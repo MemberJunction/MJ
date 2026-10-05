@@ -274,6 +274,7 @@ Prompts `{@include}` a generated markdown rendering of the TS types. This uses t
 - `AIAgent.ChatHandlingOption`: drop/re-add `CK_AIAgent_ChatHandlingOption` to add **`Consult`**.
 - `AIAgentRelationship.ChatHandlingOption`: **new** `NVARCHAR(30) NULL`, same CHECK set. NULL means inherit the parent agent's value. This is the per-pairing override that `packages/AI/Agents/docs/sub-agents-guide.md:379` already (wrongly) claims exists.
 - `AIAgent.MaxSubAgentConsultRounds`: **new** `INT NULL`. NULL means the framework default (3). CHECK `> 0`.
+- `AIAgentRelationship.ConfigurationPresetID`: **new** `UNIQUEIDENTIFIER NULL` FK → `AIAgentConfiguration`. The default preset the parent uses when calling this sub-agent (§6.5).
 
 **[D]** Two migrations: one for the framework change (Consult), one for Video Studio entities. Each is reviewable on its own and follows `migrations/CLAUDE.md`: DDL + `sp_addextendedproperty` on every column, ≥50 blank lines, CodeGen tail, apply-time `MAX(Sequence)+1` for EntityField inserts, no `__mj_*` columns, no FK indexes, no PG counterpart.
 
@@ -307,7 +308,9 @@ Presets on the root (`MJ: AI Agent Configurations`), exactly like Research Agent
 
 - Prompt-model rows bind per prompt × configuration (`MJ: AI Prompt Models`). The NULL-configuration rows also point at Gemini 3.8 Flash. This matters because when Video Studio runs as a **sub-agent** it inherits the caller's `configurationId`, and a caller config with no matching rows (e.g. "Sage Text") falls through to NULL rows (`BaseModelRunner.getPromptModelsForConfiguration`). So **the default is always Gemini 3.8 Flash**.
 - **Model choice per role:** the Art Director prefers a **video-input-capable** model when a reference video is supplied (Gemini 3.8 Flash at Standard). At High, Opus 5.5 gets keyframe sheets (§13.2).
-- **[O-2]** Should a caller be able to request a power level for a sub-agent call (e.g. an `AIAgentRelationship.ConfigurationPresetID`, or a `PowerLevel` in the input spec that the orchestrator maps to params)? Pipeline params (repair rounds, quality, fps) can honor `spec.Interaction` / a requested level even when models can't switch mid-run. Recommendation: honor a requested level for **params** in v1, and leave model switching on inheritance.
+- **[D] Callers can choose a sub-agent's power level** (decided 2026-10-05; was O-2). This is a general framework capability, not specific to Video Studio. See §6.5.
+  - **Precedence:** per-call preset (`AgentSubAgentRequest.presetName`) → relationship default preset (`AIAgentRelationship.ConfigurationPresetID`) → inherit the parent run's `configurationId` (today's behavior).
+  - **Effect:** a Research Agent run on Standard can ask Video Studio for **High**. Video Studio's prompts then select Opus 5.5, and its pipeline params (repair rounds, quality, fps) come from the `Video Studio High` configuration.
 
 ### 5.3 Prompts (`metadata/prompts/.video-studio-prompts.json`, templates under `metadata/prompts/templates/video-studio/`)
 `Video Studio - Orchestrator`, `- Director`, `- Art Director`, `- Storyboard`, `- Motion Engineer`, `- Motion Engineer Lint Fix`, `- Critic`, `- Reference Analysis`. All use `ResponseFormat: JSON`, `OutputExample: @file:`, `ValidationBehavior: Strict`, and `{@include}` the generated spec types. The Motion Engineer template carries the **render contract**:
@@ -379,6 +382,28 @@ A sub-agent's caller is often **another agent**, which is a different kind of pa
 - **As a sub-agent:** the same approval point emits a Chat with a plan-approval `responseForm`. Under `Consult`, the calling agent approves or amends it, and escalates to its human only if it can't decide. A missing `MustUse` asset (G1) consults the same way.
 - **Default `Interaction.Mode`:** `Autonomous` when invoked as a sub-agent with no explicit mode; the archetype's `DefaultInteractionMode` when a human invokes it directly.
 
+### 6.5 Caller-selected presets for sub-agents (core framework) **[D]**
+Today `ExecuteSubAgent` always passes `configurationId: params.configurationId` (`base-agent.ts:10581`), so a child can only run under its parent's AI Configuration. The durable task-graph runner passes no `configurationId` at all (`packages/MJServer/src/services/TaskGraphAgentRunner.ts:30-41`).
+
+- **Relationship default:** `AIAgentRelationship.ConfigurationPresetID` (new, nullable FK → `MJ: AI Agent Configurations`). It must reference a preset **of the sub-agent**, enforced in the relationship entity's server `ValidateAsync`.
+- **Per-call override:** `AgentSubAgentRequest.presetName?: string`. This is the preset's display name (e.g. `High`), resolved against the target agent's presets; an unknown name is a validation error returned to the parent LLM.
+- **Discovery:** the sub-agent catalog that `buildAgentBaseCatalog` renders into the parent's prompt lists each sub-agent's available presets, with descriptions, so the parent LLM knows what it can ask for.
+- **Resolution:** per-call → relationship → inherit. The resolved preset's `AIConfigurationID` (NULL means the default rows) becomes the child run's `configurationId`. It is recorded on the child's `AIAgentRun` and propagates to the child's own sub-agents under the same rules.
+- **Task graphs:** task nodes may carry a `PresetName`, and `TaskGraphAgentRunner` passes the resolved `configurationId` through (fixing today's omission).
+- **Scheduled jobs:** `AgentScheduledJobDriver` honors the `ConfigurationID` it already accepts (VS-INV-4).
+
+---
+
+## 6A. Sage transfers: hand the conversation to another agent (core framework) **[D]**
+
+**Requirement (2026-10-05):** Sage is the concierge. When another agent should own a request, Sage must be able to **transfer** it, like a transferred phone call:
+- The target agent takes the turn as a **top-level run**, with its own presets and configuration and its own response in the conversation.
+- It does **not** run as a sub-agent under Sage.
+
+This used to work and appears broken. It is how users will most often reach Video Studio from a conversation.
+
+> **Root-cause analysis and fix design in progress.** It traces the git history of Sage's delegation, today's task-graph fold, and sub-agent resolution. It lands in the next commit on this PR, together with WBS tasks `VS-SAGE-*`.
+
 ---
 
 ## 7. Rendering
@@ -423,7 +448,11 @@ The request/response wire types live in `video-studio-core`. Projects travel as 
   2. **Lint gate:** `lintMediaUrls` + a staged-assets-only rule. Any non-bundle URL blocks the render.
   3. **Per-render temp dir**, deleted on every path (`try/finally`); hard timeout and memory caps; the worker runs as an unprivileged user.
   4. **Docker driver** (`--network none`, read-only root, limits) is the **recommended production driver** whenever model-written compositions come from untrusted prompts. LocalWorker is the dev / single-node default.
-  5. **[O-6]** Contribute an optional request-interception / extra-Chrome-args hook upstream to HyperFrames (Apache-2.0), so LocalWorker gets network blocking at the browser layer too.
+  5. **Upstream contribution [D]** (decided 2026-10-05; was O-6): offer HyperFrames (`heygen-com/hyperframes`, Apache-2.0) a small, **purely additive**, opt-in engine option. It is either a request-policy callback (allow/deny per request URL) or `extraChromeArgs` (for `--proxy-server=127.0.0.1:0` style lockdown), off by default with no behavior change for existing users. The PR comes with tests in their suite, following their `CONTRIBUTING.md`.
+
+  **Our security never depends on that PR being accepted.** Layers 1–4 above are the baseline. The hook is defense in depth for LocalWorker. If upstream declines or stalls:
+  - **First fallback, a pnpm patch.** Same mechanism and governance MJ already uses for `type-graphql` (`package.json` → `pnpm.patchedDependencies`, `patches/README.md`). The patch goes against the **exact pinned** `@hyperframes/engine` version, applies only to the render worker (the only package that depends on HyperFrames), and is documented in `patches/README.md` with what/why/how-to-regenerate/upstream status. A pin bump that fails to apply the patch fails the install loudly, so it can't silently drop. Worst case if the patch is absent: we're back to layers 1–4, never an unsafe state.
+  - **Fork only as a last resort.** If the patch grows beyond a small, reviewable diff, or upstream diverges incompatibly, publish `@memberjunction/hyperframes-engine` from a fork that tracks upstream releases. **[O-6b]** This only arises if both upstream and the patch fail; not planned.
 
 ### 7.4 Determinism
 `Render.Seed` is passed to the composition, fonts are bundled as brand-kit assets (never system fonts), and `RendererVersion` is recorded. As HyperFrames documents, "exact pixels can still vary with Chrome, fonts, codecs, GPU", so the critic judges the rendered file, not the intent.
@@ -630,6 +659,7 @@ Rows must match driver `GetFileCapabilities` (Anthropic: jpeg/png/gif/webp/pdf, 
 - **VS-CON-3 — Resume a child.** _deps: VS-CON-2._ `AgentSubAgentRequest.resumeRunId`; `ExecuteSubAgent` passes `lastRunId` + `autoPopulateLastRunPayload`, injects the prior question as an assistant turn; loop agent type parses it. **AC:** tests prove payload + question continuity across the resumed child run.
 - **VS-CON-4 — Escalation + human resume.** _deps: VS-CON-2._ Root parent Chat creates the `AI Agent Request`; on human response the parent resumes and can re-invoke the child with `resumeRunId`. **AC:** integration bundle (deterministic tier) with a stub child that asks, parent escalates, response resumes both.
 - **VS-CON-5 — Fix `Retry` remap.** _deps: VS-CON-2._ No terminate; question surfaced to parent. Replace `chat-handling-option.test.ts`'s copied logic with tests against real `BaseAgent`. **AC:** tests fail before / pass after.
+- **VS-CON-7 — Caller-selected presets (§6.5).** _deps: VS-CON-1._ Migration adds `AIAgentRelationship.ConfigurationPresetID` (same migration as VS-CON-1); `AgentSubAgentRequest.presetName`; resolution in `ExecuteSubAgent`; presets listed in the sub-agent catalog; task-graph node `PresetName` + `TaskGraphAgentRunner` passes `configurationId`; `AgentSpec`/`AgentSpecSync` support. **AC:** tests prove per-call > relationship > inherit; an invalid preset name returns a validation error to the parent; the child run records the resolved configuration.
 - **VS-CON-6 — Prompt + spec plumbing + docs.** _deps: VS-CON-2._ System-prompt section + snapshot update; `AgentSpec`, `AgentSpecSync`, MCP validators accept `Consult`; docs (`sub-agents-guide.md`, `HUMAN_IN_THE_LOOP.md`, `AGENT_SKILLS_AND_PLAN_MODE_GUIDE.md`). **AC:** snapshot test updated; AgentSpecSync round-trips the field on relationships.
 
 ### VS2 — The spec
@@ -704,13 +734,17 @@ Rows must match driver `GetFileCapabilities` (Anthropic: jpeg/png/gif/webp/pdf, 
 | D10 | Data-bearing videos: sharer's responsibility; no system enforcement this phase | 2026-10-05 |
 | D11 | Every on-screen number is bound to data; literal scan enforces it | 2026-10-05 |
 | D12 | Everything in one phase, including HITL, sandboxing, reference video, UI | 2026-10-05 |
+| D13 | Callers choose sub-agent presets: per-call `presetName` → relationship `ConfigurationPresetID` → inherit | 2026-10-05 |
+| D14 | Sage gets a first-class **Transfer** (hand the conversation to another agent as a top-level run), fixed in this work | 2026-10-05 |
+| D15 | HyperFrames network hook: offered upstream; pnpm patch fallback; security never depends on it | 2026-10-05 |
 
 ## 17. Open questions
 - **O-1** Is a dedicated production entity needed for gallery performance, or do artifact extract rules suffice?
-- **O-2** Can callers request a power level for sub-agent calls (params only vs. model switching)?
-- **O-3** How does Sage's single-node delegation reach an unrelated root agent today?
+- ~~O-2~~ **Resolved:** callers can choose a sub-agent's preset (§6.5, D13).
+- ~~O-3~~ **Resolved:** Sage transfers are fixed as part of this work (§6A, D14).
 - **O-4** Lambda / Cloud Run render drivers: include or follow-on?
-- **O-5** HyperFrames `check` (layout/contrast/motion) is CLI-only in v0.8.134. Is the subprocess-in-worker approach acceptable, or should we upstream a library export?
-- **O-6** HyperFrames v0.8.134 has no request-interception hook and launches Chrome with `--no-sandbox`. Should we upstream a hook (§7.3), and should the Docker driver be the documented production default?
+- **O-5** HyperFrames `check` (layout/contrast/motion) is CLI-only in v0.8.134. Is the subprocess-in-worker approach acceptable, or should we upstream a library export (bundle with the O-6 contribution)?
+- ~~O-6~~ **Resolved:** contribute an additive hook upstream; fall back to a pnpm patch; security never depends on it (§7.3, D15).
+- **O-6b** Fork `@hyperframes/engine` only if both upstream and the patch fail.
 - **O-7** Automatic music beat detection in v1?
 - **O-8** Broader audit of AI model modality rows beyond the models Video Studio binds.
