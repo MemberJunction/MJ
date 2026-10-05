@@ -170,3 +170,44 @@ export class PostgreSQLReadOnlyPool extends BaseSingleton<PostgreSQLReadOnlyPool
         this._pool = pool;
     }
 }
+
+/** What {@link DescribeReadOnlyLoginOverreach} reads about the read-only login. */
+export interface ReadOnlyLoginGrants {
+    ReadsServerFiles: boolean;
+    ReadableBaseTables: number;
+}
+
+/** The one method {@link DescribeReadOnlyLoginOverreach} needs from a connection; a `pg` client has it. */
+export interface ReadOnlyLoginCheckClient {
+    query(sql: string, params: unknown[]): Promise<{ rows: ReadOnlyLoginGrants[] }>;  // case-violation-ok-legacy-back-compat: mirrors the pg client's query method, which a pg client must satisfy as-is
+}
+
+/**
+ * What the PostgreSQL read-only login can do beyond reading entity base views, as warnings to log at
+ * startup. Ad-hoc SQL and `TestQuerySQL` run as this login, and SQL can reach data through functions
+ * that no check of its table references sees (`query_to_xml`, file readers), so the login's own
+ * grants are the only complete limit. It should hold `SELECT` on the entity base views and nothing
+ * else: not on the base tables, and not membership of `pg_read_server_files`. Empty when the login
+ * is that narrow.
+ *
+ * @param client - A connection opened as the read-only login.
+ * @param coreSchema - The MJ core schema, whose base tables the login should not read.
+ */
+export async function DescribeReadOnlyLoginOverreach(client: ReadOnlyLoginCheckClient, coreSchema: string): Promise<string[]> {
+    const result = await client.query(
+        `SELECT pg_has_role(current_user, 'pg_read_server_files', 'MEMBER') AS "ReadsServerFiles",
+                (SELECT count(*)::int FROM pg_catalog.pg_tables t
+                  WHERE t.schemaname = $1
+                    AND has_table_privilege(current_user, quote_ident(t.schemaname) || '.' || quote_ident(t.tablename), 'SELECT')) AS "ReadableBaseTables"`,
+        [coreSchema],
+    );
+    const row = result.rows[0];
+    const warnings: string[] = [];
+    if (row?.ReadableBaseTables > 0) {
+        warnings.push(`The PostgreSQL read-only login can read ${row.ReadableBaseTables} base table(s) in schema "${coreSchema}". Ad-hoc SQL and TestQuerySQL run as this login; grant it SELECT on the entity base views only.`);
+    }
+    if (row?.ReadsServerFiles) {
+        warnings.push('The PostgreSQL read-only login is a member of pg_read_server_files, so SQL run as it can read files on the database server. Revoke that membership.');
+    }
+    return warnings;
+}

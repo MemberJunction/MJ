@@ -907,6 +907,15 @@ connectionPool: {
 - Production: `max: 50, min: 5`
 - High load: `max: 100, min: 10`
 
+### The Read-Only Login
+
+Ad-hoc SQL (`ExecuteAdhocQuery`), `TestQuerySQL` and query specs run caller-supplied SQL as the read-only login (`dbReadOnlyUsername` / `dbReadOnlyPassword`). Without one, ad-hoc SQL is refused. Grant that login **`SELECT` on the entity base views and nothing else**:
+
+- no access to the base tables behind them;
+- no membership of PostgreSQL's `pg_read_server_files`, or any SQL Server permission to reach files or other servers.
+
+MJAPI checks what SQL reads in two ways. It refuses a table reference that isn't a readable entity view, and it refuses functions that run SQL given as a string or read files (`query_to_xml`, `pg_read_file`, `OPENROWSET`, …). The login's own grants are still the only limit that SQL can never get around. On PostgreSQL, MJAPI logs a warning at startup if the read-only login can read base tables in the core schema or server files.
+
 ### Database Settings on PostgreSQL
 
 PostgreSQL reads the same `databaseSettings` as SQL Server, with the same defaults. There are no PostgreSQL-only settings.
