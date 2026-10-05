@@ -15,6 +15,10 @@
         },
         "primaryKey": {
           "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Rubric Criteria&Name=EvaluatorConfig"
+        },
+        "sync": {
+          "lastModified": "2026-10-02T21:42:45.023Z",
+          "checksum": "9a85e309256e5c92168331eaeebfc2c8de2c633351c459ca51399cdfb8904d69"
         }
       },
       {
@@ -25,6 +29,10 @@
         },
         "primaryKey": {
           "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Rubric Evaluation Scores&Name=Evidence"
+        },
+        "sync": {
+          "lastModified": "2026-10-02T21:42:45.066Z",
+          "checksum": "5f02d4c3688e940c7ea56c7d8a049b2b4c0a6483d118e9b1284b85e7e3a9d433"
         }
       },
       {
@@ -35,6 +43,10 @@
         },
         "primaryKey": {
           "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Rubric Evaluations&Name=Metadata"
+        },
+        "sync": {
+          "lastModified": "2026-10-02T21:42:45.100Z",
+          "checksum": "2e1156a9f644745b13e4cc06b295065d898b77fa733922ba2fa7d35674d716b3"
         }
       },
       {
@@ -45,6 +57,10 @@
         },
         "primaryKey": {
           "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Rubric Versions&Name=ChangeDetails"
+        },
+        "sync": {
+          "lastModified": "2026-10-02T21:42:45.129Z",
+          "checksum": "fffcef7b18070623c1c75606553110b1acc22af88ef4068430f9543b8161f1d7"
         }
       },
       {
@@ -55,6 +71,10 @@
         },
         "primaryKey": {
           "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Rubrics&Name=EvaluatorConfig"
+        },
+        "sync": {
+          "lastModified": "2026-10-02T21:42:45.158Z",
+          "checksum": "b328b533e2bcdbd0fe67345da20b46e0d0a721cd6b5be80922ee53be2c539fcb"
         }
       }
     ]
