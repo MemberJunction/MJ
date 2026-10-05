@@ -684,10 +684,14 @@ export class QueryCompositionEngine {
         // SymbolTable guarantees CTE name uniqueness at registration time.
         const symTable = new SymbolTable(dialect);
 
-        // Seed the symbol table with outer-CTE names so inner CTEs that happen
-        // to share a name with an outer CTE also get renamed.
+        // Seed the symbol table with every name the assembled WITH clause already holds, the
+        // dependency CTEs and the outer query's own, so a dependency's inner CTE that shares one
+        // of them is renamed instead of declared twice.
         for (const entry of cteEntries) {
             symTable.Seed(this.canonicalCTEName(entry.CTEName));
+        }
+        for (const definition of outer?.Definitions ?? []) {
+            symTable.Seed(this.canonicalCTEName(definition.Name));
         }
 
         let recursive = outer?.Recursive ?? false;
