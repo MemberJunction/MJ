@@ -2,6 +2,7 @@ import { Arg, Ctx, Query, Resolver, Field, Int, InputType } from 'type-graphql';
 import { LogError } from '@memberjunction/core';
 import type { RunQueryResult } from '@memberjunction/core';
 import { AppContext } from '../types.js';
+import { configInfo } from '../config.js';
 import { GetReadOnlyProvider } from '../util.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { IsScopeLimitedPrincipal } from '../auth/scopeLimitedPrincipal.js';
@@ -9,6 +10,16 @@ import { RunQueryResultType } from './QueryResolver.js';
 
 /** The timeout an ad-hoc query gets when the caller names none. */
 const DEFAULT_TIMEOUT_SECONDS = 30;
+
+/**
+ * The timeout an ad-hoc query runs with: what the caller asked for (or the default), but never
+ * longer than the server's `requestTimeout`, so a caller cannot hold a read-only connection longer
+ * than any other request may. `requestTimeoutMs` of 0 or less means the server sets no limit.
+ */
+export function ClampAdhocTimeoutSeconds(requested: number | undefined, requestTimeoutMs: number): number {
+    const seconds = requested != null && requested > 0 ? requested : DEFAULT_TIMEOUT_SECONDS;
+    return requestTimeoutMs > 0 ? Math.min(seconds, Math.max(1, Math.floor(requestTimeoutMs / 1000))) : seconds;
+}
 
 /**
  * Input type for executing ad-hoc SQL queries directly.
@@ -69,7 +80,7 @@ export class AdhocQueryResolver extends ResolverBase {
             return this.buildErrorResult('No read-only data source available for ad-hoc query execution');
         }
         const contextUser = context.userPayload?.userRecord;
-        const timeoutSeconds = input.TimeoutSeconds ?? DEFAULT_TIMEOUT_SECONDS;
+        const timeoutSeconds = ClampAdhocTimeoutSeconds(input.TimeoutSeconds, configInfo.databaseSettings.requestTimeout);
         // A negative offset must not reach paging, where it would turn paging off.
         const startRow = Math.max(0, Number.isInteger(input.StartRow) ? input.StartRow! : 0);
         try {
