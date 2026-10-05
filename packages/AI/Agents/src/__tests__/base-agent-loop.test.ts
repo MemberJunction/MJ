@@ -180,6 +180,8 @@ interface RunActionCall {
     activeSkillIDs?: unknown;
     /** `RunActionParams.RuntimeAPIKeyResolver` (the run's scoped key resolver) — absent when the run has no keys. */
     resolveAPIKey?: unknown;
+    /** `RunActionParams.CredentialScope` — absent when the run sets none. */
+    credentialScope?: unknown;
 }
 
 /** Save-queue flush diagnostics (shape from AgentRunStepSaveQueue.Flush). */
@@ -363,9 +365,10 @@ class LoopHarness {
                     ResultCodes: { Items: [] },
                 },
             ],
-            RunAction: async (input: { Action: { Name: string }; Params: ScriptedActionParam[]; Context?: { ActiveSkillIDs?: unknown }; RuntimeAPIKeyResolver?: unknown }): Promise<ScriptedActionResult> => {
+            RunAction: async (input: { Action: { Name: string }; Params: ScriptedActionParam[]; Context?: { ActiveSkillIDs?: unknown }; RuntimeAPIKeyResolver?: unknown; CredentialScope?: unknown }): Promise<ScriptedActionResult> => {
                 const call: RunActionCall = { actionName: input.Action.Name, params: input.Params, activeSkillIDs: input.Context?.ActiveSkillIDs };
                 if (input.RuntimeAPIKeyResolver !== undefined) call.resolveAPIKey = input.RuntimeAPIKeyResolver;
+                if (input.CredentialScope !== undefined) call.credentialScope = input.CredentialScope;
                 // What any log of the whole RunActionParams could contain — kept off the call record so
                 // the toEqual assertions over runActionCalls stay exact.
                 this.runActionParamsJSON.push(JSON.stringify({ ...input, Action: input.Action.Name }));
@@ -788,6 +791,46 @@ describe('BaseAgent.Execute — the run\'s runtime API keys reach actions as a S
         okAction();
         const { agent } = makeAgent(script());
         await agent.Execute(makeParams());
+        expect('resolveAPIKey' in harness.runActionCalls[0]).toBe(false);
+        expect('credentialScope' in harness.runActionCalls[0]).toBe(false);
+    });
+});
+
+describe('BaseAgent.Execute — a RuntimeOnly credential scope reaches every prompt and action in the run', () => {
+    // #601 in Skip: an org's key was rejected, failover reached a vendor the org had no key for, and
+    // the run finished on the platform's key. The scope is the caller saying "only my keys", so it
+    // has to arrive wherever a key is spent — or a path that drops it falls back silently.
+    const KEYS = [{ driverClass: 'GeminiLLM', apiKey: 'sk-gemini' }];
+    const okAction = () => { harness.runAction = () => ({ Success: true, Message: 'ok', Params: [], Result: { ResultCode: 'SUCCESS' }, LogEntry: null }); };
+    const script = () => [() => llmEnvelope(actionsEnvelope()), () => llmEnvelope(successEnvelope())];
+
+    it('every prompt the agent runs carries the scope alongside the keys', async () => {
+        okAction();
+        const { agent, runner } = makeAgent(script());
+        await agent.Execute(makeParams({ apiKeys: KEYS, CredentialScope: 'RuntimeOnly' }));
+        expect(runner.Calls.length).toBeGreaterThan(0);
+        for (const call of runner.Calls) {
+            expect(call.CredentialScope).toBe('RuntimeOnly');
+            expect(call.apiKeys).toBe(KEYS);
+        }
+    });
+
+    it('an action is told the scope, and the resolver has no platform fallback for a class the run lacks', async () => {
+        okAction();
+        const { agent } = makeAgent(script());
+        await agent.Execute(makeParams({ apiKeys: KEYS, CredentialScope: 'RuntimeOnly' }));
+        const call = harness.runActionCalls[0];
+        expect(call.credentialScope).toBe('RuntimeOnly');
+        const resolve = call.resolveAPIKey as (driverClass: string) => string | undefined;
+        expect(resolve('GeminiLLM')).toBe('sk-gemini');
+        expect(resolve('OpenAIImageGenerator')).toBeUndefined();
+    });
+
+    it('an action is told the scope even when the run carries no keys, so it does not reach for GetAIAPIKey', async () => {
+        okAction();
+        const { agent } = makeAgent(script());
+        await agent.Execute(makeParams({ CredentialScope: 'RuntimeOnly' }));
+        expect(harness.runActionCalls[0].credentialScope).toBe('RuntimeOnly');
         expect('resolveAPIKey' in harness.runActionCalls[0]).toBe(false);
     });
 });

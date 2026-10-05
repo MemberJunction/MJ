@@ -20,7 +20,7 @@ import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptE
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase, ToPlainJSON } from '@memberjunction/core';
 import { AgentRunWatchdog } from './agent-run-watchdog';
 import { AIPromptRunner, GetToolCallingDecision, AIDecisionRunResult } from '@memberjunction/ai-prompts';
-import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, MakeAIAPIKeyResolver, IRealtimeSession, IsPrefixPromptCache, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice, DecisionQuestion, DecisionAnswer } from '@memberjunction/ai';
+import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, CredentialScopeAllows, MakeAIAPIKeyResolver, IRealtimeSession, IsPrefixPromptCache, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice, DecisionQuestion, DecisionAnswer } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
 import { ProviderRubricEngine } from '@memberjunction/rubrics';
 import { ExecuteSelfCheck, PickSelfCheckLink, type SelfCheckLink, type SelfCheckLinkRow } from './self-check';
@@ -2636,6 +2636,7 @@ export class BaseAgent {
             // GetAIAPIKey; realtime does not consult MJ Credentials). Absent ⇒ platform keys, as before.
             // CreateBridgeRealtimeSession (the LiveKit / telephony factory) passes no apiKeys today.
             APIKeys: params.apiKeys,
+            CredentialScope: params.CredentialScope,
             AgentSessionID: (params.data?.agentSessionId as string | undefined) ?? '',
             PreferredModelID: modelID,
             ConfigOverridesJson: BuildRealtimeOverridesJson(modelID, voice) ?? undefined,
@@ -2685,7 +2686,7 @@ export class BaseAgent {
         // candidates by priority and takes the first whose key resolves, so an organization that
         // brings its own credential for a vendor we hold no platform key for now reaches that
         // vendor — which is the point of bringing your own key, not a side effect of it.
-        const resolveAPIKey = MakeAIAPIKeyResolver(params.apiKeys);
+        const resolveAPIKey = MakeAIAPIKeyResolver(params.apiKeys, undefined, params.CredentialScope);
         const candidates = this.selectRealtimeModelCandidates(params.agent, overrideModelID);
         for (const model of candidates) {
             const vendor = SelectRealtimeVendorForModel(model.ID, resolveAPIKey);
@@ -3037,6 +3038,7 @@ export class BaseAgent {
                 parentDepth: this._depth,
                 configurationId: params.configurationId,
                 apiKeys: params.apiKeys,
+                CredentialScope: params.CredentialScope,
                 data: params.data,
                 verbose: params.verbose,
                 // Progress streams BOTH to the runner's narration consumer (request.OnProgress —
@@ -5055,6 +5057,7 @@ export class BaseAgent {
             if (params.apiKeys && params.apiKeys.length > 0) {
                 childPromptParams.apiKeys = params.apiKeys;
             }
+            childPromptParams.CredentialScope = params.CredentialScope;
             
             // Pass through configurationId to both parent and child prompts if provided
             if (params.configurationId) {
@@ -5096,6 +5099,10 @@ export class BaseAgent {
         if (params.apiKeys && params.apiKeys.length > 0) {
             promptParams.apiKeys = params.apiKeys;
             this.logStatus(`🔑 Using ${params.apiKeys.length} API key(s) provided at runtime`, true, params);
+        }
+        promptParams.CredentialScope = params.CredentialScope;
+        if (!CredentialScopeAllows(params.CredentialScope, 'Environment')) {
+            this.logStatus(`🔒 Credential scope is ${params.CredentialScope}: the platform's environment API keys will not be used`, true, params);
         }
 
         // Thread the per-request provider so prompt run records are saved through the isolated provider
@@ -10219,6 +10226,7 @@ The context is now within limits. Please retry your request with the recovered c
      * (Generate Image) is doing what the prompts do. Override to narrow it — an agent that knows
      * which of its actions talk to which vendor can refuse everything else, and a refusal costs the
      * action nothing but the customer's key: it falls back to the platform key as if the run had none.
+     * Under a `'RuntimeOnly'` credential scope a refusal leaves the action with no key for that class.
      */
     protected actionMayUseRuntimeAPIKey(action: MJActionEntityExtended, driverClass: string, params: ExecuteAgentParams): boolean {
         return true;
@@ -10232,12 +10240,14 @@ The context is now within limits. Please retry your request with the recovered c
     private buildRuntimeAPIKeyResolver(params: ExecuteAgentParams, actionEntity: MJActionEntityExtended): RuntimeAPIKeyResolver {
         const runKeys = params.apiKeys;
         return (driverClass: string): string | undefined => {
+            const platformAllowed = CredentialScopeAllows(params.CredentialScope, 'Environment');
             if (!this.actionMayUseRuntimeAPIKey(actionEntity, driverClass, params)) {
-                this.logStatus(`🔑 Runtime API key for '${driverClass}' refused to action '${actionEntity.Name}' by policy — platform key applies`, true, params);
+                this.logStatus(`🔑 Runtime API key for '${driverClass}' refused to action '${actionEntity.Name}' by policy — ${platformAllowed ? 'platform key applies' : `credential scope is ${params.CredentialScope}, so no key applies`}`, true, params);
                 return undefined;
             }
-            const key = GetAIAPIKey(driverClass, runKeys);
-            this.logStatus(`🔑 Action '${actionEntity.Name}' resolved an API key for '${driverClass}' (${runKeys?.some((k) => k.driverClass === driverClass) ? 'run' : 'platform'})`, true, params);
+            const key = GetAIAPIKey(driverClass, runKeys, false, params.CredentialScope);
+            const source = runKeys?.some((k) => k.driverClass === driverClass) ? 'run' : platformAllowed ? 'platform' : `none — credential scope is ${params.CredentialScope}`;
+            this.logStatus(`🔑 Action '${actionEntity.Name}' resolved an API key for '${driverClass}' (${source})`, true, params);
             return key || undefined;
         };
     }
@@ -10311,8 +10321,12 @@ The context is now within limits. Please retry your request with the recovered c
                 // shared by every action in the run (parallel ones included) and copied into sub-agent
                 // runs, so anything stamped there would name the wrong action under parallel dispatch
                 // and travel further than the action it was meant for. Absent when the run has no keys,
-                // so the action uses GetAIAPIKey(driverClass) exactly as before.
+                // so the action uses GetAIAPIKey(driverClass) exactly as before — unless the scope below
+                // is RuntimeOnly, which tells the action the resolver's answer (or its absence) is final.
                 RuntimeAPIKeyResolver: params.apiKeys && params.apiKeys.length > 0 ? this.buildRuntimeAPIKeyResolver(params, actionEntity) : undefined,
+                // AICredentialScope → actions-base's RuntimeCredentialScope mirror: a value added to the
+                // former and not the latter fails to compile here, so the two cannot drift apart.
+                CredentialScope: params.CredentialScope,
             });
             
             if (result.Success) {
@@ -10602,6 +10616,7 @@ The context is now within limits. Please retry your request with the recovered c
                 configurationId: params.configurationId, // propagate configuration ID to sub-agent
                 effortLevel: params.effortLevel, // propagate effort level to sub-agent
                 apiKeys: params.apiKeys, // propagate API keys to sub-agent
+                CredentialScope: params.CredentialScope, // a sub-agent may not spend keys its parent could not
                 inputArtifacts: params.inputArtifacts, // propagate input artifacts so sub-agents inherit the parent's artifact manifest + tools (e.g. a Codesmith delegate can read a Data Snapshot the parent references)
                 data: {
                         ...params.data,
