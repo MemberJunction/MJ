@@ -1198,7 +1198,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT99 - RunQuery Rendering Matrix",
+            "TestID": "@lookup:MJ: Tests.Name=IT102 - RunQuery Rendering Matrix",
             "Sequence": 49,
             "Status": "Active"
           },
@@ -1276,7 +1276,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT100 - RunQuery Rendering over GraphQL",
+            "TestID": "@lookup:MJ: Tests.Name=IT103 - RunQuery Rendering over GraphQL",
             "Sequence": 72,
             "Status": "Active"
           },
