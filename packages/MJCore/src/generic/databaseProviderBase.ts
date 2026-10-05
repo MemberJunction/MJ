@@ -2254,8 +2254,9 @@ export interface ExecuteSQLOptions {
   /**
    * The longest this statement may run, in milliseconds. When it is exceeded the database cancels
    * the statement and the call rejects with a timeout error, so the work stops rather than only
-   * the wait. Omitted or 0 means the connection's usual limit applies. Ignored inside an ambient
-   * transaction, whose statements follow the transaction's own limits.
+   * the wait. Omitted or 0 means the connection's usual limit applies. It can only shorten that
+   * limit, never lengthen it. Ignored inside an ambient transaction, whose statements follow the
+   * transaction's own limits.
    */
   timeoutMs?: number;
 }

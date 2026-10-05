@@ -2,12 +2,11 @@ import { Arg, Ctx, Query, Resolver, Field, Int, InputType } from 'type-graphql';
 import { LogError } from '@memberjunction/core';
 import type { RunQueryResult } from '@memberjunction/core';
 import { AppContext } from '../types.js';
+import { configInfo } from '../config.js';
 import { GetReadOnlyProvider } from '../util.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { RunQueryResultType } from './QueryResolver.js';
-
-/** The timeout an ad-hoc query gets when the caller names none. */
-const DEFAULT_TIMEOUT_SECONDS = 30;
+import { ClampAdhocTimeoutSeconds } from './adhocTimeout.js';
 
 /**
  * Input type for executing ad-hoc SQL queries directly.
@@ -56,7 +55,7 @@ export class AdhocQueryResolver extends ResolverBase {
         if (!provider) {
             return this.buildErrorResult('No read-only data source available for ad-hoc query execution');
         }
-        const timeoutSeconds = input.TimeoutSeconds ?? DEFAULT_TIMEOUT_SECONDS;
+        const timeoutSeconds = ClampAdhocTimeoutSeconds(input.TimeoutSeconds, configInfo.databaseSettings.requestTimeout);
         // A negative offset must not reach paging, where it would turn paging off.
         const startRow = Math.max(0, Number.isInteger(input.StartRow) ? input.StartRow! : 0);
         try {
