@@ -277,6 +277,10 @@ describe('RedisLocalStorageProvider', () => {
             });
             expect(p).toBeDefined();
         });
+
+        it('declares a store that outlives the process, so the metadata snapshot is saved to it', () => {
+            expect(provider.SupportsCrossProcessPersistence).toBe(true);
+        });
     });
 
     describe('GetItem', () => {

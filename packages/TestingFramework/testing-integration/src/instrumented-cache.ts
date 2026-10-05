@@ -28,10 +28,7 @@ export class InstrumentedLocalStorageProvider implements ILocalStorageProvider {
 
     /**
      * Delegated for the same reason as {@link SharesReferences}: this wrapper stores nothing of its
-     * own. It matters that this passes through — the integration bootstrap wraps an in-process
-     * provider, and a wrapper that failed to delegate would report itself persistent and make
-     * `ProviderBase` serialize the whole metadata graph on every refresh in the test tier, which is
-     * exactly the cost the flag exists to avoid.
+     * own, so whether what it holds outlives the process is a property of the inner store.
      * See {@link ILocalStorageProvider.SupportsCrossProcessPersistence}.
      */
     public get SupportsCrossProcessPersistence(): boolean | undefined {

@@ -51,7 +51,7 @@ runStorageProviderContractTests('BrowserIndexedDBStorageProvider', async () => {
     const p = new BrowserIndexedDBStorageProvider();
     await awaitDbReady(p);
     return p;
-});
+}, true);
 
 // ────────────────────────────────────────────────────────────────────────────
 // Run the full contract suite against the base in-memory provider.
@@ -59,7 +59,8 @@ runStorageProviderContractTests('BrowserIndexedDBStorageProvider', async () => {
 // ────────────────────────────────────────────────────────────────────────────
 runStorageProviderContractTests(
     'BrowserStorageProviderBase',
-    () => new BrowserStorageProviderBase()
+    () => new BrowserStorageProviderBase(),
+    false
 );
 
 // ────────────────────────────────────────────────────────────────────────────

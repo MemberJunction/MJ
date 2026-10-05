@@ -11,6 +11,12 @@ describe('InstrumentedLocalStorageProvider', () => {
         provider = new InstrumentedLocalStorageProvider(inner);
     });
 
+    it('reports the inner store\'s SupportsCrossProcessPersistence', () => {
+        expect(provider.SupportsCrossProcessPersistence).toBe(false);
+        const persistent = Object.assign(new InMemoryLocalStorageProvider(), { SupportsCrossProcessPersistence: true });
+        expect(new InstrumentedLocalStorageProvider(persistent).SupportsCrossProcessPersistence).toBe(true);
+    });
+
     it('counts SetItem globally and per-category', async () => {
         await provider.SetItem('k', 'v', 'RunViewCache');
         expect(provider.SetItemCount).toBe(1);
