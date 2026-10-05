@@ -385,7 +385,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
                 const bypassResult = await bypass.query(quotedQuery, processedParams);
                 return bypassResult.rows as T[];
             }
-            const timeoutMs = options?.timeoutMs && options.timeoutMs > 0 ? Math.floor(options.timeoutMs) : undefined;
+            const timeoutMs = this.effectiveTimeoutMs(options?.timeoutMs);
             const readOnly = !!options?.readOnlyTransaction && !this._transaction;
             const timed = timeoutMs !== undefined && (!this._transaction || !!options?.ignoreAmbientTransaction);
             if (readOnly || timed) {
@@ -408,12 +408,41 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
     }
 
     /**
+     * The statement limit for a call that asked for `requested` milliseconds: never longer than
+     * the pool's own `statement_timeout`, so a caller can shorten the limit but not lift it.
+     * `undefined` when the call asked for none.
+     */
+    private effectiveTimeoutMs(requested: number | undefined): number | undefined {
+        if (!requested || requested <= 0) return undefined;
+        const poolLimit = this._connectionManager.Config?.StatementTimeoutMs;
+        const ms = Math.floor(requested);
+        return poolLimit && poolLimit > 0 ? Math.min(ms, poolLimit) : ms;
+    }
+
+    /**
+     * Returns a connection used by {@link executeOnOwnConnection} to the pool after releasing any
+     * advisory lock the statement took: a session-level advisory lock survives the transaction's
+     * end, so it would otherwise stay on the pooled connection. A connection that cannot be cleaned
+     * is discarded instead.
+     */
+    private async releaseOwnConnection(client: pg.PoolClient): Promise<void> {
+        try {
+            await client.query('SELECT pg_advisory_unlock_all()');
+            client.release();
+        } catch (err) {
+            client.release(err instanceof Error ? err : new Error(String(err)));
+        }
+    }
+
+    /**
      * Runs one statement on its own pooled connection inside a transaction of its own.
      *
      * - `readOnly`: `BEGIN READ ONLY … ROLLBACK`. Writes fail, and the rollback undoes any session
      *   setting the statement made, so the connection goes back to the pool unchanged.
      * - `timeoutMs`: `SET LOCAL statement_timeout` for this statement only; PostgreSQL cancels it
      *   when the limit passes. Without `readOnly` the transaction commits, so writes still land.
+     *
+     * Advisory locks the statement took are released before the connection goes back to the pool.
      */
     private async executeOnOwnConnection<T>(
         sql: string,
@@ -436,7 +465,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
                 throw err;
             }
         } finally {
-            client.release();
+            await this.releaseOwnConnection(client);
         }
     }
 
