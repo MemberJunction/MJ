@@ -16,6 +16,8 @@ export interface ActionToolBinding {
     /** The Action the framework dispatches when that name comes back. */
     action: MJActionEntityExtended;
     tool: ChatTool;
+    /** The Action's params the tool was built from — what {@link CoerceActionArguments} reads back. */
+    params: readonly MJActionParamEntity[];
 }
 
 /**
@@ -90,18 +92,76 @@ export function sanitizeToolName(actionName: string): string {
  * - **`Scalar` emits a union type.** It appears to violate the cross-provider common subset —
  *   OpenAPI 3.0, which Gemini's classic function declarations follow, has no union `type` — but it
  *   measured clean on every provider tested, so the plan's literal mapping stands.
- * - **Everything else emits `string`, not `object`.** §8.2 originally specified `object` for the
- *   opaque kinds, reasoning it was "exact parity with the prose catalog". It is not:
+ * - **The opaque kinds emit `string`, not `object`.** §8.2 originally specified `object` for them,
+ *   reasoning it was "exact parity with the prose catalog". It is not:
  *   `Run Ad-hoc Query.Query` is `ValueType: 'Other'` but holds SQL text, and typing it as an
  *   object made models emit `Query: {}` on 40% of calls — well-formed, dispatchable and useless,
  *   which no well-formedness check catches. Switching to `string` took usable arguments from
  *   60% to 100% on the same prompts. The structural type beats the prose description whenever the
  *   two disagree, so it must not disagree.
+ * - **`Simple Object` emits `object`.** Unlike the opaque kinds it says what the value is, and
+ *   typing a real object as `string` fails the other way: the model JSON-encodes it, and an Action
+ *   expecting an object receives text. Models still stringify objects now and then, which
+ *   {@link CoerceActionArguments} absorbs.
+ *
+ * Both are stopgaps until an action param can carry its own JSON Schema.
  */
 function schemaForValueType(valueType: MJActionParamEntity['ValueType']): Record<string, unknown> {
-    return valueType === 'Scalar'
-        ? { type: ['string', 'number', 'boolean'] }
-        : { type: 'string' };
+    switch (valueType) {
+        case 'Scalar':
+            return { type: ['string', 'number', 'boolean'] };
+        case 'Simple Object':
+            return { type: 'object' };
+        default:
+            return { type: 'string' };
+    }
+}
+
+/**
+ * Turns a JSON-encoded string back into the object or array a `Simple Object` param declares.
+ *
+ * Anything else is returned unchanged — a string that is not JSON, or JSON of the wrong shape, is
+ * the Action's to reject with its own message rather than ours to guess at.
+ */
+function decodeObjectValue(value: unknown, isArray: boolean): unknown {
+    if (typeof value !== 'string') {
+        return value;
+    }
+    try {
+        const decoded: unknown = JSON.parse(value);
+        const shapeMatches = isArray ? Array.isArray(decoded) : decoded !== null && typeof decoded === 'object' && !Array.isArray(decoded);
+        return shapeMatches ? decoded : value;
+    } catch {
+        return value;
+    }
+}
+
+/**
+ * Restores object-typed arguments a model sent as JSON strings, before the Action runs.
+ *
+ * Only `Simple Object` params are touched: an `Other` param is declared as `string` and may
+ * legitimately hold JSON-looking text. For an array param both the array itself and each element
+ * may arrive encoded.
+ *
+ * @param params The Action's params, as the tool was built from them
+ * @param args The call's arguments, as the provider returned them
+ * @returns A new argument object; `args` is not mutated
+ */
+export function CoerceActionArguments(
+    params: readonly MJActionParamEntity[],
+    args: Record<string, unknown> | undefined
+): Record<string, unknown> {
+    const coerced: Record<string, unknown> = { ...(args ?? {}) };
+    for (const param of params) {
+        if (param.ValueType !== 'Simple Object' || !(param.Name in coerced)) {
+            continue;
+        }
+        const value = decodeObjectValue(coerced[param.Name], param.IsArray);
+        coerced[param.Name] = param.IsArray && Array.isArray(value)
+            ? value.map((item) => decodeObjectValue(item, false))
+            : value;
+    }
+    return coerced;
 }
 
 /**
@@ -255,7 +315,8 @@ export function BuildActionToolSet(
     const tools: ChatTool[] = [];
 
     for (const action of actions) {
-        const tool = BuildToolFromAction(action, paramsByActionId.get(action.ID) ?? []);
+        const params = paramsByActionId.get(action.ID) ?? [];
+        const tool = BuildToolFromAction(action, params);
         const existing = byToolName.get(tool.name);
         if (existing) {
             throw new Error(
@@ -266,7 +327,7 @@ export function BuildActionToolSet(
         if (tool.name.length === 0) {
             throw new Error(`Action '${action.Name}' sanitizes to an empty tool name — it must contain at least one alphanumeric character.`);
         }
-        byToolName.set(tool.name, { kind: 'action', toolName: tool.name, action, tool });
+        byToolName.set(tool.name, { kind: 'action', toolName: tool.name, action, tool, params });
         tools.push(tool);
     }
 
