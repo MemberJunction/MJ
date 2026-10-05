@@ -49,6 +49,7 @@
     "src/lib/resolver/form-resolver.service.ts",
     "src/lib/resolver/form-variants.ts",
     "src/lib/panel-slot/form-field-panel-slot.component.ts",
+    "src/lib/panel-slot/form-field-panel-slot.component.dom.test.ts",
     "src/lib/apply/form-placement.ts",
     "src/lib/apply/form-slot-probe.service.ts",
     "src/lib/apply/form-placement-dialog.component.ts",
