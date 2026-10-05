@@ -146,10 +146,6 @@ function formatTypeString(mapped: MappedType, length?: number, precision?: numbe
 }
 
 /**
- * PostgreSQL dialect implementation.
- * Uses "double-quote" identifiers, LIMIT/OFFSET pagination, native BOOLEAN, PL/pgSQL functions.
- */
-/**
  * PostgreSQL functions caller-supplied SQL may not call: the XML exporters that run SQL given as a
  * string (`query_to_xml`, `cursor_to_xml`, `table_to_xml`, `schema_to_xml`, `database_to_xml` and
  * their schema variants), the text-search functions that do the same (`ts_stat`, `ts_rewrite`),
@@ -166,6 +162,10 @@ const POSTGRESQL_CALLER_SQL_FORBIDDEN_FUNCTIONS: readonly string[] = [
     'pg_switch_wal', 'pg_create_restore_point', 'pg_log_backend_memory_contexts'
 ];
 
+/**
+ * PostgreSQL dialect implementation.
+ * Uses "double-quote" identifiers, LIMIT/OFFSET pagination, native BOOLEAN, PL/pgSQL functions.
+ */
 export class PostgreSQLDialect extends SQLDialect {
     get PlatformKey(): DatabasePlatform {
         return 'postgresql';
