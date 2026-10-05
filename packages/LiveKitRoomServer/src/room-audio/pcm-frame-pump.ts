@@ -182,6 +182,15 @@ export class PcmFramePump {
   }
 
   /**
+   * How much already-sent audio is still ahead of real time, in ms: the pump keeps the sink up to `LeadMs` ahead, so
+   * after the last frame is sent the room is still playing this much. Zero once real time has caught up.
+   */
+  public get QueuedAheadMs(): number {
+    const sentUntil = this.timelineStart + this.framesOnTimeline * this.frameMs;
+    return Math.max(0, sentUntil - this.clock.Now());
+  }
+
+  /**
    * Plays `pcm` over the music: the music fades down to the duck level, the clip plays, the music fades back up.
    * Clips queue behind one another.
    *
