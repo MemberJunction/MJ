@@ -24509,7 +24509,12 @@
       "SpeedRank": 6,
       "CostRank": 10,
       "InheritTypeModalities": true,
-      "PriorVersionID": "@lookup:MJ: AI Models.Name=Claude Fable 5"
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Claude Fable 5",
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsForcedToolChoice": false
+        }
+      }
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
