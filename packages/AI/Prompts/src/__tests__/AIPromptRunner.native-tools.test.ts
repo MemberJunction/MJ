@@ -152,6 +152,15 @@ describe('applyNativeToolCalling — filling the outgoing request', () => {
         expect(chatParams.toolChoice).toEqual({ name: 'complete_task' });
     });
 
+    it("sends 'auto' in place of a forced complete_task to a model whose catalog rejects forced tool choice", () => {
+        engineState.configuration = { LLM: { SupportsNativeToolCalling: true, DefaultToNativeToolCalling: true, NativeControlFlow: 'implicit', SupportsForcedToolChoice: false } };
+        const chatParams = new ChatParams();
+        const tools = [{ name: 'run_ad_hoc_query', description: 'x', inputSchema: { type: 'object' } }, { name: 'complete_task', description: 'y', inputSchema: { type: 'object' } }];
+        priv(runner).applyNativeToolCalling(chatParams, prompt(), { tools, controlFlowToolNames: ['complete_task'], toolChoice: { name: 'complete_task' } }, model(), VENDOR_ID);
+        expect(chatParams.tools?.map((t) => t.name)).toEqual(['run_ad_hoc_query', 'complete_task']);
+        expect(chatParams.toolChoice).toBe('auto');
+    });
+
     it("downgrades a forced complete_task to 'none' on a hybrid model, which never receives it", () => {
         // A named choice for an undeclared tool is rejected by every provider; the hybrid's terminal
         // answer is the envelope, which 'none' asks for.

@@ -26050,7 +26050,8 @@
           "SupportsNativeToolCalling": true,
           "DefaultToNativeToolCalling": false,
           "NativeControlFlow": "implicit",
-          "NativeToolResults": true
+          "NativeToolResults": true,
+          "SupportsForcedToolChoice": false
         }
       }
     },
@@ -27270,7 +27271,8 @@
           "SupportsNativeToolCalling": true,
           "DefaultToNativeToolCalling": false,
           "NativeControlFlow": "implicit",
-          "NativeToolResults": true
+          "NativeToolResults": true,
+          "SupportsForcedToolChoice": false
         }
       }
     },
