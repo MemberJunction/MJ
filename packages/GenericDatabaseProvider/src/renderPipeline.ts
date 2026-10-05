@@ -1,7 +1,7 @@
 import { DatabasePlatform, UserInfo, QueryDependencySpec, LogStatus } from '@memberjunction/core';
 import { MJQueryParameterEntity } from '@memberjunction/core-entities';
 import { GetDialect } from '@memberjunction/sql-dialect';
-import { SQLParser, IsReadOnlyQuery } from '@memberjunction/sql-parser';
+import { SQLParser, IsReadOnlyQuery, FindForbiddenFunctionCalls } from '@memberjunction/sql-parser';
 import { QueryCompositionEngine, CompositionResult, CompositionCTEInfo } from './queryCompositionEngine.js';
 import { QueryPagingEngine, PagingWrappedSQL, RowCapOutcome } from './queryPagingEngine.js';
 import { QueryParameterProcessor, type QueryTemplateInput } from '@memberjunction/query-processor';
@@ -241,7 +241,10 @@ export class RenderPipeline {
      * statement, starting with SELECT or WITH, reading in every CTE, and not
      * writing its rows into a table. That check works from tokens, so it also
      * refuses a `SET` or `DECLARE` the AST check lets through, and it still
-     * accepts read queries the parser cannot read.
+     * accepts read queries the parser cannot read. Such SQL also may not call
+     * the functions the dialect lists in `CallerSQLForbiddenFunctions`
+     * (`query_to_xml`, `pg_read_file`, `OPENROWSET`, …): they read what a check
+     * of the tables the SQL references cannot see.
      *
      * The broader dangerous-keyword scan
      * ({@link SQLExpressionValidator.validateFullQuery}) deliberately stays on
@@ -255,6 +258,13 @@ export class RenderPipeline {
             const check = IsReadOnlyQuery(sql, dialect);
             if (!check.IsReadOnly) {
                 throw new Error(`RenderPipeline: only a single read query may be run here, and this SQL is not one: ${check.Reason}.`);
+            }
+            const forbidden = FindForbiddenFunctionCalls(sql, dialect);
+            if (forbidden.length > 0) {
+                throw new Error(
+                    `RenderPipeline: SQL supplied here may not call ${forbidden.join(', ')}. These functions run SQL ` +
+                    'given as a string, or read files or other databases, so what they read cannot be checked.',
+                );
             }
         }
         const parsed = new SQLParser(sql, dialect);

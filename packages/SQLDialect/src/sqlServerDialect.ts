@@ -122,6 +122,15 @@ function formatTypeString(mapped: MappedType, length?: number, precision?: numbe
  * SQL Server dialect implementation.
  * Uses [bracket] quoting, TOP for pagination, BIT for booleans, T-SQL functions.
  */
+/**
+ * SQL Server functions caller-supplied SQL may not call: the rowset functions that reach other
+ * servers, databases or files, and the functions that read trace, audit and extended-event files.
+ */
+const SQL_SERVER_CALLER_SQL_FORBIDDEN_FUNCTIONS: readonly string[] = [
+    'openrowset', 'openquery', 'opendatasource',
+    'fn_get_audit_file', 'fn_xe_file_target_read_file', 'fn_trace_gettable'
+];
+
 export class SQLServerDialect extends SQLDialect {
     get PlatformKey(): DatabasePlatform {
         return 'sqlserver';
@@ -419,6 +428,10 @@ export class SQLServerDialect extends SQLDialect {
 
     get QueryHintKeyword(): string | null {
         return 'OPTION';
+    }
+
+    get CallerSQLForbiddenFunctions(): readonly string[] {
+        return SQL_SERVER_CALLER_SQL_FORBIDDEN_FUNCTIONS;
     }
 
     StringLiteralPrefix(text: string): string {

@@ -2210,3 +2210,15 @@ describe('bulletproof — fuzzed invariant over a corpus of shapes', () => {
         });
     }
 });
+
+describe('forbidden functions are refused only for caller-supplied SQL', () => {
+    it('refuses pg_read_file when a read statement is required', () => {
+        expect(() => RenderPipeline.Run(`SELECT pg_read_file('/etc/hostname') AS f`, { Platform: 'postgresql', RequireReadStatement: true }))
+            .toThrow(/may not call pg_read_file/);
+    });
+
+    it('leaves a saved query that calls one alone', () => {
+        const result = RenderPipeline.Run(`SELECT CAST(query_to_xml('SELECT 1', true, false, '') AS text) AS x`, { Platform: 'postgresql' });
+        expect(result.FinalSQL).toContain('query_to_xml');
+    });
+});
