@@ -409,7 +409,11 @@ describe('xAIRealtime', () => {
             const respond = driver.Fake.Sent[0];
             expect(respond.type).toBe('response.create');
             if (respond.type === 'response.create') {
-                expect(respond.response?.instructions).toBe('Briefly say the report agent is drafting.');
+                // The session prompt rides AHEAD of the direction: `response.instructions` is a full
+                // override of the session prompt, so sending the direction alone would leave the model
+                // with no identity for exactly this one turn (#4591). The session was started with
+                // SystemPrompt 'sys', which xAIRealtimeSession inherits from OpenAIRealtimeSession.
+                expect(respond.response?.instructions).toBe('sys\n\nBriefly say the report agent is drafting.');
             }
         });
 
