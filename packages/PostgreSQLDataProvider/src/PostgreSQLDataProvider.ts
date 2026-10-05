@@ -330,6 +330,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
             this._configData = configData;
             this._schemaName = configData.MJCoreSchemaName || '__mj';
             this._connectionManager.InitializeWithExistingPool(existingPool, configData.ConnectionConfig);
+            RunQuerySQLFilterManager.Instance.SetPlatform('postgresql');
             return await super.Config(configData);
         } catch (err) {
             LogError(`PostgreSQLDataProvider.ConfigWithSharedPool failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -371,6 +372,12 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
                 const bypassResult = await bypass.query(quotedQuery, processedParams);
                 return bypassResult.rows as T[];
             }
+            const timeoutMs = this.effectiveTimeoutMs(options?.timeoutMs);
+            const readOnly = !!options?.readOnlyTransaction && !this._transaction;
+            const timed = timeoutMs !== undefined && !this._transaction;
+            if (readOnly || timed) {
+                return await this.executeOnOwnConnection<T>(quotedQuery, processedParams, readOnly, timeoutMs);
+            }
             this.AssertAmbientTransactionUsable();
             const source = this._transaction ?? this._connectionManager.Pool;
             const result = await source.query(quotedQuery, processedParams);
@@ -379,6 +386,68 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
             const desc = options?.description ? ` [${options.description}]` : '';
             LogError(`PostgreSQLDataProvider.ExecuteSQL failed${desc}: ${err instanceof Error ? err.message : String(err)}`);
             throw err;
+        }
+    }
+
+    /**
+     * The statement limit for a call that asked for `requested` milliseconds: never longer than
+     * the pool's own `statement_timeout`, so a caller can shorten the limit but not lift it.
+     * `undefined` when the call asked for none.
+     */
+    private effectiveTimeoutMs(requested: number | undefined): number | undefined {
+        if (!requested || requested <= 0) return undefined;
+        const poolLimit = this._connectionManager.Config?.StatementTimeoutMs;
+        const ms = Math.floor(requested);
+        return poolLimit && poolLimit > 0 ? Math.min(ms, poolLimit) : ms;
+    }
+
+    /**
+     * Returns a connection used by {@link executeOnOwnConnection} to the pool after releasing any
+     * advisory lock the statement took: a session-level advisory lock survives the transaction's
+     * end, so it would otherwise stay on the pooled connection. A connection that cannot be cleaned
+     * is discarded instead.
+     */
+    private async releaseOwnConnection(client: pg.PoolClient): Promise<void> {
+        try {
+            await client.query('SELECT pg_advisory_unlock_all()');
+            client.release();
+        } catch (err) {
+            client.release(err instanceof Error ? err : new Error(String(err)));
+        }
+    }
+
+    /**
+     * Runs one statement on its own pooled connection inside a transaction of its own.
+     *
+     * - `readOnly`: `BEGIN READ ONLY … ROLLBACK`. Writes fail, and the rollback undoes any session
+     *   setting the statement made, so the connection goes back to the pool unchanged.
+     * - `timeoutMs`: `SET LOCAL statement_timeout` for this statement only; PostgreSQL cancels it
+     *   when the limit passes. Without `readOnly` the transaction commits, so writes still land.
+     *
+     * Advisory locks the statement took are released before the connection goes back to the pool.
+     */
+    private async executeOnOwnConnection<T>(
+        sql: string,
+        params: unknown[] | undefined,
+        readOnly: boolean,
+        timeoutMs: number | undefined,
+    ): Promise<Array<T>> {
+        const client = await this._connectionManager.AcquireClient();
+        try {
+            await client.query(readOnly ? 'BEGIN READ ONLY' : 'BEGIN');
+            try {
+                if (timeoutMs !== undefined) {
+                    await client.query(`SET LOCAL statement_timeout = ${timeoutMs}`);
+                }
+                const result = await client.query(sql, params);
+                await client.query(readOnly ? 'ROLLBACK' : 'COMMIT');
+                return result.rows as T[];
+            } catch (err) {
+                await client.query('ROLLBACK').catch(() => undefined);
+                throw err;
+            }
+        } finally {
+            await this.releaseOwnConnection(client);
         }
     }
 

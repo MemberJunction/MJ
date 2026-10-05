@@ -83,7 +83,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { SqlLoggingSessionImpl } from './SqlLogger.js';
 import { SqlLoggingOptions, SqlLoggingSession } from './types.js';
 import { SQLDialect, GetDialect } from '@memberjunction/sql-dialect';
-import { SQLParser } from '@memberjunction/sql-parser';
+import { SQLParser, IsReadOnlyQuery } from '@memberjunction/sql-parser';
 // QueryCompositionEngine is now owned by RenderPipeline
 import { RenderPipeline, type RenderResult } from './renderPipeline.js';
 import { CRUDSprocType, useJsonArgShape } from './crudSprocFieldRules.js';
@@ -121,6 +121,12 @@ export interface ExecuteSQLBatchOptions {
     /** Whether this batch contains data mutation operations */
     isMutation?: boolean;
 }
+
+/**
+ * Execution options for SQL a caller supplied rather than a saved query (ad-hoc SQL, transient test
+ * queries): run it read-only and roll back, so it can neither write nor leave session state behind.
+ */
+const CALLER_SQL_OPTIONS: ExecuteSQLOptions = { readOnlyTransaction: true, description: 'caller-supplied query' };
 
 /** A {@link GenericDatabaseProvider.RunAfterCommit} task waiting for the outermost commit. */
 interface PostCommitEntry {
@@ -4271,7 +4277,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         try {
             const validator = SQLExpressionValidator.Instance;
             const validation = validator.validateFullQuery(params.SQL!);
-            if (!validation.valid) {
+            const statementCheck = IsReadOnlyQuery(params.SQL!, this.Dialect);
+            if (!validation.valid || !statementCheck.IsReadOnly) {
                 return {
                     Success: false,
                     QueryID: '',
@@ -4280,20 +4287,20 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     RowCount: 0,
                     TotalRowCount: 0,
                     ExecutionTime: 0,
-                    ErrorMessage: validation.error || 'SQL validation failed',
+                    ErrorMessage: !validation.valid
+                        ? validation.error || 'SQL validation failed'
+                        : `Ad-hoc SQL must be a single read query: ${statementCheck.Reason}.`,
                 };
             }
 
-            const { result, executionTime } = await this.executeQueryWithTiming(params.SQL!, contextUser);
-
-            const { paginatedResult, totalRowCount } = this.applyQueryPagination(result, params);
+            const { rows, totalRowCount, executionTime } = await this.runAdhocSQL(params, contextUser);
 
             return {
                 Success: true,
                 QueryID: '',
                 QueryName: 'Ad-Hoc Query',
-                Results: paginatedResult,
-                RowCount: paginatedResult.length,
+                Results: rows,
+                RowCount: rows.length,
                 TotalRowCount: totalRowCount,
                 ExecutionTime: executionTime,
                 ErrorMessage: '',
@@ -4312,6 +4319,64 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 ErrorMessage: `Ad-hoc query execution failed: ${errorMessage}`,
             };
         }
+    }
+
+    /**
+     * Runs validated ad-hoc SQL. It is rendered the way caller-supplied SQL always is: composition
+     * tokens resolved, comments removed, and a single read query required. With `MaxRows` the
+     * database returns that page and a count runs beside it, as for saved queries, so the server
+     * sends one page rather than every row; without it every row is returned, offset by `StartRow`
+     * when one is given. `TimeoutSeconds` limits every statement the run sends.
+     */
+    private async runAdhocSQL(
+        params: RunQueryParams,
+        contextUser?: UserInfo,
+    ): Promise<{ rows: Record<string, unknown>[]; totalRowCount: number; executionTime: number }> {
+        const usePaging = QueryPagingEngine.ShouldPage(params.StartRow, params.MaxRows);
+        const startRow = QueryPagingEngine.ResolveStartRow(params.StartRow);
+        const rendered = RenderPipeline.Run(params.SQL!, {
+            Platform: this.PlatformKey as DatabasePlatform,
+            ContextUser: contextUser,
+            RequireReadStatement: true,
+            ...(usePaging ? { Paging: { StartRow: startRow, MaxRows: params.MaxRows! } } : {}),
+        });
+        const options = this.adhocSQLOptions(params);
+        if (!usePaging) {
+            const { result, executionTime } = await this.executeQueryWithTiming(rendered.FinalSQL, contextUser, undefined, options);
+            const { paginatedResult, totalRowCount } = this.applyQueryPagination(result, params);
+            return { rows: paginatedResult, totalRowCount, executionTime };
+        }
+        const start = Date.now();
+        const [dataResult, total] = await Promise.all([
+            this.ExecuteSQL<Record<string, unknown>>(rendered.FinalSQL, undefined, options, contextUser),
+            this.countAdhocRows(rendered.PagingResult?.CountSQL ?? null, options, contextUser),
+        ]);
+        const rows = dataResult ?? [];
+        return { rows, totalRowCount: total ?? startRow + rows.length, executionTime: Date.now() - start };
+    }
+
+    /**
+     * The total row count for a page of ad-hoc SQL, or `null` when it cannot be had. A count that
+     * fails does not fail the run: some queries page fine but cannot be counted (duplicate column
+     * names are legal in a result but not inside the count's wrap), so the caller reports a lower
+     * bound instead.
+     */
+    private async countAdhocRows(countSQL: string | null, options: ExecuteSQLOptions, contextUser?: UserInfo): Promise<number | null> {
+        if (!countSQL) return null;
+        try {
+            const countResult = await this.ExecuteSQL<{ TotalRowCount: number }>(countSQL, undefined, options, contextUser);
+            const total = Number(countResult?.[0]?.TotalRowCount);
+            return Number.isFinite(total) && total >= 0 ? Math.floor(total) : null;
+        } catch (e) {
+            LogError(`Ad-hoc query row count failed; reporting a lower-bound total. ${e instanceof Error ? e.message : String(e)}`);
+            return null;
+        }
+    }
+
+    /** The options every statement of an ad-hoc run uses: caller-SQL protections, plus its timeout. */
+    private adhocSQLOptions(params: RunQueryParams): ExecuteSQLOptions {
+        const seconds = params.TimeoutSeconds;
+        return seconds && seconds > 0 ? { ...CALLER_SQL_OPTIONS, timeoutMs: seconds * 1000 } : CALLER_SQL_OPTIONS;
     }
 
     /**
@@ -4512,7 +4577,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             finalSQL = resolved.finalSQL;
 
             // Execute
-            const { result, executionTime } = await this.executeQueryWithTiming(finalSQL, contextUser);
+            const { result, executionTime } = await this.executeQueryWithTiming(finalSQL, contextUser, undefined, CALLER_SQL_OPTIONS);
 
             return {
                 Success: true,
@@ -4568,6 +4633,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 Dependencies: spec.Dependencies,
                 OriginalSQL: spec.SQL,
                 MaxRows: spec.MaxRows,
+                RequireReadStatement: true,
             }
         );
 
@@ -4612,9 +4678,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         sql: string,
         contextUser?: UserInfo,
         parameters?: unknown[],
+        options?: ExecuteSQLOptions,
     ): Promise<{ result: Record<string, unknown>[]; executionTime: number }> {
         const start = Date.now();
-        const result = await this.ExecuteSQL<Record<string, unknown>>(sql, parameters, undefined, contextUser);
+        const result = await this.ExecuteSQL<Record<string, unknown>>(sql, parameters, options, contextUser);
         const executionTime = Date.now() - start;
 
         if (!result) {

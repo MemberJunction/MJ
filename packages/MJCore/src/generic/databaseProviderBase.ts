@@ -2518,4 +2518,20 @@ export interface ExecuteSQLOptions {
    * bypasses the ambient transaction — required for teardown/probes after a doomed TX.
    */
   connectionSource?: object;
+  /**
+   * Run the statement inside a read-only transaction that is always rolled back, for SQL a
+   * caller supplied. Writes fail, and any session setting the statement changes (`SET`,
+   * `set_config`) is undone before the connection goes back to the pool, so it cannot reach a
+   * later request. Inside an ambient transaction the statement runs in that transaction as usual.
+   * PostgreSQL honours it; SQL Server, whose read queries cannot change session settings, ignores it.
+   */
+  readOnlyTransaction?: boolean;
+  /**
+   * The longest this statement may run, in milliseconds. When it is exceeded the database cancels
+   * the statement and the call rejects with a timeout error, so the work stops rather than only
+   * the wait. Omitted or 0 means the connection's usual limit applies. It can only shorten that
+   * limit, never lengthen it. Ignored inside an ambient transaction, whose statements follow the
+   * transaction's own limits.
+   */
+  timeoutMs?: number;
 }

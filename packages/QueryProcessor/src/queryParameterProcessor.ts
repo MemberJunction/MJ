@@ -276,9 +276,8 @@ export class QueryParameterProcessor {
 
     /**
      * Validates parameters against their definitions.
-     * Boolean handling is platform-aware:
-     * - SQL Server: converts to 1/0 (BIT fields)
-     * - PostgreSQL: keeps as true/false (native boolean)
+     * Boolean values are bound the way the current platform's dialect expects
+     * (`BooleanParameterValue`): 1/0 on SQL Server, true/false on PostgreSQL.
      */
     public static validateParameters(
         parameters: Record<string, unknown> | undefined,
@@ -287,7 +286,7 @@ export class QueryParameterProcessor {
     ): ParameterValidationResult {
         const errors: string[] = [];
         const validatedParams: Record<string, unknown> = {};
-        const platform = RunQuerySQLFilterManager.Instance.Platform;
+        const dialect = RunQuerySQLFilterManager.Instance.Dialect;
 
         // Process each defined parameter
         for (const paramDef of parameterDefinitions) {
@@ -338,13 +337,7 @@ export class QueryParameterProcessor {
                                 ? finalValue
                                 : String(finalValue).toLowerCase() === 'true';
 
-                            if (platform === 'postgresql') {
-                                // PostgreSQL natively supports boolean true/false
-                                validatedParams[paramDef.Name] = boolValue;
-                            } else {
-                                // SQL Server uses BIT (1/0)
-                                validatedParams[paramDef.Name] = boolValue ? 1 : 0;
-                            }
+                            validatedParams[paramDef.Name] = dialect.BooleanParameterValue(boolValue);
                             break;
                         }
                         case 'array':
