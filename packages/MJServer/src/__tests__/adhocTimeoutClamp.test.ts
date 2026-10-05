@@ -3,7 +3,7 @@
  * read-only connection longer than any other request may.
  */
 import { describe, it, expect } from 'vitest';
-import { ClampAdhocTimeoutSeconds } from '../resolvers/AdhocQueryResolver';
+import { ClampAdhocTimeoutSeconds } from '../resolvers/adhocTimeout';
 
 describe('ClampAdhocTimeoutSeconds', () => {
     it('caps a longer request at requestTimeout', () => {
