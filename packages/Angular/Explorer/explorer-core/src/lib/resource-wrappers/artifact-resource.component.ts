@@ -1,9 +1,9 @@
 import { Component, ViewEncapsulation, inject } from '@angular/core';
-import { DataSnapshot, Metadata, UserInfo } from '@memberjunction/core';
+import { CompositeKey, DataSnapshot, Metadata, UserInfo } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData, MJEnvironmentEntityExtended } from '@memberjunction/core-entities';
-import { AnalyzeArtifactService, InteractiveFormApplyService } from '@memberjunction/ng-artifacts';
+import { AnalyzeArtifactService, InteractiveFormApplyService, NavigationRequest } from '@memberjunction/ng-artifacts';
 import type { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
@@ -27,7 +27,9 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
           [canShare]="true"
           [canEdit]="true"
           (analyzeRequested)="onAnalyzeRequested($event)"
-          (applyFormRequested)="onApplyFormRequested($event)">
+          (applyFormRequested)="onApplyFormRequested($event)"
+          (openEntityRecord)="onOpenEntityRecord($event)"
+          (navigationRequest)="onNavigationRequest($event)">
         </mj-artifact-viewer-panel>
       }
     </div>
@@ -106,6 +108,30 @@ export class ArtifactResource extends BaseResourceComponent {
       const message = error instanceof Error ? error.message : 'Failed to start analysis conversation';
       MJNotificationService.Instance.CreateSimpleNotification(message, 'error', 5000);
     }
+  }
+
+  /**
+   * Opens an entity record requested by the artifact, e.g. an interactive component's
+   * OpenEntityRecord callback. Without this, record links in a standalone artifact tab do nothing.
+   */
+  onOpenEntityRecord(event: { entityName: string; compositeKey: CompositeKey }): void {
+    this.navigationService.OpenEntityRecord(event.entityName, event.compositeKey);
+  }
+
+  /**
+   * Handles app-level navigation requested by an artifact viewer plugin.
+   * Opens the target nav item (switching apps if needed) then applies query params to the URL.
+   */
+  async onNavigationRequest(event: NavigationRequest): Promise<void> {
+    const appId = event.appName ? this.resolveAppId(event.appName) : undefined;
+    await this.navigationService.OpenNavItemByName(event.navItemName, undefined, appId, {
+      queryParams: event.queryParams
+    });
+  }
+
+  private resolveAppId(appName: string): string | undefined {
+    const app = this.ProviderToUse.Applications.find(a => a.Name.toLowerCase() === appName.toLowerCase());
+    return app?.ID;
   }
 
   async GetResourceDisplayName(data: ResourceData): Promise<string> {
