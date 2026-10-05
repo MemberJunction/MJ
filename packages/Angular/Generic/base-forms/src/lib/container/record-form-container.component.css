@@ -237,6 +237,15 @@ mj-record-form-container {
   flex-shrink: 0;
 }
 
+/* Slot-mounted panels: <mj-form-panel-slot> and the panel host it mounts are
+   both display:contents, so the flex items here are the panel template's root
+   elements, two DOM levels down where the child selector above cannot reach.
+   Without this a root with overflow other than visible (min-height resolves
+   to 0) shrinks to fit the column, clipping a header card to its title row. */
+.mj-forms-layout--left-nav .mj-forms-all-panels > mj-form-panel-slot > * > *:not(mj-collapsible-panel.mj-panel--related-entity) {
+  flex-shrink: 0;
+}
+
 .mj-forms-layout--left-nav .biz-hero {
   margin-bottom: 4px;
 }
