@@ -16,8 +16,12 @@ vi.mock('@memberjunction/core', () => ({
     LogStatus: vi.fn(),
 }));
 
-const loadWindowRows = vi.fn().mockResolvedValue([{ ID: 'd1' }, { ID: 'd2' }]);
-const assembleWindow = vi.fn().mockReturnValue([
+// Implementations are passed to vi.fn() rather than set with mockResolvedValue/mockReturnValue:
+// the shared config's `restoreMocks` runs before every test, and under vitest 3 that resets a
+// mock to the implementation it was CREATED with — none, for a bare vi.fn() — so a value set
+// afterwards vanished after the first test and the deliverer was handed `undefined` history.
+const loadWindowRows = vi.fn(async () => [{ ID: 'd1' }, { ID: 'd2' }]);
+const assembleWindow = vi.fn(() => [
     { role: 'user', content: 'Find the five largest cities and give me a table' },
     { role: 'assistant', content: 'Here is the plan…' },
 ]);

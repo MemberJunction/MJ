@@ -287,10 +287,13 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
     private async loadHistory(provider: IMetadataProvider, owner: UserInfo, conversationID: string, replyID: string): Promise<ChatMessage[]> {
         try {
             const rows = await ConversationEngine.LoadWindowRowsFresh(conversationID, owner, provider);
-            return ConversationEngine.AssembleContextWindow(rows, {
+            const window = ConversationEngine.AssembleContextWindow(rows, {
                 excludeDetailIds: [replyID],
                 maxTailMessages: FOLLOW_UP_HISTORY_MESSAGES,
-            }) as ChatMessage[];
+            });
+            // Never hand back something the caller cannot spread: an engine that answers with no
+            // window is the same as no history.
+            return Array.isArray(window) ? (window as ChatMessage[]) : [];
         } catch (e) {
             LogError(`[TaskGraphContinuationDeliverer] Could not load conversation ${conversationID} for the follow-up — running on the outcome alone`, undefined, e);
             return [];
