@@ -205,7 +205,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (432 classes)
+// @memberjunction/core-entities (440 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -466,6 +466,10 @@ import {
     MJIntegrationObjectFieldEntity,
     MJIntegrationSourceTypeEntity,
     MJIntegrationURLFormatEntity,
+    MJInteractionEntity,
+    MJInteractionEventEntity,
+    MJInteractionLinkEntity,
+    MJInteractionOfferEntity,
     MJKnowledgeHubSavedSearchEntity,
     MJLibraryEntity,
     MJLibraryItemEntity,
@@ -498,6 +502,9 @@ import {
     MJMagicLinkRedemptionEntity,
     MJMaterializedResultEntity,
     MJMaterializedResultQueryEntity,
+    MJMeetingEntity,
+    MJMeetingParticipantEntity,
+    MJNumberPoolEntity,
     MJOAuthAuthServerMetadataCacheEntity,
     MJOAuthAuthorizationStateEntity,
     MJOAuthClientRegistrationEntity,
@@ -508,6 +515,7 @@ import {
     MJOutputDeliveryTypeEntity,
     MJOutputFormatTypeEntity,
     MJPermissionDomainEntity,
+    MJPhoneNumberEntity,
     MJProcessRunDetailEntity,
     MJProcessRunEntity,
     MJProjectEntity,
@@ -1097,7 +1105,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (56 classes)
+// @memberjunction/core-entities-server (57 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -1126,6 +1134,7 @@ import {
     MJEntityDocumentEntityServer,
     MJEntityEntityServer,
     MJEntityFieldPermissionEntityServer,
+    MJInteractionEventEntityServer,
     MJListDetailEntityServer,
     MJListEntityServer,
     MJMLTrainingPipelineEntityServer,
@@ -1656,6 +1665,10 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJIntegrationObjectFieldEntity,
     MJIntegrationSourceTypeEntity,
     MJIntegrationURLFormatEntity,
+    MJInteractionEntity,
+    MJInteractionEventEntity,
+    MJInteractionLinkEntity,
+    MJInteractionOfferEntity,
     MJKnowledgeHubSavedSearchEntity,
     MJLibraryEntity,
     MJLibraryItemEntity,
@@ -1688,6 +1701,9 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJMagicLinkRedemptionEntity,
     MJMaterializedResultEntity,
     MJMaterializedResultQueryEntity,
+    MJMeetingEntity,
+    MJMeetingParticipantEntity,
+    MJNumberPoolEntity,
     MJOAuthAuthServerMetadataCacheEntity,
     MJOAuthAuthorizationStateEntity,
     MJOAuthClientRegistrationEntity,
@@ -1698,6 +1714,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJOutputDeliveryTypeEntity,
     MJOutputFormatTypeEntity,
     MJPermissionDomainEntity,
+    MJPhoneNumberEntity,
     MJProcessRunDetailEntity,
     MJProcessRunEntity,
     MJProjectEntity,
@@ -1735,6 +1752,10 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJResourceLinkEntity,
     MJResourcePermissionEntity,
     MJResourcePermissionEntityExtended,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_2: any[] = [
     MJResourceTypeEntity,
     MJRoleEntity,
     MJRowLevelSecurityFilterEntity,
@@ -1743,10 +1764,6 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRubricCriterionEntity,
     MJRubricCriterionLevelEntity,
     MJRubricEntity,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_2: any[] = [
     MJRubricEvaluationEntity,
     MJRubricEvaluationScoreEntity,
     MJRubricScaleEntity,
@@ -1939,6 +1956,10 @@ const CLASS_REGISTRATIONS_2: any[] = [
     SSOLoginAction,
     UpdateUserAction,
     UpdateUserProgressAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     BufferCreatePostAction,
     BufferDeletePostAction,
     BufferGetAnalyticsAction,
@@ -1947,10 +1968,6 @@ const CLASS_REGISTRATIONS_2: any[] = [
     BufferGetSentPostsAction,
     BufferReorderQueueAction,
     BufferSearchPostsAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     CreateVideoPostAction,
     FacebookBoostPostAction,
     FacebookCreateAlbumAction,
@@ -2143,6 +2160,10 @@ const CLASS_REGISTRATIONS_3: any[] = [
     ActionScheduledJobDriver,
     AgentRunSweepScheduledJobDriver,
     AgentScheduledJobDriver,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_4: any[] = [
     EvaluateSampledAgentRunsDriver,
     IntegrationDiscoveryScheduledJobDriver,
     IntegrationSyncScheduledJobDriver,
@@ -2151,10 +2172,6 @@ const CLASS_REGISTRATIONS_3: any[] = [
     UserRoutineDispatcherDriver,
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_4: any[] = [
     MJAIAgentExampleEntityServer,
     MJAIAgentNoteEntityServer,
     MJAIAgentSessionBridgeEntityServer,
@@ -2180,6 +2197,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJEntityDocumentEntityServer,
     MJEntityEntityServer,
     MJEntityFieldPermissionEntityServer,
+    MJInteractionEventEntityServer,
     MJListDetailEntityServer,
     MJListEntityServer,
     MJMLTrainingPipelineEntityServer,
@@ -2346,6 +2364,10 @@ const CLASS_REGISTRATIONS_4: any[] = [
     TestMCPConnectionAction,
     TestRuntimeActionAction,
     TextAnalyzerAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_5: any[] = [
     URLLinkValidatorAction,
     URLMetadataExtractorAction,
     UnitConverterAction,
@@ -2355,10 +2377,6 @@ const CLASS_REGISTRATIONS_4: any[] = [
     ValidateAddressAction,
     ValidateEmailUniqueAction,
     VectorizeEntityAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_5: any[] = [
     VoidSignatureRequestAction,
     WebPageContentAction,
     WebSearchAction,
@@ -2390,7 +2408,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1015;
+export const CLASS_REGISTRATIONS_COUNT = 1024;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -15,8 +15,9 @@ vi.mock('../telephony/runAsIdentity.js', () => ({ ResolveInboundContext: vi.fn()
 
 import { LogError } from '@memberjunction/core';
 import { ResolveInboundContext } from '../telephony/runAsIdentity.js';
-import { RingCentralTelephonyService } from '../telephony/RingCentralTelephonyService.js';
+import { RingCentralTelephonyService, REGISTRATION_DEADLINE_MS, type RingCentralTelephonyServiceDeps } from '../telephony/RingCentralTelephonyService.js';
 import { OutboundCallRefusedError } from '../telephony/outboundCallPolicy.js';
+import { CallCapacityGate } from '../telephony/telephonyCapacity.js';
 import type { RingCentralTelephonyConfig } from '../types.js';
 
 const CONFIG: RingCentralTelephonyConfig = {
@@ -53,7 +54,11 @@ interface Harness {
     invite: (info: InboundInviteInfo) => Promise<void>;
 }
 
-async function harness(config: RingCentralTelephonyConfig = CONFIG, canRunAgent: (a: string, u: UserInfo) => Promise<boolean> = async () => true): Promise<Harness> {
+async function harness(
+    config: RingCentralTelephonyConfig = CONFIG,
+    canRunAgent: (a: string, u: UserInfo) => Promise<boolean> = async () => true,
+    extraDeps: Partial<RingCentralTelephonyServiceDeps> = {},
+): Promise<Harness> {
     const engine = fakeEngine();
     let inviteListener: ((info: InboundInviteInfo) => void) | undefined;
     const handle = {
@@ -70,6 +75,9 @@ async function harness(config: RingCentralTelephonyConfig = CONFIG, canRunAgent:
         sessionManager: { CreateSession: vi.fn(async () => ({ ID: 'AS1' })) } as never,
         createHandle: (async () => handle as unknown as RingCentralSoftphoneHandle) as never,
         canRunAgent,
+        coAgentResolver: vi.fn(async () => 'co-agent-1') as never,
+        capacity: new CallCapacityGate(100),
+        ...extraDeps,
     });
     await service.Start();
     return {
@@ -169,5 +177,112 @@ describe('PlaceOutboundCall — gated', () => {
     it('places an authorized call and returns the session id', async () => {
         const h = await harness();
         await expect(h.service.PlaceOutboundCall('ident-1', '+14155550123', USER, dbProvider())).resolves.toBe('SIP-CALL-1');
+    });
+});
+
+describe('call parity with the other carriers', () => {
+    it('keeps the co-agent and the dialled agent apart, and the agent DID apart from the caller number', async () => {
+        const sessionFactory = vi.fn(async () => ({}));
+        const h = await harness(CONFIG, async () => true, { sessionFactory: sessionFactory as never });
+        await h.invite(INVITE);
+
+        expect(sessionFactory.mock.calls[0][0]).toMatchObject({ AgentID: 'co-agent-1', TargetAgentID: 'agent-1' });
+        const start = h.engine.StartBridgeSession.mock.calls[0][0] as { Address: string; JoinMethod: string; TurnMode: string; Configuration: Record<string, unknown> };
+        expect(start.Address).toBe('+18005550100');
+        expect(start.Configuration['CallerNumber']).toBe('+14155550123');
+        expect(start.JoinMethod).toBe('InboundRoute');
+        expect(start.TurnMode).toBe('Active');
+    });
+});
+
+describe('concurrent-call cap', () => {
+    it('declines an inbound INVITE over the cap without starting a session', async () => {
+        const full = new CallCapacityGate(1);
+        full.TryAcquire();
+        const h = await harness(CONFIG, async () => true, { capacity: full });
+        await h.invite(INVITE);
+        expect(h.handle.declineCall).toHaveBeenCalledWith('SIP-CALL-1');
+        expect(h.engine.StartBridgeSession).not.toHaveBeenCalled();
+    });
+
+    it('reports an over-cap inbound call as Busy, not as a missing agent', async () => {
+        const full = new CallCapacityGate(1);
+        full.TryAcquire();
+        const h = await harness(CONFIG, async () => true, { capacity: full });
+        const result = await h.service.HandleInboundCall({ sessionId: 'SIP-CALL-1', from: '+1', to: '+18005550100' }, USER, PROVIDER);
+        expect(result).toMatchObject({ accepted: false, Busy: true });
+    });
+
+    it('refuses an outbound call over the cap with a clear, coded error', async () => {
+        const full = new CallCapacityGate(1);
+        full.TryAcquire();
+        const h = await harness(CONFIG, async () => true, { capacity: full });
+        const error = await h.service.PlaceOutboundCall('ident-1', '+14155550123', USER, dbProvider()).catch((e: unknown) => e);
+        expect(error).toBeInstanceOf(OutboundCallRefusedError);
+        expect((error as OutboundCallRefusedError).Code).toBe('at-capacity');
+        expect((error as Error).message).toMatch(/busy/i);
+    });
+
+    it("does not spend the caller's hourly outbound budget on a call the cap refused", async () => {
+        const gate = new CallCapacityGate(1);
+        const held = gate.TryAcquire();
+        const h = await harness({ ...CONFIG, outbound: { maxCallsPerUserPerHour: 1 } }, async () => true, { capacity: gate });
+        await expect(h.service.PlaceOutboundCall('ident-1', '+14155550123', USER, dbProvider())).rejects.toThrow(/busy/i);
+        held?.Release();
+        await expect(h.service.PlaceOutboundCall('ident-1', '+14155550123', USER, dbProvider())).resolves.toBe('SIP-CALL-1');
+    });
+
+    it('gives the slot back when the outbound gate refuses the call', async () => {
+        const gate = new CallCapacityGate(1);
+        const h = await harness(CONFIG, async () => false, { capacity: gate });
+        await expect(h.service.PlaceOutboundCall('ident-1', '+14155550123', USER, dbProvider())).rejects.toBeInstanceOf(OutboundCallRefusedError);
+        expect(gate.Active).toBe(0);
+    });
+});
+
+describe('SIP registration health', () => {
+    it('is healthy once registered', async () => {
+        const h = await harness();
+        expect(h.service.GetRegistrationStatus()).toEqual({ State: 'registered', Healthy: true });
+    });
+
+    it('is unhealthy, with the reason, when registration failed (Start only logs the failure)', async () => {
+        const failing = { onInvite: vi.fn(), register: vi.fn(async () => { throw new Error('403 Forbidden'); }), declineCall: vi.fn(), dispose: vi.fn() };
+        const h = await harness(CONFIG, async () => true, { createHandle: (async () => failing as unknown as RingCentralSoftphoneHandle) as never });
+        expect(h.service.GetRegistrationStatus()).toMatchObject({ State: 'failed', Healthy: false, Reason: '403 Forbidden' });
+    });
+
+    it('is unhealthy when the handle cannot even be created', async () => {
+        const h = await harness(CONFIG, async () => true, { createHandle: (async () => { throw new Error('sdk missing'); }) as never });
+        expect(h.service.GetRegistrationStatus()).toMatchObject({ State: 'failed', Healthy: false });
+    });
+
+    it('is healthy while registration is pending inside the deadline, unhealthy after it', async () => {
+        let nowMs = 1_000_000;
+        const never = new Promise<void>(() => undefined);
+        const hanging = { onInvite: vi.fn(), register: vi.fn(() => never), declineCall: vi.fn(), dispose: vi.fn() };
+        const service = new RingCentralTelephonyService(CONFIG, {
+            engine: fakeEngine() as never,
+            sessionFactory: vi.fn() as never,
+            sessionManager: { CreateSession: vi.fn() } as never,
+            createHandle: (async () => hanging as unknown as RingCentralSoftphoneHandle) as never,
+            capacity: new CallCapacityGate(1),
+            now: () => nowMs,
+        });
+        void service.Start();
+        await vi.waitFor(() => expect(hanging.register).toHaveBeenCalled());
+
+        expect(service.GetRegistrationStatus()).toEqual({ State: 'pending', Healthy: true });
+        nowMs += REGISTRATION_DEADLINE_MS + 5_000;
+        expect(service.GetRegistrationStatus()).toMatchObject({ State: 'pending', Healthy: false });
+        expect(service.GetRegistrationStatus().Reason).toMatch(/pending for \d+s/);
+    });
+
+    it('reports not-started before Start and after dispose', async () => {
+        const service = new RingCentralTelephonyService(CONFIG, { engine: fakeEngine() as never, capacity: new CallCapacityGate(1) });
+        expect(service.GetRegistrationStatus()).toMatchObject({ State: 'not-started', Healthy: false });
+        const h = await harness();
+        h.service.dispose();
+        expect(h.service.GetRegistrationStatus().State).toBe('not-started');
     });
 });

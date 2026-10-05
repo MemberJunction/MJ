@@ -176,6 +176,10 @@ export { ApplicationRolesResourceComponent, LoadApplicationRolesResource } from 
 // Realtime Recordings — review & replay recorded realtime sessions (audio + transcript)
 export { RealtimeRecordingsDashboardComponent, LoadRealtimeRecordingsDashboard } from './RealtimeRecordings/realtime-recordings-dashboard.component';
 
+// Telephony & Interaction Operations
+export { TelephonyOperationsDashboardComponent } from './TelephonyOperations/telephony-operations-dashboard.component';
+export * from './TelephonyOperations/telephony-operations-agent-context';
+
 // Permissions admin — three independent resource tabs (Phase 2a/b/c — unified permissions)
 export {
     PermissionsUserAccessResourceComponent,

@@ -54,6 +54,7 @@
     "@memberjunction/ng-base-types": "6.2.0-edge.2",
     "@memberjunction/ng-composer": "6.2.0-edge.2",
     "@memberjunction/ng-container-directives": "6.2.0-edge.2",
+    "@memberjunction/ng-conversation-offers": "6.2.0-edge.2",
     "@memberjunction/ng-conversations": "6.2.0-edge.2",
     "@memberjunction/ng-dashboard-viewer": "6.2.0-edge.2",
     "@memberjunction/ng-dashboards": "6.2.0-edge.2",
