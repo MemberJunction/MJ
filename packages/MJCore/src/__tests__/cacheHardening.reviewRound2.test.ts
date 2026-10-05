@@ -217,6 +217,13 @@ describe('#22 — a debounced metadata check cannot be starved', () => {
             await vi.advanceTimersByTimeAsync(debounce / 2);
         }
 
+        // Once the budget is spent the handler stops re-arming and returns, leaving the LAST armed
+        // timer to fire — and that one was scheduled for `debounce + Math.random() * JitterMs`.
+        // `Math.random` is not under fake timers' control, so the wait has to cover the whole jitter
+        // range or the assertion is a coin toss: the loop alone left 2000ms for a delay that can be
+        // 2500ms, which failed roughly one run in eight. Do not trim this to a measured-typical value.
+        await vi.advanceTimersByTimeAsync(debounce + ProviderBase.PeerMetadataNoticeJitterMs);
+
         expect(provider.Checks).toBeGreaterThan(0);
     });
 
