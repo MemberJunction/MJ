@@ -151,6 +151,13 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
   @Output() LoadError = new EventEmitter<{ title: string; detail: string }>();
   /** The live form instance, emitted right after it's created (for power-user wiring). */
   @Output() FormCreated = new EventEmitter<BaseFormComponent>();
+  /**
+   * Re-emitted form `EditModeChanged` (true = edit started, false = ended),
+   * plus one `true` right after mount when the form was created already in
+   * edit mode (`StartInEditMode`, or a new record) — StartEditMode never runs
+   * in that path, so without this the shell would never hear about it.
+   */
+  @Output() EditModeChanged = new EventEmitter<boolean>();
 
   // ── State ───────────────────────────────────────────────────────────────
 
@@ -311,6 +318,7 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
 
       this.applyVariants(instance, resolution, entityName);
       this.subscribeToFormEvents(instance);
+      this.announceInitialEditMode(instance);
 
       this.FormCreated.emit(instance);
       this.ErrorTitle = null;
@@ -437,11 +445,25 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
       form.RecordSaveFailed.subscribe(e => this.RecordSaveFailed.emit(e)),
       form.ValidationFailed.subscribe(e => this.ValidationFailed.emit(e)),
       form.RecordReady.subscribe(e => this.RecordReady.emit(e)),
+      form.EditModeChanged.subscribe(e => this.EditModeChanged.emit(e)),
     );
     // Surface 'dismiss' navigation as a first-class Dismissed event too.
     this._formEventSubs.push(
       form.Navigate.subscribe(e => { if (e.Kind === 'dismiss') this.Dismissed.emit(); }),
     );
+  }
+
+  /**
+   * Announce edit mode that was set by ASSIGNMENT rather than by
+   * StartEditMode() — the mount path writes `instance.EditMode` directly, so
+   * a form that starts in edit mode would otherwise be editing, unpinned and
+   * italic in a records preview tab. Safe to fire alongside ngOnInit's own
+   * StartEditMode for a new record: the shell's pin is idempotent.
+   */
+  private announceInitialEditMode(form: BaseFormComponent): void {
+    if (form.EditMode) {
+      this.EditModeChanged.emit(true);
+    }
   }
 
   // ── New-record value application (URL segment or object) ──────────────────

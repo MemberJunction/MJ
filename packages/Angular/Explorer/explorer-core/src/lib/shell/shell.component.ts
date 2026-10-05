@@ -498,12 +498,12 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       // Region membership again, not record identity, so a record docked to the
       // workspace is in neither pool: "Move to Workspace" takes a record out of
       // preview replacement, which is the point of docking it.
-      // ...minus any tab the user is actively editing. Replacement destroys the
-      // pane, so an editing tab leaves the pool and the next plain open gets
-      // its own tab — the edit survives without a modal interrupting a browse.
-      // (VS Code reaches the same outcome by promoting a modified preview; this
-      // is the same guarantee read off state we already have, instead of a new
-      // dirty-tracking pipeline.)
+      // A tab whose form enters edit mode is PROMOTED — pinned by
+      // TabContainerComponent.PromoteRecordTabOnEdit — and so leaves this pool
+      // permanently (VS Code's promote-on-modify). The IsRecordTabEditing read
+      // below is the fallback for resources that report IsEditing() without
+      // raising ResourceEditModeChangedEvent: such a tab still leaves the pool
+      // while editing, though only transiently (#4345).
       this.workspaceManager.RecordsRegionTabFilter = this.resolvedRecordOpenStyle === 'records'
         ? (tab) => IsRecordsRegionTab(tab.configuration) && !this.TabContainerRef?.IsRecordTabEditing(tab.id)
         : null;

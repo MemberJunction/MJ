@@ -9,14 +9,19 @@ import { SingleRecordComponent } from '../single-record/single-record.component'
   standalone: false,
     selector: 'mj-record-resource',
     styles: [`:host { display: block; height: 100%; width: 100%; }`],
-    template: `<mj-single-record [PrimaryKey]="this.PrimaryKey" [entityName]="Data.Configuration.Entity" [newRecordValues]="Data.Configuration.NewRecordValues" (loadComplete)="NotifyLoadComplete()" (recordSaved)="ResourceRecordSaved($event)" (recordDismissed)="NotifyCloseRequested()"></mj-single-record>`
+    template: `<mj-single-record [PrimaryKey]="this.PrimaryKey" [entityName]="Data.Configuration.Entity" [newRecordValues]="Data.Configuration.NewRecordValues" (loadComplete)="NotifyLoadComplete()" (recordSaved)="ResourceRecordSaved($event)" (recordDismissed)="NotifyCloseRequested()" (EditModeChanged)="ResourceEditModeChanged($event)"></mj-single-record>`
 })
 export class EntityRecordResource extends BaseResourceComponent {
     @ViewChild(SingleRecordComponent) private singleRecord?: SingleRecordComponent;
 
-    /** A record being edited must never be consumed as the region's temp tab. */
+    /** Fallback read for the pool predicate; promotion via ResourceEditModeChanged is the primary guard. */
     public override IsEditing(): boolean {
         return this.singleRecord?.IsEditing() === true;
+    }
+
+    /** The hosted form entered or left edit mode; the shell promotes the tab on `true`. */
+    public ResourceEditModeChanged(editing: boolean): void {
+        this.NotifyEditModeChanged(editing);
     }
 
     public get PrimaryKey(): CompositeKey {

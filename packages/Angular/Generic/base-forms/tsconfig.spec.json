@@ -15,6 +15,7 @@
     "src/lib/base-form-component.ts",
     "src/lib/base-form-component.validation.dom.test.ts",
     "src/lib/base-form-component.duplicate-entry-check.dom.test.ts",
+    "src/lib/base-form-component.edit-mode-changed.dom.test.ts",
     "src/lib/isa-related-panel/isa-related-card.component.ts",
     "src/lib/isa-related-panel/isa-related-card.component.dom.test.ts",
     "src/lib/explorer-entity-data-grid.component.ts",
@@ -29,6 +30,7 @@
     "src/lib/isa-related-panel/isa-related-panel.component.dom.test.ts",
     "src/lib/host/entity-form-host.component.ts",
     "src/lib/host/entity-form-host.component.dom.test.ts",
+    "src/lib/host/entity-form-host.edit-mode-relay.dom.test.ts",
     "src/lib/interactive-form/interactive-form.component.ts",
     "src/lib/interactive-form/interactive-form.component.dom.test.ts",
     "src/lib/resolver/form-resolver.service.ts"
