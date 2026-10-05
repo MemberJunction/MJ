@@ -7,9 +7,11 @@
  * @module @memberjunction/core/runQuerySQLFilterImplementations
  */
 
-import { BaseSingleton } from '@memberjunction/global';
+import { BaseSingleton, EscapeSQLString } from '@memberjunction/global';
 import { RUN_QUERY_SQL_FILTERS, RunQuerySQLFilter } from './querySQLFilters';
 import { DatabasePlatform } from './platformSQL';
+import { GetDialect } from '@memberjunction/sql-dialect';
+import type { SQLDialect } from '@memberjunction/sql-dialect';
 
 /**
  * Dangerous SQL keywords that should be blocked in expressions
@@ -91,15 +93,18 @@ const ALLOWED_SQL_KEYWORDS = [
     'BETWEEN', 'IN'
 ];
 
+/** The platform filters render for until {@link RunQuerySQLFilterManager.SetPlatform} is called. */
+const DEFAULT_FILTER_PLATFORM: DatabasePlatform = 'sqlserver';
+
+/** The dialect of {@link DEFAULT_FILTER_PLATFORM}, which the exported default implementations use. */
+const DEFAULT_FILTER_DIALECT: SQLDialect = GetDialect(DEFAULT_FILTER_PLATFORM);
+
 /**
- * SQL Filter implementation functions
+ * SQL Filter implementation functions. The filters whose output depends on the database come
+ * from {@link dialectFilterImplementations}.
  */
 const FILTER_IMPLEMENTATIONS: Record<string, (value: any) => any> = {
-    sqlString: (value: any) => {
-        if (value === null || value === undefined) return 'NULL';
-        return `'${String(value).replace(/'/g, "''")}'`;
-    },
-    
+    ...dialectFilterImplementations(DEFAULT_FILTER_DIALECT),
     sqlNumber: (value: any) => {
         const num = Number(value);
         if (isNaN(num)) throw new Error(`Invalid number: ${value}`);
@@ -113,57 +118,6 @@ const FILTER_IMPLEMENTATIONS: Record<string, (value: any) => any> = {
         return `'${date.toISOString()}'`;
     },
     
-    sqlBoolean: (value: unknown) => {
-        // Default SQL Server behavior; overridden by platform-aware version in RunQuerySQLFilterManager
-        return value ? '1' : '0';
-    },
-
-    sqlIdentifier: (value: unknown) => {
-        if (!value) throw new Error('Identifier cannot be empty');
-        const identifier = String(value);
-        // Basic SQL injection prevention for identifiers
-        if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(identifier)) {
-            throw new Error(`Invalid SQL identifier: ${identifier}`);
-        }
-        // Default SQL Server behavior; overridden by platform-aware version in RunQuerySQLFilterManager
-        return `[${identifier}]`;
-    },
-    
-    sqlIn: (values: any[]) => {
-        if (!Array.isArray(values) || values.length === 0) {
-            return '(NULL)'; // This will match nothing
-        }
-        const escaped = values.map(v => {
-            if (typeof v === 'string') {
-                return `'${v.replace(/'/g, "''")}'`;
-            } else if (typeof v === 'number') {
-                return v;
-            } else if (v === null || v === undefined) {
-                return 'NULL';
-            }
-            return `'${String(v).replace(/'/g, "''")}'`;
-        });
-        return `(${escaped.join(', ')})`;
-    },
-    
-    sqlLikeContains: (value: any) => {
-        if (value === null || value === undefined) return 'NULL';
-        const stripped = stripBoundaryWildcards(String(value), 'both');
-        return `'%${escapeLikeValue(stripped, 'sqlserver')}%'`;
-    },
-
-    sqlLikeBegins: (value: any) => {
-        if (value === null || value === undefined) return 'NULL';
-        const stripped = stripBoundaryWildcards(String(value), 'trailing');
-        return `'${escapeLikeValue(stripped, 'sqlserver')}%'`;
-    },
-
-    sqlLikeEnds: (value: any) => {
-        if (value === null || value === undefined) return 'NULL';
-        const stripped = stripBoundaryWildcards(String(value), 'leading');
-        return `'%${escapeLikeValue(stripped, 'sqlserver')}'`;
-    },
-
     sqlNoKeywordsExpression: (value: any) => {
         if (!value) {
             throw new Error('SQL expression cannot be empty');
@@ -232,33 +186,32 @@ export const RUN_QUERY_SQL_FILTERS_WITH_IMPLEMENTATIONS: RunQuerySQLFilter[] =
     }));
 
 /**
- * Creates a platform-aware sqlBoolean filter implementation.
- * SQL Server uses 1/0, PostgreSQL uses true/false.
+ * The filters whose output depends on the database, rendered for one dialect: string and IN-list
+ * literals, booleans, identifiers and the three LIKE filters. Every platform difference comes
+ * from the dialect, so a new platform needs no change here.
  */
-function createPlatformSqlBoolean(platform: DatabasePlatform): (value: unknown) => string {
-    return (value: unknown) => {
-        if (platform === 'postgresql') {
-            return value ? 'true' : 'false';
-        }
-        return value ? '1' : '0';
-    };
-}
-
-/**
- * Creates a platform-aware sqlIdentifier filter implementation.
- * SQL Server uses [brackets], PostgreSQL uses "double quotes".
- */
-function createPlatformSqlIdentifier(platform: DatabasePlatform): (value: unknown) => string {
-    return (value: unknown) => {
-        if (!value) throw new Error('Identifier cannot be empty');
-        const identifier = String(value);
-        if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(identifier)) {
-            throw new Error(`Invalid SQL identifier: ${identifier}`);
-        }
-        if (platform === 'postgresql') {
-            return `"${identifier}"`;
-        }
-        return `[${identifier}]`;
+function dialectFilterImplementations(dialect: SQLDialect): Record<string, (value: unknown) => unknown> {
+    return {
+        sqlString: (value: unknown) => (value === null || value === undefined ? 'NULL' : textLiteral(value, dialect)),
+        sqlIn: (values: unknown) => {
+            if (!Array.isArray(values) || values.length === 0) {
+                return '(NULL)'; // matches nothing
+            }
+            const items = values.map(v => typeof v === 'number' ? String(v) : v === null || v === undefined ? 'NULL' : textLiteral(v, dialect));
+            return `(${items.join(', ')})`;
+        },
+        sqlBoolean: (value: unknown) => dialect.BooleanLiteral(Boolean(value)),
+        sqlIdentifier: (value: unknown) => {
+            if (!value) throw new Error('Identifier cannot be empty');
+            const identifier = String(value);
+            if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(identifier)) {
+                throw new Error(`Invalid SQL identifier: ${identifier}`);
+            }
+            return dialect.QuoteIdentifier(identifier);
+        },
+        sqlLikeContains: (value: unknown) => likeLiteral(value, 'both', dialect),
+        sqlLikeBegins: (value: unknown) => likeLiteral(value, 'trailing', dialect),
+        sqlLikeEnds: (value: unknown) => likeLiteral(value, 'leading', dialect),
     };
 }
 
@@ -282,43 +235,24 @@ function stripBoundaryWildcards(value: string, side: 'leading' | 'trailing' | 'b
 }
 
 /**
- * Escapes literal % and _ characters inside a LIKE value in a platform-aware way.
- * SQL Server uses bracket escaping [%] [_]; PostgreSQL uses backslash escaping \% \_.
+ * A LIKE pattern literal that matches `value` literally, with `%` added on the open side(s):
+ * `both` for contains, `trailing` for begins-with, `leading` for ends-with. User-supplied `%` on
+ * those sides is dropped first, and every other character LIKE treats specially is escaped by
+ * the dialect.
  */
-function escapeLikeValue(value: string, platform: DatabasePlatform): string {
-    const escaped = value.replace(/'/g, "''");
-    if (platform === 'postgresql') {
-        return escaped.replace(/%/g, '\\%').replace(/_/g, '\\_');
-    }
-    return escaped.replace(/%/g, '[%]').replace(/_/g, '[_]');
+function likeLiteral(value: unknown, wildcardSide: 'leading' | 'trailing' | 'both', dialect: SQLDialect): string {
+    if (value === null || value === undefined) return 'NULL';
+    const stripped = stripBoundaryWildcards(String(value), wildcardSide);
+    const pattern = dialect.EscapeLikePattern(stripped.replace(/'/g, "''"));
+    const before = wildcardSide === 'trailing' ? '' : '%';
+    const after = wildcardSide === 'leading' ? '' : '%';
+    return `${dialect.StringLiteralPrefix(stripped)}'${before}${pattern}${after}'`;
 }
 
-/**
- * Creates platform-aware sqlLike filter implementations.
- * SQL Server escapes with [%]/[_], PostgreSQL escapes with \%/\_.
- */
-function createPlatformSqlLikeContains(platform: DatabasePlatform): (value: any) => string {
-    return (value: any) => {
-        if (value === null || value === undefined) return 'NULL';
-        const stripped = stripBoundaryWildcards(String(value), 'both');
-        return `'%${escapeLikeValue(stripped, platform)}%'`;
-    };
-}
-
-function createPlatformSqlLikeBegins(platform: DatabasePlatform): (value: any) => string {
-    return (value: any) => {
-        if (value === null || value === undefined) return 'NULL';
-        const stripped = stripBoundaryWildcards(String(value), 'trailing');
-        return `'${escapeLikeValue(stripped, platform)}%'`;
-    };
-}
-
-function createPlatformSqlLikeEnds(platform: DatabasePlatform): (value: any) => string {
-    return (value: any) => {
-        if (value === null || value === undefined) return 'NULL';
-        const stripped = stripBoundaryWildcards(String(value), 'leading');
-        return `'%${escapeLikeValue(stripped, platform)}'`;
-    };
+/** A string literal for `value` with the dialect's prefix, quotes escaped. */
+function textLiteral(value: unknown, dialect: SQLDialect): string {
+    const text = String(value);
+    return `${dialect.StringLiteralPrefix(text)}'${EscapeSQLString(text)}'`;
 }
 
 /**
@@ -330,7 +264,7 @@ function createPlatformSqlLikeEnds(platform: DatabasePlatform): (value: any) => 
  */
 export class RunQuerySQLFilterManager extends BaseSingleton<RunQuerySQLFilterManager> {
     private _filters: Map<string, RunQuerySQLFilter> = new Map();
-    private _platform: DatabasePlatform = 'sqlserver';
+    private _platform: DatabasePlatform = DEFAULT_FILTER_PLATFORM;
 
     /**
      * Use RunQuerySQLFilterManager.Instance to get the singleton instance.
@@ -355,28 +289,14 @@ export class RunQuerySQLFilterManager extends BaseSingleton<RunQuerySQLFilterMan
     }
 
     /**
-     * Applies platform-specific overrides for sqlBoolean and sqlIdentifier filters.
+     * Installs the dialect-sensitive filters for the current platform's dialect.
      */
     private applyPlatformOverrides(): void {
-        const boolFilter = this._filters.get('sqlBoolean');
-        if (boolFilter) {
-            boolFilter.implementation = createPlatformSqlBoolean(this._platform);
-        }
-        const idFilter = this._filters.get('sqlIdentifier');
-        if (idFilter) {
-            idFilter.implementation = createPlatformSqlIdentifier(this._platform);
-        }
-        const likeContainsFilter = this._filters.get('sqlLikeContains');
-        if (likeContainsFilter) {
-            likeContainsFilter.implementation = createPlatformSqlLikeContains(this._platform);
-        }
-        const likeBeginsFilter = this._filters.get('sqlLikeBegins');
-        if (likeBeginsFilter) {
-            likeBeginsFilter.implementation = createPlatformSqlLikeBegins(this._platform);
-        }
-        const likeEndsFilter = this._filters.get('sqlLikeEnds');
-        if (likeEndsFilter) {
-            likeEndsFilter.implementation = createPlatformSqlLikeEnds(this._platform);
+        for (const [name, implementation] of Object.entries(dialectFilterImplementations(GetDialect(this._platform)))) {
+            const filter = this._filters.get(name);
+            if (filter) {
+                filter.implementation = implementation;
+            }
         }
     }
 
@@ -392,6 +312,14 @@ export class RunQuerySQLFilterManager extends BaseSingleton<RunQuerySQLFilterMan
      */
     public get Platform(): DatabasePlatform {
         return this._platform;
+    }
+
+    /**
+     * The SQL dialect of the current platform, for callers that render values the way these
+     * filters do (for example the value bound for a boolean parameter).
+     */
+    public get Dialect(): SQLDialect {
+        return GetDialect(this._platform);
     }
 
     /**
