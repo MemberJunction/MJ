@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildToolFromAction, buildActionToolSet, sanitizeToolName } from '../native-tools/action-tool-builder';
+import { buildToolFromAction, buildActionToolSet, coerceActionArguments, sanitizeToolName } from '../native-tools/action-tool-builder';
 import type { MJActionEntityExtended } from '@memberjunction/actions-base';
 import type { MJActionParamEntity } from '@memberjunction/core-entities';
 
@@ -51,11 +51,18 @@ describe('buildToolFromAction', () => {
 
     it('maps every opaque ValueType to string, not object', () => {
         // Measured: 'Other' typed as object produced `Query: {}` on 40% of calls.
-        for (const vt of ['Other', 'Simple Object', 'BaseEntity Sub-Class', 'MediaOutput'] as const) {
+        for (const vt of ['Other', 'BaseEntity Sub-Class', 'MediaOutput'] as const) {
             const tool = buildToolFromAction(action('T'), [param({ Name: 'q', ValueType: vt })]);
             const props = (tool.inputSchema as { properties: Record<string, { type: unknown }> }).properties;
             expect(props.q.type).toBe('string');
         }
+    });
+
+    it('maps Simple Object to object, so a real object is not JSON-encoded into a string', () => {
+        // Typed as string, Test SQL Statement.Parameters arrived as '{"TopCount": 10}' and the Action rejected it.
+        const tool = buildToolFromAction(action('T'), [param({ Name: 'Parameters', ValueType: 'Simple Object' })]);
+        const props = (tool.inputSchema as { properties: Record<string, { type: unknown }> }).properties;
+        expect(props.Parameters.type).toBe('object');
     });
 
     it('wraps arrays around the element schema rather than replacing it', () => {
@@ -206,5 +213,43 @@ describe('filterDeclarableActions — per agent-action declaration control', () 
 
     it('keeps an action with no agent-action row at all (a skill-granted action is declarable by default)', () => {
         expect(filterDeclarableActions(actions, []).length).toBe(3);
+    });
+});
+
+describe('coerceActionArguments', () => {
+    const objectParam = param({ Name: 'Parameters', ValueType: 'Simple Object' });
+
+    it('decodes a Simple Object param the model sent as a JSON string', () => {
+        expect(coerceActionArguments([objectParam], { Parameters: '{"TopCount": 10}' })).toEqual({ Parameters: { TopCount: 10 } });
+    });
+
+    it('leaves an object that arrived as an object untouched', () => {
+        expect(coerceActionArguments([objectParam], { Parameters: { TopCount: 10 } })).toEqual({ Parameters: { TopCount: 10 } });
+    });
+
+    it('leaves a string that is not JSON, or JSON of the wrong shape, for the Action to reject', () => {
+        expect(coerceActionArguments([objectParam], { Parameters: 'TopCount=10' })).toEqual({ Parameters: 'TopCount=10' });
+        expect(coerceActionArguments([objectParam], { Parameters: '[1, 2]' })).toEqual({ Parameters: '[1, 2]' });
+        expect(coerceActionArguments([objectParam], { Parameters: 'null' })).toEqual({ Parameters: 'null' });
+    });
+
+    it('never touches an Other param, which is declared as a string and may hold JSON-looking text', () => {
+        const other = param({ Name: 'Query', ValueType: 'Other' });
+        expect(coerceActionArguments([other], { Query: '{"a": 1}' })).toEqual({ Query: '{"a": 1}' });
+    });
+
+    it('decodes an encoded array, and encoded elements inside it, for an array Simple Object param', () => {
+        const list = param({ Name: 'Rows', ValueType: 'Simple Object', IsArray: true });
+        expect(coerceActionArguments([list], { Rows: '[{"a": 1}]' })).toEqual({ Rows: [{ a: 1 }] });
+        expect(coerceActionArguments([list], { Rows: ['{"a": 1}', { b: 2 }] })).toEqual({ Rows: [{ a: 1 }, { b: 2 }] });
+    });
+
+    it('does not add keys for params the model omitted, and does not mutate its input', () => {
+        const args = { SQL: 'SELECT 1' };
+        expect(coerceActionArguments([objectParam], args)).toEqual({ SQL: 'SELECT 1' });
+        expect(coerceActionArguments([objectParam], undefined)).toEqual({});
+        const encoded = { Parameters: '{"x": 1}' };
+        coerceActionArguments([objectParam], encoded);
+        expect(encoded.Parameters).toBe('{"x": 1}');
     });
 });
