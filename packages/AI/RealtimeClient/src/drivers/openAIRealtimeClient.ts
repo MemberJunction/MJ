@@ -338,10 +338,17 @@ export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
         await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp });
     }
 
-    /** @inheritdoc — the instructions in the session config applied via `session.update`. */
+    /**
+     * @inheritdoc
+     *
+     * This transport keeps the pact in {@link sessionConfig} rather than in the protocol
+     * client's `sessionObject` — WebRTC applies it over the data channel, so the base field is
+     * never populated here. Without this override a spoken update would find no identity to
+     * carry and would send the caller's direction alone, which is the defect the base method
+     * documents (#397).
+     */
     protected override currentSessionInstructions(): string | null {
-        const instructions = this.sessionConfig?.['instructions'];
-        return typeof instructions === 'string' ? instructions : null;
+        return OpenAIProtocolRealtimeClient.readInstructions(this.sessionConfig);
     }
 
     /**

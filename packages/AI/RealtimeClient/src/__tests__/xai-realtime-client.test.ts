@@ -611,8 +611,10 @@ describe('xAIRealtimeClient', () => {
         it('should send the instructions and tag the resulting turn as narration, then reset to normal', () => {
             const { transcripts } = collect(client);
             client.RequestSpokenUpdate('Say one short first-person sentence.');
-            // The session's instructions ride along: per-response instructions REPLACE the session's on
-            // this protocol, so the directive alone would speak the turn with no persona.
+            // The session prompt rides AHEAD of the direction: `response.instructions` is a full
+            // override of the session prompt, so sending the direction alone would leave the model
+            // with no identity for exactly this one turn (#4591). `makeConfig` mints the session
+            // with `instructions: 'be the session voice'`.
             expect(client.Fake.SentFrames().at(-1)).toEqual({
                 type: 'response.create',
                 response: { instructions: 'be the session voice\n\nSay one short first-person sentence.' },

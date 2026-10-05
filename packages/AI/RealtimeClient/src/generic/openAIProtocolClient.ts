@@ -419,25 +419,6 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
     }
 
     /**
-     * The instructions the session was configured with, or null. Each transport holds its session
-     * config in its own field, so each answers for itself.
-     */
-    protected currentSessionInstructions(): string | null {
-        return null;
-    }
-
-    /**
-     * A spoken update's per-response instructions, made safe for this protocol: `response.instructions`
-     * REPLACES the session's instructions for that response, so a directive sent alone ("greet them,
-     * introduce yourself") is spoken with no persona at all — seen live as "Hi, I'm ChatGPT". The
-     * session's instructions are restated first and the directive follows.
-     */
-    protected withSessionInstructions(directive: string): string {
-        const session = this.currentSessionInstructions()?.trim();
-        return session ? `${session}\n\n${directive}` : directive;
-    }
-
-    /**
      * Triggers ONE short spoken update with the given instructions. Marks the upcoming
      * response as `'narration'` (flag consumed by the next `response.created`) so its
      * transcripts are emitted with `Kind: 'narration'` — ephemeral by contract. Sets
@@ -449,6 +430,9 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
      * provider, and narration is disposable by contract, so the update is dropped with a debug
      * log rather than queued to come out late and stale. Hosts SHOULD still gate on
      * {@link IsBusy} / {@link IsAudioPlaying} for timing quality.
+     *
+     * The wire frame is built by {@link buildSpokenUpdateEvent}, which is where the identity
+     * rule lives — see that method for why the caller's direction is never sent on its own.
      */
     public RequestSpokenUpdate(instructions: string): void {
         if (!this.canSendEvents()) {
@@ -461,7 +445,71 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
         this.responseActive = true;
         this.pendingNarrationKind = true;
         this.pendingLocalResponseCreates++;
-        this.sendEvent({ type: 'response.create', response: { instructions: this.withSessionInstructions(instructions) } });
+        this.sendEvent(this.buildSpokenUpdateEvent(instructions));
+    }
+
+    /**
+     * The `response.create` frame for one spoken update — **carrying the session identity, not
+     * replacing it.**
+     *
+     * ⚠️ `response.instructions` IS A FULL OVERRIDE OF THE SESSION SYSTEM PROMPT for that one
+     * response, not an addition to it. That is the whole reason this method exists. The
+     * server-side twin of this driver (`openAIRealtime.ts`) already states the rule and guards
+     * the BLANK case on it — forwarding `''` "would wipe the co-agent identity framing" — but the
+     * NON-blank case was never guarded, so every caller that supplied a real direction wiped it
+     * just as thoroughly and much less visibly.
+     *
+     * What that cost, live: the one turn that rides this method had no persona, so the model fell
+     * back to its vendor default and opened a hiring interview with *"I'm ChatGPT, your friendly
+     * voice companion"* while every other turn in the same session correctly said *"I'm Sam
+     * Rivera, Support Team Lead"* (bizapps-caliber#397 / MJ#4591). Every commentary-style caller
+     * is exposed the same way — an opening turn, a silence check-in, a delegation narration — and
+     * none of them should have to restate an identity the session already carries.
+     *
+     * Three cases, and the middle one is the fix:
+     *
+     *  - **Blank direction** → a bare `response.create`. "Respond now, under the session prompt"
+     *    (the meeting-mode bridge trigger passes `''`). Matches the server twin exactly.
+     *  - **Direction + session instructions** → `identity, then direction`. The identity leads
+     *    because it is context, and the direction is LAST because it is the thing being asked for
+     *    now — the most recent line is the one a model weights hardest.
+     *  - **Direction, no session instructions** → the direction alone. A session minted without
+     *    instructions has no identity to lose, and prefixing a blank line would be noise.
+     */
+    protected buildSpokenUpdateEvent(instructions: string): OAIProtocolResponseCreateEvent {
+        const direction = instructions?.trim() ?? '';
+        if (direction.length === 0) {
+            return { type: 'response.create' };
+        }
+        const identity = this.currentSessionInstructions();
+        return {
+            type: 'response.create',
+            response: { instructions: identity === null ? direction : `${identity}\n\n${direction}` },
+        };
+    }
+
+    /**
+     * The session-level instructions currently in force — the co-agent's identity, persona and
+     * standing directives, as applied by `session.update`.
+     *
+     * A SEAM, not a field read, because the pact lives in a different place per transport: the
+     * websocket subclass keeps it in `sessionObject`, the WebRTC driver in its own `sessionConfig`.
+     * The base holds no copy of either, so it answers "no identity on record" and each transport
+     * overrides with the one it actually applied. A transport that forgets to override loses only
+     * the carry — {@link buildSpokenUpdateEvent} still sends the caller's direction — which is the
+     * old behaviour rather than a new failure.
+     *
+     * Null rather than `''` for "this session carries no identity", so {@link buildSpokenUpdateEvent}
+     * can tell "nothing to preserve" from "preserve this".
+     */
+    protected currentSessionInstructions(): string | null {
+        return null;
+    }
+
+    /** Reads a session pact's `instructions`, or null when it carries none worth preserving. */
+    protected static readInstructions(pact: JSONObject | null | undefined): string | null {
+        const value = pact?.['instructions'];
+        return typeof value === 'string' && value.trim().length > 0 ? value : null;
     }
 
     /**
@@ -868,11 +916,6 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
 
     /** Opens the provider socket for this connection (drivers own URL/auth specifics). */
     protected abstract openProviderSocket(config: ClientRealtimeSessionConfig): IOpenAIProtocolClientSocket;
-    /** @inheritdoc — the instructions in the wire-shaped session object applied at connect. */
-    protected override currentSessionInstructions(): string | null {
-        const instructions = this.sessionObject['instructions'];
-        return typeof instructions === 'string' ? instructions : null;
-    }
     /**
      * Extracts the wire-shaped `session` object from the server pact. Default: the pact minus the
      * client-only hints ({@link ToProviderSessionConfig}).
@@ -1110,6 +1153,11 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
             return;
         }
         this.sendEvent({ type: 'session.update', session: this.sessionObject });
+    }
+
+    /** @inheritdoc — this transport's pact is {@link sessionObject}, applied over the socket. */
+    protected override currentSessionInstructions(): string | null {
+        return OpenAIProtocolRealtimeClient.readInstructions(this.sessionObject);
     }
 
     /** Streams one base64 PCM16 mic chunk as an `input_audio_buffer.append` frame. */
