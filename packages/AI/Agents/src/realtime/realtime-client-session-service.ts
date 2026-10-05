@@ -1248,12 +1248,17 @@ export class RealtimeClientSessionService {
         success: boolean = true,
         coAgentRunStepID: string | null = null,
     ): Promise<void> {
-        await this.finalizeAgentRun(coAgentRunID, contextUser, provider, success);
-        await this.finalizePromptRun(promptRunID, contextUser, provider, success);
-        await this.finalizeRunStep(coAgentRunStepID, contextUser, provider, success);
-        await this.rollUpCoAgentRunUsage(coAgentRunID, promptRunID, contextUser, provider);
-        if (coAgentRunID) {
-            AgentRunWatchdog.Instance.Untrack(coAgentRunID);
+        try {
+            await this.finalizeAgentRun(coAgentRunID, contextUser, provider, success);
+            await this.finalizePromptRun(promptRunID, contextUser, provider, success);
+            await this.finalizeRunStep(coAgentRunStepID, contextUser, provider, success);
+        } finally {
+            // Even when a finalize step throws, the run still owes its cost, and the watchdog must stop
+            // treating it as alive — or a run stuck at Running would be kept fresh indefinitely.
+            await this.rollUpCoAgentRunUsage(coAgentRunID, promptRunID, contextUser, provider);
+            if (coAgentRunID) {
+                AgentRunWatchdog.Instance.Untrack(coAgentRunID);
+            }
         }
     }
 

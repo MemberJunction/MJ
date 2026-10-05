@@ -1129,6 +1129,32 @@ describe('RealtimeClientSessionService — the co-agent run stays alive for the 
         expect(track).toHaveBeenCalledWith('co-run-real', prov, contextUser);
     });
 
+    it('unregisters it, and still charges it, even when finalizing the run throws', async () => {
+        const untrack = vi.spyOn(AgentRunWatchdog.Instance, 'Untrack');
+        let agentRunLoads = 0;
+        const agentRun = makeRun({
+            ID: 'co-run-1',
+            Dirty: true,
+            // The finalize's load fails hard; the cost copy's load (the second) succeeds.
+            Load: vi.fn(async () => {
+                agentRunLoads++;
+                if (agentRunLoads === 1) {
+                    throw new Error('connection reset');
+                }
+                return true;
+            }),
+        });
+        const promptRun = makeRun({ ID: 'prompt-run-1', TokensPrompt: 10, TokensCompletion: 2, TokensUsed: 12, TotalCost: 0.25 });
+        const prov = makeRunProvider(name => (name === 'MJ: AI Agent Runs' ? agentRun : promptRun));
+
+        await expect(
+            new RealtimeClientSessionService().FinalizeCoAgentRun('co-run-1', 'prompt-run-1', contextUser, prov, true)
+        ).rejects.toThrow('connection reset');
+
+        expect(untrack).toHaveBeenCalledWith('co-run-1');
+        expect(agentRun.TotalCost).toBe(0.25);
+    });
+
     it('unregisters it when the session ends', async () => {
         const untrack = vi.spyOn(AgentRunWatchdog.Instance, 'Untrack');
 
