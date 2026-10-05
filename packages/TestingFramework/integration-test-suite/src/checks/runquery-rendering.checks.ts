@@ -557,6 +557,12 @@ const COMPOSED_CASES: RenderCase[] = [
         Expect: items => ancestorChain(items, 200)
     },
     {
+        Name: 'RR Comp Outer CTE Shares A Dependency CTE Name',
+        SQL: `WITH EvenItems AS (SELECT ID FROM ${T} WHERE ID <= 40)\nSELECT o.ID FROM EvenItems o JOIN {{query:"{P}/RR Dep CTE"}} e ON e.ID = o.ID ORDER BY o.ID`,
+        Columns: ['ID'], Ordered: true,
+        Expect: items => ids(items.filter(i => i.ID <= 40 && i.ID % 2 === 0))
+    },
+    {
         Name: 'RR Comp Unordered',
         SQL: `SELECT b.ID FROM {{query:"{P}/RR Dep Base"}} b WHERE b.Category = 'Delta'`,
         Columns: ['ID'], Ordered: false,
