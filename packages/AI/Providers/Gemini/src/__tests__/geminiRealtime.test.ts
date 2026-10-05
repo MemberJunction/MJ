@@ -159,6 +159,18 @@ describe('GeminiRealtime client-direct (CreateClientSession)', () => {
         expect(sc.config.tools).toBeDefined();
     });
 
+    it('carries sliding-window context compression in SessionConfig but does not lock it into the token', async () => {
+        const driver = new ClientDirectTestable('k');
+        const cfg = await driver.CreateClientSession(makeParams());
+
+        const sc = cfg.SessionConfig as { config: LiveConnectConfig };
+        expect(sc.config.contextWindowCompression).toEqual({ slidingWindow: {} });
+        // Mask safety for this key is unverified, and a rejected mask fails every client-direct
+        // session, so it must stay out of the token constraints.
+        const locked = driver.MintParams!.config!.liveConnectConstraints!.config as LiveConnectConfig;
+        expect(locked.contextWindowCompression).toBeUndefined();
+    });
+
     it('throws when the mint returns no token name', async () => {
         class NoNameMint extends GeminiRealtime {
             protected override async mintAuthToken(): Promise<AuthToken> {
@@ -214,6 +226,39 @@ describe('GeminiRealtime', () => {
             expect(config.maxOutputTokens).toBe(256);
             // Defaults still present
             expect(config.responseModalities).toEqual([Modality.AUDIO]);
+        });
+
+        it('enables sliding-window context compression by default, so a session with video is not cut off at 2 minutes', async () => {
+            await driver.StartSession(makeParams());
+            expect(driver.LastConnectArgs!.Config.contextWindowCompression).toEqual({ slidingWindow: {} });
+        });
+
+        it('gives each session its own compression object', async () => {
+            await driver.StartSession(makeParams());
+            const first = driver.LastConnectArgs!.Config.contextWindowCompression;
+            await driver.StartSession(makeParams());
+            expect(driver.LastConnectArgs!.Config.contextWindowCompression).not.toBe(first);
+        });
+
+        it('lets a config-bag contextWindowCompression object win over the default', async () => {
+            const custom = { triggerTokens: '64000', slidingWindow: { targetTokens: '32000' } };
+            await driver.StartSession(makeParams({ Config: { contextWindowCompression: custom } }));
+            expect(driver.LastConnectArgs!.Config.contextWindowCompression).toEqual(custom);
+        });
+
+        it.each([
+            ['a string', 'on', 'string'],
+            ['an array', [], 'array'],
+            ['null', null, 'null'],
+        ])('replaces a config-bag contextWindowCompression that is %s with the default and reports it', async (_label, value, got) => {
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+            try {
+                await driver.StartSession(makeParams({ Config: { contextWindowCompression: value } }));
+                expect(driver.LastConnectArgs!.Config.contextWindowCompression).toEqual({ slidingWindow: {} });
+                expect(warn).toHaveBeenCalledWith(expect.stringContaining(`\`contextWindowCompression\` because it is not an object (got ${got})`));
+            } finally {
+                warn.mockRestore();
+            }
         });
 
         it('seeds InitialContext as a non-complete client-content turn', async () => {

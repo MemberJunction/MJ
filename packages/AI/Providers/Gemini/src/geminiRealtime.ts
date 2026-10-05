@@ -9,6 +9,7 @@ import {
     type LiveServerMessage,
     type LiveServerContent,
     type LiveConnectConfig,
+    type ContextWindowCompressionConfig,
     type SpeechConfig,
     type FunctionDeclaration,
     type FunctionCall,
@@ -364,6 +365,10 @@ export class GeminiRealtime extends BaseRealtimeModel {
      * there — `systemInstruction`, `tools`, and the transcription configs are NOT, and their
      * presence 400s the entire mint. Only defined fields are copied (an absent key must stay
      * absent so it doesn't enter the mask).
+     *
+     * `contextWindowCompression` is left out on purpose. No test or doc shows the mask accepts
+     * it, and a rejected mask would fail every client-direct session. The browser applies it from
+     * `SessionConfig`, like the other server-built keys the token cannot lock.
      */
     public static BuildConstraintConfig(config: LiveConnectConfig): LiveConnectConfig {
         const constraint: LiveConnectConfig = {};
@@ -444,16 +449,49 @@ export class GeminiRealtime extends BaseRealtimeModel {
         };
     }
 
+    /**
+     * Keeps a config-bag `contextWindowCompression` only when it is an object. The bag is untyped
+     * JSON, so a string, array or null would otherwise reach the wire and fail the session at
+     * connect. A malformed value is replaced by the default and reported; a well-formed one wins
+     * over the default, like every other bag key.
+     */
+    private static ensureContextWindowCompression(config: LiveConnectConfig): void {
+        const compression: unknown = config.contextWindowCompression;
+        if (GeminiRealtime.readObject(compression)) {
+            return;
+        }
+        const got = compression === null ? 'null' : Array.isArray(compression) ? 'array' : typeof compression;
+        console.warn(`[GeminiRealtime] Ignored the session config bag's \`contextWindowCompression\` because it is not an object (got ${got}); using the default sliding window.`);
+        config.contextWindowCompression = GeminiRealtime.DefaultContextWindowCompression();
+    }
+
     /** Narrows an unenforced config-bag value to a real object — not a string, array, or null. */
     private static isPlainObject(value: unknown): value is SpeechConfig {
         return typeof value === 'object' && value !== null && !Array.isArray(value);
     }
 
     /**
+     * The context-window compression every Gemini Live session gets unless the config bag sets
+     * its own: a server-side sliding window with Google's default trigger and target sizes.
+     *
+     * Without compression, Google ends a session when its context fills: about 15 minutes for
+     * audio only and about 2 minutes for audio plus video (Google's Live API session-management
+     * docs). With compression the server drops the oldest turns and the session continues.
+     * Session resumption handles a different limit (a single connection lasts about 10 minutes)
+     * and does not lift this one.
+     *
+     * Returns a new object on each call so no session shares mutable config with another.
+     */
+    public static DefaultContextWindowCompression(): ContextWindowCompressionConfig {
+        return { slidingWindow: {} };
+    }
+
+    /**
      * Builds the {@link LiveConnectConfig} from the Core session params: audio response modality,
-     * input/output transcription, system instruction, mapped tools, the neutral `voice` key mapped
-     * via {@link GeminiRealtime.buildSpeechConfig}, plus any provider-specific overrides from the
-     * open config bag.
+     * input/output transcription, system instruction, sliding-window context compression
+     * ({@link GeminiRealtime.DefaultContextWindowCompression}), mapped tools, the neutral `voice`
+     * key mapped via {@link GeminiRealtime.buildSpeechConfig}, plus any provider-specific overrides
+     * from the open config bag.
      */
     private buildConnectConfig(params: RealtimeSessionParams): LiveConnectConfig {
         const config: LiveConnectConfig = {
@@ -461,6 +499,7 @@ export class GeminiRealtime extends BaseRealtimeModel {
             inputAudioTranscription: {},
             outputAudioTranscription: {},
             systemInstruction: params.SystemPrompt,
+            contextWindowCompression: GeminiRealtime.DefaultContextWindowCompression(),
         };
         if (params.Tools && params.Tools.length > 0) {
             const bag: Record<string, unknown> = (params.Config as Record<string, unknown> | undefined) ?? {};
@@ -530,6 +569,7 @@ export class GeminiRealtime extends BaseRealtimeModel {
                 console.warn(`[GeminiRealtime] Scrubbed non-Gemini config key(s) from the session bag: ${scrubbed.join(', ')} — these are OpenAI-protocol/transport keys and do not apply to Gemini Live.`);
             }
             Object.assign(config, cfg as Partial<LiveConnectConfig>);
+            GeminiRealtime.ensureContextWindowCompression(config);
             // Captured BEFORE the mapping below replaces or deletes it, so the warning can report the
             // type that was actually rejected rather than the type that replaced it.
             const rawSpeechConfig: unknown = config.speechConfig;
