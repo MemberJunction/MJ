@@ -864,6 +864,36 @@ connectionPool: {
 - Production: `max: 50, min: 5`
 - High load: `max: 100, min: 10`
 
+### The Read-Only Login
+
+Ad-hoc SQL (`ExecuteAdhocQuery`), `TestQuerySQL` and query specs run caller-supplied SQL as the read-only login (`dbReadOnlyUsername` / `dbReadOnlyPassword`). Without one, ad-hoc SQL is refused. Grant that login **`SELECT` on the entity base views and nothing else**:
+
+- no access to the base tables behind them;
+- no membership of PostgreSQL's `pg_read_server_files`, or any SQL Server permission to reach files or other servers.
+
+MJAPI checks what SQL reads in two ways. It refuses a table reference that isn't a readable entity view, and it refuses functions that run SQL given as a string or read files (`query_to_xml`, `ts_stat`, `pg_read_file`, `OPENROWSET`, …). The login's own grants are still the only limit that SQL can never get around. On PostgreSQL, MJAPI logs a warning at startup if the read-only login can read base tables in the core schema or server files.
+
+### Database Settings on PostgreSQL
+
+PostgreSQL reads the same `databaseSettings` as SQL Server, with the same defaults. There are no PostgreSQL-only settings.
+
+| Setting (default) | SQL Server | PostgreSQL |
+|---|---|---|
+| `requestTimeout` (30,000) | Driver request timeout: a client-side timer over the whole request | `statement_timeout` on every pooled connection |
+| `connectionPool.max` / `min` (50 / 5) | Pool size | Pool size. The read-only pool is capped at 10 and keeps no idle minimum |
+| `connectionPool.idleTimeoutMillis` (30,000) | Idle connection eviction | Idle connection eviction |
+| `connectionPool.acquireTimeoutMillis` (30,000) | Wait for a pooled connection | `connectionTimeoutMillis` (see below) |
+| `connectionTimeout` (45,000) | Time to open a connection | Not used |
+| `dbReadOnlyUsername` / `dbReadOnlyPassword` | Read-only pool | Read-only pool; falls back to `PG_READ_ONLY_USERNAME` / `PG_READ_ONLY_PASSWORD` |
+
+Where the two platforms cannot match:
+
+- **One connection timeout.** The `pg` pool has a single `connectionTimeoutMillis` covering both waiting for a free slot and opening a connection. It is fed from `acquireTimeoutMillis`; `connectionTimeout` is not used.
+- **The request timeout measures something different.** SQL Server's `requestTimeout` is a client-side timer over the whole request, including reading rows. PostgreSQL's `statement_timeout` is execution time on the server, per statement. A query that executes quickly but returns rows slowly is cut off on SQL Server and not on PostgreSQL.
+- **Idle transactions.** PostgreSQL also gets `idle_in_transaction_session_timeout`, set to twice `requestTimeout`, so a connection left inside an open transaction is closed. SQL Server has no counterpart, so there is no setting for it.
+- **Connection count.** MJAPI opens two PostgreSQL pools at up to `connectionPool.max` each (a raw compatibility pool and the provider pool), plus the read-only pool (up to 10) and, when `CODEGEN_DB_USERNAME` is set, a CodeGen pool of 10. With the default of 50, that can exceed PostgreSQL's default `max_connections` of 100. Size `max` with this in mind. SQL Server opens one pool.
+- **Encryption.** SQL Server uses `encrypt` with `DB_TRUST_SERVER_CERTIFICATE`. On PostgreSQL, connections the data provider opens itself use SSL when `NODE_ENV` is `production`; the pools MJAPI opens directly (the compatibility, read-only and CodeGen pools) do not set SSL.
+
 ### Metadata Caching
 
 Entity metadata is loaded once at startup and shared across all per-request provider instances. The cache refresh interval is configurable:

@@ -227,15 +227,10 @@ SELECT 1 AS Val`;
             expect(tokens).toHaveLength(0);
         });
 
-        it('should not strip tokens inside SQL string literals', () => {
-            // A query token inside a quoted string should still be preserved
-            // (though this is an unusual edge case)
+        it('does not treat a token inside a SQL string literal as a reference', () => {
+            // The literal is text the query returns, not SQL to compose.
             const sql = `SELECT '{{query:"Demos/Active Users"}}' AS TokenText`;
-            const tokens = engine.ParseCompositionTokens(sql);
-
-            // The token is inside a string literal, so the comment stripper
-            // preserves it and the regex still finds it
-            expect(tokens).toHaveLength(1);
+            expect(engine.ParseCompositionTokens(sql)).toHaveLength(0);
         });
 
         it('should parse a reference with no category path (name only)', () => {
