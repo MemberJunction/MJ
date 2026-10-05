@@ -171,6 +171,41 @@ export class AfterResponseFormSubmittedEventArgs {
 }
 
 // ────────────────────────────────────────────────────────────────────
+// Stopping an in-progress agent run
+// ────────────────────────────────────────────────────────────────────
+
+/**
+ * Fired BEFORE an in-progress agent run is stopped, when the person clicks Stop on the reply
+ * the run is writing. Listeners can cancel (`Cancel = true`): nothing is written, the control
+ * stays available, and `AfterStopRequested` does not fire. `AgentRunId` is null when the run
+ * row has not been seen by the chat yet (the first moment after the reply placeholder appears);
+ * the stop is then resolved by the reply's detail id.
+ *
+ * Listeners run synchronously: the message item reads `Cancel` as soon as `emit()` returns.
+ */
+export class BeforeStopRequestedEventArgs extends CancellableChatEventArgs {
+    constructor(
+        public readonly ConversationDetailId: string,
+        public readonly AgentRunId: string | null
+    ) {
+        super();
+    }
+}
+
+/**
+ * Fired AFTER a stop was attempted. `Stopped` is whether the run's row was marked Cancelled;
+ * false means the run had already finished or the write was refused. NOT fired when the
+ * corresponding `BeforeStopRequestedEventArgs` was canceled.
+ */
+export class AfterStopRequestedEventArgs {
+    constructor(
+        public readonly ConversationDetailId: string,
+        public readonly AgentRunId: string | null,
+        public readonly Stopped: boolean
+    ) {}
+}
+
+// ────────────────────────────────────────────────────────────────────
 // Session lifecycle (informational — no Before-pair)
 // ────────────────────────────────────────────────────────────────────
 //

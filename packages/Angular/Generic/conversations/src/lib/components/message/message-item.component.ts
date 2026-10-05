@@ -27,6 +27,7 @@ import { ConversationAgentService } from '../../services/conversation-agent.serv
 import {
   BeforeResponseFormSubmittedEventArgs,
   AfterResponseFormSubmittedEventArgs,
+  BeforeStopRequestedEventArgs,
 } from '../../events/chat-events';
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
@@ -359,6 +360,12 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
   /** Hides the response form and actionable commands on this message. */
   @Input() public ReadOnly = false;
+
+  /**
+   * Whether the Stop control is offered on an in-progress agent reply. A host can turn stopping
+   * off for a surface without making the conversation read-only. Default true.
+   */
+  @Input() public AllowStopRun = true;
   /** Host override for the AI message display name (white-label persona). Null = the agent record's name. */
   @Input() public AssistantDisplayName: string | null = null;
 
@@ -582,10 +589,19 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   @Output() public afterResponseFormSubmitted = this.AfterResponseFormSubmitted;
 
   /**
-   * Fired when the user clicks Stop on an in-progress agent reply. Carries the reply's
-   * conversation detail; the host resolves the run behind it and stops it.
+   * Fired BEFORE a stop is requested, when the person clicks Stop on this in-progress agent
+   * reply. Listeners may set `event.Cancel = true` to keep the run going; the control then
+   * stays available and nothing else happens. Carries the reply's detail id and the run id
+   * when the chat has seen the run row.
    */
-  @Output() public StopClicked = new EventEmitter<MJConversationDetailEntity>();
+  @Output() public BeforeStopRequested = new EventEmitter<BeforeStopRequestedEventArgs>();
+
+  /**
+   * Fired when a stop was requested and no `BeforeStopRequested` listener canceled it. Carries
+   * the reply's conversation detail; the host resolves the run behind it, stops it, and fires
+   * its `AfterStopRequested` with the outcome.
+   */
+  @Output() public StopRequested = new EventEmitter<MJConversationDetailEntity>();
 
   /**
    * True from the moment Stop was clicked until the message leaves In-Progress, so the button
@@ -1462,12 +1478,20 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * whether the control is shown.
    */
   public get CanStopRun(): boolean {
-    return this.IsInProgressAIMessage && !this.ReadOnly;
+    return this.IsInProgressAIMessage && !this.ReadOnly && this.AllowStopRun;
   }
 
   /** Stop button handler: marks the message as stopping and hands the request to the host. */
   public OnStopClick(): void {
     if (!this.CanStopRun || this.IsStopping) {
+      return;
+    }
+    // Listeners see the request first and may veto it. Cancel propagates synchronously through
+    // the message-list and chat-area re-emit bindings, so by the time emit() returns,
+    // event.Cancel reflects every subscriber's answer (same contract as the response-form pair).
+    const beforeEvent = new BeforeStopRequestedEventArgs(this.message.ID, this.AgentRun?.ID ?? null);
+    this.BeforeStopRequested.emit(beforeEvent);
+    if (beforeEvent.Cancel) {
       return;
     }
     this.IsStopping = true;
@@ -1477,7 +1501,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       this.IsStopping = false;
       this.cdRef?.markForCheck?.();
     }, STOP_RETRY_AFTER_MS);
-    this.StopClicked.emit(this.message);
+    this.StopRequested.emit(this.message);
   }
 
   private clearStopRetryTimer(): void {

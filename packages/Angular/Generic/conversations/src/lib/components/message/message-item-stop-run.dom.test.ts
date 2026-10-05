@@ -1,33 +1,55 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { MessageItemComponent, STOP_RETRY_AFTER_MS } from './message-item.component';
+import type { BeforeStopRequestedEventArgs } from '../../events/chat-events';
 
 /**
  * The Stop control's render gate and click behavior.
  *
- * `CanStopRun` mirrors the template: shown only for an AI reply still In-Progress in a
- * conversation the viewer may write to. `OnStopClick` emits once and flips `IsStopping`, which
- * the template reads to disable the button and show "Stopping…"; `ngDoCheck` clears it when the
- * message leaves In-Progress. Constructed off the prototype — pure derived state, and a full
- * render needs the whole component graph. (Co-located as .dom.test.ts because importing the
+ * `CanStopRun` mirrors the template: shown only for an AI reply still In-Progress, in a
+ * conversation the viewer may write to, when the host allows stopping (`AllowStopRun`).
+ * A click fires the cancelable `BeforeStopRequested` first; a listener that cancels keeps the
+ * run going and the control available. Otherwise the item enters its stopping state and emits
+ * `StopRequested`; `ngDoCheck` clears the state when the message leaves In-Progress, and a
+ * retry window re-offers the control if the stop did not take. Constructed off the prototype,
+ * as the other message-item specs are. (Co-located as .dom.test.ts because importing the
  * component pulls the Angular graph the node project can't load.)
  */
 describe('MessageItemComponent — Stop control', () => {
+  let requested: unknown[] = [];
+  let before: BeforeStopRequestedEventArgs[] = [];
+  let cancelNext = false;
+
   const item = (fields: Record<string, unknown>): MessageItemComponent => {
     const component = Object.create(MessageItemComponent.prototype) as MessageItemComponent;
     Object.assign(component as unknown as Record<string, unknown>, {
       message: { ID: 'm1', Status: 'In-Progress', Role: 'AI' },
+      AgentRun: { ID: 'run-1' },
       _stableIsInProgressAIMessage: true,
       ReadOnly: false,
+      AllowStopRun: true,
       IsStopping: false,
-      StopClicked: { emit: (msg: unknown) => emitted.push(msg) },
+      BeforeStopRequested: {
+        emit: (e: BeforeStopRequestedEventArgs) => {
+          before.push(e);
+          if (cancelNext) {
+            e.Cancel = true;
+          }
+        },
+      },
+      StopRequested: { emit: (msg: unknown) => requested.push(msg) },
       ...fields,
     });
     return component;
   };
-  let emitted: unknown[] = [];
+
+  afterEach(() => {
+    requested = [];
+    before = [];
+    cancelNext = false;
+    vi.useRealTimers();
+  });
 
   it('is offered for an in-progress AI reply the viewer may write to', () => {
-    emitted = [];
     expect(item({}).CanStopRun).toBe(true);
   });
 
@@ -39,23 +61,42 @@ describe('MessageItemComponent — Stop control', () => {
     expect(item({ ReadOnly: true }).CanStopRun).toBe(false);
   });
 
-  it('a click emits the message once and enters the stopping state; a second click is ignored', () => {
-    emitted = [];
+  it('is hidden when the host turns stopping off, even for a writer', () => {
+    expect(item({ AllowStopRun: false }).CanStopRun).toBe(false);
+  });
+
+  it('a click fires BeforeStopRequested with the reply and run ids, then StopRequested once; a second click is ignored', () => {
     const component = item({});
     component.OnStopClick();
     component.OnStopClick();
-    expect(emitted).toHaveLength(1);
-    expect((emitted[0] as { ID: string }).ID).toBe('m1');
+
+    expect(before).toHaveLength(1);
+    expect(before[0].ConversationDetailId).toBe('m1');
+    expect(before[0].AgentRunId).toBe('run-1');
+    expect(requested).toHaveLength(1);
+    expect((requested[0] as { ID: string }).ID).toBe('m1');
     expect(component.IsStopping).toBe(true);
   });
 
-  afterEach(() => {
-    vi.useRealTimers();
+  it('reports a null run id when the chat has not seen the run row yet', () => {
+    item({ AgentRun: null }).OnStopClick();
+    expect(before[0].AgentRunId).toBeNull();
+    expect(requested).toHaveLength(1); // still requested; the host resolves it by detail id
+  });
+
+  it('a listener that cancels BeforeStopRequested keeps the run going and the control available', () => {
+    cancelNext = true;
+    const component = item({});
+    component.OnStopClick();
+
+    expect(before).toHaveLength(1);
+    expect(requested).toHaveLength(0);
+    expect(component.IsStopping).toBe(false);
+    expect(component.CanStopRun).toBe(true);
   });
 
   it('offers Stop again after the retry window if the run is still in progress', () => {
     vi.useFakeTimers();
-    emitted = [];
     const component = item({});
     component.OnStopClick();
     expect(component.IsStopping).toBe(true);
@@ -68,10 +109,10 @@ describe('MessageItemComponent — Stop control', () => {
   });
 
   it('a click while the control is not offered does nothing', () => {
-    emitted = [];
     const component = item({ ReadOnly: true });
     component.OnStopClick();
-    expect(emitted).toHaveLength(0);
+    expect(before).toHaveLength(0);
+    expect(requested).toHaveLength(0);
     expect(component.IsStopping).toBe(false);
   });
 });

@@ -77,6 +77,8 @@ import {
   AfterToolInvokedEventArgs,
   BeforeResponseFormSubmittedEventArgs,
   AfterResponseFormSubmittedEventArgs,
+  BeforeStopRequestedEventArgs,
+  AfterStopRequestedEventArgs,
   SessionStartedEventArgs,
   SessionChannelStateChangedEventArgs,
   SessionEndedEventArgs,
@@ -1213,6 +1215,13 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   @Output() afterToolInvoked = this.AfterToolInvoked;
 
   /** Cancelable — fired BEFORE a response form's submitted values are sent. */
+  /**
+   * Whether people may stop an in-progress agent run from its reply. Default true. A host can
+   * turn it off for a surface (a view-only review, a space whose runs are managed elsewhere)
+   * without making the conversation read-only.
+   */
+  @Input() public AllowStopRun = true;
+
   @Output() BeforeResponseFormSubmitted = new EventEmitter<BeforeResponseFormSubmittedEventArgs>();
 
   /**
@@ -1234,6 +1243,18 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * initialise in order, and the other way round this captures undefined.
    */
   @Output() afterResponseFormSubmitted = this.AfterResponseFormSubmitted;
+
+  /**
+   * Fired BEFORE an in-progress agent run is stopped from its reply. Cancelable: set
+   * `event.Cancel = true` to keep the run going; `AfterStopRequested` then does not fire.
+   */
+  @Output() BeforeStopRequested = new EventEmitter<BeforeStopRequestedEventArgs>();
+
+  /**
+   * Fired AFTER a stop was attempted, with whether the run's row was marked Cancelled.
+   * Not fired when `BeforeStopRequested` was canceled.
+   */
+  @Output() AfterStopRequested = new EventEmitter<AfterStopRequestedEventArgs>();
 
   /** Informational. */
   @Output() SessionStarted = new EventEmitter<SessionStartedEventArgs>();
@@ -5039,6 +5060,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         3000
       );
     }
+    this.AfterStopRequested.emit(new AfterStopRequestedEventArgs(message.ID, mappedRun?.ID ?? null, stopped));
   }
 
   /**
