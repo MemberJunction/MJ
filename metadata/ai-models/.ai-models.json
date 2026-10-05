@@ -276,7 +276,7 @@
     "fields": {
       "Name": "Claude 4.5 Sonnet",
       "PowerRank": 19,
-      "Description": "Anthropic's most capable coding model with advanced reasoning and analysis capabilities. Features a 200K token context window with extended thinking support, state-of-the-art performance on coding benchmarks, and excellent instruction following.",
+      "Description": "Anthropic's most capable coding model with advanced reasoning and analysis capabilities. Features a 200K token context window with extended thinking support, state-of-the-art performance on coding benchmarks, and excellent instruction following. DEPRECATED 2026-09-30 by Anthropic; retires on the Claude API 2026-11-30, replaced by Claude Sonnet 5.5. Context 200K, max output 64K (the 8,192 previously recorded here was wrong). Source: https://platform.claude.com/docs/en/models/sonnet-4-5/overview",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "IsActive": true,
       "SpeedRank": 9,
@@ -317,11 +317,11 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
             "Priority": 1,
-            "Status": "Active",
+            "Status": "Deprecated",
             "DriverClass": "AnthropicLLM",
             "APIName": "claude-sonnet-4-5-20250929",
             "MaxInputTokens": 200000,
-            "MaxOutputTokens": 8192,
+            "MaxOutputTokens": 64000,
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
@@ -344,7 +344,7 @@
             "DriverClass": "BedrockLLM",
             "APIName": "anthropic.claude-sonnet-4-5-20250929-v1:0",
             "MaxInputTokens": 200000,
-            "MaxOutputTokens": 8192,
+            "MaxOutputTokens": 64000,
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
@@ -372,7 +372,7 @@
             "DriverClass": "OpenRouterLLM",
             "APIName": "anthropic/claude-sonnet-4.5",
             "MaxInputTokens": 200000,
-            "MaxOutputTokens": 8192,
+            "MaxOutputTokens": 64000,
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
@@ -1127,7 +1127,7 @@
       "Description": "Llama 2 70B on Groq",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 2,
-      "IsActive": true,
+      "IsActive": false,
       "InheritTypeModalities": true,
       "ModelConfiguration": {
         "LLM": {
@@ -7903,16 +7903,17 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
             "StartedAt": "2026-01-08T14:56:00.690Z",
-            "Status": "Active",
+            "Status": "Expired",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
             "InputPricePerUnit": 0.5,
             "OutputPricePerUnit": 0.77,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Llama 4 Maverick pricing on Groq as of Jan 2025",
+            "Comments": "Llama 4 Maverick pricing on Groq as of Jan 2025. EXPIRED 2026-01-12: exact duplicate of the row starting 2026-01-12 at the same rate, left behind by the January 2026 seed import. Expired rather than deleted so the pricing history stays intact; the 2026-01-12 row remains the single Active row.",
             "CacheReadPricePerUnit": 0.25,
-            "CacheWritePricePerUnit": null
+            "CacheWritePricePerUnit": null,
+            "EndedAt": "2026-01-12T23:25:17.216Z"
           },
           "primaryKey": {
             "ID": "CCA0A4DC-497D-4E11-BEBB-392E0074A7CA"
@@ -8342,16 +8343,17 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
             "StartedAt": "2026-01-08T14:56:00.690Z",
-            "Status": "Active",
+            "Status": "Expired",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
             "InputPricePerUnit": 1.5,
             "OutputPricePerUnit": 7.5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Batch",
-            "Comments": "Claude 4 Sonnet batch pricing (50% discount) as of Jan 2025",
+            "Comments": "Claude 4 Sonnet batch pricing (50% discount) as of Jan 2025. EXPIRED 2026-01-12: exact duplicate of the row starting 2026-01-12 at the same rate, left behind by the January 2026 seed import. Expired rather than deleted so the pricing history stays intact; the 2026-01-12 row remains the single Active row.",
             "CacheReadPricePerUnit": 0.15,
-            "CacheWritePricePerUnit": 1.875
+            "CacheWritePricePerUnit": 1.875,
+            "EndedAt": "2026-01-12T23:25:17.216Z"
           },
           "primaryKey": {
             "ID": "6C644B8C-CB68-461D-A00B-36F62855539B"
@@ -8464,16 +8466,17 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
             "StartedAt": "2026-01-08T14:56:00.690Z",
-            "Status": "Active",
+            "Status": "Expired",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
             "InputPricePerUnit": 7.5,
             "OutputPricePerUnit": 37.5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Batch",
-            "Comments": "Claude 4 Opus batch pricing (50% discount) as of Jan 2025",
+            "Comments": "Claude 4 Opus batch pricing (50% discount) as of Jan 2025. EXPIRED 2026-01-12: exact duplicate of the row starting 2026-01-12 at the same rate, left behind by the January 2026 seed import. Expired rather than deleted so the pricing history stays intact; the 2026-01-12 row remains the single Active row.",
             "CacheReadPricePerUnit": 0.75,
-            "CacheWritePricePerUnit": 9.375
+            "CacheWritePricePerUnit": 9.375,
+            "EndedAt": "2026-01-12T23:25:17.216Z"
           },
           "primaryKey": {
             "ID": "A727C77A-6F00-4990-9E1D-67B95F49CCF5"
@@ -8610,16 +8613,17 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
             "StartedAt": "2026-01-08T14:56:00.690Z",
-            "Status": "Active",
+            "Status": "Expired",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
             "InputPricePerUnit": 0.11,
             "OutputPricePerUnit": 0.34,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Llama 4 Scout pricing on Groq as of Jan 2025",
+            "Comments": "Llama 4 Scout pricing on Groq as of Jan 2025. EXPIRED 2026-01-12: exact duplicate of the row starting 2026-01-12 at the same rate, left behind by the January 2026 seed import. Expired rather than deleted so the pricing history stays intact; the 2026-01-12 row remains the single Active row.",
             "CacheReadPricePerUnit": 0.055,
-            "CacheWritePricePerUnit": null
+            "CacheWritePricePerUnit": null,
+            "EndedAt": "2026-01-12T23:25:17.216Z"
           },
           "primaryKey": {
             "ID": "DA3A0E18-83DD-4329-AC87-0D8E9D563F01"
@@ -8898,7 +8902,7 @@
             "OutputPricePerUnit": 0.5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT-OSS-20B pricing on Groq as of August 2025 EXPIRED 2026-10-02: superseded by the Groq rate observed on 2026-10-02 ($0.075/$0.3); the vendor does not publish the changeover date, so the observation date is used. Source: https://console.groq.com/docs/models",
+            "Comments": "GPT-OSS-20B pricing on Groq as of August 2025. EXPIRED 2026-10-02: superseded by the Groq rate observed on 2026-10-02 ($0.075/$0.3); the vendor does not publish the changeover date, so the observation date is used. Source: https://console.groq.com/docs/models",
             "CacheReadPricePerUnit": 0.05,
             "CacheWritePricePerUnit": null,
             "EndedAt": "2026-10-02T00:00:00.000Z"
@@ -9158,7 +9162,7 @@
       "Description": "Gemini 1.5 Flash is a fast and versatile multimodal model for scaling across diverse tasks.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 8,
-      "IsActive": true,
+      "IsActive": false,
       "InheritTypeModalities": true,
       "ModelConfiguration": {
         "LLM": {
@@ -9430,7 +9434,7 @@
       "Description": "Gemini 2.5 Pro Preview Model",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 7,
-      "IsActive": true,
+      "IsActive": false,
       "SpeedRank": 0,
       "CostRank": 0,
       "InheritTypeModalities": true,
@@ -9567,7 +9571,7 @@
       "Description": "Gemini 2.5 Flash Preview Model",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 7,
-      "IsActive": true,
+      "IsActive": false,
       "SpeedRank": 0,
       "CostRank": 0,
       "InheritTypeModalities": true,
@@ -9840,7 +9844,7 @@
       "Description": "Gemini 1.5 Pro",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 4,
-      "IsActive": true,
+      "IsActive": false,
       "InheritTypeModalities": true,
       "ModelConfiguration": {
         "LLM": {
@@ -12035,7 +12039,7 @@
             "OutputPricePerUnit": 0.75,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT-OSS-120B pricing on Groq as of August 2025 EXPIRED 2026-10-02: superseded by the Groq rate observed on 2026-10-02 ($0.15/$0.6); the vendor does not publish the changeover date, so the observation date is used. Source: https://console.groq.com/docs/models",
+            "Comments": "GPT-OSS-120B pricing on Groq as of August 2025. EXPIRED 2026-10-02: superseded by the Groq rate observed on 2026-10-02 ($0.15/$0.6); the vendor does not publish the changeover date, so the observation date is used. Source: https://console.groq.com/docs/models",
             "CacheReadPricePerUnit": 0.075,
             "CacheWritePricePerUnit": null,
             "EndedAt": "2026-10-02T00:00:00.000Z"
@@ -12060,7 +12064,7 @@
             "OutputPricePerUnit": 0.69,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT-OSS-120B pricing on Cerebras as of August 2025 EXPIRED 2026-10-02: superseded by the Cerebras rate observed on 2026-10-02 ($0.35/$0.75); the vendor does not publish the changeover date, so the observation date is used. Source: https://inference-docs.cerebras.ai/models/openai-oss.md",
+            "Comments": "GPT-OSS-120B pricing on Cerebras as of August 2025. EXPIRED 2026-10-02: superseded by the Cerebras rate observed on 2026-10-02 ($0.35/$0.75); the vendor does not publish the changeover date, so the observation date is used. Source: https://inference-docs.cerebras.ai/models/openai-oss.md",
             "CacheReadPricePerUnit": null,
             "CacheWritePricePerUnit": null,
             "EndedAt": "2026-10-02T00:00:00.000Z"
@@ -13679,8 +13683,8 @@
             "Status": "Active",
             "DriverClass": "AnthropicLLM",
             "APIName": "claude-sonnet-4-6",
-            "MaxInputTokens": 200000,
-            "MaxOutputTokens": 64000,
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 128000,
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
@@ -13702,8 +13706,8 @@
             "Status": "Active",
             "DriverClass": "BedrockLLM",
             "APIName": "anthropic.claude-sonnet-4-6",
-            "MaxInputTokens": 200000,
-            "MaxOutputTokens": 64000,
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 128000,
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
@@ -13730,8 +13734,8 @@
             "Status": "Active",
             "DriverClass": "OpenRouterLLM",
             "APIName": "anthropic/claude-sonnet-4.6",
-            "MaxInputTokens": 200000,
-            "MaxOutputTokens": 64000,
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 128000,
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
@@ -18579,7 +18583,9 @@
             "OutputPricePerUnit": 25,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Claude Opus 4.8 pricing on Anthropic as of May 28, 2026 launch. Same per-token rates as Opus 4.7 ($5/$25 per 1M tokens). 5min cache write $6.25/1M, 1hr cache write $10/1M, cache hit $0.50/1M. Batch pricing $2.50/$12.50 per 1M (50% discount). Fast Mode tier $10/$50 per 1M (Opus 4.8 only — substantially cheaper than 4.6/4.7 Fast Mode at $30/$150). Sources: https://platform.claude.com/docs/en/about-claude/pricing ; https://platform.claude.com/docs/en/about-claude/models/overview"
+            "Comments": "Claude Opus 4.8 pricing on Anthropic as of May 28, 2026 launch. Same per-token rates as Opus 4.7 ($5/$25 per 1M tokens). 5min cache write $6.25/1M, 1hr cache write $10/1M, cache hit $0.50/1M. Batch pricing $2.50/$12.50 per 1M (50% discount). Fast Mode tier $10/$50 per 1M (Opus 4.8 only — substantially cheaper than 4.6/4.7 Fast Mode at $30/$150). Sources: https://platform.claude.com/docs/en/about-claude/pricing ; https://platform.claude.com/docs/en/about-claude/models/overview. Cache rates added 2026-10-05 from Anthropic's own rate card: cache read/refresh $0.5/1M, 5-minute cache write $6.25/1M. The base $5/$25 rate is unchanged, so this row is amended rather than superseded. Source: https://platform.claude.com/docs/en/about-claude/pricing",
+            "CacheReadPricePerUnit": 0.5,
+            "CacheWritePricePerUnit": 6.25
           },
           "primaryKey": {
             "ID": "F083F65E-40F5-44BE-8AEB-45754AE2CD56"
@@ -19695,7 +19701,7 @@
             "OutputPricePerUnit": 4.4,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GLM 5.2 Standard-tier serverless pricing on Fireworks.ai: $1.40/$4.40 per 1M tokens with $0.14 cached-input — vendor-parity with Z.AI direct. Live on Fireworks day-zero. Batch inference is billed at 50% of these rates. Priority tier is $1.75/$5.50 / $0.18 cached and Fast tier (accounts/fireworks/routers/glm-5p2-fast, ~2x throughput) is $2.10/$6.60 / $0.21 cached — neither is modeled here. Sources: https://docs.fireworks.ai/serverless/pricing ; https://fireworks.ai/models/fireworks/glm-5p2 ; https://fireworks.ai/blog/glm-5p2 EXPIRED 2026-09-26: Fireworks removed glm-5p2 from serverless. Row preserved for historical pricing lookups. Source: https://docs.fireworks.ai/updates/changelog",
+            "Comments": "GLM 5.2 Standard-tier serverless pricing on Fireworks.ai: $1.40/$4.40 per 1M tokens with $0.14 cached-input — vendor-parity with Z.AI direct. Live on Fireworks day-zero. Batch inference is billed at 50% of these rates. Priority tier is $1.75/$5.50 / $0.18 cached and Fast tier (accounts/fireworks/routers/glm-5p2-fast, ~2x throughput) is $2.10/$6.60 / $0.21 cached — neither is modeled here. Sources: https://docs.fireworks.ai/serverless/pricing ; https://fireworks.ai/models/fireworks/glm-5p2 ; https://fireworks.ai/blog/glm-5p2. EXPIRED 2026-09-26: Fireworks removed glm-5p2 from serverless. Row preserved for historical pricing lookups. Source: https://docs.fireworks.ai/updates/changelog",
             "CacheReadPricePerUnit": 0.14,
             "CacheWritePricePerUnit": null,
             "EndedAt": "2026-09-26T00:00:00.000Z"
@@ -20287,14 +20293,15 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
             "StartedAt": "2026-06-30T00:00:00.000Z",
-            "Status": "Active",
+            "Status": "Expired",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
             "InputPricePerUnit": 2,
             "OutputPricePerUnit": 10,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Claude Sonnet 5 launch pricing on Anthropic direct as of June 30, 2026 GA: $2/$10 per 1M tokens (in/out). Introductory rate; steps up to standard $3/$15 per 1M tokens on September 1, 2026 (parity with Sonnet 4.6 per-token pricing). New Claude 5 tokenizer produces ~30-35% more tokens for the same input text than Sonnet 4.6, so blended per-request cost may still rise even at unchanged token rates. Sources: https://www.anthropic.com/news/claude-sonnet-5 ; https://platform.claude.com/docs/en/about-claude/pricing ; https://thenewstack.io/claude-sonnet-5-launch/ ; https://simonwillison.net/2026/Jun/30/claude-sonnet-5/"
+            "Comments": "Claude Sonnet 5 launch pricing on Anthropic direct as of June 30, 2026 GA: $2/$10 per 1M tokens (in/out). Introductory rate; steps up to standard $3/$15 per 1M tokens on September 1, 2026 (parity with Sonnet 4.6 per-token pricing). New Claude 5 tokenizer produces ~30-35% more tokens for the same input text than Sonnet 4.6, so blended per-request cost may still rise even at unchanged token rates. Sources: https://www.anthropic.com/news/claude-sonnet-5 ; https://platform.claude.com/docs/en/about-claude/pricing ; https://thenewstack.io/claude-sonnet-5-launch/ ; https://simonwillison.net/2026/Jun/30/claude-sonnet-5/. EXPIRED 2026-09-01: superseded by the row starting 2026-09-01 at the same $2/$10 rate. Two concurrent Active rows existed for this model+vendor because the launch row was written for introductory pricing through 2026-08-31 and a second row was added when that became the standard price; Anthropic has confirmed the scheduled increase to $3/$15 will not occur. Closing this row leaves one Active row and a contiguous history. Source: https://platform.claude.com/docs/en/about-claude/pricing",
+            "EndedAt": "2026-09-01T00:00:00.000Z"
           },
           "primaryKey": {
             "ID": "960E27FF-F0D4-49FF-A77B-2A7295A63661"
@@ -20309,14 +20316,15 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Amazon Bedrock",
             "StartedAt": "2026-06-30T00:00:00.000Z",
-            "Status": "Active",
+            "Status": "Expired",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
             "InputPricePerUnit": 2,
             "OutputPricePerUnit": 10,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Claude Sonnet 5 launch pricing on Amazon Bedrock as of June 30, 2026 simultaneous availability. Vendor-parity with Anthropic direct ($2/$10 per 1M tokens intro; steps to $3/$15 on Sept 1, 2026). Cross-region inference adds ~10%. Model ID: anthropic.claude-sonnet-5. Sources: https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-sonnet-5.html ; https://aws.amazon.com/blogs/machine-learning/introducing-claude-sonnet-5-on-aws-anthropics-most-capable-sonnet-model/"
+            "Comments": "Claude Sonnet 5 launch pricing on Amazon Bedrock as of June 30, 2026 simultaneous availability. Vendor-parity with Anthropic direct ($2/$10 per 1M tokens intro; steps to $3/$15 on Sept 1, 2026). Cross-region inference adds ~10%. Model ID: anthropic.claude-sonnet-5. Sources: https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-sonnet-5.html ; https://aws.amazon.com/blogs/machine-learning/introducing-claude-sonnet-5-on-aws-anthropics-most-capable-sonnet-model/. EXPIRED 2026-09-01: superseded by the row starting 2026-09-01 at the same $2/$10 rate. Two concurrent Active rows existed for this model+vendor because the launch row was written for introductory pricing through 2026-08-31 and a second row was added when that became the standard price; Anthropic has confirmed the scheduled increase to $3/$15 will not occur. Closing this row leaves one Active row and a contiguous history. Source: https://platform.claude.com/docs/en/about-claude/pricing",
+            "EndedAt": "2026-09-01T00:00:00.000Z"
           },
           "primaryKey": {
             "ID": "E87DBE7D-F9BC-476A-8CFB-3A410E5DFEDC"
@@ -20331,14 +20339,15 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
             "StartedAt": "2026-06-30T00:00:00.000Z",
-            "Status": "Active",
+            "Status": "Expired",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
             "InputPricePerUnit": 2,
             "OutputPricePerUnit": 10,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Claude Sonnet 5 on OpenRouter (passthrough pricing). Source: https://openrouter.ai/anthropic/claude-sonnet-5"
+            "Comments": "Claude Sonnet 5 on OpenRouter (passthrough pricing). Source: https://openrouter.ai/anthropic/claude-sonnet-5. EXPIRED 2026-09-01: superseded by the row starting 2026-09-01 at the same $2/$10 rate. Two concurrent Active rows existed for this model+vendor because the launch row was written for introductory pricing through 2026-08-31 and a second row was added when that became the standard price; Anthropic has confirmed the scheduled increase to $3/$15 will not occur. Closing this row leaves one Active row and a contiguous history. Source: https://platform.claude.com/docs/en/about-claude/pricing",
+            "EndedAt": "2026-09-01T00:00:00.000Z"
           },
           "primaryKey": {
             "ID": "57EB99A8-3D01-49EF-83FC-C33404EF2834"
@@ -20360,9 +20369,9 @@
             "OutputPricePerUnit": 10,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Claude Sonnet 5 PERMANENT pricing effective September 1, 2026 on Anthropic direct. Anthropic announced 2026-08-10 that the introductory $2/$10 per 1M rate — originally scheduled to expire August 31, 2026 and step up to $3/$15 (parity with Sonnet 4.6 per-token pricing) — is now PERMANENT. This row exists to document the price freeze in the cost history: it fires on the same date the previously-scheduled step-up would have taken effect, at the introductory rate rather than the cancelled $3/$15. Prices are unchanged from the 2026-06-30 launch row. Cache-read and cache-write rates are unchanged from the prior row (previously not recorded; leaving null to avoid asserting values not verified from a first-party source at this cutover). The stale 'steps up on Sept 1' guidance in the June 30 row's Comments field should be understood as superseded by this row's presence. Sources: https://x.com/claudeai/status/2086891169217122586 ; https://platform.claude.com/docs/en/about-claude/pricing ; https://www.anthropic.com/news/claude-sonnet-5",
-            "CacheReadPricePerUnit": null,
-            "CacheWritePricePerUnit": null
+            "Comments": "Claude Sonnet 5 PERMANENT pricing effective September 1, 2026 on Anthropic direct. Anthropic announced 2026-08-10 that the introductory $2/$10 per 1M rate — originally scheduled to expire August 31, 2026 and step up to $3/$15 (parity with Sonnet 4.6 per-token pricing) — is now PERMANENT. This row exists to document the price freeze in the cost history: it fires on the same date the previously-scheduled step-up would have taken effect, at the introductory rate rather than the cancelled $3/$15. Prices are unchanged from the 2026-06-30 launch row. Cache-read and cache-write rates are unchanged from the prior row (previously not recorded; leaving null to avoid asserting values not verified from a first-party source at this cutover). The stale 'steps up on Sept 1' guidance in the June 30 row's Comments field should be understood as superseded by this row's presence. Sources: https://x.com/claudeai/status/2086891169217122586 ; https://platform.claude.com/docs/en/about-claude/pricing ; https://www.anthropic.com/news/claude-sonnet-5. Cache rates added 2026-10-05 from Anthropic's own rate card: cache read/refresh $0.2/1M, 5-minute cache write $2.5/1M. The base $2/$10 rate is unchanged, so this row is amended rather than superseded. Source: https://platform.claude.com/docs/en/about-claude/pricing",
+            "CacheReadPricePerUnit": 0.2,
+            "CacheWritePricePerUnit": 2.5
           },
           "primaryKey": {
             "ID": "DF0BC95F-36E4-4902-BD4D-BA22AB708E3D"
@@ -20558,7 +20567,9 @@
             "OutputPricePerUnit": 50,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Claude Fable 5 pricing on Anthropic direct as of June 9, 2026 GA: $10/$50 per 1M tokens (in/out) - exactly 2x Opus 4.8's rate card. Pricing shared with Claude Mythos 5 (same specs). Sources: https://www.anthropic.com/news/claude-fable-5-mythos-5 ; https://platform.claude.com/docs/en/about-claude/pricing ; https://platform.claude.com/docs/en/about-claude/models/introducing-claude-fable-5-and-claude-mythos-5"
+            "Comments": "Claude Fable 5 pricing on Anthropic direct as of June 9, 2026 GA: $10/$50 per 1M tokens (in/out) - exactly 2x Opus 4.8's rate card. Pricing shared with Claude Mythos 5 (same specs). Sources: https://www.anthropic.com/news/claude-fable-5-mythos-5 ; https://platform.claude.com/docs/en/about-claude/pricing ; https://platform.claude.com/docs/en/about-claude/models/introducing-claude-fable-5-and-claude-mythos-5. Cache rates added 2026-10-05 from Anthropic's own rate card: cache read/refresh $1/1M, 5-minute cache write $12.5/1M. The base $10/$50 rate is unchanged, so this row is amended rather than superseded. Source: https://platform.claude.com/docs/en/about-claude/pricing",
+            "CacheReadPricePerUnit": 1,
+            "CacheWritePricePerUnit": 12.5
           },
           "primaryKey": {
             "ID": "68745FF6-D11E-4E02-B889-7A21939AFC65"
@@ -21181,7 +21192,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
             "StartedAt": "2026-07-10T00:00:00.000Z",
-            "Status": "Active",
+            "Status": "Expired",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
             "InputPricePerUnit": 2.5,
@@ -21190,7 +21201,8 @@
             "CacheWritePricePerUnit": null,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT 5.6-terra pricing on OpenAI as of July 2026. $2.50/$15.00 per 1M tokens. Cache read 0.1x input (Family B, published cached-input price); OpenAI does not charge for cache writes. SUPERSEDED 2026-07-30 by 20% price cut to $2.00/$12.00 (see next cost row)."
+            "Comments": "GPT 5.6-terra pricing on OpenAI as of July 2026. $2.50/$15.00 per 1M tokens. Cache read 0.1x input (Family B, published cached-input price); OpenAI does not charge for cache writes. SUPERSEDED 2026-07-30 by 20% price cut to $2.00/$12.00 (see next cost row). EXPIRED 2026-07-30: superseded by the row starting 2026-07-30, which records the lower rate. The older row was never closed, leaving two concurrent Active rows for the same model+vendor. No new vendor data was needed for this fix - both rows were already in the catalogue.",
+            "EndedAt": "2026-07-30T00:00:00.000Z"
           },
           "primaryKey": {
             "ID": "60C58C8B-B5A4-4335-BCFD-2D2A65AD7DEA"
@@ -21304,7 +21316,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
             "StartedAt": "2026-07-10T00:00:00.000Z",
-            "Status": "Active",
+            "Status": "Expired",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
             "InputPricePerUnit": 1,
@@ -21313,7 +21325,8 @@
             "CacheWritePricePerUnit": null,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT 5.6-luna pricing on OpenAI as of July 2026. $1.00/$6.00 per 1M tokens. Cache read 0.1x input (Family B, published cached-input price); OpenAI does not charge for cache writes. SUPERSEDED 2026-07-30 by 80% price cut to $0.20/$1.20 (see next cost row)."
+            "Comments": "GPT 5.6-luna pricing on OpenAI as of July 2026. $1.00/$6.00 per 1M tokens. Cache read 0.1x input (Family B, published cached-input price); OpenAI does not charge for cache writes. SUPERSEDED 2026-07-30 by 80% price cut to $0.20/$1.20 (see next cost row). EXPIRED 2026-07-30: superseded by the row starting 2026-07-30, which records the lower rate. The older row was never closed, leaving two concurrent Active rows for the same model+vendor. No new vendor data was needed for this fix - both rows were already in the catalogue.",
+            "EndedAt": "2026-07-30T00:00:00.000Z"
           },
           "primaryKey": {
             "ID": "5121599E-71C3-46AB-9AA5-43006565F2B7"
@@ -24200,7 +24213,7 @@
             "OutputPricePerUnit": 0.1667,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GLM-5.3-Flash on OpenRouter listed at $0.05/$0.1667 per 1M input/output as of 2026-08-26. Values reflect a limited-time 50% Z.AI promo (through 2026-09-09 16:00 UTC); a follow-up cost row should be added once the promo expires so the historical rate is preserved and post-promo pricing is captured accurately. Source: https://openrouter.ai/z-ai/glm-5.3-flash EXPIRED 2026-09-09T16:00Z: Z.AI's 50% launch promo ended at 24:00 Singapore time (UTC+8) on 2026-09-09, the date and time pre-announced in the 2026-09-07 research report. Superseded by the list-rate row below. Note the promo figure recorded here ($0.05/$0.1667) is the rate captured at 2026-08-26; Z.AI's own later materials describe the promo as $0.075/$0.25, so the two disagree — the discrepancy is left as recorded rather than rewritten after the fact, and it does not affect the forward rate.",
+            "Comments": "GLM-5.3-Flash on OpenRouter listed at $0.05/$0.1667 per 1M input/output as of 2026-08-26. Values reflect a limited-time 50% Z.AI promo (through 2026-09-09 16:00 UTC); a follow-up cost row should be added once the promo expires so the historical rate is preserved and post-promo pricing is captured accurately. Source: https://openrouter.ai/z-ai/glm-5.3-flash. EXPIRED 2026-09-09T16:00Z: Z.AI's 50% launch promo ended at 24:00 Singapore time (UTC+8) on 2026-09-09, the date and time pre-announced in the 2026-09-07 research report. Superseded by the list-rate row below. Note the promo figure recorded here ($0.05/$0.1667) is the rate captured at 2026-08-26; Z.AI's own later materials describe the promo as $0.075/$0.25, so the two disagree — the discrepancy is left as recorded rather than rewritten after the fact, and it does not affect the forward rate.",
             "CacheReadPricePerUnit": null,
             "CacheWritePricePerUnit": null,
             "EndedAt": "2026-09-09T16:00:00.000Z"
