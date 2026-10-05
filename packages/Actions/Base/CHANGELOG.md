@@ -1,5 +1,65 @@
 # Change Log - @memberjunction/actions-base
 
+## 6.2.0-edge.2
+
+### Patch Changes
+
+- Updated dependencies [e97d95c]
+- Updated dependencies [2552b1e]
+- Updated dependencies [21f9e15]
+- Updated dependencies [4248fb3]
+- Updated dependencies [0adaf76]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [705ab4e]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [5986939]
+- Updated dependencies [200e634]
+- Updated dependencies [4d647e6]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [369e229]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [2854a2e]
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/core-entities@6.2.0-edge.2
+  - @memberjunction/code-execution@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+
+## 6.2.0-edge.1
+
+### Patch Changes
+
+- 520bd09: Durable entity actions (`EntityAction.RunMode = 'Durable'`) now receive their declared parameters by name (#4794).
+
+  `BuildDurableDeferral` stored the redacted parameters in `Task.InputPayload` as a `LoggedParam[]` array, while `TaskGraphActionRunner` reads that payload back as a name → value object. Every released build with durable dispatch (v6.1.0 onward, including 6.1.4) hit the same failure: the dispatcher's `mergedPayload` only merges plain objects, so it silently dropped the array and the action received NONE of its params. Parameters named `0…n` would only appear if the array reached `TaskGraphActionRunner.buildParams` directly, bypassing that drop. Either way every durable binding ran without its inputs, e.g. `Common.LogActivity` failing with `TypeCode is required. | Title is required.`
+  - `@memberjunction/actions-base`: new `RedactParamsToRecord()` beside `RedactParamsToJSON()`. It applies the same redaction rules and returns `{ Name: Value }`, omitting suppressed parameters, which then arrive at the action as absent rather than as a redaction stub.
+  - `@memberjunction/actions`: `BuildDurableDeferral` submits that record.
+  - `@memberjunction/task-graph`: a task whose `InputPayload` is not a name → value object now **fails** with a message naming the task, instead of running with its input silently dropped.
+  - `@memberjunction/server`: round-trip regression test through `TaskGraphActionRunner`.
+  - `@memberjunction/integration-test-suite`: EA6 now rejects an array `RedactedParams` and checks a bound param arrives by name.
+
+  **Upgrade note:** durable tasks queued before this fix still carry array payloads. They now fail loudly (`Task <id> has an InputPayload that is an array; expected a name → value object…`) instead of running with no inputs. Re-trigger the source save if that work matters, or — from the Workflows run view — use the failed step's **Edit input & retry** control to replace the stored array with a name → value object and retry it in place.
+
+  A durable binding never receives a whole record: `Entity Object` / `Entity Object Data` bindings are always stripped from the durable payload. Pass a key (e.g. `Entity Field 'ID'`) and load the record in the action.
+
+- Updated dependencies [a50948e]
+- Updated dependencies [0eeb89d]
+- Updated dependencies [a3539d2]
+- Updated dependencies [41274aa]
+- Updated dependencies [67f6c85]
+- Updated dependencies [eb3a8d3]
+- Updated dependencies [e1dd673]
+- Updated dependencies [307da67]
+- Updated dependencies [a7da50b]
+- Updated dependencies [17cc774]
+- Updated dependencies [80905a1]
+- Updated dependencies [6b08ebf]
+  - @memberjunction/core-entities@6.2.0-edge.1
+  - @memberjunction/core@6.2.0-edge.1
+  - @memberjunction/code-execution@6.2.0-edge.1
+  - @memberjunction/global@6.2.0-edge.1
+
 ## 6.2.0-edge.0
 
 ### Patch Changes

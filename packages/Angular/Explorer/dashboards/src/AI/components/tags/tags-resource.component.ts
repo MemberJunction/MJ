@@ -3016,11 +3016,13 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
             // Use KnowledgeHubMetadataEngine for cached reference data — instant, no RunView needed
             const engine = KnowledgeHubMetadataEngine.Instance;
             await engine.Config(false); // no-op if already loaded
+            // Vector indexes are cached by AIEngineBase (deferred at startup) — ensure it is loaded.
+            await AIEngineBase.Instance.EnsureLoaded();
 
             this.SourceTypeOptions = engine.ContentSourceTypes.map(t => ({ ID: t.ID, Name: t.Name }));
             this.ContentTypeOptions = engine.ContentTypes.map(t => ({ ID: t.ID, Name: t.Name }));
             this.FileTypeOptions = engine.ContentFileTypes.map(t => ({ ID: t.ID, Name: t.Name }));
-            this.VectorIndexOptions = engine.VectorIndexes.map(vi => ({ ID: vi.ID, Name: vi.Name }));
+            this.VectorIndexOptions = AIEngineBase.Instance.VectorIndexes.map(vi => ({ ID: vi.ID, Name: vi.Name }));
 
             // AI Models from AIEngineBase (already cached)
             if (this.AIModelOptions.length === 0) {
@@ -3485,8 +3487,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
 
     private resolveVectorIndexName(indexId: string): string {
         if (!indexId) return 'System default';
-        const engine = KnowledgeHubMetadataEngine.Instance;
-        const idx = engine.GetVectorIndexByID(indexId);
+        const idx = AIEngineBase.Instance.GetVectorIndexByID(indexId);
         return idx ? idx.Name : 'Unknown';
     }
 

@@ -12,6 +12,8 @@ vi.mock('@memberjunction/core', () => ({
 // Create a mock ChildProcess class that extends EventEmitter
 class MockChildProcess extends EventEmitter {
   killed = false;
+  exitCode: number | null = null;
+  signalCode: string | null = null;
   pid = Math.floor(Math.random() * 10000);
 
   send = vi.fn().mockReturnValue(true);
@@ -323,9 +325,86 @@ describe('WorkerPool', () => {
 
       // Pre-kill the worker
       mockProcesses[0].killed = true;
+      mockProcesses[0].exitCode = 0;
 
       // Should not throw
       await expect(pool.shutdown()).resolves.not.toThrow();
+    });
+
+    // Round 16 memory-leak fix: `worker.process.killed` is set to `true` by Node's real ChildProcess
+    // synchronously as soon as `kill()` successfully SENDS a signal — NOT once the process has
+    // actually exited. The default `MockChildProcess.kill()` above always simulates a well-behaved
+    // process (emits 'exit' unconditionally), which is exactly why this bug went unnoticed: the
+    // escalation's old `!worker.process.killed` check was always false by the time the force-kill
+    // timer fired, so SIGKILL never actually ran for a genuinely hung worker. These tests model a
+    // worker that ignores SIGTERM to prove the escalation now actually fires.
+    it('escalates to SIGKILL if a worker ignores SIGTERM instead of exiting', async () => {
+      // Real timers during setup — `pool.initialize()` itself relies on `setImmediate` (the mock's
+      // simulated 'ready' message) to resolve; only fake the clock around the shutdown escalation.
+      pool = new WorkerPool({ poolSize: 1 });
+      await pool.initialize();
+
+      const proc = mockProcesses[0];
+      // Override kill() so it records the call but does NOT emit 'exit' — a hung/ignoring worker.
+      proc.kill = vi.fn().mockImplementation((_signal?: string) => {
+        proc.killed = true; // matches real Node semantics: set on send, not on actual exit
+      });
+
+      vi.useFakeTimers();
+      try {
+        const shutdownPromise = pool.shutdown();
+        await vi.advanceTimersByTimeAsync(5000);
+        await shutdownPromise;
+      } finally {
+        vi.useRealTimers();
+      }
+
+      expect(proc.kill).toHaveBeenNthCalledWith(1, 'SIGTERM');
+      expect(proc.kill).toHaveBeenNthCalledWith(2, 'SIGKILL');
+    });
+
+    it('does not send a redundant SIGKILL when the worker exits promptly after SIGTERM', async () => {
+      pool = new WorkerPool({ poolSize: 1 });
+      await pool.initialize();
+      const proc = mockProcesses[0];
+
+      vi.useFakeTimers();
+      try {
+        const shutdownPromise = pool.shutdown(); // default mock kill() emits 'exit' via setImmediate
+        await vi.advanceTimersByTimeAsync(5000);
+        await shutdownPromise;
+      } finally {
+        vi.useRealTimers();
+      }
+
+      expect(proc.kill).toHaveBeenCalledTimes(1); // SIGTERM only — no SIGKILL follow-up
+    });
+  });
+
+  describe('worker startup failure', () => {
+    // Round 17 memory-leak fix: a worker that never reports ready used to stay alive as an
+    // orphaned process, because the crash handler is only attached after the ready-wait.
+    it('kills a worker that fails to report ready within the startup window', async () => {
+      mockedFork.mockImplementation(() => {
+        const proc = new MockChildProcess(); // never simulates ready
+        mockProcesses.push(proc);
+        return proc as unknown as ReturnType<typeof fork>;
+      });
+      pool = new WorkerPool({ poolSize: 1 });
+
+      vi.useFakeTimers();
+      let outcome: PromiseSettledResult<void>;
+      try {
+        const init = pool.initialize();
+        const settled = Promise.allSettled([init]).then(r => r[0]);
+        await vi.advanceTimersByTimeAsync(5000);
+        outcome = await settled;
+      } finally {
+        vi.useRealTimers();
+      }
+
+      expect(outcome.status).toBe('rejected');
+      expect(mockProcesses[0].kill).toHaveBeenCalledWith('SIGKILL');
     });
   });
 

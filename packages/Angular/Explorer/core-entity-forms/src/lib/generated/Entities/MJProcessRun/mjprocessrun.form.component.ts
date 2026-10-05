@@ -22,7 +22,8 @@ export class MJProcessRunFormComponent extends BaseFormComponent {
             { sectionKey: 'resumeAndConfiguration', sectionName: 'Resume and Configuration', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJProcessRunDetails', sectionName: 'Process Run Details', isExpanded: false },
-            { sectionKey: 'mJFeatureValues', sectionName: 'Feature Values', isExpanded: false }
+            { sectionKey: 'mJFeatureValues', sectionName: 'Feature Values', isExpanded: false },
+            { sectionKey: 'mJRecordCloneLogs', sectionName: 'Record Clone Logs', isExpanded: false }
         ]);
     }
 }

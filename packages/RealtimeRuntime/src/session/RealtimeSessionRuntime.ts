@@ -1531,6 +1531,12 @@ export class RealtimeSessionRuntime {
    * never block the voice session.
    */
   private async fetchChannelDefinitions(): Promise<RealtimeChannelDefinitionRow[]> {
+    // A connect-only provider (ConnectGraphQLClient — anonymous embeds) has no entity metadata,
+    // so AIEngineBase cannot load; asking it would only fail with "Entity … not found in
+    // metadata". An embed brings its own channels, so "no registry channels" is the right answer.
+    if ((this.Provider?.Entities?.length ?? 0) === 0) {
+      return [];
+    }
     try {
       const engine = AIEngineBase.GetProviderInstance<AIEngineBase>(this.Provider, AIEngineBase) as AIEngineBase;
       await engine.Config(false, undefined, this.Provider);

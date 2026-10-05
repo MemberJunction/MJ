@@ -17,7 +17,7 @@ import type { ManifestFetcher, RootApp } from '../dependency/dependency-graph-bu
 import type { InstalledAppMap, DependencyValue } from '../dependency/dependency-resolver.js';
 import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ListGitHubReleases, ListGitHubTags, ValidateGitHubTag, ParseGitHubUrl, type GitHubClientOptions, type MigrationDownloadResult } from '../github/github-client.js';
 import semver from 'semver';
-import { CreateAppSchema, DropAppSchema, SchemaExists, ValidateSchemaName, MJ_APP_SCHEMA_PREFIX, type SchemaNameValidation } from './schema-manager.js';
+import { CheckCanMigrateAppSchema, CreateAppSchema, DropAppSchema, SchemaExists, ValidateSchemaName, MJ_APP_SCHEMA_PREFIX, type SchemaNameValidation } from './schema-manager.js';
 import { RunFkGraphTeardown, BuildRootDoomedPredicate } from './entity-teardown.js';
 import { ExtractApplicationIds } from './migration-application-ids.js';
 import { RunAppMigrations, type SkywayDatabaseConfig } from './migration-runner.js';
@@ -781,6 +781,16 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
       }
     }
 
+    // Also before any mutation: a schema whose owner changed since install (the README's
+    // ownership retrofit hands it to dbo) can leave this login unable to run the migrations at
+    // all, which would otherwise surface as a half-applied upgrade (MJ#4756).
+    if (manifest.schema && manifest.migrations) {
+      const migratable = await CheckCanMigrateAppSchema(manifest.schema.name, context.DatabaseProvider);
+      if (!migratable.Success) {
+        return BuildFailureResult('Upgrade', options.AppName, targetVersion, 'Schema', startTime, migratable.ErrorMessage ?? 'Cannot run migrations in the app schema');
+      }
+    }
+
     // Step 3: Check dependency compatibility
     if (manifest.dependencies && Object.keys(manifest.dependencies).length > 0) {
       const depResult = await ResolveDependencyChain(manifest, context);
@@ -952,15 +962,39 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
     // `mj app enable` after a manual `npm install`. An upgraded app whose new packages never
     // resolved must not be advertised as healthy.
     const upgradeFinalStatus = npmInstallWarning ? 'Disabled' : 'Active';
+    // `SchemaName` is refreshed from the manifest alongside `ManifestJSON` — the manifest is the
+    // documented source of truth for the app's schema, so the denormalized column must not be
+    // allowed to drift from it across upgrades. Before this, `SchemaName` was written ONLY by
+    // install: an app whose manifest later corrected its schema name (most commonly its CASING,
+    // e.g. '__bcsaas' -> '__BCSaaS') kept the stale value forever, because every subsequent
+    // upgrade rewrote ManifestJSON around it. That stale value is not inert — CodeGen's
+    // `spUpdateSchemaInfoFromDatabase` backfills `SchemaInfo.CanonicalSchemaName` FROM this
+    // column, and `vwEntities` prefers CanonicalSchemaName when deriving entity ClassName/CodeName
+    // and the runtime GraphQL type names. A stale casing here therefore propagates into
+    // client-computed GraphQL operation names that no longer match the server's generated
+    // resolvers, failing every operation on the app's entities with GRAPHQL_VALIDATION_FAILED.
+    // Only written when the manifest declares a schema, so a schema-less app's column is left alone.
     await UpdateAppRecord(context.ContextUser, existingApp.ID, {
       Version: manifest.version,
       ManifestJSON: JSON.stringify(manifest),
       Status: upgradeFinalStatus,
+      ...(manifest.schema ? { SchemaName: manifest.schema.name } : {}),
     });
     if (upgradeFinalStatus !== 'Active') {
       // Array-agnostic by AppName — sweeps both the server and client arrays.
       ToggleServerDynamicPackages(context.RepoRoot, manifest.name, false, context.ServerPackagePath);
     }
+
+    // Re-assert the canonical schema name on the app's SchemaInfo row, mirroring the install path
+    // (Steps 6-7). The backfill inside `spUpdateSchemaInfoFromDatabase` only ever FILLS NULLS, so
+    // a CanonicalSchemaName already frozen from a stale `OpenApp.SchemaName` is never corrected by
+    // codegen — only an upgrade that re-asserts it can heal the row. Runs after the record update
+    // above so both the column and the SchemaInfo row are set from the same manifest value.
+    // Best-effort by contract (warns, never fatal), and idempotent.
+    if (manifest.schema) {
+      await PersistCanonicalSchemaName(manifest, context);
+    }
+
     await SetAppStep(context.ContextUser, existingApp.ID, 'RecordUpdated', undefined, manifest.version);
 
     // Step 11: Execute hooks
@@ -1748,6 +1782,15 @@ async function HandleSchemaCreation(manifest: MJAppManifest, context: Orchestrat
       // Reuse it and let Skyway apply only new migrations.
       context.Callbacks?.OnProgress?.('Schema', `Reusing existing schema '${manifest.schema.name}'`);
       await WarnIfSchemaOwnedByAnotherApp(manifest.schema.name, options.ThisAppId, context);
+      // A reused schema may not be owned by this login (a --keep-data reinstall after the
+      // README's ownership retrofit, or adopting a shared schema), so check before migrating
+      // into it (MJ#4756). A schema created below needs no check: CreateAppSchema guarantees it.
+      if (manifest.migrations) {
+        const migratable = await CheckCanMigrateAppSchema(canonicalSchemaName, context.DatabaseProvider);
+        if (!migratable.Success) {
+          return { Success: false, ErrorMessage: migratable.ErrorMessage, Created: false };
+        }
+      }
       return { Success: true, Created: false };
     }
     return { Success: false, ErrorMessage: `Schema '${manifest.schema.name}' already exists` };
@@ -1755,7 +1798,17 @@ async function HandleSchemaCreation(manifest: MJAppManifest, context: Orchestrat
 
   if (manifest.schema.createIfNotExists !== false) {
     context.Callbacks?.OnProgress?.('Schema', `Creating schema '${manifest.schema.name}'...`);
-    const result = await CreateAppSchema(manifest.schema.name, context.DatabaseProvider, { allowDoubleUnderscore: options.AllowDoubleUnderscore });
+    // CoreSchema: on SQL Server the app schema is created owned by the core schema's owner so
+    // ownership chaining lets app views read core tables (MJ#4756).
+    const result = await CreateAppSchema(manifest.schema.name, context.DatabaseProvider, {
+      allowDoubleUnderscore: options.AllowDoubleUnderscore,
+      CoreSchema: context.MJCoreSchema ?? '__mj'
+    });
+    if (result.Warning) {
+      // Created, but owned by the installer: core-table reads through app views will need
+      // explicit grants. Not fatal to the install, but never silent.
+      context.Callbacks?.OnWarn?.('Schema', result.Warning);
+    }
     return { Success: result.Success, ErrorMessage: result.ErrorMessage, Created: result.Success };
   }
 

@@ -1,5 +1,122 @@
 # Change Log - @memberjunction/ai-vector-dupe
 
+## 6.2.0-edge.2
+
+### Minor Changes
+
+- 0adaf76: Duplicate detection gains two reasoning modes: `Decision`, where a typed decision model recommends without ever merging, and `DecisionThenPrompt`, where the decision filters candidates before the prompt reasons over the survivors. Auto-merge (`AutoMergeAboveAbsolute`) now also requires the candidate's own verdict to be `Merge`, carried on the new `PotentialDuplicate.ReasoningRecommendation`, so a set-level `Merge` never merges a candidate the reasoner judged otherwise.
+
+### Patch Changes
+
+- eaa9455: Introduce `AIEmbeddingRunner` extending `BaseModelRunner` with `RequiredModelType = 'Embeddings'`.
+  - Implement credential resolution, failover across candidate models/vendors, retry handling, and `MJAIPromptRun` persistence.
+  - Deprecate `AIModelRunner.RunEmbedding` and delegate transparently to `AIEmbeddingRunner`.
+  - Migrate embedding call sites in `@memberjunction/tag-engine`, `@memberjunction/ai-vector-dupe`, `@memberjunction/ai-vector-sync`, `@memberjunction/content-autotagging`, and `@memberjunction/search-engine` to use `AIEmbeddingRunner`.
+  - `AIEmbeddingRunner` runs a driver that needs no API key (`LocalEmbedding`, `OllamaEmbedding`) with no key configured, and follows the prompt's `FailoverStrategy` (`SameModelDifferentVendor` never switches models).
+  - With no Embedding prompt, the runner embeds under an unsaved stand-in and writes no run row. `EmbeddingRunParams.SkipRunRecord` skips the row on demand.
+  - `TagEngine` embeds tags, queries and new tags with one model (the Tag Semantic Matching prompt's, else the smallest) and persists that ID.
+  - Vector search keys its query-embedding cache by model and dimension, not by driver.
+- cf97480: The duplicate check's `Decision` reasoning mode now calibrates each decision model's probability for that model (Platt scaling) before banding it, at a band set from the duplicate-check measurement. A candidate is flagged at a calibrated 0.7 or above, and the decision stage of `DecisionThenPrompt` keeps candidates at a calibrated 0.3 or above for the prompt. Each calibration is tied to the exact model it was fitted on (the MJ decision model and the resolved model behind it, through `FindDecisionCalibration`), so Jev at another version, or LLM Decision answered by another chat model, is uncalibrated. A model with no calibration gives no calibrated probability: the entry check (`CheckRecordValues`) then flags nothing and returns `Failed`, as it does for a failed decision, and batch `Decision` mode flags its candidates for review. The provider logs a missing calibration once per model. Each candidate also carries the model's own `RawProbability`; `BuildDecisionParams` and `CalibrationFor` are protected extension points, and the shipped calibrations are exported.
+- 5ee02db: Record forms now flag likely duplicates while a person enters a new record, for entities whose entity document has LLM reasoning enabled and uses the `Decision` or `DecisionThenPrompt` reasoning mode. The check only flags: it never blocks a save or merges, and it shows nothing if it misses its time budget. The server bounds each check with its own budget and stops it there, a form keeps at most one check in flight, and an API key needs both the `view:run` and `prompt:execute` scopes to run one. A user who cannot read the entity is never checked.
+- 2854a2e: Address vector indexes by their provider-side name (`ExternalID`), not the MJ display `Name`. Entity vectorization, duplicate detection and the entity-vectors resolver passed `Name`, so any index whose label differs from its provider name (e.g. "More Cheese Content (Pinecone)" vs `morecheese-content`) returned 404 on every upsert/query.
+
+  `AIEngineBase` now owns the single `MJ: Vector Indexes` cache (`VectorIndexes`, `GetVectorIndexByID`) and the one rule for the provider name (`GetProviderIndexName`: ExternalID, falling back to `Name`), proxied on `AIEngine`. `KnowledgeHubMetadataEngine` no longer caches Vector Indexes; its `VectorIndexes` / `GetVectorIndexByID` proxy the AIEngineBase cache. Every caller, including `MJVectorIndexEntityServer`'s delete path, now resolves the provider name through `GetProviderIndexName`.
+
+- Updated dependencies [f555162]
+- Updated dependencies [043f418]
+- Updated dependencies [e97d95c]
+- Updated dependencies [ff3097d]
+- Updated dependencies [79279f2]
+- Updated dependencies [3fbda62]
+- Updated dependencies [eaa9455]
+- Updated dependencies [ff00d60]
+- Updated dependencies [2552b1e]
+- Updated dependencies [660ef45]
+- Updated dependencies [8fd1c46]
+- Updated dependencies [21f9e15]
+- Updated dependencies [28fdf22]
+- Updated dependencies [4248fb3]
+- Updated dependencies [f3c6161]
+- Updated dependencies [01fafc6]
+- Updated dependencies [35ffb95]
+- Updated dependencies [5148534]
+- Updated dependencies [0adaf76]
+- Updated dependencies [ce1a5c3]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [0d61b53]
+- Updated dependencies [26c0178]
+- Updated dependencies [594f2e0]
+- Updated dependencies [861cbf0]
+- Updated dependencies [705ab4e]
+- Updated dependencies [e51ce8a]
+- Updated dependencies [96daca8]
+- Updated dependencies [aa912ca]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [14e2a3a]
+- Updated dependencies [5986939]
+- Updated dependencies [4d647e6]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [369e229]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [fb267da]
+- Updated dependencies [2854a2e]
+  - @memberjunction/ai-core-plus@6.2.0-edge.2
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/ai@6.2.0-edge.2
+  - @memberjunction/ai-prompts@6.2.0-edge.2
+  - @memberjunction/ai-vector-sync@6.2.0-edge.2
+  - @memberjunction/aiengine@6.2.0-edge.2
+  - @memberjunction/core-entities@6.2.0-edge.2
+  - @memberjunction/ai-vectors@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+  - @memberjunction/templates@6.2.0-edge.2
+  - @memberjunction/entity-documents@6.2.0-edge.2
+  - @memberjunction/ai-vectordb@6.2.0-edge.2
+  - @memberjunction/record-comparison@6.2.0-edge.2
+
+## 6.2.0-edge.1
+
+### Patch Changes
+
+- Updated dependencies [ddcd666]
+- Updated dependencies [a50948e]
+- Updated dependencies [0eeb89d]
+- Updated dependencies [15a4333]
+- Updated dependencies [a3539d2]
+- Updated dependencies [41274aa]
+- Updated dependencies [5da3ad2]
+- Updated dependencies [67f6c85]
+- Updated dependencies [eb3a8d3]
+- Updated dependencies [e1dd673]
+- Updated dependencies [9b8a84e]
+- Updated dependencies [c261eb8]
+- Updated dependencies [307da67]
+- Updated dependencies [7110019]
+- Updated dependencies [a7da50b]
+- Updated dependencies [1d43161]
+- Updated dependencies [7110019]
+- Updated dependencies [f2a4171]
+- Updated dependencies [e482249]
+- Updated dependencies [37e2f6b]
+- Updated dependencies [17cc774]
+- Updated dependencies [80905a1]
+- Updated dependencies [6b08ebf]
+  - @memberjunction/aiengine@6.2.0-edge.1
+  - @memberjunction/ai@6.2.0-edge.1
+  - @memberjunction/core-entities@6.2.0-edge.1
+  - @memberjunction/ai-core-plus@6.2.0-edge.1
+  - @memberjunction/ai-prompts@6.2.0-edge.1
+  - @memberjunction/core@6.2.0-edge.1
+  - @memberjunction/ai-vector-sync@6.2.0-edge.1
+  - @memberjunction/global@6.2.0-edge.1
+  - @memberjunction/templates@6.2.0-edge.1
+  - @memberjunction/ai-vectors@6.2.0-edge.1
+  - @memberjunction/entity-documents@6.2.0-edge.1
+  - @memberjunction/record-comparison@6.2.0-edge.1
+  - @memberjunction/ai-vectordb@6.2.0-edge.1
+
 ## 6.2.0-edge.0
 
 ### Minor Changes

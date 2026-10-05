@@ -34,6 +34,10 @@ vi.mock('@memberjunction/ai', async () => {
     class BaseLLM extends BaseModel {}
     class BaseEmbeddings extends BaseModel {}
     class BaseAudioGenerator extends BaseModel {}
+    // The OpenAI audio driver also registers against the split TTS and STT bases, so its
+    // decorators read these at module evaluation.
+    class BaseTextToSpeech extends BaseModel {}
+    class BaseSpeechToText extends BaseModel {}
     class BaseImageGenerator extends BaseModel {}
     // Static-method error helper referenced by those modules' method bodies.
     class ErrorAnalyzer {
@@ -53,7 +57,7 @@ vi.mock('@memberjunction/ai', async () => {
     // and drift from reality, which is how the xAI top-level-usage bug survived here in the first
     // place — so the real implementation is the thing under test.
     const { ResolveResponseDoneUsage } = await import('../../../../Core/src/generic/realtimeUsage');
-    return { BaseModel, BaseRealtimeModel, BaseLLM, BaseEmbeddings, BaseAudioGenerator, BaseImageGenerator, ErrorAnalyzer, RealtimeDiagLog, IsTranscriptContinuation, ResolveResponseDoneUsage };
+    return { BaseModel, BaseRealtimeModel, BaseLLM, BaseEmbeddings, BaseAudioGenerator, BaseTextToSpeech, BaseSpeechToText, BaseImageGenerator, ErrorAnalyzer, RealtimeDiagLog, IsTranscriptContinuation, ResolveResponseDoneUsage };
 });
 
 // Mock the SDK WebSocket so importing the driver never touches the network. The driver's
@@ -409,7 +413,11 @@ describe('xAIRealtime', () => {
             const respond = driver.Fake.Sent[0];
             expect(respond.type).toBe('response.create');
             if (respond.type === 'response.create') {
-                expect(respond.response?.instructions).toBe('Briefly say the report agent is drafting.');
+                // The session prompt rides AHEAD of the direction: `response.instructions` is a full
+                // override of the session prompt, so sending the direction alone would leave the model
+                // with no identity for exactly this one turn (#4591). The session was started with
+                // SystemPrompt 'sys', which xAIRealtimeSession inherits from OpenAIRealtimeSession.
+                expect(respond.response?.instructions).toBe('sys\n\nBriefly say the report agent is drafting.');
             }
         });
 

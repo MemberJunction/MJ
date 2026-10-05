@@ -54,6 +54,8 @@ import {
   RunQueryWithCacheCheckParams,
   SaveContext,
   RestoreContext,
+  CloneContext,
+  RecordChangeSource,
   RecordChangePayload,
   EntityDeleteOptions,
 } from '@memberjunction/core';
@@ -79,7 +81,7 @@ import { DuplicateRecordDetector } from '@memberjunction/ai-vector-dupe';
 import type { IColocatedVectorHost } from '@memberjunction/ai-vectordb';
 import type { DatabasePlatform } from '@memberjunction/sql-dialect';
 
-import { UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import { SQLServerDialect, SQLDialect } from '@memberjunction/sql-dialect';
 
 /**
@@ -323,11 +325,13 @@ export class SQLServerDataProvider
   }
 
   public override QuoteIdentifier(name: string): string {
-    return `[${name}]`;
+    // Double embedded closing brackets so a name containing `]` cannot terminate the
+    // quoting early (mirrors the PostgreSQL dialect's doubling of embedded `"`).
+    return `[${name.replace(/]/g, ']]')}]`;
   }
 
   public override QuoteSchemaAndView(schemaName: string, objectName: string): string {
-    return `[${schemaName}].[${objectName}]`;
+    return `${this.QuoteIdentifier(schemaName)}.${this.QuoteIdentifier(objectName)}`;
   }
 
   private static readonly _sqlServerUUIDPattern: RegExp =
@@ -1005,14 +1009,14 @@ export class SQLServerDataProvider
 
   protected GetRecordDependencyLinkSQL(dep: EntityDependency, entity: EntityInfo, relatedEntity: EntityInfo, CompositeKey: CompositeKey): string {
     const f = relatedEntity.Fields.find((f) => f.Name.trim().toLowerCase() === dep.FieldName?.trim().toLowerCase());
-    const quotes = entity.FirstPrimaryKey.NeedsQuotes ? "'" : ''; // first-pk-ok: a foreign key targets a single column; quoting follows that FK target's type
     if (!f) {
       throw new Error(`Field ${dep.FieldName} not found in Entity ${relatedEntity.Name}`);
     }
 
     if (f.RelatedEntityFieldName?.trim().toLowerCase() === 'id') {
       // simple link to first primary key, most common scenario for linkages
-      return `${quotes}${CompositeKey.GetValueByIndex(0)}${quotes}`;
+      // Key values arrive from remote callers — render through the shared sanitizer.
+      return SQLServerDataProvider.RenderKeyValueLiteral(CompositeKey.GetValueByIndex(0), entity.FirstPrimaryKey.NeedsQuotes, entity.FirstPrimaryKey.Name, entity.Name); // first-pk-ok: a foreign key targets a single column; quoting follows that FK target's type
     } else {
       // The FK points at a non-key column of `entity`, so resolve that column for THE record being
       // checked. The record is identified by its full key — every PK column, not just the first —
@@ -1030,12 +1034,29 @@ export class SQLServerDataProvider
   protected BuildFullPrimaryKeyPredicate(entity: EntityInfo, compositeKey: CompositeKey): string {
     return entity.PrimaryKeys
       .map((pk, index) => {
-        const q = pk.NeedsQuotes ? "'" : '';
         const byName = compositeKey.KeyValuePairs.find((kv) => kv.FieldName?.trim().toLowerCase() === pk.Name.trim().toLowerCase());
         const value = byName ? byName.Value : compositeKey.GetValueByIndex(index);
-        return `${pk.Name}=${q}${value}${q}`;
+        // Key values arrive from remote callers — render through the shared sanitizer so a
+        // crafted value cannot break out of the literal (or, unquoted, splice in SQL text).
+        return `${pk.Name}=${SQLServerDataProvider.RenderKeyValueLiteral(value, pk.NeedsQuotes, pk.Name, entity.Name)}`;
       })
       .join(' AND ');
+  }
+
+  /**
+   * Renders a primary-key value as a safe SQL literal. Quoted (string/date) values are
+   * escaped with {@link EscapeSQLString}; unquoted (numeric) values are validated to be a
+   * plain number, since anything else spliced in bare would execute as SQL text.
+   */
+  protected static RenderKeyValueLiteral(value: unknown, needsQuotes: boolean, fieldName: string, entityName: string): string {
+    if (needsQuotes) {
+      return `'${EscapeSQLString(String(value))}'`;
+    }
+    const raw = String(value);
+    if (!/^-?\d+(\.\d+)?$/.test(raw)) {
+      throw new Error(`Invalid non-numeric value provided for numeric key field ${fieldName} on entity ${entityName}`);
+    }
+    return raw;
   }
 
   /**
@@ -1410,11 +1431,15 @@ export class SQLServerDataProvider
 
     // Build the inline `EXEC spCreateRecordChange_Internal` from the payload,
     // referencing `@ID` (set below from the result table).
-    const restoreClause = payload.source === 'Restore'
+    const lineageClause = payload.source === 'Restore'
       ? `,
                                                                                         @Source='Restore',
                                                                                         @RestoredFromID='${payload.restoredFromID}',
                                                                                         @RestoreReason=${payload.restoreReason ? `N'${payload.restoreReason.replace(/'/g, "''")}'` : 'NULL'}`
+      : payload.source === 'Clone'
+      ? `,
+                                                                                        @Source='Clone',
+                                                                                        @ChangeContext=N'${EscapeSQLString(payload.changeContext)}'`
       : '';
     const recordChangeEXEC = `EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal @EntityName='${entity.EntityInfo.Name}',
                                                                                         @RecordID=@ID,
@@ -1424,7 +1449,7 @@ export class SQLServerDataProvider
                                                                                         @ChangesDescription='${payload.changesDescription}',
                                                                                         @FullRecordJSON='${payload.fullRecordJSON}',
                                                                                         @Status='Complete',
-                                                                                        @Comments=null${restoreClause}`;
+                                                                                        @Comments=null${lineageClause}`;
 
     const execSQL = `EXEC [${entity.EntityInfo.SchemaName}].${spName} ${binding.callArgsSQL}`;
     const sql = `
@@ -1595,6 +1620,7 @@ export class SQLServerDataProvider
     user: UserInfo,
     wrapRecordIdInQuotes: boolean,
     restoreContext?: RestoreContext | null,
+    cloneContext?: CloneContext | null,
   ) {
     // Dialect-agnostic payload assembly is hoisted into DatabaseProviderBase
     // so SQL Server and PostgreSQL share one implementation. We only render
@@ -1608,15 +1634,20 @@ export class SQLServerDataProvider
       user,
       restoreContext,
       "'",
+      cloneContext,
     );
     if (!payload) return null;
 
     const quotes = wrapRecordIdInQuotes ? "'" : '';
-    const restoreClause = payload.source === 'Restore'
+    const lineageClause = payload.source === 'Restore'
       ? `,
                                                                                         @Source='Restore',
                                                                                         @RestoredFromID='${payload.restoredFromID}',
                                                                                         @RestoreReason=${payload.restoreReason ? `N'${payload.restoreReason.replace(/'/g, "''")}'` : 'NULL'}`
+      : payload.source === 'Clone'
+      ? `,
+                                                                                        @Source='Clone',
+                                                                                        @ChangeContext=N'${EscapeSQLString(payload.changeContext)}'`
       : '';
 
     return `EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal @EntityName='${entityName}',
@@ -1627,7 +1658,7 @@ export class SQLServerDataProvider
                                                                                         @ChangesDescription='${payload.changesDescription}',
                                                                                         @FullRecordJSON='${payload.fullRecordJSON}',
                                                                                         @Status='Complete',
-                                                                                        @Comments=null${restoreClause}`;
+                                                                                        @Comments=null${lineageClause}`;
   }
   /**
    * Implements the abstract BuildRecordChangeSQL from DatabaseProviderBase.
@@ -1642,8 +1673,9 @@ export class SQLServerDataProvider
     type: 'Create' | 'Update' | 'Delete',
     user: UserInfo,
     restoreContext?: RestoreContext | null,
+    cloneContext?: CloneContext | null,
   ): { sql: string; parameters?: unknown[] } | null {
-    const sql = this.GetLogRecordChangeSQL(newData, oldData, entityName, recordID, entityInfo, type, user, true, restoreContext);
+    const sql = this.GetLogRecordChangeSQL(newData, oldData, entityName, recordID, entityInfo, type, user, true, restoreContext, cloneContext);
     if (sql) return { sql };
     return null;
   }
@@ -1715,7 +1747,7 @@ export class SQLServerDataProvider
                         )
 
                         INSERT INTO @ResultChangesTable
-                        ${this.GetLogRecordChangeSQL(null /*pass in null for new data for deleted records*/, oldData, entity.EntityInfo.Name, sCombinedPrimaryKey, entity.EntityInfo, 'Delete', user, true, entity.RestoreContext)}
+                        ${this.GetLogRecordChangeSQL(null /*pass in null for new data for deleted records*/, oldData, entity.EntityInfo.Name, sCombinedPrimaryKey, entity.EntityInfo, 'Delete', user, true, entity.RestoreContext, entity.CloneContext)}
                     END
 
                     SELECT ${sReturnList}`;
@@ -2478,7 +2510,9 @@ export class SQLServerDataProvider
     safeChangesJSON: string,
     safeChangesDesc: string,
     safePKValue: string,
-    safeUserId: string
+    safeUserId: string,
+    source?: RecordChangeSource,
+    changeContext?: string | null,
   ): string {
     const schema = entityInfo.SchemaName || '__mj';
     const view = entityInfo.BaseView;
@@ -2488,6 +2522,12 @@ export class SQLServerDataProvider
     const recordID = entityInfo.PrimaryKeys
       .map(pk => `${pk.CodeName}${CompositeKey.DefaultValueDelimiter}${safePKValue}`)
       .join(CompositeKey.DefaultFieldDelimiter);
+
+    const lineageClause = source === 'Clone'
+      ? `,
+        @Source='Clone',
+        @ChangeContext=N'${EscapeSQLString(changeContext)}'`
+      : '';
 
     return `
 DECLARE ${varName} NVARCHAR(MAX) = (
@@ -2504,7 +2544,7 @@ IF ${varName} IS NOT NULL
         @ChangesDescription='${safeChangesDesc}',
         @FullRecordJSON=${varName},
         @Status='Complete',
-        @Comments=NULL;`;
+        @Comments=NULL${lineageClause};`;
   }
 
   protected override get HasPhysicalTransaction(): boolean {
