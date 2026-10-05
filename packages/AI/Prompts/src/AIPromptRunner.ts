@@ -1,4 +1,4 @@
-import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, ErrorAnalyzer, AIErrorInfo, ResolveFileInputStrategy, AIPromptConfiguration, EncodeToolTurnsAsText, AIModelConfiguration } from '@memberjunction/ai';
+import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, ErrorAnalyzer, AIErrorInfo, ResolveFileInputStrategy, AIPromptConfiguration, EncodeToolTurnsAsText, AIModelConfiguration, CredentialScopeAllows, type AICredentialScope } from '@memberjunction/ai';
 import {
   BaseModelRunner,
   type ExecutionBound,
@@ -326,7 +326,7 @@ export class AIPromptRunner extends BaseModelRunner {
         // Select model using the appropriate prompt — capture the FULL result
         selection = await this.selectModel(modelSelectionPrompt, params.override?.modelId, params.contextUser, params.configurationId, params.override?.vendorId, params);
         if (!selection.model) {
-          throw new Error(this.buildNoModelFoundMessage(modelSelectionPrompt.Name, selection.selectionInfo));
+          throw new Error(this.buildNoModelFoundMessage(modelSelectionPrompt.Name, selection.selectionInfo, params.CredentialScope));
         }
 
         // Tell the template which path this run is actually taking, BEFORE it renders. The loop
@@ -414,7 +414,7 @@ export class AIPromptRunner extends BaseModelRunner {
 
         selection = await this.selectModel(modelSelectionPrompt, params.override?.modelId, params.contextUser, params.configurationId, params.override?.vendorId, params);
         if (!selection.model) {
-          throw new Error(this.buildNoModelFoundMessage(modelSelectionPrompt.Name, selection.selectionInfo));
+          throw new Error(this.buildNoModelFoundMessage(modelSelectionPrompt.Name, selection.selectionInfo, params.CredentialScope));
         }
       }
 
@@ -552,7 +552,7 @@ export class AIPromptRunner extends BaseModelRunner {
       allCandidates = modelResult.allCandidates || [];
       credentialAvailability = modelResult.credentialAvailability;
       if (!selectedModel) {
-        throw new Error(this.buildNoModelFoundMessage(modelSelectionPrompt.Name, modelSelectionInfo));
+        throw new Error(this.buildNoModelFoundMessage(modelSelectionPrompt.Name, modelSelectionInfo, params.CredentialScope));
       }
     }
 
@@ -1683,7 +1683,7 @@ export class AIPromptRunner extends BaseModelRunner {
    * Includes details about which models were considered and why they were unavailable
    * so the error message is actionable for end users (e.g., missing API credentials).
    */
-  private buildNoModelFoundMessage(promptName: string, selectionInfo?: AIModelSelectionInfo): string {
+  private buildNoModelFoundMessage(promptName: string, selectionInfo?: AIModelSelectionInfo, credentialScope?: AICredentialScope): string {
     const base = `No suitable model found for prompt ${promptName}`;
 
     // A selection step that threw (for example the model-type floor) records its error here; show it
@@ -1705,9 +1705,14 @@ export class AIPromptRunner extends BaseModelRunner {
       }).join(', ');
 
       const suffix = unavailableModels.length > 5 ? ` (${unavailableModels.length} total)` : '';
+      // When the scope rules out the platform's credentials, "configure them" would point the reader
+      // at exactly the fallback the caller ruled out.
+      const platformAllowed = CredentialScopeAllows(credentialScope, 'Environment') || CredentialScopeAllows(credentialScope, 'PlatformCredential');
+      const remedy = platformAllowed
+        ? `Please configure API credentials in your environment or AI Credential settings.`
+        : `The credential scope is ${credentialScope}, so only the API keys supplied with this run count; supply a key for one of these vendors.`;
       return `${base}. No valid API credentials/keys are configured for any of the candidate model-vendor combinations. ` +
-        `Tried: ${triedSummary}${suffix}. ` +
-        `Please configure API credentials in your environment or AI Credential settings.`;
+        `Tried: ${triedSummary}${suffix}. ${remedy}`;
     }
 
     return `${base}. ${selectionInfo.selectionReason || 'Unknown reason'}`;
