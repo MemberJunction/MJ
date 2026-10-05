@@ -28,6 +28,25 @@ describe('ErrorAnalyzer', () => {
             expect(info.canFailover).toBe(true);
         });
 
+        it("should detect Google's invalid-key 400 as authentication, which stops failover", () => {
+            // The shape @google/genai surfaces: the vendor's JSON error body as the message, HTTP 400.
+            const error = {
+                status: 400,
+                message: JSON.stringify({
+                    error: {
+                        code: 400,
+                        message: 'API key not valid. Please pass a valid API key.',
+                        status: 'INVALID_ARGUMENT',
+                        details: [{ '@type': 'type.googleapis.com/google.rpc.ErrorInfo', reason: 'API_KEY_INVALID' }]
+                    }
+                })
+            };
+            const info = ErrorAnalyzer.analyzeError(error, 'Google');
+
+            expect(info.errorType).toBe('Authentication');
+            expect(info.severity).toBe('Fatal');
+        });
+
         it('should detect context length exceeded', () => {
             const error = { message: 'context_length_exceeded: maximum context length is 128k' };
             const info = ErrorAnalyzer.analyzeError(error);

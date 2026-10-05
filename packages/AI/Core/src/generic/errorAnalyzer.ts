@@ -169,7 +169,12 @@ export class ErrorAnalyzer {
             errorString.includes('authentication failed') ||
             errorString.includes('invalid api key') ||
             errorString.includes('invalid key') ||
-            errorString.includes('api key is invalid')) {
+            errorString.includes('api key is invalid') ||
+            // Google: HTTP 400 "API key not valid. Please pass a valid API key." with reason
+            // API_KEY_INVALID. None of the phrases above match it, so it fell through to the
+            // permissive VendorValidationError and failed over to another vendor instead of failing.
+            errorString.includes('api key not valid') ||
+            errorString.includes('api_key_invalid')) {
             return 'Authentication';
         }
 
