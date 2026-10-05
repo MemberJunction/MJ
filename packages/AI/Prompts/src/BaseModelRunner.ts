@@ -41,6 +41,7 @@ import {
 } from '@memberjunction/ai-core-plus';
 import {
   BaseResult,
+  ChatResult,
   ErrorAnalyzer,
   AIErrorInfo,
   GetAIAPIKey,
@@ -1761,7 +1762,7 @@ export abstract class BaseModelRunner {
         return result;
 
       } catch (error) {
-        lastError = error as Error;
+        lastError = this.asModelError(error as Error | ChatResult);
 
         // Analyze error to get error info
         const errorInfo = ErrorAnalyzer.analyzeError(lastError);
@@ -1938,6 +1939,21 @@ export abstract class BaseModelRunner {
     const delaySeconds = (delay / 1000).toFixed(1);
     LogStatus(`   Waiting ${delaySeconds}s before retry (strategy: ${prompt.RetryStrategy || 'Fixed'})...`);
     await new Promise(resolve => setTimeout(resolve, delay));
+  }
+
+  /**
+   * The Error a failover attempt records for a caught value. A streaming call rejects with its failed
+   * ChatResult (BaseLLM) rather than an Error, so its `.message` was undefined and every such failure
+   * reached the prompt run and the agent run as "Unknown error". Keeps the driver's classification on
+   * it, which ErrorAnalyzer then honours.
+   */
+  private asModelError(caught: Error | ChatResult): Error {
+    if (caught instanceof Error) {
+      return caught;
+    }
+    const wrapped: Error & { errorInfo?: AIErrorInfo } = new Error(caught?.errorMessage || caught?.statusText || 'Model execution failed');
+    wrapped.errorInfo = caught?.errorInfo;
+    return wrapped;
   }
 
   /**

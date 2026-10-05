@@ -47,6 +47,17 @@ describe('ErrorAnalyzer', () => {
             expect(info.severity).toBe('Fatal');
         });
 
+        it('keeps the classification a failed result already carries — a rejected streaming ChatResult', () => {
+            // BaseLLM rejects a failed stream with its ChatResult; analyzed afresh that is 'Unknown'/'Transient'.
+            const driverInfo = { error: { name: 'ApiError', status: 400 }, errorType: 'Authentication', severity: 'Fatal', canFailover: true };
+            const rejected = { success: false, errorMessage: 'API key not valid. Please pass a valid API key.', errorInfo: driverInfo };
+
+            const info = ErrorAnalyzer.analyzeError(rejected, 'AIPromptRunner');
+
+            expect(info.errorType).toBe('Authentication');
+            expect(info.severity).toBe('Fatal');
+        });
+
         it('should detect context length exceeded', () => {
             const error = { message: 'context_length_exceeded: maximum context length is 128k' };
             const info = ErrorAnalyzer.analyzeError(error);
