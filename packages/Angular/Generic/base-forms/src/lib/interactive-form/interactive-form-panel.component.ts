@@ -143,7 +143,7 @@ export class InteractiveFormPanelComponent extends BaseContributionPanel impleme
                 break;
             }
             case 'error': {
-                // `<mj-react-component>` has already logged it.
+                // `<mj-react-component>` logs initialization failures and error-boundary catches itself.
                 const detail = (event.payload as { error?: unknown } | null | undefined)?.error;
                 this.setRenderError(`${this.Title} failed: ${detail ? String(detail) : 'unknown error'}`);
                 break;
