@@ -195,6 +195,8 @@ export * from './resolvers/GenerateSeedTaxonomyResolver.js';
 export * from './resolvers/PipelineProgressResolver.js';
 export * from './resolvers/IntegrationProgressResolver.js';
 export * from './resolvers/IdentityClaimRedemptionResolver.js';
+export * from './resolvers/UserAvatarResolver.js';
+export * from './resolvers/avatarInputValidation.js';
 export * from './resolvers/ClientToolRequestResolver.js';
 export * from './resolvers/AutotagPipelineResolver.js';
 export * from './resolvers/TagGovernanceResolver.js';
