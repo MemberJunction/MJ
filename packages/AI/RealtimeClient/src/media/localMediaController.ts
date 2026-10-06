@@ -47,8 +47,31 @@ interface LiveCapture {
     Unwatch: () => void;
 }
 
+/**
+ * What a camera-and-microphone controller offers. {@link LocalMediaController} is the browser's; a host on
+ * another platform, or a test, can supply its own.
+ */
+export interface ILocalMediaController {
+    /** The current state. */
+    readonly State: LocalMediaState;
+    /** The state, now and on every change. Completes on {@link Dispose}. */
+    readonly State$: Observable<LocalMediaState>;
+    /** The live stream of a kind, or `null` while it is off. The same object across device switches. */
+    GetStream(kind: LocalMediaKind): MediaStream | null;
+    /** Lists the input devices. */
+    RefreshDevices(): Promise<MediaDevice[]>;
+    /** Starts capturing a kind, on `deviceId` when it is available. Always resolves; a failure is a result. */
+    Start(kind: LocalMediaKind, deviceId?: string): Promise<LocalMediaResult>;
+    /** Moves a live kind to another device, keeping the same stream and the track's mute. */
+    SwitchDevice(kind: LocalMediaKind, deviceId: string): Promise<LocalMediaResult>;
+    /** Stops a kind and releases its device. */
+    Stop(kind: LocalMediaKind): void;
+    /** Stops both kinds and completes {@link State$}. */
+    Dispose(): void;
+}
+
 /** The camera and microphone of one browser session. */
-export class LocalMediaController {
+export class LocalMediaController implements ILocalMediaController {
     private readonly state = new BehaviorSubject<LocalMediaState>({ Camera: OFF, Microphone: OFF, Devices: [] });
     private readonly live: Record<LocalMediaKind, LiveCapture | null> = { camera: null, microphone: null };
     private readonly pending: Record<LocalMediaKind, Promise<LocalMediaResult> | null> = { camera: null, microphone: null };

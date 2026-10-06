@@ -24,6 +24,8 @@ import {
 } from '@memberjunction/ai-core-plus';
 import {
   BaseRealtimeClient,
+  type ILocalMediaController,
+  type LocalMediaFailure,
   LoadAssemblyAIRealtimeClient,
   LoadElevenLabsRealtimeClient,
   LoadGeminiRealtimeClient,
@@ -240,6 +242,28 @@ function trackKeyFromJSON(raw: JSONValue): string | null {
   }
   return `${direction}:${modality}`;
 }
+
+/**
+ * The `DOMException` name for each way the controller can fail to start the microphone, so a host that
+ * tells a denied microphone apart (`error.name === 'NotAllowedError'`) works the same with or without one.
+ */
+const MICROPHONE_ERROR_NAMES: Record<LocalMediaFailure, string> = {
+  denied: 'NotAllowedError',
+  'not-found': 'NotFoundError',
+  'in-use': 'NotReadableError',
+  unsupported: 'NotSupportedError',
+  error: 'Error',
+};
+
+/** The error a failed microphone start reports, named as `getUserMedia` would have named it. */
+function microphoneStartError(reason: LocalMediaFailure, message: string): Error {
+  const error = new Error(message);
+  error.name = MICROPHONE_ERROR_NAMES[reason];
+  return error;
+}
+
+/** The microphone a session start opened, or why it could not. */
+type OpenedMicrophone = { Stream: MediaStream; Error: null } | { Stream: null; Error: Error };
 
 /**
  * One thought/reasoning narration emitted on {@link RealtimeSessionRuntime.ThoughtNarration$}.
@@ -619,6 +643,10 @@ export class RealtimeSessionRuntime {
   private client: BaseRealtimeClient | null = null;
   /** The mic capture stream — acquired here (permission UX) and handed to the client. */
   private localStream: MediaStream | null = null;
+  /** The host's camera-and-microphone controller for this session, when the host offers one. */
+  private localMedia: ILocalMediaController | null = null;
+  /** Follows the controller's microphone, so a swapped-in track reaches the driver and the recorder. */
+  private localMediaSubscription: Subscription | null = null;
   private agentSessionId: string | null = null;
   /**
    * The application the active session runs in (sources the server-side app config cascade +
@@ -1234,13 +1262,17 @@ export class RealtimeSessionRuntime {
       // Everything past here awaits on hardware and the network, during which the host may end the
       // session. Each await is followed by a staleness check so an abandoned start releases what it
       // just acquired instead of leaving a live microphone and a live call behind it.
-      this.localStream = await this.mediaHost.AcquireMicrophone();
+      const microphone = await this.openMicrophone();
+      this.localStream = microphone.Stream;
       if (this.startGeneration !== generation) {
         await this.unwindAbandonedStart(session, client);
         return;
       }
+      if (microphone.Error) {
+        throw microphone.Error;
+      }
 
-      await client.Connect(this.BuildClientConfig(session), this.localStream);
+      await client.Connect(this.BuildClientConfig(session), microphone.Stream);
       if (this.startGeneration !== generation) {
         await this.unwindAbandonedStart(session, client);
         return;
@@ -1313,6 +1345,7 @@ export class RealtimeSessionRuntime {
     client: BaseRealtimeClient
   ): Promise<void> {
     console.warn('[RealtimeSession] Session was ended while starting — releasing the partial session.');
+    this.closeLocalMedia();
     this.localStream?.getTracks().forEach(t => t.stop());
     this.localStream = null;
     try {
@@ -1334,6 +1367,59 @@ export class RealtimeSessionRuntime {
       this.agentSessionId = null;
       await this.closeServerSession(session.AgentSessionId);
     }
+  }
+
+  /**
+   * Opens the user's microphone: through the host's controller when it offers one, otherwise through
+   * {@link IRealtimeMediaHost.AcquireMicrophone}. A failure is returned rather than thrown, so the caller can
+   * first check whether the start was abandoned meanwhile (a teardown disposes the controller, which fails a
+   * start still in flight) and unwind quietly instead of reporting an error nobody is waiting for.
+   */
+  private async openMicrophone(): Promise<OpenedMicrophone> {
+    const controller = this.mediaHost.CreateLocalMediaController?.() ?? null;
+    if (!controller) {
+      try {
+        return { Stream: await this.mediaHost.AcquireMicrophone(), Error: null };
+      } catch (error) {
+        return { Stream: null, Error: error instanceof Error ? error : new Error(String(error)) };
+      }
+    }
+    this.localMedia = controller;
+    const started = await controller.Start('microphone');
+    if (started.Status === 'failed') {
+      return { Stream: null, Error: microphoneStartError(started.Reason, started.Message) };
+    }
+    this.followMicrophone(controller, started.Stream);
+    return { Stream: started.Stream, Error: null };
+  }
+
+  /**
+   * Moves the driver and the recorder onto the microphone's new track whenever the controller swaps one into
+   * the stream: a device switch, or a lost device replaced by the default. The stream stays the same object,
+   * and the controller carries the old track's mute over. Mid-swap the stream holds no track, so only a
+   * finished swap is followed.
+   */
+  private followMicrophone(controller: ILocalMediaController, stream: MediaStream): void {
+    let followed = stream.getAudioTracks()[0] ?? null;
+    this.localMediaSubscription = controller.State$.subscribe(() => {
+      const track = stream.getAudioTracks()[0] ?? null;
+      if (!track || track === followed) {
+        return;
+      }
+      followed = track;
+      this.recorder?.ReplaceMicrophone?.(stream);
+      this.client?.ReplaceMicrophone?.(stream)?.catch((error: unknown) => {
+        console.error('[RealtimeSession] The realtime driver could not move to the new microphone:', error);
+      });
+    });
+  }
+
+  /** Stops following the controller and disposes it, which releases its devices. */
+  private closeLocalMedia(): void {
+    this.localMediaSubscription?.unsubscribe();
+    this.localMediaSubscription = null;
+    this.localMedia?.Dispose();
+    this.localMedia = null;
   }
 
   /**
@@ -3751,6 +3837,7 @@ export class RealtimeSessionRuntime {
 
     // Defensive: stop the mic even when Connect never ran (the client also stops the
     // tracks it was handed — track.stop() is idempotent).
+    this.closeLocalMedia();
     this.localStream?.getTracks().forEach(t => t.stop());
     this.localStream = null;
 

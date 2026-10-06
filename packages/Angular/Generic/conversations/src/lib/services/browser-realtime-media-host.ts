@@ -2,6 +2,7 @@ import {
     IRealtimeMediaHost,
     IRealtimeSessionRecorder,
 } from '@memberjunction/realtime-runtime';
+import { type ILocalMediaController, LocalMediaController } from '@memberjunction/ai-realtime-client/media';
 import { RealtimeAudioRecorder } from './realtime-audio-recorder';
 
 /**
@@ -16,9 +17,18 @@ export class BrowserRealtimeMediaHost implements IRealtimeMediaHost {
     /**
      * Requests the microphone through the standard Web API, which surfaces the browser's own
      * permission prompt. A denial rejects, and the runtime treats that as a failed session start.
+     * The runtime uses {@link CreateLocalMediaController} instead when it is present, as it is here.
      */
     public async AcquireMicrophone(): Promise<MediaStream> {
         return navigator.mediaDevices.getUserMedia({ audio: true });
+    }
+
+    /**
+     * The browser's camera-and-microphone controller. The runtime starts the microphone through it,
+     * so a call follows a device switch and keeps going when a headset is unplugged.
+     */
+    public CreateLocalMediaController(): ILocalMediaController {
+        return new LocalMediaController();
     }
 
     /**

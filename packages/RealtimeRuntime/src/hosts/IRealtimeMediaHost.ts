@@ -19,7 +19,8 @@
  *
  * ## Implementations
  *
- * - **Browser** — `getUserMedia({ audio: true })` and the global `RTCPeerConnection`.
+ * - **Browser** — a `LocalMediaController` (from `@memberjunction/ai-realtime-client/media`) that opens
+ *   the microphone and follows device changes, and the global `RTCPeerConnection`.
  * - **React Native** — the `react-native-webrtc` equivalents, which polyfill both APIs natively
  *   and additionally give the platform's acoustic echo cancellation, noise suppression and jitter
  *   buffering for free.
@@ -33,6 +34,8 @@
  * runtime never *constructs* one; it only receives it from the host and hands it to the realtime
  * client driver, whose `Connect()` already takes exactly this type.
  */
+
+import type { ILocalMediaController } from '@memberjunction/ai-realtime-client';
 
 /**
  * The platform capabilities the realtime session runtime needs but cannot provide itself.
@@ -70,6 +73,17 @@ export interface IRealtimeMediaHost {
      * restoring audio state is never worth failing the end of a call over.
      */
     ReleaseMicrophone?(): Promise<void> | void;
+
+    /**
+     * OPTIONAL: creates a controller for the user's camera and microphone, once per session.
+     *
+     * When a host offers one, the runtime starts the microphone through it instead of
+     * {@link AcquireMicrophone}. The call then follows a device switch and survives a lost device:
+     * the controller swaps the new track into the same stream (falling back to the system default
+     * when a device goes away), and the runtime moves the driver and the recorder onto it. The
+     * runtime disposes the controller at teardown. Hosts without one keep {@link AcquireMicrophone}.
+     */
+    CreateLocalMediaController?(): ILocalMediaController;
 
     /**
      * OPTIONAL: creates a recorder for this session's audio, when the platform can record and the
