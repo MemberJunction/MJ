@@ -345,7 +345,7 @@ one key would leave the function on the old code. A container image is the alter
 Dockerfile on the AWS Lambda Node base image, pushed to ECR and passed as `image_uri` instead of `s3_bucket` + `s3_key`.
 
 **2. Point Terraform at the artifact.** In the `lambda_consumers` entry for the subscription (4.2), set `s3_key` to
-the key you just uploaded. The key of the map must equal a subscription whose `ConsumerKind` is `External`; the
+the key you just uploaded. The key of the map must equal a subscription whose `HostType` is `External`; the
 module refuses an entry for an `MJWorker` subscription, and its `external_subscriptions_without_lambda` output lists
 any `External` subscription with no entry (deployed some other way, or forgotten). `handler` defaults to
 `index.handler`, so the file must be `index.mjs` exporting `handler` — or set `handler` to match your entrypoint.
