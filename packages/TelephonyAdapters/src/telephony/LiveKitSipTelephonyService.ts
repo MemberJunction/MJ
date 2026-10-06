@@ -416,7 +416,7 @@ export class LiveKitSipTelephonyService {
             Dialer: trunkID
                 ? {
                       DialIntoRoom: (request: DialIntoRoomRequest) =>
-                          this.sip.DialIntoRoom({ ...request, TrunkID: trunkID, FromNumber: this.config.outboundFromNumber, WaitUntilAnswered: true }),
+                          this.sip.DialIntoRoom({ ...request, TrunkID: trunkID, FromNumber: request.FromNumber ?? this.config.outboundFromNumber, WaitUntilAnswered: true }),
                   }
                 : undefined,
             AgentStarter: (request: StartRoomAgentRequest) => this.starter.StartRoomAgent(request),

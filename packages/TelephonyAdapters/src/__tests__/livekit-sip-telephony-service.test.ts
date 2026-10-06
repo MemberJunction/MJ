@@ -93,6 +93,9 @@ describe('construction', () => {
         await wired.Dialer.DialIntoRoom({ RoomName: 'call-abc', Number: '+14155550199', ParticipantIdentity: 'sip-handoff-1', DisplayName: 'Dana', RingTimeoutSeconds: 30 });
         expect(h.sip.DialIntoRoom).toHaveBeenCalledWith(expect.objectContaining({ TrunkID: 'ST_out', FromNumber: '+18005550100', Number: '+14155550199', WaitUntilAnswered: true }));
 
+        await wired.Dialer.DialIntoRoom({ RoomName: 'call-abc', Number: '+14155550199', ParticipantIdentity: 'sip-handoff-2', DisplayName: 'Dana', FromNumber: '+18005559999' });
+        expect(h.sip.DialIntoRoom).toHaveBeenCalledWith(expect.objectContaining({ TrunkID: 'ST_out', FromNumber: '+18005559999', Number: '+14155550199', WaitUntilAnswered: true }));
+
         await wired.AgentStarter({ RoomName: 'call-abc', AgentID: 'a2', AgentName: 'Rex' });
         expect(h.starter.StartRoomAgent).toHaveBeenCalled();
     });

@@ -388,6 +388,7 @@ export class RoomHandoffEngine extends BaseSingleton<RoomHandoffEngine> {
                 Number: number,
                 ParticipantIdentity: identity,
                 DisplayName: displayName,
+                FromNumber: flow.Request.Destination.Kind === 'number' ? flow.Request.Destination.FromNumber : undefined,
                 RingTimeoutSeconds: HANDOFF_DIAL_RING_SECONDS,
             });
         } catch (e) {
