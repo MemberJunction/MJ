@@ -59,6 +59,15 @@ export interface MintedToken {
   RoomName: string;
 }
 
+/**
+ * The LiveKit participant identity a signed-in MJ user joins a room with. Everything that mints a token for a user, and
+ * everything that later looks for that user in a room (the handoff engine watching for a person to appear), derives it
+ * here so the two can never disagree.
+ */
+export function LiveKitUserIdentity(userID: string): string {
+  return `user-${userID}`.toLowerCase();
+}
+
 /** Mints scoped LiveKit access tokens. Stateless apart from its resolved credentials. */
 export class LiveKitTokenService {
   private readonly config: LiveKitServerConfig;

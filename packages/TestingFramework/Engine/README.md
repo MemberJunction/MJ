@@ -106,7 +106,7 @@ graph LR
 | Oracle | Description |
 |--------|-------------|
 | `ExactMatchOracle` | Compares output against an expected string |
-| `LLMJudgeOracle` | Scores the test's inline criteria with RubricScoring. It does not read MJ: Test Rubrics |
+| `LLMJudgeOracle` | Scores the test's inline criteria with RubricScoring, through the same metadata prompts as the LLM rubric evaluator: the criteria render through *Rubric Criterion*, the judge named in `judgePrompt` (default *Rubric Evaluator - Default Judge*) fills *Rubric Evaluator*'s slot, and the input, expected and actual outputs travel as one delimited subject message. `model` pins the model and `timeoutMS` bounds the call. It does not read MJ: Test Rubrics |
 | `SchemaValidatorOracle` | Validates output against a JSON schema |
 | `SQLValidatorOracle` | Validates output by running SQL queries |
 | `TraceValidatorOracle` | Validates execution trace/steps of an agent run |
