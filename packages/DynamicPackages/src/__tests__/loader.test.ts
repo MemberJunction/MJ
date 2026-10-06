@@ -100,6 +100,21 @@ describe('LoadDynamicPackages', () => {
         expect(log.warns).toEqual([]);
     });
 
+    it('passes DynamicPackageStartupContext with ProcessId to StartupExport', async () => {
+        writeHostPackage('ctx-startup', "export let receivedContext = null; export function Init(ctx) { receivedContext = ctx; }");
+        const report = await LoadDynamicPackages({
+            processId: 'mjapi',
+            config: {
+                dynamicPackages: { server: [{ PackageName: `${scope}/ctx-startup`, StartupExport: 'Init', Enabled: true }] },
+            },
+            configFilePath: hostConfigPath,
+        });
+        expect(report.Loaded[0].RanStartupExport).toBe(true);
+        expect((report.Loaded[0].Module as { receivedContext?: { ProcessId: string } }).receivedContext).toEqual({
+            ProcessId: 'mjapi',
+        });
+    });
+
     it('skips disabled entries and entries scoped to other processes, recording why', async () => {
         const report = await LoadDynamicPackages({
             processId: 'cli:migrate',
