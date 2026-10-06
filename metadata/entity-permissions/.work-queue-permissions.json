@@ -1,0 +1,30 @@
+[
+  {
+    "_comments": [
+      "Payloads may carry personal data: general UI roles do not read messages (03 \u00a76.7)"
+    ],
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entity Permissions.Entity=MJ: Work Queue Messages&RoleName=UI"
+    },
+    "fields": {
+      "CanRead": false,
+      "CanCreate": false,
+      "CanUpdate": false,
+      "CanDelete": false
+    }
+  },
+  {
+    "_comments": [
+      "Deliveries carry LastError and Progress text: same rule"
+    ],
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entity Permissions.Entity=MJ: Work Queue Deliveries&RoleName=UI"
+    },
+    "fields": {
+      "CanRead": false,
+      "CanCreate": false,
+      "CanUpdate": false,
+      "CanDelete": false
+    }
+  }
+]

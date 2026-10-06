@@ -52,6 +52,9 @@ function harness(config: LiveKitSipSettings = CONFIG, overrides: Partial<LiveKit
         RemoveParticipant: vi.fn(async () => undefined),
         DialIntoRoom: vi.fn(async () => undefined),
         OutboundTrunkExists: vi.fn(async () => true),
+        ListOutboundTrunks: vi.fn(async () => [
+            { TrunkID: 'ST_out', Name: 'Outbound', Numbers: ['+18005550100', '+18005559999'] },
+        ]),
         EnsureInboundRouting: vi.fn(async () => ({ TrunkID: 'ST_in', DispatchRuleID: 'SDR', CreatedTrunk: true, CreatedDispatchRule: true })),
         IsParticipantPresent: vi.fn(async () => true),
     };
@@ -85,13 +88,43 @@ afterEach(() => vi.useRealTimers());
 
 describe('construction', () => {
     it('gives the handoff engine presence checks, a dialer for the outbound trunk, and a way to start another agent in a room', async () => {
-        const h = harness();
+        const h = harness({ ...CONFIG, numbers: ['+18005558888'] });
         expect(h.handoff.Configure).toHaveBeenCalledTimes(1);
         const wired = h.handoff.Configure.mock.calls[0][0];
         expect(wired.Presence).toBe(h.sip);
 
+        // Omitted FromNumber falls back to config.outboundFromNumber
         await wired.Dialer.DialIntoRoom({ RoomName: 'call-abc', Number: '+14155550199', ParticipantIdentity: 'sip-handoff-1', DisplayName: 'Dana', RingTimeoutSeconds: 30 });
         expect(h.sip.DialIntoRoom).toHaveBeenCalledWith(expect.objectContaining({ TrunkID: 'ST_out', FromNumber: '+18005550100', Number: '+14155550199', WaitUntilAnswered: true }));
+
+        // Empty / whitespace FromNumber treated as unset and falls back to config.outboundFromNumber
+        await wired.Dialer.DialIntoRoom({ RoomName: 'call-abc', Number: '+14155550199', ParticipantIdentity: 'sip-handoff-empty', DisplayName: 'Dana', FromNumber: '   ' });
+        expect(h.sip.DialIntoRoom).toHaveBeenCalledWith(expect.objectContaining({ TrunkID: 'ST_out', FromNumber: '+18005550100', Number: '+14155550199', WaitUntilAnswered: true }));
+
+        // Owned FromNumber on trunk passes validation
+        await wired.Dialer.DialIntoRoom({ RoomName: 'call-abc', Number: '+14155550199', ParticipantIdentity: 'sip-handoff-2', DisplayName: 'Dana', FromNumber: '+18005559999' });
+        expect(h.sip.DialIntoRoom).toHaveBeenCalledWith(expect.objectContaining({ TrunkID: 'ST_out', FromNumber: '+18005559999', Number: '+14155550199', WaitUntilAnswered: true }));
+
+        // Owned FromNumber in config.numbers passes validation
+        await wired.Dialer.DialIntoRoom({ RoomName: 'call-abc', Number: '+14155550199', ParticipantIdentity: 'sip-handoff-cfg', DisplayName: 'Dana', FromNumber: '+18005558888' });
+        expect(h.sip.DialIntoRoom).toHaveBeenCalledWith(expect.objectContaining({ TrunkID: 'ST_out', FromNumber: '+18005558888', Number: '+14155550199', WaitUntilAnswered: true }));
+
+        // Dynamic refresh on cache miss: newly added trunk number is picked up without restarting
+        h.sip.ListOutboundTrunks.mockResolvedValueOnce([
+            { TrunkID: 'ST_out', Name: 'Outbound', Numbers: ['+18005550100', '+18005559999', '+18005557777'] },
+        ]);
+        await wired.Dialer.DialIntoRoom({ RoomName: 'call-abc', Number: '+14155550199', ParticipantIdentity: 'sip-handoff-refresh', DisplayName: 'Dana', FromNumber: '+18005557777' });
+        expect(h.sip.DialIntoRoom).toHaveBeenCalledWith(expect.objectContaining({ TrunkID: 'ST_out', FromNumber: '+18005557777', Number: '+14155550199', WaitUntilAnswered: true }));
+
+        // Malformed FromNumber throws
+        await expect(
+            wired.Dialer.DialIntoRoom({ RoomName: 'call-abc', Number: '+14155550199', ParticipantIdentity: 'sip-handoff-err', DisplayName: 'Dana', FromNumber: 'not-e164' }),
+        ).rejects.toThrow(/not a valid E.164 phone number/);
+
+        // Not-owned FromNumber throws
+        await expect(
+            wired.Dialer.DialIntoRoom({ RoomName: 'call-abc', Number: '+14155550199', ParticipantIdentity: 'sip-handoff-err2', DisplayName: 'Dana', FromNumber: '+14155550000' }),
+        ).rejects.toThrow(/not owned by this organization/);
 
         await wired.AgentStarter({ RoomName: 'call-abc', AgentID: 'a2', AgentName: 'Rex' });
         expect(h.starter.StartRoomAgent).toHaveBeenCalled();
