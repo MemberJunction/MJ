@@ -18,7 +18,7 @@ const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const MEDIA_ENTRY = 'media/index.ts';
 
 /** Packages `/media` may import. Anything else (`@google/genai`, Angular, `livekit-client`, `node:*`) is refused. */
-const ALLOWED_PACKAGES: ReadonlySet<string> = new Set(['@memberjunction/ai', '@memberjunction/global']);
+const ALLOWED_PACKAGES: ReadonlySet<string> = new Set(['@memberjunction/ai', '@memberjunction/global', 'rxjs']);
 
 /** Reads a source file by its path relative to `src/`; `undefined` when there is no such file. */
 type SourceReader = (file: string) => string | undefined;
