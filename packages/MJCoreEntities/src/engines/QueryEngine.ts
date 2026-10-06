@@ -39,7 +39,8 @@ export class QueryEngine extends BaseEngine<QueryEngine> {
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
         const configs: Partial<BaseEnginePropertyConfig>[] = [
-            { Type: 'entity', EntityName: 'MJ: Queries', PropertyName: '_queries', CacheLocal: true },
+            // IncludeBinaryFields: the binary vector column is loaded server-side (QueryEngineServer reads it), skipped over the wire.
+            { Type: 'entity', EntityName: 'MJ: Queries', PropertyName: '_queries', CacheLocal: true, IncludeBinaryFields: 'DatabaseProviderOnly' },
             { Type: 'entity', EntityName: 'MJ: Query Categories', PropertyName: '_categories', CacheLocal: true },
             { Type: 'entity', EntityName: 'MJ: Query Fields', PropertyName: '_fields', CacheLocal: true },
             { Type: 'entity', EntityName: 'MJ: Query Parameters', PropertyName: '_parameters', CacheLocal: true },

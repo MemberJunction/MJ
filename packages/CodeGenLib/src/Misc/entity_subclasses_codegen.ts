@@ -14,6 +14,7 @@ import { configInfo, DbPlatform, MjCoreSchema, ResolveEntityImportPackage, type 
 import { SQLLogging } from './sql_logging';
 import { CodeGenConnection, ResolveCodeGenDatabaseProvider } from '../Database/codeGenDatabaseProvider';
 import { CodeGenReporter } from './codegen-reporter';
+import { NormalizeGeneratedValidatorText } from './validator-text';
 import { v4 as uuidv4 } from 'uuid';
 import { WriteFileIfChanged } from './file-write';
 import { EmitStats } from './emit-stats';
@@ -544,7 +545,7 @@ ${loadModule}
 
         let sRet: string = `    /**
     * * Field Name: ${e.Name}${e.DisplayName && e.DisplayName.length > 0 ? '\n    * * Display Name: ' + e.DisplayName : ''}
-    * * ${fieldDeprecatedFlag}${fieldDisabledFlag}SQL Data Type: ${e.SQLFullType}${e.RelatedEntity ? '\n    * * Related Entity/Foreign Key: ' + e.RelatedEntity + ' (' + e.RelatedEntityBaseView + '.' + e.RelatedEntityFieldName + ')' : ''}${e.DefaultValue && e.DefaultValue.length > 0 ? '\n    * * Default Value: ' + e.DefaultValue : ''}${valueList}${jsonTypeComment}${e.Description && e.Description.length > 0 ? '\n    * * Description: ' + EntitySubClassGeneratorBase.SanitizeDescription(e.Description) : ''}${isaSourceComment}${conflictNote}
+    * * ${fieldDeprecatedFlag}${fieldDisabledFlag}SQL Data Type: ${e.SQLFullType}${e.IsBinaryFieldType ? '\n    * * Binary Value: base64-encoded string. Decode with Base64ToBytes() — or Base64ToFloat32Vector() for an embedding — from @memberjunction/global.' : ''}${e.RelatedEntity ? '\n    * * Related Entity/Foreign Key: ' + e.RelatedEntity + ' (' + e.RelatedEntityBaseView + '.' + e.RelatedEntityFieldName + ')' : ''}${e.DefaultValue && e.DefaultValue.length > 0 ? '\n    * * Default Value: ' + e.DefaultValue : ''}${valueList}${jsonTypeComment}${e.Description && e.Description.length > 0 ? '\n    * * Description: ' + EntitySubClassGeneratorBase.SanitizeDescription(e.Description) : ''}${isaSourceComment}${conflictNote}
     */
     get ${safeName}(): ${typeString} {
         ${getterBody}
@@ -1419,7 +1420,9 @@ ${fields}
             const linkedRecordPK = f ? f.ID : entity.ID;
             const newGeneratedCodeId = uuidv4();
             v.generatedCodeId = newGeneratedCodeId;
-            const checkQuery = `SELECT 1 FROM ${generatedCodeTbl} WHERE ${qi('CategoryID')} = ${validatorCodeCategoryID} AND ${qi('LinkedEntityID')} = ${lit(linkedEntityID ?? '')} AND ${qi('LinkedRecordPrimaryKey')} = ${lit(linkedRecordPK)}`;
+            // Every table-level validator links to the entity row, so its guard also names the validator.
+            const nameMatch = f ? '' : ` AND ${qi('Name')} = ${lit(v.functionName)}`;
+            const checkQuery = `SELECT 1 FROM ${generatedCodeTbl} WHERE ${qi('CategoryID')} = ${validatorCodeCategoryID} AND ${qi('LinkedEntityID')} = ${lit(linkedEntityID ?? '')} AND ${qi('LinkedRecordPrimaryKey')} = ${lit(linkedRecordPK)}${nameMatch}`;
             const insertSQL = `INSERT INTO ${generatedCodeTbl} (${qi('ID')}, ${qi('CategoryID')}, ${qi('GeneratedByModelID')}, ${qi('GeneratedAt')}, ${qi('Language')}, ${qi('Status')}, ${qi('Source')}, ${qi('Code')}, ${qi('Description')}, ${qi('Name')}, ${qi('LinkedEntityID')}, ${qi('LinkedRecordPrimaryKey')})
 VALUES (${lit(newGeneratedCodeId)}, ${validatorCodeCategoryID}, ${lit(v.aiModelID)}, ${utcNow}, ${lit('TypeScript')}, ${lit('Approved')}, ${lit(v.sourceCheckConstraint)}, ${lit(v.functionText)}, ${lit(v.functionDescription)}, ${lit(v.functionName)}, ${lit(linkedEntityID ?? '')}, ${lit(linkedRecordPK)})`;
             sSQL += `${provider.conditionalInsertSQL(checkQuery, insertSQL)};\n\n`;
@@ -1526,8 +1529,7 @@ VALUES (${lit(newGeneratedCodeId)}, ${validatorCodeCategoryID}, ${lit(v.aiModelI
       const validationFunctions = validators.map((f) => {
         // output the function text and the function description in a JSDoc block
 
-        // first format the function text to ensure that escaped \n, \t, and \" are replaced with actual characters
-        const cleansedText = f.functionText.replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\"/g, '"');
+        const cleansedText = NormalizeGeneratedValidatorText(f.functionText);
         // next up, format the function text to have proper indentation with 4 spaces preceding the start of each line
         const formattedText = cleansedText.split('\n').map((l) => `    ${l}`).join('\n');
 
