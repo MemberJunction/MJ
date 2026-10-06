@@ -420,8 +420,13 @@ export function InitialPlacementState(
 
 /**
  * The starting answers read from a contribution block: the user's own earlier choice when
- * editing a saved row, or a generated panel's proposal when applying one. Every claim is
- * checked against the form; one the form cannot honour falls back to the default.
+ * editing a saved row, or a generated panel's proposal when applying one. A claim the form
+ * cannot honour falls back to the default.
+ *
+ * While the form is unread ({@link TargetsUnread}), a section, tab, field or in-section claim
+ * cannot be checked, so it is passed through as stated. A grid or panel claim is still checked
+ * against the context's grids and panels. A field claim is matched against the sections' fields
+ * whether or not those were read from the form, so it can name fields the dialog does not offer.
  *
  * @param activeNow Whether the panel is on now, so the edit keeps it on.
  * @param keepOff Whether the panel is off now, so the edit keeps it off rather than making it a draft.

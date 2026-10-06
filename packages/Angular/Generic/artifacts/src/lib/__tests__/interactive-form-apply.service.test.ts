@@ -15,9 +15,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { CompositeKey } from '@memberjunction/core';
 import type { ComponentSpec } from '@memberjunction/interactive-component-types';
+import type { FormContributionSpec } from '@memberjunction/interactive-component-types/forms';
 import type {
-    FieldGroupsInDetails, FormCompositionRegistry, FormCompositionSnapshot, HumanizeEntityTitle, PlacementStateFromContribution,
-    ResolveContributionKey, ResolveFormContributionWinners,
+    FieldGroupsInDetails, FormCompositionRegistry, FormCompositionSnapshot, FormPlacementContext, FormPlacementDecision,
+    FormPlacementState, HumanizeEntityTitle, PlacementStateFromContribution, ResolveContributionKey, ResolveFormContributionWinners,
 } from '@memberjunction/ng-base-forms';
 
 // ─── Hoisted state buckets the mocks read/write ──────────────────────────
@@ -45,6 +46,11 @@ const hoisted = vi.hoisted(() => ({
         contribution: { slot: 'after-fields', presentation: 'panel', title: 'Lifetime value' } as Record<string, unknown>,
         activateNow: true,
     },
+    /**
+     * Opt-in: the placement dialog applies the answers its seed produced, as a user who changes
+     * nothing does, instead of `placement`.
+     */
+    applySeededAnswers: false,
     /** The context the dialog was handed — what the user was actually offered. */
     placementContext: null as Record<string, unknown> | null,
     /** The record the dialog's preview was told to show. */
@@ -111,9 +117,10 @@ const mockDialog = {
                 get RecordKey(): CompositeKey | null { return hoisted.placementRecordKey; },
                 Applied: {
                     subscribe: (cb: (d: unknown) => void) => {
-                        if (hoisted.dialogResult === 'apply') {
-                            cb({ Contribution: { ...hoisted.placement.contribution }, ActivateNow: hoisted.placement.activateNow });
-                        }
+                        if (hoisted.dialogResult !== 'apply') return;
+                        cb(hoisted.applySeededAnswers
+                            ? seededDecision(instance as unknown as { Context: FormPlacementContext; Proposal: FormContributionSpec | null })
+                            : { Contribution: { ...hoisted.placement.contribution }, ActivateNow: hoisted.placement.activateNow });
                     },
                 },
                 Cancelled: {
@@ -249,6 +256,40 @@ vi.mock('@memberjunction/core', async () => {
 import { InteractiveFormApplyService } from '../services/interactive-form-apply.service';
 import { FormCompositionRegistry as RealFormCompositionRegistry } from '@memberjunction/ng-base-forms';
 
+/**
+ * The pure placement rules, from ng-base-forms' dist. The dialog derives its guards and its
+ * decision from them, so the fake dialog the seed runs against does the same.
+ */
+const placementRules = await vi.importActual<typeof import('@memberjunction/ng-base-forms/dist/lib/apply/form-placement.js')>(
+    '@memberjunction/ng-base-forms/dist/lib/apply/form-placement.js');
+
+/**
+ * A stand-in for the placement dialog with the guards MjFormPlacementDialogComponent derives
+ * from its context. The dialog itself is an Angular component this node suite does not load.
+ */
+function fakeDialog(context: FormPlacementContext) {
+    return {
+        Context: context,
+        State: undefined as FormPlacementState | undefined,
+        CanReplaceField: placementRules.SectionsWithFields(context).length > 0,
+        PlaceableSections: context.Sections,
+        RailTabs: placementRules.ReplaceableRailTabs(context),
+    };
+}
+
+/** The answers the seed the service handed the dialog produces against `context`. */
+function seededState(context: FormPlacementContext): FormPlacementState {
+    const dialog = hoisted.placementDialog as { SeedState: (d: unknown) => void };
+    const fake = fakeDialog(context);
+    dialog.SeedState(fake);
+    return fake.State!;
+}
+
+/** What the dialog emits when the user applies the seeded answers unchanged. */
+function seededDecision(dialog: { Context: FormPlacementContext; Proposal: FormContributionSpec | null }): FormPlacementDecision {
+    return placementRules.ResolvePlacementDecision(seededState(dialog.Context), dialog.Context, dialog.Proposal);
+}
+
 function mockProvider(overrides: Partial<{ EntityByName: (name: string) => unknown; CurrentUser: unknown }> = {}) {
     return {
         EntityByName: () => ({ ID: 'ENT-1', Name: 'MJ: Apps' }),
@@ -269,6 +310,7 @@ beforeEach(() => {
     hoisted.resolveActionIdsByName = false;
     hoisted.placementRecordKey = null;
     hoisted.placementDialog = null;
+    hoisted.applySeededAnswers = false;
     hoisted.registrations = [];
     hoisted.hiddenRegistrations = [];
     hoisted.events = [];
@@ -658,15 +700,11 @@ describe('InteractiveFormApplyService — form-panel specs', () => {
         const svc = new InteractiveFormApplyService();
         await svc.ConfirmAndApply(panel, ENTITY, provider(), snapshot());
         const dialog = hoisted.placementDialog as { SeedState?: (d: never) => void };
-        const context = hoisted.placementContext!;
+        const context = hoisted.placementContext as unknown as FormPlacementContext;
         expect(typeof dialog.SeedState).toBe('function');
-        const fake = {
-            Context: { ...context, FullCustomForm: false },
-            State: undefined as unknown,
-        };
-        dialog.SeedState!(fake as never);
-        expect((fake.State as { Presentation: string }).Presentation).toBe(proposal.presentation);
-        expect((fake.State as { ReplaceMode: string }).ReplaceMode).toBe('section');
+        const state = seededState({ ...context, FullCustomForm: false });
+        expect(state.Presentation).toBe(proposal.presentation);
+        expect(state.ReplaceMode).toBe('section');
     });
 
     it('does not read the proposal\'s key or sort order as claims', async () => {
@@ -675,13 +713,112 @@ describe('InteractiveFormApplyService — form-panel specs', () => {
         await svc.ConfirmAndApply(panelSpec({ replacesSectionKey: undefined, sortKey: 90 }), ENTITY, provider(), snapshot({
             Contributions: [{ Key: 'header', Slot: 'before-fields', Source: 'class', Title: 'Header', Presentation: 'bare', Hidden: false, Precedence: 3 }],
         }));
-        const dialog = hoisted.placementDialog as { SeedState?: (d: never) => void };
-        const context = hoisted.placementContext as { Existing: Array<{ Key: string }> };
+        const context = hoisted.placementContext as unknown as FormPlacementContext;
         expect(context.Existing.map((e) => e.Key)).toContain('header');
-        const fake = { Context: context, State: undefined as unknown };
-        dialog.SeedState!(fake as never);
-        expect((fake.State as { ReplaceMode: string; SortKey: number | null }).ReplaceMode).toBe('none');
-        expect((fake.State as { ReplaceMode: string; SortKey: number | null }).SortKey).toBeNull();
+        const state = seededState(context);
+        expect(state.ReplaceMode).toBe('none');
+        expect(state.SortKey).toBeNull();
+    });
+
+    /**
+     * The seed reads a proposal as it reads a saved row, which keeps a claim it cannot check on a
+     * form that has not been read. The dialog does not offer such a claim, so the seed drops it
+     * and the row is written without it.
+     */
+    describe('a proposed claim the dialog does not offer', () => {
+        /** The server's composition, as `Get Form Composition For Entity` returns it. */
+        function composition(over: Record<string, unknown>): void {
+            hoisted.actionResponses.set('Get Form Composition For Entity', {
+                Success: true,
+                Message: JSON.stringify({ Sections: [], Related: [], Contributions: [], SlotsPresent: [], FullCustomForm: false, ...over }),
+            });
+        }
+
+        /** Applies the proposal against the server's composition, as a user who changes nothing. */
+        async function applyUnchanged(formContribution: Record<string, unknown>, open: FormCompositionSnapshot | null = null) {
+            hoisted.applySeededAnswers = true;
+            const svc = new InteractiveFormApplyService();
+            await svc.ConfirmAndApply(panelSpec(formContribution), ENTITY, provider(), open);
+            return {
+                state: seededState(hoisted.placementContext as unknown as FormPlacementContext),
+                sent: sentSpec().formContribution as unknown as FormContributionSpec,
+            };
+        }
+
+        it('drops a field claim on a full custom form, so the row claims no field', async () => {
+            composition({ FullCustomForm: true });
+            const { state, sent } = await applyUnchanged({ replacesSectionKey: undefined, replacesFieldNames: ['Bogus', 'Password'] });
+            expect(state.ReplaceMode).toBe('none');
+            expect(state.ReplaceFieldNames).toEqual([]);
+            expect(sent.replacesFieldNames).toBeUndefined();
+            expect(sent.configuration?.fields).toBeUndefined();
+        });
+
+        it('drops a field claim on fields taken from entity metadata rather than read from the form', async () => {
+            composition({ Sections: [{ Key: 'details', Title: 'Details', Fields: [{ Name: 'Password', Label: 'Password' }] }] });
+            const { state, sent } = await applyUnchanged({ replacesSectionKey: undefined, replacesFieldNames: ['Bogus', 'Password'] });
+            expect(state.ReplaceMode).toBe('none');
+            expect(sent.replacesFieldNames).toBeUndefined();
+            expect(sent.configuration?.fields).toBeUndefined();
+        });
+
+        it('drops a claim on a section the dialog does not list', async () => {
+            composition({ FullCustomForm: true });
+            const { state, sent } = await applyUnchanged({ replacesSectionKey: 'contactInfo' });
+            expect(state.ReplaceMode).toBe('none');
+            expect(sent.replacesSectionKey).toBeUndefined();
+            expect(sent.replacesSectionKeys).toBeUndefined();
+        });
+
+        it('drops a claim on a whole tab when the dialog offers no tab', async () => {
+            composition({ FullCustomForm: true });
+            const { state, sent } = await applyUnchanged({ presentation: 'panel', replacesSectionKey: '__mj_form_details' });
+            expect(state.ReplaceMode).toBe('none');
+            expect(sent.replacesSectionKey).toBeUndefined();
+            expect(sent.chromeGroup).toBeUndefined();
+        });
+
+        it('drops a place inside a section the dialog does not list', async () => {
+            composition({ FullCustomForm: true });
+            const { state, sent } = await applyUnchanged({ replacesSectionKey: undefined, inSectionKey: 'details', sectionPosition: 'end' });
+            expect(state.InSectionKey).toBe('');
+            expect(sent.inSectionKey).toBeUndefined();
+            expect(sent.sectionPosition).toBeUndefined();
+        });
+
+        it('keeps a field claim on fields the open form reported', async () => {
+            const open = snapshot({
+                Sections: [{ Key: 'details', Title: 'Details', Variant: 'default', Group: null, Hidden: false, Fields: [{ Name: 'Email', Label: 'Email' }] }],
+            });
+            const { state, sent } = await applyUnchanged({ replacesSectionKey: undefined, replacesFieldNames: ['Email'] }, open);
+            expect(state.ReplaceMode).toBe('field');
+            expect(sent.replacesFieldNames).toEqual(['Email']);
+            expect(sent.configuration?.fields).toEqual(['Email']);
+        });
+
+        it('keeps a section claim on a section the open form reported', async () => {
+            const { state, sent } = await applyUnchanged({ replacesSectionKey: 'details' }, snapshot());
+            expect(state.ReplaceMode).toBe('section');
+            expect(sent.replacesSectionKey).toBe('details');
+        });
+
+        it('keeps a place inside a section the open form reported', async () => {
+            const { state, sent } = await applyUnchanged({ replacesSectionKey: undefined, inSectionKey: 'details' }, snapshot());
+            expect(state.InSectionKey).toBe('details');
+            expect(sent.inSectionKey).toBe('details');
+        });
+
+        it('restores the claim when it seeds again against the form once the dialog reads it', async () => {
+            composition({ Sections: [{ Key: 'details', Title: 'Details', Fields: [{ Name: 'Email', Label: 'Email' }] }] });
+            hoisted.dialogResult = 'cancel';
+            const svc = new InteractiveFormApplyService();
+            await svc.ConfirmAndApply(panelSpec({ replacesSectionKey: undefined, replacesFieldNames: ['Email'] }), ENTITY, provider(), null);
+            const derived = hoisted.placementContext as unknown as FormPlacementContext;
+            expect(seededState(derived).ReplaceMode).toBe('none');
+            const read = seededState({ ...derived, TargetsVerified: true });
+            expect(read.ReplaceMode).toBe('field');
+            expect(read.ReplaceFieldNames).toEqual(['Email']);
+        });
     });
 
     it('offers the sections the live form actually has', async () => {

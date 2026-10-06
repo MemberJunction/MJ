@@ -34,7 +34,7 @@ import {
     ApplyDecisionToSpec, CollectFormContributionRegistrations,
     FieldGroupsInDetails, FormCompositionRegistry, FormSlotProbeService, HumanizeEntityTitle, MjFormPlacementDialogComponent,
     PlacementStateFromContribution, ResolveContributionKey, ResolveFormContributionWinners,
-    type FormCompositionSnapshot, type FormPlacementContext, type FormPlacementDecision, type FormRecordRef,
+    type FormCompositionSnapshot, type FormPlacementContext, type FormPlacementDecision, type FormPlacementState, type FormRecordRef,
 } from '@memberjunction/ng-base-forms';
 
 /** Result of an apply attempt — surfaced to the caller for any post-apply UI. */
@@ -463,16 +463,16 @@ export class InteractiveFormApplyService {
             dialog.Provider = provider;
             dialog.ComponentName = componentName ?? proposal.title;
             dialog.Proposal = proposal;
-            // The dialog starts from the proposal's claims the open form can honour. The
+            // The dialog starts from the proposal's claims it offers on this form. The
             // proposal's own key and sort order are left out: a key that matches an installed
             // panel would read as "replace that panel", which the author cannot have meant, and
             // the order among the panels in one position is the host's.
             dialog.SeedState = (d) => {
-                d.State = PlacementStateFromContribution(
+                d.State = this.offeredClaimsOnly(PlacementStateFromContribution(
                     { ...proposal, contributionKey: undefined, sortKey: undefined },
                     d.Context,
                     !d.Context.FullCustomForm,
-                );
+                ), d);
             };
             // The preview draws the component itself, not a placeholder, before anything is saved.
             dialog.PanelComponentSpec = component;
@@ -492,6 +492,28 @@ export class InteractiveFormApplyService {
             // either output, so treat that as a cancel rather than hanging the caller.
             ref.Result.subscribe(() => { if (!settled) { settled = true; resolve(null); } });
         });
+    }
+
+    /**
+     * The seeded answers kept to the claims the dialog offers, through the guards it applies to
+     * the user's own choices: a field claim only when it offers fields, a section or tab claim
+     * only on a section or tab it lists, and a place inside a section only in a section it lists.
+     * A claim it does not offer falls back to replacing nothing.
+     *
+     * The seed reads the proposal as it reads a saved row, which keeps every section, tab, field
+     * and in-section claim as stated while the form is unread. When the dialog reads the form
+     * later and the user has changed nothing, it seeds again, so a claim the form can honour
+     * comes back.
+     */
+    private offeredClaimsOnly(state: FormPlacementState, dialog: MjFormPlacementDialogComponent): FormPlacementState {
+        const listed = new Set(dialog.PlaceableSections.map((section) => section.Key));
+        const sectionKeys = state.ReplaceSectionKeys.length > 0 ? state.ReplaceSectionKeys : [state.ReplaceSectionKey];
+        const offered = state.ReplaceMode === 'field' ? dialog.CanReplaceField
+            : state.ReplaceMode === 'section' ? sectionKeys.every((key) => listed.has(key))
+            : state.ReplaceMode === 'rail-tab' ? dialog.RailTabs.some((tab) => tab.Key === state.ReplaceRailKey)
+            : true;
+        const placed = listed.has(state.InSectionKey) ? state : { ...state, InSectionKey: '' };
+        return offered ? placed : { ...placed, ReplaceMode: 'none', ReplaceFieldNames: [] };
     }
 
     /**
