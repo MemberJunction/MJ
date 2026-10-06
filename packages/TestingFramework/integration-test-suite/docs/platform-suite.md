@@ -37,7 +37,7 @@ Every bundle in this family belongs to the **"Integration Tests — Deterministi
 | `remote-op-wire-progress` | 1 (WIRE1) | IT15 - Remote Operations Over-The-Wire Progress | client (needs live MJAPI; parked like IT03 until MJAPI is provisioned in CI) | deterministic |
 | `realtime-deterministic` | 9 (RD1–RD9) | IT51 - Realtime Deterministic Seams | server | deterministic; several checks skip-as-pass loudly on unseeded slices |
 | `predictive-studio` | 5 (PS1–PS5) | IT14 - Predictive Studio Stack Seams | server | deterministic; PS5 live-sidecar leg gated `PS_INTEGRATION=1` |
-| `search` | 7 (SR1–SR7) | IT52 - Unified Search Seams | client | deterministic; SR7 skips off the Network transport |
+| `search` | 8 (SR1–SR8) | IT52 - Unified Search Seams | client | deterministic; SR7 skips off the Network transport; SR8 skips when the no-grant user is not seeded |
 | `templates` | 6 (TP1–TP6) | IT38 - Template Engine Rendering | server | deterministic |
 | `communication` | 4 (CM1–CM4) | IT42 - Communication DryRun | server | deterministic; nothing ever leaves the process |
 
@@ -344,7 +344,7 @@ Every bundle in this family belongs to the **"Integration Tests — Deterministi
 
 ## 8. Search
 
-### 8.1 `search` (SR1–SR7) — IT52
+### 8.1 `search` (SR1–SR8) — IT52
 
 **Machinery under test.** Domain 13's deterministic legs over the search decision-tree APIs (Search Overview guide): `EntityByName` (definition lookup) vs `SearchEntity`/`SearchEntities` (ranked record search, pinned to `mode: 'lexical'` so no embedding model is ever touched — the semantic legs are the LLM-gated tier, deliberately omitted), hostile-input robustness of the lexical pass, `SearchEngine.Search` graceful-configuration contracts, `SearchScopePermissionResolver` fail-closed semantics against real scope metadata, and the `GraphQLSearchClient` scope-list wire round-trip.
 
@@ -363,6 +363,7 @@ Every bundle in this family belongs to the **"Integration Tests — Deterministi
 | `search.SR5` | SearchEngine.Search: unconfigured deployments return empty-success; short queries short-circuit | sub-minimum query (`'mj'`) → `Success=true`, `TotalCount=0`; a tagged well-formed probe → `Success=true`, `Results` an array, `TotalCount === Results.length`, whatever the provider configuration (warns when zero providers are active — the empty-success contract verified, ranked cross-source coverage not exercised) | graceful-degradation regressions: a throw or `Success=false` on an unconfigured deployment; MIN_TERM_LENGTH guard loss |
 | `search.SR6` | SearchScopePermissionResolver fail-closed; real-scope decisions internally consistent | a guaranteed-nonexistent scope ID resolves `Allowed=false`, `Level='None'`, `toSqlPredicate()==='1=0'`; for up to 10 real seeded scopes: `Allowed ⇔ Level!=='None' ⇔ '1=1'/'1=0'` predicate agreement, non-empty auditable `Reason` (real-scope leg skips with a warn when no scopes are seeded) | fail-open drift on the scope gate — the highest-severity search bug class |
 | `search.SR7` | GraphQLSearchClient scope list round-trips with no phantoms (Network only) | every scope returned by `GetSearchScopes()` over the wire exists in `MJ: Search Scopes` (no phantoms) with a non-empty name; a strict subset is legitimate (permission filtering) and only the no-phantom direction is asserted | the wire scope list inventing scopes — a client offering scopes the server will refuse (or worse, honor) |
+| `search.SR8` | SearchEngine.Search with an Audience: a no-grant reader leaves a subset and no storage hit | the same tagged query run as the context user alone and with `Audience: { Readers: [it-nogrant] }` (rebuilt over the run's provider with its empty `UserRoles`): both `Success=true`; the audience set is a subset of the caller-only set, holds no `storage-file` result, and — when the caller-only set is non-empty — is empty (a roleless reader reads nothing); warns when the caller-only search returns nothing; skips when the seed is absent | an audience that widens results, lets a caller-only storage hit through, or ignores a reader |
 
 ---
 

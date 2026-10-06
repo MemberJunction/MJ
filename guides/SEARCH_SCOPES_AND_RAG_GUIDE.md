@@ -239,14 +239,19 @@ No scope duplication needed.
 
 Everything above is about one person: the caller. When the results will be shown to **several** people — an agent answering in a shared conversation — the caller's reach is the ceiling, not the floor: a document one participant can't open must not be quoted to the room because another participant could.
 
-`SearchParams.Audience.Readers` names the other people who will see the results. The engine runs its permission safety net once for the caller and once per reader (in parallel), and keeps the intersection. Readers can only remove results, never add them. The audience is part of the result-cache key, so a search the caller ran alone is never served to a room, nor the reverse. The GraphQL surface does not expose this today — it is for server-side callers such as a host's conversation turn handler.
+`SearchParams.Audience.Readers` names the other people who will see the results. The engine runs its permission safety net (entity read, row filters, ownership; and the origin-record gate once that separate change lands) once for the caller and once per reader (concurrently), and keeps the intersection. Readers can only remove results, never add them. The audience is part of the result-cache key, so a search the caller ran alone is never served to a room, nor the reverse. The GraphQL surface does not expose this today — it is for server-side callers such as a host's conversation turn handler.
 
-Three rules for callers:
-- **Pass hydrated `UserInfo` objects** (with `UserRoles`, e.g. from `UserCache`). Permissions and row filters are evaluated from a reader's roles; a bare `{ ID }` reads nothing, and the room gets an empty result. The engine logs this case.
-- **Storage hits are refused under an audience.** `MJ: File Storage Account Permissions` are evaluated by the storage lane for the caller when the lane runs, and cannot be re-run for another user, so a `storage-file` result is dropped rather than shown on the caller's permission alone. Per-reader storage checks are a follow-up.
-- **Only the fused/final results are audience-filtered.** `streamSearch`'s per-provider partial events arrive before any permission pass; never render them to a room.
+Four rules for callers:
+1. **Pass hydrated `UserInfo` objects** (e.g. from `UserCache`): every reader needs a non-empty `ID` and a `UserRoles` array. A malformed audience — `Readers` not an array, a `null` reader, a reader with no `ID` or with no `UserRoles` array — fails the search (`Success: false`, an error starting "SearchEngine: invalid Audience"); the engine never skips a reader it cannot check, because a skipped reader would restrict nothing. `UserRoles: []` is legitimate: that reader reads nothing, and the room gets an empty result.
+2. **Expect no storage hits.** `MJ: File Storage Account Permissions` are evaluated by the storage lane for the caller when the lane runs, and cannot be re-run for another user, so a `storage-file` result is dropped rather than shown on the caller's permission alone. Per-reader storage checks are a follow-up.
+3. **Show the room `fused`/`final` results.** Under an audience, `streamSearch`'s `provider` events carry `results: []` — they keep `providerName` and `durationMs`, so a UI can still show progress — because partials arrive before any permission pass.
+4. **Check each reader's scope entitlement yourself.** Scope entitlement (`SearchScopePermission`), `ServerDerived` dimensions, scope `ExtraFilter`/`MetadataFilter` templates and vector push-down are all evaluated for the **caller only**. Before passing `ScopeIDs` for a room, confirm every reader may use those scopes, and don't rely on dimension-only bounds to keep a room inside its reach.
 
-Audience filtering raises the residual-filter rate, so a host serving rooms should raise the over-fetch factor (below). Push-down should still carry as much of the audience as the scope can express (a server-derived dimension computed over every participant), for the same recall reasons given above. The audience pass is the truth; push-down is the recall.
+Two further limits:
+- **`SourceCounts` are counted before the permission and audience passes**, so they reveal the caller's unfiltered reach to anyone shown them. Don't show them to a room.
+- **The result cache keys on reader IDs.** Within the 30 s TTL, a reader object with the same `ID` but different hydration (roles changed, say) gets the cached verdict.
+
+Audience filtering raises the residual-filter rate, so a host serving rooms should raise the over-fetch factor (below). Carrying the audience into push-down is achievable today only through an expansion query keyed on the conversation's `PrimaryScopeRecordID`; a resolver that sees the audience is a follow-up. The audience pass is the truth; push-down is the recall.
 
 ### Overfetch factor tuning
 

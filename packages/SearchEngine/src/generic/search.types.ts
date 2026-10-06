@@ -124,20 +124,33 @@ export interface SearchParams {
     /**
      * Everyone besides `contextUser` who will see this search's results. When set, a result
      * survives only if **every** reader may read it: the engine runs its permission safety net
-     * (entity read, row filters, ownership, origin records) once for the caller and once per
-     * reader, and keeps the intersection. Use it for a shared conversation, where the asker's
-     * reach is the ceiling but not the floor — a document one participant can't open must not
-     * be quoted to the room because another participant could. Readers never widen a result set.
+     * (entity read, row filters, ownership; and the origin-record gate once that separate change lands)
+     * once for the caller and once per reader, and keeps the intersection. Use it for a shared
+     * conversation, where the asker's reach is the ceiling but not the floor — a document one participant
+     * can't open must not be quoted to the room because another participant could. Readers never widen
+     * a result set. The engine does not resolve IDs to users, and nothing in the GraphQL surface sets this today.
      *
-     * Server-side callers pass **hydrated** `UserInfo` objects (with `UserRoles`, e.g. from `UserCache`):
-     * permissions and row filters are evaluated from a reader's roles, so a bare `{ ID }` reads nothing
-     * and empties the result. The engine does not resolve IDs to users, and nothing in the GraphQL
-     * surface sets this today.
+     * Four rules for callers:
+     * 1. **Pass hydrated `UserInfo` objects** (e.g. from `UserCache`): every reader needs a non-empty `ID`
+     *    and a `UserRoles` array. A malformed audience — `Readers` not an array, a `null` reader, a reader
+     *    with no `ID` or with no `UserRoles` array — fails the search (`Success: false`, an error starting
+     *    "SearchEngine: invalid Audience"); it is never skipped. `UserRoles: []` is legitimate and reads
+     *    nothing, which empties the result.
+     * 2. **Expect no storage hits.** `storage-file` results are refused under an audience: their permissions
+     *    are evaluated by the storage lane for the caller only and cannot be re-checked per reader.
+     * 3. **Show the room `fused`/`final` results.** Under an audience, `streamSearch`'s `provider` events carry
+     *    `results: []` (with `providerName` and `durationMs`, for progress): partials arrive before any
+     *    permission pass.
+     * 4. **Check each reader's scope entitlement yourself.** Scope entitlement (`SearchScopePermission`),
+     *    `ServerDerived` dimensions, scope `ExtraFilter`/`MetadataFilter` templates and vector push-down are
+     *    evaluated for the caller only. A host must check that every reader may use the scopes it passes, and
+     *    must not rely on dimension-only bounds to keep a room inside its reach.
      *
-     * Two limits, both failing closed: `storage-file` results are refused when an audience is present
-     * (their permissions are evaluated by the storage lane for the caller only, and cannot be re-checked
-     * per reader), and `streamSearch`'s per-provider partial events are not audience-filtered — only the
-     * fused/final results are. Show a room the final results, never the partials.
+     * Two further limits:
+     * - **`SourceCounts` are counted before the permission and audience passes**, so they reveal the caller's
+     *   unfiltered reach to anyone shown them. Don't show them to a room.
+     * - **The result cache keys on reader IDs.** Within its 30 s TTL, a reader object with the same `ID` but
+     *   different hydration (roles changed, say) gets the cached verdict.
      */
     Audience?: SearchAudience;
 }
@@ -147,8 +160,9 @@ export interface SearchParams {
  */
 export interface SearchAudience {
     /**
-     * Readers besides the caller, as hydrated `UserInfo` objects (roles included). The caller is always
-     * a reader; listing them again, or listing a reader twice, is harmless.
+     * Readers besides the caller, as hydrated `UserInfo` objects: a non-empty `ID` and a `UserRoles` array
+     * each (`[]` for a reader with no roles). The caller is always a reader; listing them again, or listing
+     * a reader twice, is harmless. A reader that is `null`, has no `ID` or has no `UserRoles` array fails the search.
      */
     Readers: UserInfo[];
 }
@@ -508,7 +522,10 @@ export type SearchStreamEvent =
         phase: 'provider';
         /** Friendly provider name that just returned (Vector / FullText / Entity / Storage / external). */
         providerName: string;
-        /** This provider's contribution before fusion. */
+        /**
+         * This provider's contribution before fusion — and before any permission pass. Always empty when
+         * `SearchParams.Audience` adds a reader: partials are withheld from a room (see that field).
+         */
         results: SearchResultItem[];
         /** Provider wall-clock duration in ms. */
         durationMs: number;
@@ -554,7 +571,10 @@ export interface SearchResult {
     TotalCount: number;
     /** Total search execution time in milliseconds */
     ElapsedMs: number;
-    /** Count of results contributed by each source before fusion */
+    /**
+     * Count of results contributed by each source before fusion — and before the permission safety net and
+     * any audience pass, so it reflects the caller's unfiltered reach (see `SearchParams.Audience`).
+     */
     SourceCounts: {
         Vector: number;
         FullText: number;

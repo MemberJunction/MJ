@@ -314,7 +314,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'scheduling-concurrency': 3,
         'scope-enforcement': 5,
         'scoped-anon-elevation': 6,
-        'search': 7,
+        'search': 8,
         'server-cache': 32,
         'shipped-agents-live': 4,
         'startup-mode': 3,
