@@ -1,0 +1,163 @@
+[
+  {
+    "fields": {
+      "Name": "Get Work Queue Subscription Stats",
+      "OperationKey": "WorkQueue.GetSubscriptionStats",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Work Queue",
+      "Description": "Returns pending, in-flight and dead-lettered counts (plus blocked keys, oldest pending age and recent completions where the transport supports them) for one work-queue subscription or all of them. Implemented by WorkQueueGetSubscriptionStatsServerOperation in @memberjunction/work-queue-engine.",
+      "InputTypeName": "WorkQueueGetSubscriptionStatsInput",
+      "InputTypeDefinition": "@file:types/work-queue-get-subscription-stats.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "WorkQueueGetSubscriptionStatsOutput",
+      "OutputTypeDefinition": "@file:types/work-queue-get-subscription-stats.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "workqueue:read",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "7C2CDC24-F6B1-4DF1-B3B5-31364753DBC3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "List Work Queue Dead Letters",
+      "OperationKey": "WorkQueue.ListDeadLetters",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Work Queue",
+      "Description": "Pages through one subscription's dead-lettered deliveries with their message, attempts, reason, last error and whether each blocks its partition key. Implemented by WorkQueueListDeadLettersServerOperation in @memberjunction/work-queue-engine.",
+      "InputTypeName": "WorkQueueListDeadLettersInput",
+      "InputTypeDefinition": "@file:types/work-queue-list-dead-letters.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "WorkQueueListDeadLettersOutput",
+      "OutputTypeDefinition": "@file:types/work-queue-list-dead-letters.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "workqueue:read",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "99F03AEC-821C-470A-B068-597DADC9644B"
+    }
+  },
+  {
+    "fields": {
+      "Name": "List Work Queue Partitions",
+      "OperationKey": "WorkQueue.ListPartitions",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Work Queue",
+      "Description": "Pages through one subscription's partition keys that are in flight or blocked by a dead-lettered Ordered head, optionally filtered to one condition. Implemented by WorkQueueListPartitionsServerOperation in @memberjunction/work-queue-engine.",
+      "InputTypeName": "WorkQueueListPartitionsInput",
+      "InputTypeDefinition": "@file:types/work-queue-list-partitions.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "WorkQueueListPartitionsOutput",
+      "OutputTypeDefinition": "@file:types/work-queue-list-partitions.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "workqueue:read",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "95BD197D-C393-4D82-9914-F216FF4611D8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Replay Work Queue Dead Letter",
+      "OperationKey": "WorkQueue.ReplayDeadLetter",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Work Queue",
+      "Description": "Returns one dead-lettered delivery to Pending with its attempts reset; an Ordered head keeps its position, so its key resumes once the replay completes. Implemented by WorkQueueReplayDeadLetterServerOperation in @memberjunction/work-queue-engine.",
+      "InputTypeName": "WorkQueueReplayDeadLetterInput",
+      "InputTypeDefinition": "@file:types/work-queue-replay-dead-letter.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "WorkQueueReplayDeadLetterOutput",
+      "OutputTypeDefinition": "@file:types/work-queue-replay-dead-letter.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "workqueue:operate",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "234CA630-1C68-4469-82A0-D3F56004BE1A"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Discard Work Queue Delivery",
+      "OperationKey": "WorkQueue.DiscardDelivery",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Work Queue",
+      "Description": "Resolves one delivery without processing it, with a required reason. A pending or dead-lettered delivery becomes Discarded immediately; discarding a dead-lettered Ordered head unblocks its key. An in-flight delivery is cancelled instead (cancelRequested = true): the running handler is told to stop within one heartbeat interval (30 s at most) and the delivery becomes Discarded as soon as the handler acknowledges, or at lease expiry if its worker is gone. Implemented by WorkQueueDiscardDeliveryServerOperation in @memberjunction/work-queue-engine.",
+      "InputTypeName": "WorkQueueDiscardDeliveryInput",
+      "InputTypeDefinition": "@file:types/work-queue-discard-delivery.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "WorkQueueDiscardDeliveryOutput",
+      "OutputTypeDefinition": "@file:types/work-queue-discard-delivery.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "workqueue:operate",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "FACEE516-41BD-4346-BB6F-07F44CF97E2F"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Get Work Queue Backlog",
+      "OperationKey": "WorkQueue.GetBacklog",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Work Queue",
+      "Description": "Returns the autoscaler metric for one subscription: claimable pending deliveries (partition rules applied) plus in-flight deliveries. Both counts matter — schedulers such as KEDA subtract running executions from the metric, so a pending-only count starves the queue. Each count is capped at 1000 (capped = true). Implemented by WorkQueueGetBacklogServerOperation in @memberjunction/work-queue-engine.",
+      "InputTypeName": "WorkQueueGetBacklogInput",
+      "InputTypeDefinition": "@file:types/work-queue-get-backlog.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "WorkQueueGetBacklogOutput",
+      "OutputTypeDefinition": "@file:types/work-queue-get-backlog.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "workqueue:read",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "6CE1A749-455A-4315-B3DA-44F56D1834C0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Validate Work Queue Bindings",
+      "OperationKey": "WorkQueue.ValidateBindings",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Work Queue",
+      "Description": "Validates work-queue topology and cloud resource bindings: with no transport name, the whole topology; with one, every topic and subscription bound to that transport against the resources it names. Implemented by WorkQueueValidateBindingsServerOperation in @memberjunction/work-queue-engine.",
+      "InputTypeName": "WorkQueueValidateBindingsInput",
+      "InputTypeDefinition": "@file:types/work-queue-validate-bindings.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "WorkQueueValidateBindingsOutput",
+      "OutputTypeDefinition": "@file:types/work-queue-validate-bindings.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "workqueue:read",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "0CBB434E-D678-4B3A-856A-07FCA23EC22A"
+    }
+  }
+]
