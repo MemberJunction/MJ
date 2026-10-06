@@ -8,6 +8,8 @@ import {
     RealtimeClientTranscript,
     RealtimeClientUsage,
 } from '../generic/baseRealtimeClient';
+import type { MediaVideoSource } from '../media/model';
+import { FakeMediaStream } from './helpers/realtime-fakes';
 
 /**
  * Minimal concrete subclass exposing the protected emit helpers so the base-class
@@ -50,9 +52,33 @@ class StubRealtimeClient extends BaseRealtimeClient {
     public EmitUsage(u: RealtimeClientUsage): void {
         this.emitUsage(u);
     }
+    public EmitRemoteVideo(video: MediaVideoSource | MediaStream): void {
+        this.emitRemoteVideo(video);
+    }
 }
 
 describe('BaseRealtimeClient', () => {
+    describe('remote video', () => {
+        it('hands a driver\'s plain stream on as a stream source', () => {
+            const client = new StubRealtimeClient();
+            const received: MediaVideoSource[] = [];
+            client.OnRemoteVideo((video) => received.push(video));
+            const stream = new FakeMediaStream([]);
+            client.EmitRemoteVideo(stream);
+            expect(received).toEqual([{ Kind: 'stream', Stream: stream }]);
+        });
+
+        it('hands a player that owns the element on as it is', () => {
+            const client = new StubRealtimeClient();
+            const received: MediaVideoSource[] = [];
+            client.OnRemoteVideo((video) => received.push(video));
+            const player: MediaVideoSource = { Kind: 'element', Attach: () => () => undefined };
+            client.EmitRemoteVideo(player);
+            expect(received).toEqual([player]);
+            expect(received[0]).toBe(player);
+        });
+    });
+
     describe('handler plumbing', () => {
         it('should deliver transcripts to the registered handler', () => {
             const client = new StubRealtimeClient();

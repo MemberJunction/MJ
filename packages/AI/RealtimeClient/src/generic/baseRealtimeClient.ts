@@ -9,6 +9,7 @@ import {
     RealtimeUsageModalityDetail,
 } from '@memberjunction/ai';
 import { IRealtimeAudioMeter, REALTIME_AUDIO_BIN_COUNT } from '../audio/audioMeter';
+import type { MediaVideoSource } from '../media/model';
 
 /**
  * A point-in-time snapshot of the session's audible activity, sampled by the host
@@ -242,7 +243,7 @@ export abstract class BaseRealtimeClient {
     private errorHandler?: (error: RealtimeClientError) => void;
     private interruptionHandler?: () => void;
     private usageHandler?: (usage: RealtimeClientUsage) => void;
-    private remoteVideoHandler?: (stream: MediaStream) => void;
+    private remoteVideoHandler?: (video: MediaVideoSource) => void;
     private trackHandler?: (track: RealtimeTrack) => void;
 
     // ── Media-track state and negotiation ──────────────────────────────────────
@@ -265,6 +266,12 @@ export abstract class BaseRealtimeClient {
 
     /** The model's declared inbound video stream ceiling, recorded by {@link negotiateTracks}; `undefined` until a driver declares one. */
     private inboundVideoStreamLimit: number | undefined;
+
+    /** What the driver supports, recorded by {@link negotiateTracks} so {@link AddTrack} can resolve against it later. */
+    private supportedTracks: readonly RealtimeTrackDescriptor[] | null = null;
+
+    /** The index the next added track's id takes, so an added track never reuses an id. */
+    private nextTrackIndex = 0;
 
     /**
      * How many concurrent inbound video streams the model accepts: the ceiling the driver declared when it
@@ -338,10 +345,70 @@ export abstract class BaseRealtimeClient {
             ...t,
             State: t.State === 'requested' ? 'live' : t.State,
         }));
+        this.supportedTracks = effectiveSupported;
+        this.nextTrackIndex = this.tracks.length;
         for (const track of this.tracks) {
             this.emitTrackStateChange(track);
         }
         return this.tracks;
+    }
+
+    /**
+     * Adds a track to a running session, such as inbound video when the user starts their camera, resolved against
+     * what the driver supported when it negotiated at connect. The new track is `'live'`, or `'unsupported'` with the
+     * reason (the model takes no such track, or no more inbound video streams). A live track with the same
+     * direction, modality and source is returned as it is. Other tracks keep their ids.
+     *
+     * The base re-negotiates locally, which is all a driver needs when its provider accepts the media without a
+     * setup change (Gemini Live takes video frames at any time). A driver whose wire must change overrides this and
+     * calls it.
+     *
+     * @returns The track, or `null` when the session has not negotiated tracks: before it connects, or with a driver
+     *   that does not negotiate them (only the Gemini driver does today).
+     */
+    public AddTrack(descriptor: RealtimeTrackDescriptor): RealtimeTrack | null {
+        if (!this.supportedTracks) {
+            return null;
+        }
+        const key = RealtimeTrackKey(descriptor);
+        const existing = this.tracks.find((t) => t.State === 'live' && RealtimeTrackKey(t.Descriptor) === key);
+        if (existing) {
+            return existing;
+        }
+        // Resolve after the live inbound video streams, so the stream cap and its reason count them.
+        const liveVideo = this.tracks.filter((t) => t.State === 'live' && isInboundVideo(t.Descriptor)).map((t) => t.Descriptor);
+        const index = this.nextTrackIndex++;
+        const resolved = ResolveRequestedTracks(
+            [...liveVideo, descriptor],
+            this.supportedTracks,
+            (d) => `${d.Direction}:${String(d.Modality)}:${index}`,
+            { MaxInboundVideoStreams: this.inboundVideoStreamLimit }
+        );
+        const added = resolved[resolved.length - 1];
+        const track: RealtimeTrack = { ...added, State: added.State === 'requested' ? 'live' : added.State };
+        this.tracks = [...this.tracks.filter((t) => RealtimeTrackKey(t.Descriptor) !== key), track];
+        this.emitTrackStateChange(track);
+        return track;
+    }
+
+    /**
+     * Ends a track on a running session, such as inbound video when the user stops their camera: the track is
+     * reported `'ended'` and leaves {@link AllTracks}. Audio, the session's floor, cannot be removed.
+     *
+     * @returns Whether a track was ended.
+     */
+    public RemoveTrack(descriptor: Pick<RealtimeTrackDescriptor, 'Modality' | 'Direction' | 'SourceID'>): boolean {
+        if (String(descriptor.Modality).trim().toLowerCase() === 'audio') {
+            return false;
+        }
+        const key = RealtimeTrackKey(descriptor);
+        const track = this.tracks.find((t) => RealtimeTrackKey(t.Descriptor) === key);
+        if (!track) {
+            return false;
+        }
+        this.tracks = this.tracks.filter((t) => t !== track);
+        this.emitTrackStateChange({ ...track, State: 'ended' });
+        return true;
     }
 
     // ── Audio-activity metering (capability surface — see driver obligation #9) ─
@@ -611,17 +678,20 @@ export abstract class BaseRealtimeClient {
     }
 
     /**
-     * Registers the (single) remote-VIDEO handler — the model/avatar's video track for a VIDEO session
-     * (a talking-head the host renders, e.g. as the agent's tile). Invoked once the provider publishes
-     * its video track.
+     * Registers the (single) remote-VIDEO handler — the model/avatar's video for a VIDEO session (a talking-head
+     * the host renders, e.g. as the agent's tile). Invoked once the provider's video is available.
+     *
+     * The video is a {@link MediaVideoSource}: a live stream (a WebRTC track), or a player that must own the
+     * `<video>` element (MSE or WebCodecs playout of encoded avatar video). Hosts show either with
+     * `AttachVideoSource`.
      *
      * **Optional capability:** audio-only drivers (the default) never emit — registering is always safe,
-     * but hosts must not assume a video track arrives. Video-capable drivers
-     * ({@link BaseRealtimeModel.SupportsVideo}) call {@link emitRemoteVideo} when the track is live.
+     * but hosts must not assume video arrives. Video-capable drivers ({@link BaseRealtimeModel.SupportsVideo})
+     * call {@link emitRemoteVideo} when it is live.
      *
-     * @param handler Invoked with the remote video `MediaStream` when it becomes available.
+     * @param handler Invoked with the remote video when it becomes available.
      */
-    public OnRemoteVideo(handler: (stream: MediaStream) => void): void {
+    public OnRemoteVideo(handler: (video: MediaVideoSource) => void): void {
         this.remoteVideoHandler = handler;
     }
 
@@ -683,8 +753,16 @@ export abstract class BaseRealtimeClient {
         this.usageHandler?.(usage);
     }
 
-    /** Emits the model/avatar's remote video stream to the registered handler (video drivers only). */
-    protected emitRemoteVideo(stream: MediaStream): void {
-        this.remoteVideoHandler?.(stream);
+    /**
+     * Emits the model/avatar's remote video to the registered handler (video drivers only). A driver with a plain
+     * `MediaStream` passes it as it is; it is handed on as a `'stream'` source.
+     */
+    protected emitRemoteVideo(video: MediaVideoSource | MediaStream): void {
+        this.remoteVideoHandler?.('Kind' in video ? video : { Kind: 'stream', Stream: video });
     }
+}
+
+/** Whether a descriptor is an inbound video track. */
+function isInboundVideo(descriptor: RealtimeTrackDescriptor): boolean {
+    return descriptor.Direction === 'inbound' && String(descriptor.Modality).trim().toLowerCase() === 'video';
 }
