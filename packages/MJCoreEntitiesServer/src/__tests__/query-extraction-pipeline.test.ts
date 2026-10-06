@@ -177,16 +177,13 @@ WHERE 1=1
 ORDER BY COALESCE(rev.totalrevenue, 0) DESC`;
 
 describe('Pipeline: Member Lifetime Revenue (CTE + Templates)', () => {
-    // CTE queries with Nunjucks templates inside the CTE body cause the AST parser
-    // to fail (template placeholders break the SQL syntax). The parser falls back
-    // to regex-based CTE extraction, but ExtractSelectColumns returns empty because
-    // the cleaned SQL isn't parseable. This is expected — field extraction for
-    // templated CTE queries relies on the LLM enrichment stage (not tested here).
-    //
-    // These tests verify that parameters ARE extracted (template expressions are
-    // dialect-agnostic and parsed before AST), and that the analysis flags are correct.
+    // Nunjucks templates sit inside the CTE body, including a quoted '{{ MembershipType }}'.
+    // Until 6.2.0-edge.0 placeholder substitution quoted that value a second time, the cleaned
+    // SQL did not parse, and field extraction was left to the LLM enrichment stage. The parser
+    // now substitutes inside an existing literal without extra quotes, so fields are extracted
+    // deterministically; parameters were always extracted (template parsing is pre-AST).
 
-    it('T-SQL: should extract parameters even when field extraction fails', () => {
+    it('T-SQL: should extract parameters', () => {
         const { params, analysis } = extractFields(MEMBER_REVENUE_TSQL, 'sqlserver');
 
         expect(params).toHaveLength(2);
@@ -197,7 +194,7 @@ describe('Pipeline: Member Lifetime Revenue (CTE + Templates)', () => {
         expect(analysis.hasConditionalBlocks).toBe(true);
     });
 
-    it('PostgreSQL: should extract parameters even when field extraction fails', () => {
+    it('PostgreSQL: should extract parameters', () => {
         const { params, analysis } = extractFields(MEMBER_REVENUE_PG, 'postgresql');
 
         expect(params).toHaveLength(2);
@@ -214,11 +211,12 @@ describe('Pipeline: Member Lifetime Revenue (CTE + Templates)', () => {
         expect(tsql.params.length).toBe(pg.params.length);
     });
 
-    it('field extraction returns null for templated CTE queries (LLM needed)', () => {
-        // This documents the known limitation: field extraction for queries with
-        // Nunjucks inside CTEs requires the LLM enrichment stage.
+    it('extracts the outer SELECT columns of a templated CTE query without the LLM', () => {
         const { fields } = extractFields(MEMBER_REVENUE_PG, 'postgresql');
-        expect(fields).toBeNull();
+        expect(fields!.map(f => f.name)).toEqual([
+            'memberid', 'firstname', 'lastname', 'email', 'joindate', 'joinyear',
+            'currentmembershiptype', 'totalrevenue', 'invoicecount',
+        ]);
     });
 });
 
@@ -268,9 +266,8 @@ LEFT JOIN ChapterEventActivity chev ON chmem.chapterid = chev.chapterid
 LEFT JOIN ChapterCourseActivity chcr ON chmem.chapterid = chcr.chapterid`;
 
 describe('Pipeline: Chapter Engagement Summary (3 CTEs)', () => {
-    // This query has Nunjucks templates inside the CTE body, so AST field extraction
-    // fails. Parameters are still extracted because template parsing is pre-AST.
-    // Field extraction for this pattern requires the LLM enrichment stage.
+    // Nunjucks templates (quoted '{{ ChapterType }}' / '{{ Region }}') sit inside a CTE body.
+    // Fields are now extracted deterministically — see the Member Lifetime Revenue block.
 
     it('should extract 2 parameters (ChapterType, Region)', () => {
         const { params } = extractFields(CHAPTER_ENGAGEMENT_PG, 'postgresql');
@@ -281,9 +278,13 @@ describe('Pipeline: Chapter Engagement Summary (3 CTEs)', () => {
         expect(params.every(p => !p.isRequired)).toBe(true);
     });
 
-    it('field extraction returns null for templated CTE queries (LLM needed)', () => {
+    it('extracts the outer SELECT columns of a templated CTE query without the LLM', () => {
         const { fields } = extractFields(CHAPTER_ENGAGEMENT_PG, 'postgresql');
-        expect(fields).toBeNull();
+        expect(fields!.map(f => f.name)).toEqual([
+            'chapterid', 'chaptername', 'chaptertype', 'region', 'state',
+            'activemembercount', 'avgmembertenuredays', 'uniqueeventsattended',
+            'totalregistrations', 'totalattendances', 'uniquecoursesenrolled', 'coursecompletions',
+        ]);
     });
 });
 
