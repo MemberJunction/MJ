@@ -1098,10 +1098,6 @@ describe('Order in a position — before the form has been read', () => {
     });
 });
 
-/**
- * The line under "Where it goes" and the summary beside Apply describe one answer. They read
- * the same lookup, so they name the same grid, panel, tab or fields.
- */
 describe('SummarizePlacement — a proposal claim the seed dropped', () => {
     const state = (): FormPlacementState => InitialPlacementState(PROPOSAL, CONTEXT);
     const END = 'on this form, but the form could not confirm it, so the panel is saved without that claim.';
@@ -1124,6 +1120,10 @@ describe('SummarizePlacement — a proposal claim the seed dropped', () => {
     });
 });
 
+/**
+ * The line under "Where it goes" and the summary beside Apply describe one answer. They read
+ * the same lookup, so they name the same grid, panel, tab or fields.
+ */
 describe('DescribePlacementLine', () => {
     const base = () => InitialPlacementState(PROPOSAL, CONTEXT);
 
