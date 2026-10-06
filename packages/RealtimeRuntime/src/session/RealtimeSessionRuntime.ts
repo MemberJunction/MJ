@@ -39,10 +39,12 @@ import {
   RealtimeClientTranscript,
   RealtimeClientUsage,
   VideoSourceArbiter,
+  type DisplayCaptureOptions,
   type VideoSourceState
 } from '@memberjunction/ai-realtime-client';
 import { DefaultRealtimeSessionLauncher, type IRealtimeSessionLauncher } from './session-launcher';
 import { ClientSessionDeadline } from './client-session-deadline';
+import { RealtimeCaptures, REALTIME_CAPTURES_OFF, type RealtimeCaptureState, type RealtimeCaptureStates } from './realtime-captures';
 import { RealtimeSessionEventHub, type IRealtimeSessionEventSource, type RealtimeSessionStreamEvent } from './session-event-hub';
 import { BuildNarrationInstructions } from '../narration/narration-template';
 import { ParseDelegationResultJson, ParsedDelegationArtifact, FormatToolName } from './delegation-result-parser';
@@ -523,6 +525,14 @@ export class RealtimeSessionRuntime {
    */
   public readonly VideoSources$: Observable<readonly VideoSourceState[]> = this._videoSources$.asObservable();
 
+  private readonly _captures$ = new BehaviorSubject<RealtimeCaptureStates>(REALTIME_CAPTURES_OFF);
+  /**
+   * The user's camera and screen share: off, starting, on (with the stream to show the user) or failed (with the
+   * reason). Both off outside a session. Start and stop them with {@link StartCamera}, {@link StartScreenShare},
+   * {@link StopCamera} and {@link StopScreenShare}; while one is on, it is also a source on {@link VideoSources$}.
+   */
+  public readonly Captures$: Observable<RealtimeCaptureStates> = this._captures$.asObservable();
+
   /**
    * Channel requests to enter / leave the FOCUS layout (see
    * {@link RealtimeChannelFocusEvent}). Fired when a plugin calls its host context's
@@ -647,6 +657,9 @@ export class RealtimeSessionRuntime {
   private localMedia: ILocalMediaController | null = null;
   /** Follows the controller's microphone, so a swapped-in track reaches the driver and the recorder. */
   private localMediaSubscription: Subscription | null = null;
+  /** The live session's camera and screen share; created once the client is connected. */
+  private captures: RealtimeCaptures | null = null;
+  private capturesSubscription: Subscription | null = null;
   private agentSessionId: string | null = null;
   /**
    * The application the active session runs in (sources the server-side app config cascade +
@@ -1277,6 +1290,8 @@ export class RealtimeSessionRuntime {
         await this.unwindAbandonedStart(session, client);
         return;
       }
+      // Tracks are negotiated now, so a capture can tell whether the model takes video.
+      this.openCaptures(client);
 
       // Notify active channels that the session client is connected and tracks are established
       for (const channel of this._activeChannels$.value) {
@@ -1345,6 +1360,7 @@ export class RealtimeSessionRuntime {
     client: BaseRealtimeClient
   ): Promise<void> {
     console.warn('[RealtimeSession] Session was ended while starting — releasing the partial session.');
+    this.closeCaptures();
     this.closeLocalMedia();
     this.localStream?.getTracks().forEach(t => t.stop());
     this.localStream = null;
@@ -1420,6 +1436,64 @@ export class RealtimeSessionRuntime {
     this.localMediaSubscription = null;
     this.localMedia?.Dispose();
     this.localMedia = null;
+  }
+
+  /** Creates the session's camera and screen share and mirrors their state on {@link Captures$}. */
+  private openCaptures(client: BaseRealtimeClient): void {
+    this.closeCaptures();
+    const captures = new RealtimeCaptures({ Client: client, LocalMedia: this.localMedia, Host: this.mediaHost });
+    this.captures = captures;
+    this.capturesSubscription = captures.States$.subscribe((states) => this._captures$.next(states));
+  }
+
+  /** Stops the camera and screen share, if any, and reports both off. */
+  private closeCaptures(): void {
+    this.capturesSubscription?.unsubscribe();
+    this.capturesSubscription = null;
+    this.captures?.Dispose();
+    this.captures = null;
+    if (this._captures$.value !== REALTIME_CAPTURES_OFF) {
+      this._captures$.next(REALTIME_CAPTURES_OFF);
+    }
+  }
+
+  /** What a capture reports when there is no live session to show it to. */
+  private noSessionCapture(): RealtimeCaptureState {
+    return { Status: 'failed', Failure: 'no-session', Message: 'There is no call to share with.' };
+  }
+
+  /**
+   * Starts the user's camera and shows it to the agent. Call it from the user's click: it may ask for camera
+   * permission. Resolves with the camera's state; a failure (no session, a model that takes no video, a refused
+   * permission) is a state with a message, never a throw. While the camera is on, it is a source on
+   * {@link VideoSources$}, and it stops by itself if the device goes away.
+   *
+   * @param deviceId The camera to open; the system default when absent.
+   */
+  public async StartCamera(deviceId?: string): Promise<RealtimeCaptureState> {
+    return this.captures ? this.captures.Start('camera', { DeviceID: deviceId }) : this.noSessionCapture();
+  }
+
+  /** Stops the user's camera. Safe to call when it is off. */
+  public StopCamera(): void {
+    this.captures?.Stop('camera');
+  }
+
+  /**
+   * Asks the user for a screen, window or browser tab (or one panel of the page) and shows it to the agent. Call it
+   * from the user's click: the browser's picker needs one. Resolves with the share's state; a failure (no session,
+   * a model that takes no video, a closed picker, a host that cannot share) is a state with a message. The share
+   * also stops when the user ends it from the browser's own bar.
+   *
+   * @param options What the picker offers first, or the panel to share.
+   */
+  public async StartScreenShare(options?: DisplayCaptureOptions): Promise<RealtimeCaptureState> {
+    return this.captures ? this.captures.Start('screen', options) : this.noSessionCapture();
+  }
+
+  /** Stops the user's screen share. Safe to call when nothing is shared. */
+  public StopScreenShare(): void {
+    this.captures?.Stop('screen');
   }
 
   /**
@@ -3835,6 +3909,8 @@ export class RealtimeSessionRuntime {
     this.flushAllChannelSaves();
     this.disposeChannels();
 
+    // The camera and screen share go first: the camera runs on the controller closed next.
+    this.closeCaptures();
     // Defensive: stop the mic even when Connect never ran (the client also stops the
     // tracks it was handed — track.stop() is idempotent).
     this.closeLocalMedia();

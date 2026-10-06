@@ -63,6 +63,13 @@ export {
     type RealtimeSessionVerificationSnapshot,
 } from './session/session-event-hub';
 export { ClientSessionDeadline } from './session/client-session-deadline';
+export {
+    REALTIME_CAPTURES_OFF,
+    type RealtimeCaptureFailure,
+    type RealtimeCaptureKind,
+    type RealtimeCaptureState,
+    type RealtimeCaptureStates,
+} from './session/realtime-captures';
 
 // Channel scoping inputs a host supplies at session start.
 export {

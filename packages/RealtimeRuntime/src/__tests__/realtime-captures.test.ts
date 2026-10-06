@@ -1,0 +1,181 @@
+import { describe, it, expect } from 'vitest';
+import { CHANNEL_INBOUND_VIDEO_TRACK, type RealtimeTrackDescriptor } from '@memberjunction/ai';
+import { VideoSourceArbiter, type SampledFrame } from '@memberjunction/ai-realtime-client';
+import { RealtimeCaptures, type RealtimeFrameSamplerFactory } from '../session/realtime-captures';
+import type { IRealtimeMediaHost } from '../hosts/IRealtimeMediaHost';
+import { FakeController, FakeShare, ShareHost, VideoClient, stream } from './capture-test-helpers';
+
+/** A sampler that takes no frames by itself; the test pushes them. */
+interface FakeSampler {
+    Stream: MediaStream;
+    Rate: number;
+    Push(frame: string): void;
+    Running: boolean;
+}
+
+function harness(takesVideo = true, requested: RealtimeTrackDescriptor[] = []) {
+    const client = new VideoClient();
+    client.Negotiate(takesVideo, requested);
+    const controller = new FakeController();
+    const host = new ShareHost();
+    const samplers: FakeSampler[] = [];
+    const createSampler: RealtimeFrameSamplerFactory = (s, rate, onFrame) => {
+        const sampler: FakeSampler = {
+            Stream: s,
+            Rate: rate,
+            Running: false,
+            Push: (data) => onFrame({ Data: data, MimeType: 'image/jpeg', Width: 1, Height: 1, TimestampMs: Date.now() } satisfies SampledFrame),
+        };
+        samplers.push(sampler);
+        return {
+            Start: () => (sampler.Running = true),
+            Stop: () => {
+                sampler.Running = false;
+            },
+        };
+    };
+    const captures = new RealtimeCaptures({ Client: client, LocalMedia: controller, Host: host, CreateSampler: createSampler });
+    const sources = () => VideoSourceArbiter.ForSink(client).GetSources().map((s) => ({ SourceID: s.SourceID, Label: s.Label, Kind: s.Kind }));
+    return { client, controller, host, samplers, captures, sources };
+}
+
+describe('RealtimeCaptures', () => {
+    it('starts the camera on a model that takes video: adds the track, opens the camera, shows it at the model rate', async () => {
+        const { client, controller, samplers, captures, sources } = harness();
+        const state = await captures.Start('camera', { DeviceID: 'cam-2' });
+        expect(state).toEqual({ Status: 'on', Stream: controller.CameraStream });
+        expect(controller.StartCalls).toEqual([['camera', 'cam-2']]);
+        expect(client.IsTrackEstablished('video', 'inbound')).toBe(true);
+        expect(sources()).toEqual([{ SourceID: 'capture:camera', Label: 'Camera', Kind: 'camera' }]);
+        expect(samplers[0]).toMatchObject({ Stream: controller.CameraStream, Rate: 2, Running: true });
+        samplers[0].Push('frame-1');
+        expect(client.Frames).toEqual(['frame-1']);
+    });
+
+    it('refuses on a model that takes no video, before asking for the camera', async () => {
+        const { controller, captures } = harness(false);
+        const state = await captures.Start('camera');
+        expect(state).toMatchObject({ Status: 'failed', Failure: 'unsupported' });
+        expect(state.Message).toMatch(/does not support inbound video/);
+        expect(controller.StartCalls).toEqual([]);
+    });
+
+    it('stopping takes back everything it added: the frames, the source, the camera and the track', async () => {
+        const { client, controller, samplers, captures, sources } = harness();
+        await captures.Start('camera');
+        captures.Stop('camera');
+        expect(captures.States.Camera).toEqual({ Status: 'off' });
+        expect(samplers[0].Running).toBe(false);
+        expect(sources()).toEqual([]);
+        expect(controller.StopCalls).toEqual(['camera']);
+        expect(client.IsTrackEstablished('video', 'inbound')).toBe(false);
+    });
+
+    it('uses the video track the session was minted with, and leaves it there', async () => {
+        const { client, captures } = harness(true, [{ ...CHANNEL_INBOUND_VIDEO_TRACK }]);
+        const before = client.AllTracks.map((t) => t.TrackID);
+        await captures.Start('camera');
+        captures.Stop('camera');
+        expect(client.AllTracks.map((t) => t.TrackID)).toEqual(before);
+        expect(client.IsTrackEstablished('video', 'inbound')).toBe(true);
+    });
+
+    it('keeps the track it added while the other capture is still on', async () => {
+        const { client, captures } = harness();
+        await captures.Start('camera');
+        await captures.Start('screen');
+        captures.Stop('camera');
+        expect(client.IsTrackEstablished('video', 'inbound')).toBe(true);
+        captures.Stop('screen');
+        expect(client.IsTrackEstablished('video', 'inbound')).toBe(false);
+    });
+
+    it('reports a refused camera with its reason, and gives the track back', async () => {
+        const { client, controller, captures } = harness();
+        controller.NextFailure = { Reason: 'denied', Message: 'Camera permission was denied.' };
+        const state = await captures.Start('camera');
+        expect(state).toEqual({ Status: 'failed', Failure: 'denied', Message: 'Camera permission was denied.' });
+        expect(client.IsTrackEstablished('video', 'inbound')).toBe(false);
+    });
+
+    it('stops when the camera goes away', async () => {
+        const { client, controller, captures, sources } = harness();
+        await captures.Start('camera');
+        controller.LoseCamera();
+        expect(captures.States.Camera).toEqual({ Status: 'off' });
+        expect(sources()).toEqual([]);
+        expect(client.IsTrackEstablished('video', 'inbound')).toBe(false);
+    });
+
+    it('a second start while on returns the state without opening again', async () => {
+        const { controller, captures } = harness();
+        await captures.Start('camera');
+        const again = await captures.Start('camera');
+        expect(again.Status).toBe('on');
+        expect(controller.StartCalls).toHaveLength(1);
+    });
+
+    it('a stop while the camera opens lets go of it once it has opened', async () => {
+        const { client, controller, captures } = harness();
+        controller.HoldStart();
+        const starting = captures.Start('camera');
+        expect(captures.States.Camera.Status).toBe('starting');
+        captures.Stop('camera');
+        controller.Release();
+        expect(await starting).toEqual({ Status: 'off' });
+        expect(controller.StopCalls).toEqual(['camera']);
+        expect(client.IsTrackEstablished('video', 'inbound')).toBe(false);
+    });
+
+    it('shares a screen with the picker hint, reports what is shared, and stops when the browser ends it', async () => {
+        const { host, captures, sources } = harness();
+        const share = new FakeShare('window');
+        host.Next = { Status: 'started', Capture: share };
+        const state = await captures.Start('screen', { PreferredSurface: 'window' });
+        expect(host.Requests).toEqual([{ PreferredSurface: 'window' }]);
+        expect(state).toEqual({ Status: 'on', Stream: share.Stream, Surface: 'window' });
+        expect(sources()).toEqual([{ SourceID: 'capture:screen', Label: 'Shared screen', Kind: 'screen' }]);
+        share.EndFromBrowser();
+        expect(captures.States.Screen).toEqual({ Status: 'off' });
+        expect(sources()).toEqual([]);
+    });
+
+    it('stops the share itself when the user stops it in the app', async () => {
+        const { host, captures } = harness();
+        const share = new FakeShare('screen');
+        host.Next = { Status: 'started', Capture: share };
+        await captures.Start('screen');
+        captures.Stop('screen');
+        expect(share.Stopped).toBe(true);
+    });
+
+    it('reports a closed picker as cancelled, and a refused one with its reason', async () => {
+        const { host, captures } = harness();
+        host.Next = { Status: 'cancelled' };
+        expect(await captures.Start('screen')).toMatchObject({ Status: 'failed', Failure: 'cancelled' });
+        host.Next = { Status: 'failed', Reason: 'denied', Message: 'Screen sharing is blocked.' };
+        expect(await captures.Start('screen')).toEqual({ Status: 'failed', Failure: 'denied', Message: 'Screen sharing is blocked.' });
+    });
+
+    it('cannot capture what the host cannot open', async () => {
+        const client = new VideoClient();
+        client.Negotiate(true);
+        const host: IRealtimeMediaHost = { AcquireMicrophone: async () => stream('mic') };
+        const captures = new RealtimeCaptures({ Client: client, LocalMedia: null, Host: host });
+        expect(await captures.Start('camera')).toMatchObject({ Status: 'failed', Failure: 'unsupported', Message: 'This app cannot open a camera.' });
+        expect(await captures.Start('screen')).toMatchObject({ Status: 'failed', Failure: 'unsupported', Message: 'This app cannot share a screen.' });
+        expect(client.IsTrackEstablished('video', 'inbound')).toBe(false);
+    });
+
+    it('Dispose stops both captures and completes', async () => {
+        const { client, captures } = harness();
+        await captures.Start('camera');
+        await captures.Start('screen');
+        let completed = false;
+        captures.States$.subscribe({ complete: () => (completed = true) });
+        captures.Dispose();
+        expect(completed).toBe(true);
+        expect(captures.States).toEqual({ Camera: { Status: 'off' }, Screen: { Status: 'off' } });
+        expect(client.IsTrackEstablished('video', 'inbound')).toBe(false);
+    });
+});

@@ -2,7 +2,13 @@ import {
     IRealtimeMediaHost,
     IRealtimeSessionRecorder,
 } from '@memberjunction/realtime-runtime';
-import { type ILocalMediaController, LocalMediaController } from '@memberjunction/ai-realtime-client/media';
+import {
+    type DisplayCaptureOptions,
+    type DisplayCaptureResult,
+    type ILocalMediaController,
+    LocalMediaController,
+    RequestDisplayCapture,
+} from '@memberjunction/ai-realtime-client/media';
 import { RealtimeAudioRecorder } from './realtime-audio-recorder';
 
 /**
@@ -29,6 +35,14 @@ export class BrowserRealtimeMediaHost implements IRealtimeMediaHost {
      */
     public CreateLocalMediaController(): ILocalMediaController {
         return new LocalMediaController();
+    }
+
+    /**
+     * Opens the browser's share picker for the session's screen share: a screen, window or tab, or one panel of
+     * this page where the browser can narrow a capture to it.
+     */
+    public RequestDisplayCapture(options?: DisplayCaptureOptions): Promise<DisplayCaptureResult> {
+        return RequestDisplayCapture(options);
     }
 
     /**

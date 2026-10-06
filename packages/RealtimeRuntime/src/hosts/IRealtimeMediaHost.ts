@@ -35,7 +35,7 @@
  * client driver, whose `Connect()` already takes exactly this type.
  */
 
-import type { ILocalMediaController } from '@memberjunction/ai-realtime-client';
+import type { DisplayCaptureOptions, DisplayCaptureResult, ILocalMediaController } from '@memberjunction/ai-realtime-client';
 
 /**
  * The platform capabilities the realtime session runtime needs but cannot provide itself.
@@ -84,6 +84,15 @@ export interface IRealtimeMediaHost {
      * runtime disposes the controller at teardown. Hosts without one keep {@link AcquireMicrophone}.
      */
     CreateLocalMediaController?(): ILocalMediaController;
+
+    /**
+     * OPTIONAL: asks the user for a screen, window or browser tab to share (or one panel of the page), for the
+     * session's screen share. Always resolves: a cancelled picker or a refusal is a result.
+     *
+     * A browser host passes it to `RequestDisplayCapture` from `@memberjunction/ai-realtime-client/media`. A host
+     * without it cannot share a screen; the runtime reports that instead of asking.
+     */
+    RequestDisplayCapture?(options?: DisplayCaptureOptions): Promise<DisplayCaptureResult>;
 
     /**
      * OPTIONAL: creates a recorder for this session's audio, when the platform can record and the
