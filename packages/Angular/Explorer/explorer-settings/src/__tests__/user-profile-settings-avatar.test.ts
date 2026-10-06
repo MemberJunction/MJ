@@ -76,9 +76,9 @@ describe('UserProfileSettingsComponent avatar persistence', () => {
   });
 
   it.each([
-    ['upload', (c: UserProfileSettingsComponent) => (c.UploadedImageBase64 = DATA_URI), [DATA_URI, null]],
-    ['url', (c: UserProfileSettingsComponent) => (c.ImageUrlInput = 'https://example.com/me.png'), ['https://example.com/me.png', null]],
-    ['icon', (c: UserProfileSettingsComponent) => (c.SelectedIconClass = 'fa-solid fa-user'), [null, 'fa-solid fa-user']],
+    ['upload', (c: UserProfileSettingsComponent): void => { c.UploadedImageBase64 = DATA_URI; }, [DATA_URI, null]],
+    ['url', (c: UserProfileSettingsComponent): void => { c.ImageUrlInput = 'https://example.com/me.png'; }, ['https://example.com/me.png', null]],
+    ['icon', (c: UserProfileSettingsComponent): void => { c.SelectedIconClass = 'fa-solid fa-user'; }, [null, 'fa-solid fa-user']],
   ] as const)('save() on the %s tab calls the mutation, not Save()', async (tab, arrange, expected) => {
     const { component, avatarService, user } = build({ Success: true });
     component.SelectedTab = tab;
