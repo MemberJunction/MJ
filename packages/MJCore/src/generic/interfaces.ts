@@ -1223,11 +1223,6 @@ export type RunViewResult<T = any> = {
     Unsubscribe?: () => void;
 }
 
-/**
- * Interface for providers that execute views.
- * Supports parameterized view execution with filtering and pagination.
- * Views are the primary way to query entity data in MemberJunction.
- */
 /** What the database reports for one view; see {@link IRunViewProvider.GetRunViewsDatabaseStatus}. */
 export interface RunViewDatabaseStatus {
     Success: boolean;
@@ -1238,6 +1233,11 @@ export interface RunViewDatabaseStatus {
     ErrorMessage?: string;
 }
 
+/**
+ * Interface for providers that execute views.
+ * Supports parameterized view execution with filtering and pagination.
+ * Views are the primary way to query entity data in MemberJunction.
+ */
 export interface IRunViewProvider {
     Config(configData: ProviderConfigDataBase): Promise<boolean>
 

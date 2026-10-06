@@ -76,15 +76,15 @@ export function CreateSharedCacheFromEnvironment(settings: CacheSettingsConfig |
     });
 }
 
-/** `LocalCacheManager` settings from `cacheSettings` in mj.config.cjs. */
 /**
- * The warm-up lease MJAPI hands to `StartupManager`, in milliseconds (plan — it used to
- * be a constant no host could change).
+ * The warm-up lease MJAPI hands to `StartupManager`, in milliseconds, from
+ * `cacheSettings.startupWarmupLeaseSeconds` (default 30).
  */
 export function WarmupLeaseMsFromSettings(settings: CacheSettingsConfig | undefined): number {
     return (settings?.startupWarmupLeaseSeconds ?? 30) * 1000;
 }
 
+/** `LocalCacheManager` settings from `cacheSettings` in mj.config.cjs. */
 export function CacheManagerConfigFromSettings(settings: CacheSettingsConfig | undefined): Partial<LocalCacheManagerConfig> {
     return {
         maxSizeBytes: (settings?.maxMemoryMB ?? 150) * 1024 * 1024,
@@ -280,8 +280,9 @@ export async function WirePushStatusFanOut(redis: RedisLocalStorageProvider): Pr
                     message: payload.message,
                     SourceServerId: payload.SourceServerId,
                 });
-            } catch {
+            } catch (err) {
                 // A malformed message on a shared channel must not take down the subscriber.
+                LogError('Error processing push-status fan-out message', undefined, err);
             }
         });
 

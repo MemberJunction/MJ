@@ -206,22 +206,6 @@ const DEFAULT_TTL_SECONDS = 3600;
 const SCAN_BATCH = 500;
 
 /**
- * Adds a key to an index-group set and keeps the set alive at least as long as its longest-lived
- * member, atomically.
- *
- * KEYS[1] = the group set, ARGV[1] = the member key, ARGV[2] = the member's TTL in seconds (0 = none).
- *
- * - A member stored without expiry makes the set persistent.
- * - A member with a TTL extends the set's expiry when the set would otherwise expire first.
- * - A set that is persistent and already holds other members keeps no expiry: every TTL write
- *   gives the set an expiry, so a persistent set with more than one member holds a persistent
- *   member.
- *
- * Only `SADD`/`TTL`/`SCARD`/`EXPIRE`/`PERSIST` — no Redis 7-only flags, so it runs on the 6.x
- * tiers that hosted Redis services still offer.
- * @internal
- */
-/**
  * Prunes one index group and returns its live members, atomically.
  *
  * Every step — reading the set, testing each member, removing the dead ones, dropping a set that
@@ -260,6 +244,22 @@ end
 return alive
 `;
 
+/**
+ * Adds a key to an index-group set and keeps the set alive at least as long as its longest-lived
+ * member, atomically.
+ *
+ * KEYS[1] = the group set, ARGV[1] = the member key, ARGV[2] = the member's TTL in seconds (0 = none).
+ *
+ * - A member stored without expiry makes the set persistent.
+ * - A member with a TTL extends the set's expiry when the set would otherwise expire first.
+ * - A set that is persistent and already holds other members keeps no expiry: every TTL write
+ *   gives the set an expiry, so a persistent set with more than one member holds a persistent
+ *   member.
+ *
+ * Only `SADD`/`TTL`/`SCARD`/`EXPIRE`/`PERSIST` — no Redis 7-only flags, so it runs on the 6.x
+ * tiers that hosted Redis services still offer.
+ * @internal
+ */
 const ADD_TO_GROUP_SCRIPT = `
 redis.call('SADD', KEYS[1], ARGV[1])
 local ttl = tonumber(ARGV[2])

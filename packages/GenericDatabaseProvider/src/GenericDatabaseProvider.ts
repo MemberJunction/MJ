@@ -3225,11 +3225,6 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /**
-     * Executes cache status checks for multiple views.
-     * Default: parallel individual queries (works on all platforms).
-     * SQL Server overrides to use ExecuteSQLBatch for multi-result-set efficiency.
-     */
-    /**
      * The freshness probe for one view: a row count, plus the newest `__mj_UpdatedAt` **when the
      * entity has that column**. Selecting it unconditionally made the probe fail outright for an
      * entity whose view does not carry it, instead of comparing by count alone the way
@@ -3246,6 +3241,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         return `SELECT ${count}, MAX(${this.QuoteIdentifier('__mj_UpdatedAt')}) AS ${this.QuoteIdentifier('MaxUpdatedAt')} ${from}`;
     }
 
+    /**
+     * Executes cache status checks for multiple views.
+     * Default: parallel individual queries (works on all platforms).
+     * SQL Server overrides to use ExecuteSQLBatch for multi-result-set efficiency.
+     */
     protected async getBatchedServerCacheStatus(
         items: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; whereSQL: string }>,
         contextUser?: UserInfo,

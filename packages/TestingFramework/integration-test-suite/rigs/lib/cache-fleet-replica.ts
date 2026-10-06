@@ -62,8 +62,7 @@ interface Counters {
     externalCacheChanges: { count: number; totalMs: number; maxMs: number };
     /** AIEngineBase.AdditionalLoading invocations (derived-state rebuilds) */
     rebuilds: { count: number; totalMs: number; maxMs: number; samplesMs: number[] };
-    /** SQLServerDataProvider.ExecuteSQL / ExecuteSQLBatch round trips */
-    /** readerCalls: round trips made by the cli-ops reader loop (kept out of the others) */
+    /** SQLServerDataProvider.ExecuteSQL / ExecuteSQLBatch round trips; readerCalls are the cli-ops reader loop's, kept out of the others */
     dbCalls: { executeSQL: number; executeSQLBatch: number; batchStatements: number; readerCalls: number };
     /** BaseEngine.SweepAgainstDatabase runs on AIEngineBase (plan 3.1) and the properties they reloaded */
     sweeps: { count: number; reloads: number };

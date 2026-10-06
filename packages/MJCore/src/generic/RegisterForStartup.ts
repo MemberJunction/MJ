@@ -658,13 +658,6 @@ export class StartupManager extends BaseSingleton<StartupManager> {
     }
 
     /**
-     * Waits for this server's turn to warm its engines when other servers share the cache (plan:
-     * cold-start herd). The first server loads from the database and fills the shared cache; the
-     * ones that start alongside it wait, then load from the warm cache. On a private cache the turn
-     * is granted at once. A turn that is not granted within `leaseMs` is taken anyway.
-     * @returns True when this server holds the turn and must release it.
-     */
-    /**
      * Keeps this server's warm-up turn alive while its engines load, re-claiming the lease every
      * third of its TTL. Without it a slow cold-database load loses the turn mid-flight and every
      * waiting server starts loading too.
@@ -686,6 +679,13 @@ export class StartupManager extends BaseSingleton<StartupManager> {
      */
     public static WarmupWaitLeaseMultiple: number = 4;
 
+    /**
+     * Waits for this server's turn to warm its engines when other servers share the cache (plan:
+     * cold-start herd). The first server loads from the database and fills the shared cache; the
+     * ones that start alongside it wait, then load from the warm cache. On a private cache the turn
+     * is granted at once. A turn that is not granted within `leaseMs` is taken anyway.
+     * @returns True when this server holds the turn and must release it.
+     */
     private async takeWarmupTurn(leaseMs: number, engineCount: number): Promise<boolean> {
         if (leaseMs <= 0 || engineCount === 0) {
             return false;

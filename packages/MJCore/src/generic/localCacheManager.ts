@@ -2977,17 +2977,6 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     }
 
     /**
-     * Upserts a single entity in a cached RunView result.
-     * Used by BaseEngine for immediate cache sync when an entity is saved.
-     * If the entity exists (by primary key), it is replaced; otherwise it is added.
-     *
-     * Serializes async operations on the same cache fingerprint to prevent
-     * lost-update races. When multiple entity events fire simultaneously
-     * (e.g., 3 deletes from a TransactionGroup), each read-modify-write cycle
-     * must complete before the next one starts for the same fingerprint.
-     * Different fingerprints run concurrently with no contention.
-     */
-    /**
      * Runs an in-place slot rewrite under {@link withFingerprintLock}. When the lock itself fails
      * (a shared lock another server held too long), reports the rewrite as not done rather than
      * throwing, so the caller's fallback — invalidate the slot, making every server reload —
@@ -3041,9 +3030,19 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     }
 
     /**
+     * Upserts a single entity in a cached RunView result.
+     * Used by BaseEngine for immediate cache sync when an entity is saved.
+     * If the entity exists (by primary key), it is replaced; otherwise it is added.
+     *
+     * Serializes async operations on the same cache fingerprint to prevent
+     * lost-update races. When multiple entity events fire simultaneously
+     * (e.g., 3 deletes from a TransactionGroup), each read-modify-write cycle
+     * must complete before the next one starts for the same fingerprint.
+     * Different fingerprints run concurrently with no contention.
+     *
      * @param fingerprint - The cache fingerprint to update
      * @param entityData - The entity data as a plain object (use entity.GetAll())
-     * @param primaryKeyFieldName - Name of the primary key field
+     * @param key - The record's primary key
      * @param newMaxUpdatedAt - New maxUpdatedAt timestamp (from entity's __mj_UpdatedAt)
      * @returns true if cache was updated, false if cache not found or update failed
      */

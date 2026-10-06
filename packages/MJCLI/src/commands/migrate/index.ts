@@ -263,8 +263,7 @@ export default class Migrate extends Command {
    * Running servers never hear about a schema or data change made here, and a server-side cache
    * hit is never re-validated, so without this they keep serving pre-migration rows (#4083).
    * No-op without REDIS_URL. A failed clear is reported, not fatal: the migration succeeded.
-   */
-  /**
+   *
    * @param wroteSomething - False when the run changed nothing (no migrations applied), in which
    *   case no server can be holding stale rows and the fleet is left alone.
    */
