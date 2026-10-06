@@ -2149,6 +2149,16 @@ export class AIPromptRunner extends BaseModelRunner {
         params
       );
 
+      // No key under a scope that rules out the environment must not reach a driver: the OpenAI and
+      // Anthropic SDKs read OPENAI_API_KEY / ANTHROPIC_API_KEY themselves when handed none. Selection
+      // and failover already skip unkeyed candidates; parallel tasks are planned without the scope.
+      if (!apiKey?.trim() && !CredentialScopeAllows(params.CredentialScope, 'Environment')) {
+        throw new Error(
+          `No credentials found for driver class '${driverClass}': the credential scope is ${params.CredentialScope}, ` +
+          `and this run carries no API key for it.`
+        );
+      }
+
       // Create LLM instance with vendor-specific driver class
       llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, driverClass, apiKey);
 
