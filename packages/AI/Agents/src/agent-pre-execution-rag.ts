@@ -33,6 +33,7 @@ import {
     SearchContext,
     FusionWeightsByProvider,
     SearchFusion,
+    GetSearchScopePermissionResolver,
 } from '@memberjunction/search-engine';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { ChatMessage } from '@memberjunction/ai';
@@ -178,6 +179,10 @@ export class AgentPreExecutionRAG {
             LogStatus(`AgentPreExecutionRAG: Scope "${row.SearchScopeID}" not active — skipping.`);
             return null;
         }
+        // Gate before rendering the query: a denied scope should cost nothing, and the Forbidden row
+        // logs what the person asked rather than a template rendering they never got.
+        if (!(await this.scopePermitted(scope, params))) return null;
+
         const query = await this.resolveQuery(row, scope, params);
         if (!query || !query.trim()) return null;
 
@@ -223,6 +228,58 @@ export class AgentPreExecutionRAG {
             LogError(`AgentPreExecutionRAG: Exception searching scope "${scope.Name}": ${msg}`);
             return null;
         }
+    }
+
+    /**
+     * The gate the other scoped search paths already apply — the Scoped Search action and the GraphQL
+     * resolver both refuse a scope the acting user may not SEARCH — applied here too. An agent's scope
+     * ASSIGNMENT (`MJ: AI Agent Search Scopes`) says which scopes the agent reads from; it is not a
+     * grant to the person asking. Without this, pre-execution RAG searched every assigned scope for
+     * every user before the first tool call: the one scoped search path that never asked.
+     *
+     * The bar is the same as the action's: the permission must resolve as allowed AND above `Read`.
+     * `Read` lets a person see a scope in a picker; it does not let them run a search in it, and the
+     * action and resolver both refuse it (`scoped-search.action.ts`, `SearchKnowledgeResolver.ts`).
+     *
+     * A denied scope is skipped (the others still run) and the attempt is written to the search log as
+     * Forbidden, where the other denials land. A resolver failure is reported as denied, for this scope
+     * only — the same posture as `ExplainScope`'s entitlement step — rather than aborting every scope.
+     *
+     * No skill principal is passed: skills activate during the run, after this phase. Follow-up: a
+     * persisted `MJ: Conversation Skills` row is active before the run and could veto here as it does
+     * in the action; when exactly one is active it should become the principal, as the action does.
+     */
+    private async scopePermitted(scope: MJSearchScopeEntity, params: AgentPreExecutionRAGParams): Promise<boolean> {
+        const startTime = Date.now();
+        let reason: string;
+        try {
+            const verdict = await GetSearchScopePermissionResolver().ResolveEffectivePermission({
+                User: params.contextUser,
+                SearchScopeID: scope.ID,
+                Agent: params.agent,
+                PrimaryScopeRecordID: params.primaryScopeRecordId ?? null,
+                ContextUser: params.contextUser,
+            });
+            if (verdict.Allowed && verdict.Level !== 'Read') return true;
+            reason = verdict.Level === 'Read' && verdict.Allowed
+                ? `${verdict.Reason} — Read grants visibility of the scope, not the right to search it.`
+                : verdict.Reason;
+            LogStatus(`AgentPreExecutionRAG: scope "${scope.Name}" refused for the acting user — ${reason} (source=${verdict.Source}). Skipping it.`);
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            reason = `Entitlement could not be resolved, reported as denied: ${msg}`;
+            LogError(`AgentPreExecutionRAG: scope "${scope.Name}" — ${reason}`);
+        }
+        await SearchEngine.Instance.LogForbiddenSearch({
+            Query: params.lastUserMessage,
+            ScopeIDs: [scope.ID],
+            FailureReason: reason,
+            StartTime: startTime,
+            ContextUser: params.contextUser,
+            AIAgentID: params.agent.ID,
+            PrimaryScopeRecordID: params.primaryScopeRecordId ?? null,
+        });
+        return false;
     }
 
     /**
