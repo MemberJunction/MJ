@@ -100,7 +100,9 @@ export interface SearchParams {
     /**
      * Optional per-provider `topK` overfetch multiplier. Compensates for residual late
      * permission filtering by requesting more candidates from each provider than the caller
-     * strictly wants. The final result count is still bounded by `MaxResults`. Default: 2.
+     * strictly wants. The final result count is still bounded by `MaxResults`. When not set, the
+     * largest `permissionOverfetchFactor` declared by the resolved scopes' `ScopeConfig` applies, else
+     * the engine default (2). Whatever the source, the factor is clamped to 1–20.
      */
     PermissionOverfetchFactor?: number;
     /**

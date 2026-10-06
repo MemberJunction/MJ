@@ -111,7 +111,7 @@ Recognized keys:
 - `rrfK` — RRF smoothing constant (default 60).
 - `fusionWeights` — per-provider weights for cross-source RRF fusion within this scope.
 - `reRanker` — optional re-ranker stage (see [§6](#6-optional-re-ranker)).
-- `permissionOverfetchFactor` — multiplier on per-provider `topK` to compensate for residual permission filtering. Default 2.
+- `permissionOverfetchFactor` — multiplier on per-provider `topK` to compensate for residual permission filtering. Default 2; the largest factor across the resolved scopes applies (a scope that declares none counts as the default), clamped to 1–20. See [Overfetch factor tuning](#overfetch-factor-tuning).
 
 ---
 
@@ -239,7 +239,7 @@ No scope duplication needed.
 
 `effectiveTopK = userTopK * permissionOverfetchFactor` compensates for residual filtering. Default 2. Tune higher for corpora where permission sparsity is high (>50% of matches filtered).
 
-The factor is resolved per search, in this order: the caller's `SearchParams.PermissionOverfetchFactor`; else the **largest** `permissionOverfetchFactor` declared by any resolved scope's `ScopeConfig`; else the engine default (`SearchEngineConfig.DefaultPermissionOverfetchFactor`, 2). Whatever the source, the value is held to **1–20** (a value below 1 means no over-fetch; above 20 is clamped and logged, since one metadata edit would otherwise multiply every provider call for every caller of the scope). The largest wins across scopes because a lane trimmed heavily by late permission checks needs the extra candidates whichever scope it belongs to, and a larger factor only costs provider work. Declare it on the scope when its author knows the lanes are sparse after permissions — for example a scope whose hits are re-checked per participant of a shared conversation — so every caller doesn't have to know to pass it.
+The factor is resolved per search, in this order: the caller's `SearchParams.PermissionOverfetchFactor`; else the **largest** `permissionOverfetchFactor` declared by any resolved scope's `ScopeConfig`; else the engine default (`SearchEngineConfig.DefaultPermissionOverfetchFactor`, 2). Whatever the source, the value is held to **1–20** (a value below 1 means no over-fetch; above 20 is clamped and logged, since one metadata edit would otherwise multiply every provider call for every caller of the scope). The largest wins across scopes because a lane trimmed heavily by late permission checks needs the extra candidates whichever scope it belongs to; a scope that declares nothing counts as the default, so one scope's low factor never lowers a neighbour's. A larger factor never changes which results a caller gets (the final list is still trimmed to `MaxResults`), but it costs more than provider work: dedup, the content exclusion and the permission passes handle more candidates, a re-ranker is fed up to its `inputTopN` from a bigger pool, and `streamSearch`'s per-provider partial events draw from the larger pool (each event is capped to the caller's `MaxResults`). Declare it on the scope when its author knows the lanes are sparse after permissions — for example a scope whose hits are re-checked per participant of a shared conversation — so every caller doesn't have to know to pass it.
 
 ### Observability
 

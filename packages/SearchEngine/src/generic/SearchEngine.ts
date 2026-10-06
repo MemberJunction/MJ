@@ -101,8 +101,9 @@ export interface SearchEngineConfig {
     DefaultMaxResults?: number;
     /**
      * Default multiplier applied to per-provider `topK` to compensate for residual
-     * late permission filtering. Individual calls can override via
-     * `SearchParams.PermissionOverfetchFactor`. Default: 2.
+     * late permission filtering. A scope's `ScopeConfig.permissionOverfetchFactor` or a call's
+     * `SearchParams.PermissionOverfetchFactor` takes precedence. Clamped to 1–20 (logged once, at
+     * configuration); a non-finite value falls back to 2. Default: 2.
      */
     DefaultPermissionOverfetchFactor?: number;
 }
@@ -218,6 +219,13 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
     /** Maximum cached entries across all users. LRU-evicted on overflow. */
     private static readonly CACHE_MAX_ENTRIES = 500;
 
+    /**
+     * Ceiling on the per-provider over-fetch multiplier, whatever its source (caller, scope metadata or
+     * the engine default). Above it a single metadata edit would multiply every provider call for every
+     * caller of the scope, and vector providers bill per candidate.
+     */
+    private static readonly MAX_OVERFETCH_FACTOR = 20;
+
     private _cache: Map<string, { result: SearchResult; expires: number }> = new Map();
 
     private _dimensionResolver = new ScopeDimensionResolver();
@@ -262,7 +270,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         // `??` passes NaN/Infinity through; a non-finite default would have become the provider topK.
         const configuredDefault = config.DefaultPermissionOverfetchFactor;
         this._defaultOverfetchFactor = typeof configuredDefault === 'number' && Number.isFinite(configuredDefault)
-            ? Math.max(1, configuredDefault)
+            ? this.clampOverfetchFactor(configuredDefault, 'the engine default')
             : 2;
         this._providerEntries = [];
 
@@ -376,8 +384,6 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             const resolvedScopes = this.resolveScopes(params.ScopeIDs);
             const isUnconstrained = resolvedScopes.length === 0 || resolvedScopes.some(s => s.Scope.IsGlobal);
 
-            const overfetchFactor = this.ResolvePermissionOverfetchFactor(params, resolvedScopes);
-            const providerTopK = Math.max(topK, Math.ceil(topK * overfetchFactor));
 
             // ──────────────────────────────────────────────────────────
             // Cache lookup (next PR #2532). Skip preview searches — they're already
@@ -397,6 +403,15 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                 if (hit) this._cache.delete(cacheKey); // expired
             }
 
+            // Resolved after the cache lookup, so a cache hit never pays for scope-config parsing or logs a clamp.
+            const overfetchFactor = this.ResolvePermissionOverfetchFactor(params, resolvedScopes);
+            const providerTopK = Math.max(topK, Math.ceil(topK * overfetchFactor));
+            // Partial (per-provider) events go out before any permission pass, so the over-fetch factor
+            // must not multiply what a stream client sees: cap each event to the caller's own topK.
+            const partialEvents: OnProviderResolved | undefined = onProviderResolved
+                ? (ev) => onProviderResolved({ ...ev, results: ev.results.slice(0, topK) })
+                : undefined;
+
             // ──────────────────────────────────────────────────────────
             // Execute providers — either unscoped (original path) or per-scope
             // ──────────────────────────────────────────────────────────
@@ -414,7 +429,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                     contextUser,
                     isPreview,
                     undefined,
-                    onProviderResolved,
+                    partialEvents,
                 );
                 sourceCounts = this.countSources(labeledLists);
                 const defaultFusionWeights = params.FusionWeightsOverride;
@@ -432,7 +447,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                         params.SearchContext,
                         params.FusionWeightsOverride,
                         this.principalsFrom(params),
-                        onProviderResolved,
+                        partialEvents,
                     )
                 ));
 
@@ -1680,24 +1695,29 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
 
     /**
      * The per-provider over-fetch multiplier for this search, in priority order: the caller's
-     * `SearchParams.PermissionOverfetchFactor`; else the **largest** `permissionOverfetchFactor` any
-     * resolved scope declares in its `ScopeConfig`; else the engine default. Never below 1.
+     * `SearchParams.PermissionOverfetchFactor`; else the **largest** of each resolved scope's declared
+     * `ScopeConfig.permissionOverfetchFactor` (a scope that declares none counts as the engine default);
+     * else the engine default. Clamped to `[1, MAX_OVERFETCH_FACTOR]`.
      *
      * The largest wins across scopes, not the first: over-fetch exists to compensate for late
      * permission filtering, and a lane trimmed heavily by it needs the extra candidates whichever
-     * scope it belongs to — a larger factor only costs provider work, never correctness. This is also
-     * why a scope may declare it at all: the scope's author knows how sparse its lanes are after
-     * permissions, and every caller shouldn't have to.
+     * scope it belongs to. A larger factor never changes which results the caller gets (the final
+     * list is still trimmed to `MaxResults`), but it does cost more: every provider returns more
+     * candidates, dedup, the content exclusion and the permission passes do more work, a re-ranker is
+     * fed up to its `inputTopN` from a bigger pool, and `streamSearch`'s per-provider partial events
+     * (capped to the caller's `MaxResults`) draw from it. This is why a scope may declare it at all:
+     * the scope's author knows how sparse its lanes are after permissions, and every caller shouldn't
+     * have to.
      */
     protected ResolvePermissionOverfetchFactor(params: SearchParams, resolvedScopes: ScopeBundle[]): number {
         if (typeof params.PermissionOverfetchFactor === 'number' && Number.isFinite(params.PermissionOverfetchFactor)) {
             return this.clampOverfetchFactor(params.PermissionOverfetchFactor, 'the caller');
         }
-        const declared = resolvedScopes
-            .map(bundle => this.scopeOverfetchFactor(bundle.Scope.ScopeConfig))
-            .filter((factor): factor is number => factor !== undefined);
-        if (declared.length > 0) return this.clampOverfetchFactor(Math.max(...declared), 'a scope');
-        return this.clampOverfetchFactor(this._defaultOverfetchFactor, 'the engine default');
+        // A scope that declares nothing counts as the default, so one scope's low factor never pulls
+        // down a neighbour that was happy with the default (the max is a floor, never a ceiling).
+        const factors = resolvedScopes.map(bundle => this.scopeOverfetchFactor(bundle.Scope.ScopeConfig) ?? this._defaultOverfetchFactor);
+        if (factors.length > 0) return this.clampOverfetchFactor(Math.max(...factors), 'a scope');
+        return this._defaultOverfetchFactor;
     }
 
     /** A scope's declared `ScopeConfig.permissionOverfetchFactor`, when it is a finite number. Anything else is "not declared". */
@@ -1718,9 +1738,6 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         }
         return clamped;
     }
-
-    /** Ceiling on the per-provider over-fetch multiplier, whatever its source. */
-    private static readonly MAX_OVERFETCH_FACTOR = 20;
 
     private async runReRanker(
         query: string,
