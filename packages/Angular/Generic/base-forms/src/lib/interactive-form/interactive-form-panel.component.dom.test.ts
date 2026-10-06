@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import type { BaseEntity } from '@memberjunction/core';
-import { ReactBridgeService } from '@memberjunction/ng-react';
+import { ReactBridgeService, type MJReactComponent } from '@memberjunction/ng-react';
 import { By } from '@angular/platform-browser';
 import { renderComponentFixture, query, text } from '@memberjunction/ng-test-utils';
 import { InteractiveFormsEngine, type MJComponentEntity } from '@memberjunction/core-entities';
@@ -215,5 +215,24 @@ describe('InteractiveFormPanelComponent (DOM) — writing a parent field', () =>
     const before = f.componentInstance.HostProps;
     f.componentInstance.ngDoCheck();
     expect(f.componentInstance.HostProps).toBe(before);
+  });
+});
+
+/**
+ * A panel's Validate may be async. The host has to await it, or it reads a Promise as "no
+ * opinion" and lets an invalid record save.
+ */
+describe('InteractiveFormPanelComponent (DOM) — validating', () => {
+  it('awaits an async validator and reports its failure', async () => {
+    const f = render(contribution());
+    f.componentInstance.ReactComponent = {
+      hasMethod: () => true,
+      invokeMethod: () => Promise.resolve({ isValid: false, errors: ['x'] }),
+    } as unknown as MJReactComponent;
+
+    const result = await f.componentInstance.Validate();
+
+    expect(result.Success).toBe(false);
+    expect(result.Errors[0]).toMatchObject({ Source: 'skip:person-ltv', Message: 'x' });
   });
 });
