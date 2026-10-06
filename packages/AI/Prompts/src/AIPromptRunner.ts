@@ -4824,15 +4824,16 @@ export class AIPromptRunner {
    * The Error a failover attempt records for a caught value. A streaming call rejects with its failed
    * ChatResult (BaseLLM) rather than an Error, so its `.message` was undefined and every such failure
    * reached the prompt run and the agent run as "Unknown error". Keeps the driver's classification on
-   * it, which ErrorAnalyzer then honours; any other rejected value (a bare `{ status: 429 }`) is
-   * classified as itself before it is wrapped, so wrapping never loses what it said.
+   * it, which ErrorAnalyzer then honours. Any other rejected value is classified as itself, with its
+   * `errorMessage` read as the message ErrorAnalyzer looks for — so a bare `{ status: 429 }` stays a
+   * RateLimit and `{ errorMessage: 'Invalid API key provided' }` stays an Authentication error.
    */
   private asModelError(caught: Error | ChatResult): Error {
     if (caught instanceof Error) {
       return caught;
     }
     const wrapped: Error & { errorInfo?: AIErrorInfo } = new Error(caught?.errorMessage || caught?.statusText || 'Model execution failed');
-    wrapped.errorInfo = caught?.errorInfo ?? ErrorAnalyzer.analyzeError(caught);
+    wrapped.errorInfo = caught?.errorInfo ?? ErrorAnalyzer.analyzeError({ ...caught, message: caught?.errorMessage });
     return wrapped;
   }
 
