@@ -55,6 +55,10 @@ export class WorkingRecordCommitter {
         const entityObject = await this.load(record);
         const created = !record.Identity.IsPersisted;
         const written = await this.applyChangedFields(record, entityObject);
+        // Columns a stage set directly rather than proposed — a durable copy's FileID, a checksum
+        // computed from the text that was just read. Nothing competes for these on confidence, and
+        // without this they were silently dropped on every parent commit.
+        written.push(...this.applyColumns(record, entityObject));
 
         entityObject.Set(statusField, status);
         written.push(statusField);
@@ -254,6 +258,30 @@ export class WorkingRecordCommitter {
             return null;
         }
         return `ContentSourceID='${sourceID}' AND URL='${child.Identity.EphemeralID.replace(/'/g, "''")}'`;
+    }
+
+    /**
+     * Write the columns a stage set directly.
+     *
+     * Only columns the entity actually has are written, so a stage can set something meaningful for
+     * one entity without breaking a pipeline that runs it over another.
+     */
+    private applyColumns(record: WorkingRecord, entityObject: BaseEntity): string[] {
+        const columns = record.GetExtension<Record<string, unknown>>('Pipeline', 'columns');
+        if (!columns) {
+            return [];
+        }
+        const written: string[] = [];
+        for (const [column, value] of Object.entries(columns)) {
+            if (value === undefined || value === null) {
+                continue;
+            }
+            if (entityObject.Fields.some((f) => f.Name === column)) {
+                entityObject.Set(column, value);
+                written.push(column);
+            }
+        }
+        return written;
     }
 
     /** Load the existing row, or start a new one for a record Discover has only just produced. */

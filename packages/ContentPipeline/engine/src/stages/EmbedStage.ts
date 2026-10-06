@@ -29,6 +29,9 @@ import {
 /** The registered name. */
 export const EMBED_STAGE = 'Embed';
 
+/** The registered name of the Content Item variant. */
+export const EMBED_ITEM_STAGE = 'EmbedContentItem';
+
 /** Which operation a record needs. */
 type EmbedOperation = 'Full' | 'MetadataOnly';
 
@@ -38,10 +41,7 @@ type EmbedOperation = 'Full' | 'MetadataOnly';
  * Which operation a record gets is decided by **its own hydrated status**, never by anything in a
  * queued message — so a stale message cannot trigger the wrong one.
  */
-@RegisterClass(BasePipelineStage, EMBED_STAGE)
-export class EmbedStage extends BasePipelineStage {
-    public readonly Name = EMBED_STAGE;
-    public readonly Entity: WorkingRecordEntity = 'Content Item Chunk';
+export abstract class BaseEmbedStage extends BasePipelineStage {
     public readonly StatusField = 'EmbeddingStatus';
 
     public override get Declaration(): StageDeclaration {
@@ -66,7 +66,11 @@ export class EmbedStage extends BasePipelineStage {
         const operation = this.operationFor(record);
         if (operation === 'Full') {
             const text = record.Get('Text');
-            if (typeof text !== 'string' || text.trim().length === 0) {
+            const hasText = typeof text === 'string' && text.trim().length > 0;
+            // Text is not the only embeddable thing. An image, an audio file or a video is embedded
+            // from the artifact itself by a multi-modal model, and has no text by nature — skipping
+            // it for "no text" would make the whole non-text corpus silently unsearchable.
+            if (!hasText && !this.isNonTextModality(record)) {
                 return Outcome.Skipped('no text to embed');
             }
         }
@@ -128,6 +132,17 @@ export class EmbedStage extends BasePipelineStage {
         return record.GetExtension<string>('Pipeline', 'embeddingStatus') === 'MetadataOnly'
             ? 'MetadataOnly'
             : 'Full';
+    }
+
+    /**
+     * Whether this record's content is something other than text.
+     *
+     * Modality is a well-known field, so it is whatever the best-informed stage decided — a reader
+     * that knows it unpacked a JPEG outranks a discover driver guessing from a file extension.
+     */
+    private isNonTextModality(record: WorkingRecord): boolean {
+        const modality = record.Get('Modality');
+        return typeof modality === 'string' && modality !== 'text' && modality.length > 0;
     }
 
     /** What rides alongside the vector. */
@@ -196,4 +211,30 @@ export class EmbedStage extends BasePipelineStage {
         }
         return writer;
     }
+}
+
+/**
+ * Embed over Content Item Chunk — the usual case, where an item was segmented first.
+ */
+@RegisterClass(BasePipelineStage, EMBED_STAGE)
+export class EmbedStage extends BaseEmbedStage {
+    public readonly Name = EMBED_STAGE;
+    public readonly Entity: WorkingRecordEntity = 'Content Item Chunk';
+}
+
+/**
+ * Embed over Content Item directly.
+ *
+ * Segmenting is not a precondition of embedding. An item that fits a model's context in one piece —
+ * an abstract, a product description, a short page — is embedded as it stands, and MJ embeds
+ * content items directly elsewhere for exactly that reason. Requiring a chunk per item would mean
+ * manufacturing a one-chunk row for every such record purely to satisfy this stage.
+ *
+ * A pipeline runs one or the other, not both: whichever is configured decides what carries the
+ * vector.
+ */
+@RegisterClass(BasePipelineStage, EMBED_ITEM_STAGE)
+export class EmbedContentItemStage extends BaseEmbedStage {
+    public readonly Name = EMBED_ITEM_STAGE;
+    public readonly Entity: WorkingRecordEntity = 'Content Item';
 }

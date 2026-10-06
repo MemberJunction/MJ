@@ -21,3 +21,5 @@ export * from './PipelineRecordProcessRunner.js';
 export * from './PipelineRunNowOperation.js';
 export * from './readers/index.js';
 export * from './stages/index.js';
+export * from './MJVectorStoreWriter.js';
+export * from './MJFileDurableCopyStore.js';

@@ -112,7 +112,7 @@ export class ExtractStage extends BasePipelineStage {
 
         const strategy = ClassifyUnresolved(fileType.FileType);
         if (strategy === 'MultiModal') {
-            return this.handleNonText(record, fileType.FileType as string, resolved, fetched.Content, context, confidence);
+            return this.handleNonText(record, fileType.FileType as string, resolved, fetched.Content, fetched.ContentType, context, confidence);
         }
 
         return this.read(record, context, fetched.Content, fileType.FileType ?? '', url, resolved, confidence);
@@ -232,6 +232,7 @@ export class ExtractStage extends BasePipelineStage {
         fileType: string,
         resolved: ResolvedSource,
         content: Uint8Array,
+        contentType: string | undefined,
         context: StageContext,
         confidence: ResolvedConfidenceScale,
     ): Promise<StageOutcome> {
@@ -241,7 +242,7 @@ export class ExtractStage extends BasePipelineStage {
             record.MarkComplete();
             return Outcome.Skipped(`'${fileType}' is not text and multi-modal handling is disabled for this source`);
         }
-        const copied = await this.persistDurableCopy(record, resolved, content, context);
+        const copied = await this.persistDurableCopy(record, resolved, content, contentType, context);
         return Outcome.Complete(
             copied
                 ? `'${fileType}' routed to multi-modal handling, bytes kept at ${copied}`
@@ -259,6 +260,7 @@ export class ExtractStage extends BasePipelineStage {
         record: WorkingRecord,
         resolved: ResolvedSource,
         content: Uint8Array,
+        contentType: string | undefined,
         context: StageContext,
     ): Promise<string | null> {
         if (!resolved.DurableCopyStoreKey || !resolved.ObjectKeyTemplate) {
@@ -291,11 +293,20 @@ export class ExtractStage extends BasePipelineStage {
         const result = await store.Persist({
             Content: content,
             ObjectKey: objectKey,
+            ContentType: contentType,
             ContextUser: context.ContextUser,
             Provider: context.Provider,
             Signal: context.Signal,
         });
         record.SetExtension(EXTRACT_STAGE, 'durableCopy', result);
+        if (result.FileID) {
+            // The item's reference to its kept bytes. A column rather than a proposal: there is
+            // nothing for another stage to out-argue here.
+            record.SetExtension('Pipeline', 'columns', {
+                ...(record.GetExtension<Record<string, unknown>>('Pipeline', 'columns') ?? {}),
+                FileID: result.FileID,
+            });
+        }
         return result.ObjectKey;
     }
 

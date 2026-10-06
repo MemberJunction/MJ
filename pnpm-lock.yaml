@@ -10405,9 +10405,15 @@ importers:
 
   packages/ContentPipeline/engine:
     dependencies:
+      '@memberjunction/ai-prompts':
+        specifier: 6.2.0-edge.2
+        version: link:../../AI/Prompts
       '@memberjunction/ai-segmentation':
         specifier: 6.2.0-edge.2
         version: link:../../AI/Segmentation
+      '@memberjunction/ai-vectordb':
+        specifier: 6.2.0-edge.2
+        version: link:../../AI/Vectors/Database
       '@memberjunction/content-pipeline-base':
         specifier: 6.2.0-edge.2
         version: link:../base
@@ -10429,6 +10435,9 @@ importers:
       '@memberjunction/record-set-processor-base':
         specifier: 6.2.0-edge.2
         version: link:../../RecordSetProcessor/base
+      '@memberjunction/storage':
+        specifier: 6.2.0-edge.2
+        version: link:../../MJStorage
     devDependencies:
       '@types/node':
         specifier: 24.10.11
