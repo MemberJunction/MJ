@@ -16,7 +16,7 @@ import { RunQueryResult } from '../generic/runQuery';
 import { QueryExecutionSpec } from '../generic/queryExecutionSpec';
 import { CompositeKey } from '../generic/compositeKey';
 import { UserInfo, RecordDependency } from '../generic/securityInfo';
-import { RecordMergeRequest, RecordMergeResult } from '../generic/entityInfo';
+import { EntityInfo, RecordMergeRequest, RecordMergeResult } from '../generic/entityInfo';
 import { TransactionGroupBase } from '../generic/transactionGroup';
 import { BaseEntity, BaseEntityEvent } from '../generic/baseEntity';
 import { MJGlobal, MJEventType } from '@memberjunction/global';
@@ -508,5 +508,82 @@ describe('ProviderBase — metadata change notices from other servers', () => {
         expect(p.HandlePeerMetadataNotice(notice({ CacheKey: 'MJ: Users|_|_' , Category: 'RunViewCache' }))).toBe(false);
         await vi.advanceTimersByTimeAsync(5000);
         expect(p.Checks).toHaveLength(0);
+    });
+});
+
+// ===========================================================================
+// SweepMetadataAgainstDatabase — the gate that keeps a stock install from querying
+// ===========================================================================
+
+/**
+ * The metadata sweep runs on a timer in every MJAPI process. Its gate — consult the database only
+ * when an entity the metadata is built from declares `TrustServerCacheCompletely = false` — is the
+ * whole reason a stock install pays nothing for it, and the only test that mentioned it used a mock
+ * of the sweep, so removing the gate left everything green. These drive the real method.
+ */
+class SweepTestProvider extends MemberRefreshTestProvider {
+    public EntityList: Array<{ Name: string; TrustServerCacheCompletely: boolean }> = [];
+    public RefreshIfNeededCalls: Array<{ bypass: boolean | undefined }> = [];
+
+    public override get Entities(): EntityInfo[] {
+        return this.EntityList as unknown as EntityInfo[];
+    }
+
+    public override async RefreshIfNeeded(_providerToUse?: IMetadataProvider, bypassMinCheckInterval?: boolean): Promise<boolean> {
+        this.RefreshIfNeededCalls.push({ bypass: bypassMinCheckInterval });
+        return true;
+    }
+}
+
+describe('ProviderBase.SweepMetadataAgainstDatabase', () => {
+    it('does not consult the database when no metadata member declares drift — the stock install', async () => {
+        const p = new SweepTestProvider();
+        p.RegisterMembership(buildDataset(['MJ: Entities', 'MJ: Entity Fields']));
+        p.EntityList = [
+            { Name: 'MJ: Entities', TrustServerCacheCompletely: true },
+            { Name: 'MJ: Entity Fields', TrustServerCacheCompletely: true },
+        ];
+
+        const result = await p.SweepMetadataAgainstDatabase();
+
+        expect(result).toEqual({ Declared: [], Checked: false, Refreshed: false });
+        expect(p.RefreshIfNeededCalls).toHaveLength(0);
+    });
+
+    it('checks — bypassing the throttle — when a member declares it can change without an event', async () => {
+        const p = new SweepTestProvider();
+        p.RegisterMembership(buildDataset(['MJ: Entities', 'MJ: Entity Fields']));
+        p.EntityList = [
+            { Name: 'MJ: Entities', TrustServerCacheCompletely: true },
+            { Name: 'MJ: Entity Fields', TrustServerCacheCompletely: false }, // an operator edits this table directly
+        ];
+
+        const result = await p.SweepMetadataAgainstDatabase();
+
+        expect(result).toEqual({ Declared: ['MJ: Entity Fields'], Checked: true, Refreshed: true });
+        expect(p.RefreshIfNeededCalls).toEqual([{ bypass: true }]); // the sweep interval is the throttle
+    });
+
+    it('ignores an untrusted entity that is NOT one the metadata is built from', async () => {
+        // Many entities may declare drift; only the metadata's own members say anything about
+        // whether the metadata itself is stale.
+        const p = new SweepTestProvider();
+        p.RegisterMembership(buildDataset(['MJ: Entities']));
+        p.EntityList = [
+            { Name: 'MJ: Entities', TrustServerCacheCompletely: true },
+            { Name: 'MJ: User Record Logs', TrustServerCacheCompletely: false },
+        ];
+
+        expect(p.MetadataMembersDeclaringDrift()).toEqual([]);
+        expect((await p.SweepMetadataAgainstDatabase()).Checked).toBe(false);
+        expect(p.RefreshIfNeededCalls).toHaveLength(0);
+    });
+
+    it('treats an unknown membership set as "nothing declared", not as "reload"', async () => {
+        const p = new SweepTestProvider();
+        p.EntityList = [{ Name: 'MJ: Entities', TrustServerCacheCompletely: false }];
+
+        expect((await p.SweepMetadataAgainstDatabase()).Checked).toBe(false);
+        expect(p.RefreshIfNeededCalls).toHaveLength(0);
     });
 });

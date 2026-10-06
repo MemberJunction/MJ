@@ -208,21 +208,26 @@ describe('#22 — a debounced metadata check cannot be starved', () => {
     });
 
     it('runs the check once the deferral budget is spent, however steadily notices arrive', async () => {
+        // Pin the jitter to its worst case. `Math.random` is not under fake timers' control, so an
+        // unpinned run is a coin toss; pinning it to the maximum makes the run deterministic AND
+        // the hardest one for the guard to pass.
+        vi.spyOn(Math, 'random').mockReturnValue(0.999);
         const provider = new NoticeProvider();
         const debounce = ProviderBase.MetadataDatasetRefreshDebounceMs;
+        // Long enough for the budget to run out and the timer pending at that moment to fire: once the
+        // budget is spent the handler stops re-arming and returns, leaving the last armed timer — set
+        // for `debounce + jitter` — to run.
+        const window = ProviderBase.PeerMetadataNoticeMaxDeferralMs + debounce + ProviderBase.PeerMetadataNoticeJitterMs + debounce;
 
-        // A notice every half-debounce forever: the timer is reset each time.
-        for (let elapsed = 0; elapsed < ProviderBase.PeerMetadataNoticeMaxDeferralMs + debounce * 4; elapsed += debounce / 2) {
+        // A notice every half-debounce for the WHOLE window, and the check is asserted with notices
+        // still arriving. There is deliberately no quiet period afterwards: a pending timer fires
+        // during any pause whether the guard exists or not, so a quiet period would let this pass with
+        // the guard removed. Without the guard every notice here re-arms a timer that is longer than
+        // the gap to the next notice, so it never fires.
+        for (let elapsed = 0; elapsed < window; elapsed += debounce / 2) {
             provider.HandlePeerMetadataNotice(notice());
             await vi.advanceTimersByTimeAsync(debounce / 2);
         }
-
-        // Once the budget is spent the handler stops re-arming and returns, leaving the LAST armed
-        // timer to fire — and that one was scheduled for `debounce + Math.random() * JitterMs`.
-        // `Math.random` is not under fake timers' control, so the wait has to cover the whole jitter
-        // range or the assertion is a coin toss: the loop alone left 2000ms for a delay that can be
-        // 2500ms, which failed roughly one run in eight. Do not trim this to a measured-typical value.
-        await vi.advanceTimersByTimeAsync(debounce + ProviderBase.PeerMetadataNoticeJitterMs);
 
         expect(provider.Checks).toBeGreaterThan(0);
     });
