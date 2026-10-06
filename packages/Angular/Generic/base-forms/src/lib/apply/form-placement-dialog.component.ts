@@ -150,6 +150,8 @@ export class MjFormPlacementDialogComponent extends BaseAngularComponent {
     private hasContext = false;
     /** The answers as the seed left them, or null when no seed has run. */
     private seededAnswers: string | null = null;
+    /** The fields the seeded answers stand in for. Empty when the seed made no field claim. */
+    private seededFieldNames: readonly string[] = [];
 
     public State: FormPlacementState = InitialPlacementState(null, this._context);
 
@@ -157,6 +159,7 @@ export class MjFormPlacementDialogComponent extends BaseAngularComponent {
     private resetState(): void {
         this.State = InitialPlacementState(this._proposal, this._context);
         this.seededAnswers = null;
+        this.seededFieldNames = [];
         this.applySeed();
     }
 
@@ -165,6 +168,7 @@ export class MjFormPlacementDialogComponent extends BaseAngularComponent {
         if (!this.hasContext || !this._proposal || !this._seedState) return;
         this._seedState(this);
         this.seededAnswers = JSON.stringify(this.State);
+        this.seededFieldNames = this.State.ReplaceMode === 'field' ? [...this.State.ReplaceFieldNames] : [];
     }
 
     /** True while the answers are still the ones the seed produced. */
@@ -197,7 +201,7 @@ export class MjFormPlacementDialogComponent extends BaseAngularComponent {
     }
 
     public get Summary(): string {
-        return SummarizePlacement(this.answers, this._context, this.VisibleTo);
+        return SummarizePlacement(this.answers, this._context, this.VisibleTo, this.seededFieldNames);
     }
 
     /** The answers as they are applied: keeping a panel off counts only where it is offered. */

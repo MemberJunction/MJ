@@ -12,6 +12,7 @@ import {
     ChosenSectionKeys,
     FORM_PLACEMENT_SLOTS,
     HasDetailsTab,
+    SectionHoldingField,
     ShowsRail,
     SlotIsOnForm,
     type FormPlacementContext,
@@ -106,11 +107,14 @@ export function DescribePlacementLine(state: FormPlacementState, context: FormPl
  * form allows — a panel that is active but invisible behind a full form — reads plainly.
  *
  * @param visibleTo Who sees the panel, from {@link DescribeVisibleTo}.
+ * @param fieldsStoodInFor The fields the dialog's starting answers stood in for, by entity field
+ * name. Empty when they stood in for none.
  */
 export function SummarizePlacement(
     state: FormPlacementState,
     context: FormPlacementContext,
     visibleTo = DescribeVisibleTo('User'),
+    fieldsStoodInFor: readonly string[] = [],
 ): string {
     const target = placementTarget(state, context);
     const inSection = target.Mode === 'none' ? target.Section : null;
@@ -132,7 +136,7 @@ export function SummarizePlacement(
     parts.push(`visible to ${visibleTo}`);
     parts.push(state.ActivateNow ? 'starting now' : state.KeepOff ? 'kept off' : 'saved as a draft');
 
-    return `${parts.join(', ')}.${summaryCaveats(state, context, inSection)}`;
+    return `${parts.join(', ')}.${summaryCaveats(state, context, inSection, fieldsStoodInFor)}`;
 }
 
 /** What the answers point at on the form, looked up once for every sentence that names it. */
@@ -212,15 +216,31 @@ function describeReplacement(target: PlacementTarget, state: FormPlacementState,
     }
 }
 
-/** The sentences that follow the summary when an answer will not land the way it reads. */
+/** One field's label on the form, or its entity field name when no section draws it. */
+function fieldLabel(context: FormPlacementContext, fieldName: string): string {
+    return SectionHoldingField(context, fieldName)?.Fields?.find((f) => f.Name === fieldName)?.Label || fieldName;
+}
+
+/**
+ * The sentences that follow the summary when an answer will not land the way it reads.
+ *
+ * A panel moved off a field claim keeps its `configuration.fields`, so it still draws those
+ * fields, while the host saves a panel's edits only to fields it claims.
+ */
 function summaryCaveats(
     state: FormPlacementState,
     context: FormPlacementContext,
     inSection: FormPlacementSection | null,
+    fieldsStoodInFor: readonly string[],
 ): string {
     let caveats = '';
     if (state.ReplaceMode === 'field') {
         caveats += ' The chosen position does not apply: a panel standing in for a field renders inside that field\'s section.';
+    }
+    if (state.ReplaceMode !== 'field' && fieldsStoodInFor.length > 0) {
+        const labels = fieldsStoodInFor.map((name) => fieldLabel(context, name)).join(', ');
+        caveats += ` This panel keeps drawing the fields it was set to stand in for (${labels}).`
+            + ' The form also shows its own inputs for them, and edits made to them in the panel are not saved.';
     }
     if (state.ReplaceMode !== 'field' && !inSection && context.SlotsVerified && !SlotIsOnForm(context, state.Slot)) {
         caveats += ` This form does not emit ${state.Slot}, so the panel renders at the bottom instead.`;

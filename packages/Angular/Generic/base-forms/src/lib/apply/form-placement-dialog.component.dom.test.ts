@@ -765,6 +765,85 @@ describe('MjFormPlacementDialogComponent (DOM) — standing in for fields', () =
 });
 
 /**
+ * A panel placed as a field claim keeps `configuration.fields` when it moves elsewhere, so it
+ * still draws those fields while the form shows them too. The summary says so.
+ */
+describe('MjFormPlacementDialogComponent (DOM) — moving a panel off its field claim', () => {
+    const withFields: FormPlacementContext = {
+        ...CONTEXT,
+        Sections: [
+            { Key: 'details', Title: 'Details', Fields: [{ Name: 'Name', Label: 'Name' }] },
+            { Key: 'scheduleCapacity', Title: 'Schedule & Capacity', Fields: [{ Name: 'SeatLimit', Label: 'Seat Limit' }] },
+        ],
+    };
+    const WARNING = 'This panel keeps drawing the fields it was set to stand in for';
+
+    /** Opens the dialog seeded from a saved row, as the Manage drawer does. */
+    function renderSeeded(row: FormContributionSpec, context: FormPlacementContext = withFields) {
+        return renderComponentFixture(MjFormPlacementDialogComponent, {
+            imports: [CommonModule, FormsModule, AlertStub, ButtonStub, MjIconPickerComponent],
+            declarations: [MjFormPlacementDialogComponent],
+            inputs: {
+                ProbeForm: false, Context: context, Proposal: row, ComponentName: 'Seats',
+                SeedState: (dialog: MjFormPlacementDialogComponent) => {
+                    dialog.State = PlacementStateFromContribution(row, dialog.Context, true);
+                },
+            },
+        });
+    }
+
+    const summary = (f: ReturnType<typeof renderSeeded>) =>
+        (f.nativeElement as HTMLElement).querySelector('.mj-placement-summary')?.textContent ?? '';
+
+    /** Picks one of the "Does it replace anything?" answers, as the user does. */
+    async function pickReplaceMode(f: ReturnType<typeof renderSeeded>, mode: string): Promise<void> {
+        (f.nativeElement as HTMLElement).querySelector<HTMLInputElement>(`input[name="mj-replace"][value="${mode}"]`)!.click();
+        f.detectChanges();
+        await f.whenStable();
+        f.detectChanges();
+    }
+
+    it('warns that a field panel moved to a section still draws its fields', async () => {
+        const f = renderSeeded({ slot: 'after-fields', presentation: 'panel', title: 'Seats', replacesFieldNames: ['SeatLimit'] });
+        expect(f.componentInstance.State.ReplaceMode).toBe('field');
+        expect(summary(f)).not.toContain(WARNING);
+
+        await pickReplaceMode(f, 'section');
+        expect(f.componentInstance.State.ReplaceMode).toBe('section');
+        expect(summary(f)).toContain(
+            `${WARNING} (Seat Limit). The form also shows its own inputs for them, and edits made to them in the panel are not saved.`);
+    });
+
+    it('says nothing for a panel that never stood in for a field', async () => {
+        const f = renderSeeded({ slot: 'after-fields', presentation: 'panel', title: 'Seats' });
+        await pickReplaceMode(f, 'section');
+        expect(f.componentInstance.State.ReplaceMode).toBe('section');
+        expect(summary(f)).not.toContain(WARNING);
+    });
+
+    it('says nothing for a panel seeded as a section claim, even when its block also names fields', async () => {
+        const f = renderSeeded({
+            slot: 'before-fields', presentation: 'panel', title: 'Seats', replacesSectionKey: 'details', replacesFieldNames: ['SeatLimit'],
+        });
+        expect(f.componentInstance.State.ReplaceMode).toBe('section');
+        await pickReplaceMode(f, 'none');
+        expect(f.componentInstance.State.ReplaceMode).toBe('none');
+        expect(summary(f)).not.toContain(WARNING);
+    });
+
+    it('names a field by its field name when the form was not read', async () => {
+        const unread: FormPlacementContext = {
+            ...CONTEXT, Sections: [], Existing: [], SlotsPresent: [], SlotsVerified: false, Rail: [], TargetsVerified: false, FullCustomForm: true,
+        };
+        const f = renderSeeded({ slot: 'after-fields', presentation: 'panel', title: 'Seats', replacesFieldNames: ['SeatLimit'] }, unread);
+        expect(f.componentInstance.State.ReplaceMode).toBe('field');
+        await pickReplaceMode(f, 'none');
+        expect(f.componentInstance.State.ReplaceMode).toBe('none');
+        expect(summary(f)).toContain(`${WARNING} (SeatLimit).`);
+    });
+});
+
+/**
  * With the form preview on, the scaled form is read-only and every answer is made in the
  * controls beside it. The preview only has to receive the panel as it would be saved.
  */
