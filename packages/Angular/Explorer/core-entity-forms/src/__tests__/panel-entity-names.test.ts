@@ -1,4 +1,5 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -13,7 +14,8 @@ import { describe, expect, it } from 'vitest';
  * mounts. The `'*'` wildcard (every entity's form) is allowed.
  *
  * The scan reads every `.ts` file under `src/lib` that registers a panel
- * (`RegisterClassEx(BaseFormPanel`), whatever the file is named.
+ * (`RegisterClassEx(BaseFormPanel`), whatever the file is named. Test files (`*.test.ts`)
+ * are left out.
  *
  * The registered names are read from the generated core entity classes
  * (`@RegisterClass(BaseEntity, 'MJ: ...')` in `MJCoreEntities/src/generated/entities/__mj.ts`).
@@ -22,12 +24,13 @@ const here = dirname(fileURLToPath(import.meta.url));
 const libDir = join(here, '..', 'lib');
 const generatedEntitiesFile = join(here, '..', '..', '..', '..', '..', 'MJCoreEntities', 'src', 'generated', 'entities', '__mj.ts');
 
-/** The `.ts` files under `dir` that register a form panel. */
+/** The `.ts` files under `dir`, test files excluded, that register a form panel. */
 function panelFiles(dir: string): string[] {
     return readdirSync(dir).flatMap((name) => {
         const full = join(dir, name);
         if (statSync(full).isDirectory()) return panelFiles(full);
-        return name.endsWith('.ts') && readFileSync(full, 'utf8').includes('RegisterClassEx(BaseFormPanel') ? [full] : [];
+        if (!name.endsWith('.ts') || name.endsWith('.test.ts')) return [];
+        return readFileSync(full, 'utf8').includes('RegisterClassEx(BaseFormPanel') ? [full] : [];
     });
 }
 
@@ -97,6 +100,19 @@ describe('entity names queried by compiled form panels', () => {
         expect(registrations).toContainEqual({ File: 'custom/Companies/company-overview.panel.ts', Kind: 'registration', Name: 'MJ: Companies' });
         expect(registrations).toContainEqual({ File: 'custom/HierarchyPanels/hierarchy-form-panels.ts', Kind: 'registration', Name: 'MJ: AI Agent Categories' });
         expect(registrations).toContainEqual({ File: 'panels/ai-skill-sharing/ai-skill-sharing-panel.component.ts', Kind: 'registration', Name: 'MJ: AI Skills' });
+    });
+
+    it('leaves test files out of the scan', () => {
+        const dir = mkdtempSync(join(tmpdir(), 'panel-files-'));
+        try {
+            const registration = "@RegisterClassEx(BaseFormPanel, { entity: 'MJ: Not A Real Entity' })";
+            writeFileSync(join(dir, 'sample.panel.ts'), registration);
+            writeFileSync(join(dir, 'sample.panel.dom.test.ts'), registration);
+            writeFileSync(join(dir, 'sample.panel.test.ts'), registration);
+            expect(panelFiles(dir).map((file) => relative(dir, file))).toEqual(['sample.panel.ts']);
+        } finally {
+            rmSync(dir, { recursive: true, force: true });
+        }
     });
 
     it('uses only MJ:-prefixed names', () => {
