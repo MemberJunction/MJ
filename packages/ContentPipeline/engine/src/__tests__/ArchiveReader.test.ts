@@ -3,6 +3,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { ReadRequest, WorkingRecord, WorkingRecordIdentity } from '@memberjunction/content-pipeline-base';
 import { ArchiveReader, ArchiveMember } from '../readers/ArchiveReader.js';
 import { PlainTextReader } from '../readers/PlainTextReader.js';
+import { HtmlReader } from '../readers/HtmlReader.js';
 
 /** A reader standing in for a real archive format. */
 @RegisterClass(ArchiveReader, 'TestArchive')
@@ -138,3 +139,31 @@ describe('members that are not text', () => {
     });
 });
 
+
+describe('HtmlReader', () => {
+    const html = (body: string) => ({
+        ...request(),
+        Content: new TextEncoder().encode(body),
+        FileType: 'html',
+    });
+
+    it('extracts readable text through MJ’s TextExtractor rather than a second implementation', async () => {
+        const result = await new HtmlReader().Read(
+            html('<html><head><title>Quarterly</title><style>p{color:red}</style></head><body><p>Revenue rose.</p><script>x()</script></body></html>'),
+        );
+        expect(result.Blocks).toHaveLength(1);
+        expect(result.Blocks[0].Text).toContain('Revenue rose.');
+        expect(result.Blocks[0].Text).not.toContain('color:red');
+        expect(result.Blocks[0].Text).not.toContain('x()');
+    });
+
+    it('takes the document title when it has one', async () => {
+        const result = await new HtmlReader().Read(html('<html><head><title>Quarterly</title></head><body><p>Body.</p></body></html>'));
+        expect(result.Blocks[0].Title).toBe('Quarterly');
+    });
+
+    it('reports no blocks for a document that yields no text, rather than an empty one', async () => {
+        const result = await new HtmlReader().Read(html('<html><body><script>only()</script></body></html>'));
+        expect(result.Blocks).toHaveLength(0);
+    });
+});

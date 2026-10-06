@@ -11,3 +11,4 @@ export * from './ArchiveReader.js';
 export function LoadContentPipelineReaders(): void {
     // Intentionally empty — importing this module is what fires the decorators.
 }
+export * from './HtmlReader.js';
