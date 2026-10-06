@@ -33,7 +33,13 @@ type Captured = { params: RunViewParams | null };
  * its params. `Sequence` stands in for a numeric field (`NeedsQuotes` is false only for
  * Number and Boolean TS types).
  */
-function fakeProvider(captured: Captured, rows: Record<string, unknown>[] = []): DatabaseProviderBase {
+function fakeProvider(captured: Captured, rows: Record<string, unknown>[] = [], unreadableEntities: string[] = []): DatabaseProviderBase {
+    const withPerms = (e: Record<string, unknown>) => ({
+        ...e,
+        // Real EntityInfo aggregates per-user permissions; the boundary screen now consults
+        // CanRead for every subquery target, so the mock must answer it.
+        GetUserPermisions: () => ({ CanRead: !unreadableEntities.includes(e.Name as string) }),
+    });
     return {
         Entities: [
             {
@@ -67,7 +73,7 @@ function fakeProvider(captured: Captured, rows: Record<string, unknown>[] = []):
             { Name: 'Committees: Motions', SchemaName: '__mj_BizAppsCommittees', BaseView: 'vwMotions', BaseTable: 'Motion', Fields: [] },
             { Name: 'Committees: Memberships', SchemaName: '__mj_BizAppsCommittees', BaseView: 'vwMemberships', BaseTable: 'Membership', Fields: [] },
             { Name: 'Committees: Terms', SchemaName: '__mj_BizAppsCommittees', BaseView: 'vwTerms', BaseTable: 'Term', Fields: [] },
-        ],
+        ].map(withPerms),
         RunView: async (params: RunViewParams): Promise<RunViewResult> => {
             captured.params = params;
             return { Success: true, Results: rows, RowCount: rows.length, TotalRowCount: rows.length, ErrorMessage: '' } as RunViewResult;
@@ -244,6 +250,19 @@ describe('ResolverBase — GraphQL-boundary ExtraFilter AST screen', () => {
         await new Probe().RunDynamic(input, fakeProvider(captured));
 
         expect(captured.params?.ExtraFilter).toBe(`ID IN (SELECT ID FROM [__mj].[vwUsers] WHERE Email = 'a@b.com')`);
+    });
+
+    it('RunDynamicViewGeneric rejects a subquery into an entity the caller cannot read', async () => {
+        const captured: Captured = { params: null };
+        const input = {
+            EntityName: ENTITY_NAME,
+            ExtraFilter: `ID IN (SELECT TaskID FROM [__mj_BizAppsTasks].[vwTaskAssignments])`,
+        } as RunDynamicViewInput;
+
+        await expect(
+            new Probe().RunDynamic(input, fakeProvider(captured, [], ['MJ_BizApps_Tasks: Task Assignments']))
+        ).rejects.toThrow(/read permission/);
+        expect(captured.params).toBeNull();
     });
 
     it('RunDynamicViewGeneric passes a benign ExtraFilter through to RunView', async () => {

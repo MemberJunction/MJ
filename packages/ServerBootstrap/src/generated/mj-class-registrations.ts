@@ -222,7 +222,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (432 classes)
+// @memberjunction/core-entities (440 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -483,6 +483,10 @@ import {
     MJIntegrationObjectFieldEntity,
     MJIntegrationSourceTypeEntity,
     MJIntegrationURLFormatEntity,
+    MJInteractionEntity,
+    MJInteractionEventEntity,
+    MJInteractionLinkEntity,
+    MJInteractionOfferEntity,
     MJKnowledgeHubSavedSearchEntity,
     MJLibraryEntity,
     MJLibraryItemEntity,
@@ -515,6 +519,9 @@ import {
     MJMagicLinkRedemptionEntity,
     MJMaterializedResultEntity,
     MJMaterializedResultQueryEntity,
+    MJMeetingEntity,
+    MJMeetingParticipantEntity,
+    MJNumberPoolEntity,
     MJOAuthAuthServerMetadataCacheEntity,
     MJOAuthAuthorizationStateEntity,
     MJOAuthClientRegistrationEntity,
@@ -525,6 +532,7 @@ import {
     MJOutputDeliveryTypeEntity,
     MJOutputFormatTypeEntity,
     MJPermissionDomainEntity,
+    MJPhoneNumberEntity,
     MJProcessRunDetailEntity,
     MJProcessRunEntity,
     MJProjectEntity,
@@ -1134,10 +1142,11 @@ import {
     AutotagWebsite,
 } from '@memberjunction/content-autotagging';
 
-// @memberjunction/rubrics (10 classes)
+// @memberjunction/rubrics (11 classes)
 import {
     AgentRubricEvaluator,
     CreateRubricDraftAction,
+    DecisionRubricEvaluator,
     DeterministicRubricEvaluator,
     EvaluateRecordAgainstRubricAction,
     GetRubricAction,
@@ -1313,7 +1322,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (56 classes)
+// @memberjunction/core-entities-server (57 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -1342,6 +1351,7 @@ import {
     MJEntityDocumentEntityServer,
     MJEntityEntityServer,
     MJEntityFieldPermissionEntityServer,
+    MJInteractionEventEntityServer,
     MJListDetailEntityServer,
     MJListEntityServer,
     MJMLTrainingPipelineEntityServer,
@@ -1923,6 +1933,10 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJIntegrationObjectFieldEntity,
     MJIntegrationSourceTypeEntity,
     MJIntegrationURLFormatEntity,
+    MJInteractionEntity,
+    MJInteractionEventEntity,
+    MJInteractionLinkEntity,
+    MJInteractionOfferEntity,
     MJKnowledgeHubSavedSearchEntity,
     MJLibraryEntity,
     MJLibraryItemEntity,
@@ -1955,6 +1969,9 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJMagicLinkRedemptionEntity,
     MJMaterializedResultEntity,
     MJMaterializedResultQueryEntity,
+    MJMeetingEntity,
+    MJMeetingParticipantEntity,
+    MJNumberPoolEntity,
     MJOAuthAuthServerMetadataCacheEntity,
     MJOAuthAuthorizationStateEntity,
     MJOAuthClientRegistrationEntity,
@@ -1965,6 +1982,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJOutputDeliveryTypeEntity,
     MJOutputFormatTypeEntity,
     MJPermissionDomainEntity,
+    MJPhoneNumberEntity,
     MJProcessRunDetailEntity,
     MJProcessRunEntity,
     MJProjectEntity,
@@ -1993,6 +2011,10 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRecordGeoCodeEntity,
     MJRecordLinkEntity,
     MJRecordMergeDeletionLogEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_2: any[] = [
     MJRecordMergeLogEntity,
     MJRecordProcessCategoryEntity,
     MJRecordProcessEntity,
@@ -2001,10 +2023,6 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRemoteOperationEntity,
     MJResourceLinkEntity,
     MJResourcePermissionEntity,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_2: any[] = [
     MJResourcePermissionEntityExtended,
     MJResourceTypeEntity,
     MJRoleEntity,
@@ -2197,6 +2215,10 @@ const CLASS_REGISTRATIONS_2: any[] = [
     WatchNewJotFormSubmissionsAction,
     WatchNewSurveyMonkeyResponsesAction,
     WatchNewTypeformResponsesAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     AttachTagsAction,
     CreateUserAction_actions_bizapps_lms,
     DetachTagsAction,
@@ -2205,10 +2227,6 @@ const CLASS_REGISTRATIONS_2: any[] = [
     GetCertificatesAction,
     GetCourseAnalyticsAction,
     GetLearnWorldsBulkDataAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     GetLearnWorldsCourseDetailsAction,
     GetLearnWorldsCoursesAction,
     GetLearnWorldsUserDetailsAction,
@@ -2358,6 +2376,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     AutotagWebsite,
     AgentRubricEvaluator,
     CreateRubricDraftAction,
+    DecisionRubricEvaluator,
     DeterministicRubricEvaluator,
     EvaluateRecordAgainstRubricAction,
     GetRubricAction,
@@ -2400,6 +2419,10 @@ const CLASS_REGISTRATIONS_3: any[] = [
     PDFToolLibrary,
     QueryBuilderAgent,
     RealtimeAgentType,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_4: any[] = [
     SearchResultSetToolLibrary,
     TextToolLibrary,
     WhiteboardChannelServer,
@@ -2409,10 +2432,6 @@ const CLASS_REGISTRATIONS_3: any[] = [
     GeminiCliAdapter,
     HarnessAgentBase,
     HarnessAgentType,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_4: any[] = [
     OpenCodeAdapter,
     PiAdapter,
     StdioJsonAdapter,
@@ -2510,6 +2529,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJEntityDocumentEntityServer,
     MJEntityEntityServer,
     MJEntityFieldPermissionEntityServer,
+    MJInteractionEventEntityServer,
     MJListDetailEntityServer,
     MJListEntityServer,
     MJMLTrainingPipelineEntityServer,
@@ -2603,6 +2623,10 @@ const CLASS_REGISTRATIONS_4: any[] = [
     DataMapperAction,
     DelayAction,
     DeleteDirectoryAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_5: any[] = [
     DeleteObjectAction,
     DeleteRecordAction,
     DirectoryExistsAction,
@@ -2613,10 +2637,6 @@ const CLASS_REGISTRATIONS_4: any[] = [
     ExecuteCodeAction,
     ExecuteMCPToolAction,
     ExploreDatabaseSchemaAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_5: any[] = [
     ExternalChangeDetectionAction,
     FileCompressAction,
     FinalizeDocumentAction,
@@ -2738,7 +2758,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1105;
+export const CLASS_REGISTRATIONS_COUNT = 1115;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
