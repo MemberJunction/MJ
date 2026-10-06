@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { AGENT_RUN_SUBJECT, EvaluateSampledAgentRuns, DriftDeltas, DriftSeries, KeepSample, PeriodMeans, ProductionSamplingJob, SampleBucket, SamplingEvaluatorChoice, SelectSampledRuns } from '../sampling.js';
+import { AGENT_RUN_SUBJECT, EvaluateSampledAgentRuns, DriftDeltas, DriftSeries, KeepSample, PeriodMeans, ProductionSamplingJob, SampleBucket, SelectSampledRuns } from '../sampling.js';
+import { ResolveRubricEvaluatorSelection } from '../evaluatorRegistry.js';
 
 describe('production sampling', () => {
     it('does not treat a broken evaluator config as missing', () => {
-        expect(() => SamplingEvaluatorChoice('{')).toThrow(SyntaxError);
-        expect(SamplingEvaluatorChoice('{"EvaluatorType":"Deterministic"}').evaluator).toBe('Deterministic');
+        expect(() => ResolveRubricEvaluatorSelection('{')).toThrow('The evaluator config is not valid JSON.');
+        expect(ResolveRubricEvaluatorSelection('{"EvaluatorType":"Deterministic"}').Name).toBe('Deterministic');
     });
 
     it('keeps the same run for the same rate', () => {
@@ -39,8 +40,6 @@ describe('production sampling', () => {
             rubricId: 'rubric',
             subjectRecordId: 'open',
             subjectEntityName: AGENT_RUN_SUBJECT,
-            evaluator: 'LLM',
-            promptMode: 'SinglePass',
         }]);
         expect(new EvaluateSampledAgentRuns({ async Load() { return { links: [], runs: [], evaluated: [] }; } }, { async EvaluateRecord() {} }).Plan({
             links: [{ agentId: 'agent', rubricId: 'rubric', sampleRate: 1, status: 'Active' }],
@@ -71,8 +70,6 @@ describe('production sampling', () => {
             rubricId: 'sample-rubric',
             subjectRecordId: 'open',
             subjectEntityName: AGENT_RUN_SUBJECT,
-            evaluator: 'LLM',
-            promptMode: 'SinglePass',
         }]);
     });
 
@@ -98,7 +95,7 @@ describe('production sampling', () => {
     });
 
     it('uses the agent rubric evaluator and defaults a missing one to LLM SinglePass', async () => {
-        const evaluated: { evaluator: string; promptMode: string; rubricId: string }[] = [];
+        const evaluated: { evaluatorConfig?: unknown; rubricId: string }[] = [];
         const job = ProductionSamplingJob({
             async links() {
                 return [
@@ -115,9 +112,14 @@ describe('production sampling', () => {
         });
         await job.Run();
         expect(evaluated).toEqual([
-            { rubricId: 'plain', subjectRecordId: 'open', subjectEntityName: AGENT_RUN_SUBJECT, evaluator: 'LLM', promptMode: 'SinglePass' },
-            { rubricId: 'rules', subjectRecordId: 'open', subjectEntityName: AGENT_RUN_SUBJECT, evaluator: 'Deterministic', promptMode: 'SinglePass' },
-            { rubricId: 'each', subjectRecordId: 'open', subjectEntityName: AGENT_RUN_SUBJECT, evaluator: 'LLM', promptMode: 'PerCriterion' },
+            { rubricId: 'plain', subjectRecordId: 'open', subjectEntityName: AGENT_RUN_SUBJECT },
+            { rubricId: 'rules', subjectRecordId: 'open', subjectEntityName: AGENT_RUN_SUBJECT, evaluatorConfig: { EvaluatorType: 'Deterministic' } },
+            { rubricId: 'each', subjectRecordId: 'open', subjectEntityName: AGENT_RUN_SUBJECT, evaluatorConfig: '{"EvaluatorType":"AIPrompt","Mode":"PerCriterion"}' },
+        ]);
+        expect(evaluated.map(item => ResolveRubricEvaluatorSelection(item.evaluatorConfig))).toEqual([
+            { Name: 'LLM', Settings: {} },
+            { Name: 'Deterministic', Settings: {} },
+            { Name: 'LLM', Settings: { Mode: 'PerCriterion' } },
         ]);
     });
 

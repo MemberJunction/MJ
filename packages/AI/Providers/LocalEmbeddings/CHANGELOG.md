@@ -1,5 +1,20 @@
 # @memberjunction/ai-local-embeddings
 
+## 6.2.0-edge.2
+
+### Patch Changes
+
+- ce1a5c3: Add `BaseEmbeddings.RequiresAPIKey` (default `true`), mirroring `VectorDBBase.RequiresAPIKey`. `LocalEmbedding` and `OllamaEmbedding` return `false`, so credential checks such as `AIEmbeddingRunner`'s accept them with no API key configured.
+- Updated dependencies [ff3097d]
+- Updated dependencies [79279f2]
+- Updated dependencies [2552b1e]
+- Updated dependencies [f3c6161]
+- Updated dependencies [5148534]
+- Updated dependencies [ce1a5c3]
+- Updated dependencies [4d647e6]
+  - @memberjunction/ai@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+
 ## 6.2.0-edge.1
 
 ### Patch Changes

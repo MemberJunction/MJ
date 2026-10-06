@@ -1,5 +1,20 @@
 # @memberjunction/ai-cohere
 
+## 6.2.0-edge.2
+
+### Patch Changes
+
+- ed77dd7: Cohere reranking works again. `CohereReranker` is registered under `CohereReranker`, the driver class every Cohere reranker model-vendor row carries, as well as `CohereLLM`; before, the ClassFactory fell back to a bare `BaseReranker` and every Cohere rerank failed. Its docs now name the right legacy environment variable, `AI_VENDOR_API_KEY__COHERERERANKER`. `RerankerService.GetReranker` is deprecated in favour of `AIRerankerRunner`.
+- Updated dependencies [ff3097d]
+- Updated dependencies [79279f2]
+- Updated dependencies [2552b1e]
+- Updated dependencies [f3c6161]
+- Updated dependencies [5148534]
+- Updated dependencies [ce1a5c3]
+- Updated dependencies [4d647e6]
+  - @memberjunction/ai@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+
 ## 6.2.0-edge.1
 
 ### Patch Changes
