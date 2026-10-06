@@ -134,7 +134,7 @@ no MJ action for it. Deployments that already have Custom Search access can keep
 
 All 100+ actions organized by category. Each action is registered with `@RegisterClass(BaseAction, "<name>")`.
 
-### AI (8 actions)
+### AI (9 actions)
 
 Actions for prompt execution, agent discovery, image generation, and content summarization.
 
@@ -148,6 +148,7 @@ Actions for prompt execution, agent discovery, image generation, and content sum
 | `Find Best Action` | `FindBestActionAction` | Select the single best action for a task |
 | `Load Agent Spec` | `LoadAgentSpecAction` | Load full specification for an AI agent |
 | `Generate Image` | `GenerateImageAction` | Generate images using AI models |
+| `__ReadSkillFile` | `ReadSkillFileAction` | Read one file of an active multi-file skill (offered automatically when such a skill activates) |
 
 ### Communication (3 actions)
 
@@ -285,7 +286,7 @@ Miscellaneous server-side utilities.
 | `__CensusDataLookup` | `CensusDataLookupAction` | Query US Census Bureau data |
 | `__QRCode` | `QRCodeAction` | Generate QR code images |
 
-### Visualization (7 actions)
+### Visualization (9 actions)
 
 Generate SVG charts, diagrams, and infographics using D3 and Rough.js. All produce self-contained SVG markup suitable for embedding in HTML or saving as files.
 
@@ -298,6 +299,8 @@ Generate SVG charts, diagrams, and infographics using D3 and Rough.js. All produ
 | `__CreateSVGInfographic` | `CreateSVGInfographicAction` | Multi-section infographics with icons and data |
 | `__CreateSVGSketchDiagram` | `CreateSVGSketchDiagramAction` | Hand-drawn style diagrams via Rough.js |
 | `__CreateMermaidDiagram` | `CreateMermaidDiagramAction` | Render Mermaid diagram definitions to SVG |
+| `__RenderArchitectureDiagram` | `RenderArchitectureDiagramAction` | Render an archify architecture/workflow/sequence/dataflow/lifecycle spec to a self-contained SVG and an interactive HTML file (`@memberjunction/ai-diagrams`) |
+| `__GetArchitectureDiagramReference` | `GetArchitectureDiagramReferenceAction` | Return an archify schema, example spec or authoring reference |
 
 `Create Mermaid Diagram` renders in headless Chromium, which the `playwright` dependency does not install. Install one on the host with `npx playwright install chromium`, or set `MJ_CHROMIUM_EXECUTABLE_PATH` to an existing binary. Without one the action returns `BROWSER_UNAVAILABLE`.
 

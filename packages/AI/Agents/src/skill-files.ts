@@ -7,6 +7,8 @@
  * @module @memberjunction/ai-agents
  */
 
+import { UUIDsEqual } from '@memberjunction/global';
+
 /** Name of the action that returns one skill file's content (CoreActions `ReadSkillFileAction`). */
 export const READ_SKILL_FILE_ACTION_NAME = 'Read Skill File';
 
@@ -23,7 +25,7 @@ export interface SkillFileRef {
 export function FormatSkillFileListing(skills: ReadonlyArray<{ ID: string; Name: string }>, files: readonly SkillFileRef[]): string {
     const sections: string[] = [];
     for (const skill of skills) {
-        const paths = files.filter(f => f.SkillID.toUpperCase() === skill.ID.toUpperCase()).map(f => `- ${f.Path}`);
+        const paths = files.filter(f => UUIDsEqual(f.SkillID, skill.ID)).map(f => `- ${f.Path}`);
         if (paths.length > 0) {
             sections.push(`### Files of skill "${skill.Name}"\n${paths.join('\n')}`);
         }

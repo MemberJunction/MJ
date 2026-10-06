@@ -86,14 +86,17 @@ function splitRefAndPath(rest: string[], ref?: string): { ref: string; path: str
 
 /** Builds a validated GitHub source; `path` is the skill folder relative to the repo root ('' = root). */
 export function GitHubSkillSource(owner: string, repo: string, path: string, ref: string): SkillSource {
-    const cleanPath = path.replace(/^\/+|\/+$/g, '');
-    if (cleanPath.split('/').some(s => s === '..' || s === '.')) {
+    // Split rather than trim with /^\/+|\/+$/: that regex backtracks quadratically on a long run of
+    // slashes, and the path comes from a URL someone pasted. Empty segments (leading, trailing or
+    // doubled slashes) drop out the same way.
+    const segments = path.split('/').filter(s => s.length > 0);
+    if (segments.some(s => s === '..' || s === '.')) {
         throw new Error(`Invalid skill folder path: "${path}"`);
     }
     if (!ref.trim()) {
         throw new Error('A GitHub skill source needs a ref (tag, branch or commit SHA)');
     }
-    return { SourceType: 'GitHub', Owner: owner, Repo: repo, Path: cleanPath, Ref: ref.trim() };
+    return { SourceType: 'GitHub', Owner: owner, Repo: repo, Path: segments.join('/'), Ref: ref.trim() };
 }
 
 /** The URL stored in `AISkill.SourceURL`; for GitHub, a browsable folder link (the ref also goes in `SourceRef`). */
