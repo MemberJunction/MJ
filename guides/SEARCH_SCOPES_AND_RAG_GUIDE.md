@@ -421,6 +421,10 @@ Configured per dimension in `SearchScope.SearchContextConfig.dimensions[].inheri
 - **Strict**: only exact matches. Content must be tagged with the queried dimension value.
 - **Cascading**: broader — content without a dimension tag is treated as "applies to all". Use for soft hierarchies (e.g., org-wide policies visible to every department, but department-specific content only within that department).
 
+A **cascading template must carry an `{% else %}<column> IS NULL` branch.** The engine never renders `inheritanceMode`; the mode lives in the author's template. Under the `{% if x | length %}` idiom an empty set removes the clause, and without an `{% else %}` a reader who reaches no tagged value sees every tagged row instead of only the untagged ones. Declare `RequiredMetadataKeys` on the lane as well, so a dropped clause is caught at render time.
+
+**`required`** on a dimension refuses the search (`ScopeDimensionError`) when the dimension does not resolve or resolves to nothing (`null`, an empty set, a blank string), instead of letting the lane run with its clause dropped. A dimension declared `inheritanceMode: 'cascading'` is exempt, because there empty is meaningful (see above). The message names the scope and the dimension and says whether the caller sent an empty value, the declared `defaultValue` is empty, or nothing is reachable for the user. One refused scope fails a multi-scope search; the Scoped Search action and pre-execution RAG search one scope per call.
+
 ### Tenant provisioning flow
 
 Typical onboarding for a new tenant:

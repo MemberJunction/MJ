@@ -252,6 +252,16 @@ export interface ScopeSecondaryDimension {
     expansionQueryID?: string;
     /** Names a ServerDerived dimension this one may only narrow (never widen). */
     narrowingOf?: string;
+    /**
+     * The dimension must resolve to a **non-empty** value or the search is refused (`ScopeDimensionError`).
+     * Unresolved and resolved-to-nothing (an expansion query with no rows, `null`, an empty set, a blank
+     * string) are both refusals: a required dimension is the bound, and "nothing reachable" means nothing
+     * to search — never a lane left unbounded because its template clause rendered empty. The one
+     * exemption is an explicitly declared `inheritanceMode: 'cascading'`, where an empty value is
+     * meaningful (untagged content applies to everyone) and is allowed through; a cascading template must
+     * then carry an `{% else %}<column> IS NULL` branch, or an empty set widens the lane to every tagged
+     * row. An empty value on a dimension that is not required still reaches the template.
+     */
     required?: boolean;
     defaultValue?: SecondaryScopeValue | null;
     /**
