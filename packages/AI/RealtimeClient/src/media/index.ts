@@ -15,6 +15,7 @@ export * from './attachVideoSource';
 export * from './frameCapture';
 export * from './frameSampler';
 export * from './localMediaController';
+export * from './mediaStage';
 export * from './model';
 export * from './channelVideoSource';
 export * from './displayCapture';

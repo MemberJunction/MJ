@@ -68,3 +68,50 @@ export type MediaVideoSource =
     | { Kind: 'stream'; Stream: MediaStream }
     /** A player that takes over the element and returns a function that releases it. */
     | { Kind: 'element'; Attach(element: HTMLVideoElement): () => void };
+
+/**
+ * What a participant's video shows. Open vocabulary. These are on-screen kinds; the video source arbiter's
+ * `VideoSourceKind` is a different list, of what the model is shown.
+ */
+export type MediaSourceKind = 'camera' | 'screen' | 'avatar' | (string & {});
+
+/** Where a surface appears: the main stage, a picture-in-picture tile, a tab, or nowhere. */
+export type MediaPlacement = 'stage' | 'pip' | 'tab' | 'hidden';
+
+/** Every placement, in the order a displaced surface falls back through them. */
+export const MEDIA_PLACEMENTS: readonly MediaPlacement[] = ['stage', 'pip', 'tab', 'hidden'];
+
+/** One person or agent in a session, as the media stage sees them. */
+export interface MediaParticipant {
+    /** Stable identity within the session. */
+    Identity: string;
+    DisplayName: string;
+    /** `'self'` is the local user. */
+    Role: 'self' | 'agent' | 'host' | 'participant';
+    /** Whether the participant is speaking now. */
+    IsSpeaking: boolean;
+    /** The participant's videos, by kind: a camera, a shared screen, an avatar. */
+    Video: Partial<Record<MediaSourceKind, MediaVideoSource>>;
+}
+
+/**
+ * Something that can be placed: a channel's surface (a whiteboard, a remote browser) or a participant's video
+ * (the avatar, the user's camera, a shared screen).
+ */
+export interface MediaSurface {
+    /** Stable key, usually the channel key. The user's moves are recorded against it. */
+    Key: string;
+    Label: string;
+    /** Where it goes unless the user moved it. */
+    DefaultPlacement: MediaPlacement;
+    /** Where the user may move it. Defaults to every placement. */
+    AllowedPlacements?: readonly MediaPlacement[];
+    /** The participant video it shows, when it is one; absent for a component surface such as a whiteboard. */
+    Video?: { ParticipantIdentity: string; Kind: MediaSourceKind };
+}
+
+/** One move the user made: a surface to a placement. */
+export interface MediaPlacementMove {
+    SurfaceKey: string;
+    Placement: MediaPlacement;
+}
