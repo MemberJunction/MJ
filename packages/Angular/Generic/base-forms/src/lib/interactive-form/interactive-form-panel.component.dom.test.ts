@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { Component, EventEmitter, Input, Output, type Provider } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
 import type { BaseEntity } from '@memberjunction/core';
 import { ReactBridgeService, type MJReactComponent } from '@memberjunction/ng-react';
 import { By } from '@angular/platform-browser';
@@ -10,6 +11,13 @@ import type { FormContributionRegistration } from '../panel-slot/form-contributi
 import type { BaseFormComponent } from '../base-form-component';
 import type { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { FormPanelEventNames, type FormPanelHostProps } from '@memberjunction/interactive-component-types/forms';
+import { FormFieldEditCoordinator, type FormFieldEdit } from '../form-field-edit.coordinator';
+
+const logError = vi.hoisted(() => vi.fn());
+vi.mock('@memberjunction/core', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  LogError: (...args: unknown[]) => logError(...args),
+}));
 
 /**
  * DOM coverage for <mj-interactive-form-panel> — the generic BaseFormPanel that renders a
@@ -169,13 +177,13 @@ describe('InteractiveFormPanelComponent (DOM) — writing a parent field', () =>
     Metadata: { entity: 'MJ_BizApps_Common: People', slot: 'after-fields', contributionKey: 'skip:email', replacesFieldNames: ['Email'] },
   } as Partial<FormContributionRegistration>);
 
-  function renderEditable(editMode: boolean) {
+  function renderEditable(editMode: boolean, providers: Provider[] = []) {
     const record = editableRecord({ Email: 'old@x.io', Notes: 'keep' });
     vi.spyOn(InteractiveFormPanelComponent.prototype as unknown as OnInitProto, 'ngOnInit').mockResolvedValue(undefined);
     const f = renderComponentFixture(InteractiveFormPanelComponent, {
       imports: [ReactStub, AlertStub, PanelStub],
       declarations: [InteractiveFormPanelComponent],
-      providers: [{ provide: ReactBridgeService, useValue: {} }],
+      providers: [{ provide: ReactBridgeService, useValue: {} }, ...providers],
       inputs: { Contribution: claimsEmail(), Record: record as unknown as BaseEntity, FormComponent: { ...FORM, EditMode: editMode } as unknown as BaseFormComponent },
     });
     return { f, record };
@@ -197,6 +205,33 @@ describe('InteractiveFormPanelComponent (DOM) — writing a parent field', () =>
     const { f, record } = renderEditable(false);
     (f.componentInstance as unknown as PanelInternals).applyFieldChange('Email', 'new@x.io');
     expect(record.Fields.find((x) => x.Name === 'Email')?.Value).toBe('old@x.io');
+  });
+
+  it('tells the form a claimed field was edited', () => {
+    const { f } = renderEditable(true, [FormFieldEditCoordinator]);
+    const edits: FormFieldEdit[] = [];
+    TestBed.inject(FormFieldEditCoordinator).Edited$.subscribe((edit) => edits.push(edit));
+
+    (f.componentInstance as unknown as PanelInternals).applyFieldChange('email', 'new@x.io');
+
+    expect(edits).toEqual([{ FieldName: 'Email' }]);
+  });
+
+  it('logs a write the record refuses, without rejecting or reporting an edit', async () => {
+    logError.mockClear();
+    const { f, record } = renderEditable(true, [FormFieldEditCoordinator]);
+    const edits: FormFieldEdit[] = [];
+    TestBed.inject(FormFieldEditCoordinator).Edited$.subscribe((edit) => edits.push(edit));
+    record.Set = () => { throw new Error('Field Email is disabled'); };
+
+    const handled = f.componentInstance.OnReactComponentEvent({
+      type: FormPanelEventNames.FieldChanged,
+      payload: { fieldName: 'Email', newValue: 'new@x.io' },
+    });
+
+    await expect(handled).resolves.toBeUndefined();
+    expect(logError).toHaveBeenCalledWith(expect.stringContaining('Field Email is disabled'));
+    expect(edits).toEqual([]);
   });
 
   it('hands the panel the new value when the user edits a field elsewhere on the form', () => {

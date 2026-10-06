@@ -17,6 +17,7 @@ import { MJReactComponent, ReactBridgeService, type ReactComponentEvent } from '
 import { BaseContributionPanel } from '../panel-slot/base-contribution-panel';
 import { ContributionSectionKey } from '../panel-slot/form-contribution';
 import { BuildFormPanelHostProps } from './form-panel-host-props.builder';
+import { FormFieldEditCoordinator } from '../form-field-edit.coordinator';
 
 /**
  * Generic host for a metadata form contribution (`MJ: Entity Form Contributions` row →
@@ -63,6 +64,8 @@ export class InteractiveFormPanelComponent extends BaseContributionPanel impleme
     private shownValues: unknown[] | null = null;
     private readonly cdr = inject(ChangeDetectorRef);
     private readonly reactBridge = inject(ReactBridgeService);
+    /** The form's field-edit broadcast, which starts the entry-time duplicate check on a new record. */
+    private readonly fieldEdits = inject(FormFieldEditCoordinator, { optional: true });
 
     /** Section identity — {@link ContributionSectionKey}, the key the rail files this panel by. */
     public get SectionKey(): string {
@@ -229,6 +232,11 @@ export class InteractiveFormPanelComponent extends BaseContributionPanel impleme
      * (`replacesFieldNames`), and only while the form is in edit mode. Anything else is ignored
      * and logged, so a panel cannot change a field the user did not hand it or edit a record the
      * user is only viewing.
+     *
+     * A write the record refuses (a disabled or unreadable field) is logged and dropped. A write
+     * that succeeds is reported to {@link FormFieldEditCoordinator}, as an edit in
+     * `mj-form-field` is. Field validation and the `ValueChange` output of `mj-form-field` do not
+     * apply, because a claimed field is not drawn.
      */
     private applyFieldChange(fieldName: string | undefined, value: unknown): void {
         if (!fieldName || !this.Record) return;
@@ -248,8 +256,14 @@ export class InteractiveFormPanelComponent extends BaseContributionPanel impleme
             LogError(`InteractiveFormPanelComponent: unknown field "${fieldName}" on ${entityName}; change ignored.`);
             return;
         }
-        // Dynamic field name from the React side — the same sanctioned Set() path the whole-form host uses.
-        this.Record.Set(field.Name, value);
+        try {
+            // Dynamic field name from the React side — the same sanctioned Set() path the whole-form host uses.
+            this.Record.Set(field.Name, value);
+        } catch (err) {
+            LogError(`InteractiveFormPanelComponent: could not set "${field.Name}" on ${entityName}: ${err instanceof Error ? err.message : String(err)}`);
+            return;
+        }
+        this.fieldEdits?.Notify({ FieldName: field.Name });
     }
 
     private invokeIfRegistered<T = unknown>(method: string, ...args: unknown[]): T | undefined {
