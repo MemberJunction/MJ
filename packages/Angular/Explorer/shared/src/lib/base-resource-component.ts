@@ -107,6 +107,20 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
         this._resourceCloseRequestedEvent = value;
     }
 
+    private _resourceEditModeChangedEvent: ((editing: boolean) => void) | null = null;
+    /**
+     * Wired by the tab container. `true` means the hosted form just entered edit
+     * mode; the shell PROMOTES (pins) a records preview tab on that edge so the
+     * record is never replaced by the next plain open — VS Code's
+     * promote-on-modify. `false` is informational; promotion is sticky.
+     */
+    public get ResourceEditModeChangedEvent(): ((editing: boolean) => void) | null {
+        return this._resourceEditModeChangedEvent;
+    }
+    public set ResourceEditModeChangedEvent(value: ((editing: boolean) => void) | null) {
+        this._resourceEditModeChangedEvent = value;
+    }
+
     private _displayNameChangedEvent: ((newName: string) => void) | null = null;
     public get DisplayNameChangedEvent(): ((newName: string) => void) | null {
         return this._displayNameChangedEvent;
@@ -442,11 +456,24 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
     }
 
     /**
+     * Tell the host shell the hosted form's edit mode changed. Subclasses that
+     * host an editable form call this from the form's EditModeChanged output.
+     */
+    protected NotifyEditModeChanged(editing: boolean): void {
+        if (this._resourceEditModeChangedEvent) {
+            this._resourceEditModeChangedEvent(editing);
+        }
+    }
+
+    /**
      * True when this resource holds in-progress user edits that a silent
-     * replacement would destroy. Consulted by the shell before consuming a
-     * temporary record tab under the preview-tab model (see
-     * TabRequest.TempScope): an editing tab is never replaced — the next open
-     * lands in its own tab instead, so the edit survives.
+     * replacement would destroy.
+     *
+     * Since #4345 the PRIMARY protection is promotion: the shell pins a records
+     * preview tab on the `ResourceEditModeChangedEvent(true)` edge. This read
+     * remains as the fallback the pool predicate consults for resources that
+     * report edit state without raising that event, so such a tab still leaves
+     * the consumption pool while editing.
      *
      * Default false: most resources are read-only surfaces with nothing to
      * lose. Resources that host an editable form override it.

@@ -32,7 +32,7 @@ import { LoadingTheme, LoadingAnimationType, AnimationStep, getActiveTheme } fro
 import { AppAccessDialogComponent, AppAccessDialogConfig, AppAccessDialogResult } from './components/dialogs/app-access-dialog.component';
 import { TabContainerComponent } from './components/tabs/tab-container.component';
 import { BaseUserMenu, UserMenuElement, UserMenuItem, UserMenuContext, isUserMenuDivider, ApplicationInfoRef } from '../user-menu';
-import { MJUserEntity, InstanceConfigEngine, UserInfoEngine } from '@memberjunction/core-entities';
+import { MJUserEntity, InstanceConfigEngine, InteractiveFormsEngine, UserInfoEngine } from '@memberjunction/core-entities';
 import { CommandPaletteService } from '../command-palette/command-palette.service';
 import { FileOpenService } from '@memberjunction/ng-file-storage';
 import { FeedbackDialogService, FeedbackService } from '@memberjunction/ng-feedback';
@@ -519,12 +519,12 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       // Region membership again, not record identity, so a record docked to the
       // workspace is in neither pool: "Move to Workspace" takes a record out of
       // preview replacement, which is the point of docking it.
-      // ...minus any tab the user is actively editing. Replacement destroys the
-      // pane, so an editing tab leaves the pool and the next plain open gets
-      // its own tab — the edit survives without a modal interrupting a browse.
-      // (VS Code reaches the same outcome by promoting a modified preview; this
-      // is the same guarantee read off state we already have, instead of a new
-      // dirty-tracking pipeline.)
+      // A tab whose form enters edit mode is PROMOTED — pinned by
+      // TabContainerComponent.PromoteRecordTabOnEdit — and so leaves this pool
+      // permanently (VS Code's promote-on-modify). The IsRecordTabEditing read
+      // below is the fallback for resources that report IsEditing() without
+      // raising ResourceEditModeChangedEvent: such a tab still leaves the pool
+      // while editing, though only transiently (#4345).
       this.workspaceManager.RecordsRegionTabFilter = this.resolvedRecordOpenStyle === 'records'
         ? (tab) => IsRecordsRegionTab(tab.configuration) && !this.TabContainerRef?.IsRecordTabEditing(tab.id)
         : null;
@@ -857,6 +857,10 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     await InstanceConfigEngine.Instance.Config(false).catch(() => {
         LogStatus('InstanceConfigEngine initialization skipped (not critical)');
     });
+
+    // The browser has no process environment, so Instance Config is where an administrator turns
+    // metadata form contributions off. Applied here, before workspace initialization opens a form.
+    InteractiveFormsEngine.ApplyInstanceConfiguration(InstanceConfigEngine.Instance);
 
     // Resolve the record-open style EAGERLY, before workspace initialization.
     // The first workspace configuration emission fires synchronously inside
