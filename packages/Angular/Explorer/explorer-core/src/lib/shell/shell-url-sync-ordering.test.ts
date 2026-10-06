@@ -2,6 +2,7 @@
 // (same convention as the other component suites in this node test environment).
 import '@angular/compiler';
 import { describe, it, expect, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { ShellComponent } from './shell.component';
 
 /**
@@ -151,5 +152,50 @@ describe('the guard re-reads the configuration rather than trusting the one it e
             h.setActiveTab,
             'the re-read shows an activation newer than the navigation, so the sync must yield',
         ).not.toHaveBeenCalled();
+    });
+});
+
+/**
+ * THE STAMP IS TAKEN WHETHER OR NOT THE SHELL IS READY, which is the other half of the fix.
+ *
+ * `lastNavigationAt` is seeded at construction and updated on every `NavigationEnd`. That update sits
+ * OUTSIDE the `if (this.Initialized)` guard on purpose. Move it inside and a navigation that lands
+ * before the shell is ready leaves the stamp at its construction value — so the startup sync, which
+ * takes `navigatedAt` from the default parameter, compares against a time older than ANY activation,
+ * the guard yields, and the shell stops syncing the workspace to a deep-linked url. The tests above
+ * all pass with that regression in place, because none of them drives the subscription.
+ *
+ * ── WHY THIS READS THE SOURCE ───────────────────────────────────────────────────────────────────
+ *
+ * The subscription is set up inline inside `InitializeShell()`, a ~230-line method that reaches a
+ * large collaborator surface. Driving it would mean shadowing most of that, and extracting the
+ * callback to make it reachable would be a production change to a fix that is already under review.
+ * What is actually at risk is an ORDERING — the assignment before the guard — and ordering is exactly
+ * what a source read can hold without rendering anything.
+ *
+ * Comments are stripped first: the assignment is introduced by a comment that explains it, and an
+ * index comparison over the raw text would be measuring prose.
+ */
+describe('the navigation stamp is recorded before the readiness guard', () => {
+    const SOURCE = readFileSync(new URL('./shell.component.ts', import.meta.url), 'utf8').replace(
+        /\/\/[^\n]*|\/\*[\s\S]*?\*\//g,
+        '',
+    );
+
+    /** The NavigationEnd subscriber's body — bounded so another `Initialized` check cannot satisfy it. */
+    const block = (() => {
+        const at = SOURCE.indexOf('this.lastNavigationAt = Date.now()');
+        expect(at, 'the stamp must be assigned on a navigation').toBeGreaterThan(-1);
+        return SOURCE.slice(at, at + 400);
+    })();
+
+    it('assigns the stamp before testing Initialized', () => {
+        const guard = block.indexOf('this.Initialized');
+        expect(guard, 'the readiness guard must follow the stamp in the same callback').toBeGreaterThan(0);
+    });
+
+    it('passes that same stamp to the sync, rather than re-reading the clock', () => {
+        // Re-reading Date.now() at the call site would time the sync, not the navigation it reacts to.
+        expect(block).toContain('this.lastNavigationAt)');
     });
 });
