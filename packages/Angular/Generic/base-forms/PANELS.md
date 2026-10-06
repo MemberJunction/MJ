@@ -422,7 +422,8 @@ form can honour and from its default for the rest; the user confirms placement. 
 the chosen field names into `configuration.fields`; `fields` is reserved for that use on a field panel.
 `configuration.fields` is written only when a panel is placed as a field claim, and a later placement
 change never removes it: a panel moved off its field claim keeps drawing the fields it was built for,
-while the host shows those fields again.
+and the host shows those fields again unless the new placement replaces the section or tab that
+draws them. The placement summary says so when the user moves such a panel.
 
 Rows are authored by an OpenApp under `metadata/entity-form-contributions/`, or by an agent through
 the `Create` / `Modify` / `Activate Form Contribution Version` actions. The actions change only the
