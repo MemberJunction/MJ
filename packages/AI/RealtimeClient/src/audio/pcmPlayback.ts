@@ -82,8 +82,18 @@ export class RealtimePcmPlayback implements IRealtimePcmPlayback {
         // Created eagerly so GetOutputStream stays a pure read. The feature-check covers older
         // environments where the node does not exist (recording then stays mic-only).
         if (typeof this.context.createMediaStreamDestination === 'function') {
-            this.outputDestination = this.context.createMediaStreamDestination();
-            this.masterGain.connect(this.outputDestination);
+            // Recording is best-effort and must never fail the call: a throw here would
+            // propagate out of the driver's Connect and kill the voice session over a tap.
+            try {
+                const destination = this.context.createMediaStreamDestination();
+                this.masterGain.connect(destination);
+                this.outputDestination = destination;
+            } catch (error) {
+                console.warn(
+                    '[RealtimePcmPlayback] Could not create the recording tap — agent audio will not be recordable this session:',
+                    error
+                );
+            }
         }
     }
 

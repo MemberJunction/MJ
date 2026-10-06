@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RealtimePcmPlayback } from '../audio/pcmPlayback';
 
 /** Records every `connect(target)` so tests can assert the audio graph's edges. */
@@ -83,5 +83,29 @@ describe('RealtimePcmPlayback output stream', () => {
         const playback = new RealtimePcmPlayback(24000);
         expect(playback.GetOutputStream()).toBeNull();
         expect(lastContext!.Gain.Targets).toEqual([DESTINATION_SENTINEL]);
+    });
+
+    it('still constructs, keeps the speakers wired, and warns when creating the recording tap throws', () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        try {
+            class ThrowingTapContext extends FakeAudioContext {
+                constructor(options?: AudioContextOptions) {
+                    super(options);
+                    (this as unknown as { createMediaStreamDestination: () => unknown }).createMediaStreamDestination = () => {
+                        throw new Error('tap unavailable');
+                    };
+                }
+            }
+            (globalThis as { AudioContext?: unknown }).AudioContext = ThrowingTapContext;
+
+            const playback = new RealtimePcmPlayback(24000);
+
+            expect(playback.GetOutputStream()).toBeNull();
+            expect(lastContext!.Gain.Targets).toEqual([DESTINATION_SENTINEL]);
+            expect(warn).toHaveBeenCalledTimes(1);
+            expect(String(warn.mock.calls[0][0])).toContain('Could not create the recording tap');
+        } finally {
+            warn.mockRestore();
+        }
     });
 });
