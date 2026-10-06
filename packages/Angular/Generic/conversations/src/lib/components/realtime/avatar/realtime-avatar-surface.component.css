@@ -2,4 +2,11 @@
   display: block;
   width: 100%;
   height: 100%;
+  /* The orb sizes itself to this surface, wherever it is placed. */
+  container-type: size;
+}
+
+/* The orb's diameter: about a third of the surface's shorter side, so its rings fit. */
+.avatar__orb {
+  --mj-realtime-orb-size: 30cqmin;
 }

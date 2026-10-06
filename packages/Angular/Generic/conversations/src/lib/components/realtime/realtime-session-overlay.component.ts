@@ -27,6 +27,7 @@ import { RealtimeComposerComponent } from './realtime-composer.component';
 import { RealtimeSurfaceTabsComponent, RealtimeChannelSlot } from './realtime-surface-tabs.component';
 import { RealtimeSurfaceStageModel } from './realtime-surface-stage.model';
 import { RealtimeSurfaceMoveMenuComponent, type RealtimeSurfaceMove } from './realtime-surface-move-menu.component';
+import { AgentOrbStateFor, RealtimeAgentOrbComponent, type RealtimeAgentOrbState } from './realtime-agent-orb.component';
 import {
   ParseSurfacePipPref, ParseSurfacePlacementPref, SerializeSurfacePipPref, SerializeSurfacePlacementPref,
   SURFACE_PIP_PREF_KEY, SURFACE_PLACEMENT_PREF_KEY
@@ -143,6 +144,7 @@ export interface RealtimeStartLiveRequest {
     CommonModule,
     SharedGenericModule,
     RealtimeAgentBannerComponent,
+    RealtimeAgentOrbComponent,
     RealtimeSessionThreadComponent,
     RealtimeChannelStripComponent,
     RealtimePerceptionChipComponent,
@@ -1426,12 +1428,8 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   }
 
   /** Maps the realtime state onto the hero orb's `data-state` (active turn-states only). */
-  public HeroOrbState(state: RealtimeConnectionState): 'speaking' | 'listening' | 'thinking' {
-    switch (state) {
-      case 'speaking': return 'speaking';
-      case 'thinking': return 'thinking';
-      default: return 'listening';
-    }
+  public HeroOrbState(state: RealtimeConnectionState): RealtimeAgentOrbState {
+    return AgentOrbStateFor(state);
   }
 
   /** Short first-person status line for the pure-audio hero. */

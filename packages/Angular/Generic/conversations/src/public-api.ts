@@ -145,6 +145,7 @@ export * from './lib/components/realtime/realtime-agent-picker.component';
 export * from './lib/components/realtime/realtime-session-overlay.component';
 export * from './lib/components/realtime/realtime-session-state';
 export * from './lib/components/realtime/realtime-agent-banner.component';
+export * from './lib/components/realtime/realtime-agent-orb.component';
 export * from './lib/components/realtime/realtime-session-thread.component';
 export * from './lib/components/realtime/realtime-delegation-card.component';
 export * from './lib/components/realtime/realtime-activity-rail.component';

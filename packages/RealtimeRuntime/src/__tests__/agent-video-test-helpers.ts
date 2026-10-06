@@ -8,7 +8,7 @@ import {
     type JSONValue,
     type RealtimeTrackDescriptor,
 } from '@memberjunction/ai';
-import { BaseRealtimeClient, type MediaVideoSource } from '@memberjunction/ai-realtime-client';
+import { BaseRealtimeClient, type MediaVideoSource, type RealtimeClientState } from '@memberjunction/ai-realtime-client';
 
 /** The track a channel that shows the agent sinks: outbound video, in whatever encoding the model sends. */
 export const AGENT_VIDEO_TRACK: RealtimeTrackDescriptor = { Modality: 'video', Direction: 'outbound' };
@@ -37,6 +37,11 @@ export abstract class FakeVideoDriver extends BaseRealtimeClient {
     /** The model's video arrives. */
     public ShowAgentVideo(video: MediaVideoSource | MediaStream): void {
         this.emitRemoteVideo(video);
+    }
+
+    /** The provider's connection or turn changes. */
+    public ReportState(state: RealtimeClientState): void {
+        this.emitStateChange(state);
     }
 
     public SendText(): void {}

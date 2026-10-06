@@ -39,6 +39,7 @@ import { FormatChannelNote } from './channel-state-delta';
 import { VisualPerceptionPump, type VisualFrameReason } from './channel-visual-pump';
 import { DEFAULT_CHANNEL_SURFACE_PLACEMENT, type ChannelSurfacePlacement } from './channel-surface-placement';
 import type { RealtimeCaptureKind, RealtimeCaptureState, RealtimeCaptureStates } from '../session/realtime-captures';
+import type { RealtimeConnectionState } from '../session/RealtimeSessionRuntime';
 import type { ParsedDelegationArtifact } from '../session/delegation-result-parser';
 
 /**
@@ -262,6 +263,12 @@ export interface RealtimeChannelContext {
    * shows the agent, one that sinks outbound video ({@link BaseRealtimeChannelClient.GetSunkTracks}), follows it here.
    */
   AgentVideo$?: Observable<MediaVideoSource | null>;
+
+  /**
+   * OPTIONAL — the call's state, now and on every change (the runtime's `ConnectionState$`): connecting, listening,
+   * speaking, thinking, an error, or closed. A channel that shows the agent follows the agent's turn here.
+   */
+  ConnectionState$?: Observable<RealtimeConnectionState>;
 }
 
 /**

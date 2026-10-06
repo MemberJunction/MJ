@@ -2650,8 +2650,9 @@ export class RealtimeSessionRuntime {
       Captures$: this.Captures$,
       StartCapture: (kind: RealtimeCaptureKind) => (kind === 'camera' ? this.StartCamera() : this.StartScreenShare()),
       StopCapture: (kind: RealtimeCaptureKind) => (kind === 'camera' ? this.StopCamera() : this.StopScreenShare()),
-      // The agent's video, for a channel that shows it.
-      AgentVideo$: this.AgentVideo$
+      // The agent's video, and the call's state, for a channel that shows the agent.
+      AgentVideo$: this.AgentVideo$,
+      ConnectionState$: this.ConnectionState$
     };
   }
 

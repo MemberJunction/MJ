@@ -1,7 +1,19 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderComponentFixture, query, queryAll } from '@memberjunction/ng-test-utils';
 import type { MediaParticipant, MediaVideoSource } from '@memberjunction/ai-realtime-client/media';
-import { MediaTileComponent } from './media-tile.component';
+import { Component, Input } from '@angular/core';
+import { MediaTileComponent, MediaTilePlaceholderDirective } from './media-tile.component';
+
+/** A host that gives the tile its own placeholder. */
+@Component({
+  standalone: true,
+  imports: [MediaTileComponent, MediaTilePlaceholderDirective],
+  template: `<mj-media-tile [Participant]="Participant" [StallAfterMs]="StallAfterMs"><span class="own-placeholder" mjMediaTilePlaceholder>orb</span></mj-media-tile>`,
+})
+class PlaceholderHostComponent {
+  @Input() public Participant: MediaParticipant | null = null;
+  @Input() public StallAfterMs: number | null = null;
+}
 
 /** An element source that records what it was attached to and how often it was detached. */
 function elementSource(): MediaVideoSource & { Attached: HTMLVideoElement[]; Detaches: number } {
@@ -38,6 +50,12 @@ describe('MediaTileComponent (DOM)', () => {
       const f = render(participant());
       expect(query(f, '.tile__initials')?.textContent?.trim()).toBe('AL');
       expect(query(f, '.tile__video')?.classList.contains('tile__video--hidden')).toBe(true);
+    });
+
+    it("shows the host's own placeholder instead of the initials", () => {
+      const f = renderComponentFixture(PlaceholderHostComponent, { inputs: { Participant: participant() } });
+      expect(query(f, '.tile__placeholder .own-placeholder')?.textContent).toBe('orb');
+      expect(query(f, '.tile__initials')).toBeNull();
     });
 
     it('shows the picture when an AvatarUrl is given', () => {
@@ -240,6 +258,21 @@ describe('MediaTileComponent (DOM)', () => {
       f.componentRef.setInput('Participant', participant({ Video: { camera: elementSource() } }));
       f.detectChanges();
       expect(query(f, '.tile__placeholder')).not.toBeNull();
+    });
+
+    it("shows the host's own placeholder instead of the initials, until the first frame and while stalled", () => {
+      vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'performance'] });
+      const f = renderComponentFixture(PlaceholderHostComponent, {
+        inputs: { Participant: participant({ Video: { avatar: elementSource() } }), StallAfterMs: 1000 },
+      });
+      expect(query(f, '.tile__placeholder .own-placeholder')).not.toBeNull();
+      expect(query(f, '.tile__initials')).toBeNull();
+      frame();
+      f.detectChanges();
+      expect(query(f, '.own-placeholder')).toBeNull();
+      vi.advanceTimersByTime(1300);
+      f.detectChanges();
+      expect(query(f, '.tile__placeholder .own-placeholder')).not.toBeNull();
     });
 
     it('always shows the video without a stall time, and watches nothing', () => {

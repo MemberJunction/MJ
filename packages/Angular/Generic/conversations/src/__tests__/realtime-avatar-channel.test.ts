@@ -6,7 +6,12 @@ import { BehaviorSubject } from 'rxjs';
 import { MJGlobal } from '@memberjunction/global';
 import type { IMetadataProvider } from '@memberjunction/core';
 import type { MediaVideoSource } from '@memberjunction/ai-realtime-client/media';
-import { BaseRealtimeChannelClient, BuildChannelCatalogNote, type RealtimeChannelContext } from '@memberjunction/realtime-runtime';
+import {
+  BaseRealtimeChannelClient,
+  BuildChannelCatalogNote,
+  type RealtimeChannelContext,
+  type RealtimeConnectionState,
+} from '@memberjunction/realtime-runtime';
 import {
   LoadRealtimeAvatarChannel,
   REALTIME_AVATAR_CHANNEL_CLASS,
@@ -16,7 +21,10 @@ import type { RealtimeAvatarSurfaceComponent } from '../lib/components/realtime/
 
 LoadRealtimeAvatarChannel();
 
-/** A session as the channel sees it, with the agent's video. */
+/** The call's state, as the session streams it. */
+const callState$ = new BehaviorSubject<RealtimeConnectionState>('speaking');
+
+/** A session as the channel sees it, with the agent's video and the call's state. */
 function context(video$: BehaviorSubject<MediaVideoSource | null>): RealtimeChannelContext {
   return {
     AgentName: 'Sage',
@@ -28,6 +36,7 @@ function context(video$: BehaviorSubject<MediaVideoSource | null>): RealtimeChan
     AgentSessionID: 'session-1',
     ExecuteServerAction: async () => null,
     AgentVideo$: video$.asObservable(),
+    ConnectionState$: callState$.asObservable(),
   };
 }
 
@@ -67,13 +76,16 @@ describe('the Avatar channel', () => {
     expect(channel.GetSourcedTracks()).toEqual([]);
   });
 
-  it("gives its surface the agent's name and video", () => {
+  it("gives its surface the agent's name, video and the call's state", () => {
     const video$ = new BehaviorSubject<MediaVideoSource | null>(null);
     const channel = new RealtimeAvatarChannel();
     channel.Initialize(context(video$));
-    const surface = { AgentName: '', Video$: null } as unknown as RealtimeAvatarSurfaceComponent;
+    const surface = { AgentName: '', Video$: null, State$: null } as unknown as RealtimeAvatarSurfaceComponent;
     channel.BindSurface(surface);
     expect(surface.AgentName).toBe('Sage');
+    const states: RealtimeConnectionState[] = [];
+    surface.State$?.subscribe((s) => states.push(s));
+    expect(states).toEqual(['speaking']);
     const seen: Array<MediaVideoSource | null> = [];
     surface.Video$?.subscribe((v) => seen.push(v));
     const player: MediaVideoSource = { Kind: 'element', Attach: () => () => undefined };

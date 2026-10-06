@@ -3,6 +3,8 @@ import {
   ChangeDetectionStrategy,
   ChangeDetectorRef,
   Component,
+  ContentChild,
+  Directive,
   ElementRef,
   EventEmitter,
   Input,
@@ -18,11 +20,18 @@ import { MediaVideoBinding } from '../media-video-binding';
 import { VideoFrameWatch } from '../video-frame-watch';
 
 /**
+ * Marks the content an `mj-media-tile` shows instead of the participant's picture or initials, while it has no video to
+ * show (none, or out of frames): `<mj-media-tile><span mjMediaTilePlaceholder>…</span></mj-media-tile>`.
+ */
+@Directive({ selector: '[mjMediaTilePlaceholder]', standalone: true })
+export class MediaTilePlaceholderDirective {}
+
+/**
  * `mj-media-tile`: one participant. Their video (the preferred one, else a shared screen, the camera, the avatar),
  * or their picture or initials when there is none; name, role badge, mute and screen-sharing indicators, an
  * "AI-generated video" label while it shows an avatar, connection quality, an active-speaker ring, an optional audio
  * meter and a pin button. With {@link StallAfterMs} set, a video that stops sending frames cross-fades to the picture or
- * initials until its frames come back.
+ * initials until its frames come back. Content marked {@link MediaTilePlaceholderDirective} takes the picture's place.
  *
  * The tile never plays audio: a voice must not stop because its tile left the screen, so the host plays each
  * voice once, outside the layout.
@@ -47,10 +56,13 @@ import { VideoFrameWatch } from '../video-frame-watch';
 
       @if (!HasVideo || Stalled) {
         <div class="tile__placeholder" [class.tile__placeholder--over-video]="Stalled">
-          @if (AvatarUrl) {
-            <img [src]="AvatarUrl" [alt]="Participant?.DisplayName ?? ''" />
-          } @else {
-            <span class="tile__initials">{{ Initials }}</span>
+          <ng-content select="[mjMediaTilePlaceholder]"></ng-content>
+          @if (!Placeholder) {
+            @if (AvatarUrl) {
+              <img [src]="AvatarUrl" [alt]="Participant?.DisplayName ?? ''" />
+            } @else {
+              <span class="tile__initials">{{ Initials }}</span>
+            }
           }
         </div>
       }
@@ -146,6 +158,9 @@ export class MediaTileComponent implements AfterViewInit, OnDestroy {
    * come back; until its first frame, too. `null` (the default): the video always shows. Read when a video is attached.
    */
   @Input() public StallAfterMs: number | null = null;
+
+  /** The host's own placeholder, shown instead of the picture or initials. */
+  @ContentChild(MediaTilePlaceholderDirective) public Placeholder?: MediaTilePlaceholderDirective;
 
   /** Emits when the user clicks the pin button. */
   @Output() public TogglePin = new EventEmitter<void>();

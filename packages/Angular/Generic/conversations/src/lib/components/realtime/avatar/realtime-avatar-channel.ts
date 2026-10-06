@@ -63,6 +63,7 @@ export class RealtimeAvatarChannel extends BaseRealtimeChannelClient<RealtimeAva
   public override BindSurface(instance: RealtimeAvatarSurfaceComponent): void {
     instance.AgentName = this.Context?.AgentName ?? 'The assistant';
     instance.Video$ = this.Context?.AgentVideo$ ?? null;
+    instance.State$ = this.Context?.ConnectionState$ ?? null;
   }
 }
 

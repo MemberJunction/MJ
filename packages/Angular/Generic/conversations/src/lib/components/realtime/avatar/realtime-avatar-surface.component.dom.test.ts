@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { renderComponentFixture, query, text, ExpectNoAxeViolations } from '@memberjunction/ng-test-utils';
 import type { MediaVideoSource } from '@memberjunction/ai-realtime-client/media';
+import type { RealtimeConnectionState } from '@memberjunction/realtime-runtime';
 import { RealtimeAvatarSurfaceComponent } from './realtime-avatar-surface.component';
 
 /**
@@ -24,11 +25,18 @@ function player(): MediaVideoSource & { Attached: HTMLVideoElement[]; Detaches: 
   return source;
 }
 
-function render(video: MediaVideoSource | null = null) {
+function render(video: MediaVideoSource | null = null, state: RealtimeConnectionState = 'listening') {
   const video$ = new BehaviorSubject<MediaVideoSource | null>(video);
-  const fixture = renderComponentFixture(RealtimeAvatarSurfaceComponent, { inputs: { AgentName: 'Sage Lee', Video$: video$.asObservable() } });
-  return { fixture, video$ };
+  const state$ = new BehaviorSubject<RealtimeConnectionState>(state);
+  const fixture = renderComponentFixture(RealtimeAvatarSurfaceComponent, {
+    inputs: { AgentName: 'Sage Lee', Video$: video$.asObservable(), State$: state$.asObservable() },
+  });
+  return { fixture, video$, state$ };
 }
+
+/** The orb in the tile's placeholder, and the turn it shows. */
+const orbState = (fixture: ReturnType<typeof render>['fixture']): string | null =>
+  query(fixture, '.tile__placeholder mj-realtime-agent-orb .orb')?.getAttribute('data-state') ?? null;
 
 /** Frame callbacks the tile's video registered: jsdom has none of its own. */
 let frames: Array<() => void> = [];
@@ -54,9 +62,10 @@ describe('RealtimeAvatarSurfaceComponent (DOM)', () => {
     vi.useRealTimers();
   });
 
-  it("shows the agent's initials until the video arrives", () => {
+  it('shows the orb, and not the initials, until the video arrives', () => {
     const { fixture } = render();
-    expect(text(fixture, '.tile__initials')).toBe('SL');
+    expect(orbState(fixture)).toBe('listening');
+    expect(query(fixture, '.tile__initials')).toBeNull();
     expect(query(fixture, '.tile__chip')).toBeNull();
   });
 
@@ -71,16 +80,33 @@ describe('RealtimeAvatarSurfaceComponent (DOM)', () => {
     expect(text(fixture, '.tile__chip')).toBe('AI-generated video');
   });
 
-  it("shows the agent's initials until the video's first frame, and again after a second without one", () => {
+  it("shows the orb until the video's first frame, and again after a second without one", () => {
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'performance'] });
     const { fixture } = render(player());
-    expect(text(fixture, '.tile__initials')).toBe('SL');
+    expect(orbState(fixture)).toBe('listening');
     frame();
     fixture.detectChanges();
-    expect(query(fixture, '.tile__initials')).toBeNull();
+    expect(orbState(fixture)).toBeNull();
     vi.advanceTimersByTime(1300);
     fixture.detectChanges();
-    expect(text(fixture, '.tile__initials')).toBe('SL');
+    expect(orbState(fixture)).toBe('listening');
+  });
+
+  it("follows the agent's turn on the orb: speaking, thinking, and listening for everything else", () => {
+    const { fixture, state$ } = render(null, 'speaking');
+    expect(orbState(fixture)).toBe('speaking');
+    state$.next('thinking');
+    fixture.detectChanges();
+    expect(orbState(fixture)).toBe('thinking');
+    state$.next('connecting');
+    fixture.detectChanges();
+    expect(orbState(fixture)).toBe('listening');
+  });
+
+  it("lets go of the call's state when it is destroyed", () => {
+    const { fixture, state$ } = render();
+    fixture.destroy();
+    expect(state$.observed).toBe(false);
   });
 
   it('follows a newer video, and lets go of the one it showed', () => {

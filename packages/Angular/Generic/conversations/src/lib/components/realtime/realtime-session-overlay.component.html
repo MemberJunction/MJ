@@ -63,12 +63,7 @@
                audio inside expanding sound-wave rings; nothing to read, nothing to configure. -->
           <div class="hero" [class.hero--presenting]="PresenterOnStage" [attr.data-state]="state" role="status" aria-live="polite">
             @if (!PresenterOnStage) {
-              <div class="hero__stage">
-                <span class="hero__ring" aria-hidden="true"></span>
-                <span class="hero__ring hero__ring--2" aria-hidden="true"></span>
-                <span class="hero__ring hero__ring--3" aria-hidden="true"></span>
-                <div class="hero__orb" [attr.data-state]="HeroOrbState(state)" aria-hidden="true"></div>
-              </div>
+              <mj-realtime-agent-orb class="hero__orb" [State]="HeroOrbState(state)"></mj-realtime-agent-orb>
               <div class="hero__eq" aria-hidden="true">
                 <span></span><span></span><span></span><span></span><span></span>
                 <span></span><span></span><span></span><span></span>

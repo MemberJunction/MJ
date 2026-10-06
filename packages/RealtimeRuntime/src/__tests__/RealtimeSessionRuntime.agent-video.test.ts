@@ -186,6 +186,18 @@ describe("RealtimeSessionRuntime: the agent's video", () => {
         await runtime.EndRealtimeSession();
     });
 
+    it("gives a channel the call's state through its context", async () => {
+        const avatar = avatarChannel();
+        const { runtime, start } = build([avatar]);
+        const client = await start();
+        const seen: string[] = [];
+        avatar.ContextForTest?.ConnectionState$?.subscribe((s) => seen.push(s));
+        client.ReportState('listening');
+        client.ReportState('speaking');
+        expect(seen.slice(-2)).toEqual(['listening', 'speaking']);
+        await runtime.EndRealtimeSession();
+    });
+
     it('marks the channel that shows the video as used when it arrives, so its surface shows, and no other channel', async () => {
         const { runtime, used, start } = build([
             avatarChannel(),
