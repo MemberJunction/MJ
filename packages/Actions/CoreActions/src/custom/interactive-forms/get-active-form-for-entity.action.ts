@@ -2,6 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { BaseAction } from "@memberjunction/actions";
 import { Metadata, LogError, RunView } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
+import { FormScopeAllowedOnEntity } from "@memberjunction/core-entities";
 import type { ComponentSpec } from "@memberjunction/interactive-component-types";
 
 /**
@@ -17,6 +18,9 @@ import type { ComponentSpec } from "@memberjunction/interactive-component-types"
  *     full variants list includes 'Pending' rows so the agent can recognize
  *     an in-flight refinement loop and reuse the Pending row instead of
  *     spawning a new one.
+ *   - On an identity or permission entity only the caller's own `User` rows
+ *     apply ({@link FormScopeAllowedOnEntity}), so a Role or Global form there
+ *     is neither active nor listed.
  *
  * Output shape (JSON in `Message`, also surfaced as a `Result` output param):
  * ```
@@ -107,7 +111,7 @@ export class GetActiveFormForEntityAction extends BaseAction {
                 );
             }
 
-            const overrides = overrideResult.Results ?? [];
+            const overrides = (overrideResult.Results ?? []).filter(o => FormScopeAllowedOnEntity(entity.Name, o.Scope));
             if (overrides.length === 0) {
                 const payload = { EntityName: entityName, Active: null, Variants: [] };
                 params.Params.push({ Name: "Result", Type: "Output", Value: payload });
