@@ -120,6 +120,13 @@ export interface IRealtimeSessionRecorder {
     /** Mixes the agent's audio in once its track arrives, so the recording carries both sides. */
     AttachRemoteStream(stream: MediaStream): void;
 
+    /**
+     * OPTIONAL: records the microphone stream's current track from now on, after its track was
+     * replaced (a device switch, or a lost device replaced by the default). A recorder bound to the
+     * old track would otherwise record silence. A recorder without it keeps its original binding.
+     */
+    ReplaceMicrophone?(micStream: MediaStream): void;
+
     /** Milliseconds into the recording, used to stamp per-turn cue offsets into a seekable file. */
     NowOffsetMs(): number;
 

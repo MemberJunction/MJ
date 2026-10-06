@@ -9,7 +9,8 @@ import {
     ElevenLabsServerEvent,
     IElevenLabsClientSocket,
 } from '../drivers/elevenLabsRealtimeClient';
-import { collect, FakeMediaStream, FakeTrack } from './helpers/realtime-fakes';
+import { collect, FakeMediaStream, FakeMicCapture, FakeTrack } from './helpers/realtime-fakes';
+import { DescribePcmMicrophoneReplacement } from './helpers/microphone-replacement';
 
 // ── Fakes (no network, no Web Audio) ───────────────────────────────────────────
 
@@ -78,14 +79,6 @@ class FakePlayback implements IRealtimePcmPlayback {
     public Close(): void {
         this.Closed = true;
         this.IsPlaying = false;
-    }
-}
-
-/** Fake mic capture handle. */
-class FakeMicCapture implements IPcmMicCapture {
-    public Stopped = false;
-    public Stop(): void {
-        this.Stopped = true;
     }
 }
 
@@ -776,3 +769,12 @@ describe('tool-result nudge — result lands after the turn closed', () => {
         expect(userMessages()).toHaveLength(0);
     });
 });
+
+DescribePcmMicrophoneReplacement(
+    async () => {
+        const client = new TestElevenLabsClient();
+        const track = await connect(client);
+        return { Client: client, Track: track, Capture: client.Capture };
+    },
+    () => new TestElevenLabsClient()
+);

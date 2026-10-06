@@ -164,6 +164,15 @@ describe('LocalMediaController', () => {
             await controller.SwitchDevice('microphone', 'mic-headset');
             expect(controller.State.Microphone).toMatchObject({ Status: 'on', DeviceID: 'mic-headset' });
         });
+
+        it('keeps a muted microphone muted on the new device', async () => {
+            const stream = startedStream(await controller.Start('microphone'));
+            stream.getAudioTracks()[0].enabled = false;
+
+            await controller.SwitchDevice('microphone', 'mic-headset');
+            expect(stream.getAudioTracks()).toEqual([devices.Tracks[1]]);
+            expect(devices.Tracks[1].enabled).toBe(false);
+        });
     });
 
     describe('a lost device', () => {
@@ -176,6 +185,16 @@ describe('LocalMediaController', () => {
             expect(controller.GetStream('microphone')).toBe(stream);
             expect(stream.getAudioTracks()).toEqual([devices.Tracks[1]]);
             expect(controller.State.Microphone).toMatchObject({ Status: 'on', DeviceID: 'mic-built-in' });
+        });
+
+        it('keeps a muted microphone muted on the default device', async () => {
+            const stream = startedStream(await controller.Start('microphone', 'mic-headset'));
+            stream.getAudioTracks()[0].enabled = false;
+            devices.Unplug('mic-headset');
+            await settle();
+
+            expect(stream.getAudioTracks()).toEqual([devices.Tracks[1]]);
+            expect(devices.Tracks[1].enabled).toBe(false);
         });
 
         it('reports failed when no device of that kind is left', async () => {

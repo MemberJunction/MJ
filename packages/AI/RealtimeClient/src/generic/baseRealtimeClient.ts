@@ -228,6 +228,11 @@ export interface RealtimeClientError {
  *    client-owned-audio drivers, the remote WebRTC stream on peer-connection drivers.
  *    Meters must be released on disconnect ({@link closeAudioMeters}). A driver with no
  *    tappable plane simply attaches nothing — hosts fall back to turn-state animation.
+ * 10. **Follow a replaced microphone track, when the transport can.** A device switch or a
+ *    lost device swaps the track inside the mic stream, and anything bound to the old track (a
+ *    WebRTC sender, a Web Audio source node, the input meter's clone) goes silent. A driver
+ *    implements {@link BaseRealtimeClient.ReplaceMicrophone} to rebind them: `replaceTrack` on
+ *    its senders, or `IPcmMicCapture.Rebind` on its PCM capture, and a new input meter.
  */
 export abstract class BaseRealtimeClient {
     // ── Registered handlers (single-handler style, like IRealtimeSession) ─────
@@ -494,6 +499,25 @@ export abstract class BaseRealtimeClient {
      * @param muted `true` to mute the mic, `false` to unmute.
      */
     public abstract SetMuted(muted: boolean): void;
+
+    /**
+     * Moves a connected session onto the microphone stream's current audio track: call it after the
+     * track changes (a device switch, or a lost device replaced by the default) or to use another
+     * stream. The connection stays up and the provider hears the new track. The driver now owns this
+     * stream as it owned the one given to {@link Connect}; the previous stream's tracks are the
+     * caller's to stop.
+     *
+     * Mute follows the track: the new track's `enabled` flag decides it, so a caller replacing a
+     * muted track carries `enabled` over (the `LocalMediaController` does).
+     *
+     * **Optional capability** (driver obligation #10): a driver that can't rebind its transport
+     * leaves it undefined. Does nothing when the session isn't connected.
+     *
+     * @param micStream The stream to follow, usually the one given to {@link Connect} after the
+     *   controller swapped its track.
+     * @throws (rejects) When the stream has no audio track; the session keeps its current microphone.
+     */
+    public ReplaceMicrophone?(micStream: MediaStream): Promise<void>;
 
     /**
      * Tears down the provider connection and all client-held resources (control channel,

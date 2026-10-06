@@ -13,6 +13,7 @@ import {
     IRealtimeAudioSink,
     IRealtimeDataChannel,
     IRealtimePeerConnection,
+    IRealtimeRtpSender,
 } from './openAIRealtimeClient';
 
 /**
@@ -56,6 +57,8 @@ export class OpenAILiveClient extends BaseRealtimeClient {
     private remoteStream: MediaStream | null = null;
     private remoteStreamHandlers: Array<(stream: MediaStream) => void> = [];
     private micStream: MediaStream | null = null;
+    /** The senders carrying the mic tracks, kept so {@link ReplaceMicrophone} can move them to a new track. */
+    private micSenders: IRealtimeRtpSender[] = [];
     protected sessionConfig: JSONObject | null = null;
 
     // ── State Machine ──────────────────────────────────────────────────────────
@@ -160,6 +163,7 @@ export class OpenAILiveClient extends BaseRealtimeClient {
         this.closeAudioMeters();
         this.micStream?.getTracks().forEach((t) => t.stop());
         this.micStream = null;
+        this.micSenders = [];
 
         if (this.dataChannel) {
             try {
@@ -329,6 +333,23 @@ export class OpenAILiveClient extends BaseRealtimeClient {
     }
 
     /**
+     * Moves the mic senders and the input meter to the stream's current tracks (obligation #10).
+     * `replaceTrack` needs no renegotiation, so the call carries on.
+     */
+    public async ReplaceMicrophone(micStream: MediaStream): Promise<void> {
+        if (this.micSenders.length === 0) {
+            return;
+        }
+        const tracks = micStream.getAudioTracks();
+        if (tracks.length === 0) {
+            throw new Error('The microphone stream has no audio track.');
+        }
+        await Promise.all(this.micSenders.map((sender, index) => sender.replaceTrack(tracks[index] ?? null)));
+        this.micStream = micStream;
+        this.attachInputAudioMeter(RealtimeAudioMeter.ForMicStream(micStream));
+    }
+
+    /**
      * Returns the agent's remote audio MediaStream if available.
      */
     public override GetRemoteMediaStream(): MediaStream | null {
@@ -434,9 +455,7 @@ export class OpenAILiveClient extends BaseRealtimeClient {
     }
 
     private attachMicrophone(pc: IRealtimePeerConnection, micStream: MediaStream): void {
-        for (const track of micStream.getAudioTracks()) {
-            pc.addTrack(track, micStream);
-        }
+        this.micSenders = micStream.getAudioTracks().map((track) => pc.addTrack(track, micStream));
     }
 
     private attachRemoteAudio(pc: IRealtimePeerConnection): void {

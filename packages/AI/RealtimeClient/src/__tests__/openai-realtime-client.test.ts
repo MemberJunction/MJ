@@ -15,6 +15,8 @@ import {
     IRealtimePeerConnection,
     OpenAIRealtimeClient,
 } from '../drivers/openAIRealtimeClient';
+import { FakeRtpSender } from './helpers/realtime-fakes';
+import { DescribeWebRtcMicrophoneReplacement } from './helpers/microphone-replacement';
 
 // ── Fakes (no network, no WebRTC) ──────────────────────────────────────────────
 
@@ -57,14 +59,19 @@ class FakeDataChannel implements IRealtimeDataChannel {
 class FakePeerConnection implements IRealtimePeerConnection {
     public ontrack: ((event: RTCTrackEvent) => void) | null = null;
     public AddedTracks: MediaStreamTrack[] = [];
+    /** The sender handed back for each added track. */
+    public Senders: FakeRtpSender[] = [];
     public Channel = new FakeDataChannel();
     public ChannelLabel = '';
     public LocalDescription: RTCSessionDescriptionInit | null = null;
     public RemoteDescription: RTCSessionDescriptionInit | null = null;
     public Closed = false;
 
-    public addTrack(track: MediaStreamTrack, _stream: MediaStream): void {
+    public addTrack(track: MediaStreamTrack, _stream: MediaStream): FakeRtpSender {
         this.AddedTracks.push(track);
+        const sender = new FakeRtpSender(track);
+        this.Senders.push(sender);
+        return sender;
     }
     public createDataChannel(label: string): IRealtimeDataChannel {
         this.ChannelLabel = label;
@@ -832,3 +839,13 @@ describe('OpenAIRealtimeClient', () => {
         });
     });
 });
+
+DescribeWebRtcMicrophoneReplacement(
+    async () => {
+        const client = new ConnectTestClient();
+        const track = new FakeTrack();
+        await client.Connect(makeConfig(), new FakeMediaStream([track]));
+        return { Client: client, Track: track, Senders: client.Pc.Senders };
+    },
+    () => new ConnectTestClient()
+);

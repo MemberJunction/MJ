@@ -200,6 +200,72 @@ describe('RealtimeAudioRecorder — with stubbed Web Audio', () => {
         await recorder.Stop();
     });
 
+    describe('ReplaceMicrophone', () => {
+        /** Makes the stubbed context record each source node: the stream it reads and whether it was disconnected. */
+        function recordSources(): Array<{ Stream: MediaStream; Disconnected: boolean }> {
+            const sources: Array<{ Stream: MediaStream; Disconnected: boolean }> = [];
+            const context = g['AudioContext'] as { prototype: { createMediaStreamSource(stream: MediaStream): object } };
+            context.prototype.createMediaStreamSource = (stream: MediaStream) => {
+                const source = { Stream: stream, Disconnected: false, connect: () => undefined, disconnect: () => (source.Disconnected = true) };
+                sources.push(source);
+                return source;
+            };
+            return sources;
+        }
+
+        /** Lets the async graph setup started by Start() finish. */
+        async function settleSetup(): Promise<void> {
+            await Promise.resolve();
+            await Promise.resolve();
+        }
+
+        it('records the new stream once the graph is ready, and drops the old source', async () => {
+            const sources = recordSources();
+            const first = fakeStream(1);
+            const second = fakeStream(1);
+            const recorder = new RealtimeAudioRecorder();
+            recorder.Start(first, null);
+            await settleSetup();
+
+            recorder.ReplaceMicrophone(second);
+            expect(sources.map((s) => s.Stream)).toEqual([first, second]);
+            expect(sources.map((s) => s.Disconnected)).toEqual([true, false]);
+            await recorder.Stop();
+        });
+
+        it('a replacement during setup is the microphone the graph connects', async () => {
+            const sources = recordSources();
+            const second = fakeStream(1);
+            const recorder = new RealtimeAudioRecorder();
+            recorder.Start(fakeStream(1), null);
+            recorder.ReplaceMicrophone(second);
+            await settleSetup();
+
+            expect(sources.map((s) => s.Stream)).toEqual([second]);
+            await recorder.Stop();
+        });
+
+        it('keeps the current source when the new stream has no audio track', async () => {
+            const sources = recordSources();
+            const first = fakeStream(1);
+            const recorder = new RealtimeAudioRecorder();
+            recorder.Start(first, null);
+            await settleSetup();
+
+            recorder.ReplaceMicrophone(fakeStream(0));
+            expect(sources.map((s) => s.Stream)).toEqual([first]);
+            expect(sources[0].Disconnected).toBe(false);
+            await recorder.Stop();
+        });
+
+        it('does nothing when not recording', () => {
+            const sources = recordSources();
+            const recorder = new RealtimeAudioRecorder();
+            expect(() => recorder.ReplaceMicrophone(fakeStream(1))).not.toThrow();
+            expect(sources).toEqual([]);
+        });
+    });
+
     it('MimeType reverts to empty after Stop (recording flag cleared)', async () => {
         const recorder = new RealtimeAudioRecorder();
         recorder.Start(fakeStream(1), null);

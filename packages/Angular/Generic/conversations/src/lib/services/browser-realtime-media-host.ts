@@ -64,6 +64,10 @@ class BrowserRealtimeSessionRecorder implements IRealtimeSessionRecorder {
         this.recorder.AttachRemoteStream(stream);
     }
 
+    public ReplaceMicrophone(micStream: MediaStream): void {
+        this.recorder.ReplaceMicrophone(micStream);
+    }
+
     public NowOffsetMs(): number {
         return this.recorder.NowOffsetMs();
     }

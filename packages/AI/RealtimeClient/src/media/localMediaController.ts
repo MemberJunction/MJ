@@ -9,8 +9,10 @@
  * - **A device switch keeps the stream.** The new track replaces the old one inside the `MediaStream` that
  *   {@link LocalMediaController.GetStream} handed out, so a `<video>` self-view or a `FrameSampler` keeps
  *   working. Consumers bound to a track rather than a stream (a Web Audio source node, a WebRTC sender) must
- *   rebind when `State$` reports the new device. The current device is released before the new one opens,
- *   because mobile browsers open one camera at a time; if the new one fails, the previous one is reopened.
+ *   rebind when `State$` reports the new device; a realtime client does it in `ReplaceMicrophone`. The new
+ *   track keeps the old one's `enabled` flag, so a muted microphone stays muted. The current device is
+ *   released before the new one opens, because mobile browsers open one camera at a time; if the new one
+ *   fails, the previous one is reopened.
  * - **A lost device falls back to the default.** When the device in use goes away (unplugged, Bluetooth
  *   dropped), the kind restarts on the system default device. Only when none is left does it report `failed`.
  * - **Capture runs at the device's native frame rate**; pace what the model receives with a `FrameSampler`.
@@ -132,10 +134,10 @@ export class LocalMediaController {
             return { Status: 'failed', Reason: 'error', Message: 'Stopped or changed again before the switch finished.' };
         }
         if (switched.Status === 'started') {
-            this.insertTrack(kind, current.Stream, switched.Track);
+            this.insertTrack(kind, current, switched.Track);
             return { Status: 'started', Stream: current.Stream };
         }
-        await this.reopenOrFail(kind, current.Stream, previous ? { exact: previous } : undefined, generation);
+        await this.reopenOrFail(kind, current, previous ? { exact: previous } : undefined, generation);
         return switched;
     }
 
@@ -232,21 +234,25 @@ export class LocalMediaController {
         return false;
     }
 
-    /** Puts a track in the kind's stream and reports its device. */
-    private insertTrack(kind: LocalMediaKind, stream: MediaStream, track: MediaStreamTrack): void {
-        stream.addTrack(track);
-        this.live[kind] = { Stream: stream, Track: track, Unwatch: this.watch(kind, track) };
+    /**
+     * Puts a track in the stream of the capture it replaces and reports its device. The track takes over the
+     * old one's `enabled` flag, so a muted microphone stays muted on the new device.
+     */
+    private insertTrack(kind: LocalMediaKind, replacing: LiveCapture, track: MediaStreamTrack): void {
+        track.enabled = replacing.Track.enabled;
+        replacing.Stream.addTrack(track);
+        this.live[kind] = { Stream: replacing.Stream, Track: track, Unwatch: this.watch(kind, track) };
         this.publishTrack(kind, onState(track));
     }
 
-    /** Opens a device into the kind's stream; if that fails, stops the kind and reports why. */
-    private async reopenOrFail(kind: LocalMediaKind, stream: MediaStream, deviceId: ConstrainDOMString | undefined, generation: number): Promise<void> {
+    /** Opens a device in place of a released capture; if that fails, stops the kind and reports why. */
+    private async reopenOrFail(kind: LocalMediaKind, replacing: LiveCapture, deviceId: ConstrainDOMString | undefined, generation: number): Promise<void> {
         const reopened = await this.acquire(kind, deviceId);
         if (!this.isLatest(kind, generation, reopened)) {
             return;
         }
         if (reopened.Status === 'started') {
-            this.insertTrack(kind, stream, reopened.Track);
+            this.insertTrack(kind, replacing, reopened.Track);
             return;
         }
         this.Stop(kind);
@@ -267,7 +273,7 @@ export class LocalMediaController {
             return;
         }
         const generation = this.beginChange(kind, current);
-        await this.reopenOrFail(kind, current.Stream, undefined, generation);
+        await this.reopenOrFail(kind, current, undefined, generation);
     }
 
     private publishTrack(kind: LocalMediaKind, track: LocalTrackState): void {

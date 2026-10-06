@@ -977,6 +977,16 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
         this.setState('listening');
     }
 
+    /** Rebinds the PCM capture and the input meter to the stream's current track (obligation #10); the socket stays open. */
+    public async ReplaceMicrophone(micStream: MediaStream): Promise<void> {
+        if (!this.micCapture) {
+            return;
+        }
+        this.micCapture.Rebind(micStream);
+        this.micStream = micStream;
+        this.attachInputAudioMeter(RealtimeAudioMeter.ForMicStream(micStream));
+    }
+
     /**
      * Tears down the socket, mic capture, mic tracks, and playout engine, resets the response
      * state machine, and emits a final `'closed'` (unless already `'error'`). Safe to call

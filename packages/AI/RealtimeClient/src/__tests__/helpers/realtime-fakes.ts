@@ -17,8 +17,10 @@ import {
     IRealtimeAudioSink,
     IRealtimeDataChannel,
     IRealtimePeerConnection,
+    IRealtimeRtpSender,
     OpenAIRealtimeClient,
 } from '../../drivers/openAIRealtimeClient';
+import { IPcmMicCapture } from '../../audio/micCapture';
 import {
     GeminiClientConnectArgs,
     GeminiLiveClientSession,
@@ -59,6 +61,36 @@ export class FakeTrack extends EventTarget implements MediaStreamTrack {
     public stop(): void {
         this.Stopped = true;
         this.readyState = 'ended';
+    }
+}
+
+/**
+ * Fake PCM mic capture: records stops and rebinds. Like the real one, a rebind to a stream without an
+ * audio track throws.
+ */
+export class FakeMicCapture implements IPcmMicCapture {
+    public Stopped = false;
+    /** Every stream handed to Rebind, in order. */
+    public readonly Rebound: MediaStream[] = [];
+    public Stop(): void {
+        this.Stopped = true;
+    }
+    public Rebind(micStream: MediaStream): void {
+        if (micStream.getAudioTracks().length === 0) {
+            throw new Error('The microphone stream has no audio track.');
+        }
+        this.Rebound.push(micStream);
+    }
+}
+
+/** Fake RTP sender: records every track it is moved to. */
+export class FakeRtpSender implements IRealtimeRtpSender {
+    /** Every track handed to replaceTrack, in order. */
+    public readonly Replaced: Array<MediaStreamTrack | null> = [];
+    constructor(public Track: MediaStreamTrack | null) {}
+    public async replaceTrack(track: MediaStreamTrack | null): Promise<void> {
+        this.Replaced.push(track);
+        this.Track = track;
     }
 }
 
@@ -169,6 +201,8 @@ export class FakeDataChannel implements IRealtimeDataChannel {
 export class FakePeerConnection implements IRealtimePeerConnection {
     public ontrack: ((event: RTCTrackEvent) => void) | null = null;
     public AddedTracks: MediaStreamTrack[] = [];
+    /** The sender handed back for each added track. */
+    public Senders: FakeRtpSender[] = [];
     public Channel = new FakeDataChannel();
     public ChannelLabel = '';
     public LocalDescription: RTCSessionDescriptionInit | null = null;
@@ -179,8 +213,11 @@ export class FakePeerConnection implements IRealtimePeerConnection {
     /** The offer returned by createOffer (sdp may be intentionally omitted). */
     public Offer: RTCSessionDescriptionInit = { type: 'offer', sdp: 'FAKE_OFFER_SDP' };
 
-    public addTrack(track: MediaStreamTrack, _stream: MediaStream): void {
+    public addTrack(track: MediaStreamTrack, _stream: MediaStream): FakeRtpSender {
         this.AddedTracks.push(track);
+        const sender = new FakeRtpSender(track);
+        this.Senders.push(sender);
+        return sender;
     }
     public createDataChannel(label: string): IRealtimeDataChannel {
         this.ChannelLabel = label;
@@ -301,19 +338,11 @@ export class FakeGeminiPlayback implements IGeminiAudioPlayback {
     }
 }
 
-/** Fake mic capture handle. */
-export class FakeGeminiMicCapture implements IGeminiMicCapture {
-    public Stopped = false;
-    public Stop(): void {
-        this.Stopped = true;
-    }
-}
-
 /** Harness overriding all three creation seams so Connect runs with NO network / audio. */
 export class GeminiTestClient extends GeminiRealtimeClient {
     public Fake = new FakeGeminiSession();
     public Playback = new FakeGeminiPlayback();
-    public Capture = new FakeGeminiMicCapture();
+    public Capture = new FakeMicCapture();
     public LastConnectArgs: GeminiClientConnectArgs | null = null;
     /** The driver's mic-chunk callback, captured so tests can simulate worklet frames. */
     public OnPcmChunk: ((base64Pcm16: string) => void) | null = null;

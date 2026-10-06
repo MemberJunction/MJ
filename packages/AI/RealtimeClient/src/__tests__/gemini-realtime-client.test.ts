@@ -17,6 +17,8 @@ import {
     IGeminiAudioPlayback,
     IGeminiMicCapture,
 } from '../drivers/geminiRealtimeClient';
+import { FakeMicCapture } from './helpers/realtime-fakes';
+import { DescribePcmMicrophoneReplacement } from './helpers/microphone-replacement';
 
 // ── Fakes (no network, no Web Audio) ───────────────────────────────────────────
 
@@ -60,14 +62,6 @@ class FakePlayback implements IGeminiAudioPlayback {
     public Close(): void {
         this.Closed = true;
         this.IsPlaying = false;
-    }
-}
-
-/** Fake mic capture handle. */
-class FakeMicCapture implements IGeminiMicCapture {
-    public Stopped = false;
-    public Stop(): void {
-        this.Stopped = true;
     }
 }
 
@@ -839,3 +833,12 @@ describe('GeminiRealtimeClient', () => {
         });
     });
 });
+
+DescribePcmMicrophoneReplacement(
+    async () => {
+        const client = new TestGeminiClient();
+        const track = await connect(client);
+        return { Client: client, Track: track, Capture: client.Capture };
+    },
+    () => new TestGeminiClient()
+);
