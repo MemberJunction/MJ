@@ -1,6 +1,6 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { BaseAction } from "@memberjunction/actions";
-import { Metadata, LogError, RunView } from "@memberjunction/core";
+import { Metadata, LogError, RunView, type IMetadataProvider, type UserInfo } from "@memberjunction/core";
 import { EscapeSQLString, RegisterClass } from "@memberjunction/global";
 import {
     AddOutput, CheckPersonalWrite, Failure, GetStringParam, LoadComponent, LoadOverride, MapToComponentStatus,
@@ -23,12 +23,16 @@ import {
  * `CheckPersonalWrite` in `_shared.ts`): shared forms are managed from Form
  * Builder or the form's Manage drawer. The target's Component and Override flip
  * to Active in one entity transaction. The prior Active sibling is set aside after
- * that transaction; if one of those saves fails, the action returns
- * `PERSIST_FAILED` and the target stays Active.
+ * that transaction, its Component first and its Override last; if one of those
+ * saves fails, the action returns `PERSIST_FAILED` and the target stays Active.
+ * The prior Override stays Active until its own save succeeds.
  *
- * Idempotency. If the target Override is already Active, returns SUCCESS
- * with a no-op message. If it's Inactive, that's a misuse — we surface
- * NOT_PENDING so the agent / UI can ask the user what they really want.
+ * Idempotency. If the target Override is already Active, the caller's other
+ * Active overrides on the entity are set aside and the action returns SUCCESS
+ * with a no-op message that carries `DemotedCount`. So a retry after
+ * `PERSIST_FAILED` sets the prior version aside. If the target is Inactive,
+ * that's a misuse — we surface NOT_PENDING so the agent / UI can ask the user
+ * what they really want.
  *
  * Inputs:
  *   - `OverrideID` (required, string) — the Pending override to activate
@@ -36,7 +40,7 @@ import {
  * Outputs:
  *   - `ComponentID` — the Component now Active
  *   - `OverrideID` — echoed for convenience
- *   - `PreviousActiveOverrideID` — the override that was demoted (or null)
+ *   - `PreviousActiveOverrideID` — the first override that was demoted (or null)
  */
 @RegisterClass(BaseAction, "__ActivateInteractiveFormVersion")
 export class ActivateInteractiveFormVersionAction extends BaseAction {
@@ -59,28 +63,29 @@ export class ActivateInteractiveFormVersionAction extends BaseAction {
             }
             const ownershipFail = CheckPersonalWrite(target, user);
             if (ownershipFail) return ownershipFail;
-            if (target.Status === 'Active') {
-                AddOutput(params, "ComponentID", target.ComponentID);
-                AddOutput(params, "OverrideID", target.ID);
-                AddOutput(params, "PreviousActiveOverrideID", null);
-                return { Success: true, ResultCode: "SUCCESS",
-                    Message: JSON.stringify({ noop: true, OverrideID: target.ID, ComponentID: target.ComponentID }) };
-            }
             if (target.Status === 'Inactive') {
                 return Failure("NOT_PENDING",
                     `Override ${overrideID} is Inactive. Use 'Revert Interactive Form' to restore an older version, not 'Activate'.`);
             }
 
-            // Find the caller's other Active overrides on this entity.
-            const rv = RunView.FromMetadataProvider(provider);
-            const priorResult = await rv.RunView<{ ID: string; ComponentID: string }>({
-                EntityName: "MJ: Entity Form Overrides",
-                ExtraFilter: `EntityID='${EscapeSQLString(target.EntityID)}' AND Scope='User' AND UserID='${EscapeSQLString(target.UserID ?? '')}' AND Status='Active' AND ID <> '${EscapeSQLString(target.ID)}'`,
-                Fields: ['ID', 'ComponentID'],
-                ResultType: 'simple',
-            }, user);
-            if (!priorResult.Success) {
-                return Failure("QUERY_FAILED", `Prior-active lookup failed: ${priorResult.ErrorMessage ?? 'unknown error'}`);
+            const priors = await findPriorActiveOverrides(provider, user, target);
+            if ('error' in priors) return priors.error;
+            const previousActiveID = priors.rows[0]?.ID ?? null;
+
+            if (target.Status === 'Active') {
+                const notDemoted = await setPriorsAside(provider, user, target.ID, priors.rows);
+                if (notDemoted) return notDemoted;
+                AddOutput(params, "ComponentID", target.ComponentID);
+                AddOutput(params, "OverrideID", target.ID);
+                AddOutput(params, "PreviousActiveOverrideID", previousActiveID);
+                return { Success: true, ResultCode: "SUCCESS",
+                    Message: JSON.stringify({
+                        noop: true,
+                        OverrideID: target.ID,
+                        ComponentID: target.ComponentID,
+                        PreviousActiveOverrideID: previousActiveID,
+                        DemotedCount: priors.rows.length,
+                    }) };
             }
 
             // Promote target's component.
@@ -104,35 +109,18 @@ export class ActivateInteractiveFormVersionAction extends BaseAction {
             });
             if ('error' in promoted) return promoted.error;
 
-            // Demote priors. Component AND Override flipped in lock-step.
-            let firstPriorID: string | null = null;
-            for (const prior of priorResult.Results ?? []) {
-                if (!firstPriorID) firstPriorID = prior.ID;
-                const priorO = await LoadOverride(provider, user, prior.ID);
-                const priorC = await LoadComponent(provider, user, prior.ComponentID);
-                if (priorO) {
-                    priorO.Status = 'Inactive';
-                    if (!(await priorO.Save())) {
-                        return notSetAside(target.ID, `override ${prior.ID}`, priorO.LatestResult?.CompleteMessage);
-                    }
-                }
-                if (priorC) {
-                    priorC.Status = MapToComponentStatus('Inactive');
-                    if (!(await priorC.Save())) {
-                        return notSetAside(target.ID, `component ${prior.ComponentID}`, priorC.LatestResult?.CompleteMessage);
-                    }
-                }
-            }
+            const notDemoted = await setPriorsAside(provider, user, target.ID, priors.rows);
+            if (notDemoted) return notDemoted;
 
             AddOutput(params, "ComponentID", target.ComponentID);
             AddOutput(params, "OverrideID", target.ID);
-            AddOutput(params, "PreviousActiveOverrideID", firstPriorID);
+            AddOutput(params, "PreviousActiveOverrideID", previousActiveID);
             return { Success: true, ResultCode: "SUCCESS",
                 Message: JSON.stringify({
                     OverrideID: target.ID,
                     ComponentID: target.ComponentID,
-                    PreviousActiveOverrideID: firstPriorID,
-                    DemotedCount: (priorResult.Results ?? []).length,
+                    PreviousActiveOverrideID: previousActiveID,
+                    DemotedCount: priors.rows.length,
                 }) };
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
@@ -140,6 +128,62 @@ export class ActivateInteractiveFormVersionAction extends BaseAction {
             return Failure("UNEXPECTED_ERROR", message);
         }
     }
+}
+
+/** A prior Active sibling override and the component it points at. */
+interface PriorActiveOverride {
+    ID: string;
+    ComponentID: string;
+}
+
+/** The caller's other Active User-scope overrides on the target's entity, or a `QUERY_FAILED` result. */
+async function findPriorActiveOverrides(
+    provider: IMetadataProvider,
+    user: UserInfo,
+    target: { ID: string; EntityID: string; UserID: string | null },
+): Promise<{ rows: PriorActiveOverride[] } | { error: ActionResultSimple }> {
+    const rv = RunView.FromMetadataProvider(provider);
+    const result = await rv.RunView<PriorActiveOverride>({
+        EntityName: "MJ: Entity Form Overrides",
+        ExtraFilter: `EntityID='${EscapeSQLString(target.EntityID)}' AND Scope='User' AND UserID='${EscapeSQLString(target.UserID ?? '')}' AND Status='Active' AND ID <> '${EscapeSQLString(target.ID)}'`,
+        Fields: ['ID', 'ComponentID'],
+        ResultType: 'simple',
+    }, user);
+    if (!result.Success) {
+        return { error: Failure("QUERY_FAILED", `Prior-active lookup failed: ${result.ErrorMessage ?? 'unknown error'}`) };
+    }
+    return { rows: result.Results ?? [] };
+}
+
+/**
+ * Sets each prior version aside: its Component to Deprecated, then its Override to Inactive.
+ * Returns `PERSIST_FAILED` at the first save that fails, or null when every prior is set aside.
+ * The Override is saved last, so a prior that is not fully set aside is still Active and a later
+ * lookup finds it again.
+ */
+async function setPriorsAside(
+    provider: IMetadataProvider,
+    user: UserInfo,
+    targetID: string,
+    priors: PriorActiveOverride[],
+): Promise<ActionResultSimple | null> {
+    for (const prior of priors) {
+        const priorC = await LoadComponent(provider, user, prior.ComponentID);
+        if (priorC) {
+            priorC.Status = MapToComponentStatus('Inactive');
+            if (!(await priorC.Save())) {
+                return notSetAside(targetID, `component ${prior.ComponentID}`, priorC.LatestResult?.CompleteMessage);
+            }
+        }
+        const priorO = await LoadOverride(provider, user, prior.ID);
+        if (priorO) {
+            priorO.Status = 'Inactive';
+            if (!(await priorO.Save())) {
+                return notSetAside(targetID, `override ${prior.ID}`, priorO.LatestResult?.CompleteMessage);
+            }
+        }
+    }
+    return null;
 }
 
 /** The result when the target is Active but a prior version's row could not be set aside. */
