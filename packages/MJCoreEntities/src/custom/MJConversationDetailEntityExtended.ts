@@ -1,5 +1,6 @@
 import {
     BaseEntity,
+    BaseEntityResult,
     EntityDeleteOptions,
     EntitySaveOptions,
     IMetadataProvider,
@@ -50,20 +51,22 @@ const OWNER_ONLY_RATING_FIELDS = ['UserRating', 'UserFeedback'];
 @RegisterClass(BaseEntity, 'MJ: Conversation Details')
 export class MJConversationDetailEntityExtended extends MJConversationDetailEntity {
     override async Save(options?: EntitySaveOptions): Promise<boolean> {
-        if (!(await this.currentUserMayWrite())) {
+        if (!(await this.currentUserMayWrite('save'))) {
             return false;
         }
         return super.Save(options);
     }
 
     override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
-        if (!(await this.currentUserMayWrite())) {
+        if (!(await this.currentUserMayWrite('delete'))) {
             return false;
         }
         return super.Delete(options);
     }
 
-    private async currentUserMayWrite(): Promise<boolean> {
+    private async currentUserMayWrite(operation: 'save' | 'delete'): Promise<boolean> {
+        const resultType: 'create' | 'update' | 'delete' =
+            operation === 'delete' ? 'delete' : this.IsSaved ? 'update' : 'create';
         const provider = this.ProviderToUse as unknown as IMetadataProvider;
         if (provider?.ProviderType !== 'Database') {
             // Client-side path — trust the enforcement that already ran upstream.
@@ -99,7 +102,8 @@ export class MJConversationDetailEntityExtended extends MJConversationDetailEnti
             // message and there is no per-user storage to overwrite.
             if (this.dirtyRatingFieldNames().length > 0) {
                 this.RecordDenied(
-                    'Only the conversation owner can set or change the rating and feedback on this message.'
+                    'Only the conversation owner can set or change the rating and feedback on this message.',
+                    resultType
                 );
                 return false;
             }
@@ -115,7 +119,7 @@ export class MJConversationDetailEntityExtended extends MJConversationDetailEnti
                 .find((p: MJResourcePermissionEntity) => UUIDsEqual(p.ResourceRecordID, this.ConversationID));
 
             if (!grant) {
-                this.RecordDenied('You do not have access to this conversation.');
+                this.RecordDenied('You do not have access to this conversation.', resultType);
                 return false;
             }
             if (grant.PermissionLevel === 'Edit' || grant.PermissionLevel === 'Owner') {
@@ -123,16 +127,16 @@ export class MJConversationDetailEntityExtended extends MJConversationDetailEnti
             }
 
             // Only View — block writes.
-            this.RecordDenied('You have view-only access to this conversation.');
+            this.RecordDenied('You have view-only access to this conversation.', resultType);
             return false;
         } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
             LogError(
-                `MJConversationDetailEntityExtended.currentUserMayWrite failed: ${
-                    error instanceof Error ? error.message : String(error)
-                }`
+                `MJConversationDetailEntityExtended.currentUserMayWrite failed ` +
+                    `(${operation} on conversation ${this.ConversationID}, user ${user.ID}): ${message}`
             );
             // Fail closed — safer to deny than silently allow a compromised write.
-            this.RecordDenied('Unable to verify conversation permissions.');
+            this.RecordDenied('Unable to verify conversation permissions.', resultType);
             return false;
         }
     }
@@ -152,15 +156,22 @@ export class MJConversationDetailEntityExtended extends MJConversationDetailEnti
     }
 
     /**
-     * Populate `LatestResult.Message` so callers that inspect the save result
-     * see why the write was refused rather than a generic failure.
+     * Records WHY the write was refused as a NEW `ResultHistory` entry, so callers that read
+     * `LatestResult.CompleteMessage` see the reason (issue #4791).
+     *
+     * It must be a new entry, not an edit of `LatestResult`: on a brand-new record there IS no
+     * `LatestResult` yet (nothing has been saved), so editing it silently dropped the denial and
+     * every caller logged "unknown error". Appending also leaves an earlier successful save's
+     * entry untouched. Mirrors `ReadOnlyExternalBaseEntity.rejectMutation`.
      */
-    private RecordDenied(message: string): void {
-        const result = this.LatestResult as unknown as { Success: boolean; Message?: string } | undefined;
-        if (result) {
-            result.Success = false;
-            result.Message = message;
-        }
+    private RecordDenied(message: string, type: 'create' | 'update' | 'delete'): void {
+        const result = new BaseEntityResult();
+        result.Success = false;
+        result.Type = type;
+        result.Message = message;
+        result.StartedAt = new Date();
+        result.EndedAt = new Date();
+        this.RegisterResultHistoryEntry(result);
     }
 }
 

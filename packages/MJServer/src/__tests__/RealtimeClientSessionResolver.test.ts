@@ -3,7 +3,7 @@
 // bring it in automatically — this line MUST precede any import that pulls in the resolver file.
 import 'reflect-metadata';
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // --- Mock CanRun authorization (AIAgentPermissionHelper.HasPermission) plus the
 //     provider-scoped AIEngineBase whose cached metadata serves the resolver's pairing-row
@@ -210,8 +210,22 @@ interface FakeSession {
     NewRecord: () => void;
     Save: () => Promise<boolean>;
     Load: (id: string) => Promise<boolean>;
-    LatestResult?: { CompleteMessage?: string };
+    LatestResult?: { CompleteMessage?: string; Success?: boolean };
+    /** Only set on the fakes exercising `describeSaveFailure`'s "no failure detail recorded" branches. */
+    ResultHistory?: unknown[];
 }
+
+/**
+ * A `console.error` spy shared by the save-failure-log tests (#4791) below. Assigned with
+ * `vi.spyOn(console, 'error').mockImplementation(() => undefined)` inside each test that needs it
+ * — restored here so no test leaks a mocked `console.error` into the ones after it.
+ */
+let errSpy: ReturnType<typeof vi.spyOn> | undefined;
+
+afterEach(() => {
+    errSpy?.mockRestore();
+    errSpy = undefined;
+});
 
 function makeSessionEntity(overrides: Partial<FakeSession> = {}): FakeSession {
     return {
@@ -847,6 +861,28 @@ describe('RealtimeClientSessionResolver.ExecuteRealtimeSessionTool', () => {
         await expect(
             resolver.ExecuteRealtimeSessionTool('session-1', 'call-1', 'x', '{}', makeCtx(), makePubSub()),
         ).rejects.toThrow(/no target agent configured/i);
+    });
+
+    it('logs the session id and "no failure detail recorded" when updatePendingFeedbackRunID\'s save is refused silently (#4791)', async () => {
+        errSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const session = makeSessionEntity({
+            Config_: JSON.stringify({ targetAgentID: 'target-1' }),
+            Save: vi.fn(async () => false),
+            LatestResult: undefined,
+            ResultHistory: [],
+        });
+        currentProvider = makeProvider(() => session);
+        executeRelayedToolMock.mockResolvedValue({ ResultJson: '{"q":1}', Success: true, PausedRunID: 'paused-1' });
+        const resolver = makeResolver();
+
+        await resolver.ExecuteRealtimeSessionTool('session-1', 'call-1', 'invoke-target-agent', '{}', makeCtx(), makePubSub());
+
+        const loggedLines = errSpy.mock.calls.map((call) => String(call[0]));
+        const failureLine = loggedLines.find((line) => line.includes('updatePendingFeedbackRunID'));
+        expect(failureLine).toBeDefined();
+        expect(failureLine).toContain('session-1');
+        expect(failureLine).toContain('no failure detail recorded');
+        expect(failureLine).not.toContain('unknown error');
     });
 });
 
@@ -1690,6 +1726,7 @@ describe('RealtimeClientSessionResolver.SaveSessionChannelArtifact', () => {
     });
 
     it('returns a structured failure when the artifact header save fails (no version attempted)', async () => {
+        errSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
         const failingArtifact = makeSessionEntity({
             ID: 'artifact-fail',
             Save: vi.fn(async () => false),
@@ -1706,10 +1743,14 @@ describe('RealtimeClientSessionResolver.SaveSessionChannelArtifact', () => {
 
         expect(result.Success).toBe(false);
         expect(result.ErrorMessage).toMatch(/artifact save failed/i);
+        expect(result.ErrorMessage).toContain('session session-1');
+        expect(result.ErrorMessage).toContain('db down');
+        expect(errSpy.mock.calls.map((call) => String(call[0]))).toContain(result.ErrorMessage);
         expect(version.Save).not.toHaveBeenCalled();
     });
 
     it('returns a structured failure (carrying the orphaned ArtifactID) when the version save fails', async () => {
+        errSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
         const failingVersion = makeSessionEntity({
             ID: 'version-fail',
             Save: vi.fn(async () => false),
@@ -1728,6 +1769,10 @@ describe('RealtimeClientSessionResolver.SaveSessionChannelArtifact', () => {
         expect(result.Success).toBe(false);
         expect(result.ArtifactID).toBe('artifact-1');
         expect(result.ArtifactVersionID).toBeUndefined();
+        expect(result.ErrorMessage).toMatch(/artifact version save failed/i);
+        expect(result.ErrorMessage).toContain('session session-1');
+        expect(result.ErrorMessage).toContain('too big');
+        expect(errSpy.mock.calls.map((call) => String(call[0]))).toContain(result.ErrorMessage);
         expect(junction.Save).not.toHaveBeenCalled();
     });
 
@@ -2880,6 +2925,44 @@ describe('RealtimeClientSessionResolver — scoped-anonymous elevation (issue #3
         expect(executeRelayedToolMock.mock.calls[0][1]).toBe(ANON_USER);
     });
 
+    it('writes the hidden direct-action tool turn (ExecuteRealtimeSessionTool) as the CALLER, not the system user (#4791)', async () => {
+        const detail = makeSessionEntity({ ID: 'detail-1' });
+        currentProvider = {
+            GetEntityObject: vi.fn(async (name: string) =>
+                name === 'MJ: Conversation Details' ? detail : makeSessionEntity({ UserID: 'anon-1' }),
+            ),
+        };
+        executeRelayedToolMock.mockResolvedValue({ ResultJson: '{"success":true}', Success: true });
+        const resolver = makeAnonResolver();
+
+        await resolver.ExecuteRealtimeSessionTool(
+            'session-1', 'call-1', 'Some Direct Action', '{}', makeCtx(), makePubSub(),
+        );
+
+        // The dispatch itself still runs elevated (SYSTEM_USER)…
+        expect(executeRelayedToolMock.mock.calls[0][1]).toBe(SYSTEM_USER);
+        // …but the hidden Conversation Detail turn is written as the CALLER, never the system user.
+        expect(getEntityObjectSpy()).toHaveBeenCalledWith('MJ: Conversation Details', ANON_USER);
+        expect(getEntityObjectSpy()).not.toHaveBeenCalledWith('MJ: Conversation Details', SYSTEM_USER);
+        expect(detail.Save).toHaveBeenCalled();
+        expect(detail.UserID).toBe('anon-1');
+    });
+
+    it('writes the direct-action tool turn as the caller unchanged for a normal authenticated user', async () => {
+        const detail = makeSessionEntity({ ID: 'detail-2' });
+        currentProvider = {
+            GetEntityObject: vi.fn(async (name: string) => (name === 'MJ: Conversation Details' ? detail : makeSessionEntity())),
+        };
+        executeRelayedToolMock.mockResolvedValue({ ResultJson: '{"success":true}', Success: true });
+        const resolver = makeResolver();
+
+        await resolver.ExecuteRealtimeSessionTool(
+            'session-1', 'call-1', 'Some Direct Action', '{}', makeCtx(), makePubSub(),
+        );
+
+        expect(getEntityObjectSpy()).toHaveBeenCalledWith('MJ: Conversation Details', USER);
+    });
+
     it('accumulates relayed usage onto the prompt run under the SYSTEM user', async () => {
         const session = makeSessionEntity({
             UserID: 'anon-1',
@@ -2940,6 +3023,32 @@ describe('RealtimeClientSessionResolver — scoped-anonymous elevation (issue #3
 
         expect(ok).toBe(true);
         expect(getEntityObjectSpy()).toHaveBeenCalledWith('MJ: AI Prompt Runs', SYSTEM_USER);
+    });
+
+    it('writes the hidden co-agent tool turn (RelayRealtimeToolTurn) as the CALLER (#4791)', async () => {
+        const session = makeSessionEntity({
+            UserID: 'anon-1',
+            Config_: JSON.stringify({ targetAgentID: 'target-1', promptRunID: 'prompt-run-1' }),
+        });
+        const promptRun = makeSessionEntity({ ID: 'prompt-run-1', Messages: null });
+        const detail = makeSessionEntity({ ID: 'detail-3' });
+        currentProvider = {
+            GetEntityObject: vi.fn(async (name: string) => {
+                if (name === 'MJ: AI Prompt Runs') return promptRun;
+                if (name === 'MJ: Conversation Details') return detail;
+                return session;
+            }),
+        };
+        const resolver = makeAnonResolver();
+
+        const ok = await resolver.RelayRealtimeToolTurn('session-1', 'browser_navigate', makeCtx(), '{"url":"x"}');
+
+        expect(ok).toBe(true);
+        // The co-agent run mirror stays SYSTEM…
+        expect(getEntityObjectSpy()).toHaveBeenCalledWith('MJ: AI Prompt Runs', SYSTEM_USER);
+        // …but the hidden Conversation Detail tool-turn is written as the CALLER, never SYSTEM.
+        expect(getEntityObjectSpy()).toHaveBeenCalledWith('MJ: Conversation Details', ANON_USER);
+        expect(getEntityObjectSpy()).not.toHaveBeenCalledWith('MJ: Conversation Details', SYSTEM_USER);
     });
 
     it('prepares the session with observability under the SYSTEM user while UserID stays the visitor', async () => {
@@ -3003,6 +3112,10 @@ describe('RealtimeClientSessionResolver — scoped-anonymous elevation (issue #3
         // The junction write (an entity the anon role does NOT hold) runs as the SYSTEM user.
         expect(getEntityObjectSpy()).toHaveBeenCalledWith('MJ: Conversation Detail Artifacts', SYSTEM_USER);
         expect(junctions).toHaveLength(1);
+        // The hidden anchor `Conversation Detail` is written as the CALLER (#4791) — like every
+        // other `MJ: Conversation Details` write, the System user is refused as not the owner.
+        expect(getEntityObjectSpy()).toHaveBeenCalledWith('MJ: Conversation Details', ANON_USER);
+        expect(getEntityObjectSpy()).not.toHaveBeenCalledWith('MJ: Conversation Details', SYSTEM_USER);
         // The hidden anchor is attributed to the SESSION owner, not the elevated principal.
         expect(anchors).toHaveLength(1);
         expect(anchors[0].UserID).toBe('anon-1');
@@ -3101,6 +3214,107 @@ describe('RealtimeClientSessionResolver — scoped-anonymous elevation (issue #3
         expect(getEntityObjectSpy()).toHaveBeenCalledWith('MJ: AI Agents', USER);
         expect((storeRecordingMock.mock.calls[0][0] as { ContextUser: unknown }).ContextUser).toBe(USER);
         expect(getSystemUserMock).not.toHaveBeenCalled();
+    });
+
+    /** Provider routing a hidden-tool-turn RelayRealtimeToolTurn call: session, prompt run, detail. */
+    function makeToolTurnProvider(detail: FakeSession): unknown {
+        const session = makeSessionEntity({
+            UserID: 'anon-1',
+            Config_: JSON.stringify({ targetAgentID: 'target-1', promptRunID: 'prompt-run-1' }),
+        });
+        const promptRun = makeSessionEntity({ ID: 'prompt-run-1', Messages: null });
+        return {
+            GetEntityObject: vi.fn(async (name: string) => {
+                if (name === 'MJ: AI Prompt Runs') return promptRun;
+                if (name === 'MJ: Conversation Details') return detail;
+                return session;
+            }),
+        };
+    }
+
+    it('logs the session id, write user id and "no failure detail recorded" when a hidden tool turn save is refused without a LatestResult (#4791)', async () => {
+        errSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const detail = makeSessionEntity({
+            ID: 'detail-1',
+            Save: vi.fn(async () => false),
+            LatestResult: undefined,
+            ResultHistory: [],
+        });
+        currentProvider = makeToolTurnProvider(detail);
+        const resolver = makeAnonResolver();
+
+        await resolver.RelayRealtimeToolTurn('session-1', 'browser_navigate', makeCtx(), '{}');
+
+        const loggedLines = errSpy.mock.calls.map((call) => String(call[0]));
+        const failureLine = loggedLines.find((line) => line.includes('persistDirectActionTurn'));
+        expect(failureLine).toBeDefined();
+        // Exact substrings: 'anon-1' alone is the caller, session.UserID AND detail.UserID at once,
+        // so only the labelled form proves the WRITE user is what got logged.
+        expect(failureLine).toContain('session session-1');
+        expect(failureLine).toContain('write user anon-1');
+        expect(failureLine).toContain('no failure detail recorded (LatestResult null; ResultHistory length 0)');
+        expect(failureLine).toContain('the write was refused before reaching the provider');
+        expect(failureLine).not.toContain('unknown error');
+    });
+
+    it('does not claim WHERE the write was refused when a result was registered with an empty message (#4791)', async () => {
+        errSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const detail = makeSessionEntity({
+            ID: 'detail-1',
+            Save: vi.fn(async () => false),
+            LatestResult: { Success: false, CompleteMessage: '   ' },
+            ResultHistory: [{}],
+        });
+        currentProvider = makeToolTurnProvider(detail);
+        const resolver = makeAnonResolver();
+
+        await resolver.RelayRealtimeToolTurn('session-1', 'browser_navigate', makeCtx(), '{}');
+
+        const loggedLines = errSpy.mock.calls.map((call) => String(call[0]));
+        const failureLine = loggedLines.find((line) => line.includes('persistDirectActionTurn'));
+        expect(failureLine).toBeDefined();
+        expect(failureLine).toContain('no failure detail recorded (LatestResult empty; ResultHistory length 1)');
+        expect(failureLine).not.toContain('refused before reaching the provider');
+    });
+
+    it('never logs a PRIOR SUCCESS entry\'s text as the failure reason when the refusal registered nothing (#4791)', async () => {
+        errSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const detail = makeSessionEntity({
+            ID: 'detail-1',
+            Save: vi.fn(async () => false),
+            LatestResult: { Success: true, CompleteMessage: 'previous save ok' },
+            ResultHistory: [{}, {}],
+        });
+        currentProvider = makeToolTurnProvider(detail);
+        const resolver = makeAnonResolver();
+
+        await resolver.RelayRealtimeToolTurn('session-1', 'browser_navigate', makeCtx(), '{}');
+
+        const loggedLines = errSpy.mock.calls.map((call) => String(call[0]));
+        const failureLine = loggedLines.find((line) => line.includes('persistDirectActionTurn'));
+        expect(failureLine).toBeDefined();
+        expect(failureLine).toContain(
+            'no failure detail recorded (latest result entry is a prior success; ResultHistory length 2)',
+        );
+        expect(failureLine).not.toContain('previous save ok');
+    });
+
+    it('logs the real CompleteMessage when present (#4791)', async () => {
+        errSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const detail = makeSessionEntity({
+            ID: 'detail-1',
+            Save: vi.fn(async () => false),
+            LatestResult: { CompleteMessage: 'You do not have access to this conversation.' },
+        });
+        currentProvider = makeToolTurnProvider(detail);
+        const resolver = makeAnonResolver();
+
+        await resolver.RelayRealtimeToolTurn('session-1', 'browser_navigate', makeCtx(), '{}');
+
+        const loggedLines = errSpy.mock.calls.map((call) => String(call[0]));
+        const failureLine = loggedLines.find((line) => line.includes('persistDirectActionTurn'));
+        expect(failureLine).toBeDefined();
+        expect(failureLine).toContain('You do not have access to this conversation.');
     });
 });
 
