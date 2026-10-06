@@ -7727,6 +7727,48 @@ export const MJAISkillActionSchema = z.object({
 export type MJAISkillActionEntityType = z.infer<typeof MJAISkillActionSchema>;
 
 /**
+ * zod schema definition for the entity MJ: AI Skill Files
+ */
+export const MJAISkillFileSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    SkillID: z.string().describe(`
+        * * Field Name: SkillID
+        * * Display Name: Skill ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Skills (vwAISkills.ID)`),
+    Path: z.string().describe(`
+        * * Field Name: Path
+        * * Display Name: Path
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Path relative to the skill folder, with forward slashes, for example references/api.md. Unique within a skill.`),
+    Content: z.string().describe(`
+        * * Field Name: Content
+        * * Display Name: Content
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The file's text content. Binary files are not imported.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Skill: z.string().describe(`
+        * * Field Name: Skill
+        * * Display Name: Skill
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJAISkillFileEntityType = z.infer<typeof MJAISkillFileSchema>;
+
+/**
  * zod schema definition for the entity MJ: AI Skill Permissions
  */
 export const MJAISkillPermissionSchema = z.object({
@@ -8021,6 +8063,45 @@ export const MJAISkillSchema = z.object({
     *   * Conversation
     *   * Run
         * * Description: How long an activation lasts. Run (default): the skill is active for the run that activated it and no longer — a one-shot capability. Conversation: once activated in a run that belongs to a conversation, the skill stays active for that conversation (an MJ: Conversation Skills row, Status Active) and is re-requested at the start of every later root run there until ended — a persona, or a mode whose menu is pressed on the next turn. Subject to every availability gate on each run; ActivationMode still decides who may trigger the FIRST activation.`),
+    SourceType: z.union([z.literal('GitHub'), z.literal('URL')]).nullable().describe(`
+        * * Field Name: SourceType
+        * * Display Name: Source Type
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * GitHub
+    *   * URL
+        * * Description: Where this skill's content came from. URL: a SKILL.md fetched from a plain URL. GitHub: a skill folder in a GitHub repository (SKILL.md plus its other files). NULL: authored or uploaded in this instance, with no upstream to track. Only sourced skills are checked by the Skill Update Check scheduled job.`),
+    SourceURL: z.string().nullable().describe(`
+        * * Field Name: SourceURL
+        * * Display Name: Source URL
+        * * SQL Data Type: nvarchar(1000)
+        * * Description: The source location. For URL, the URL of the SKILL.md itself. For GitHub, the skill folder as https://github.com/<owner>/<repo>/tree/<ref>/<path>, with the ref also stored in SourceRef so a ref containing slashes stays unambiguous.`),
+    SourceRef: z.string().nullable().describe(`
+        * * Field Name: SourceRef
+        * * Display Name: Source Ref
+        * * SQL Data Type: nvarchar(255)
+        * * Description: The git ref (tag, branch or commit SHA) a GitHub-sourced skill was imported from and is checked against. Pin to a tag or commit for a reviewable supply chain; a branch moves with every upstream commit. NULL for URL sources.`),
+    SourceVersion: z.string().nullable().describe(`
+        * * Field Name: SourceVersion
+        * * Display Name: Source Version
+        * * SQL Data Type: nvarchar(100)
+        * * Description: The version the upstream skill declares (SKILL.md frontmatter metadata.version) as of the last import. Informational; change detection uses SourceContentHash.`),
+    SourceContentHash: z.string().nullable().describe(`
+        * * Field Name: SourceContentHash
+        * * Display Name: Source Content Hash
+        * * SQL Data Type: nvarchar(64)
+        * * Description: Lowercase hex SHA-256 over the imported SKILL.md and every imported file (sorted by path). The Skill Update Check job recomputes it from the source; when it differs, the skill is set to Pending for admin review rather than overwritten.`),
+    LastSyncedAt: z.date().nullable().describe(`
+        * * Field Name: LastSyncedAt
+        * * Display Name: Last Synced At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When the skill's content was last imported from its source. An update check that finds no change does not touch it.`),
+    Frontmatter: z.string().nullable().describe(`
+        * * Field Name: Frontmatter
+        * * Display Name: Frontmatter
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: SKILL.md frontmatter keys MJ does not model as columns (for example license, metadata, allowed-tools), as a JSON object. Written back on SKILL.md export so an import/export round trip keeps them. NULL when the imported file had none.`),
     CreatedByUser: z.string().describe(`
         * * Field Name: CreatedByUser
         * * Display Name: Created By User
@@ -60330,6 +60411,119 @@ export class MJAISkillActionEntity extends BaseEntity<MJAISkillActionEntityType>
 
 
 /**
+ * MJ: AI Skill Files - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AISkillFile
+ * * Base View: vwAISkillFiles
+ * * @description A file that belongs to a skill besides its SKILL.md, such as a reference document or an example. Not injected when the skill activates: the activation message lists each file's Path, and the agent reads one on demand through the Read Skill File action.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Skill Files')
+export class MJAISkillFileEntity extends BaseEntity<MJAISkillFileEntityType> {
+    /**
+    * Loads the MJ: AI Skill Files record from the database
+    * @param ID: string - primary key value to load the MJ: AI Skill Files record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJAISkillFileEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: SkillID
+    * * Display Name: Skill ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Skills (vwAISkills.ID)
+    */
+    get SkillID(): string {
+        return this.Get('SkillID');
+    }
+    set SkillID(value: string) {
+        this.Set('SkillID', value);
+    }
+
+    /**
+    * * Field Name: Path
+    * * Display Name: Path
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Path relative to the skill folder, with forward slashes, for example references/api.md. Unique within a skill.
+    */
+    get Path(): string {
+        return this.Get('Path');
+    }
+    set Path(value: string) {
+        this.Set('Path', value);
+    }
+
+    /**
+    * * Field Name: Content
+    * * Display Name: Content
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The file's text content. Binary files are not imported.
+    */
+    get Content(): string {
+        return this.Get('Content');
+    }
+    set Content(value: string) {
+        this.Set('Content', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Skill
+    * * Display Name: Skill
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Skill(): string {
+        return this.Get('Skill');
+    }
+}
+
+
+/**
  * MJ: AI Skill Permissions - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: AISkillPermission
@@ -61048,6 +61242,101 @@ export class MJAISkillEntity extends BaseEntity<MJAISkillEntityType> {
     }
     set ActivationScope(value: 'Conversation' | 'Run') {
         this.Set('ActivationScope', value);
+    }
+
+    /**
+    * * Field Name: SourceType
+    * * Display Name: Source Type
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * GitHub
+    *   * URL
+    * * Description: Where this skill's content came from. URL: a SKILL.md fetched from a plain URL. GitHub: a skill folder in a GitHub repository (SKILL.md plus its other files). NULL: authored or uploaded in this instance, with no upstream to track. Only sourced skills are checked by the Skill Update Check scheduled job.
+    */
+    get SourceType(): 'GitHub' | 'URL' | null {
+        return this.Get('SourceType');
+    }
+    set SourceType(value: 'GitHub' | 'URL' | null) {
+        this.Set('SourceType', value);
+    }
+
+    /**
+    * * Field Name: SourceURL
+    * * Display Name: Source URL
+    * * SQL Data Type: nvarchar(1000)
+    * * Description: The source location. For URL, the URL of the SKILL.md itself. For GitHub, the skill folder as https://github.com/<owner>/<repo>/tree/<ref>/<path>, with the ref also stored in SourceRef so a ref containing slashes stays unambiguous.
+    */
+    get SourceURL(): string | null {
+        return this.Get('SourceURL');
+    }
+    set SourceURL(value: string | null) {
+        this.Set('SourceURL', value);
+    }
+
+    /**
+    * * Field Name: SourceRef
+    * * Display Name: Source Ref
+    * * SQL Data Type: nvarchar(255)
+    * * Description: The git ref (tag, branch or commit SHA) a GitHub-sourced skill was imported from and is checked against. Pin to a tag or commit for a reviewable supply chain; a branch moves with every upstream commit. NULL for URL sources.
+    */
+    get SourceRef(): string | null {
+        return this.Get('SourceRef');
+    }
+    set SourceRef(value: string | null) {
+        this.Set('SourceRef', value);
+    }
+
+    /**
+    * * Field Name: SourceVersion
+    * * Display Name: Source Version
+    * * SQL Data Type: nvarchar(100)
+    * * Description: The version the upstream skill declares (SKILL.md frontmatter metadata.version) as of the last import. Informational; change detection uses SourceContentHash.
+    */
+    get SourceVersion(): string | null {
+        return this.Get('SourceVersion');
+    }
+    set SourceVersion(value: string | null) {
+        this.Set('SourceVersion', value);
+    }
+
+    /**
+    * * Field Name: SourceContentHash
+    * * Display Name: Source Content Hash
+    * * SQL Data Type: nvarchar(64)
+    * * Description: Lowercase hex SHA-256 over the imported SKILL.md and every imported file (sorted by path). The Skill Update Check job recomputes it from the source; when it differs, the skill is set to Pending for admin review rather than overwritten.
+    */
+    get SourceContentHash(): string | null {
+        return this.Get('SourceContentHash');
+    }
+    set SourceContentHash(value: string | null) {
+        this.Set('SourceContentHash', value);
+    }
+
+    /**
+    * * Field Name: LastSyncedAt
+    * * Display Name: Last Synced At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When the skill's content was last imported from its source. An update check that finds no change does not touch it.
+    */
+    get LastSyncedAt(): Date | null {
+        return this.Get('LastSyncedAt');
+    }
+    set LastSyncedAt(value: Date | null) {
+        this.Set('LastSyncedAt', value);
+    }
+
+    /**
+    * * Field Name: Frontmatter
+    * * Display Name: Frontmatter
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: SKILL.md frontmatter keys MJ does not model as columns (for example license, metadata, allowed-tools), as a JSON object. Written back on SKILL.md export so an import/export round trip keeps them. NULL when the imported file had none.
+    */
+    get Frontmatter(): string | null {
+        return this.Get('Frontmatter');
+    }
+    set Frontmatter(value: string | null) {
+        this.Set('Frontmatter', value);
     }
 
     /**
