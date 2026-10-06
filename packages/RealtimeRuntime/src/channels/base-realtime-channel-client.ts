@@ -32,6 +32,7 @@ import { ChannelPerceptionCoalescer, DEFAULT_CHANNEL_PERCEPTION_OPTIONS, type Ch
 import { FormatChannelNote } from './channel-state-delta';
 import { VisualPerceptionPump, type VisualFrameReason } from './channel-visual-pump';
 import { DEFAULT_CHANNEL_SURFACE_PLACEMENT, type ChannelSurfacePlacement } from './channel-surface-placement';
+import type { RealtimeCaptureKind } from '../session/realtime-captures';
 import type { ParsedDelegationArtifact } from '../session/delegation-result-parser';
 
 /**
@@ -492,6 +493,16 @@ export abstract class BaseRealtimeChannelClient<TSurface extends object = object
    */
   public ApplySurfacePlacement(placement: ChannelSurfacePlacement): void {
     this.surfacePlacement = placement;
+  }
+
+  /**
+   * The runtime capture this channel fronts (`'camera'` or `'screen'`), or `null`. Such a channel is the capture's policy:
+   * the runtime starts the capture only while the channel is in the session and the session's policy lets the agent see
+   * pixels through it, and the user's "agent can see" choice for the channel decides whether the capture's frames reach
+   * the model. Default `null`.
+   */
+  public get CaptureKind(): RealtimeCaptureKind | null {
+    return null;
   }
 
   /**

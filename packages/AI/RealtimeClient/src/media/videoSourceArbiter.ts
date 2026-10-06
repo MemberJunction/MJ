@@ -88,6 +88,12 @@ export interface VideoSourceDescriptor {
      * persisted per-channel visual-perception choice by this key.
      */
     ChannelKey?: string;
+    /**
+     * Whether a newly registered source starts enabled. Default `true`. A source the agent may not see yet registers
+     * disabled, so the model is never told it is looking at it. Ignored for an id that is already registered; use
+     * {@link VideoSourceArbiter.SetSourceEnabled} for that.
+     */
+    Enabled?: boolean;
 }
 
 /** A source as the arbiter currently sees it. */
@@ -245,7 +251,7 @@ export class VideoSourceArbiter {
             this.sources.set(descriptor.SourceID, {
                 ...descriptor,
                 Kind: descriptor.Kind ?? 'surface',
-                Enabled: true,
+                Enabled: descriptor.Enabled ?? true,
                 Seq: this.nextSeq++,
                 FramesSent: 0,
                 LastSentAt: 0,

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { CHANNEL_INBOUND_VIDEO_TRACK, type RealtimeTrackDescriptor } from '@memberjunction/ai';
 import { VideoSourceArbiter, type SampledFrame } from '@memberjunction/ai-realtime-client';
-import { RealtimeCaptures, type RealtimeFrameSamplerFactory } from '../session/realtime-captures';
+import { RealtimeCaptures, type RealtimeCaptureAdmission, type RealtimeCaptureKind, type RealtimeFrameSamplerFactory } from '../session/realtime-captures';
 import type { IRealtimeMediaHost } from '../hosts/IRealtimeMediaHost';
 import { FakeController, FakeShare, ShareHost, VideoClient, stream } from './capture-test-helpers';
 
@@ -13,7 +13,7 @@ interface FakeSampler {
     Running: boolean;
 }
 
-function harness(takesVideo = true, requested: RealtimeTrackDescriptor[] = []) {
+function harness(takesVideo = true, requested: RealtimeTrackDescriptor[] = [], admit?: (kind: RealtimeCaptureKind) => RealtimeCaptureAdmission) {
     const client = new VideoClient();
     client.Negotiate(takesVideo, requested);
     const controller = new FakeController();
@@ -34,7 +34,7 @@ function harness(takesVideo = true, requested: RealtimeTrackDescriptor[] = []) {
             },
         };
     };
-    const captures = new RealtimeCaptures({ Client: client, LocalMedia: controller, Host: host, CreateSampler: createSampler });
+    const captures = new RealtimeCaptures({ Client: client, LocalMedia: controller, Host: host, CreateSampler: createSampler, Admit: admit });
     const sources = () => VideoSourceArbiter.ForSink(client).GetSources().map((s) => ({ SourceID: s.SourceID, Label: s.Label, Kind: s.Kind }));
     return { client, controller, host, samplers, captures, sources };
 }
@@ -165,6 +165,50 @@ describe('RealtimeCaptures', () => {
         expect(await captures.Start('camera')).toMatchObject({ Status: 'failed', Failure: 'unsupported', Message: 'This app cannot open a camera.' });
         expect(await captures.Start('screen')).toMatchObject({ Status: 'failed', Failure: 'unsupported', Message: 'This app cannot share a screen.' });
         expect(client.IsTrackEstablished('video', 'inbound')).toBe(false);
+    });
+
+    describe("the session's policy", () => {
+        it('refuses a capture the policy does not admit, before adding a track or asking for anything', async () => {
+            const { client, controller, host, captures } = harness(true, [], () => ({ Admitted: false, Message: 'The camera is not part of this call.' }));
+            expect(await captures.Start('camera')).toEqual({ Status: 'failed', Failure: 'policy', Message: 'The camera is not part of this call.' });
+            expect(await captures.Start('screen')).toMatchObject({ Status: 'failed', Failure: 'policy' });
+            expect(captures.States.Camera).toMatchObject({ Status: 'failed', Failure: 'policy' });
+            expect(controller.StartCalls).toEqual([]);
+            expect(host.Requests).toEqual([]);
+            expect(client.IsTrackEstablished('video', 'inbound')).toBe(false);
+        });
+
+        it("marks the capture as its channel's, and keeps it from the agent while the policy says so", async () => {
+            const { client, samplers, captures } = harness(true, [], () => ({ Admitted: true, ChannelKey: 'Camera', VisibleToAgent: false }));
+            await captures.Start('camera');
+            const arbiter = VideoSourceArbiter.ForSink(client);
+            expect(arbiter.GetSources()).toMatchObject([{ SourceID: 'capture:camera', ChannelKey: 'Camera', Enabled: false }]);
+            samplers[0].Push('frame-1');
+            expect(client.Frames).toEqual([]);
+            expect(client.Notes).toEqual([]);
+        });
+
+        it('shows a running capture to the agent, or hides it, when its channel changes, without a note of its own', async () => {
+            const { client, samplers, captures } = harness(true, [], () => ({ Admitted: true, ChannelKey: 'Camera', VisibleToAgent: true }));
+            await captures.Start('camera');
+            const notes = client.Notes.length;
+            captures.SetVisibleToAgent('camera', false);
+            samplers[0].Push('hidden');
+            captures.SetVisibleToAgent('camera', true);
+            samplers[0].Push('seen');
+            expect(client.Frames).toEqual(['seen']);
+            expect(client.Notes).toHaveLength(notes);
+        });
+
+        it('applies a change made while the capture is still opening', async () => {
+            const { client, controller, captures } = harness(true, [], () => ({ Admitted: true, ChannelKey: 'Camera', VisibleToAgent: true }));
+            controller.HoldStart();
+            const starting = captures.Start('camera');
+            captures.SetVisibleToAgent('camera', false);
+            controller.Release();
+            await starting;
+            expect(VideoSourceArbiter.ForSink(client).GetSources()[0].Enabled).toBe(false);
+        });
     });
 
     it('Dispose stops both captures and completes', async () => {

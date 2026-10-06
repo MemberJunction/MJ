@@ -44,7 +44,14 @@ import {
 } from '@memberjunction/ai-realtime-client';
 import { DefaultRealtimeSessionLauncher, type IRealtimeSessionLauncher } from './session-launcher';
 import { ClientSessionDeadline } from './client-session-deadline';
-import { RealtimeCaptures, REALTIME_CAPTURES_OFF, type RealtimeCaptureState, type RealtimeCaptureStates } from './realtime-captures';
+import {
+  RealtimeCaptures,
+  REALTIME_CAPTURES_OFF,
+  type RealtimeCaptureAdmission,
+  type RealtimeCaptureKind,
+  type RealtimeCaptureState,
+  type RealtimeCaptureStates,
+} from './realtime-captures';
 import { RealtimeSessionEventHub, type IRealtimeSessionEventSource, type RealtimeSessionStreamEvent } from './session-event-hub';
 import { BuildNarrationInstructions } from '../narration/narration-template';
 import { ParseDelegationResultJson, ParsedDelegationArtifact, FormatToolName } from './delegation-result-parser';
@@ -271,6 +278,12 @@ const MICROPHONE_ERROR_NAMES: Record<LocalMediaFailure, string> = {
   'in-use': 'NotReadableError',
   unsupported: 'NotSupportedError',
   error: 'Error',
+};
+
+/** What the user is told when the call's policy refuses a capture. */
+const CAPTURE_WORDING: Record<RealtimeCaptureKind, { NotInCall: string; NotAllowed: string }> = {
+  camera: { NotInCall: 'The camera is not part of this call.', NotAllowed: 'This call cannot show the agent your camera' },
+  screen: { NotInCall: 'Screen sharing is not part of this call.', NotAllowed: 'This call cannot show the agent your screen' },
 };
 
 /** The error a failed microphone start reports, named as `getUserMedia` would have named it. */
@@ -1457,7 +1470,12 @@ export class RealtimeSessionRuntime {
   /** Creates the session's camera and screen share and mirrors their state on {@link Captures$}. */
   private openCaptures(client: BaseRealtimeClient): void {
     this.closeCaptures();
-    const captures = new RealtimeCaptures({ Client: client, LocalMedia: this.localMedia, Host: this.mediaHost });
+    const captures = new RealtimeCaptures({
+      Client: client,
+      LocalMedia: this.localMedia,
+      Host: this.mediaHost,
+      Admit: (kind) => this.admitCapture(kind),
+    });
     this.captures = captures;
     this.capturesSubscription = captures.States$.subscribe((states) => this._captures$.next(states));
   }
@@ -1479,6 +1497,56 @@ export class RealtimeSessionRuntime {
   }
 
   /**
+   * The session's policy for a capture. The channel that fronts it (its `CaptureKind`) must be in the session, open or
+   * advertised, and the server's policy must let the agent see pixels through it (the agent's configuration and any
+   * zero-data-retention rule). The user's own "agent can see" choice for the channel does not refuse a start: it decides
+   * whether the frames reach the model.
+   */
+  private admitCapture(kind: RealtimeCaptureKind): RealtimeCaptureAdmission {
+    const channel = this.findCaptureChannel(kind)?.Plugin;
+    if (!channel) {
+      return { Admitted: false, Message: CAPTURE_WORDING[kind].NotInCall };
+    }
+    const resolved = this.GetResolvedChannel(channel.ChannelName);
+    const allowed = resolved?.Exposure ?? resolved?.MaxExposure ?? channel.GetDescriptor().MaxExposure;
+    if (allowed !== 'pixels') {
+      const reasons = (resolved?.ExposureLimits ?? []).map((limit) => limit.Reason);
+      return { Admitted: false, Message: reasons.length > 0 ? `${CAPTURE_WORDING[kind].NotAllowed}: ${reasons.join('; ')}.` : `${CAPTURE_WORDING[kind].NotAllowed}.` };
+    }
+    return { Admitted: true, ChannelKey: channel.ChannelName, VisibleToAgent: channel.Exposure === 'pixels' };
+  }
+
+  /** The channel in the session, open or advertised, that fronts a capture. */
+  private findCaptureChannel(kind: RealtimeCaptureKind): DispatchableChannel | null {
+    const open = this._activeChannels$.value.find((c) => c.CaptureKind === kind);
+    if (open) {
+      return { Plugin: open, IsOpen: true };
+    }
+    const advertised = this.advertisedChannels.find((p) => p.Plugin.CaptureKind === kind);
+    return advertised ? { Plugin: advertised.Plugin, IsOpen: false } : null;
+  }
+
+  /**
+   * Brings up the channel that fronts a capture once the capture is starting, so the host shows its surface: an advertised
+   * channel is opened (and announces itself to the agent), an open one counts as used.
+   */
+  private async revealCaptureChannel(kind: RealtimeCaptureKind): Promise<void> {
+    const state = kind === 'camera' ? this.captures?.States.Camera : this.captures?.States.Screen;
+    const channel = state?.Status === 'starting' ? this.findCaptureChannel(kind) : null;
+    if (!channel) {
+      return;
+    }
+    if (channel.IsOpen) {
+      this.noteChannelActivity(channel.Plugin);
+      return;
+    }
+    const opened = await this.OpenChannel(channel.Plugin.ChannelName);
+    if (!opened.Success) {
+      console.warn(`[RealtimeSession] Could not open channel '${channel.Plugin.ChannelName}' for the ${kind}: ${opened.ErrorMessage ?? opened.ErrorCode}`);
+    }
+  }
+
+  /**
    * Starts the user's camera and shows it to the agent. Call it from the user's click: it may ask for camera
    * permission. Resolves with the camera's state; a failure (no session, a model that takes no video, a refused
    * permission) is a state with a message, never a throw. While the camera is on, it is a source on
@@ -1487,7 +1555,12 @@ export class RealtimeSessionRuntime {
    * @param deviceId The camera to open; the system default when absent.
    */
   public async StartCamera(deviceId?: string): Promise<RealtimeCaptureState> {
-    return this.captures ? this.captures.Start('camera', { DeviceID: deviceId }) : this.noSessionCapture();
+    if (!this.captures) {
+      return this.noSessionCapture();
+    }
+    const started = this.captures.Start('camera', { DeviceID: deviceId });
+    await this.revealCaptureChannel('camera');
+    return started;
   }
 
   /** Stops the user's camera. Safe to call when it is off. */
@@ -1504,7 +1577,12 @@ export class RealtimeSessionRuntime {
    * @param options What the picker offers first, or the panel to share.
    */
   public async StartScreenShare(options?: DisplayCaptureOptions): Promise<RealtimeCaptureState> {
-    return this.captures ? this.captures.Start('screen', options) : this.noSessionCapture();
+    if (!this.captures) {
+      return this.noSessionCapture();
+    }
+    const started = this.captures.Start('screen', options);
+    await this.revealCaptureChannel('screen');
+    return started;
   }
 
   /** Stops the user's screen share. Safe to call when nothing is shared. */
@@ -2005,6 +2083,11 @@ export class RealtimeSessionRuntime {
       reasons.push(UserExposureReason(user));
     }
     plugin.ApplyExposure({ Policy: resolved?.Exposure, User: user, Reasons: reasons });
+    // A capture this channel fronts follows it: the agent sees its frames only while the channel's exposure allows pixels.
+    const kind = plugin.CaptureKind;
+    if (kind) {
+      this.captures?.SetVisibleToAgent(kind, plugin.Exposure === 'pixels');
+    }
   }
 
   /** Follows the session client's video-source arbiter so {@link VideoSources$} reflects it. */

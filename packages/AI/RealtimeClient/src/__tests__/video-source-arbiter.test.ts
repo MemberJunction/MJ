@@ -334,6 +334,18 @@ describe('VideoSourceArbiter', () => {
             expect(sink.Notes).toEqual(["[The user turned off the agent's view of: Camera]"]);
         });
 
+        it('registers a source the agent may not see yet disabled: it is no candidate and the model hears nothing', () => {
+            arbiter.RegisterSource({ SourceID: 'wb', Label: 'Whiteboard' });
+            sink.Notes.length = 0;
+            arbiter.RegisterSource({ SourceID: 'cam', Label: 'Camera', Kind: 'camera', ChannelKey: 'Camera', Enabled: false });
+            expect(arbiter.GetActiveSourceIDs()).toEqual(['wb']);
+            expect(arbiter.PushFrame('cam', 'X')).toBe(false);
+            expect(sink.Notes).toEqual([]);
+            expect(arbiter.GetSources().find((s) => s.SourceID === 'cam')).toMatchObject({ Enabled: false, ChannelKey: 'Camera' });
+            arbiter.RegisterSource({ SourceID: 'cam', Label: 'Camera', Kind: 'camera', Enabled: true });
+            expect(arbiter.GetSources().find((s) => s.SourceID === 'cam')?.Enabled).toBe(false); // an update keeps the state
+        });
+
         it('notify:false lets a caller send its own note without the model hearing it twice', () => {
             arbiter.RegisterSource({ SourceID: 'wb', Label: 'Whiteboard' });
             arbiter.SetSourceEnabled('wb', false, false);

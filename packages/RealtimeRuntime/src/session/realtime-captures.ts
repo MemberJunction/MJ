@@ -3,6 +3,8 @@
  * besides the channels' own surfaces.
  *
  * A capture starts only when the user asks (a click in the host's UI) and in this order:
+ * 0. the session's policy must allow it ({@link RealtimeCapturesOptions.Admit}: the runtime admits a capture only while
+ *    the channel that fronts it is in the session and lets the agent see pixels);
  * 1. the model must be able to take it: an inbound video track is already live, or one is added now
  *    (`AddTrack`; a session never requests video before anyone shares, so it is not billed or limited for it);
  * 2. the device or surface is opened: the camera through the host's `ILocalMediaController`, a screen, window or
@@ -48,6 +50,8 @@ export type RealtimeCaptureFailure =
     | 'in-use'
     /** The user closed the browser's share picker without choosing. */
     | 'cancelled'
+    /** The call's policy does not allow it: the channel that fronts it is not in the call, or may not show the agent video. */
+    | 'policy'
     /** Anything else; see the message. */
     | 'error';
 
@@ -77,6 +81,20 @@ export type RealtimeFrameSamplerFactory = (
     onFrame: (frame: SampledFrame) => void
 ) => { Start(): boolean; Stop(): void };
 
+/**
+ * The session's policy for one capture: refused with a reason for the user, or admitted with the channel it belongs to
+ * and whether the agent may see it yet.
+ */
+export type RealtimeCaptureAdmission =
+    | { Admitted: false; Message: string }
+    | {
+          Admitted: true;
+          /** The channel that fronts the capture: the user's "agent can see" choice for it is kept under this key. */
+          ChannelKey?: string;
+          /** Whether the agent may see it now. When not, it runs for the user only until {@link RealtimeCaptures.SetVisibleToAgent}. */
+          VisibleToAgent: boolean;
+      };
+
 export interface RealtimeCapturesOptions {
     /** The session's realtime client: the arbiter's sink and the owner of the video track. */
     Client: BaseRealtimeClient;
@@ -86,9 +104,14 @@ export interface RealtimeCapturesOptions {
     Host: IRealtimeMediaHost;
     /** Defaults to a DOM {@link FrameSampler}. */
     CreateSampler?: RealtimeFrameSamplerFactory;
+    /** Asked before each start, before anything is added or opened. Default: admitted, visible, with no channel. */
+    Admit?: (kind: RealtimeCaptureKind) => RealtimeCaptureAdmission;
 }
 
 const OFF: RealtimeCaptureState = { Status: 'off' };
+
+/** What a capture gets when the session sets no policy. */
+const ADMITTED: RealtimeCaptureAdmission = { Admitted: true, VisibleToAgent: true };
 
 /** Both captures off: what a host shows outside a session. */
 export const REALTIME_CAPTURES_OFF: RealtimeCaptureStates = Object.freeze({ Camera: OFF, Screen: OFF });
@@ -131,6 +154,11 @@ export class RealtimeCaptures {
     /** Whether this class added the session's inbound video track, and so may remove it. */
     private addedVideoTrack = false;
     private disposed = false;
+    /** How each capture is shown to the agent: set at its start, kept up to date by {@link SetVisibleToAgent}. */
+    private readonly showing: Record<RealtimeCaptureKind, { ChannelKey?: string; VisibleToAgent: boolean }> = {
+        camera: { VisibleToAgent: true },
+        screen: { VisibleToAgent: true },
+    };
 
     constructor(private readonly options: RealtimeCapturesOptions) {}
 
@@ -158,6 +186,11 @@ export class RealtimeCaptures {
         if (this.disposed || current.Status === 'starting' || current.Status === 'on') {
             return current;
         }
+        const admission = this.options.Admit?.(kind) ?? ADMITTED;
+        if (!admission.Admitted) {
+            return this.fail(kind, 'policy', admission.Message);
+        }
+        this.showing[kind] = { ChannelKey: admission.ChannelKey, VisibleToAgent: admission.VisibleToAgent };
         const generation = ++this.generation[kind];
         this.setState(kind, { Status: 'starting' });
         const refusal = this.ensureVideoTrack();
@@ -180,6 +213,17 @@ export class RealtimeCaptures {
         }
         this.live[kind] = { Sampler: this.showToAgent(kind, acquired.Stream), Release: acquired.Release };
         return this.setState(kind, { Status: 'on', Stream: acquired.Stream, ...(acquired.Surface ? { Surface: acquired.Surface } : {}) });
+    }
+
+    /**
+     * Lets the agent see a capture, or hides it from the agent while it keeps running for the user (the policy of the
+     * channel that fronts it changed). Applies to a capture that is still starting too. Quiet: the channel tells the model.
+     */
+    public SetVisibleToAgent(kind: RealtimeCaptureKind, visible: boolean): void {
+        this.showing[kind] = { ...this.showing[kind], VisibleToAgent: visible };
+        if (this.live[kind]) {
+            VideoSourceArbiter.ForSink(this.options.Client).SetSourceEnabled(SOURCE_IDS[kind], visible, false);
+        }
     }
 
     /** Stops a capture: no more frames, out of the arbiter, the device or share released. Safe when it is off. */
@@ -252,11 +296,12 @@ export class RealtimeCaptures {
         this.options.Client.RemoveTrack(CAPTURE_VIDEO_TRACK);
     }
 
-    /** Registers the capture with the arbiter and samples it at the negotiated rate. */
+    /** Registers the capture with the arbiter, as its channel's and as visible as the policy allows, and samples it at the negotiated rate. */
     private showToAgent(kind: RealtimeCaptureKind, stream: MediaStream): { Stop(): void } {
         const arbiter = VideoSourceArbiter.ForSink(this.options.Client);
         const sourceId = SOURCE_IDS[kind];
-        arbiter.RegisterSource({ SourceID: sourceId, Label: LABELS[kind], Kind: kind });
+        const { ChannelKey, VisibleToAgent } = this.showing[kind];
+        arbiter.RegisterSource({ SourceID: sourceId, Label: LABELS[kind], Kind: kind, Enabled: VisibleToAgent, ...(ChannelKey ? { ChannelKey } : {}) });
         const create = this.options.CreateSampler ?? createDomSampler;
         const sampler = create(stream, this.options.Client.InboundVideoRate ?? 1, (frame) => arbiter.PushFrame(sourceId, frame.Data, frame.MimeType));
         sampler.Start();
