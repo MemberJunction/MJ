@@ -1335,7 +1335,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT97 - Cache Architecture Invariants",
+            "TestID": "@lookup:MJ: Tests.Name=IT104 - Cache Architecture Invariants",
             "Sequence": 48,
             "Status": "Active"
           },
