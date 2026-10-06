@@ -19,7 +19,8 @@
     "src/lib/components/plugins/component-artifact-viewer.component.ts",
     "src/lib/components/plugins/component-artifact-viewer.component.dom.test.ts",
     "src/lib/services/artifact-icon.service.ts",
-    "src/lib/services/artifact-preview-resolver.service.ts"
+    "src/lib/services/artifact-preview-resolver.service.ts",
+    "src/lib/__tests__/interactive-form-apply.service.test.ts"
   ],
   "exclude": [
     "node_modules",

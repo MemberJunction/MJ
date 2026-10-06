@@ -111,6 +111,7 @@ export {
     PlacementStateFromContribution,
     type FormPlacementContext,
     type FormPlacementDecision,
+    type FormPlacementDroppedClaim,
     type FormPlacementExisting,
     type FormPlacementField,
     type FormPlacementRailItem,

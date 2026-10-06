@@ -34,7 +34,8 @@ import {
     ApplyDecisionToSpec, CollectFormContributionRegistrations,
     FieldGroupsInDetails, FormCompositionRegistry, FormSlotProbeService, HumanizeEntityTitle, MjFormPlacementDialogComponent,
     PlacementStateFromContribution, ResolveContributionKey, ResolveFormContributionWinners,
-    type FormCompositionSnapshot, type FormPlacementContext, type FormPlacementDecision, type FormPlacementState, type FormRecordRef,
+    type FormCompositionSnapshot, type FormPlacementContext, type FormPlacementDecision, type FormPlacementDroppedClaim,
+    type FormPlacementState, type FormRecordRef,
 } from '@memberjunction/ng-base-forms';
 
 /** Result of an apply attempt — surfaced to the caller for any post-apply UI. */
@@ -509,7 +510,7 @@ export class InteractiveFormApplyService {
     private offeredClaimsOnly(
         state: FormPlacementState,
         dialog: MjFormPlacementDialogComponent,
-    ): { State: FormPlacementState; Dropped: MjFormPlacementDialogComponent['DroppedProposalClaim'] } {
+    ): { State: FormPlacementState; Dropped: FormPlacementDroppedClaim | null } {
         const dropped = this.claimNotOffered(state, dialog);
         return dropped
             ? { State: { ...state, ReplaceMode: 'none', ReplaceFieldNames: [], InSectionKey: '' }, Dropped: dropped }
@@ -524,7 +525,7 @@ export class InteractiveFormApplyService {
     private claimNotOffered(
         state: FormPlacementState,
         dialog: MjFormPlacementDialogComponent,
-    ): MjFormPlacementDialogComponent['DroppedProposalClaim'] {
+    ): FormPlacementDroppedClaim | null {
         const listed = new Set(dialog.PlaceableSections.map((section) => section.Key));
         const sectionKeys = state.ReplaceSectionKeys.length > 0 ? state.ReplaceSectionKeys : [state.ReplaceSectionKey];
         switch (state.ReplaceMode) {
