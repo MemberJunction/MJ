@@ -12,6 +12,9 @@ import { describe, expect, it } from 'vitest';
  * the slot host matches it exactly against the form's entity name, so an unknown name never
  * mounts. The `'*'` wildcard (every entity's form) is allowed.
  *
+ * The scan reads every `.ts` file under `src/lib` that registers a panel
+ * (`RegisterClassEx(BaseFormPanel`), whatever the file is named.
+ *
  * The registered names are read from the generated core entity classes
  * (`@RegisterClass(BaseEntity, 'MJ: ...')` in `MJCoreEntities/src/generated/entities/__mj.ts`).
  */
@@ -19,11 +22,12 @@ const here = dirname(fileURLToPath(import.meta.url));
 const libDir = join(here, '..', 'lib');
 const generatedEntitiesFile = join(here, '..', '..', '..', '..', '..', 'MJCoreEntities', 'src', 'generated', 'entities', '__mj.ts');
 
+/** The `.ts` files under `dir` that register a form panel. */
 function panelFiles(dir: string): string[] {
     return readdirSync(dir).flatMap((name) => {
         const full = join(dir, name);
         if (statSync(full).isDirectory()) return panelFiles(full);
-        return name.endsWith('.panel.ts') ? [full] : [];
+        return name.endsWith('.ts') && readFileSync(full, 'utf8').includes('RegisterClassEx(BaseFormPanel') ? [full] : [];
     });
 }
 
@@ -70,7 +74,7 @@ describe('entity names queried by compiled form panels', () => {
     it('reads the generated entity names and the panel files', () => {
         expect(registered.size).toBeGreaterThan(300);
         expect(registered.has('MJ: Employees')).toBe(true);
-        expect(panelFiles(libDir).length).toBeGreaterThanOrEqual(15);
+        expect(panelFiles(libDir).length).toBeGreaterThanOrEqual(21);
     });
 
     it('finds the overview panel queries', () => {
@@ -87,10 +91,12 @@ describe('entity names queried by compiled form panels', () => {
         }
     });
 
-    it('finds the panel registrations', () => {
+    it('finds the panel registrations, also in files not named *.panel.ts', () => {
         const registrations = usages.filter((u) => u.Kind === 'registration');
-        expect(registrations.length).toBeGreaterThanOrEqual(14);
+        expect(registrations.length).toBeGreaterThanOrEqual(41);
         expect(registrations).toContainEqual({ File: 'custom/Companies/company-overview.panel.ts', Kind: 'registration', Name: 'MJ: Companies' });
+        expect(registrations).toContainEqual({ File: 'custom/HierarchyPanels/hierarchy-form-panels.ts', Kind: 'registration', Name: 'MJ: AI Agent Categories' });
+        expect(registrations).toContainEqual({ File: 'panels/ai-skill-sharing/ai-skill-sharing-panel.component.ts', Kind: 'registration', Name: 'MJ: AI Skills' });
     });
 
     it('uses only MJ:-prefixed names', () => {
