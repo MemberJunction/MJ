@@ -17,7 +17,7 @@ import type { ManifestFetcher, RootApp } from '../dependency/dependency-graph-bu
 import type { InstalledAppMap, DependencyValue } from '../dependency/dependency-resolver.js';
 import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ListGitHubReleases, ListGitHubTags, ValidateGitHubTag, ParseGitHubUrl, type GitHubClientOptions, type MigrationDownloadResult } from '../github/github-client.js';
 import semver from 'semver';
-import { CreateAppSchema, DropAppSchema, SchemaExists } from './schema-manager.js';
+import { CheckCanMigrateAppSchema, CreateAppSchema, DropAppSchema, SchemaExists } from './schema-manager.js';
 import { RunFkGraphTeardown, buildRootDoomedPredicate } from './entity-teardown.js';
 import { extractApplicationIds } from './migration-application-ids.js';
 import { RunAppMigrations, type SkywayDatabaseConfig } from './migration-runner.js';
@@ -754,6 +754,16 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
     const compatResult = CheckMJVersionCompatibility(context.MJVersion, manifest.mjVersionRange);
     if (!compatResult.Compatible) {
       return BuildFailureResult('Upgrade', options.AppName, targetVersion, 'Schema', startTime, compatResult.Message ?? 'Incompatible MJ version');
+    }
+
+    // Before any mutation: a schema whose owner changed since install (the README's
+    // ownership retrofit hands it to dbo) can leave this login unable to run the migrations at
+    // all, which would otherwise surface as a half-applied upgrade (MJ#4756).
+    if (manifest.schema && manifest.migrations) {
+      const migratable = await CheckCanMigrateAppSchema(manifest.schema.name, context.DatabaseProvider);
+      if (!migratable.Success) {
+        return BuildFailureResult('Upgrade', options.AppName, targetVersion, 'Schema', startTime, migratable.ErrorMessage ?? 'Cannot run migrations in the app schema');
+      }
     }
 
     // Step 3: Check dependency compatibility
@@ -1608,6 +1618,15 @@ async function HandleSchemaCreation(manifest: MJAppManifest, context: Orchestrat
       // or createIfNotExists is set (the app expects to adopt an existing schema).
       // Reuse it and let Skyway apply only new migrations.
       context.Callbacks?.OnProgress?.('Schema', `Reusing existing schema '${manifest.schema.name}'`);
+      // A reused schema may not be owned by this login (a --keep-data reinstall after the
+      // README's ownership retrofit, or adopting a shared schema), so check before migrating
+      // into it (MJ#4756). A schema created below needs no check: CreateAppSchema guarantees it.
+      if (manifest.migrations) {
+        const migratable = await CheckCanMigrateAppSchema(canonicalSchemaName, context.DatabaseProvider);
+        if (!migratable.Success) {
+          return { Success: false, ErrorMessage: migratable.ErrorMessage, Created: false };
+        }
+      }
       return { Success: true, Created: false };
     }
     return { Success: false, ErrorMessage: `Schema '${manifest.schema.name}' already exists` };
@@ -1615,7 +1634,17 @@ async function HandleSchemaCreation(manifest: MJAppManifest, context: Orchestrat
 
   if (manifest.schema.createIfNotExists !== false) {
     context.Callbacks?.OnProgress?.('Schema', `Creating schema '${manifest.schema.name}'...`);
-    const result = await CreateAppSchema(manifest.schema.name, context.DatabaseProvider, { allowDoubleUnderscore });
+    // CoreSchema: on SQL Server the app schema is created owned by the core schema's owner so
+    // ownership chaining lets app views read core tables (MJ#4756).
+    const result = await CreateAppSchema(manifest.schema.name, context.DatabaseProvider, {
+      allowDoubleUnderscore,
+      CoreSchema: context.MJCoreSchema ?? '__mj'
+    });
+    if (result.Warning) {
+      // Created, but owned by the installer: core-table reads through app views will need
+      // explicit grants. Not fatal to the install, but never silent.
+      context.Callbacks?.OnWarn?.('Schema', result.Warning);
+    }
     return { Success: result.Success, ErrorMessage: result.ErrorMessage, Created: result.Success };
   }
 
