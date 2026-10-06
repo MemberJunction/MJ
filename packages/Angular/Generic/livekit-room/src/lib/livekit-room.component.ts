@@ -42,7 +42,7 @@ import {
   MediaDeviceMenuComponent,
   MediaTileComponent,
 } from '@memberjunction/ng-realtime-media';
-import type { MediaDevice, MediaDeviceSelection, MediaParticipant } from '@memberjunction/ai-realtime-client/media';
+import type { DisplayCaptureSurface, MediaDevice, MediaDeviceSelection, MediaParticipant } from '@memberjunction/ai-realtime-client/media';
 import { LiveKitControlBarComponent } from './components/livekit-control-bar.component';
 import { LiveKitChatPanelComponent } from './components/livekit-chat-panel.component';
 import { LiveKitParticipantsPanelComponent } from './components/livekit-participants-panel.component';
@@ -472,6 +472,10 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
   /** @deprecated Use {@link OnToggleScreenShare}. */
   public onToggleScreenShare(): void {
     return this.OnToggleScreenShare();
+  }
+  /** Starts screen sharing with the kind of surface the user picked from the Share menu offered first. */
+  public OnScreenShareRequested(surface: DisplayCaptureSurface): void {
+    void this.controller.SetScreenShareEnabled(true, surface);
   }
   /** Toggles the chat panel and clears the unread count when opening. */
   public OnToggleChat(): void {

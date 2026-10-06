@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { ConnectionQuality, ConnectionState, DisconnectReason, RoomEvent, Track } from 'livekit-client';
+import { ConnectionQuality, ConnectionState, DisconnectReason, RoomEvent, Track, type ScreenShareCaptureOptions } from 'livekit-client';
 import { LiveKitRoomController } from '../livekit-room-controller';
 
 /**
@@ -40,7 +40,10 @@ class FakeParticipant {
     this.isCameraEnabled = enabled;
     this.setPub(Track.Source.Camera, enabled);
   }
-  public async setScreenShareEnabled(enabled: boolean): Promise<void> {
+  /** The options each `setScreenShareEnabled` call received. */
+  public readonly screenShareOptions: Array<ScreenShareCaptureOptions | undefined> = [];
+  public async setScreenShareEnabled(enabled: boolean, options?: ScreenShareCaptureOptions): Promise<void> {
+    this.screenShareOptions.push(options);
     this.isScreenShareEnabled = enabled;
     this.setPub(Track.Source.ScreenShare, enabled);
   }
@@ -145,6 +148,18 @@ describe('LiveKitRoomController', () => {
       expect(next).toBe(true);
       expect(controller.State.LocalMedia.CameraEnabled).toBe(true);
       expect(changed).toHaveBeenCalled();
+    });
+
+    it('starts a screen share with the picked kind of surface offered first', async () => {
+      await controller.SetScreenShareEnabled(true, 'window');
+      expect(room.localParticipant.screenShareOptions).toEqual([{ video: { displaySurface: 'window' } }]);
+      expect(controller.State.LocalMedia.ScreenShareEnabled).toBe(true);
+    });
+
+    it('toggles a screen share with no preference', async () => {
+      await controller.ToggleScreenShare();
+      expect(room.localParticipant.screenShareOptions).toEqual([undefined]);
+      expect(controller.State.LocalMedia.ScreenShareEnabled).toBe(true);
     });
 
     it('cancels a media toggle when beforeMediaToggle is canceled', async () => {

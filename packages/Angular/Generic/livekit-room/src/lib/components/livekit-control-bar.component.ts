@@ -1,90 +1,105 @@
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
 import type { LiveKitLocalMediaState } from '@memberjunction/livekit-room-core';
+import type { DisplayCaptureSurface } from '@memberjunction/ai-realtime-client/media';
+import { MJButtonDirective } from '@memberjunction/ng-ui-components';
+import { MediaControlsComponent, type MediaShareRequest } from '@memberjunction/ng-realtime-media';
 
 /**
- * The room control bar: microphone / camera / screen-share toggles, a chat toggle, a participants
- * toggle, a device-settings button, and a leave button. Every control is individually gated by an
- * `@Input`; the bar only emits intent — the host component drives the {@link LiveKitRoomController}.
+ * The room control bar: the microphone, camera and Share buttons (`mj-media-controls`), then layout, device settings,
+ * chat, participants, whiteboard, recording and leave, all round `mjButton`s. Every control is individually gated by
+ * an `@Input`; the bar only emits intent — the host component drives the {@link LiveKitRoomController}.
  */
 @Component({
   selector: 'mj-livekit-control-bar',
   standalone: true,
+  imports: [MJButtonDirective, MediaControlsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="lk-bar">
-      @if (EnableMicrophoneControl) {
-        <button
-          type="button"
-          class="lk-bar__btn"
-          [class.lk-bar__btn--off]="!LocalMedia.MicrophoneEnabled"
-          [title]="LocalMedia.MicrophoneEnabled ? 'Mute microphone' : 'Unmute microphone'"
-          (click)="ToggleMicrophone.emit()"
-        >
-          <i class="fa-solid" [class.fa-microphone]="LocalMedia.MicrophoneEnabled" [class.fa-microphone-slash]="!LocalMedia.MicrophoneEnabled"></i>
-        </button>
-      }
-      @if (EnableCameraControl) {
-        <button
-          type="button"
-          class="lk-bar__btn"
-          [class.lk-bar__btn--off]="!LocalMedia.CameraEnabled"
-          [title]="LocalMedia.CameraEnabled ? 'Turn off camera' : 'Turn on camera'"
-          (click)="ToggleCamera.emit()"
-        >
-          <i class="fa-solid" [class.fa-video]="LocalMedia.CameraEnabled" [class.fa-video-slash]="!LocalMedia.CameraEnabled"></i>
-        </button>
-      }
-      @if (EnableScreenShareControl) {
-        <button
-          type="button"
-          class="lk-bar__btn"
-          [class.lk-bar__btn--active]="LocalMedia.ScreenShareEnabled"
-          [title]="LocalMedia.ScreenShareEnabled ? 'Stop sharing' : 'Share screen'"
-          (click)="ToggleScreenShare.emit()"
-        >
-          <i class="fa-solid fa-display"></i>
-        </button>
+      @if (EnableMicrophoneControl || EnableCameraControl || EnableScreenShareControl) {
+        <mj-media-controls
+          [MicrophoneOn]="LocalMedia.MicrophoneEnabled"
+          [CameraOn]="LocalMedia.CameraEnabled"
+          [Sharing]="LocalMedia.ScreenShareEnabled"
+          [ShowMicrophone]="EnableMicrophoneControl"
+          [ShowCamera]="EnableCameraControl"
+          [ShowShare]="EnableScreenShareControl"
+          [ShowShareMenu]="EnableShareMenu"
+          (MicrophoneToggled)="ToggleMicrophone.emit()"
+          (CameraToggled)="ToggleCamera.emit()"
+          (ShareRequested)="OnShareRequested($event)"
+          (StopShareRequested)="ToggleScreenShare.emit()"
+        ></mj-media-controls>
       }
       @if (EnableLayoutSwitcher) {
-        <button type="button" class="lk-bar__btn" title="Change layout" (click)="ToggleLayoutMenu.emit()">
-          <i class="fa-solid fa-table-columns"></i>
+        <button type="button" mjButton Shape="circle" AriaLabel="Change layout" title="Change layout" (click)="ToggleLayoutMenu.emit()">
+          <i class="fa-solid fa-table-columns" aria-hidden="true"></i>
         </button>
       }
       @if (EnableDeviceSettings) {
-        <button type="button" class="lk-bar__btn" title="Device settings" (click)="OpenDeviceSettings.emit()">
-          <i class="fa-solid fa-gear"></i>
+        <button type="button" mjButton Shape="circle" AriaLabel="Device settings" title="Device settings" (click)="OpenDeviceSettings.emit()">
+          <i class="fa-solid fa-gear" aria-hidden="true"></i>
         </button>
       }
       @if (EnableChatToggle) {
-        <button type="button" class="lk-bar__btn" [class.lk-bar__btn--active]="ChatOpen" title="Chat" (click)="ToggleChat.emit()">
-          <i class="fa-solid fa-comment"></i>
+        <button
+          type="button"
+          mjButton
+          Shape="circle"
+          class="lk-bar__anchor"
+          [Variant]="ChatOpen ? 'primary' : 'secondary'"
+          [AriaLabel]="ChatLabel"
+          title="Chat"
+          (click)="ToggleChat.emit()"
+        >
+          <i class="fa-solid fa-comment" aria-hidden="true"></i>
           @if (UnreadChatCount > 0) {
-            <span class="lk-bar__badge">{{ UnreadChatCount }}</span>
+            <span class="lk-bar__badge" aria-hidden="true">{{ UnreadChatCount }}</span>
           }
         </button>
       }
       @if (EnableParticipantsToggle) {
-        <button type="button" class="lk-bar__btn" [class.lk-bar__btn--active]="ParticipantsOpen" title="Participants" (click)="ToggleParticipants.emit()">
-          <i class="fa-solid fa-users"></i>
+        <button
+          type="button"
+          mjButton
+          Shape="circle"
+          class="lk-bar__anchor"
+          [Variant]="ParticipantsOpen ? 'primary' : 'secondary'"
+          [AriaLabel]="ParticipantsLabel"
+          title="Participants"
+          (click)="ToggleParticipants.emit()"
+        >
+          <i class="fa-solid fa-users" aria-hidden="true"></i>
           @if (ParticipantCount > 0) {
-            <span class="lk-bar__badge">{{ ParticipantCount }}</span>
+            <span class="lk-bar__badge" aria-hidden="true">{{ ParticipantCount }}</span>
           }
         </button>
       }
       @if (EnableWhiteboard) {
-        <button type="button" class="lk-bar__btn" [class.lk-bar__btn--active]="WhiteboardActive" title="Whiteboard" (click)="ToggleWhiteboard.emit()">
-          <i class="fa-solid fa-chalkboard"></i>
+        <button
+          type="button"
+          mjButton
+          Shape="circle"
+          [Variant]="WhiteboardActive ? 'primary' : 'secondary'"
+          AriaLabel="Whiteboard"
+          title="Whiteboard"
+          (click)="ToggleWhiteboard.emit()"
+        >
+          <i class="fa-solid fa-chalkboard" aria-hidden="true"></i>
         </button>
       }
       @if (EnableRecordingControl) {
         <button
           type="button"
-          class="lk-bar__btn"
-          [class.lk-bar__btn--recording]="IsRecording"
+          mjButton
+          Shape="circle"
+          [class.lk-bar__recording]="IsRecording"
+          [Variant]="IsRecording ? 'danger' : 'secondary'"
+          [AriaLabel]="IsRecording ? 'Stop recording' : 'Start recording'"
           [title]="IsRecording ? 'Stop recording' : 'Start recording'"
           (click)="ToggleRecording.emit()"
         >
-          <i class="fa-solid" [class.fa-circle]="!IsRecording" [class.fa-stop]="IsRecording"></i>
+          <i class="fa-solid" [class.fa-circle]="!IsRecording" [class.fa-stop]="IsRecording" aria-hidden="true"></i>
         </button>
       }
       @if (EnableLeaveControl) {
@@ -104,14 +119,14 @@ import type { LiveKitLocalMediaState } from '@memberjunction/livekit-room-core';
               </button>
             </div>
           }
-          <button type="button" class="lk-bar__btn lk-bar__btn--leave" title="Leave or end the meeting"
-            [class.lk-bar__btn--leave-open]="LeaveMenuOpen" (click)="LeaveMenuOpen = !LeaveMenuOpen">
-            <i class="fa-solid fa-phone-slash"></i>
-            <i class="fa-solid fa-caret-up lk-bar__leave-caret"></i>
+          <button type="button" mjButton Shape="circle" Variant="danger" class="lk-bar__anchor"
+            AriaLabel="Leave or end the meeting" title="Leave or end the meeting" (click)="LeaveMenuOpen = !LeaveMenuOpen">
+            <i class="fa-solid fa-phone-slash" aria-hidden="true"></i>
+            <i class="fa-solid fa-caret-up lk-bar__leave-caret" aria-hidden="true"></i>
           </button>
         } @else {
-          <button type="button" class="lk-bar__btn lk-bar__btn--leave" title="Leave" (click)="Leave.emit()">
-            <i class="fa-solid fa-phone-slash"></i>
+          <button type="button" mjButton Shape="circle" Variant="danger" AriaLabel="Leave" title="Leave" (click)="Leave.emit()">
+            <i class="fa-solid fa-phone-slash" aria-hidden="true"></i>
           </button>
         }
       }
@@ -126,41 +141,11 @@ import type { LiveKitLocalMediaState } from '@memberjunction/livekit-room-core';
         gap: 10px;
         padding: 10px 14px;
       }
-      .lk-bar__btn {
+      /* Anchors a count badge or the leave caret on its button. */
+      .lk-bar__anchor {
         position: relative;
-        width: 44px;
-        height: 44px;
-        border-radius: 50%;
-        border: none;
-        cursor: pointer;
-        font-size: 1rem;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        color: var(--mj-text-primary, #334155);
-        background: var(--mj-bg-surface-card, #f1f5f9);
-        transition:
-          background-color 120ms ease,
-          color 120ms ease,
-          transform 80ms ease;
       }
-      .lk-bar__btn:hover {
-        background: var(--mj-bg-surface-hover, #e2e8f0);
-      }
-      .lk-bar__btn:active {
-        transform: scale(0.94);
-      }
-      .lk-bar__btn--off {
-        color: var(--mj-text-inverse, #fff);
-        background: var(--mj-status-error, #ef4444);
-      }
-      .lk-bar__btn--active {
-        color: var(--mj-text-inverse, #fff);
-        background: var(--mj-brand-primary, #0076b6);
-      }
-      .lk-bar__btn--recording {
-        color: var(--mj-text-inverse, #fff);
-        background: var(--mj-status-error, #ef4444);
+      .lk-bar__recording {
         animation: lk-bar-rec 1.4s ease-in-out infinite;
       }
       @keyframes lk-bar-rec {
@@ -168,16 +153,8 @@ import type { LiveKitLocalMediaState } from '@memberjunction/livekit-room-core';
           opacity: 0.6;
         }
       }
-      .lk-bar__btn--leave {
-        position: relative;
-        color: var(--mj-text-inverse, #fff);
-        background: var(--mj-status-error, #ef4444);
-      }
-      .lk-bar__btn--leave:hover,
-      .lk-bar__btn--leave-open {
-        background: var(--mj-status-error-text, #b91c1c);
-      }
-      .lk-bar__leave-caret {
+      /* Under the anchor class, so it outranks mjButton's own icon size. */
+      .lk-bar__anchor .lk-bar__leave-caret {
         position: absolute;
         right: 3px;
         bottom: 3px;
@@ -270,6 +247,11 @@ export class LiveKitControlBarComponent {
   @Input() public EnableCameraControl = true;
   /** Show the screen-share toggle. */
   @Input() public EnableScreenShareControl = true;
+  /**
+   * Show the Share button's arrow, whose menu asks the browser's picker for an entire screen, a window or a browser
+   * tab first. Off by default: a host that turns it on handles {@link ScreenShareRequested}.
+   */
+  @Input() public EnableShareMenu = false;
   /** Show the device-settings button. */
   @Input() public EnableDeviceSettings = true;
   /** Show the chat toggle. */
@@ -303,6 +285,8 @@ export class LiveKitControlBarComponent {
   @Output() public ToggleCamera = new EventEmitter<void>();
   /** The user clicked the screen-share toggle. */
   @Output() public ToggleScreenShare = new EventEmitter<void>();
+  /** The user picked, from the Share menu, the kind of surface the browser's picker should offer first. */
+  @Output() public ScreenShareRequested = new EventEmitter<DisplayCaptureSurface>();
   /** The user clicked the device-settings button. */
   @Output() public OpenDeviceSettings = new EventEmitter<void>();
   /** The user clicked the chat toggle. */
@@ -322,4 +306,29 @@ export class LiveKitControlBarComponent {
 
   /** Whether the Zoom-style leave menu (Leave vs. End for everyone) is open. */
   public LeaveMenuOpen = false;
+
+  /** The chat button's name, with the unread count its badge shows. */
+  public get ChatLabel(): string {
+    return this.UnreadChatCount > 0 ? `Chat, ${this.UnreadChatCount} unread` : 'Chat';
+  }
+
+  /** The participants button's name, with the count its badge shows. */
+  public get ParticipantsLabel(): string {
+    return this.ParticipantCount > 0 ? `Participants, ${this.ParticipantCount}` : 'Participants';
+  }
+
+  /**
+   * Hands a Share request on: a kind of surface picked from the menu as {@link ScreenShareRequested}, the main
+   * button's request (no preference) as {@link ToggleScreenShare}.
+   */
+  public OnShareRequested(request: MediaShareRequest): void {
+    if (request.Kind !== 'display') {
+      return; // The bar lists no panels, so a panel request cannot come from it.
+    }
+    if (request.PreferredSurface) {
+      this.ScreenShareRequested.emit(request.PreferredSurface);
+    } else {
+      this.ToggleScreenShare.emit();
+    }
+  }
 }

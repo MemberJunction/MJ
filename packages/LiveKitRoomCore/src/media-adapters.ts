@@ -5,11 +5,15 @@
  * Both are memoized: the controller rebuilds its views on every state change, and a tile must see the same
  * participant and the same video source until something actually changes, or it would reattach its video.
  *
+ * `ToScreenShareCaptureOptions` goes the other way: the kind of surface a user picked from the Share menu, as
+ * LiveKit's screen-share options.
+ *
  * @module @memberjunction/livekit-room-core
  */
 
-import { Track, type TrackPublication } from 'livekit-client';
+import { Track, type ScreenShareCaptureOptions, type TrackPublication } from 'livekit-client';
 import type {
+    DisplayCaptureSurface,
     MediaDevice,
     MediaDeviceKind,
     MediaParticipant,
@@ -27,6 +31,16 @@ const DEVICE_KINDS: Record<LiveKitDevice['Kind'], MediaDeviceKind> = {
     audioinput: 'microphone',
     videoinput: 'camera',
     audiooutput: 'speaker',
+};
+
+/** The `displaySurface` values LiveKit hands to `getDisplayMedia`. */
+type LiveKitDisplaySurface = NonNullable<Exclude<ScreenShareCaptureOptions['video'], boolean | undefined>['displaySurface']>;
+
+/** The browser's name for each kind of display surface. */
+const DISPLAY_SURFACES: Record<DisplayCaptureSurface, LiveKitDisplaySurface> = {
+    screen: 'monitor',
+    window: 'window',
+    tab: 'browser',
 };
 
 /**
@@ -57,6 +71,15 @@ export function ToLiveKitDeviceKind(kind: MediaDeviceKind): LiveKitDevice['Kind'
         default:
             return 'audiooutput';
     }
+}
+
+/**
+ * LiveKit's screen-share options for a `/media` surface preference: the kind of surface the browser's picker offers
+ * first. A hint: only Chromium browsers read it, and the user can still pick another kind. No preference gives no
+ * options, so LiveKit asks as it always has.
+ */
+export function ToScreenShareCaptureOptions(surface?: DisplayCaptureSurface): ScreenShareCaptureOptions | undefined {
+    return surface ? { video: { displaySurface: DISPLAY_SURFACES[surface] } } : undefined;
 }
 
 function buildMediaParticipant(view: LiveKitParticipantView): MediaParticipant {

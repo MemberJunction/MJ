@@ -1,0 +1,128 @@
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import {
+  renderComponentFixture,
+  query,
+  queryAll,
+  overlayQuery,
+  overlayQueryAll,
+  clearOverlayContainers,
+  ExpectNoAxeViolations,
+} from '@memberjunction/ng-test-utils';
+import { MediaControlsComponent, type MediaShareRequest } from './media-controls.component';
+
+afterEach(() => {
+  clearOverlayContainers();
+});
+
+/**
+ * DOM spec for <mj-media-controls>: the buttons' names and looks follow the state, each click asks for the
+ * opposite, and the split Share button asks with no preference, for a picked kind of surface, or for a host's panel.
+ */
+describe('MediaControlsComponent (DOM)', () => {
+  const render = (inputs: Record<string, unknown> = {}) => renderComponentFixture(MediaControlsComponent, { inputs: { ...inputs } });
+  const button = (f: ReturnType<typeof render>, title: string) => query(f, `button[title="${title}"]`) as HTMLButtonElement | null;
+  const menuLabels = (selector = 'mj-menu') =>
+    (overlayQueryAll(`${selector} mj-menu-item`) as HTMLElement[]).map((item) => item.querySelector('.mj-menu-item-label')?.textContent?.trim());
+  const menuItem = (label: string) =>
+    (overlayQueryAll('mj-menu-item') as HTMLElement[]).find((item) => item.querySelector('.mj-menu-item-label')?.textContent?.trim() === label) as HTMLElement;
+  const shareRequests = (f: ReturnType<typeof render>) => {
+    const requests: MediaShareRequest[] = [];
+    f.componentInstance.ShareRequested.subscribe((request: MediaShareRequest) => requests.push(request));
+    return requests;
+  };
+  const openShareMenu = (f: ReturnType<typeof render>) => {
+    button(f, 'Choose what to share')?.click();
+    f.detectChanges();
+  };
+
+  it('names each button by what a click does, red while the microphone or camera is off', () => {
+    const f = render({ MicrophoneOn: true, CameraOn: false });
+    const mic = button(f, 'Mute microphone');
+    const camera = button(f, 'Turn on camera');
+    expect(mic?.getAttribute('aria-label')).toBe('Mute microphone');
+    expect(mic?.classList.contains('mj-btn--secondary')).toBe(true);
+    expect(mic?.querySelector('.fa-microphone')).not.toBeNull();
+    expect(camera?.classList.contains('mj-btn--danger')).toBe(true);
+    expect(camera?.querySelector('.fa-video-slash')).not.toBeNull();
+    expect(queryAll(f, 'button').every((b) => b.classList.contains('mj-btn--circle'))).toBe(true);
+  });
+
+  it('asks for the opposite state when the microphone or camera is clicked', () => {
+    const f = render({ MicrophoneOn: true, CameraOn: false });
+    const mic = vi.fn();
+    const camera = vi.fn();
+    f.componentInstance.MicrophoneToggled.subscribe(mic);
+    f.componentInstance.CameraToggled.subscribe(camera);
+    button(f, 'Mute microphone')?.click();
+    button(f, 'Turn on camera')?.click();
+    expect(mic).toHaveBeenCalledWith(false);
+    expect(camera).toHaveBeenCalledWith(true);
+  });
+
+  it('asks to share with no preference from the main part of Share', () => {
+    const f = render();
+    const requests = shareRequests(f);
+    button(f, 'Share screen')?.click();
+    expect(requests).toEqual([{ Kind: 'display' }]);
+  });
+
+  it('offers an entire screen, a window and a browser tab from the arrow, and asks for the picked kind first', () => {
+    const f = render();
+    const requests = shareRequests(f);
+    openShareMenu(f);
+    expect(overlayQuery('mj-menu')?.getAttribute('aria-label')).toBe('Share');
+    expect(menuLabels()).toEqual(['Entire screen', 'Window', 'Browser tab']);
+    expect(overlayQuery('mj-menu-divider')).toBeNull();
+    menuItem('Window').click();
+    f.detectChanges();
+    expect(requests).toEqual([{ Kind: 'display', PreferredSurface: 'window' }]);
+    expect(overlayQuery('mj-menu')).toBeNull();
+  });
+
+  it("offers the host's panels under This panel, and asks for the picked panel", () => {
+    const f = render({
+      SharePanels: [
+        { Key: 'Whiteboard', Label: 'Whiteboard', Icon: 'fa-solid fa-chalkboard' },
+        { Key: 'Browser', Label: 'Remote browser' },
+      ],
+    });
+    const requests = shareRequests(f);
+    openShareMenu(f);
+    expect(menuLabels()).toEqual(['Entire screen', 'Window', 'Browser tab', 'This panel']);
+    expect(menuItem('This panel').getAttribute('aria-haspopup')).toBe('menu');
+    menuItem('This panel').click();
+    f.detectChanges();
+    expect(menuLabels('mj-menu[aria-label="This panel"]')).toEqual(['Whiteboard', 'Remote browser']);
+    menuItem('Remote browser').click();
+    f.detectChanges();
+    expect(requests).toEqual([{ Kind: 'panel', PanelKey: 'Browser' }]);
+  });
+
+  it('while sharing, the main part stops sharing and the arrow is gone', () => {
+    const f = render({ Sharing: true });
+    const requests = shareRequests(f);
+    const stop = vi.fn();
+    f.componentInstance.StopShareRequested.subscribe(stop);
+    const share = button(f, 'Stop sharing');
+    expect(share?.classList.contains('mj-btn--primary')).toBe(true);
+    expect(button(f, 'Choose what to share')).toBeNull();
+    share?.click();
+    expect(stop).toHaveBeenCalledOnce();
+    expect(requests).toEqual([]);
+  });
+
+  it('leaves out the microphone, the camera and the arrow when their gates are off', () => {
+    const f = render({ ShowMicrophone: false, ShowCamera: false, ShowShareMenu: false });
+    expect(queryAll(f, 'button').map((b) => b.getAttribute('title'))).toEqual(['Share screen']);
+  });
+
+  it('leaves out Share when its gate is off', () => {
+    const f = render({ ShowShare: false });
+    expect(queryAll(f, 'button').map((b) => b.getAttribute('title'))).toEqual(['Unmute microphone', 'Turn on camera']);
+  });
+
+  it('has no axe violations', async () => {
+    const f = render({ MicrophoneOn: true, CameraOn: true });
+    await ExpectNoAxeViolations(f);
+  });
+});

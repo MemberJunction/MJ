@@ -27,7 +27,31 @@ class MenuHostComponent {
   public readonly Events: string[] = [];
 }
 
-const KEY_CODES = { Enter: 13, Escape: 27, ArrowDown: 40 } as const;
+/** A menu whose last item opens a submenu of two panels. */
+@Component({
+  standalone: true,
+  imports: [MJMenuTriggerDirective, MJMenuComponent, MJMenuItemComponent],
+  template: `
+    <button type="button" class="trigger" [mjMenuTriggerFor]="menu">Share</button>
+    <ng-template #menu>
+      <mj-menu AriaLabel="Share">
+        <mj-menu-item (Triggered)="Events.push('screen')">Entire screen</mj-menu-item>
+        <mj-menu-item class="panel-item" [mjMenuTriggerFor]="panels">This panel</mj-menu-item>
+      </mj-menu>
+    </ng-template>
+    <ng-template #panels>
+      <mj-menu class="panels" AriaLabel="This panel">
+        <mj-menu-item (Triggered)="Events.push('whiteboard')">Whiteboard</mj-menu-item>
+        <mj-menu-item (Triggered)="Events.push('browser')">Browser</mj-menu-item>
+      </mj-menu>
+    </ng-template>
+  `,
+})
+class SubmenuHostComponent {
+  public readonly Events: string[] = [];
+}
+
+const KEY_CODES = { Enter: 13, Escape: 27, Space: 32, ArrowLeft: 37, ArrowRight: 39, ArrowDown: 40 } as const;
 
 afterEach(() => {
   clearOverlayContainers();
@@ -118,5 +142,88 @@ describe('MJMenuComponent (DOM)', () => {
     const f = render({ MenuName: null });
     open(f);
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('[mj-menu] has no accessible name'), expect.anything());
+  });
+});
+
+describe('MJMenuItemComponent submenu (DOM)', () => {
+  const render = () => renderComponentFixture(SubmenuHostComponent);
+  const panelItem = () => overlayQuery('.panel-item') as HTMLElement;
+  /** A keydown as a browser sends it: the CDK menu reads the legacy `keyCode`. */
+  const key = (target: HTMLElement, name: keyof typeof KEY_CODES) => {
+    const event = new KeyboardEvent('keydown', { key: name, bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'keyCode', { value: KEY_CODES[name] });
+    target.dispatchEvent(event);
+  };
+  const open = (f: ReturnType<typeof render>) => {
+    (query(f, '.trigger') as HTMLButtonElement).click();
+    f.detectChanges();
+  };
+
+  it('marks an item that opens a submenu with an arrow after its label, hidden from assistive tech', () => {
+    const f = render();
+    open(f);
+    expect(panelItem().getAttribute('aria-haspopup')).toBe('menu');
+    expect(panelItem().querySelector('.mj-menu-item-submenu')?.getAttribute('aria-hidden')).toBe('true');
+    const plain = (overlayQueryAll('mj-menu-item') as HTMLElement[])[0];
+    expect(plain.querySelector('.mj-menu-item-submenu')).toBeNull();
+  });
+
+  it('opens the submenu on click, and an item in it runs and closes every menu', () => {
+    const f = render();
+    open(f);
+    panelItem().click();
+    f.detectChanges();
+    const panels = overlayQuery('mj-menu.panels') as HTMLElement;
+    expect(panels).not.toBeNull();
+    (panels.querySelectorAll('mj-menu-item')[1] as HTMLElement).click();
+    f.detectChanges();
+    expect(f.componentInstance.Events).toEqual(['browser']);
+    expect(overlayQuery('mj-menu')).toBeNull();
+  });
+
+  it('opens the submenu with ArrowRight and closes it with ArrowLeft, back on its item', () => {
+    const f = render();
+    open(f);
+    panelItem().focus();
+    key(panelItem(), 'ArrowRight');
+    f.detectChanges();
+    const first = overlayQuery('mj-menu.panels mj-menu-item') as HTMLElement;
+    expect(document.activeElement).toBe(first);
+    key(first, 'ArrowLeft');
+    f.detectChanges();
+    expect(overlayQuery('mj-menu.panels')).toBeNull();
+    expect(document.activeElement).toBe(panelItem());
+  });
+
+  it('opens the submenu with Enter', () => {
+    const f = render();
+    open(f);
+    panelItem().focus();
+    key(panelItem(), 'Enter');
+    f.detectChanges();
+    expect(overlayQuery('mj-menu.panels')).not.toBeNull();
+    expect(f.componentInstance.Events).toEqual([]);
+  });
+
+  it('closes only the submenu on Escape, back on its item', () => {
+    const f = render();
+    open(f);
+    panelItem().focus();
+    key(panelItem(), 'ArrowRight');
+    f.detectChanges();
+    key(overlayQuery('mj-menu.panels mj-menu-item') as HTMLElement, 'Escape');
+    f.detectChanges();
+    expect(overlayQuery('mj-menu.panels')).toBeNull();
+    expect(overlayQuery('mj-menu')).not.toBeNull();
+    expect(document.activeElement).toBe(panelItem());
+  });
+
+  it('opens the submenu with Space', () => {
+    const f = render();
+    open(f);
+    panelItem().focus();
+    key(panelItem(), 'Space');
+    f.detectChanges();
+    expect(overlayQuery('mj-menu.panels')).not.toBeNull();
   });
 });

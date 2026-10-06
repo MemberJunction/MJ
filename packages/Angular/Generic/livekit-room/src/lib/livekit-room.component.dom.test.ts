@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest';
-import { renderComponentFixture, query, queryAll, text } from '@memberjunction/ng-test-utils';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { renderComponentFixture, query, queryAll, text, overlayQueryAll, clearOverlayContainers } from '@memberjunction/ng-test-utils';
 import type { LiveKitParticipantView, LiveKitRoomController, LiveKitRoomState } from '@memberjunction/livekit-room-core';
 import { LiveKitRoomComponent, LIVEKIT_ROOM_CONTROLLER_FACTORY } from './livekit-room.component';
 
@@ -15,6 +15,10 @@ import { LiveKitRoomComponent, LIVEKIT_ROOM_CONTROLLER_FACTORY } from './livekit
  * gating; media/track behavior remains live-tested per §7.
  */
 describe('LiveKitRoomComponent (DOM, fake controller)', () => {
+  afterEach(() => {
+    clearOverlayContainers();
+  });
+
   const makeState = (over: Partial<LiveKitRoomState> = {}): LiveKitRoomState =>
     ({
       Status: 'idle',
@@ -34,6 +38,7 @@ describe('LiveKitRoomComponent (DOM, fake controller)', () => {
     let state = initial;
     const handlers = new Map<string, (arg: LiveKitRoomState) => void>();
     const toggleMicrophone = vi.fn();
+    const setScreenShareEnabled = vi.fn(() => Promise.resolve());
     const fake = {
       get State() {
         return state;
@@ -47,6 +52,7 @@ describe('LiveKitRoomComponent (DOM, fake controller)', () => {
       ToggleMicrophone: toggleMicrophone,
       ToggleCamera: vi.fn(),
       ToggleScreenShare: vi.fn(),
+      SetScreenShareEnabled: setScreenShareEnabled,
       Connect: vi.fn(() => Promise.resolve()),
       Disconnect: vi.fn(() => Promise.resolve()),
       Dispose: vi.fn(),
@@ -61,6 +67,7 @@ describe('LiveKitRoomComponent (DOM, fake controller)', () => {
     return {
       controller: fake as unknown as LiveKitRoomController,
       toggleMicrophone,
+      setScreenShareEnabled,
       /** Mutate State and fire the controller's `stateChanged` event, as the real controller would. */
       emitState(next: LiveKitRoomState): void {
         state = next;
@@ -127,6 +134,17 @@ describe('LiveKitRoomComponent (DOM, fake controller)', () => {
     expect(mic).not.toBeNull();
     mic.click();
     expect(fc.toggleMicrophone).toHaveBeenCalled();
+  });
+
+  it('starts a share from the Share menu with the picked kind of surface offered first', () => {
+    const fc = makeFakeController(makeState({ Status: 'connected' }));
+    const f = render(fc.controller);
+    (query(f, 'mj-livekit-control-bar button[title="Choose what to share"]') as HTMLButtonElement).click();
+    f.detectChanges();
+    const tab = (overlayQueryAll('mj-menu-item') as HTMLElement[]).find((item) => item.textContent?.trim() === 'Browser tab');
+    tab?.click();
+    f.detectChanges();
+    expect(fc.setScreenShareEnabled).toHaveBeenCalledWith(true, 'tab');
   });
 
   it('re-renders when the controller emits a stateChanged event (connecting → connected)', () => {

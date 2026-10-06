@@ -26,10 +26,13 @@ import {
   type LocalAudioTrack,
   type LocalVideoTrack,
   type RoomOptions,
+  type ScreenShareCaptureOptions,
 } from 'livekit-client';
 import { BehaviorSubject, Observable } from 'rxjs';
+import type { DisplayCaptureSurface } from '@memberjunction/ai-realtime-client/media';
 import { LiveKitRoomEventBus } from './events';
 import { ApplyBackgroundEffect, ApplyNoiseFilter } from './livekit-effects';
+import { ToScreenShareCaptureOptions } from './media-adapters';
 import {
   LiveKitBackgroundEffect,
   LiveKitConnectionStatus,
@@ -252,9 +255,12 @@ export class LiveKitRoomController {
     await this.toggleLocalMedia('camera', enabled);
   }
 
-  /** Starts or stops local screen sharing. */
-  public async SetScreenShareEnabled(enabled: boolean): Promise<void> {
-    await this.toggleLocalMedia('screen', enabled);
+  /**
+   * Starts or stops local screen sharing. `preferredSurface` is the kind of surface the browser's picker offers first
+   * when sharing starts (Chromium reads it; the user can still pick another kind).
+   */
+  public async SetScreenShareEnabled(enabled: boolean, preferredSurface?: DisplayCaptureSurface): Promise<void> {
+    await this.toggleLocalMedia('screen', enabled, ToScreenShareCaptureOptions(preferredSurface));
   }
 
   /** Toggles the microphone and returns the new state. */
@@ -612,8 +618,15 @@ export class LiveKitRoomController {
     };
   }
 
-  /** Toggles a local-media kind via the local participant, surfacing failures as device errors. */
-  private async toggleLocalMedia(kind: 'microphone' | 'camera' | 'screen', enabled: boolean): Promise<void> {
+  /**
+   * Toggles a local-media kind via the local participant, surfacing failures as device errors. `screenOptions` go to
+   * LiveKit when a screen share starts.
+   */
+  private async toggleLocalMedia(
+    kind: 'microphone' | 'camera' | 'screen',
+    enabled: boolean,
+    screenOptions?: ScreenShareCaptureOptions,
+  ): Promise<void> {
     if (!this.room) {
       return;
     }
@@ -628,7 +641,7 @@ export class LiveKitRoomController {
       } else if (kind === 'camera') {
         await lp.setCameraEnabled(enabled);
       } else {
-        await lp.setScreenShareEnabled(enabled);
+        await lp.setScreenShareEnabled(enabled, screenOptions);
       }
       this.rebuildState();
       this.Events.Emit('localMediaChanged', this.stateSubject.value.LocalMedia);

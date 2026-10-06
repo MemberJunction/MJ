@@ -26,7 +26,7 @@ export {
 } from './audio-meter';
 
 export { LiveKitMediaPreview } from './livekit-preview';
-export { ToMediaParticipant, ToMediaDevice, ToLiveKitDeviceKind } from './media-adapters';
+export { ToMediaParticipant, ToMediaDevice, ToLiveKitDeviceKind, ToScreenShareCaptureOptions } from './media-adapters';
 export { ApplyNoiseFilter, applyNoiseFilter, ApplyBackgroundEffect, applyBackgroundEffect } from './livekit-effects';
 
 export {

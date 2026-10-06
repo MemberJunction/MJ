@@ -86,6 +86,9 @@ export class MJMenuComponent implements AfterViewInit {
 /**
  * `mj-menu-item`: one action in an `mj-menu`. `Triggered` fires on a click, Enter or Space, and then the menu
  * closes. A `Disabled` item stays focusable, so it is announced, but cannot be triggered.
+ *
+ * An item with `[mjMenuTriggerFor]` opens a submenu instead: a click, Enter, Space or ArrowRight opens it,
+ * ArrowLeft or Escape closes it, and an arrow after the label shows that it has one.
  */
 @Component({
   selector: 'mj-menu-item',
@@ -104,6 +107,9 @@ export class MJMenuComponent implements AfterViewInit {
       <i class="mj-menu-item-icon" [class]="Icon" aria-hidden="true"></i>
     }
     <span class="mj-menu-item-label"><ng-content></ng-content></span>
+    @if (HasSubmenu) {
+      <i class="mj-menu-item-submenu fa-solid fa-chevron-right" aria-hidden="true"></i>
+    }
   `,
   styles: [
     `
@@ -148,12 +154,24 @@ export class MJMenuComponent implements AfterViewInit {
         flex: 1;
         min-width: 0;
       }
+      .mj-menu-item-submenu {
+        flex-shrink: 0;
+        font-size: 0.75em;
+        color: var(--mj-text-secondary);
+      }
     `,
   ],
 })
 export class MJMenuItemComponent {
+  private readonly item = inject(CdkMenuItem, { self: true });
+
   /** A Font Awesome class list for the icon before the label, e.g. `fa-solid fa-expand`. */
   @Input() Icon: string | null = null;
+
+  /** Whether the item opens a submenu: it also carries `[mjMenuTriggerFor]`, and shows an arrow after its label. */
+  public get HasSubmenu(): boolean {
+    return this.item.hasMenu;
+  }
 }
 
 /** `mj-menu-divider`: a line between groups of items in an `mj-menu`. */

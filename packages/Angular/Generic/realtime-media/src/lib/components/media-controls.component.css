@@ -1,0 +1,12 @@
+:host {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--mj-space-2-5);
+}
+
+/* The Share button and its arrow read as one control. */
+.share {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--mj-space-0-5);
+}
