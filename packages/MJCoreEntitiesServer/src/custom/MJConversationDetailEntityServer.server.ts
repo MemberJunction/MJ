@@ -1,10 +1,11 @@
-import { BaseEntity, EntitySaveOptions } from "@memberjunction/core";
+import { BaseEntity, BaseEntityResult, EntitySaveOptions, IMetadataProvider, LogError } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
-import { MJConversationDetailEntityExtended } from "@memberjunction/core-entities";
+import { MJConversationDetailEntityExtended, MJConversationEntity } from "@memberjunction/core-entities";
 
 /**
  * Server-side subclass of MJConversationDetailEntity that automatically tracks
- * when the original message content has been modified.
+ * when the original message content has been modified, and puts each new message
+ * on the conversation's current branch.
  *
  * When a user edits their message after initial creation, the OriginalMessageChanged
  * flag is set to true, allowing the UI to display an "(Edited)" indicator. This is
@@ -26,19 +27,61 @@ import { MJConversationDetailEntityExtended } from "@memberjunction/core-entitie
  * run server-side (`ProviderType === 'Database'`), which is exactly where it was being
  * shadowed out. Inheriting composes the two behaviors instead: this class flags the edit,
  * then delegates to the permission gate via `super.Save`.
+ *
+ * A new row saved without a `BranchID` gets the conversation's `CurrentBranchID` (null is the
+ * trunk, so no value is set). This runs for every creator path on the server: the UI,
+ * AgentRunner, feedback resumes and threads. When the conversation `Load` returns false (not
+ * found, or hidden by row-level security), no branch is stamped and the row saves on the trunk.
+ * Only a read that throws makes `Save` return `false`, with a result entry and nothing written.
  */
 @RegisterClass(BaseEntity, "MJ: Conversation Details")
 export class MJConversationDetailEntityServer extends MJConversationDetailEntityExtended {
     /**
-     * Override Save to detect message changes and set the OriginalMessageChanged flag.
-     * This is done as pre-processing before calling super.Save() to ensure it's a single DB round trip.
+     * Sets the OriginalMessageChanged flag on a genuine message edit and stamps a new row's
+     * BranchID, then calls super.Save() so both values are written in the same save.
+     * Returns `false` without saving when reading the conversation throws.
      */
     override async Save(options?: EntitySaveOptions): Promise<boolean> {
         if (this.ShouldFlagOriginalMessageChanged()) {
             this.OriginalMessageChanged = true;
         }
-
+        try {
+            await this.StampBranchFromConversation();
+        } catch (error) {
+            LogError(
+                `MJConversationDetailEntityServer: could not read the current branch of conversation ` +
+                    `${this.ConversationID}: ${error instanceof Error ? error.message : String(error)}`
+            );
+            const result = new BaseEntityResult();
+            result.Success = false;
+            result.Type = 'create';
+            result.Message = "Unable to determine the conversation's current branch.";
+            result.StartedAt = new Date();
+            result.EndedAt = new Date();
+            this.RegisterResultHistoryEntry(result);
+            return false;
+        }
         return super.Save(options);
+    }
+
+    /**
+     * A new message with no explicit branch lands on the conversation's current branch.
+     * One place for every creator path: the UI, AgentRunner, feedback resumes, threads.
+     * Stamps nothing when the conversation `Load` returns false; a read that throws propagates.
+     */
+    public async StampBranchFromConversation(): Promise<void> {
+        if (this.IsSaved || this.BranchID != null || !this.ConversationID) {
+            return;
+        }
+        const user = this.ContextCurrentUser;
+        if (!user) {
+            return;
+        }
+        const provider = this.ProviderToUse as unknown as IMetadataProvider;
+        const conversation = await provider.GetEntityObject<MJConversationEntity>('MJ: Conversations', user);
+        if (await conversation.Load(this.ConversationID) && conversation.CurrentBranchID) {
+            this.BranchID = conversation.CurrentBranchID;
+        }
     }
 
     /**

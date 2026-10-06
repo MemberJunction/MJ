@@ -8,7 +8,7 @@
  * GetMaxVersionForArtifact / CheckForDuplicateVersion) are overridden on a test subclass, the
  * provider is a fake entity factory, and AIEngine is module-mocked. No DB, no network.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { UserInfo, IMetadataProvider, RunViewParams, RunViewResult } from '@memberjunction/core';
 import type { ExecuteAgentResult } from '@memberjunction/ai-core-plus';
 
@@ -276,16 +276,18 @@ describe('AgentRunner.ProcessAgentArtifacts — conversationDetailId-optional wi
         expect(requested).toHaveLength(0);
     });
 
-    it('skips the duplicate version (returns undefined) when content matches the latest version', async () => {
+    it('outside a conversation, skips the duplicate version (returns undefined) and writes nothing', async () => {
         const version = makeEntity('ver-never-saved');
-        const { provider } = makeProvider(() => version);
+        const { provider, requested } = makeProvider(() => version);
         const runner = new TestableAgentRunner(provider);
-        runner.PreviousArtifact = { artifactId: PRIOR_UUID, versionNumber: 3 };
+        runner.MaxVersion = 3;
         runner.DuplicateVersionId = 'ver-existing-3';
 
-        const info = await runner.ProcessAgentArtifacts(makeResult(), 'detail-9', undefined, contextUser, provider);
+        const info = await runner.ProcessAgentArtifacts(makeResult(), undefined, SOURCE_UUID, contextUser, provider);
 
         expect(info).toBeUndefined();
+        expect(runner.DuplicateSpy).toHaveBeenCalledWith(SOURCE_UUID);
+        expect(requested).toHaveLength(0);
         expect(version.Save).not.toHaveBeenCalled();
         expect(runner.LinkSpy).not.toHaveBeenCalled();
     });
@@ -298,6 +300,174 @@ describe('AgentRunner.ProcessAgentArtifacts — conversationDetailId-optional wi
         const info = await runner.ProcessAgentArtifacts(makeResult(), undefined, undefined, contextUser, provider);
 
         expect(info).toBeUndefined();
+    });
+});
+
+/**
+ * A duplicate hit inside a conversation reuses the existing version for the current reply: the
+ * reply gets an `Output` link to that version (so the version is visible on the reply's branch
+ * path) and the same `{ artifactId, versionId, versionNumber }` result the normal path returns.
+ * The real `LinkArtifactToConversationDetail` runs here so the saved link row can be inspected.
+ */
+describe('AgentRunner.ProcessAgentArtifacts — duplicate content reuses the version for the reply', () => {
+    const DETAIL_UUID = 'dddd0000-1111-4222-8333-444455556666';
+    const EXISTING_VERSION_UUID = 'eeee0000-1111-4222-8333-444455556666';
+    const EXISTING_LINK_UUID = 'cccc0000-1111-4222-8333-444455556666';
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    /** Stubs the version lookups only; linking runs for real against the fake provider. */
+    class ReuseRunner extends AgentRunner {
+        public PreviousArtifact: { artifactId: string; versionNumber: number } | null = null;
+        public MaxVersion = 0;
+        public DuplicateVersionId: string | null = null;
+        public DuplicateSpy = vi.fn();
+
+        public override async FindPreviousArtifactForMessage(): Promise<{ artifactId: string; versionNumber: number } | null> {
+            return this.PreviousArtifact;
+        }
+
+        public override async GetMaxVersionForArtifact(): Promise<number> {
+            return this.MaxVersion;
+        }
+
+        protected override async CheckForDuplicateVersion(artifactId: string, candidateContent: string, latestVersionNumber: number): Promise<string | null> {
+            this.DuplicateSpy(artifactId, latestVersionNumber);
+            return this.DuplicateVersionId;
+        }
+    }
+
+    /** How the fake provider answers the link-exists read and the link save. */
+    interface LinkWorld {
+        /** Rows the link-exists read returns. */
+        existingLinks?: Array<{ ID: string }>;
+        /** What each `Save` resolves to. */
+        saveResult?: boolean;
+        /** When set, the link-exists read fails with this message. */
+        readError?: string;
+    }
+
+    /**
+     * Provider whose `RunView` answers the link-exists check from `world` and whose
+     * `GetEntityObject` hands out one fake per request, recording every request.
+     */
+    function reuseProvider({ existingLinks = [], saveResult = true, readError }: LinkWorld = {}): {
+        provider: IMetadataProvider;
+        requested: string[];
+        junctions: FakeEntity[];
+        runViewCalls: RunViewParams[];
+    } {
+        const requested: string[] = [];
+        const junctions: FakeEntity[] = [];
+        const runViewCalls: RunViewParams[] = [];
+        const provider = {
+            GetEntityObject: vi.fn(async (entityName: string) => {
+                requested.push(entityName);
+                const entity = makeEntity(`new-${requested.length}`, { Save: vi.fn(async () => saveResult) });
+                if (entityName === 'MJ: Conversation Detail Artifacts') {
+                    junctions.push(entity);
+                }
+                return entity;
+            }),
+            RunView: vi.fn(async (params: RunViewParams): Promise<RunViewResult> => {
+                runViewCalls.push(params);
+                if (params.EntityName !== 'MJ: Conversation Detail Artifacts') {
+                    return { Success: true, Results: [] } as unknown as RunViewResult;
+                }
+                if (readError) {
+                    return { Success: false, Results: [], ErrorMessage: readError } as unknown as RunViewResult;
+                }
+                return { Success: true, Results: existingLinks } as unknown as RunViewResult;
+            }),
+        } as unknown as IMetadataProvider;
+        return { provider, requested, junctions, runViewCalls };
+    }
+
+    function duplicateRunner(provider: IMetadataProvider): ReuseRunner {
+        const runner = new ReuseRunner(provider);
+        runner.PreviousArtifact = { artifactId: PRIOR_UUID, versionNumber: 3 };
+        runner.DuplicateVersionId = EXISTING_VERSION_UUID;
+        return runner;
+    }
+
+    it('links the existing version to the reply with one Output row and returns it, creating no new version', async () => {
+        const { provider, requested, junctions, runViewCalls } = reuseProvider();
+        const runner = duplicateRunner(provider);
+        const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+        const info = await runner.ProcessAgentArtifacts(makeResult(), DETAIL_UUID, undefined, contextUser, provider);
+
+        // The reply's artifact result points at the reused version, as the normal path's result does.
+        expect(info).toEqual({ artifactId: PRIOR_UUID, versionId: EXISTING_VERSION_UUID, versionNumber: 3 });
+        expect(runner.DuplicateSpy).toHaveBeenCalledWith(PRIOR_UUID, 3);
+        // Only the link row is created: no artifact header and no new version.
+        expect(requested).toEqual(['MJ: Conversation Detail Artifacts']);
+        expect(junctions).toHaveLength(1);
+        expect(junctions[0].ConversationDetailID).toBe(DETAIL_UUID);
+        expect(junctions[0].ArtifactVersionID).toBe(EXISTING_VERSION_UUID);
+        expect(junctions[0].Direction).toBe('Output');
+        expect(junctions[0].Save).toHaveBeenCalledTimes(1);
+        // The link-exists check reads this exact pair.
+        const linkCheck = runViewCalls.find((p) => p.EntityName === 'MJ: Conversation Detail Artifacts');
+        expect(linkCheck?.ExtraFilter).toBe(
+            `ConversationDetailID='${DETAIL_UUID}' AND ArtifactVersionID='${EXISTING_VERSION_UUID}' AND Direction='Output'`
+        );
+        expect(logSpy).toHaveBeenCalledWith(
+            `Reusing version 3 of artifact ${PRIOR_UUID} for this reply (identical content)`
+        );
+    });
+
+    it('does not write a second link when the reply already has an Output link to that version', async () => {
+        const { provider, requested, junctions } = reuseProvider({ existingLinks: [{ ID: EXISTING_LINK_UUID }] });
+        const runner = duplicateRunner(provider);
+
+        const info = await runner.ProcessAgentArtifacts(makeResult(), DETAIL_UUID, undefined, contextUser, provider);
+
+        expect(info).toEqual({ artifactId: PRIOR_UUID, versionId: EXISTING_VERSION_UUID, versionNumber: 3 });
+        expect(junctions).toHaveLength(0);
+        expect(requested).toHaveLength(0);
+    });
+
+    it('reuses the version named by sourceArtifactId the same way', async () => {
+        const { provider, junctions } = reuseProvider();
+        const runner = new ReuseRunner(provider);
+        runner.DuplicateVersionId = EXISTING_VERSION_UUID;
+        runner.MaxVersion = 5;
+
+        const info = await runner.ProcessAgentArtifacts(makeResult(), DETAIL_UUID, SOURCE_UUID, contextUser, provider);
+
+        expect(runner.DuplicateSpy).toHaveBeenCalledWith(SOURCE_UUID, 5);
+        expect(info).toEqual({ artifactId: SOURCE_UUID, versionId: EXISTING_VERSION_UUID, versionNumber: 5 });
+        expect(junctions).toHaveLength(1);
+        expect(junctions[0].Direction).toBe('Output');
+    });
+
+    it('returns undefined (never throws) when saving the link fails', async () => {
+        const { provider, junctions } = reuseProvider({ saveResult: false });
+        const runner = duplicateRunner(provider);
+
+        const info = await runner.ProcessAgentArtifacts(makeResult(), DETAIL_UUID, undefined, contextUser, provider);
+
+        expect(info).toBeUndefined();
+        expect(junctions).toHaveLength(1);
+        expect(junctions[0].Save).toHaveBeenCalledTimes(1);
+    });
+
+    it('writes no link and returns undefined when the link-exists read fails', async () => {
+        const { provider, requested, junctions, runViewCalls } = reuseProvider({ readError: 'boom' });
+        const runner = duplicateRunner(provider);
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+        const info = await runner.ProcessAgentArtifacts(makeResult(), DETAIL_UUID, undefined, contextUser, provider);
+
+        expect(info).toBeUndefined();
+        expect(runViewCalls.some((p) => p.EntityName === 'MJ: Conversation Detail Artifacts')).toBe(true);
+        expect(requested).not.toContain('MJ: Conversation Detail Artifacts');
+        expect(junctions).toHaveLength(0);
+        const logged = errorSpy.mock.calls.map((call) => String(call[0]));
+        expect(logged.some((message) => message.includes('boom'))).toBe(true);
     });
 });
 

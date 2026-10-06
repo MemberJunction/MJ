@@ -14601,6 +14601,57 @@ export const MJConversationArtifactSchema = z.object({
 export type MJConversationArtifactEntityType = z.infer<typeof MJConversationArtifactSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Conversation Branches
+ */
+export const MJConversationBranchSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ConversationID: z.string().describe(`
+        * * Field Name: ConversationID
+        * * Display Name: Conversation ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)`),
+    ParentBranchID: z.string().nullable().describe(`
+        * * Field Name: ParentBranchID
+        * * Display Name: Parent Branch ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Conversation Branches (vwConversationBranches.ID)`),
+    ForkFromSequence: z.number().nullable().describe(`
+        * * Field Name: ForkFromSequence
+        * * Display Name: Fork From Sequence
+        * * SQL Data Type: int
+        * * Description: Sequence of the last message shared with the parent path. NULL means the branch starts before the first message, in which case ParentBranchID is also NULL.`),
+    Name: z.string().nullable().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Optional user-facing label for the branch.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Conversation: z.string().nullable().describe(`
+        * * Field Name: Conversation
+        * * Display Name: Conversation
+        * * SQL Data Type: nvarchar(255)`),
+    ParentBranch: z.string().nullable().describe(`
+        * * Field Name: ParentBranch
+        * * Display Name: Parent Branch
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJConversationBranchEntityType = z.infer<typeof MJConversationBranchSchema>;
+
+/**
  * zod schema definition for the entity MJ: Conversation Compaction Runs
  */
 export const MJConversationCompactionRunSchema = z.object({
@@ -15059,6 +15110,12 @@ export const MJConversationDetailSchema = z.object({
         * * SQL Data Type: int
         * * Default Value: 0
         * * Description: Monotonic, per-conversation ordinal assigned on insert (1-based). Provides a stable symbolic handle used by conversation-history retrieval tools and by the sequence markers embedded in compaction summaries. A summary stored in SummaryOfEarlierConversation on a given row covers all rows with a lower Sequence in the same conversation.`),
+    BranchID: z.string().nullable().describe(`
+        * * Field Name: BranchID
+        * * Display Name: Branch
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Conversation Branches (vwConversationBranches.ID)
+        * * Description: The branch this message belongs to. NULL means the trunk (the original conversation path).`),
     Conversation: z.string().nullable().describe(`
         * * Field Name: Conversation
         * * Display Name: Conversation
@@ -15086,6 +15143,10 @@ export const MJConversationDetailSchema = z.object({
     TestRun: z.string().nullable().describe(`
         * * Field Name: TestRun
         * * Display Name: Test Run
+        * * SQL Data Type: nvarchar(255)`),
+    Branch: z.string().nullable().describe(`
+        * * Field Name: Branch
+        * * Display Name: Branch
         * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
@@ -15465,6 +15526,11 @@ export const MJConversationSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)
         * * Description: Conversation-altitude returning-visitor chain (R2). Self-foreign-key to the visitor's immediately prior Conversation (found by VisitorKey or the resolved LinkedEntityID/LinkedRecordID pair at mint time). History and memory are conversation-scoped, so the chain lives here — NOT on AIAgentSession.LastSessionID, which owns reconnect/resume semantics and is walked by the replay viewer. Named to mirror AIAgentSession.LastSessionID. NULL for a brand-new visitor's first conversation.`),
+    CurrentBranchID: z.string().nullable().describe(`
+        * * Field Name: CurrentBranchID
+        * * Display Name: Current Branch
+        * * SQL Data Type: uniqueidentifier
+        * * Description: The branch currently shown and written to. NULL means the trunk. Not a foreign key, to avoid a CodeGen cascade cycle with ConversationBranch.`),
     User: z.string().describe(`
         * * Field Name: User
         * * Display Name: User
@@ -79044,6 +79110,176 @@ export class MJConversationArtifactEntity extends BaseEntity<MJConversationArtif
 
 
 /**
+ * MJ: Conversation Branches - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ConversationBranch
+ * * Base View: vwConversationBranches
+ * * @description An alternative continuation of a conversation, created by editing an earlier user message or regenerating an AI reply. The branch's path is its own messages plus each ancestor's messages up to that ancestor's ForkFromSequence.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Conversation Branches')
+export class MJConversationBranchEntity extends BaseEntity<MJConversationBranchEntityType> {
+    /**
+    * Loads the MJ: Conversation Branches record from the database
+    * @param ID: string - primary key value to load the MJ: Conversation Branches record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJConversationBranchEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * MJ: Conversation Branches - Delete method override to wrap in transaction since CascadeDeletes is true.
+    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically.
+    * @public
+    * @method
+    * @override
+    * @memberof MJConversationBranchEntity
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    */
+    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+        if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
+            // For database providers, use the transaction methods directly
+            const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
+            
+            try {
+                await provider.BeginTransaction();
+                const result = await super.Delete(options);
+                
+                if (result) {
+                    await provider.CommitTransaction();
+                    return true;
+                } else {
+                    await provider.RollbackTransaction();
+                    return false;
+                }
+            } catch (error) {
+                await provider.RollbackTransaction();
+                throw error;
+            }
+        } else {
+            // For network providers, cascading deletes are handled server-side
+            return super.Delete(options);
+        }
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ConversationID
+    * * Display Name: Conversation ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)
+    */
+    get ConversationID(): string {
+        return this.Get('ConversationID');
+    }
+    set ConversationID(value: string) {
+        this.Set('ConversationID', value);
+    }
+
+    /**
+    * * Field Name: ParentBranchID
+    * * Display Name: Parent Branch ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Conversation Branches (vwConversationBranches.ID)
+    */
+    get ParentBranchID(): string | null {
+        return this.Get('ParentBranchID');
+    }
+    set ParentBranchID(value: string | null) {
+        this.Set('ParentBranchID', value);
+    }
+
+    /**
+    * * Field Name: ForkFromSequence
+    * * Display Name: Fork From Sequence
+    * * SQL Data Type: int
+    * * Description: Sequence of the last message shared with the parent path. NULL means the branch starts before the first message, in which case ParentBranchID is also NULL.
+    */
+    get ForkFromSequence(): number | null {
+        return this.Get('ForkFromSequence');
+    }
+    set ForkFromSequence(value: number | null) {
+        this.Set('ForkFromSequence', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Optional user-facing label for the branch.
+    */
+    get Name(): string | null {
+        return this.Get('Name');
+    }
+    set Name(value: string | null) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Conversation
+    * * Display Name: Conversation
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Conversation(): string | null {
+        return this.Get('Conversation');
+    }
+
+    /**
+    * * Field Name: ParentBranch
+    * * Display Name: Parent Branch
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ParentBranch(): string | null {
+        return this.Get('ParentBranch');
+    }
+}
+
+
+/**
  * MJ: Conversation Compaction Runs - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: ConversationCompactionRun
@@ -80312,6 +80548,20 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
     }
 
     /**
+    * * Field Name: BranchID
+    * * Display Name: Branch
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Conversation Branches (vwConversationBranches.ID)
+    * * Description: The branch this message belongs to. NULL means the trunk (the original conversation path).
+    */
+    get BranchID(): string | null {
+        return this.Get('BranchID');
+    }
+    set BranchID(value: string | null) {
+        this.Set('BranchID', value);
+    }
+
+    /**
     * * Field Name: Conversation
     * * Display Name: Conversation
     * * SQL Data Type: nvarchar(255)
@@ -80372,6 +80622,15 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
     */
     get TestRun(): string | null {
         return this.Get('TestRun');
+    }
+
+    /**
+    * * Field Name: Branch
+    * * Display Name: Branch
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Branch(): string | null {
+        return this.Get('Branch');
     }
 
     /**
@@ -81443,6 +81702,19 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
     }
     set LastConversationID(value: string | null) {
         this.Set('LastConversationID', value);
+    }
+
+    /**
+    * * Field Name: CurrentBranchID
+    * * Display Name: Current Branch
+    * * SQL Data Type: uniqueidentifier
+    * * Description: The branch currently shown and written to. NULL means the trunk. Not a foreign key, to avoid a CodeGen cascade cycle with ConversationBranch.
+    */
+    get CurrentBranchID(): string | null {
+        return this.Get('CurrentBranchID');
+    }
+    set CurrentBranchID(value: string | null) {
+        this.Set('CurrentBranchID', value);
     }
 
     /**

@@ -44,6 +44,7 @@ import {
     type DateJumpPeriod,
     type DateJumpOutcome
 } from '../../utils/date-jump';
+import { BranchSwitcherState, BranchSwitchRequest } from '../../utils/conversation-branching';
 
 /** Context handed to the `messageRenderer` slot template per message. */
 interface MessageRendererContext {
@@ -118,6 +119,21 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   public get conversation(): MJConversationEntity | null {
     return this.Conversation;
   }
+
+  /**
+   * Switcher state per detail ID. Rows without an entry show no switcher. A new map is pushed
+   * into the message items already on screen.
+   */
+  @Input()
+  public set BranchSwitcherMap(value: Map<string, BranchSwitcherState>) {
+    this._branchSwitcherMap = value;
+    this.applyBranchSwitchers();
+  }
+  public get BranchSwitcherMap(): Map<string, BranchSwitcherState> {
+    return this._branchSwitcherMap;
+  }
+  private _branchSwitcherMap = new Map<string, BranchSwitcherState>();
+
   @Input() public CurrentUser!: UserInfo;
 
   /** @deprecated Use {@link CurrentUser}. */
@@ -498,16 +514,23 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
    * initialise in order, and the other way round this captures undefined.
    */
   @Output() public deleteMessage = this.DeleteMessage;
+  /** Forwarded from MessageItemComponent: the user asked for a new reply in place of an AI reply. */
+  @Output() public RegenerateRequested = new EventEmitter<MJConversationDetailEntity>();
+  /** @deprecated Use {@link RegenerateRequested}. Emits with it, for hosts that still bind the old name. */
   @Output() public RetryMessage = new EventEmitter<MJConversationDetailEntity>();
 
   /**
-   * @deprecated Use {@link RetryMessage}.
+   * @deprecated Use {@link RegenerateRequested}.
    *
    * The same emitter under the old binding name, so a template still binding
    * (retryMessage) keeps working. Must stay AFTER RetryMessage: class fields
    * initialise in order, and the other way round this captures undefined.
    */
   @Output() public retryMessage = this.RetryMessage;
+  /** Forwarded from MessageItemComponent: the user stepped to another alternative at a fork point. */
+  @Output() public BranchSwitchRequested = new EventEmitter<BranchSwitchRequest>();
+  /** Forwarded from MessageItemComponent: the user edited a message to send on a new branch. */
+  @Output() public EditResendRequested = new EventEmitter<{ Message: MJConversationDetailEntity; NewText: string }>();
   @Output() public TestFeedbackMessage = new EventEmitter<MJConversationDetailEntity>();
 
   /**
@@ -1014,6 +1037,17 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
       this.updateMessages(this.messages);
     }
 
+  }
+
+  /** Pushes the current switcher map into every rendered message component. */
+  private applyBranchSwitchers(): void {
+    for (const [, rendered] of this._renderedMessages) {
+      if (rendered.kind === 'component') {
+        const instance = rendered.ref.instance as MessageItemComponent;
+        instance.BranchSwitcher = this.BranchSwitcherMap.get(instance.message.ID) ?? null;
+        rendered.ref.changeDetectorRef.markForCheck();
+      }
+    }
   }
 
   /**
@@ -1887,10 +1921,16 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     instance.agentRun = this.AgentRunMap.get(message.ID) || null;
     instance.ratings = this.RatingsMap.get(message.ID);
     instance.attachments = this.AttachmentsMap.get(message.ID) || [];
+    instance.BranchSwitcher = this.BranchSwitcherMap.get(message.ID) ?? null;
+    instance.BranchSwitchRequested.subscribe((request: BranchSwitchRequest) => this.BranchSwitchRequested.emit(request));
+    instance.EditResendRequested.subscribe((e) => this.EditResendRequested.emit(e));
 
     instance.editClicked.subscribe((msg: MJConversationDetailEntity) => this.EditMessage.emit(msg));
     instance.deleteClicked.subscribe((msg: MJConversationDetailEntity) => this.DeleteMessage.emit(msg));
-    instance.retryClicked.subscribe((msg: MJConversationDetailEntity) => this.RetryMessage.emit(msg));
+    instance.RegenerateRequested.subscribe((msg: MJConversationDetailEntity) => {
+      this.RegenerateRequested.emit(msg);
+      this.RetryMessage.emit(msg);
+    });
     instance.testFeedbackClicked.subscribe((msg: MJConversationDetailEntity) => this.TestFeedbackMessage.emit(msg));
     instance.artifactClicked.subscribe((data: {artifactId: string; versionId?: string}) => this.ArtifactClicked.emit(data));
     instance.messageEdited.subscribe((msg: MJConversationDetailEntity) => this.MessageEdited.emit(msg));

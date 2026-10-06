@@ -8,13 +8,23 @@
  */
 
 import { Metadata, RunView, type UserInfo } from '@memberjunction/core';
-import type {
-    MJConversationArtifactEntity,
-    MJConversationArtifactVersionEntity,
+import {
+    ConversationEngine,
+    type MJConversationArtifactEntity,
+    type MJConversationArtifactVersionEntity,
 } from '@memberjunction/core-entities';
+import { EscapeSQLString } from '@memberjunction/global';
 import type { ComponentSpec } from '@memberjunction/react-runtime';
 import { ParseChartSpec, type ChartSpec } from '@/components/charts/chart-spec';
 import { ToInteractiveSpec } from '@/data/services/interactive-components';
+import {
+    ArtifactAgentInScope,
+    ArtifactLinkQueries,
+    BuildArtifactLinks,
+    IsArtifactVersionVisible,
+    IsArtifactVisible,
+    type ArtifactLinks,
+} from '@/data/services/artifact-scope';
 
 /** The renderer the UI should use for an artifact's content, chosen by {@link classify}. */
 export type ArtifactRenderKind = 'json-table' | 'json' | 'markdown' | 'code' | 'html' | 'chart' | 'interactive' | 'text';
@@ -120,13 +130,15 @@ function classify(typeName: string, content: string): Classification {
 /**
  * Load an artifact and its latest version content, classified for rendering.
  *
- * Loads the `MJ: Conversation Artifacts` row via `GetEntityObject().Load()`, then
- * `RunView`s `MJ: Conversation Artifact Versions` (ordered `Version DESC`) to get
- * the newest content, and runs {@link classify} to pick a render kind + payload.
+ * Loads the `MJ: Conversation Artifacts` row via `GetEntityObject().Load()`, then reads its
+ * versions visible on the current path of the conversation it belongs to (see
+ * {@link loadVisibleVersions}), and runs {@link classify} on the newest one to pick a render kind
+ * + payload.
  *
  * @param artifactId  The `MJ: Conversation Artifacts` record id.
  * @param contextUser Optional acting user (server-side scoping); defaults to `Metadata.CurrentUser`.
  * @returns A {@link LoadedArtifact}, or `null` if the artifact can't be loaded.
+ * @throws When the scope of the artifact's conversation or its message links cannot be read.
  */
 export async function LoadArtifact(artifactId: string, contextUser?: UserInfo): Promise<LoadedArtifact | null> {
     const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
@@ -136,19 +148,7 @@ export async function LoadArtifact(artifactId: string, contextUser?: UserInfo): 
     const loaded = await artifact.Load(artifactId);
     if (!loaded) return null;
 
-    const rv = new RunView();
-    const versionsResult = await rv.RunView<MJConversationArtifactVersionEntity>(
-        {
-            EntityName: 'MJ: Conversation Artifact Versions',
-            ExtraFilter: `ConversationArtifactID='${artifactId}'`,
-            OrderBy: 'Version DESC',
-            MaxRows: 50,
-            ResultType: 'entity_object',
-        },
-        currentUser,
-    );
-
-    const versions = versionsResult.Success ? (versionsResult.Results ?? []) : [];
+    const versions = await loadVisibleVersions(artifact, currentUser);
     const latest = versions[0];
     const content = latest?.Content ?? '';
     const { kind, rows, json, chart, spec, language } = classify(artifact.ArtifactType ?? '', content);
@@ -173,6 +173,35 @@ export async function LoadArtifact(artifactId: string, contextUser?: UserInfo): 
         Spec: spec,
         Language: language,
     };
+}
+
+/**
+ * The artifact's versions visible on the current path of the conversation it belongs to, newest
+ * first: the versions a message on that path links to, plus those no message links to.
+ *
+ * @throws When the conversation's scope or the message links cannot be read.
+ */
+async function loadVisibleVersions(
+    artifact: MJConversationArtifactEntity,
+    user: UserInfo,
+): Promise<MJConversationArtifactVersionEntity[]> {
+    const scope = await ConversationEngine.LoadCurrentScope(artifact.ConversationID, user);
+    const [versionsResult, inScopeLinks, anyPathLinks] = await new RunView().RunViews(
+        [
+            {
+                EntityName: 'MJ: Conversation Artifact Versions',
+                ExtraFilter: `ConversationArtifactID='${EscapeSQLString(artifact.ID)}'`,
+                OrderBy: 'Version DESC',
+                MaxRows: 50,
+                ResultType: 'entity_object',
+            },
+            ...ArtifactLinkQueries(scope),
+        ],
+        user,
+    );
+    const links = BuildArtifactLinks(inScopeLinks, anyPathLinks);
+    const versions: MJConversationArtifactVersionEntity[] = versionsResult.Success ? (versionsResult.Results ?? []) : [];
+    return versions.filter((v) => IsArtifactVersionVisible(links, v.ID));
 }
 
 // ---------------------------------------------------------------------------
@@ -222,41 +251,49 @@ function quotedIdList(ids: string[]): string {
 }
 
 /**
- * Load the artifacts of a conversation as dock summaries — including a coarse
- * category, a preview snippet, and best-effort agent attribution.
+ * Load the artifacts of a conversation visible on its current path as dock summaries — including a
+ * coarse category, a preview snippet, and best-effort agent attribution.
  *
- * Attribution comes from the conversation detail (message) that references the
- * artifact (`ConversationDetail.ArtifactID` → `AgentID`); the preview/category
- * come from the artifact's latest version content.
+ * An artifact is visible when a message on the path links to it (`ConversationDetail.ArtifactID`),
+ * or when no message links to it. Attribution comes from the first message on the path that links
+ * the artifact and has an agent; the preview/category come from the newest version visible on the
+ * path.
  *
  * @param conversationId The conversation whose artifacts to load.
  * @param contextUser    Optional acting user (server-side scoping).
+ * @throws When the conversation's scope or the message links cannot be read.
  */
 export async function LoadConversationArtifacts(conversationId: string, contextUser?: UserInfo): Promise<ArtifactSummary[]> {
     const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
     const currentUser = contextUser ?? md.CurrentUser;
     const rv = new RunView();
 
-    const artifactsResult = await rv.RunView<MJConversationArtifactEntity>(
-        {
-            EntityName: 'MJ: Conversation Artifacts',
-            ExtraFilter: `ConversationID='${conversationId}'`,
-            OrderBy: '__mj_UpdatedAt DESC',
-            MaxRows: 200,
-            ResultType: 'entity_object',
-        },
+    const scope = await ConversationEngine.LoadCurrentScope(conversationId, currentUser);
+    const [artifactsResult, inScopeLinks, anyPathLinks] = await rv.RunViews(
+        [
+            {
+                // Every artifact row of the conversation; the message links decide which are visible.
+                EntityName: 'MJ: Conversation Artifacts',
+                ExtraFilter: `ConversationID='${EscapeSQLString(conversationId)}'`,
+                OrderBy: '__mj_UpdatedAt DESC',
+                MaxRows: 200,
+                ResultType: 'entity_object',
+            },
+            ...ArtifactLinkQueries(scope),
+        ],
         currentUser,
     );
-    const artifacts = artifactsResult.Success ? (artifactsResult.Results ?? []) : [];
+    const links = BuildArtifactLinks(inScopeLinks, anyPathLinks);
+    const rows: MJConversationArtifactEntity[] = artifactsResult.Success ? (artifactsResult.Results ?? []) : [];
+    const artifacts = rows.filter((a) => IsArtifactVisible(links, a.ID));
     if (artifacts.length === 0) return [];
 
-    const contentByArtifact = await loadLatestContent(rv, artifacts.map((a) => a.ID), currentUser);
-    const agentByArtifact = await loadAgentByArtifact(rv, conversationId, currentUser);
+    const contentByArtifact = await loadLatestContent(rv, artifacts.map((a) => a.ID), links, currentUser);
     const agentNameById = await loadAgentNames(rv, currentUser);
 
     return artifacts.map((artifact) => {
         const content = contentByArtifact.get(artifact.ID) ?? '';
-        const agentId = agentByArtifact.get(artifact.ID) ?? null;
+        const agentId = ArtifactAgentInScope(links, artifact.ID);
         const typeName = artifact.ArtifactType ?? 'Artifact';
         return {
             id: artifact.ID,
@@ -271,8 +308,13 @@ export async function LoadConversationArtifacts(conversationId: string, contextU
     });
 }
 
-/** Load the latest version content for each artifact id. */
-async function loadLatestContent(rv: RunView, artifactIds: string[], user: UserInfo | undefined): Promise<Map<string, string>> {
+/** Load the content of each artifact's newest version visible in scope. */
+async function loadLatestContent(
+    rv: RunView,
+    artifactIds: string[],
+    links: ArtifactLinks,
+    user: UserInfo | undefined,
+): Promise<Map<string, string>> {
     const out = new Map<string, string>();
     if (artifactIds.length === 0) return out;
     const result = await rv.RunView<MJConversationArtifactVersionEntity>(
@@ -280,7 +322,7 @@ async function loadLatestContent(rv: RunView, artifactIds: string[], user: UserI
             EntityName: 'MJ: Conversation Artifact Versions',
             ExtraFilter: `ConversationArtifactID IN (${quotedIdList(artifactIds)})`,
             OrderBy: 'Version DESC',
-            Fields: ['ConversationArtifactID', 'Content', 'Version'],
+            Fields: ['ID', 'ConversationArtifactID', 'Content', 'Version'],
             MaxRows: 500,
             ResultType: 'simple',
         },
@@ -288,29 +330,9 @@ async function loadLatestContent(rv: RunView, artifactIds: string[], user: UserI
     );
     if (!result.Success) return out;
     for (const row of result.Results ?? []) {
-        // Rows are Version DESC, so the first seen per artifact is the latest.
+        // Rows are Version DESC, so the first visible one per artifact is the newest in scope.
+        if (!IsArtifactVersionVisible(links, row.ID)) continue;
         if (!out.has(row.ConversationArtifactID)) out.set(row.ConversationArtifactID, row.Content ?? '');
-    }
-    return out;
-}
-
-/** Map artifact id → attributed agent id via the referencing message. */
-async function loadAgentByArtifact(rv: RunView, conversationId: string, user: UserInfo | undefined): Promise<Map<string, string>> {
-    const out = new Map<string, string>();
-    const result = await rv.RunView<{ ArtifactID: string | null; AgentID: string | null }>(
-        {
-            EntityName: 'MJ: Conversation Details',
-            ExtraFilter: `ConversationID='${conversationId}' AND ArtifactID IS NOT NULL`,
-            Fields: ['ArtifactID', 'AgentID'],
-            MaxRows: 500,
-            ResultType: 'simple',
-        },
-        user,
-    );
-    if (result.Success) {
-        for (const row of result.Results ?? []) {
-            if (row.ArtifactID && row.AgentID && !out.has(row.ArtifactID)) out.set(row.ArtifactID, row.AgentID);
-        }
     }
     return out;
 }

@@ -104,20 +104,20 @@ describe('PriorTurnToolResultCache', () => {
 
     it('round-trips records and normalizes id casing on both key components (SQL Server upper vs PG lower)', () => {
         const records: CarryForwardStepRecord[] = [{ OutputData: 'payload' }];
-        PriorTurnToolResultCache.Instance.Set(CONV_ID, AGENT_A, records);
-        expect(PriorTurnToolResultCache.Instance.Get(CONV_ID.toLowerCase(), AGENT_A.toLowerCase())).toEqual(records);
+        PriorTurnToolResultCache.Instance.Set(CONV_ID, AGENT_A, null, records);
+        expect(PriorTurnToolResultCache.Instance.Get(CONV_ID.toLowerCase(), AGENT_A.toLowerCase(), null)).toEqual(records);
     });
 
     it('scopes entries per agent — agent B never sees agent A\'s results in the same conversation', () => {
-        PriorTurnToolResultCache.Instance.Set(CONV_ID, AGENT_A, [{ OutputData: 'agent-a-result' }]);
-        expect(PriorTurnToolResultCache.Instance.Get(CONV_ID, AGENT_B)).toBeUndefined(); // miss → DB (agent-scoped)
-        expect(PriorTurnToolResultCache.Instance.Get(CONV_ID, AGENT_A)).toEqual([{ OutputData: 'agent-a-result' }]);
+        PriorTurnToolResultCache.Instance.Set(CONV_ID, AGENT_A, null, [{ OutputData: 'agent-a-result' }]);
+        expect(PriorTurnToolResultCache.Instance.Get(CONV_ID, AGENT_B, null)).toBeUndefined(); // miss → DB (agent-scoped)
+        expect(PriorTurnToolResultCache.Instance.Get(CONV_ID, AGENT_A, null)).toEqual([{ OutputData: 'agent-a-result' }]);
     });
 
     it('treats an empty array as a valid negative-cache entry, distinct from a miss', () => {
-        expect(PriorTurnToolResultCache.Instance.Get(CONV_ID, AGENT_A)).toBeUndefined(); // miss → ask the DB
-        PriorTurnToolResultCache.Instance.Set(CONV_ID, AGENT_A, []);
-        expect(PriorTurnToolResultCache.Instance.Get(CONV_ID, AGENT_A)).toEqual([]); // known-empty → skip the DB
+        expect(PriorTurnToolResultCache.Instance.Get(CONV_ID, AGENT_A, null)).toBeUndefined(); // miss → ask the DB
+        PriorTurnToolResultCache.Instance.Set(CONV_ID, AGENT_A, null, []);
+        expect(PriorTurnToolResultCache.Instance.Get(CONV_ID, AGENT_A, null)).toEqual([]); // known-empty → skip the DB
     });
 });
 
@@ -141,7 +141,7 @@ describe('BaseAgent.loadPriorTurnToolResultSteps — cache consumption', () => {
     it('cache hit returns the cached records with zero database calls', async () => {
         const fromProvider = vi.spyOn(RunView, 'FromMetadataProvider');
         const records: CarryForwardStepRecord[] = [{ OutputData: 'cached-result' }];
-        PriorTurnToolResultCache.Instance.Set(CONV_ID, AGENT_A, records);
+        PriorTurnToolResultCache.Instance.Set(CONV_ID, AGENT_A, null, records);
 
         const loaded = await carryForwardInternals(new BaseAgent()).loadPriorTurnToolResultSteps(loadParams);
         expect(loaded).toEqual(records);
@@ -150,7 +150,7 @@ describe('BaseAgent.loadPriorTurnToolResultSteps — cache consumption', () => {
 
     it('negative-cache hit (prior run made no tool calls) also skips the database', async () => {
         const fromProvider = vi.spyOn(RunView, 'FromMetadataProvider');
-        PriorTurnToolResultCache.Instance.Set(CONV_ID, AGENT_A, []);
+        PriorTurnToolResultCache.Instance.Set(CONV_ID, AGENT_A, null, []);
 
         const loaded = await carryForwardInternals(new BaseAgent()).loadPriorTurnToolResultSteps(loadParams);
         expect(loaded).toEqual([]);
@@ -158,7 +158,7 @@ describe('BaseAgent.loadPriorTurnToolResultSteps — cache consumption', () => {
     });
 
     it("another agent's warm entry is NOT a hit — the loader falls through to the DB", async () => {
-        PriorTurnToolResultCache.Instance.Set(CONV_ID, AGENT_B, [{ OutputData: 'other-agent-result' }]);
+        PriorTurnToolResultCache.Instance.Set(CONV_ID, AGENT_B, null, [{ OutputData: 'other-agent-result' }]);
         const runViewFn = vi.fn().mockResolvedValue({ Success: true, Results: [] });
         vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({ RunView: runViewFn } as unknown as RunView);
 
@@ -207,40 +207,40 @@ describe('BaseAgent.cachePriorTurnToolResults — population at run completion',
                 { StepType: 'Compaction', Status: 'Completed', OutputData: 'compaction-out' },
             ],
         }).cachePriorTurnToolResults();
-        expect(PriorTurnToolResultCache.Instance.Get(CONV_ID, AGENT_A)).toEqual([
+        expect(PriorTurnToolResultCache.Instance.Get(CONV_ID, AGENT_A, null)).toEqual([
             { OutputData: 'tool-1' },
             { OutputData: null },
         ]);
-        expect(PriorTurnToolResultCache.Instance.Get(CONV_ID, AGENT_B)).toBeUndefined();
+        expect(PriorTurnToolResultCache.Instance.Get(CONV_ID, AGENT_B, null)).toBeUndefined();
     });
 
     it('caches an empty projection for a tool-free run (the negative-cache case)', () => {
         agentWith({ steps: [{ StepType: 'Prompt', Status: 'Completed', OutputData: 'x' }] }).cachePriorTurnToolResults();
-        expect(PriorTurnToolResultCache.Instance.Get(CONV_ID, AGENT_A)).toEqual([]);
+        expect(PriorTurnToolResultCache.Instance.Get(CONV_ID, AGENT_A, null)).toEqual([]);
     });
 
     it("publishes for AwaitingFeedback runs too — the normal chat-turn ending (settled-status symmetry with the DB filter)", () => {
         agentWith({ status: 'AwaitingFeedback', steps: [{ StepType: 'Tool', Status: 'Completed', OutputData: 'chat-turn-tool' }] }).cachePriorTurnToolResults();
-        expect(PriorTurnToolResultCache.Instance.Get(CONV_ID, AGENT_A)).toEqual([{ OutputData: 'chat-turn-tool' }]);
+        expect(PriorTurnToolResultCache.Instance.Get(CONV_ID, AGENT_A, null)).toEqual([{ OutputData: 'chat-turn-tool' }]);
     });
 
     it('sub-agent runs never publish (mirrors the ParentRunID IS NULL filter of the DB path)', () => {
         agentWith({ depth: 1, steps: [{ StepType: 'Tool', Status: 'Completed', OutputData: 'sub' }] }).cachePriorTurnToolResults();
-        expect(PriorTurnToolResultCache.Instance.Get(CONV_ID, AGENT_A)).toBeUndefined();
+        expect(PriorTurnToolResultCache.Instance.Get(CONV_ID, AGENT_A, null)).toBeUndefined();
     });
 
     it("unsettled runs leave the previous settled run's entry standing (mirrors the Status IN (...) filter)", () => {
-        PriorTurnToolResultCache.Instance.Set(CONV_ID, AGENT_A, [{ OutputData: 'from-run-N' }]);
+        PriorTurnToolResultCache.Instance.Set(CONV_ID, AGENT_A, null, [{ OutputData: 'from-run-N' }]);
         for (const status of ['Failed', 'Running', 'Cancelled', 'Paused']) {
             agentWith({ status, steps: [{ StepType: 'Tool', Status: 'Completed', OutputData: 'from-run-N+1' }] }).cachePriorTurnToolResults();
         }
-        expect(PriorTurnToolResultCache.Instance.Get(CONV_ID, AGENT_A)).toEqual([{ OutputData: 'from-run-N' }]);
+        expect(PriorTurnToolResultCache.Instance.Get(CONV_ID, AGENT_A, null)).toEqual([{ OutputData: 'from-run-N' }]);
     });
 
     it('skips runs without a conversationId (programmatic runs)', () => {
         const a = agentWith({ steps: [{ StepType: 'Tool', Status: 'Completed', OutputData: 'x' }] });
         a._executeParams = undefined;
         a.cachePriorTurnToolResults();
-        expect(PriorTurnToolResultCache.Instance.Get(CONV_ID, AGENT_A)).toBeUndefined();
+        expect(PriorTurnToolResultCache.Instance.Get(CONV_ID, AGENT_A, null)).toBeUndefined();
     });
 });

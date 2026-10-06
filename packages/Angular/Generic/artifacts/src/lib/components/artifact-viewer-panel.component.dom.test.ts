@@ -1,9 +1,11 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
-import type { MJArtifactEntity, MJArtifactVersionEntity } from '@memberjunction/core-entities';
+import type { IMetadataProvider, RunViewParams, RunViewResult } from '@memberjunction/core';
+import { ConversationEngine, type ConversationScope, type MJArtifactEntity, type MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ArtifactFileService } from '../services/artifact-file.service';
-import { renderComponentFixture, query, text, capture, StubEmptyStateComponent } from '@memberjunction/ng-test-utils';
+import { ArtifactIconService } from '../services/artifact-icon.service';
+import { renderComponentFixture, query, queryAll, text, capture, StubEmptyStateComponent } from '@memberjunction/ng-test-utils';
 import { ArtifactViewerPanelComponent } from './artifact-viewer-panel.component';
 
 /**
@@ -16,6 +18,7 @@ import { ArtifactViewerPanelComponent } from './artifact-viewer-panel.component'
 @Component({ standalone: true, selector: 'mj-artifact-type-plugin-viewer', template: '' })
 class PluginViewerStub {
   @Input() artifactTypeName = ''; @Input() artifactVersion: unknown; @Input() contentType = ''; @Input() readonly = false;
+  @Input() VisibleVersionNumbers: ReadonlyArray<number> | null = null;
   @Output() applyFormRequested = new EventEmitter<unknown>(); @Output() navigationRequest = new EventEmitter<unknown>();
   @Output() openEntityRecord = new EventEmitter<unknown>(); @Output() pluginLoaded = new EventEmitter<unknown>(); @Output() tabsChanged = new EventEmitter<unknown>();
 }
@@ -113,5 +116,184 @@ describe('ArtifactViewerPanelComponent (DOM)', () => {
     const out = capture(f.componentInstance.closed);
     (query(f, '.close-btn') as HTMLElement).click();
     expect(out.length).toBe(1);
+  });
+});
+
+// ─── Versions in a conversation scope ───────────────────────────────────────────────────────────
+
+const CONVERSATION_ID = '11111111-1111-1111-1111-111111111111';
+const BRANCH_ID = '22222222-2222-2222-2222-222222222222';
+const SCOPE: ConversationScope = {
+  ConversationID: CONVERSATION_ID,
+  BranchID: BRANCH_ID,
+  Branches: [{ ID: BRANCH_ID, ConversationID: CONVERSATION_ID, ParentBranchID: null, ForkFromSequence: 2, Name: null }],
+};
+
+interface VersionRow { ID: string; ArtifactID: string; VersionNumber: number; Name: string | null; Content: string; __mj_CreatedAt: Date }
+interface LinkRow { ID: string; ConversationDetailID: string; ArtifactVersionID: string; Direction: 'Input' | 'Output' }
+type LoadSeam = { loadArtifact: (targetVersionNumber?: number) => Promise<void> };
+
+function versionRows(numbers: number[]): VersionRow[] {
+  return [...numbers]
+    .sort((a, b) => b - a)
+    .map((n) => ({ ID: `ver-${n}`, ArtifactID: 'a1', VersionNumber: n, Name: null, Content: '{}', __mj_CreatedAt: new Date('2026-10-01') }));
+}
+
+/**
+ * A provider whose RunViews returns `rows` for MJ: Artifact Versions, `links` for MJ: Conversation
+ * Detail Artifacts and nothing else, and records every batch. GetEntityObject hands back load-only
+ * stubs for the artifact and its versions; any other record fails to load.
+ */
+function versionsProvider(rows: VersionRow[], links: LinkRow[] = []): { Provider: IMetadataProvider; Batches: RunViewParams[][] } {
+  const batches: RunViewParams[][] = [];
+  const toResult = (results: unknown[]): RunViewResult =>
+    ({ Success: true, Results: results, RowCount: results.length, TotalRowCount: results.length }) as unknown as RunViewResult;
+  const fake = {
+    CurrentUser: { ID: 'test-user-id' },
+    Entities: [],
+    Roles: [],
+    EntityByName: () => undefined,
+    RunView: async () => toResult([]),
+    RunViews: async (list: RunViewParams[]) => {
+      batches.push(list);
+      return list.map((p) => toResult(
+        p.EntityName === 'MJ: Artifact Versions' ? rows : p.EntityName === 'MJ: Conversation Detail Artifacts' ? links : []
+      ));
+    },
+    GetEntityObject: async (entityName: string) => {
+      if (entityName === 'MJ: Artifacts') {
+        return { ID: 'a1', Name: 'Q3 Report', Description: null, Type: null, Load: async () => true };
+      }
+      const version: Partial<VersionRow> & { Load: (id: string) => Promise<boolean> } = {
+        Load: async (id: string) => {
+          const row = rows.find((r) => r.ID === id);
+          if (row) Object.assign(version, row);
+          return !!row;
+        },
+      };
+      return version;
+    },
+  };
+  return { Provider: fake as unknown as IMetadataProvider, Batches: batches };
+}
+
+async function renderLoaded(numbers: number[], inputs: Record<string, unknown>, targetVersionNumber?: number, links: LinkRow[] = []) {
+  vi.spyOn(ArtifactViewerPanelComponent.prototype as unknown as OnInitProto, 'ngOnInit').mockResolvedValue(undefined);
+  const { Provider, Batches } = versionsProvider(versionRows(numbers), links);
+  const f = renderComponentFixture(ArtifactViewerPanelComponent, {
+    imports: CHILDREN,
+    declarations: [ArtifactViewerPanelComponent],
+    providers: [
+      { provide: MJNotificationService, useValue: {} },
+      { provide: ArtifactFileService, useValue: fileServiceStub },
+      { provide: ArtifactIconService, useValue: { getArtifactIcon: () => 'fa-file' } },
+    ],
+    inputs: { artifactId: 'a1', Provider, ...inputs },
+  });
+  await (f.componentInstance as unknown as LoadSeam).loadArtifact(targetVersionNumber);
+  f.detectChanges();
+  return { f, Batches };
+}
+
+function dropdownLabels(f: ReturnType<typeof renderComponentFixture<ArtifactViewerPanelComponent>>): string[] {
+  f.componentInstance.ShowVersionDropdown = true;
+  f.componentRef.changeDetectorRef.markForCheck();
+  f.detectChanges();
+  return queryAll(f, '.version-option .version-number').map((el) => el.textContent?.trim() ?? '');
+}
+
+describe('ArtifactViewerPanelComponent — versions in a conversation scope', () => {
+  it('reads the version list with ArtifactVersionScopeFilter when a scope is set', async () => {
+    const { Batches } = await renderLoaded([1, 2, 4], { Scope: SCOPE, viewContext: 'conversation' });
+    expect(Batches[0][0].EntityName).toBe('MJ: Artifact Versions');
+    expect(Batches[0][0].ExtraFilter).toBe(ConversationEngine.ArtifactVersionScopeFilter(SCOPE, 'a1'));
+  });
+
+  it('reads every version of the artifact without a scope', async () => {
+    const { Batches } = await renderLoaded([1, 2, 3], { viewContext: 'conversation' });
+    expect(Batches[0][0].ExtraFilter).toBe("ArtifactID='a1'");
+  });
+
+  it('keeps the collection and link queries of the batch unchanged with a scope', async () => {
+    const { Batches } = await renderLoaded([1, 2, 4], { Scope: SCOPE, viewContext: 'conversation' });
+    expect(Batches[0].map((p) => p.EntityName)).toEqual(['MJ: Artifact Versions', 'MJ: Collection Artifacts', 'MJ: Conversation Detail Artifacts']);
+    expect(Batches[0][1].ExtraFilter).toContain("WHERE ArtifactID='a1'");
+    expect(Batches[0][2].ExtraFilter).toContain("WHERE ArtifactID='a1'");
+  });
+
+  it('labels a version that follows a gap with the visible version before it', async () => {
+    const { f } = await renderLoaded([1, 2, 4], { Scope: SCOPE, viewContext: 'conversation' });
+    expect(dropdownLabels(f)).toEqual(['v4 · from v2', 'v2', 'v1']);
+  });
+
+  it('labels consecutive versions with their number only', async () => {
+    const { f } = await renderLoaded([1, 2, 3], { Scope: SCOPE, viewContext: 'conversation' });
+    expect(dropdownLabels(f)).toEqual(['v3', 'v2', 'v1']);
+  });
+
+  it('does not label gaps without a scope', async () => {
+    const { f } = await renderLoaded([1, 2, 4], { viewContext: 'conversation' });
+    expect(dropdownLabels(f)).toEqual(['v4', 'v2', 'v1']);
+  });
+
+  it('shows the newest visible version and a notice when the requested version is not visible', async () => {
+    const { f } = await renderLoaded([1, 2, 4], { Scope: SCOPE, viewContext: 'conversation' }, 3);
+    expect(f.componentInstance.SelectedVersionNumber).toBe(4);
+    expect(f.componentInstance.artifactVersion?.ID).toBe('ver-4');
+    expect(f.componentInstance.ScopeNotice).toBe('Version 3 is on another branch; showing v4.');
+    expect(text(f, '.scope-notice')).toBe('Version 3 is on another branch; showing v4.');
+  });
+
+  it('shows the requested version without a notice when it is visible', async () => {
+    const { f } = await renderLoaded([1, 2, 4], { Scope: SCOPE, viewContext: 'conversation' }, 2);
+    expect(f.componentInstance.SelectedVersionNumber).toBe(2);
+    expect(f.componentInstance.ScopeNotice).toBeNull();
+    expect(query(f, '.scope-notice')).toBeNull();
+  });
+
+  it('clears the notice on the next load', async () => {
+    const { f } = await renderLoaded([1, 2, 4], { Scope: SCOPE, viewContext: 'conversation' }, 3);
+    expect(f.componentInstance.ScopeNotice).not.toBeNull();
+    await (f.componentInstance as unknown as LoadSeam).loadArtifact(2);
+    f.detectChanges();
+    expect(f.componentInstance.ScopeNotice).toBeNull();
+    expect(query(f, '.scope-notice')).toBeNull();
+  });
+
+  it('ignores the scope in collection context', async () => {
+    const { f, Batches } = await renderLoaded([1, 2, 4], { Scope: SCOPE, viewContext: 'collection' }, 3);
+    expect(Batches[0][0].ExtraFilter).toBe("ArtifactID='a1'");
+    expect(f.componentInstance.SelectedVersionNumber).toBe(4);
+    expect(f.componentInstance.ScopeNotice).toBeNull();
+    expect(f.componentInstance.PluginVisibleVersionNumbers).toBeNull();
+  });
+
+  it('shows a version whose only link from the path is an Input link, without a notice or error', async () => {
+    // An attachment's version is linked to its message with Direction='Input' only; the scoped read returns it.
+    const inputLink: LinkRow = { ID: 'cda-1', ConversationDetailID: 'detail-1', ArtifactVersionID: 'ver-1', Direction: 'Input' };
+    const { f, Batches } = await renderLoaded([1], { Scope: SCOPE, viewContext: 'conversation' }, 1, [inputLink]);
+    expect(Batches[0][0].ExtraFilter).toBe(ConversationEngine.ArtifactVersionScopeFilter(SCOPE, 'a1'));
+    expect(f.componentInstance.error).toBeNull();
+    expect(f.componentInstance.ScopeNotice).toBeNull();
+    expect(f.componentInstance.SelectedVersionNumber).toBe(1);
+    expect(f.componentInstance.artifactVersion?.ID).toBe('ver-1');
+    expect(query(f, '.scope-notice')).toBeNull();
+    expect(queryAll(f, 'mj-empty-state').map((el) => el.getAttribute('title'))).not.toContain("Couldn't load artifact");
+  });
+
+  it('reports that no version is on the current path when the scoped read is empty', async () => {
+    const { f } = await renderLoaded([], { Scope: SCOPE, viewContext: 'conversation' }, 3);
+    expect(f.componentInstance.error).toBe('No version of this artifact is on the current path.');
+    expect(queryAll(f, 'mj-empty-state').map((el) => el.getAttribute('title'))).toContain("Couldn't load artifact");
+  });
+
+  it('hands the visible version numbers to the viewer plugin with a scope', async () => {
+    const { f } = await renderLoaded([1, 2, 4], { Scope: SCOPE, viewContext: 'conversation' });
+    expect(f.componentInstance.PluginVisibleVersionNumbers).toEqual([4, 2, 1]);
+  });
+
+  it('hands no version numbers to the viewer plugin without a scope', async () => {
+    const { f } = await renderLoaded([1, 2, 4], { viewContext: 'conversation' });
+    expect(f.componentInstance.PluginVisibleVersionNumbers).toBeNull();
   });
 });

@@ -39,6 +39,17 @@
   100% { box-shadow: none; }
 }
 
+/* Search hit: a highlight applied programmatically for 2 s after a search result opens */
+.message-item.search-hit-highlight {
+  animation: searchHitHighlight 2s ease-out forwards;
+}
+
+@keyframes searchHitHighlight {
+  0%   { background-color: color-mix(in srgb, var(--mj-brand-primary) 18%, transparent); }
+  70%  { background-color: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent); }
+  100% { background-color: transparent; }
+}
+
 .message-item.in-progress {
   background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
   border-left: 3px solid var(--mj-brand-primary);
@@ -369,6 +380,45 @@
 }
 .message-edit-icon i.fa-pen {
   font-size: 12px;
+}
+
+/* Branch switcher: `< i / n >` on the first row after a fork point */
+.message-branch-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 11px;
+  color: var(--mj-text-muted);
+}
+.message-branch-switcher .branch-step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.message-branch-switcher .branch-step:hover:not(:disabled) {
+  color: var(--mj-text-secondary);
+}
+.message-branch-switcher .branch-step:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.message-branch-switcher .branch-step:focus-visible {
+  outline: none;
+  box-shadow: var(--mj-focus-ring);
+}
+.message-branch-switcher .branch-step i {
+  font-size: 10px;
+}
+.message-branch-switcher .branch-position {
+  font-variant-numeric: tabular-nums;
 }
 
 /* Time pill - unified styling for all AI message states */

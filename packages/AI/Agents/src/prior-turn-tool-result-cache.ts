@@ -21,6 +21,9 @@ import { CarryForwardStepRecord } from './tool-result-format';
  * - Entries are keyed by conversation AND agent, mirroring the DB path's `AgentID`
  *   filter — in a multi-agent conversation, agent B must never inherit agent A's
  *   results labeled "your previous turn".
+ * - Entries are also keyed by branch, mirroring the DB path's branch-path filter — a
+ *   run never inherits results from a run whose reply row is off its path. A branch with
+ *   no entry yet falls back to the DB path, which can return a trunk run from before the fork.
  * - Values are the raw completed-`Tool`-step `OutputData` projections; eligibility is
  *   still decided downstream by `BuildPriorTurnToolResultsMessage` via `toolFamily`,
  *   identical for cached and DB-loaded records.
@@ -62,27 +65,24 @@ export class PriorTurnToolResultCache extends BaseSingleton<PriorTurnToolResultC
         ttlMs: 30 * 60 * 1000
     });
 
-    /**
-     * Cache key: normalized conversation + agent, so agent B never inherits agent A's
-     * results in a multi-agent conversation. `::` is safe (UUIDs cannot contain it).
-     */
-    private static buildKey(conversationId: string, agentId: string): string {
-        return `${NormalizeUUID(conversationId)}::${NormalizeUUID(agentId)}`;
+    /** Key: conversation, agent and branch ('trunk' when none), so an entry serves only runs on the branch that stored it. */
+    private static buildKey(conversationId: string, agentId: string, branchId: string | null): string {
+        return `${NormalizeUUID(conversationId)}::${NormalizeUUID(agentId)}::${branchId ? NormalizeUUID(branchId) : 'trunk'}`;
     }
 
     /**
      * Returns the carry-forward records of this agent's most recent settled root run in
-     * the conversation on this node — `[]` means "settled with no tool results" (a
-     * valid, query-skipping answer); `undefined` means "not known here, ask the
-     * database".
+     * the conversation on this node, on one branch path (`branchId` null is the trunk) —
+     * `[]` means "settled with no tool results" (a valid, query-skipping answer);
+     * `undefined` means "not known here, ask the database".
      */
-    public Get(conversationId: string, agentId: string): CarryForwardStepRecord[] | undefined {
-        return this.cache.Get(PriorTurnToolResultCache.buildKey(conversationId, agentId));
+    public Get(conversationId: string, agentId: string, branchId: string | null): CarryForwardStepRecord[] | undefined {
+        return this.cache.Get(PriorTurnToolResultCache.buildKey(conversationId, agentId, branchId));
     }
 
-    /** Records a settled root run's carry-forward projections (empty array included). */
-    public Set(conversationId: string, agentId: string, steps: CarryForwardStepRecord[]): void {
-        this.cache.Set(PriorTurnToolResultCache.buildKey(conversationId, agentId), steps);
+    /** Records a settled root run's carry-forward projections (empty array included) for one branch path. */
+    public Set(conversationId: string, agentId: string, branchId: string | null, steps: CarryForwardStepRecord[]): void {
+        this.cache.Set(PriorTurnToolResultCache.buildKey(conversationId, agentId, branchId), steps);
     }
 
     /** Drops every entry — test isolation hook. */

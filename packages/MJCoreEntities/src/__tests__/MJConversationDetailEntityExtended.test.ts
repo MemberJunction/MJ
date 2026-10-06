@@ -196,4 +196,19 @@ describe('MJConversationDetailEntityExtended owner gate', () => {
             'Only the conversation owner can set or change the rating and feedback on this message.'
         );
     });
+
+    it('denies a rating change by a non-owner even when they hold an Edit grant', async () => {
+        mocks.getUserAvailableResources.mockReturnValue([{ ResourceRecordID: 'conv-1', PermissionLevel: 'Edit' }]);
+        const entity = await makeEntity();
+        entity.Fields = [{ Name: 'UserFeedback', Dirty: true }];
+
+        expect(await entity.Save()).toBe(false);
+        expect(entity.LatestResult?.CompleteMessage).toBe(
+            'Only the conversation owner can set or change the rating and feedback on this message.'
+        );
+        expect(mocks.superSave).not.toHaveBeenCalled();
+
+        entity.Fields = [{ Name: 'UserFeedback', Dirty: false }];
+        expect(await entity.Save()).toBe(true);
+    });
 });

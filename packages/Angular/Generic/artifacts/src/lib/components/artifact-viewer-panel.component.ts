@@ -1,9 +1,9 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, OnDestroy, SimpleChanges, ViewChild, ViewContainerRef, ComponentRef, Type, ChangeDetectorRef } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
-import { UserInfo, Metadata, RunView, LogError, CompositeKey, DataSnapshot } from '@memberjunction/core';
+import { UserInfo, Metadata, RunView, RunViewParams, LogError, CompositeKey, DataSnapshot } from '@memberjunction/core';
 import { ParseJSONRecursive, ParseJSONOptions , UUIDsEqual } from '@memberjunction/global';
-import { MJArtifactEntity, MJArtifactVersionEntity, MJArtifactVersionAttributeEntity, MJArtifactTypeEntity, MJCollectionEntity, MJCollectionArtifactEntity, ArtifactMetadataEngine, MJConversationEntity, MJConversationDetailArtifactEntity, MJConversationDetailEntity, MJArtifactUseEntity } from '@memberjunction/core-entities';
+import { MJArtifactEntity, MJArtifactVersionEntity, MJArtifactVersionAttributeEntity, MJArtifactTypeEntity, MJCollectionEntity, MJCollectionArtifactEntity, ArtifactMetadataEngine, MJConversationEntity, MJConversationDetailArtifactEntity, MJConversationDetailEntity, MJArtifactUseEntity, ConversationEngine, type ConversationScope } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
@@ -12,6 +12,25 @@ import { ArtifactViewerTab, NavigationRequest } from './base-artifact-viewer.com
 import { ArtifactIconService } from '../services/artifact-icon.service';
 import { ArtifactFileService } from '../services/artifact-file.service';
 import { RecentAccessService } from '@memberjunction/ng-shared-generic';
+
+/** Fields of the version list query: version metadata without Content. */
+const VERSION_LIST_FIELDS = ['ID', 'ArtifactID', 'VersionNumber', 'Name', 'Description', '__mj_CreatedAt', '__mj_UpdatedAt'];
+
+/**
+ * Dropdown labels for the versions visible in a conversation scope, by VersionNumber. In ascending
+ * order, a version whose number is not the previous visible number plus one is labelled
+ * `v{n} · from v{previous}`; the first version and consecutive versions are `v{n}`.
+ */
+function buildScopedVersionLabels(versionNumbers: readonly number[]): Map<number, string> {
+  const ascending = [...new Set(versionNumbers)].sort((a, b) => a - b);
+  const labels = new Map<number, string>();
+  let previous: number | null = null;
+  for (const n of ascending) {
+    labels.set(n, previous !== null && n !== previous + 1 ? `v${n} · from v${previous}` : `v${n}`);
+    previous = n;
+  }
+  return labels;
+}
 
 @Component({
   standalone: false,
@@ -121,6 +140,13 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
   get viewContext(): 'conversation' | 'collection' | null {
     return this.ViewContext;
   } // Where artifact is being viewed
+
+  /**
+   * The conversation path whose versions the viewer lists. With a scope, the version list holds
+   * the versions linked from a message on that path plus versions made outside any conversation;
+   * null lists every version. Ignored in collection context.
+   */
+  @Input() Scope: ConversationScope | null = null;
   @Input() ContextCollectionId?: string;
 
   /** @deprecated Use {@link ContextCollectionId}. */
@@ -277,6 +303,15 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
   }
   public isLoading = true;
   public error: string | null = null;
+
+  /** One line shown above the content when the requested version is not in the scope; null otherwise. */
+  public ScopeNotice: string | null = null;
+
+  /** Version numbers of the listed versions, handed to the viewer plugin; null when the viewer has no scope. */
+  public PluginVisibleVersionNumbers: number[] | null = null;
+
+  /** Dropdown labels by VersionNumber; empty when the viewer has no scope. */
+  private versionLabels = new Map<number, string>();
   public JsonContent = '';
 
   /** @deprecated Use {@link JsonContent}. */
@@ -651,6 +686,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
         const targetVersion = this.AllVersions.find(v => v.VersionNumber === newVersionNumber);
         if (targetVersion) {
           this.SelectedVersionNumber = (targetVersion.VersionNumber as number) || 1;
+          this.ScopeNotice = null;
 
           // Load full content for the selected version
           const fullVersion = await this.loadVersionContent(targetVersion.ID);
@@ -699,7 +735,74 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     this.PrimaryCollection = null;
     this.artifactTypeDriverClass = null;
     this.artifactContentCategory = null;
+    this.ScopeNotice = null;
+    this.PluginVisibleVersionNumbers = null;
+    this.versionLabels = new Map<number, string>();
     this.clearLinksData();
+  }
+
+  /** The scope the version list is read in: {@link Scope}, or null in collection context. */
+  private get activeScope(): ConversationScope | null {
+    return this.ViewContext === 'collection' ? null : this.Scope;
+  }
+
+  /** Batch query [0]: metadata of the versions the viewer lists, newest first. */
+  private buildVersionListQuery(artifactId: string, scope: ConversationScope | null): RunViewParams {
+    if (scope) {
+      return {
+        EntityName: 'MJ: Artifact Versions',
+        ExtraFilter: ConversationEngine.ArtifactVersionScopeFilter(scope, artifactId),
+        OrderBy: 'VersionNumber DESC',
+        Fields: VERSION_LIST_FIELDS,
+        ResultType: 'simple'
+      };
+    }
+    // conversation-scope: collection and direct open show every version
+    return {
+      EntityName: 'MJ: Artifact Versions',
+      ExtraFilter: `ArtifactID='${artifactId}'`,
+      OrderBy: 'VersionNumber DESC',
+      Fields: VERSION_LIST_FIELDS,
+      ResultType: 'simple'
+    };
+  }
+
+  /** With a scope, builds the dropdown labels and the version numbers handed to the plugin. */
+  private applyVersionScope(scope: ConversationScope | null): void {
+    if (!scope) {
+      return;
+    }
+    const numbers = this.AllVersions.map(v => v.VersionNumber);
+    this.versionLabels = buildScopedVersionLabels(numbers);
+    this.PluginVisibleVersionNumbers = numbers;
+  }
+
+  /**
+   * The listed version to show: the requested one, else the newest. With a scope, a requested
+   * version that is not listed sets {@link ScopeNotice}.
+   */
+  private pickVersionToShow(
+    versions: Record<string, unknown>[],
+    targetVersionNumber: number | undefined,
+    scope: ConversationScope | null
+  ): Record<string, unknown> {
+    const newest = versions[0];
+    if (!targetVersionNumber) {
+      return newest;
+    }
+    const requested = versions.find(v => v.VersionNumber === targetVersionNumber);
+    if (requested) {
+      return requested;
+    }
+    if (scope) {
+      this.ScopeNotice = `Version ${targetVersionNumber} is on another branch; showing v${newest.VersionNumber}.`;
+    }
+    return newest;
+  }
+
+  /** The dropdown label of a version: `v{n}`, or `v{n} · from v{previous}` after a gap in the scope's versions. */
+  public GetVersionLabel(versionNumber: number): string {
+    return this.versionLabels.get(versionNumber) ?? `v${versionNumber}`;
   }
 
   private async loadArtifact(targetVersionNumber?: number): Promise<void> {
@@ -728,16 +831,11 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
 
       // PERF: Batch load version metadata, collection associations, and conversation links
       // in a single RunViews call. Content is excluded here — loaded on-demand for the selected version.
+      const scope = this.activeScope;
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const batchResults = await rv.RunViews([
-        {
-          // [0] Version metadata (lightweight — no Content field)
-          EntityName: 'MJ: Artifact Versions',
-          ExtraFilter: `ArtifactID='${artifactId}'`,
-          OrderBy: 'VersionNumber DESC',
-          Fields: ['ID', 'ArtifactID', 'VersionNumber', 'Name', 'Description', '__mj_CreatedAt', '__mj_UpdatedAt'],
-          ResultType: 'simple'
-        },
+        // [0] Version metadata (lightweight — no Content field)
+        this.buildVersionListQuery(artifactId, scope),
         {
           // [1] Collection associations for all versions of this artifact
           EntityName: 'MJ: Collection Artifacts',
@@ -765,22 +863,18 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
       const [versionsResult, collectionsResult, convDetailResult] = batchResults;
 
       if (!versionsResult.Success || !versionsResult.Results || versionsResult.Results.length === 0) {
-        this.error = 'No artifact version found';
+        this.error = scope && versionsResult.Success
+          ? 'No version of this artifact is on the current path.'
+          : 'No artifact version found';
         return;
       }
 
       this.Artifact = artifactEntity;
       this.AllVersions = versionsResult.Results as MJArtifactVersionEntity[];
+      this.applyVersionScope(scope);
 
-      // Determine which version to display
-      let selectedVersion: Record<string, unknown> | undefined;
-      if (targetVersionNumber) {
-        selectedVersion = versionsResult.Results.find(
-          (v: Record<string, unknown>) => v.VersionNumber === targetVersionNumber
-        );
-      }
-      // Fall back to latest version (first in DESC order)
-      const versionToLoad = selectedVersion || versionsResult.Results[0];
+      // The requested version, or the latest (first in DESC order)
+      const versionToLoad = this.pickVersionToShow(versionsResult.Results, targetVersionNumber, scope);
       this.SelectedVersionNumber = (versionToLoad.VersionNumber as number) || 1;
 
       // PERF: Start artifact type resolution and selected version content load in parallel
@@ -1442,6 +1536,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
   async SelectVersion(version: MJArtifactVersionEntity): Promise<void> {
     this.SelectedVersionNumber = (version.VersionNumber as number) || 1;
     this.ShowVersionDropdown = false;
+    this.ScopeNotice = null;
 
     // Load full content for the selected version (allVersions only has metadata)
     const fullVersion = await this.loadVersionContent(version.ID);
@@ -1694,6 +1789,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
             // Check if user has access (is owner or participant)
             const userIsOwner = UUIDsEqual(conversation.UserID, this.CurrentUser.ID);
 
+            // conversation-scope: access check; a message on any branch makes the user a participant
             const participantResult = await rv.RunView({
               EntityName: 'MJ: Conversation Details',
               ExtraFilter: `ConversationID='${conversation.ID}' AND UserID='${this.CurrentUser.ID}'`,

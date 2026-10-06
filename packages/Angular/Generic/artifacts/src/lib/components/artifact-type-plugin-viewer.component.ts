@@ -138,6 +138,8 @@ export class ArtifactTypePluginViewerComponent extends BaseAngularComponent impl
   @Input() height?: string;
   @Input() readonly: boolean = true;
   @Input() cssClass?: string;
+  /** Version numbers the viewer lists in its conversation scope, handed to the plugin; null without a scope. */
+  @Input() VisibleVersionNumbers: ReadonlyArray<number> | null = null;
 
   @Output() OpenEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
 
@@ -353,6 +355,9 @@ export class ArtifactTypePluginViewerComponent extends BaseAngularComponent impl
       }
       if (this.ContentType !== undefined) {
         this.componentRef.setInput('contentType', this.ContentType);
+      }
+      if (this.VisibleVersionNumbers) {
+        this.componentRef.setInput('VisibleVersionNumbers', this.VisibleVersionNumbers);
       }
 
       // Subscribe to openEntityRecord event if the plugin emits it

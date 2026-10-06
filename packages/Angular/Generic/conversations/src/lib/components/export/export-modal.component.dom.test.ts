@@ -1,9 +1,9 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from 'vitest';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MJDialogComponent, MJDialogActionsComponent, MJButtonDirective } from '@memberjunction/ng-ui-components';
 import type { UserInfo } from '@memberjunction/core';
-import type { MJConversationEntity } from '@memberjunction/core-entities';
+import { ConversationEngine, type ConversationBranchRow, type ConversationScope, type MJConversationEntity } from '@memberjunction/core-entities';
 import { renderComponentFixture, query, queryAll, text, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import { ExportModalComponent } from './export-modal.component';
 import { ExportService, ExportBranding } from '../../services/export.service';
@@ -25,8 +25,22 @@ describe('ExportModalComponent (DOM)', () => {
   const conversation = { ID: 'c1', Name: 'My Chat' } as unknown as MJConversationEntity;
   const currentUser = { ID: 'u1' } as unknown as UserInfo;
 
-  const exportServiceStub = { exportConversation: vi.fn(() => Promise.resolve()) };
+  const exportServiceStub = { ExportConversation: vi.fn(() => Promise.resolve()) };
   const toastStub = { success: vi.fn(), error: vi.fn() };
+  /** The scope of a conversation with no current branch. */
+  const TRUNK: ConversationScope = { ConversationID: 'c1', BranchID: null, Branches: [] };
+  /** `ConversationEngine.LoadCurrentScope`, which the modal reads at export time; the trunk by default. */
+  let loadScope: MockInstance<typeof ConversationEngine.LoadCurrentScope>;
+  /** Lets the export handler finish: it awaits the scope read before calling the export service. */
+  const settle = () => new Promise<void>(resolve => setTimeout(resolve, 0));
+
+  beforeEach(() => {
+    loadScope = vi.spyOn(ConversationEngine, 'LoadCurrentScope').mockResolvedValue(TRUNK);
+  });
+
+  afterEach(() => {
+    loadScope.mockRestore();
+  });
 
   const render = (inputs: Record<string, unknown> = {}, setup?: (c: ExportModalComponent) => void) =>
     renderComponentFixture(ExportModalComponent, {
@@ -103,11 +117,50 @@ describe('ExportModalComponent (DOM)', () => {
     expect(spy).toHaveBeenCalled();
   });
 
-  it('invokes the export service with the chosen format and options on Export', () => {
-    exportServiceStub.exportConversation.mockClear();
+  it('invokes the export service with the chosen format and options on Export', async () => {
+    exportServiceStub.ExportConversation.mockClear();
     const f = render();
     (queryAll(f, 'mj-dialog-actions button')[1] as HTMLButtonElement).click();
-    expect(exportServiceStub.exportConversation).toHaveBeenCalledWith('c1', 'markdown', currentUser, expect.objectContaining({ includeMessages: true }));
+    await settle();
+    expect(exportServiceStub.ExportConversation).toHaveBeenCalledWith('c1', TRUNK, 'markdown', currentUser, expect.objectContaining({ includeMessages: true }));
+  });
+
+  describe('conversation scope', () => {
+    const branch: ConversationBranchRow = { ID: 'BRANCH-B', ConversationID: 'c1', ParentBranchID: null, ForkFromSequence: 2, Name: 'Shorter answers' };
+    const branchScope: ConversationScope = { ConversationID: 'c1', BranchID: 'BRANCH-B', Branches: [branch] };
+
+    beforeEach(() => {
+      exportServiceStub.ExportConversation.mockClear();
+      toastStub.success.mockClear();
+      toastStub.error.mockClear();
+    });
+
+    it('reads the current scope of the conversation at export time and exports it', async () => {
+      loadScope.mockResolvedValueOnce(branchScope);
+      const f = render();
+      (queryAll(f, 'mj-dialog-actions button')[1] as HTMLButtonElement).click();
+      await settle();
+      expect(loadScope).toHaveBeenCalledWith('c1', currentUser);
+      expect(exportServiceStub.ExportConversation).toHaveBeenCalledWith(
+        'c1',
+        branchScope,
+        'markdown',
+        currentUser,
+        expect.objectContaining({ includeMessages: true })
+      );
+    });
+
+    it('reports the error and exports nothing when the scope cannot be read', async () => {
+      loadScope.mockRejectedValueOnce(new Error('Conversation c1 could not be read: denied'));
+      const f = render();
+      (queryAll(f, 'mj-dialog-actions button')[1] as HTMLButtonElement).click();
+      await settle();
+      f.detectChanges();
+      expect(exportServiceStub.ExportConversation).not.toHaveBeenCalled();
+      expect(toastStub.error).toHaveBeenCalledWith('Conversation c1 could not be read: denied');
+      expect(toastStub.success).not.toHaveBeenCalled();
+      expect(text(f, '.error-message')).toContain('could not be read: denied');
+    });
   });
 
   describe('branding ("Include branding" checkbox)', () => {
@@ -138,8 +191,10 @@ describe('ExportModalComponent (DOM)', () => {
       queryAll(f, '.option-checkboxes input[type="checkbox"]')[2] as HTMLInputElement;
     const cssCheckbox = (f: ReturnType<typeof render>) =>
       queryAll(f, '.format-specific-options input[type="checkbox"]')[0] as HTMLInputElement;
-    const exportNow = (f: ReturnType<typeof render>) =>
+    const exportNow = async (f: ReturnType<typeof render>) => {
       (queryAll(f, 'mj-dialog-actions button')[1] as HTMLButtonElement).click();
+      await settle();
+    };
 
     it('renders unchecked for the HTML format when the host supplied no branding', async () => {
       const f = await renderWithBranding(null);
@@ -175,12 +230,13 @@ describe('ExportModalComponent (DOM)', () => {
     });
 
     it('threads branding + includeTheme through to the export service when checked', async () => {
-      exportServiceStub.exportConversation.mockClear();
+      exportServiceStub.ExportConversation.mockClear();
       const branding: ExportBranding = { brandTokens: { '--mj-brand-primary': '#ff0000' } };
       const f = await renderWithBranding(branding);
-      exportNow(f);
-      expect(exportServiceStub.exportConversation).toHaveBeenCalledWith(
+      await exportNow(f);
+      expect(exportServiceStub.ExportConversation).toHaveBeenCalledWith(
         'c1',
+        TRUNK,
         'html',
         currentUser,
         expect.objectContaining({ includeTheme: true, branding })
@@ -188,13 +244,14 @@ describe('ExportModalComponent (DOM)', () => {
     });
 
     it('unchecking "Include CSS styling" drops branding from the HTML export (no unstyled leak)', async () => {
-      exportServiceStub.exportConversation.mockClear();
+      exportServiceStub.ExportConversation.mockClear();
       const f = await renderWithBranding({ brandTokens: { '--mj-brand-primary': '#ff0000' }, logoUrl: 'https://x/l.png' });
       cssCheckbox(f).click();
       f.detectChanges();
-      exportNow(f);
-      expect(exportServiceStub.exportConversation).toHaveBeenCalledWith(
+      await exportNow(f);
+      expect(exportServiceStub.ExportConversation).toHaveBeenCalledWith(
         'c1',
+        TRUNK,
         'html',
         currentUser,
         expect.objectContaining({ includeCSS: false, includeTheme: false, branding: undefined })
@@ -204,16 +261,17 @@ describe('ExportModalComponent (DOM)', () => {
     it('the HTML-only CSS toggle does NOT follow the user into markdown', async () => {
       // Regression: includeCSS used to mutate includeTheme, so turning CSS off while on
       // HTML silently stripped branding from a subsequent markdown export.
-      exportServiceStub.exportConversation.mockClear();
+      exportServiceStub.ExportConversation.mockClear();
       const branding: ExportBranding = { title: 'Acme Report', logoUrl: 'https://x/l.png' };
       const f = await renderWithBranding(branding);
       cssCheckbox(f).click(); // CSS off, on the HTML format
       f.detectChanges();
       (queryAll(f, '.format-option')[FORMAT_INDEX.markdown] as HTMLElement).click();
       f.detectChanges();
-      exportNow(f);
-      expect(exportServiceStub.exportConversation).toHaveBeenCalledWith(
+      await exportNow(f);
+      expect(exportServiceStub.ExportConversation).toHaveBeenCalledWith(
         'c1',
+        TRUNK,
         'markdown',
         currentUser,
         expect.objectContaining({ includeTheme: true, branding })
@@ -221,13 +279,14 @@ describe('ExportModalComponent (DOM)', () => {
     });
 
     it('omits branding when the user unchecks the box', async () => {
-      exportServiceStub.exportConversation.mockClear();
+      exportServiceStub.ExportConversation.mockClear();
       const f = await renderWithBranding({ brandTokens: { '--mj-brand-primary': '#ff0000' } });
       themeCheckbox(f).click();
       f.detectChanges();
-      exportNow(f);
-      expect(exportServiceStub.exportConversation).toHaveBeenCalledWith(
+      await exportNow(f);
+      expect(exportServiceStub.ExportConversation).toHaveBeenCalledWith(
         'c1',
+        TRUNK,
         'html',
         currentUser,
         expect.objectContaining({ includeTheme: false, branding: undefined })
@@ -235,13 +294,14 @@ describe('ExportModalComponent (DOM)', () => {
     });
 
     it('unchecking branding on markdown omits it there too', async () => {
-      exportServiceStub.exportConversation.mockClear();
+      exportServiceStub.ExportConversation.mockClear();
       const f = await renderWithBranding({ title: 'Acme Report' }, 'markdown');
       themeCheckbox(f).click();
       f.detectChanges();
-      exportNow(f);
-      expect(exportServiceStub.exportConversation).toHaveBeenCalledWith(
+      await exportNow(f);
+      expect(exportServiceStub.ExportConversation).toHaveBeenCalledWith(
         'c1',
+        TRUNK,
         'markdown',
         currentUser,
         expect.objectContaining({ includeTheme: false, branding: undefined })

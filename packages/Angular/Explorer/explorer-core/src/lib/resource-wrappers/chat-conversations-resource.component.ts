@@ -1457,7 +1457,8 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    *
    * Explorer renders each chat surface as a separate resource, so results for another
    * surface go through NavigationService. Conversations and messages resolve to a
-   * conversation, which this component owns, so they are selected in place.
+   * conversation, which this component owns, so they are selected in place; a message then
+   * opens on its branch at its sequence.
    */
   OnSearchResultSelected(result: SearchResult): void {
     this.CloseSearch();
@@ -1467,6 +1468,10 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
       case 'conversation':
         void this.OnConversationSelected(route.ConversationId);
         break;
+      case 'message':
+        this.openMessageResult(route.ConversationId, route.BranchId, route.Sequence)
+          .catch((error: unknown) => console.error('Failed to open the message from search:', error));
+        break;
       case 'artifact':
         this.navigationService.OpenArtifact(route.ArtifactId, route.Title);
         break;
@@ -1474,6 +1479,16 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
         void this.navigationService.OpenNavItemByName(route.NavItemName, route.Configuration);
         break;
     }
+  }
+
+  /**
+   * Selects the message's conversation, renders it into the chat area, then has the chat area
+   * switch to the message's branch and scroll to it.
+   */
+  private async openMessageResult(conversationId: string, branchId: string | null, sequence: number): Promise<void> {
+    await this.OnConversationSelected(conversationId);
+    this.cdr.detectChanges();
+    await this.ChatArea?.OpenMessage(conversationId, branchId, sequence);
   }
 
   /** @deprecated Use {@link OnOpenEntityRecord}. */

@@ -23,6 +23,7 @@
  */
 
 import { RunView, UserInfo, LogError, LogStatus, type IMetadataProvider } from '@memberjunction/core';
+import { ConversationEngine } from '@memberjunction/core-entities';
 import type { MJConversationEntity, MJConversationDetailEntity, MJAIAgentNoteEntity } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIPromptParams } from '@memberjunction/ai-core-plus';
@@ -82,7 +83,7 @@ export async function WriteReturningVisitorRecap(
       return;
     }
 
-    const transcript = await loadTranscript(conversationId, contextUser);
+    const transcript = await loadTranscript(conversationId, contextUser, provider);
     if (!transcript) {
       LogStatus(`[ReturningVisitorRecap] empty transcript for ${conversationId} — bailing`);
       return;
@@ -152,14 +153,24 @@ async function recapAlreadyExists(conversationId: string, contextUser: UserInfo)
   return result.Success && (result.Results?.length ?? 0) > 0;
 }
 
-/** Builds a compact transcript string from the conversation's most-recent detail turns. */
-async function loadTranscript(conversationId: string, contextUser: UserInfo): Promise<string | undefined> {
+/**
+ * Builds a compact transcript string from the most recent detail turns on the conversation's current
+ * branch path. Returns undefined when the conversation's scope cannot be read.
+ */
+async function loadTranscript(conversationId: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<string | undefined> {
+  const scope = await ConversationEngine.LoadCurrentScope(conversationId, contextUser, provider).catch((e: unknown) => {
+    LogError(`[ReturningVisitorRecap] could not read the branch scope of conversation ${conversationId}: ${e instanceof Error ? e.message : String(e)}`);
+    return undefined;
+  });
+  if (!scope) {
+    return undefined;
+  }
   const rv = new RunView();
   const result = await rv.RunView<MJConversationDetailEntity>(
     {
       EntityName: CONVERSATION_DETAILS_ENTITY,
-      ExtraFilter: `ConversationID = '${conversationId}'`,
-      OrderBy: '__mj_CreatedAt DESC',
+      ExtraFilter: ConversationEngine.ScopeFilter(scope),
+      OrderBy: 'Sequence DESC',
       MaxRows: MAX_TRANSCRIPT_TURNS,
       ResultType: 'entity_object',
     },

@@ -1,5 +1,5 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
-import { MJConversationEntity } from '@memberjunction/core-entities';
+import { ConversationEngine, MJConversationEntity } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
 import { ExportService, ExportFormat, ExportOptions, ExportBranding } from '../../services/export.service';
 import { DialogService } from '../../services/dialog.service';
@@ -595,10 +595,14 @@ export class ExportModalComponent {
 
     this.IsExporting = true;
     this.ErrorMessage = '';
+    const conversationId = this.Conversation.ID;
 
     try {
-      await this.exportService.exportConversation(
-        this.Conversation.ID,
+      // The conversation's current branch path, read fresh; a failed read is an export error.
+      const scope = await ConversationEngine.LoadCurrentScope(conversationId, this.CurrentUser);
+      await this.exportService.ExportConversation(
+        conversationId,
+        scope,
         this.SelectedFormat!,
         this.CurrentUser,
         this.resolveExportOptions()

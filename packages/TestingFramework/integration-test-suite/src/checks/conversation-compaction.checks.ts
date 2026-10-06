@@ -1,5 +1,5 @@
 /**
- * conversation-compaction.checks.ts — the 'conversation-compaction' bundle (CC1–CC12).
+ * conversation-compaction.checks.ts — the 'conversation-compaction' bundle (CC1–CC20).
  *
  * GRADUATED from packages/MJServer/integration-test-scripts/conversation-compaction-tests.ts
  * (shipped inside PR #2732 as a standalone dispatcher; check bodies lifted verbatim), so the
@@ -29,12 +29,14 @@ import {
     ConversationWindowFields,
     ConversationWindowSourceRow,
     MJConversationEntity,
+    MJConversationBranchEntity,
     MJConversationDetailEntity,
     MJAIAgentSessionEntity,
     MJArtifactEntity,
     MJArtifactVersionEntity,
     MJConversationDetailArtifactEntity,
 } from '@memberjunction/core-entities';
+import type { ConversationBranchRow } from '@memberjunction/core-entities';
 import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended } from '@memberjunction/ai-core-plus';
 import { BaseAgent, ConversationToolManager, ConversationSearchHit, ConversationToolMessage, PriorTurnToolResultCache } from '@memberjunction/ai-agents';
 import type { CarryForwardStepRecord } from '@memberjunction/ai-agents';
@@ -116,10 +118,136 @@ interface BaseAgentStepInternals {
     _agentRun: MJAIAgentRunEntityExtended;
     _executeParams: Record<string, unknown> | undefined;
     _depth: number;
+    _conversationBranches: ConversationBranchRow[];
     _stepSaveQueue: { Flush(): Promise<{ failures: number }> };
     createStepEntity(p: Record<string, unknown>): Promise<MJAIAgentRunStepEntityExtended>;
     loadPriorTurnToolResultSteps(p: Record<string, unknown>): Promise<CarryForwardStepRecord[]>;
     cachePriorTurnToolResults(): void;
+}
+
+/**
+ * A settled (AwaitingFeedback) run for `agentId` whose reply row is `replyDetailId`, with one
+ * completed Tool step whose OutputData carries `marker`.
+ */
+async function CreateSettledToolRun(
+    ctx: IntegrationCheckContext,
+    conversationId: string,
+    agentId: string,
+    replyDetailId: string,
+    marker: string
+): Promise<void> {
+    const fixture = requireFixture(ctx);
+    const run = await CreateAgentRunFixture(ctx, conversationId);
+    const step = await ctx.Provider.GetEntityObject<MJAIAgentRunStepEntityExtended>('MJ: AI Agent Run Steps', ctx.User);
+    step.AgentRunID = run.ID;
+    step.StepNumber = 1;
+    step.StepType = 'Tool';
+    step.StepName = `Conversation Tool: getMessageBySequence ${FIXTURE_TAG}`;
+    step.Status = 'Completed';
+    step.OutputData = JSON.stringify({ marker });
+    Assert(await step.Save(), `tool step fixture save: ${step.LatestResult?.CompleteMessage}`);
+    fixture.Steps.push(step);
+    run.AgentID = agentId;
+    run.Status = 'AwaitingFeedback';
+    run.ConversationDetailID = replyDetailId;
+    Assert(await run.Save(), `run settle save: ${run.LatestResult?.CompleteMessage}`);
+}
+
+/** The carry-forward loader's DB fallback on one path: the cache is cleared first. */
+async function LoadPriorTurnFromDb(
+    internals: BaseAgentStepInternals,
+    params: Record<string, unknown>,
+    branches: ConversationBranchRow[]
+): Promise<CarryForwardStepRecord[]> {
+    PriorTurnToolResultCache.Instance.Clear();
+    internals._conversationBranches = branches;
+    return internals.loadPriorTurnToolResultSteps(params);
+}
+
+/** True when the loader returned exactly one step and it carries `marker`. */
+function HasOnlyMarker(steps: CarryForwardStepRecord[], marker: string): boolean {
+    return steps.length === 1 && (steps[0].OutputData || '').includes(`"${marker}"`);
+}
+
+/** A conversation with a trunk and one sibling branch, from {@link CreateBranchedConversationFixture}. */
+interface BranchedConversationFixture {
+    ConversationID: string;
+    BranchID: string;
+    /** Trunk row `<label>-1` (User), at the fork point: on both paths. */
+    BeforeFork: MJConversationDetailEntity;
+    /** Trunk row `<label>-2` (AI), after the fork point: on the trunk only. */
+    TrunkOnly: MJConversationDetailEntity;
+    /** Branch row `<label>-3` (AI): on the branch only. */
+    BranchOnly: MJConversationDetailEntity;
+}
+
+/**
+ * Trunk rows `<label>-1` (User) and `<label>-2` (AI), and a branch that forks after
+ * `<label>-1` and holds `<label>-3` (AI). Every row is recorded on the accumulator for teardown.
+ */
+async function CreateBranchedConversationFixture(
+    ctx: IntegrationCheckContext,
+    label: string
+): Promise<BranchedConversationFixture> {
+    const fixture = requireFixture(ctx);
+    const entry = await CreateConversationFixture(ctx, [{ role: 'User', text: `${label}-1` }, { role: 'AI', text: `${label}-2` }]);
+    const conversationId = entry.Conversation.ID;
+
+    const branch = await ctx.Provider.GetEntityObject<MJConversationBranchEntity>('MJ: Conversation Branches', ctx.User);
+    branch.ConversationID = conversationId;
+    branch.ParentBranchID = null;
+    branch.ForkFromSequence = entry.Details[0].Sequence;
+    Assert(await branch.Save(), `branch fixture save: ${branch.LatestResult?.CompleteMessage}`);
+    fixture.WindowRoots.push(branch);   // after its details, before its conversation
+
+    const branchRow = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', ctx.User);
+    branchRow.ConversationID = conversationId;
+    branchRow.Role = 'AI';
+    branchRow.Message = `${label}-3`;
+    branchRow.HiddenToUser = false;
+    branchRow.BranchID = branch.ID;
+    Assert(await branchRow.Save(), `branch row save: ${branchRow.LatestResult?.CompleteMessage}`);
+    entry.Details.push(branchRow);   // teardown sweeps entry.Details
+
+    return {
+        ConversationID: conversationId,
+        BranchID: branch.ID,
+        BeforeFork: entry.Details[0],
+        TrunkOnly: entry.Details[1],
+        BranchOnly: branchRow,
+    };
+}
+
+/**
+ * Sibling branches never share a prior run. Trunk rows sb-1 (User) and sb-2 (AI); branch B
+ * forks after sb-1 and holds sb-3. A run whose reply is sb-3 is not the trunk's prior run, and a
+ * NEWER run whose reply is sb-2 (trunk, after the fork) is not B's prior run.
+ */
+async function AssertSiblingBranchRunsNotCarried(
+    ctx: IntegrationCheckContext,
+    internals: BaseAgentStepInternals,
+    agentId: string
+): Promise<void> {
+    const conv = await CreateBranchedConversationFixture(ctx, 'sb');
+    const conversationId = conv.ConversationID;
+
+    const branches = await ConversationEngine.LoadBranchesFresh(conversationId, ctx.User, ctx.Provider);
+    const trunkParams = { conversationId, contextUser: ctx.User, agent: { ID: agentId } };
+    const branchParams = { ...trunkParams, ConversationBranchID: conv.BranchID };
+
+    await CreateSettledToolRun(ctx, conversationId, agentId, conv.BranchOnly.ID, 'on-branch');
+    AssertEqual((await LoadPriorTurnFromDb(internals, trunkParams, [])).length, 0,
+        'a run whose reply is on a sibling branch is not the trunk prior run');
+    Assert(HasOnlyMarker(await LoadPriorTurnFromDb(internals, branchParams, branches), 'on-branch'),
+        'the branch finds its own run (control)');
+
+    await CreateSettledToolRun(ctx, conversationId, agentId, conv.TrunkOnly.ID, 'on-trunk');
+    Assert(HasOnlyMarker(await LoadPriorTurnFromDb(internals, branchParams, branches), 'on-branch'),
+        'a newer trunk run past the fork point is not the branch prior run');
+    Assert(HasOnlyMarker(await LoadPriorTurnFromDb(internals, trunkParams, []), 'on-trunk'),
+        'the trunk finds its own run (control)');
+    internals._conversationBranches = [];
+    PriorTurnToolResultCache.Instance.Clear();
 }
 
 /** First existing row's ID for a reference-only lookup, or fail loudly. */
@@ -164,8 +292,15 @@ async function AttachArtifactFixture(
     direction: 'Input' | 'Output',
     name: string
 ): Promise<{ ArtifactID: string; VersionID: string }> {
-    const fixture = requireFixture(ctx);
+    const artifactId = await CreateArtifactFixture(ctx, name);
+    const versionId = await CreateArtifactVersionFixture(ctx, artifactId, 1, name);
+    await LinkArtifactVersionFixture(ctx, detailId, versionId, direction);
+    return { ArtifactID: artifactId, VersionID: versionId };
+}
 
+/** A tagged `MJ: Artifacts` row with no versions; returns its ID. */
+async function CreateArtifactFixture(ctx: IntegrationCheckContext, name: string): Promise<string> {
+    const fixture = requireFixture(ctx);
     const artifact = await ctx.Provider.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', ctx.User);
     artifact.Name = `${name} ${FIXTURE_TAG}`;
     artifact.EnvironmentID = await RequireAnyId(ctx, 'MJ: Environments');
@@ -174,26 +309,70 @@ async function AttachArtifactFixture(
     artifact.Visibility = 'Always';
     Assert(await artifact.Save(), `artifact fixture save: ${artifact.LatestResult?.CompleteMessage}`);
     fixture.WindowRoots.push(artifact);
+    return artifact.ID;
+}
 
+/** Version `versionNumber` of an artifact fixture; returns its ID. */
+async function CreateArtifactVersionFixture(
+    ctx: IntegrationCheckContext,
+    artifactId: string,
+    versionNumber: number,
+    name: string
+): Promise<string> {
+    const fixture = requireFixture(ctx);
     const version = await ctx.Provider.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', ctx.User);
-    version.ArtifactID = artifact.ID;
-    version.VersionNumber = 1;
-    version.Name = `${name} v1`;
-    version.Content = JSON.stringify({ probe: name });
+    version.ArtifactID = artifactId;
+    version.VersionNumber = versionNumber;
+    version.Name = `${name} v${versionNumber}`;
+    version.Content = JSON.stringify({ probe: name, version: versionNumber });
     version.UserID = ctx.User.ID;
     Assert(await version.Save(), `version fixture save: ${version.LatestResult?.CompleteMessage}`);
     fixture.WindowRoots.push(version);   // LIFO teardown puts this before its artifact
+    return version.ID;
+}
 
+/** Links a detail to an artifact version through `MJ: Conversation Detail Artifacts`. */
+async function LinkArtifactVersionFixture(
+    ctx: IntegrationCheckContext,
+    detailId: string,
+    versionId: string,
+    direction: 'Input' | 'Output'
+): Promise<void> {
+    const fixture = requireFixture(ctx);
     const junction = await ctx.Provider.GetEntityObject<MJConversationDetailArtifactEntity>(
         'MJ: Conversation Detail Artifacts', ctx.User
     );
     junction.ConversationDetailID = detailId;
-    junction.ArtifactVersionID = version.ID;
+    junction.ArtifactVersionID = versionId;
     junction.Direction = direction;
     Assert(await junction.Save(), `junction fixture save: ${junction.LatestResult?.CompleteMessage}`);
     fixture.WindowJunctions.push(junction);   // references a detail — deleted before it
+}
 
-    return { ArtifactID: artifact.ID, VersionID: version.ID };
+/** Version numbers that `filter` returns from `MJ: Artifact Versions`, ascending. */
+async function ArtifactVersionNumbers(ctx: IntegrationCheckContext, filter: string): Promise<number[]> {
+    const result = await new RunView().RunView<{ VersionNumber: number }>({
+        EntityName: 'MJ: Artifact Versions',
+        ExtraFilter: filter,
+        OrderBy: 'VersionNumber ASC',
+        Fields: ['VersionNumber'],
+        ResultType: 'simple',
+    }, ctx.User);
+    Assert(result.Success, `artifact version read: ${result.ErrorMessage}`);
+    return result.Results.map(r => r.VersionNumber);
+}
+
+/** Messages of the pinned rows that `filter` returns from `MJ: Conversation Details`, by Sequence. */
+async function PinnedMessages(ctx: IntegrationCheckContext, filter: string): Promise<string[]> {
+    const result = await new RunView().RunView<{ Message: string }>({
+        EntityName: 'MJ: Conversation Details',
+        ExtraFilter: `${filter} AND IsPinned=1`,
+        OrderBy: 'Sequence ASC',
+        Fields: ['Message'],
+        ResultType: 'simple',
+    }, ctx.User);
+    Assert(result.Success, `pinned detail read: ${result.ErrorMessage}`);
+    return result.Results.map(r => r.Message);
 }
 
 /** Sequential `mN` messages, for the paging checks. */
@@ -371,7 +550,7 @@ export const ConversationCompactionChecks: NamedCheck[] = [
     },
     {
         Id: 'conversation-compaction.CC10',
-        Name: 'CC10: carry-forward loader — DB fallback on cache miss, cache precedence on hit, agent-scoped provenance',
+        Name: 'CC10: carry-forward loader — DB fallback on cache miss, cache precedence on hit, agent- and branch-scoped provenance',
         Fn: async (ctx): Promise<void> => {
             const fixture = requireFixture(ctx);
             const entry = await CreateConversationFixture(ctx, [{ role: 'User', text: 'cf-1' }]);
@@ -392,6 +571,9 @@ export const ConversationCompactionChecks: NamedCheck[] = [
             // settled-status filter must find it (this exact status is what the PR-review
             // gate fix exists for).
             run.Status = 'AwaitingFeedback';
+            // The loader carries a run forward only when its reply row is on the run's branch
+            // path; this conversation's row is on the trunk.
+            run.ConversationDetailID = entry.Details[0].ID;
             Assert(await run.Save(), `run settle save: ${run.LatestResult?.CompleteMessage}`);
 
             const agent = new BaseAgent();
@@ -411,7 +593,7 @@ export const ConversationCompactionChecks: NamedCheck[] = [
             AssertEqual(otherAgentSteps.length, 0, "another agent's loader finds no prior run (AgentID filter)");
 
             // Hit → the cache wins without touching the DB (distinct marker proves the source).
-            PriorTurnToolResultCache.Instance.Set(entry.Conversation.ID, agentId, [{ OutputData: JSON.stringify({ marker: 'from-cache' }) }]);
+            PriorTurnToolResultCache.Instance.Set(entry.Conversation.ID, agentId, null, [{ OutputData: JSON.stringify({ marker: 'from-cache' }) }]);
             const fromCache = await internals.loadPriorTurnToolResultSteps(loadParams);
             AssertEqual(fromCache.length, 1, 'cache hit returned one record');
             Assert((fromCache[0].OutputData || '').includes('from-cache'), 'cache took precedence over the DB rows');
@@ -423,12 +605,15 @@ export const ConversationCompactionChecks: NamedCheck[] = [
             internals._executeParams = { conversationId: entry.Conversation.ID };
             internals._depth = 0;
             internals.cachePriorTurnToolResults();
-            const populated = PriorTurnToolResultCache.Instance.Get(entry.Conversation.ID, agentId);
+            const populated = PriorTurnToolResultCache.Instance.Get(entry.Conversation.ID, agentId, null);
             Assert(!!populated && populated.length === 1 && (populated[0].OutputData || '').includes('from-db'),
                 'AwaitingFeedback run completion populated the cache from in-memory steps');
-            AssertEqual(PriorTurnToolResultCache.Instance.Get(entry.Conversation.ID, '00000000-0000-0000-0000-00000000BEEF'), undefined,
+            AssertEqual(PriorTurnToolResultCache.Instance.Get(entry.Conversation.ID, '00000000-0000-0000-0000-00000000BEEF', null), undefined,
                 "population is agent-scoped — another agent's key stays cold");
             PriorTurnToolResultCache.Instance.Clear();
+
+            // Branch provenance: a run on a sibling branch is never carried forward.
+            await AssertSiblingBranchRunsNotCarried(ctx, internals, agentId);
         }
     },
     {
@@ -662,6 +847,56 @@ export const ConversationCompactionChecks: NamedCheck[] = [
             const artifacts = window.ArtifactsByDetailId.get(target.ID) ?? [];
             AssertEqual(artifacts.length, 1, 'the Input artifact was filtered out');
             Assert((artifacts[0].ArtifactName ?? '').startsWith('Kept output'), 'the surviving card is the Output one');
+        }
+    },
+    {
+        Id: 'conversation-compaction.CC19',
+        Name: 'CC19: ArtifactVersionScopeFilter — each path sees the versions its messages link (any direction) and the unlinked one',
+        Fn: async (ctx): Promise<void> => {
+            // v1 is linked (Output) from the trunk row after the fork, v2 (Input) from the
+            // branch row, and v3 from no message. A version is visible on a path when a message
+            // on that path links it, in either direction, or when no message links it.
+            const conv = await CreateBranchedConversationFixture(ctx, 'av');
+            const artifactId = await CreateArtifactFixture(ctx, 'Scoped history');
+            const onTrunk = await CreateArtifactVersionFixture(ctx, artifactId, 1, 'Scoped history');
+            const onBranch = await CreateArtifactVersionFixture(ctx, artifactId, 2, 'Scoped history');
+            await CreateArtifactVersionFixture(ctx, artifactId, 3, 'Scoped history');
+            await LinkArtifactVersionFixture(ctx, conv.TrunkOnly.ID, onTrunk, 'Output');
+            await LinkArtifactVersionFixture(ctx, conv.BranchOnly.ID, onBranch, 'Input');
+
+            const trunkScope = ConversationEngine.TrunkScope(conv.ConversationID);
+            const branchScope = await ConversationEngine.LoadScope(conv.ConversationID, conv.BranchID, ctx.User, ctx.Provider);
+
+            // conversation-scope: artifact-wide control read, no conversation path applies
+            const all = await ArtifactVersionNumbers(ctx, `ArtifactID='${artifactId}'`);
+            AssertEqual(all.join(','), '1,2,3', 'control: the artifact has three versions');
+            AssertEqual((await ArtifactVersionNumbers(ctx, ConversationEngine.ArtifactVersionScopeFilter(trunkScope, artifactId))).join(','),
+                '1,3', 'the trunk sees its Output-linked version and the unlinked one');
+            AssertEqual((await ArtifactVersionNumbers(ctx, ConversationEngine.ArtifactVersionScopeFilter(branchScope, artifactId))).join(','),
+                '2,3', 'the branch sees its Input-linked version and the unlinked one');
+        }
+    },
+    {
+        Id: 'conversation-compaction.CC20',
+        Name: 'CC20: ScopeFilter — a pinned-row read on each path returns only the pins on that path',
+        Fn: async (ctx): Promise<void> => {
+            // One pin per path, plus the row at the fork point, which is on both paths.
+            const conv = await CreateBranchedConversationFixture(ctx, 'pin');
+            for (const row of [conv.BeforeFork, conv.TrunkOnly, conv.BranchOnly]) {
+                row.IsPinned = true;
+                Assert(await row.Save(), `pin save: ${row.LatestResult?.CompleteMessage}`);
+            }
+
+            const trunkScope = ConversationEngine.TrunkScope(conv.ConversationID);
+            const branchScope = await ConversationEngine.LoadScope(conv.ConversationID, conv.BranchID, ctx.User, ctx.Provider);
+
+            // conversation-scope: whole-conversation control read across every path
+            const all = await PinnedMessages(ctx, `ConversationID='${conv.ConversationID}'`);
+            AssertEqual(all.join(','), 'pin-1,pin-2,pin-3', 'control: three pinned rows across both paths');
+            AssertEqual((await PinnedMessages(ctx, ConversationEngine.ScopeFilter(trunkScope))).join(','),
+                'pin-1,pin-2', 'the trunk reads its own pins and not the branch pin');
+            AssertEqual((await PinnedMessages(ctx, ConversationEngine.ScopeFilter(branchScope))).join(','),
+                'pin-1,pin-3', 'the branch reads the fork-point pin and its own pin, not the trunk pin after the fork');
         }
     }
 ];

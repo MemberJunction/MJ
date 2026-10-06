@@ -17,11 +17,14 @@ export * from './lib/utils/agent-turn-routing';
 // NOTE: the routing decision's builders and types, and IsAgentAllowed, live in
 // @memberjunction/ai-core-plus — import them from there directly.
 export * from './lib/utils/decision-routing';
+// Branch switcher state and the pure helpers that build it
+export * from './lib/utils/conversation-branching';
 
 // Services - State
 export * from './lib/services/data-cache.service';
 export * from './lib/services/artifact-state.service';
 export * from './lib/services/agent-state.service';
+export * from './lib/services/conversation-scope.service';
 export * from './lib/services/conversation-liveness-dom.service';
 export * from './lib/services/conversation-agent.service';
 export * from './lib/services/active-tasks.service';

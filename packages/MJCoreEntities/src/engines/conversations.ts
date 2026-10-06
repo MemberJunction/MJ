@@ -4,6 +4,7 @@ import { EscapeSQLString, NormalizeUUID, ToEpochMs, UUIDsEqual } from "@memberju
 import { BehaviorSubject, Observable } from "rxjs";
 import {
     MJConversationEntity,
+    MJConversationBranchEntity,
     MJConversationDetailEntity,
     MJConversationDetailEntityType,
     MJAIAgentRunEntity,
@@ -132,6 +133,46 @@ export interface ConversationWindowSourceRow {
  */
 export const ConversationWindowFields: readonly (keyof ConversationWindowSourceRow)[] =
     ['ID', 'Sequence', 'Role', 'Message', 'SummaryOfEarlierConversation', '__mj_CreatedAt'];
+
+/** One `MJ: Conversation Branches` row, as the path helpers need it. */
+export interface ConversationBranchRow {
+    ID: string;
+    ConversationID: string;
+    /** Branch this one forked from; null means it forked from the trunk. */
+    ParentBranchID: string | null;
+    /** Sequence of the last message shared with the parent path; null means none are shared. */
+    ForkFromSequence: number | null;
+    Name?: string | null;
+}
+
+/** One choice at a fork point. `BranchID` null is the trunk. */
+export interface BranchAlternative {
+    BranchID: string | null;
+    Name: string | null;
+}
+
+/** Longest branch chain the path predicate will build. */
+export const MAX_BRANCH_DEPTH = 32;
+
+/** The Fields a fresh load of branch rows selects. */
+export const ConversationBranchFields: readonly (keyof ConversationBranchRow)[] =
+    ['ID', 'ConversationID', 'ParentBranchID', 'ForkFromSequence', 'Name'];
+
+/** The rows one reader may see: a conversation plus the branch whose path is active. */
+export interface ConversationScope {
+    readonly ConversationID: string;
+    /** null = trunk */
+    readonly BranchID: string | null;
+    /** The conversation's branch rows, loaded once. Empty on the trunk. */
+    readonly Branches: ReadonlyArray<ConversationBranchRow>;
+}
+
+function sameId(a: string | null | undefined, b: string | null | undefined): boolean {
+    if (a == null || b == null) {
+        return a == null && b == null;
+    }
+    return NormalizeUUID(a) === NormalizeUUID(b);
+}
 
 export interface SharedByInfo {
     /** Grantor user ID. Null when the share predates the `SharedByUserID` column. */
@@ -305,6 +346,8 @@ export interface LoadDetailWindowParams {
     PageSize?: number;
     /** Raw rows to pull per attempt. Default `PageSize * 3`. */
     RawOverread?: number;
+    /** The branch whose path to page; null or omitted is the trunk. */
+    BranchID?: string | null;
 }
 
 /**
@@ -1015,6 +1058,43 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     }
 
     /**
+     * Creates a branch forked after `ForkFromSequence` on `ParentBranchID` and makes it the
+     * conversation's current branch. A fork before the first message shares nothing, so
+     * its parent is always the trunk.
+     * @throws when the branch or the conversation cannot be saved
+     */
+    public async ForkBranch(
+        input: { ConversationID: string; ForkFromSequence: number | null; ParentBranchID: string | null; Name?: string | null },
+        contextUser: UserInfo
+    ): Promise<MJConversationBranchEntity> {
+        const md = this.ProviderToUse;
+        const branch = await md.GetEntityObject<MJConversationBranchEntity>('MJ: Conversation Branches', contextUser);
+        branch.NewRecord();
+        branch.ConversationID = input.ConversationID;
+        branch.ForkFromSequence = input.ForkFromSequence;
+        branch.ParentBranchID = input.ForkFromSequence == null ? null : input.ParentBranchID;
+        branch.Name = input.Name ?? null;
+        if (!(await branch.Save())) {
+            throw new Error(`Failed to create conversation branch: ${branch.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
+        if (!(await this.SwitchBranch(input.ConversationID, branch.ID, contextUser))) {
+            throw new Error(`Branch ${branch.ID} was created but could not be made current`);
+        }
+        return branch;
+    }
+
+    /** Makes a branch (or the trunk, with null) the conversation's current branch. */
+    public async SwitchBranch(conversationId: string, branchId: string | null, contextUser: UserInfo): Promise<boolean> {
+        const md = this.ProviderToUse;
+        const conversation = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', contextUser);
+        if (!(await conversation.Load(conversationId))) {
+            return false;
+        }
+        conversation.CurrentBranchID = branchId;
+        return conversation.Save();
+    }
+
+    /**
      * Reparents a folder (project) under another folder, or to the top level when
      * parentId is null. Callers are responsible for preventing cycles (don't pass a
      * descendant of the folder as its new parent). Updates the cached entity in place
@@ -1680,41 +1760,39 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     // ========================================================================
 
     /**
-     * Loads conversation details (messages) for a specific conversation.
-     * Results are cached for instant retrieval on subsequent calls.
-     *
-     * @param conversationId - The conversation to load details for
-     * @param contextUser - The current user context
-     * @param forceRefresh - If true, reloads even if cached
-     * @returns Array of conversation detail entities
-     */
-    /**
      * Loads conversation details using the efficient GetConversationComplete query
      * which returns messages, agent runs, artifacts, ratings, and user avatars in one round-trip.
-     * Results are cached for instant retrieval on subsequent calls.
+     * The cache holds every row of the conversation, on every branch path; a scope limits
+     * only what this call returns.
      *
      * @param conversationId - The conversation to load details for
      * @param contextUser - The current user context
      * @param forceRefresh - If true, reloads even if cached
-     * @returns The full cache entry with all peripheral data
+     * @param scope - When given, the returned entry holds only the rows in this scope
+     *   (see {@link scopedEntry}); when omitted, every row of the conversation
+     * @returns The cache entry with all peripheral data, limited to the scope when one is given
+     * @throws when the scope belongs to another conversation
      */
     public async LoadConversationDetails(
         conversationId: string,
         contextUser: UserInfo,
-        forceRefresh: boolean = false
+        forceRefresh: boolean = false,
+        scope?: ConversationScope
     ): Promise<ConversationDetailCache> {
+        ConversationEngine.assertScopeOf(conversationId, scope);
         const key = NormalizeUUID(conversationId);
 
         // Return cached if available and not forcing
         if (!forceRefresh) {
             const cached = this._detailCache.get(key);
             if (cached) {
-                return cached;
+                return ConversationEngine.scopedEntry(cached, scope);
             }
         }
 
         // Use GetConversationComplete for one-round-trip loading of all data
         const rq = new RunQuery();
+        // conversation-scope: whole-conversation cache; every consumer filters to its scope
         const result = await rq.RunQuery({
             QueryName: 'GetConversationComplete',
             CategoryPath: 'MJ/Conversations',
@@ -1734,7 +1812,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
                 LoadedAt: new Date(),
                 PeripheralDataStale: false
             };
-            return empty;
+            return ConversationEngine.scopedEntry(empty, scope);
         }
 
         const rawData = result.Results as ConversationDetailComplete[];
@@ -1743,7 +1821,40 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         const cacheEntry = await this.buildDetailCacheFromRawData(rawData, contextUser);
         this._detailCache.set(key, cacheEntry);
 
-        return cacheEntry;
+        return ConversationEngine.scopedEntry(cacheEntry, scope);
+    }
+
+    /**
+     * Throws when a scope is given and belongs to another conversation.
+     * @throws when the scope belongs to another conversation
+     */
+    private static assertScopeOf(conversationId: string, scope: ConversationScope | undefined): void {
+        if (scope && !sameId(scope.ConversationID, conversationId)) {
+            throw new Error(`Conversation ${conversationId} is not the scope's conversation ${scope.ConversationID}`);
+        }
+    }
+
+    /**
+     * A cache entry limited to a scope: a copy whose `Details` hold only the rows in the scope,
+     * and whose `RawData` holds the raw rows of those details, both in their cached order. The
+     * peripheral maps are the cached ones, shared. The entry itself when no scope is given. The
+     * cached entry is never changed. Callers check the scope's conversation first
+     * ({@link assertScopeOf}).
+     */
+    private static scopedEntry(
+        entry: ConversationDetailCache,
+        scope: ConversationScope | undefined
+    ): ConversationDetailCache {
+        if (!scope) {
+            return entry;
+        }
+        const details = ConversationEngine.FilterToScope(scope, entry.Details);
+        const detailIds = new Set(details.map(d => NormalizeUUID(d.ID)));
+        return {
+            ...entry,
+            Details: details,
+            RawData: entry.RawData.filter(r => !!r.ID && detailIds.has(NormalizeUUID(r.ID))),
+        };
     }
 
 
@@ -1762,19 +1873,24 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * a partial entry there would silently starve the agent of everything before the summary
      * boundary, with no error. Use a separate partial cache if incremental caching is needed.
      *
-     * Does not throw for a read that FAILS — a failed load returns an empty window flagged
-     * {@link DetailWindowLoadResult.Failed} so the caller can leave its paging state intact
-     * rather than mistaking the failure for the start of the conversation.
+     * Every detail read is limited to the path of `BranchID` (the trunk when omitted).
      *
-     * It is not, however, exception-proof: there is no `try/catch` here, so a provider that
-     * REJECTS rather than returning `Success: false` propagates out to the caller. That path
-     * is left deliberately — it degrades better than the handled one, because an exception
-     * skips the cursor write entirely and the caller's paging state survives untouched.
+     * Does not throw for a read that FAILS — a failed branch-path read, like a failed page
+     * read, returns an empty window flagged {@link DetailWindowLoadResult.Failed} so the
+     * caller can leave its paging state intact rather than mistaking the failure for the
+     * start of the conversation. A failed branch-path read never falls back to the trunk.
+     *
+     * It is not, however, exception-proof: the detail reads have no `try/catch`, so a
+     * provider that REJECTS rather than returning `Success: false` propagates out to the
+     * caller. That path is left deliberately — it degrades better than the handled one,
+     * because an exception skips the cursor write entirely and the caller's paging state
+     * survives untouched.
      *
      * ### Round-trip profile — the counterweight to the payload win
      *
      * This trades ONE fat query for several thin ones. Per page:
      *
+     *   0. {@link BranchPathFilterFresh} — one branch read, only when `BranchID` is set
      *   1. {@link fetchDetailRowsBySequence} — always
      *   2. {@link expandOldestSession} — only when the oldest row is session-stamped
      *   3. {@link hasOlderDetails} — always, in parallel with (4)
@@ -1796,7 +1912,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * over more content — and unlike first paint, a reader who has scrolled up has already
      * committed to reading back. If paging up ever feels slow, that is the number to raise.
      *
-     * @param params - Conversation, optional `Sequence` bound, and page sizing
+     * @param params - Conversation, optional branch, optional `Sequence` bound, and page sizing
      * @param contextUser - The requesting user (entity RLS applies)
      */
     public async LoadDetailWindow(
@@ -1806,9 +1922,12 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         const pageSize = params.PageSize ?? DEFAULT_WINDOW_PAGE_SIZE;
         const overread = params.RawOverread ?? pageSize * DETAIL_WINDOW_OVERREAD_FACTOR;
 
-        const page = await this.fetchDetailRowsBySequence(
-            params.ConversationID, params.BeforeSequence, overread, contextUser
-        );
+        const pathFilter = await this.resolveWindowPathFilter(params, contextUser);
+        if (pathFilter === null) {
+            return emptyDetailWindowResult(true);
+        }
+
+        const page = await this.fetchDetailRowsBySequence(pathFilter, params.BeforeSequence, overread, contextUser);
         // Deliberately two branches, not one. `null` is a FAILED read; an empty array is a
         // range that genuinely holds no rows. Collapsing them is what lets a transport blip
         // read downstream as "you have reached the start of the conversation".
@@ -1819,7 +1938,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             return emptyDetailWindowResult(false);
         }
 
-        const details = await this.expandOldestSession(params.ConversationID, page, contextUser);
+        const details = await this.expandOldestSession(pathFilter, page, contextUser);
         const oldestSequence = details[0].Sequence;
         const newestSequence = details[details.length - 1].Sequence;
 
@@ -1828,7 +1947,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         // to an empty/false result on a failed read — so `Promise.all` cannot introduce a
         // rejection path this method did not already have.
         const [olderProbe, peripherals] = await Promise.all([
-            this.hasOlderDetails(params.ConversationID, oldestSequence, contextUser),
+            this.hasOlderDetails(pathFilter, oldestSequence, contextUser),
             this.buildWindowPeripherals(details, contextUser)
         ]);
 
@@ -1846,24 +1965,49 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     }
 
     /**
+     * The `ExtraFilter` predicate for the window's branch path.
+     *
+     * @returns The predicate, or null when the branch rows could not be read or the branch
+     *   path could not be built.
+     */
+    private async resolveWindowPathFilter(
+        params: LoadDetailWindowParams,
+        contextUser: UserInfo
+    ): Promise<string | null> {
+        try {
+            return await ConversationEngine.BranchPathFilterFresh(
+                params.ConversationID, params.BranchID, contextUser, this.ProviderToUse
+            );
+        } catch (error) {
+            console.error(
+                `[ConversationEngine] Failed to build the branch path for conversation ${params.ConversationID}, `
+                    + `branch ${params.BranchID}:`,
+                error
+            );
+            return null;
+        }
+    }
+
+    /**
      * Reads the newest `maxRows` detail rows below an optional `Sequence` bound and returns
      * them in CHRONOLOGICAL order.
      *
      * The query is `Sequence DESC` because the interesting end of a transcript is the tail;
      * the reversal happens here so every caller downstream sees oldest-to-newest.
      *
+     * @param pathFilter - The branch path predicate from {@link BuildBranchPathFilter}
      * @returns The page in ascending `Sequence` order, or null when the read failed.
      */
     private async fetchDetailRowsBySequence(
-        conversationId: string,
+        pathFilter: string,
         beforeSequence: number | undefined,
         maxRows: number,
         contextUser: UserInfo
     ): Promise<MJConversationDetailEntity[] | null> {
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const filter = beforeSequence == null
-            ? `ConversationID='${conversationId}'`
-            : `ConversationID='${conversationId}' AND Sequence < ${beforeSequence}`;
+            ? pathFilter
+            : `${pathFilter} AND Sequence < ${beforeSequence}`;
 
         const result = await rv.RunView<MJConversationDetailEntity>({
             EntityName: 'MJ: Conversation Details',
@@ -1888,10 +2032,11 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * boundary — without this read the card renders from a partial row set AND the same
      * session reappears on the next older page.
      *
+     * @param pathFilter - The branch path predicate from {@link BuildBranchPathFilter}
      * @returns The page with any missing session rows prepended, still chronological.
      */
     private async expandOldestSession(
-        conversationId: string,
+        pathFilter: string,
         details: MJConversationDetailEntity[],
         contextUser: UserInfo
     ): Promise<MJConversationDetailEntity[]> {
@@ -1903,7 +2048,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView<MJConversationDetailEntity>({
             EntityName: 'MJ: Conversation Details',
-            ExtraFilter: `ConversationID='${conversationId}' AND AgentSessionID='${sessionId}' `
+            ExtraFilter: `${pathFilter} AND AgentSessionID='${sessionId}' `
                 + `AND Sequence < ${details[0].Sequence}`,
             OrderBy: 'Sequence DESC',
             MaxRows: MAX_SESSION_EXPANSION_ROWS,
@@ -1925,16 +2070,18 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      *
      * Returns a TRI-STATE rather than a boolean. "No older rows" and "could not find out"
      * are both `HasOlder: false`, and only the second must leave the caller's cursor alone.
+     *
+     * @param pathFilter - The branch path predicate from {@link BuildBranchPathFilter}
      */
     private async hasOlderDetails(
-        conversationId: string,
+        pathFilter: string,
         oldestSequence: number,
         contextUser: UserInfo
     ): Promise<{ HasOlder: boolean; Failed: boolean }> {
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const probe = await rv.RunView<Pick<MJConversationDetailEntityType, 'ID'>>({
             EntityName: 'MJ: Conversation Details',
-            ExtraFilter: `ConversationID='${conversationId}' AND Sequence < ${oldestSequence}`,
+            ExtraFilter: `${pathFilter} AND Sequence < ${oldestSequence}`,
             OrderBy: 'Sequence DESC',
             MaxRows: 1,
             Fields: ['ID'],
@@ -2172,26 +2319,33 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * - Artifacts/ratings: replaced per-detail (cheap — plain data, not entity objects)
      * - User avatars: merged (new users added)
      *
-     * If no cache exists yet, falls back to a full load.
+     * If no cache exists yet, falls back to a full load. The cache holds every row of the
+     * conversation; a scope limits only what this call returns.
      *
      * @param conversationId - The conversation to refresh
      * @param contextUser - The current user context
-     * @returns The updated cache entry
+     * @param scope - When given, the returned entry holds only the rows in this scope
+     *   (see {@link scopedEntry}); when omitted, every row of the conversation
+     * @returns The updated cache entry, limited to the scope when one is given
+     * @throws when the scope belongs to another conversation
      */
     public async RefreshConversationDetails(
         conversationId: string,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        scope?: ConversationScope
     ): Promise<ConversationDetailCache> {
+        ConversationEngine.assertScopeOf(conversationId, scope);
         const key = NormalizeUUID(conversationId);
         const existing = this._detailCache.get(key);
 
         // No cache yet — do a full load
         if (!existing) {
-            return this.LoadConversationDetails(conversationId, contextUser);
+            return this.LoadConversationDetails(conversationId, contextUser, false, scope);
         }
 
         // Run the query
         const rq = new RunQuery();
+        // conversation-scope: whole-conversation cache; every consumer filters to its scope
         const result = await rq.RunQuery({
             QueryName: 'GetConversationComplete',
             CategoryPath: 'MJ/Conversations',
@@ -2200,7 +2354,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
 
         if (!result.Success || !result.Results) {
             console.error('[ConversationEngine] Failed to refresh conversation details:', result.ErrorMessage);
-            return existing;
+            return ConversationEngine.scopedEntry(existing, scope);
         }
 
         const freshRows = result.Results as ConversationDetailComplete[];
@@ -2291,7 +2445,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         existing.LoadedAt = new Date();
         existing.PeripheralDataStale = false;
 
-        return existing;
+        return ConversationEngine.scopedEntry(existing, scope);
     }
 
     /**
@@ -2356,8 +2510,11 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      *   covers everything before it, and cutting into the post-boundary tail would create
      *   a coverage gap.
      * @param options.historyFrom - A history floor: see {@link AssembleContextWindow}.
+     * @param scope - When given, the window is built from the rows in this scope only; when
+     *   omitted, from every cached row of the conversation
      * @returns Messages in chronological order, each stamped with
      *   {@link ConversationContextMetadata}
+     * @throws when the scope belongs to another conversation
      */
     public async GetAgentContextWindow(
         conversationId: string,
@@ -2366,19 +2523,61 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             excludeDetailIds?: string[];
             maxTailMessages?: number;
             historyFrom?: Date | null;
-        }
+        },
+        scope?: ConversationScope
     ): Promise<ConversationContextMessage[]> {
         await this.Config(false, contextUser);
-        const cache = await this.LoadConversationDetails(conversationId, contextUser);
+        const cache = await this.LoadConversationDetails(conversationId, contextUser, false, scope);
         return ConversationEngine.AssembleContextWindow(cache.Details, options);
     }
 
     /**
-     * Loads a conversation's window source rows FRESH — one RunView through the given
+     * Loads a conversation's branch rows FRESH through the given provider (entity RLS applies).
+     * Ordered by creation so alternatives at a fork point list in the order they were made.
+     * @throws when the RunView reports failure
+     */
+    public static async LoadBranchesFresh(
+        conversationId: string,
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
+    ): Promise<ConversationBranchRow[]> {
+        const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
+        const rows = await rv.RunView<ConversationBranchRow>({
+            EntityName: 'MJ: Conversation Branches',
+            ExtraFilter: `ConversationID='${EscapeSQLString(conversationId)}'`,
+            OrderBy: '__mj_CreatedAt ASC',
+            Fields: [...ConversationBranchFields],
+            ResultType: 'simple',
+        }, contextUser);
+        if (!rows.Success) {
+            throw new Error(`Failed to load branches for conversation ${conversationId}: ${rows.ErrorMessage}`);
+        }
+        return rows.Results || [];
+    }
+
+    /**
+     * {@link ScopeFilter} of the scope from {@link LoadScope}. The trunk (an empty, whitespace-only
+     * or missing branch id) needs no load and costs no query.
+     * @throws When the branch read fails ({@link LoadBranchesFresh}), when `branchId` is not
+     *   among the conversation's branches, or when its chain is longer than {@link MAX_BRANCH_DEPTH}
+     */
+    public static async BranchPathFilterFresh(
+        conversationId: string,
+        branchId: string | null | undefined,
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
+    ): Promise<string> {
+        const scope = await ConversationEngine.LoadScope(conversationId, branchId, contextUser, provider);
+        return ConversationEngine.ScopeFilter(scope);
+    }
+
+    /**
+     * Loads the window source rows on a conversation's branch path FRESH — through the given
      * provider with the contextUser (entity RLS applies), never touching this engine's
-     * process-global detail cache. The single source of the fresh-load query shape
-     * (entity name, filter, order, fields) for every server-side caller: the agent
-     * resolver's history loader and the cross-turn compaction pass both consume this,
+     * process-global detail cache. The trunk costs one RunView; a branch costs two (its branch
+     * rows via {@link BranchPathFilterFresh}, then the path's rows). The single source of the
+     * fresh-load query shape (entity name, filter, order, fields) for every server-side
+     * caller: the agent resolver's history loader and the cross-turn compaction pass both consume this,
      * so the two can never drift apart. THROWS on load failure — servers must fail
      * loudly rather than proceed against an empty history.
      *
@@ -2388,23 +2587,27 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * @param historyFrom - Optional history floor: only rows written at or after it are loaded,
      *   so nothing before it leaves the database. Pair it with the same `historyFrom` on
      *   {@link AssembleContextWindow}, which also drops the summary of earlier messages.
-     * @returns The conversation's rows in Sequence order, shaped for {@link AssembleContextWindow}
-     * @throws When the underlying RunView reports failure (never returns a silent empty set),
-     *   or when `historyFrom` is an invalid date
+     * @param branchId - The branch whose path to load; null or omitted reads the trunk.
+     * @returns The rows on the branch's path (the trunk when no branch) in Sequence order,
+     *   shaped for {@link AssembleContextWindow}
+     * @throws When a RunView reports failure (never returns a silent empty set), when
+     *   `historyFrom` is an invalid date, when `branchId` is not among the conversation's
+     *   branches, or when its chain is longer than {@link MAX_BRANCH_DEPTH}
      */
     public static async LoadWindowRowsFresh(
         conversationId: string,
         contextUser: UserInfo,
         provider?: IMetadataProvider,
-        historyFrom?: Date | null
+        historyFrom?: Date | null,
+        branchId?: string | null
     ): Promise<ConversationWindowSourceRow[]> {
         const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
-        const conversationFilter = `ConversationID='${conversationId}'`;
+        const pathFilter = await ConversationEngine.BranchPathFilterFresh(conversationId, branchId, contextUser, provider);
         const rows = await rv.RunView<ConversationWindowSourceRow>({
             EntityName: 'MJ: Conversation Details',
             ExtraFilter: historyFrom
-                ? `${conversationFilter} AND ${ConversationEngine.HistoryFromFilter(historyFrom)}`
-                : conversationFilter,
+                ? `${pathFilter} AND ${ConversationEngine.HistoryFromFilter(historyFrom)}`
+                : pathFilter,
             OrderBy: 'Sequence ASC',
             Fields: [...ConversationWindowFields],
             ResultType: 'simple',
@@ -2472,6 +2675,225 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      */
     public static HistoryFromFilter(historyFrom: Date, column: string = '__mj_CreatedAt'): string {
         return `${column} >= '${historyFrom.toISOString()}'`;
+    }
+
+    /**
+     * The branch and its ancestors, current branch first. Empty for the trunk.
+     * @throws when the branch is not in `branches`, or the chain is longer than
+     *   {@link MAX_BRANCH_DEPTH} (which also catches a cycle).
+     */
+    public static BuildBranchChain(
+        branches: ReadonlyArray<ConversationBranchRow>,
+        branchId: string | null | undefined
+    ): ConversationBranchRow[] {
+        const chain: ConversationBranchRow[] = [];
+        let current: string | null = branchId ?? null;
+        while (current != null) {
+            if (chain.length >= MAX_BRANCH_DEPTH) {
+                throw new Error(`Branch chain for ${branchId} exceeds ${MAX_BRANCH_DEPTH} levels`);
+            }
+            const id = current;
+            const branch = branches.find(b => sameId(b.ID, id));
+            if (!branch) {
+                throw new Error(`Branch ${id} not found`);
+            }
+            chain.push(branch);
+            current = branch.ParentBranchID ?? null;
+        }
+        return chain;
+    }
+
+    /**
+     * The `ExtraFilter` predicate for a branch path: the branch's own rows, plus each
+     * ancestor's rows up to that ancestor's fork sequence, plus the trunk up to the last
+     * fork sequence. A null branch is the trunk alone.
+     *
+     * Column names are bracketed, so the predicate also works inside a subquery on
+     * `vwConversationDetails` from another entity's filter: the PostgreSQL provider converts
+     * bracketed names itself but quotes bare names only when they are fields of the outer entity.
+     */
+    public static BuildBranchPathFilter(
+        conversationId: string,
+        branchId: string | null | undefined,
+        branches: ReadonlyArray<ConversationBranchRow>
+    ): string {
+        const conversationFilter = `[ConversationID]='${EscapeSQLString(conversationId)}'`;
+        const chain = ConversationEngine.BuildBranchChain(branches, branchId);
+        if (chain.length === 0) {
+            return `${conversationFilter} AND [BranchID] IS NULL`;
+        }
+        const clauses: string[] = [];
+        let cap: number | null = null;
+        for (const branch of chain) {
+            const id = EscapeSQLString(branch.ID);
+            clauses.push(cap == null ? `[BranchID]='${id}'` : `([BranchID]='${id}' AND [Sequence] <= ${cap})`);
+            cap = branch.ForkFromSequence;
+            if (cap == null) {
+                return `${conversationFilter} AND (${clauses.join(' OR ')})`;
+            }
+        }
+        clauses.push(`([BranchID] IS NULL AND [Sequence] <= ${cap})`);
+        return `${conversationFilter} AND (${clauses.join(' OR ')})`;
+    }
+
+    /** True when a row is on the path described by a chain from {@link BuildBranchChain}. */
+    public static IsRowOnBranchPath(
+        row: { BranchID?: string | null; Sequence: number },
+        chain: ReadonlyArray<ConversationBranchRow>
+    ): boolean {
+        let cap: number | null = null;
+        for (const branch of chain) {
+            if (sameId(row.BranchID, branch.ID)) {
+                return cap == null || row.Sequence <= cap;
+            }
+            cap = branch.ForkFromSequence;
+            if (cap == null) {
+                return false;
+            }
+        }
+        return row.BranchID == null && (cap == null || row.Sequence <= cap);
+    }
+
+    /** In-memory counterpart of {@link BuildBranchPathFilter} for rows already loaded. */
+    public static FilterRowsToBranchPath<T extends { BranchID?: string | null; Sequence: number }>(
+        rows: ReadonlyArray<T>,
+        branchId: string | null | undefined,
+        branches: ReadonlyArray<ConversationBranchRow>
+    ): T[] {
+        const chain = ConversationEngine.BuildBranchChain(branches, branchId);
+        return rows.filter(r => ConversationEngine.IsRowOnBranchPath(r, chain));
+    }
+
+    /** A scope for the trunk: no branch rows are needed. */
+    public static TrunkScope(conversationId: string): ConversationScope {
+        return { ConversationID: conversationId, BranchID: null, Branches: [] };
+    }
+
+    /**
+     * Builds a scope for an explicit branch. An empty, whitespace-only or missing branch id is the
+     * trunk. A branch id loads the conversation's branch rows once and must name one of them
+     * (compared without regard to case); the scope's `BranchID` is that row's `ID`.
+     * @throws when the branch rows cannot be read or the branch is not one of them.
+     */
+    public static async LoadScope(
+        conversationId: string,
+        branchId: string | null | undefined,
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
+    ): Promise<ConversationScope> {
+        const normalized = branchId && branchId.trim().length > 0 ? branchId : null;
+        if (normalized === null) {
+            return ConversationEngine.TrunkScope(conversationId);
+        }
+        const branches = await ConversationEngine.LoadBranchesFresh(conversationId, contextUser, provider);
+        const branch = branches.find(b => sameId(b.ID, normalized));
+        if (!branch) {
+            throw new Error(`Branch ${normalized} is not a branch of conversation ${conversationId}`);
+        }
+        return { ConversationID: conversationId, BranchID: branch.ID, Branches: branches };
+    }
+
+    /**
+     * Reads the conversation's CurrentBranchID, then {@link LoadScope}.
+     * @throws when the conversation cannot be read or is not visible, or when {@link LoadScope} throws.
+     */
+    public static async LoadCurrentScope(
+        conversationId: string,
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
+    ): Promise<ConversationScope> {
+        const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
+        const result = await rv.RunView<{ ID: string; CurrentBranchID: string | null }>({
+            EntityName: 'MJ: Conversations',
+            ExtraFilter: `ID='${EscapeSQLString(conversationId)}'`,
+            Fields: ['ID', 'CurrentBranchID'],
+            ResultType: 'simple',
+        }, contextUser);
+        if (!result.Success) {
+            throw new Error(`Conversation ${conversationId} could not be read: ${result.ErrorMessage}`);
+        }
+        const row = result.Results?.[0];
+        if (!row) {
+            throw new Error(`Conversation ${conversationId} not found`);
+        }
+        return ConversationEngine.LoadScope(conversationId, row.CurrentBranchID ?? null, contextUser, provider);
+    }
+
+    /**
+     * Predicate over MJ: Conversation Details for the rows in scope. Same text as
+     * {@link BuildBranchPathFilter}.
+     * @throws when the scope's `BranchID`, or the parent of a branch on its chain, is not in the
+     *   scope's `Branches`, or when the chain is longer than {@link MAX_BRANCH_DEPTH}.
+     */
+    public static ScopeFilter(scope: ConversationScope): string {
+        return ConversationEngine.BuildBranchPathFilter(scope.ConversationID, scope.BranchID, scope.Branches);
+    }
+
+    /**
+     * `[column] IN (SELECT ID FROM [__mj].[vwConversationDetails] WHERE <ScopeFilter>)` for entities
+     * anchored by a conversation detail id column.
+     */
+    public static ScopeSubquery(scope: ConversationScope, column: string = 'ConversationDetailID'): string {
+        return `[${column}] IN (SELECT ID FROM [__mj].[vwConversationDetails] WHERE ${ConversationEngine.ScopeFilter(scope)})`;
+    }
+
+    /** In-memory form of {@link ScopeFilter} for one row already loaded. */
+    public static IsInScope(scope: ConversationScope, row: { BranchID?: string | null; Sequence: number }): boolean {
+        const chain = ConversationEngine.BuildBranchChain(scope.Branches, scope.BranchID);
+        return ConversationEngine.IsRowOnBranchPath(row, chain);
+    }
+
+    /** In-memory form of {@link ScopeFilter} for rows already loaded. Keeps their order. */
+    public static FilterToScope<T extends { BranchID?: string | null; Sequence: number }>(
+        scope: ConversationScope,
+        rows: readonly T[]
+    ): T[] {
+        return ConversationEngine.FilterRowsToBranchPath(rows, scope.BranchID, scope.Branches);
+    }
+
+    /**
+     * Filter over MJ: Artifact Versions for the versions of one artifact visible in scope: versions
+     * linked (in any direction) from a message on the path, and versions with no conversation link
+     * at all.
+     */
+    public static ArtifactVersionScopeFilter(scope: ConversationScope, artifactId: string): string {
+        const path = ConversationEngine.ScopeFilter(scope);
+        const id = EscapeSQLString(artifactId);
+        return `[ArtifactID]='${id}' AND (` +
+            `[ID] IN (SELECT ArtifactVersionID FROM [__mj].[vwConversationDetailArtifacts] WHERE ConversationDetailID IN (SELECT ID FROM [__mj].[vwConversationDetails] WHERE ${path}))` +
+            ` OR [ID] NOT IN (SELECT ArtifactVersionID FROM [__mj].[vwConversationDetailArtifacts] WHERE ArtifactVersionID IS NOT NULL)` +
+            `)`;
+    }
+
+    /**
+     * The choices available after the row at `forkFromSequence` on branch `parentBranchId`:
+     * the parent's own continuation first, then every branch forked there, in list order.
+     * `forkFromSequence` null means "before the first message".
+     */
+    public static GetAlternativesAt(
+        forkFromSequence: number | null,
+        parentBranchId: string | null,
+        branches: ReadonlyArray<ConversationBranchRow>
+    ): BranchAlternative[] {
+        const forks = branches.filter(b =>
+            (b.ForkFromSequence ?? null) === forkFromSequence && sameId(b.ParentBranchID, parentBranchId)
+        );
+        return [
+            { BranchID: parentBranchId, Name: null },
+            ...forks.map(b => ({ BranchID: b.ID, Name: b.Name ?? null })),
+        ];
+    }
+
+    /** Which alternative at a fork point the given chain follows. */
+    public static ActiveAlternativeAt(
+        forkFromSequence: number | null,
+        parentBranchId: string | null,
+        chain: ReadonlyArray<ConversationBranchRow>
+    ): string | null {
+        const taken = chain.find(b =>
+            (b.ForkFromSequence ?? null) === forkFromSequence && sameId(b.ParentBranchID, parentBranchId)
+        );
+        return taken ? taken.ID : parentBranchId;
     }
 
     /** True when a row's timestamp is at or after the floor; false when it is missing or unreadable. */

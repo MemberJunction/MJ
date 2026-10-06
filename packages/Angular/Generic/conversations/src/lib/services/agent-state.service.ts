@@ -2,8 +2,8 @@ import { Injectable, OnDestroy } from '@angular/core';
 import { BehaviorSubject, Observable, interval, Subscription } from 'rxjs';
 import { map, shareReplay, switchMap } from 'rxjs/operators';
 import { LogStatusEx, RunView, UserInfo, Metadata, IMetadataProvider } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
-import { MJAIAgentRunEntity } from '@memberjunction/core-entities';
+import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
+import { ConversationEngine, MJAIAgentRunEntity, type ConversationScope } from '@memberjunction/core-entities';
 
 export type AgentStatus = 'acknowledging' | 'working' | 'completing' | 'completed' | 'error';
 
@@ -61,24 +61,25 @@ export class AgentStateService implements OnDestroy {
    * Starts polling for active agents
    * @param currentUser The current user context
    * @param conversationId Optional conversation ID to filter by
+   * @param scope The conversation scope whose runs are read; the trunk of `conversationId` when null
    */
-  StartPolling(currentUser: UserInfo, conversationId?: string): void {
+  StartPolling(currentUser: UserInfo, conversationId?: string, scope: ConversationScope | null = null): void {
     this.currentUser = currentUser;
     this.StopPolling();
     this.pollCycleCount = 0;
 
     // Initial load
-    this.loadActiveAgents(conversationId);
+    this.loadActiveAgents(conversationId, scope);
 
     // Start polling
     this.pollSubscription = interval(this.pollInterval)
-      .pipe(switchMap(() => this.loadActiveAgents(conversationId)))
+      .pipe(switchMap(() => this.loadActiveAgents(conversationId, scope)))
       .subscribe();
   }
 
   /** @deprecated Use {@link StartPolling}. */
-  startPolling(currentUser: UserInfo, conversationId?: string): void {
-    return this.StartPolling(currentUser, conversationId);
+  startPolling(currentUser: UserInfo, conversationId?: string, scope: ConversationScope | null = null): void {
+    return this.StartPolling(currentUser, conversationId, scope);
   }
 
   /**
@@ -131,20 +132,23 @@ export class AgentStateService implements OnDestroy {
   /**
    * Manually refreshes active agents
    * @param conversationId Optional conversation ID to filter by
+   * @param scope The conversation scope whose runs are read; the trunk of `conversationId` when null
    */
-  async Refresh(conversationId?: string): Promise<void> {
-    await this.loadActiveAgents(conversationId);
+  async Refresh(conversationId?: string, scope: ConversationScope | null = null): Promise<void> {
+    await this.loadActiveAgents(conversationId, scope);
   }
 
   /** @deprecated Use {@link Refresh}. */
-  async refresh(conversationId?: string): Promise<void> {
-    return this.Refresh(conversationId);
+  async refresh(conversationId?: string, scope: ConversationScope | null = null): Promise<void> {
+    return this.Refresh(conversationId, scope);
   }
 
   /**
-   * Loads active agents from the database
+   * Loads the running and paused agent runs from the database. With a conversation, only runs
+   * whose conversation detail is in `scope` (the trunk of `conversationId` when null), plus the
+   * conversation's runs that have no conversation detail, which belong to every path.
    */
-  private async loadActiveAgents(conversationId?: string): Promise<void> {
+  private async loadActiveAgents(conversationId?: string, scope: ConversationScope | null = null): Promise<void> {
     if (!this.currentUser) {
       return;
     }
@@ -159,7 +163,8 @@ export class AgentStateService implements OnDestroy {
       let filter = `Status IN ('Running', 'Paused')`;
 
       if (conversationId) {
-        filter += ` AND ConversationID='${conversationId}'`;
+        const inScope = ConversationEngine.ScopeSubquery(scope ?? ConversationEngine.TrunkScope(conversationId));
+        filter += ` AND (${inScope} OR ([ConversationID]='${EscapeSQLString(conversationId)}' AND [ConversationDetailID] IS NULL))`;
       }
 
       LogStatusEx({message: `[${timestamp}] 🤖 AgentStateService - Executing RunView for AI Agent Runs`, verboseOnly: true});

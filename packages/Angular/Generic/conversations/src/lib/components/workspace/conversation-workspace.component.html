@@ -140,6 +140,7 @@
             [versionNumber]="activeVersionNumber ?? undefined"
             [showSaveToCollection]="activeTab !== 'collections'"
             [viewContext]="activeTab === 'collections' ? 'collection' : 'conversation'"
+            [Scope]="activeTab === 'collections' ? null : ArtifactViewerScope"
             [contextCollectionId]="collectionState.activeCollectionId ?? undefined"
             [canShare]="canShareActiveArtifact"
             [canEdit]="canEditActiveArtifact"

@@ -1,12 +1,13 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ViewChildren, QueryList, ContentChildren, TemplateRef, ElementRef, AfterViewChecked, inject } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfo, RunView, RunQuery, Metadata, CompositeKey, LogStatusEx, TransformSimpleObjectToEntityObject, DataSnapshot } from '@memberjunction/core';
-import { MJConversationEntity, MJConversationDetailEntity, MJAIAgentRunEntity, MJArtifactEntity, MJTaskEntity, ArtifactMetadataEngine, ConversationEngine, ConversationDetailComplete, RatingJSON, ArtifactJSON } from '@memberjunction/core-entities';
+import { MJConversationEntity, MJConversationDetailEntity, MJAIAgentRunEntity, MJArtifactEntity, MJTaskEntity, ArtifactMetadataEngine, ConversationEngine, ConversationDetailComplete, RatingJSON, ArtifactJSON, ConversationBranchRow, type ConversationScope } from '@memberjunction/core-entities';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, CaptureDataSnapshotCommand, AppContextSnapshot, ConversationUtility, OpenResourceCommand } from "@memberjunction/ai-core-plus";
 import { ActionableCommandRequest, UICommandHandlerService } from '../../services/ui-command-handler.service';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { AgentStateService } from '../../services/agent-state.service';
+import { ConversationScopeService } from '../../services/conversation-scope.service';
 import { ConversationLivenessDomService } from '../../services/conversation-liveness-dom.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
 import {
@@ -32,8 +33,8 @@ import { ComposerDraftStore } from '../../services/composer-draft-store';
 import { ConversationEmptyStateComponent } from './conversation-empty-state.component';
 import { TestFeedbackDialogData, TestFeedbackDialogResult } from '@memberjunction/ng-testing';
 import { DialogService as ConversationsDialogService } from '../../services/dialog.service';
-import { Subject } from 'rxjs';
-import { takeUntil } from 'rxjs/operators';
+import { Subject, firstValueFrom } from 'rxjs';
+import { map, takeUntil } from 'rxjs/operators';
 import { ConversationStreamingService } from '../../services/conversation-streaming.service';
 import { ConversationBridgeService } from '../../services/conversation-bridge.service';
 import { AgentClientService } from '@memberjunction/ng-agent-client';
@@ -60,6 +61,7 @@ import {
   type DateJumpOutcome
 } from '../../utils/date-jump';
 import { MessageListComponent } from '../message/message-list.component';
+import { BuildBranchSwitcherMap, BranchSwitcherState, BranchSwitchRequest, FindPredecessorOnPath, IsForkPointOrEarlier } from '../../utils/conversation-branching';
 import { DecideArtifactPanelAction, SnapshotArtifactVersions, ArtifactPanelAction, ArtifactPanelBaseline, ArtifactVersionRef } from '../../utils/artifact-panel-action';
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 
@@ -1624,6 +1626,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   private lastLoadedConversationId: string | null = null; // Track which conversation's peripheral data was loaded
   private currentlyLoadingConversationId: string | null = null; // Track which conversation is currently being loaded
   private conversationLoadToken = 0; // Monotonic token to discard stale async conversation loads
+  /** The conversation whose load has ended; null while a load runs and before the first one. */
+  private readyConversationId: string | null = null;
+  /** Emits each time a conversation load ends. */
+  private readonly conversationLoadEnded$ = new Subject<void>();
   /** The reconcile passes in progress, shared by every caller that arrives while they run. */
   private reconcileInFlight: Promise<void> | null = null;
   /** Reason for one more reconcile pass, requested while a pass was running. */
@@ -2195,11 +2201,11 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   /**
-   * All currently pinned messages in the active conversation, newest pin first.
+   * The pinned messages on the current branch path, newest pin first.
    *
    * Read from the window store's separate pin set, NOT filtered out of `messages` — a pin
-   * older than the loaded window would otherwise vanish from the panel. Loaded by its own
-   * `IsPinned=1` query in {@link loadMessages}, already ordered `Sequence DESC`.
+   * older than the loaded window would otherwise vanish from the panel. Loaded by
+   * {@link hydratePinnedMessages} when the pins panel first opens, already ordered `Sequence DESC`.
    *
    * This and the three getters around it are TEMPLATE-BOUND, so they run on every change
    * detection cycle. They read the store's cheap single-value accessors rather than
@@ -2309,6 +2315,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
 
     this.messages = [...snapshot.Details];
+    this.rebuildBranchSwitcherMap();
     this.cdr.detectChanges();
   }
 
@@ -2495,6 +2502,87 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   private engine = ConversationEngine.Instance;
 
   private windowStore = new ConversationDetailWindowStore(ConversationEngine.Instance);
+
+  /** The conversation's branch rows, loaded with the transcript. */
+  private branches: ConversationBranchRow[] = [];
+  /** Switcher state per detail ID for the loaded window. */
+  public BranchSwitcherMap = new Map<string, BranchSwitcherState>();
+
+  /** Builds the scope of a conversation's current branch path from the branch rows registered here. */
+  private readonly scopeService = inject(ConversationScopeService);
+  /** The conversation whose branch rows this component registered with {@link scopeService}. */
+  private branchRowsConversationId: string | null = null;
+  /** The conversation and branch of the last trunk fallback that {@link scopeFor} logged. */
+  private scopeFallbackLogged: string | null = null;
+
+  /** The branch currently shown; null is the trunk. */
+  public get CurrentBranchId(): string | null {
+    return this.BranchIdFor(this.ConversationId);
+  }
+
+  /** The current branch of the given conversation; null is the trunk or an unknown conversation. */
+  public BranchIdFor(conversationId: string | null): string | null {
+    return this.findConversation(conversationId)?.CurrentBranchID ?? null;
+  }
+
+  /**
+   * The scope of a conversation's current branch path. When the branch rows for that branch are
+   * not registered yet, returns the trunk scope and logs once per conversation and branch.
+   */
+  private scopeFor(conversationId: string): ConversationScope {
+    const branchId = this.BranchIdFor(conversationId);
+    try {
+      return this.scopeService.ForConversation(conversationId, branchId);
+    } catch (error) {
+      const key = `${NormalizeUUID(conversationId)}|${NormalizeUUID(branchId)}`;
+      if (this.scopeFallbackLogged !== key) {
+        this.scopeFallbackLogged = key;
+        console.warn(`Conversation ${conversationId} is read on the trunk until the rows of branch ${branchId} are loaded:`, error);
+      }
+      return ConversationEngine.TrunkScope(conversationId);
+    }
+  }
+
+  /** The current conversation's scope, passed to the artifact viewer; null with no conversation. */
+  public get ArtifactViewerScope(): ConversationScope | null {
+    const conversationId = this.ConversationId;
+    return conversationId ? this.scopeFor(conversationId) : null;
+  }
+
+  /**
+   * Registers the branch rows loaded for a conversation, with this component as their owner, so
+   * {@link scopeFor} can build its branch scope.
+   */
+  private registerBranchRows(conversationId: string, rows: ConversationBranchRow[]): void {
+    this.branchRowsConversationId = conversationId;
+    this.scopeService.SetBranches(conversationId, rows, this);
+  }
+
+  /**
+   * Removes the branch rows this component registered. Rows that another chat area registered
+   * later for the same conversation stay.
+   */
+  private unregisterBranchRows(): void {
+    if (this.branchRowsConversationId) {
+      this.scopeService.ClearBranches(this.branchRowsConversationId, this);
+    }
+    this.branchRowsConversationId = null;
+  }
+
+  /**
+   * The conversation row for an ID: the bound `Conversation` when its ID matches, otherwise
+   * the engine's cached row. Hosts can set `ConversationId` before `Conversation`, so the
+   * bound row can briefly belong to the previous conversation.
+   */
+  private findConversation(conversationId: string | null): MJConversationEntity | undefined {
+    if (!conversationId) {
+      return undefined;
+    }
+    if (this.Conversation && UUIDsEqual(this.Conversation.ID, conversationId)) {
+      return this.Conversation;
+    }
+    return ConversationEngine.Instance.GetConversation(conversationId);
+  }
 
 
   /**
@@ -2838,6 +2926,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
           const refreshed = this.windowStore.GetSnapshot();
           this.messages = refreshed.Details;
+          this.rebuildBranchSwitcherMap();
 
           // Reprocess peripheral data (artifacts, ratings) from the refreshed window
           this.lastLoadedConversationId = null;
@@ -2962,6 +3051,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   ngOnDestroy() {
     // Stop polling when component is destroyed
     this.agentStateService.stopPolling();
+    this.unregisterBranchRows();
 
     // Complete destroy subject to cleanup subscriptions
     this.destroy$.next();
@@ -3028,6 +3118,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.IsUploadingAttachments = false;
     this.UploadingMessage = '';
     this.intentCheckMessage = null;
+    this.branches = [];
+    this.unregisterBranchRows();
+    this.BranchSwitcherMap = new Map();
 
     // Reset width along with the flag — otherwise a pane maximized in the
     // previous conversation leaves artifactPaneWidth at 100, and the next
@@ -3050,6 +3143,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       return;
     }
     const loadToken = ++this.conversationLoadToken;
+    this.readyConversationId = null;
 
     this.resetConversationScopedViewState();
 
@@ -3086,7 +3180,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
           return;
         }
         // TODO: Replace polling with PubSub - see plans/repair-conversations-ui-performance.md
-        this.agentStateService.startPolling(this.CurrentUser, conversationId);
+        this.agentStateService.startPolling(this.CurrentUser, conversationId, this.scopeFor(conversationId));
       } catch (error) {
         if (!this.isActiveConversationLoad(conversationId, loadToken)) {
           return;
@@ -3103,6 +3197,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         // Create new array reference to trigger Angular change detection
         this.messages = [...this.messages];
         this.cdr.detectChanges();
+        this.readyConversationId = conversationId;
+        // Optional-chained: harness-constructed instances may skip field initializers.
+        this.conversationLoadEnded$?.next();
 
         // Defensive fallback: force another change detection cycle after async ops complete
         setTimeout(() => {
@@ -3119,6 +3216,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this.currentlyLoadingConversationId = null;
       this.lastLoadedConversationId = null;
       this.agentStateService.stopPolling();
+      this.conversationLoadEnded$?.next();
     }
   }
 
@@ -3184,40 +3282,24 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       // complete history. A separate `_partialDetailCache` is the shape to reach for if
       // measurement says re-entry is worth it. Measure before building it.
       // Pins are counted separately: a pin can sit far below the window's oldest Sequence,
-      // and the pins panel must list ALL of them, not just the ones currently on screen.
-      // Concurrent with the window — the two share only the conversation id, and running the
-      // pin read after the window made it delay first paint for no reason.
-      await Promise.all([
-        this.windowStore.LoadLatest(conversationId, this.CurrentUser),
-        this.loadPinnedMessageCount(conversationId, loadToken)
+      // and the pins panel must list ALL of them on the current branch path, not just the ones
+      // currently on screen.
+      // Branch rows load alongside the window: the switcher map needs them. The pin count reads
+      // after the branch rows, because its filter is the scope of the current branch path. First
+      // paint waits for the longer of the window read and the branch rows plus the pin count.
+      // The count stays awaited: the load token only stops a count whose conversation load was
+      // replaced, so a count still running when a branch switch starts in this load could
+      // overwrite the new branch's count.
+      const [, branches] = await Promise.all([
+        this.windowStore.LoadLatest(conversationId, this.CurrentUser, this.CurrentBranchId),
+        this.loadBranchesAndPinCount(conversationId, loadToken)
       ]);
       if (!this.isActiveConversationLoad(conversationId, loadToken)) {
         return;
       }
-
-      // Read the loaded window back off the store
+      this.branches = branches;
+      this.applyWindowSnapshot();
       const snapshot = this.windowStore.GetSnapshot();
-      this.messages = snapshot.Details;
-
-      // Copy user avatars from the window result
-      this.UserAvatarMap.clear();
-      for (const [userId, avatar] of snapshot.UserAvatars) {
-        this.UserAvatarMap.set(userId, {
-          imageUrl: avatar.ImageURL,
-          iconClass: avatar.IconClass
-        });
-      }
-
-      this.updateAttachmentSupport();
-
-      // Detect in-progress messages for streaming reconnection
-      this.InProgressMessageIds = [...this.messages
-        .filter(m => m.Status === 'In-Progress')
-        .map(m => m.ID)];
-
-      if (this.InProgressMessageIds.length > 0) {
-        LogStatusEx({message: `🔌 Detected ${this.InProgressMessageIds.length} in-progress messages for reconnection`, verboseOnly: true});
-      }
 
       // Check for missed completions (user navigated away, agent completed, user returned)
       for (const message of this.messages) {
@@ -3257,6 +3339,77 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
   }
 
+  /**
+   * Reads the store's loaded window into the transcript: messages, user avatars, attachment
+   * support, in-progress message IDs and the branch switcher map.
+   */
+  private applyWindowSnapshot(): void {
+    const snapshot = this.windowStore.GetSnapshot();
+    this.messages = snapshot.Details;
+
+    // Copy user avatars from the window result
+    this.UserAvatarMap.clear();
+    for (const [userId, avatar] of snapshot.UserAvatars) {
+      this.UserAvatarMap.set(userId, {
+        imageUrl: avatar.ImageURL,
+        iconClass: avatar.IconClass
+      });
+    }
+
+    this.updateAttachmentSupport();
+
+    // Detect in-progress messages for streaming reconnection
+    this.InProgressMessageIds = [...this.messages
+      .filter(m => m.Status === 'In-Progress')
+      .map(m => m.ID)];
+
+    if (this.InProgressMessageIds.length > 0) {
+      LogStatusEx({message: `🔌 Detected ${this.InProgressMessageIds.length} in-progress messages for reconnection`, verboseOnly: true});
+    }
+
+    this.rebuildBranchSwitcherMap();
+  }
+
+  /**
+   * Builds the switcher state for the rows in `messages`. Uses an empty map when it cannot be
+   * built, so a switcher problem never hides the transcript.
+   */
+  private rebuildBranchSwitcherMap(): void {
+    try {
+      this.BranchSwitcherMap = BuildBranchSwitcherMap(this.messages, this.CurrentBranchId, this.branches, this.windowStore.HasMoreAbove);
+    } catch (error) {
+      console.error('Failed to build the branch switcher:', error);
+      this.BranchSwitcherMap = new Map();
+    }
+  }
+
+  /**
+   * The conversation's branch rows. An empty list when they cannot be read, so the transcript
+   * still loads without a switcher.
+   */
+  private async loadBranchesOrEmpty(conversationId: string): Promise<ConversationBranchRow[]> {
+    try {
+      return await ConversationEngine.LoadBranchesFresh(conversationId, this.CurrentUser, this.ProviderToUse);
+    } catch (error) {
+      console.error(`Failed to load branches for conversation ${conversationId}:`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Loads the branch rows and registers them, then counts the pins in the scope of the current
+   * branch path. Registers and counts nothing when a newer conversation load started.
+   */
+  private async loadBranchesAndPinCount(conversationId: string, loadToken: number): Promise<ConversationBranchRow[]> {
+    const branches = await this.loadBranchesOrEmpty(conversationId);
+    if (!this.isActiveConversationLoad(conversationId, loadToken)) {
+      return branches;
+    }
+    this.registerBranchRows(conversationId, branches);
+    await this.loadPinnedMessageCount(conversationId, loadToken);
+    return branches;
+  }
+
 
   /**
    * Reads only the PIN COUNT on conversation open.
@@ -3272,7 +3425,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const result = await rv.RunView<MJConversationDetailEntity>({
       EntityName: 'MJ: Conversation Details',
-      ExtraFilter: `ConversationID='${conversationId}' AND IsPinned=1`,
+      ExtraFilter: `${ConversationEngine.ScopeFilter(this.scopeFor(conversationId))} AND [IsPinned]=1`,
       ResultType: 'count_only'
     }, this.CurrentUser);
 
@@ -3296,7 +3449,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const result = await rv.RunView<MJConversationDetailEntity>({
       EntityName: 'MJ: Conversation Details',
-      ExtraFilter: `ConversationID='${conversationId}' AND IsPinned=1`,
+      ExtraFilter: `${ConversationEngine.ScopeFilter(this.scopeFor(conversationId))} AND [IsPinned]=1`,
       OrderBy: 'Sequence DESC',   // newest pin first — the panel's order
       ResultType: 'entity_object'
     }, this.CurrentUser);
@@ -3310,6 +3463,21 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
     this.windowStore.SetPinnedDetails(result.Results ?? []);
     this.pinsHydrated = true;
+  }
+
+  /**
+   * Reads the pin count in the scope of the current branch path and, when the pins panel's rows
+   * are loaded, reads those rows again too. A read that throws is logged and changes nothing.
+   */
+  private async reloadPinsForScope(conversationId: string, loadToken: number): Promise<void> {
+    try {
+      await this.loadPinnedMessageCount(conversationId, loadToken);
+      if (this.pinsHydrated && this.isActiveConversationLoad(conversationId, loadToken)) {
+        await this.hydratePinnedMessages(conversationId);
+      }
+    } catch (error) {
+      console.error(`Failed to read the pins for conversation ${conversationId}:`, error);
+    }
   }
 
 
@@ -3922,6 +4090,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
       this.messages = Array.from(merged.values())
         .sort((a, b) => (a.__mj_CreatedAt?.getTime() || 0) - (b.__mj_CreatedAt?.getTime() || 0));
+      this.rebuildBranchSwitcherMap();
 
       // Find newly discovered messages (delegated agents)
       const newMessages = engineDetails.filter(m => !existingMessageIds.has(m.ID));
@@ -3940,6 +4109,373 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       LogStatusEx({message: `✅ Refreshed ${engineDetails.length} messages from engine cache (${newMessages.length} new)`, verboseOnly: true});
     } catch (error) {
       console.error('Failed to reload messages for active conversation:', error);
+    }
+  }
+
+  /** True while a branch switch or an edit's fork is saving and reloading; other switch and edit requests are ignored meanwhile. */
+  private branchSwitchInFlight = false;
+  /** Increments on every branch reload; a reload whose token is no longer current stops. */
+  private branchReloadToken = 0;
+  /**
+   * The pins recorded before a branch reload reset the store, with the conversation load they
+   * belong to. A reload that replaces a running one in the same conversation load reuses them,
+   * because by then the store already holds the cleared values.
+   */
+  private pinsDuringBranchReload: { LoadToken: number; Count: number; Details: MJConversationDetailEntity[] } | null = null;
+
+  /**
+   * Makes the requested alternative the conversation's current branch and shows its path.
+   * Ignored while another switch is running. Refused with a notice when the user has view-only
+   * access, or while a reply is being sent or processed.
+   */
+  async OnBranchSwitchRequested(request: BranchSwitchRequest): Promise<void> {
+    await this.switchToBranch(request.BranchID);
+  }
+
+  /**
+   * Makes `branchId` (null is the trunk) the conversation's current branch and reloads the
+   * window on it. Ignored while another switch is running. Refused with a notice when the user
+   * has view-only access, or while a reply is being sent or processed. Ends a realtime session
+   * open for the conversation first.
+   *
+   * @returns true when the window reloaded on the branch; false when the switch was ignored,
+   *   refused or failed, or the conversation is no longer shown.
+   */
+  private async switchToBranch(branchId: string | null): Promise<boolean> {
+    if (this.branchSwitchInFlight) {
+      return false;
+    }
+    if (this.EffectiveReadOnly) {
+      MJNotificationService.Instance.CreateSimpleNotification('You have view-only access to this conversation', 'error', 3000);
+      return false;
+    }
+    if (this.IsProcessing || this.getActiveMessageInputComponent()?.IsSending) {
+      MJNotificationService.Instance.CreateSimpleNotification('Wait for the current reply to finish before switching branches', 'error', 3000);
+      return false;
+    }
+    const conversationId = this.ConversationId;
+    const conversation = this.findConversation(conversationId);
+    if (!conversationId || !conversation) {
+      return false;
+    }
+    this.branchSwitchInFlight = true;
+    try {
+      await this.endRealtimeSessionForSwitch(conversationId);
+      let switched = false;
+      try {
+        switched = await ConversationEngine.Instance.SwitchBranch(conversationId, branchId, this.CurrentUser);
+      } catch (error) {
+        console.error('Failed to switch branch:', error);
+      }
+      if (!switched) {
+        MJNotificationService.Instance.CreateSimpleNotification('Could not switch branch', 'error', 3000);
+        return false;
+      }
+      // Set locally as well: the engine updates its cached row from a save event that can be dropped.
+      conversation.CurrentBranchID = branchId;
+      if (!this.isActiveConversation(conversationId)) {
+        return false;
+      }
+      return await this.reloadWindowForBranch();
+    } finally {
+      this.branchSwitchInFlight = false;
+    }
+  }
+
+  /**
+   * Ends the realtime session open for `conversationId`, if any, and waits for it, because a
+   * session keeps the history of the branch path it started on. Shows a notice when it ended.
+   * When ending fails, logs the error and returns, so the branch change still goes on.
+   */
+  private async endRealtimeSessionForSwitch(conversationId: string): Promise<void> {
+    if (!this.RealtimeSession.IsActiveFor(conversationId)) {
+      return;
+    }
+    try {
+      await this.RealtimeSession.EndRealtimeSession();
+    } catch (error) {
+      console.error('Failed to end the voice session before changing branch:', error);
+      return;
+    }
+    MJNotificationService.Instance.CreateSimpleNotification('Voice session ended to switch branch', 'info', 3000);
+  }
+
+  /**
+   * Sends an edited message on a new branch: forks after the message before it, shows the new
+   * branch, then sends the edited text through the composer. The original message is unchanged.
+   * Ignored while a branch switch or another fork is running. Makes no branch while the composer
+   * is missing, read-only or still sending.
+   */
+  async OnEditResendRequested(event: { Message: MJConversationDetailEntity; NewText: string }): Promise<void> {
+    if (this.branchSwitchInFlight) {
+      return;
+    }
+    const conversationId = this.ConversationId;
+    const conversation = this.findConversation(conversationId);
+    if (!conversationId || !conversation) {
+      return;
+    }
+    const input = this.composerReadyForResend();
+    if (!input) {
+      return;
+    }
+    const outcome = await this.forkBranchAndReload(
+      conversationId,
+      conversation,
+      async () => {
+        const predecessor = await this.resolvePredecessor(event.Message);
+        if (predecessor === undefined) {
+          MJNotificationService.Instance.CreateSimpleNotification('Could not locate the message before this one', 'error', 3000);
+        }
+        return predecessor;
+      },
+      'Could not create a branch for the edited message'
+    );
+    if (outcome === 'Stopped' || !this.isActiveConversation(conversationId)) {
+      return;
+    }
+    if (outcome === 'NotReloaded') {
+      MJNotificationService.Instance.CreateSimpleNotification(
+        'The branch was created but the conversation could not be reloaded; the message was not sent', 'error', 3000
+      );
+      return;
+    }
+    const sent = await input.SendMessageWithText(event.NewText, undefined, { IsResend: true });
+    if (!sent) {
+      MJNotificationService.Instance.CreateSimpleNotification('The branch was created but the message was not sent', 'error', 3000);
+    }
+  }
+
+  /**
+   * Regenerates an AI reply on a new branch: forks at the user message the reply answers, shows
+   * the new branch, then runs the agent for that user message again through the composer. The
+   * original reply is unchanged. Ignored while a branch switch or another fork is running. Makes
+   * no branch while the composer is missing, read-only or still sending, or when the user message
+   * is not in the loaded window.
+   */
+  async OnRegenerateRequested(aiMessage: MJConversationDetailEntity): Promise<void> {
+    if (this.branchSwitchInFlight) {
+      return;
+    }
+    const conversationId = this.ConversationId;
+    const conversation = this.findConversation(conversationId);
+    if (!conversationId || !conversation) {
+      return;
+    }
+    const input = this.composerReadyForResend();
+    if (!input) {
+      return;
+    }
+    const userMessage = this.findUserMessageBefore(aiMessage);
+    if (!userMessage) {
+      MJNotificationService.Instance.CreateSimpleNotification('Could not find the message this reply answers', 'error', 3000);
+      return;
+    }
+    const forkPoint = { Sequence: userMessage.Sequence, BranchID: userMessage.BranchID ?? null };
+    const outcome = await this.forkBranchAndReload(
+      conversationId,
+      conversation,
+      async () => forkPoint,
+      'Could not create a branch for the regenerated reply'
+    );
+    if (outcome === 'Stopped' || !this.isActiveConversation(conversationId)) {
+      return;
+    }
+    if (outcome === 'NotReloaded') {
+      MJNotificationService.Instance.CreateSimpleNotification(
+        'The branch was created but the conversation could not be reloaded; the reply was not regenerated', 'error', 3000
+      );
+      return;
+    }
+    let rerun = false;
+    try {
+      rerun = await input.RerunAgentForMessage(userMessage);
+    } catch (error) {
+      console.error('Failed to regenerate the reply:', error);
+    }
+    if (!rerun) {
+      MJNotificationService.Instance.CreateSimpleNotification('The branch was created but the reply was not regenerated', 'error', 3000);
+    }
+  }
+
+  /**
+   * The active composer when it can resend a message or rerun an agent now. Otherwise shows why
+   * and returns null: no composer is mounted, it is read-only, or it is still sending (an agent
+   * reply is running).
+   */
+  private composerReadyForResend(): MessageInputComponent | null {
+    const input = this.getActiveMessageInputComponent();
+    const problem = !input ? 'No composer is mounted for this conversation'
+      : input.ReadOnly ? 'This conversation is read-only'
+      : input.IsSending ? 'Wait for the current reply to finish'
+      : null;
+    if (problem) {
+      MJNotificationService.Instance.CreateSimpleNotification(problem, 'error', 3000);
+      return null;
+    }
+    return input ?? null;
+  }
+
+  /**
+   * Forks a branch after the row that `resolveForkPoint` names, makes it current and reloads the
+   * window on it. Ends a realtime session open for the conversation before the fork. Holds
+   * `branchSwitchInFlight` until done.
+   *
+   * @param resolveForkPoint The row the new branch continues after; null forks before the first
+   *   row. Returns undefined, after telling the user why, when no fork point can be found.
+   * @param failureText The notification shown when the branch cannot be created.
+   * @returns 'Reloaded' when the window shows the new branch; 'NotReloaded' when the branch
+   *   exists but the window did not reload on it; 'Stopped' when no branch was made or the
+   *   conversation is no longer shown.
+   */
+  private async forkBranchAndReload(
+    conversationId: string,
+    conversation: MJConversationEntity,
+    resolveForkPoint: () => Promise<{ Sequence: number; BranchID: string | null } | null | undefined>,
+    failureText: string
+  ): Promise<'Reloaded' | 'NotReloaded' | 'Stopped'> {
+    this.branchSwitchInFlight = true;
+    try {
+      const forkPoint = await resolveForkPoint();
+      if (forkPoint === undefined) {
+        return 'Stopped';
+      }
+      await this.endRealtimeSessionForSwitch(conversationId);
+      const branch = await ConversationEngine.Instance.ForkBranch({
+        ConversationID: conversationId,
+        ForkFromSequence: forkPoint?.Sequence ?? null,
+        ParentBranchID: forkPoint?.BranchID ?? null,
+      }, this.CurrentUser);
+      // Set locally as well: the engine updates its cached row from a save event that can be dropped.
+      conversation.CurrentBranchID = branch.ID;
+      if (!this.isActiveConversation(conversationId)) {
+        return 'Stopped';
+      }
+      return await this.reloadWindowForBranch() ? 'Reloaded' : 'NotReloaded';
+    } catch (error) {
+      console.error('Failed to fork a branch:', error);
+      MJNotificationService.Instance.CreateSimpleNotification(failureText, 'error', 3000);
+      return 'Stopped';
+    } finally {
+      this.branchSwitchInFlight = false;
+    }
+  }
+
+  /**
+   * The row before `message` on the active path. Loads one older row when the window
+   * does not hold it. Undefined when it cannot be determined.
+   */
+  private async resolvePredecessor(message: MJConversationDetailEntity): Promise<{ Sequence: number; BranchID: string | null } | null | undefined> {
+    const snapshot = this.windowStore.GetSnapshot();
+    const inWindow = FindPredecessorOnPath(this.messages, message.ID, snapshot.Cursor.HasMoreAbove);
+    if (inWindow !== undefined) {
+      return inWindow;
+    }
+    const older = await ConversationEngine.Instance.LoadDetailWindow(
+      { ConversationID: message.ConversationID, BeforeSequence: message.Sequence, PageSize: 1, RawOverread: 1, BranchID: this.CurrentBranchId },
+      this.CurrentUser
+    );
+    if (older.Failed) {
+      return undefined;
+    }
+    const prev = older.Details[older.Details.length - 1];
+    return prev ? { Sequence: prev.Sequence, BranchID: prev.BranchID ?? null } : null;
+  }
+
+  /** The nearest earlier User row in the loaded window; null when the window holds none. */
+  private findUserMessageBefore(aiMessage: MJConversationDetailEntity): MJConversationDetailEntity | null {
+    const sorted = [...this.messages].sort((a, b) => a.Sequence - b.Sequence);
+    const index = sorted.findIndex(m => UUIDsEqual(m.ID, aiMessage.ID));
+    for (let i = index - 1; i >= 0; i--) {
+      if (sorted[i].Role === 'User') {
+        return sorted[i];
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Has the open artifact viewer load again in the current scope; it reads its `Scope` input
+   * only when it loads. Asks for the selected version (0 asks for the newest); a version that
+   * is not in the scope shows the newest one with a notice. Does nothing while the pane is closed.
+   */
+  private refreshArtifactViewerForScope(): void {
+    if (!this.ShowArtifactPanel || !this.SelectedArtifactId) {
+      return;
+    }
+    // Renders first, so the viewer's Scope input holds the new scope when it reloads.
+    this.cdr.detectChanges();
+    this.ArtifactViewerRefresh$.next({ artifactId: this.SelectedArtifactId, versionNumber: this.SelectedVersionNumber ?? 0 });
+  }
+
+  /**
+   * Reloads the newest page on the current branch, then the branch rows, then the switcher
+   * map, the open artifact viewer, the agent runs, artifacts and ratings, and the pins in the
+   * scope of the new branch path. The pin count and the loaded pins keep their earlier values
+   * until that read lands. Restarts the agent-run poll in the new scope. Stops when a newer
+   * branch reload or conversation load starts; the newer load reads the window, branch rows and
+   * pins again.
+   *
+   * @returns true when the window, branch rows and peripherals all loaded for the current branch;
+   *   false when there is no conversation, a newer load replaced this one, the window read failed,
+   *   or the reload failed.
+   */
+  private async reloadWindowForBranch(): Promise<boolean> {
+    const conversationId = this.ConversationId;
+    if (!conversationId) {
+      return false;
+    }
+    const reloadToken = ++this.branchReloadToken;
+    const loadToken = this.conversationLoadToken;
+    const isCurrent = (): boolean =>
+      reloadToken === this.branchReloadToken && this.isActiveConversationLoad(conversationId, loadToken);
+    try {
+      const recorded = this.pinsDuringBranchReload;
+      const pins = recorded && recorded.LoadToken === loadToken
+        ? recorded
+        : { LoadToken: loadToken, Count: this.windowStore.PinnedTotalCount, Details: [...this.windowStore.PinnedDetails] };
+      this.pinsDuringBranchReload = pins;
+
+      await this.windowStore.LoadLatest(conversationId, this.CurrentUser, this.CurrentBranchId);
+      if (!isCurrent()) {
+        return false;
+      }
+      if (this.pinsHydrated) {
+        this.windowStore.SetPinnedDetails(pins.Details);
+      }
+      this.windowStore.SetPinnedCount(pins.Count);
+
+      const branches = await this.loadBranchesOrEmpty(conversationId);
+      if (!isCurrent()) {
+        return false;
+      }
+      this.branches = branches;
+      this.registerBranchRows(conversationId, branches);
+      this.applyWindowSnapshot();
+      this.refreshArtifactViewerForScope();
+      this.agentStateService.startPolling(this.CurrentUser, conversationId, this.scopeFor(conversationId));
+
+      this.lastLoadedConversationId = null;
+      await Promise.all([
+        this.loadPeripheralData(conversationId, this.windowStore.GetSnapshot()),
+        this.reloadPinsForScope(conversationId, loadToken)
+      ]);
+      if (!isCurrent()) {
+        return false;
+      }
+      this.cdr.detectChanges();
+      return !this.windowStore.LoadFailed;
+    } catch (error) {
+      console.error('Failed to reload the conversation for the current branch:', error);
+      if (isCurrent()) {
+        MJNotificationService.Instance.CreateSimpleNotification('Could not reload the conversation for this branch', 'error', 3000);
+      }
+      return false;
+    } finally {
+      // The newest reload owns the recorded pins; it clears them however it ends.
+      if (reloadToken === this.branchReloadToken) {
+        this.pinsDuringBranchReload = null;
+      }
     }
   }
 
@@ -4843,24 +5379,89 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   /**
-   * Pages older history until `messageId` falls inside the loaded window.
+   * Opens a message, such as a search hit, in the active conversation: waits for the
+   * conversation's load to end, switches to the message's branch through the same guarded path
+   * as the branch switcher when the message is not on the current branch path (a row of an
+   * ancestor up to its fork point is on the path), pages older history until the window holds
+   * `sequence`, then scrolls to the row and highlights it for 2 s.
    *
-   * Deterministic rather than heuristic: a pin carries its own `Sequence`, so the stop
-   * condition is simply "the window now reaches at least that far back" — no equivalent of
-   * the date jump's `NeedsOlder` probing is needed. Bounded by the same page cap, for the same
-   * reason: an unbounded walk back is the thing windowing exists to avoid.
+   * @param conversationId The conversation of the message. The caller activates it first.
+   * @param branchId The message's branch; null is the trunk. Compared without case.
+   * @param sequence The message's sequence in its conversation.
+   * @returns true when the row was found and scrolled to; false when the conversation is not the
+   *   active one, the branch switch was refused or failed (the switch shows its notice), or the
+   *   row is not on the branch path.
    */
+  public async OpenMessage(conversationId: string, branchId: string | null, sequence: number): Promise<boolean> {
+    if (!this.isActiveConversation(conversationId) || !(await this.waitForConversationLoad(conversationId))) {
+      return false;
+    }
+    const onCurrentPath = this.scopeService.IsOnCurrentPath(conversationId, this.CurrentBranchId, { BranchID: branchId, Sequence: sequence });
+    if (!onCurrentPath && !(await this.switchToBranch(branchId))) {
+      return false;
+    }
+    if (!this.isActiveConversation(conversationId)) {
+      return false;
+    }
+    await this.loadUntilSequenceIsWindowed(sequence);
+    if (!this.isActiveConversation(conversationId)) {
+      return false;
+    }
+    await this.refreshAfterPaging(conversationId);
+    const row = this.messages.find(m => m.Sequence === sequence && UUIDsEqual(m.BranchID ?? null, branchId));
+    if (row) {
+      // The bottom-follow of the load that just ended must not scroll away from the row.
+      this.scrollToBottom = false;
+      this.bottomFollowSuppressedUntil = Date.now() + 1500;
+    }
+    if (!row || !this.messageListComponent?.ScrollToMessage(row.ID)) {
+      MJNotificationService.Instance.CreateSimpleNotification('Could not find that message in this conversation', 'info', 3000);
+      return false;
+    }
+    this.beaconMessage(row.ID, 'search-hit-highlight', 2000);
+    return true;
+  }
+
+  /**
+   * Waits until the load of `conversationId` has ended. False when another conversation
+   * becomes active first or the component is destroyed.
+   */
+  private async waitForConversationLoad(conversationId: string): Promise<boolean> {
+    while (this.isActiveConversation(conversationId) && !UUIDsEqual(this.readyConversationId, conversationId)) {
+      const ended = await firstValueFrom(
+        this.conversationLoadEnded$.pipe(map(() => true), takeUntil(this.destroy$)),
+        { defaultValue: false }
+      );
+      if (!ended) {
+        return false;
+      }
+    }
+    return this.isActiveConversation(conversationId);
+  }
+
+  /** Pages older history until the pinned message `messageId` falls inside the loaded window. */
   private async loadUntilMessageIsWindowed(messageId: string): Promise<boolean> {
     const target = this.PinnedMessages.find(p => UUIDsEqual(p.ID, messageId));
     if (!target) {
       return false;   // not a loaded pin — nothing tells us how far back to page
     }
+    return this.loadUntilSequenceIsWindowed(target.Sequence);
+  }
 
+  /**
+   * Pages older history until the loaded window reaches back to `sequence`.
+   *
+   * Deterministic rather than heuristic: the target's `Sequence` is known, so the stop
+   * condition is simply "the window now reaches at least that far back" — no equivalent of
+   * the date jump's `NeedsOlder` probing is needed. Bounded by the same page cap, for the same
+   * reason: an unbounded walk back is the thing windowing exists to avoid.
+   */
+  private async loadUntilSequenceIsWindowed(sequence: number): Promise<boolean> {
     const conversationId = this.ConversationId;
     for (let page = 0; page < DATE_JUMP_MAX_PAGES; page++) {
       const snapshot = this.windowStore.GetSnapshot();
       const oldest = snapshot.Cursor.OldestSequence;
-      if (oldest !== null && oldest <= target.Sequence) {
+      if (oldest !== null && oldest <= sequence) {
         return true;                        // the window now covers it
       }
       if (!snapshot.Cursor.HasMoreAbove) {
@@ -4876,8 +5477,11 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     return false;                           // hit the page cap
   }
 
-  /** Flashes the beacon on a message once its scroll has settled. */
-  private beaconMessage(messageId: string): void {
+  /**
+   * Adds `cssClass` to a message for `durationMs` once its scroll has settled. Defaults to the
+   * pin beacon.
+   */
+  private beaconMessage(messageId: string, cssClass: string = 'pin-beacon', durationMs: number = 1500): void {
     // Re-queried rather than captured: the target may have been a spacer when the scroll
     // started and been remounted as a real bubble by the time it lands.
     setTimeout(() => {
@@ -4885,8 +5489,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       if (!el) {
         return;
       }
-      el.classList.add('pin-beacon');
-      setTimeout(() => el.classList.remove('pin-beacon'), 1500);
+      el.classList.add(cssClass);
+      setTimeout(() => el.classList.remove(cssClass), durationMs);
     }, 350);
   }
 
@@ -4949,11 +5553,31 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   async OnDeleteMessage(message: MJConversationDetailEntity): Promise<void> {
     if (!UUIDsEqual(this.Conversation?.UserID, this.CurrentUser?.ID)) return;
+    const conversationId = this.ConversationId;
+    if (!conversationId) return;
 
-    // Find this message and all messages after it sorted by creation time
-    const sortedMessages = [...this.messages].sort((a, b) =>
-      new Date(a.__mj_CreatedAt!).getTime() - new Date(b.__mj_CreatedAt!).getTime()
-    );
+    // The delete cannot be undone, so the branch rows are read fresh: the list held since the
+    // transcript loaded is empty when that read failed and misses forks made in another session.
+    // When the rows cannot be read, nothing is deleted.
+    let branches: ConversationBranchRow[];
+    try {
+      branches = await ConversationEngine.LoadBranchesFresh(conversationId, this.CurrentUser, this.ProviderToUse);
+    } catch (error) {
+      console.error(`Failed to load branches for conversation ${conversationId} before a delete:`, error);
+      MJNotificationService.Instance.CreateSimpleNotification('Could not verify branches; the message was not deleted', 'error', 3000);
+      return;
+    }
+    if (!this.isActiveConversation(conversationId)) return;
+    this.branches = branches;
+    this.registerBranchRows(conversationId, branches);
+    this.rebuildBranchSwitcherMap();
+    if (IsForkPointOrEarlier(message.Sequence, branches)) {
+      MJNotificationService.Instance.CreateSimpleNotification('This message is shared with another branch and cannot be deleted', 'error', 3000);
+      return;
+    }
+
+    // Find this message and all messages after it sorted by Sequence
+    const sortedMessages = [...this.messages].sort((a, b) => a.Sequence - b.Sequence);
     const targetIndex = sortedMessages.findIndex(m => UUIDsEqual(m.ID, message.ID));
     if (targetIndex === -1) return;
 
@@ -5009,14 +5633,12 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     return this.OnDeleteMessage(message);
   }
 
+  /** @deprecated Use {@link OnRegenerateRequested}. */
   OnRetryMessage(message: MJConversationDetailEntity): void {
-    // TODO: Implement retry logic
-    // This should find the parent user message and re-trigger the agent invocation
-    LogStatusEx({message: 'Retry requested for message', verboseOnly: true, additionalArgs: [message.ID]});
-    // For now, just log it - full implementation would require refactoring agent invocation
+    void this.OnRegenerateRequested(message);
   }
 
-  /** @deprecated Use {@link OnRetryMessage}. */
+  /** @deprecated Use {@link OnRegenerateRequested}. */
   onRetryMessage(message: MJConversationDetailEntity): void {
     return this.OnRetryMessage(message);
   }
@@ -5637,6 +6259,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       // Re-read the refreshed window
       const refreshed = this.windowStore.GetSnapshot();
       this.messages = refreshed.Details;
+      this.rebuildBranchSwitcherMap();
 
       // Reprocess peripheral data + realtime session meta (drives the timeline's session cards)
       this.lastLoadedConversationId = null;
@@ -6231,11 +6854,11 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     if (!this.ConversationId || !this.CurrentUser) return null;
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-      // Get all conversation detail IDs for this conversation, newest first.
+      // Get the conversation detail IDs on the current branch path, newest first.
       const detailsResult = await rv.RunView<MJConversationDetailEntity>(
         {
           EntityName: 'MJ: Conversation Details',
-          ExtraFilter: `ConversationID='${this.ConversationId}'`,
+          ExtraFilter: ConversationEngine.ScopeFilter(this.scopeFor(this.ConversationId)),
           Fields: ['ID'],
           OrderBy: '__mj_CreatedAt DESC',
           ResultType: 'simple',

@@ -309,6 +309,26 @@
   box-sizing: border-box;
 }
 
+/* One-line notice above the content when the requested version is not in the conversation scope */
+.scope-notice {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  font-size: 12px;
+  color: var(--mj-text-secondary);
+  background: var(--mj-bg-surface-sunken);
+  border-bottom: 1px solid var(--mj-border-default);
+}
+
+.scope-notice-text {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .artifact-content-wrapper {
   flex: 1;
   display: flex;

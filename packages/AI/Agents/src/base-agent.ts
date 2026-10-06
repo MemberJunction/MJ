@@ -11,7 +11,7 @@
  * @since 2.49.0
  */
 
-import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, FileStorageEngineBase, MJAISkillEntity, MJEnvironmentEntityExtended, MJConversationSkillEntity, MJAIVendorEntity } from '@memberjunction/core-entities';
+import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, FileStorageEngineBase, MJAISkillEntity, MJEnvironmentEntityExtended, MJConversationSkillEntity, MJAIVendorEntity, ConversationEngine, type ConversationBranchRow } from '@memberjunction/core-entities';
 import { BuildActionToolSet, FilterDeclarableActions, SanitizeToolName } from './native-tools/action-tool-builder';
 import { BuildNativeToolSet, SUB_AGENT_TOOL_PREFIX, type NativeToolBinding } from './native-tools/control-tools';
 import { BuildAssistantToolCallTurn, BuildToolResultTurn, CompactToolResultContent, type NativeToolResult } from './native-tools/tool-result-turns';
@@ -1497,6 +1497,12 @@ export class BaseAgent {
     private _conversationToolManager: ConversationToolManager = new ConversationToolManager();
 
     /**
+     * The conversation's branch rows for the current run, loaded once when the run is on a
+     * branch (`ExecuteAgentParams.ConversationBranchID`). Empty on the trunk.
+     */
+    private _conversationBranches: ConversationBranchRow[] = [];
+
+    /**
      * Manages in-flight durable memory writes for the current agent run.
      * Only consulted when the agent has AllowMemoryWrite enabled.
      */
@@ -2098,10 +2104,16 @@ export class BaseAgent {
             // Arm conversation-history retrieval tools — available only when the run has a
             // conversation to page against (the same gate as all cross-turn context features).
             // A history floor holds here too: the tools page only rows from it onward.
+            // On a branch, the tools page only rows on that branch's path.
+            this._conversationBranches = wrappedParams.conversationId && wrappedParams.ConversationBranchID
+                ? await ConversationEngine.LoadBranchesFresh(wrappedParams.conversationId, params.contextUser, this.ProviderToUse)
+                : [];
             this._conversationToolManager.Initialize(
                 wrappedParams.conversationId || null,
                 params.contextUser,
-                wrappedParams.ConversationHistoryFrom ?? null
+                wrappedParams.ConversationHistoryFrom ?? null,
+                wrappedParams.ConversationBranchID ?? null,
+                this._conversationBranches
             );
             this._conversationToolManager.SetSummaryHost(this.buildConversationSummaryHost(wrappedParams));
 
@@ -7689,6 +7701,23 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
+     * The `MJ: AI Agent Runs` predicate for this agent's previous settled root run on one
+     * branch path: the run's reply row must be on that path, so a run made on a sibling
+     * branch is never carried forward.
+     */
+    public static BuildPriorTurnRunFilter(
+        conversationId: string,
+        agentId: string,
+        branchId: string | null,
+        branches: ReadonlyArray<ConversationBranchRow>,
+        statusList: string
+    ): string {
+        const pathFilter = ConversationEngine.BuildBranchPathFilter(conversationId, branchId, branches);
+        return `ConversationID='${conversationId}' AND Status IN (${statusList}) AND ParentRunID IS NULL AND AgentID='${agentId}'`
+            + ` AND ConversationDetailID IN (SELECT ID FROM [__mj].[vwConversationDetails] WHERE ${pathFilter})`;
+    }
+
+    /**
      * Loads this agent's previous settled root run's Tool steps for this conversation
      * (settled = {@link settledRunStatuses}: Completed or AwaitingFeedback).
      * Deliberately loads ALL completed Tool steps — eligibility for carry-forward is
@@ -7703,7 +7732,8 @@ The context is now within limits. Please retry your request with the recovered c
      * @private
      */
     private async loadPriorTurnToolResultSteps(params: ExecuteAgentParams): Promise<CarryForwardStepRecord[]> {
-        const cached = PriorTurnToolResultCache.Instance.Get(params.conversationId!, params.agent.ID);
+        const branchId = params.ConversationBranchID ?? null;
+        const cached = PriorTurnToolResultCache.Instance.Get(params.conversationId!, params.agent.ID, branchId);
         if (cached) {
             this.logStatus(`[PriorTurnToolResults] Prior-run tool results served from cache (${cached.length} step(s), no DB lookup)`, true, params);
             return cached;
@@ -7713,10 +7743,11 @@ The context is now within limits. Please retry your request with the recovered c
         const statusList = predicate.runStatuses.map(s => `'${s}'`).join(', ');
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         // AgentID scopes provenance: in a multi-agent conversation, agent B must never
-        // inherit agent A's results labeled "your previous turn".
+        // inherit agent A's results labeled "your previous turn". The branch path scopes it
+        // the same way: a run on a sibling branch is never carried forward.
         const priorRun = await rv.RunView<{ ID: string }>({
             EntityName: 'MJ: AI Agent Runs',
-            ExtraFilter: `ConversationID='${params.conversationId}' AND Status IN (${statusList}) AND ParentRunID IS NULL AND AgentID='${params.agent.ID}'`,
+            ExtraFilter: BaseAgent.BuildPriorTurnRunFilter(params.conversationId!, params.agent.ID, branchId, this._conversationBranches, statusList),
             OrderBy: '__mj_CreatedAt DESC',
             MaxRows: 1,
             Fields: ['ID'],
@@ -7744,9 +7775,10 @@ The context is now within limits. Please retry your request with the recovered c
      * only when the run row settled as {@link settledRunStatuses} (Completed OR
      * AwaitingFeedback — the normal chat-turn ending) — a failed run leaves the previous
      * settled run's entry standing, just as the RunView filter would. Scoped to this
-     * run's agent (cache key = conversation + agent) so parallel agents in one
-     * conversation never cross-pollinate. An empty projection is cached too (the
-     * negative-cache case that spares tool-free conversations the queries every turn).
+     * run's agent and branch (cache key = conversation + agent + branch) so parallel
+     * agents in one conversation, and sibling branches, never cross-pollinate. An empty
+     * projection is cached too (the negative-cache case that spares tool-free
+     * conversations the queries every turn).
      * Same-node edge semantics (failed step INSERTs, concurrent completions) are
      * documented on the cache class. Called from {@link finalizeAgentRun}.
      * @private
@@ -7761,7 +7793,7 @@ The context is now within limits. Please retry your request with the recovered c
         const records: CarryForwardStepRecord[] = (this._agentRun.Steps || [])
             .filter(s => s.StepType === predicate.stepType && s.Status === predicate.stepStatus)
             .map(s => ({ OutputData: s.OutputData || null }));
-        PriorTurnToolResultCache.Instance.Set(conversationId, this._agentRun.AgentID, records);
+        PriorTurnToolResultCache.Instance.Set(conversationId, this._agentRun.AgentID, this._executeParams?.ConversationBranchID ?? null, records);
     }
 
     /**
@@ -17901,6 +17933,7 @@ The context is now within limits. Please retry your request with the recovered c
         }
         const outcome = await ConversationCompactionManager.CompactIfNeeded({
             ConversationId: params.conversationId,
+            BranchID: params.ConversationBranchID ?? null,
             Agent: params.agent,
             AgentType: config?.agentType || null,
             Budget: budget,

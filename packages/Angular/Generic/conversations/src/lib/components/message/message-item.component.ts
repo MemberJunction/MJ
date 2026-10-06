@@ -31,6 +31,7 @@ import {
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
 import { BadgeTextForAttachment } from '../../util/attachment-badge';
+import { BranchSwitcherState, BranchSwitchRequest } from '../../utils/conversation-branching';
 
 /**
  * Represents an attachment on a message for display
@@ -144,6 +145,8 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   public get currentUser(): UserInfo {
     return this.CurrentUser;
   }
+  /** The `< i / n >` switcher for this row; null when the row is not the first after a fork point. */
+  @Input() public BranchSwitcher: BranchSwitcherState | null = null;
   @Input() public AllMessages!: MJConversationDetailEntity[];
 
   /** @deprecated Use {@link AllMessages}. */
@@ -431,10 +434,20 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * initialise in order, and the other way round this captures undefined.
    */
   @Output() public deleteClicked = this.DeleteClicked;
-  @Output() public RetryClicked = new EventEmitter<MJConversationDetailEntity>();
+  /** Emits this AI reply when the user asks for a new one; the host regenerates it on a new branch. */
+  @Output() public RegenerateRequested = new EventEmitter<MJConversationDetailEntity>();
 
   /**
-   * @deprecated Use {@link RetryClicked}.
+   * @deprecated Use {@link RegenerateRequested}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (RetryClicked) keeps working. Must stay AFTER RegenerateRequested: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public RetryClicked = this.RegenerateRequested;
+
+  /**
+   * @deprecated Use {@link RegenerateRequested}.
    *
    * The same emitter under the old binding name, so a template still binding
    * (retryClicked) keeps working. Must stay AFTER RetryClicked: class fields
@@ -573,6 +586,10 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * initialise in order, and the other way round this captures undefined.
    */
   @Output() public afterResponseFormSubmitted = this.AfterResponseFormSubmitted;
+  /** Emits the alternative to show when the user steps through the branch switcher. */
+  @Output() public BranchSwitchRequested = new EventEmitter<BranchSwitchRequest>();
+  /** Emits the edited text of this message; the host sends it on a new branch. */
+  @Output() public EditResendRequested = new EventEmitter<{ Message: MJConversationDetailEntity; NewText: string }>();
 
   private _loadTime: number = Date.now();
   private _elapsedTimeInterval: any = null;
@@ -1818,6 +1835,21 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     return this.OnEditClick();
   }
 
+  /** True when this row is the first after a fork point with more than one alternative. */
+  public get HasBranchSwitcher(): boolean {
+    return !!this.BranchSwitcher && this.BranchSwitcher.Alternatives.length > 1;
+  }
+
+  /** Requests the previous (-1) or next (1) alternative, wrapping at either end. Does nothing while a reply is processing. */
+  public OnBranchStep(delta: -1 | 1): void {
+    if (!this.BranchSwitcher || this.IsProcessing) {
+      return;
+    }
+    const count = this.BranchSwitcher.Alternatives.length;
+    const next = (this.BranchSwitcher.CurrentIndex + delta + count) % count;
+    this.BranchSwitchRequested.emit({ DetailID: this.message.ID, BranchID: this.BranchSwitcher.Alternatives[next].BranchID });
+  }
+
   public StartEditing(): void {
     this.originalText = this.message.Message || '';
     this.EditedText = this.originalText;
@@ -1851,34 +1883,18 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     return this.CancelEditing();
   }
 
-  public async SaveEdit(): Promise<void> {
-    if (!this.EditedText.trim() || this.EditedText === this.originalText) {
+  /** Hands the edited text to the host, which forks a branch and resends it. The original row is never changed. */
+  public SaveEdit(): void {
+    const text = this.EditedText.trim();
+    if (!text || this.EditedText === this.originalText) {
       this.CancelEditing();
       return;
     }
-
-    try {
-      // Update the message entity
-      this.message.Message = this.EditedText;
-      const saveResult = await this.message.Save();
-
-      if (saveResult) {
-        this.IsEditing = false;
-        this.EditedText = '';
-        this.originalText = '';
-        // Invalidate display message cache since message changed
-        this._cachedMessageText = '';
-        this._cachedDisplayMessage = '';
-        this.MessageEdited.emit(this.message);
-        this.cdRef.detectChanges();
-      } else {
-        console.error('Failed to save message edit');
-        alert('Failed to save message. Please try again.');
-      }
-    } catch (error) {
-      console.error('Error saving message edit:', error);
-      alert('Error saving message. Please try again.');
-    }
+    this.EditResendRequested.emit({ Message: this.message, NewText: text });
+    this.IsEditing = false;
+    this.EditedText = '';
+    this.originalText = '';
+    this.cdRef.detectChanges();
   }
 
   /** @deprecated Use {@link SaveEdit}. */
@@ -1943,15 +1959,26 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     return this.OnTestFeedbackClick();
   }
 
-  public OnRetryClick(): void {
-    if (!this.IsProcessing && this.MessageStatus === 'Error') {
-      this.RetryClicked.emit(this.message);
+  /** True for an AI reply that is finished and not being edited, so a new reply can be asked for. */
+  public get CanRegenerate(): boolean {
+    return this.IsAIMessage && !this.IsProcessing && !this.IsEditing && this.MessageStatus !== 'In-Progress';
+  }
+
+  /** Asks the host for a new reply in place of this one, when {@link CanRegenerate} allows it. */
+  public OnRegenerateClick(): void {
+    if (this.CanRegenerate) {
+      this.RegenerateRequested.emit(this.message);
     }
   }
 
-  /** @deprecated Use {@link OnRetryClick}. */
+  /** @deprecated Use {@link OnRegenerateClick}. */
+  public OnRetryClick(): void {
+    this.OnRegenerateClick();
+  }
+
+  /** @deprecated Use {@link OnRegenerateClick}. */
   public onRetryClick(): void {
-    return this.OnRetryClick();
+    this.OnRegenerateClick();
   }
 
   public OnArtifactClick(): void {

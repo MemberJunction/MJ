@@ -161,6 +161,7 @@ vi.mock('@memberjunction/generic-database-provider', async (importOriginal) => {
 });
 
 import { RealtimeClientSessionResolver } from '../resolvers/RealtimeClientSessionResolver.js';
+import { ConversationEngine } from '@memberjunction/core-entities';
 import type { AppContext } from '../types.js';
 import type { UserInfo } from '@memberjunction/core';
 import type { StoreRealtimeRecordingResult } from '@memberjunction/ai-agents';
@@ -3438,18 +3439,41 @@ describe('RealtimeClientSessionResolver — conversation-history hydration', () 
         return { ID: `h-${message ?? 'x'}`, Role: role, Message: message, HiddenToUser: false, AgentSessionID: null, ...over };
     }
 
+    /** A `MJ: Conversation Branches` row as the branch-path read selects it. */
+    interface BranchRow {
+        ID: string;
+        ConversationID: string;
+        ParentBranchID: string | null;
+        ForkFromSequence: number | null;
+        Name: string | null;
+    }
+
     /**
      * Provider that answers BOTH Conversation Details queries separately: the prior-leg transcript
-     * (filtered by `AgentSessionID IN (…)`) and the conversation history (`ConversationID=…`).
-     * Routing on the filter is what keeps the two from being confused for one another.
+     * (filtered by `AgentSessionID IN (…)`) and the conversation history (the active-path filter).
+     * Routing on the filter is what keeps the two from being confused for one another. It also
+     * serves the conversation row (`CurrentBranchID`; null `conversation` = not found or hidden)
+     * and the conversation's branch rows, which the history read uses to build the path.
      */
     function makeProvider(opts: {
         chain?: Record<string, { UserID: string; LastSessionID?: string | null }>;
         legRows?: Array<{ ID: string; Role: string; Message: string | null; HiddenToUser: boolean }>;
         historyRows?: HistoryRow[];
         historyFails?: boolean;
+        conversation?: { ID: string; CurrentBranchID: string | null } | null;
+        branchRows?: BranchRow[];
+        branchesFail?: boolean;
     }): { provider: unknown; runView: ReturnType<typeof vi.fn> } {
         const runView = vi.fn(async (params: { EntityName: string; ExtraFilter?: string }) => {
+            if (params.EntityName === 'MJ: Conversations') {
+                const conversation = opts.conversation === undefined ? { ID: 'conv-1', CurrentBranchID: null } : opts.conversation;
+                return { Success: true, Results: conversation ? [conversation] : [] };
+            }
+            if (params.EntityName === 'MJ: Conversation Branches') {
+                return opts.branchesFail
+                    ? { Success: false, ErrorMessage: 'db down', Results: [] }
+                    : { Success: true, Results: opts.branchRows ?? [] };
+            }
             if (params.EntityName === 'MJ: Conversation Details') {
                 if (params.ExtraFilter?.startsWith('AgentSessionID IN')) {
                     return { Success: true, Results: opts.legRows ?? [] };
@@ -3476,6 +3500,15 @@ describe('RealtimeClientSessionResolver — conversation-history hydration', () 
             RunView: runView,
         };
         return { provider, runView };
+    }
+
+    /** The history read: the Conversation Details query that is not the prior-leg lookup. */
+    function historyCall(runView: ReturnType<typeof vi.fn>): { ExtraFilter: string; OrderBy: string } | undefined {
+        const call = runView.mock.calls.find((c) => {
+            const params = c[0] as { EntityName: string; ExtraFilter?: string };
+            return params.EntityName === 'MJ: Conversation Details' && !params.ExtraFilter?.startsWith('AgentSessionID IN');
+        });
+        return call?.[0] as { ExtraFilter: string; OrderBy: string } | undefined;
     }
 
     function historyArg(): Array<{ role: string; content: unknown }> {
@@ -3515,17 +3548,81 @@ describe('RealtimeClientSessionResolver — conversation-history hydration', () 
         ]);
     });
 
-    it('scopes the read to the session\'s conversation', async () => {
-        const { provider, runView } = makeProvider({ historyRows: [row('User', 'hi')] });
+    it('scopes the read to the session\'s conversation, on the trunk when it has no current branch', async () => {
+        const { provider, runView } = makeProvider({
+            historyRows: [row('User', 'hi')],
+            conversation: { ID: "conv-o'brien", CurrentBranchID: null },
+        });
         currentProvider = provider;
 
         await makeResolver().StartRealtimeClientSession('target-1', makeCtx(), "conv-o'brien");
 
-        const call = runView.mock.calls.find(
-            (c) => (c[0] as { ExtraFilter?: string }).ExtraFilter?.startsWith('ConversationID='),
-        );
         // The apostrophe must be doubled, not passed through — this string is concatenated into SQL.
-        expect((call![0] as { ExtraFilter: string }).ExtraFilter).toBe("ConversationID='conv-o''brien'");
+        const conversationCall = runView.mock.calls.find((c) => (c[0] as { EntityName: string }).EntityName === 'MJ: Conversations');
+        expect((conversationCall![0] as { ExtraFilter: string }).ExtraFilter).toBe("ID='conv-o''brien'");
+        expect(historyCall(runView)).toMatchObject({
+            ExtraFilter: "[ConversationID]='conv-o''brien' AND [BranchID] IS NULL",
+            OrderBy: 'Sequence ASC',
+        });
+        expect(historyArg()).toEqual([{ role: 'user', content: 'hi' }]);
+    });
+
+    it('reads only the path of the conversation\'s current branch, in Sequence order', async () => {
+        const pathFilter = vi.spyOn(ConversationEngine, 'BranchPathFilterFresh');
+        const { provider, runView } = makeProvider({
+            historyRows: [row('User', 'on the branch')],
+            conversation: { ID: 'conv-1', CurrentBranchID: 'b1' },
+            branchRows: [{ ID: 'b1', ConversationID: 'conv-1', ParentBranchID: null, ForkFromSequence: 4, Name: null }],
+        });
+        currentProvider = provider;
+
+        await makeResolver().StartRealtimeClientSession('target-1', makeCtx(), 'conv-1');
+
+        expect(pathFilter).toHaveBeenCalledWith('conv-1', 'b1', USER, provider);
+        expect(historyCall(runView)).toMatchObject({
+            ExtraFilter: "[ConversationID]='conv-1' AND ([BranchID]='b1' OR ([BranchID] IS NULL AND [Sequence] <= 4))",
+            OrderBy: 'Sequence ASC',
+        });
+        expect(historyArg()).toEqual([{ role: 'user', content: 'on the branch' }]);
+        pathFilter.mockRestore();
+    });
+
+    it('passes the raw conversation id to the engine, which escapes it once on the branch path', async () => {
+        const pathFilter = vi.spyOn(ConversationEngine, 'BranchPathFilterFresh');
+        const { provider, runView } = makeProvider({
+            historyRows: [row('User', 'on the branch')],
+            conversation: { ID: "conv-o'brien", CurrentBranchID: 'b1' },
+            branchRows: [{ ID: 'b1', ConversationID: "conv-o'brien", ParentBranchID: null, ForkFromSequence: 4, Name: null }],
+        });
+        currentProvider = provider;
+
+        await makeResolver().StartRealtimeClientSession('target-1', makeCtx(), "conv-o'brien");
+
+        expect(pathFilter).toHaveBeenCalledWith("conv-o'brien", 'b1', USER, provider);
+        const branchCall = runView.mock.calls.find((c) => (c[0] as { EntityName: string }).EntityName === 'MJ: Conversation Branches');
+        expect((branchCall![0] as { ExtraFilter: string }).ExtraFilter).toBe("ConversationID='conv-o''brien'");
+        expect(historyCall(runView)).toMatchObject({
+            ExtraFilter: "[ConversationID]='conv-o''brien' AND ([BranchID]='b1' OR ([BranchID] IS NULL AND [Sequence] <= 4))",
+            OrderBy: 'Sequence ASC',
+        });
+        pathFilter.mockRestore();
+    });
+
+    it.each([
+        ['the current branch is not among the conversation\'s branches', { conversation: { ID: 'conv-1', CurrentBranchID: 'b-gone' } }],
+        ['the branch rows cannot be read', { conversation: { ID: 'conv-1', CurrentBranchID: 'b1' }, branchesFail: true }],
+        ['the conversation is not found or not visible', { conversation: null }],
+    ])('starts COLD, never with every branch, when %s', async (_label, opts) => {
+        errSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const { provider, runView } = makeProvider({ historyRows: [row('User', 'should never be read')], ...opts });
+        currentProvider = provider;
+
+        const result = await makeResolver().StartRealtimeClientSession('target-1', makeCtx(), 'conv-1');
+
+        expect(result.AgentSessionId).toBe('session-new');
+        expect(historyArg()).toEqual([]);
+        expect(historyCall(runView)).toBeUndefined();
+        expect(errSpy.mock.calls.some((c) => String(c[0]).includes('could not build the active branch path'))).toBe(true);
     });
 
     it('skips hidden rows, error rows, and empty messages', async () => {
@@ -3636,6 +3733,7 @@ describe('RealtimeClientSessionResolver — conversation-history hydration', () 
         await makeResolver().StartRealtimeClientSession('target-1', makeCtx());
 
         expect(historyArg()).toEqual([]);
-        expect(runView.mock.calls.some((c) => (c[0] as { ExtraFilter?: string }).ExtraFilter?.startsWith('ConversationID='))).toBe(false);
+        expect(historyCall(runView)).toBeUndefined();
+        expect(runView.mock.calls.some((c) => (c[0] as { EntityName: string }).EntityName === 'MJ: Conversations')).toBe(false);
     });
 });

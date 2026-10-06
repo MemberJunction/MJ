@@ -7,9 +7,10 @@
  *
  * @module @memberjunction/ng-dashboards
  */
-import { IMetadataProvider, RunView } from '@memberjunction/core';
+import { IMetadataProvider, LogError, RunView } from '@memberjunction/core';
 import { EscapeSQLString } from '@memberjunction/global';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { ConversationEngine } from '@memberjunction/core-entities';
 
 const CONVERSATION_ENTITY = 'MJ: Conversations';
 const CONVERSATION_DETAIL_ENTITY = 'MJ: Conversation Details';
@@ -71,9 +72,11 @@ export async function LoadMeetingRooms(provider: IMetadataProvider, maxRows = 50
 }
 
 /**
- * Loads + speaker-attributes one room's transcript. Resolves agent lines via `AgentID` (AIEngine cache) and
- * heard lines via the diarized `ExternalID` against the room's participant roster (so a `User` line reads as
- * the actual person, and another agent heard in the room reads as that agent — not a generic "User").
+ * Loads + speaker-attributes one room's transcript: the details on the room conversation's current branch
+ * path, in `Sequence` order. Resolves agent lines via `AgentID` (AIEngine cache) and heard lines via the
+ * diarized `ExternalID` against the room's participant roster (so a `User` line reads as the actual person,
+ * and another agent heard in the room reads as that agent — not a generic "User"). Returns an empty
+ * transcript when the conversation's branch scope or its filter cannot be built.
  *
  * @param provider The request-scoped metadata provider.
  * @param conversationID The room conversation id.
@@ -84,13 +87,21 @@ export async function LoadRoomTranscript(
     conversationID: string,
     roomKey: string,
 ): Promise<TranscriptLine[]> {
+    let pathFilter: string;
+    try {
+        const scope = await ConversationEngine.LoadCurrentScope(conversationID, provider.CurrentUser, provider);
+        pathFilter = ConversationEngine.ScopeFilter(scope);
+    } catch (e) {
+        LogError(`Room transcript: could not read the branch scope of conversation ${conversationID}: ${e instanceof Error ? e.message : String(e)}`);
+        return [];
+    }
     const rv = RunView.FromMetadataProvider(provider);
     const [detailResult, bridgeResult] = await rv.RunViews([
         {
             EntityName: CONVERSATION_DETAIL_ENTITY,
-            ExtraFilter: `ConversationID='${EscapeSQLString(conversationID)}'`,
+            ExtraFilter: pathFilter,
             Fields: ['ID', 'Role', 'Message', 'AgentID', 'ExternalID', 'Error', '__mj_CreatedAt'],
-            OrderBy: '__mj_CreatedAt ASC',
+            OrderBy: 'Sequence ASC',
             MaxRows: 5000,
             ResultType: 'simple',
         },

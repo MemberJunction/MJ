@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { MJConversationDetailEntity } from '@memberjunction/core-entities';
+import { MJConversationDetailEntity, ConversationEngine } from '@memberjunction/core-entities';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
 import { DataCacheService } from '../../services/data-cache.service';
 import { Subject } from 'rxjs';
@@ -28,6 +28,8 @@ export class ThreadPanelComponent extends BaseAngularComponent implements OnInit
     return this.ParentMessageId;
   }
   @Input() ConversationId!: string;
+  /** The branch whose path the replies are read from; null is the trunk. */
+  @Input() CurrentBranchId: string | null = null;
 
   /** @deprecated Use {@link ConversationId}. */
   @Input() set conversationId(value: string) {
@@ -166,11 +168,12 @@ export class ThreadPanelComponent extends BaseAngularComponent implements OnInit
   private async loadReplies(): Promise<void> {
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+      const pathFilter = await ConversationEngine.BranchPathFilterFresh(this.ConversationId, this.CurrentBranchId, this.CurrentUser, this.ProviderToUse);
       const result = await rv.RunView<MJConversationDetailEntity>(
         {
           EntityName: 'MJ: Conversation Details',
-          ExtraFilter: `ParentID='${this.ParentMessageId}'`,
-          OrderBy: '__mj_CreatedAt ASC',
+          ExtraFilter: `${pathFilter} AND ParentID='${this.ParentMessageId}'`,
+          OrderBy: 'Sequence ASC',
           ResultType: 'entity_object'
         },
         this.CurrentUser

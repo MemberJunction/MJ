@@ -327,6 +327,20 @@
   font-weight: 500;
 }
 
+/* A message hit on a branch other than the one its conversation shows */
+.branch-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 4px;
+  padding: 2px 8px;
+  background: color-mix(in srgb, var(--mj-status-warning) 12%, var(--mj-bg-surface));
+  color: var(--mj-text-secondary);
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
 .result-meta {
   display: flex;
   flex-direction: column;

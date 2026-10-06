@@ -382,6 +382,6 @@ describe('BaseAgent.finalizeAgentRun — pending-save drain + run status', () =>
 
     await finalize(agent, { step: 'Success', message: 'done' });
     // Steps is empty → the cached [] is the negative-cache entry that spares the next turn its DB lookups.
-    expect(PriorTurnToolResultCache.Instance.Get(conversationId, agentId)).toEqual([]);
+    expect(PriorTurnToolResultCache.Instance.Get(conversationId, agentId, null)).toEqual([]);
   });
 });

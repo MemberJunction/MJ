@@ -1,9 +1,9 @@
 import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef, inject } from '@angular/core';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
-import { ResourceData } from '@memberjunction/core-entities';
+import { ConversationEngine, ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { RunView } from '@memberjunction/core';
+import { LogError, RunView } from '@memberjunction/core';
 import { GraphQLLiveKitClient, GraphQLDataProvider, RealtimeModelVoices, RealtimeVoiceOption } from '@memberjunction/graphql-dataprovider';
 import { UserHoldsAuthorization, REALTIME_ADVANCED_SESSION_CONTROLS } from '@memberjunction/ng-conversations';
 import {
@@ -1242,20 +1242,31 @@ export class LiveKitRoomResource extends BaseResourceComponent implements OnInit
     }
   }
 
-  /** Opens a past meeting's transcript (drill-in). */
+  /**
+   * Opens a past meeting's transcript (drill-in): the details on the room conversation's current branch
+   * path, in `Sequence` order. The transcript stays empty when the branch scope or its filter cannot be built.
+   */
   public async OpenTranscript(room: { ConversationID: string; Name: string }): Promise<void> {
     this.OpenHistoryRoom = room;
     this.HistoryTranscript = [];
     this.LoadingTranscript = true;
     this.cdr.detectChanges();
     try {
+      let pathFilter: string;
+      try {
+        const scope = await ConversationEngine.LoadCurrentScope(room.ConversationID, this.ProviderToUse.CurrentUser, this.ProviderToUse);
+        pathFilter = ConversationEngine.ScopeFilter(scope);
+      } catch (e) {
+        LogError(`Meeting transcript: could not read the branch scope of conversation ${room.ConversationID}: ${e instanceof Error ? e.message : String(e)}`);
+        return;
+      }
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const res = await rv.RunView<{ Role: string; Message: string; AgentID: string; Error: string }>(
         {
           EntityName: 'MJ: Conversation Details',
-          ExtraFilter: `ConversationID='${room.ConversationID.replace(/'/g, "''")}'`,
+          ExtraFilter: pathFilter,
           Fields: ['Role', 'Message', 'AgentID', 'Error', '__mj_CreatedAt'],
-          OrderBy: '__mj_CreatedAt ASC',
+          OrderBy: 'Sequence ASC',
           MaxRows: 5000,
           ResultType: 'simple',
         },

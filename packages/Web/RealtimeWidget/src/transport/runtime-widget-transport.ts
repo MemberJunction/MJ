@@ -14,7 +14,8 @@
  * @module @memberjunction/realtime-widget
  */
 
-import { RunView, type UserInfo, type IMetadataProvider } from '@memberjunction/core';
+import { RunView, LogError, type UserInfo, type IMetadataProvider } from '@memberjunction/core';
+import { ConversationEngine } from '@memberjunction/core-entities';
 import type { MJConversationEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { setupGraphQLClient, GraphQLProviderConfigData } from '@memberjunction/graphql-dataprovider';
 import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
@@ -202,14 +203,28 @@ export class RuntimeWidgetTransport implements IWidgetTransport {
         return detail;
     }
 
-    /** Reads the newest AI Conversation Detail for the conversation (the agent's reply). */
+    /**
+     * Reads the newest AI Conversation Detail on the conversation's current branch path (the agent's
+     * reply). Returns an empty string when the conversation's scope cannot be read.
+     */
     private async readLatestAgentReply(): Promise<string> {
+        const conversationId = this.conversationId;
+        if (!conversationId || !this.contextUser) {
+            return '';
+        }
+        const scope = await ConversationEngine.LoadCurrentScope(conversationId, this.contextUser, this.provider ?? undefined).catch((err: unknown) => {
+            LogError(`[mj-widget] Could not read the branch scope of conversation ${conversationId}: ${err instanceof Error ? err.message : String(err)}`);
+            return undefined;
+        });
+        if (!scope) {
+            return '';
+        }
         const rv = new RunView();
         const result = await rv.RunView<MJConversationDetailEntity>(
             {
                 EntityName: CONVERSATION_DETAILS_ENTITY,
-                ExtraFilter: `ConversationID='${this.conversationId}' AND Role='AI'`,
-                OrderBy: '__mj_CreatedAt DESC',
+                ExtraFilter: `${ConversationEngine.ScopeFilter(scope)} AND [Role]='AI'`,
+                OrderBy: 'Sequence DESC',
                 MaxRows: 1,
                 ResultType: 'entity_object',
             },

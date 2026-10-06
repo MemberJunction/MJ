@@ -36,6 +36,7 @@ import {
     MJArtifactVersionEntity,
     MJConversationDetailArtifactEntity,
     MJConversationDetailEntity,
+    ConversationEngine,
 } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIAgentPermissionHelper, AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -77,6 +78,7 @@ const SIGNIFICANT_PROGRESS_STEPS = ['prompt_execution', 'action_execution', 'sub
 const SESSION_ENTITY = 'MJ: AI Agent Sessions';
 const CO_AGENT_ENTITY = 'MJ: AI Agent Co Agents';
 const CONVERSATION_DETAIL_ENTITY = 'MJ: Conversation Details';
+const CONVERSATION_ENTITY = 'MJ: Conversations';
 const CHANNEL_ENTITY = 'MJ: AI Agent Channels';
 const SESSION_CHANNEL_ENTITY = 'MJ: AI Agent Session Channels';
 const ARTIFACT_ENTITY = 'MJ: Artifacts';
@@ -1843,6 +1845,11 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      * as the resumed transcript are removed, so the prompt never carries two accounts of one
      * exchange.
      *
+     * Only the rows on the conversation's active path are read: the path of its `CurrentBranchID`
+     * (the trunk when it has none), in `Sequence` order. When that path cannot be built — the
+     * conversation cannot be read or is not visible, or its branch rows are missing or invalid —
+     * the session starts with no history, never with every branch's rows.
+     *
      * Strictly tolerant — no conversation, a failed read, or any throw yields `[]`, never a failed
      * session start. The call still works; it just starts cold.
      *
@@ -1861,8 +1868,17 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         if (!conversationId) {
             return [];
         }
+        const rv = RunView.FromMetadataProvider(provider);
+        let pathFilter: string;
         try {
-            const rv = RunView.FromMetadataProvider(provider);
+            pathFilter = await this.loadActivePathFilter(conversationId, rv, contextUser, provider);
+        } catch (error) {
+            LogError(
+                `StartRealtimeClientSession: could not build the active branch path for conversation ${conversationId}: ${(error as Error).message}`,
+            );
+            return [];
+        }
+        try {
             const result = await rv.RunView<{
                 Role: string;
                 Message: string | null;
@@ -1871,9 +1887,9 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             }>(
                 {
                     EntityName: CONVERSATION_DETAIL_ENTITY,
-                    ExtraFilter: `ConversationID='${conversationId.replace(/'/g, "''")}'`,
+                    ExtraFilter: pathFilter,
                     Fields: ['ID', 'Role', 'Message', 'HiddenToUser', 'AgentSessionID', '__mj_CreatedAt'],
-                    OrderBy: '__mj_CreatedAt ASC',
+                    OrderBy: 'Sequence ASC',
                     ResultType: 'simple',
                 },
                 contextUser,
@@ -1898,6 +1914,40 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             );
             return [];
         }
+    }
+
+    /**
+     * The `ExtraFilter` predicate for the conversation's active path: its `CurrentBranchID` path,
+     * or the trunk when it has none. The id's apostrophes are doubled in the conversation read this
+     * method builds; the engine gets the raw id because it escapes the ids it puts into the path.
+     *
+     * @throws When the conversation read fails or returns no row (not found or not visible), or
+     *   the branch path cannot be built (failed branch read, unknown branch, chain too deep).
+     */
+    private async loadActivePathFilter(
+        conversationId: string,
+        rv: RunView,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<string> {
+        const safeId = conversationId.replace(/'/g, "''");
+        const conversation = await rv.RunView<{ ID: string; CurrentBranchID: string | null }>(
+            {
+                EntityName: CONVERSATION_ENTITY,
+                ExtraFilter: `ID='${safeId}'`,
+                Fields: ['ID', 'CurrentBranchID'],
+                ResultType: 'simple',
+            },
+            contextUser,
+        );
+        if (!conversation.Success) {
+            throw new Error(`conversation read failed: ${conversation.ErrorMessage}`);
+        }
+        const row = conversation.Results?.[0];
+        if (!row) {
+            throw new Error('conversation not found');
+        }
+        return ConversationEngine.BranchPathFilterFresh(conversationId, row.CurrentBranchID ?? null, contextUser, provider);
     }
 
     /**

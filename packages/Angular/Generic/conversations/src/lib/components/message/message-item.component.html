@@ -36,8 +36,16 @@
         </span>
       }
 
-      <!-- Edit (owner's completed user messages) — opens the inline editor; the server
-           sets OriginalMessageChanged when the text actually changes on save -->
+      @if (HasBranchSwitcher) {
+        <span class="message-branch-switcher" title="Switch between alternatives">
+          <button type="button" class="branch-step" [disabled]="IsProcessing" (click)="OnBranchStep(-1)" aria-label="Previous alternative"><i class="fas fa-chevron-left"></i></button>
+          <span class="branch-position">{{ BranchSwitcher!.CurrentIndex + 1 }} / {{ BranchSwitcher!.Alternatives.length }}</span>
+          <button type="button" class="branch-step" [disabled]="IsProcessing" (click)="OnBranchStep(1)" aria-label="Next alternative"><i class="fas fa-chevron-right"></i></button>
+        </span>
+      }
+
+      <!-- Edit (owner's completed user messages) — opens the inline editor; a changed text is
+           sent again on a new branch, and the original message is not changed -->
       @if (allowMessageEdit && isUserMessage && isConversationOwner && !isEditing && messageStatus === 'Complete') {
         <span class="message-edit-icon" (click)="onEditClick()" title="Edit message">
           <i class="fas fa-pen"></i>
@@ -201,7 +209,7 @@
           <div class="edit-actions">
             <button class="edit-action-btn save" (click)="saveEdit()">
               <i class="fas fa-check"></i>
-              Save
+              Resend
             </button>
             <button class="edit-action-btn cancel" (click)="cancelEditing()">
               <i class="fas fa-times"></i>
@@ -209,7 +217,7 @@
             </button>
           </div>
           <div class="edit-hint">
-            Press Enter to save, Shift+Enter for new line, Escape to cancel
+            Press Enter to send as a new branch, Shift+Enter for new line, Escape to cancel
           </div>
         </div>
       }
@@ -390,12 +398,12 @@
     <!-- Rating component moved to message footer (lines 113-134) -->
 
     <!-- Removed message-actions hover panel - actions now in gear icon dropdown -->
-    <!-- Retry button kept for critical error recovery on failed messages -->
-    @if (messageStatus === 'Error' && isAIMessage && !isProcessing && !isEditing) {
+    <!-- Regenerate button: asks for a new AI reply on a new branch -->
+    @if (CanRegenerate) {
       <div class="message-actions">
-        <button class="message-action-btn retry-btn" (click)="onRetryClick()" title="Retry">
+        <button class="message-action-btn retry-btn" (click)="OnRegenerateClick()" title="Regenerate this reply on a new branch">
           <i class="fas fa-redo"></i>
-          Retry
+          Regenerate
         </button>
       </div>
     }

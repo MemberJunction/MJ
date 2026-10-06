@@ -3,7 +3,7 @@ import { Metadata, IMetadataProvider } from '@memberjunction/core';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
-import { MJGlobal } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { ClientRealtimeSessionConfig, DEFAULT_REALTIME_AUDIO_TRACKS, JSONObject, JSONValue, RealtimeToolDefinition, RealtimeTrackDescriptor, RealtimeTrackDirection } from '@memberjunction/ai';
 import { AppContextSnapshot } from '@memberjunction/ai-core-plus';
 import {
@@ -516,7 +516,11 @@ export class RealtimeSessionRuntime {
    */
   /** Conversation id the SERVER created for this session (null when the host supplied one). */
   private createdConversationId: string | null = null;
-  /** The session's conversation id (supplied or server-created). */
+  /**
+   * The session's conversation id (supplied or server-created). While a start's mint runs, the
+   * conversation the start asked for; null when it asked the server to create one. Null after
+   * teardown.
+   */
   private sessionConversationId: string | null = null;
   /** First final user utterance of the live session (the naming seed). */
   private firstUserTranscript: string | null = null;
@@ -792,6 +796,14 @@ export class RealtimeSessionRuntime {
   }
 
   /**
+   * True when a session is open or starting for `conversationId`. Ids are compared without
+   * regard to case.
+   */
+  public IsActiveFor(conversationId: string | null | undefined): boolean {
+    return this.IsActive && conversationId != null && UUIDsEqual(this.sessionConversationId, conversationId);
+  }
+
+  /**
    * Start a client-direct voice session fronting `targetAgentId`.
    *
    * @param targetAgentId The agent the Realtime Co-Agent voices on behalf of.
@@ -848,6 +860,9 @@ export class RealtimeSessionRuntime {
     }
 
     const consent = this.beginSessionStart({ agentName, recordingConsent, applicationId, appContext });
+    this.sessionConversationId = conversationId ?? null;
+    // A teardown while the channels start or the mint runs bumps this; see the checks below.
+    const generation = this.startGeneration;
     // Captured BEFORE startChannels so the mint carries exactly the snapshot the prologue
     // resolved, whatever a channel plugin may push in the meantime.
     const effectiveAppContext = this._appContext$.value;
@@ -859,7 +874,20 @@ export class RealtimeSessionRuntime {
       const allClientTools = [...(clientTools ?? []), ...(await this.startChannels())];
       session = await this.mintSession(targetAgentId, conversationId, lastSessionId, preferredModelId, allClientTools, coAgentId, configOverridesJson, consent, this.recordingStartedAtIso, mediaCollectionId, this.applicationId, effectiveAppContext);
     } catch (error) {
+      // An ended or replaced start only logs its failure: the error state and the teardown belong
+      // to the session that is current now, which a newer start may own.
+      if (this.startGeneration !== generation) {
+        console.error('[RealtimeSession] A start that was already ended failed:', error);
+        return;
+      }
       await this.failSessionStart(error);
+      return;
+    }
+
+    // The host ended the start while the mint ran. That teardown had no session id to close, so
+    // close the minted row here, and touch no shared state: a newer start may already own it.
+    if (this.startGeneration !== generation) {
+      await this.closeServerSession(session.AgentSessionId);
       return;
     }
 
@@ -3008,6 +3036,7 @@ export class RealtimeSessionRuntime {
     // to call without an active session).
     const closedSessionId = this.agentSessionId;
     this.agentSessionId = null;
+    this.sessionConversationId = null;
     this.narrationTemplate = null;
     this.clientToolHandlers.clear();
     this._modelName$.next(null);

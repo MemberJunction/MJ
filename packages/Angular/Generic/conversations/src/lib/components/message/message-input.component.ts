@@ -556,6 +556,13 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   @Input() AgentHistoryFrom: Date | null = null;
 
   /**
+   * The conversation's active branch. The agent's previous output and the configuration preset
+   * pinned by an earlier '@mention' are looked up only on this branch's path. Null (the
+   * default) is the trunk.
+   */
+  @Input() CurrentBranchId: string | null = null;
+
+  /**
    * Runs agent turns on the host's server instead of MJ's own path. The chat area still picks
    * the agent and fires {@link BeforeAgentTurn}; it then calls the handler once per turn, before
    * any reply row exists, and shows the rows the handler reports. Null (the default) runs turns
@@ -1871,18 +1878,29 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * tick — the `attachmentsChanged` event chain hasn't propagated yet, so
    * `this.pendingAttachments` may not contain the attachment. Pass it in
    * explicitly and we merge + dedupe (by `id`) before saving.
+   *
+   * `options.IsResend` sends an edited copy of an earlier message. The composer's draft is left
+   * alone: only `extraAttachments` are saved with the message, and the pending attachments and
+   * editor text are not cleared. The send never counts as the conversation's first message, so
+   * it does not name the conversation or claim a pending Plan Mode choice.
    */
-  public async SendMessageWithText(text: string, extraAttachments?: PendingAttachment[]): Promise<boolean> {
+  public async SendMessageWithText(
+    text: string,
+    extraAttachments?: PendingAttachment[],
+    options?: { IsResend?: boolean }
+  ): Promise<boolean> {
     if (this.ReadOnly) {
       return false;
     }
+    const isResend = options?.IsResend === true;
+    const draftAttachments = isResend ? [] : this.pendingAttachments;
     const merged: PendingAttachment[] = (() => {
       if (!extraAttachments || extraAttachments.length === 0) {
-        return [...this.pendingAttachments];
+        return [...draftAttachments];
       }
       const seen = new Set<string>();
       const out: PendingAttachment[] = [];
-      for (const a of [...this.pendingAttachments, ...extraAttachments]) {
+      for (const a of [...draftAttachments, ...extraAttachments]) {
         if (seen.has(a.id)) continue;
         seen.add(a.id);
         out.push(a);
@@ -1957,19 +1975,21 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
           }
         }
 
-        // Clear pending attachments after successful send
-        this.pendingAttachments = [];
+        if (!isResend) {
+          // Clear pending attachments after successful send
+          this.pendingAttachments = [];
 
-        // Also clear the mention editor's content + its own attachments list.
-        // The user-initiated send path (MessageInputBoxComponent.onSendClick)
-        // calls mentionEditor.clear() — we bypass that path here, so the chips
-        // would otherwise stay on screen after the message goes out.
-        this.InputBox?.mentionEditor?.clear();
+          // Also clear the mention editor's content + its own attachments list.
+          // The user-initiated send path (MessageInputBoxComponent.onSendClick)
+          // calls mentionEditor.clear() — we bypass that path here, so the chips
+          // would otherwise stay on screen after the message goes out.
+          this.InputBox?.mentionEditor?.clear();
+        }
 
         this.MessageSent.emit(detail);
 
         const mentionResult = this.parseMentionsFromMessage(detail.Message);
-        const isFirstMessage = this.ConversationHistory.length === 0;
+        const isFirstMessage = !isResend && this.ConversationHistory.length === 0;
         await this.routeMessage(detail, mentionResult, isFirstMessage);
         return true;
       } else {
@@ -1987,6 +2007,28 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   /** @deprecated Use {@link SendMessageWithText}. */
   public async sendMessageWithText(text: string, extraAttachments?: PendingAttachment[]): Promise<boolean> {
     return this.SendMessageWithText(text, extraAttachments);
+  }
+
+  /**
+   * Routes an existing user message through the agent path again, so the agent writes a new reply
+   * on the current branch. No message is saved, and the composer's draft and pending attachments
+   * are left alone. The rerun never counts as the conversation's first message. `IsSending` stays
+   * true until the agent turn ends, so no other send starts meanwhile.
+   *
+   * @returns false, with no agent turn, when the composer is read-only or already sending.
+   */
+  public async RerunAgentForMessage(userMessage: MJConversationDetailEntity): Promise<boolean> {
+    if (this.ReadOnly || this.IsSending) {
+      return false;
+    }
+    this.IsSending = true;
+    try {
+      const mentionResult = this.parseMentionsFromMessage(userMessage.Message || '');
+      await this.routeMessage(userMessage, mentionResult, false);
+      return true;
+    } finally {
+      this.IsSending = false;
+    }
   }
 
   /**
@@ -2187,7 +2229,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   ): Promise<RoutingArtifactVersion[]> {
     const artifactsByAgent = await Promise.all(participants.map(async participant => ({
       Agent: participant.Agent,
-      Artifacts: await this.agentService.FindAgentArtifacts(conversationId, participant.Agent.ID, this.AgentHistoryFrom)
+      Artifacts: await this.agentService.FindAgentArtifacts(conversationId, participant.Agent.ID, this.AgentHistoryFrom, this.CurrentBranchId)
     })));
     return BuildRoutingArtifactVersions(artifactsByAgent);
   }
@@ -2366,7 +2408,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   ): Promise<void> {
     const manager = this.ConverationManagerAgent;
     const managerPreset = manager?.ID && messageDetail.ConversationID
-      ? await this.agentService.FindConfigurationPresetForAgent(messageDetail.ConversationID, manager.ID)
+      ? await this.agentService.FindConfigurationPresetForAgent(messageDetail.ConversationID, manager.ID, this.CurrentBranchId)
       : undefined;
     if (manager?.ID && managerPreset) {
       await this.executeAgentContinuation(
@@ -2571,7 +2613,8 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         this.ConversationId,
         agentId,
         message,
-        this.ConversationHistory
+        this.ConversationHistory,
+        this.CurrentBranchId
       );
       return intent;
     } catch (error) {
@@ -3062,7 +3105,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       return { payload: null, artifactInfo: null };
     }
 
-    const source = await this.agentService.FindLatestAgentOutputVersion(this.ConversationId, agentId, this.AgentHistoryFrom);
+    const source = await this.agentService.FindLatestAgentOutputVersion(this.ConversationId, agentId, this.AgentHistoryFrom, this.CurrentBranchId);
     if (!source || source.payload == null) {
       console.log(`📦 No previous payload found for agent ${agentId}`);
       return { payload: null, artifactInfo: null };
@@ -3141,7 +3184,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
       // Find configuration preset from previous @mention in conversation history
       const configurationPresetId = agent?.ID
-        ? await this.agentService.FindConfigurationPresetForAgent(conversationId, agent.ID)
+        ? await this.agentService.FindConfigurationPresetForAgent(conversationId, agent.ID, this.CurrentBranchId)
         : undefined;
 
       // Invoke the sub-agent with progress callback
@@ -3317,7 +3360,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     // the loaded window while its artifact does not, and this path silently degrades to a
     // null payload when the lookup misses.
     const source = await this.agentService.FindLatestAgentOutputVersion(
-      conversationId, lastAIMessage.AgentID, this.AgentHistoryFrom
+      conversationId, lastAIMessage.AgentID, this.AgentHistoryFrom, this.CurrentBranchId
     );
     if (source && source.payload != null) {
       previousPayload = source.payload;
@@ -3599,7 +3642,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
     // Extract configuration preset from the User message that @mentioned this agent
     // Uses the shared helper method in the agent service
-    previousConfigurationId = await this.agentService.FindConfigurationPresetForAgent(conversationId, agentId);
+    previousConfigurationId = await this.agentService.FindConfigurationPresetForAgent(conversationId, agentId, this.CurrentBranchId);
 
     // Fall back to the chat header's mode-picker selection when nothing
     // in the message history pinned a preset. The picker reflects the
@@ -3618,7 +3661,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     // used to walk is the loaded window, so the artifact it is looking for is exactly the
     // one most likely to be missing from it.
     if (!previousPayload) {
-      const source = await this.agentService.FindLatestAgentOutputVersion(conversationId, agentId, this.AgentHistoryFrom);
+      const source = await this.agentService.FindLatestAgentOutputVersion(conversationId, agentId, this.AgentHistoryFrom, this.CurrentBranchId);
       if (source && source.payload != null) {
         previousPayload = source.payload;
         previousArtifactInfo = {

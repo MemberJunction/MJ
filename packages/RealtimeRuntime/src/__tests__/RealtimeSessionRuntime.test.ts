@@ -171,7 +171,10 @@ describe('session lifecycle, driven end to end with fakes', () => {
     @RegisterClass(BaseRealtimeClient, 'fake-provider')
     class FakeRealtimeClient extends BaseRealtimeClient {
         public static DisconnectCalls = 0;
-        public async Connect(): Promise<void> {}
+        public static ConnectCalls = 0;
+        public async Connect(): Promise<void> {
+            FakeRealtimeClient.ConnectCalls++;
+        }
         public SendText(): void {}
         public CancelActiveResponse(): void {}
         public SendContextNote(): void {}
@@ -332,6 +335,136 @@ describe('session lifecycle, driven end to end with fakes', () => {
         await runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider'));
         expect(runtime.LastStartError).toBeNull();
         await runtime.EndRealtimeSession();
+    });
+
+    it('reports a session active for its conversation only, comparing ids without case', async () => {
+        const { runtime } = build(new FakeMediaHost());
+        expect(runtime.IsActiveFor('conv-1')).toBe(false);
+
+        await runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider'), { conversationId: 'conv-1' });
+
+        expect(runtime.IsActiveFor('CONV-1')).toBe(true);
+        expect(runtime.IsActiveFor('conv-2')).toBe(false);
+        expect(runtime.IsActiveFor(null)).toBe(false);
+
+        await runtime.EndRealtimeSession();
+        expect(runtime.IsActiveFor('conv-1')).toBe(false);
+        expect(runtime['sessionConversationId']).toBeNull();
+    });
+
+    it('closes the minted session and goes no further when the host ends the start during the mint', async () => {
+        // Teardown during the mint has no session id to close yet; the start must close the row the
+        // mint returns, and must not open a microphone or a connection nobody is watching.
+        const host = new FakeMediaHost();
+        const runtime = new RealtimeSessionRuntime(host);
+        const relays: Array<{ query: string; variables: Record<string, unknown> }> = [];
+        let finishMint: ((value: unknown) => void) | null = null;
+        const mintingProvider = {
+            Entities: [],
+            ExecuteGQL: (query: string, variables: Record<string, unknown>): Promise<unknown> => {
+                relays.push({ query, variables });
+                return query.includes('StartRealtimeClientSession')
+                    ? new Promise<unknown>((resolve) => { finishMint = resolve; })
+                    : Promise.resolve({});
+            },
+        };
+        runtime.Provider = mintingProvider as unknown as IMetadataProvider;
+        FakeRealtimeClient.ConnectCalls = 0;
+
+        const starting = runtime.StartRealtimeSession('agent-1', 'conv-2', null, null, null, null, null, null, false);
+        await vi.waitFor(() => expect(finishMint).not.toBeNull());
+        expect(runtime.IsActiveFor('conv-2')).toBe(true);
+        await runtime.EndRealtimeSession();   // user leaves mid-mint
+        finishMint!({ StartRealtimeClientSession: mintedSession('fake-provider') });
+        await starting;
+
+        const closes = relays.filter((r) => r.query.includes('mutation CloseAgentSession'));
+        expect(closes).toHaveLength(1);
+        expect(closes[0].variables).toEqual({ agentSessionId: 'session-1' });
+        expect(runtime.IsActive).toBe(false);
+        expect(runtime.IsActiveFor('conv-2')).toBe(false);
+        expect(runtime.CurrentAgentSessionId).toBeNull();
+        expect(host.AcquireMicrophoneCalls).toBe(0);
+        expect(FakeRealtimeClient.ConnectCalls).toBe(0);
+    });
+
+    it('leaves a newer session alone when an ended start\'s mint fails afterwards', async () => {
+        // Start A is ended during its mint and start B goes live; A's failure must not tear B down.
+        const runtime = new RealtimeSessionRuntime(new FakeMediaHost());
+        const relays: Array<{ query: string; variables: Record<string, unknown> }> = [];
+        let failMintA: ((error: Error) => void) | null = null;
+        const provider = {
+            Entities: [],
+            sessionId: 'transport-session-1',
+            ExecuteGQL: (query: string, variables: Record<string, unknown>): Promise<unknown> => {
+                relays.push({ query, variables });
+                return query.includes('StartRealtimeClientSession')
+                    ? new Promise<unknown>((_resolve, reject) => { failMintA = reject; })
+                    : Promise.resolve({});
+            },
+            PushStatusUpdates: () => ({ subscribe: () => ({ unsubscribe: () => undefined }) }),
+        };
+        runtime.Provider = provider as unknown as IMetadataProvider;
+        const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        try {
+            const startingA = runtime.StartRealtimeSession('agent-1', 'conv-a', null, null, null, null, null, null, false);
+            await vi.waitFor(() => expect(failMintA).not.toBeNull());
+            await runtime.EndRealtimeSession();   // user leaves A mid-mint
+            await runtime.StartRealtimeSessionFromResult({ ...mintedSession('fake-provider'), AgentSessionId: 'session-b', ConversationId: 'conv-b' }, { conversationId: 'conv-b' });
+            expect(runtime.IsActiveFor('conv-b')).toBe(true);
+            const states: string[] = [];
+            const watching = runtime.ConnectionState$.subscribe((state) => states.push(state));
+            FakeRealtimeClient.DisconnectCalls = 0;
+
+            failMintA!(new Error('mint A failed'));
+            await startingA;
+            watching.unsubscribe();
+
+            expect(runtime.IsActive).toBe(true);
+            expect(runtime.IsActiveFor('conv-b')).toBe(true);
+            expect(runtime.CurrentAgentSessionId).toBe('session-b');
+            expect(relays.filter((r) => r.query.includes('mutation CloseAgentSession'))).toHaveLength(0);
+            expect(FakeRealtimeClient.DisconnectCalls).toBe(0);
+            expect(states).not.toContain('error');
+            expect(states).not.toContain('closed');
+            expect(runtime.LastStartError).toBeNull();
+            expect(error).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ message: 'mint A failed' }));
+        } finally {
+            error.mockRestore();
+            await runtime.EndRealtimeSession();
+        }
+    });
+
+    it('reports a starting session active for the conversation it asked for while the mint runs', async () => {
+        // The last session's conversation must not answer for the next start.
+        const { runtime } = build(new FakeMediaHost());
+        await runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider'), { conversationId: 'conv-1' });
+        await runtime.EndRealtimeSession();
+
+        let failMint: ((error: Error) => void) | null = null;
+        const mintingProvider = {
+            Entities: [],
+            sessionId: 'transport-session-1',
+            ExecuteGQL: (query: string): Promise<unknown> => query.includes('StartRealtimeClientSession')
+                ? new Promise<unknown>((_resolve, reject) => { failMint = reject; })
+                : Promise.resolve({}),
+            PushStatusUpdates: () => ({ subscribe: () => ({ unsubscribe: () => undefined }) }),
+        };
+        runtime.Provider = mintingProvider as unknown as IMetadataProvider;
+        const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        try {
+            const starting = runtime.StartRealtimeSession('agent-1', 'conv-2', null, null, null, null, null, null, false);
+            await vi.waitFor(() => expect(failMint).not.toBeNull());
+
+            expect(runtime.IsActiveFor('conv-2')).toBe(true);
+            expect(runtime.IsActiveFor('conv-1')).toBe(false);
+
+            failMint!(new Error('mint failed'));
+            await starting;
+            expect(runtime.IsActiveFor('conv-2')).toBe(false);
+        } finally {
+            error.mockRestore();
+        }
     });
 });
 
