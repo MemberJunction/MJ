@@ -1,4 +1,4 @@
-import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, ErrorAnalyzer, AIErrorInfo, ResolveFileInputStrategy, AIPromptConfiguration, EncodeToolTurnsAsText } from '@memberjunction/ai';
+import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, ErrorAnalyzer, AIErrorInfo, ResolveFileInputStrategy, AIPromptConfiguration, EncodeToolTurnsAsText, AIModelConfiguration } from '@memberjunction/ai';
 import {
   BaseModelRunner,
   type ExecutionBound,
@@ -6,7 +6,7 @@ import {
   type FailoverConfiguration,
   type FailoverAttempt,
 } from './BaseModelRunner';
-import { GetToolCallingDecision, GetToolCallingMode, NativeToolCallingDecision, RecordToolCallingDecision, RecordToolCallingMode, ResolveNativeToolCalling } from './nativeToolCallingGate';
+import { GetToolCallingDecision, GetToolCallingMode, NativeToolCallingDecision, RecordToolCallingDecision, RecordToolCallingMode, ResolveNativeToolCalling, ResolveToolChoiceForRequest } from './nativeToolCallingGate';
 import { AIModelRunner } from './AIModelRunner';
 import { ValidationAttempt, AIPromptRunResult, AIModelSelectionInfo } from '@memberjunction/ai-core-plus';
 import { LogStatus, IsVerboseLoggingEnabled, Metadata, UserInfo } from '@memberjunction/core';
@@ -1918,17 +1918,7 @@ export class AIPromptRunner extends BaseModelRunner {
   ): NativeToolCallingDecision {
     try {
       return ResolveNativeToolCalling({
-        catalogConfiguration: AIEngine.Instance.GetEffectiveModelConfiguration(
-          model.ID,
-          vendorId
-            // Must be the INFERENCE PROVIDER row, not the Model Developer row: most models carry
-            // two AIModelVendor rows for the same VendorID, and ModelVendors has no guaranteed
-            // order. Picking the developer row merges an empty config layer and silently drops any
-            // per-serving-path LLM.* knob (notably the SupportsNativeToolCalling kill switch).
-            ? model.ModelVendors?.find(mv => UUIDsEqual(mv.VendorID, vendorId)
-                && mv.Status === 'Active' && this.IsInferenceProvider(mv))?.ID
-            : undefined
-        ),
+        catalogConfiguration: this.catalogConfigurationFor(model, vendorId),
         promptConfiguration: prompt.PromptConfigurationObject,
         promptModelConfiguration,
         // Action tools and control-flow tools are counted separately: under the hybrid the control
@@ -1958,6 +1948,24 @@ export class AIPromptRunner extends BaseModelRunner {
     return this.ResolveNativeToolCallingDecision(prompt, params, model, vendorId, promptModelConfiguration);
   }
 
+  /**
+   * The merged catalog configuration for the selected model on the selected vendor.
+   *
+   * Must resolve the INFERENCE PROVIDER row, not the Model Developer row: most models carry two
+   * AIModelVendor rows for the same VendorID, and ModelVendors has no guaranteed order. Picking the
+   * developer row merges an empty config layer and silently drops any per-serving-path LLM.* knob
+   * (notably the SupportsNativeToolCalling kill switch).
+   */
+  private catalogConfigurationFor(model: MJAIModelEntityExtended, vendorId: string | null): AIModelConfiguration | null {
+    return AIEngine.Instance.GetEffectiveModelConfiguration(
+      model.ID,
+      vendorId
+        ? model.ModelVendors?.find(mv => UUIDsEqual(mv.VendorID, vendorId)
+            && mv.Status === 'Active' && this.IsInferenceProvider(mv))?.ID
+        : undefined
+    );
+  }
+
   private applyNativeToolCalling(
     chatParams: ChatParams,
     prompt: MJAIPromptEntityExtended,
@@ -1983,7 +1991,7 @@ export class AIPromptRunner extends BaseModelRunner {
       chatParams.tools = decision.controlFlow === 'implicit'
         ? params.tools
         : params.tools?.filter((t) => !control.has(t.name));
-      chatParams.toolChoice = params.toolChoice;
+      chatParams.toolChoice = ResolveToolChoiceForRequest(params.toolChoice, chatParams.tools, this.catalogConfigurationFor(model, vendorId));
       chatParams.parallelToolCalls = params.parallelToolCalls;
     }
 

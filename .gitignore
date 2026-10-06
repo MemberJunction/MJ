@@ -252,3 +252,6 @@ standards-findings.json
 # Throwaway output of the strict-template verification config (see
 # packages/Angular/Explorer/core-entity-forms/tsconfig.stricttemplates.json)
 dist-stricttmpl/
+
+# CodeGraph local index
+.codegraph/
