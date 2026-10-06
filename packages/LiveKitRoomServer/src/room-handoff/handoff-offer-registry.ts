@@ -82,6 +82,7 @@ export function ToOfferView(offer: HandoffOfferRecord): HandoffOfferView {
         Status: offer.Status,
         CreatedAt: new Date(offer.CreatedAtMs).toISOString(),
         ExpiresAt: new Date(offer.ExpiresAtMs).toISOString(),
+        InteractionID: offer.InteractionID ?? null,
     };
 }
 
