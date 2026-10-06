@@ -6063,11 +6063,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * Every storage provider isolates by category — Redis keys are `{prefix}:{category}:{key}`,
      * browser localStorage `[mj]:[category]:[key]`, IndexedDB a dedicated object store, the
      * in-memory providers a nested map — so a read and a write that disagree about the category can
-     * never meet. From `987a126aab` until this constant they did disagree: the batched warm read in
-     * `GetAndCacheDatasetByName` named `'DatasetCache'` while every write and every other reader
-     * passed none and so landed in `default`. The warm-serve path therefore missed on every
-     * transport and silently refetched from the server for five months — correct, never cheap.
-     * Naming the category once is what keeps all six call sites honest.
+     * never meet. When the batched warm read in `GetAndCacheDatasetByName` named `'DatasetCache'`
+     * while every write and every other reader landed in `default`, the warm-serve path missed on
+     * every transport and silently refetched from the server. Naming the category once is what keeps
+     * all six call sites in agreement.
      */
     public static readonly DatasetCacheCategory = 'DatasetCache';
 

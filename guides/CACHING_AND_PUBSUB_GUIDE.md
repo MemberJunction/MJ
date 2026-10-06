@@ -2446,7 +2446,7 @@ entity:
   dormant.
 
   **The user cache's periodic reload is gated the same way** (`UserCache`'s auto-refresh, fed by
-  `databaseSettings.metadataCacheRefreshInterval`, default 180 s). It used to reload every user and
+  `databaseSettings.metadataCacheRefreshInterval`, in milliseconds, default 180000). It used to reload every user and
   role unconditionally on that timer, which by itself kept the database awake; it now reads only when
   one of those two entities declares drift. The timer keeps ticking either way, so marking an entity
   later takes effect on the next tick without a restart, and `metadataCacheRefreshInterval: 0`
@@ -2468,14 +2468,13 @@ the wrong one finds nothing.
 |---|---|---|
 | `RunViewCache` | RunView results, keyed by fingerprint | `sharedCacheTTLSeconds` (default 3600) |
 | `RunQueryCache` | RunQuery results | as above |
-| `DatasetCache` | *(reserved — see the note below)* | as above |
+| `DatasetCache` | dataset blobs and their `_date` keys | per write: 3600 s for a blob, 3300 s for its `_date` key |
 | `Metadata` | metadata payloads | as above |
-| `default` | the metadata snapshot, the user-cache stamp, dataset blobs | **never expires**, except per entry |
+| `default` | the metadata snapshot, the user-cache stamp | **never expires**, except per entry |
 
 **Why `default` never expires.** It holds **proxy keys**: entries that vouch for other entries. The
-metadata snapshot's timestamps key is written *after* the payload it describes, and a dataset's
-`_date` key *after* its blob, so that a half-written snapshot reads as obsolete rather than as
-current. Under one blanket expiry that ordering inverts — the proxy is written last, so it expires
+metadata snapshot's timestamps key is written *after* the payload it describes, so that a
+half-written snapshot reads as obsolete rather than as current. Under one blanket expiry that ordering inverts — the proxy is written last, so it expires
 last, and a reader finds a freshness claim with nothing behind it. A process booting into that
 window adopted the timestamps and then served empty metadata as current.
 
@@ -2484,17 +2483,12 @@ for the category not to expire on its own clock. `categoryTTLSeconds` is *merged
 rather than replacing it, so configuring another category cannot silently switch it back on; naming
 `default` explicitly still overrides it.
 
-**Entries in that category may still carry their own expiry**, and a per-write TTL takes precedence
-over the category. Dataset blobs use this: `ProviderBase.DatasetCacheTTLSeconds` (3600) for the blob
-and `DatasetDateCacheTTLSeconds` (3300) for its `_date` key — deliberately shorter, so the pair
-expires in the safe direction and the cache reads as absent rather than as "fresh, but empty".
-
-> **Known asymmetry.** `CacheDataset` writes dataset blobs to `default`, and `GetCachedDataset`,
-> `IsDatasetCached` and `ClearDatasetCache` read them there — but `GetAndCacheDatasetByName` reads
-> the `DatasetCache` category, so its warm-serve path never hits, and `mj cache clear --category
-> DatasetCache` clears nothing. Dataset keys are in fact removed by the snapshot sweep, which matches
-> them by key marker. This predates the cross-process work and is tracked separately; do not assume
-> `DatasetCache` holds anything today.
+**A per-write TTL takes precedence over the category.** Datasets use this. Every dataset read and
+write names `ProviderBase.DatasetCacheCategory` (`DatasetCache`), and each write sets its own expiry:
+`ProviderBase.DatasetCacheTTLSeconds` (3600) for the blob and `DatasetDateCacheTTLSeconds` (3300) for
+its `_date` key. The `_date` key is the blob's proxy, and it is deliberately shorter-lived, so the
+pair expires in the safe direction: the cache reads as absent rather than as "fresh, but empty".
+`mj cache clear --category DatasetCache` clears them.
 
 **On a shared store, expiry belongs to the store.** A process must not age entries out by its own
 clock: every server would delete the same keys on its own schedule, publish a `removed` for each,
@@ -2504,11 +2498,22 @@ an entry whose own expiry has passed, leaving the key to the store.
 
 ## Enabling sweeping (operator runbook)
 
-MJ's periodic checks are **off in effect** on a stock installation: all four tick, and none of them
-reads the database, because every MJ entity ships with `TrustServerCacheCompletely = true` — a
-declaration that every mutation flows through `BaseEntity` and therefore fires an event the caches
-already hear. You enable a sweep by **declaring that an entity can change without one**, not by
-turning a switch on.
+MJ's periodic checks read the database **only for entities that declare they can change without an
+event** (`TrustServerCacheCompletely = false`). Turning a check on means declaring drift, not
+flipping a switch. On a stock installation:
+
+- **The engine sweep queries only the untrusted entities that a loaded engine holds as a config.**
+  MJ ships about two dozen log, run and audit entities as untrusted. Being untrusted is not enough to
+  be swept: an entity that no engine caches, or that is read only through one-off `RunView` calls, is
+  never visited. To see what your installation sweeps, look for `{prefix}:__lease__:engine-sweep:*`
+  keys in a shared cache. No such key means the engine sweep reads nothing.
+- **The user-cache staleness check runs on any fleet that shares a cache** (a store whose
+  `SharedAcrossProcesses` is true, such as Redis). That holds even when `MJ: Users` and
+  `MJ: User Roles` are trusted. A lost or deferred notice can leave a peer's user cache stale, and
+  for a deactivated user or a revoked role a stale hit is a security problem. The check is two
+  aggregate queries per interval. A single server with a process-local cache skips it.
+
+The metadata sweep and the user-cache periodic reload stay idle on a stock installation.
 
 ### The four periodic checks
 
@@ -2516,12 +2521,14 @@ turning a switch on.
 |---|---|---|
 | Engine sweep | `engineSweepIntervalSeconds` (300) | an engine holds a config whose entity declares drift |
 | Metadata sweep | `metadataSweepIntervalSeconds` (300) | a metadata-dataset member entity declares drift |
-| User-cache staleness check | `userCacheCheckIntervalSeconds` (300) | `MJ: Users` or `MJ: User Roles` declares drift |
-| User-cache periodic reload | `databaseSettings.metadataCacheRefreshInterval` (180 s) | as above |
+| User-cache staleness check | `userCacheCheckIntervalSeconds` (300) | `MJ: Users` or `MJ: User Roles` declares drift, **or** the cache is shared across processes |
+| User-cache periodic reload | `databaseSettings.metadataCacheRefreshInterval` (milliseconds, 180000) | `MJ: Users` or `MJ: User Roles` declares drift |
 
-Each takes `0` to stop its timer outright. **If you want the database to idle** — Azure SQL serverless,
-where any recurring query prevents auto-pause — the default already achieves that; set the intervals to
-`0` as well if you want the timers gone entirely.
+Each takes `0` to stop its timer outright. **If you want the database to idle** (Azure SQL serverless,
+where any recurring query prevents auto-pause), the defaults may not get you there. On a
+shared-cache fleet, set `userCacheCheckIntervalSeconds` to `0`. If any `engine-sweep` lease key appears,
+set `engineSweepIntervalSeconds` to `0` too, but only if nothing writes those entities outside MJ. A server
+whose user-cache check is off picks up a peer's lost user or role change at its next restart.
 
 ### Turning a sweep on
 
