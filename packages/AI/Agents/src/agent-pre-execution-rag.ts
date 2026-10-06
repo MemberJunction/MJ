@@ -77,7 +77,7 @@ export interface AgentPreExecutionRAGParams {
      * runs, so the set is already settled here. When exactly one skill is active it is the skill
      * principal for the permission gate and the search, as in the Scoped Search action.
      */
-    activeSkillIDs?: string[];
+    activeSkillIDs?: string[];  // case-violation-ok-legacy-back-compat: named to match the rest of AgentPreExecutionRAGParams (agent, lastUserMessage, contextUser), which predate the rule
     /**
      * Phase 2C: when true, consume SearchEngine.streamSearch() instead of
      * the synchronous Search() per scope. The final aggregate is identical
