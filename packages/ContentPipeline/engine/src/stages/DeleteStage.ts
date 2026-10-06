@@ -16,10 +16,13 @@
  * @module @memberjunction/content-pipeline
  */
 
+import { CompositeKey, LogError } from '@memberjunction/core';
+import { MJFileEntity } from '@memberjunction/core-entities';
+import { FileStorageEngine } from '@memberjunction/storage';
 import { RegisterClass } from '@memberjunction/global';
+import { VectorTargetResolver } from '../VectorTarget.js';
 import {
     BasePipelineStage,
-    BaseVectorWriter,
     Outcome,
     StageContext,
     StageDeclaration,
@@ -70,9 +73,20 @@ export abstract class BaseDeleteStage extends BasePipelineStage {
         }
 
         const removed: string[] = [];
+        const skipped: string[] = [];
+
         const vectorRemoved = await this.removeVector(record, context);
-        if (vectorRemoved) {
+        if (vectorRemoved === null) {
+            skipped.push('vector');
+        } else if (vectorRemoved) {
             removed.push('vector');
+        }
+
+        const copyRemoved = await this.removeDurableCopy(record, context);
+        if (copyRemoved === null) {
+            skipped.push('durable copy');
+        } else if (copyRemoved) {
+            removed.push('durable copy');
         }
 
         // Deleting an item marks everything beneath it for removal: its chunks, and any items it
@@ -84,8 +98,18 @@ export abstract class BaseDeleteStage extends BasePipelineStage {
         }
 
         record.SetExtension(this.Name, 'removed', removed);
-        // The commit that follows writes DeleteStatus = 'Deleted'. Getting here means every removal
-        // succeeded, which is what makes marking safe.
+        if (skipped.length > 0) {
+            // Something this record produced is still out there and could not be reached. The commit
+            // that follows would write DeleteStatus = 'Deleted', which asserts the opposite and would
+            // strand it permanently — nothing revisits a Deleted row. Leaving it Pending is what lets
+            // a later run, with the configuration fixed, finish the job.
+            record.SetExtension(this.Name, 'skipped', skipped);
+            return Outcome.Skipped(
+                `could not remove ${skipped.join(', ')} — left pending rather than marked deleted`,
+            );
+        }
+        // Getting here means every removal either succeeded or was genuinely unnecessary, which is
+        // what makes marking safe.
         return Outcome.Complete(removed.length > 0 ? `removed ${removed.join(', ')}` : 'nothing to remove');
     }
 
@@ -100,30 +124,89 @@ export abstract class BaseDeleteStage extends BasePipelineStage {
     }
 
     /**
-     * Remove the record's vector.
+     * Remove the bytes this record was kept as, if any.
      *
-     * A writer with no delete support is not an error — a deployment that never wrote vectors has
-     * nothing to remove.
+     * The stage's own description says it owns every outside-system artifact, and the durable copy
+     * is one: leaving the object behind means a deleted item's content is still sitting in the
+     * storage account. Both the object and its `MJ: Files` row go.
+     *
+     * @returns Whether a copy was removed, or null when there is one and it could not be reached.
      */
-    private async removeVector(record: WorkingRecord, context: StageContext): Promise<boolean> {
-        const key = context.Configuration.VectorWriterKey;
-        if (typeof key !== 'string' || key.length === 0) {
-            return false;
-        }
-        const writer = BaseVectorWriter.Resolve(key) as (BaseVectorWriter & {
-            Delete?: (ids: readonly string[], ctx: unknown) => Promise<unknown>;
-        }) | null;
-        if (!writer || typeof writer.Delete !== 'function') {
+    private async removeDurableCopy(record: WorkingRecord, context: StageContext): Promise<boolean | null> {
+        const fileID = record.GetExtension<string>('Pipeline', 'fileID');
+        if (!fileID) {
             return false;
         }
         try {
-            await writer.Delete([record.Identity.Key], {
-                ContextUser: context.ContextUser,
-                Provider: context.Provider,
-                Configuration: context.Configuration,
-                Signal: context.Signal,
-                ReportProgress: (m: string) => context.ReportProgress(m),
-            });
+            const file = await context.Provider.GetEntityObject<MJFileEntity>('MJ: Files', context.ContextUser);
+            if (!(await file.InnerLoad(CompositeKey.FromID(fileID)))) { // first-pk-ok: MJ core entity, single-column ID
+                // The row is already gone; nothing is stranded.
+                return false;
+            }
+            await FileStorageEngine.Instance.Config(false, context.ContextUser, context.Provider);
+            const accounts = FileStorageEngine.Instance.GetAccountsByProviderID(file.ProviderID);
+            if (accounts.length === 0) {
+                LogError(
+                    `DeleteStage: no storage account for provider '${file.ProviderID}', so the kept copy ` +
+                        `'${fileID}' cannot be removed.`,
+                );
+                return null;
+            }
+            const driver = await FileStorageEngine.Instance.GetDriver(accounts[0].ID, context.ContextUser);
+            await driver.DeleteObject(file.ProviderKey ?? file.Name);
+            // The row goes after the object, so a failure between the two leaves a row pointing at a
+            // missing object rather than an object nothing points at.
+            await file.Delete();
+            return true;
+        } catch (error) {
+            throw new TransientStageError(
+                `Removing the kept copy for '${record.Identity.Key}' failed: ` +
+                    `${error instanceof Error ? error.message : String(error)}`,
+                { cause: error },
+            );
+        }
+    }
+
+    /**
+     * Remove the record's vector.
+     *
+     * Driven by `VectorRecordID` — the receipt Embed wrote. A record that never carried one has no
+     * vector to remove, which is genuinely absent; a record that carries one and whose removal could
+     * not be attempted is NOT, and the difference decides whether this record may be marked Deleted.
+     *
+     * @returns Whether a vector was removed, or null when removal was skipped rather than
+     *          unnecessary — the caller refuses to mark a skipped record Deleted.
+     */
+    private async removeVector(record: WorkingRecord, context: StageContext): Promise<boolean | null> {
+        const vectorRecordID = record.GetExtension<string>('Pipeline', 'vectorRecordID');
+        if (!vectorRecordID) {
+            // Nothing was ever embedded for this record.
+            return false;
+        }
+        const contentSourceID = record.GetExtension<string>('Pipeline', 'contentSourceID');
+        if (!contentSourceID) {
+            // There IS a vector, and no way to work out which index holds it. Skipped, not absent.
+            LogError(
+                `DeleteStage: '${record.Identity.Key}' has VectorRecordID '${vectorRecordID}' but no ` +
+                    'Content Source, so its index cannot be resolved and the vector cannot be removed.',
+            );
+            return null;
+        }
+        try {
+            const target = await new VectorTargetResolver(context.Provider, context.ContextUser).Resolve(
+                contentSourceID,
+            );
+            if (target.Database.IsReadOnly) {
+                LogError(
+                    `DeleteStage: the vector database for '${record.Identity.Key}' is read-only, so its ` +
+                        'vector cannot be removed.',
+                );
+                return null;
+            }
+            await target.Database.DeleteRecords(
+                [{ id: vectorRecordID, values: [] }],
+                target.IndexName,
+            );
             return true;
         } catch (error) {
             // Leave the record Pending so the next attempt repeats the removal. Removal is

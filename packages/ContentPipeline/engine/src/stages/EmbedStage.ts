@@ -10,21 +10,20 @@
  */
 
 import { RegisterClass } from '@memberjunction/global';
+import { AIEmbeddingRunner } from '@memberjunction/ai-prompts';
+import { RecordMetadataValue } from '@memberjunction/ai-vectordb';
 import {
     BasePipelineStage,
-    BaseVectorWriter,
     FatalStageError,
     FinalizeResult,
     Outcome,
     StageContext,
     StageDeclaration,
     StageOutcome,
-    VectorMetadataUpdate,
-    VectorRecord,
-    VectorWriteOutcome,
     WorkingRecord,
     WorkingRecordEntity,
 } from '@memberjunction/content-pipeline-base';
+import { ResolvedVectorTarget, VectorTargetResolver } from '../VectorTarget.js';
 
 /** The registered name. */
 export const EMBED_STAGE = 'Embed';
@@ -88,38 +87,128 @@ export abstract class BaseEmbedStage extends BasePipelineStage {
         records: readonly WorkingRecord[],
         context: StageContext,
     ): Promise<FinalizeResult[]> {
-        const writer = this.resolveWriter(context);
+        const target = await this.resolveTarget(records, context);
         const full: WorkingRecord[] = [];
         const metadataOnly: WorkingRecord[] = [];
         for (const record of records) {
             const operation = record.GetExtension<EmbedOperation>(EMBED_STAGE, 'operation') ?? 'Full';
-            // A full embed wins when both could apply: its upsert writes the metadata anyway.
-            (operation === 'MetadataOnly' && writer.UpdateMetadata ? metadataOnly : full).push(record);
+            (operation === 'MetadataOnly' ? metadataOnly : full).push(record);
         }
 
         const outcomes: FinalizeResult[] = [];
         if (full.length > 0) {
             context.ReportProgress(`embedding ${full.length} record(s)`);
-            const payload: VectorRecord[] = full.map((r) => ({
-                RecordID: r.Identity.Key,
-                Text: (r.Get('Text') as string) ?? '',
-                Metadata: this.metadataFor(r),
-            }));
-            outcomes.push(...this.toResults(await this.write(() => writer.Upsert(payload, this.writeContext(context)))));
+            outcomes.push(...(await this.embedAndStore(full, target, context)));
         }
         if (metadataOnly.length > 0) {
+            // Metadata without values is a metadata update to MJ's providers, so the model call that
+            // would reproduce an identical vector is skipped.
             context.ReportProgress(`updating metadata for ${metadataOnly.length} record(s)`);
-            const payload: VectorMetadataUpdate[] = metadataOnly.map((r) => ({
-                RecordID: r.Identity.Key,
-                Metadata: this.metadataFor(r),
-            }));
             outcomes.push(
-                ...this.toResults(
-                    await this.write(() => writer.UpdateMetadata!(payload, this.writeContext(context))),
-                ),
+                ...(await this.store(
+                    metadataOnly,
+                    metadataOnly.map((r) => ({ id: this.vectorIdFor(r), values: [], metadata: this.metadataFor(r) })),
+                    target,
+                    null,
+                    context,
+                )),
             );
         }
         return outcomes;
+    }
+
+    /** Embed a page in one model call, then store it in one provider call. */
+    private async embedAndStore(
+        records: readonly WorkingRecord[],
+        target: ResolvedVectorTarget,
+        context: StageContext,
+    ): Promise<FinalizeResult[]> {
+        const embedding = await new AIEmbeddingRunner().RunEmbedding({
+            Texts: records.map((r) => this.textFor(r)),
+            // Named explicitly: these vectors are compared against stored vectors, so every one has
+            // to come from the same model rather than whichever the prompt happened to fall back to.
+            ModelID: target.EmbeddingModelID ?? undefined,
+            Dimensions: target.Dimensions ?? undefined,
+            ContextUser: context.ContextUser,
+            Provider: context.Provider,
+            Description: 'Content pipeline Embed stage',
+        });
+        if (!embedding.Success) {
+            // The texts are unchanged, so a retry is the right answer rather than marking every
+            // record permanently failed over one call.
+            return records.map((r) => ({
+                Key: r.Identity.Key,
+                Outcome: Outcome.Retry(embedding.ErrorMessage ?? 'embedding failed'),
+            }));
+        }
+        const payload = records.map((record, i) => ({
+            id: this.vectorIdFor(record),
+            values: embedding.Vectors[i],
+            metadata: this.metadataFor(record),
+        }));
+        return this.store(records, payload, target, embedding.ModelID ?? target.EmbeddingModelID, context);
+    }
+
+    /**
+     * Hand the batch to the provider and record the receipt on each record.
+     *
+     * The receipt matters as much as the write: without VectorRecordID nothing can later delete the
+     * vector this row produced, which is how orphaned vectors stay searchable after their content
+     * is gone.
+     */
+    private async store(
+        records: readonly WorkingRecord[],
+        payload: { id: string; values: number[]; metadata: Record<string, RecordMetadataValue> }[],
+        target: ResolvedVectorTarget,
+        modelID: string | null,
+        context: StageContext,
+    ): Promise<FinalizeResult[]> {
+        if (target.Database.IsReadOnly) {
+            return records.map((r) => ({
+                Key: r.Identity.Key,
+                Outcome: Outcome.Fatal('the configured vector database is read-only'),
+            }));
+        }
+        try {
+            const response = await target.Database.CreateRecords(payload, target.IndexName, target.ProviderConfig);
+            if (response.success === false) {
+                throw new Error(response.message ?? 'the vector store rejected the batch');
+            }
+        } catch (error) {
+            // A bulk call that threw tells us nothing about any individual record in it, so the
+            // whole page fails together — which is Record Set Processing's contract for a batch.
+            const message = error instanceof Error ? error.message : String(error);
+            return records.map((r) => ({ Key: r.Identity.Key, Outcome: Outcome.Retry(`vector write failed: ${message}`) }));
+        }
+
+        const now = new Date();
+        for (const [i, record] of records.entries()) {
+            record.SetExtension('Pipeline', 'columns', {
+                ...(record.GetExtension<Record<string, unknown>>('Pipeline', 'columns') ?? {}),
+                VectorRecordID: payload[i].id,
+                LastEmbeddedAt: now,
+                ...(modelID ? { EmbeddingModelID: modelID } : {}),
+            });
+        }
+        context.ReportProgress(`stored ${payload.length} vector(s)`);
+        return records.map((r) => ({ Key: r.Identity.Key, Outcome: Outcome.Complete() }));
+    }
+
+    /**
+     * The vector's id.
+     *
+     * Reuses whatever this record was stored under before, so a re-embed replaces its vector rather
+     * than leaving the old one behind under a different id.
+     */
+    private vectorIdFor(record: WorkingRecord): string {
+        return record.GetExtension<string>('Pipeline', 'vectorRecordID') || record.Identity.Key;
+    }
+
+    /** The text to embed — the decorator first, so a chunk still reads in context. */
+    private textFor(record: WorkingRecord): string {
+        const text = (record.Get('Text') as string | null) ?? '';
+        const decorator = record.Get('Decorator');
+        return typeof decorator === 'string' && decorator.length > 0 ? `${decorator}\n\n${text}` : text;
     }
 
     /**
@@ -137,17 +226,18 @@ export abstract class BaseEmbedStage extends BasePipelineStage {
     /**
      * Whether this record's content is something other than text.
      *
-     * Modality is a well-known field, so it is whatever the best-informed stage decided — a reader
-     * that knows it unpacked a JPEG outranks a discover driver guessing from a file extension.
+     * Modality is a well-known field, so it is whatever the best-informed stage decided — an
+     * extractor that knows it unpacked a JPEG outranks a discover driver guessing from a file
+     * extension.
      */
     private isNonTextModality(record: WorkingRecord): boolean {
         const modality = record.Get('Modality');
         return typeof modality === 'string' && modality !== 'text' && modality.length > 0;
     }
 
-    /** What rides alongside the vector. */
-    private metadataFor(record: WorkingRecord): Record<string, unknown> {
-        const metadata: Record<string, unknown> = { RecordID: record.Identity.Key };
+    /** What rides alongside the vector, narrowed to what a store will accept. */
+    private metadataFor(record: WorkingRecord): Record<string, RecordMetadataValue> {
+        const metadata: Record<string, RecordMetadataValue> = { RecordID: record.Identity.Key };
         const title = record.Get('Title');
         const modality = record.Get('Modality');
         if (typeof title === 'string') {
@@ -159,57 +249,28 @@ export abstract class BaseEmbedStage extends BasePipelineStage {
         return metadata;
     }
 
-    /** Run a bulk write, turning a throw into a page-wide transient failure. */
-    private async write(run: () => Promise<VectorWriteOutcome[]>): Promise<VectorWriteOutcome[]> {
+    /**
+     * The index this page writes to.
+     *
+     * Every record in a page belongs to one content source, so the target is resolved once. A page
+     * spanning sources would be a bug in the source query rather than something to paper over here.
+     */
+    private async resolveTarget(
+        records: readonly WorkingRecord[],
+        context: StageContext,
+    ): Promise<ResolvedVectorTarget> {
+        const contentSourceID = records
+            .map((r) => r.GetExtension<string>('Pipeline', 'contentSourceID'))
+            .find((id): id is string => typeof id === 'string' && id.length > 0);
+        if (!contentSourceID) {
+            throw new FatalStageError('Embed was handed records with no Content Source to resolve an index from');
+        }
         try {
-            return await run();
+            return await new VectorTargetResolver(context.Provider, context.ContextUser).Resolve(contentSourceID);
         } catch (error) {
-            // A bulk call that threw tells us nothing about any individual record in it, so the
-            // whole page fails together — which is Record Set Processing's contract for a batch.
-            throw new Error(
-                `Vector write failed for the page: ${error instanceof Error ? error.message : String(error)}`,
-            );
+            // A misconfigured index will not start being configured on a retry.
+            throw new FatalStageError(error instanceof Error ? error.message : String(error));
         }
-    }
-
-    /** Turn the writer's per-record outcomes into finalize results. */
-    private toResults(outcomes: readonly VectorWriteOutcome[]): FinalizeResult[] {
-        return outcomes.map((o) => ({
-            Key: o.RecordID,
-            Outcome: o.Success
-                ? Outcome.Complete()
-                : o.IsTransient
-                  ? Outcome.Retry(o.Message ?? 'vector write failed')
-                  : Outcome.Fatal(o.Message ?? 'vector write failed'),
-        }));
-    }
-
-    /** The slice of the stage context a writer needs. */
-    private writeContext(context: StageContext) {
-        return {
-            ContextUser: context.ContextUser,
-            Provider: context.Provider,
-            Configuration: context.Configuration,
-            Signal: context.Signal,
-            ReportProgress: (m: string) => context.ReportProgress(m),
-        };
-    }
-
-    /** The vector writer this run uses. */
-    private resolveWriter(context: StageContext): BaseVectorWriter {
-        const key = context.Configuration.VectorWriterKey;
-        if (typeof key !== 'string' || key.length === 0) {
-            throw new FatalStageError(
-                "No vector writer is configured. Set VectorWriterKey in the Record Process's Options.",
-            );
-        }
-        const writer = BaseVectorWriter.Resolve(key);
-        if (!writer) {
-            throw new FatalStageError(
-                `Vector writer '${key}' is not registered. Check that the package registering it has been loaded.`,
-            );
-        }
-        return writer;
     }
 }
 

@@ -1,44 +1,19 @@
+/**
+ * @fileoverview DeleteStage — what it removes, and when it refuses to say it did.
+ *
+ * Removal itself now goes through MJ's registered providers (`VectorDBBase` for the vector,
+ * `FileStorageBase` for the kept bytes) rather than a pipeline-local writer contract, so what is
+ * covered here is the decision the stage owns: telling "there was nothing to remove" apart from
+ * "there was something and it could not be reached". Only the first may be marked Deleted — nothing
+ * revisits a Deleted row, so marking the second strands the artifact permanently.
+ */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { RegisterClass } from '@memberjunction/global';
-import {
-    BaseVectorWriter,
-    StageContext,
-    VectorRecord,
-    VectorWriteOutcome,
-    WorkingRecord,
-    WorkingRecordIdentity,
-} from '@memberjunction/content-pipeline-base';
+import { StageContext, WorkingRecord, WorkingRecordIdentity } from '@memberjunction/content-pipeline-base';
 import { DeleteStage } from '../stages/DeleteStage.js';
 import { PipelineProcessor } from '../PipelineProcessor.js';
 import type { WorkingRecordCommitter } from '../WorkingRecordCommitter.js';
 import type { WorkingRecordHydrator } from '../WorkingRecordHydrator.js';
 import '../stages/index.js';
-
-const deleted: string[][] = [];
-let deleteThrows = false;
-
-@RegisterClass(BaseVectorWriter, 'delete-test-writer')
-class DeletingWriter extends BaseVectorWriter {
-    public readonly Key = 'delete-test-writer';
-    public async Upsert(r: readonly VectorRecord[]): Promise<VectorWriteOutcome[]> {
-        return r.map((x) => ({ RecordID: x.RecordID, Success: true }));
-    }
-    public async Delete(ids: readonly string[]): Promise<void> {
-        if (deleteThrows) {
-            throw new Error('store unreachable');
-        }
-        deleted.push([...ids]);
-    }
-}
-
-/** A writer with no delete support — a deployment that never wrote vectors. */
-@RegisterClass(BaseVectorWriter, 'delete-test-nodelete')
-class NoDeleteWriter extends BaseVectorWriter {
-    public readonly Key = 'delete-test-nodelete';
-    public async Upsert(r: readonly VectorRecord[]): Promise<VectorWriteOutcome[]> {
-        return r.map((x) => ({ RecordID: x.RecordID, Success: true }));
-    }
-}
 
 function contextWith(configuration: Record<string, unknown> = {}): StageContext {
     return {
@@ -59,42 +34,38 @@ function contextWith(configuration: Record<string, unknown> = {}): StageContext 
 const chunk = () => new WorkingRecord(new WorkingRecordIdentity('Content Item Chunk', 'u/C1', 'C1'));
 
 beforeEach(() => {
-    deleted.length = 0;
-    deleteThrows = false;
     vi.restoreAllMocks();
 });
 
-describe('DeleteStage', () => {
-    it("removes the record's vector", async () => {
-        const outcome = await new DeleteStage().Run(chunk(), contextWith({ VectorWriterKey: 'delete-test-writer' }));
-        expect(outcome.Status).toBe('Complete');
-        expect(deleted).toEqual([['C1']]);
-    });
-
-    it('records what it removed', async () => {
-        const record = chunk();
-        await new DeleteStage().Run(record, contextWith({ VectorWriterKey: 'delete-test-writer' }));
-        expect(record.GetExtension<string[]>('Delete', 'removed')).toEqual(['vector']);
-    });
-
-    it('completes when there is nothing to remove', async () => {
-        const outcome = await new DeleteStage().Run(chunk(), contextWith({ VectorWriterKey: 'delete-test-nodelete' }));
-        expect(outcome.Status).toBe('Complete');
-        expect(deleted).toEqual([]);
-    });
-
-    it('completes when no vector writer is configured at all', async () => {
+describe('nothing to remove', () => {
+    it('completes for a record that was never embedded and never kept', async () => {
         const outcome = await new DeleteStage().Run(chunk(), contextWith());
         expect(outcome.Status).toBe('Complete');
+        expect(outcome.Message).toContain('nothing to remove');
     });
 
-    it('REMOVES FIRST and leaves the record pending when removal fails', async () => {
-        // Marking deleted now would strand the vector forever; staying Pending means the next
-        // attempt repeats an idempotent removal.
-        deleteThrows = true;
-        await expect(
-            new DeleteStage().Run(chunk(), contextWith({ VectorWriterKey: 'delete-test-writer' })),
-        ).rejects.toThrow(/Removing the vector/);
+    it('marks Deleted, because absent really is absent', () => {
+        expect(new DeleteStage().CompleteStatus).toBe('Deleted');
+    });
+});
+
+describe('something to remove that cannot be reached', () => {
+    it('REFUSES to mark Deleted when a vector exists but its index cannot be resolved', async () => {
+        // VectorRecordID says a vector is out there; no Content Source says which index holds it.
+        // Marking this Deleted would leave it searchable forever with nothing left pointing at it.
+        const record = chunk();
+        record.SetExtension('Pipeline', 'vectorRecordID', 'vec-1');
+        const outcome = await new DeleteStage().Run(record, contextWith());
+        expect(outcome.Status).toBe('Skipped');
+        expect(outcome.Message).toContain('vector');
+        expect(record.GetExtension<string[]>('Delete', 'skipped')).toEqual(['vector']);
+    });
+
+    it('leaves the record pending rather than failing it, so a later run can finish the job', async () => {
+        const record = chunk();
+        record.SetExtension('Pipeline', 'vectorRecordID', 'vec-1');
+        const outcome = await new DeleteStage().Run(record, contextWith());
+        expect(outcome.Status).not.toBe('Failed');
     });
 });
 

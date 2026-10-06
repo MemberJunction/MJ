@@ -38,7 +38,6 @@ import {
     WorkingRecordIdentity,
 } from '@memberjunction/content-pipeline-base';
 import {
-    BaseDurableCopyStore,
     ObjectKeyResolutionError,
     ResolveObjectKey,
 } from '@memberjunction/content-pipeline-base';
@@ -334,14 +333,9 @@ export class ExtractStage extends BasePipelineStage {
         contentType: string | undefined,
         context: StageContext,
     ): Promise<string | null> {
-        if (!resolved.DurableCopyStoreKey || !resolved.ObjectKeyTemplate) {
+        if (!resolved.ObjectKeyTemplate) {
+            // This source keeps no durable copies.
             return null;
-        }
-        const store = BaseDurableCopyStore.Resolve(resolved.DurableCopyStoreKey);
-        if (!store) {
-            throw new FatalStageError(
-                `Durable copy store '${resolved.DurableCopyStoreKey}' is not registered.`,
-            );
         }
 
         let objectKey: string;
@@ -361,24 +355,67 @@ export class ExtractStage extends BasePipelineStage {
             throw error;
         }
 
-        const result = await store.Persist({
-            Content: content,
-            ObjectKey: objectKey,
-            ContentType: contentType,
-            ContextUser: context.ContextUser,
-            Provider: context.Provider,
-            Signal: context.Signal,
-        });
-        record.SetExtension(EXTRACT_STAGE, 'durableCopy', result);
-        if (result.FileID) {
-            // The item's reference to its kept bytes. A column rather than a proposal: there is
-            // nothing for another stage to out-argue here.
-            record.SetExtension('Pipeline', 'columns', {
-                ...(record.GetExtension<Record<string, unknown>>('Pipeline', 'columns') ?? {}),
-                FileID: result.FileID,
-            });
+        // Straight to MJ Files — no driver contract in between. FileStorageBase is already the
+        // registry of places a file can go, and a MJ: Files row is how every other part of MJ finds
+        // one again. Bytes never land in this database.
+        await FileStorageEngine.Instance.Config(false, context.ContextUser, context.Provider);
+        const account = this.resolveStorageAccount(resolved);
+        const driver = await FileStorageEngine.Instance.GetDriver(account.ID, context.ContextUser);
+        if (!(await driver.PutObject(objectKey, Buffer.from(content), contentType))) {
+            throw new TransientStageError(`Storage provider refused to write '${objectKey}'`);
         }
-        return result.ObjectKey;
+
+        // The row is written after the bytes, never before: a File row pointing at an object that
+        // was never stored is worse than no row, because everything downstream trusts the reference.
+        const file = await context.Provider.GetEntityObject<MJFileEntity>('MJ: Files', context.ContextUser);
+        file.NewRecord();
+        file.Name = objectKey.split('/').pop() ?? objectKey;
+        file.ProviderID = account.ProviderID;
+        file.ProviderKey = objectKey;
+        file.ContentType = contentType ?? 'application/octet-stream';
+        file.Status = 'Uploaded';
+        if (!(await file.Save())) {
+            throw new TransientStageError(
+                `Stored '${objectKey}' but could not record its MJ: Files row: ` +
+                    `${file.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+            );
+        }
+
+        record.SetExtension(EXTRACT_STAGE, 'durableCopy', { FileID: file.ID, ObjectKey: objectKey });
+        // The item's reference to its kept bytes. A column rather than a proposal: there is nothing
+        // for another stage to out-argue here.
+        record.SetExtension('Pipeline', 'columns', {
+            ...(record.GetExtension<Record<string, unknown>>('Pipeline', 'columns') ?? {}),
+            FileID: file.ID,
+        });
+        return objectKey;
+    }
+
+    /**
+     * The File Storage Account durable copies go to.
+     *
+     * A source names one when it has a reason to; otherwise the deployment's single configured
+     * account is used. Having none at all is a configuration error, not a reason to quietly drop the
+     * bytes the source asked to keep.
+     */
+    private resolveStorageAccount(resolved: ResolvedSource) {
+        const engine = FileStorageEngine.Instance;
+        const named = resolved.FileStorageAccountID;
+        if (named) {
+            const account = engine.GetAccountById(named) ?? engine.GetAccountByName(named);
+            if (!account) {
+                throw new FatalStageError(`No File Storage Account matches '${named}'`);
+            }
+            return account;
+        }
+        const accounts = engine.Accounts;
+        if (accounts.length === 0) {
+            throw new FatalStageError(
+                'This source keeps durable copies but no File Storage Account is configured, so there ' +
+                    'is nowhere to put them.',
+            );
+        }
+        return accounts[0];
     }
 
     /** The modality a recognized non-text format belongs to. */
@@ -474,8 +511,8 @@ export class ExtractStage extends BasePipelineStage {
             ContentTypeExtractorKey: (context.Configuration.ContentTypeExtractorKey as string | undefined) ?? null,
             FallbackExtractorKey: (context.Configuration.FallbackExtractorKey as string | undefined) ?? null,
             MultiModalEnabled: this.multiModalEnabled(settings, context),
-            DurableCopyStoreKey: (settings.DurableCopyStoreKey as string | undefined)
-                ?? (context.Configuration.DurableCopyStoreKey as string | undefined)
+            FileStorageAccountID: (settings.FileStorageAccountID as string | undefined)
+                ?? (context.Configuration.FileStorageAccountID as string | undefined)
                 ?? null,
             ObjectKeyTemplate: (settings.ObjectKeyTemplate as string | undefined)
                 ?? (context.Configuration.ObjectKeyTemplate as string | undefined)
@@ -508,7 +545,7 @@ interface ResolvedSource {
     ContentTypeExtractorKey: string | null;
     FallbackExtractorKey: string | null;
     MultiModalEnabled: boolean;
-    DurableCopyStoreKey: string | null;
+    FileStorageAccountID: string | null;
     /** e.g. `{TenantID}/{ContentSourceID}/{RecordID}-{Name}`. */
     ObjectKeyTemplate: string | null;
     /**

@@ -19,5 +19,3 @@ export * from './ContentPipelineStartup.js';
 export * from './PipelineProcessRunTracker.js';
 export * from './readers/index.js';
 export * from './stages/index.js';
-export * from './MJVectorStoreWriter.js';
-export * from './MJFileDurableCopyStore.js';

@@ -1,65 +1,13 @@
 /**
- * @fileoverview Durable copies — keeping the bytes a record was made from.
+ * @fileoverview Object keys for durable copies.
  *
- * A non-text record that has to be retrievable later, without re-authenticating against its original
- * source, keeps its bytes once. The pipeline stores a reference; the bytes live in whichever backend
- * a deployment configured.
+ * There is deliberately no driver contract here. Where the bytes live is MJ's question, not the
+ * pipeline's: `FileStorageBase` is the registry of places to put a file and a `MJ: Files` row is how
+ * everything else in MJ finds one again. What IS the pipeline's business, and all that remains in
+ * this file, is the rule about the key those bytes are written under.
  *
  * @module @memberjunction/content-pipeline-base
  */
-
-import { MJGlobal } from '@memberjunction/global';
-import { IMetadataProvider, UserInfo } from '@memberjunction/core';
-
-/** What to persist. */
-export interface DurableCopyRequest {
-    /** The bytes. */
-    Content: Uint8Array;
-    /** The object key to write under, already resolved and verified. */
-    ObjectKey: string;
-    /** The transport's content-type claim, when there was one. */
-    ContentType?: string;
-    /** The acting user. */
-    ContextUser: UserInfo;
-    /** The provider to read through. */
-    Provider: IMetadataProvider;
-    /** Fires when the run is asked to stop. */
-    Signal: AbortSignal;
-}
-
-/** Where the bytes went. */
-export interface DurableCopyResult {
-    /** The `MJ: Files` record holding the metadata, when the store created one. */
-    FileID?: string;
-    /** The key the bytes were written under. */
-    ObjectKey: string;
-}
-
-/**
- * A registered place to keep bytes.
- *
- * Separate from user-uploaded attachments by design: content the pipeline fetched has a different
- * lifecycle and a different access story, and mixing the two makes both harder to reason about.
- */
-export abstract class BaseDurableCopyStore {
-    /** The registration key. Must match the key passed to `@RegisterClass`. */
-    public abstract readonly Key: string;
-
-    /** Write the bytes and return where they went. */
-    public abstract Persist(request: DurableCopyRequest): Promise<DurableCopyResult>;
-
-    /** Resolve a registered store by key, returning null rather than a hollow base instance. */
-    public static Resolve(key: string): BaseDurableCopyStore | null {
-        if (!key || key.trim().length === 0) {
-            return null;
-        }
-        const result = MJGlobal.Instance.ClassFactory.TryCreateInstance<BaseDurableCopyStore>(
-            BaseDurableCopyStore,
-            key.trim(),
-        );
-        return result.Resolved ? result.Instance : null;
-    }
-}
 
 /** Raised when an object key cannot be resolved. Deliberately not a soft failure — see below. */
 export class ObjectKeyResolutionError extends Error {
