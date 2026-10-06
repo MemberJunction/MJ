@@ -208,6 +208,25 @@ async function runPreExecutionRAG(ctx: IntegrationCheckContext, agent: MJAIAgent
 /** The search-log fields RG1/RG2 read. */
 type ForbiddenLogRow = Pick<MJSearchExecutionLogEntity, 'ID' | 'AIAgentID' | 'FailureReason'>;
 
+/** Success search-log rows this user wrote for exactly this query, re-polled briefly: the audit write is fire-and-forget. */
+async function successRows(ctx: IntegrationCheckContext, query: string): Promise<Array<Pick<MJSearchExecutionLogEntity, 'ID' | 'SearchScopeID'>>> {
+  for (let attempt = 0; ; attempt++) {
+    const r = await new RunView().RunView<Pick<MJSearchExecutionLogEntity, 'ID' | 'SearchScopeID'>>(
+      {
+        EntityName: 'MJ: Search Execution Logs',
+        ExtraFilter: `Status='Success' AND UserID='${EscapeSQLString(ctx.User.ID)}' AND Query='${EscapeSQLString(query)}'`,
+        Fields: ['ID', 'SearchScopeID'],
+        ResultType: 'simple',
+        BypassCache: true,
+      },
+      ctx.User,
+    );
+    Assert(r.Success, `Search Execution Log read failed: ${r.ErrorMessage ?? ''}`);
+    if (r.Results.length > 0 || attempt >= 5) return r.Results;
+    await new Promise<void>((resolve) => setTimeout(resolve, 500));
+  }
+}
+
 /** Forbidden search-log rows this user wrote for the IT scope and exactly this query. */
 async function forbiddenRows(ctx: IntegrationCheckContext, query: string): Promise<ForbiddenLogRow[]> {
   const fx = requireFixture(ctx);
@@ -425,7 +444,8 @@ for (const check of AgentRagSearchChecks) {
 
 /**
  * 'agent-rag-gate' (IT107, deterministic): pre-execution RAG's scope-permission gate, exercised by calling
- * `AgentPreExecutionRAG.Execute()` directly (no model), over this file's seeded corpus and fixture lifecycle.
+ * `AgentPreExecutionRAG.Execute()` directly (no model). It seeds no corpus (a note save embeds, which the
+ * deterministic lane cannot rely on): the proof is the search log, a Success row for a granted run and a Forbidden row for a refused one.
  *
  * RG2 refuses through the AGENT (an unsaved copy of IT: Search Agent set to SearchScopeAccess='None'), not
  * through the seeded no-grant user: that user holds no roles, so it cannot read `MJ: AI Agent Search Scopes`
@@ -436,35 +456,23 @@ for (const check of AgentRagSearchChecks) {
 export const AgentRagGateChecks: NamedCheck[] = [
   {
     Id: 'agent-rag-gate.RG1',
-    Name: 'RG1: (deterministic) pre-execution RAG run directly for a granted user returns the seeded in-scope notes, not the excluded one',
+    Name: 'RG1: (deterministic) pre-execution RAG run directly for a granted user searches the IT scope: a Success search-log row, no Forbidden row',
     Fn: async (ctx): Promise<void> => {
-      if (!noteCorpusSearchable(ctx)) {
-        skipUnsearchable('RG1');
-        return;
-      }
       const fx = requireFixture(ctx);
       const agent = await resolveSearchAgent(ctx);
-      const query = `${fx.LogQueryPrefix} ${fx.Marker} sentinel`;
+      const query = `${fx.LogQueryPrefix} ${fx.Marker} granted`;
       const result = await runPreExecutionRAG(ctx, agent, query);
-      Assert(
-        !!result,
-        'pre-execution RAG returned null for the run user — the fixture grants the IT scope Search to UI/Developer/Integration; ' +
-          'either the gate refused it (see the Forbidden rows) or the search found nothing',
-      );
-      Assert(result!.queriedScopeIDs.some((id) => UUIDsEqual(id, fx.ScopeID)), 'the IT scope was not among the scopes pre-execution RAG searched');
-      const returned = new Set(result!.combinedResults.map((r) => NormalizeUUID(r.RecordID)));
-      for (const id of inScopeNoteIds(fx)) {
-        Assert(returned.has(NormalizeUUID(id)), `in-scope sentinel note ${id} is missing from the pre-execution RAG result`);
+      // The gate bundle seeds no corpus (a note save embeds, which the deterministic lane cannot rely on),
+      // so the result may be null when the scope holds nothing; the proof that the gate ALLOWED the search is
+      // the engine's own audit row, which it writes for every search it ran.
+      if (result) {
+        Assert(result.queriedScopeIDs.some((id) => UUIDsEqual(id, fx.ScopeID)), 'the IT scope was not among the scopes pre-execution RAG searched');
       }
-      for (const id of fx.ExcludedNoteIds) {
-        Assert(!returned.has(NormalizeUUID(id)), `the excluded note ${id} leaked past the scope ExtraFilter into pre-execution RAG`);
-      }
-      Assert(
-        result!.formattedSystemMessage.includes(`Results from "${IT_SCOPE_NAME}"`),
-        'the formatted <retrieved_context> block does not carry the IT scope results',
-      );
       AssertEqual((await forbiddenRows(ctx, query)).length, 0, 'a granted run must write no Forbidden row');
-      console.log(`      → pre-execution RAG returned ${returned.size} result(s) incl. all ${inScopeNoteIds(fx).length} in-scope sentinels`);
+      const ran = await successRows(ctx, query);
+      Assert(ran.length >= 1, 'a granted run must leave a Success search-log row for this query (the gate let the search run)');
+      Assert(ran.every((r) => !r.SearchScopeID || UUIDsEqual(r.SearchScopeID, fx.ScopeID)), 'the Success row names a scope other than the IT scope');
+      console.log(`      → granted: ${ran.length} Success row(s), no Forbidden row${result ? `, ${result.combinedResults.length} result(s)` : ', empty corpus'}`);
     },
   },
   {
@@ -493,7 +501,8 @@ for (const check of AgentRagGateChecks) {
 }
 
 /** Seeds the sentinel corpus both bundles search. */
-async function setupRagFixture(ctx: IntegrationCheckContext): Promise<void> {
+/** The fixture both bundles share, before any corpus: the seeded scope's ID, a marker and the log prefix. */
+async function createRagFixture(ctx: IntegrationCheckContext): Promise<AgentRagSearchFixture> {
   const marker = `ITRAG${Date.now()
     .toString(36)
     .replace(/[^a-z0-9]/gi, '')}`;
@@ -518,10 +527,25 @@ async function setupRagFixture(ctx: IntegrationCheckContext): Promise<void> {
     CreatedRunIds: [],
   };
   ctx.AgentRagSearchFixture = fx;
+  return fx;
+}
+
+/**
+ * The gate bundle's setup: the fixture with NO sentinel notes. Saving an `MJ: AI Agent Notes` row generates an
+ * embedding (`MJAIAgentNoteEntityServer.Save`), which the deterministic lane cannot rely on; RG1 and RG2 prove
+ * the gate through the search log instead.
+ */
+async function setupRagGateFixture(ctx: IntegrationCheckContext): Promise<void> {
+  await createRagFixture(ctx);
+}
+
+/** Seeds the sentinel corpus the live bundle searches. */
+async function setupRagFixture(ctx: IntegrationCheckContext): Promise<void> {
+  const fx = await createRagFixture(ctx);
   // Seed the sentinel corpus: two in-scope notes + one excluded (carries the scope's exclusion marker).
-  fx.SeededNoteIds.push(await seedNote(ctx, `${marker} sentinel alpha note ${FIXTURE_TAG}`));
-  fx.SeededNoteIds.push(await seedNote(ctx, `${marker} sentinel beta note ${FIXTURE_TAG}`));
-  const excludedId = await seedNote(ctx, `${marker} sentinel gamma ${EXCLUDE_MARKER} note ${FIXTURE_TAG}`);
+  fx.SeededNoteIds.push(await seedNote(ctx, `${fx.Marker} sentinel alpha note ${FIXTURE_TAG}`));
+  fx.SeededNoteIds.push(await seedNote(ctx, `${fx.Marker} sentinel beta note ${FIXTURE_TAG}`));
+  const excludedId = await seedNote(ctx, `${fx.Marker} sentinel gamma ${EXCLUDE_MARKER} note ${FIXTURE_TAG}`);
   fx.SeededNoteIds.push(excludedId);
   fx.ExcludedNoteIds.push(excludedId);
 }
@@ -615,4 +639,4 @@ async function deleteCreatedRuns(ctx: IntegrationCheckContext, fx: AgentRagSearc
 }
 
 IntegrationCheckRegistry.Instance.RegisterLifecycle('agent-rag-search', { Setup: setupRagFixture, Teardown: teardownRagFixture });
-IntegrationCheckRegistry.Instance.RegisterLifecycle('agent-rag-gate', { Setup: setupRagFixture, Teardown: teardownRagFixture });
+IntegrationCheckRegistry.Instance.RegisterLifecycle('agent-rag-gate', { Setup: setupRagGateFixture, Teardown: teardownRagFixture });

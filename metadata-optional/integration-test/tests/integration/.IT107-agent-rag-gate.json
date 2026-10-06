@@ -2,10 +2,10 @@
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
     "Name": "IT107 - Agent Pre-Execution RAG Permission Gate",
-    "Description": "Pre-execution RAG's scope-permission gate, deterministic, no LLM: the checks call AgentPreExecutionRAG.Execute() directly as IT: Search Agent over a sentinel MJ: AI Agent Notes corpus seeded in IT: Integration Test Scope (shared fixture lifecycle with IT62). RG1: for the run user (granted Search on the IT scope through the UI, Developer or Integration role) the result holds the seeded in-scope notes, not the IT-SCOPE-EXCLUDED one, and no Forbidden row is written. RG2: for an unsaved copy of the agent set to SearchScopeAccess='None' the result is null and exactly one Forbidden MJ: Search Execution Logs row is written for the IT scope and the query, attributed to the agent. 2 checks RG1-RG2.",
+    "Description": "Pre-execution RAG's scope-permission gate, deterministic, no LLM: the checks call AgentPreExecutionRAG.Execute() directly for the seeded IT: Search Agent. The bundle seeds no notes (a note save embeds); the proof is the search log.",
     "InputDefinition": {},
     "ExpectedOutcomes": {
-      "summary": "A granted run of pre-execution RAG retrieves the seeded in-scope notes; a refused run retrieves nothing and leaves exactly one Forbidden search-log row naming the IT scope, the query and the agent."
+      "summary": "A granted run of pre-execution RAG leaves a Success search-log row for the IT scope and no Forbidden row; an agent with SearchScopeAccess='None' gets null and exactly one Forbidden row attributed to it."
     },
     "Configuration": {
       "tier": "deterministic",
