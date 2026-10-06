@@ -38,8 +38,14 @@ describe('RealtimeAudioRecorder — disabled when Web Audio is unavailable', () 
 describe('RealtimeAudioRecorder — with stubbed Web Audio', () => {
     const g = globalThis as Record<string, unknown>;
     const saved: Record<string, unknown> = {};
+    /** Streams handed to createMediaStreamSource, in call order. */
+    let sourceCalls: MediaStream[] = [];
+    /** When set, createMediaStreamSource throws a cross-rate NotSupportedError for exactly this stream. */
+    let throwForStream: MediaStream | null = null;
 
     beforeEach(() => {
+        sourceCalls = [];
+        throwForStream = null;
         for (const key of ['AudioContext', 'AudioWorkletNode', 'Blob', 'URL']) {
             saved[key] = g[key];
         }
@@ -54,7 +60,11 @@ describe('RealtimeAudioRecorder — with stubbed Web Audio', () => {
             public createMediaStreamDestination() {
                 return { stream: {} };
             }
-            public createMediaStreamSource() {
+            public createMediaStreamSource(stream: MediaStream) {
+                sourceCalls.push(stream);
+                if (stream === throwForStream) {
+                    throw new DOMException('cross-rate', 'NotSupportedError');
+                }
                 return { connect: () => undefined };
             }
             public createScriptProcessor() {
@@ -233,5 +243,54 @@ describe('RealtimeAudioRecorder — with stubbed Web Audio', () => {
         expect(internals.pendingRemoteStream).toBeNull();
         expect(recorder.IsRecording).toBe(false);
         expect(recorder.SnapshotNewSegment()).toBeNull(); // no leftover unflushed segment
+    });
+    describe('remote stream that cannot be mixed in', () => {
+        const captureOne = (recorder: RealtimeAudioRecorder): void => {
+            (recorder as unknown as { captureFrame(f: Float32Array): void }).captureFrame(new Float32Array(128).fill(0.5));
+        };
+
+        it('Start(mic, remote) keeps recording mic-only and warns when the remote connect throws', async () => {
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+            const remote = fakeStream(1);
+            throwForStream = remote;
+            const recorder = new RealtimeAudioRecorder();
+            recorder.Start(fakeStream(1), remote);
+            await vi.waitFor(() => expect(sourceCalls).toContain(remote));
+
+            expect(recorder.IsRecording).toBe(true);
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining('agent stream'), expect.any(DOMException));
+            captureOne(recorder);
+            const blob = await recorder.Stop();
+            expect(blob).not.toBeNull();
+            expect(blob!.size).toBeGreaterThan(44);
+        });
+
+        it('AttachRemoteStream after setup keeps recording mic-only and warns when the connect throws', async () => {
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+            const recorder = new RealtimeAudioRecorder();
+            recorder.Start(fakeStream(1), null);
+            await vi.waitFor(() => expect(sourceCalls.length).toBe(1)); // mic connected => graph ready
+            const remote = fakeStream(1);
+            throwForStream = remote;
+
+            expect(() => recorder.AttachRemoteStream(remote)).not.toThrow();
+            expect(recorder.IsRecording).toBe(true);
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining('agent stream'), expect.any(DOMException));
+            captureOne(recorder);
+            const blob = await recorder.Stop();
+            expect(blob).not.toBeNull();
+            expect(blob!.size).toBeGreaterThan(44);
+        });
+
+        it('connects the same remote stream exactly once when Start(mic, remote) is followed by AttachRemoteStream(remote)', async () => {
+            const remote = fakeStream(1);
+            const recorder = new RealtimeAudioRecorder();
+            recorder.Start(fakeStream(1), remote);
+            await vi.waitFor(() => expect(sourceCalls).toContain(remote));
+            recorder.AttachRemoteStream(remote); // the post-Connect PCM case: handler fires with the same stream
+
+            expect(sourceCalls.filter((s) => s === remote)).toHaveLength(1);
+            await recorder.Stop();
+        });
     });
 });
