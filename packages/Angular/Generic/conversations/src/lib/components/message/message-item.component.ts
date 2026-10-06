@@ -27,7 +27,7 @@ import { ConversationAgentService } from '../../services/conversation-agent.serv
 import {
   BeforeResponseFormSubmittedEventArgs,
   AfterResponseFormSubmittedEventArgs,
-  BeforeStopRequestedEventArgs,
+  BeforeStopClickedEventArgs,
 } from '../../events/chat-events';
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
@@ -594,12 +594,12 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * stays available and nothing else happens. Carries the reply's detail id and the run id
    * when the chat has seen the run row.
    */
-  @Output() public BeforeStopRequested = new EventEmitter<BeforeStopRequestedEventArgs>();
+  @Output() public BeforeStopClicked = new EventEmitter<BeforeStopClickedEventArgs>();
 
   /**
-   * Fired when a stop was requested and no `BeforeStopRequested` listener canceled it. Carries
+   * Fired when a stop was requested and no `BeforeStopClicked` listener canceled it. Carries
    * the reply's conversation detail; the host resolves the run behind it, stops it, and fires
-   * its `AfterStopRequested` with the outcome.
+   * its `AfterStopClicked` with the outcome.
    */
   @Output() public StopRequested = new EventEmitter<MJConversationDetailEntity>();
 
@@ -1489,8 +1489,8 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     // Listeners see the request first and may veto it. Cancel propagates synchronously through
     // the message-list and chat-area re-emit bindings, so by the time emit() returns,
     // event.Cancel reflects every subscriber's answer (same contract as the response-form pair).
-    const beforeEvent = new BeforeStopRequestedEventArgs(this.message.ID, this.AgentRun?.ID ?? null);
-    this.BeforeStopRequested.emit(beforeEvent);
+    const beforeEvent = new BeforeStopClickedEventArgs(this.message.ID, this.AgentRun?.ID ?? null);
+    this.BeforeStopClicked.emit(beforeEvent);
     if (beforeEvent.Cancel) {
       return;
     }

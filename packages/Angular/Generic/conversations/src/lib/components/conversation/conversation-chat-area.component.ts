@@ -77,8 +77,8 @@ import {
   AfterToolInvokedEventArgs,
   BeforeResponseFormSubmittedEventArgs,
   AfterResponseFormSubmittedEventArgs,
-  BeforeStopRequestedEventArgs,
-  AfterStopRequestedEventArgs,
+  BeforeStopClickedEventArgs,
+  AfterStopClickedEventArgs,
   SessionStartedEventArgs,
   SessionChannelStateChangedEventArgs,
   SessionEndedEventArgs,
@@ -1246,15 +1246,15 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   /**
    * Fired BEFORE an in-progress agent run is stopped from its reply. Cancelable: set
-   * `event.Cancel = true` to keep the run going; `AfterStopRequested` then does not fire.
+   * `event.Cancel = true` to keep the run going; `AfterStopClicked` then does not fire.
    */
-  @Output() BeforeStopRequested = new EventEmitter<BeforeStopRequestedEventArgs>();
+  @Output() BeforeStopClicked = new EventEmitter<BeforeStopClickedEventArgs>();
 
   /**
    * Fired AFTER a stop was attempted, with whether the run's row was marked Cancelled.
-   * Not fired when `BeforeStopRequested` was canceled.
+   * Not fired when `BeforeStopClicked` was canceled.
    */
-  @Output() AfterStopRequested = new EventEmitter<AfterStopRequestedEventArgs>();
+  @Output() AfterStopClicked = new EventEmitter<AfterStopClickedEventArgs>();
 
   /** Informational. */
   @Output() SessionStarted = new EventEmitter<SessionStartedEventArgs>();
@@ -5060,7 +5060,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         3000
       );
     }
-    this.AfterStopRequested.emit(new AfterStopRequestedEventArgs(message.ID, mappedRun?.ID ?? null, stopped));
+    this.AfterStopClicked.emit(new AfterStopClickedEventArgs(message.ID, mappedRun?.ID ?? null, stopped));
   }
 
   /**

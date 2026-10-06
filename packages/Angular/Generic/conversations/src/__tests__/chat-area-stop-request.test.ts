@@ -10,19 +10,19 @@ vi.mock('@memberjunction/ng-notifications', async (importOriginal) => ({
 }));
 
 import { ConversationChatAreaComponent } from '../lib/components/conversation/conversation-chat-area.component';
-import { AfterStopRequestedEventArgs } from '../lib/events/chat-events';
+import { AfterStopClickedEventArgs } from '../lib/events/chat-events';
 
 /**
  * The chat area's side of the stop pair: it resolves the run behind the reply (mapped, or by
- * the reply's detail id), asks the agent state service to stop it, and fires `AfterStopRequested`
- * with the outcome, so a host that let the `BeforeStopRequested` through learns what happened.
+ * the reply's detail id), asks the agent state service to stop it, and fires `AfterStopClicked`
+ * with the outcome, so a host that let the `BeforeStopClicked` through learns what happened.
  * Built off the prototype as `chat-area-reconcile.test.ts` is.
  */
 interface Harness {
   component: ConversationChatAreaComponent;
   cancelAgent: ReturnType<typeof vi.fn>;
   cancelForDetail: ReturnType<typeof vi.fn>;
-  after: AfterStopRequestedEventArgs[];
+  after: AfterStopClickedEventArgs[];
 }
 
 function createHarness(options: { mapped?: boolean; stopped?: boolean } = {}): Harness {
@@ -31,10 +31,10 @@ function createHarness(options: { mapped?: boolean; stopped?: boolean } = {}): H
   const open = component as unknown as Record<string, unknown>;
   const cancelAgent = vi.fn(async () => stopped);
   const cancelForDetail = vi.fn(async () => stopped);
-  const after: AfterStopRequestedEventArgs[] = [];
+  const after: AfterStopClickedEventArgs[] = [];
   open.AgentRunsByDetailId = new Map(mapped ? [['m1', { ID: 'run-1' }]] : []);
   open.agentStateService = { CancelAgent: cancelAgent, CancelAgentForDetail: cancelForDetail };
-  open.AfterStopRequested = { emit: (e: AfterStopRequestedEventArgs) => after.push(e) };
+  open.AfterStopClicked = { emit: (e: AfterStopClickedEventArgs) => after.push(e) };
   return { component, cancelAgent, cancelForDetail, after };
 }
 

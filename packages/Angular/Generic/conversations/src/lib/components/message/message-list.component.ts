@@ -27,7 +27,7 @@ import { MessageItemComponent, MessageAttachment, MessageArtifactRef, MessagePen
 import {
   BeforeResponseFormSubmittedEventArgs,
   AfterResponseFormSubmittedEventArgs,
-  BeforeStopRequestedEventArgs,
+  BeforeStopClickedEventArgs,
 } from '../../events/chat-events';
 import { RealtimeSessionTimelineCardComponent } from '../realtime/realtime-session-timeline-card.component';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
@@ -604,10 +604,10 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   @Output() public diagnosticRequested = this.DiagnosticRequested; // emits messageId
 
   /**
-   * Relays a message item's `BeforeStopRequested`: fired before an in-progress run is stopped,
+   * Relays a message item's `BeforeStopClicked`: fired before an in-progress run is stopped,
    * cancelable by setting `event.Cancel = true`.
    */
-  @Output() public BeforeStopRequested = new EventEmitter<BeforeStopRequestedEventArgs>();
+  @Output() public BeforeStopClicked = new EventEmitter<BeforeStopClickedEventArgs>();
 
   /** Relays a message item's uncanceled stop request: the host stops the run behind that AI reply. */
   @Output() public StopMessage = new EventEmitter<MJConversationDetailEntity>();
@@ -1905,7 +1905,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     instance.editClicked.subscribe((msg: MJConversationDetailEntity) => this.EditMessage.emit(msg));
     instance.deleteClicked.subscribe((msg: MJConversationDetailEntity) => this.DeleteMessage.emit(msg));
     instance.retryClicked.subscribe((msg: MJConversationDetailEntity) => this.RetryMessage.emit(msg));
-    instance.BeforeStopRequested.subscribe((e: BeforeStopRequestedEventArgs) => this.BeforeStopRequested.emit(e));
+    instance.BeforeStopClicked.subscribe((e: BeforeStopClickedEventArgs) => this.BeforeStopClicked.emit(e));
     instance.StopRequested.subscribe((msg: MJConversationDetailEntity) => this.StopMessage.emit(msg));
     instance.testFeedbackClicked.subscribe((msg: MJConversationDetailEntity) => this.TestFeedbackMessage.emit(msg));
     instance.artifactClicked.subscribe((data: {artifactId: string; versionId?: string}) => this.ArtifactClicked.emit(data));

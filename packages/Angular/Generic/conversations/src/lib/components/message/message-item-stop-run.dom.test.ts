@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { MessageItemComponent, STOP_RETRY_AFTER_MS } from './message-item.component';
-import type { BeforeStopRequestedEventArgs } from '../../events/chat-events';
+import type { BeforeStopClickedEventArgs } from '../../events/chat-events';
 
 /**
  * The Stop control's render gate and click behavior.
  *
  * `CanStopRun` mirrors the template: shown only for an AI reply still In-Progress, in a
  * conversation the viewer may write to, when the host allows stopping (`AllowStopRun`).
- * A click fires the cancelable `BeforeStopRequested` first; a listener that cancels keeps the
+ * A click fires the cancelable `BeforeStopClicked` first; a listener that cancels keeps the
  * run going and the control available. Otherwise the item enters its stopping state and emits
  * `StopRequested`; `ngDoCheck` clears the state when the message leaves In-Progress, and a
  * retry window re-offers the control if the stop did not take. Constructed off the prototype,
@@ -16,7 +16,7 @@ import type { BeforeStopRequestedEventArgs } from '../../events/chat-events';
  */
 describe('MessageItemComponent — Stop control', () => {
   let requested: unknown[] = [];
-  let before: BeforeStopRequestedEventArgs[] = [];
+  let before: BeforeStopClickedEventArgs[] = [];
   let cancelNext = false;
 
   const item = (fields: Record<string, unknown>): MessageItemComponent => {
@@ -28,8 +28,8 @@ describe('MessageItemComponent — Stop control', () => {
       ReadOnly: false,
       AllowStopRun: true,
       IsStopping: false,
-      BeforeStopRequested: {
-        emit: (e: BeforeStopRequestedEventArgs) => {
+      BeforeStopClicked: {
+        emit: (e: BeforeStopClickedEventArgs) => {
           before.push(e);
           if (cancelNext) {
             e.Cancel = true;
@@ -65,7 +65,7 @@ describe('MessageItemComponent — Stop control', () => {
     expect(item({ AllowStopRun: false }).CanStopRun).toBe(false);
   });
 
-  it('a click fires BeforeStopRequested with the reply and run ids, then StopRequested once; a second click is ignored', () => {
+  it('a click fires BeforeStopClicked with the reply and run ids, then StopRequested once; a second click is ignored', () => {
     const component = item({});
     component.OnStopClick();
     component.OnStopClick();
@@ -84,7 +84,7 @@ describe('MessageItemComponent — Stop control', () => {
     expect(requested).toHaveLength(1); // still requested; the host resolves it by detail id
   });
 
-  it('a listener that cancels BeforeStopRequested keeps the run going and the control available', () => {
+  it('a listener that cancels BeforeStopClicked keeps the run going and the control available', () => {
     cancelNext = true;
     const component = item({});
     component.OnStopClick();
