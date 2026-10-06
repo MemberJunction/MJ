@@ -20,6 +20,12 @@ export const AVATAR_MAX_URL_LENGTH = 2048;
 /** Longest icon class string accepted. */
 export const AVATAR_MAX_ICON_CLASS_LENGTH = 100;
 
+/**
+ * Longest `data:` value that can still decode to {@link AVATAR_MAX_IMAGE_BYTES}: the longest accepted
+ * prefix plus the padded base64 payload. Anything longer is refused before the pattern scans it.
+ */
+const AVATAR_MAX_DATA_URI_LENGTH = 'data:image/jpeg;base64,'.length + Math.ceil(AVATAR_MAX_IMAGE_BYTES / 3) * 4;
+
 /** `data:image/<raster type>;base64,<payload>` — SVG is deliberately absent (it can carry script). */
 const DATA_URI_PATTERN = /^data:image\/(png|jpeg|jpg|gif|webp);base64,([A-Za-z0-9+/]+={0,2})$/;
 
@@ -67,15 +73,19 @@ function imageUrlError(value: string): string | undefined {
 }
 
 function dataUriError(value: string): string | undefined {
+    if (value.length > AVATAR_MAX_DATA_URI_LENGTH) {
+        return tooLargeError(Math.floor((value.length * 3) / 4));
+    }
     const match = DATA_URI_PATTERN.exec(value);
     if (!match || match[2].length % 4 !== 0) {
         return 'Avatar image must be a base64 PNG, JPEG, GIF or WEBP data URI.';
     }
     const decodedBytes = decodedBase64Length(match[2]);
-    if (decodedBytes > AVATAR_MAX_IMAGE_BYTES) {
-        return `Avatar image must be ${AVATAR_MAX_IMAGE_BYTES / 1024}KB or smaller (this one is ${Math.ceil(decodedBytes / 1024)}KB).`;
-    }
-    return undefined;
+    return decodedBytes > AVATAR_MAX_IMAGE_BYTES ? tooLargeError(decodedBytes) : undefined;
+}
+
+function tooLargeError(bytes: number): string {
+    return `Avatar image must be ${AVATAR_MAX_IMAGE_BYTES / 1024}KB or smaller (this one is about ${Math.ceil(bytes / 1024)}KB).`;
 }
 
 /** Decoded byte length of a padded base64 string, without decoding it. */

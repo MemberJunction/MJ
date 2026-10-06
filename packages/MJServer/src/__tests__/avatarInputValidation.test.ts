@@ -50,6 +50,15 @@ describe('ValidateAvatarInput', () => {
       expect(expectRefused(dataUri(AVATAR_MAX_IMAGE_BYTES + 1))).toContain('200KB');
     });
 
+    it('refuses an oversized data URI on length alone, even one the pattern would reject anyway', () => {
+      const huge = `data:image/png;base64,${'A'.repeat(2 * 1024 * 1024)}!`;
+      expect(expectRefused(huge)).toContain('200KB');
+    });
+
+    it('accepts the longest prefix with a payload of exactly the cap', () => {
+      expect(ValidateAvatarInput(dataUri(AVATAR_MAX_IMAGE_BYTES, 'jpeg'), null).Valid).toBe(true);
+    });
+
     it('refuses SVG, which can carry script', () => {
       expectRefused(`data:image/svg+xml;base64,${Buffer.from('<svg onload="alert(1)"/>').toString('base64')}`);
     });
