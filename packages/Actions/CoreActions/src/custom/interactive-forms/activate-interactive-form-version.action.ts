@@ -33,9 +33,10 @@ import {
  * Idempotency. If the target Override is already Active, the caller's other
  * Active overrides on the entity are set aside and the action returns SUCCESS
  * with a no-op message that carries `DemotedCount`. So a retry after
- * `PERSIST_FAILED` sets the prior version aside. If the target is Inactive,
- * that's a misuse — we surface NOT_PENDING so the agent / UI can ask the user
- * what they really want.
+ * `PERSIST_FAILED` sets aside a prior whose Override could not be set aside; a
+ * prior whose Component status could not be updated is not found again. If the
+ * target is Inactive, that's a misuse — we surface NOT_PENDING so the agent / UI
+ * can ask the user what they really want.
  *
  * Inputs:
  *   - `OverrideID` (required, string) — the Pending override to activate
@@ -164,8 +165,8 @@ async function findPriorActiveOverrides(
  * when every prior is set aside.
  *
  * The Override is saved first, so a Component that cannot be saved never leaves a second Active
- * override. When a prior's Override save fails, its Component is left as it is, so the prior
- * stays fully Active and a later lookup finds it again.
+ * override. When a prior's Override cannot be loaded or saved, it is reported and its Component
+ * is left as it is, so the prior stays fully Active and a later lookup finds it again.
  */
 async function setPriorsAside(
     provider: IMetadataProvider,
@@ -176,12 +177,14 @@ async function setPriorsAside(
     const failures: string[] = [];
     for (const prior of priors) {
         const priorO = await LoadOverride(provider, user, prior.ID);
-        if (priorO) {
-            priorO.Status = 'Inactive';
-            if (!(await priorO.Save())) {
-                failures.push(`The prior override ${prior.ID} could not be set aside (${reasonOf(priorO)}).`);
-                continue;
-            }
+        if (!priorO) {
+            failures.push(`The prior override ${prior.ID} could not be loaded, so it was not set aside.`);
+            continue;
+        }
+        priorO.Status = 'Inactive';
+        if (!(await priorO.Save())) {
+            failures.push(`The prior override ${prior.ID} could not be set aside (${reasonOf(priorO)}).`);
+            continue;
         }
         const priorC = await LoadComponent(provider, user, prior.ComponentID);
         if (priorC) {

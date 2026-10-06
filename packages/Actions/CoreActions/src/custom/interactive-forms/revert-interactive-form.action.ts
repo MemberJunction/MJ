@@ -24,7 +24,9 @@ import {
  * The override is saved first. Both Component status saves are then tried, even
  * when the first fails. If either fails, the action returns `PERSIST_FAILED` that
  * names every Component whose status was not updated; the override stays
- * re-pointed.
+ * re-pointed. The override then already points at the target, so a retry with
+ * the same target returns SUCCESS from the no-op path and the Component
+ * statuses stay as they are.
  *
  * Old Component rows are never deleted — they remain as immutable history.
  * A subsequent revert can move forward again to any version.
@@ -140,17 +142,18 @@ export class RevertInteractiveFormAction extends BaseAction {
             if (newActive) {
                 newActive.Status = MapToComponentStatus('Active');
                 if (!(await newActive.Save())) {
-                    notUpdated.push(`Component ${target.ID} (${newActive.LatestResult?.CompleteMessage ?? 'unknown error'})`);
+                    notUpdated.push(`the status of Component ${target.ID} was not updated ` +
+                        `(${newActive.LatestResult?.CompleteMessage ?? 'unknown error'})`);
                 }
             }
             currentComponent.Status = MapToComponentStatus('Inactive');
             if (!(await currentComponent.Save())) {
-                notUpdated.push(`Component ${currentComponent.ID} (${currentComponent.LatestResult?.CompleteMessage ?? 'unknown error'})`);
+                notUpdated.push(`the status of Component ${currentComponent.ID} was not updated ` +
+                    `(${currentComponent.LatestResult?.CompleteMessage ?? 'unknown error'})`);
             }
             if (notUpdated.length > 0) {
                 return Failure("PERSIST_FAILED",
-                    `Override ${override.ID} was re-pointed to Component ${target.ID}, but the status of ` +
-                    `${notUpdated.join(' and ')} was not updated.`);
+                    `Override ${override.ID} was re-pointed to Component ${target.ID}, but ${notUpdated.join('; ')}.`);
             }
 
             AddOutput(params, "OverrideID", override.ID);

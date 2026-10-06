@@ -336,6 +336,17 @@ describe('ActivateInteractiveFormVersionAction', () => {
         expect(r.Message).not.toContain('OVER-PRIOR-2');
     });
 
+    it('reports a prior the lookup found but that cannot be loaded, and leaves its component alone', async () => {
+        seedOverride('OVER-PENDING', { ComponentID: 'COMP-NEW', Scope: 'User', Status: 'Pending' });
+        seedComponent('COMP-NEW', { Status: 'Draft' });
+        seedComponent('COMP-OLD', { Status: 'Published' });
+        hoisted.runViewResults.push([{ ID: 'OVER-GONE', ComponentID: 'COMP-OLD' }]);
+        const r = await run(new ActivateInteractiveFormVersionAction(), mkParams({ OverrideID: 'OVER-PENDING' }));
+        expect(r.ResultCode).toBe('PERSIST_FAILED');
+        expect(r.Message).toContain('The prior override OVER-GONE could not be loaded');
+        expect(hoisted.saveAttempts).toEqual(['COMP-NEW', 'OVER-PENDING']);
+    });
+
     it('returns QUERY_FAILED from the no-op path when the prior lookup fails, and writes nothing', async () => {
         seedOverride('OVER-A', { ComponentID: 'COMP-A', Scope: 'User', Status: 'Active' });
         seedComponent('COMP-A', { Status: 'Published' });
@@ -476,11 +487,23 @@ describe('RevertInteractiveFormAction', () => {
             expect(hoisted.saveAttempts).toEqual(['OVER-1', 'COMP-OLD', 'COMP-NEW']);
             expect(r.Message).toContain('Override OVER-1 was re-pointed to Component COMP-OLD');
             for (const id of ['COMP-OLD', 'COMP-NEW']) {
-                if (failingIDs.includes(id)) expect(r.Message).toContain(`Component ${id} (mock error)`);
-                else expect(r.Message).not.toContain(`Component ${id} (`);
+                if (failingIDs.includes(id)) expect(r.Message).toContain(`the status of Component ${id} was not updated (mock error)`);
+                else expect(r.Message).not.toContain(`the status of Component ${id}`);
             }
         },
     );
+
+    it('names each component whose status was not updated in its own clause', async () => {
+        seedOverride('OVER-1', { ComponentID: 'COMP-NEW', Status: 'Active' });
+        seedComponent('COMP-NEW', { Name: 'F', Version: '1.1.0', Status: 'Published' });
+        seedComponent('COMP-OLD', { Name: 'F', Version: '1.0.0', Status: 'Deprecated' });
+        hoisted.failingSaves.add('COMP-OLD');
+        hoisted.failingSaves.add('COMP-NEW');
+        const r = await run(new RevertInteractiveFormAction(), mkParams({ ActiveOverrideID: 'OVER-1', TargetComponentID: 'COMP-OLD' }));
+        expect(r.Message).toBe(
+            'Override OVER-1 was re-pointed to Component COMP-OLD, but the status of Component COMP-OLD was not updated ' +
+            '(mock error); the status of Component COMP-NEW was not updated (mock error).');
+    });
 
     it('is a no-op when target Component is already the Active component', async () => {
         seedOverride('OVER-1', { ComponentID: 'COMP-CURRENT', Status: 'Active' });
