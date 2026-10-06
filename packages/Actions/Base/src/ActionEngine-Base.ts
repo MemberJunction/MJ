@@ -338,6 +338,11 @@ export class RunActionParams<TContext = any> {
     * Under `'RuntimeOnly'` an action that calls an AI vendor itself must take the
     * {@link RuntimeAPIKeyResolver}'s answer as final — `undefined`, or no resolver at all, means the
     * run has no key for that vendor, NOT "use `GetAIAPIKey`". Absent means `'Any'`.
+    *
+    * An action that runs its own prompt or agent must forward this onto that prompt's or agent's
+    * params (`CredentialScope`). It is not handed the run's keys, so under `'RuntimeOnly'` that
+    * prompt finds no usable model and fails — which is the point: otherwise it would resolve the
+    * platform's keys inside a run restricted to the caller's.
     */
    public CredentialScope?: RuntimeCredentialScope;
 
