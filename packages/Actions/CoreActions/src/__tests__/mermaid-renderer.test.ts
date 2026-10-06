@@ -1,11 +1,12 @@
 /**
  * MermaidRenderer drives headless Chromium through Playwright. These tests replace Playwright with
- * a fake browser so they cover the renderer's own contract — error classification, page cleanup,
- * the network lockdown, config precedence and relaunch — without needing a browser binary.
+ * a fake browser so they cover the renderer's own contract — error classification, the warm page
+ * pool and its cap, the network lockdown, config precedence and relaunch — without a browser binary.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 interface FakePage {
+    isClosed: ReturnType<typeof vi.fn>;
     route: ReturnType<typeof vi.fn>;
     setContent: ReturnType<typeof vi.fn>;
     addScriptTag: ReturnType<typeof vi.fn>;
@@ -34,6 +35,7 @@ import { MermaidRenderer } from '../custom/visualization/shared/mermaid-renderer
 
 function makePage(evaluateResult: unknown | (() => Promise<unknown>)): FakePage {
     return {
+        isClosed: vi.fn().mockReturnValue(false),
         route: vi.fn().mockResolvedValue(undefined),
         setContent: vi.fn().mockResolvedValue(undefined),
         addScriptTag: vi.fn().mockResolvedValue(undefined),
@@ -63,14 +65,14 @@ describe('MermaidRenderer', () => {
         vi.useRealTimers();
     });
 
-    it('returns the SVG the page rendered and closes the page', async () => {
+    it('returns the SVG the page rendered and keeps the page warm', async () => {
         const page = makePage({ ok: true, svg: '<svg>ok</svg>' });
         launchMock.mockResolvedValue(makeBrowser(page));
 
         const result = await MermaidRenderer.Instance.Render('flowchart TD\nA-->B', 'default', {});
 
         expect(result).toEqual({ Success: true, Svg: '<svg>ok</svg>' });
-        expect(page.close).toHaveBeenCalledTimes(1);
+        expect(page.close).not.toHaveBeenCalled();
     });
 
     it('loads the bundled Mermaid script and blocks every network request', async () => {
@@ -99,14 +101,14 @@ describe('MermaidRenderer', () => {
         expect(args.Config).toMatchObject({ theme: 'dark', securityLevel: 'strict', startOnLoad: false, fontSize: 14 });
     });
 
-    it('reports a Mermaid syntax error as RENDER_FAILED and still closes the page', async () => {
+    it('reports a Mermaid syntax error as RENDER_FAILED and keeps the healthy page', async () => {
         const page = makePage({ ok: false, error: 'Parse error on line 2' });
         launchMock.mockResolvedValue(makeBrowser(page));
 
         const result = await MermaidRenderer.Instance.Render('flowchart TD\nA-->', 'default', {});
 
         expect(result).toEqual({ Success: false, ErrorCode: 'RENDER_FAILED', Message: 'Parse error on line 2' });
-        expect(page.close).toHaveBeenCalledTimes(1);
+        expect(page.close).not.toHaveBeenCalled();
     });
 
     it('reports BROWSER_UNAVAILABLE when Chromium cannot launch, and tries again next time', async () => {
@@ -124,15 +126,35 @@ describe('MermaidRenderer', () => {
         expect(launchMock).toHaveBeenCalledTimes(2);
     });
 
-    it('reuses one browser across renders', async () => {
-        const browser = makeBrowser(makePage({ ok: true, svg: '<svg/>' }));
+    it('reuses one browser and one warm page, loading Mermaid into it only once', async () => {
+        const page = makePage({ ok: true, svg: '<svg/>' });
+        const browser = makeBrowser(page);
         launchMock.mockResolvedValue(browser);
 
         await MermaidRenderer.Instance.Render('flowchart TD\nA-->B', 'default', {});
         await MermaidRenderer.Instance.Render('flowchart TD\nB-->C', 'default', {});
 
         expect(launchMock).toHaveBeenCalledTimes(1);
-        expect(browser.newPage).toHaveBeenCalledTimes(2);
+        expect(browser.newPage).toHaveBeenCalledTimes(1);
+        expect(page.addScriptTag).toHaveBeenCalledTimes(1);
+        expect(page.evaluate).toHaveBeenCalledTimes(2);
+    });
+
+    it('never runs more than four renders at once', async () => {
+        const finish: Array<() => void> = [];
+        const page = makePage(() => new Promise((resolve) => finish.push(() => resolve({ ok: true, svg: '<svg/>' }))));
+        launchMock.mockResolvedValue(makeBrowser(page));
+
+        const renders = Array.from({ length: 6 }, (_, i) => MermaidRenderer.Instance.Render(`flowchart TD\nA${i}-->B`, 'default', {}));
+        await vi.waitFor(() => expect(page.evaluate).toHaveBeenCalledTimes(4));
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        expect(page.evaluate).toHaveBeenCalledTimes(4); // MAX_PAGES; the other two wait for a slot
+
+        finish.splice(0).forEach((done) => done());
+        await vi.waitFor(() => expect(page.evaluate).toHaveBeenCalledTimes(6));
+        finish.splice(0).forEach((done) => done());
+        const results = await Promise.all(renders);
+        expect(results.every((r) => r.Success)).toBe(true);
     });
 
     it('relaunches when the shared browser has disconnected', async () => {
