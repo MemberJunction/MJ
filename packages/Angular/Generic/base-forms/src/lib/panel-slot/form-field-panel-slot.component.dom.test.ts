@@ -30,6 +30,7 @@ import { FormSlotCoordinator } from './form-slot-coordinator.service';
 import { ForgetHiddenPanelsSettings, SetPanelHidden } from './panel-hides';
 import { InvalidateFormContributionRegistrationCache } from './collect-form-contribution-registrations';
 import type { BaseFormComponent } from '../base-form-component';
+import type { FormContext } from '../types/form-types';
 
 /**
  * DOM coverage for <mj-form-field-panel-slot>, the host a collapsible panel renders at each end of
@@ -135,6 +136,7 @@ interface SlotInputs {
     Position?: 'start' | 'end';
     Record?: BaseEntity;
     FormComponent?: BaseFormComponent;
+    FormContext?: FormContext;
 }
 
 function renderSlot(inputs: SlotInputs, providers: Provider[] = []): ComponentFixture<FormFieldPanelSlotComponent> {
@@ -198,6 +200,19 @@ describe('FormFieldPanelSlotComponent (DOM)', () => {
         expect(panel.FormComponent).toBe(form);
         expect(panel.RegistrationMetadata?.contributionKey).toBe('zzz.address');
         expect(form.RegisterFormPanel).toHaveBeenCalledWith(panel);
+    });
+
+    it('hands the form context to a mounted panel, and a new context to the same panel', () => {
+        const first: FormContext = { sectionFilter: 'street' };
+        const f = renderSlot({ FieldNames: ['Street'], FormContext: first });
+        const panel = f.debugElement.query(By.directive(AddressPanel)).componentInstance as AddressPanel;
+        expect(panel.FormContext).toBe(first);
+
+        const next: FormContext = { sectionFilter: 'city', showValidation: true };
+        f.componentRef.setInput('FormContext', next);
+        f.detectChanges();
+        expect(f.debugElement.query(By.directive(AddressPanel)).componentInstance).toBe(panel);
+        expect(panel.FormContext).toBe(next);
     });
 
     it('renders nothing when the host form owns its whole body', () => {

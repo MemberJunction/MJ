@@ -7,7 +7,7 @@ import type { EntityInfo } from '@memberjunction/core';
  * locked the door behind the user: the last panel switched off took the toolbar button
  * with it, and there was no way to switch it back on.
  */
-type Row = { ID: string; EntityID: string | null; Status: string };
+type Row = { ID: string; EntityID: string | null; Status: string; Configuration?: string | null };
 let rows: Row[] = [];
 let throws = false;
 
@@ -72,5 +72,19 @@ describe('FormPanelAdminService.HasRowsForEntity', () => {
         expect(service.HasRowsForEntity(null)).toBe(false);
         throws = true;
         expect(service.HasRowsForEntity(ENTITY)).toBe(false);
+    });
+});
+
+/** The drawer opens the placement dialog on a row's configuration, which its preview draws from. */
+describe('FormPanelAdminService.RowsForEntity', () => {
+    beforeEach(() => {
+        rows = [];
+        throws = false;
+    });
+
+    it('carries the stored configuration text onto the row', () => {
+        const stored = '{"fields":["A"],"palette":"warm"}';
+        rows = [{ ID: 'r1', EntityID: 'E1', Status: 'Active', Configuration: stored }];
+        expect(new FormPanelAdminService().RowsForEntity(ENTITY)[0].Configuration).toBe(stored);
     });
 });
