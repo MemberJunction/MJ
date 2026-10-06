@@ -36,6 +36,9 @@ interface Harness {
 }
 
 function createShell(opts?: { style?: string; attachTabContainer?: boolean }): Harness {
+  // One spy per test on the shared singleton. No explicit restore is needed:
+  // the root vitest.shared.ts sets `restoreMocks: true`, so vitest restores
+  // it after every test and the layers never stack.
   vi.spyOn(InstanceConfigEngine.Instance, 'Get').mockImplementation(
     (key: string) => (key === 'Shell.RecordOpen.Style' ? opts?.style : undefined)
   );
@@ -124,12 +127,15 @@ describe('ShellComponent — records-region pool excludes a record being edited'
     const tab = tabs(h).find((t) => t.id === tabId)!;
     expect(h.manager.RecordsRegionTabFilter!(tab)).toBe(true);
 
-    // Both region tabs are now unpinned and consumable; the manager takes the
-    // first in tab order, which is the one that was being edited.
+    // Both region tabs are unpinned and consumable again. The guard's contract
+    // is only that the edited tab is back in the pool: the next open consumes
+    // ONE of them in place rather than creating a third. Which one the manager
+    // picks is its own business (currently first in tab order), so it is not
+    // asserted here.
     const nextId = openRecord(h, 'r3');
-    expect(nextId).toBe(tabId);
     expect(tabs(h).length).toBe(2);
-    expect(tabs(h).find((t) => t.id === tabId)!.resourceRecordId).toBe('r3');
+    expect(tabs(h).some((t) => t.id === nextId)).toBe(true);
+    expect(tabs(h).filter((t) => t.resourceRecordId === 'r3')).toHaveLength(1);
   });
 
   it('before the tab container view child resolves, nothing counts as editing (startup fail-safe)', () => {
