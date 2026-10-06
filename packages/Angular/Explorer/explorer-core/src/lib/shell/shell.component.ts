@@ -1084,8 +1084,11 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
         if (updateEvent.eventCode === EventCodes.AvatarUpdated) {
           const md = this.ProviderToUse;
           const currentUserInfo = md.CurrentUser;
-          const userEntity = await md.GetEntityObject<any>('MJ: Users');
+          const userEntity = await md.GetEntityObject<MJUserEntity>('MJ: Users');
           await userEntity.Load(currentUserInfo.ID);
+          // The user menu reads its own context entity (GetUserDisplayInfo), so refresh it too.
+          this.userEntity = userEntity;
+          this.userMenu?.UpdateContext({ userEntity });
           this.applyUserAvatar(userEntity);
         }
       })
