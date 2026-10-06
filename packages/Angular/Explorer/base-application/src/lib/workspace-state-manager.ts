@@ -358,9 +358,13 @@ export class WorkspaceStateManager {
     });
 
     if (existingTab) {
-      // Focus existing tab
+      // Focus existing tab, and restamp it — focusing IS accessing. See the same restamp in
+      // `OpenTab`'s existing-tab branch for what reads this field and why a stale one is wrong.
       const updatedConfig = {
         ...config,
+        tabs: config.tabs.map(tab =>
+          tab.id === existingTab.id ? { ...tab, lastAccessedAt: new Date().toISOString() } : tab
+        ),
         activeTabId: existingTab.id
       };
       this.UpdateConfiguration(updatedConfig);
@@ -468,11 +472,20 @@ export class WorkspaceStateManager {
       // Focus existing tab AND update its title and configuration.
       // Title and config must be refreshed because in single-resource mode,
       // the same tab gets reused for different nav items within an app.
+      //
+      // RESTAMPED, because focusing a tab IS accessing it. This branch set activeTabId and left
+      // lastAccessedAt at whatever the tab last carried, while the new-tab branch below and
+      // SetActiveTab both stamp — so reopening an already-open record left the active tab looking
+      // older than it is. Three things read that field and all three were wrong for such a tab: the
+      // records hub pill picks the most recent record tab, tab-container falls back to the most
+      // recent nav tab, and the shell's url-sync guard compares it against the current navigation
+      // (MJ#4989), which it cannot do if the stamp predates the focus.
       const updatedTabs = config.tabs.map(tab =>
         tab.id === existingTab.id
           ? {
               ...tab,
               title: request.Title,
+              lastAccessedAt: new Date().toISOString(),
               configuration: { ...tab.configuration, ...request.Configuration }
             }
           : tab
