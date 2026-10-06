@@ -27,8 +27,9 @@ import {
     SaveEntityGraphOperation,
 } from '@memberjunction/core';
 
-// @memberjunction/ai-vectors-memory (2 classes)
+// @memberjunction/ai-vectors-memory (3 classes)
 import {
+    BaseVectorAccelerator,
     SimpleVectorDatabase,
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
@@ -840,6 +841,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     OpenAIRealtimeClient,
     xAIRealtimeClient,
     SaveEntityGraphOperation,
+    BaseVectorAccelerator,
     SimpleVectorDatabase,
     SimpleVectorServiceProvider,
     AIAgentPermissionProvider,
@@ -1031,11 +1033,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJDashboardPermissionEntity,
     MJDashboardPermissionEntityExtended,
     MJDashboardUserPreferenceEntity,
-    MJDashboardUserStateEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJDashboardUserStateEntity,
     MJDataContextEntity,
     MJDataContextItemEntity,
     MJDatasetEntity,

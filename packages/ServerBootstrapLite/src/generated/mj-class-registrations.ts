@@ -178,8 +178,9 @@ import {
     SaveEntityGraphOperation,
 } from '@memberjunction/core';
 
-// @memberjunction/ai-vectors-memory (2 classes)
+// @memberjunction/ai-vectors-memory (3 classes)
 import {
+    BaseVectorAccelerator,
     SimpleVectorDatabase,
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
@@ -1403,6 +1404,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     xAIRealtime,
     ZhipuLLM,
     SaveEntityGraphOperation,
+    BaseVectorAccelerator,
     SimpleVectorDatabase,
     SimpleVectorServiceProvider,
     PgVectorColocatedDatabase,
@@ -1555,11 +1557,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCompanyIntegrationSyncWatermarkEntity,
     MJComponentDependencyEntity,
     MJComponentEntity,
-    MJComponentEntityExtended,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJComponentEntityExtended,
     MJComponentLibraryEntity,
     MJComponentLibraryLinkEntity,
     MJComponentRegistryEntity,
@@ -1759,11 +1761,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRemoteOperationCategoryEntity,
     MJRemoteOperationEntity,
     MJResourceLinkEntity,
-    MJResourcePermissionEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJResourcePermissionEntity,
     MJResourcePermissionEntityExtended,
     MJResourceTypeEntity,
     MJRoleEntity,
@@ -1963,11 +1965,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     GetUserEnrollmentsAction,
     OnboardLearnerAction,
     SSOLoginAction,
-    UpdateUserAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    UpdateUserAction,
     UpdateUserProgressAction,
     BufferCreatePostAction,
     BufferDeletePostAction,
@@ -2167,11 +2169,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     WorkflowValidateServerOperation,
     ActionLogRetentionScheduledJobDriver,
     ActionScheduledJobDriver,
-    AgentRunSweepScheduledJobDriver,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    AgentRunSweepScheduledJobDriver,
     AgentScheduledJobDriver,
     EvaluateSampledAgentRunsDriver,
     IntegrationDiscoveryScheduledJobDriver,
@@ -2371,11 +2373,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     SendDocumentForSignatureAction,
     SendSingleMessageAction,
     SendToAudienceAction,
-    ShareListAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    ShareListAction,
     SlackWebhookAction,
     SummarizeContentAction,
     SyncMCPToolsAction,
@@ -2424,7 +2426,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1032;
+export const CLASS_REGISTRATIONS_COUNT = 1033;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
