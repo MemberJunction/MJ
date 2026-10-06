@@ -32,7 +32,7 @@ import { ChannelPerceptionCoalescer, DEFAULT_CHANNEL_PERCEPTION_OPTIONS, type Ch
 import { FormatChannelNote } from './channel-state-delta';
 import { VisualPerceptionPump, type VisualFrameReason } from './channel-visual-pump';
 import { DEFAULT_CHANNEL_SURFACE_PLACEMENT, type ChannelSurfacePlacement } from './channel-surface-placement';
-import type { RealtimeCaptureKind } from '../session/realtime-captures';
+import type { RealtimeCaptureKind, RealtimeCaptureState, RealtimeCaptureStates } from '../session/realtime-captures';
 import type { ParsedDelegationArtifact } from '../session/delegation-result-parser';
 
 /**
@@ -234,6 +234,22 @@ export interface RealtimeChannelContext {
    * OPTIONAL — the underlying {@link BaseRealtimeClient} driving the media and transport planes.
    */
   Client?: BaseRealtimeClient | null;
+
+  /**
+   * OPTIONAL — the session's camera and screen share, now and on every change (the runtime's `Captures$`). A channel that
+   * fronts a capture ({@link BaseRealtimeChannelClient.CaptureKind}) follows it here.
+   */
+  Captures$?: Observable<RealtimeCaptureStates>;
+
+  /**
+   * OPTIONAL — starts the camera or a screen share for the user's click on the channel's surface: the runtime's
+   * `StartCamera` or `StartScreenShare`, under the same policy. Resolves with the capture's state; a failure is a state,
+   * never a throw.
+   */
+  StartCapture?(kind: RealtimeCaptureKind): Promise<RealtimeCaptureState>;
+
+  /** OPTIONAL — stops the camera or the screen share (the runtime's `StopCamera` / `StopScreenShare`). */
+  StopCapture?(kind: RealtimeCaptureKind): void;
 }
 
 /**

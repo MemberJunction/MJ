@@ -48,6 +48,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ConversationBridgeService } from '../../services/conversation-bridge.service';
 import { RealtimeSessionService } from '../../services/realtime-session.service';
 import { RealtimeAgentPick } from '../realtime/realtime-agent-picker.component';
+import { ConversationCallStartOptions } from '../realtime/capture/realtime-capture-channel';
 import {
   BuildRealtimeConfigOverridesJson,
   FilterRealtimeCoAgents,
@@ -1551,7 +1552,9 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         // user is, what they see, capability manifest) — drives the server-side app cascade + the
         // mint-time prompt injection, and seeds the ClientContextChannel's streaming.
         this.ApplicationId,
-        this.AppContext as AppContextSnapshot | null
+        this.AppContext as AppContextSnapshot | null,
+        // The channels this UI brings to its calls (the camera and screen share).
+        ConversationCallStartOptions()
       );
     } catch (error) {
       console.error('Failed to start voice session:', error);

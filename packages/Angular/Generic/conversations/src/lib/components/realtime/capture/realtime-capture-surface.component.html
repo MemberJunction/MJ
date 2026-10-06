@@ -1,0 +1,57 @@
+@if (View; as view) {
+  @switch (view.Status) {
+    @case ('on') {
+      @if (view.Kind === 'camera') {
+        <div class="capture capture--live">
+          <mj-self-view
+            class="capture__self"
+            [Participant]="view.Participant"
+            [AgentCanSee]="view.AgentCanSee"
+            [ShowHide]="false"
+            [ShowMeter]="false"
+            [ShowConnectionQuality]="false"
+            [ShowActiveSpeakerRing]="false">
+          </mj-self-view>
+          <div class="capture__bar">
+            <button type="button" mjButton Variant="danger" Size="sm" (click)="StopRequested.emit()">Turn off camera</button>
+          </div>
+        </div>
+      } @else {
+        <mj-share-preview
+          class="capture capture--live"
+          [Source]="view.Source"
+          [Surface]="view.Surface"
+          (StopRequested)="StopRequested.emit()"
+          (ChangeRequested)="ChangeRequested.emit()">
+        </mj-share-preview>
+      }
+    }
+    @case ('starting') {
+      <div class="capture capture--card" role="status">
+        <mj-loading class="capture__loading" [Text]="Wording.Starting" Size="small"></mj-loading>
+      </div>
+    }
+    @default {
+      <!-- The ask centres itself while it fits and scrolls when the box is shorter than it. -->
+      <div class="capture capture--card">
+        <div class="capture__ask">
+          <i class="capture__icon" [class]="Wording.Icon" aria-hidden="true"></i>
+          <h3 class="capture__title">{{ Heading }}</h3>
+          @if (view.Reason) {
+            <p class="capture__reason">{{ view.Reason }}</p>
+          }
+          @if (view.Problem) {
+            <p class="capture__problem" role="alert">{{ view.Problem }}</p>
+          }
+          <div class="capture__actions">
+            <button type="button" mjButton Variant="primary" (click)="StartRequested.emit()">{{ Wording.Start }}</button>
+            @if (view.Reason !== null) {
+              <button type="button" mjButton Variant="secondary" (click)="DeclineRequested.emit()">Not now</button>
+            }
+          </div>
+          <p class="capture__hint">{{ Wording.Hint }}</p>
+        </div>
+      </div>
+    }
+  }
+}

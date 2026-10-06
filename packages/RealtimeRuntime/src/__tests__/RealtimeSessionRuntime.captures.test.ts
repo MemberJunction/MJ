@@ -16,6 +16,7 @@ import {
     REALTIME_CAPTURES_OFF,
     type RealtimeCaptureKind,
     type RealtimeCaptureStates,
+    type RealtimeChannelContext,
     type StartRealtimeClientSessionResult,
 } from '../index';
 import { ShareHost, VideoClient } from './capture-test-helpers';
@@ -59,6 +60,9 @@ class CaptureChannel extends BaseRealtimeChannelClient {
     }
     protected override OnOpen(): void {
         this.Opened++;
+    }
+    public get ContextForTest(): RealtimeChannelContext | null {
+        return this.Context;
     }
 }
 
@@ -234,6 +238,20 @@ describe('RealtimeSessionRuntime camera and screen share', () => {
             expect(runtime.SetVideoSourceEnabled('capture:camera', true)).toBe(true);
             expect(sources()[0].Enabled).toBe(true);
             expect(runtime.GetChannelExposure('Camera')).toBe('pixels');
+            await runtime.EndRealtimeSession();
+        });
+
+        it("gives a capture channel the captures, and the user's clicks on its surface, through its context", async () => {
+            const camera = new CaptureChannel('Camera', 'camera', 'open-on-start');
+            const { runtime, start } = build([camera]);
+            await start();
+            const ctx = camera.ContextForTest;
+            const seen: string[] = [];
+            ctx?.Captures$?.subscribe((c) => seen.push(c.Camera.Status));
+            expect(await ctx?.StartCapture?.('camera')).toMatchObject({ Status: 'on' });
+            ctx?.StopCapture?.('camera');
+            expect(seen).toEqual(['off', 'starting', 'on', 'off']);
+            expect(await ctx?.StartCapture?.('screen')).toMatchObject({ Status: 'failed', Failure: 'policy' });
             await runtime.EndRealtimeSession();
         });
 

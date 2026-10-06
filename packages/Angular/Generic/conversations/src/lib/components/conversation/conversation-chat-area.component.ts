@@ -65,6 +65,7 @@ import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 
 // PR 2c — Widget extension surface
 import { ChatSlotDirective, type MJChatSlotName } from '../../directives/chat-slot.directive';
+import { ConversationCallStartOptions } from '../realtime/capture/realtime-capture-channel';
 import type {
   IMJChatAgentPresenceComponent,
   MJChatAgentPresenceState,
@@ -5731,7 +5732,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         null, // mediaCollectionId
         // App awareness — see message-input.startVoiceSession for the rationale.
         this.ApplicationId,
-        this.AppContext as AppContextSnapshot | null
+        this.AppContext as AppContextSnapshot | null,
+        // The channels this UI brings to its calls (the camera and screen share).
+        ConversationCallStartOptions()
       );
       this.RealtimeReview = null;
       await start;

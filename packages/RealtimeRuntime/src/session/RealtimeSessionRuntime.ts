@@ -2604,7 +2604,11 @@ export class RealtimeSessionRuntime {
         return service.client;
       },
       SendVideoFrame: (base64Image: string, mimeType?: string) => this.SendVideoFrame(base64Image, mimeType),
-      IsTrackEstablished: (modality: string, direction: RealtimeTrackDirection) => this.IsTrackEstablished(modality, direction)
+      IsTrackEstablished: (modality: string, direction: RealtimeTrackDirection) => this.IsTrackEstablished(modality, direction),
+      // The camera and screen share, for a channel that fronts one: their state, and the user's clicks on its surface.
+      Captures$: this.Captures$,
+      StartCapture: (kind: RealtimeCaptureKind) => (kind === 'camera' ? this.StartCamera() : this.StartScreenShare()),
+      StopCapture: (kind: RealtimeCaptureKind) => (kind === 'camera' ? this.StopCamera() : this.StopScreenShare())
     };
   }
 

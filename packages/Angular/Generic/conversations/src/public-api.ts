@@ -184,6 +184,10 @@ export * from './lib/components/realtime/media/realtime-media-surface.component'
 export * from './lib/components/realtime/identity-verification/identity-verification-channel';
 export * from './lib/components/realtime/identity-verification/identity-verification-model';
 export * from './lib/components/realtime/identity-verification/identity-verification-surface.component';
+// Camera and Screen Share channels (opt-in, on demand): the agent asks, the user turns the capture on. State + surface.
+export * from './lib/components/realtime/capture/realtime-capture-channel';
+export * from './lib/components/realtime/capture/realtime-capture-model';
+export * from './lib/components/realtime/capture/realtime-capture-surface.component';
 
 // Interactive Component channel: hosts any component artifact (mj-react-component) next to the call, with a
 // contract derived from the component's own spec. The pure parts (spec -> contract, config, data-state bounding,
