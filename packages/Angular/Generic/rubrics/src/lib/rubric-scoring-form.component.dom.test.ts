@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { RubricScoringFormComponent } from './rubric-scoring-form.component';
 import { Draft } from './dom-fixture';
+import type { RubricFormAnswer } from './model';
 
 describe('RubricScoringFormComponent (DOM)', () => {
     function render() {
@@ -21,9 +22,9 @@ describe('RubricScoringFormComponent (DOM)', () => {
 
     it('emits the level when its button is clicked and then allows submit', () => {
         const { fixture, host } = render();
-        const answers: { scaleLevelId?: string | null }[][] = [];
+        const answers: RubricFormAnswer[][] = [];
         fixture.componentInstance.AnswersChange.subscribe(next => answers.push(next));
-        const level = [...host.querySelectorAll('button')].find(button => button.textContent?.includes('High')) as HTMLButtonElement;
+        const level = Array.from(host.querySelectorAll('button')).find(button => button.textContent?.includes('High')) as HTMLButtonElement;
         level.click();
         expect(answers[0][0].scaleLevelId).toBe('high');
         fixture.componentInstance.Answers = answers[0];
@@ -39,7 +40,7 @@ describe('RubricScoringFormComponent (DOM)', () => {
 
     it('selects a level from a digit on the fieldset and ignores that digit inside the rationale', () => {
         const { fixture, host } = render();
-        const answers: { scaleLevelId?: string | null; isNotApplicable?: boolean }[][] = [];
+        const answers: RubricFormAnswer[][] = [];
         fixture.componentInstance.AnswersChange.subscribe(next => answers.push(next));
         host.querySelector('fieldset')?.dispatchEvent(new KeyboardEvent('keydown', { key: '1', bubbles: true }));
         expect(answers.at(-1)?.[0].scaleLevelId).toBe('high');

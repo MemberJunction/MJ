@@ -4,6 +4,8 @@ import { UUIDsEqual } from '@memberjunction/global';
 import { RubricVersionDiff, type RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import { FormatVersionDiff, ParseRubricRef, RequireViewSuccess, RubricIdentityFilter, SnapshotFromRows, ValidateSnapshot } from './rubricCli.js';
 import { ProviderRubricEngine } from './providerRecords.js';
+import { DEFAULT_RUBRIC_EVALUATOR } from './evaluatorRegistry.js';
+import type { RubricEvaluatorSettings } from './evaluatorServices.js';
 
 /** Database work behind `mj rubric`. The caller opens the provider and closes it. */
 export class RubricCommands {
@@ -43,7 +45,8 @@ export class RubricCommands {
         process.exit(1);
     }
 
-    public async Evaluate(ref: string, entity: string, record: string, evaluator: string | undefined): Promise<void> {
+    /** Evaluates one record with a registered evaluator, LLM when none is named. Settings pick the prompt, model, and mode. */
+    public async Evaluate(ref: string, entity: string, record: string, evaluator: string | undefined, settings: RubricEvaluatorSettings = {}): Promise<void> {
         const { rubric, version } = await this.version(ref);
         const engine = ProviderRubricEngine(this.provider, this.user);
         const result = await engine.EvaluateRecord({
@@ -51,7 +54,8 @@ export class RubricCommands {
             versionId: String(version.ID),
             subjectEntityName: entity,
             subjectRecordId: record,
-            evaluator: evaluator === 'Deterministic' ? 'Deterministic' : 'LLM',
+            evaluator: evaluator ?? DEFAULT_RUBRIC_EVALUATOR,
+            settings,
         });
         console.log(`${result.outcome ?? ''}  ${result.score ?? ''}`);
         for (const criterion of result.criteria ?? []) console.log(`${criterion.key}  ${criterion.normalizedScore ?? '—'}`);

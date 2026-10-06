@@ -16,7 +16,6 @@ export class MJRowLevelSecurityFilterFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'identifier', sectionName: 'Identifier', isExpanded: true },
             { sectionKey: 'filterDefinition', sectionName: 'Filter Definition', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJEntityPermissionsDeleteRLSFilterID', sectionName: 'Entity Permissions', isExpanded: false },

@@ -1,0 +1,100 @@
+[
+  {
+    "fields": {
+      "Name": "CodeGen: JSON Check Parser",
+      "Description": "Translates a SQL @CHECK expression written on a JSONType interface or member into a TypeScript rule body (NULL passes, like SQL) with a business-friendly description",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/codegen/json-check-parser.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "AssistantPrefill": "```json",
+      "StopSequences": "\n```",
+      "PrefillFallbackMode": "Ignore",
+      "SelectionStrategy": "Specific",
+      "OutputType": "object",
+      "OutputExample": "",
+      "PowerPreference": "Balanced",
+      "ParallelizationMode": "None",
+      "MaxRetries": 3,
+      "RetryDelayMS": 1500,
+      "RetryStrategy": "Fixed",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+      "EffortLevel": 1
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 5
+          },
+          "primaryKey": {
+            "ID": "225911DA-D432-47B7-B57A-5723F87D36E6"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 4
+          },
+          "primaryKey": {
+            "ID": "22BB1C35-2718-4C36-8957-0BF71DAFD620"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Haiku 4.5",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 3
+          },
+          "primaryKey": {
+            "ID": "BDC145C8-8AFD-489C-9987-E5A6559ADF27"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "229A6C2B-C448-4FA4-923D-4D6E9E5A1E99"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5.5 Instant",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "DC311D7F-63B0-4E0D-AF52-617B698FBD39"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 9
+          },
+          "primaryKey": {
+            "ID": "5A9F7BA0-9DA8-4701-867C-9CB3F9FF0F30"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "A27898A9-44AF-45E6-B814-D78948A891BB"
+    }
+  }
+]
