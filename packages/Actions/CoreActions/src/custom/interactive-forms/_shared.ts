@@ -275,8 +275,10 @@ export function ContributionScopeFilter(entityID: string, user: NonNullable<RunA
  * Off when the Node switch is off (`MJ_FORMS_METADATA_CONTRIBUTIONS=false`, read into
  * `InteractiveFormsEngine.MetadataContributionsEnabled`), or when the instance configuration
  * Explorer reads (`Forms.MetadataContributions.Enabled`) is `false`. The instance configuration
- * is read on every call, so setting it back to `true` turns the answer back on. When Instance
- * Config cannot load, only the Node switch counts.
+ * comes from the cached `InstanceConfigEngine`, which is refreshed after a save in the same
+ * process or by cross-server cache invalidation, so setting it back to `true` turns the answer
+ * back on once the cache has the new value. When Instance Config cannot load, only the Node
+ * switch counts.
  */
 export async function MetadataContributionsOn(provider: IMetadataProvider, user: UserInfo): Promise<boolean> {
     if (!InteractiveFormsEngine.MetadataContributionsEnabled) return false;
