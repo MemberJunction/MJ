@@ -140,6 +140,11 @@ export class RoomHandoffEngine extends BaseSingleton<RoomHandoffEngine> {
         this.registeredObservers.clear();
     }
 
+    /** Emits a handoff event to all registered observers and the primary observer. */
+    public EmitHandoffEvent(event: RoomHandoffEvent): void {
+        this.emitHandoffEvent(event);
+    }
+
     private emitHandoffEvent(event: RoomHandoffEvent): void {
         try {
             this.deps.Observer?.OnHandoffEvent?.(event);
