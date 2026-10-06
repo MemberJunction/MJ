@@ -7,6 +7,7 @@
 "@memberjunction/web-search-engine": minor
 "@memberjunction/core-actions": minor
 "@memberjunction/ai-core-plus": minor
+"@memberjunction/core-entities": minor
 ---
 
 fix(sage): the Workflow Planner's plan approval renders a button again, and the planner remembers the plan it presented
@@ -68,3 +69,12 @@ fix(task-graph, server, ai-agents): three silent gaps in the workflow follow-up,
 - **The owner lookup refreshes the user cache on a miss.** `TaskGraphContinuationDeliverer.resolveOwner` found the conversation's owner in `UserCache` or fell back to the dispatcher's own user, which the conversation's owner gate refuses, so a user created after the process loaded its cache silently lost the follow-up. On a miss it now calls `UserCache.Instance.Refresh` (the same load the process did at startup) and looks again before falling back.
 - **A task's agent message rides beside its output.** `TaskContinuationParams.Tasks[].Message` carries each agent-run task's `Message`, bounded like `Output`, loaded by the dispatcher in one query over the graph's runs. A Loop agent's prose answer therefore reaches the follow-up even when the task's output is an array or a primitive, which the `_message` field on a plain-object payload could not cover without changing the output's shape. The deliverer renders it as "**Task** reported:" before the output. A payload that already carries `_message` keeps its own value.
 - **A parked sub-agent is marked, not inferred.** `ExecuteAgentResult.parkedOnTaskID` is set when a run parks on a task graph it submitted; `BaseAgent.processSubAgentStep` ends the parent's turn on that marker instead of on `agentRun.Status === 'Paused'`, so a future mechanism that pauses a run for another reason does not end the parent's turn by accident.
+
+---
+
+refactor(server, task-graph, core-entities, web-search): the follow-up's text and bounds live where MJ keeps them
+
+- **The follow-up instruction is a seeded prompt.** `Workflow Follow-Up` (metadata/prompts, category MJ: System, no model) holds the text the conversation's agent is reinvoked with when a graph settles; `TaskGraphContinuationDeliverer` renders its template with the outcome as data through `TemplateEngineServer.RenderTemplateSimple`. Tune the wording with `mj sync push`. A missing prompt or failed render falls back to the outcome alone and is logged.
+- **One default history window.** `ConversationEngine.DefaultHistoryMessages` replaces the separate `20`s in the run resolver and the follow-up turn.
+- **A graph can set its continuation output budget.** `TaskGraphSpec.continuationOutputChars` is persisted in the parent task's metadata and read by the dispatcher, with the dispatcher's `MAX_CONTINUATION_OUTPUT_CHARS` as the default. Not yet on the `TaskGraph.Submit` remote operation's input, which is generated.
+- **The search engine's notice names no vendor.** It reports that no configured provider declares the Answer capability.
