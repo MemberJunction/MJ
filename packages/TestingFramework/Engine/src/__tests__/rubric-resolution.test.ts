@@ -82,6 +82,29 @@ describe('rubric resolution', () => {
         expect(WeightsForImplicitRubric({ trace: 1 }, true)).toEqual({ trace: 1 });
     });
 
+    it('passes evaluator config to the rubric oracle while preserving existing evaluator on explicit oracle', () => {
+        const choice = ResolveRubric({
+            agentRubricId: 'agent',
+            agentEvaluatorConfig: { EvaluatorType: 'AIPrompt', PromptName: 'Rubric Judge - Sage' },
+        });
+        const added = EnsureImplicitRubricOracle([{ type: 'trace-no-errors' }], choice, 'v1', '1.0.0');
+        expect(added[1].config).toEqual({
+            rubricId: 'agent',
+            rubricVersionId: 'v1',
+            versionLabel: '1.0.0',
+            evaluator: { EvaluatorType: 'AIPrompt', PromptName: 'Rubric Judge - Sage' },
+        });
+
+        const explicitEvaluator = { EvaluatorName: 'Decision' };
+        const overwritten = EnsureImplicitRubricOracle(
+            [{ type: 'rubric', config: { rubricId: 'agent', evaluator: explicitEvaluator } }],
+            choice,
+            'v1',
+            '1.0.0',
+        );
+        expect(overwritten[0].config?.evaluator).toEqual(explicitEvaluator);
+    });
+
     it('lets an llm-judge skip only the agent rubric', () => {
         const inline = [{ type: 'llm-judge', config: { criteria: ['Accurate'] } }, { type: 'trace-no-errors' }];
         const agent = ResolveRubric({ agentRubricId: 'agent' });
@@ -120,8 +143,8 @@ describe('rubric resolution', () => {
             contextRecordId: 'test-1',
             versionId: 'v1',
             passThreshold: null,
-            evaluator: 'LLM',
         });
+        expect(seen[0]).not.toHaveProperty('evaluator');
         const refused = await oracle.evaluate(
             { test: { ID: 'test-1' } as never, contextUser: {} as never },
             { rubricId: 'rubric' } as never,

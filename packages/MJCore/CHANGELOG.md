@@ -1,5 +1,52 @@
 # Change Log - @memberjunction/core
 
+## 6.2.0-edge.2
+
+### Minor Changes
+
+- 4248fb3: Add `DecisionFeaturePipelineDriver`, an infer processor driver that evaluates structured decisions through `AIDecisionRunner` for feature pipelines. Supports Likelihood (boolean with configurable constraint threshold), Choice (enum), and Score (numeric with 2-10 level rubrics) outputs, confidence tracking, and metadata catalog integration.
+- 0adaf76: Duplicate detection gains two reasoning modes: `Decision`, where a typed decision model recommends without ever merging, and `DecisionThenPrompt`, where the decision filters candidates before the prompt reasons over the survivors. Auto-merge (`AutoMergeAboveAbsolute`) now also requires the candidate's own verdict to be `Merge`, carried on the new `PotentialDuplicate.ReasoningRecommendation`, so a set-level `Merge` never merges a candidate the reasoner judged otherwise.
+- 7e57b48: Support `CloneContext` across the MemberJunction stack (§10.2, §10.3, §15):
+  - Add `Clone` to `RecordChange.Source` CHECK constraint and add nullable `ChangeContext` nvarchar(max) column.
+  - Declare `IRecordChangeCloneContext` and `IRecordChangeContext` JSONType interfaces with `@lookup` metadata.
+  - In `@memberjunction/core`: Add `CloneContext` interface, `RecordChangeSource = 'Clone'`, and `CloneContext` methods on `BaseEntity`; add structured `ChangeContext` serialization on `DatabaseProviderBase.BuildRecordChangePayload`.
+  - In database providers (`GenericDatabaseProvider`, `SQLServerDataProvider`, `PostgreSQLDataProvider`): propagate and persist `Source='Clone'` and `ChangeContext` across saves, deletes, and IS-A child/sibling updates. `ChangeContext` is written only when a change carries one, so tracked writes keep working on a PostgreSQL database that doesn't have the column yet.
+  - Clone context is set only on the server, by the record-cloning engine. It is deliberately not part of the GraphQL mutation inputs: a client-supplied context would let any caller stamp fabricated clone lineage into Record Changes.
+  - In `@memberjunction/server`: an update now applies only the client's field values, not the `OldValues___` / `RestoreContext___` blobs or fields the user may not read.
+  - In `@memberjunction/server`: on an entity that doesn't track record changes, an update loaded the client's old values as sent, so date old values (epoch milliseconds on the wire) became Invalid Dates and unchanged date fields read as edited. They are now typed like the field, as the OldValues comparison already did.
+  - In `@memberjunction/server`: an update to an `MJ: Record Changes` row always loads the stored row first, so its Comments-only rule compares against the real values rather than client-supplied old values.
+- 7e57b48: Support Record Clone Logs, Record Process 'Clone' WorkType, and typed clone metadata configurations (§3.4, §4.1, §4.2, §4.3, §10.5):
+  - Add `RecordCloneLog` and `RecordCloneLogItem` database tables, CodeGen entities (`MJRecordCloneLogEntity`, `MJRecordCloneLogItemEntity`), and typed `PlanJSONObject` accessor backed by `IClonePlan` JSONType definition.
+  - Expand `CK_RecordProcess_WorkType` to include `'Clone'`.
+  - Define `IClonePlan`, `IEntityCloneConfiguration`, `ICloneRelationshipPolicy`, and `IEntityFieldCloneConfiguration` JSONType interfaces. `ICloneRelationshipPolicy.ExcludeRows` leaves matching child rows (and their descendants) out of a clone, e.g. device tokens and drafts among a user's settings.
+  - Add typed `CloneConfig`, `CloneEnabled`, and `NotCloneable` getters to `EntityInfo`, `EntityRelationshipInfo`, and `EntityFieldInfo` in `@memberjunction/core`.
+  - Seed metadata for `recordclone` API scopes, `Record Cloned` audit log type, `Record Cloning` remote operation category, and the `Record Cloning` authorization tree: `Clone Records` (with `Clone Records in Platform Schema` and `Clone Records in Custom Schemas` under it), and its siblings `Clone Records: Fire Hooks`, `Clone Records: Batch` and `Clone Records: Override Scope`, which holding `Clone Records` does not grant. Also the `Record Changes: Annotate` and `Manage Authorizations` authorizations. Developer holds each explicitly.
+
+  **Upgrade note.** The release metadata sets `Entity.Configuration` to `{ "Clone": … }` on 63 MJ entities (listed in `metadata/entities/.clone-configurations.json`), and metadata sync writes the whole field. No other shipped metadata sets `Configuration` on these entities, but any `Configuration` an administrator added to one of them since 6.1 (for example `UI.Form` or `Attachments` settings) is replaced when the release metadata is applied. Check those entities before upgrading and re-apply your settings afterwards, merged with the new `Clone` key.
+
+- 369e229: Developer can create and update MJ: Row Level Security Filters. Sync push reloads metadata inside its transaction. An IS-A parent's delete returns, a new record does not load a missing child row, the GraphQL provider does not send a second delete, and a parent built by its child stays linked. The chat area accepts ReadOnly. A dialog manages its focus, names itself when it has no title, and leaves Tab inside a modal or an open dropdown or calendar above it. Tab that a dropdown or calendar hands back at the first or last stop wraps inside the dialog, and a dialog that does not trap focus does not let the dialog under it take the page's Tab. A host publishes an in-progress agent turn's live status through AgentRunStatusPublisher, including the completion when a background run fails before it has a run. A reply that finishes before the chat shows it completes without loading the conversation again.
+
+### Patch Changes
+
+- e97d95c: Agent docs: metadata ships only as release migrations. Individual PRs never include metadata migration SQL (reviewers should not flag its absence); the build engineer applies migrations and runs `mj sync push` against the last release to produce one net metadata migration, without rerunning CodeGen.
+- 21f9e15: Add `ConnectGraphQLClient` for embeds that need an authenticated client without the full metadata boot (#4887). `SetupGraphQLClient` now rejects when no metadata loaded, carrying the metadata download's failure as the cause (a user with no roles still gets the no-roles screen in Explorer and Bootstrap apps); the metadata refresh-check throttle is armed only by a successful check, and a failed metadata download no longer locks out an immediate retry; a cold boot no longer re-fetches the current user. Switching credentials on the provider (for example an anonymous connection upgraded to a login) rebuilds its GraphQL client so requests carry the new identity.
+- 705ab4e: A failed IS-A chain save or delete now leaves every level of the chain as it was before the call.
+
+  Each parent in the chain is finalized as saved and clean when its own write returns, before the leaf writes and the chain commits. When the leaf's write, its validation or the commit then failed, the transaction rolled back, but the parent objects still said they were saved. A new chain's retry updated a parent row that no longer existed, and an edited chain's retry skipped the parent's edit, returned true, and lost it.
+  - The IS-A initiator captures the chain before the parents save. On every failure path (a parent's save fails, the leaf's write fails or throws, the commit throws) it puts back what the rolled-back writes changed in memory. Each finalized level gets back its saved and loaded flags, its result history, and each field's value and dirty-tracking state. A field edited while the save was in flight keeps the edit, compared with the pre-save baseline.
+  - The same holds on the client, where `GraphQLDataProvider` records each parent's save in memory and sends the chain in the leaf's one mutation.
+  - Nothing is put back where the parents' writes were not undone: inside a `TransactionGroup`, or on a provider that reports entity transactions but opened no scope.
+  - A leaf whose commit failed after an earlier failed attempt now records the failure. `finalizeSave()` empties the result history, and a save records its failure only when the history is as long as when the save started, so that failure went unrecorded and `LatestResult` was null.
+  - A chain delete had the same problem the other way round. Each parent was reset with `NewRecord()` as soon as its own delete returned, so after a rollback the parent read as a new record under a new key, its link to the leaf was gone, and the retry failed. A chain delete that holds a transaction is now a unit of work: every record it deletes, including the records a parent's related-record collections delete, is reset only once it commits. A rollback leaves each one saved, under the same key and still linked. Without a transaction (the client) nothing rolls back, and each level resets as its delete returns, as before.
+  - A failed chain delete is now recorded on the leaf. Once the leaf's own row was deleted, its history held the provider's entry for that delete, so a parent's failure and a failed commit went unrecorded and the caller read a failure with no reason. A parent's failure now reads `Failed to delete parent entity '<name>': <reason>`, and a failed commit carries the commit's error.
+  - A composite (graph) save that rolls back now puts back each node's IS-A parents as well as the node, and each record's values and result history as well as its baseline. A graph delete that holds a transaction resets the records it deletes only once it commits, so a rollback leaves them saved; without one, a record whose delete went through stays reset, because its row is gone.
+  - `EntityField.GetState()` / `RestoreState()` and the `EntityFieldState` type are new, for the framework's own rollback.
+
+- 5986939: Internal build fix, not user-facing: restores a comma the #4586 merge dropped from the root `package.json`, which stopped every `pnpm` command on `next`. No package code changes. Leave this out of the release notes.
+- Updated dependencies [4d647e6]
+  - @memberjunction/global@6.2.0-edge.2
+  - @memberjunction/sql-dialect@6.2.0-edge.2
+
 ## 6.2.0-edge.1
 
 ### Minor Changes

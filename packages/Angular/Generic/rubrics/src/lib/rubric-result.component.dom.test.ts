@@ -43,7 +43,7 @@ describe('RubricResultComponent (DOM)', () => {
     it('says the gate was not met when the result failed it', () => {
         const result = PassedResult();
         result.gateFailed = true;
-        result.outcome = 'Failed';
+        result.outcome = 'GateFailed';
         const host = render(component => {
             component.Version = Draft();
             component.Result = result;

@@ -1,0 +1,136 @@
+[
+  {
+    "_comments": [
+      "Default grid columns for the delivery list: what an operator scans (which subscription, state, attempts, key, when claimable, lease, dead-letter reason). CodeGen's default flagged only Status and PartitionKey."
+    ],
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Work Queue Deliveries"
+    },
+    "fields": {
+      "Name": "MJ: Work Queue Deliveries"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "DefaultInView": true
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Work Queue Deliveries&Name=Subscription"
+          }
+        },
+        {
+          "fields": {
+            "DefaultInView": true
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Work Queue Deliveries&Name=Status"
+          }
+        },
+        {
+          "fields": {
+            "DefaultInView": true
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Work Queue Deliveries&Name=AttemptCount"
+          }
+        },
+        {
+          "fields": {
+            "DefaultInView": true
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Work Queue Deliveries&Name=PartitionKey"
+          }
+        },
+        {
+          "fields": {
+            "DefaultInView": true
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Work Queue Deliveries&Name=VisibleAt"
+          }
+        },
+        {
+          "fields": {
+            "DefaultInView": true
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Work Queue Deliveries&Name=LeaseExpiresAt"
+          }
+        },
+        {
+          "fields": {
+            "DefaultInView": true
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Work Queue Deliveries&Name=DeadLetterReason"
+          }
+        },
+        {
+          "fields": {
+            "DefaultInView": true
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Work Queue Deliveries&Name=__mj_CreatedAt"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "_comments": [
+      "Default grid columns for the message list: topic, publish order, key, attributes and publish time."
+    ],
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Work Queue Messages"
+    },
+    "fields": {
+      "Name": "MJ: Work Queue Messages"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "DefaultInView": true
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Work Queue Messages&Name=Topic"
+          }
+        },
+        {
+          "fields": {
+            "DefaultInView": true
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Work Queue Messages&Name=PublishOrdinal"
+          }
+        },
+        {
+          "fields": {
+            "DefaultInView": true
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Work Queue Messages&Name=PartitionKey"
+          }
+        },
+        {
+          "fields": {
+            "DefaultInView": true
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Work Queue Messages&Name=Attributes"
+          }
+        },
+        {
+          "fields": {
+            "DefaultInView": true
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Work Queue Messages&Name=PublishedAt"
+          }
+        }
+      ]
+    }
+  }
+]

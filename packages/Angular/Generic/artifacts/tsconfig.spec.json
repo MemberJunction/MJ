@@ -16,8 +16,11 @@
     "src/lib/components/artifact-viewer-panel.component.dom.test.ts",
     "src/lib/components/artifact-version-download.ts",
     "src/lib/components/artifact-version-download.test.ts",
+    "src/lib/components/plugins/component-artifact-viewer.component.ts",
+    "src/lib/components/plugins/component-artifact-viewer.component.dom.test.ts",
     "src/lib/services/artifact-icon.service.ts",
-    "src/lib/services/artifact-preview-resolver.service.ts"
+    "src/lib/services/artifact-preview-resolver.service.ts",
+    "src/lib/__tests__/interactive-form-apply.service.test.ts"
   ],
   "exclude": [
     "node_modules",
