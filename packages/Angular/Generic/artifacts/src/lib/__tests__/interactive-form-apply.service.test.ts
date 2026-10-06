@@ -18,7 +18,7 @@ import type { ComponentSpec } from '@memberjunction/interactive-component-types'
 import type { FormContributionSpec } from '@memberjunction/interactive-component-types/forms';
 import type {
     FieldGroupsInDetails, FormCompositionRegistry, FormCompositionSnapshot, FormPlacementContext, FormPlacementDecision,
-    FormPlacementDroppedClaim, FormPlacementState, HumanizeEntityTitle, PlacementStateFromContribution, ResolveContributionKey, ResolveFormContributionWinners,
+    FormPlacementState, MjFormPlacementDialogComponent, HumanizeEntityTitle, PlacementStateFromContribution, ResolveContributionKey, ResolveFormContributionWinners,
 } from '@memberjunction/ng-base-forms';
 
 // ─── Hoisted state buckets the mocks read/write ──────────────────────────
@@ -264,22 +264,29 @@ const placementRules = await vi.importActual<typeof import('@memberjunction/ng-b
     '@memberjunction/ng-base-forms/dist/lib/apply/form-placement.js');
 
 /**
+ * The dialog members the service's seed reads and writes, typed from the real class so a renamed
+ * or retyped member fails the type check.
+ */
+type SeedTarget = Pick<MjFormPlacementDialogComponent, 'Context' | 'CanReplaceField' | 'PlaceableSections' | 'RailTabs' | 'DroppedProposalClaim'>
+    & { State?: FormPlacementState };
+
+/**
  * A stand-in for the placement dialog with the guards MjFormPlacementDialogComponent derives
  * from its context. The dialog itself is an Angular component this node suite does not load.
  */
-function fakeDialog(context: FormPlacementContext) {
+function fakeDialog(context: FormPlacementContext): SeedTarget {
     return {
         Context: context,
-        State: undefined as FormPlacementState | undefined,
+        State: undefined,
         CanReplaceField: placementRules.SectionsWithFields(context).length > 0,
         PlaceableSections: context.Sections,
         RailTabs: placementRules.ReplaceableRailTabs(context),
-        DroppedProposalClaim: null as FormPlacementDroppedClaim | null,
+        DroppedProposalClaim: null,
     };
 }
 
 /** The fake dialog after the seed the service handed the dialog has run against `context`. */
-function seededDialog(context: FormPlacementContext): ReturnType<typeof fakeDialog> {
+function seededDialog(context: FormPlacementContext): SeedTarget {
     const dialog = hoisted.placementDialog as { SeedState: (d: unknown) => void };
     const fake = fakeDialog(context);
     dialog.SeedState(fake);
