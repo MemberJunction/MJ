@@ -423,8 +423,9 @@ const globalRow: FormComponentReference = { ID: 'row-global', Scope: 'Global', U
 
 /**
  * A form or panel draws the `MJ: Components` row its form or panel row points at, and a form's
- * spec can also load a component by name. So a change to what a component draws is checked
- * against every row that uses it, and without the grant a component no row uses is read-only.
+ * spec can also load a component by name. So without the grant, a user may change or delete only
+ * a component of their own, on any column. A holder's change to what a component draws is checked
+ * against every row that uses it.
  */
 describe('ComponentWriteRefusal', () => {
     /** A change to the component's specification by `ME`, with whatever the case overrides. */
@@ -482,6 +483,22 @@ describe('ComponentWriteRefusal', () => {
             expect(componentAllowed(componentWrite({ References: [{ Scope: ' user' as FormScope, UserID: ME }] }))).toBe(false);
             expect(componentAllowed(componentWrite({ References: [{ Scope: 'Global ' as FormScope, UserID: null }] }))).toBe(false);
         });
+
+        it("refuses a change to any column of another user's component", () => {
+            for (const field of ['Description', 'VersionSequence', 'Version']) {
+                expect(ComponentWriteRefusal(componentWrite({ ChangedFields: [field], References: [othersRow] })))
+                    .toMatch(/only a component of your own/);
+                expect(ComponentWriteRefusal(componentWrite({ ChangedFields: [field], References: [] })))
+                    .toMatch(/No form or panel uses this one, you did not create it/);
+            }
+        });
+
+        it('allows a change to any column of their own component', () => {
+            for (const field of ['Description', 'VersionSequence', 'Version']) {
+                expect(componentAllowed(componentWrite({ ChangedFields: [field], References: [ownRow] }))).toBe(true);
+                expect(componentAllowed(componentWrite({ ChangedFields: [field], References: [], CreatedByCaller: true }))).toBe(true);
+            }
+        });
     });
 
     describe('with the grant', () => {
@@ -496,10 +513,26 @@ describe('ComponentWriteRefusal', () => {
                 .toMatch(/belongs to someone else/);
             expect(componentAllowed(componentWrite({ References: [{ Scope: ' user' as FormScope, UserID: SOMEONE }], CallerHoldsGrant: true }))).toBe(false);
         });
+
+        it('allows a change to the description, and to the specification, of a component a Role row uses', () => {
+            expect(componentAllowed(componentWrite({ ChangedFields: ['Description'], References: [roleRow], CallerHoldsGrant: true }))).toBe(true);
+            expect(componentAllowed(componentWrite({ ChangedFields: ['Specification'], References: [roleRow], CallerHoldsGrant: true }))).toBe(true);
+        });
+
+        it("checks only the guarded columns, so a description change to a component another user's personal row uses passes", () => {
+            expect(componentAllowed(componentWrite({ ChangedFields: ['Description'], References: [othersRow], CallerHoldsGrant: true }))).toBe(true);
+            expect(componentAllowed(componentWrite({ ChangedFields: ['Specification'], References: [othersRow], CallerHoldsGrant: true }))).toBe(false);
+        });
     });
 
-    it('says the component is used by a form or panel when a row refuses it', () => {
-        expect(ComponentWriteRefusal(componentWrite({ References: [globalRow] }))).toMatch(/used by a form or panel/);
+    it('tells a caller without the grant that they may change only their own components', () => {
+        expect(ComponentWriteRefusal(componentWrite({ References: [globalRow] })))
+            .toMatch(/^Without the Manage Form Defaults authorization you can change or delete only a component of your own.*used by a form or panel that is not your own/);
+    });
+
+    it('tells a holder that the component is used by a form or panel', () => {
+        expect(ComponentWriteRefusal(componentWrite({ References: [othersRow], CallerHoldsGrant: true })))
+            .toMatch(/^This component is used by a form or panel/);
     });
 
     it('allows any write when there is no caller', () => {
@@ -509,18 +542,24 @@ describe('ComponentWriteRefusal', () => {
         }
     });
 
-    it('allows a change to a column that is not guarded', () => {
+    it('allows a holder a change to a column that is not guarded', () => {
         for (const field of ['Description', 'Title', 'Version', 'FunctionalRequirements']) {
-            expect(componentAllowed(componentWrite({ ChangedFields: [field], References: [othersRow, globalRow] }))).toBe(true);
-            expect(componentAllowed(componentWrite({ ChangedFields: [field], References: [] }))).toBe(true);
+            expect(componentAllowed(componentWrite({ ChangedFields: [field], References: [othersRow, globalRow], CallerHoldsGrant: true }))).toBe(true);
         }
-        expect(componentAllowed(componentWrite({ ChangedFields: [], References: [] }))).toBe(true);
+        expect(componentAllowed(componentWrite({ ChangedFields: [], References: [othersRow], CallerHoldsGrant: true }))).toBe(true);
     });
 
-    it('guards the specification, status, name, namespace and type, however the column name is cased', () => {
+    it('refuses a caller without the grant a change to an unguarded column, or no column, of a component not their own', () => {
+        for (const field of ['Description', 'Title', 'Version', 'FunctionalRequirements']) {
+            expect(componentAllowed(componentWrite({ ChangedFields: [field], References: [othersRow, globalRow] }))).toBe(false);
+        }
+        expect(componentAllowed(componentWrite({ ChangedFields: [], References: [] }))).toBe(false);
+    });
+
+    it('guards the specification, status, name, namespace and type for a holder, however the column name is cased', () => {
         expect([...GUARDED_COMPONENT_FIELDS]).toEqual(['Specification', 'Status', 'Name', 'Type', 'Namespace']);
         for (const field of [...GUARDED_COMPONENT_FIELDS, 'status', ' Namespace ']) {
-            expect(componentAllowed(componentWrite({ ChangedFields: [field], References: [globalRow] }))).toBe(false);
+            expect(componentAllowed(componentWrite({ ChangedFields: [field], References: [othersRow], CallerHoldsGrant: true }))).toBe(false);
         }
     });
 
@@ -531,15 +570,25 @@ describe('ComponentWriteRefusal', () => {
 });
 
 describe('ComponentWriteIsGuarded', () => {
-    it('is true for a guarded change or a delete by a caller', () => {
-        expect(ComponentWriteIsGuarded({ Operation: 'update', ChangedFields: ['Namespace'], CallerID: ME })).toBe(true);
-        expect(ComponentWriteIsGuarded({ Operation: 'delete', ChangedFields: [], CallerID: ME })).toBe(true);
+    it('is true for a delete by a caller, and for a holder\'s guarded change', () => {
+        for (const CallerHoldsGrant of [true, false]) {
+            expect(ComponentWriteIsGuarded({ Operation: 'delete', ChangedFields: [], CallerID: ME, CallerHoldsGrant })).toBe(true);
+        }
+        expect(ComponentWriteIsGuarded({ Operation: 'update', ChangedFields: ['Namespace'], CallerID: ME, CallerHoldsGrant: true })).toBe(true);
     });
 
-    it('is false for a create, an unguarded change, or no caller', () => {
-        expect(ComponentWriteIsGuarded({ Operation: 'create', ChangedFields: ['Specification'], CallerID: ME })).toBe(false);
-        expect(ComponentWriteIsGuarded({ Operation: 'update', ChangedFields: ['Description'], CallerID: ME })).toBe(false);
-        expect(ComponentWriteIsGuarded({ Operation: 'delete', ChangedFields: [], CallerID: null })).toBe(false);
+    it('is true for any update by a caller without the grant, whatever it changes', () => {
+        for (const ChangedFields of [['Description'], ['VersionSequence'], ['Version'], ['Namespace'], []]) {
+            expect(ComponentWriteIsGuarded({ Operation: 'update', ChangedFields, CallerID: ME, CallerHoldsGrant: false })).toBe(true);
+        }
+    });
+
+    it('is false for a create, a holder\'s unguarded change, or no caller', () => {
+        expect(ComponentWriteIsGuarded({ Operation: 'create', ChangedFields: ['Specification'], CallerID: ME, CallerHoldsGrant: false })).toBe(false);
+        expect(ComponentWriteIsGuarded({ Operation: 'update', ChangedFields: ['Description'], CallerID: ME, CallerHoldsGrant: true })).toBe(false);
+        for (const Operation of ['update', 'delete'] as const) {
+            expect(ComponentWriteIsGuarded({ Operation, ChangedFields: ['Description'], CallerID: null, CallerHoldsGrant: false })).toBe(false);
+        }
     });
 });
 

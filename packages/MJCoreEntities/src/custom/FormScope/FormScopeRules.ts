@@ -92,7 +92,8 @@ function readsAsPersonal(scope: string | null): boolean {
 
 /**
  * The `MJ: Components` columns that change what a form or panel using the component draws, or
- * which component a lookup by name finds.
+ * which component a lookup by name finds. An update by a holder of the grant is checked only when
+ * it changes one of them; an update by anyone else is always checked.
  */
 export const GUARDED_COMPONENT_FIELDS = ['Specification', 'Status', 'Name', 'Type', 'Namespace'] as const satisfies
     ReadonlyArray<keyof MJComponentEntityType>;
@@ -121,7 +122,7 @@ export interface OwnedComponentCheck {
 /** One write to a `MJ: Components` row, as {@link ComponentWriteRefusal} needs to see it. */
 export interface ComponentWrite extends OwnedComponentCheck {
     Operation: FormScopeOperation;
-    /** The columns whose new value differs from the stored one. Read on update only. */
+    /** The columns whose new value differs from the stored one. Read on an update by a holder only. */
     ChangedFields: readonly string[];
     /** Null when there is no caller: a trusted server context. */
     CallerID: string | null;
@@ -132,11 +133,17 @@ const COMPONENT_REFUSAL_LEAD =
     'This component is used by a form or panel, so changing its specification, status, name, ' +
     'namespace or type, or deleting it, changes that form or panel.';
 
+const OWN_COMPONENT_RULE =
+    'Without the Manage Form Defaults authorization you can change or delete only a component of ' +
+    'your own: one used by your own personal forms or panels and by nothing else, or one used by ' +
+    'none that you created.';
+
+const FOREIGN_COMPONENT_REFUSAL_LEAD =
+    `${OWN_COMPONENT_RULE} This one is used by a form or panel that is not your own.`;
+
 const UNREFERENCED_COMPONENT_REFUSAL =
-    'Without the Manage Form Defaults authorization you can change the specification, status, name, ' +
-    'namespace or type of a component, or delete it, only when it is your own: used by your own ' +
-    'personal forms or panels and by nothing else, or used by none and created by you. No form or ' +
-    'panel uses this one, you did not create it, and other forms may load it by name.';
+    `${OWN_COMPONENT_RULE} No form or panel uses this one, you did not create it, and other forms ` +
+    'may load it by name.';
 
 const UNCLAIMED_COMPONENT_REFUSAL =
     'Without the Manage Form Defaults authorization you can point a form or panel only at a component ' +
@@ -153,13 +160,17 @@ const NAME_COLLISION_REFUSAL =
     'used by your own personal forms and panels and by nothing else, or used by none and created by you.';
 
 /**
- * Whether this write must be checked against the forms and panels that use the component: a
- * delete, or an update that changes a {@link GUARDED_COMPONENT_FIELDS} column, by a caller.
- * A create is never checked here; {@link ComponentNameCollisionRefusal} covers its name.
+ * Whether this write by a caller must be checked against the forms and panels that use the
+ * component: a delete; any update by a caller without the grant, whatever columns it changes; or
+ * an update by a holder that changes a {@link GUARDED_COMPONENT_FIELDS} column. With no caller (a
+ * trusted server context) nothing is checked. A create is never checked here;
+ * {@link ComponentNameCollisionRefusal} covers its name.
  */
-export function ComponentWriteIsGuarded(write: Pick<ComponentWrite, 'Operation' | 'ChangedFields' | 'CallerID'>): boolean {
+export function ComponentWriteIsGuarded(
+    write: Pick<ComponentWrite, 'Operation' | 'ChangedFields' | 'CallerID' | 'CallerHoldsGrant'>,
+): boolean {
     if (write.CallerID == null || write.Operation === 'create') return false;
-    if (write.Operation === 'delete') return true;
+    if (write.Operation === 'delete' || !write.CallerHoldsGrant) return true;
     return write.ChangedFields.some((field) => GUARDED_COMPONENT_FIELD_KEYS.has(field.trim().toLowerCase()));
 }
 
@@ -175,16 +186,20 @@ export function IsCallersOwnComponent(component: OwnedComponentCheck, callerID: 
 }
 
 /**
- * Why a guarded write to a component is not allowed, or null when it is.
+ * Why a write to a component is not allowed, or null when it is. Only a write that
+ * {@link ComponentWriteIsGuarded} selects is checked.
  *
- * Each row that uses the component is checked with {@link FormScopeWriteRefusal} as if the caller
- * were updating that row in place: a `Role` or `Global` row needs the grant, another user's
- * personal row refuses everyone (a holder included), and the caller's own personal row passes.
+ * Without the grant, any update and a delete are allowed only for a component of the caller's own
+ * ({@link IsCallersOwnComponent}): used by at least one row and only by the caller's own personal
+ * rows, or used by no row and created by the caller. Forms can load a component by name, so a
+ * component with no row may still be what someone else's form draws.
  *
- * Without the grant, a component no row uses may be changed only by the user who created it:
- * forms can load a component by name, so a component with no row may still be what someone
- * else's form draws. A holder may change it. Personal rows are checked first, so when the grant
- * would not help, the refusal says so.
+ * With the grant, each row that uses the component is checked with {@link FormScopeWriteRefusal}
+ * as if the caller were updating that row in place: a `Role` or `Global` row passes, another
+ * user's personal row refuses, and the caller's own personal row passes. A component no row uses
+ * may be changed.
+ *
+ * Personal rows are checked first, so when the grant would not help, the refusal says so.
  */
 export function ComponentWriteRefusal(write: ComponentWrite): string | null {
     if (!ComponentWriteIsGuarded(write)) return null;
@@ -192,7 +207,9 @@ export function ComponentWriteRefusal(write: ComponentWrite): string | null {
         return write.CreatedByCaller ? null : UNREFERENCED_COMPONENT_REFUSAL;
     }
     const refusal = referenceRefusal(write.References, write.CallerID ?? '', write.CallerHoldsGrant);
-    return refusal ? `${COMPONENT_REFUSAL_LEAD} ${refusal}` : null;
+    if (!refusal) return null;
+    const lead = write.CallerHoldsGrant ? COMPONENT_REFUSAL_LEAD : FOREIGN_COMPONENT_REFUSAL_LEAD;
+    return `${lead} ${refusal}`;
 }
 
 /** A form or panel row pointed at a component: what the row rule needs to see. */

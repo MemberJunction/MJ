@@ -2,11 +2,12 @@
  * Unit tests for `MJComponentEntityServer`: the guard on a component that forms and panels draw.
  *
  * A form or panel draws the component its row points at, and a form's spec can load a component
- * by name, so a change to a component's specification, status, name, namespace or type, or its
- * deletion, changes what other people's forms draw. What is pinned here is the wiring: which
- * writes read what, that the changed columns come from the stored row, and that an ordinary save,
- * a `ReplayOnly` save and a delete are each refused before the write. The rules themselves are
- * tested as a matrix in `@memberjunction/core-entities`.
+ * by name, so a change to a component can change what other people's forms draw. Without the
+ * grant a user may change or delete only a component of their own, on any column; a holder's
+ * update is checked when it changes the specification, status, name, namespace or type. What is
+ * pinned here is the wiring: which writes read what, that the changed columns come from the stored
+ * row, and that an ordinary save, a `ReplayOnly` save and a delete are each refused before the
+ * write. The rules themselves are tested as a matrix in `@memberjunction/core-entities`.
  *
  * The extended base is mocked to a settable stub, and `RunView` to a stand-in database holding
  * components and the form and panel rows that use them.
@@ -123,6 +124,8 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
         public Status: string | null = 'Published';
         public Type: string | null = 'Widget';
         public Description: string | null = null;
+        public Version = '1.0.0';
+        public VersionSequence = 1;
         public IsSaved = true;
         public ContextCurrentUser: StubCaller | null = null;
         public SuperSaveCalled = false;
@@ -182,6 +185,8 @@ interface StubHooks {
     Status: string | null;
     Type: string | null;
     Description: string | null;
+    Version: string;
+    VersionSequence: number;
     IsSaved: boolean;
     ContextCurrentUser: StubCaller | null;
     SuperSaveCalled: boolean;
@@ -276,9 +281,40 @@ describe('MJComponentEntityServer — form component guard', () => {
             expect(e.Recorded?.Message).toMatch(/Manage Form Defaults/);
         });
 
-        it('is allowed for a change to a column that is not guarded', async () => {
+        /** Changes to columns the holder rule does not guard. */
+        const UNGUARDED_CHANGES: Array<Partial<StubHooks>> = [
+            { Description: 'new words' }, { VersionSequence: 2147483647 }, { Version: '9.9.9' },
+        ];
+
+        it("is refused for a change to any column of another user's component, before the write", async () => {
             storeComponent();
-            expect(await make(ALICE, { Description: 'new words' }).Save()).toBe(true);
+            use('COMP-1', 'User', BOB.ID);
+            for (const change of UNGUARDED_CHANGES) {
+                const e = make(ALICE, change);
+                expect(await e.Save()).toBe(false);
+                expect(e.SuperSaveCalled).toBe(false);
+                expect(e.Recorded?.Message).toMatch(/only a component of your own/);
+            }
+            db.uses = [];
+            createdBy('COMP-1', BOB);
+            for (const change of UNGUARDED_CHANGES) {
+                const e = make(ALICE, change);
+                expect(await e.Save()).toBe(false);
+                expect(e.Recorded?.Message).toMatch(/No form or panel uses this one, you did not create it/);
+            }
+        });
+
+        it('is allowed for a change to any column of the caller\'s own component', async () => {
+            storeComponent();
+            use('COMP-1', 'User', ALICE.ID);
+            for (const change of UNGUARDED_CHANGES) {
+                expect(await make(ALICE, change).Save()).toBe(true);
+            }
+            db.uses = [];
+            createdBy('COMP-1', ALICE);
+            for (const change of UNGUARDED_CHANGES) {
+                expect(await make(ALICE, change).Save()).toBe(true);
+            }
         });
     });
 
@@ -297,6 +333,21 @@ describe('MJComponentEntityServer — form component guard', () => {
             const e = make(OWNER, { Type: 'Form' });
             expect(await e.Save()).toBe(false);
             expect(e.Recorded?.Message).toMatch(/belongs to someone else/);
+        });
+
+        it('is allowed for a change to the description, and to the specification, of a component a Role row uses', async () => {
+            storeComponent();
+            use('COMP-1', 'Role', null);
+            expect(await make(OWNER, { Description: 'new words' }).Save()).toBe(true);
+            expect(await make(OWNER, { Specification: '{"v":2}' }).Save()).toBe(true);
+        });
+
+        it("checks only the guarded columns, so a description change to a component another user's personal row uses is allowed", async () => {
+            storeComponent();
+            use('COMP-1', 'User', BOB.ID);
+            expect(await make(OWNER, { Description: 'new words' }).Save()).toBe(true);
+            expect(await make(OWNER, { VersionSequence: 2 }).Save()).toBe(true);
+            expect(await make(OWNER, { Specification: '{"v":2}' }).Save()).toBe(false);
         });
     });
 

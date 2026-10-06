@@ -80,8 +80,8 @@ interface GuardCaller {
  * delete reads, in one batch and as the caller: every form and panel row that uses the component,
  * the component's stored guarded columns (update), the other components with the same name
  * (update without the grant), and whether the caller created the component (without the grant).
- * The changed columns are found by comparing the write's values with the stored ones. When a read
- * fails, the write is refused.
+ * These are read for every update, whatever it changes. The changed columns are found by
+ * comparing the write's values with the stored ones. When a read fails, the write is refused.
  */
 export async function ComponentGuardRefusal(row: GuardedComponentRow, operation: FormScopeOperation): Promise<string | null> {
     const caller = guardCaller(row);

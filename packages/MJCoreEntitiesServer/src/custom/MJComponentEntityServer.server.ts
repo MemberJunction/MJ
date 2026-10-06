@@ -18,12 +18,13 @@ import { ComponentGuardRefusal, type GuardedComponentRow } from "./FormComponent
  *
  * Also guards the component behind a full custom form or panel (`ComponentGuardRefusal`). A form
  * or panel draws the component its row points at, and a form's spec can load a component by name,
- * so a change to a component's specification, status, name, namespace or type, or its deletion,
- * changes what other people's forms draw:
- * - without the `Manage Form Defaults` grant, it is allowed only for a component of the caller's
- *   own (`IsCallersOwnComponent`): used by at least one row and only by the caller's own personal
- *   rows, or used by no row and created by the caller;
- * - with the grant, it is allowed unless another user's personal row uses the component.
+ * so a change to a component can change what other people's forms draw:
+ * - without the `Manage Form Defaults` grant, any update, whatever columns it changes, and a
+ *   delete are allowed only for a component of the caller's own (`IsCallersOwnComponent`): used
+ *   by at least one row and only by the caller's own personal rows, or used by no row and created
+ *   by the caller;
+ * - with the grant, a delete, or an update that changes the specification, status, name,
+ *   namespace or type, is allowed unless another user's personal row uses the component.
  * Without the grant, a created or renamed component also may not share its name with another
  * component that is not the caller's own. A save or delete with no caller (a trusted server
  * context) is not checked.
