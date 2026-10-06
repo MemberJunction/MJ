@@ -365,19 +365,6 @@ describe('InteractiveFormPanelComponent (DOM) — a failure inside the panel', (
     expect(logError).toHaveBeenCalledWith(expect.stringContaining('boom'));
   });
 
-  it('clears an error the React host reported when the panel loads its spec again', async () => {
-    vi.spyOn(InteractiveFormsEngine.Instance, 'Config').mockResolvedValue(undefined);
-    vi.spyOn(InteractiveFormsEngine.Instance, 'GetComponentByID').mockResolvedValue({
-      Name: 'LTV strip', Specification: JSON.stringify({ name: 'LTV', componentRole: 'form-panel' }),
-    } as unknown as MJComponentEntity);
-    const f = render(contribution());
-    await f.componentInstance.OnReactComponentEvent(hostError('react'));
-
-    await (f.componentInstance as unknown as PanelInternals).loadSpec();
-
-    expect(f.componentInstance.RenderError).toBeNull();
-  });
-
   it('logs a host error that mj-react-component does not log itself, such as a render timeout', async () => {
     logError.mockClear();
     const f = render(contribution());

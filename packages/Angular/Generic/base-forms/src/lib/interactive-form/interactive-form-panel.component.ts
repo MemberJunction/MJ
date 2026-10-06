@@ -294,7 +294,6 @@ export class InteractiveFormPanelComponent extends BaseContributionPanel impleme
     }
 
     private async loadSpec(): Promise<void> {
-        this.setRenderError(null);
         const supplied = this.Contribution?.ComponentSpec;
         if (supplied) {
             this.componentSpec = IsFormPanelRole(supplied) ? supplied : null;
