@@ -121,6 +121,8 @@ export async function CreateCameraCapture(
  * Requests screen share video capture via `navigator.mediaDevices.getDisplayMedia`.
  * Gated on {@link FrameCaptureOptions.ConsentGranted} when consent is required.
  *
+ * @deprecated Use `RequestDisplayCapture` (in `displayCapture.ts`), which offers surface hints and panel
+ *   capture and reports what was shared, then a {@link FrameSampler} on its stream.
  * @param options Frame capture options.
  * @param displayMediaOptions Display media options.
  */

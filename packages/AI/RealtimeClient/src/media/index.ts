@@ -14,6 +14,7 @@
 export * from './frameCapture';
 export * from './frameSampler';
 export * from './channelVideoSource';
+export * from './displayCapture';
 export * from './videoPacing';
 export * from './videoSourceArbiter';
 export * from '../audio/audioMeter';

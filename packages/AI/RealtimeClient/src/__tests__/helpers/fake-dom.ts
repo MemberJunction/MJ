@@ -57,6 +57,11 @@ export class FakeCanvasElement {
     }
 }
 
+/** Stands in for a page panel (a `<div>`); `Isolation` is what `getComputedStyle(...).isolation` reports. */
+export class FakePanelElement {
+    public Isolation = 'auto';
+}
+
 /** The base64 payload every fake canvas encodes to ("FRAME"). */
 export const FAKE_FRAME_BASE64 = 'RlJBTUU=';
 
@@ -64,13 +69,23 @@ export const FAKE_FRAME_BASE64 = 'RlJBTUU=';
 export interface FakeDom {
     Videos: FakeVideoElement[];
     Canvases: FakeCanvasElement[];
+    Panels: FakePanelElement[];
 }
 
-/** Installs a fake `document` whose `createElement` makes {@link FakeVideoElement}s and {@link FakeCanvasElement}s. */
+/**
+ * Installs a fake `document` whose `createElement` makes {@link FakeVideoElement}s, {@link FakeCanvasElement}s
+ * and (for `'div'`) {@link FakePanelElement}s, and a `getComputedStyle` that reads a panel's `Isolation`.
+ */
 export function InstallFakeDom(): FakeDom {
-    const dom: FakeDom = { Videos: [], Canvases: [] };
+    const dom: FakeDom = { Videos: [], Canvases: [], Panels: [] };
+    vi.stubGlobal('getComputedStyle', (element: FakePanelElement): { isolation: string } => ({ isolation: element.Isolation }));
     vi.stubGlobal('document', {
-        createElement: (tag: string): FakeVideoElement | FakeCanvasElement => {
+        createElement: (tag: string): FakeVideoElement | FakeCanvasElement | FakePanelElement => {
+            if (tag === 'div') {
+                const panel = new FakePanelElement();
+                dom.Panels.push(panel);
+                return panel;
+            }
             if (tag === 'video') {
                 const video = new FakeVideoElement();
                 dom.Videos.push(video);
