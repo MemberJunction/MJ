@@ -1,6 +1,6 @@
 # Architecture & flow diagrams skill (built on archify)
 
-**Status:** Phases 0–3 built in this PR (see the *As built* notes under each phase) · Phase 4 in progress
+**Status:** Phases 0–4 built in this PR (see the *As built* notes under each phase)
 
 ## Goal
 
@@ -179,6 +179,19 @@ Worth doing independently of archify.
 This makes any *instruction-only* Anthropic skill importable and trackable. Skills that ship scripts
 (archify included) still need the vendored-code route of Phases 1–3, because the server does not run
 a skill's scripts.
+
+**As built (Phase 4).** Migration `V202610061800__v6.2.x__AISkill_External_Sources_And_Files`, with its CodeGen output.
+- **Source fields as planned,** with `SourceType` limited by a CHECK to `URL` | `GitHub` (NULL means authored here). One addition: `Frontmatter`, which stores unknown SKILL.md keys so they survive an import followed by an export, not just a pass through the converter.
+- **`AISkillFile`** (`SkillID`, `Path`, `Content`, unique per skill and path).
+  - The "read skill file" step is a `Read Skill File` action. It is offered automatically, with the file list, when a skill that has files activates. The action reads only files of skills active in the run.
+  - Files are not cached in `AIEngineBase`, which would ship their content to every browser.
+- **YAML frontmatter** uses `yaml`, which was already in the workspace. `license` and `metadata.version` are exposed, and unknown keys are preserved.
+- **URL / GitHub import:** `SkillImportExportService.ImportSkillFromSource`, https only. It makes one tree-listing call for a GitHub folder and skips binaries and files over 512 KB. It is service-only for now: anything that exposes it to users needs an SSRF guard.
+- **Update check:** a daily `Skill Update Check` scheduled job (shipped Active). A changed `SourceContentHash` sets the skill to `Pending`, which already existed in `AISkill.Status`, and leaves its content untouched. Re-importing with `updateSkillId` approves the change. A Pending skill can't be activated, so an upstream change takes it offline until an admin reviews it, as the plan intends.
+- **Known limits:**
+  - GitHub's unauthenticated limit is 60 calls an hour, and the check makes one per sourced skill.
+  - Export is still a single SKILL.md.
+  - Realtime agents don't get the file list.
 
 ## Risks and open questions
 
