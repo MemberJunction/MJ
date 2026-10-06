@@ -187,7 +187,7 @@ export class ArtifactsModule {
 
     // No React runtime preload here: Angular constructs this module eagerly in every app whose
     // import graph reaches it (#4802). The component viewer initializes the runtime on demand;
-    // hosts that want a warm cache call AngularAdapterService.Preload() themselves.
+    // hosts that want a warm cache call AngularAdapterService.preload() themselves.
   }
 
   /**
