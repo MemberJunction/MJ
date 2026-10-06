@@ -2307,6 +2307,9 @@ export class MJAIAgentExample_ {
     @Field({nullable: true, description: "Optional expiration timestamp. Examples past this date are candidates for archival. NULL means no expiration."}) 
     ExpiresAt?: Date;
         
+    @Field({nullable: true, description: "The example embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of EmbeddingVector. Written alongside EmbeddingVector; readers prefer it and fall back to EmbeddingVector when it is NULL."}) 
+    EmbeddingVectorBinary?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Agent?: string;
@@ -2415,6 +2418,9 @@ export class CreateMJAIAgentExampleInput {
     @Field({ nullable: true })
     ExpiresAt: Date | null;
 
+    @Field({ nullable: true })
+    EmbeddingVectorBinary: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -2490,6 +2496,9 @@ export class UpdateMJAIAgentExampleInput {
 
     @Field({ nullable: true })
     ExpiresAt?: Date | null;
+
+    @Field({ nullable: true })
+    EmbeddingVectorBinary?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -3658,6 +3667,9 @@ export class MJAIAgentNote_ {
     @MaxLength(20)
     AuthorType?: string;
         
+    @Field({nullable: true, description: "The note embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of EmbeddingVector. Written alongside EmbeddingVector; readers prefer it and fall back to EmbeddingVector when it is NULL."}) 
+    EmbeddingVectorBinary?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Agent?: string;
@@ -3789,6 +3801,9 @@ export class CreateMJAIAgentNoteInput {
     @Field({ nullable: true })
     AuthorType?: string;
 
+    @Field({ nullable: true })
+    EmbeddingVectorBinary: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -3879,6 +3894,9 @@ export class UpdateMJAIAgentNoteInput {
 
     @Field({ nullable: true })
     AuthorType?: string;
+
+    @Field({ nullable: true })
+    EmbeddingVectorBinary?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -33002,6 +33020,12 @@ export class MJComponent_ {
     @Field(() => Boolean, {nullable: true, description: "Indicates whether the component has any custom properties that are marked as required. This is auto-calculated based on the component's properties array to identify components with mandatory custom configuration."}) 
     HasRequiredCustomProps?: boolean;
         
+    @Field({nullable: true, description: "The functional-requirements embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of FunctionalRequirementsVector. Written alongside FunctionalRequirementsVector; readers prefer it and fall back to FunctionalRequirementsVector when it is NULL."}) 
+    FunctionalRequirementsVectorBinary?: string;
+        
+    @Field({nullable: true, description: "The technical-design embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of TechnicalDesignVector. Written alongside TechnicalDesignVector; readers prefer it and fall back to TechnicalDesignVector when it is NULL."}) 
+    TechnicalDesignVectorBinary?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     SourceRegistry?: string;
@@ -33097,6 +33121,12 @@ export class CreateMJComponentInput {
     @Field(() => Boolean, { nullable: true })
     HasRequiredCustomProps?: boolean;
 
+    @Field({ nullable: true })
+    FunctionalRequirementsVectorBinary: string | null;
+
+    @Field({ nullable: true })
+    TechnicalDesignVectorBinary: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -33187,6 +33217,12 @@ export class UpdateMJComponentInput {
 
     @Field(() => Boolean, { nullable: true })
     HasRequiredCustomProps?: boolean;
+
+    @Field({ nullable: true })
+    FunctionalRequirementsVectorBinary?: string | null;
+
+    @Field({ nullable: true })
+    TechnicalDesignVectorBinary?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -50697,6 +50733,9 @@ export class MJEntityRecordDocument_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: "The embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of VectorJSON. Written alongside VectorJSON by vector sync; readers prefer it and fall back to VectorJSON when it is NULL."}) 
+    VectorBinary?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Entity?: string;
@@ -50746,6 +50785,9 @@ export class CreateMJEntityRecordDocumentInput {
     @Field({ nullable: true })
     EntityRecordUpdatedAt?: Date;
 
+    @Field({ nullable: true })
+    VectorBinary: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -50782,6 +50824,9 @@ export class UpdateMJEntityRecordDocumentInput {
 
     @Field({ nullable: true })
     EntityRecordUpdatedAt?: Date;
+
+    @Field({ nullable: true })
+    VectorBinary?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -70112,6 +70157,9 @@ export class MJQuery_ {
     @Field({nullable: true, description: "Optional JSON configuration bag defining query-level policies and semantic capabilities (shape = IQueryConfiguration). Includes Priority (1-100) for ground-truth ranking in the semantic layer, LogExecution to control query execution logging, AlternativeQuestions for multi-phrasing vector recall, UsageGuidance and WhenNotToUse bounds for AI agents, and DomainScope."}) 
     Configuration?: string;
         
+    @Field({nullable: true, description: "The query embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of EmbeddingVector. Written alongside EmbeddingVector; readers prefer it and fall back to EmbeddingVector when it is NULL."}) 
+    EmbeddingVectorBinary?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(50)
     Category?: string;
@@ -70213,6 +70261,9 @@ export class CreateMJQueryInput {
     @Field({ nullable: true })
     Configuration: string | null;
 
+    @Field({ nullable: true })
+    EmbeddingVectorBinary: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -70297,6 +70348,9 @@ export class UpdateMJQueryInput {
 
     @Field({ nullable: true })
     Configuration?: string | null;
+
+    @Field({ nullable: true })
+    EmbeddingVectorBinary?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -87142,6 +87196,9 @@ export class MJTag_ {
     @MaxLength(36)
     EmbeddingModelID?: string;
         
+    @Field({nullable: true, description: "The tag embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of EmbeddingVector. Written alongside EmbeddingVector; readers prefer it and fall back to EmbeddingVector when it is NULL."}) 
+    EmbeddingVectorBinary?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Parent?: string;
@@ -87228,6 +87285,9 @@ export class CreateMJTagInput {
     @Field({ nullable: true })
     EmbeddingModelID: string | null;
 
+    @Field({ nullable: true })
+    EmbeddingVectorBinary: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -87285,6 +87345,9 @@ export class UpdateMJTagInput {
 
     @Field({ nullable: true })
     EmbeddingModelID?: string | null;
+
+    @Field({ nullable: true })
+    EmbeddingVectorBinary?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
