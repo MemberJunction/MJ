@@ -16,9 +16,17 @@ export {
   type LiveKitRoomControllerOptions,
 } from './livekit-room-controller';
 
-export { LiveKitAudioMeter, AUDIO_METER_BIN_COUNT, AUDIO_METER_SILENCE_FLOOR, type LiveKitAudioMeterFrame } from './audio-meter';
+export {
+  LiveKitAudioMeter,
+  AUDIO_METER_BIN_COUNT,
+  AUDIO_METER_SILENCE_FLOOR,
+  AUDIO_METER_ATTACK,
+  AUDIO_METER_DECAY,
+  type LiveKitAudioMeterFrame,
+} from './audio-meter';
 
 export { LiveKitMediaPreview } from './livekit-preview';
+export { ToMediaParticipant, ToMediaDevice, ToLiveKitDeviceKind } from './media-adapters';
 export { ApplyNoiseFilter, applyNoiseFilter, ApplyBackgroundEffect, applyBackgroundEffect } from './livekit-effects';
 
 export {

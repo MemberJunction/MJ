@@ -1,4 +1,19 @@
-import type { LiveKitDevice } from '@memberjunction/livekit-room-core';
+import {
+  AUDIO_METER_ATTACK,
+  AUDIO_METER_BIN_COUNT,
+  AUDIO_METER_DECAY,
+  AUDIO_METER_SILENCE_FLOOR,
+  type LiveKitDevice,
+} from '@memberjunction/livekit-room-core';
+import type { MediaAudioMeterSettings } from '@memberjunction/ng-realtime-media';
+
+/** How the room's meters move: seven bars, quick to rise and slow to fall, as LiveKit's meter always did. */
+export const LIVEKIT_METER_SETTINGS: Readonly<MediaAudioMeterSettings> = Object.freeze({
+  BarCount: AUDIO_METER_BIN_COUNT,
+  Attack: AUDIO_METER_ATTACK,
+  Decay: AUDIO_METER_DECAY,
+  SilenceFloor: AUDIO_METER_SILENCE_FLOOR,
+});
 
 /** One chat message rendered in the chat panel (sourced from the LiveKit data channel). */
 export interface LiveKitChatMessage {

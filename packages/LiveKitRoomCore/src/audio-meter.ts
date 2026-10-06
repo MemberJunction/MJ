@@ -13,6 +13,12 @@ export const AUDIO_METER_BIN_COUNT = 7;
 /** Below this level the meter is treated as silent (clamps idle noise to a flat baseline). */
 export const AUDIO_METER_SILENCE_FLOOR = 0.04;
 
+/** How fast the meter rises toward a louder level, 0..1. */
+export const AUDIO_METER_ATTACK = 0.6;
+
+/** How fast the meter falls toward a quieter level, 0..1. */
+export const AUDIO_METER_DECAY = 0.18;
+
 /** One smoothed frame of audio-visual data. */
 export interface LiveKitAudioMeterFrame {
   /** Smoothed level, 0..1. */
@@ -32,12 +38,12 @@ export class LiveKitAudioMeter {
   private readonly bins: number[] = new Array(AUDIO_METER_BIN_COUNT).fill(0);
 
   /**
-   * @param attack Smoothing factor when the level is rising, 0..1 (higher = snappier). Default 0.6.
-   * @param decay Smoothing factor when the level is falling, 0..1 (lower = slower fall). Default 0.18.
+   * @param attack Smoothing factor when the level is rising, 0..1 (higher = snappier). Default {@link AUDIO_METER_ATTACK}.
+   * @param decay Smoothing factor when the level is falling, 0..1 (lower = slower fall). Default {@link AUDIO_METER_DECAY}.
    */
   constructor(
-    private readonly attack = 0.6,
-    private readonly decay = 0.18,
+    private readonly attack = AUDIO_METER_ATTACK,
+    private readonly decay = AUDIO_METER_DECAY,
   ) {}
 
   /**

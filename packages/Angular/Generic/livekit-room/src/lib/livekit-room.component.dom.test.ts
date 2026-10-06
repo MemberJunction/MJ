@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { renderComponentFixture, query, text } from '@memberjunction/ng-test-utils';
-import type { LiveKitRoomController, LiveKitRoomState } from '@memberjunction/livekit-room-core';
+import { renderComponentFixture, query, queryAll, text } from '@memberjunction/ng-test-utils';
+import type { LiveKitParticipantView, LiveKitRoomController, LiveKitRoomState } from '@memberjunction/livekit-room-core';
 import { LiveKitRoomComponent, LIVEKIT_ROOM_CONTROLLER_FACTORY } from './livekit-room.component';
 
 /**
@@ -78,16 +78,39 @@ describe('LiveKitRoomComponent (DOM, fake controller)', () => {
   it('renders the connection overlay (not the connected stage) when the controller reports "connecting"', () => {
     const fc = makeFakeController(makeState({ Status: 'connecting' }));
     const f = render(fc.controller);
-    expect(query(f, 'mj-livekit-connection-overlay')).not.toBeNull();
-    expect(text(f, 'mj-livekit-connection-overlay')).toContain('Connecting');
+    expect(query(f, 'mj-connection-overlay')).not.toBeNull();
+    expect(text(f, 'mj-connection-overlay')).toContain('Connecting');
     expect(query(f, 'mj-livekit-control-bar')).not.toBeNull(); // container chrome still renders
   });
 
   it('hides the overlay and shows the (empty) participant stage when connected', () => {
     const fc = makeFakeController(makeState({ Status: 'connected', RoomName: 'Standup' }));
     const f = render(fc.controller);
-    expect(query(f, 'mj-livekit-connection-overlay')).toBeNull();
+    expect(query(f, 'mj-connection-overlay')).toBeNull();
     expect(text(f, '.lk-room__grid')).toContain('Waiting for participants');
+  });
+
+  it('plays every remote voice, whatever the layout shows', () => {
+    // Split view shows two tiles (the sharer and the speaker); all three remote participants are still heard.
+    const remote = (identity: string, over: Partial<LiveKitParticipantView> = {}): LiveKitParticipantView =>
+      ({
+        Identity: identity,
+        DisplayName: identity,
+        IsLocal: false,
+        Role: 'participant',
+        IsSpeaking: false,
+        AudioLevel: 0,
+        HasAudio: true,
+        HasVideo: false,
+        IsScreenSharing: false,
+        ConnectionQuality: 'good',
+        Raw: { audioLevel: 0, getTrackPublication: () => undefined },
+        ...over,
+      }) as unknown as LiveKitParticipantView;
+    const fc = makeFakeController(makeState({ Status: 'connected', Remote: [remote('sharer', { IsScreenSharing: true }), remote('talker'), remote('listener')] }));
+    const f = render(fc.controller, { Layout: 'split', ShowAudioMeters: false });
+    expect(queryAll(f, 'mj-media-tile')).toHaveLength(2);
+    expect(queryAll(f, 'mj-livekit-participant-audio')).toHaveLength(3);
   });
 
   it('renders the room name from controller State in the header', () => {
@@ -109,12 +132,12 @@ describe('LiveKitRoomComponent (DOM, fake controller)', () => {
   it('re-renders when the controller emits a stateChanged event (connecting → connected)', () => {
     const fc = makeFakeController(makeState({ Status: 'connecting' }));
     const f = render(fc.controller);
-    expect(query(f, 'mj-livekit-connection-overlay')).not.toBeNull();
+    expect(query(f, 'mj-connection-overlay')).not.toBeNull();
 
     fc.emitState(makeState({ Status: 'connected', RoomName: 'Standup' }));
     f.detectChanges();
 
-    expect(query(f, 'mj-livekit-connection-overlay')).toBeNull();
+    expect(query(f, 'mj-connection-overlay')).toBeNull();
     expect(text(f, '.lk-room__title')).toContain('Standup');
   });
 });

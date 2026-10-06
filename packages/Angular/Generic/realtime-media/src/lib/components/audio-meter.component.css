@@ -1,0 +1,23 @@
+:host {
+  display: inline-flex;
+  align-items: center;
+  height: 100%;
+}
+
+.meter {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 100%;
+}
+
+.meter__bar {
+  display: block;
+  width: 3px;
+  height: 10%;
+  min-height: 2px;
+  border-radius: 2px;
+  background: var(--mj-brand-primary);
+  transform-origin: center;
+  transition: background-color 120ms ease;
+}

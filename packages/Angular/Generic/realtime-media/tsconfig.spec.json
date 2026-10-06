@@ -1,0 +1,20 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["vitest/globals", "node"]
+  },
+  // Explicit file list: the DOM project AOT-compiles only these components and their specs.
+  "include": [
+    "src/lib/components/agent-state.component.ts",
+    "src/lib/components/agent-state.component.dom.test.ts",
+    "src/lib/components/connection-overlay.component.ts",
+    "src/lib/components/connection-overlay.component.dom.test.ts",
+    "src/lib/components/media-device-menu.component.ts",
+    "src/lib/components/media-device-menu.component.dom.test.ts",
+    "src/lib/components/audio-meter.component.ts",
+    "src/lib/components/audio-meter.component.dom.test.ts",
+    "src/lib/components/media-tile.component.ts",
+    "src/lib/components/media-tile.component.dom.test.ts"
+  ],
+  "exclude": ["node_modules", "dist"]
+}

@@ -32,15 +32,23 @@ import {
   type LiveKitParticipantView,
   type LiveKitRoomError,
   type LiveKitRoomState,
+  ToLiveKitDeviceKind,
+  ToMediaDevice,
+  ToMediaParticipant,
 } from '@memberjunction/livekit-room-core';
-import { LiveKitParticipantTileComponent } from './components/livekit-participant-tile.component';
+import {
+  MediaAgentStateComponent,
+  MediaConnectionOverlayComponent,
+  MediaDeviceMenuComponent,
+  MediaTileComponent,
+} from '@memberjunction/ng-realtime-media';
+import type { MediaDevice, MediaDeviceSelection, MediaParticipant } from '@memberjunction/ai-realtime-client/media';
 import { LiveKitControlBarComponent } from './components/livekit-control-bar.component';
 import { LiveKitChatPanelComponent } from './components/livekit-chat-panel.component';
-import { LiveKitDeviceMenuComponent } from './components/livekit-device-menu.component';
 import { LiveKitParticipantsPanelComponent } from './components/livekit-participants-panel.component';
-import { LiveKitConnectionOverlayComponent } from './components/livekit-connection-overlay.component';
+import { LiveKitParticipantAudioComponent } from './components/livekit-participant-audio.component';
 import { LiveKitPreJoinComponent, type LiveKitPreJoinChoices } from './components/livekit-prejoin.component';
-import { LiveKitAgentStateComponent, type LiveKitAgentVisualState } from './components/livekit-agent-state.component';
+import type { LiveKitAgentVisualState } from './components/livekit-agent-state.component';
 import { LiveKitWhiteboardSurfaceComponent } from './components/livekit-whiteboard-surface.component';
 import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import {
@@ -60,6 +68,7 @@ import {
   type LiveKitChatMessage,
   type LiveKitDeviceLists,
   type LiveKitDeviceSelection,
+  LIVEKIT_METER_SETTINGS,
 } from './models';
 
 /**
@@ -112,14 +121,15 @@ export interface LiveKitLayoutOption {
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    LiveKitParticipantTileComponent,
+    MediaTileComponent,
+    MediaAgentStateComponent,
+    MediaConnectionOverlayComponent,
+    MediaDeviceMenuComponent,
+    LiveKitParticipantAudioComponent,
     LiveKitControlBarComponent,
     LiveKitChatPanelComponent,
-    LiveKitDeviceMenuComponent,
     LiveKitParticipantsPanelComponent,
-    LiveKitConnectionOverlayComponent,
     LiveKitPreJoinComponent,
-    LiveKitAgentStateComponent,
     LiveKitWhiteboardSurfaceComponent,
     MJEmptyStateComponent,
   ],
@@ -316,6 +326,10 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
   ];
   /** The device lists for the device menu. */
   public Devices: LiveKitDeviceLists = { Microphones: [], Cameras: [], Speakers: [] };
+  /** {@link Devices} as one `/media` list, for the device menu. */
+  public MediaDevices: MediaDevice[] = [];
+  /** How the tiles' meters move: as LiveKit's meter always did. */
+  public readonly MeterSettings = LIVEKIT_METER_SETTINGS;
   /** The active microphone `deviceId`, used to pre-select it in the device menu. */
   public SelectedMicrophoneId: string | null = null;
   /** The active camera `deviceId`, used to pre-select it in the device menu. */
@@ -514,6 +528,11 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
   /** @deprecated Use {@link OnDeviceSelected}. */
   public onDeviceSelected(selection: LiveKitDeviceSelection): void {
     return this.OnDeviceSelected(selection);
+  }
+
+  /** Switches the device picked in the device menu. */
+  public OnMediaDeviceSelected(selection: MediaDeviceSelection): void {
+    this.OnDeviceSelected({ Kind: ToLiveKitDeviceKind(selection.Kind), DeviceId: selection.DeviceID });
   }
 
   /** Updates the locally-tracked selected device id for a kind. */
@@ -719,6 +738,11 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
     return this.AvatarFor(p);
   }
 
+  /** A participant as the tiles render it: the same view always gives the same participant, so a tile never reattaches. */
+  public MediaParticipantFor(p: LiveKitParticipantView): MediaParticipant {
+    return ToMediaParticipant(p);
+  }
+
   // ── internals ────────────────────────────────────────────────────────────────────
 
   /** Connects automatically once initialized and both connection inputs are present. */
@@ -839,6 +863,7 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
     ]);
     this.runInZone(() => {
       this.Devices = { Microphones: mics, Cameras: cams, Speakers: speakers };
+      this.MediaDevices = [...mics, ...cams, ...speakers].map(ToMediaDevice);
       this.refreshSelectedDeviceIds();
     });
   }

@@ -13,7 +13,7 @@
         </span>
         <span class="lk-room__header-right">
           @if (ShowAgentState && AgentParticipant) {
-            <mj-livekit-agent-state [State]="AgentState" [AgentName]="AgentParticipant.DisplayName"></mj-livekit-agent-state>
+            <mj-agent-state [State]="AgentState" [AgentName]="AgentParticipant.DisplayName"></mj-agent-state>
           }
           @if (ShowParticipantCount) {
             <span class="lk-room__count"><i class="fa-solid fa-users"></i> {{ AllParticipants.length }}</span>
@@ -24,6 +24,11 @@
 
     @if (State.AudioPlaybackBlocked) {
       <button type="button" class="lk-room__sound-banner" (click)="onEnableSound()"><i class="fa-solid fa-volume-high"></i> Click to enable sound</button>
+    }
+
+    <!-- Every remote voice plays here, whatever the layout shows: tiles never play audio. -->
+    @for (p of State.Remote; track p.Identity) {
+      <mj-livekit-participant-audio [Participant]="p"></mj-livekit-participant-audio>
     }
 
     <div class="lk-room__body">
@@ -44,14 +49,15 @@
             >
               <div class="lk-room__split-pane" [style.flexBasis.%]="SplitRatio * 100">
                 @if (ScreenShareParticipant) {
-                  <mj-livekit-participant-tile
-                    [Participant]="ScreenShareParticipant"
+                  <mj-media-tile
+                    [MeterSettings]="MeterSettings"
+                    [Participant]="MediaParticipantFor(ScreenShareParticipant)"
                     [ShowActiveSpeakerRing]="false"
-                    [ShowAudioMeter]="false"
+                    [ShowMeter]="false"
                     [ShowConnectionQuality]="ShowConnectionQuality"
-                    [ShowNameBadge]="ShowNameBadges"
+                    [ShowName]="ShowNameBadges"
                     [AvatarUrl]="avatarFor(ScreenShareParticipant)"
-                  ></mj-livekit-participant-tile>
+                  ></mj-media-tile>
                 } @else {
                   <mj-empty-state class="lk-room__empty" Size="compact"
                     Icon="fa-solid fa-display"
@@ -61,51 +67,54 @@
               <div class="lk-room__splitter" (pointerdown)="onSplitDragStart($event)" title="Drag to resize"><span></span></div>
               <div class="lk-room__split-pane">
                 @if (SplitSpeakerParticipant) {
-                  <mj-livekit-participant-tile
-                    [Participant]="SplitSpeakerParticipant"
+                  <mj-media-tile
+                    [MeterSettings]="MeterSettings"
+                    [Participant]="MediaParticipantFor(SplitSpeakerParticipant)"
                     [ShowActiveSpeakerRing]="ShowActiveSpeakerHighlight"
-                    [ShowAudioMeter]="ShowAudioMeters"
+                    [ShowMeter]="ShowAudioMeters"
                     [ShowConnectionQuality]="ShowConnectionQuality"
-                    [ShowNameBadge]="ShowNameBadges"
-                    [ShowPinButton]="EnablePinning"
+                    [ShowName]="ShowNameBadges"
+                    [Pinnable]="EnablePinning"
                     [IsPinned]="PinnedIdentity === SplitSpeakerParticipant.Identity"
                     [AvatarUrl]="avatarFor(SplitSpeakerParticipant)"
                     (TogglePin)="onTogglePin(SplitSpeakerParticipant.Identity)"
-                  ></mj-livekit-participant-tile>
+                  ></mj-media-tile>
                 }
               </div>
             </div>
           } @else if (Layout === "spotlight") {
             @if (SpotlightParticipant) {
               <div class="lk-room__spotlight">
-                <mj-livekit-participant-tile
-                  [Participant]="SpotlightParticipant"
+                <mj-media-tile
+                  [MeterSettings]="MeterSettings"
+                  [Participant]="MediaParticipantFor(SpotlightParticipant)"
                   [ShowActiveSpeakerRing]="ShowActiveSpeakerHighlight"
-                  [ShowAudioMeter]="ShowAudioMeters"
+                  [ShowMeter]="ShowAudioMeters"
                   [ShowConnectionQuality]="ShowConnectionQuality"
-                  [ShowNameBadge]="ShowNameBadges"
-                  [ShowPinButton]="EnablePinning"
+                  [ShowName]="ShowNameBadges"
+                  [Pinnable]="EnablePinning"
                   [IsPinned]="PinnedIdentity === SpotlightParticipant.Identity"
                   [AvatarUrl]="avatarFor(SpotlightParticipant)"
                   (TogglePin)="onTogglePin(SpotlightParticipant.Identity)"
-                ></mj-livekit-participant-tile>
+                ></mj-media-tile>
               </div>
             }
             @if (FilmstripParticipants.length > 0) {
               <div class="lk-room__filmstrip">
                 @for (p of FilmstripParticipants; track p.Identity) {
                   <div class="lk-room__filmstrip-tile">
-                    <mj-livekit-participant-tile
-                      [Participant]="p"
+                    <mj-media-tile
+                      [MeterSettings]="MeterSettings"
+                      [Participant]="MediaParticipantFor(p)"
                       [ShowActiveSpeakerRing]="ShowActiveSpeakerHighlight"
-                      [ShowAudioMeter]="ShowAudioMeters"
+                      [ShowMeter]="ShowAudioMeters"
                       [ShowConnectionQuality]="ShowConnectionQuality"
-                      [ShowNameBadge]="ShowNameBadges"
-                      [ShowPinButton]="EnablePinning"
+                      [ShowName]="ShowNameBadges"
+                      [Pinnable]="EnablePinning"
                       [IsPinned]="PinnedIdentity === p.Identity"
                       [AvatarUrl]="avatarFor(p)"
                       (TogglePin)="onTogglePin(p.Identity)"
-                    ></mj-livekit-participant-tile>
+                    ></mj-media-tile>
                   </div>
                 }
               </div>
@@ -114,17 +123,18 @@
             <div class="lk-room__grid" [attr.data-count]="DisplayParticipants.length">
               @for (p of DisplayParticipants; track p.Identity) {
                 <div class="lk-room__grid-tile">
-                  <mj-livekit-participant-tile
-                    [Participant]="p"
+                  <mj-media-tile
+                    [MeterSettings]="MeterSettings"
+                    [Participant]="MediaParticipantFor(p)"
                     [ShowActiveSpeakerRing]="ShowActiveSpeakerHighlight"
-                    [ShowAudioMeter]="ShowAudioMeters"
+                    [ShowMeter]="ShowAudioMeters"
                     [ShowConnectionQuality]="ShowConnectionQuality"
-                    [ShowNameBadge]="ShowNameBadges"
-                    [ShowPinButton]="EnablePinning"
+                    [ShowName]="ShowNameBadges"
+                    [Pinnable]="EnablePinning"
                     [IsPinned]="PinnedIdentity === p.Identity"
                     [AvatarUrl]="avatarFor(p)"
                     (TogglePin)="onTogglePin(p.Identity)"
-                  ></mj-livekit-participant-tile>
+                  ></mj-media-tile>
                 </div>
               } @empty {
                 <mj-empty-state class="lk-room__empty" Size="compact"
@@ -136,12 +146,12 @@
         }
 
         @if (ShowOverlay) {
-          <mj-livekit-connection-overlay
+          <mj-connection-overlay
             [Status]="State.Status"
             [DisconnectReason]="State.DisconnectReason ?? null"
             [ErrorMessage]="LastErrorMessage"
             (Retry)="Connect()"
-          ></mj-livekit-connection-overlay>
+          ></mj-connection-overlay>
         }
       </section>
 
@@ -208,20 +218,20 @@
 
         @if (DeviceMenuOpen) {
           <div class="lk-room__device-popover">
-            <mj-livekit-device-menu
-              [Devices]="Devices"
-              [SelectedMicrophoneId]="SelectedMicrophoneId"
-              [SelectedCameraId]="SelectedCameraId"
-              [SelectedSpeakerId]="SelectedSpeakerId"
+            <mj-media-device-menu
+              [Devices]="MediaDevices"
+              [SelectedMicrophoneID]="SelectedMicrophoneId"
+              [SelectedCameraID]="SelectedCameraId"
+              [SelectedSpeakerID]="SelectedSpeakerId"
               [ShowNoiseFilter]="EnableNoiseFilter"
               [NoiseFilterEnabled]="State.NoiseFilterEnabled"
-              [ShowBackgroundEffects]="EnableBackgroundEffects"
+              [ShowBackgroundBlur]="EnableBackgroundEffects"
               [BackgroundBlurEnabled]="State.BackgroundEffect.Kind !== 'none'"
-              (DeviceSelected)="onDeviceSelected($event)"
+              (DeviceSelected)="OnMediaDeviceSelected($event)"
               (NoiseFilterToggled)="onNoiseFilterToggled($event)"
               (BackgroundBlurToggled)="onBackgroundBlurToggled($event)"
               (Close)="onCloseDeviceMenu()"
-            ></mj-livekit-device-menu>
+            ></mj-media-device-menu>
           </div>
         }
       </footer>

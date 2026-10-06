@@ -8,11 +8,14 @@
 /** A kind of local device the user captures from. */
 export type LocalMediaKind = 'camera' | 'microphone';
 
-/** One input device. */
+/** What a device does: a camera or a microphone the user captures from, or a speaker that plays sound. */
+export type MediaDeviceKind = LocalMediaKind | 'speaker';
+
+/** One device. */
 export interface MediaDevice {
     /** The browser's id for the device, stable for this site until the user clears its data. */
     DeviceID: string;
-    Kind: LocalMediaKind;
+    Kind: MediaDeviceKind;
     /** The device's name. Browsers leave it empty until the user has allowed this site that kind of device. */
     Label: string;
     /** Devices on the same physical product (a webcam's camera and microphone) share a group id. */
@@ -81,7 +84,7 @@ export type MediaPlacement = 'stage' | 'pip' | 'tab' | 'hidden';
 /** Every placement, in the order a displaced surface falls back through them. */
 export const MEDIA_PLACEMENTS: readonly MediaPlacement[] = ['stage', 'pip', 'tab', 'hidden'];
 
-/** One person or agent in a session, as the media stage sees them. */
+/** One person or agent in a session, as the media stage and its tiles see them. */
 export interface MediaParticipant {
     /** Stable identity within the session. */
     Identity: string;
@@ -92,6 +95,39 @@ export interface MediaParticipant {
     IsSpeaking: boolean;
     /** The participant's videos, by kind: a camera, a shared screen, an avatar. */
     Video: Partial<Record<MediaSourceKind, MediaVideoSource>>;
+    /** Which video a tile shows when there are several. Defaults to a shared screen, then the camera, then the avatar. */
+    PreferredVideo?: MediaSourceKind;
+    /** Whether the participant's microphone is off. */
+    IsMuted?: boolean;
+    /** The connection's quality, when the platform reports one. */
+    ConnectionQuality?: MediaConnectionQuality;
+    /** Reads the participant's current audio level, 0..1, for a meter. Called on every animation frame. */
+    GetAudioLevel?: () => number;
+}
+
+/** A participant's connection quality. */
+export type MediaConnectionQuality = 'excellent' | 'good' | 'poor' | 'lost' | 'unknown';
+
+/** The agent's conversational state, for an indicator. */
+export type MediaAgentState = 'idle' | 'listening' | 'thinking' | 'speaking';
+
+/** The state of a session's connection, for an overlay. */
+export type MediaConnectionStatus = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'disconnected' | 'error';
+
+/** Why a session ended. */
+export type MediaDisconnectReason =
+    | 'client-initiated'
+    | 'server-shutdown'
+    | 'participant-removed'
+    | 'room-deleted'
+    | 'connection-lost'
+    | 'duplicate-identity'
+    | 'unknown';
+
+/** A device the user picked in a device menu. */
+export interface MediaDeviceSelection {
+    Kind: MediaDeviceKind;
+    DeviceID: string;
 }
 
 /**

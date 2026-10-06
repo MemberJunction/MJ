@@ -1,0 +1,13 @@
+/*
+ * Public API Surface of @memberjunction/ng-realtime-media
+ *
+ * Provider-neutral media UI: standalone components that render the `/media` models of
+ * `@memberjunction/ai-realtime-client`. Import the `/media` types from there (not re-exported here, per MJ package
+ * rules).
+ */
+
+export * from './lib/components/agent-state.component';
+export * from './lib/components/connection-overlay.component';
+export * from './lib/components/media-device-menu.component';
+export * from './lib/components/audio-meter.component';
+export * from './lib/components/media-tile.component';
