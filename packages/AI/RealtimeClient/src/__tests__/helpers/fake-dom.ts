@@ -9,6 +9,7 @@ import { vi } from 'vitest';
 export class FakeVideoElement {
     public muted = false;
     public playsInline = false;
+    public autoplay = false;
     public srcObject: MediaStream | null = null;
     /** The current frame's size. Zero until the test says the stream has produced a frame. */
     public videoWidth = 0;

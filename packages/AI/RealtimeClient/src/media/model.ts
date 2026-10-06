@@ -57,3 +57,14 @@ export interface LocalMediaState {
 export type LocalMediaResult =
     | { Status: 'started'; Stream: MediaStream }
     | { Status: 'failed'; Reason: LocalMediaFailure; Message: string };
+
+/**
+ * A source of video to show: a live `MediaStream` (a camera, a shared screen, a WebRTC track), or a player that
+ * must own the `<video>` element (MSE or WebCodecs playout of encoded video, such as an avatar). Renderers show
+ * either with `AttachVideoSource`.
+ */
+export type MediaVideoSource =
+    /** A live stream, shown muted: its audio is played elsewhere. */
+    | { Kind: 'stream'; Stream: MediaStream }
+    /** A player that takes over the element and returns a function that releases it. */
+    | { Kind: 'element'; Attach(element: HTMLVideoElement): () => void };

@@ -11,6 +11,7 @@
  * @module @memberjunction/ai-realtime-client/media
  */
 
+export * from './attachVideoSource';
 export * from './frameCapture';
 export * from './frameSampler';
 export * from './localMediaController';
