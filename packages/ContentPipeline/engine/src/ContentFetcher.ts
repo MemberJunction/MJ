@@ -13,6 +13,7 @@
  */
 
 import { MJGlobal, RegisterClass } from '@memberjunction/global';
+import { SafeFetch } from '@memberjunction/network-utils';
 
 /** What to fetch, and under what constraints. */
 export interface FetchRequest {
@@ -41,12 +42,17 @@ export interface FetchResponse {
  *
  * The default implementation is an ordinary unauthenticated HTTP GET — enough for public sources,
  * and honest about being nothing more.
+ *
+ * It goes through {@link SafeFetch} rather than `fetch`. A Content Source URL is attacker-influenced
+ * data: anyone who can create or edit a source can point it at `169.254.169.254` or at something
+ * behind the firewall and have the server fetch it for them. SafeFetch resolves the host and refuses
+ * private, loopback and link-local addresses, re-checking on every redirect hop.
  */
 @RegisterClass(ContentFetcher, 'ContentFetcher')
 export class ContentFetcher {
     /** Fetch the bytes at a URL. */
     public async Fetch(request: FetchRequest): Promise<FetchResponse> {
-        const response = await fetch(request.URL, { signal: request.Signal });
+        const response = await SafeFetch(request.URL, { signal: request.Signal });
         if (!response.ok) {
             throw new Error(`Fetching '${request.URL}' failed: HTTP ${response.status} ${response.statusText}`);
         }

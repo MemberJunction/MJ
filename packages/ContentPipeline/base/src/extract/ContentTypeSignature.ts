@@ -58,6 +58,39 @@ export interface SignatureMatch {
  * }
  * ```
  */
+/**
+ * Advance past an XML prologue — processing instructions, comments and the doctype — to the first
+ * real element.
+ *
+ * Deliberately a scan rather than `head.replace(/<\?[\s\S]*?\?>/g, '')`. That expression is
+ * polynomial on input made of many unterminated `<?` sequences, which is reachable here because the
+ * bytes come from whatever a source served (CodeQL rule js/polynomial-redos). `indexOf` is linear
+ * and cannot backtrack.
+ */
+export function SkipPrologue(head: string): string {
+    const openers: readonly (readonly [string, string])[] = [
+        ['<?', '?>'],
+        ['<!--', '-->'],
+        ['<!', '>'],
+    ];
+    let i = 0;
+    for (;;) {
+        while (i < head.length && /\s/.test(head[i])) {
+            i++;
+        }
+        const opener = openers.find((o) => head.startsWith(o[0], i));
+        if (!opener) {
+            return head.slice(i);
+        }
+        const end = head.indexOf(opener[1], i + opener[0].length);
+        if (end < 0) {
+            // Unterminated: there is no element to find after it.
+            return '';
+        }
+        i = end + opener[1].length;
+    }
+}
+
 export abstract class BaseContentTypeSignature {
     /** The registration key. Must match the key passed to `@RegisterClass`. */
     public abstract readonly Key: string;
@@ -185,7 +218,7 @@ export abstract class BaseXmlSignature extends BaseContentTypeSignature {
 
     public async Check(probe: SignatureProbe): Promise<SignatureMatch | null> {
         const head = new TextDecoder('utf-8', { fatal: false }).decode(probe.Content.subarray(0, 4096));
-        const root = /<\s*([A-Za-z_][\w.-]*(?::[\w.-]+)?)[\s>]/.exec(head.replace(/<\?[\s\S]*?\?>/g, ''))?.[1];
+        const root = /<\s*([A-Za-z_][\w.-]*(?::[\w.-]+)?)[\s>]/.exec(SkipPrologue(head))?.[1];
         const rootMatches =
             root !== undefined &&
             this.RootElements.some((e) => e.toLowerCase() === root.toLowerCase().split(':').pop());

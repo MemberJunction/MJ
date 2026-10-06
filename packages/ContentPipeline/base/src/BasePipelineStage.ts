@@ -78,6 +78,18 @@ export abstract class BasePipelineStage {
      */
     public abstract readonly StatusField: string;
 
+    /**
+     * The value {@link StatusField} takes when this stage succeeds.
+     *
+     * Almost every stage means 'Complete' by success, but the value belongs to the column, not to
+     * the pipeline: `DeleteStatus` is a two-value soft-delete marker whose success is 'Deleted',
+     * and writing 'Complete' into it violates its CHECK constraint. Stages whose status column has
+     * its own vocabulary override this.
+     */
+    public get CompleteStatus(): string {
+        return 'Complete';
+    }
+
     /** What this stage reads and writes. Defaults to declaring nothing. */
     public get Declaration(): StageDeclaration {
         return { Reads: [], Writes: [], ReadsExtensions: [], WritesExtensions: [] };

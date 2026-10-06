@@ -195,11 +195,11 @@ export class PipelineProcessor implements IRecordProcessor {
         if (this.config.IsTest) {
             return null;
         }
-        const status = this.statusFor(outcome, {});
+        const last = this.stages[this.stages.length - 1];
+        const status = this.statusFor(outcome, {}, last);
         if (status === null) {
             return null;
         }
-        const last = this.stages[this.stages.length - 1];
         const committer = this.storage.Committer(context.provider, context.contextUser);
         const result = await committer.Commit(record, last.StatusField, status);
         return [...result.ColumnsWritten];
@@ -378,14 +378,14 @@ export class PipelineProcessor implements IRecordProcessor {
         if (this.config.IsTest) {
             return null;
         }
-        const status = this.statusFor(outcome, hints);
+        const lastStage = this.stages[this.stages.length - 1];
+        const status = this.statusFor(outcome, hints, lastStage);
         if (status === null) {
             // A transient failure before the last attempt leaves the status at Pending — the record
             // is still in the queue's hands, waiting out its backoff. Committing anything here
             // would take it out of play.
             return null;
         }
-        const lastStage = this.stages[this.stages.length - 1];
         const committer = this.storage.Committer(context.provider, context.contextUser);
         const result = await committer.Commit(working, lastStage.StatusField, status);
         return [...result.ColumnsWritten];
@@ -587,10 +587,10 @@ export class PipelineProcessor implements IRecordProcessor {
      * run is filter-scoped — filter scope does not retry. Without the attempt number a
      * dead-lettered record would still look ready and would be queued again indefinitely.
      */
-    private statusFor(outcome: StageOutcome, hints: PipelineRecordHints): string | null {
+    private statusFor(outcome: StageOutcome, hints: PipelineRecordHints, stage: BasePipelineStage): string | null {
         switch (outcome.Status) {
             case 'Complete':
-                return 'Complete';
+                return stage.CompleteStatus;
             case 'Skipped':
                 return 'Skipped';
             case 'Failed':

@@ -17,21 +17,19 @@
   "author": "MemberJunction.com",
   "license": "BUSL-1.1",
   "dependencies": {
+    "@memberjunction/ai-segmentation": "6.2.0-edge.2",
     "@memberjunction/content-pipeline-base": "6.2.0-edge.2",
     "@memberjunction/core": "6.2.0-edge.2",
     "@memberjunction/core-entities": "6.2.0-edge.2",
     "@memberjunction/global": "6.2.0-edge.2",
+    "@memberjunction/network-utils": "6.2.0-edge.2",
     "@memberjunction/record-set-processor": "6.2.0-edge.2",
-    "@memberjunction/record-set-processor-base": "6.2.0-edge.2",
-    "@memberjunction/ai-segmentation": "6.2.0-edge.2"
+    "@memberjunction/record-set-processor-base": "6.2.0-edge.2"
   },
   "devDependencies": {
     "@types/node": "24.10.11",
     "typescript": "^5.9.3",
-    "vitest": "^3.1.1",
-    "@memberjunction/sqlserver-dataprovider": "6.2.0-edge.2",
-    "mssql": "^11.0.1",
-    "@memberjunction/generic-database-provider": "6.2.0-edge.2"
+    "vitest": "^3.1.1"
   },
   "repository": {
     "type": "git",

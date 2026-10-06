@@ -11,7 +11,8 @@
  * @module @memberjunction/content-pipeline
  */
 
-import { BaseEntity, IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { BaseEntity, IMetadataProvider, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
+import { KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
 
 /** What to do when a proposed name matches no row. */
 export type UnresolvedLookupPolicy =
@@ -41,7 +42,7 @@ export class LookupResolver {
     private readonly cache = new Map<string, Promise<Map<string, string>>>();
 
     constructor(
-        private readonly provider: IMetadataProvider = Metadata.Provider,
+        private readonly provider: IMetadataProvider,
         private readonly contextUser?: UserInfo,
         private readonly policy: UnresolvedLookupPolicy = 'Skip',
     ) {}
@@ -90,15 +91,37 @@ export class LookupResolver {
         return promise;
     }
 
-    /** Read the lookup table. */
-    private async read(entityName: string, contextUser: UserInfo): Promise<Map<string, string>> {
+    /** The rows backing a lookup, from the engine where it caches them. */
+    private async rows(entityName: string, contextUser: UserInfo): Promise<readonly { ID: string; Name: string }[]> {
+        const engine = KnowledgeHubMetadataEngine.Instance;
+        await engine.Config(false, contextUser, this.provider);
+        switch (entityName) {
+            case 'MJ: Content Types':
+                return engine.ContentTypes;
+            case 'MJ: Content Source Types':
+                return engine.ContentSourceTypes;
+            case 'MJ: Content File Types':
+                return engine.ContentFileTypes;
+        }
         const rv = RunView.FromMetadataProvider(this.provider);
         const result = await rv.RunView<{ ID: string; Name: string }>({ EntityName: entityName }, contextUser);
         if (!result.Success) {
             throw new Error(`Could not read '${entityName}' to resolve lookups`);
         }
+        return result.Results;
+    }
+
+    /**
+     * Read the lookup table.
+     *
+     * The three content lookups this resolver serves are already cached by
+     * {@link KnowledgeHubMetadataEngine}; reading them from there keeps one copy in the process
+     * rather than a second one per resolver. Anything else falls back to a RunView.
+     */
+    private async read(entityName: string, contextUser: UserInfo): Promise<Map<string, string>> {
+        const rows = await this.rows(entityName, contextUser);
         const map = new Map<string, string>();
-        for (const row of result.Results) {
+        for (const row of rows) {
             if (typeof row.Name === 'string') {
                 map.set(row.Name.trim().toLowerCase(), row.ID);
             }

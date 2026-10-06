@@ -46,6 +46,15 @@ export const DELETE_ITEM_STAGE = 'DeleteContentItem';
 export abstract class BaseDeleteStage extends BasePipelineStage {
     public readonly StatusField = 'DeleteStatus';
 
+    /**
+     * `DeleteStatus` is a two-value marker — Pending until the outside-system cleanup has run,
+     * Deleted once it has. 'Complete' is not in its CHECK constraint, so a stage that finished
+     * its deletion has to say so in the column's own vocabulary.
+     */
+    public override get CompleteStatus(): string {
+        return 'Deleted';
+    }
+
     public override get Declaration(): StageDeclaration {
         return {
             Reads: [],

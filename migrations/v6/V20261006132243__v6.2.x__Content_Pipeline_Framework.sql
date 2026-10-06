@@ -7,20 +7,22 @@
                           SegmentationStatus on Content Item alongside the existing
                           TaggingStatus / EmbeddingStatus
     * DeleteStatus      — soft-delete marker on Content Item, mirroring Content Item Chunk
-    * extractor cascade — ExtractorKey on Content Source / Content Type (defaults) and on
-                          Content Item (what actually ran), plus ExtractorKeyOverride (forced)
-    * multi-modal       — Modality on Content Item, flags on Content Source / Content Source Type,
-                          FileID for durable copies of fetched artifacts
-    * well-known fields — Date and Decorator on Content Item, Decorator on Content Item Chunk,
-                          completing the fixed set a
-                          working record maps onto real columns (Text, FileType, ContentType,
-                          Title, Date, Modality, Decorator)
+    * well-known fields — Date, Decorator and Modality on Content Item, Decorator on Content Item
+                          Chunk, completing the fixed set a working record maps onto real columns
+                          (Text, FileType, ContentType, Title, Date, Modality, Decorator)
+    * FileID            — the durable copy of a fetched artifact, held as an MJ File so it lands in
+                          whichever storage provider the source is configured for
     * 'Pipeline Stage'  — a new Record Process WorkType
     * 'MetadataOnly'    — a new Content Item EmbeddingStatus value (metadata-only re-embed)
 
-  Every change is additive. Naming follows the conventions already in these tables:
-  SegmenterKey / CleanerKey establish the nvarchar(100) "registered class key" pattern, and the
-  status columns on Content Item are nvarchar(40) over a five-value list.
+  Every change is additive. Naming follows the conventions already in these tables: SegmenterKey /
+  CleanerKey establish the nvarchar(100) "registered class key" pattern, and the status columns on
+  Content Item are nvarchar(40) over a five-value list.
+
+  The stage-status columns are NULLable with no default ON PURPOSE. A NOT NULL DEFAULT 'Pending'
+  back-fills every row that already exists, which on upgrade marks the entire existing corpus for
+  reprocessing. NULL means "this row has never been through this stage", which is both true and
+  cheap; the stages read NULL as Pending.
 */
 
 -- ---------------------------------------------------------------------------
@@ -28,12 +30,10 @@
 -- ---------------------------------------------------------------------------
 ALTER TABLE ${flyway:defaultSchema}.ContentItem ADD
     FieldConfidence NVARCHAR(MAX) NULL,
-    ExtractionStatus NVARCHAR(40) NOT NULL CONSTRAINT DF_ContentItem_ExtractionStatus DEFAULT ('Pending'),
-    SegmentationStatus NVARCHAR(40) NOT NULL CONSTRAINT DF_ContentItem_SegmentationStatus DEFAULT ('Pending'),
+    ExtractionStatus NVARCHAR(40) NULL,
+    SegmentationStatus NVARCHAR(40) NULL,
     DeleteStatus NVARCHAR(20) NULL,
-    ExtractorKey NVARCHAR(100) NULL,
-    ExtractorKeyOverride NVARCHAR(100) NULL,
-    Modality NVARCHAR(20) NOT NULL CONSTRAINT DF_ContentItem_Modality DEFAULT ('text'),
+    Modality NVARCHAR(20) NULL,
     [Date] DATETIMEOFFSET NULL,
     Decorator NVARCHAR(MAX) NULL,
     FileID UNIQUEIDENTIFIER NULL;
@@ -49,6 +49,8 @@ ALTER TABLE ${flyway:defaultSchema}.ContentItem
     CHECK (SegmentationStatus IN ('Pending', 'Processing', 'Complete', 'Failed', 'Skipped'));
 GO
 
+-- Deleted is terminal. The Delete stage owns the outside-system cleanup, so a row stays Pending
+-- until that cleanup has actually run — there is deliberately no 'Complete'.
 ALTER TABLE ${flyway:defaultSchema}.ContentItem
     ADD CONSTRAINT CK_ContentItem_DeleteStatus
     CHECK (DeleteStatus IN ('Pending', 'Deleted'));
@@ -62,6 +64,15 @@ GO
 ALTER TABLE ${flyway:defaultSchema}.ContentItem
     ADD CONSTRAINT FK_ContentItem_File
     FOREIGN KEY (FileID) REFERENCES ${flyway:defaultSchema}.[File](ID);
+GO
+
+-- A URL identifies an item within its source. Without this, a re-walk racing a scheduled run (or
+-- two triggers firing at once) creates a second item for the same URL, and every chunk and vector
+-- below it is duplicated too. Filtered so that rows without a URL are unconstrained, and so that a
+-- soft-deleted item does not block re-discovering the same URL later.
+CREATE UNIQUE INDEX UQ_ContentItem_Source_URL
+    ON ${flyway:defaultSchema}.ContentItem (ContentSourceID, URL)
+    WHERE URL IS NOT NULL AND DeleteStatus IS NULL;
 GO
 
 -- Widen EmbeddingStatus to admit the metadata-only re-embed path (phase F13). The value list is
@@ -87,30 +98,12 @@ GO
 -- ---------------------------------------------------------------------------
 ALTER TABLE ${flyway:defaultSchema}.ContentSource ADD
     FieldConfidence NVARCHAR(MAX) NULL,
-    ExtractorKey NVARCHAR(100) NULL,
-    MultiModalEnabled BIT NOT NULL CONSTRAINT DF_ContentSource_MultiModalEnabled DEFAULT (0),
-    DiscoveryStatus NVARCHAR(40) NOT NULL CONSTRAINT DF_ContentSource_DiscoveryStatus DEFAULT ('Pending'),
-    LastDiscoveredAt DATETIMEOFFSET NULL;
+    DiscoveryStatus NVARCHAR(40) NULL;
 GO
 
 ALTER TABLE ${flyway:defaultSchema}.ContentSource
     ADD CONSTRAINT CK_ContentSource_DiscoveryStatus
     CHECK (DiscoveryStatus IN ('Pending', 'Processing', 'Complete', 'Failed', 'Skipped'));
-GO
-
-
--- ---------------------------------------------------------------------------
--- Content Type
--- ---------------------------------------------------------------------------
-ALTER TABLE ${flyway:defaultSchema}.ContentType ADD
-    ExtractorKey NVARCHAR(100) NULL;
-GO
-
--- ---------------------------------------------------------------------------
--- Content Source Type
--- ---------------------------------------------------------------------------
-ALTER TABLE ${flyway:defaultSchema}.ContentSourceType ADD
-    SupportsMultiModal BIT NOT NULL CONSTRAINT DF_ContentSourceType_SupportsMultiModal DEFAULT (0);
 GO
 
 -- ---------------------------------------------------------------------------
@@ -124,25 +117,63 @@ ALTER TABLE ${flyway:defaultSchema}.RecordProcess
     CHECK (WorkType IN (N'Action', N'Agent', N'Infer', N'FieldRules', N'ML Model', N'Clone', N'Pipeline Stage'));
 GO
 
-
 -- ===========================================================================
 -- Extended properties
 -- ===========================================================================
 
-
-
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Per-field provenance for the pipeline: for each well-known field, the confidence the winning stage had and which stage set it. Lets two stages that know nothing about each other resolve a shared field on merit rather than by running order.',
+    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = 'ContentItem',
+    @level2type = N'COLUMN', @level2name = 'FieldConfidence';
 
 EXEC sp_addextendedproperty @name = N'MS_Description',
-    @value = N'Status of the Discover stage for this source: Pending, Processing, Complete, Failed or Skipped. What makes a source ready to walk is its schedule; this records how the last walk ended.',
+    @value = N'Status of the Extract stage for this item: Pending, Processing, Complete, Failed or Skipped. NULL means the item has never been through Extract.',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
-    @level1type = N'TABLE',  @level1name = 'ContentSource',
-    @level2type = N'COLUMN', @level2name = 'DiscoveryStatus';
+    @level1type = N'TABLE',  @level1name = 'ContentItem',
+    @level2type = N'COLUMN', @level2name = 'ExtractionStatus';
 
 EXEC sp_addextendedproperty @name = N'MS_Description',
-    @value = N'When this source was last walked by the Discover stage.',
+    @value = N'Status of the Segment stage for this item: Pending, Processing, Complete, Failed or Skipped. NULL means the item has never been through Segment.',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
-    @level1type = N'TABLE',  @level1name = 'ContentSource',
-    @level2type = N'COLUMN', @level2name = 'LastDiscoveredAt';
+    @level1type = N'TABLE',  @level1name = 'ContentItem',
+    @level2type = N'COLUMN', @level2name = 'SegmentationStatus';
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Soft-delete marker: Pending once something has been removed at the source, Deleted once the Delete stage has cleaned up everything downstream of it. Marking rather than deleting keeps the outside-system cleanup in one place and makes it retryable.',
+    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = 'ContentItem',
+    @level2type = N'COLUMN', @level2name = 'DeleteStatus';
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'What kind of content this item holds: text, image, audio, video or multimodal. Determines whether the item can be embedded without extracted text.',
+    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = 'ContentItem',
+    @level2type = N'COLUMN', @level2name = 'Modality';
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'The date the content itself carries — published, issued or authored — as opposed to when this row was created.',
+    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = 'ContentItem',
+    @level2type = N'COLUMN', @level2name = 'Date';
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Text that accompanies this item so it still makes sense retrieved on its own. Kept as its own field rather than prefixed into Text so it stays separately searchable and can be revised without rewriting the content.',
+    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = 'ContentItem',
+    @level2type = N'COLUMN', @level2name = 'Decorator';
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'The durable copy of the fetched artifact, held as an MJ File so the bytes live in whichever storage provider the source is configured for rather than in this database.',
+    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = 'ContentItem',
+    @level2type = N'COLUMN', @level2name = 'FileID';
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Per-field provenance for the pipeline: for each well-known field, the confidence the winning stage had and which stage set it.',
+    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = 'ContentItemChunk',
+    @level2type = N'COLUMN', @level2name = 'FieldConfidence';
 
 EXEC sp_addextendedproperty @name = N'MS_Description',
     @value = N'Text that accompanies this chunk so it still makes sense retrieved on its own — normally inherited from its parent item. Kept as its own field rather than prefixed into Text so it stays separately searchable and can be revised without rewriting the chunk.',
@@ -150,60 +181,17 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
     @level1type = N'TABLE',  @level1name = 'ContentItemChunk',
     @level2type = N'COLUMN', @level2name = 'Decorator';
 
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Per-field provenance for the pipeline: for each well-known field, the confidence the winning stage had and which stage set it.',
+    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = 'ContentSource',
+    @level2type = N'COLUMN', @level2name = 'FieldConfidence';
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Status of the Discover stage for this source: Pending, Processing, Complete, Failed or Skipped. What makes a source ready to walk is its schedule; this records how the last walk ended. NULL means the source has never been walked by the pipeline.',
+    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = 'ContentSource',
+    @level2type = N'COLUMN', @level2name = 'DiscoveryStatus';
 
 /*****************************************************************************************
 ******************************************************************************************
@@ -221,14 +209,12 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
 ***  `mj codegen --skipfiles` against a database at this migration's schema and
 ***  replace this entire block with the fresh output.
 ***
-***  Generated: 2026-10-02 by @memberjunction/cli 6.2.0-edge.1
-***
 ******************************************************************************************
 *****************************************************************************************/
 
-/* SQL text to insert 19 new entity field(s) */
+/* SQL text to insert 12 new entity field(s) */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4d79792e-03f2-4d6c-8413-ab7985a71b00' OR (EntityID = 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22' AND Name = 'FieldConfidence')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'fa690241-ef35-4446-b7a1-893def4e9e38' OR (EntityID = 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22' AND Name = 'FieldConfidence')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -261,12 +247,12 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
          )
          VALUES
          (
-            '4d79792e-03f2-4d6c-8413-ab7985a71b00',
+            'fa690241-ef35-4446-b7a1-893def4e9e38',
             'B420FF22-0E66-EF11-A752-C0A5E8ACCB22', -- Entity: MJ: Content Sources
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22'),
             'FieldConfidence',
             'Field Confidence',
-            NULL,
+            'Per-field provenance for the pipeline: for each well-known field, the confidence the winning stage had and which stage set it.',
             'nvarchar',
             -1,
             0,
@@ -291,7 +277,7 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '53584129-52f2-4d9d-b1a6-85bfdbfc231c' OR (EntityID = 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22' AND Name = 'ExtractorKey')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e21d688f-6c5a-46e9-b4c4-9a132cc4421a' OR (EntityID = 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22' AND Name = 'DiscoveryStatus')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -324,144 +310,18 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
          )
          VALUES
          (
-            '53584129-52f2-4d9d-b1a6-85bfdbfc231c',
-            'B420FF22-0E66-EF11-A752-C0A5E8ACCB22', -- Entity: MJ: Content Sources
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22'),
-            'ExtractorKey',
-            'Extractor Key',
-            NULL,
-            'nvarchar',
-            200,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'eb0d4146-bcb2-49e5-bd08-9340706ea53b' OR (EntityID = 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22' AND Name = 'MultiModalEnabled')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'eb0d4146-bcb2-49e5-bd08-9340706ea53b',
-            'B420FF22-0E66-EF11-A752-C0A5E8ACCB22', -- Entity: MJ: Content Sources
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22'),
-            'MultiModalEnabled',
-            'Multi Modal Enabled',
-            NULL,
-            'bit',
-            1,
-            1,
-            0,
-            0,
-            '(0)',
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd718a3df-3760-4ef9-9521-7a79edcef6b0' OR (EntityID = 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22' AND Name = 'DiscoveryStatus')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'd718a3df-3760-4ef9-9521-7a79edcef6b0',
+            'e21d688f-6c5a-46e9-b4c4-9a132cc4421a',
             'B420FF22-0E66-EF11-A752-C0A5E8ACCB22', -- Entity: MJ: Content Sources
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22'),
             'DiscoveryStatus',
             'Discovery Status',
-            'Status of the Discover stage for this source: Pending, Processing, Complete, Failed or Skipped. What makes a source ready to walk is its schedule; this records how the last walk ended.',
+            'Status of the Discover stage for this source: Pending, Processing, Complete, Failed or Skipped. What makes a source ready to walk is its schedule; this records how the last walk ended. NULL means the source has never been walked by the pipeline.',
             'nvarchar',
             80,
             0,
             0,
-            0,
-            'Pending',
+            1,
+            NULL,
             0,
             1,
             0,
@@ -480,7 +340,7 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a1750d7e-1153-459e-aa15-6557beec89d3' OR (EntityID = 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22' AND Name = 'LastDiscoveredAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '585b13c9-fadc-4707-93ec-ff4cad9b0f42' OR (EntityID = 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22' AND Name = 'FieldConfidence')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -513,201 +373,12 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
          )
          VALUES
          (
-            'a1750d7e-1153-459e-aa15-6557beec89d3',
-            'B420FF22-0E66-EF11-A752-C0A5E8ACCB22', -- Entity: MJ: Content Sources
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22'),
-            'LastDiscoveredAt',
-            'Last Discovered At',
-            'When this source was last walked by the Discover stage.',
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '96935dde-419a-4e67-979e-c3e578a58213' OR (EntityID = 'B62E4A4A-0E66-EF11-A752-C0A5E8ACCB22' AND Name = 'SupportsMultiModal')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '96935dde-419a-4e67-979e-c3e578a58213',
-            'B62E4A4A-0E66-EF11-A752-C0A5E8ACCB22', -- Entity: MJ: Content Source Types
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'B62E4A4A-0E66-EF11-A752-C0A5E8ACCB22'),
-            'SupportsMultiModal',
-            'Supports Multi Modal',
-            NULL,
-            'bit',
-            1,
-            1,
-            0,
-            0,
-            '(0)',
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '75b916f9-936e-4b7d-9dd8-5b3b038d5f3f' OR (EntityID = 'A793AD50-0E66-EF11-A752-C0A5E8ACCB22' AND Name = 'ExtractorKey')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '75b916f9-936e-4b7d-9dd8-5b3b038d5f3f',
-            'A793AD50-0E66-EF11-A752-C0A5E8ACCB22', -- Entity: MJ: Content Types
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A793AD50-0E66-EF11-A752-C0A5E8ACCB22'),
-            'ExtractorKey',
-            'Extractor Key',
-            NULL,
-            'nvarchar',
-            200,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '84b08344-b6a8-4b12-89bb-3142d199451e' OR (EntityID = 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22' AND Name = 'FieldConfidence')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '84b08344-b6a8-4b12-89bb-3142d199451e',
+            '585b13c9-fadc-4707-93ec-ff4cad9b0f42',
             'B693AD50-0E66-EF11-A752-C0A5E8ACCB22', -- Entity: MJ: Content Items
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22'),
             'FieldConfidence',
             'Field Confidence',
-            NULL,
+            'Per-field provenance for the pipeline: for each well-known field, the confidence the winning stage had and which stage set it. Lets two stages that know nothing about each other resolve a shared field on merit rather than by running order.',
             'nvarchar',
             -1,
             0,
@@ -732,7 +403,7 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'bae40000-6496-4bca-aae4-4002d0569536' OR (EntityID = 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22' AND Name = 'ExtractionStatus')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '0cc3fe44-493c-44f8-863c-873485695c69' OR (EntityID = 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22' AND Name = 'ExtractionStatus')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -765,18 +436,18 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
          )
          VALUES
          (
-            'bae40000-6496-4bca-aae4-4002d0569536',
+            '0cc3fe44-493c-44f8-863c-873485695c69',
             'B693AD50-0E66-EF11-A752-C0A5E8ACCB22', -- Entity: MJ: Content Items
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22'),
             'ExtractionStatus',
             'Extraction Status',
-            NULL,
+            'Status of the Extract stage for this item: Pending, Processing, Complete, Failed or Skipped. NULL means the item has never been through Extract.',
             'nvarchar',
             80,
             0,
             0,
-            0,
-            'Pending',
+            1,
+            NULL,
             0,
             1,
             0,
@@ -795,7 +466,7 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5d5f0ff3-5e9e-45b0-b806-212317951e7a' OR (EntityID = 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22' AND Name = 'SegmentationStatus')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '62c2e076-b2d0-4130-84c9-c0039758d20e' OR (EntityID = 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22' AND Name = 'SegmentationStatus')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -828,18 +499,18 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
          )
          VALUES
          (
-            '5d5f0ff3-5e9e-45b0-b806-212317951e7a',
+            '62c2e076-b2d0-4130-84c9-c0039758d20e',
             'B693AD50-0E66-EF11-A752-C0A5E8ACCB22', -- Entity: MJ: Content Items
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22'),
             'SegmentationStatus',
             'Segmentation Status',
-            NULL,
+            'Status of the Segment stage for this item: Pending, Processing, Complete, Failed or Skipped. NULL means the item has never been through Segment.',
             'nvarchar',
             80,
             0,
             0,
-            0,
-            'Pending',
+            1,
+            NULL,
             0,
             1,
             0,
@@ -858,7 +529,7 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '2846295a-5a6c-4f5d-9b16-cf16762f265b' OR (EntityID = 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22' AND Name = 'DeleteStatus')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '9e27aa9c-1112-4324-9956-62096f6b9d5a' OR (EntityID = 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22' AND Name = 'DeleteStatus')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -891,12 +562,12 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
          )
          VALUES
          (
-            '2846295a-5a6c-4f5d-9b16-cf16762f265b',
+            '9e27aa9c-1112-4324-9956-62096f6b9d5a',
             'B693AD50-0E66-EF11-A752-C0A5E8ACCB22', -- Entity: MJ: Content Items
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22'),
             'DeleteStatus',
             'Delete Status',
-            NULL,
+            'Soft-delete marker: Pending once something has been removed at the source, Deleted once the Delete stage has cleaned up everything downstream of it. Marking rather than deleting keeps the outside-system cleanup in one place and makes it retryable.',
             'nvarchar',
             40,
             0,
@@ -921,7 +592,7 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c16aacd0-0436-4e9e-ae02-a72e75ab4aa4' OR (EntityID = 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22' AND Name = 'ExtractorKey')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a91b73a2-1616-4b5e-90ea-f769b95081fb' OR (EntityID = 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22' AND Name = 'Modality')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -954,144 +625,18 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
          )
          VALUES
          (
-            'c16aacd0-0436-4e9e-ae02-a72e75ab4aa4',
-            'B693AD50-0E66-EF11-A752-C0A5E8ACCB22', -- Entity: MJ: Content Items
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22'),
-            'ExtractorKey',
-            'Extractor Key',
-            NULL,
-            'nvarchar',
-            200,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '7d4454ea-7879-40b3-960c-7678cab835c7' OR (EntityID = 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22' AND Name = 'ExtractorKeyOverride')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '7d4454ea-7879-40b3-960c-7678cab835c7',
-            'B693AD50-0E66-EF11-A752-C0A5E8ACCB22', -- Entity: MJ: Content Items
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22'),
-            'ExtractorKeyOverride',
-            'Extractor Key Override',
-            NULL,
-            'nvarchar',
-            200,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '9b2f6bc3-983d-4abe-b98e-c6deff926716' OR (EntityID = 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22' AND Name = 'Modality')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '9b2f6bc3-983d-4abe-b98e-c6deff926716',
+            'a91b73a2-1616-4b5e-90ea-f769b95081fb',
             'B693AD50-0E66-EF11-A752-C0A5E8ACCB22', -- Entity: MJ: Content Items
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22'),
             'Modality',
             'Modality',
-            NULL,
+            'What kind of content this item holds: text, image, audio, video or multimodal. Determines whether the item can be embedded without extracted text.',
             'nvarchar',
             40,
             0,
             0,
-            0,
-            'text',
+            1,
+            NULL,
             0,
             1,
             0,
@@ -1110,7 +655,7 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd87fac96-8e4c-415a-84a7-8378a5d38748' OR (EntityID = 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22' AND Name = 'Date')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd4681eca-9242-44af-9c8c-3f1d80e451d0' OR (EntityID = 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22' AND Name = 'Date')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1143,12 +688,12 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
          )
          VALUES
          (
-            'd87fac96-8e4c-415a-84a7-8378a5d38748',
+            'd4681eca-9242-44af-9c8c-3f1d80e451d0',
             'B693AD50-0E66-EF11-A752-C0A5E8ACCB22', -- Entity: MJ: Content Items
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22'),
             'Date',
             'Date',
-            NULL,
+            'The date the content itself carries — published, issued or authored — as opposed to when this row was created.',
             'datetimeoffset',
             10,
             34,
@@ -1173,7 +718,7 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5aa7f807-a3e2-4582-a0db-25a789faa4f3' OR (EntityID = 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22' AND Name = 'Decorator')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4d33320c-92d2-44dd-8d38-c21b0435384f' OR (EntityID = 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22' AND Name = 'Decorator')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1206,12 +751,12 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
          )
          VALUES
          (
-            '5aa7f807-a3e2-4582-a0db-25a789faa4f3',
+            '4d33320c-92d2-44dd-8d38-c21b0435384f',
             'B693AD50-0E66-EF11-A752-C0A5E8ACCB22', -- Entity: MJ: Content Items
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22'),
             'Decorator',
             'Decorator',
-            NULL,
+            'Text that accompanies this item so it still makes sense retrieved on its own. Kept as its own field rather than prefixed into Text so it stays separately searchable and can be revised without rewriting the content.',
             'nvarchar',
             -1,
             0,
@@ -1236,7 +781,7 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1857d613-85c3-4357-87b5-78659d940b10' OR (EntityID = 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22' AND Name = 'FileID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '78a87f3b-8a9c-43be-9b6a-3b4f6bb83e6a' OR (EntityID = 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22' AND Name = 'FileID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1269,12 +814,12 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
          )
          VALUES
          (
-            '1857d613-85c3-4357-87b5-78659d940b10',
+            '78a87f3b-8a9c-43be-9b6a-3b4f6bb83e6a',
             'B693AD50-0E66-EF11-A752-C0A5E8ACCB22', -- Entity: MJ: Content Items
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22'),
             'FileID',
             'File ID',
-            NULL,
+            'The durable copy of the fetched artifact, held as an MJ File so the bytes live in whichever storage provider the source is configured for rather than in this database.',
             'uniqueidentifier',
             16,
             0,
@@ -1299,7 +844,7 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '462e6b74-3b9d-47a6-8a15-76930d37c634' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'FieldConfidence')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '61ffcc16-9494-4a39-9663-a0850c60624e' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'FieldConfidence')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1332,12 +877,12 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
          )
          VALUES
          (
-            '462e6b74-3b9d-47a6-8a15-76930d37c634',
+            '61ffcc16-9494-4a39-9663-a0850c60624e',
             '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21', -- Entity: MJ: Content Item Chunks
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21'),
             'FieldConfidence',
             'Field Confidence',
-            NULL,
+            'Per-field provenance for the pipeline: for each well-known field, the confidence the winning stage had and which stage set it.',
             'nvarchar',
             -1,
             0,
@@ -1362,7 +907,7 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '72368b32-8b0a-47a5-82b5-683b287287a0' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'Decorator')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '409e836d-258b-40c4-85a0-3a54304830d7' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'Decorator')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1395,7 +940,7 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
          )
          VALUES
          (
-            '72368b32-8b0a-47a5-82b5-683b287287a0',
+            '409e836d-258b-40c4-85a0-3a54304830d7',
             '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21', -- Entity: MJ: Content Item Chunks
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21'),
             'Decorator',
@@ -1425,125 +970,44 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
          )
       END;
 
-/* SQL text to insert entity field value with ID 9bb32a14-1026-4dcd-a2df-5dd5e6af9ace */
+/* SQL text to insert entity field value with ID d09533df-ba99-4475-bfcd-17f43e332e33 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('9bb32a14-1026-4dcd-a2df-5dd5e6af9ace', 'BAE40000-6496-4BCA-AAE4-4002D0569536', 1, 'Complete', 'Complete', GETUTCDATE(), GETUTCDATE());
+                                       ('d09533df-ba99-4475-bfcd-17f43e332e33', 'A91B73A2-1616-4B5E-90EA-F769B95081FB', 1, 'audio', 'audio', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 335c35e0-183d-4c7b-8d09-de97861357be */
+/* SQL text to insert entity field value with ID 134d3e88-81cd-473a-8412-5d9e5da56c0e */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('335c35e0-183d-4c7b-8d09-de97861357be', 'BAE40000-6496-4BCA-AAE4-4002D0569536', 2, 'Failed', 'Failed', GETUTCDATE(), GETUTCDATE());
+                                       ('134d3e88-81cd-473a-8412-5d9e5da56c0e', 'A91B73A2-1616-4B5E-90EA-F769B95081FB', 2, 'image', 'image', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 7e6d7adb-0c49-41e3-b26b-42acf6834984 */
+/* SQL text to insert entity field value with ID f0999172-8811-4218-9952-a57a41415f99 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('7e6d7adb-0c49-41e3-b26b-42acf6834984', 'BAE40000-6496-4BCA-AAE4-4002D0569536', 3, 'Pending', 'Pending', GETUTCDATE(), GETUTCDATE());
+                                       ('f0999172-8811-4218-9952-a57a41415f99', 'A91B73A2-1616-4B5E-90EA-F769B95081FB', 3, 'multimodal', 'multimodal', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 56840cf5-0bed-4dc0-b0f6-183fedcf86c5 */
+/* SQL text to insert entity field value with ID 32824c79-820a-4f48-8412-224a0cf2edab */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('56840cf5-0bed-4dc0-b0f6-183fedcf86c5', 'BAE40000-6496-4BCA-AAE4-4002D0569536', 4, 'Processing', 'Processing', GETUTCDATE(), GETUTCDATE());
+                                       ('32824c79-820a-4f48-8412-224a0cf2edab', 'A91B73A2-1616-4B5E-90EA-F769B95081FB', 4, 'text', 'text', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID edee9536-d5f7-45d8-a122-7ced049acea7 */
+/* SQL text to insert entity field value with ID d7cfc474-9cb4-43ea-9c90-2dd2b4aaa79c */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('edee9536-d5f7-45d8-a122-7ced049acea7', 'BAE40000-6496-4BCA-AAE4-4002D0569536', 5, 'Skipped', 'Skipped', GETUTCDATE(), GETUTCDATE());
+                                       ('d7cfc474-9cb4-43ea-9c90-2dd2b4aaa79c', 'A91B73A2-1616-4B5E-90EA-F769B95081FB', 5, 'video', 'video', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to update ValueListType for entity field ID BAE40000-6496-4BCA-AAE4-4002D0569536 */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='BAE40000-6496-4BCA-AAE4-4002D0569536';
+/* SQL text to update ValueListType for entity field ID A91B73A2-1616-4B5E-90EA-F769B95081FB */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='A91B73A2-1616-4B5E-90EA-F769B95081FB';
 
-/* SQL text to insert entity field value with ID 38b98e03-be55-4fd8-82f7-e5f16d371dbb */
+/* SQL text to insert entity field value with ID 1c6db017-c6be-49e0-b919-f51bc9ee9f4b */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('38b98e03-be55-4fd8-82f7-e5f16d371dbb', '5D5F0FF3-5E9E-45B0-B806-212317951E7A', 1, 'Complete', 'Complete', GETUTCDATE(), GETUTCDATE());
-
-/* SQL text to insert entity field value with ID 7dfa972b-ba05-4f79-b18e-62c94c9f0f67 */
-INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
-                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
-                                    VALUES
-                                       ('7dfa972b-ba05-4f79-b18e-62c94c9f0f67', '5D5F0FF3-5E9E-45B0-B806-212317951E7A', 2, 'Failed', 'Failed', GETUTCDATE(), GETUTCDATE());
-
-/* SQL text to insert entity field value with ID 75931442-0d76-4ec0-a35d-b141f180ca2e */
-INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
-                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
-                                    VALUES
-                                       ('75931442-0d76-4ec0-a35d-b141f180ca2e', '5D5F0FF3-5E9E-45B0-B806-212317951E7A', 3, 'Pending', 'Pending', GETUTCDATE(), GETUTCDATE());
-
-/* SQL text to insert entity field value with ID 6f5e1845-034c-46be-8c0d-f9e602404d3b */
-INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
-                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
-                                    VALUES
-                                       ('6f5e1845-034c-46be-8c0d-f9e602404d3b', '5D5F0FF3-5E9E-45B0-B806-212317951E7A', 4, 'Processing', 'Processing', GETUTCDATE(), GETUTCDATE());
-
-/* SQL text to insert entity field value with ID b41a7e77-c8d5-462d-9715-0cb4392a4802 */
-INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
-                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
-                                    VALUES
-                                       ('b41a7e77-c8d5-462d-9715-0cb4392a4802', '5D5F0FF3-5E9E-45B0-B806-212317951E7A', 5, 'Skipped', 'Skipped', GETUTCDATE(), GETUTCDATE());
-
-/* SQL text to update ValueListType for entity field ID 5D5F0FF3-5E9E-45B0-B806-212317951E7A */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='5D5F0FF3-5E9E-45B0-B806-212317951E7A';
-
-/* SQL text to insert entity field value with ID ed8c0629-50c0-4363-94fe-872e979eaf00 */
-INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
-                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
-                                    VALUES
-                                       ('ed8c0629-50c0-4363-94fe-872e979eaf00', '2846295A-5A6C-4F5D-9B16-CF16762F265B', 1, 'Deleted', 'Deleted', GETUTCDATE(), GETUTCDATE());
-
-/* SQL text to insert entity field value with ID b994f40c-911d-4c51-acd0-86115ce8a9a9 */
-INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
-                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
-                                    VALUES
-                                       ('b994f40c-911d-4c51-acd0-86115ce8a9a9', '2846295A-5A6C-4F5D-9B16-CF16762F265B', 2, 'Pending', 'Pending', GETUTCDATE(), GETUTCDATE());
-
-/* SQL text to update ValueListType for entity field ID 2846295A-5A6C-4F5D-9B16-CF16762F265B */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='2846295A-5A6C-4F5D-9B16-CF16762F265B';
-
-/* SQL text to insert entity field value with ID 65ae638a-0809-407f-a90c-f144a0df2412 */
-INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
-                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
-                                    VALUES
-                                       ('65ae638a-0809-407f-a90c-f144a0df2412', '9B2F6BC3-983D-4ABE-B98E-C6DEFF926716', 1, 'audio', 'audio', GETUTCDATE(), GETUTCDATE());
-
-/* SQL text to insert entity field value with ID a1aab961-c3a3-4fd7-868d-275d138cdc63 */
-INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
-                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
-                                    VALUES
-                                       ('a1aab961-c3a3-4fd7-868d-275d138cdc63', '9B2F6BC3-983D-4ABE-B98E-C6DEFF926716', 2, 'image', 'image', GETUTCDATE(), GETUTCDATE());
-
-/* SQL text to insert entity field value with ID 32c7fd56-eb6e-4d8e-8c2a-4cf8a1871aa7 */
-INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
-                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
-                                    VALUES
-                                       ('32c7fd56-eb6e-4d8e-8c2a-4cf8a1871aa7', '9B2F6BC3-983D-4ABE-B98E-C6DEFF926716', 3, 'multimodal', 'multimodal', GETUTCDATE(), GETUTCDATE());
-
-/* SQL text to insert entity field value with ID d5c95035-aa68-4c50-abed-d34f42e72827 */
-INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
-                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
-                                    VALUES
-                                       ('d5c95035-aa68-4c50-abed-d34f42e72827', '9B2F6BC3-983D-4ABE-B98E-C6DEFF926716', 4, 'text', 'text', GETUTCDATE(), GETUTCDATE());
-
-/* SQL text to insert entity field value with ID ab1d4dcf-909f-460d-983f-52ce642ae4e8 */
-INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
-                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
-                                    VALUES
-                                       ('ab1d4dcf-909f-460d-983f-52ce642ae4e8', '9B2F6BC3-983D-4ABE-B98E-C6DEFF926716', 5, 'video', 'video', GETUTCDATE(), GETUTCDATE());
-
-/* SQL text to update ValueListType for entity field ID 9B2F6BC3-983D-4ABE-B98E-C6DEFF926716 */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='9B2F6BC3-983D-4ABE-B98E-C6DEFF926716';
-
-/* SQL text to insert entity field value with ID 7a9043a6-968d-4c1a-b2fd-7a885562c637 */
-INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
-                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
-                                    VALUES
-                                       ('7a9043a6-968d-4c1a-b2fd-7a885562c637', '41209810-B679-44C8-82A1-A5A6E5057616', 3, 'MetadataOnly', 'MetadataOnly', GETUTCDATE(), GETUTCDATE());
+                                       ('1c6db017-c6be-49e0-b919-f51bc9ee9f4b', '41209810-B679-44C8-82A1-A5A6E5057616', 3, 'MetadataOnly', 'MetadataOnly', GETUTCDATE(), GETUTCDATE());
 
 /* SQL text to update entity field value sequence */
 UPDATE [${flyway:defaultSchema}].[EntityFieldValue] SET Sequence=4 WHERE ID='603BFEB8-11E7-4D60-8C59-47F60AF071D9';
@@ -1554,72 +1018,134 @@ UPDATE [${flyway:defaultSchema}].[EntityFieldValue] SET Sequence=5 WHERE ID='E34
 /* SQL text to update entity field value sequence */
 UPDATE [${flyway:defaultSchema}].[EntityFieldValue] SET Sequence=6 WHERE ID='17027BA3-78F5-43D8-A6F5-5A8CEBB016B2';
 
-/* SQL text to insert entity field value with ID ef486fa3-e8a3-4bb6-8161-8493867565b8 */
+/* SQL text to insert entity field value with ID 953cff49-ed68-4d91-807c-82b555ca8c86 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('ef486fa3-e8a3-4bb6-8161-8493867565b8', 'D718A3DF-3760-4EF9-9521-7A79EDCEF6B0', 1, 'Complete', 'Complete', GETUTCDATE(), GETUTCDATE());
+                                       ('953cff49-ed68-4d91-807c-82b555ca8c86', 'E21D688F-6C5A-46E9-B4C4-9A132CC4421A', 1, 'Complete', 'Complete', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 3b5ef088-75d1-4498-afd2-d2a41043260b */
+/* SQL text to insert entity field value with ID 2e590260-5271-4c2a-9924-965d23c6e328 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('3b5ef088-75d1-4498-afd2-d2a41043260b', 'D718A3DF-3760-4EF9-9521-7A79EDCEF6B0', 2, 'Failed', 'Failed', GETUTCDATE(), GETUTCDATE());
+                                       ('2e590260-5271-4c2a-9924-965d23c6e328', 'E21D688F-6C5A-46E9-B4C4-9A132CC4421A', 2, 'Failed', 'Failed', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 3985640f-9630-440d-b4fd-36be56f2037f */
+/* SQL text to insert entity field value with ID a0c498e6-70b4-4ae7-8081-79b3201dc1d1 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('3985640f-9630-440d-b4fd-36be56f2037f', 'D718A3DF-3760-4EF9-9521-7A79EDCEF6B0', 3, 'Pending', 'Pending', GETUTCDATE(), GETUTCDATE());
+                                       ('a0c498e6-70b4-4ae7-8081-79b3201dc1d1', 'E21D688F-6C5A-46E9-B4C4-9A132CC4421A', 3, 'Pending', 'Pending', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 58906c2b-d0f4-4903-9267-4abaf1ab5524 */
+/* SQL text to insert entity field value with ID 1717c1ab-bb23-4efa-bf92-edd9d1d672eb */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('58906c2b-d0f4-4903-9267-4abaf1ab5524', 'D718A3DF-3760-4EF9-9521-7A79EDCEF6B0', 4, 'Processing', 'Processing', GETUTCDATE(), GETUTCDATE());
+                                       ('1717c1ab-bb23-4efa-bf92-edd9d1d672eb', 'E21D688F-6C5A-46E9-B4C4-9A132CC4421A', 4, 'Processing', 'Processing', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID d70be9fc-f309-41aa-8b71-fe4d63ff1ba5 */
+/* SQL text to insert entity field value with ID 7504e42a-1c28-4cb2-8b37-400c070dae87 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('d70be9fc-f309-41aa-8b71-fe4d63ff1ba5', 'D718A3DF-3760-4EF9-9521-7A79EDCEF6B0', 5, 'Skipped', 'Skipped', GETUTCDATE(), GETUTCDATE());
+                                       ('7504e42a-1c28-4cb2-8b37-400c070dae87', 'E21D688F-6C5A-46E9-B4C4-9A132CC4421A', 5, 'Skipped', 'Skipped', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to update ValueListType for entity field ID D718A3DF-3760-4EF9-9521-7A79EDCEF6B0 */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='D718A3DF-3760-4EF9-9521-7A79EDCEF6B0';
+/* SQL text to update ValueListType for entity field ID E21D688F-6C5A-46E9-B4C4-9A132CC4421A */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='E21D688F-6C5A-46E9-B4C4-9A132CC4421A';
 
-/* SQL text to insert entity field value with ID 7c8e2ff6-4c14-4c65-849e-c6566d6b3106 */
+/* SQL text to insert entity field value with ID 7735ca77-9268-4489-849b-5fed80288330 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('7c8e2ff6-4c14-4c65-849e-c6566d6b3106', '58345D95-711E-470F-BD28-1AA4AD8214D2', 7, 'Pipeline Stage', 'Pipeline Stage', GETUTCDATE(), GETUTCDATE());
+                                       ('7735ca77-9268-4489-849b-5fed80288330', '58345D95-711E-470F-BD28-1AA4AD8214D2', 7, 'Pipeline Stage', 'Pipeline Stage', GETUTCDATE(), GETUTCDATE());
 
-/* Deterministic search-flag hygiene — clear AllowUserSearchAPI */
+/* SQL text to insert entity field value with ID d85936a5-3277-40af-b1f4-2e716de50d50 */
+INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
+                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
+                                    VALUES
+                                       ('d85936a5-3277-40af-b1f4-2e716de50d50', '0CC3FE44-493C-44F8-863C-873485695C69', 1, 'Complete', 'Complete', GETUTCDATE(), GETUTCDATE());
 
-         UPDATE [${flyway:defaultSchema}].[Entity]
-         SET [AllowUserSearchAPI] = 0
-         WHERE [ID] IN (
-            SELECT e.[ID]
-            FROM [${flyway:defaultSchema}].[Entity] e
-            WHERE e.[AllowUserSearchAPI] = 1
-              AND e.[AutoUpdateAllowUserSearchAPI] = 1
-              AND e.[VirtualEntity] = 0
-              AND ISNULL(e.[FullTextSearchEnabled], 0) = 0
-              AND e.[SchemaName] NOT IN ('sys','staging')
-              AND NOT EXISTS (
-               SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] f2
-               WHERE f2.[EntityID] = e.[ID]
-                 AND f2.[IncludeInUserSearchAPI] = 1
-            )
-         );
+/* SQL text to insert entity field value with ID 7b4ee8e1-80de-4fac-bf1d-386e77821308 */
+INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
+                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
+                                    VALUES
+                                       ('7b4ee8e1-80de-4fac-bf1d-386e77821308', '0CC3FE44-493C-44F8-863C-873485695C69', 2, 'Failed', 'Failed', GETUTCDATE(), GETUTCDATE());
+
+/* SQL text to insert entity field value with ID 7f3e7f8d-5e65-426c-961d-f2d4142f95ae */
+INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
+                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
+                                    VALUES
+                                       ('7f3e7f8d-5e65-426c-961d-f2d4142f95ae', '0CC3FE44-493C-44F8-863C-873485695C69', 3, 'Pending', 'Pending', GETUTCDATE(), GETUTCDATE());
+
+/* SQL text to insert entity field value with ID 9f50faaa-d25c-4f19-82b1-73c0272953a6 */
+INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
+                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
+                                    VALUES
+                                       ('9f50faaa-d25c-4f19-82b1-73c0272953a6', '0CC3FE44-493C-44F8-863C-873485695C69', 4, 'Processing', 'Processing', GETUTCDATE(), GETUTCDATE());
+
+/* SQL text to insert entity field value with ID 47f45627-04c2-4ea1-807f-3510552cf44a */
+INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
+                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
+                                    VALUES
+                                       ('47f45627-04c2-4ea1-807f-3510552cf44a', '0CC3FE44-493C-44F8-863C-873485695C69', 5, 'Skipped', 'Skipped', GETUTCDATE(), GETUTCDATE());
+
+/* SQL text to update ValueListType for entity field ID 0CC3FE44-493C-44F8-863C-873485695C69 */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='0CC3FE44-493C-44F8-863C-873485695C69';
+
+/* SQL text to insert entity field value with ID c7b1b6b5-4dad-4d8a-aae3-525bdbcee9ed */
+INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
+                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
+                                    VALUES
+                                       ('c7b1b6b5-4dad-4d8a-aae3-525bdbcee9ed', '62C2E076-B2D0-4130-84C9-C0039758D20E', 1, 'Complete', 'Complete', GETUTCDATE(), GETUTCDATE());
+
+/* SQL text to insert entity field value with ID fd7eb245-78f0-4c76-96b5-1c15317d5573 */
+INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
+                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
+                                    VALUES
+                                       ('fd7eb245-78f0-4c76-96b5-1c15317d5573', '62C2E076-B2D0-4130-84C9-C0039758D20E', 2, 'Failed', 'Failed', GETUTCDATE(), GETUTCDATE());
+
+/* SQL text to insert entity field value with ID 743b85ef-978c-4932-b7c2-c40b9b3391c5 */
+INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
+                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
+                                    VALUES
+                                       ('743b85ef-978c-4932-b7c2-c40b9b3391c5', '62C2E076-B2D0-4130-84C9-C0039758D20E', 3, 'Pending', 'Pending', GETUTCDATE(), GETUTCDATE());
+
+/* SQL text to insert entity field value with ID 7b829efe-ac3d-4b6a-9c0d-d5167c8ec222 */
+INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
+                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
+                                    VALUES
+                                       ('7b829efe-ac3d-4b6a-9c0d-d5167c8ec222', '62C2E076-B2D0-4130-84C9-C0039758D20E', 4, 'Processing', 'Processing', GETUTCDATE(), GETUTCDATE());
+
+/* SQL text to insert entity field value with ID 12485a0a-332a-4a4b-8474-5d35df4a915e */
+INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
+                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
+                                    VALUES
+                                       ('12485a0a-332a-4a4b-8474-5d35df4a915e', '62C2E076-B2D0-4130-84C9-C0039758D20E', 5, 'Skipped', 'Skipped', GETUTCDATE(), GETUTCDATE());
+
+/* SQL text to update ValueListType for entity field ID 62C2E076-B2D0-4130-84C9-C0039758D20E */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='62C2E076-B2D0-4130-84C9-C0039758D20E';
+
+/* SQL text to insert entity field value with ID 2e250a9b-a9cc-47ab-b95f-48cf9277df85 */
+INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
+                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
+                                    VALUES
+                                       ('2e250a9b-a9cc-47ab-b95f-48cf9277df85', '9E27AA9C-1112-4324-9956-62096F6B9D5A', 1, 'Deleted', 'Deleted', GETUTCDATE(), GETUTCDATE());
+
+/* SQL text to insert entity field value with ID 0f3c30b3-b79c-4ea5-8c4d-ec15f254ca96 */
+INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
+                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
+                                    VALUES
+                                       ('0f3c30b3-b79c-4ea5-8c4d-ec15f254ca96', '9E27AA9C-1112-4324-9956-62096F6B9D5A', 2, 'Pending', 'Pending', GETUTCDATE(), GETUTCDATE());
+
+/* SQL text to update ValueListType for entity field ID 9E27AA9C-1112-4324-9956-62096F6B9D5A */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='9E27AA9C-1112-4324-9956-62096F6B9D5A';
 
 
 /* Create Entity Relationship: MJ: Files -> MJ: Content Items (One To Many via FileID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '779dd08e-97a9-4ba8-a601-6f7de18dc2a0'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '33485956-f271-4199-b3c9-369c33119e5b'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('779dd08e-97a9-4ba8-a601-6f7de18dc2a0', '29248F34-2837-EF11-86D4-6045BDEE16E6', 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22', 'FileID', 'One To Many', 1, 1, 9, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('33485956-f271-4199-b3c9-369c33119e5b', '29248F34-2837-EF11-86D4-6045BDEE16E6', 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22', 'FileID', 'One To Many', 1, 1, 9, GETUTCDATE(), GETUTCDATE())
    END;
 
 /* Index for Foreign Keys for ContentItemChunk */
@@ -1730,8 +1256,8 @@ IF NOT EXISTS (
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_ContentItem_FileID ON [${flyway:defaultSchema}].[ContentItem] ([FileID]);
 
-/* SQL text to update entity field related entity name field map for entity field ID 1857D613-85C3-4357-87B5-78659D940B10 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='1857D613-85C3-4357-87B5-78659D940B10', @RelatedEntityNameFieldMap='File';
+/* SQL text to update entity field related entity name field map for entity field ID 78A87F3B-8A9C-43BE-9B6A-3B4F6BB83E6A */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='78A87F3B-8A9C-43BE-9B6A-3B4F6BB83E6A', @RelatedEntityNameFieldMap='File';
 
 /* Hierarchy Metadata Function SQL for MJ: Content Item Chunks.ParentChunkID */
 -----------------------------------------------------------------
@@ -2817,14 +2343,13 @@ CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateContentItem]
     @DisplayLink nvarchar(2000) = NULL,
     @FieldConfidence_Clear bit = 0,
     @FieldConfidence nvarchar(MAX) = NULL,
+    @ExtractionStatus_Clear bit = 0,
     @ExtractionStatus nvarchar(40) = NULL,
+    @SegmentationStatus_Clear bit = 0,
     @SegmentationStatus nvarchar(40) = NULL,
     @DeleteStatus_Clear bit = 0,
     @DeleteStatus nvarchar(20) = NULL,
-    @ExtractorKey_Clear bit = 0,
-    @ExtractorKey nvarchar(100) = NULL,
-    @ExtractorKeyOverride_Clear bit = 0,
-    @ExtractorKeyOverride nvarchar(100) = NULL,
+    @Modality_Clear bit = 0,
     @Modality nvarchar(20) = NULL,
     @Date_Clear bit = 0,
     @Date datetimeoffset = NULL,
@@ -2865,8 +2390,6 @@ BEGIN
                 [ExtractionStatus],
                 [SegmentationStatus],
                 [DeleteStatus],
-                [ExtractorKey],
-                [ExtractorKeyOverride],
                 [Modality],
                 [Date],
                 [Decorator],
@@ -2895,12 +2418,10 @@ BEGIN
                 CASE WHEN @ParentID_Clear = 1 THEN NULL ELSE ISNULL(@ParentID, NULL) END,
                 CASE WHEN @DisplayLink_Clear = 1 THEN NULL ELSE ISNULL(@DisplayLink, NULL) END,
                 CASE WHEN @FieldConfidence_Clear = 1 THEN NULL ELSE ISNULL(@FieldConfidence, NULL) END,
-                ISNULL(@ExtractionStatus, 'Pending'),
-                ISNULL(@SegmentationStatus, 'Pending'),
+                CASE WHEN @ExtractionStatus_Clear = 1 THEN NULL ELSE ISNULL(@ExtractionStatus, NULL) END,
+                CASE WHEN @SegmentationStatus_Clear = 1 THEN NULL ELSE ISNULL(@SegmentationStatus, NULL) END,
                 CASE WHEN @DeleteStatus_Clear = 1 THEN NULL ELSE ISNULL(@DeleteStatus, NULL) END,
-                CASE WHEN @ExtractorKey_Clear = 1 THEN NULL ELSE ISNULL(@ExtractorKey, NULL) END,
-                CASE WHEN @ExtractorKeyOverride_Clear = 1 THEN NULL ELSE ISNULL(@ExtractorKeyOverride, NULL) END,
-                ISNULL(@Modality, 'text'),
+                CASE WHEN @Modality_Clear = 1 THEN NULL ELSE ISNULL(@Modality, NULL) END,
                 CASE WHEN @Date_Clear = 1 THEN NULL ELSE ISNULL(@Date, NULL) END,
                 CASE WHEN @Decorator_Clear = 1 THEN NULL ELSE ISNULL(@Decorator, NULL) END,
                 CASE WHEN @FileID_Clear = 1 THEN NULL ELSE ISNULL(@FileID, NULL) END
@@ -2933,8 +2454,6 @@ BEGIN
                 [ExtractionStatus],
                 [SegmentationStatus],
                 [DeleteStatus],
-                [ExtractorKey],
-                [ExtractorKeyOverride],
                 [Modality],
                 [Date],
                 [Decorator],
@@ -2962,12 +2481,10 @@ BEGIN
                 CASE WHEN @ParentID_Clear = 1 THEN NULL ELSE ISNULL(@ParentID, NULL) END,
                 CASE WHEN @DisplayLink_Clear = 1 THEN NULL ELSE ISNULL(@DisplayLink, NULL) END,
                 CASE WHEN @FieldConfidence_Clear = 1 THEN NULL ELSE ISNULL(@FieldConfidence, NULL) END,
-                ISNULL(@ExtractionStatus, 'Pending'),
-                ISNULL(@SegmentationStatus, 'Pending'),
+                CASE WHEN @ExtractionStatus_Clear = 1 THEN NULL ELSE ISNULL(@ExtractionStatus, NULL) END,
+                CASE WHEN @SegmentationStatus_Clear = 1 THEN NULL ELSE ISNULL(@SegmentationStatus, NULL) END,
                 CASE WHEN @DeleteStatus_Clear = 1 THEN NULL ELSE ISNULL(@DeleteStatus, NULL) END,
-                CASE WHEN @ExtractorKey_Clear = 1 THEN NULL ELSE ISNULL(@ExtractorKey, NULL) END,
-                CASE WHEN @ExtractorKeyOverride_Clear = 1 THEN NULL ELSE ISNULL(@ExtractorKeyOverride, NULL) END,
-                ISNULL(@Modality, 'text'),
+                CASE WHEN @Modality_Clear = 1 THEN NULL ELSE ISNULL(@Modality, NULL) END,
                 CASE WHEN @Date_Clear = 1 THEN NULL ELSE ISNULL(@Date, NULL) END,
                 CASE WHEN @Decorator_Clear = 1 THEN NULL ELSE ISNULL(@Decorator, NULL) END,
                 CASE WHEN @FileID_Clear = 1 THEN NULL ELSE ISNULL(@FileID, NULL) END
@@ -3037,14 +2554,13 @@ CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateContentItem]
     @DisplayLink nvarchar(2000) = NULL,
     @FieldConfidence_Clear bit = 0,
     @FieldConfidence nvarchar(MAX) = NULL,
+    @ExtractionStatus_Clear bit = 0,
     @ExtractionStatus nvarchar(40) = NULL,
+    @SegmentationStatus_Clear bit = 0,
     @SegmentationStatus nvarchar(40) = NULL,
     @DeleteStatus_Clear bit = 0,
     @DeleteStatus nvarchar(20) = NULL,
-    @ExtractorKey_Clear bit = 0,
-    @ExtractorKey nvarchar(100) = NULL,
-    @ExtractorKeyOverride_Clear bit = 0,
-    @ExtractorKeyOverride nvarchar(100) = NULL,
+    @Modality_Clear bit = 0,
     @Modality nvarchar(20) = NULL,
     @Date_Clear bit = 0,
     @Date datetimeoffset = NULL,
@@ -3077,12 +2593,10 @@ BEGIN
         [ParentID] = CASE WHEN @ParentID_Clear = 1 THEN NULL ELSE ISNULL(@ParentID, [ParentID]) END,
         [DisplayLink] = CASE WHEN @DisplayLink_Clear = 1 THEN NULL ELSE ISNULL(@DisplayLink, [DisplayLink]) END,
         [FieldConfidence] = CASE WHEN @FieldConfidence_Clear = 1 THEN NULL ELSE ISNULL(@FieldConfidence, [FieldConfidence]) END,
-        [ExtractionStatus] = ISNULL(@ExtractionStatus, [ExtractionStatus]),
-        [SegmentationStatus] = ISNULL(@SegmentationStatus, [SegmentationStatus]),
+        [ExtractionStatus] = CASE WHEN @ExtractionStatus_Clear = 1 THEN NULL ELSE ISNULL(@ExtractionStatus, [ExtractionStatus]) END,
+        [SegmentationStatus] = CASE WHEN @SegmentationStatus_Clear = 1 THEN NULL ELSE ISNULL(@SegmentationStatus, [SegmentationStatus]) END,
         [DeleteStatus] = CASE WHEN @DeleteStatus_Clear = 1 THEN NULL ELSE ISNULL(@DeleteStatus, [DeleteStatus]) END,
-        [ExtractorKey] = CASE WHEN @ExtractorKey_Clear = 1 THEN NULL ELSE ISNULL(@ExtractorKey, [ExtractorKey]) END,
-        [ExtractorKeyOverride] = CASE WHEN @ExtractorKeyOverride_Clear = 1 THEN NULL ELSE ISNULL(@ExtractorKeyOverride, [ExtractorKeyOverride]) END,
-        [Modality] = ISNULL(@Modality, [Modality]),
+        [Modality] = CASE WHEN @Modality_Clear = 1 THEN NULL ELSE ISNULL(@Modality, [Modality]) END,
         [Date] = CASE WHEN @Date_Clear = 1 THEN NULL ELSE ISNULL(@Date, [Date]) END,
         [Decorator] = CASE WHEN @Decorator_Clear = 1 THEN NULL ELSE ISNULL(@Decorator, [Decorator]) END,
         [FileID] = CASE WHEN @FileID_Clear = 1 THEN NULL ELSE ISNULL(@FileID, [FileID]) END
@@ -3186,16 +2700,6 @@ REVOKE EXECUTE ON [${flyway:defaultSchema}].[spDeleteContentItem] FROM [cdp_Deve
 REVOKE EXECUTE ON [${flyway:defaultSchema}].[spDeleteContentItem] FROM [cdp_Integration]
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteContentItem] TO [cdp_Developer], [cdp_Integration];
 
-/* Index for Foreign Keys for ContentSourceType */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Content Source Types
--- Item: Index for Foreign Keys
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------;
-
 /* Index for Foreign Keys for ContentSource */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -3276,271 +2780,6 @@ IF NOT EXISTS (
     AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[ContentSource]')
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_ContentSource_ScheduledJobID ON [${flyway:defaultSchema}].[ContentSource] ([ScheduledJobID]);
-
-/* Index for Foreign Keys for ContentType */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Content Types
--- Item: Index for Foreign Keys
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
--- Index for foreign key AIModelID in table ContentType
-IF NOT EXISTS (
-    SELECT 1
-    FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_ContentType_AIModelID' 
-    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[ContentType]')
-)
-CREATE INDEX IDX_AUTO_MJ_FKEY_ContentType_AIModelID ON [${flyway:defaultSchema}].[ContentType] ([AIModelID]);
-
--- Index for foreign key EmbeddingModelID in table ContentType
-IF NOT EXISTS (
-    SELECT 1
-    FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_ContentType_EmbeddingModelID' 
-    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[ContentType]')
-)
-CREATE INDEX IDX_AUTO_MJ_FKEY_ContentType_EmbeddingModelID ON [${flyway:defaultSchema}].[ContentType] ([EmbeddingModelID]);
-
--- Index for foreign key VectorIndexID in table ContentType
-IF NOT EXISTS (
-    SELECT 1
-    FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_ContentType_VectorIndexID' 
-    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[ContentType]')
-)
-CREATE INDEX IDX_AUTO_MJ_FKEY_ContentType_VectorIndexID ON [${flyway:defaultSchema}].[ContentType] ([VectorIndexID]);
-
-/* Base View SQL for MJ: Content Source Types */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Content Source Types
--- Item: vwContentSourceTypes
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ BASE VIEW FOR ENTITY:      MJ: Content Source Types
------               SCHEMA:      ${flyway:defaultSchema}
------               BASE TABLE:  ContentSourceType
------               PRIMARY KEY: ID
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[vwContentSourceTypes]', 'V') IS NOT NULL
-    DROP VIEW [${flyway:defaultSchema}].[vwContentSourceTypes];
-GO
-
-CREATE VIEW [${flyway:defaultSchema}].[vwContentSourceTypes]
-AS
-SELECT
-    c.*
-FROM
-    [${flyway:defaultSchema}].[ContentSourceType] AS c
-GO
-REVOKE SELECT ON [${flyway:defaultSchema}].[vwContentSourceTypes] FROM [cdp_Developer]
-REVOKE SELECT ON [${flyway:defaultSchema}].[vwContentSourceTypes] FROM [cdp_Integration]
-REVOKE SELECT ON [${flyway:defaultSchema}].[vwContentSourceTypes] FROM [cdp_UI]
-GRANT SELECT ON [${flyway:defaultSchema}].[vwContentSourceTypes] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
-
-/* Base View Permissions SQL for MJ: Content Source Types */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Content Source Types
--- Item: Permissions for vwContentSourceTypes
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-REVOKE SELECT ON [${flyway:defaultSchema}].[vwContentSourceTypes] FROM [cdp_Developer]
-REVOKE SELECT ON [${flyway:defaultSchema}].[vwContentSourceTypes] FROM [cdp_Integration]
-REVOKE SELECT ON [${flyway:defaultSchema}].[vwContentSourceTypes] FROM [cdp_UI]
-GRANT SELECT ON [${flyway:defaultSchema}].[vwContentSourceTypes] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
-
-/* spCreate SQL for MJ: Content Source Types */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Content Source Types
--- Item: spCreateContentSourceType
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ CREATE PROCEDURE FOR ContentSourceType
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[spCreateContentSourceType]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spCreateContentSourceType];
-GO
-
-CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateContentSourceType]
-    @ID uniqueidentifier = NULL,
-    @Name nvarchar(255),
-    @Description_Clear bit = 0,
-    @Description nvarchar(1000) = NULL,
-    @DriverClass_Clear bit = 0,
-    @DriverClass nvarchar(255) = NULL,
-    @Configuration_Clear bit = 0,
-    @Configuration nvarchar(MAX) = NULL,
-    @SupportsMultiModal bit = NULL
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-
-    IF @ID IS NOT NULL
-    BEGIN
-        -- User provided a value, use it
-        INSERT INTO [${flyway:defaultSchema}].[ContentSourceType]
-            (
-                [ID],
-                [Name],
-                [Description],
-                [DriverClass],
-                [Configuration],
-                [SupportsMultiModal]
-            )
-        OUTPUT INSERTED.[ID] INTO @InsertedRow
-        VALUES
-            (
-                @ID,
-                @Name,
-                CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, NULL) END,
-                CASE WHEN @DriverClass_Clear = 1 THEN NULL ELSE ISNULL(@DriverClass, NULL) END,
-                CASE WHEN @Configuration_Clear = 1 THEN NULL ELSE ISNULL(@Configuration, NULL) END,
-                ISNULL(@SupportsMultiModal, 0)
-            )
-    END
-    ELSE
-    BEGIN
-        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
-        INSERT INTO [${flyway:defaultSchema}].[ContentSourceType]
-            (
-                [Name],
-                [Description],
-                [DriverClass],
-                [Configuration],
-                [SupportsMultiModal]
-            )
-        OUTPUT INSERTED.[ID] INTO @InsertedRow
-        VALUES
-            (
-                @Name,
-                CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, NULL) END,
-                CASE WHEN @DriverClass_Clear = 1 THEN NULL ELSE ISNULL(@DriverClass, NULL) END,
-                CASE WHEN @Configuration_Clear = 1 THEN NULL ELSE ISNULL(@Configuration, NULL) END,
-                ISNULL(@SupportsMultiModal, 0)
-            )
-    END
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [${flyway:defaultSchema}].[vwContentSourceTypes] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-REVOKE EXECUTE ON [${flyway:defaultSchema}].[spCreateContentSourceType] FROM [cdp_Developer]
-REVOKE EXECUTE ON [${flyway:defaultSchema}].[spCreateContentSourceType] FROM [cdp_Integration]
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateContentSourceType] TO [cdp_Developer], [cdp_Integration];
-
-/* spCreate Permissions for MJ: Content Source Types */
-
-REVOKE EXECUTE ON [${flyway:defaultSchema}].[spCreateContentSourceType] FROM [cdp_Developer]
-REVOKE EXECUTE ON [${flyway:defaultSchema}].[spCreateContentSourceType] FROM [cdp_Integration]
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateContentSourceType] TO [cdp_Developer], [cdp_Integration];
-
-/* spUpdate SQL for MJ: Content Source Types */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Content Source Types
--- Item: spUpdateContentSourceType
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ UPDATE PROCEDURE FOR ContentSourceType
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateContentSourceType]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateContentSourceType];
-GO
-
-CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateContentSourceType]
-    @ID uniqueidentifier,
-    @Name nvarchar(255) = NULL,
-    @Description_Clear bit = 0,
-    @Description nvarchar(1000) = NULL,
-    @DriverClass_Clear bit = 0,
-    @DriverClass nvarchar(255) = NULL,
-    @Configuration_Clear bit = 0,
-    @Configuration nvarchar(MAX) = NULL,
-    @SupportsMultiModal bit = NULL
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE
-        [${flyway:defaultSchema}].[ContentSourceType]
-    SET
-        [Name] = ISNULL(@Name, [Name]),
-        [Description] = CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, [Description]) END,
-        [DriverClass] = CASE WHEN @DriverClass_Clear = 1 THEN NULL ELSE ISNULL(@DriverClass, [DriverClass]) END,
-        [Configuration] = CASE WHEN @Configuration_Clear = 1 THEN NULL ELSE ISNULL(@Configuration, [Configuration]) END,
-        [SupportsMultiModal] = ISNULL(@SupportsMultiModal, [SupportsMultiModal])
-    WHERE
-        [ID] = @ID
-
-    -- Check if the update was successful
-    IF @@ROWCOUNT = 0
-        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
-        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwContentSourceTypes] WHERE 1=0
-    ELSE
-        -- Return the updated record so the caller can see the updated values and any calculated fields
-        SELECT
-                                        *
-                                    FROM
-                                        [${flyway:defaultSchema}].[vwContentSourceTypes]
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-
-REVOKE EXECUTE ON [${flyway:defaultSchema}].[spUpdateContentSourceType] FROM [cdp_Developer]
-REVOKE EXECUTE ON [${flyway:defaultSchema}].[spUpdateContentSourceType] FROM [cdp_Integration]
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateContentSourceType] TO [cdp_Developer], [cdp_Integration]
-GO
-
-------------------------------------------------------------
------ TRIGGER FOR __mj_UpdatedAt field for the ContentSourceType table
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateContentSourceType]', 'TR') IS NOT NULL
-    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateContentSourceType];
-GO
-CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateContentSourceType
-ON [${flyway:defaultSchema}].[ContentSourceType]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE
-        [${flyway:defaultSchema}].[ContentSourceType]
-    SET
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM
-        [${flyway:defaultSchema}].[ContentSourceType] AS _organicTable
-    INNER JOIN
-        INSERTED AS I ON
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-
-/* spUpdate Permissions for MJ: Content Source Types */
-
-REVOKE EXECUTE ON [${flyway:defaultSchema}].[spUpdateContentSourceType] FROM [cdp_Developer]
-REVOKE EXECUTE ON [${flyway:defaultSchema}].[spUpdateContentSourceType] FROM [cdp_Integration]
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateContentSourceType] TO [cdp_Developer], [cdp_Integration];
 
 /* Base View SQL for MJ: Content Sources */
 -----------------------------------------------------------------
@@ -3672,12 +2911,8 @@ CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateContentSource]
     @ScheduledJobID uniqueidentifier = NULL,
     @FieldConfidence_Clear bit = 0,
     @FieldConfidence nvarchar(MAX) = NULL,
-    @ExtractorKey_Clear bit = 0,
-    @ExtractorKey nvarchar(100) = NULL,
-    @MultiModalEnabled bit = NULL,
-    @DiscoveryStatus nvarchar(40) = NULL,
-    @LastDiscoveredAt_Clear bit = 0,
-    @LastDiscoveredAt datetimeoffset = NULL
+    @DiscoveryStatus_Clear bit = 0,
+    @DiscoveryStatus nvarchar(40) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -3703,10 +2938,7 @@ BEGIN
                 [CleanerKey],
                 [ScheduledJobID],
                 [FieldConfidence],
-                [ExtractorKey],
-                [MultiModalEnabled],
-                [DiscoveryStatus],
-                [LastDiscoveredAt]
+                [DiscoveryStatus]
             )
         OUTPUT INSERTED.[ID] INTO @InsertedRow
         VALUES
@@ -3726,10 +2958,7 @@ BEGIN
                 CASE WHEN @CleanerKey_Clear = 1 THEN NULL ELSE ISNULL(@CleanerKey, NULL) END,
                 CASE WHEN @ScheduledJobID_Clear = 1 THEN NULL ELSE ISNULL(@ScheduledJobID, NULL) END,
                 CASE WHEN @FieldConfidence_Clear = 1 THEN NULL ELSE ISNULL(@FieldConfidence, NULL) END,
-                CASE WHEN @ExtractorKey_Clear = 1 THEN NULL ELSE ISNULL(@ExtractorKey, NULL) END,
-                ISNULL(@MultiModalEnabled, 0),
-                ISNULL(@DiscoveryStatus, 'Pending'),
-                CASE WHEN @LastDiscoveredAt_Clear = 1 THEN NULL ELSE ISNULL(@LastDiscoveredAt, NULL) END
+                CASE WHEN @DiscoveryStatus_Clear = 1 THEN NULL ELSE ISNULL(@DiscoveryStatus, NULL) END
             )
     END
     ELSE
@@ -3751,10 +2980,7 @@ BEGIN
                 [CleanerKey],
                 [ScheduledJobID],
                 [FieldConfidence],
-                [ExtractorKey],
-                [MultiModalEnabled],
-                [DiscoveryStatus],
-                [LastDiscoveredAt]
+                [DiscoveryStatus]
             )
         OUTPUT INSERTED.[ID] INTO @InsertedRow
         VALUES
@@ -3773,10 +2999,7 @@ BEGIN
                 CASE WHEN @CleanerKey_Clear = 1 THEN NULL ELSE ISNULL(@CleanerKey, NULL) END,
                 CASE WHEN @ScheduledJobID_Clear = 1 THEN NULL ELSE ISNULL(@ScheduledJobID, NULL) END,
                 CASE WHEN @FieldConfidence_Clear = 1 THEN NULL ELSE ISNULL(@FieldConfidence, NULL) END,
-                CASE WHEN @ExtractorKey_Clear = 1 THEN NULL ELSE ISNULL(@ExtractorKey, NULL) END,
-                ISNULL(@MultiModalEnabled, 0),
-                ISNULL(@DiscoveryStatus, 'Pending'),
-                CASE WHEN @LastDiscoveredAt_Clear = 1 THEN NULL ELSE ISNULL(@LastDiscoveredAt, NULL) END
+                CASE WHEN @DiscoveryStatus_Clear = 1 THEN NULL ELSE ISNULL(@DiscoveryStatus, NULL) END
             )
     END
     -- return the new record from the base view, which might have some calculated fields
@@ -3836,12 +3059,8 @@ CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateContentSource]
     @ScheduledJobID uniqueidentifier = NULL,
     @FieldConfidence_Clear bit = 0,
     @FieldConfidence nvarchar(MAX) = NULL,
-    @ExtractorKey_Clear bit = 0,
-    @ExtractorKey nvarchar(100) = NULL,
-    @MultiModalEnabled bit = NULL,
-    @DiscoveryStatus nvarchar(40) = NULL,
-    @LastDiscoveredAt_Clear bit = 0,
-    @LastDiscoveredAt datetimeoffset = NULL
+    @DiscoveryStatus_Clear bit = 0,
+    @DiscoveryStatus nvarchar(40) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -3862,10 +3081,7 @@ BEGIN
         [CleanerKey] = CASE WHEN @CleanerKey_Clear = 1 THEN NULL ELSE ISNULL(@CleanerKey, [CleanerKey]) END,
         [ScheduledJobID] = CASE WHEN @ScheduledJobID_Clear = 1 THEN NULL ELSE ISNULL(@ScheduledJobID, [ScheduledJobID]) END,
         [FieldConfidence] = CASE WHEN @FieldConfidence_Clear = 1 THEN NULL ELSE ISNULL(@FieldConfidence, [FieldConfidence]) END,
-        [ExtractorKey] = CASE WHEN @ExtractorKey_Clear = 1 THEN NULL ELSE ISNULL(@ExtractorKey, [ExtractorKey]) END,
-        [MultiModalEnabled] = ISNULL(@MultiModalEnabled, [MultiModalEnabled]),
-        [DiscoveryStatus] = ISNULL(@DiscoveryStatus, [DiscoveryStatus]),
-        [LastDiscoveredAt] = CASE WHEN @LastDiscoveredAt_Clear = 1 THEN NULL ELSE ISNULL(@LastDiscoveredAt, [LastDiscoveredAt]) END
+        [DiscoveryStatus] = CASE WHEN @DiscoveryStatus_Clear = 1 THEN NULL ELSE ISNULL(@DiscoveryStatus, [DiscoveryStatus]) END
     WHERE
         [ID] = @ID
 
@@ -3920,344 +3136,6 @@ REVOKE EXECUTE ON [${flyway:defaultSchema}].[spUpdateContentSource] FROM [cdp_De
 REVOKE EXECUTE ON [${flyway:defaultSchema}].[spUpdateContentSource] FROM [cdp_Integration]
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateContentSource] TO [cdp_Developer], [cdp_Integration];
 
-/* Base View SQL for MJ: Content Types */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Content Types
--- Item: vwContentTypes
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ BASE VIEW FOR ENTITY:      MJ: Content Types
------               SCHEMA:      ${flyway:defaultSchema}
------               BASE TABLE:  ContentType
------               PRIMARY KEY: ID
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[vwContentTypes]', 'V') IS NOT NULL
-    DROP VIEW [${flyway:defaultSchema}].[vwContentTypes];
-GO
-
-CREATE VIEW [${flyway:defaultSchema}].[vwContentTypes]
-AS
-SELECT
-    c.*,
-    MJAIModel_AIModelID.[Name] AS [AIModel],
-    MJAIModel_EmbeddingModelID.[Name] AS [EmbeddingModel],
-    MJVectorIndex_VectorIndexID.[Name] AS [VectorIndex]
-FROM
-    [${flyway:defaultSchema}].[ContentType] AS c
-INNER JOIN
-    [${flyway:defaultSchema}].[AIModel] AS MJAIModel_AIModelID
-  ON
-    [c].[AIModelID] = MJAIModel_AIModelID.[ID]
-LEFT OUTER JOIN
-    [${flyway:defaultSchema}].[AIModel] AS MJAIModel_EmbeddingModelID
-  ON
-    [c].[EmbeddingModelID] = MJAIModel_EmbeddingModelID.[ID]
-LEFT OUTER JOIN
-    [${flyway:defaultSchema}].[VectorIndex] AS MJVectorIndex_VectorIndexID
-  ON
-    [c].[VectorIndexID] = MJVectorIndex_VectorIndexID.[ID]
-GO
-REVOKE SELECT ON [${flyway:defaultSchema}].[vwContentTypes] FROM [cdp_Developer]
-REVOKE SELECT ON [${flyway:defaultSchema}].[vwContentTypes] FROM [cdp_Integration]
-REVOKE SELECT ON [${flyway:defaultSchema}].[vwContentTypes] FROM [cdp_UI]
-GRANT SELECT ON [${flyway:defaultSchema}].[vwContentTypes] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
-
-/* Base View Permissions SQL for MJ: Content Types */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Content Types
--- Item: Permissions for vwContentTypes
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-REVOKE SELECT ON [${flyway:defaultSchema}].[vwContentTypes] FROM [cdp_Developer]
-REVOKE SELECT ON [${flyway:defaultSchema}].[vwContentTypes] FROM [cdp_Integration]
-REVOKE SELECT ON [${flyway:defaultSchema}].[vwContentTypes] FROM [cdp_UI]
-GRANT SELECT ON [${flyway:defaultSchema}].[vwContentTypes] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
-
-/* spCreate SQL for MJ: Content Types */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Content Types
--- Item: spCreateContentType
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ CREATE PROCEDURE FOR ContentType
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[spCreateContentType]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spCreateContentType];
-GO
-
-CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateContentType]
-    @ID uniqueidentifier = NULL,
-    @Name nvarchar(255),
-    @Description_Clear bit = 0,
-    @Description nvarchar(MAX) = NULL,
-    @AIModelID uniqueidentifier,
-    @MinTags int,
-    @MaxTags int,
-    @EmbeddingModelID_Clear bit = 0,
-    @EmbeddingModelID uniqueidentifier = NULL,
-    @VectorIndexID_Clear bit = 0,
-    @VectorIndexID uniqueidentifier = NULL,
-    @Configuration_Clear bit = 0,
-    @Configuration nvarchar(MAX) = NULL,
-    @SegmenterKey_Clear bit = 0,
-    @SegmenterKey nvarchar(100) = NULL,
-    @CleanerKey_Clear bit = 0,
-    @CleanerKey nvarchar(100) = NULL,
-    @ExtractorKey_Clear bit = 0,
-    @ExtractorKey nvarchar(100) = NULL
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-
-    IF @ID IS NOT NULL
-    BEGIN
-        -- User provided a value, use it
-        INSERT INTO [${flyway:defaultSchema}].[ContentType]
-            (
-                [ID],
-                [Name],
-                [Description],
-                [AIModelID],
-                [MinTags],
-                [MaxTags],
-                [EmbeddingModelID],
-                [VectorIndexID],
-                [Configuration],
-                [SegmenterKey],
-                [CleanerKey],
-                [ExtractorKey]
-            )
-        OUTPUT INSERTED.[ID] INTO @InsertedRow
-        VALUES
-            (
-                @ID,
-                @Name,
-                CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, NULL) END,
-                @AIModelID,
-                @MinTags,
-                @MaxTags,
-                CASE WHEN @EmbeddingModelID_Clear = 1 THEN NULL ELSE ISNULL(@EmbeddingModelID, NULL) END,
-                CASE WHEN @VectorIndexID_Clear = 1 THEN NULL ELSE ISNULL(@VectorIndexID, NULL) END,
-                CASE WHEN @Configuration_Clear = 1 THEN NULL ELSE ISNULL(@Configuration, NULL) END,
-                CASE WHEN @SegmenterKey_Clear = 1 THEN NULL ELSE ISNULL(@SegmenterKey, NULL) END,
-                CASE WHEN @CleanerKey_Clear = 1 THEN NULL ELSE ISNULL(@CleanerKey, NULL) END,
-                CASE WHEN @ExtractorKey_Clear = 1 THEN NULL ELSE ISNULL(@ExtractorKey, NULL) END
-            )
-    END
-    ELSE
-    BEGIN
-        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
-        INSERT INTO [${flyway:defaultSchema}].[ContentType]
-            (
-                [Name],
-                [Description],
-                [AIModelID],
-                [MinTags],
-                [MaxTags],
-                [EmbeddingModelID],
-                [VectorIndexID],
-                [Configuration],
-                [SegmenterKey],
-                [CleanerKey],
-                [ExtractorKey]
-            )
-        OUTPUT INSERTED.[ID] INTO @InsertedRow
-        VALUES
-            (
-                @Name,
-                CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, NULL) END,
-                @AIModelID,
-                @MinTags,
-                @MaxTags,
-                CASE WHEN @EmbeddingModelID_Clear = 1 THEN NULL ELSE ISNULL(@EmbeddingModelID, NULL) END,
-                CASE WHEN @VectorIndexID_Clear = 1 THEN NULL ELSE ISNULL(@VectorIndexID, NULL) END,
-                CASE WHEN @Configuration_Clear = 1 THEN NULL ELSE ISNULL(@Configuration, NULL) END,
-                CASE WHEN @SegmenterKey_Clear = 1 THEN NULL ELSE ISNULL(@SegmenterKey, NULL) END,
-                CASE WHEN @CleanerKey_Clear = 1 THEN NULL ELSE ISNULL(@CleanerKey, NULL) END,
-                CASE WHEN @ExtractorKey_Clear = 1 THEN NULL ELSE ISNULL(@ExtractorKey, NULL) END
-            )
-    END
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [${flyway:defaultSchema}].[vwContentTypes] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-REVOKE EXECUTE ON [${flyway:defaultSchema}].[spCreateContentType] FROM [cdp_Developer]
-REVOKE EXECUTE ON [${flyway:defaultSchema}].[spCreateContentType] FROM [cdp_Integration]
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateContentType] TO [cdp_Developer], [cdp_Integration];
-
-/* spCreate Permissions for MJ: Content Types */
-
-REVOKE EXECUTE ON [${flyway:defaultSchema}].[spCreateContentType] FROM [cdp_Developer]
-REVOKE EXECUTE ON [${flyway:defaultSchema}].[spCreateContentType] FROM [cdp_Integration]
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateContentType] TO [cdp_Developer], [cdp_Integration];
-
-/* spUpdate SQL for MJ: Content Types */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Content Types
--- Item: spUpdateContentType
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ UPDATE PROCEDURE FOR ContentType
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateContentType]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateContentType];
-GO
-
-CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateContentType]
-    @ID uniqueidentifier,
-    @Name nvarchar(255) = NULL,
-    @Description_Clear bit = 0,
-    @Description nvarchar(MAX) = NULL,
-    @AIModelID uniqueidentifier = NULL,
-    @MinTags int = NULL,
-    @MaxTags int = NULL,
-    @EmbeddingModelID_Clear bit = 0,
-    @EmbeddingModelID uniqueidentifier = NULL,
-    @VectorIndexID_Clear bit = 0,
-    @VectorIndexID uniqueidentifier = NULL,
-    @Configuration_Clear bit = 0,
-    @Configuration nvarchar(MAX) = NULL,
-    @SegmenterKey_Clear bit = 0,
-    @SegmenterKey nvarchar(100) = NULL,
-    @CleanerKey_Clear bit = 0,
-    @CleanerKey nvarchar(100) = NULL,
-    @ExtractorKey_Clear bit = 0,
-    @ExtractorKey nvarchar(100) = NULL
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE
-        [${flyway:defaultSchema}].[ContentType]
-    SET
-        [Name] = ISNULL(@Name, [Name]),
-        [Description] = CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, [Description]) END,
-        [AIModelID] = ISNULL(@AIModelID, [AIModelID]),
-        [MinTags] = ISNULL(@MinTags, [MinTags]),
-        [MaxTags] = ISNULL(@MaxTags, [MaxTags]),
-        [EmbeddingModelID] = CASE WHEN @EmbeddingModelID_Clear = 1 THEN NULL ELSE ISNULL(@EmbeddingModelID, [EmbeddingModelID]) END,
-        [VectorIndexID] = CASE WHEN @VectorIndexID_Clear = 1 THEN NULL ELSE ISNULL(@VectorIndexID, [VectorIndexID]) END,
-        [Configuration] = CASE WHEN @Configuration_Clear = 1 THEN NULL ELSE ISNULL(@Configuration, [Configuration]) END,
-        [SegmenterKey] = CASE WHEN @SegmenterKey_Clear = 1 THEN NULL ELSE ISNULL(@SegmenterKey, [SegmenterKey]) END,
-        [CleanerKey] = CASE WHEN @CleanerKey_Clear = 1 THEN NULL ELSE ISNULL(@CleanerKey, [CleanerKey]) END,
-        [ExtractorKey] = CASE WHEN @ExtractorKey_Clear = 1 THEN NULL ELSE ISNULL(@ExtractorKey, [ExtractorKey]) END
-    WHERE
-        [ID] = @ID
-
-    -- Check if the update was successful
-    IF @@ROWCOUNT = 0
-        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
-        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwContentTypes] WHERE 1=0
-    ELSE
-        -- Return the updated record so the caller can see the updated values and any calculated fields
-        SELECT
-                                        *
-                                    FROM
-                                        [${flyway:defaultSchema}].[vwContentTypes]
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-
-REVOKE EXECUTE ON [${flyway:defaultSchema}].[spUpdateContentType] FROM [cdp_Developer]
-REVOKE EXECUTE ON [${flyway:defaultSchema}].[spUpdateContentType] FROM [cdp_Integration]
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateContentType] TO [cdp_Developer], [cdp_Integration]
-GO
-
-------------------------------------------------------------
------ TRIGGER FOR __mj_UpdatedAt field for the ContentType table
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateContentType]', 'TR') IS NOT NULL
-    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateContentType];
-GO
-CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateContentType
-ON [${flyway:defaultSchema}].[ContentType]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE
-        [${flyway:defaultSchema}].[ContentType]
-    SET
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM
-        [${flyway:defaultSchema}].[ContentType] AS _organicTable
-    INNER JOIN
-        INSERTED AS I ON
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-
-/* spUpdate Permissions for MJ: Content Types */
-
-REVOKE EXECUTE ON [${flyway:defaultSchema}].[spUpdateContentType] FROM [cdp_Developer]
-REVOKE EXECUTE ON [${flyway:defaultSchema}].[spUpdateContentType] FROM [cdp_Integration]
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateContentType] TO [cdp_Developer], [cdp_Integration];
-
-/* spDelete SQL for MJ: Content Source Types */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Content Source Types
--- Item: spDeleteContentSourceType
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ DELETE PROCEDURE FOR ContentSourceType
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteContentSourceType]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteContentSourceType];
-GO
-
-CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteContentSourceType]
-    @ID uniqueidentifier
-AS
-BEGIN
-    SET NOCOUNT ON;
-
-    DELETE FROM
-        [${flyway:defaultSchema}].[ContentSourceType]
-    WHERE
-        [ID] = @ID
-
-
-    -- Check if the delete was successful
-    IF @@ROWCOUNT = 0
-        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
-    ELSE
-        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
-END
-GO
-REVOKE EXECUTE ON [${flyway:defaultSchema}].[spDeleteContentSourceType] FROM [cdp_Integration]
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteContentSourceType] TO [cdp_Developer], [cdp_Integration];
-
-/* spDelete Permissions for MJ: Content Source Types */
-
-REVOKE EXECUTE ON [${flyway:defaultSchema}].[spDeleteContentSourceType] FROM [cdp_Integration]
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteContentSourceType] TO [cdp_Developer], [cdp_Integration];
-
 /* spDelete SQL for MJ: Content Sources */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -4304,52 +3182,6 @@ REVOKE EXECUTE ON [${flyway:defaultSchema}].[spDeleteContentSource] FROM [cdp_De
 REVOKE EXECUTE ON [${flyway:defaultSchema}].[spDeleteContentSource] FROM [cdp_Integration]
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteContentSource] TO [cdp_Developer], [cdp_Integration];
 
-/* spDelete SQL for MJ: Content Types */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Content Types
--- Item: spDeleteContentType
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ DELETE PROCEDURE FOR ContentType
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteContentType]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteContentType];
-GO
-
-CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteContentType]
-    @ID uniqueidentifier
-AS
-BEGIN
-    SET NOCOUNT ON;
-
-    DELETE FROM
-        [${flyway:defaultSchema}].[ContentType]
-    WHERE
-        [ID] = @ID
-
-
-    -- Check if the delete was successful
-    IF @@ROWCOUNT = 0
-        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
-    ELSE
-        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
-END
-GO
-REVOKE EXECUTE ON [${flyway:defaultSchema}].[spDeleteContentType] FROM [cdp_Developer]
-REVOKE EXECUTE ON [${flyway:defaultSchema}].[spDeleteContentType] FROM [cdp_Integration]
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteContentType] TO [cdp_Developer], [cdp_Integration];
-
-/* spDelete Permissions for MJ: Content Types */
-
-REVOKE EXECUTE ON [${flyway:defaultSchema}].[spDeleteContentType] FROM [cdp_Developer]
-REVOKE EXECUTE ON [${flyway:defaultSchema}].[spDeleteContentType] FROM [cdp_Integration]
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteContentType] TO [cdp_Developer], [cdp_Integration];
-
 /* spDelete SQL for MJ: Entity Documents */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -4388,17 +3220,14 @@ BEGIN
     DECLARE @MJContentSources_EntityDocumentID_CleanerKey nvarchar(100)
     DECLARE @MJContentSources_EntityDocumentID_ScheduledJobID uniqueidentifier
     DECLARE @MJContentSources_EntityDocumentID_FieldConfidence nvarchar(MAX)
-    DECLARE @MJContentSources_EntityDocumentID_ExtractorKey nvarchar(100)
-    DECLARE @MJContentSources_EntityDocumentID_MultiModalEnabled bit
     DECLARE @MJContentSources_EntityDocumentID_DiscoveryStatus nvarchar(40)
-    DECLARE @MJContentSources_EntityDocumentID_LastDiscoveredAt datetimeoffset
     DECLARE cascade_update_MJContentSources_EntityDocumentID_cursor CURSOR FOR
-        SELECT [ID], [Name], [ContentTypeID], [ContentSourceTypeID], [ContentFileTypeID], [URL], [EmbeddingModelID], [VectorIndexID], [Configuration], [EntityID], [EntityDocumentID], [SegmenterKey], [CleanerKey], [ScheduledJobID], [FieldConfidence], [ExtractorKey], [MultiModalEnabled], [DiscoveryStatus], [LastDiscoveredAt]
+        SELECT [ID], [Name], [ContentTypeID], [ContentSourceTypeID], [ContentFileTypeID], [URL], [EmbeddingModelID], [VectorIndexID], [Configuration], [EntityID], [EntityDocumentID], [SegmenterKey], [CleanerKey], [ScheduledJobID], [FieldConfidence], [DiscoveryStatus]
         FROM [${flyway:defaultSchema}].[ContentSource]
         WHERE [EntityDocumentID] = @ID
 
     OPEN cascade_update_MJContentSources_EntityDocumentID_cursor
-    FETCH NEXT FROM cascade_update_MJContentSources_EntityDocumentID_cursor INTO @MJContentSources_EntityDocumentIDID, @MJContentSources_EntityDocumentID_Name, @MJContentSources_EntityDocumentID_ContentTypeID, @MJContentSources_EntityDocumentID_ContentSourceTypeID, @MJContentSources_EntityDocumentID_ContentFileTypeID, @MJContentSources_EntityDocumentID_URL, @MJContentSources_EntityDocumentID_EmbeddingModelID, @MJContentSources_EntityDocumentID_VectorIndexID, @MJContentSources_EntityDocumentID_Configuration, @MJContentSources_EntityDocumentID_EntityID, @MJContentSources_EntityDocumentID_EntityDocumentID, @MJContentSources_EntityDocumentID_SegmenterKey, @MJContentSources_EntityDocumentID_CleanerKey, @MJContentSources_EntityDocumentID_ScheduledJobID, @MJContentSources_EntityDocumentID_FieldConfidence, @MJContentSources_EntityDocumentID_ExtractorKey, @MJContentSources_EntityDocumentID_MultiModalEnabled, @MJContentSources_EntityDocumentID_DiscoveryStatus, @MJContentSources_EntityDocumentID_LastDiscoveredAt
+    FETCH NEXT FROM cascade_update_MJContentSources_EntityDocumentID_cursor INTO @MJContentSources_EntityDocumentIDID, @MJContentSources_EntityDocumentID_Name, @MJContentSources_EntityDocumentID_ContentTypeID, @MJContentSources_EntityDocumentID_ContentSourceTypeID, @MJContentSources_EntityDocumentID_ContentFileTypeID, @MJContentSources_EntityDocumentID_URL, @MJContentSources_EntityDocumentID_EmbeddingModelID, @MJContentSources_EntityDocumentID_VectorIndexID, @MJContentSources_EntityDocumentID_Configuration, @MJContentSources_EntityDocumentID_EntityID, @MJContentSources_EntityDocumentID_EntityDocumentID, @MJContentSources_EntityDocumentID_SegmenterKey, @MJContentSources_EntityDocumentID_CleanerKey, @MJContentSources_EntityDocumentID_ScheduledJobID, @MJContentSources_EntityDocumentID_FieldConfidence, @MJContentSources_EntityDocumentID_DiscoveryStatus
 
     WHILE @@FETCH_STATUS = 0
     BEGIN
@@ -4406,9 +3235,9 @@ BEGIN
         SET @MJContentSources_EntityDocumentID_EntityDocumentID = NULL
 
         -- Call the update SP for the related entity
-        EXEC [${flyway:defaultSchema}].[spUpdateContentSource] @ID = @MJContentSources_EntityDocumentIDID, @Name = @MJContentSources_EntityDocumentID_Name, @ContentTypeID = @MJContentSources_EntityDocumentID_ContentTypeID, @ContentSourceTypeID = @MJContentSources_EntityDocumentID_ContentSourceTypeID, @ContentFileTypeID = @MJContentSources_EntityDocumentID_ContentFileTypeID, @URL = @MJContentSources_EntityDocumentID_URL, @EmbeddingModelID = @MJContentSources_EntityDocumentID_EmbeddingModelID, @VectorIndexID = @MJContentSources_EntityDocumentID_VectorIndexID, @Configuration = @MJContentSources_EntityDocumentID_Configuration, @EntityID = @MJContentSources_EntityDocumentID_EntityID, @EntityDocumentID_Clear = 1, @EntityDocumentID = @MJContentSources_EntityDocumentID_EntityDocumentID, @SegmenterKey = @MJContentSources_EntityDocumentID_SegmenterKey, @CleanerKey = @MJContentSources_EntityDocumentID_CleanerKey, @ScheduledJobID = @MJContentSources_EntityDocumentID_ScheduledJobID, @FieldConfidence = @MJContentSources_EntityDocumentID_FieldConfidence, @ExtractorKey = @MJContentSources_EntityDocumentID_ExtractorKey, @MultiModalEnabled = @MJContentSources_EntityDocumentID_MultiModalEnabled, @DiscoveryStatus = @MJContentSources_EntityDocumentID_DiscoveryStatus, @LastDiscoveredAt = @MJContentSources_EntityDocumentID_LastDiscoveredAt
+        EXEC [${flyway:defaultSchema}].[spUpdateContentSource] @ID = @MJContentSources_EntityDocumentIDID, @Name = @MJContentSources_EntityDocumentID_Name, @ContentTypeID = @MJContentSources_EntityDocumentID_ContentTypeID, @ContentSourceTypeID = @MJContentSources_EntityDocumentID_ContentSourceTypeID, @ContentFileTypeID = @MJContentSources_EntityDocumentID_ContentFileTypeID, @URL = @MJContentSources_EntityDocumentID_URL, @EmbeddingModelID = @MJContentSources_EntityDocumentID_EmbeddingModelID, @VectorIndexID = @MJContentSources_EntityDocumentID_VectorIndexID, @Configuration = @MJContentSources_EntityDocumentID_Configuration, @EntityID = @MJContentSources_EntityDocumentID_EntityID, @EntityDocumentID_Clear = 1, @EntityDocumentID = @MJContentSources_EntityDocumentID_EntityDocumentID, @SegmenterKey = @MJContentSources_EntityDocumentID_SegmenterKey, @CleanerKey = @MJContentSources_EntityDocumentID_CleanerKey, @ScheduledJobID = @MJContentSources_EntityDocumentID_ScheduledJobID, @FieldConfidence = @MJContentSources_EntityDocumentID_FieldConfidence, @DiscoveryStatus = @MJContentSources_EntityDocumentID_DiscoveryStatus
 
-        FETCH NEXT FROM cascade_update_MJContentSources_EntityDocumentID_cursor INTO @MJContentSources_EntityDocumentIDID, @MJContentSources_EntityDocumentID_Name, @MJContentSources_EntityDocumentID_ContentTypeID, @MJContentSources_EntityDocumentID_ContentSourceTypeID, @MJContentSources_EntityDocumentID_ContentFileTypeID, @MJContentSources_EntityDocumentID_URL, @MJContentSources_EntityDocumentID_EmbeddingModelID, @MJContentSources_EntityDocumentID_VectorIndexID, @MJContentSources_EntityDocumentID_Configuration, @MJContentSources_EntityDocumentID_EntityID, @MJContentSources_EntityDocumentID_EntityDocumentID, @MJContentSources_EntityDocumentID_SegmenterKey, @MJContentSources_EntityDocumentID_CleanerKey, @MJContentSources_EntityDocumentID_ScheduledJobID, @MJContentSources_EntityDocumentID_FieldConfidence, @MJContentSources_EntityDocumentID_ExtractorKey, @MJContentSources_EntityDocumentID_MultiModalEnabled, @MJContentSources_EntityDocumentID_DiscoveryStatus, @MJContentSources_EntityDocumentID_LastDiscoveredAt
+        FETCH NEXT FROM cascade_update_MJContentSources_EntityDocumentID_cursor INTO @MJContentSources_EntityDocumentIDID, @MJContentSources_EntityDocumentID_Name, @MJContentSources_EntityDocumentID_ContentTypeID, @MJContentSources_EntityDocumentID_ContentSourceTypeID, @MJContentSources_EntityDocumentID_ContentFileTypeID, @MJContentSources_EntityDocumentID_URL, @MJContentSources_EntityDocumentID_EmbeddingModelID, @MJContentSources_EntityDocumentID_VectorIndexID, @MJContentSources_EntityDocumentID_Configuration, @MJContentSources_EntityDocumentID_EntityID, @MJContentSources_EntityDocumentID_EntityDocumentID, @MJContentSources_EntityDocumentID_SegmenterKey, @MJContentSources_EntityDocumentID_CleanerKey, @MJContentSources_EntityDocumentID_ScheduledJobID, @MJContentSources_EntityDocumentID_FieldConfidence, @MJContentSources_EntityDocumentID_DiscoveryStatus
     END
 
     CLOSE cascade_update_MJContentSources_EntityDocumentID_cursor
@@ -4500,7 +3329,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteEntityDocument] TO [cdp_Inte
 
 /* SQL text to insert 1 new entity field(s) */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '046a50ba-8901-4dfd-9675-7dd6989088f6' OR (EntityID = 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22' AND Name = 'File')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4300783e-78aa-47d0-a9ab-622a9f1cc203' OR (EntityID = 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22' AND Name = 'File')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -4533,7 +3362,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteEntityDocument] TO [cdp_Inte
          )
          VALUES
          (
-            '046a50ba-8901-4dfd-9675-7dd6989088f6',
+            '4300783e-78aa-47d0-a9ab-622a9f1cc203',
             'B693AD50-0E66-EF11-A752-C0A5E8ACCB22', -- Entity: MJ: Content Items
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22'),
             'File',
@@ -4567,50 +3396,22 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteEntityDocument] TO [cdp_Inte
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = 'D718A3DF-3760-4EF9-9521-7A79EDCEF6B0'
+               WHERE ID = '0CC3FE44-493C-44F8-863C-873485695C69'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = 'A1750D7E-1153-459E-AA15-6557BEEC89D3'
+               WHERE ID = 'D4681ECA-9242-44AF-9C8C-3F1D80E451D0'
                AND AutoUpdateDefaultInView = 1;
 
 /* Set field properties for entity */
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '96935DDE-419A-4E67-979E-C3E578A58213'
+               WHERE ID = 'E21D688F-6C5A-46E9-B4C4-9A132CC4421A'
                AND AutoUpdateDefaultInView = 1;
 
-/* Set field properties for entity */
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = 'BAE40000-6496-4BCA-AAE4-4002D0569536'
-               AND AutoUpdateDefaultInView = 1;
-
-/* Set categories for 1 fields */
-
--- UPDATE Entity Field Category Info MJ: Content Types.ExtractorKey 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Advanced Configuration',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '75B916F9-936E-4B7D-9DD8-5B3B038D5F3F';
-
-/* Set categories for 1 fields */
-
--- UPDATE Entity Field Category Info MJ: Content Source Types.SupportsMultiModal 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Source Type Details',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Supports Multi-Modal'
-WHERE 
-   ID = '96935DDE-419A-4E67-979E-C3E578A58213';
-
-/* Set categories for 5 fields */
+/* Set categories for 2 fields */
 
 -- UPDATE Entity Field Category Info MJ: Content Sources.FieldConfidence 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -4618,25 +3419,7 @@ SET
    Category = 'Processing & Automation',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '4D79792E-03F2-4D6C-8413-AB7985A71B00';
-
--- UPDATE Entity Field Category Info MJ: Content Sources.ExtractorKey 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Processing & Automation',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Extractor Strategy'
-WHERE 
-   ID = '53584129-52F2-4D9D-B1A6-85BFDBFC231C';
-
--- UPDATE Entity Field Category Info MJ: Content Sources.MultiModalEnabled 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'AI & Indexing',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Multi-Modal Enabled'
-WHERE 
-   ID = 'EB0D4146-BCB2-49E5-BD08-9340706EA53B';
+   ID = 'FA690241-EF35-4446-B7A1-893DEF4E9E38';
 
 -- UPDATE Entity Field Category Info MJ: Content Sources.DiscoveryStatus 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -4644,15 +3427,7 @@ SET
    Category = 'Processing & Automation',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = 'D718A3DF-3760-4EF9-9521-7A79EDCEF6B0';
-
--- UPDATE Entity Field Category Info MJ: Content Sources.LastDiscoveredAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Processing & Automation',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = 'A1750D7E-1153-459E-AA15-6557BEEC89D3';
+   ID = 'E21D688F-6C5A-46E9-B4C4-9A132CC4421A';
 
 /* Set categories for 6 fields */
 
@@ -4660,18 +3435,18 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    Category = 'Chunk Details',
-   GeneratedFormSection = 'Category'
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'JSON'
 WHERE 
-   ID = '462E6B74-3B9D-47A6-8A15-76930D37C634';
+   ID = '61FFCC16-9494-4A39-9663-A0850C60624E';
 
 -- UPDATE Entity Field Category Info MJ: Content Item Chunks.Decorator 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    Category = 'Chunk Content',
-   GeneratedFormSection = 'Category',
-   ExtendedType = 'Markdown'
+   GeneratedFormSection = 'Category'
 WHERE 
-   ID = '72368B32-8B0A-47A5-82B5-683B287287A0';
+   ID = '409E836D-258B-40C4-85A0-3A54304830D7';
 
 -- UPDATE Entity Field Category Info MJ: Content Item Chunks.ParentChunkIDDepth 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -4705,55 +3480,40 @@ SET
 WHERE 
    ID = '3B61C881-E36E-4627-A6E5-15E6C89E4014';
 
-/* Set categories for 15 fields */
+/* Set categories for 13 fields */
 
 -- UPDATE Entity Field Category Info MJ: Content Items.FieldConfidence 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    Category = 'Content Details',
-   GeneratedFormSection = 'Category'
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'JSON'
 WHERE 
-   ID = '84B08344-B6A8-4B12-89BB-3142D199451E';
+   ID = '585B13C9-FADC-4707-93EC-FF4CAD9B0F42';
 
 -- UPDATE Entity Field Category Info MJ: Content Items.ExtractionStatus 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Processing Status',
+   Category = 'AI & Vectorization',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = 'BAE40000-6496-4BCA-AAE4-4002D0569536';
+   ID = '0CC3FE44-493C-44F8-863C-873485695C69';
 
 -- UPDATE Entity Field Category Info MJ: Content Items.SegmentationStatus 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Processing Status',
+   Category = 'AI & Vectorization',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '5D5F0FF3-5E9E-45B0-B806-212317951E7A';
+   ID = '62C2E076-B2D0-4130-84C9-C0039758D20E';
 
 -- UPDATE Entity Field Category Info MJ: Content Items.DeleteStatus 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Processing Status',
+   Category = 'AI & Vectorization',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '2846295A-5A6C-4F5D-9B16-CF16762F265B';
-
--- UPDATE Entity Field Category Info MJ: Content Items.ExtractorKey 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Source Information',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = 'C16AACD0-0436-4E9E-AE02-A72E75AB4AA4';
-
--- UPDATE Entity Field Category Info MJ: Content Items.ExtractorKeyOverride 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Source Information',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '7D4454EA-7879-40B3-960C-7678CAB835C7';
+   ID = '9E27AA9C-1112-4324-9956-62096F6B9D5A';
 
 -- UPDATE Entity Field Category Info MJ: Content Items.Modality 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -4761,7 +3521,7 @@ SET
    Category = 'Content Details',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '9B2F6BC3-983D-4ABE-B98E-C6DEFF926716';
+   ID = 'A91B73A2-1616-4B5E-90EA-F769B95081FB';
 
 -- UPDATE Entity Field Category Info MJ: Content Items.Date 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -4770,7 +3530,7 @@ SET
    GeneratedFormSection = 'Category',
    DisplayName = 'Content Date'
 WHERE 
-   ID = 'D87FAC96-8E4C-415A-84A7-8378A5D38748';
+   ID = 'D4681ECA-9242-44AF-9C8C-3F1D80E451D0';
 
 -- UPDATE Entity Field Category Info MJ: Content Items.Decorator 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -4778,7 +3538,7 @@ SET
    Category = 'Content Details',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '5AA7F807-A3E2-4582-A0DB-25A789FAA4F3';
+   ID = '4D33320C-92D2-44DD-8D38-C21B0435384F';
 
 -- UPDATE Entity Field Category Info MJ: Content Items.FileID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -4787,7 +3547,7 @@ SET
    GeneratedFormSection = 'Category',
    DisplayName = 'File'
 WHERE 
-   ID = '1857D613-85C3-4357-87B5-78659D940B10';
+   ID = '78A87F3B-8A9C-43BE-9B6A-3B4F6BB83E6A';
 
 -- UPDATE Entity Field Category Info MJ: Content Items.File 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -4796,7 +3556,7 @@ SET
    GeneratedFormSection = 'Category',
    DisplayName = 'File Reference'
 WHERE 
-   ID = '046A50BA-8901-4DFD-9675-7DD6989088F6';
+   ID = '4300783E-78AA-47D0-A9AB-622A9F1CC203';
 
 -- UPDATE Entity Field Category Info MJ: Content Items.ParentIDDepth 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -4829,23 +3589,4 @@ SET
    GeneratedFormSection = 'Category'
 WHERE 
    ID = '6AA4A7B1-1663-4C86-A61E-796603E138D7';
-
-/* Update FieldCategoryInfo setting for entity */
-
-                  UPDATE [${flyway:defaultSchema}].[EntitySetting]
-                  SET [Value] = '{
-  "Processing Status": {
-    "description": "Tracks the lifecycle and state of automated content processing tasks",
-    "icon": "fa fa-tasks"
-  }
-}', [__mj_UpdatedAt] = GETUTCDATE()
-                  WHERE [EntityID] = 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22' AND [Name] = 'FieldCategoryInfo';
-
-/* Update FieldCategoryIcons setting (legacy) */
-
-                  UPDATE [${flyway:defaultSchema}].[EntitySetting]
-                  SET [Value] = '{
-  "Processing Status": "fa fa-tasks"
-}', [__mj_UpdatedAt] = GETUTCDATE()
-                  WHERE [EntityID] = 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22' AND [Name] = 'FieldCategoryIcons';
 

@@ -17,7 +17,7 @@
  * @module @memberjunction/content-pipeline
  */
 
-import { BaseEntity, CompositeKey, IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, IMetadataProvider, LogError, RunView, UserInfo } from '@memberjunction/core';
 import { WorkingRecordEntity } from '@memberjunction/content-pipeline-base';
 import { GetEntityName, GetStatusFields } from './EntityFieldMap.js';
 
@@ -50,7 +50,7 @@ export interface ResetOptions {
  */
 export class ContentPipelineResetService {
     constructor(
-        private readonly provider: IMetadataProvider = Metadata.Provider,
+        private readonly provider: IMetadataProvider,
         private readonly contextUser?: UserInfo,
     ) {}
 

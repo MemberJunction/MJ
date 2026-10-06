@@ -119,12 +119,13 @@ export class WorkingRecordCommitter {
         }
         entityObject.Set(statusField, status);
         written.push(statusField);
-        if (changed && !created) {
+        const rediscovered = changed && !created;
+        if (rediscovered) {
             // Content moved on, so every downstream stage has to redo its work. Reset is flat, and
             // reaches each stage's own status field directly.
             written.push(...this.resetDownstream(child, entityObject, statusField));
         }
-        this.applyConfidence(child, entityObject, written);
+        this.applyConfidence(child, entityObject, written, rediscovered);
         this.applyCompletionSignal(child, entityObject, statusField, written);
 
         if (!(await entityObject.Save())) {
@@ -142,15 +143,32 @@ export class WorkingRecordCommitter {
     /**
      * Whether a produced record's content differs from what is stored.
      *
-     * Compares the text, which is what every downstream stage actually consumes. A record with no
-     * text yet — discovered but not extracted — counts as changed, so it proceeds.
+     * The checksum is the change signal. Discover can compute one from a source listing without
+     * fetching anything, which is what makes an unchanged re-walk cheap: same checksum, no work.
+     *
+     * Comparing text instead — as this did — gets re-discovery backwards. Discover produces no
+     * text, so every re-walk looked "changed" and reset every item through the whole pipeline.
+     * Text remains the fallback for records produced by a stage that has text but no checksum,
+     * such as the blocks an archive expands into.
      */
     private contentChanged(child: WorkingRecord, entityObject: BaseEntity): boolean {
-        const proposed = child.Get('Text');
-        if (typeof proposed !== 'string' || proposed.length === 0) {
+        const proposedChecksum = this.proposedChecksum(child);
+        if (proposedChecksum !== null) {
+            const stored = entityObject.Get('Checksum');
+            return typeof stored !== 'string' || stored.length === 0 || stored !== proposedChecksum;
+        }
+        const proposedText = child.Get('Text');
+        if (typeof proposedText !== 'string' || proposedText.length === 0) {
             return true;
         }
-        return entityObject.Get('Text') !== proposed;
+        return entityObject.Get('Text') !== proposedText;
+    }
+
+    /** The checksum the producing stage computed, if it computed one. */
+    private proposedChecksum(child: WorkingRecord): string | null {
+        const columns = child.GetExtension<Record<string, unknown>>('Pipeline', 'columns');
+        const value = columns?.Checksum;
+        return typeof value === 'string' && value.length > 0 ? value : null;
     }
 
     /**
@@ -320,11 +338,15 @@ export class WorkingRecordCommitter {
     }
 
     /** Persist the provenance of every resolved field alongside the values. */
-    private applyConfidence(record: WorkingRecord, entityObject: BaseEntity, written: string[]): void {
+    private applyConfidence(record: WorkingRecord, entityObject: BaseEntity, written: string[], reset = false): void {
         if (!entityObject.Fields.some((f) => f.Name === 'FieldConfidence')) {
             return;
         }
-        entityObject.Set('FieldConfidence', JSON.stringify(record.ToFieldConfidence()));
+        // Content that moved on invalidates every score earned against the old content. Clearing
+        // rather than merging is what lets the stages re-propose into an empty field map and win on
+        // their own merit — without it, a re-extraction ties with its own previous result at equal
+        // confidence, loses the tie, and the record is marked Complete holding stale text.
+        entityObject.Set('FieldConfidence', reset ? null : JSON.stringify(record.ToFieldConfidence()));
         written.push('FieldConfidence');
     }
 

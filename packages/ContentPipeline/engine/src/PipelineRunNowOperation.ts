@@ -60,6 +60,7 @@ export class PipelineRunNowOperation extends RecordProcessRunNowServerOperation 
             Provider: provider,
             TriggeredBy: 'OnDemand',
             SingleRecordID: input.singleRecordID,
+            Scope: input.scope,
             DryRun: input.dryRun,
             OnProgress: (p) =>
                 context.emitProgress({

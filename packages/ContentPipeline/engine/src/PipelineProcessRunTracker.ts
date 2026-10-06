@@ -35,6 +35,15 @@ interface OpenDetail {
     StageName: string;
     StartedAt: Date;
     Progress: string[];
+    /**
+     * The progress save currently in flight, if any.
+     *
+     * Progress saves are deliberately not awaited by the stage that reports progress — a stage
+     * should not be made to wait on telemetry. But the final save has to: two `Save()` calls racing
+     * on the same entity can land out of order, and the loser is the one carrying the result. The
+     * finalizer awaits this before writing.
+     */
+    InFlight?: Promise<unknown>;
 }
 
 /**
@@ -102,7 +111,7 @@ export class PipelineProcessRunTracker extends GenericProcessRunTracker implemen
             Status: 'Running',
             Progress: entry.Progress,
         });
-        void entry.Detail.Save().catch((error: unknown) => {
+        entry.InFlight = entry.Detail.Save().catch((error: unknown) => {
             LogError(
                 `PipelineProcessRunTracker: progress save failed for '${key}': ` +
                     `${error instanceof Error ? error.message : String(error)}`,
@@ -128,6 +137,9 @@ export class PipelineProcessRunTracker extends GenericProcessRunTracker implemen
             return;
         }
         this.open.delete(record.RecordID);
+
+        // Let any in-flight progress save land first, so it cannot overwrite the result below.
+        await entry.InFlight;
 
         const detail = entry.Detail;
         detail.Status = result.Status;

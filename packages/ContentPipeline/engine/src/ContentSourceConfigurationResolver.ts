@@ -16,7 +16,8 @@
  * @module @memberjunction/content-pipeline
  */
 
-import { IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, LogError, UserInfo } from '@memberjunction/core';
+import { KnowledgeHubMetadataEngine, MJContentSourceEntity } from '@memberjunction/core-entities';
 
 /** One field a Content Source Type declares its sources must provide. */
 export interface SourceTypeField {
@@ -69,7 +70,7 @@ export class ContentSourceConfigurationResolver {
     private readonly cache = new Map<string, Promise<ResolvedSourceConfiguration>>();
 
     constructor(
-        private readonly provider: IMetadataProvider = Metadata.Provider,
+        private readonly provider: IMetadataProvider,
         private readonly contextUser?: UserInfo,
     ) {}
 
@@ -102,19 +103,23 @@ export class ContentSourceConfigurationResolver {
         this.cache.delete(contentSourceID);
     }
 
-    /** Read the source and its type, then merge, validate and resolve. */
+    /**
+     * Read the source and its type, then merge, validate and resolve.
+     *
+     * Sources and source types come from {@link KnowledgeHubMetadataEngine} rather than a RunView
+     * per record. They are metadata — a handful of slowly-changing rows — and querying them once
+     * per record turns a page of 500 items into 1,000 round trips for data that did not change
+     * between the first and the last.
+     */
     private async load(contentSourceID: string, contextUser: UserInfo): Promise<ResolvedSourceConfiguration> {
-        const rv = RunView.FromMetadataProvider(this.provider);
-        const sources = await rv.RunView(
-            { EntityName: 'MJ: Content Sources', ExtraFilter: `ID='${contentSourceID}'` },
-            contextUser,
-        );
-        if (!sources.Success || sources.Results.length === 0) {
+        const engine = KnowledgeHubMetadataEngine.Instance;
+        await engine.Config(false, contextUser, this.provider);
+        const source = engine.ContentSources.find((s) => s.ID === contentSourceID);
+        if (!source) {
             throw new Error(`Content Source '${contentSourceID}' not found`);
         }
-        const source = sources.Results[0] as Record<string, unknown>;
         const sourceConfig = this.parse(source.Configuration, `Content Source '${contentSourceID}'`);
-        const typeConfig = await this.loadTypeConfiguration(source, contextUser);
+        const typeConfig = this.loadTypeConfiguration(source, engine);
 
         const declared = Array.isArray(typeConfig.RequiredFields)
             ? (typeConfig.RequiredFields as SourceTypeField[])
@@ -125,7 +130,7 @@ export class ContentSourceConfigurationResolver {
 
         return {
             ContentSourceID: contentSourceID,
-            URL: typeof source.URL === 'string' ? source.URL : '',
+            URL: source.URL ?? '',
             Settings: settings,
             Parameters: this.flatten(settings),
             Configuration: sourceConfig,
@@ -135,21 +140,16 @@ export class ContentSourceConfigurationResolver {
         };
     }
 
-    /** The parsed `Configuration` of the source's type. */
-    private async loadTypeConfiguration(
-        source: Record<string, unknown>,
-        contextUser: UserInfo,
-    ): Promise<Record<string, unknown>> {
+    /** The parsed `Configuration` of the source's type, from the engine's cached rows. */
+    private loadTypeConfiguration(
+        source: MJContentSourceEntity,
+        engine: KnowledgeHubMetadataEngine,
+    ): Record<string, unknown> {
         const typeID = source.ContentSourceTypeID;
-        if (typeof typeID !== 'string') {
+        if (!typeID) {
             return {};
         }
-        const rv = RunView.FromMetadataProvider(this.provider);
-        const types = await rv.RunView(
-            { EntityName: 'MJ: Content Source Types', ExtraFilter: `ID='${typeID}'` },
-            contextUser,
-        );
-        const type = types.Results?.[0] as Record<string, unknown> | undefined;
+        const type = engine.ContentSourceTypes.find((t) => t.ID === typeID);
         if (!type) {
             return {};
         }

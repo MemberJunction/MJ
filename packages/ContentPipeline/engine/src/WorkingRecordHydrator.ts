@@ -23,6 +23,17 @@ import { GetEntityFieldMap, GetEntityName } from './EntityFieldMap.js';
  * This is how every production stage gets its starting point, since each is handed a record
  * reference and nothing else.
  */
+/**
+ * Stored status columns republished into the working record's `Pipeline` extension space.
+ *
+ * These are read by gates rather than competed for by stages, so they are extensions rather than
+ * well-known fields: nothing proposes them, and nothing resolves them on confidence.
+ */
+const PIPELINE_STATUS_EXTENSIONS: readonly (readonly [string, string])[] = [
+    ['DeleteStatus', 'deleteStatus'],
+    ['EmbeddingStatus', 'embeddingStatus'],
+];
+
 export class WorkingRecordHydrator {
     constructor(
         private readonly provider: IMetadataProvider,
@@ -63,6 +74,15 @@ export class WorkingRecordHydrator {
         const contentSourceID = entityObject.Get('ContentSourceID');
         if (typeof contentSourceID === 'string') {
             record.SetExtension('Pipeline', 'contentSourceID', contentSourceID);
+        }
+        // The stored statuses two gates read: the pending-delete skip in PipelineProcessor and the
+        // metadata-only path in EmbedStage. Publishing them here is what makes those gates work on
+        // a real row rather than only where a test set them by hand.
+        for (const [column, key] of PIPELINE_STATUS_EXTENSIONS) {
+            const value = this.readString(entityObject, column);
+            if (value !== null) {
+                record.SetExtension('Pipeline', key, value);
+            }
         }
         const confidence = this.readConfidence(entityObject);
         const map = GetEntityFieldMap(entity);

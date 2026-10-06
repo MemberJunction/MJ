@@ -20,7 +20,7 @@
  */
 
 import { IMetadataProvider, Metadata, UserInfo } from '@memberjunction/core';
-import { MJRecordProcessEntity } from '@memberjunction/core-entities';
+import { MJRecordProcessEntity, RecordProcessScopeOverride } from '@memberjunction/core-entities';
 import { IProcessRunTracker, ProcessRunResult, ProgressInfo, TriggeredByValue } from '@memberjunction/record-set-processor-base';
 import { RecordProcessExecutor, RecordSetProcessor } from '@memberjunction/record-set-processor';
 import { BuildPipelineProcessor, PIPELINE_STAGE_WORK_TYPE } from './PipelineStageRegistration.js';
@@ -39,6 +39,14 @@ export interface PipelineRunOptions {
     Tracker?: IProcessRunTracker;
     /** Run a single record rather than the process's whole scope. */
     SingleRecordID?: string;
+    /**
+     * A runtime scope override — the rows a caller picked, in place of the stored scope.
+     *
+     * Dropping this silently runs the whole stored filter instead of the handful of rows the
+     * caller asked for, which is the difference between reprocessing one item and reprocessing a
+     * corpus. Forwarded verbatim to {@link RecordProcessExecutor.BuildSource}.
+     */
+    Scope?: RecordProcessScopeOverride;
     /** Compute everything, commit nothing. */
     DryRun?: boolean;
     /** What started this run, for the run header. */
@@ -88,7 +96,7 @@ export class PipelineRecordProcessRunner {
         const processor = BuildPipelineProcessor(this.buildContext(rp, options), progress);
 
         return RecordSetProcessor.Instance.Process({
-            source: executor.BuildSource(rp, provider, options.SingleRecordID),
+            source: executor.BuildSource(rp, provider, options.SingleRecordID, options.Scope),
             processor,
             tracker,
             contextUser: options.ContextUser,

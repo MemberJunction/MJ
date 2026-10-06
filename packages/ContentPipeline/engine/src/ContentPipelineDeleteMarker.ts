@@ -10,14 +10,14 @@
  * @module @memberjunction/content-pipeline
  */
 
-import { BaseEntity, CompositeKey, IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, IMetadataProvider, LogError, RunView, UserInfo } from '@memberjunction/core';
 
 import { PipelineEntityName } from './EntityFieldMap';
 
 /** Marks a deleted item's dependents pending. */
 export class ContentPipelineDeleteMarker {
     constructor(
-        private readonly provider: IMetadataProvider = Metadata.Provider,
+        private readonly provider: IMetadataProvider,
         private readonly contextUser?: UserInfo,
     ) {}
 
