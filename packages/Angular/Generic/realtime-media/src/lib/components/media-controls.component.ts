@@ -85,7 +85,7 @@ const SHARE_SURFACES: readonly ShareSurfaceOption[] = [
           mjButton
           Shape="circle"
           [Size]="Size"
-          [Variant]="CameraOn ? 'secondary' : 'danger'"
+          [Variant]="CameraVariant"
           [AriaLabel]="CameraLabel"
           [title]="CameraLabel"
           (click)="CameraToggled.emit(!CameraOn)"
@@ -180,6 +180,11 @@ export class MediaControlsComponent {
   @Input() public Size: MjButtonSize = 'md';
   /** Show a short label under each button ("Mute", "Video", "Share"), for a call bar that names its controls. */
   @Input() public ShowLabels = false;
+  /**
+   * The camera is optional in this call, as in a call with an agent, where it starts off and usually stays off. Off is then
+   * the normal state: the camera button is neutral while off and filled while on, like a toggle, instead of red while off.
+   */
+  @Input() public CameraOptional = false;
 
   /** The user asked to turn the microphone on (`true`) or off (`false`). */
   @Output() public MicrophoneToggled = new EventEmitter<boolean>();
@@ -193,6 +198,14 @@ export class MediaControlsComponent {
   /** The microphone button's name. */
   public get MicrophoneLabel(): string {
     return this.MicrophoneOn ? 'Mute microphone' : 'Unmute microphone';
+  }
+
+  /** How the camera button looks: red while off, unless the camera is optional; filled while an optional camera is on. */
+  public get CameraVariant(): 'primary' | 'secondary' | 'danger' {
+    if (this.CameraOptional) {
+      return this.CameraOn ? 'primary' : 'secondary';
+    }
+    return this.CameraOn ? 'secondary' : 'danger';
   }
 
   /** The camera button's name. */

@@ -143,6 +143,17 @@ describe('MediaControlsComponent (DOM)', () => {
     expect(queryAll(f, '.control__label').every((l) => l.getAttribute('aria-hidden') === 'true')).toBe(true);
   });
 
+  it('keeps an optional camera neutral while off and fills it while on, the microphone still red while off', () => {
+    const f = render({ CameraOptional: true, CameraOn: false, MicrophoneOn: false });
+    const camera = () => button(f, f.componentInstance.CameraOn ? 'Turn off camera' : 'Turn on camera');
+    expect(camera()?.classList.contains('mj-btn--secondary')).toBe(true);
+    expect(camera()?.classList.contains('mj-btn--danger')).toBe(false);
+    expect(button(f, 'Unmute microphone')?.classList.contains('mj-btn--danger')).toBe(true);
+    f.componentRef.setInput('CameraOn', true);
+    f.detectChanges();
+    expect(camera()?.classList.contains('mj-btn--primary')).toBe(true);
+  });
+
   it('shows no labels by default', () => {
     expect(queryAll(render(), '.control__label')).toEqual([]);
   });

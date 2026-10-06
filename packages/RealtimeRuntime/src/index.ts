@@ -65,6 +65,8 @@ export {
 export { ClientSessionDeadline } from './session/client-session-deadline';
 export {
     REALTIME_CAPTURES_OFF,
+    REALTIME_CAPTURE_OFFERS_NONE,
+    type RealtimeCaptureOffers,
     type RealtimeCaptureFailure,
     type RealtimeCaptureKind,
     type RealtimeCaptureState,

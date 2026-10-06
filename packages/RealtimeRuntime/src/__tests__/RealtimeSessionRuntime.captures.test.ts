@@ -14,9 +14,12 @@ import {
     BaseRealtimeChannelClient,
     RealtimeSessionRuntime,
     REALTIME_CAPTURES_OFF,
+    REALTIME_CAPTURE_OFFERS_NONE,
     type RealtimeCaptureKind,
+    type RealtimeCaptureOffers,
     type RealtimeCaptureStates,
     type RealtimeChannelContext,
+    type IRealtimeMediaHost,
     type StartRealtimeClientSessionResult,
 } from '../index';
 import { ShareHost, VideoClient } from './capture-test-helpers';
@@ -26,6 +29,14 @@ import { ShareHost, VideoClient } from './capture-test-helpers';
 class CaptureProviderClient extends VideoClient {
     public override async Connect(_config: ClientRealtimeSessionConfig, _micStream: MediaStream): Promise<void> {
         this.Negotiate(true);
+    }
+}
+
+/** An audio-only model's driver: it negotiates no video. */
+@RegisterClass(BaseRealtimeClient, 'audio-only-provider')
+class AudioOnlyProviderClient extends VideoClient {
+    public override async Connect(_config: ClientRealtimeSessionConfig, _micStream: MediaStream): Promise<void> {
+        this.Negotiate(false);
     }
 }
 
@@ -71,6 +82,8 @@ class MintProvider {
     public readonly sessionId = 'transport-session-1';
     public readonly Entities: unknown[] = [];
     public Policy: RealtimeSessionClientPolicy | null = null;
+    /** The realtime driver the mint names. */
+    public Driver = 'capture-provider';
     public async ExecuteGQL(query: string): Promise<unknown> {
         if (!query.includes('mutation StartRealtimeClientSession')) {
             return {};
@@ -78,7 +91,7 @@ class MintProvider {
         const result: StartRealtimeClientSessionResult = {
             AgentSessionId: 'session-1',
             ConversationId: 'conv-1',
-            Provider: 'capture-provider',
+            Provider: this.Driver,
             Model: 'video-model',
             EphemeralToken: 'token',
             ExpiresAt: '2030-01-01T00:00:00Z',
@@ -102,9 +115,13 @@ function resolved(key: string, overrides: Partial<ResolvedRealtimeChannel> = {})
     return { Key: key, DisplayPolicy: 'on-demand', MaxExposure: 'pixels', Exposure: 'pixels', Source: 'host', ...overrides };
 }
 
-function build(channels: CaptureChannel[] = []) {
+/**
+ * A session with the given channels. The host is a {@link ShareHost} (camera and screen sharing) unless the test gives
+ * the runtime another one, built on the same fakes.
+ */
+function build(channels: CaptureChannel[] = [], mediaHost?: (host: ShareHost) => IRealtimeMediaHost) {
     const host = new ShareHost();
-    const runtime = new RealtimeSessionRuntime(host);
+    const runtime = new RealtimeSessionRuntime(mediaHost ? mediaHost(host) : host);
     const provider = new MintProvider();
     runtime.Provider = provider as unknown as IMetadataProvider;
     const captures: RealtimeCaptureStates[] = [];
@@ -113,11 +130,13 @@ function build(channels: CaptureChannel[] = []) {
     runtime.VideoSources$.subscribe((s) => (sources = s));
     const used: string[] = [];
     runtime.ChannelActivity$.subscribe((c) => used.push(c.ChannelName));
+    const offers: RealtimeCaptureOffers[] = [];
+    runtime.CaptureOffers$.subscribe((o) => offers.push(o));
     const start = () =>
         runtime.StartRealtimeSession('agent-1', null, null, 'Sage', null, null, null, null, false, null, null, null, {
             HostChannels: channels.map((channel) => ({ Create: () => channel })),
         });
-    return { host, runtime, provider, captures, used, start, sources: () => sources };
+    return { host, runtime, provider, captures, used, offers, start, sources: () => sources };
 }
 
 describe('RealtimeSessionRuntime camera and screen share', () => {
@@ -167,6 +186,56 @@ describe('RealtimeSessionRuntime camera and screen share', () => {
         expect(controller.Disposed).toBe(true);
         expect(sources()).toEqual([]);
         expect(await runtime.StartCamera()).toMatchObject({ Failure: 'no-session' });
+    });
+
+    describe('what the call offers', () => {
+        const both = () => [new CaptureChannel('Camera', 'camera'), new CaptureChannel('ScreenShare', 'screen')];
+
+        it('offers the camera and a share while the call is on, its channels are in it and the model takes video', async () => {
+            const { runtime, offers, start } = build(both());
+            expect(offers).toEqual([REALTIME_CAPTURE_OFFERS_NONE]);
+            await start();
+            expect(offers.at(-1)).toEqual({ Camera: true, Screen: true });
+            await runtime.EndRealtimeSession();
+            expect(offers.at(-1)).toEqual(REALTIME_CAPTURE_OFFERS_NONE);
+        });
+
+        it('offers neither without its channel', async () => {
+            const { runtime, offers, start } = build([new CaptureChannel('Camera', 'camera')]);
+            await start();
+            expect(offers.at(-1)).toEqual({ Camera: true, Screen: false });
+            await runtime.EndRealtimeSession();
+        });
+
+        it('offers nothing on a model that takes no video', async () => {
+            const { runtime, provider, offers, start } = build(both());
+            provider.Driver = 'audio-only-provider';
+            await start();
+            expect(offers).toEqual([REALTIME_CAPTURE_OFFERS_NONE]);
+            await runtime.EndRealtimeSession();
+        });
+
+        it('offers no share on a host that cannot share a screen', async () => {
+            const cameraOnly = (host: ShareHost): IRealtimeMediaHost => ({
+                AcquireMicrophone: () => host.AcquireMicrophone(),
+                CreateLocalMediaController: () => host.CreateLocalMediaController(),
+            });
+            const { runtime, offers, start } = build(both(), cameraOnly);
+            await start();
+            expect(offers.at(-1)).toEqual({ Camera: true, Screen: false });
+            await runtime.EndRealtimeSession();
+        });
+
+        it("offers no capture the server's policy refuses", async () => {
+            const { runtime, provider, offers, start } = build(both());
+            provider.Policy = {
+                Version: 1,
+                Channels: [resolved('Camera', { Exposure: 'state' }), resolved('ScreenShare')],
+            };
+            await start();
+            expect(offers.at(-1)).toEqual({ Camera: false, Screen: true });
+            await runtime.EndRealtimeSession();
+        });
     });
 
     describe("the capture's channel", () => {

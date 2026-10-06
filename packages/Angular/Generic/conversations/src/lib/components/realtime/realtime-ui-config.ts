@@ -69,6 +69,8 @@ export type RealtimeChromeMode = 'orb' | 'console' | 'auto';
  */
 export type RealtimeControlId =
   | 'mute'
+  | 'camera'
+  | 'share'
   | 'captions'
   | 'type'
   | 'end'

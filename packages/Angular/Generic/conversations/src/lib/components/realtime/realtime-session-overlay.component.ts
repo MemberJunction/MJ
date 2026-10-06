@@ -7,7 +7,14 @@ import { UserInfoEngine } from '@memberjunction/core-entities';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { MJStorageMediaPlayerComponent, MediaTranscriptCue } from '@memberjunction/ng-media-player';
-import { RealtimeConnectionState } from '@memberjunction/realtime-runtime';
+import {
+  REALTIME_CAPTURES_OFF,
+  REALTIME_CAPTURE_OFFERS_NONE,
+  type RealtimeCaptureOffers,
+  type RealtimeCaptureState,
+  type RealtimeCaptureStates,
+  type RealtimeConnectionState,
+} from '@memberjunction/realtime-runtime';
 import { RealtimeSessionService } from '../../services/realtime-session.service';
 import { ParsedDelegationArtifact } from '@memberjunction/realtime-runtime';
 import { BuildReviewThreadItems, RealtimeSessionReview, RealtimeSessionReviewTurn } from '../../services/realtime-session-review.service';
@@ -43,7 +50,7 @@ import { BaseRealtimeChannelClient } from '@memberjunction/realtime-runtime';
 import { RealtimeWhiteboardBoardComponent, WhiteboardState } from '@memberjunction/ng-whiteboard';
 import {
   MediaStageComponent, MediaStagePipActionsDirective, MediaStageSurfaceDirective,
-  type MediaPipRect, type MediaStagePipRectChange
+  type MediaPipRect, type MediaShareRequest, type MediaStagePipRectChange
 } from '@memberjunction/ng-realtime-media';
 
 /**
@@ -669,6 +676,9 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
       // What the agent can see (frames flowing from a whiteboard, browser, shared screen): feeds the
       // "agent can see" chip. Not gated by disclosure level — it is a privacy indicator, never earned.
       this.realtime.VideoSources$.subscribe(sources => { this.VideoSources = sources; this.cdr.markForCheck(); }),
+      // The camera and screen share, and which of them the call offers: the composer's Camera and Share follow both.
+      this.realtime.Captures$.subscribe(states => { this.CaptureStates = states; this.cdr.markForCheck(); }),
+      this.realtime.CaptureOffers$.subscribe(offers => { this.CaptureOffers = offers; this.cdr.markForCheck(); }),
       // Live/idle flips: reset/ratchet disclosure + re-evaluate the review-vs-live branch.
       this.realtime.Active$.subscribe(active => this.onActiveChanged(active)),
       // Connection lifecycle drives chrome (the `connecting` loader) + the public output.
@@ -678,6 +688,49 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
 
   /** The video sources the agent can or could see right now (see {@link RealtimeSessionService.VideoSources$}). */
   public VideoSources: readonly VideoSourceState[] = [];
+
+  /** The user's camera and screen share (see {@link RealtimeSessionService.Captures$}). */
+  public CaptureStates: RealtimeCaptureStates = REALTIME_CAPTURES_OFF;
+
+  /** Which captures the call offers (see {@link RealtimeSessionService.CaptureOffers$}); the composer shows Camera and Share from it. */
+  public CaptureOffers: RealtimeCaptureOffers = REALTIME_CAPTURE_OFFERS_NONE;
+
+  /** Whether the camera is on or starting: the composer's Camera button reads as on. */
+  public get CameraOn(): boolean {
+    return isCapturing(this.CaptureStates.Camera);
+  }
+
+  /** Whether a share is on or starting: the composer's Share button reads as sharing. */
+  public get Sharing(): boolean {
+    return isCapturing(this.CaptureStates.Screen);
+  }
+
+  /**
+   * The composer's Camera button. The session starts or stops the camera; its channel's box shows it, or why it could not
+   * start.
+   */
+  public OnCameraToggled(on: boolean): void {
+    if (on) {
+      void this.realtime.StartCamera();
+    } else {
+      this.realtime.StopCamera();
+    }
+    this.ControlInvoked.emit('camera');
+  }
+
+  /** The composer's Share button or menu: the session asks the browser's picker, offering the kind of surface picked first. */
+  public OnShareRequested(request: MediaShareRequest): void {
+    if (request.Kind === 'display') {
+      void this.realtime.StartScreenShare(request.PreferredSurface ? { PreferredSurface: request.PreferredSurface } : undefined);
+    }
+    this.ControlInvoked.emit('share');
+  }
+
+  /** The composer's Stop sharing. */
+  public OnStopShareRequested(): void {
+    this.realtime.StopScreenShare();
+    this.ControlInvoked.emit('share');
+  }
 
   /**
    * The user switched one of the agent's video sources on or off in the "agent can see" chip. The session
@@ -2035,4 +2088,9 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   public EndSession(): void {
     void this.OnEndCall();
   }
+}
+
+/** Whether a capture is on or on its way, as the composer's buttons show it. */
+function isCapturing(capture: RealtimeCaptureState): boolean {
+  return capture.Status === 'on' || capture.Status === 'starting';
 }

@@ -74,6 +74,15 @@ export interface RealtimeCaptureStates {
     Screen: RealtimeCaptureState;
 }
 
+/** Which captures a call offers the user: those it could start now. */
+export interface RealtimeCaptureOffers {
+    Camera: boolean;
+    Screen: boolean;
+}
+
+/** Neither capture offered: what a host shows outside a call. */
+export const REALTIME_CAPTURE_OFFERS_NONE: RealtimeCaptureOffers = Object.freeze({ Camera: false, Screen: false });
+
 /** Samples frames from a stream; the default draws through the DOM, and a test passes one that needs none. */
 export type RealtimeFrameSamplerFactory = (
     stream: MediaStream,

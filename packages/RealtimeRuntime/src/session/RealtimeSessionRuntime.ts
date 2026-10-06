@@ -47,7 +47,9 @@ import { ClientSessionDeadline } from './client-session-deadline';
 import {
   RealtimeCaptures,
   REALTIME_CAPTURES_OFF,
+  REALTIME_CAPTURE_OFFERS_NONE,
   type RealtimeCaptureAdmission,
+  type RealtimeCaptureOffers,
   type RealtimeCaptureKind,
   type RealtimeCaptureState,
   type RealtimeCaptureStates,
@@ -561,6 +563,16 @@ export class RealtimeSessionRuntime {
    * {@link StopCamera} and {@link StopScreenShare}; while one is on, it is also a source on {@link VideoSources$}.
    */
   public readonly Captures$: Observable<RealtimeCaptureStates> = this._captures$.asObservable();
+
+  private readonly _captureOffers$ = new BehaviorSubject<RealtimeCaptureOffers>(REALTIME_CAPTURE_OFFERS_NONE);
+
+  /**
+   * Which captures the call offers, now and on every change. A capture is offered while the call is connected, the model
+   * takes inbound video, the host can open it (a camera controller; screen sharing) and the call's policy admits it (its
+   * channel is in the call and may show the agent pixels). A host shows its Camera and Share controls from this. Neither
+   * is offered outside a call.
+   */
+  public readonly CaptureOffers$: Observable<RealtimeCaptureOffers> = this._captureOffers$.asObservable();
 
   /**
    * Channel requests to enter / leave the FOCUS layout (see
@@ -1478,6 +1490,7 @@ export class RealtimeSessionRuntime {
     });
     this.captures = captures;
     this.capturesSubscription = captures.States$.subscribe((states) => this._captures$.next(states));
+    this.refreshCaptureOffers();
   }
 
   /** Stops the camera and screen share, if any, and reports both off. */
@@ -1489,6 +1502,23 @@ export class RealtimeSessionRuntime {
     if (this._captures$.value !== REALTIME_CAPTURES_OFF) {
       this._captures$.next(REALTIME_CAPTURES_OFF);
     }
+    this.refreshCaptureOffers();
+  }
+
+  /** Works out which captures the call offers ({@link CaptureOffers$}) and publishes a change. */
+  private refreshCaptureOffers(): void {
+    const offers: RealtimeCaptureOffers =
+      this.captures && this.client?.SupportsInboundVideo ? { Camera: this.canOffer('camera'), Screen: this.canOffer('screen') } : REALTIME_CAPTURE_OFFERS_NONE;
+    const current = this._captureOffers$.value;
+    if (offers.Camera !== current.Camera || offers.Screen !== current.Screen) {
+      this._captureOffers$.next(offers);
+    }
+  }
+
+  /** Whether the host can open a capture and the call's policy admits it. */
+  private canOffer(kind: RealtimeCaptureKind): boolean {
+    const hostCanOpen = kind === 'camera' ? this.localMedia !== null : typeof this.mediaHost.RequestDisplayCapture === 'function';
+    return hostCanOpen && this.admitCapture(kind).Admitted;
   }
 
   /** What a capture reports when there is no live session to show it to. */

@@ -1,5 +1,7 @@
 :host {
   display: block;
+  /* The fused dock reflows by its own width, not the window's (the call column narrows when the panel opens). */
+  container-type: inline-size;
 }
 
 /* ---------- Levels 0–1: phone-call strip (big round controls, centered) ---------- */
@@ -34,6 +36,20 @@
   align-items: flex-start;
   gap: 22px;
 }
+
+/* A narrow strip tightens its gaps, then wraps onto a second row, rather than cutting off its first and last controls. */
+@container (max-width: 600px) {
+  .strip,
+  .strip__media {
+    gap: 12px;
+  }
+}
+@container (max-width: 480px) {
+  .strip {
+    flex-wrap: wrap;
+    row-gap: 12px;
+  }
+}
 .ctrl-label--end {
   color: var(--mj-status-error);
 }
@@ -59,8 +75,10 @@
   flex-shrink: 0;
 }
 
+/* min-width: 0 lets the box (and its text) give way to the controls on a narrow dock instead of pushing End out. */
 .dock__box {
   flex: 1;
+  min-width: 0;
   display: flex;
   align-items: flex-end;
   gap: 9px;
@@ -70,6 +88,18 @@
   background: var(--mj-bg-surface-card);
   transition: border-color 140ms ease, box-shadow 140ms ease, border-radius 140ms ease;
 }
+/* On a narrow dock the text box takes a row of its own under the controls, so neither is squeezed. */
+@container (max-width: 520px) {
+  .dock {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+  .dock__box {
+    order: 1;
+    flex-basis: 100%;
+  }
+}
+
 .dock__box:focus-within {
   border-color: var(--mj-brand-primary);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);

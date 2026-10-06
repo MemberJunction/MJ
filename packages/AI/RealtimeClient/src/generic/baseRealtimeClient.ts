@@ -301,6 +301,15 @@ export abstract class BaseRealtimeClient {
     }
 
     /**
+     * Whether the model takes inbound video on this session: the driver declared an inbound video track it supports when it
+     * negotiated tracks, and a stream limit above zero. No video track need be live; one is added when a capture starts
+     * ({@link AddTrack}). `false` before tracks are negotiated, and for a driver that does not negotiate them.
+     */
+    public get SupportsInboundVideo(): boolean {
+        return (this.inboundVideoStreamLimit ?? 1) > 0 && (this.supportedTracks ?? []).some(isInboundVideo);
+    }
+
+    /**
      * Returns whether a track of the requested modality and direction is established and `'live'`.
      */
     public IsTrackEstablished(modality: string, direction: RealtimeTrackDirection): boolean {

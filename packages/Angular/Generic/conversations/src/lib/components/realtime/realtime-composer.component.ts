@@ -2,7 +2,7 @@ import { Component, ElementRef, EventEmitter, HostListener, Input, Output, ViewC
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
-import { MediaControlsComponent } from '@memberjunction/ng-realtime-media';
+import { MediaControlsComponent, type MediaShareRequest } from '@memberjunction/ng-realtime-media';
 import { RealtimeSessionService } from '../../services/realtime-session.service';
 
 /**
@@ -21,8 +21,9 @@ import { RealtimeSessionService } from '../../services/realtime-session.service'
  *    Submit calls {@link RealtimeSessionService.SendText}, which injects the text as a user
  *    turn into the SAME live voice call.
  *
- * The controls are the design system's: the microphone is `mj-media-controls` (the call controls the LiveKit room
- * uses too) and every other control an `mjButton` circle, sized per shape (52, 44 or 32 px).
+ * The controls are the design system's: the microphone, the camera and Share are `mj-media-controls` (the call controls
+ * the LiveKit room uses too) and every other control an `mjButton` circle, sized per shape (52, 44 or 32 px). The camera
+ * and Share show only when the overlay says the call offers them; the camera is optional here, so it is neutral while off.
  *
  * Mute talks to the session service directly (pure local toggle); captions / Details /
  * End are emitted up so the overlay shell owns that state and lifecycle.
@@ -77,6 +78,27 @@ export class RealtimeComposerComponent {
 
   /** Current draft text in the dock's composer input. */
   public Draft = '';
+
+  /** Show the camera button: the call offers the camera (the runtime's `CaptureOffers$`). */
+  @Input() ShowCamera = false;
+
+  /** Show the Share button: the call offers a screen share. */
+  @Input() ShowShare = false;
+
+  /** Whether the camera is on (or starting). */
+  @Input() CameraOn = false;
+
+  /** Whether the user is sharing (or choosing what to share). */
+  @Input() Sharing = false;
+
+  /** The user asked to turn the camera on (`true`) or off (`false`). The overlay starts or stops it. */
+  @Output() CameraToggled = new EventEmitter<boolean>();
+
+  /** The user asked to share a screen, window or tab. */
+  @Output() ShareRequested = new EventEmitter<MediaShareRequest>();
+
+  /** The user asked to stop sharing. */
+  @Output() StopShareRequested = new EventEmitter<void>();
 
   /**
    * The mic mute state. A two-way reflection: the overlay may push it down (e.g. its

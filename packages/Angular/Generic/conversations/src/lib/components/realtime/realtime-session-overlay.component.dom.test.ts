@@ -1,11 +1,16 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Component, ErrorHandler, OnDestroy, OnInit, type Type } from '@angular/core';
 import { BehaviorSubject, EMPTY, Subject } from 'rxjs';
-import type { VideoSourceState } from '@memberjunction/ai-realtime-client';
+import type { DisplayCaptureOptions, VideoSourceState } from '@memberjunction/ai-realtime-client';
 import type { RealtimeToolDefinition } from '@memberjunction/ai';
 import {
   BaseRealtimeChannelClient,
+  REALTIME_CAPTURES_OFF,
+  REALTIME_CAPTURE_OFFERS_NONE,
   type ChannelSurfacePlacement,
+  type RealtimeCaptureOffers,
+  type RealtimeCaptureState,
+  type RealtimeCaptureStates,
   type RealtimeChannelFocusEvent,
   type RealtimeConnectionState,
 } from '@memberjunction/realtime-runtime';
@@ -62,6 +67,10 @@ class TestWhiteboardChannel extends BaseRealtimeChannelClient<TestBoardComponent
 function fakeSession() {
   const channels$ = new BehaviorSubject<BaseRealtimeChannelClient[]>([]);
   const focus$ = new Subject<RealtimeChannelFocusEvent>();
+  const captures$ = new BehaviorSubject<RealtimeCaptureStates>(REALTIME_CAPTURES_OFF);
+  const offers$ = new BehaviorSubject<RealtimeCaptureOffers>(REALTIME_CAPTURE_OFFERS_NONE);
+  /** The capture calls the overlay made, in order. */
+  const calls: string[] = [];
   const service = {
     Captions$: EMPTY,
     DelegationProgress$: EMPTY,
@@ -76,6 +85,22 @@ function fakeSession() {
     ChannelFocus$: focus$.asObservable(),
     ChannelActivity$: EMPTY,
     VideoSources$: new BehaviorSubject<readonly VideoSourceState[]>([]).asObservable(),
+    Captures$: captures$.asObservable(),
+    CaptureOffers$: offers$.asObservable(),
+    StartCamera: async (): Promise<RealtimeCaptureState> => {
+      calls.push('StartCamera');
+      return { Status: 'starting' };
+    },
+    StopCamera: (): void => {
+      calls.push('StopCamera');
+    },
+    StartScreenShare: async (options?: DisplayCaptureOptions): Promise<RealtimeCaptureState> => {
+      calls.push(`StartScreenShare:${options?.PreferredSurface ?? 'any'}`);
+      return { Status: 'starting' };
+    },
+    StopScreenShare: (): void => {
+      calls.push('StopScreenShare');
+    },
     IsActive: false,
     CurrentAgentSessionId: null,
     HasChannelBeenUsed: (): boolean => false,
@@ -88,7 +113,7 @@ function fakeSession() {
     EndRealtimeSession: async (): Promise<void> => undefined,
     CancelDelegation: async (): Promise<boolean> => true,
   } satisfies Partial<RealtimeSessionService>;
-  return { service, channels$, focus$ };
+  return { service, channels$, focus$, captures$, offers$, calls };
 }
 
 /**
@@ -344,6 +369,44 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
       expect(savedPipLayouts.at(-1)).toBe('{}');
       expect(savedLayouts.at(-1)).toBe('[]');
       expect(surface(f).classList.contains('stage-surface--pip')).toBe(false);
+    });
+  });
+
+  describe("the composer's Camera and Share", () => {
+    const composerButton = (f: Awaited<ReturnType<typeof renderWithBoard>>['f'], title: string) =>
+      query(f, `mj-realtime-composer mj-media-controls button[title="${title}"]`) as HTMLButtonElement | null;
+
+    it('shows neither while the call offers neither', async () => {
+      const { f } = await renderWithBoard();
+      expect(query(f, 'mj-realtime-composer mj-media-controls')).not.toBeNull();
+      expect(composerButton(f, 'Turn on camera')).toBeNull();
+      expect(composerButton(f, 'Share screen')).toBeNull();
+    });
+
+    it('shows them once the call offers them, and starts and stops the camera through the session', async () => {
+      const { f, offers$, captures$, calls } = await renderWithBoard();
+      offers$.next({ Camera: true, Screen: true });
+      await settle();
+      expect(composerButton(f, 'Turn on camera')?.classList.contains('mj-btn--secondary')).toBe(true);
+      composerButton(f, 'Turn on camera')?.click();
+      captures$.next({ ...REALTIME_CAPTURES_OFF, Camera: { Status: 'starting' } });
+      await settle();
+      composerButton(f, 'Turn off camera')?.click();
+      expect(calls).toEqual(['StartCamera', 'StopCamera']);
+    });
+
+    it('asks the session to share, with the kind picked in the menu first, and to stop', async () => {
+      const { f, offers$, captures$, calls } = await renderWithBoard();
+      offers$.next({ Camera: false, Screen: true });
+      await settle();
+      composerButton(f, 'Share screen')?.click();
+      (query(f, 'mj-realtime-composer mj-media-controls button[title="Choose what to share"]') as HTMLButtonElement).click();
+      await settle();
+      (overlayQueryAll('mj-menu-item') as HTMLElement[]).find((item) => item.textContent?.trim() === 'Browser tab')?.click();
+      captures$.next({ ...REALTIME_CAPTURES_OFF, Screen: { Status: 'on' } });
+      await settle();
+      composerButton(f, 'Stop sharing')?.click();
+      expect(calls).toEqual(['StartScreenShare:any', 'StartScreenShare:tab', 'StopScreenShare']);
     });
   });
 

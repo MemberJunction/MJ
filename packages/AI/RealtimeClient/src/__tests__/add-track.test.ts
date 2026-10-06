@@ -29,6 +29,12 @@ function sessionConfig(extra: JSONObject = {}, requested: JSONObject[] = []): Cl
 
 const CAMERA: RealtimeTrackDescriptor = { Modality: 'video', Direction: 'inbound', Encoding: 'image/jpeg', Rate: 5, SourceID: 'camera', Label: 'Camera' };
 
+/** A channel's inbound video track, as the session config carries it (JSON). */
+function channelVideoTrack(sourceId: string): JSONObject {
+    const { Modality, Direction, Encoding, Rate, RequiresConsent } = CHANNEL_INBOUND_VIDEO_TRACK;
+    return { Modality, Direction, Encoding: Encoding ?? null, Rate: Rate ?? null, RequiresConsent: RequiresConsent ?? false, SourceID: sourceId };
+}
+
 describe('adding and removing tracks on a running session', () => {
     let client: GeminiTestClient;
     let events: RealtimeTrack[];
@@ -53,6 +59,23 @@ describe('adding and removing tracks on a running session', () => {
         expect(client.AddTrack(CAMERA)).toBeNull();
     });
 
+    it('says whether the model takes inbound video, with no video track live yet', async () => {
+        expect(client.SupportsInboundVideo).toBe(false);
+        await connect(sessionConfig());
+        expect(client.IsTrackEstablished('video', 'inbound')).toBe(false);
+        expect(client.SupportsInboundVideo).toBe(true);
+    });
+
+    it('says a model that takes no video does not', async () => {
+        await connect(sessionConfig({ supportsInboundVideo: false, maxInboundVideoStreams: 0 }));
+        expect(client.SupportsInboundVideo).toBe(false);
+    });
+
+    it('says a model that takes video but no stream of it does not', async () => {
+        await connect(sessionConfig({ supportsInboundVideo: true, maxInboundVideoStreams: 0 }));
+        expect(client.SupportsInboundVideo).toBe(false);
+    });
+
     it('adds inbound video to an audio-only session, at the model rate, and frames start reaching the model', async () => {
         await connect(sessionConfig());
         expect(client.SendVideoFrame('frame')).toBe(false);
@@ -75,7 +98,7 @@ describe('adding and removing tracks on a running session', () => {
     });
 
     it("counts the live video streams against the model's limit", async () => {
-        await connect(sessionConfig({}, [{ ...CHANNEL_INBOUND_VIDEO_TRACK, SourceID: 'whiteboard' } as JSONObject]));
+        await connect(sessionConfig({}, [channelVideoTrack('whiteboard')]));
         const track = client.AddTrack(CAMERA);
         expect(track?.State).toBe('unsupported');
         expect(track?.Reason).toMatch(/at most 1 inbound video stream/);

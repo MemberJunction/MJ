@@ -136,6 +136,51 @@ describe('RealtimeComposerComponent (DOM)', () => {
     expect(queryAll(f, '.dock .control__label')).toEqual([]);
   });
 
+  it('shows Camera and Share only when told the call offers them, the camera neutral while off', () => {
+    const f = render({ ShowCamera: false, ShowShare: false });
+    expect(query(f, '.strip button[title="Turn on camera"]')).toBeNull();
+    expect(query(f, '.strip button[title="Share screen"]')).toBeNull();
+    f.componentRef.setInput('ShowCamera', true);
+    f.componentRef.setInput('ShowShare', true);
+    f.detectChanges();
+    const camera = query(f, '.strip button[title="Turn on camera"]');
+    expect(camera?.classList.contains('mj-btn--secondary')).toBe(true);
+    expect(query(f, '.strip button[title="Share screen"]')).not.toBeNull();
+    expect(queryAll(f, '.strip .control__label').map((l) => l.textContent?.trim())).toEqual(['Mute', 'Video', 'Share']);
+  });
+
+  it.each([
+    ['the strip', {}],
+    ['the lean dock', { Compact: true }],
+    ['the fused dock', { Open: true }],
+  ])('passes the camera and share requests up from %s', (_layout, inputs) => {
+    const f = render({ ...inputs, ShowCamera: true, ShowShare: true, CameraOn: true, Sharing: true });
+    const toggles = capture(f.componentInstance.CameraToggled);
+    const stops = capture(f.componentInstance.StopShareRequested);
+    (query(f, 'button[title="Turn off camera"]') as HTMLButtonElement).click();
+    (query(f, 'button[title="Stop sharing"]') as HTMLButtonElement).click();
+    expect(toggles).toEqual([false]);
+    expect(stops).toHaveLength(1);
+  });
+
+  it('drops the Share arrow in the fused dock, which is short of room, and keeps it elsewhere', () => {
+    const dock = render({ Open: true, ShowShare: true });
+    expect(query(dock, '.dock button[title="Share screen"]')).not.toBeNull();
+    expect(query(dock, '.dock button[title="Choose what to share"]')).toBeNull();
+  });
+
+  it('keeps the Share arrow in the strip', () => {
+    const strip = render({ ShowShare: true });
+    expect(query(strip, '.strip button[title="Choose what to share"]')).not.toBeNull();
+  });
+
+  it('asks to share a screen from the Share button', () => {
+    const f = render({ ShowShare: true });
+    const shares = capture(f.componentInstance.ShareRequested);
+    click(f, '.strip button[title="Share screen"]');
+    expect(shares).toEqual([{ Kind: 'display' }]);
+  });
+
   it('has no axe violations on the strip', async () => {
     const f = render({ ShowDetails: true });
     await ExpectNoAxeViolations(f);
