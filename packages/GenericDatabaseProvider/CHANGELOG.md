@@ -1,5 +1,52 @@
 # @memberjunction/generic-database-provider
 
+## 6.1.5
+
+### Patch Changes
+
+- 0885fb6: fix(generic-database-provider): page on MaxRows alone, without requiring StartRow
+
+  `QueryPagingEngine.ShouldPage` required both `MaxRows` and `StartRow`, so a caller asking only to _cap_ a result — rather than to walk pages — fell through to the "execute full query, apply in-memory pagination" fallback. The database returned every row, the whole set crossed the network, and it was trimmed in memory afterwards. A ceiling the database never sees is not a ceiling, and callers could not detect the difference: in that branch `TotalRowCount` is simply the length of the fully-materialized array, so it looks identical to a genuinely paged result. Observed against a live database, a `MaxRows=10` call returned `TotalRowCount: 479` with no `OFFSET`/`FETCH` issued at all.
+
+  The requirement was a scoping decision rather than a rule — the original server-side-paging work framed the feature as pagination and kept the old path "for backward compatibility" for everything else. `RunView` has since settled the same question the other way: `BuildTotalRowCountSQL` treats rows as limited when `usingPagination || maxRowsForQuery > 0`, a fix made because the narrower condition missed every case where `MaxRows` was set without an explicit `StartRow`. This brings `RunQuery` in line with its sibling.
+
+  `MaxRows` alone is now sufficient. An absent `StartRow` means page zero, resolved through the new `QueryPagingEngine.ResolveStartRow` so the sites acting on a true `ShouldPage` cannot read `params.StartRow!` and get `undefined`. A negative `StartRow` is still rejected, and `MaxRows` remains the deciding factor so a `StartRow` alone cannot turn an unbounded query into a truncated one.
+
+  Behavioural consequences for callers that pass `MaxRows` without `StartRow`: they now receive SQL-level paging instead of a full fetch, so far less data moves, but an unordered query's "first N" remains arbitrary (`DefaultPagingOrderBy` is injected when none exists, so the SQL stays valid); those calls populate the paged cache rather than the full-result cache, shifting hit rates; and they now incur `CountSQL`, which re-runs the query's logic to count — paging saves transfer and memory, not database work.
+
+- ec5f382: Saved queries, ad-hoc SQL and composed queries now render and run correctly on SQL Server and PostgreSQL in the shapes that previously failed or returned the wrong rows.
+  - **Row caps and paging.** A query's own `TOP` / `LIMIT` / `OFFSET … FETCH` is kept: when the caller also passes `MaxRows`, the smaller wins and `TotalRowCount` follows. CTEs, `WITH RECURSIVE`, query hints, `SELECT DISTINCT`, set operations, `TOP PERCENT` / `WITH TIES` and SQL the parser cannot read are paged and capped by editing the statement in place, or as a derived table, instead of being rewritten from the syntax tree. Ad-hoc SQL with `MaxRows` is paged in the database instead of fetching every row. A requested cap that cannot be applied is logged; paging a `FOR JSON` / `FOR XML` query fails with an error that says so.
+  - **Composition.** A dependency's trailing `;`, SQL Server `OPTION (…)` hints, template tags (`{% if %}` and similar) and doubled quotes in static values now compose correctly. The real composition token is resolved, not a copy in a comment or string literal. Composing into an outer `WITH` / `WITH RECURSIVE` produces one valid clause, and a dependency CTE that shares a name with one of the outer query's CTEs is renamed instead of declared twice. A query that references the same dependency twice saves one dependency row.
+  - **PostgreSQL.** Pools get the `statement_timeout` and `idle_in_transaction_session_timeout` that match SQL Server's request timeout. Caller-supplied SQL runs in a rolled-back read-only transaction, and the read-only provider gets its own pool on the read-only login. Column references are read as names, and comment stripping no longer breaks dollar-quoted and `E''` strings.
+  - **Caller-supplied SQL** must be a single read query. Ad-hoc SQL over GraphQL (`ExecuteAdhocQuery`) now runs through the read-only provider's own ad-hoc path, so it works on PostgreSQL too and pages the same way everywhere. `RunQueryParams.TimeoutSeconds` (ad-hoc SQL) and `ExecuteSQLOptions.timeoutMs` set a per-call limit that the database enforces: the request is cancelled on SQL Server, and `statement_timeout` applies on PostgreSQL. That limit can shorten the server's own limit but never lengthen it.
+  - **What caller-supplied SQL may call.** Ad-hoc SQL, `TestQuerySQL` and query specs are refused when they call a function that runs SQL given as a string, or reads files or other databases (on PostgreSQL `query_to_xml` and its family, `ts_stat` and `ts_rewrite`, `dblink`, the server-file and large-object functions, and server-administration functions; on SQL Server `OPENROWSET`, `OPENQUERY`, `OPENDATASOURCE` and the trace and audit file readers). The list is the new `SQLDialect.CallerSQLForbiddenFunctions`. On PostgreSQL, advisory locks taken by such SQL are released before its connection returns to the pool, and MJAPI warns at startup when the read-only login can read base tables or server files.
+  - **Dialects.** The rendering pipeline reads `SQLDialect` members (`SelectListPagingOrderBy`, `PagingRequiresOrderBy`, `QueryHintKeyword`, `SupportsEscapeStringLiterals`, `SupportsDollarQuotedStrings`, `StringLiteralPrefix`, `EscapeLikePattern`, `BooleanParameterValue`) instead of checking the platform name, so a new dialect declares its behaviour in one class.
+  - **Text filters.** `sqlString` / `sqlIn` keep non-ASCII text on SQL Server, and the LIKE filters escape `[` (SQL Server) and `\` (PostgreSQL). SQL Server bracket-quoted identifiers escape `]`.
+  - `RunQueryParams.MaxRows` documents that there is no default row limit, and that `MaxRows` limits the rows returned, not the work the database does.
+
+- Updated dependencies [3910bd5]
+- Updated dependencies [8ee1709]
+- Updated dependencies [8ee1709]
+- Updated dependencies [13d92ac]
+- Updated dependencies [ad65a01]
+- Updated dependencies [c3d7e50]
+- Updated dependencies [1d3f2cb]
+- Updated dependencies [5cccaf2]
+- Updated dependencies [ec5f382]
+  - @memberjunction/core@6.1.5
+  - @memberjunction/actions-base@6.1.5
+  - @memberjunction/actions@6.1.5
+  - @memberjunction/core-entities@6.1.5
+  - @memberjunction/sql-dialect@6.1.5
+  - @memberjunction/sql-parser@6.1.5
+  - @memberjunction/query-processor@6.1.5
+  - @memberjunction/aiengine@6.1.5
+  - @memberjunction/ai-vectors-memory@6.1.5
+  - @memberjunction/encryption@6.1.5
+  - @memberjunction/queue@6.1.5
+  - @memberjunction/geo-core@6.1.5
+  - @memberjunction/global@6.1.5
+
 ## 6.1.4
 
 ### Patch Changes

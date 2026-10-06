@@ -1,5 +1,58 @@
 # Change Log - @memberjunction/core-actions
 
+## 6.1.5
+
+### Patch Changes
+
+- Updated dependencies [3910bd5]
+- Updated dependencies [7baaf30]
+- Updated dependencies [8ee1709]
+- Updated dependencies [8ee1709]
+- Updated dependencies [13d92ac]
+- Updated dependencies [ad65a01]
+- Updated dependencies [c3d7e50]
+- Updated dependencies [1d3f2cb]
+- Updated dependencies [0885fb6]
+- Updated dependencies [ec5f382]
+  - @memberjunction/core@6.1.5
+  - @memberjunction/export-engine@6.1.5
+  - @memberjunction/actions-base@6.1.5
+  - @memberjunction/actions@6.1.5
+  - @memberjunction/core-entities@6.1.5
+  - @memberjunction/ai-agents@6.1.5
+  - @memberjunction/ai-prompts@6.1.5
+  - @memberjunction/ai@6.1.5
+  - @memberjunction/sql-dialect@6.1.5
+  - @memberjunction/generic-database-provider@6.1.5
+  - @memberjunction/core-entities-server@6.1.5
+  - @memberjunction/sqlserver-dataprovider@6.1.5
+  - @memberjunction/ai-agent-manager@6.1.5
+  - @memberjunction/ai-engine-base@6.1.5
+  - @memberjunction/clustering-engine@6.1.5
+  - @memberjunction/ai-core-plus@6.1.5
+  - @memberjunction/aiengine@6.1.5
+  - @memberjunction/ai-mcp-client@6.1.5
+  - @memberjunction/ai-vector-sync@6.1.5
+  - @memberjunction/code-execution@6.1.5
+  - @memberjunction/communication-types@6.1.5
+  - @memberjunction/communication-engine@6.1.5
+  - @memberjunction/content-autotagging@6.1.5
+  - @memberjunction/external-change-detection@6.1.5
+  - @memberjunction/integration-engine@6.1.5
+  - @memberjunction/interactive-component-types@6.1.5
+  - @memberjunction/lists@6.1.5
+  - @memberjunction/storage@6.1.5
+  - @memberjunction/react-linter@6.1.5
+  - @memberjunction/record-set-processor-base@6.1.5
+  - @memberjunction/record-set-processor@6.1.5
+  - @memberjunction/search-engine@6.1.5
+  - @memberjunction/esignature@6.1.5
+  - @memberjunction/geo-core@6.1.5
+  - @memberjunction/ai-betty-bot@6.1.5
+  - @memberjunction/lists-base@6.1.5
+  - @memberjunction/global@6.1.5
+  - @memberjunction/network-utils@6.1.5
+
 ## 6.1.4
 
 ### Patch Changes

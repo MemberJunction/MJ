@@ -1,5 +1,14 @@
 # @memberjunction/ng-test-utils
 
+## 6.1.5
+
+### Patch Changes
+
+- Updated dependencies [3910bd5]
+- Updated dependencies [ad65a01]
+- Updated dependencies [ec5f382]
+  - @memberjunction/core@6.1.5
+
 ## 6.1.4
 
 ### Patch Changes

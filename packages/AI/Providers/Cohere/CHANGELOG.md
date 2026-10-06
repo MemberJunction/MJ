@@ -1,5 +1,13 @@
 # @memberjunction/ai-cohere
 
+## 6.1.5
+
+### Patch Changes
+
+- Updated dependencies [c3d7e50]
+  - @memberjunction/ai@6.1.5
+  - @memberjunction/global@6.1.5
+
 ## 6.1.4
 
 ### Patch Changes

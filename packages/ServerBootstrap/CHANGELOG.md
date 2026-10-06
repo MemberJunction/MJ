@@ -1,5 +1,138 @@
 # @memberjunction/server-bootstrap
 
+## 6.1.5
+
+### Patch Changes
+
+- Updated dependencies [11bf565]
+- Updated dependencies [f79063b]
+- Updated dependencies [3910bd5]
+- Updated dependencies [8ee1709]
+- Updated dependencies [8ee1709]
+- Updated dependencies [13d92ac]
+- Updated dependencies [1057ffe]
+- Updated dependencies [ad65a01]
+- Updated dependencies [c3d7e50]
+- Updated dependencies [0885fb6]
+- Updated dependencies [77f9e8d]
+- Updated dependencies [ec5f382]
+  - @memberjunction/actions-bizapps-accounting@6.1.5
+  - @memberjunction/codegen-lib@6.1.5
+  - @memberjunction/core@6.1.5
+  - @memberjunction/actions-base@6.1.5
+  - @memberjunction/actions@6.1.5
+  - @memberjunction/task-graph@6.1.5
+  - @memberjunction/server@6.1.5
+  - @memberjunction/core-entities@6.1.5
+  - @memberjunction/ai-agents@6.1.5
+  - @memberjunction/testing-integration@6.1.5
+  - @memberjunction/ai-prompts@6.1.5
+  - @memberjunction/ai-gemini@6.1.5
+  - @memberjunction/ai-vertex@6.1.5
+  - @memberjunction/ai-anthropic@6.1.5
+  - @memberjunction/testing-engine@6.1.5
+  - @memberjunction/generic-database-provider@6.1.5
+  - @memberjunction/ai-openai@6.1.5
+  - @memberjunction/core-entities-server@6.1.5
+  - @memberjunction/ai-agent-harness@6.1.5
+  - @memberjunction/ai-agent-manager@6.1.5
+  - @memberjunction/ai-engine-base@6.1.5
+  - @memberjunction/ai-core-plus@6.1.5
+  - @memberjunction/database-designer-actions@6.1.5
+  - @memberjunction/database-designer-core@6.1.5
+  - @memberjunction/ai-form-builder@6.1.5
+  - @memberjunction/tag-engine-base@6.1.5
+  - @memberjunction/computer-use-engine@6.1.5
+  - @memberjunction/predictive-studio@6.1.5
+  - @memberjunction/ai-recommendations-rex@6.1.5
+  - @memberjunction/ai-bridge-livekit@6.1.5
+  - @memberjunction/ai-bridge-ringcentral@6.1.5
+  - @memberjunction/ai-bridge-teams@6.1.5
+  - @memberjunction/ai-bridge-twilio@6.1.5
+  - @memberjunction/ai-bridge-vonage@6.1.5
+  - @memberjunction/ai-bridge-server@6.1.5
+  - @memberjunction/remote-browser-selfhost@6.1.5
+  - @memberjunction/remote-browser-server@6.1.5
+  - @memberjunction/ai-reranker@6.1.5
+  - @memberjunction/ai-segmentation@6.1.5
+  - @memberjunction/ai-vector-dupe@6.1.5
+  - @memberjunction/ai-vectors-memory@6.1.5
+  - @memberjunction/ai-vectors-pinecone@6.1.5
+  - @memberjunction/ai-vectors-qdrant@6.1.5
+  - @memberjunction/ai-vectors-sqlserver@6.1.5
+  - @memberjunction/ai-vectors-pgvector@6.1.5
+  - @memberjunction/actions-apollo@6.1.5
+  - @memberjunction/actions-bizapps-crm@6.1.5
+  - @memberjunction/actions-bizapps-formbuilders@6.1.5
+  - @memberjunction/actions-bizapps-lms@6.1.5
+  - @memberjunction/actions-bizapps-social@6.1.5
+  - @memberjunction/actions-content-autotag@6.1.5
+  - @memberjunction/core-actions@6.1.5
+  - @memberjunction/action-runtime-host@6.1.5
+  - @memberjunction/archiving-action@6.1.5
+  - @memberjunction/archiving-engine@6.1.5
+  - @memberjunction/auth-providers@6.1.5
+  - @memberjunction/communication-types@6.1.5
+  - @memberjunction/entity-communications-base@6.1.5
+  - @memberjunction/communication-ms-graph@6.1.5
+  - @memberjunction/communication-sendgrid@6.1.5
+  - @memberjunction/content-autotagging@6.1.5
+  - @memberjunction/doc-utils@6.1.5
+  - @memberjunction/encryption@6.1.5
+  - @memberjunction/external-data-sources@6.1.5
+  - @memberjunction/external-data-source-databricks@6.1.5
+  - @memberjunction/external-data-source-mongodb@6.1.5
+  - @memberjunction/external-data-source-mysql@6.1.5
+  - @memberjunction/external-data-source-oracle@6.1.5
+  - @memberjunction/external-data-source-postgres@6.1.5
+  - @memberjunction/external-data-source-sqlserver@6.1.5
+  - @memberjunction/external-data-source-snowflake@6.1.5
+  - @memberjunction/integration-actions@6.1.5
+  - @memberjunction/integration-engine@6.1.5
+  - @memberjunction/data-context-server@6.1.5
+  - @memberjunction/queue@6.1.5
+  - @memberjunction/storage@6.1.5
+  - @memberjunction/messaging-adapters@6.1.5
+  - @memberjunction/react-linter@6.1.5
+  - @memberjunction/record-comparison@6.1.5
+  - @memberjunction/record-set-processor@6.1.5
+  - @memberjunction/scheduling-actions@6.1.5
+  - @memberjunction/scheduling-engine-base@6.1.5
+  - @memberjunction/scheduling-engine@6.1.5
+  - @memberjunction/search-engine@6.1.5
+  - @memberjunction/server-extensions-core@6.1.5
+  - @memberjunction/templates@6.1.5
+  - @memberjunction/esignature@6.1.5
+  - @memberjunction/geo-core@6.1.5
+  - @memberjunction/ai-provider-bundle@6.1.5
+  - @memberjunction/ai-assemblyai@6.1.5
+  - @memberjunction/ai-azure@6.1.5
+  - @memberjunction/ai-bedrock@6.1.5
+  - @memberjunction/ai-betty-bot@6.1.5
+  - @memberjunction/ai-blackforestlabs@6.1.5
+  - @memberjunction/ai-cerebras@6.1.5
+  - @memberjunction/ai-cohere@6.1.5
+  - @memberjunction/ai-elevenlabs@6.1.5
+  - @memberjunction/ai-fireworks@6.1.5
+  - @memberjunction/ai-groq@6.1.5
+  - @memberjunction/ai-heygen@6.1.5
+  - @memberjunction/ai-huggingface@6.1.5
+  - @memberjunction/ai-inception@6.1.5
+  - @memberjunction/ai-inworld@6.1.5
+  - @memberjunction/ai-lmstudio@6.1.5
+  - @memberjunction/ai-llamacpp@6.1.5
+  - @memberjunction/ai-local-embeddings@6.1.5
+  - @memberjunction/ai-minimax@6.1.5
+  - @memberjunction/ai-mistral@6.1.5
+  - @memberjunction/ai-ollama@6.1.5
+  - @memberjunction/ai-openrouter@6.1.5
+  - @memberjunction/ai-zhipu@6.1.5
+  - @memberjunction/ai-xai@6.1.5
+  - @memberjunction/esignature-docusign@6.1.5
+  - @memberjunction/esignature-dropboxsign@6.1.5
+  - @memberjunction/esignature-pandadoc@6.1.5
+  - @memberjunction/dynamic-packages@6.1.5
+
 ## 6.1.4
 
 ### Patch Changes

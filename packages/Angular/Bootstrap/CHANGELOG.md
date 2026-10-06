@@ -1,5 +1,45 @@
 # @memberjunction/ng-bootstrap
 
+## 6.1.5
+
+### Patch Changes
+
+- Updated dependencies [3370dc7]
+- Updated dependencies [3910bd5]
+- Updated dependencies [7baaf30]
+- Updated dependencies [8ee1709]
+- Updated dependencies [8ee1709]
+- Updated dependencies [13d92ac]
+- Updated dependencies [ad65a01]
+- Updated dependencies [c3d7e50]
+- Updated dependencies [1d3f2cb]
+- Updated dependencies [77f9e8d]
+- Updated dependencies [ec5f382]
+  - @memberjunction/ng-artifacts@6.1.5
+  - @memberjunction/ng-explorer-core@6.1.5
+  - @memberjunction/core@6.1.5
+  - @memberjunction/ng-entity-viewer@6.1.5
+  - @memberjunction/actions-base@6.1.5
+  - @memberjunction/ng-dashboards@6.1.5
+  - @memberjunction/core-entities@6.1.5
+  - @memberjunction/graphql-dataprovider@6.1.5
+  - @memberjunction/ai-realtime-client@6.1.5
+  - @memberjunction/ng-conversations@6.1.5
+  - @memberjunction/ng-dashboard-viewer@6.1.5
+  - @memberjunction/ai-engine-base@6.1.5
+  - @memberjunction/ai-core-plus@6.1.5
+  - @memberjunction/tag-engine-base@6.1.5
+  - @memberjunction/ai-vectors-memory@6.1.5
+  - @memberjunction/ng-auth-services@6.1.5
+  - @memberjunction/ng-core-entity-forms@6.1.5
+  - @memberjunction/ng-explorer-settings@6.1.5
+  - @memberjunction/ng-shared@6.1.5
+  - @memberjunction/ng-clustering@6.1.5
+  - @memberjunction/ng-entity-action-ux@6.1.5
+  - @memberjunction/ng-file-storage@6.1.5
+  - @memberjunction/communication-types@6.1.5
+  - @memberjunction/entity-communications-base@6.1.5
+
 ## 6.1.4
 
 ### Patch Changes
