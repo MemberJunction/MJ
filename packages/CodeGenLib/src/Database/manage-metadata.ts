@@ -6178,12 +6178,12 @@ VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)
       // Note: Assuming fieldName does not contain regex special characters; otherwise, it needs to be escaped as well.
       const processedConstraint = constraintDefinition.replace(/(^|[=(\s])N'([^']*)'/g, "$1'$2'");
 
-      // PostgreSQL ANY (ARRAY[...]) pattern:
-      // CHECK ((("FieldName")::text = ANY ((ARRAY['Val1'::character varying, 'Val2'::character varying])::text[])))
-      // Also handles simpler forms: ("FieldName" = ANY (ARRAY['Val1', 'Val2']))
-      const pgArrayValues = this.parsePgArrayConstraint(processedConstraint);
-      if (pgArrayValues) {
-         return pgArrayValues;
+      // PostgreSQL writes every one of these shapes differently from SQL Server, so it gets its own
+      // anchored parse (#4713). It runs first because a PG definition cannot match the SQL Server
+      // patterns below, and returning null here must NOT fall through to them.
+      const pgValues = this.parsePostgreSQLConstraint(processedConstraint, fieldName);
+      if (pgValues) {
+         return pgValues;
       }
 
       // Build a regex fragment that matches the field name in any quoting style:
@@ -6250,7 +6250,10 @@ VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)
       if (!parsedValues || !field) {
          return parsedValues;
       }
-      if (field.Type?.trim().toLowerCase() === 'bit') {
+      // `bit` on SQL Server, `boolean`/`bool` on PostgreSQL — the same column, the same reasoning.
+      // The PG parser cannot currently produce a boolean list anyway (true/false are neither quoted
+      // nor numeric literals), so that half is a second line of defence rather than load-bearing.
+      if (['bit', 'boolean', 'bool'].includes(field.Type?.trim().toLowerCase() ?? '')) {
          return null;
       }
       if (field.IsPrimaryKey && parsedValues.length === 1) {
@@ -6290,32 +6293,204 @@ VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)
    }
 
    /**
-    * Parses PostgreSQL ANY (ARRAY[...]) CHECK constraint syntax.
-    * PG's pg_get_constraintdef() returns constraints like:
-    *   CHECK ((("Status")::text = ANY ((ARRAY['Confirmed'::character varying, 'Cancelled'::character varying])::text[])))
-    * This method extracts the string values from the ARRAY literal.
+    * Parses PostgreSQL's renderings of a value-list CHECK into the values it permits, or null when the
+    * constraint is not a plain value list (#4713 — the other dialect of #3978).
+    *
+    * `pg_get_constraintdef()` writes these shapes, all captured from a live PostgreSQL 16:
+    *
+    *   (((s)::text = ANY ((ARRAY['Active'::character varying, ...])::text[])))   multi, varchar
+    *   ((level = ANY (ARRAY[1, 2, 3])))                                          multi, numeric
+    *   ((bi = ANY (ARRAY['100000000000'::bigint, (2)::bigint])))                 multi, mixed quoting
+    *   (((x IS NULL) OR (x = ANY (ARRAY[1, 2]))))                                nullable
+    *   ((one = 7))   /   (((s)::text = 'OnlyOne'::text))                         single value
+    *
+    * ANCHORED ON PURPOSE, and that is the whole design. The previous version searched for `ARRAY[...]`
+    * anywhere in the definition and read only QUOTED elements, which was safe only by accident: both
+    * `(x <> ALL (ARRAY[1, 2]))` (NOT IN) and `((x = ANY (ARRAY[1, 2])) OR (x > 100))` contain an ARRAY
+    * whose elements are NOT the field's legal values — the first inverts the meaning, the second is a
+    * subset. Reading numeric elements without anchoring the whole constraint would have turned both
+    * into wrong value lists, and a wrong list makes `Validate()` refuse what the database accepts.
+    *
+    * Booleans are excluded by construction: `true`/`false` are neither quoted nor numeric, so an
+    * `ARRAY[true, false]` yields no elements. That matches the `bit` exclusion on SQL Server — the
+    * constraint is vacuous, and a checkbox is not a dropdown.
     */
-   private parsePgArrayConstraint(constraintDefinition: string): string[] | null {
-      // Match the ARRAY[...] portion, handling optional type casts
-      const arrayMatch = constraintDefinition.match(/\bARRAY\s*\[([^\]]+)\]/i);
-      if (!arrayMatch) {
+   private parsePostgreSQLConstraint(constraintDefinition: string, fieldName: string): string[] | null {
+      // Strip the `CHECK (...)` wrapper pg_get_constraintdef() adds, then any balanced outer parens.
+      const checkMatch = /^\s*CHECK\s*\((.*)\)\s*$/is.exec(constraintDefinition);
+      let body = ManageMetadataBase.stripOuterParens(checkMatch ? checkMatch[1] : constraintDefinition);
+      if (body.length === 0) {
          return null;
       }
 
-      // Extract individual values from the array content
-      // Each element looks like: 'Value'::character varying  or just  'Value'
-      const arrayContent = arrayMatch[1];
-      const valueRegex = /'([^']+)'(?:::[^,\]]*)?/g;
-      const possibleValues: string[] = [];
-      let match;
+      const field = ManageMetadataBase.escapeForRegex(fieldName);
+      // The left-hand side: the bare column, optionally double-quoted, optionally parenthesized and
+      // cast (`(status)::text`) — which is how PG compares a varchar.
+      const lhs = `\\(?"?${field}"?\\)?(?:::[A-Za-z][A-Za-z0-9 ]*(?:\\[\\])?)?`;
 
-      while ((match = valueRegex.exec(arrayContent)) !== null) {
-         if (match[1]) {
-            possibleValues.push(match[1]);
-         }
+      // `(x IS NULL) OR <rest>` — the nullable form. Unwrap it and judge <rest> on its own.
+      const nullable = new RegExp(`^\\(?\\s*${lhs}\\s+IS\\s+NULL\\s*\\)?\\s+OR\\s+(.*)$`, 'is').exec(body);
+      if (nullable) {
+         body = ManageMetadataBase.stripOuterParens(nullable[1]);
       }
 
-      return possibleValues.length > 0 ? possibleValues : null;
+      // Anything still carrying a second condition or a non-equality operator is not a value list.
+      // `<> ALL` is NOT IN; ` OR `/` AND ` means the list is not the whole story. Tested with the
+      // string literals blanked first, so a constraint whose VALUES contain an operator —
+      // `CHECK (op = ANY (ARRAY['<'::text, '>'::text]))` — is judged on its structure, not its data.
+      const structure = body.replace(/'(?:[^']|'')*'/g, "''");
+      if (/\s(OR|AND)\s/i.test(structure) || /<>|!=|>|</.test(structure) || /\bALL\s*\(/i.test(structure)) {
+         return null;
+      }
+
+      // Multi-value: <lhs> = ANY (ARRAY[ ... ])   (the ARRAY may itself be parenthesized and cast).
+      // The closing bracket is found by matching, not by regex: the varchar form ends `])::text[]`,
+      // so a greedy `.*\]` swallows the cast and a lazy one would break on a value containing `]`.
+      const anyMatch = new RegExp(`^${lhs}\\s*=\\s*ANY\\s*\\(\\s*\\(?\\s*ARRAY\\s*\\[`, 'is').exec(body);
+      if (anyMatch) {
+         const elements = ManageMetadataBase.readToMatchingBracket(body, anyMatch[0].length);
+         return elements === null ? null : ManageMetadataBase.pgArrayElements(elements);
+      }
+
+      // Single value: <lhs> = <literal>. PG renders `IN (x)` this way, and it permits exactly x.
+      const singleMatch = new RegExp(`^${lhs}\\s*=\\s*(.+)$`, 'is').exec(body);
+      if (singleMatch) {
+         const value = ManageMetadataBase.pgLiteralValue(singleMatch[1]);
+         return value === null ? null : [value];
+      }
+
+      return null;
+   }
+
+   /**
+    * Returns the text between an already-consumed `[` and its matching `]`, ignoring brackets that sit
+    * inside quoted literals, or null when the bracket never closes.
+    */
+   private static readToMatchingBracket(text: string, startIndex: number): string | null {
+      let depth = 1, inQuote = false;
+      for (let i = startIndex; i < text.length; i++) {
+         const ch = text[i];
+         if (inQuote) {
+            if (ch === "'") {
+               if (text[i + 1] === "'") i++;
+               else inQuote = false;
+            }
+            continue;
+         }
+         if (ch === "'") inQuote = true;
+         else if (ch === '[') depth++;
+         else if (ch === ']') {
+            depth--;
+            if (depth === 0) {
+               return text.slice(startIndex, i);
+            }
+         }
+      }
+      return null;
+   }
+
+   /**
+    * Splits an ARRAY[...] body into its elements and reads each one's literal value, or returns null
+    * when any element is not a literal this can read (a boolean, a function call, a column reference).
+    * All-or-nothing on purpose: a PARTIAL list is worse than none, because the values it drops are
+    * legal ones that `Validate()` would then refuse. That is the bug this replaces — PG writes
+    * `ARRAY['100000000000'::bigint, (2)::bigint]`, and reading only quoted elements captured the first
+    * value and silently dropped the second.
+    */
+   private static pgArrayElements(arrayBody: string): string[] | null {
+      const values: string[] = [];
+      for (const element of ManageMetadataBase.splitTopLevel(arrayBody)) {
+         const value = ManageMetadataBase.pgLiteralValue(element);
+         if (value === null) {
+            return null;
+         }
+         values.push(value);
+      }
+      return values.length > 0 ? values : null;
+   }
+
+   /**
+    * Reads one PostgreSQL literal, unwrapping the parentheses and `::type` casts it may be dressed in —
+    * `'Active'::character varying`, `(2)::bigint`, `('1e30'::numeric)::double precision`, `2.25`.
+    * Returns null for anything that is not a quoted or numeric literal, which is what keeps booleans,
+    * function calls and column references out of a value list.
+    */
+   private static pgLiteralValue(element: string): string | null {
+      let text = element.trim();
+      // Peel casts and wrapping parens until neither is left: ('x'::numeric)::double precision
+      for (let i = 0; i < 10; i++) {
+         const stripped = ManageMetadataBase.stripOuterParens(text.replace(/::[A-Za-z][A-Za-z0-9 ]*(?:\[\])?\s*$/, '').trim());
+         if (stripped === text) {
+            break;
+         }
+         text = stripped;
+      }
+      const quoted = /^'((?:[^']|'')*)'$/s.exec(text);
+      if (quoted) {
+         return quoted[1].replace(/''/g, "'");
+      }
+      return /^-?\d+(?:\.\d*)?(?:[eE][+-]?\d+)?$/.test(text) ? text : null;
+   }
+
+   /** Splits on commas that sit outside quotes, parentheses and brackets. */
+   private static splitTopLevel(text: string): string[] {
+      const parts: string[] = [];
+      let depth = 0, inQuote = false, current = '';
+      for (let i = 0; i < text.length; i++) {
+         const ch = text[i];
+         if (inQuote) {
+            inQuote = ch !== "'" || text[i + 1] === "'";
+            if (ch === "'" && text[i + 1] === "'") {
+               current += ch;
+               i++;
+            }
+         }
+         else if (ch === "'") {
+            inQuote = true;
+         }
+         else if (ch === '(' || ch === '[') {
+            depth++;
+         }
+         else if (ch === ')' || ch === ']') {
+            depth--;
+         }
+         else if (ch === ',' && depth === 0) {
+            parts.push(current);
+            current = '';
+            continue;
+         }
+         current += text[i];
+      }
+      if (current.trim().length > 0) {
+         parts.push(current);
+      }
+      return parts;
+   }
+
+   /** Removes balanced parentheses that wrap the whole expression, however many layers deep. */
+   private static stripOuterParens(text: string): string {
+      let result = text.trim();
+      while (result.startsWith('(') && result.endsWith(')')) {
+         let depth = 0, wrapsWhole = true;
+         for (let i = 0; i < result.length; i++) {
+            if (result[i] === '(') depth++;
+            else if (result[i] === ')') depth--;
+            if (depth === 0 && i < result.length - 1) {
+               wrapsWhole = false;
+               break;
+            }
+         }
+         if (!wrapsWhole) {
+            break;
+         }
+         result = result.slice(1, -1).trim();
+      }
+      return result;
+   }
+
+   /** Escapes regex metacharacters so an identifier can be embedded in a pattern. */
+   private static escapeForRegex(value: string): string {
+      return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
    }
 
 
