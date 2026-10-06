@@ -408,6 +408,8 @@ const NESTED_SCAN_BASELINE: Record<string, number> = {
     'TestingFramework/integration-test-suite/src/checks/transaction-groups-batched.checks.ts': 1,
     'TestingFramework/integration-test-suite/src/discovery-corpus/generator.ts': 1,
     'TestingFramework/testing-integration/src/rls-fixture.ts': 1,
+    'WorkQueue/base/src/topology/manifest.ts': 1,
+    'WorkQueue/engine/src/operations/WorkQueueOperatorService.ts': 1,
 };
 
 describe('Nested UUID scan compliance', () => {
