@@ -337,10 +337,9 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
    * Flex order, in precedence: where the user put this panel, then where its host said
    * to put it, then the form's section order.
    *
-   * The user's own placement has to win. `Order` is a fixed number a host supplies — a
-   * contribution panel derives one from its slot — and taking it unconditionally meant
-   * dragging such a panel wrote a new section order that nothing ever read, so the panel
-   * did not move and the drag looked broken.
+   * The user's placement comes first so a dragged panel draws where it was dropped. `Order`
+   * is a fixed number a host supplies (a contribution panel derives one from its slot); it
+   * applies only while the user has not placed the panel.
    */
   @HostBinding('style.order')
   get CssOrder(): number {
