@@ -269,6 +269,16 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
    */
   @Output() RecordReady = new EventEmitter<BaseEntity>();
 
+  /**
+   * Emitted whenever edit mode starts (`true`) or ends (`false`). The Explorer
+   * shell uses the `true` edge to PROMOTE a records preview tab — pin it — the
+   * moment the user starts editing (VS Code's promote-on-modify), so a record
+   * being edited is neither replaceable by the next plain open nor italic.
+   * Fires on every call, not only on transitions: a new record's ngOnInit
+   * re-asserts edit mode and the shell's pin is idempotent.
+   */
+  @Output() EditModeChanged = new EventEmitter<boolean>();
+
   /** Layout the container resolved for this form. Set by `<mj-record-form-container>`; read by panel hosts. */
   public ChromeLayout: 'accordion' | 'left-nav' = 'accordion';
 
@@ -441,6 +451,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     if (entityName) {
       this.formStateService.setEditMode(entityName, true);
     }
+    this.EditModeChanged.emit(true);
   }
 
   public EndEditMode(): void {
@@ -450,6 +461,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     if (entityName) {
       this.formStateService.setEditMode(entityName, false);
     }
+    this.EditModeChanged.emit(false);
   }
 
   public handleHistoryDialog(): void {

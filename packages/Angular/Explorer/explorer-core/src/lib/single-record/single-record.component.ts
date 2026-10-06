@@ -73,6 +73,13 @@ export class SingleRecordComponent extends BaseAngularComponent implements OnDes
   @Output() public recordDismissed = this.RecordDismissed;
 
   /**
+   * Edit mode of the hosted form started (true) or ended (false). Relayed from
+   * `<mj-entity-form-host>` so the resource wrapper can tell the shell to
+   * promote this tab. {@link IsEditing} remains as the synchronous fallback.
+   */
+  @Output() public EditModeChanged: EventEmitter<boolean> = new EventEmitter<boolean>();
+
+  /**
    * The live form's composition — sections, related grids, contributions, and the slots
    * the form actually emits. Re-emitted on every chrome resolve.
    *
@@ -153,6 +160,10 @@ export class SingleRecordComponent extends BaseAngularComponent implements OnDes
   /** @deprecated Use {@link OnSaved}. */
   onSaved(record: BaseEntity): void {
     return this.OnSaved(record);
+  }
+
+  OnEditModeChanged(editing: boolean): void {
+    this.EditModeChanged.emit(editing);
   }
 
   OnNotification(event: FormNotificationEvent): void {
