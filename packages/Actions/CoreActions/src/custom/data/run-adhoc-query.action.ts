@@ -423,6 +423,9 @@ export class RunAdhocQueryAction extends BaseAction {
                 analysisRequest: analysisRequest
             };
             promptParams.contextUser = params.ContextUser;
+            // The calling run's credential scope. This action is never handed the run's keys, so under
+            // 'RuntimeOnly' the prompt finds no usable model and fails instead of spending the platform's.
+            promptParams.CredentialScope = params.CredentialScope;
 
             // Execute the prompt
             const runner = new AIPromptRunner();

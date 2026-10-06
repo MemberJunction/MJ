@@ -63,6 +63,10 @@ export class HandoffOffer {
   /** After this the offer can no longer be accepted. */
   @Field(() => String)
   ExpiresAt: string;
+
+  /** The MJ interaction ID associated with this conversation/room, if known. */
+  @Field(() => String, { nullable: true })
+  InteractionID?: string | null;
 }
 
 /** One change to an offer, pushed to the person it belongs to. */
@@ -295,5 +299,6 @@ function toGraphQLOffer(offer: HandoffOfferView): HandoffOffer {
     Status: offer.Status,
     CreatedAt: offer.CreatedAt,
     ExpiresAt: offer.ExpiresAt,
+    InteractionID: offer.InteractionID ?? null,
   };
 }
