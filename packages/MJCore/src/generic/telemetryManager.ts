@@ -369,6 +369,11 @@ export interface TelemetrySettings {
     autoTrim: {
         enabled: boolean;
         maxEvents?: number;
+        /**
+         * Cap on retained analyzer insights. Like `maxEvents`, but for the derived collection:
+         * one insight is appended per emitted warning and they were never released.
+         */
+        maxInsights?: number;
         maxAgeMs?: number;
     };
     /** Duplicate detection settings */
@@ -847,6 +852,7 @@ const DEFAULT_SETTINGS: TelemetrySettings = {
     autoTrim: {
         enabled: true,
         maxEvents: 10000,
+        maxInsights: 1000,
         maxAgeMs: 30 * 60 * 1000  // 30 minutes
     },
     duplicateDetection: {
@@ -858,6 +864,13 @@ const DEFAULT_SETTINGS: TelemetrySettings = {
         dedupeWindowMs: 30000  // 30 seconds
     }
 };
+
+/**
+ * How often the O(n) map sweeps in `trimIfNeeded` are allowed to run. `trimIfNeeded` is called on
+ * every recorded event; walking `_patterns` and `_insightDedupeWindow` that often would make
+ * telemetry cost scale with its own history.
+ */
+const DEEP_TRIM_INTERVAL_MS = 60000;
 
 // ============================================================================
 // TELEMETRY MANAGER
@@ -882,6 +895,13 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
     private _analyzers: TelemetryAnalyzer[] = [];
     private _insights: TelemetryInsight[] = [];
     private _insightDedupeWindow: Map<string, number> = new Map();
+
+    /**
+     * When the two map sweeps in {@link trimIfNeeded} last ran. They are O(n) over their maps,
+     * while `trimIfNeeded` itself runs on every recorded event, so they are throttled rather than
+     * paid per event.
+     */
+    private _lastDeepTrimAt = 0;
 
     /**
      * Returns the singleton instance of TelemetryManager
@@ -1858,6 +1878,35 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
         // Trim by count
         if (maxEvents && this._events.length > maxEvents) {
             this._events = this._events.slice(-maxEvents);
+        }
+
+        // Three collections derived from `_events` need bounding on the same schedule: `_insights`
+        // gains an entry per emitted warning, `_patterns` one per distinct fingerprint — and every
+        // new filter combination is a distinct fingerprint — and `_insightDedupeWindow` one per
+        // dedupe key. Unbounded, they retain for the life of the process.
+        const maxInsights = this._settings.autoTrim.maxInsights ?? 1000;
+        if (maxInsights && this._insights.length > maxInsights) {
+            this._insights = this._insights.slice(-maxInsights);
+        }
+
+        // The sweeps below walk whole maps, so they are throttled rather than run per event. Both
+        // collections are bounded by time rather than count: an entry that stops recurring should age
+        // out, while one that keeps recurring is live data a count cap would evict for nothing.
+        if (now - this._lastDeepTrimAt > DEEP_TRIM_INTERVAL_MS) {
+            this._lastDeepTrimAt = now;
+            if (maxAgeMs) {
+                for (const [fingerprint, pattern] of this._patterns) {
+                    if (now - pattern.lastSeen > maxAgeMs) {
+                        this._patterns.delete(fingerprint);
+                    }
+                }
+            }
+            const dedupeWindowMs = this._settings.analyzers?.dedupeWindowMs ?? 30000;
+            for (const [key, seenAt] of this._insightDedupeWindow) {
+                if (now - seenAt > dedupeWindowMs) {
+                    this._insightDedupeWindow.delete(key);
+                }
+            }
         }
     }
 

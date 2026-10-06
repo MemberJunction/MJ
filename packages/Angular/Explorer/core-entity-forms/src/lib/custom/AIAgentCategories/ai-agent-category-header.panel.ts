@@ -7,11 +7,15 @@ import { MJAIAgentCategoryEntity, UserInfoEngine } from '@memberjunction/core-en
 const SETTING_KEY = 'mj.form.aiAgentCategories.headerCollapsed';
 
 @RegisterClassEx(BaseFormPanel, {
-    key: 'form-panel:AI Agent Categories:header',
+    key: 'form-panel:MJ: AI Agent Categories:header',
     metadata: {
-        entity: 'AI Agent Categories',
-        slot: 'header',
-        sortKey: 10,
+        entity: 'MJ: AI Agent Categories',
+        // A hero is a bare strip in before-fields. Its sortKey is above the overview's
+        // (higher draws first), so it draws above the overview cards.
+        slot: 'before-fields',
+        presentation: 'bare',
+        contributionKey: 'ai-agent-categories:header',
+        sortKey: 20,
     },
 })
 @Component({
