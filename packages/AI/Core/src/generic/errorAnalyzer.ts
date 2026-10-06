@@ -193,7 +193,11 @@ export class ErrorAnalyzer {
             // API_KEY_INVALID. None of the phrases above match it, so it fell through to the
             // permissive VendorValidationError and failed over to another vendor instead of failing.
             errorString.includes('api key not valid') ||
-            errorString.includes('api_key_invalid')) {
+            errorString.includes('api_key_invalid') ||
+            // Google's expired key: HTTP 400 "API key expired. Please renew the API key." with reason
+            // API_KEY_EXPIRED. It read as InvalidRequest, which stops failover with the wrong reason.
+            errorString.includes('api key expired') ||
+            errorString.includes('api_key_expired')) {
             return 'Authentication';
         }
 
