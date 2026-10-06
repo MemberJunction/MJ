@@ -297,7 +297,9 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             {
                 PropertyName: '_agentNotes',
                 EntityName: 'MJ: AI Agent Notes',
-                CacheLocal: true
+                CacheLocal: true,
+                // Binary vector column: loaded server-side (the AIEngine reads it), skipped over the wire.
+                IncludeBinaryFields: 'DatabaseProviderOnly',
             },
             {
                 PropertyName: '_scopedPromptParts',
@@ -312,7 +314,9 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             {
                 PropertyName: '_agentExamples',
                 EntityName: 'MJ: AI Agent Examples',
-                CacheLocal: true
+                CacheLocal: true,
+                // Binary vector column: loaded server-side (the AIEngine reads it), skipped over the wire.
+                IncludeBinaryFields: 'DatabaseProviderOnly',
             },
             {
                 PropertyName: '_agents',

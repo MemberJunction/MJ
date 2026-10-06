@@ -1135,6 +1135,28 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT99 - JSONType Live Sync",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "08315A24-260C-4D22-BC99-7621B41181C8"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT100 - JSONType Live Sync (client transport)",
+            "Sequence": 71,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C71E99EA-27E1-4AC8-A156-34C47256365E"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT94 - MetadataSync Push Atomicity",
             "Sequence": 49,
             "Status": "Active"
@@ -1176,6 +1198,17 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT102 - RunQuery Rendering Matrix",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "5A52D768-D266-479F-9722-9D90500FC7F5"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT95 - Trailing Runtime State",
             "Sequence": 48,
             "Status": "Active"
@@ -1201,6 +1234,21 @@
           "sync": {
             "lastModified": "2026-09-13T20:08:49.384Z",
             "checksum": "0182dec8e6529614d671437b2efb710c1111b0437ff228f4a7c41a9b7b25fc6d"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT104 - Form Contributions",
+            "Sequence": 48,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "BE0B5BAB-E7AB-4074-815D-EDE0151ADBEA"
+          },
+          "sync": {
+            "lastModified": "2026-09-17T20:05:32.183Z",
+            "checksum": "2e35f7ba0e03b46059e6aa28590909692b9e7f0d6b340ebd264a335c5e402c0c"
           }
         },
         {
@@ -1238,6 +1286,28 @@
           },
           "primaryKey": {
             "ID": "D0A93B02-FD0F-4B47-89D0-914DC49D13B6"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT103 - RunQuery Rendering over GraphQL",
+            "Sequence": 72,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "F010EDA8-2094-41BA-8E25-0D5EFB0C13FE"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT101 - Binary Fields and Vector Columns",
+            "Sequence": 73,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "80642370-A10B-405B-89CC-536AAAA00397"
           }
         }
       ]
