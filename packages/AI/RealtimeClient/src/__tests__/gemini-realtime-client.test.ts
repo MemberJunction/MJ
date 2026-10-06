@@ -839,3 +839,69 @@ describe('GeminiRealtimeClient', () => {
         });
     });
 });
+
+describe('GeminiRealtimeClient remote media stream (issue #5153)', () => {
+    /** Playback fake that exposes an output stream, like the production Web Audio engine. */
+    class StreamPlayback extends FakePlayback {
+        constructor(public readonly Stream: MediaStream) {
+            super();
+        }
+        public GetOutputStream(): MediaStream | null {
+            return this.Stream;
+        }
+    }
+
+    class StreamClient extends TestGeminiClient {
+        public readonly AgentStream: MediaStream = new FakeMediaStream([]);
+        constructor() {
+            super();
+            this.Playback = new StreamPlayback(this.AgentStream);
+        }
+    }
+
+    it('is null before Connect and the playback stream after Connect', async () => {
+        const client = new StreamClient();
+        expect(client.GetRemoteMediaStream()).toBeNull();
+        await connect(client);
+        expect(client.GetRemoteMediaStream()).toBe(client.AgentStream);
+    });
+
+    it('fires a handler registered before Connect exactly once, on Connect', async () => {
+        const client = new StreamClient();
+        const received: MediaStream[] = [];
+        client.OnRemoteMediaStream((s) => received.push(s));
+        expect(received).toHaveLength(0);
+        await connect(client);
+        expect(received).toEqual([client.AgentStream]);
+    });
+
+    it('fires a handler registered after Connect immediately, once', async () => {
+        const client = new StreamClient();
+        await connect(client);
+        const received: MediaStream[] = [];
+        client.OnRemoteMediaStream((s) => received.push(s));
+        expect(received).toEqual([client.AgentStream]);
+    });
+
+    it('clears the stream on Disconnect and does not re-fire stale handlers on reconnect', async () => {
+        const client = new StreamClient();
+        const received: MediaStream[] = [];
+        client.OnRemoteMediaStream((s) => received.push(s));
+        await connect(client);
+        await client.Disconnect();
+        expect(client.GetRemoteMediaStream()).toBeNull();
+
+        await connect(client);
+        expect(client.GetRemoteMediaStream()).toBe(client.AgentStream);
+        expect(received).toHaveLength(1);
+    });
+
+    it('stays null and never fires when the playback has no GetOutputStream', async () => {
+        const client = new TestGeminiClient();
+        const received: MediaStream[] = [];
+        client.OnRemoteMediaStream((s) => received.push(s));
+        await connect(client);
+        expect(client.GetRemoteMediaStream()).toBeNull();
+        expect(received).toHaveLength(0);
+    });
+});

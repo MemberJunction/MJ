@@ -27,6 +27,13 @@ export interface IRealtimePcmPlayback {
      * implementations) stay valid; callers use `playback.CreateMeter?.() ?? null`.
      */
     CreateMeter?(): IRealtimeAudioMeter | null;
+    /**
+     * OPTIONAL: the agent's output audio as a `MediaStream`, so a host can mix the agent voice
+     * into a recording (issue #5153). Mirrors what WebRTC drivers get from the peer connection.
+     * Optional so test fakes and environments without `MediaStreamAudioDestinationNode` stay
+     * valid; callers use `playback.GetOutputStream?.() ?? null`.
+     */
+    GetOutputStream?(): MediaStream | null;
 }
 
 /**
@@ -52,6 +59,11 @@ export class RealtimePcmPlayback implements IRealtimePcmPlayback {
      * the single tap point {@link CreateMeter} analyses without altering the audio path.
      */
     private masterGain: GainNode;
+    /**
+     * Second sink fed by {@link masterGain} (alongside the speakers) that exposes the agent
+     * audio as a `MediaStream`. Null where the context lacks `createMediaStreamDestination`.
+     */
+    private outputDestination: MediaStreamAudioDestinationNode | null = null;
     /** The absolute context time up to which audio has been scheduled. */
     private playheadTime = 0;
     /** Sources scheduled and not yet ended (so Flush can stop them). */
@@ -67,6 +79,12 @@ export class RealtimePcmPlayback implements IRealtimePcmPlayback {
         this.context = new AudioContext({ sampleRate });
         this.masterGain = this.context.createGain();
         this.masterGain.connect(this.context.destination);
+        // Created eagerly so GetOutputStream stays a pure read. The feature-check covers older
+        // environments where the node does not exist (recording then stays mic-only).
+        if (typeof this.context.createMediaStreamDestination === 'function') {
+            this.outputDestination = this.context.createMediaStreamDestination();
+            this.masterGain.connect(this.outputDestination);
+        }
     }
 
     /** @inheritdoc */
@@ -108,6 +126,17 @@ export class RealtimePcmPlayback implements IRealtimePcmPlayback {
     /** @inheritdoc */
     public CreateMeter(): IRealtimeAudioMeter | null {
         return RealtimeAudioMeter.ForContextNode(this.context, this.masterGain);
+    }
+
+    /**
+     * The agent's output audio as a `MediaStream`, or `null` when unsupported. Hosts mix this
+     * into a recording: WebRTC drivers get the agent voice from the peer connection, PCM
+     * drivers (which play through Web Audio) must expose it from here. The stream lives on
+     * this engine's own (e.g. 24 kHz) context, so consumers wrap it in a source node on THEIR
+     * context rather than reusing this one.
+     */
+    public GetOutputStream(): MediaStream | null {
+        return this.outputDestination?.stream ?? null;
     }
 
     /** @inheritdoc */

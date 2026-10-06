@@ -329,6 +329,9 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.negotiateTracks(requestedTracks, supportedTracks);
 
         this.playback = this.createPlayback();
+        // The agent voice plays through Web Audio only; publish it so a host recorder can mix
+        // it in (issue #5153). Null for playbacks with no output stream (fakes, no WebAudio).
+        this.publishRemoteMediaStream(this.playback.GetOutputStream?.() ?? null);
         const connectArgs: GeminiClientConnectArgs = {
             Model: model,
             Config: liveConfig,
@@ -377,6 +380,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.micCapture = null;
         this.playback?.Close();
         this.playback = null;
+        this.clearRemoteMediaStream();
         this.resumptionHandle = null;
         this.firstVideoSendTimestamp = 0;
         this.lastVideoSendTimestamp = 0;
