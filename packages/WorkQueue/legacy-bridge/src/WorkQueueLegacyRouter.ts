@@ -11,15 +11,15 @@ import { LegacyQueueTopicName, LegacyQueueTypeSlug } from './LegacyQueueTopicNam
  */
 export class WorkQueueLegacyRouter implements ILegacyQueueRouter {
     public async TryRoute(queueTypeName: string, data: unknown, options: unknown, contextUser: UserInfo): Promise<boolean> {
-        const topicName = this.TopicNameFor(queueTypeName);
-        if (!topicName || !(await this.MetadataLoaded(contextUser))) {
+        const topicName = this.topicNameFor(queueTypeName);
+        if (!topicName || !(await this.metadataLoaded(contextUser))) {
             return false;
         }
         const topic = WorkQueueEngine.Instance.GetTopicByName(topicName);
         if (!topic || topic.Status !== 'Active') {
             return false;
         }
-        if (!this.HasDeliveringSubscription(topic.ID)) {
+        if (!this.hasDeliveringSubscription(topic.ID)) {
             LogStatus(`[QueueManager] Work queue topic '${topicName}' is Active but no subscription on it is Active or Paused; running '${queueTypeName}' in-process`);
             return false;
         }
@@ -28,10 +28,10 @@ export class WorkQueueLegacyRouter implements ILegacyQueueRouter {
             LogError(`[QueueManager] '${queueTypeName}' task data is not plain JSON and cannot be routed to '${topicName}'; running in-process`);
             return false;
         }
-        return this.Publish(topicName, queueTypeName, payload, contextUser);
+        return this.publish(topicName, queueTypeName, payload, contextUser);
     }
 
-    private TopicNameFor(queueTypeName: string): string | null {
+    private topicNameFor(queueTypeName: string): string | null {
         try {
             return LegacyQueueTopicName(queueTypeName);
         } catch (error) {
@@ -40,7 +40,7 @@ export class WorkQueueLegacyRouter implements ILegacyQueueRouter {
         }
     }
 
-    private async MetadataLoaded(contextUser: UserInfo): Promise<boolean> {
+    private async metadataLoaded(contextUser: UserInfo): Promise<boolean> {
         try {
             await WorkQueueEngine.Instance.Config(false, contextUser);
             return true;
@@ -50,12 +50,12 @@ export class WorkQueueLegacyRouter implements ILegacyQueueRouter {
         }
     }
 
-    private HasDeliveringSubscription(topicID: string): boolean {
+    private hasDeliveringSubscription(topicID: string): boolean {
         return WorkQueueEngine.Instance.SubscriptionsForTopic(topicID)
             .some((s) => s.Status === 'Active' || s.Status === 'Paused');
     }
 
-    private async Publish(topicName: string, queueTypeName: string, payload: LegacyQueueTaskPayload, contextUser: UserInfo): Promise<boolean> {
+    private async publish(topicName: string, queueTypeName: string, payload: LegacyQueueTaskPayload, contextUser: UserInfo): Promise<boolean> {
         try {
             const [result] = await WorkQueueEngine.Instance.PublishAs(
                 topicName,

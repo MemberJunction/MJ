@@ -18,13 +18,13 @@ export class AIActionQueue extends QueueBase {
         try {
             await AIEngine.Instance.Config(false, this._contextUser);
             if (!entityAIAction) {
-                return this.ToTaskResult(await AIEngine.Instance.ExecuteAIAction(task.Data as AIActionParams));
+                return this.toTaskResult(await AIEngine.Instance.ExecuteAIAction(task.Data as AIActionParams));
             }
             const params = await this.ResolveEntityAIActionParams(task.Data);
             if (!params) {
                 return { success: false, output: null, userMessage: RECORD_NOT_FOUND_MESSAGE, exception: null, failureKind: 'RecordNotFound' };
             }
-            return this.ToTaskResult(await AIEngine.Instance.ExecuteEntityAIAction(params));
+            return this.toTaskResult(await AIEngine.Instance.ExecuteEntityAIAction(params));
         }
         catch (e) {
             const message = e instanceof Error ? e.message : String(e);
@@ -47,7 +47,7 @@ export class AIActionQueue extends QueueBase {
         throw new EntityAIActionReferenceError('Unrecognised Entity AI Action task data: expected an EntityAIActionTaskReference or EntityAIActionParams');
     }
 
-    private ToTaskResult(result: BaseResult | null): TaskResult {
+    private toTaskResult(result: BaseResult | null): TaskResult {
         return {
             success: result ? result.success : false,
             output: result ? (result.success ? null : result.errorMessage) : null,

@@ -26,14 +26,14 @@ export class LegacyQueueDriverHandler extends BaseWorkHandler<LegacyQueueTaskPay
         if (!IsLegacyQueueTaskPayload(payload)) {
             throw new FatalWorkError(`Work queue message ${message.MessageID} is not a legacy queue task payload`);
         }
-        const user = this.ResolveUser(payload.userID ?? null);
-        const driver = await this.CreateDriver(payload.queueTypeName, user);
-        const task = await this.CreateTask(payload, user);
+        const user = this.resolveUser(payload.userID ?? null);
+        const driver = await this.createDriver(payload.queueTypeName, user);
+        const task = await this.createTask(payload, user);
         const result = await driver.ExecuteTask(task, user, this.Provider);
-        return this.ToOutcome(result, payload.queueTypeName, context);
+        return this.toOutcome(result, payload.queueTypeName, context);
     }
 
-    private ToOutcome(result: TaskResult, queueTypeName: string, context: WorkContext): WorkOutcome {
+    private toOutcome(result: TaskResult, queueTypeName: string, context: WorkContext): WorkOutcome {
         if (result.success) {
             return Outcome.Complete();
         }
@@ -50,7 +50,7 @@ export class LegacyQueueDriverHandler extends BaseWorkHandler<LegacyQueueTaskPay
     }
 
     /** The enqueuing user when it can be resolved; otherwise the host's user this handler was bound with. */
-    private ResolveUser(userID: string | null): UserInfo {
+    private resolveUser(userID: string | null): UserInfo {
         if (!userID) {
             return this.ContextUser;
         }
@@ -61,7 +61,7 @@ export class LegacyQueueDriverHandler extends BaseWorkHandler<LegacyQueueTaskPay
         }
     }
 
-    private async CreateDriver(queueTypeName: string, user: UserInfo): Promise<QueueBase> {
+    private async createDriver(queueTypeName: string, user: UserInfo): Promise<QueueBase> {
         const factory = MJGlobal.Instance.ClassFactory;
         if (!factory.GetRegistration(QueueBase, queueTypeName)) {
             throw new FatalWorkError(`No QueueBase driver is registered for queue type '${queueTypeName}'`);
@@ -70,20 +70,20 @@ export class LegacyQueueDriverHandler extends BaseWorkHandler<LegacyQueueTaskPay
         queueRecord.NewRecord();
         queueRecord.Name = queueTypeName.slice(0, QUEUE_NAME_MAX_LENGTH);
         const resolution = factory.TryCreateInstance<QueueBase>(
-            QueueBase, queueTypeName, queueRecord, await this.QueueTypeID(queueTypeName, user), user);
+            QueueBase, queueTypeName, queueRecord, await this.queueTypeID(queueTypeName, user), user);
         if (!resolution.Resolved || !resolution.Instance) {
             throw new FatalWorkError(`No QueueBase driver is registered for queue type '${queueTypeName}'`);
         }
         return resolution.Instance;
     }
 
-    private async QueueTypeID(queueTypeName: string, user: UserInfo): Promise<string> {
+    private async queueTypeID(queueTypeName: string, user: UserInfo): Promise<string> {
         await QueueManager.Config(user);
         const wanted = queueTypeName.trim().toLowerCase();
         return QueueManager.QueueTypes.find((t) => t.Name.trim().toLowerCase() === wanted)?.ID ?? '';
     }
 
-    private async CreateTask(payload: LegacyQueueTaskPayload, user: UserInfo): Promise<TaskBase> {
+    private async createTask(payload: LegacyQueueTaskPayload, user: UserInfo): Promise<TaskBase> {
         const taskRecord = await this.Provider.GetEntityObject<MJQueueTaskEntity>('MJ: Queue Tasks', user);
         taskRecord.NewRecord();
         taskRecord.Data = JSON.stringify(payload.data);
