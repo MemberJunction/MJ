@@ -874,7 +874,8 @@ describe('replacing fields inside one group', () => {
         expect(DescribeFieldList(['A'])).toBe('the A field');
         expect(DescribeFieldList(['A', 'B'])).toBe('the A and B fields');
         expect(DescribeFieldList(['A', 'B', 'C'])).toBe('the A, B and C fields');
-        expect(DescribeFieldList(['A', 'B', 'C', 'D'])).toBe('4 fields, starting with A');
+        expect(DescribeFieldList(['A', 'B', 'C', 'D'])).toBe('the A, B and 2 other fields');
+        expect(DescribeFieldList(['A', 'B', 'C', 'D', 'E'])).toBe('the A, B and 3 other fields');
     });
 });
 

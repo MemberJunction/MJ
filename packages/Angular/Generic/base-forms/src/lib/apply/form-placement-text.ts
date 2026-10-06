@@ -56,7 +56,8 @@ export function DescribeSectionList(titles: readonly string[]): string {
 }
 
 /**
- * A readable list of field labels: one name, two joined by "and", the rest counted.
+ * A readable list of field labels: up to three by name ("the A, B and C fields"), and past
+ * three the first two and a count of the rest ("the A, B and 2 other fields").
  *
  * Counted past three because the sentence is one line beside the buttons, and a panel
  * standing in for eight fields would push the rest of it off the end.
@@ -66,7 +67,7 @@ export function DescribeFieldList(labels: readonly string[]): string {
     if (labels.length === 1) return `the ${labels[0]} field`;
     if (labels.length === 2) return `the ${labels[0]} and ${labels[1]} fields`;
     if (labels.length === 3) return `the ${labels[0]}, ${labels[1]} and ${labels[2]} fields`;
-    return `${labels.length} fields, starting with ${labels[0]}`;
+    return `the ${labels[0]}, ${labels[1]} and ${labels.length - 2} other fields`;
 }
 
 /**
@@ -242,7 +243,7 @@ function hidesAnyFieldSection(state: FormPlacementState, context: FormPlacementC
     });
 }
 
-/** A tab by the name the rail gives it: Details and More by title, any other tab by its key. */
+/** A tab's name for a sentence: the rail title for Details and More, the key for any other tab. */
 function tabTitle(railKey: string): string {
     if (railKey === DETAILS_SECTION_KEY) return DETAILS_SECTION_TITLE;
     if (railKey === MORE_SECTION_KEY) return 'More';
