@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/content-pipeline-base",
   "type": "module",
-  "version": "6.2.0-edge.1",
+  "version": "6.2.0-edge.2",
   "description": "MemberJunction: Content Pipeline Base - the working record, the stage contract, and the confidence convention shared by every content pipeline stage. Client-safe.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -17,8 +17,8 @@
   "author": "MemberJunction.com",
   "license": "BUSL-1.1",
   "dependencies": {
-    "@memberjunction/core": "6.2.0-edge.1",
-    "@memberjunction/global": "6.2.0-edge.1"
+    "@memberjunction/core": "6.2.0-edge.2",
+    "@memberjunction/global": "6.2.0-edge.2"
   },
   "devDependencies": {
     "@types/node": "24.10.11",

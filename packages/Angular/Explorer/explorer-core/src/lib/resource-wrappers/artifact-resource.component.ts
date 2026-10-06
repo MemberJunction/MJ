@@ -5,6 +5,7 @@ import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData, MJEnvironmentEntityExtended } from '@memberjunction/core-entities';
 import { AnalyzeArtifactService, InteractiveFormApplyService } from '@memberjunction/ng-artifacts';
 import type { ComponentSpec } from '@memberjunction/interactive-component-types';
+import type { FormAgentContext } from '@memberjunction/ng-base-forms';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 /**
@@ -47,15 +48,22 @@ export class ArtifactResource extends BaseResourceComponent {
   private readonly applyService = inject(InteractiveFormApplyService);
 
   /**
-   * Apply-to-my-form handler — see InteractiveFormApplyService.
-   * Confirms with the user, then routes to Create or Modify depending on
-   * whether an Active override already exists for this entity+user.
+   * Apply-to-my-form handler — see InteractiveFormApplyService. Routes a whole form to
+   * the override actions and a form panel to the contribution actions.
+   *
+   * When the agent context names an open record form (`AdditionalContext.Form`), the service
+   * reads that form's full composition from the `FormCompositionRegistry`, to validate a
+   * panel's placement and spot an installed contribution with the same key before writing
+   * anything.
    */
   async OnApplyFormRequested(event: { spec: unknown; entityName: string }): Promise<void> {
+    const additional = (this.navigationService.AppContextSnapshot$.value?.AdditionalContext ?? null) as
+      { Form?: FormAgentContext } | null;
     await this.applyService.ConfirmAndApply(
       event.spec as ComponentSpec,
       event.entityName,
       this.ProviderToUse,
+      additional?.Form ?? null,
     );
   }
 

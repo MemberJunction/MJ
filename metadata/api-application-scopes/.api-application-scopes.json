@@ -831,5 +831,44 @@
       "lastModified": "2026-07-07T15:18:22.302Z",
       "checksum": "3ae0f7b2cc8ee2e7f3f2dedcd2865bebfac6930a5410000d506d4cfb919c8638"
     }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: API Applications.Name=MJAPI",
+      "ScopeID": "@lookup:MJ: API Scopes.FullPath=workqueue:publish",
+      "ResourcePattern": "*",
+      "PatternType": "Include",
+      "IsDeny": false,
+      "Priority": 0
+    },
+    "primaryKey": {
+      "ID": "C04DCEE8-8E72-445F-B15A-2A1E9BDD8A9A"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: API Applications.Name=MJAPI",
+      "ScopeID": "@lookup:MJ: API Scopes.FullPath=workqueue:read",
+      "ResourcePattern": "*",
+      "PatternType": "Include",
+      "IsDeny": false,
+      "Priority": 0
+    },
+    "primaryKey": {
+      "ID": "2731DAD4-0DE4-444A-86C4-0BA6BA729805"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: API Applications.Name=MJAPI",
+      "ScopeID": "@lookup:MJ: API Scopes.FullPath=workqueue:operate",
+      "ResourcePattern": "*",
+      "PatternType": "Include",
+      "IsDeny": false,
+      "Priority": 0
+    },
+    "primaryKey": {
+      "ID": "00CBCA1D-E939-4341-994B-F65079888EE6"
+    }
   }
 ]

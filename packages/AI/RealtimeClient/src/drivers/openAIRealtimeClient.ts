@@ -1,7 +1,7 @@
 import { RegisterClass } from '@memberjunction/global';
 import { ClientRealtimeSessionConfig, JSONObject } from '@memberjunction/ai';
 import { RealtimeAudioMeter } from '../audio/audioMeter';
-import { BaseRealtimeClient } from '../generic/baseRealtimeClient';
+import { BaseRealtimeClient, ToProviderSessionConfig } from '../generic/baseRealtimeClient';
 import {
     OpenAIProtocolRealtimeClient,
     OpenAIProtocolClientEvent,
@@ -339,6 +339,19 @@ export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
     }
 
     /**
+     * @inheritdoc
+     *
+     * This transport keeps the pact in {@link sessionConfig} rather than in the protocol
+     * client's `sessionObject` — WebRTC applies it over the data channel, so the base field is
+     * never populated here. Without this override a spoken update would find no identity to
+     * carry and would send the caller's direction alone, which is the defect the base method
+     * documents (#397).
+     */
+    protected override currentSessionInstructions(): string | null {
+        return OpenAIProtocolRealtimeClient.readInstructions(this.sessionConfig);
+    }
+
+    /**
      * Sends the server-controlled session config (instructions + tools) as a
      * `session.update` so the co-agent's identity and tool set apply. Skipped when the
      * host supplied no config (e.g. it failed to parse the server payload — the host
@@ -349,7 +362,7 @@ export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
             return;
         }
         if (channel.readyState === 'open') {
-            channel.send(JSON.stringify({ type: 'session.update', session: this.sessionConfig }));
+            channel.send(JSON.stringify({ type: 'session.update', session: ToProviderSessionConfig(this.sessionConfig) }));
         }
     }
 }
