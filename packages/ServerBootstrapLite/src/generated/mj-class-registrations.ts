@@ -1166,7 +1166,7 @@ import {
     MJVectorIndexEntityServer,
 } from '@memberjunction/core-entities-server';
 
-// @memberjunction/core-actions (151 classes)
+// @memberjunction/core-actions (153 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1230,6 +1230,7 @@ import {
     GenerateIntegrationActionAction,
     GeocodeAddressAction,
     GetActiveFormForEntityAction,
+    GetArchitectureDiagramReferenceAction,
     GetDefaultFormScaffoldForEntityAction,
     GetDownloadUrlAction,
     GetEntityDetailsAction,
@@ -1277,6 +1278,7 @@ import {
     ReadRSSFeedAction,
     RefreshListFromSourceAction,
     RemoveRecordsFromListAction,
+    RenderArchitectureDiagramAction,
     ResolveAudienceAction,
     RetryAction,
     ReverseGeocodeAction,
@@ -2289,6 +2291,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     GenerateIntegrationActionAction,
     GeocodeAddressAction,
     GetActiveFormForEntityAction,
+    GetArchitectureDiagramReferenceAction,
     GetDefaultFormScaffoldForEntityAction,
     GetDownloadUrlAction,
     GetEntityDetailsAction,
@@ -2336,6 +2339,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     ReadRSSFeedAction,
     RefreshListFromSourceAction,
     RemoveRecordsFromListAction,
+    RenderArchitectureDiagramAction,
     ResolveAudienceAction,
     RetryAction,
     ReverseGeocodeAction,
@@ -2362,12 +2366,12 @@ const CLASS_REGISTRATIONS_4: any[] = [
     TavilySearchAction,
     TeamsWebhookAction,
     TestMCPConnectionAction,
-    TestRuntimeActionAction,
-    TextAnalyzerAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    TestRuntimeActionAction,
+    TextAnalyzerAction,
     URLLinkValidatorAction,
     URLMetadataExtractorAction,
     UnitConverterAction,
@@ -2408,7 +2412,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1024;
+export const CLASS_REGISTRATIONS_COUNT = 1026;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

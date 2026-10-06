@@ -151,6 +151,8 @@ export * from './custom/visualization/create-svg-network.action';
 export * from './custom/visualization/create-svg-infographic.action';
 export * from './custom/visualization/create-svg-sketch-diagram.action';
 export * from './custom/visualization/create-mermaid-diagram.action';
+export * from './custom/visualization/render-architecture-diagram.action';
+export * from './custom/visualization/get-architecture-diagram-reference.action';
 export * from './custom/visualization/shared/svg-types';
 export * from './custom/visualization/shared/svg-utils';
 export * from './custom/visualization/shared/svg-theming';

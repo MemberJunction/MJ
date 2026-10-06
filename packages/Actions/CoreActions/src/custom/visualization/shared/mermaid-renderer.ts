@@ -116,6 +116,30 @@ export class MermaidRenderer extends BaseSingleton<MermaidRenderer> implements I
         }
     }
 
+    /**
+     * Runs `work` on a fresh page of this renderer's browser, outside the Mermaid pool, with every network
+     * request blocked and the same {@link RENDER_TIMEOUT_MS} cap. For other server-side checks that need a
+     * real browser, such as the archify diagram readability gate. The page is always closed. Never throws.
+     */
+    public async WithIsolatedPage<T>(work: (page: Page) => Promise<T>): Promise<{ Success: true; Value: T } | MermaidRenderFailure> {
+        const browser = await this.getBrowser();
+        if (browser.Success === false) {
+            return browser;
+        }
+        const page = browser.Browser.newPage();
+        try {
+            const value = await this.withTimeout(page.then(async (p) => {
+                await p.route('**/*', (route) => route.abort());
+                return work(p);
+            }), RENDER_TIMEOUT_MS);
+            return { Success: true, Value: value };
+        } catch (error) {
+            return this.classifyFailure(error);
+        } finally {
+            await this.closeQuietly(page);
+        }
+    }
+
     /** Closes the shared browser, if one was launched. Its pages, idle ones included, close with it. */
     public async Shutdown(): Promise<void> {
         const pending = this.browserPromise;

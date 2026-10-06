@@ -1,0 +1,24 @@
+{
+  "repository": "https://github.com/tt-a1i/archify",
+  "manifest": "https://tt-a1i.github.io/archify/skill-updates/archify/stable.json",
+  "tag": "v3.0.1",
+  "version": "3.0.1",
+  "treeSha": "7dcd73a73672d5da4f85d4c612017b478547303b",
+  "zipSha256": "b0b23bd28db314f04ca8ab9620fe20f8c1ac6474a3546bd8fe4679508aa1b7f5",
+  "vendoredPaths": [
+    "renderers",
+    "schemas",
+    "examples",
+    "references",
+    "brand-marks/catalog.json",
+    "assets/template.html",
+    "assets/JetBrainsMono-OFL.txt",
+    "SKILL.md",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md",
+    "package.json"
+  ],
+  "exclude": [
+    "examples/*.html"
+  ]
+}

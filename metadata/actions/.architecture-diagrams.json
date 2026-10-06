@@ -1,0 +1,253 @@
+[
+  {
+    "fields": {
+      "Name": "Render Architecture Diagram",
+      "Description": "Renders a presentation-quality architecture, workflow, sequence, data-flow or lifecycle diagram from an archify JSON spec (nodes with explicit positions and sizes, plus edges). archify validates the spec against its schemas and layout rules and renders it in-process. On success it returns a self-contained SVG for embedding in reports and markdown, and the standalone interactive HTML page (themes, trace, finder, focus panel, export) as a file. A spec that fails returns VALIDATION_FAILED with archify's diagnostics; repair the spec and call again. Use Get Architecture Diagram Reference for the schema and an example first.",
+      "DriverClass": "__RenderArchitectureDiagram",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-sitemap",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data"
+    },
+    "primaryKey": {
+      "ID": "42FC2391-612C-4336-9D80-C53948EDBA6D"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DiagramType",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Which archify renderer to use: architecture (components, services, boundaries, infrastructure), workflow (processes, approval gates, tool calls, runbooks, CI/CD), sequence (API call chains, request lifecycles, async traces), dataflow (pipelines, ETL/ELT, lineage, consumers) or lifecycle (state and status transitions, retries, terminal states).",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "5A9D9D99-544B-473E-A6BA-E6E780B8A99C"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SpecJSON",
+            "Type": "Input",
+            "ValueType": "Other",
+            "IsArray": false,
+            "Description": "The archify JSON spec, as a JSON string or object. Its shape is the type's schema (Get Architecture Diagram Reference, Topic=schema); start from the type's example (Topic=example).",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "664ADAD1-2798-4AB3-A2D3-431F0235F90A"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Output",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "What to return: svg, html or both. Default both.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B7BF2764-2D43-4937-AC0A-49D531E51F1E"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "BrowserCheck",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "true to also load the page in headless Chromium and fail with BROWSER_CHECK_FAILED if the diagram does not lay out (unmeasured labels, zero size, a page script error). Skipped when the server has no Chromium. Default false.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "951F2EAE-4029-4D4E-A325-E54B45E60CA5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SVG",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The self-contained SVG: styles scoped to its own id, a solid background, safe to embed in report HTML or in a markdown svg fence.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "253B78A1-A5F7-4CAF-A71B-020924E1E1FA"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FileOutput",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "The standalone interactive HTML page as a file output: { fileName, mimeType, sizeBytes, fileData (base64), visibility: 'Always' }.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "8FB409F3-5652-49E8-B5C0-40EF9A7BEBD5"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "The diagram rendered. The Message holds the SVG unless Output is html."
+          },
+          "primaryKey": {
+            "ID": "2E1AC8E3-9D93-4B63-8DCC-DAEA91AF184F"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "VALIDATION_FAILED",
+            "IsSuccess": false,
+            "Description": "The spec failed archify's schema, reference or layout checks. The Message is archify's diagnostics JSON (each problem has code, message, subject, evidence and supportedFixes). Edit the parts the diagnostics name and call again."
+          },
+          "primaryKey": {
+            "ID": "64F8CBD0-9A0D-4815-B302-B7FAB17898D6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_INPUT",
+            "IsSuccess": false,
+            "Description": "DiagramType, Output or SpecJSON is missing or malformed (for example SpecJSON is not a JSON object)."
+          },
+          "primaryKey": {
+            "ID": "E3479E8F-8908-4ABB-A94B-269EB6877ED7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "RENDER_FAILED",
+            "IsSuccess": false,
+            "Description": "archify failed for a reason it could not classify. Retrying the same spec will not help."
+          },
+          "primaryKey": {
+            "ID": "84A63FF9-F5E2-4AFD-9438-06A344817D4A"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "TIMEOUT",
+            "IsSuccess": false,
+            "Description": "The render did not finish within 30 seconds. Simplify the diagram or split it into several."
+          },
+          "primaryKey": {
+            "ID": "FFEFEBB4-6F3D-4DDB-AF55-66779ACF230A"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "BROWSER_CHECK_FAILED",
+            "IsSuccess": false,
+            "Description": "BrowserCheck was requested and the page did not lay the diagram out. The Message lists the problems."
+          },
+          "primaryKey": {
+            "ID": "FF069EB8-9CB4-4378-8237-0A0A415D1673"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Get Architecture Diagram Reference",
+      "Description": "Returns archify authoring material for Render Architecture Diagram, one piece at a time: a diagram type's JSON schema (with the common schema), the type's canonical example spec, or a reference document (authoring-defaults, authoring-contract, layout-repair, brand-marks). Read the schema and the example before writing a spec.",
+      "DriverClass": "__GetArchitectureDiagramReference",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-book-open",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data"
+    },
+    "primaryKey": {
+      "ID": "4CEB029C-B252-4649-9E10-BDE31BB4A7B1"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Topic",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "What to return: schema, example, authoring-defaults, authoring-contract, layout-repair or brand-marks.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "787D3D04-9886-4B64-AA27-DD54C9DFEA97"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DiagramType",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Required for schema and example: architecture, workflow, sequence, dataflow or lifecycle.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "DB4B4A25-F4A7-40C0-80D3-97558936DBFC"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "The Message holds the requested schema, example or reference document."
+          },
+          "primaryKey": {
+            "ID": "55087815-96B4-444E-BFAF-A3DEFB4E0BBB"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_INPUT",
+            "IsSuccess": false,
+            "Description": "Topic is unknown, or schema/example was requested without a valid DiagramType."
+          },
+          "primaryKey": {
+            "ID": "51D3387D-EB08-4153-AA76-988054530DB9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "The requested material is not in this build of the diagram package."
+          },
+          "primaryKey": {
+            "ID": "0904A8DE-F33B-4B5E-983A-36F73D0F14DE"
+          }
+        }
+      ]
+    }
+  }
+]

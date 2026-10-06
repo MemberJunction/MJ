@@ -1,0 +1,69 @@
+diff --git a/renderers/shared/cli.mjs b/renderers/shared/cli.mjs
+index bc4a5e3b56..1bc2dc1cc2 100644
+--- a/renderers/shared/cli.mjs
++++ b/renderers/shared/cli.mjs
+@@ -74,6 +74,9 @@ function applyLocaleTranslations(diagramType, diagram) {
+ // Keep this synchronous because callers also use it to establish the guarded
+ // output path before testing a last-moment filesystem alias change.
+ export function loadDiagram({ rendererDir, diagramType, defaultExample, argv = process.argv }) {
++  // MJ shim: @memberjunction/ai-diagrams renders in memory. Its worker sets this job before importing a renderer.
++  const mjJob = globalThis.__MJ_ARCHIFY_JOB;
++  if (mjJob) return loadInMemoryDiagram(diagramType, mjJob);
+   // Compilers also import this module for SVG helpers. Only CLI execution
+   // should install a process-level handler, before reading or validating input.
+   installRendererDiagnosticBoundary();
+@@ -130,11 +133,41 @@ export function loadDiagram({ rendererDir, diagramType, defaultExample, argv = p
+   return { diagram, template, outPath, sourceEvidence };
+ }
+ 
++// MJ shim: loadDiagram's checks on an in-memory spec. No input file, no output path, and no
++// repository evidence (a server has no checkout to verify source claims against).
++function loadInMemoryDiagram(diagramType, job) {
++  const diagram = job.diagram;
++  validateSchema(diagramType, diagram);
++  applyLocaleTranslations(diagramType, diagram);
++  validateCrossCollectionContracts(diagramType, diagram);
++  validateEngineeringProfile(diagramType, diagram);
++  return { diagram, template: job.template, outPath: '', sourceEvidence: null };
++}
++
++// MJ shim: a server must not fetch whatever URL a spec names, so in memory only catalog marks resolve.
++function rejectRemoteBrandMarks(diagramType, diagram) {
++  const collection = SEMANTIC_COLLECTIONS[diagramType];
++  const nodes = Array.isArray(diagram[collection]) ? diagram[collection] : [];
++  const remote = nodes.flatMap((node, index) => {
++    const brand = node?.brand;
++    const isRemote = (typeof brand === 'object' && brand !== null) || (typeof brand === 'string' && /^https?:/i.test(brand.trim()));
++    return isRemote ? [`/${collection}/${index}/brand`] : [];
++  });
++  if (!remote.length) return;
++  const message = `Brand marks from URLs are not available here: ${remote.join(', ')}`;
++  throwDiagnosticError(message, [{
++    code: 'brand/remote-unavailable', message,
++    subject: { paths: remote },
++    supportedFixes: ['use a brand name from the built-in catalog', 'remove the brand field'],
++  }]);
++}
++
+ // Brand URL capture is the only asynchronous authoring step. Typed renderers
+ // opt into it through this wrapper without changing loadDiagram's long-lived
+ // synchronous safety contract.
+ export async function loadDiagramWithBrandMarks(options) {
+   const loaded = loadDiagram(options);
++  if (globalThis.__MJ_ARCHIFY_JOB) rejectRemoteBrandMarks(options.diagramType, loaded.diagram); // MJ shim
+   await prepareDiagramBrandMarks(options.diagramType, loaded.diagram);
+   return loaded;
+ }
+@@ -271,6 +304,12 @@ export function writeDiagram({ outPath, template, diagramType, meta, svg, cards,
+     visualPreset: meta.visual_preset || 'classic',
+     sourceEvidence,
+   });
++  // MJ shim: hand the page and its SVG back to the in-memory job instead of writing a file.
++  const mjJob = globalThis.__MJ_ARCHIFY_JOB;
++  if (mjJob) {
++    mjJob.result = { html, svg };
++    return;
++  }
+   let candidatePath;
+   let candidateIdentity;
+   let candidateBinding;
