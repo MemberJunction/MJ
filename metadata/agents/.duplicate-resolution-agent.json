@@ -36,10 +36,18 @@
             "RubricID": "@lookup:MJ: Rubrics.Name=Duplicate decision",
             "Purpose": "Evaluation",
             "IsDefault": true,
-            "Status": "Active"
+            "Status": "Active",
+            "EvaluatorConfig": {
+              "EvaluatorType": "AIPrompt",
+              "PromptName": "Rubric Judge - Duplicate Resolution Agent"
+            }
           },
           "primaryKey": {
             "ID": "24739DAF-4A9D-42DB-9739-F899E72222F9"
+          },
+          "sync": {
+            "lastModified": "2026-10-02T21:42:25.024Z",
+            "checksum": "662993ac947658a3833175f23ab14810f0d465ca65da6a1eba1468891b93b2f5"
           }
         },
         {
@@ -49,10 +57,18 @@
             "Purpose": "SelfCheck",
             "IsDefault": true,
             "Status": "Disabled",
-            "MaxSelfCheckAttempts": 1
+            "MaxSelfCheckAttempts": 1,
+            "EvaluatorConfig": {
+              "EvaluatorType": "AIPrompt",
+              "PromptName": "Rubric Judge - Duplicate Resolution Agent"
+            }
           },
           "primaryKey": {
             "ID": "93C02EDC-66DC-43DE-9DCA-6C87656BAB3B"
+          },
+          "sync": {
+            "lastModified": "2026-10-02T21:42:25.035Z",
+            "checksum": "ad29ddd8ead880804d9968e7ad40d8054159886a99bda007ab934266e0a9f3f3"
           }
         },
         {
@@ -62,10 +78,18 @@
             "Purpose": "ProductionSampling",
             "IsDefault": true,
             "Status": "Active",
-            "SampleRate": 0.1
+            "SampleRate": 0.1,
+            "EvaluatorConfig": {
+              "EvaluatorType": "AIPrompt",
+              "PromptName": "Rubric Judge - Duplicate Resolution Agent"
+            }
           },
           "primaryKey": {
             "ID": "987F7908-3A02-457C-BF8D-7B707C24CFF2"
+          },
+          "sync": {
+            "lastModified": "2026-10-02T21:42:25.048Z",
+            "checksum": "bd4e59bb714a9834a77f573e6026691ebef2846921222249f799e4e40560d962"
           }
         }
       ]

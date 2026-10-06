@@ -17,6 +17,9 @@ export class PGQueryParameterProcessor {
         if (typeof value === 'number') return value;
         if (typeof value === 'string') return value;
         if (Buffer.isBuffer(value)) return value; // BYTEA
+        // Any other byte array (e.g. a plain Uint8Array) is bound as bytea too; String() would
+        // have turned it into "1,2,3".
+        if (value instanceof Uint8Array) return Buffer.from(value.buffer, value.byteOffset, value.byteLength);
         return String(value);
     }
 

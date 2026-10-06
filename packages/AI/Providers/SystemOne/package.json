@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/ai-systemone",
   "type": "module",
-  "version": "6.2.0-edge.1",
+  "version": "6.2.0-edge.2",
   "description": "MemberJunction driver for any server that speaks the System One decisions API (POST /v1/systemone): Kev on Modal, llama.cpp llama-server, TypeSafe",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -20,8 +20,8 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@memberjunction/ai": "6.2.0-edge.1",
-    "@memberjunction/global": "6.2.0-edge.1"
+    "@memberjunction/ai": "6.2.0-edge.2",
+    "@memberjunction/global": "6.2.0-edge.2"
   },
   "repository": {
     "type": "git",

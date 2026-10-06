@@ -3,19 +3,19 @@ import { CommonModule } from '@angular/common';
 import { RunView } from '@memberjunction/core';
 import { RegisterClassEx } from '@memberjunction/global';
 import { BaseFormPanel } from '@memberjunction/ng-base-forms';
-import { MJConversationEntity } from '@memberjunction/core-entities';
+import { MJConversationDetailEntity, MJConversationEntity } from '@memberjunction/core-entities';
 
 interface ConversationDetailRow {
     ID: string;
-    Role: string;
+    Role: MJConversationDetailEntity['Role'];
     Message: string;
     CreatedAt: string;
 }
 
 @RegisterClassEx(BaseFormPanel, {
-    key: 'form-panel:Conversations:overview',
+    key: 'form-panel:MJ: Conversations:overview',
     metadata: {
-        entity: 'Conversations',
+        entity: 'MJ: Conversations',
         slot: 'before-fields',
         sortKey: 10,
     },
@@ -31,21 +31,27 @@ interface ConversationDetailRow {
             <div class="mj-overview-card">
                 <div class="mj-card-header">
                     <div class="mj-card-title"><i class="fa-solid fa-comments" style="color: var(--mj-brand-primary, #38bdf8);"></i> Turn Summary</div>
-                    <span class="mj-card-badge">{{ Messages.length }} Turns</span>
+                    @if (!LoadError) {
+                        <span class="mj-card-badge">{{ Messages.length }} Turns</span>
+                    }
                 </div>
                 <div class="mj-card-body">
-                    <div class="mj-metric-row">
-                        <span class="mj-metric-label">Total Messages</span>
-                        <span class="mj-metric-val">{{ Messages.length }}</span>
-                    </div>
-                    <div class="mj-metric-row">
-                        <span class="mj-metric-label">User Prompts</span>
-                        <span class="mj-metric-val">{{ UserMessageCount }}</span>
-                    </div>
-                    <div class="mj-metric-row">
-                        <span class="mj-metric-label">Agent Responses</span>
-                        <span class="mj-metric-val">{{ AgentMessageCount }}</span>
-                    </div>
+                    @if (LoadError) {
+                        <span class="mj-load-error">{{ LoadError }}</span>
+                    } @else {
+                        <div class="mj-metric-row">
+                            <span class="mj-metric-label">Total Messages</span>
+                            <span class="mj-metric-val">{{ Messages.length }}</span>
+                        </div>
+                        <div class="mj-metric-row">
+                            <span class="mj-metric-label">User Prompts</span>
+                            <span class="mj-metric-val">{{ UserMessageCount }}</span>
+                        </div>
+                        <div class="mj-metric-row">
+                            <span class="mj-metric-label">Agent Responses</span>
+                            <span class="mj-metric-val">{{ AgentMessageCount }}</span>
+                        </div>
+                    }
                 </div>
             </div>
 
@@ -56,7 +62,9 @@ interface ConversationDetailRow {
                     <span class="mj-card-badge">History</span>
                 </div>
                 <div class="mj-card-body">
-                    @if (Messages.length === 0) {
+                    @if (LoadError) {
+                        <span class="mj-load-error">{{ LoadError }}</span>
+                    } @else if (Messages.length === 0) {
                         <span style="font-size: 12px; color: var(--mj-text-muted);">No messages in this conversation yet.</span>
                     } @else {
                         @for (msg of RecentMessages; track msg.ID) {
@@ -64,7 +72,7 @@ interface ConversationDetailRow {
                                 <span class="mj-metric-label" style="text-overflow: ellipsis; overflow: hidden; white-space: nowrap; max-width: 200px;">
                                     <strong>{{ msg.Role }}:</strong> {{ msg.Message }}
                                 </span>
-                                <span class="mj-pill" [class.mj-pill-blue]="msg.Role === 'user'" [class.mj-pill-green]="msg.Role !== 'user'">
+                                <span class="mj-pill" [class.mj-pill-blue]="IsUserTurn(msg)" [class.mj-pill-green]="IsAgentTurn(msg)">
                                     {{ msg.Role }}
                                 </span>
                             </div>
@@ -127,6 +135,7 @@ interface ConversationDetailRow {
         }
         .mj-metric-label { color: var(--mj-text-secondary, #94a3b8); }
         .mj-metric-val { font-weight: 600; color: var(--mj-text-primary, #f8fafc); font-family: monospace; }
+        .mj-load-error { font-size: 12px; color: var(--mj-status-error); }
         .mj-pill { font-size: 10.5px; font-weight: 700; padding: 2px 6px; border-radius: 4px; }
         .mj-pill-green { background: rgba(16, 185, 129, 0.15); color: #10b981; }
         .mj-pill-blue { background: rgba(56, 189, 248, 0.15); color: #38bdf8; }
@@ -135,17 +144,29 @@ interface ConversationDetailRow {
 export class ConversationOverviewPanel extends BaseFormPanel<MJConversationEntity> implements OnInit {
     private cdr = inject(ChangeDetectorRef);
     public Messages: ConversationDetailRow[] = [];
+    /** Set when the query fails, so the cards show the failure instead of zero messages. */
+    public LoadError: string | null = null;
 
     public ngOnInit(): void {
         this.loadConversationMessages();
     }
 
     public get UserMessageCount(): number {
-        return this.Messages.filter(m => m.Role?.toLowerCase() === 'user').length;
+        return this.Messages.filter(m => this.IsUserTurn(m)).length;
     }
 
     public get AgentMessageCount(): number {
-        return this.Messages.filter(m => m.Role?.toLowerCase() !== 'user').length;
+        return this.Messages.filter(m => this.IsAgentTurn(m)).length;
+    }
+
+    /** A turn the user sent. `Role` is stored as 'User', 'AI' or 'Error'. */
+    protected IsUserTurn(detail: ConversationDetailRow): boolean {
+        return detail.Role === 'User';
+    }
+
+    /** A turn an agent sent. An 'Error' turn is neither a user turn nor an agent turn. */
+    protected IsAgentTurn(detail: ConversationDetailRow): boolean {
+        return detail.Role === 'AI';
     }
 
     public get RecentMessages(): ConversationDetailRow[] {
@@ -157,19 +178,27 @@ export class ConversationOverviewPanel extends BaseFormPanel<MJConversationEntit
         try {
             const rv = new RunView();
             const res = await rv.RunView<ConversationDetailRow>({
-                EntityName: 'Conversation Details',
+                EntityName: 'MJ: Conversation Details',
                 ExtraFilter: `ConversationID = '${this.Record.ID}'`,
                 Fields: ['ID', 'Role', 'Message', '__mj_CreatedAt'],
                 OrderBy: '__mj_CreatedAt DESC',
                 MaxRows: 50,
                 ResultType: 'simple'
             });
-            if (res.Success && res.Results) {
-                this.Messages = res.Results;
-                this.cdr.markForCheck();
+            if (res.Success) {
+                this.Messages = res.Results ?? [];
+            } else {
+                this.showLoadError(res.ErrorMessage);
             }
         } catch (e) {
             console.error('Failed to load conversation details:', e);
+            this.showLoadError(e instanceof Error ? e.message : undefined);
         }
+        this.cdr.markForCheck();
+    }
+
+    /** Shows a short "could not load" line, with the underlying message when there is one. */
+    private showLoadError(detail: string | undefined): void {
+        this.LoadError = detail ? `Could not load messages: ${detail}` : 'Could not load messages.';
     }
 }

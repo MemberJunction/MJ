@@ -2038,6 +2038,11 @@ export interface RunViewSystemUserInput {
      * Starting row number for pagination (optional, 0-based)
      */
     StartRow?: number;
+    /**
+     * When true, binary fields (varbinary / bytea columns) are returned as base64 strings.
+     * They are omitted by default; a binary field named in `Fields` is always returned. (optional)
+     */
+    IncludeBinaryFields?: boolean;
 }
 
 

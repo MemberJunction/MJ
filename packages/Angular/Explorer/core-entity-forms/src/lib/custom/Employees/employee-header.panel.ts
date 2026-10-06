@@ -7,11 +7,15 @@ import { MJEmployeeEntity, UserInfoEngine } from '@memberjunction/core-entities'
 const SETTING_KEY = 'mj.form.employees.headerCollapsed';
 
 @RegisterClassEx(BaseFormPanel, {
-    key: 'form-panel:Employees:header',
+    key: 'form-panel:MJ: Employees:header',
     metadata: {
-        entity: 'Employees',
-        slot: 'header',
-        sortKey: 10,
+        entity: 'MJ: Employees',
+        // A hero is a bare strip in before-fields. Its sortKey is above the overview's
+        // (higher draws first), so it draws above the overview cards.
+        slot: 'before-fields',
+        presentation: 'bare',
+        contributionKey: 'employees:header',
+        sortKey: 20,
     },
 })
 @Component({

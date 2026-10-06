@@ -18,7 +18,7 @@ describe('RubricComparisonMatrixComponent (DOM)', () => {
                 { id: 'agent', name: 'Agent', evaluatorType: 'Agent', status: 'Submitted', scores: [{ key: 'clarity', normalizedScore: 0 }] },
             ];
         });
-        const heads = [...host.querySelectorAll('.matrix-head')].map(cell => cell.textContent?.trim());
+        const heads = Array.from(host.querySelectorAll('.matrix-head')).map(cell => cell.textContent?.trim());
         expect(heads).toEqual(['Criterion', 'AI Prompt', 'Agent']);
         expect(host.textContent).not.toContain('AI Evaluator');
         expect(host.querySelectorAll('.matrix-disagree')).toHaveLength(2);

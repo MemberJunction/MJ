@@ -127,10 +127,15 @@ export class MJUserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJProjects', sectionName: 'Projects', isExpanded: false },
             { sectionKey: 'mJRecordCloneLogs', sectionName: 'Record Clone Logs', isExpanded: false },
             { sectionKey: 'mJAISkills', sectionName: 'AI Skills', isExpanded: false },
+            { sectionKey: 'mJEntityFormContributions', sectionName: 'Entity Form Contributions', isExpanded: false },
             { sectionKey: 'mJRubricVersions', sectionName: 'Rubric Versions', isExpanded: false },
             { sectionKey: 'mJUserRoutines', sectionName: 'User Routines', isExpanded: false },
             { sectionKey: 'mJRubricEvaluations', sectionName: 'Rubric Evaluations', isExpanded: false },
-            { sectionKey: 'mJUserRoutineRecipients', sectionName: 'User Routine Recipients', isExpanded: false }
+            { sectionKey: 'mJUserRoutineRecipients', sectionName: 'User Routine Recipients', isExpanded: false },
+            { sectionKey: 'mJInteractionEvents', sectionName: 'Interaction Events', isExpanded: false },
+            { sectionKey: 'mJMeetingParticipants', sectionName: 'Meeting Participants', isExpanded: false },
+            { sectionKey: 'mJMeetings', sectionName: 'Meetings', isExpanded: false },
+            { sectionKey: 'mJInteractionOffers', sectionName: 'Interaction Offers', isExpanded: false }
         ]);
     }
 }

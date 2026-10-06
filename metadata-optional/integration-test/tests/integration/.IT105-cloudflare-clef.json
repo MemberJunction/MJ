@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT105 - Cloudflare Clef Decision Models",
+    "Description": "Cloudflare's Clef and Clef-flash decision models resolve from the synced metadata through AIDecisionRunner to the Workers AI request, with no network. CF1 Clef and Clef-flash are Active Decision models whose effective Decision limits are 64 questions per call, 255 Choice options, 10 Score levels and 65,536 state tokens; each has one Cloudflare Model Developer row, one Active Cloudflare Inference Provider row naming the CloudflareDecision driver, its @cf/cloudflare APIName and a 65,536-token input limit without streaming, and an active Realtime cost row at $0.24 or $0.09 per million input tokens with free output; the Cloudflare vendor takes an API Key credential. CF2 ClassFactory.CreateInstance(BaseDecision, 'CloudflareDecision', key) returns the shipped CloudflareDecision class, which reads the account ID from a '<accountId>:<apiToken>' key. CF3 a real AIDecisionRunner.ExecuteDecision on the Default Decision prompt, with override naming each model and its Cloudflare vendor and a legacy apiKeys credential, selects that model with CloudflareDecision; the driver POSTs the System One body for a Likelihood, a Choice and a Score question to https://api.cloudflare.com/client/v4/accounts/<account>/ai/run/<APIName> with the token alone as the bearer and the short model name in the body; the scripted Workers AI response, in Cloudflare's v4 envelope, comes back mapped (Choice probabilities renormalised, Score probabilities keyed by level name); and the MJ: AI Prompt Runs row is recorded against that model and the Cloudflare vendor, successful, with the scripted input tokens and a cost priced from the model's cost row. CF4 a Workers AI v4 envelope reporting success false, whether it arrives with a 200 or a 500, fails the call with the envelope's errors[].message: Clef alone fails with that message on the result and the run row, and a throwaway test Decision prompt bound to Clef then Clef-flash fails over and Clef-flash answers, the runner's logged attempt for Clef carrying the message. CF5 a bare System One response with no envelope, as a Worker or AI Gateway returns it, is accepted and mapped. CF6 a real API Key credential created through CredentialEngine (stored encrypted) whose values carry an accountId, bound to Clef's Cloudflare model-vendor row, sends the request to https://api.cloudflare.com/client/v4/accounts/<that account>/ai/run/@cf/cloudflare/clef with its token as the bearer. The network is replaced only at the driver's SendRequest hook, by a subclass registered over CloudflareDecision for the length of CF3 to CF6 and restored after each; CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_WORKERS_AI_BASE_URL are unset for the bundle. Server transport by necessity: the stand-in is a ClassFactory registration in this process. Every prompt run, test prompt, credential, binding and credential audit-log row the bundle creates is deleted, children first.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Clef and Clef-flash are usable as Decision models: their metadata resolves with the right limits, driver, API names and prices, the driver builds through the ClassFactory, and an AIDecisionRunner call naming either one sends the right Workers AI request, maps its answers and records the run against the model and Cloudflare; an envelope failure carries Cloudflare's message and fails over, a bare response is accepted, and a bound credential's accountId builds the URL."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "cloudflare-clef"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "9EB04248-0F49-4D04-9AB3-8F07888B60BB"
+  }
+}
