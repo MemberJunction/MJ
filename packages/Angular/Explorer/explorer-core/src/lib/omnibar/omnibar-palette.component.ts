@@ -146,12 +146,8 @@ export class OmnibarPaletteComponent implements OnDestroy {
     }
 
     /**
-     * Keyboard selection may only ever target rows that are actually RENDERED.
-     * RecentRows render only in the empty-query state ({@link Rows} empty AND
-     * `Query.length === 0`), so falling back to them once a query is typed selected
-     * rows the user could not see — and Enter executed one. Real failure from the
-     * regression suite: typing over a seeded '/' left `Rows` empty and Enter opened
-     * an `MJ: Applications` RECORD page instead of switching to the Admin app.
+     * Rows that keyboard selection may target: only rendered rows. {@link RecentRows}
+     * render only in the empty-query state, so they are selectable only then.
      */
     private get selectableRows(): OmnibarRow[] {
         if (this.Rows.length > 0) {
@@ -161,19 +157,12 @@ export class OmnibarPaletteComponent implements OnDestroy {
     }
 
     /**
-     * Whether <kbd>Enter</kbd> on a rowless palette may fall through to the full Search
-     * Results workspace for the typed text. Drives BOTH the key handler and the empty
-     * state's wording, so the promise on screen and the behavior can't diverge.
+     * Whether <kbd>Enter</kbd> on a palette with no rows may open the full Search Results
+     * workspace for the typed text. Drives both the key handler and the empty-state wording.
      *
-     * Default mode is unconditional: full search IS this mode's action — the See-All row
-     * navigates to exactly the same place — so submitting early can't diverge from
-     * submitting late, and a search box that ignores Enter for 300 ms reads as broken.
-     *
-     * Trigger modes require a SETTLED query. There, full search is a *different* action
-     * from what the rows would have offered (switch app, open record), so escaping while
-     * a fetch is outstanding would substitute a global search for the app the user was
-     * three keystrokes into naming — the same class of wrong-action bug as selecting an
-     * unrendered row.
+     * Default mode always allows it, because full search is that mode's own action. A trigger
+     * mode allows it only after its fetch settles, because there full search is a different
+     * action from what the rows offer (switch app, open record).
      */
     public get CanEscapeToFullSearch(): boolean {
         if (this.EffectiveQuery.trim().length <= 1) {
@@ -414,11 +403,9 @@ export class OmnibarPaletteComponent implements OnDestroy {
     /**
      * Executes a suggestion: navigate per its payload, or re-seed for entity drill-in.
      *
-     * Deliberately unguarded: every activation path (input Enter, row Enter, row click)
-     * targets a row the user can see, because {@link selectableRows} only ever offers
-     * rendered rows and a mode change clears {@link Rows} outright. Refusing a visible
-     * row while a debounce is outstanding made the palette look interactive and be inert
-     * for ~300 ms after every keystroke.
+     * Not blocked while a fetch is pending: every activation path targets a rendered row,
+     * because {@link selectableRows} offers only rendered rows and a mode change clears
+     * {@link Rows}.
      */
     public Execute(suggestion: MentionSuggestion): void {
         const nav = GetOmnibarNavPayload(suggestion);
@@ -549,23 +536,14 @@ export class OmnibarPaletteComponent implements OnDestroy {
             return;
         }
 
-        // A MODE change invalidates the rows outright: a different provider answers a
-        // different question, so the old list isn't a stale approximation of the new
-        // one — it's the wrong list. (Typing 'Admin' over the seeded '/' switches
-        // Go-to-App → Global Search, and the app list must not survive that.) Rows
-        // for the SAME mode are kept while the next fetch is in flight, which is
-        // conventional palette behavior and avoids flicker on every keystroke.
+        // A mode change clears the rows, because a different provider answers a different
+        // question. Rows for the same mode stay on screen while the next fetch runs.
         if (this.ActiveTriggerChar !== this.renderedTriggerChar) {
             this.Rows = [];
         }
 
-        // An empty `Rows` must mean "nothing matched", never "we haven't looked yet" — the
-        // empty state asserts "No matches" and offers Enter as an escape hatch, and both
-        // claims are false while a fetch is outstanding. Loading is therefore per-QUERY,
-        // not default-mode-only: trigger modes used to skip this assignment entirely, so
-        // the mode-change clear above rendered "No matches" for the whole debounce.
-        // `Rows.length === 0` keeps same-mode refinement flicker-free — rows already on
-        // screen stay, and no spinner appears.
+        // In every mode, show the spinner while no rows are on screen, so the "No matches"
+        // empty state appears only after a fetch has settled.
         this.IsLoading = this.Rows.length === 0;
         this.cdr.markForCheck();
 
@@ -583,9 +561,8 @@ export class OmnibarPaletteComponent implements OnDestroy {
             ContextUser: this.currentUser,
             Provider: null,
         };
-        // A failed fetch must still SETTLE this generation. Letting the rejection escape
-        // left the spinner up forever (and surfaced as an unhandled rejection, since the
-        // caller invokes this as `void fetchSuggestions(...)`).
+        // A failed fetch still settles this generation, so the spinner clears and no
+        // rejection escapes the `void fetchSuggestions(...)` call.
         let suggestions: MentionSuggestion[] = [];
         try {
             suggestions = query.trim().length === 0
