@@ -452,6 +452,15 @@ describe('MJComponentEntityServer — form component guard', () => {
             expect(await make(ALICE, { IsSaved: false, ID: 'NEW', Name: 'Łódź Panel' }).Save()).toBe(false);
         });
 
+        it('refuses a create without the grant when the name check throws', async () => {
+            db.components.push({ ID: 'OTHER', Name: 'PersonLtvStrip', Namespace: null, Specification: '{}', Status: null, Type: null });
+            db.throws = true;
+            const e = make(ALICE, { IsSaved: false, ID: 'NEW' });
+            expect(await e.Save()).toBe(false);
+            expect(e.SuperSaveCalled).toBe(false);
+            expect(e.Recorded?.Message).toMatch(/could not be read.*connection lost/);
+        });
+
         it('allows a create with no same-named component', async () => {
             expect(await make(ALICE, { IsSaved: false, ID: 'NEW', Name: 'Unique' }).Save()).toBe(true);
         });

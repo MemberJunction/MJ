@@ -19,6 +19,8 @@ const { hoisted } = vi.hoisted(() => ({
     hoisted: {
         entities: [] as Array<{ entityName: string; fields: Record<string, unknown>; saveOutcome: boolean; ID: string }>,
         dupRows: [] as Array<{ ID: string; Status: string }>,
+        /** The ExtraFilter of every duplicate check, in order. */
+        dupFilters: [] as string[],
         dupQueryFails: false,
         lintViolations: [] as Array<{ severity: string; rule: string; message: string }>,
         /** Entity names whose new rows fail to save. */
@@ -97,7 +99,8 @@ const provider = {
 vi.mock('@memberjunction/core', async () => {
     const actual = await vi.importActual<Record<string, unknown>>('@memberjunction/core');
     class MockRunView {
-        async RunView<T>(): Promise<{ Success: boolean; Results: T[]; ErrorMessage?: string }> {
+        async RunView<T>(params: { ExtraFilter?: string }): Promise<{ Success: boolean; Results: T[]; ErrorMessage?: string }> {
+            hoisted.dupFilters.push(params.ExtraFilter ?? '');
             if (hoisted.dupQueryFails) return { Success: false, Results: [], ErrorMessage: 'boom' };
             return { Success: true, Results: hoisted.dupRows as unknown as T[] };
         }
@@ -151,7 +154,7 @@ const componentRow = () => hoisted.entities.find(e => e.entityName === 'MJ: Comp
 const contributionRow = () => hoisted.entities.find(e => e.entityName === 'MJ: Entity Form Contributions')!;
 
 beforeEach(() => {
-    hoisted.entities = []; hoisted.dupRows = []; hoisted.dupQueryFails = false; hoisted.lintViolations = [];
+    hoisted.entities = []; hoisted.dupRows = []; hoisted.dupFilters = []; hoisted.dupQueryFails = false; hoisted.lintViolations = [];
     hoisted.failingSaves = new Set();
     hoisted.tx = { supported: false, open: false, pending: [], committed: [], rolledBack: 0 };
     hoisted.saveGuard = null;
@@ -249,6 +252,12 @@ describe('CreateFormContributionAction', () => {
     it('returns ALREADY_EXISTS when an Active or Pending row shares the key', async () => {
         hoisted.dupRows = [{ ID: 'ROW-1', Status: 'Pending' }];
         expect((await run(params())).ResultCode).toBe('ALREADY_EXISTS');
+    });
+
+    it("looks for a duplicate among the caller's own Active or Pending rows", async () => {
+        await run(params());
+        expect(hoisted.dupFilters[0]).toContain("Scope='User' AND UserID='USER-1'");
+        expect(hoisted.dupFilters[0]).toContain("Status IN ('Active','Pending')");
     });
 
     it('returns QUERY_FAILED when the duplicate check cannot run, and writes nothing', async () => {

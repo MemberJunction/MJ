@@ -50,6 +50,14 @@ describe('PanelContributionKey', () => {
         expect(CONTRIBUTION_KEY_PATTERN.test(key ?? '')).toBe(true);
     });
 
+    it('collapses a run of dashes to one', () => {
+        expect(PanelContributionKey('Revenue--Tracker')).toBe('panel:Revenue-Tracker');
+    });
+
+    it('keeps at most 240 characters of the name, so the key fits the column', () => {
+        expect(PanelContributionKey('x'.repeat(300))).toBe(`panel:${'x'.repeat(240)}`);
+    });
+
     it('returns null when the name carries nothing usable', () => {
         expect(PanelContributionKey(undefined)).toBeNull();
         expect(PanelContributionKey('   ')).toBeNull();
