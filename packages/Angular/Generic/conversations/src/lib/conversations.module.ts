@@ -89,6 +89,7 @@ import { LoadRealtimeMediaChannel } from './components/realtime/media/media-chan
 import { LoadClientContextChannel } from './components/realtime/channels/client-context-channel';
 import { LoadIdentityVerificationChannel } from './components/realtime/identity-verification/identity-verification-channel';
 import { LoadRealtimeCaptureChannels } from './components/realtime/capture/realtime-capture-channel';
+import { LoadRealtimeAvatarChannel } from './components/realtime/avatar/realtime-avatar-channel';
 import { RealtimeMediaSurfaceComponent } from './components/realtime/media/realtime-media-surface.component';
 import { LoadRealtimeInteractiveComponentChannel } from './components/realtime/interactive-component/interactive-component-channel';
 import { RealtimeInteractiveComponentSurfaceComponent } from './components/realtime/interactive-component/realtime-interactive-component-surface.component';
@@ -124,6 +125,8 @@ LoadClientContextChannel();
 LoadIdentityVerificationChannel();
 // The Camera and Screen Share channel plugins (ClientPluginClass 'RealtimeCameraChannel' / 'RealtimeScreenShareChannel').
 LoadRealtimeCaptureChannels();
+// The Avatar channel plugin (ClientPluginClass 'RealtimeAvatarChannel'): the agent's video.
+LoadRealtimeAvatarChannel();
 // Whiteboard ARTIFACT VIEWER plugin — resolved by the artifact plugin host via the
 // ClassFactory (keyed by the artifact type's DriverClass), same tree-shaking concern.
 LoadWhiteboardArtifactViewer();

@@ -151,5 +151,25 @@
     "primaryKey": {
       "ID": "150EAB9E-55CB-46D0-A17F-D3A389AE8898"
     }
+  },
+  {
+    "fields": {
+      "Name": "Avatar",
+      "Description": "The agent's video, when the model sends one (an avatar). It is in every call and inert without video: it gives the agent no tools or instructions, and shows the agent nothing. Its surface is the agent's video, placed on the stage.",
+      "ServerPluginClass": "ClientOnlyChannelServer",
+      "ClientPluginClass": "RealtimeAvatarChannel",
+      "TransportType": "PubSub",
+      "IsActive": true,
+      "UIConfig": {
+        "DisplayName": "Avatar",
+        "GroupName": "Media",
+        "Icon": "fa-solid fa-circle-user",
+        "Color": "--mj-brand-primary",
+        "Placement": "stage"
+      }
+    },
+    "primaryKey": {
+      "ID": "43108281-981C-4467-B2EC-0B9F47CCFA57"
+    }
   }
 ]

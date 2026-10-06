@@ -76,11 +76,18 @@
   background: var(--mj-brand-primary);
 }
 
-/* Text over video sits on a dark scrim in both themes, so it stays light rather than following --mj-text-inverse. */
-.tile__chip {
+/* The chips sit in a row in the top-left corner. */
+.tile__chips {
   position: absolute;
   top: 8px;
   left: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* Text over video sits on a dark scrim in both themes, so it stays light rather than following --mj-text-inverse. */
+.tile__chip {
   font-size: 0.72rem;
   padding: 2px 8px;
   border-radius: 999px;

@@ -15,8 +15,9 @@ import { MediaVideoBinding } from '../media-video-binding';
 
 /**
  * `mj-media-tile`: one participant. Their video (the preferred one, else a shared screen, the camera, the avatar),
- * or their picture or initials when there is none; name, role badge, mute and screen-sharing indicators,
- * connection quality, an active-speaker ring, an optional audio meter and a pin button.
+ * or their picture or initials when there is none; name, role badge, mute and screen-sharing indicators, an
+ * "AI-generated video" label while it shows an avatar, connection quality, an active-speaker ring, an optional audio
+ * meter and a pin button.
  *
  * The tile never plays audio: a voice must not stop because its tile left the screen, so the host plays each
  * voice once, outside the layout.
@@ -48,8 +49,15 @@ import { MediaVideoBinding } from '../media-video-binding';
         </div>
       }
 
-      @if (IsSharingScreen) {
-        <span class="tile__chip"><i class="fa-solid fa-display" aria-hidden="true"></i> Sharing</span>
+      @if (IsAvatarVideo || IsSharingScreen) {
+        <div class="tile__chips">
+          @if (IsAvatarVideo) {
+            <span class="tile__chip"><i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> AI-generated video</span>
+          }
+          @if (IsSharingScreen) {
+            <span class="tile__chip"><i class="fa-solid fa-display" aria-hidden="true"></i> Sharing</span>
+          }
+        </div>
       }
 
       @if (Pinnable) {
@@ -158,6 +166,15 @@ export class MediaTileComponent implements AfterViewInit, OnDestroy {
   /** Whether the participant is sharing a screen. */
   public get IsSharingScreen(): boolean {
     return this.Participant?.Video.screen !== undefined;
+  }
+
+  /**
+   * Whether the video shown is the participant's avatar. An avatar is generated, and its watermark (where the model adds
+   * one) cannot be seen, so the tile says so for as long as it shows one.
+   */
+  public get IsAvatarVideo(): boolean {
+    const avatar = this.Participant?.Video.avatar;
+    return avatar !== undefined && this.chooseVideo() === avatar;
   }
 
   /** The participant's level reader, or `null` when there is none to meter. */

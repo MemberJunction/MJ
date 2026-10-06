@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { renderComponentFixture, query } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, queryAll } from '@memberjunction/ng-test-utils';
 import type { MediaParticipant, MediaVideoSource } from '@memberjunction/ai-realtime-client/media';
 import { MediaTileComponent } from './media-tile.component';
 
@@ -66,6 +66,18 @@ describe('MediaTileComponent (DOM)', () => {
     it('shows the sharing chip while the participant shares a screen', () => {
       expect(query(render(participant({ Video: { screen: elementSource() } })), '.tile__chip')).not.toBeNull();
       expect(query(render(participant()), '.tile__chip')).toBeNull();
+    });
+
+    it('says the video is AI-generated for as long as it shows an avatar', () => {
+      const chips = (value: MediaParticipant) => queryAll(render(value), '.tile__chip').map((c) => c.textContent?.trim());
+      expect(chips(participant({ Role: 'agent', Video: { avatar: elementSource() } }))).toEqual(['AI-generated video']);
+      expect(chips(participant({ Role: 'agent' }))).toEqual([]);
+      expect(chips(participant({ Video: { camera: elementSource(), avatar: elementSource() } }))).toEqual([]);
+      expect(chips(participant({ Video: { avatar: elementSource(), screen: elementSource() } }))).toEqual(['Sharing']);
+      expect(chips(participant({ Video: { avatar: elementSource(), screen: elementSource() }, PreferredVideo: 'avatar' }))).toEqual([
+        'AI-generated video',
+        'Sharing',
+      ]);
     });
 
     it('reflects connection quality as a modifier class', () => {

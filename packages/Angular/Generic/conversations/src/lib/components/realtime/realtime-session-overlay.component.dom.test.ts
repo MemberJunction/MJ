@@ -7,6 +7,7 @@ import {
   BaseRealtimeChannelClient,
   REALTIME_CAPTURES_OFF,
   REALTIME_CAPTURE_OFFERS_NONE,
+  ReadChannelSurfacePlacement,
   type ChannelSurfacePlacement,
   type RealtimeCaptureOffers,
   type RealtimeCaptureState,
@@ -16,9 +17,10 @@ import {
 } from '@memberjunction/realtime-runtime';
 import { renderComponentFixture, query, click, overlayQueryAll, clearOverlayContainers } from '@memberjunction/ng-test-utils';
 import { UserInfoEngine } from '@memberjunction/core-entities';
-import type { MediaPlacement } from '@memberjunction/ai-realtime-client/media';
+import type { MediaPlacement, MediaVideoSource } from '@memberjunction/ai-realtime-client/media';
 import { RealtimeSessionOverlayComponent } from './realtime-session-overlay.component';
 import { RealtimeSessionService } from '../../services/realtime-session.service';
+import { RealtimeAvatarChannel } from './avatar/realtime-avatar-channel';
 
 /** Every surface creation, destruction, bind and unbind, in order. */
 const lifecycle: string[] = [];
@@ -67,6 +69,8 @@ class TestWhiteboardChannel extends BaseRealtimeChannelClient<TestBoardComponent
 function fakeSession() {
   const channels$ = new BehaviorSubject<BaseRealtimeChannelClient[]>([]);
   const focus$ = new Subject<RealtimeChannelFocusEvent>();
+  /** Channels the session marks as used, as the runtime does when the agent first uses one. */
+  const activity$ = new Subject<BaseRealtimeChannelClient>();
   const captures$ = new BehaviorSubject<RealtimeCaptureStates>(REALTIME_CAPTURES_OFF);
   const offers$ = new BehaviorSubject<RealtimeCaptureOffers>(REALTIME_CAPTURE_OFFERS_NONE);
   /** The capture calls the overlay made, in order. */
@@ -83,7 +87,7 @@ function fakeSession() {
     ActiveChannels$: channels$.asObservable(),
     get ActiveChannels(): readonly BaseRealtimeChannelClient[] { return channels$.value; },
     ChannelFocus$: focus$.asObservable(),
-    ChannelActivity$: EMPTY,
+    ChannelActivity$: activity$.asObservable(),
     VideoSources$: new BehaviorSubject<readonly VideoSourceState[]>([]).asObservable(),
     Captures$: captures$.asObservable(),
     CaptureOffers$: offers$.asObservable(),
@@ -113,7 +117,7 @@ function fakeSession() {
     EndRealtimeSession: async (): Promise<void> => undefined,
     CancelDelegation: async (): Promise<boolean> => true,
   } satisfies Partial<RealtimeSessionService>;
-  return { service, channels$, focus$, captures$, offers$, calls };
+  return { service, channels$, focus$, activity$, captures$, offers$, calls };
 }
 
 /**
@@ -452,6 +456,63 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
       await settle();
       expect(f.componentInstance.ChannelFocusMode).toBe(false);
       expect(surface(f).classList.contains('stage-surface--pip')).toBe(true);
+    });
+  });
+
+  describe('the Avatar channel', () => {
+    /** A player source that records where it was attached. */
+    const player = () => {
+      const attached: HTMLVideoElement[] = [];
+      const source: MediaVideoSource = { Kind: 'element', Attach: (element) => (attached.push(element), () => undefined) };
+      return { source, attached };
+    };
+
+    /** A call with the Avatar channel in it, placed as its registry row places it, and the agent's video the test sends. */
+    const renderWithAvatar = async () => {
+      const session = fakeSession();
+      const video$ = new BehaviorSubject<MediaVideoSource | null>(null);
+      const avatar = new RealtimeAvatarChannel();
+      avatar.ApplySurfacePlacement(ReadChannelSurfacePlacement({ Placement: 'stage' }));
+      avatar.Initialize({
+        AgentName: 'Sage',
+        Provider: null,
+        SendContextNote: () => undefined,
+        RequestSave: () => undefined,
+        SetFocusMode: () => undefined,
+        SaveAsArtifact: async () => null,
+        AgentSessionID: 'session-1',
+        ExecuteServerAction: async () => null,
+        AgentVideo$: video$.asObservable(),
+      });
+      const f = renderComponentFixture(RealtimeSessionOverlayComponent, {
+        providers: [
+          { provide: RealtimeSessionService, useValue: session.service },
+          { provide: ErrorHandler, useValue: { handleError: (error: unknown) => reported.push(error) } },
+        ],
+        inputs: { Chrome: 'console' },
+        autoDetect: true,
+      });
+      session.channels$.next([avatar]);
+      await settle();
+      return { f, avatar, video$, ...session };
+    };
+
+    it("shows nothing of the avatar while the agent sends no video", async () => {
+      const { f } = await renderWithAvatar();
+      expect(query(f, '[data-surface="Avatar"]')).toBeNull();
+      expect(f.componentInstance.ChannelFocusMode).toBe(false);
+    });
+
+    it("puts the agent's video on the stage when it arrives, labelled as AI-generated", async () => {
+      const { f, avatar, video$, activity$ } = await renderWithAvatar();
+      const { source, attached } = player();
+      video$.next(source);
+      activity$.next(avatar);
+      await settle();
+      expect(query(f, '[data-surface="Avatar"]')?.classList.contains('stage-surface--stage')).toBe(true);
+      expect(f.componentInstance.ChannelFocusMode).toBe(true);
+      expect(query(f, 'mj-realtime-avatar-surface .tile__chip')?.textContent?.trim()).toBe('AI-generated video');
+      expect(attached).toHaveLength(1);
     });
   });
 });
