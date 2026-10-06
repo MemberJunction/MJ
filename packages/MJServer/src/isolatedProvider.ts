@@ -2,7 +2,8 @@ import sql from 'mssql';
 import { DatabaseProviderBase, Metadata } from '@memberjunction/core';
 import { SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
-import { mj_core_schema } from './config.js';
+import { mj_core_schema, configInfo } from './config.js';
+import { BuildPostgreSQLConnectionConfig, ResolvePostgreSQLEndpoint } from './postgresqlPoolSettings.js';
 
 /**
  * A fresh Read-Write provider with its OWN transaction state, sharing the server's connection pool.
@@ -41,15 +42,10 @@ export async function CreateIsolatedProvider(dataSource?: sql.ConnectionPool): P
  */
 async function createPostgresProvider(): Promise<DatabaseProviderBase> {
   const { PostgreSQLDataProvider, PostgreSQLProviderConfigData } = await import('@memberjunction/postgresql-dataprovider');
-  const pgHost = process.env.PG_HOST || process.env.DB_HOST || 'localhost';
-  const pgPort = parseInt(process.env.PG_PORT || process.env.DB_PORT || '5432', 10);
-  const pgUser = process.env.PG_USERNAME || process.env.DB_USERNAME || 'postgres';
-  const pgPass = process.env.PG_PASSWORD || process.env.DB_PASSWORD || '';
-  const pgDatabase = process.env.PG_DATABASE || process.env.DB_DATABASE || '';
 
   const pgProvider = new PostgreSQLDataProvider();
   const pgConfig = new PostgreSQLProviderConfigData(
-    { Host: pgHost, Port: pgPort, Database: pgDatabase, User: pgUser, Password: pgPass },
+    BuildPostgreSQLConnectionConfig(ResolvePostgreSQLEndpoint(), configInfo.databaseSettings, 'api'),
     mj_core_schema,
     0,
     undefined,
