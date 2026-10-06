@@ -107,6 +107,22 @@ describe('MJButtonDirective', () => {
     });
   });
 
+  describe('shape', () => {
+    it('defaults to the rounded rectangle', () => {
+      expect(directive.Shape).toBe('default');
+      expect(directive.isCircle).toBe(false);
+    });
+
+    it('is a circle alongside any variant and size', () => {
+      directive.Shape = 'circle';
+      directive.Variant = 'danger';
+      directive.Size = 'sm';
+      expect(directive.isCircle).toBe(true);
+      expect(directive.isDanger).toBe(true);
+      expect(directive.isSm).toBe(true);
+    });
+  });
+
   describe('toggle behavior', () => {
     it('should not toggle selected on click when toggleable is false', () => {
       directive.toggleable = false;
@@ -245,6 +261,27 @@ describe('MJButtonDirective', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
       const d = new MJButtonDirective(makeHost(''));
       d.variant = 'primary';
+      d.ngAfterContentInit();
+      expect(warn).not.toHaveBeenCalled();
+      warn.mockRestore();
+    });
+
+    it('warns for a circle with no accessible name, whatever its variant', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const d = new MJButtonDirective(makeHost(''));
+      d.Variant = 'danger';
+      d.Shape = 'circle';
+      d.ngAfterContentInit();
+      expect(warn).toHaveBeenCalledOnce();
+      warn.mockRestore();
+    });
+
+    it('does NOT warn for a circle with an AriaLabel', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const d = new MJButtonDirective(makeHost(''));
+      d.Variant = 'danger';
+      d.Shape = 'circle';
+      d.AriaLabel = 'Unmute microphone';
       d.ngAfterContentInit();
       expect(warn).not.toHaveBeenCalled();
       warn.mockRestore();
