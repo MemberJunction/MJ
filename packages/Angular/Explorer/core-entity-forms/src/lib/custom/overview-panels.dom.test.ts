@@ -207,4 +207,15 @@ describe('ConversationOverviewPanel role display (DOM)', () => {
         expect(values).toEqual(['2', '1', '1']);
         expect(query(fixture, '.mj-load-error')).toBeNull();
     });
+
+    it('counts an Error turn as neither a User prompt nor an agent response, and gives it no pill color', async () => {
+        stubRunView(viewResult([...conversation.Rows, { ID: 'msg-3', Role: 'Error', Message: 'Model timed out' }]));
+        const fixture = await render(conversation);
+        const values = queryAll(fixture, '.mj-metric-val').map((v) => v.textContent?.trim());
+        expect(values).toEqual(['3', '1', '1']);
+        const errorPill = queryAll(fixture, '.mj-pill').find((p) => p.textContent?.trim() === 'Error');
+        expect(errorPill).toBeDefined();
+        expect(errorPill?.classList.contains('mj-pill-green')).toBe(false);
+        expect(errorPill?.classList.contains('mj-pill-blue')).toBe(false);
+    });
 });

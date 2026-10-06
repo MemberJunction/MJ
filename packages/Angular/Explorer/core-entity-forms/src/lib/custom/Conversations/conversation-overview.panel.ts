@@ -72,7 +72,7 @@ interface ConversationDetailRow {
                                 <span class="mj-metric-label" style="text-overflow: ellipsis; overflow: hidden; white-space: nowrap; max-width: 200px;">
                                     <strong>{{ msg.Role }}:</strong> {{ msg.Message }}
                                 </span>
-                                <span class="mj-pill" [class.mj-pill-blue]="msg.Role === 'User'" [class.mj-pill-green]="msg.Role !== 'User'">
+                                <span class="mj-pill" [class.mj-pill-blue]="isUserTurn(msg)" [class.mj-pill-green]="isAgentTurn(msg)">
                                     {{ msg.Role }}
                                 </span>
                             </div>
@@ -152,11 +152,21 @@ export class ConversationOverviewPanel extends BaseFormPanel<MJConversationEntit
     }
 
     public get UserMessageCount(): number {
-        return this.Messages.filter(m => m.Role?.toLowerCase() === 'user').length;
+        return this.Messages.filter(m => this.isUserTurn(m)).length;
     }
 
     public get AgentMessageCount(): number {
-        return this.Messages.filter(m => m.Role?.toLowerCase() !== 'user').length;
+        return this.Messages.filter(m => this.isAgentTurn(m)).length;
+    }
+
+    /** A turn the user sent. `Role` is stored as 'User', 'AI' or 'Error'. */
+    protected isUserTurn(detail: ConversationDetailRow): boolean {
+        return detail.Role === 'User';
+    }
+
+    /** A turn an agent sent. An 'Error' turn is neither a user turn nor an agent turn. */
+    protected isAgentTurn(detail: ConversationDetailRow): boolean {
+        return detail.Role === 'AI';
     }
 
     public get RecentMessages(): ConversationDetailRow[] {
