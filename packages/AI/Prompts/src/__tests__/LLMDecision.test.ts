@@ -1011,6 +1011,40 @@ describe('LLMDecision', () => {
         });
     });
 
+    describe('10. The chat prompt runs under the decision\'s execution scope', () => {
+        type BuildPromptParams = (prompt: MJAIPromptEntityExtended, params: DecisionParams) => AIPromptParams;
+        const chatPrompt = { ID: PROMPT_ID, Name: 'Decision Test Prompt' } as unknown as MJAIPromptEntityExtended;
+        const decisionParams = { State: 'state', Questions: defaultQuestions } as unknown as DecisionParams;
+
+        it("copies the scope's apiKeys, configurationId and CredentialScope, keeping the constructor's contextUser", () => {
+            const decision = new LLMDecision('', PROMPT_ID, mockUser);
+            const apiKeys = [{ driverClass: 'GeminiLLM', apiKey: 'customer-key' }];
+            const otherUser = { ID: 'user-other', Name: 'Other User' } as unknown as UserInfo;
+            decision.ExecutionScope = { contextUser: otherUser, configurationId: 'config-1', apiKeys, credentialId: 'credential-1', CredentialScope: 'RuntimeOnly' };
+            const build = (decision as unknown as { buildPromptParams: BuildPromptParams }).buildPromptParams.bind(decision);
+
+            const promptParams = build(chatPrompt, decisionParams);
+
+            expect(promptParams.apiKeys).toBe(apiKeys);
+            expect(promptParams.configurationId).toBe('config-1');
+            expect(promptParams.credentialId).toBe('credential-1');
+            expect(promptParams.CredentialScope).toBe('RuntimeOnly');
+            expect(promptParams.contextUser).toBe(mockUser);
+            expect(promptParams.prompt).toBe(chatPrompt);
+        });
+
+        it('without a scope, carries no keys or credential scope of its own', () => {
+            const decision = new LLMDecision('', PROMPT_ID, mockUser);
+            const build = (decision as unknown as { buildPromptParams: BuildPromptParams }).buildPromptParams.bind(decision);
+
+            const promptParams = build(chatPrompt, decisionParams);
+
+            expect(promptParams.apiKeys).toBeUndefined();
+            expect(promptParams.CredentialScope).toBeUndefined();
+            expect(promptParams.contextUser).toBe(mockUser);
+        });
+    });
+
     describe("9. The chat run's parent and cost", () => {
         const likelihoodOnly: DecisionParams = {
             Model: 'LLM',
