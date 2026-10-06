@@ -50,6 +50,7 @@ import {
     FusionWeightsByProvider,
     DimensionExplanation,
     ScopePrincipals,
+    SearchAudience,
 } from './search.types';
 import { BaseSearchProvider, SearchProviderConfig } from './ISearchProvider';
 import { SearchFusion, LabeledResultList } from './SearchFusion';
@@ -363,6 +364,10 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         let invocationRerankerName: string | null = null;
 
         try {
+            // A malformed audience fails the search here rather than being skipped later: a reader the
+            // host failed to map would otherwise restrict nothing, and the room would see the caller's reach.
+            this.validateAudience(params.Audience);
+
             // Defensive null-check: `params.Query.trim()` throws on null/undefined,
             // and Sage's LLM has been observed to emit empty/missing tool args.
             // Coerce to string before validating so we surface a clean error
@@ -536,6 +541,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                 // number should be zero (the safety net should never trim anything).
                 LogStatus(`SearchEngine: Residual permission filter removed ${lateFilteredCount} result(s) — consider tightening provider push-down.`);
             }
+            results = await this.FilterForAudience(results, params, contextUser);
 
             const scoreThreshold = params.MinScore ?? 0;
             if (scoreThreshold > 0) {
@@ -689,12 +695,16 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             storage: 'Storage',
         };
 
+        // A provider's partials arrive before any permission pass. Under an audience they would show the
+        // room what only the caller may read, so the event keeps its progress fields and drops its results;
+        // the room's results arrive in `fused`/`final`, after the audience pass.
+        const withholdPartials = this.audienceWithholdsPartials(params, contextUser);
         const onProviderResolved: OnProviderResolved = (ev) => {
             const label = sourceTypeToLabel[ev.sourceType.toLowerCase()] ?? ev.sourceType;
             push({
                 phase: 'provider',
                 providerName: label,
-                results: ev.results,
+                results: withholdPartials ? [] : ev.results,
                 durationMs: ev.durationMs,
             });
         };
@@ -836,8 +846,176 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             // into expansion queries. Two searches identical but for the active skill are NOT
             // interchangeable, so they must not share a cache entry.
             AISkillID: params.AISkillID ?? undefined,
+            // The audience narrows the result set, so a search the caller ran alone must never be
+            // served from the cache to a room, nor a room's result to the caller alone. Sorted so
+            // the same readers in any order share an entry. IDs only: within the TTL, a reader object
+            // with the same ID but different roles gets the cached verdict (see SearchParams.Audience).
+            AudienceReaderIDs: this.audienceReaderIDs(params.Audience, contextUser),
         };
         return `${userKey}|${trimmed}|${this.stableStringify(projection)}`;
+    }
+
+    /**
+     * Throw when `audience` is present but cannot be honoured. Called first in `searchInternal`, whose catch
+     * turns the throw into a `Success: false` result. A malformed reader is refused rather than skipped:
+     * skipping it would restrict nothing, and the room would see the caller's full reach.
+     */
+    private validateAudience(audience: SearchAudience | undefined): void {
+        if (audience === undefined) return;
+        const problem = this.audienceProblem(audience);
+        if (problem) throw new Error(`SearchEngine: invalid Audience — ${problem}`);
+    }
+
+    /** What is wrong with an audience, or `null` when it is well formed. Takes `unknown`: hosts assemble it at runtime. */
+    private audienceProblem(audience: unknown): string | null {
+        if (audience === null || typeof audience !== 'object') {
+            return `expected { Readers: UserInfo[] }, got ${this.describeValue(audience)}. Omit Audience for a search with no audience.`;
+        }
+        const readers = 'Readers' in audience ? audience.Readers : undefined;
+        if (!Array.isArray(readers)) {
+            return `Readers must be an array of hydrated UserInfo objects, got ${this.describeValue(readers)}.`;
+        }
+        const list: unknown[] = readers;
+        for (let i = 0; i < list.length; i++) {
+            const problem = this.audienceReaderProblem(list[i]);
+            if (problem) return `Readers[${i}] ${problem}`;
+        }
+        return null;
+    }
+
+    /**
+     * What is wrong with one reader, or `null`. A reader needs a non-empty `ID` and a `UserRoles` array:
+     * `[]` is a reader with no roles (legitimate, reads nothing); a missing array means it was never hydrated.
+     */
+    private audienceReaderProblem(reader: unknown): string | null {
+        if (reader === null || typeof reader !== 'object') {
+            return `is ${this.describeValue(reader)}, not a UserInfo — map every participant to a hydrated user before searching for them.`;
+        }
+        const id = 'ID' in reader ? reader.ID : undefined;
+        if (typeof id !== 'string' || id.trim() === '') {
+            return 'has no ID — a reader the host could not map to a user would restrict nothing, so the search is refused.';
+        }
+        const roles = 'UserRoles' in reader ? reader.UserRoles : undefined;
+        if (!Array.isArray(roles)) {
+            return `(${id}) has no UserRoles array — pass hydrated UserInfo (e.g. from UserCache); a reader with no roles is \`UserRoles: []\`.`;
+        }
+        return null;
+    }
+
+    /** `null`, `an array`, or the `typeof` name: validation messages name a bad value's kind rather than echo it. */
+    private describeValue(value: unknown): string {
+        if (value === null) return 'null';
+        if (Array.isArray(value)) return 'an array';
+        return typeof value;
+    }
+
+    /**
+     * The readers an audience actually adds: one per distinct ID (case-insensitive), the caller's own ID left
+     * out. Empty when the audience changes nothing. Expects an audience that passed `validateAudience`.
+     */
+    private distinctReaders(audience: SearchAudience | undefined, contextUser: UserInfo): UserInfo[] {
+        if (!audience) return [];
+        const seen = new Set<string>();
+        const callerID = contextUser.ID?.toLowerCase();
+        if (callerID) seen.add(callerID);
+        const readers: UserInfo[] = [];
+        for (const reader of audience.Readers) {
+            const id = reader.ID.toLowerCase();
+            if (seen.has(id)) continue;
+            seen.add(id);
+            readers.push(reader);
+        }
+        return readers;
+    }
+
+    /** The distinct reader IDs, lower-cased and sorted, for the cache key. `undefined` when the audience adds no reader, so it keys like no audience. */
+    private audienceReaderIDs(audience: SearchAudience | undefined, contextUser: UserInfo): string[] | undefined {
+        const ids = this.distinctReaders(audience, contextUser).map(r => r.ID.toLowerCase()).sort();
+        return ids.length > 0 ? ids : undefined;
+    }
+
+    /**
+     * Whether `streamSearch` must withhold provider partials: when the audience adds a reader (partials have
+     * passed no permission check for the room), and when the audience is malformed (the search is about to fail;
+     * nothing unchecked is emitted before it does).
+     */
+    private audienceWithholdsPartials(params: SearchParams, contextUser: UserInfo): boolean {
+        if (params.Audience === undefined) return false;
+        try {
+            this.validateAudience(params.Audience);
+        } catch {
+            return true;
+        }
+        return this.distinctReaders(params.Audience, contextUser).length > 0;
+    }
+
+    /**
+     * Keep only the results every reader in `params.Audience` may read, on top of the caller's own filter.
+     * Each reader gets the same safety net the caller did (`filterByPermissions`: entity read, row filters,
+     * ownership), so a shared conversation's results are the intersection of what every participant may see —
+     * the asker's reach is the ceiling, each other reader's reach lowers it. Readers are checked concurrently;
+     * a reader with the caller's own ID, or listed twice, is checked once. Expects a validated audience
+     * (`searchInternal` validates it before doing any work).
+     *
+     * Two things the pass cannot do, both failing closed:
+     * - **Storage hits are refused under an audience.** `filterByPermissions` passes `storage-file`
+     *   results through: their permission model is the storage provider's, evaluated for the caller
+     *   when the lane ran, and it cannot be re-run here for another user. A hit nobody has re-checked
+     *   for the room is not shown to the room.
+     * - **A reader with no roles (`UserRoles: []`) reads nothing.** Permissions and row filters are
+     *   evaluated from `UserInfo.UserRoles`, so such a reader empties the result. A reader with no
+     *   `UserRoles` array at all never gets here: validation refuses it.
+     *
+     * **Identity contract.** A result survives when every reader's `filterByPermissions` returns it. Survivors
+     * are matched to the input by `EntityName|RecordID` (the record the result names), falling back to object
+     * identity for a result that names no record. An override of `filterByPermissions` may therefore return
+     * copies, but must not rewrite `EntityName` or `RecordID`.
+     *
+     * Protected so a host can change how an audience combines (a host that materializes a shared reach in one
+     * query can replace the per-reader pass). It receives the whole `params`, so an override can see the anchor
+     * (`SearchContext`) and the scopes. The default is the intersection.
+     */
+    protected async FilterForAudience(
+        results: SearchResultItem[],
+        params: SearchParams,
+        contextUser: UserInfo
+    ): Promise<SearchResultItem[]> {
+        const readers = this.distinctReaders(params.Audience, contextUser);
+        if (readers.length === 0 || results.length === 0) return results;
+
+        const checkable = results.filter(r => r.ResultType !== 'storage-file');
+        if (checkable.length < results.length) {
+            LogStatus(`SearchEngine: ${results.length - checkable.length} storage result(s) refused under an audience — ` +
+                'storage permissions are evaluated for the caller only and cannot be re-checked per reader.');
+        }
+
+        const survivors = await Promise.all(readers.map(reader => this.filterByPermissions(checkable, reader)));
+        this.logAudienceNarrowing(readers, survivors, checkable.length);
+        const keptByEveryReader = survivors.map(list => new Set(list.map(r => this.audienceIdentity(r))));
+        return checkable.filter(r => {
+            const identity = this.audienceIdentity(r);
+            return keptByEveryReader.every(kept => kept.has(identity));
+        });
+    }
+
+    /** `EntityName|RecordID` for a result that names a record, else the object itself — see `FilterForAudience`'s identity contract. */
+    private audienceIdentity(result: SearchResultItem): string | SearchResultItem {
+        return result.EntityName && result.RecordID ? `${result.EntityName}|${result.RecordID}` : result;
+    }
+
+    /** Log, per reader, why the shared result set shrank: a reader with no roles, or results a reader cannot read. */
+    private logAudienceNarrowing(readers: UserInfo[], survivors: SearchResultItem[][], checkedCount: number): void {
+        readers.forEach((reader, i) => {
+            if (reader.UserRoles.length === 0) {
+                LogStatus(`SearchEngine: Audience reader ${reader.ID} has no roles (UserRoles: []) — permissions resolve ` +
+                    'from roles, so expect it to read nothing and the shared result set to be empty.');
+            }
+            const dropped = checkedCount - survivors[i].length;
+            if (dropped > 0) {
+                LogStatus(`SearchEngine: Audience reader ${reader.ID} cannot read ${dropped} result(s) the caller can — ` +
+                    'removed from the shared result set.');
+            }
+        });
     }
 
     /** Insert into the LRU cache, evicting oldest entries when over capacity. */
