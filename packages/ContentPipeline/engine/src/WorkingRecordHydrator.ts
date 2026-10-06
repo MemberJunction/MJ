@@ -32,6 +32,9 @@ import { GetEntityFieldMap, GetEntityName } from './EntityFieldMap.js';
 const PIPELINE_STATUS_EXTENSIONS: readonly (readonly [string, string])[] = [
     ['DeleteStatus', 'deleteStatus'],
     ['EmbeddingStatus', 'embeddingStatus'],
+    // Where this record's bytes were kept, for a record whose URL no longer yields them — an
+    // archive member whose URL would re-fetch the archive.
+    ['FileID', 'fileID'],
 ];
 
 export class WorkingRecordHydrator {

@@ -149,3 +149,24 @@ function extensionOf(fileName: string | null | undefined): string | null {
     }
     return lastSegment.slice(dot + 1).toLowerCase();
 }
+
+/**
+ * Whether a run of bytes is text at all.
+ *
+ * Built on {@link IsPlausibleText} rather than beside it, so there is one answer to "is this text"
+ * and one threshold to tune. A null byte short-circuits it: no text encoding this handles produces
+ * one, and checking it first avoids decoding a large binary only to reject it.
+ *
+ * @param content The bytes to judge.
+ * @param minimumPrintableRatio How much of the decoded result must be printable. Default 0.85.
+ */
+export function LooksLikeText(content: Uint8Array, minimumPrintableRatio = 0.85): boolean {
+    if (content.length === 0) {
+        return false;
+    }
+    const sample = content.subarray(0, 4096);
+    if (sample.includes(0)) {
+        return false;
+    }
+    return IsPlausibleText(new TextDecoder('utf-8', { fatal: false }).decode(sample), minimumPrintableRatio);
+}

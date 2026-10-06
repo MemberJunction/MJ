@@ -32,8 +32,22 @@ export interface ReadRequest {
  * an archive reader unpacking a compressed file emits one block per member.
  */
 export interface ContentBlock {
-    /** The block's text. */
+    /**
+     * The block's text.
+     *
+     * Empty when the block is not text at all — see {@link Content}. A splitting reader must not
+     * manufacture text it does not have: decoding arbitrary bytes as UTF-8 produces a string, but a
+     * string of mojibake, which then gets chunked, embedded and served as though it meant something.
+     */
     Text: string;
+    /**
+     * The block's raw bytes, for a block that is not text.
+     *
+     * A reader sets this instead of {@link Text} when it has unpacked something — a PDF or an image
+     * inside an archive — that needs its own extraction rather than a decode. The stage keeps the
+     * bytes and routes the block down the non-text path, the same one a non-text source record takes.
+     */
+    Content?: Uint8Array;
     /**
      * A stable identity for this block within its parent, appended to the parent's URL to form the
      * child's own. An archive member's path is the natural choice.

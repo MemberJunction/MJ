@@ -21,10 +21,60 @@ class TestClassifier extends BaseContentClassifier {
     }
 }
 
+/** Tag rows the stage saved, so a test can assert tagging actually persisted something. */
+export const savedTags: { ItemID: string; Tag: string; Weight?: number }[] = [];
+
+/**
+ * A provider that records what the stage writes.
+ *
+ * Tagging's whole point is the rows it leaves behind, so a stub that cannot accept a write would
+ * only re-prove the defect this replaced: tags computed, nothing saved.
+ */
+function recordingProvider() {
+    return {
+        RunView: async () => ({ Success: true, Results: [] as { ID: string }[] }),
+        GetEntityObject: async () => {
+            const row: Record<string, unknown> = {};
+            return {
+                NewRecord: () => true,
+                Save: async () => {
+                    savedTags.push({
+                        ItemID: row.ItemID as string,
+                        Tag: row.Tag as string,
+                        Weight: row.Weight as number | undefined,
+                    });
+                    return true;
+                },
+                Delete: async () => true,
+                InnerLoad: async () => true,
+                get ItemID() {
+                    return row.ItemID as string;
+                },
+                set ItemID(v: string) {
+                    row.ItemID = v;
+                },
+                get Tag() {
+                    return row.Tag as string;
+                },
+                set Tag(v: string) {
+                    row.Tag = v;
+                },
+                get Weight() {
+                    return row.Weight as number;
+                },
+                set Weight(v: number) {
+                    row.Weight = v;
+                },
+                LatestResult: null,
+            };
+        },
+    } as never;
+}
+
 function contextWith(configuration: Record<string, unknown> = {}, signal?: AbortSignal): StageContext {
     return {
         ContextUser: {} as never,
-        Provider: {} as never,
+        Provider: recordingProvider(),
         Configuration: configuration,
         IsTest: false,
         Scope: 'Filter',
@@ -48,6 +98,7 @@ function item(text: string | null): WorkingRecord {
 beforeEach(() => {
     classifyImpl = async () => ({ Tags: [] });
     vi.restoreAllMocks();
+    savedTags.length = 0;
 });
 
 describe('TagStage', () => {
@@ -57,6 +108,30 @@ describe('TagStage', () => {
         const outcome = await new TagStage().Run(record, contextWith({ ClassifierKey: 'test-classifier' }));
         expect(outcome.Status).toBe('Complete');
         expect(record.GetExtension<{ Name: string }[]>('Tag', 'tags')).toHaveLength(2);
+    });
+
+    it('SAVES the tags, rather than leaving them in the extension space', async () => {
+        // The defect this replaced: a successful Tag stage wrote tags nowhere, so the record went
+        // Complete and nothing was tagged.
+        classifyImpl = async () => ({ Tags: [{ Name: 'finance', Score: 0.9 }, { Name: 'policy' }] });
+        const record = item('some text');
+        await new TagStage().Run(record, contextWith({ ClassifierKey: 'test-classifier' }));
+        expect(savedTags.map((t) => t.Tag)).toEqual(['finance', 'policy']);
+        expect(savedTags[0]).toMatchObject({ ItemID: 'ITEM-1', Weight: 0.9 });
+    });
+
+    it('clamps a score outside 0-1 rather than storing it', async () => {
+        classifyImpl = async () => ({ Tags: [{ Name: 'odd', Score: 4 }] });
+        await new TagStage().Run(item('some text'), contextWith({ ClassifierKey: 'test-classifier' }));
+        expect(savedTags[0].Weight).toBe(1);
+    });
+
+    it('saves nothing on a test run, which commits nothing by definition', async () => {
+        classifyImpl = async () => ({ Tags: [{ Name: 'finance' }] });
+        const context = { ...contextWith({ ClassifierKey: 'test-classifier' }), IsTest: true };
+        const outcome = await new TagStage().Run(item('some text'), context);
+        expect(outcome.Status).toBe('Complete');
+        expect(savedTags).toHaveLength(0);
     });
 
     it('records which classifier ran', async () => {

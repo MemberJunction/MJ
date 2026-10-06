@@ -8,9 +8,12 @@
  * @module @memberjunction/content-pipeline
  */
 
+import { CompositeKey, LogError, RunView } from '@memberjunction/core';
+import { MJContentItemTagEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import {
     BaseContentClassifier,
+    ClassifiedTag,
     BasePipelineStage,
     FatalStageError,
     Outcome,
@@ -80,17 +83,80 @@ export class TagStage extends BasePipelineStage {
             );
         }
 
-        // Tags are written to the extension space rather than a well-known field: what a deployment
-        // does with them — formal Tag rows, suggestions, something else — is its own business, and
-        // the pipeline has no column that would mean the same thing to everyone.
         record.SetExtension(TAG_STAGE, 'tags', result.Tags);
         record.SetExtension(TAG_STAGE, 'classifierKey', classifier.Key);
         for (const [key, value] of Object.entries(result.Extensions ?? {})) {
             record.SetExtension(`${TAG_STAGE}.${classifier.Key}`, key, value);
         }
 
+        // The extension space alone is not a destination. Tags left there vanish when the run ends,
+        // which made a successful Tag stage a no-op: the record went Complete and nothing was
+        // tagged. MJ already has the table for this, so they are written to MJ: Content Item Tags.
+        const saved = await this.persistTags(record, result.Tags, context);
+
         context.ReportProgress(`classified into ${result.Tags.length} tag(s)`);
-        return Outcome.Complete(`${result.Tags.length} tag(s) via ${classifier.Key}`);
+        return Outcome.Complete(`${saved} of ${result.Tags.length} tag(s) saved via ${classifier.Key}`);
+    }
+
+    /**
+     * Write the classifier's tags to `MJ: Content Item Tags`.
+     *
+     * Replace rather than append: a re-tagged item should end up with what the classifier just
+     * concluded, not that plus everything it ever concluded before. Existing rows are removed first,
+     * and a tag that fails to save is logged rather than failing the record — losing one tag is not
+     * worth re-running the model call that produced the other forty.
+     */
+    private async persistTags(
+        record: WorkingRecord,
+        tags: readonly ClassifiedTag[],
+        context: StageContext,
+    ): Promise<number> {
+        const itemID = record.Identity.RecordID;
+        if (!itemID || context.IsTest) {
+            // A test run computes everything and commits nothing; an uncommitted record has no id to
+            // hang tags from.
+            return 0;
+        }
+
+        const rv = RunView.FromMetadataProvider(context.Provider);
+        const existing = await rv.RunView<{ ID: string }>(
+            { EntityName: 'MJ: Content Item Tags', ExtraFilter: `ItemID='${itemID}'` },
+            context.ContextUser,
+        );
+        if (existing.Success) {
+            for (const row of existing.Results) {
+                const entity = await context.Provider.GetEntityObject<MJContentItemTagEntity>(
+                    'MJ: Content Item Tags',
+                    context.ContextUser,
+                );
+                if (await entity.InnerLoad(CompositeKey.FromID(row.ID))) { // first-pk-ok: MJ core content entity, single-column ID
+                    await entity.Delete();
+                }
+            }
+        }
+
+        let saved = 0;
+        for (const tag of tags) {
+            const entity = await context.Provider.GetEntityObject<MJContentItemTagEntity>(
+                'MJ: Content Item Tags',
+                context.ContextUser,
+            );
+            entity.NewRecord();
+            entity.ItemID = itemID;
+            entity.Tag = tag.Name;
+            if (typeof tag.Score === 'number') {
+                entity.Weight = Math.max(0, Math.min(1, tag.Score));
+            }
+            if (await entity.Save()) {
+                saved++;
+            } else {
+                LogError(
+                    `TagStage: could not save tag '${tag.Name}' for content item '${itemID}': ` +
+                        `${entity.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+                );
+            }
+        }
+        return saved;
     }
 
     /** The classifier this run uses. */

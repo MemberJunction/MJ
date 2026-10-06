@@ -11,6 +11,9 @@
  * @module @memberjunction/content-pipeline
  */
 
+import { CompositeKey, LogError, LogStatus } from '@memberjunction/core';
+import { MJFileEntity } from '@memberjunction/core-entities';
+import { FileStorageEngine } from '@memberjunction/storage';
 import { RegisterClass } from '@memberjunction/global';
 import {
     BasePipelineStage,
@@ -79,7 +82,13 @@ export class ExtractStage extends BasePipelineStage {
         }
 
         const resolved = await this.resolveSource(record, context);
-        const fetched = await this.fetch(url, resolved.ContentSourceID, resolved.Parameters, context);
+        // A record whose bytes were already kept reads them back rather than re-fetching its URL.
+        // For an archive member that is the difference between extracting the member and extracting
+        // the archive it came out of, which is what its URL still points at.
+        const keptFileID = record.GetExtension<string>('Pipeline', 'fileID');
+        const fetched = keptFileID
+            ? await this.readKeptFile(keptFileID, context)
+            : await this.fetch(url, resolved.ContentSourceID, resolved.Parameters, context);
 
         const confidence = ResolveConfidence(context.Configuration);
         const signature = DetectByteSignature(fetched.Content);
@@ -116,6 +125,33 @@ export class ExtractStage extends BasePipelineStage {
         }
 
         return this.read(record, context, fetched.Content, fileType.FileType ?? '', url, resolved, confidence);
+    }
+
+    /**
+     * Read back bytes kept by an earlier run, through MJ Files.
+     *
+     * Deliberately not a fetch: the artifact may never have had a URL of its own, and where it does
+     * that URL points at whatever contained it.
+     */
+    private async readKeptFile(fileID: string, context: StageContext) {
+        const file = await context.Provider.GetEntityObject<MJFileEntity>('MJ: Files', context.ContextUser);
+        if (!(await file.InnerLoad(CompositeKey.FromID(fileID)))) { // first-pk-ok: MJ core entity, single-column ID
+            throw new FatalStageError(`The kept copy '${fileID}' for this record no longer exists`);
+        }
+        await FileStorageEngine.Instance.Config(false, context.ContextUser, context.Provider);
+        const accounts = FileStorageEngine.Instance.GetAccountsByProviderID(file.ProviderID);
+        if (accounts.length === 0) {
+            throw new FatalStageError(
+                `No storage account is configured for provider '${file.ProviderID}', so '${fileID}' cannot be read`,
+            );
+        }
+        const driver = await FileStorageEngine.Instance.GetDriver(accounts[0].ID, context.ContextUser);
+        const bytes = await driver.GetObject({ fullPath: file.ProviderKey ?? file.Name });
+        return {
+            Content: new Uint8Array(bytes),
+            ContentType: file.ContentType ?? undefined,
+            ResolvedURL: file.ProviderKey ?? file.Name,
+        };
     }
 
     /** Fetch, distinguishing a transport failure that might recover from one that will not. */
@@ -190,9 +226,44 @@ export class ExtractStage extends BasePipelineStage {
         // item and the container keeps its own identity — overwriting it with the first block's
         // content would lose the container and silently mislabel one of its members as the whole.
         for (const block of result.Blocks) {
-            record.AddChild(this.toChild(record, block, url, confidence));
+            const child = this.toChild(record, block, url, confidence);
+            // A member that is not text needs its bytes kept now, while they are in hand. Its URL
+            // points at the container, so nothing can fetch it again later.
+            if (block.Content) {
+                await this.keepChildBytes(child, block.Content, resolved, context);
+            }
+            record.AddChild(child);
         }
         return Outcome.Complete(`expanded into ${result.Blocks.length} item(s) with ${selected.Key}`);
+    }
+
+    /**
+     * Keep an expanded member's bytes, and point the child at them.
+     *
+     * Best-effort: a member whose bytes could not be kept is still worth recording, and it will be
+     * skipped by Extract rather than silently read as the container it came from. Failing the whole
+     * archive because one member could not be stored would lose the other members too.
+     */
+    private async keepChildBytes(
+        child: WorkingRecord,
+        content: Uint8Array,
+        resolved: ResolvedSource,
+        context: StageContext,
+    ): Promise<void> {
+        try {
+            const objectKey = await this.persistDurableCopy(child, resolved, content, undefined, context);
+            if (!objectKey) {
+                LogStatus(
+                    `ExtractStage: '${child.Identity.EphemeralID}' is not text and this source keeps no ` +
+                        'durable copies, so its bytes are not retained.',
+                );
+            }
+        } catch (error) {
+            LogError(
+                `ExtractStage: could not keep bytes for '${child.Identity.EphemeralID}': ` +
+                    `${error instanceof Error ? error.message : String(error)}`,
+            );
+        }
     }
 
     /**
@@ -357,7 +428,20 @@ export class ExtractStage extends BasePipelineStage {
     ): WorkingRecord {
         const url = block.Key ? `${parentURL}#${block.Key}` : `${parentURL}#block-${Date.now()}`;
         const child = new WorkingRecord(new WorkingRecordIdentity('Content Item', url));
-        child.Propose('Text', block.Text, confidence.ReaderText, EXTRACT_STAGE);
+        if (block.Text) {
+            child.Propose('Text', block.Text, confidence.ReaderText, EXTRACT_STAGE);
+        } else if (block.Content) {
+            // A member that is not text — a PDF or an image inside an archive. It gets the modality
+            // its bytes imply and stays Pending for Extract rather than being committed as a
+            // successful read of nothing, so the multi-modal path picks it up on its own turn.
+            child.Propose(
+                'Modality',
+                this.modalityFor(block.FileType ?? ''),
+                confidence.Modality,
+                `${EXTRACT_STAGE}.Split`,
+            );
+            child.SetExtension(EXTRACT_STAGE, 'content', block.Content);
+        }
         if (block.Title) {
             child.Propose('Title', block.Title, block.TitleConfidence ?? confidence.ReaderTitle, EXTRACT_STAGE);
         }

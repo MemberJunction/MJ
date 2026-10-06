@@ -11,7 +11,13 @@
  */
 
 import { RegisterClass } from '@memberjunction/global';
-import { BaseContentReader, ContentBlock, ReadRequest, ReadResult } from '@memberjunction/content-pipeline-base';
+import {
+    BaseContentReader,
+    ContentBlock,
+    LooksLikeText,
+    ReadRequest,
+    ReadResult,
+} from '@memberjunction/content-pipeline-base';
 
 /** The registered key. */
 export const ARCHIVE_READER = 'Archive';
@@ -45,8 +51,13 @@ export class ArchiveReader extends BaseContentReader {
                 break;
             }
             const fileType = this.fileTypeOf(member.Path);
+            const isText = LooksLikeText(member.Content);
             blocks.push({
-                Text: new TextDecoder('utf-8', { fatal: false }).decode(member.Content),
+                // Only decoded when the bytes actually are text. A PDF, an image or a spreadsheet
+                // member decoded as UTF-8 produces mojibake that reads as a successful extraction
+                // and is then chunked, embedded and served as if it meant something.
+                Text: isText ? new TextDecoder('utf-8', { fatal: false }).decode(member.Content) : '',
+                Content: isText ? undefined : member.Content,
                 // The member's path, so the child's identity survives re-extraction unchanged.
                 Key: member.Path,
                 Title: this.titleOf(member.Path),

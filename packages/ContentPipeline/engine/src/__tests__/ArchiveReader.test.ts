@@ -107,3 +107,34 @@ describe('the split pattern end to end', () => {
         expect(childURL).toBe('https://x.test/bundle.zip#docs/intro.md');
     });
 });
+
+describe('members that are not text', () => {
+    it('does NOT decode a PDF member as UTF-8', async () => {
+        // The defect: every member was decoded as UTF-8, so a PDF inside a zip became mojibake that
+        // looked like a successful extraction and was then chunked, embedded and served.
+        const reader = new TestArchiveReader();
+        const pdf = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x37, 0x00, 0x01, 0x02, 0xff, 0xfe]);
+        reader.Members = [{ Path: 'report.pdf', Content: pdf }];
+        const result = await reader.Read(request());
+        expect(result.Blocks[0].Text).toBe('');
+        expect(result.Blocks[0].Content).toEqual(pdf);
+        expect(result.Blocks[0].FileType).toBe('pdf');
+    });
+
+    it('still decodes a genuinely textual member', async () => {
+        const reader = new TestArchiveReader();
+        reader.Members = [member('notes.txt', 'plain readable text')];
+        const result = await reader.Read(request());
+        expect(result.Blocks[0].Text).toBe('plain readable text');
+        expect(result.Blocks[0].Content).toBeUndefined();
+    });
+
+    it('treats a member with a null byte as binary whatever its extension claims', async () => {
+        const reader = new TestArchiveReader();
+        reader.Members = [{ Path: 'lies.txt', Content: new Uint8Array([0x68, 0x69, 0x00, 0x68, 0x69]) }];
+        const result = await reader.Read(request());
+        expect(result.Blocks[0].Text).toBe('');
+        expect(result.Blocks[0].Content).toBeDefined();
+    });
+});
+
