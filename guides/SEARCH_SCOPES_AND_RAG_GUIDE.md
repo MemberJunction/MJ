@@ -235,6 +235,18 @@ No scope duplication needed.
 | `StorageSearchProvider` | Already folder-path / account-permission bounded via `MJ: File Storage Account Permissions`. |
 | 3rd-party index providers | Use the engine's native permission/ACL filter. Documented in the "how to add a provider" guide. |
 
+### The origin-record gate for derived content
+
+A content item or chunk is a row of its own entity, but it was *derived* from another record — the file, task or conversation it was extracted from — and the right to read it belongs to that origin. Row-level security on `MJ: Content Items` / `MJ: Content Item Chunks` can only say who may read the content table; it cannot see the origin's own row filters.
+
+So after a content result passes the entity-level ownership and row-filter check, `SearchEngine.VerifyOriginRecords` follows chunk → item (→ root item, for a split child) → `MJ: Entity Record Documents` → the origin record, and keeps the result only when the origin is a row the user may read, verified exactly as the result's own entity was (`PK IN (...)` under the origin entity's row filter, as the user). Content with no Entity Record Document has no origin and passes unchanged; non-content entities are untouched. The hook is `protected`, so a host can extend the rule to another derived-content family, and it fails closed.
+
+Consequences for an app that indexes documents behind its own permissions:
+- **Every lookup runs as the user, and that adds grants a chunk reader did not need before.** Anyone who should see chunk hits needs read on the base `MJ: Content Items` (the chunk → item hop reads it, through the base entity even for IS-A subtypes, because `RootParentID` is a view-computed column a subtype's view does not project). Anyone who should see hits derived from a record needs read on `MJ: Entity Record Documents`. Grant both under the app's row filters. Without the item grant, every chunk hit is dropped; without the document grant, the document-bearing hits are, and crawled content still passes.
+- A split child (an item with a `RootParentID` other than itself) is judged by its root's document. A root is its own `RootParentID` in the view and is never re-read.
+- Changing who may read the *origin* record takes effect on the next search; nothing in the index needs to change. Push-down (the scope's `MetadataFilter`) stays the recall mechanism; this gate is the truth.
+- Cost: up to three extra `PK IN (...)` RunViews per content group (chunk → item, root items when any hit is a split child, documents when any item has one), plus one per origin entity; groups run in parallel.
+
 ### Overfetch factor tuning
 
 `effectiveTopK = userTopK * permissionOverfetchFactor` compensates for residual filtering. Default 2. Tune higher for corpora where permission sparsity is high (>50% of matches filtered).
