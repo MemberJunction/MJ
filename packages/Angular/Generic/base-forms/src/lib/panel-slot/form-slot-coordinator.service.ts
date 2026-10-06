@@ -35,6 +35,7 @@ export const FORM_SLOT_CHAIN: FormPanelSlot[] = [
 export class FormSlotCoordinator {
     private readonly presentSlots = new Set<FormPanelSlot>();
     private readonly changes$ = new Subject<void>();
+    private readonly panelsChanged$ = new Subject<void>();
     /** Tracks synchronous re-entry depth into safeEmit so an emit storm
      *  caused by a future refactor surfaces loudly instead of freezing. */
     private emitDepth = 0;
@@ -113,6 +114,20 @@ export class FormSlotCoordinator {
     /** @deprecated Use {@link Changes}. */
     public get changes() {
         return this.Changes;
+    }
+
+    /**
+     * Fires when the set of panels this form shows changed without any slot coming or going,
+     * for example when the user hides or shows a panel. The slot hosts resolve their panels
+     * again when it fires.
+     */
+    public get PanelsChanged() {
+        return this.panelsChanged$.asObservable();
+    }
+
+    /** Tells every slot host on this form to resolve its panels again. */
+    public NotifyPanelsChanged(): void {
+        this.panelsChanged$.next();
     }
 
     /**

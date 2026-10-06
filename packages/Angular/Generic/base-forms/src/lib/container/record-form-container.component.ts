@@ -2748,10 +2748,12 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   }
 
   /**
-   * A panel was switched or removed. The registration memo is already dropped by the
-   * admin service, so the chrome has to be resolved again for the change to show.
+   * A panel was switched, hidden, shown or removed. The registration memo is already dropped
+   * by the admin service. The slot hosts mount the new panel set, then the chrome is resolved
+   * again from it.
    */
   OnPanelManagerChanged(): void {
+    this.slots.NotifyPanelsChanged();
     this.scheduleChromeResolve();
     this.refreshPanelManagerInputs();
     this.cdr.markForCheck();

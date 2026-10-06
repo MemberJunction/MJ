@@ -26,6 +26,7 @@ import { CollectFormContributionRegistrations } from './collect-form-contributio
 import { FORM_PLACEMENT_PREVIEW } from './placement-preview';
 import { MountFormContribution } from './mount-form-contribution';
 import { FormRecordRefreshCoordinator } from '../form-record-refresh.coordinator';
+import { FormSlotCoordinator } from './form-slot-coordinator.service';
 
 /**
  * `<mj-form-field-panel-slot>` — mounts the contributions drawn inside a section.
@@ -72,6 +73,8 @@ export class FormFieldPanelSlotComponent implements OnInit, OnChanges, OnDestroy
     private readonly recordRefresh = inject(FormRecordRefreshCoordinator, { optional: true });
     /** The placement dialog's unsaved panel, when this slot is on the dialog's preview form. */
     private readonly preview = inject(FORM_PLACEMENT_PREVIEW, { optional: true });
+    /** The form's slot coordinator, which says when the user hid or showed a panel. */
+    private readonly slots = inject(FormSlotCoordinator, { optional: true });
 
     public ngOnInit(): void {
         this.recordRefresh?.Refreshed$.pipe(takeUntil(this.destroy$)).subscribe((record) => {
@@ -85,6 +88,7 @@ export class FormFieldPanelSlotComponent implements OnInit, OnChanges, OnDestroy
             // No engine here — compiled registrations are the only source.
         }
         this.preview?.Changed$.pipe(takeUntil(this.destroy$)).subscribe(() => this.remount());
+        this.slots?.PanelsChanged.pipe(takeUntil(this.destroy$)).subscribe(() => this.remount());
     }
 
     public ngOnChanges(changes: SimpleChanges): void {

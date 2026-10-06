@@ -1,12 +1,34 @@
-import { describe, it, expect, vi } from 'vitest';
-import { Component } from '@angular/core';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { Component, type Provider } from '@angular/core';
 import { By } from '@angular/platform-browser';
+import { BehaviorSubject } from 'rxjs';
 import { RegisterClassEx } from '@memberjunction/global';
-import type { BaseEntity } from '@memberjunction/core';
+import type { BaseEntity, IMetadataProvider } from '@memberjunction/core';
 import { RenderComponentFixture, QueryAll } from '@memberjunction/ng-test-utils';
-import type { ComponentFixture } from '@angular/core/testing';
+import { TestBed, type ComponentFixture } from '@angular/core/testing';
+
+import { UserInfoEngine } from '@memberjunction/core-entities';
+
+/** A contribution engine with no rows, so only the compiled panels below take part. */
+const engine = {
+    Loaded: true,
+    IsPermissionConstrained: false,
+    LoadingSubject: new BehaviorSubject<boolean>(false),
+    Contributions$: new BehaviorSubject<unknown[]>([]),
+    GetApplicableContributions: () => [],
+    Config: vi.fn(async () => undefined),
+};
+
+vi.mock('@memberjunction/core-entities', async (importOriginal) => ({
+    ...(await importOriginal<Record<string, unknown>>()),
+    InteractiveFormsEngine: { get Instance() { return engine; } },
+}));
+
 import { FormFieldPanelSlotComponent } from './form-field-panel-slot.component';
 import { BaseFormPanel } from './base-form-panel';
+import { FormSlotCoordinator } from './form-slot-coordinator.service';
+import { ForgetHiddenPanelsSettings, SetPanelHidden } from './panel-hides';
+import { InvalidateFormContributionRegistrationCache } from './collect-form-contribution-registrations';
 import type { BaseFormComponent } from '../base-form-component';
 
 /**
@@ -16,7 +38,8 @@ import type { BaseFormComponent } from '../base-form-component';
  * (`replacesFieldNames`), highest `sortKey` first, then highest priority.
  *
  * The panels below are registered in the process-global ClassFactory under test-only entity names.
- * The record has no EntityInfo, so the slot reads compiled registrations only.
+ * The record has no EntityInfo, so the slot reads compiled registrations only, except where a test
+ * needs the user's hides: those use a record and form the collector reads hides for.
  */
 
 const ENTITY = 'ZZZ_FieldSlotEntity';
@@ -110,12 +133,14 @@ interface SlotInputs {
     FieldNames?: string[];
     SectionKey?: string;
     Position?: 'start' | 'end';
+    Record?: BaseEntity;
     FormComponent?: BaseFormComponent;
 }
 
-function renderSlot(inputs: SlotInputs): ComponentFixture<FormFieldPanelSlotComponent> {
+function renderSlot(inputs: SlotInputs, providers: Provider[] = []): ComponentFixture<FormFieldPanelSlotComponent> {
     return RenderComponentFixture(FormFieldPanelSlotComponent, {
         declarations: [FormFieldPanelSlotComponent],
+        providers,
         inputs: { Entity: ENTITY, Record: RECORD, FormComponent: FORM, FieldNames: [], SectionKey: '', Position: 'start', ...inputs },
     });
 }
@@ -218,5 +243,43 @@ describe('FormFieldPanelSlotComponent (DOM) - claimed field names', () => {
     it('matches a claimed name after trimming it, and does not match one that differs only by case', () => {
         const f = renderSlot({ FieldNames: ['PostalCode', 'Region'], SectionKey: 'location' });
         expect(mountedPanels(f)).toEqual(['postal']);
+    });
+});
+
+/**
+ * A hide or show changes which claims win while the section stays where it is. The container says
+ * so through the form's slot coordinator, and the slot mounts the new set: a hidden claim leaves,
+ * so its fields draw again, and a shown claim comes back in their place.
+ */
+describe('FormFieldPanelSlotComponent (DOM) - the user hides or shows a field claim', () => {
+    const provider = { CurrentUser: { ID: 'user-1', UserRoles: [] } } as unknown as IMetadataProvider;
+    const record = { EntityInfo: { ID: 'ent-field-slot', Name: ENTITY, RelatedEntities: [], ChildEntities: [] }, Get: () => null } as unknown as BaseEntity;
+    const form = { OwnsEntireFormBody: false, ProviderToUse: provider } as unknown as BaseFormComponent;
+
+    /** The user's settings, so a hide written through `SetPanelHidden` is read back. */
+    const settings = new Map<string, string>();
+
+    beforeEach(() => {
+        settings.clear();
+        vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockImplementation((key: string) => settings.get(key));
+        vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation((key: string, value: string) => { settings.set(key, value); });
+        ForgetHiddenPanelsSettings();
+        InvalidateFormContributionRegistrationCache();
+    });
+
+    afterEach(() => vi.restoreAllMocks());
+
+    it('unmounts a hidden claim and mounts it again when it is shown', () => {
+        const f = renderSlot({ FieldNames: ['Street'], Record: record, FormComponent: form }, [FormSlotCoordinator]);
+        const slots = TestBed.inject(FormSlotCoordinator);
+        expect(mountedPanels(f)).toEqual(['address']);
+
+        SetPanelHidden(ENTITY, 'zzz.address', true);
+        slots.NotifyPanelsChanged();
+        expect(mountedPanels(f)).toEqual([]);
+
+        SetPanelHidden(ENTITY, 'zzz.address', false);
+        slots.NotifyPanelsChanged();
+        expect(mountedPanels(f)).toEqual(['address']);
     });
 });

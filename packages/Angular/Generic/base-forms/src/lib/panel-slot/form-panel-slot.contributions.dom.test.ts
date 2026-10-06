@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { Component } from '@angular/core';
+import { Component, type Provider } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
 import { BehaviorSubject } from 'rxjs';
 import { RegisterClassEx } from '@memberjunction/global';
 import type { BaseEntity, IMetadataProvider } from '@memberjunction/core';
@@ -28,10 +29,20 @@ const engine = {
     Config: vi.fn(async () => undefined),
 };
 
+/** The user's settings, so a hide written through `SetPanelHidden` is read back. */
+const settings = new Map<string, string>();
+
 vi.mock('@memberjunction/core-entities', async (importOriginal) => ({
     ...(await importOriginal<Record<string, unknown>>()),
     InteractiveFormsEngine: { get Instance() { return engine; } },
-    UserInfoEngine: { get Instance() { return { GetSetting: () => undefined }; } },
+    UserInfoEngine: {
+        get Instance() {
+            return {
+                GetSetting: (key: string) => settings.get(key),
+                SetSettingDebounced: (key: string, value: string) => { settings.set(key, value); },
+            };
+        },
+    },
 }));
 
 const logError = vi.fn();
@@ -49,6 +60,8 @@ import { FormPanelSlotComponent } from './form-panel-slot.component';
 import { FormFieldPanelSlotComponent } from './form-field-panel-slot.component';
 import { InvalidateFormContributionRegistrationCache } from './collect-form-contribution-registrations';
 import { BaseFormPanel } from './base-form-panel';
+import { FormSlotCoordinator } from './form-slot-coordinator.service';
+import { SetPanelHidden } from './panel-hides';
 
 const ENTITY = 'ZZZ_SlotContributionEntity';
 
@@ -116,9 +129,10 @@ function row(over: Record<string, unknown>) {
     };
 }
 
-function renderSlot(slot: string) {
+function renderSlot(slot: string, providers: Provider[] = []) {
     const f = renderComponentFixture(FormPanelSlotComponent, {
         declarations: [FormPanelSlotComponent],
+        providers,
         inputs: { Entity: ENTITY, Slot: slot, Record: RECORD, FormComponent: FORM },
     });
     f.componentRef.setInput('FormContext', {});
@@ -151,6 +165,7 @@ beforeEach(() => {
     engine.IsPermissionConstrained = false;
     engine.LoadingSubject.next(false);
     engine.rows = [];
+    settings.clear();
     InvalidateFormContributionRegistrationCache();
     (FormPanelSlotComponent as unknown as { contributionGateResolved: boolean }).contributionGateResolved = false;
 });
@@ -287,5 +302,25 @@ describe('FormFieldPanelSlotComponent (DOM) — a wildcard place in a section', 
     it('draws at its own slot instead', () => {
         renderSlot('after-everything');
         expect(mountedKeys()).toEqual(['class:zzz.wildcard-section@after-everything']);
+    });
+});
+
+/**
+ * A hide or show changes which panels win while every slot stays where it is. The container says
+ * so through the form's slot coordinator, and the slot mounts the new set.
+ */
+describe('FormPanelSlotComponent (DOM) — the user hides or shows a panel', () => {
+    it('unmounts a hidden panel and mounts it again when it is shown', () => {
+        renderSlot('after-fields', [FormSlotCoordinator]);
+        const slots = TestBed.inject(FormSlotCoordinator);
+        expect(mountedKeys()).toEqual(['class:header@after-fields']);
+
+        SetPanelHidden(ENTITY, 'header', true);
+        slots.NotifyPanelsChanged();
+        expect(mountedKeys()).toEqual([]);
+
+        SetPanelHidden(ENTITY, 'header', false);
+        slots.NotifyPanelsChanged();
+        expect(mountedKeys()).toEqual(['class:header@after-fields']);
     });
 });

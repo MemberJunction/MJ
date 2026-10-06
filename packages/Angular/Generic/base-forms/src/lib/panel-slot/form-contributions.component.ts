@@ -10,6 +10,7 @@ import {
     type FormContributionWinner,
 } from './form-contribution';
 import { FORM_PLACEMENT_PREVIEW } from './placement-preview';
+import { FormSlotCoordinator } from './form-slot-coordinator.service';
 
 /**
  * Fills in related-entity grids that the form template did not bake and that
@@ -17,8 +18,9 @@ import { FORM_PLACEMENT_PREVIEW } from './placement-preview';
  * generated and custom form that uses the container picks it up.
  *
  * Reads the same contributions the slots do (compiled panels and rows, less the
- * ones this user hid) and resolves again when rows change. Claimed / extra panels
- * still mount via `<mj-form-panel-slot>` — this host does not remount those.
+ * ones this user hid) and resolves again when rows change or the user hides or
+ * shows a panel. Claimed / extra panels still mount via `<mj-form-panel-slot>` —
+ * this host does not remount those.
  */
 @Component({
     standalone: false,
@@ -48,6 +50,8 @@ export class FormContributionsComponent implements OnChanges, OnInit, OnDestroy 
     private readonly cdr = inject(ChangeDetectorRef);
     /** The placement dialog's unsaved panel, when this is the dialog's preview form. */
     private readonly preview = inject(FORM_PLACEMENT_PREVIEW, { optional: true });
+    /** The form's slot coordinator, which says when the user hid or showed a panel. */
+    private readonly slots = inject(FormSlotCoordinator, { optional: true });
 
     public ngOnChanges(changes: SimpleChanges): void {
         const keys = ['Record', 'FormComponent', 'BakedSectionKeys', 'ShowRelatedEntities'];
@@ -65,6 +69,7 @@ export class FormContributionsComponent implements OnChanges, OnInit, OnDestroy 
             // No engine here — compiled registrations are the only source.
         }
         this.preview?.Changed$.pipe(takeUntil(this.destroy$)).subscribe(() => this.refreshAndMark());
+        this.slots?.PanelsChanged.pipe(takeUntil(this.destroy$)).subscribe(() => this.refreshAndMark());
     }
 
     public ngOnDestroy(): void {

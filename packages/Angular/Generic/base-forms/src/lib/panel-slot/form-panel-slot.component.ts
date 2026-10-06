@@ -60,8 +60,8 @@ import { FormRecordRefreshCoordinator } from '../form-record-refresh.coordinator
  * get them in the preferred position.
  *
  * **Re-mount**: any input change OR a coordinator change (another slot
- * registers/deregisters) triggers a re-render so fallback assignments stay
- * correct as slots come and go.
+ * registers/deregisters, or the form's panel set changed) triggers a re-render
+ * so fallback assignments and hidden panels stay correct.
  */
 @Component({
     standalone: false,
@@ -132,6 +132,10 @@ export class FormPanelSlotComponent implements OnInit, OnChanges, OnDestroy {
                 .pipe(takeUntil(this.destroy$))
                 .subscribe(() => this.remount());
         }
+        // A hide or show changes which panels win without any slot coming or going.
+        this.coordinator?.PanelsChanged
+            .pipe(takeUntil(this.destroy$))
+            .subscribe(() => this.remount());
         this.recordRefresh?.Refreshed$.pipe(takeUntil(this.destroy$)).subscribe((record) => {
             this.notifyMountedPanels(record);
         });

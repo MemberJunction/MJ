@@ -14,6 +14,7 @@ import { UserInfoEngine } from '@memberjunction/core-entities';
 import { Subject } from 'rxjs';
 import { FORM_PLACEMENT_PREVIEW, FormPlacementPreview, PLACEMENT_PREVIEW_KEY } from '../panel-slot/placement-preview';
 import { ForgetHiddenPanelsSettings } from '../panel-slot/panel-hides';
+import { FormSlotCoordinator } from '../panel-slot/form-slot-coordinator.service';
 import type { FormContributionRegistration } from '../panel-slot/form-contribution';
 import { InteractiveFormPanelComponent } from '../interactive-form/interactive-form-panel.component';
 import { ValidationErrorInfo, ValidationErrorType } from '@memberjunction/global';
@@ -1023,5 +1024,20 @@ describe('MjRecordFormContainerComponent (DOM) — after the form is closed', ()
     expect(inst.chromeResolveTimer).toBeNull();
     expect(inst.countRequestToken).not.toBe(token);
     expect(inst.chromeRulesForEntityId).toBeNull();
+  });
+});
+
+/**
+ * A hide or show in the drawer changes which panels win while every slot stays put, so the slot
+ * hosts have to hear it from the container.
+ */
+describe('MjRecordFormContainerComponent (DOM) — the drawer changed a panel', () => {
+  it('tells the slot hosts that the panels changed', () => {
+    const f = render();
+    let notified = 0;
+    const subscription = f.componentRef.injector.get(FormSlotCoordinator).PanelsChanged.subscribe(() => notified++);
+    f.componentInstance.OnPanelManagerChanged();
+    subscription.unsubscribe();
+    expect(notified).toBe(1);
   });
 });

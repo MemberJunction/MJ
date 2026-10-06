@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { Component, Input } from '@angular/core';
+import { Component, Input, type Provider } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
 import { BehaviorSubject } from 'rxjs';
 import { RegisterClassEx } from '@memberjunction/global';
 import type { BaseEntity, IMetadataProvider } from '@memberjunction/core';
@@ -27,12 +28,21 @@ const settings = new Map<string, string>();
 vi.mock('@memberjunction/core-entities', async (importOriginal) => ({
     ...(await importOriginal<Record<string, unknown>>()),
     InteractiveFormsEngine: { get Instance() { return engine; } },
-    UserInfoEngine: { get Instance() { return { GetSetting: (key: string) => settings.get(key) }; } },
+    UserInfoEngine: {
+        get Instance() {
+            return {
+                GetSetting: (key: string) => settings.get(key),
+                SetSettingDebounced: (key: string, value: string) => { settings.set(key, value); },
+            };
+        },
+    },
 }));
 
 import { FormContributionsComponent } from './form-contributions.component';
 import { InvalidateFormContributionRegistrationCache } from './collect-form-contribution-registrations';
 import { BaseFormPanel } from './base-form-panel';
+import { FormSlotCoordinator } from './form-slot-coordinator.service';
+import { SetPanelHidden } from './panel-hides';
 
 const ENTITY = 'ZZZ_ComposerEntity';
 const ORDERS = 'ZZZ Orders';
@@ -74,10 +84,11 @@ function invoicesClaim() {
     };
 }
 
-function render() {
+function render(providers: Provider[] = []) {
     return renderComponentFixture(FormContributionsComponent, {
         imports: [GridPanelStub],
         declarations: [FormContributionsComponent],
+        providers,
         inputs: { Record: RECORD, FormComponent: FORM, BakedSectionKeys: [] },
     });
 }
@@ -115,5 +126,19 @@ describe('FormContributionsComponent (DOM)', () => {
         engine.rows = [invoicesClaim()];
         engine.Contributions$.next([]);
         expect(stockGrids(f)).toEqual([]);
+    });
+
+    it('fills in the grid when the user hides its claim on the open form, and drops it when shown', () => {
+        const f = render([FormSlotCoordinator]);
+        const slots = TestBed.inject(FormSlotCoordinator);
+        expect(stockGrids(f)).toEqual([INVOICES]);
+
+        SetPanelHidden(ENTITY, `related:${ORDERS}:CustomerID`, true);
+        slots.NotifyPanelsChanged();
+        expect(stockGrids(f)).toEqual([ORDERS, INVOICES]);
+
+        SetPanelHidden(ENTITY, `related:${ORDERS}:CustomerID`, false);
+        slots.NotifyPanelsChanged();
+        expect(stockGrids(f)).toEqual([INVOICES]);
     });
 });
