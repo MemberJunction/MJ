@@ -31,6 +31,12 @@ type MermaidRenderFailure = Extract<MermaidRenderResult, { Success: false }>;
 /** Upper bound on a single render, so a pathological diagram cannot hold the action open. */
 const RENDER_TIMEOUT_MS = 20_000;
 
+/**
+ * Most pages rendering at once; further renders wait for one to free up. Each page holds Mermaid's
+ * ~3 MB bundle, so this bounds the browser's memory when an agent fans out. Finished pages stay warm.
+ */
+const MAX_PAGES = 4; // ponytail: fixed cap; make it configurable if a host needs more parallel renders
+
 /** Optional override for the Chromium binary, for hosts whose browser does not match Playwright's build. */
 const EXECUTABLE_PATH_ENV = 'MJ_CHROMIUM_EXECUTABLE_PATH';
 
@@ -50,15 +56,21 @@ interface PageRenderArgs {
 type PageRenderOutcome = { ok: true; svg: string } | { ok: false; error: string };
 
 /**
- * Process-wide renderer. The browser is launched lazily on first use and shared; each render
- * gets its own page, which is always closed. Registered with {@link ShutdownRegistry} so the
- * Chromium child process goes away with the host.
+ * Process-wide renderer. The browser is launched lazily on first use and shared. Renders run on a
+ * pool of at most {@link MAX_PAGES} warm pages, each with Mermaid loaded and no network access, so
+ * the 3 MB bundle is parsed once per page rather than once per render. A page that crashed or timed
+ * out is closed, never reused. Registered with {@link ShutdownRegistry} so the Chromium child
+ * process goes away with the host.
  */
 export class MermaidRenderer extends BaseSingleton<MermaidRenderer> implements IShutdownable {
     public readonly ShutdownName = 'MermaidRenderer';
 
     private browserPromise: Promise<Browser> | null = null;
     private bundlePath: string | null = null;
+    /** Warm pages, each tagged with the browser it belongs to so a relaunch never reuses a dead one. */
+    private idlePages: Array<{ Page: Page; Browser: Browser }> = [];
+    private busyPages = 0;
+    private slotWaiters: Array<() => void> = [];
 
     protected constructor() {
         super();
@@ -74,18 +86,25 @@ export class MermaidRenderer extends BaseSingleton<MermaidRenderer> implements I
      * result with an error code, so a caller (an agent) can decide what to do instead.
      */
     public async Render(code: string, theme: MermaidTheme, config: MermaidConfig): Promise<MermaidRenderResult> {
+        // Slot first, then the browser: a render that waited must not use a browser that died meanwhile.
+        await this.acquireSlot();
         const browser = await this.getBrowser();
         if (browser.Success === false) {
+            this.releaseSlot();
             return browser;
         }
-        const page = browser.Browser.newPage();
+        const idle = this.takeIdlePage(browser.Browser);
+        const page = idle ? Promise.resolve(idle) : browser.Browser.newPage();
+        let reusable = false;
         try {
-            // One deadline covers page setup as well as the render, so a stalled bundle load is a TIMEOUT too.
-            const outcome = await this.withTimeout(this.renderOnPage(page, {
+            // One deadline covers loading Mermaid into a new page as well as the render, so a stalled bundle load is a TIMEOUT too.
+            const outcome = await this.withTimeout(page.then((p) => this.renderOnPage(p, !idle, {
                 Code: code,
                 // Caller config first so theme and the security level cannot be overridden by it.
                 Config: { ...config, theme, startOnLoad: false, securityLevel: 'strict' },
-            }), RENDER_TIMEOUT_MS);
+            })), RENDER_TIMEOUT_MS);
+            // The page finished normally (a syntax error leaves it healthy too), so it can serve the next render.
+            reusable = true;
             if (outcome.ok === false) {
                 return { Success: false, ErrorCode: 'RENDER_FAILED', Message: outcome.error };
             }
@@ -93,14 +112,15 @@ export class MermaidRenderer extends BaseSingleton<MermaidRenderer> implements I
         } catch (error) {
             return this.classifyFailure(error);
         } finally {
-            await this.closeQuietly(page);
+            await this.checkInPage(page, browser.Browser, reusable);
         }
     }
 
-    /** Closes the shared browser, if one was launched. */
+    /** Closes the shared browser, if one was launched. Its pages, idle ones included, close with it. */
     public async Shutdown(): Promise<void> {
         const pending = this.browserPromise;
         this.browserPromise = null;
+        this.idlePages = [];
         if (!pending) {
             return;
         }
@@ -154,15 +174,56 @@ export class MermaidRenderer extends BaseSingleton<MermaidRenderer> implements I
         return launch;
     }
 
-    private async renderOnPage(pending: Promise<Page>, args: PageRenderArgs): Promise<PageRenderOutcome> {
-        const page = await pending;
-        // The diagram source is model output. The page needs nothing from the network, so it gets nothing.
-        await page.route('**/*', (route) => route.abort());
-        await page.setContent('<!DOCTYPE html><html><head><meta charset="utf-8"></head><body></body></html>');
-        await page.addScriptTag({ path: this.getBundlePath() });
+    /** Waits for one of the {@link MAX_PAGES} render slots. */
+    private async acquireSlot(): Promise<void> {
+        if (this.busyPages < MAX_PAGES) {
+            this.busyPages++;
+            return;
+        }
+        // releaseSlot hands its slot straight to the oldest waiter, so busyPages never passes the cap.
+        await new Promise<void>((resolve) => this.slotWaiters.push(resolve));
+    }
+
+    private releaseSlot(): void {
+        const next = this.slotWaiters.shift();
+        if (next) {
+            next();
+        } else {
+            this.busyPages--;
+        }
+    }
+
+    /** A warm page from this browser, if one is idle. */
+    private takeIdlePage(browser: Browser): Page | undefined {
+        // Drop pages from a browser that has since been replaced, and pages that closed while idle.
+        this.idlePages = this.idlePages.filter((idle) => idle.Browser === browser && !idle.Page.isClosed());
+        return this.idlePages.pop()?.Page;
+    }
+
+    /** Returns a healthy page to the pool, or closes one that crashed or timed out. Always frees the slot. */
+    private async checkInPage(page: Promise<Page>, browser: Browser, reusable: boolean): Promise<void> {
+        if (!reusable) {
+            // Free the slot first: a wedged page must not hold one while it closes.
+            this.releaseSlot();
+            await this.closeQuietly(page);
+            return;
+        }
+        this.idlePages.push({ Page: await page, Browser: browser });
+        this.releaseSlot();
+    }
+
+    private async renderOnPage(page: Page, isNew: boolean, args: PageRenderArgs): Promise<PageRenderOutcome> {
+        if (isNew) {
+            // The diagram source is model output. The page needs nothing from the network, so it gets nothing.
+            await page.route('**/*', (route) => route.abort());
+            await page.setContent('<!DOCTYPE html><html><head><meta charset="utf-8"></head><body></body></html>');
+            await page.addScriptTag({ path: this.getBundlePath() });
+        }
         return page.evaluate(async ({ Code, Config }: PageRenderArgs): Promise<PageRenderOutcome> => {
             const mermaid = (window as unknown as { mermaid: BrowserMermaid }).mermaid;
             try {
+                // A warm page starts every render empty, so nothing from an earlier diagram carries over.
+                document.body.replaceChildren();
                 mermaid.initialize(Config);
                 const { svg } = await mermaid.render(`mermaid-${Date.now()}`, Code);
                 return { ok: true, svg };
