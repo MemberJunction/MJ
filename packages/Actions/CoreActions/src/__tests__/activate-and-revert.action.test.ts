@@ -493,6 +493,20 @@ describe('RevertInteractiveFormAction', () => {
         },
     );
 
+    it('returns PERSIST_FAILED naming the target component when it cannot be loaded for its status save', async () => {
+        seedOverride('OVER-1', { ComponentID: 'COMP-NEW', Status: 'Active' });
+        seedComponent('COMP-NEW', { Name: 'F', Version: '1.1.0', Status: 'Published' });
+        hoisted.runViewResults.push([{ ID: 'COMP-GONE', Version: '1.0.0', VersionSequence: 1 }]);
+        const r = await run(new RevertInteractiveFormAction(), mkParams({ ActiveOverrideID: 'OVER-1', TargetVersionSequence: 1 }));
+        expect(r.Success).toBe(false);
+        expect(r.ResultCode).toBe('PERSIST_FAILED');
+        expect(r.Message).toBe(
+            'Override OVER-1 was re-pointed to Component COMP-GONE, but Component COMP-GONE could not be loaded, ' +
+            'so its status was not updated.');
+        expect(hoisted.saveAttempts).toEqual(['OVER-1', 'COMP-NEW']);
+        expect(hoisted.components.get('COMP-NEW')!.record.Status).toBe('Deprecated');
+    });
+
     it('names each component whose status was not updated in its own clause', async () => {
         seedOverride('OVER-1', { ComponentID: 'COMP-NEW', Status: 'Active' });
         seedComponent('COMP-NEW', { Name: 'F', Version: '1.1.0', Status: 'Published' });

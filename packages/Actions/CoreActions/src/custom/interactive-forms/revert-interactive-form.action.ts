@@ -22,11 +22,11 @@ import {
  *     Component to Status='Active'.
  *
  * The override is saved first. Both Component status saves are then tried, even
- * when the first fails. If either fails, the action returns `PERSIST_FAILED` that
- * names every Component whose status was not updated; the override stays
- * re-pointed. The override then already points at the target, so a retry with
- * the same target returns SUCCESS from the no-op path and the Component
- * statuses stay as they are.
+ * when the first fails. If either fails, or the target Component cannot be loaded
+ * for its status save, the action returns `PERSIST_FAILED` that names every
+ * Component whose status was not updated; the override stays re-pointed. The
+ * override then already points at the target, so a retry with the same target
+ * returns SUCCESS from the no-op path and the Component statuses stay as they are.
  *
  * Old Component rows are never deleted — they remain as immutable history.
  * A subsequent revert can move forward again to any version.
@@ -145,6 +145,8 @@ export class RevertInteractiveFormAction extends BaseAction {
                     notUpdated.push(`the status of Component ${target.ID} was not updated ` +
                         `(${newActive.LatestResult?.CompleteMessage ?? 'unknown error'})`);
                 }
+            } else {
+                notUpdated.push(`Component ${target.ID} could not be loaded, so its status was not updated`);
             }
             currentComponent.Status = MapToComponentStatus('Inactive');
             if (!(await currentComponent.Save())) {
