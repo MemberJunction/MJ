@@ -15,4 +15,5 @@ export * from './lib/components/media-stage.component';
 export * from './lib/components/media-controls.component';
 export * from './lib/components/self-view.component';
 export * from './lib/components/share-preview.component';
+export * from './lib/components/camera-check.component';
 export * from './lib/pip-geometry';

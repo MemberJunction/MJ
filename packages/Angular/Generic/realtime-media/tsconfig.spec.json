@@ -22,7 +22,9 @@
     "src/lib/components/self-view.component.ts",
     "src/lib/components/self-view.component.dom.test.ts",
     "src/lib/components/share-preview.component.ts",
-    "src/lib/components/share-preview.component.dom.test.ts"
+    "src/lib/components/share-preview.component.dom.test.ts",
+    "src/lib/components/camera-check.component.ts",
+    "src/lib/components/camera-check.component.dom.test.ts"
   ],
   "exclude": ["node_modules", "dist"]
 }
