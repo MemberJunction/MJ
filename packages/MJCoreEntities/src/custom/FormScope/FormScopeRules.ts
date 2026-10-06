@@ -1,0 +1,414 @@
+import { AuthorizationEvaluator, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
+import type { MJComponentEntityType, MJEntityFormContributionEntity } from '../../generated/entities/__mj';
+
+/**
+ * Who may write a full custom form or a panel, and at which scope.
+ *
+ * A form or panel belongs to one user, to a role, or to everyone. Anyone may manage their own.
+ * Changing what OTHER people see — creating, editing, removing or re-aiming a role or everyone
+ * item — takes the {@link MANAGE_FORM_DEFAULTS_AUTHORIZATION} grant. Changing the component a
+ * form or panel draws changes that form or panel, so {@link ComponentWriteRefusal},
+ * {@link FormRowComponentRefusal} and {@link ComponentNameCollisionRefusal} apply the same rule to
+ * the `MJ: Components` row, to which component a row points at, and to a component's name.
+ *
+ * Lives here, in a package both the server and the browser depend on, so the two cannot disagree:
+ * the server-side entity subclasses enforce this rule on every write path, and the form's drawer
+ * calls the same function to decide which controls to draw.
+ */
+
+/** The authorization that lets a user publish a form or panel to a role or to everyone. */
+export const MANAGE_FORM_DEFAULTS_AUTHORIZATION = 'Manage Form Defaults';
+
+/** Who a form or panel is for. Derived from the entity so it tracks the column's value list. */
+export type FormScope = MJEntityFormContributionEntity['Scope'];
+
+/** The scopes as stored. Keyed by {@link FormScope}, so it stays in step with the value list. */
+const CANONICAL_FORM_SCOPES: Readonly<Record<FormScope, true>> = { User: true, Role: true, Global: true };
+
+/** True when `value` is exactly `User`, `Role` or `Global`: no padding, this casing. */
+export function IsCanonicalFormScope(value: unknown): value is FormScope {
+    return typeof value === 'string' && Object.prototype.hasOwnProperty.call(CANONICAL_FORM_SCOPES, value);
+}
+
+export type FormScopeOperation = 'create' | 'update' | 'delete';
+
+/** One write to a form or panel, as the rule needs to see it. */
+export interface FormScopeWrite {
+    Operation: FormScopeOperation;
+    /** Scope before the write. Null on create. */
+    PriorScope: FormScope | null;
+    /** Owner before the write. Null on create, or when the item was not personal. */
+    PriorUserID: string | null;
+    /** Scope after the write. On delete, the same as the prior scope. */
+    NextScope: FormScope;
+    /** Owner after the write. */
+    NextUserID: string | null;
+    CallerID: string;
+    CallerHoldsGrant: boolean;
+}
+
+const GRANT_REFUSAL =
+    `Publishing a form or panel to a role or to everyone, or changing one that is, requires the ` +
+    `${MANAGE_FORM_DEFAULTS_AUTHORIZATION} authorization.`;
+
+const OWNERSHIP_REFUSAL =
+    'You can only change your own personal forms and panels. This one belongs to someone else, and ' +
+    'holding the Manage Form Defaults authorization does not change that — it governs what other ' +
+    'people are shown, not their own customisations.';
+
+/**
+ * Why this write is not allowed, or null when it is.
+ *
+ * Both sides of the write are checked. A personal side must belong to the caller; a shared side
+ * needs the grant. Checking only the new side would let a user demote a shared item to their own
+ * and take it over; checking only the old side would let them promote their own to everyone.
+ *
+ * A scope is read the way the database reads it: a side is personal when its scope is `User`
+ * after trimming and case-folding. Any side whose scope is not exactly `User` (`Role`, `Global`,
+ * a padded or re-cased value, a blank, an unknown value) counts as shared and needs the grant.
+ */
+export function FormScopeWriteRefusal(write: FormScopeWrite): string | null {
+    const next = { Scope: write.NextScope, UserID: write.NextUserID };
+    const sides = write.Operation === 'create'
+        ? [next]
+        : [{ Scope: write.PriorScope, UserID: write.PriorUserID }, next];
+    // Ownership first: it is the stricter rule, and a holder is refused by it too.
+    for (const side of sides) {
+        if (readsAsPersonal(side.Scope) && !UUIDsEqual(side.UserID ?? '', write.CallerID)) {
+            return OWNERSHIP_REFUSAL;
+        }
+    }
+    if (!write.CallerHoldsGrant && sides.some((side) => side.Scope !== 'User')) {
+        return GRANT_REFUSAL;
+    }
+    return null;
+}
+
+/** True when a scope is `User` once trimmed and case-folded, as the database compares it. */
+function readsAsPersonal(scope: string | null): boolean {
+    return (scope ?? '').trim().toLowerCase() === 'user';
+}
+
+/**
+ * The `MJ: Components` columns that change what a form or panel using the component draws, or
+ * which component a lookup by name finds. An update by a holder of the grant is checked only when
+ * it changes one of them; an update by any other caller is always checked. A write with no caller
+ * (a trusted server context) is not checked.
+ */
+export const GUARDED_COMPONENT_FIELDS = ['Specification', 'Status', 'Name', 'Type', 'Namespace'] as const satisfies
+    ReadonlyArray<keyof MJComponentEntityType>;
+
+/** One of {@link GUARDED_COMPONENT_FIELDS}. */
+export type GuardedComponentField = typeof GUARDED_COMPONENT_FIELDS[number];
+
+const GUARDED_COMPONENT_FIELD_KEYS: ReadonlySet<string> = new Set(GUARDED_COMPONENT_FIELDS.map((f) => f.toLowerCase()));
+
+/** A full custom form or panel row that uses a component, as the component rules read it. */
+export interface FormComponentReference {
+    /** The row's ID. Read only to leave a row out of its own check. */
+    ID?: string;
+    Scope: FormScope;
+    UserID: string | null;
+}
+
+/** A component as the ownership test reads it. */
+export interface OwnedComponentCheck {
+    /** Every `MJ: Entity Form Contributions` and `MJ: Entity Form Overrides` row that uses the component. */
+    References: readonly FormComponentReference[];
+    /** True when the component's `Create` record change names the caller. Read only when no row uses it. */
+    CreatedByCaller: boolean;
+}
+
+/** One write to a `MJ: Components` row, as {@link ComponentWriteRefusal} needs to see it. */
+export interface ComponentWrite extends OwnedComponentCheck {
+    Operation: FormScopeOperation;
+    /** The columns whose new value differs from the stored one. Read on an update by a holder only. */
+    ChangedFields: readonly string[];
+    /** Null when there is no caller: a trusted server context. */
+    CallerID: string | null;
+    CallerHoldsGrant: boolean;
+}
+
+const COMPONENT_REFUSAL_LEAD =
+    'This component is used by a form or panel, so changing its specification, status, name, ' +
+    'namespace or type, or deleting it, changes that form or panel.';
+
+const OWN_COMPONENT_RULE =
+    'Without the Manage Form Defaults authorization you can change or delete only a component of ' +
+    'your own: one used by your own personal forms or panels and by nothing else, or one used by ' +
+    'none that you created.';
+
+const FOREIGN_COMPONENT_REFUSAL_LEAD =
+    `${OWN_COMPONENT_RULE} This one is used by a form or panel that is not your own.`;
+
+const GRANT_WOULD_ALLOW = 'With that authorization you could make this change.';
+
+const UNREFERENCED_COMPONENT_REFUSAL =
+    `${OWN_COMPONENT_RULE} No form or panel uses this one, you did not create it, and other forms ` +
+    'may load it by name.';
+
+const UNCLAIMED_COMPONENT_REFUSAL =
+    'Without the Manage Form Defaults authorization you can point a form or panel only at a component ' +
+    'of your own: one used by your own personal forms and panels and by nothing else, or one used by ' +
+    'none that you created. No form or panel uses this one, and you did not create it.';
+
+const ROW_COMPONENT_REFUSAL_LEAD =
+    'Another form or panel already uses this component, and pointing a form or panel at it would ' +
+    'let a change to it reach that one too.';
+
+const NAME_COLLISION_REFUSAL =
+    'Another component already has this name. Forms find components by name, so without the Manage ' +
+    'Form Defaults authorization a component may share its name only with components of your own: ' +
+    'used by your own personal forms and panels and by nothing else, or used by none and created by you.';
+
+/**
+ * Whether this write by a caller must be checked against the forms and panels that use the
+ * component: a delete; any update by a caller without the grant, whatever columns it changes; or
+ * an update by a holder that changes a {@link GUARDED_COMPONENT_FIELDS} column. With no caller (a
+ * trusted server context) nothing is checked. A create is never checked here;
+ * {@link ComponentNameCollisionRefusal} covers its name.
+ */
+export function ComponentWriteIsGuarded(
+    write: Pick<ComponentWrite, 'Operation' | 'ChangedFields' | 'CallerID' | 'CallerHoldsGrant'>,
+): boolean {
+    if (write.CallerID == null || write.Operation === 'create') return false;
+    if (write.Operation === 'delete' || !write.CallerHoldsGrant) return true;
+    return write.ChangedFields.some((field) => GUARDED_COMPONENT_FIELD_KEYS.has(field.trim().toLowerCase()));
+}
+
+/**
+ * Whether a component is the caller's own: used by at least one row and only by the caller's own
+ * personal rows, or used by no row and created by the caller. A row whose scope is not exactly
+ * `User` is not the caller's own, whoever it names.
+ */
+export function IsCallersOwnComponent(component: OwnedComponentCheck, callerID: string): boolean {
+    return component.References.length > 0
+        ? referenceRefusal(component.References, callerID, false) === null
+        : component.CreatedByCaller;
+}
+
+/**
+ * Why a write to a component is not allowed, or null when it is. Only a write that
+ * {@link ComponentWriteIsGuarded} selects is checked.
+ *
+ * Without the grant, any update and a delete are allowed only for a component of the caller's own
+ * ({@link IsCallersOwnComponent}): used by at least one row and only by the caller's own personal
+ * rows, or used by no row and created by the caller. Forms can load a component by name, so a
+ * component with no row may still be what someone else's form draws.
+ *
+ * With the grant, each row that uses the component is checked with {@link FormScopeWriteRefusal}
+ * as if the caller were updating that row in place: a `Role` or `Global` row passes, another
+ * user's personal row refuses, and the caller's own personal row passes. A component no row uses
+ * may be changed.
+ *
+ * A refusal for a caller without the grant says whether the grant would help. It says the grant
+ * would allow the write when a holder making the same write would pass. It says the grant does
+ * not change the answer only when a holder would be refused too: the write is one a holder is
+ * checked for, and another user's personal row uses the component.
+ */
+export function ComponentWriteRefusal(write: ComponentWrite): string | null {
+    if (!ComponentWriteIsGuarded(write)) return null;
+    const callerID = write.CallerID ?? '';
+    if (write.CallerHoldsGrant) {
+        const refusal = referenceRefusal(write.References, callerID, true);
+        return refusal ? `${COMPONENT_REFUSAL_LEAD} ${refusal}` : null;
+    }
+    if (IsCallersOwnComponent(write, callerID)) return null;
+    if (write.References.length === 0) return UNREFERENCED_COMPONENT_REFUSAL;
+    const holderWouldBeRefused = ComponentWriteRefusal({ ...write, CallerHoldsGrant: true }) !== null;
+    return `${FOREIGN_COMPONENT_REFUSAL_LEAD} ${holderWouldBeRefused ? OWNERSHIP_REFUSAL : GRANT_WOULD_ALLOW}`;
+}
+
+/** A form or panel row pointed at a component: what the row rule needs to see. */
+export interface FormRowComponentCheck extends OwnedComponentCheck {
+    /** The row being written. Null on create. A reference with this ID is left out. */
+    RowID: string | null;
+    /** Null when there is no caller: a trusted server context. */
+    CallerID: string | null;
+    CallerHoldsGrant: boolean;
+}
+
+/**
+ * Why a form or panel row may not point at this component, or null when it may. Applies when the
+ * row is created or its `ComponentID` changes.
+ *
+ * Without the grant, the component must be the caller's own ({@link IsCallersOwnComponent}): used
+ * only by the caller's own personal rows, or used by none and created by the caller. With the
+ * grant, every other row that uses it is checked as {@link ComponentWriteRefusal} checks it: a
+ * shared row passes, and another user's personal row refuses everyone, an Owner included. Without
+ * this, a personal row pointed at someone else's component would make that component the
+ * caller's to change, or lock it against everyone else.
+ */
+export function FormRowComponentRefusal(check: FormRowComponentCheck): string | null {
+    if (check.CallerID == null) return null;
+    const others = check.References.filter((reference) =>
+        !(check.RowID && reference.ID && UUIDsEqual(reference.ID, check.RowID)));
+    if (!check.CallerHoldsGrant && others.length === 0) {
+        return check.CreatedByCaller ? null : UNCLAIMED_COMPONENT_REFUSAL;
+    }
+    const refusal = referenceRefusal(others, check.CallerID, check.CallerHoldsGrant);
+    return refusal ? `${ROW_COMPONENT_REFUSAL_LEAD} ${refusal}` : null;
+}
+
+/** A component's name, as {@link ComponentNameCollisionRefusal} needs to see it. */
+export interface ComponentNameCheck {
+    /** True on create, or when an update changes `Name` or `Namespace`. */
+    NamesComponent: boolean;
+    /** Every other component a lookup by this name finds, as the ownership test reads it. */
+    Collisions: readonly OwnedComponentCheck[];
+    /** Null when there is no caller: a trusted server context. */
+    CallerID: string | null;
+    CallerHoldsGrant: boolean;
+}
+
+/**
+ * Why a component may not take this name, or null when it may.
+ *
+ * A form's spec can load a component by name, and the lookup returns whichever match it finds
+ * first, so a second component with the same name could stand in for the first. Without the grant,
+ * a created or renamed component may share its name only with components that are the caller's
+ * own ({@link IsCallersOwnComponent}). A holder is not restricted, so they can resolve a collision.
+ */
+export function ComponentNameCollisionRefusal(check: ComponentNameCheck): string | null {
+    if (!check.NamesComponent || check.CallerID == null || check.CallerHoldsGrant) return null;
+    const callerID = check.CallerID;
+    const foreign = check.Collisions.some((collision) => !IsCallersOwnComponent(collision, callerID));
+    return foreign ? NAME_COLLISION_REFUSAL : null;
+}
+
+/**
+ * The first refusal among these rows for a caller changing them in place, personal rows first,
+ * or null when every row allows it.
+ */
+function referenceRefusal(
+    references: readonly FormComponentReference[],
+    callerID: string,
+    callerHoldsGrant: boolean,
+): string | null {
+    const personalFirst = [...references].sort(
+        (a, b) => Number(readsAsPersonal(b.Scope)) - Number(readsAsPersonal(a.Scope)));
+    for (const reference of personalFirst) {
+        const refusal = FormScopeWriteRefusal({
+            Operation: 'update',
+            PriorScope: reference.Scope, PriorUserID: reference.UserID,
+            NextScope: reference.Scope, NextUserID: reference.UserID,
+            CallerID: callerID,
+            CallerHoldsGrant: callerHoldsGrant,
+        });
+        if (refusal) return refusal;
+    }
+    return null;
+}
+
+/**
+ * How narrow a scope's audience is, for breaking a tie between two rows at the same precedence.
+ * Higher wins: `User` (3) over `Role` (2) over `Global` (1). A value that is not one of the three
+ * ranks 0, below every scope.
+ */
+export function ContributionScopeRank(scope: FormScope | null | undefined): number {
+    switch (scope) {
+        case 'User': return 3;
+        case 'Role': return 2;
+        case 'Global': return 1;
+        default: return 0;
+    }
+}
+
+/** The fields the same-key tie-break reads from a contribution. */
+export interface RankedFormContribution {
+    /** Last-wins rank; null or undefined reads as 0. */
+    Precedence: number | null | undefined;
+    /** The row's scope. Not read for a compiled panel. */
+    Scope?: FormScope | null;
+    /** True for a compiled `BaseFormPanel` registration, which wins every precedence tie against a row. */
+    Compiled?: boolean;
+}
+
+/**
+ * Whether `candidate` beats `incumbent` for one contribution key: higher precedence first; on a
+ * tie a compiled panel beats any row, and between rows the narrower scope wins
+ * ({@link ContributionScopeRank}). On a full tie the incumbent stays, so the result follows the
+ * order the caller walks the contributions in.
+ */
+export function FormContributionOutranks(candidate: RankedFormContribution, incumbent: RankedFormContribution): boolean {
+    const precedence = (candidate.Precedence ?? 0) - (incumbent.Precedence ?? 0);
+    if (precedence !== 0) return precedence > 0;
+    return tieRank(candidate) > tieRank(incumbent);
+}
+
+function tieRank(contribution: RankedFormContribution): number {
+    return contribution.Compiled ? Number.POSITIVE_INFINITY : ContributionScopeRank(contribution.Scope);
+}
+
+/**
+ * Whether a user may pick a full custom form and see it rendered.
+ *
+ * A live (`Active`) form always. A set-aside (`Inactive`) form only when it is the user's own
+ * `User` row: applying a second form sets the first aside, and the user must be able to swap back.
+ * A shared form set to `Inactive` was retracted by whoever manages it, so it is neither offered nor
+ * rendered. A `Pending` row is a draft and is never either. The browser's form resolver and the
+ * server's composition action both decide with this.
+ *
+ * It checks `Status` and `Scope` only, not whose row it is or which role it is for. Callers pass
+ * rows that already apply to the user: their own `User` rows, their roles' rows and `Global` rows.
+ */
+export function IsSelectableFormOverride(row: { Status: string | null | undefined; Scope: string | null | undefined }): boolean {
+    return row.Status === 'Active' || (row.Status === 'Inactive' && row.Scope === 'User');
+}
+
+/**
+ * Entities whose forms show only the user's own full custom forms and panels, lowercased.
+ *
+ * A full custom form or a panel runs a React spec the runtime interprets. On an identity,
+ * permission or form-metadata surface, one published to a role or to everyone would change what
+ * other people see where it matters most, so only `User`-scope items render there.
+ */
+export const RESTRICTED_FORM_ENTITIES: ReadonlySet<string> = new Set([
+    'mj: users',
+    'mj: roles',
+    'mj: user roles',
+    'mj: authorizations',
+    'mj: authorization roles',
+    'mj: entity permissions',
+    'mj: row level security filters',
+    'mj: api keys',
+    'mj: entity field permissions',
+    'mj: entity form overrides',
+    'mj: entity form contributions',
+]);
+
+/**
+ * Whether a full custom form or panel at this scope may render on this entity's form.
+ *
+ * Always for `User`. Any other scope only off {@link RESTRICTED_FORM_ENTITIES}; the name is
+ * matched trimmed and case-folded. Applied where rows are read, so it holds however a row was
+ * written, `mj sync` and direct SQL included.
+ */
+export function FormScopeAllowedOnEntity(entityName: string | null | undefined, scope: string | null | undefined): boolean {
+    if (scope === 'User') return true;
+    return !RESTRICTED_FORM_ENTITIES.has((entityName ?? '').trim().toLowerCase());
+}
+
+/**
+ * Whether this user may publish forms and panels to a role or to everyone.
+ *
+ * An `Owner`-type user counts as holding it: they are the platform's top authority and must never
+ * be locked out of this. It does not let them touch other people's personal items — that is
+ * {@link FormScopeWriteRefusal}'s ownership rule, which no grant overrides.
+ *
+ * False without a user or when the authorization is not defined, so a deployment that has not
+ * synced the authorization yet fails closed.
+ */
+export function UserCanManageFormDefaults(
+    user: UserInfo | null | undefined,
+    provider: IMetadataProvider | null | undefined,
+): boolean {
+    if (!user) return false;
+    if (user.Type?.trim().toLowerCase() === 'owner') return true;
+    const authorizations = provider?.Authorizations ?? [];
+    const grant = authorizations.find((a) =>
+        a.Name?.trim().toLowerCase() === MANAGE_FORM_DEFAULTS_AUTHORIZATION.toLowerCase());
+    if (!grant) return false;
+    return new AuthorizationEvaluator().UserCanExecuteWithAncestors(grant, user, authorizations);
+}
