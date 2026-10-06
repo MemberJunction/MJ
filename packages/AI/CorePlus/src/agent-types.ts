@@ -1248,10 +1248,19 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      */
     apiKeys?: AIAPIKey[];
     /**
-     * Which credentials the run may spend; omitted means `'Any'`. `'RuntimeOnly'` restricts every
-     * prompt, sub-agent, action and realtime session in the run to {@link apiKeys}: a vendor the run
-     * carries no key for is not used, rather than falling back to the platform's credentials. See
-     * `AICredentialScope` in `@memberjunction/ai`.
+     * Which credentials the run may spend; omitted means `'Any'`. `'RuntimeOnly'` restricts the run's
+     * model calls to {@link apiKeys}: a vendor the run carries no key for is not used, rather than
+     * falling back to the platform's credentials. See `AICredentialScope` in `@memberjunction/ai`.
+     *
+     * Covered: every prompt the agent runs and the ones it starts on its own behalf (JSON repair, the
+     * result-selector judge, summarize, compaction, naming), decision calls, self-check rubrics,
+     * sub-agents, realtime sessions and actions. An action that calls a vendor directly gets the run's
+     * key through `RunActionParams.RuntimeAPIKeyResolver`; one that runs its own prompt or agent is
+     * handed only the scope, not the keys, so under `'RuntimeOnly'` it fails rather than spending the
+     * platform's.
+     *
+     * Not covered: retrieval reranking (`AIRerankerRunner`, the search rerankers) and vector
+     * embeddings outside a prompt run, which are platform infrastructure and resolve their own keys.
      */
     CredentialScope?: AICredentialScope;
     /**
