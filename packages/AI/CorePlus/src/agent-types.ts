@@ -868,6 +868,15 @@ export type ExecuteAgentResult<P = any> = {
      * @since 6.1.0
      */
     artifactDirective?: ArtifactDirective;
+
+    /**
+     * Set when the run PARKED on a durable task graph it submitted: the graph's parent task ID.
+     * The run's row is `Paused` rather than complete, and the dispatcher reinvokes the root of the
+     * chain with the results when the graph settles, so a caller that sees this has nothing more
+     * to do for the turn. Absent for every other outcome. Callers read this, never the row's
+     * `Paused` status, which other mechanisms may also use.
+     */
+    parkedOnTaskID?: string;
     /**
      * Optional memory context that was injected into the agent execution.
      * Includes the notes and examples that were retrieved and used for context.

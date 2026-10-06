@@ -50,7 +50,9 @@ export function ExtractTaskOutput(result: unknown): unknown {
     if (payload == null) return message;
     if (!message) return payload;
     if (typeof payload === 'object' && !Array.isArray(payload)) {
-        return { ...(payload as Record<string, unknown>), [TASK_OUTPUT_MESSAGE_KEY]: message };
+        const fields = payload as Record<string, unknown>;
+        // A payload that already carries the key keeps its own value; the agent put it there on purpose.
+        return TASK_OUTPUT_MESSAGE_KEY in fields ? fields : { ...fields, [TASK_OUTPUT_MESSAGE_KEY]: message };
     }
     return payload;
 }

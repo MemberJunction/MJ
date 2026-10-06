@@ -18,6 +18,12 @@ import { ExtractTaskOutput, TASK_OUTPUT_MESSAGE_KEY } from '../services/TaskGrap
 const run = (payload: unknown, message: string | null | undefined) => ({ payload, agentRun: { Message: message } });
 
 describe('ExtractTaskOutput', () => {
+    it('leaves a payload that already carries the message key alone', () => {
+        const out = ExtractTaskOutput(run({ cities: ['Sydney'], [TASK_OUTPUT_MESSAGE_KEY]: 'the agent put this here' }, 'a different message')) as Record<string, unknown>;
+        expect(out[TASK_OUTPUT_MESSAGE_KEY]).toBe('the agent put this here');
+        expect(out.cities).toEqual(['Sydney']);
+    });
+
     it('attaches the prose answer to a structured payload, keeping every payload field', () => {
         // The real case: the agent wrote {cities} to the payload and listed every temperature in its message.
         const out = ExtractTaskOutput(run({ cities: ['Sydney', 'Melbourne'] }, 'Sydney: 52°F. Melbourne: 63°F.')) as Record<string, unknown>;

@@ -6,6 +6,7 @@
 "@memberjunction/ng-conversations": minor
 "@memberjunction/web-search-engine": minor
 "@memberjunction/core-actions": minor
+"@memberjunction/ai-core-plus": minor
 ---
 
 fix(sage): the Workflow Planner's plan approval renders a button again, and the planner remembers the plan it presented
@@ -60,3 +61,10 @@ fix(server): a task's output carries the agent's answer, not just its payload
 
 The follow-up turn is also given the conversation it belongs to — the request, the approved plan, the last twenty messages, loaded through the same `ConversationEngine` helpers the run resolver uses — with the outcome appended last, and its instruction names the shape: the columns the user asked for, in that order, one row per item. It had been handed the outcome alone, so "present it in the form they asked for" had nothing to point at and one run answered with a table, the next with bulleted lists.
 
+---
+
+fix(task-graph, server, ai-agents): three silent gaps in the workflow follow-up, found in review
+
+- **The owner lookup refreshes the user cache on a miss.** `TaskGraphContinuationDeliverer.resolveOwner` found the conversation's owner in `UserCache` or fell back to the dispatcher's own user, which the conversation's owner gate refuses, so a user created after the process loaded its cache silently lost the follow-up. On a miss it now calls `UserCache.Instance.Refresh` (the same load the process did at startup) and looks again before falling back.
+- **A task's agent message rides beside its output.** `TaskContinuationParams.Tasks[].Message` carries each agent-run task's `Message`, bounded like `Output`, loaded by the dispatcher in one query over the graph's runs. A Loop agent's prose answer therefore reaches the follow-up even when the task's output is an array or a primitive, which the `_message` field on a plain-object payload could not cover without changing the output's shape. The deliverer renders it as "**Task** reported:" before the output. A payload that already carries `_message` keeps its own value.
+- **A parked sub-agent is marked, not inferred.** `ExecuteAgentResult.parkedOnTaskID` is set when a run parks on a task graph it submitted; `BaseAgent.processSubAgentStep` ends the parent's turn on that marker instead of on `agentRun.Status === 'Paused'`, so a future mechanism that pauses a run for another reason does not end the parent's turn by accident.

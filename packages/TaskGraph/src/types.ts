@@ -456,6 +456,13 @@ export type TaskContinuationParams = {
         Status: string;
         Summary?: string;
         /** The task's output, truncated to the dispatcher's per-task cap. Absent when the task produced none. */
+        /**
+         * The agent's own answer for the task — its run's `Message` — bounded like `Output`. A Loop
+         * agent answers in prose here and keeps only partial state in its payload, so a follow-up
+         * given `Output` alone presented JSON where the user asked for a table. Absent for tasks
+         * that did not run an agent, or whose agent wrote no message.
+         */
+        Message?: string;
         Output?: string;
         ErrorMessage?: string;
     }>;

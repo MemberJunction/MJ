@@ -35,9 +35,17 @@ vi.mock('@memberjunction/core-entities', () => ({
     },
 }));
 
-/** The users the server knows. The conversation's owner is `owner-1`; the dispatcher runs as `user-1`. */
+/**
+ * The users the server knows. The conversation's owner is `owner-1`; the dispatcher runs as `user-1`.
+ * `Refresh` is what the deliverer calls on a cache miss; a test can make it add a user, as a real
+ * refresh would for a user created after the process loaded its cache.
+ */
+const userCache = vi.hoisted(() => ({
+    users: [{ ID: 'owner-1', Name: 'Owner One' }, { ID: 'user-1', Name: 'Dispatcher' }] as Array<{ ID: string; Name: string }>,
+    refresh: vi.fn(async () => undefined),
+}));
 vi.mock('@memberjunction/generic-database-provider', () => ({
-    UserCache: { Instance: { Users: [{ ID: 'owner-1', Name: 'Owner One' }, { ID: 'user-1', Name: 'Dispatcher' }] } },
+    UserCache: { Instance: { get Users() { return userCache.users; }, Refresh: (...a: unknown[]) => userCache.refresh(...a) } },
 }));
 
 vi.mock('@memberjunction/ai-core-plus', () => ({ MJAIAgentEntityExtended: class {} }));
@@ -256,6 +264,7 @@ describe('Reinvoke — restarting the conversation\'s agent', () => {
                 rows.push(row);
                 return row;
             }),
+            ExecuteSQL: vi.fn(), // marks it as a database provider, so the owner lookup may refresh the user cache
         };
         const deliverer = new TaskGraphContinuationDeliverer(
             { CreateProvider: vi.fn().mockResolvedValue(provider) } as never,
@@ -269,7 +278,34 @@ describe('Reinvoke — restarting the conversation\'s agent', () => {
         runAgent.mockClear();
         runAgentInConversation.mockClear();
         publish.mockClear();
+        userCache.refresh.mockReset();
+        userCache.refresh.mockResolvedValue(undefined);
+        userCache.users = [{ ID: 'owner-1', Name: 'Owner One' }, { ID: 'user-1', Name: 'Dispatcher' }];
         runAgentInConversation.mockResolvedValue({ agentResult: { success: true, agentRun: { ID: 'followup-run' } } });
+    });
+
+    it('refreshes the user cache on a miss and runs as the owner it then finds', async () => {
+        // The owner was created after this process loaded its cache: a stale cache would have
+        // acted as the dispatcher's user, which the conversation's owner gate refuses.
+        userCache.refresh.mockImplementation(async () => { userCache.users.push({ ID: 'late-owner', Name: 'Late Owner' }); });
+        // Both the run's user and the conversation's owner are the late user, so nothing cached matches.
+        const h = reinvokeHarness({ runs: [{ ID: 'run-1', AgentID: 'agent-1', UserID: 'late-owner' }], detail: { ownerID: 'late-owner' } });
+        await h.deliverer.Reinvoke(params());
+
+        expect(userCache.refresh).toHaveBeenCalledTimes(1);
+        const [turn] = runAgentInConversation.mock.calls[0];
+        expect(turn.contextUser.ID).toBe('late-owner');
+    });
+
+    it('renders each task\'s agent message beside its output', async () => {
+        const h = reinvokeHarness();
+        await h.deliverer.Reinvoke(params({ Tasks: [
+            { TaskID: 't1', Name: 'Weather', Status: 'Complete', Output: '{"cities":["Sydney"]}', Message: 'Sydney: 61°F, overcast.' },
+        ] }));
+        const content: string = runAgentInConversation.mock.calls[0][0].conversationMessages.at(-1).content;
+        expect(content).toContain('**Weather** reported:');
+        expect(content).toContain('Sydney: 61°F, overcast.');
+        expect(content).toContain('Output of **Weather**:');
     });
 
     it('announces the landed follow-up to every session of the conversation\'s owner', async () => {

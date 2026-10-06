@@ -12,7 +12,7 @@
  *
  * @module @memberjunction/server
  */
-import { LogError, LogStatus, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { LogError, LogStatus, type DatabaseProviderBase, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { ConversationEngine, MJAIAgentRunEntity, MJConversationDetailEntity, MJConversationEntity } from '@memberjunction/core-entities';
 import type { ChatMessage } from '@memberjunction/ai';
 import { UserCache } from '@memberjunction/generic-database-provider';
@@ -312,17 +312,33 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
         const byID = (id: string | null | undefined): UserInfo | undefined =>
             id ? UserCache.Instance.Users.find((u) => UUIDsEqual(u.ID, id)) : undefined;
 
-        const preferred = byID(preferredUserID);
-        if (preferred) return preferred;
-
         const conversation = await provider.GetEntityObject<MJConversationEntity>('MJ: Conversations', this.contextUser);
-        if (await conversation.Load(conversationID)) {
-            const owner = byID(conversation.UserID);
-            if (owner) return owner;
+        const conversationOwnerID = (await conversation.Load(conversationID)) ? conversation.UserID : null;
+
+        const found = byID(preferredUserID) ?? byID(conversationOwnerID);
+        if (found) return found;
+
+        // A miss is usually a user created after this process loaded its cache, not a user that
+        // does not exist. Refresh the cache (the same load the process did at startup) and look
+        // again before giving up; acting as the dispatcher's own user is refused by the
+        // conversation's owner gate, so a stale cache would silently lose the follow-up.
+        if (this.isDatabaseProvider(provider)) {
+            await UserCache.Instance.Refresh(provider);
+            const refreshed = byID(preferredUserID) ?? byID(conversationOwnerID);
+            if (refreshed) return refreshed;
         }
 
-        LogError(`[TaskGraphContinuationDeliverer] No cached user owns conversation ${conversationID} (run user ${preferredUserID ?? 'none'}) — acting as ${this.contextUser.Name ?? this.contextUser.ID}.`);
+        LogError(`[TaskGraphContinuationDeliverer] No user owns conversation ${conversationID} (run user ${preferredUserID ?? 'none'}), even after refreshing the user cache — acting as ${this.contextUser.Name ?? this.contextUser.ID}.`);
         return this.contextUser;
+    }
+
+    /**
+     * Whether the provider can run SQL, which the user cache needs to reload itself. A structural
+     * check rather than `instanceof`: the server's provider factory hands out a database provider,
+     * and this keeps the test double (and any bundle-duplicated class) from failing the check.
+     */
+    private isDatabaseProvider(provider: IMetadataProvider): provider is DatabaseProviderBase {
+        return typeof (provider as Partial<DatabaseProviderBase>).ExecuteSQL === 'function';
     }
 
     /**
@@ -379,6 +395,11 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
             for (const task of params.Tasks.slice(0, MAX_LISTED_TASKS)) {
                 const detail = task.ErrorMessage ?? task.Summary;
                 lines.push(`- ${this.statusIcon(task.Status)} **${task.Name}** — ${task.Status}${detail ? `: ${detail}` : ''}`);
+                if (task.Message) {
+                    // The agent's own answer for the task — the prose a Loop agent writes while its
+                    // payload holds only partial state. See TaskContinuationParams.Tasks.Message.
+                    lines.push('', `**${task.Name}** reported:`, '', task.Message, '');
+                }
                 if (task.Output) {
                     // The output itself, not a reference to it — see TaskContinuationParams.Tasks.
                     lines.push('', `Output of **${task.Name}**:`, '', task.Output, '');

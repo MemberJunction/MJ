@@ -498,6 +498,8 @@ describe('Top-level Flow agent', () => {
         expect(prompts.PromptIDs).toHaveLength(0);
         expect(result.success).toBe(true);
         expect(harness.run.Status).toBe('Paused');
+        // The parent of a parked sub-agent reads this marker, not the Paused status.
+        expect(result.parkedOnTaskID).toBeTruthy();
 
         const routing = harness.routingStep;
         expect(routing.name).toBe('Workflow runs on the task-graph dispatcher');
