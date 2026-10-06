@@ -328,7 +328,7 @@ export class AgentRunner {
 
                     if (!conversationName && options.userMessage) {
                         // Try to generate a name using the "Name Conversation" prompt (same as UI)
-                        const nameResult = await this.GenerateConversationName(options.userMessage, contextUser, md);
+                        const nameResult = await this.GenerateConversationName(options.userMessage, contextUser, md, params);
                         if (nameResult) {
                             conversationName = nameResult.name;
                             conversationDescription = nameResult.description;
@@ -1362,13 +1362,16 @@ export class AgentRunner {
      *
      * @param userMessage - The first user message to base the name on
      * @param contextUser - User context for prompt execution
+     * @param credentials - The run's configuration, runtime keys and credential scope, so naming runs
+     *   on the same credentials as the agent run it names
      * @returns Generated conversation name and description, or null if generation failed
      * @private
      */
     private async GenerateConversationName(
         userMessage: string,
         contextUser: UserInfo,
-        provider?: IMetadataProvider
+        provider?: IMetadataProvider,
+        credentials?: Pick<ExecuteAgentParams, 'configurationId' | 'apiKeys' | 'CredentialScope'>
     ): Promise<{ name: string; description: string } | null> {
         try {
             // Import AIPromptRunner, AIPromptParams, and AIEngine
@@ -1392,6 +1395,9 @@ export class AgentRunner {
             promptParams.contextUser = contextUser;
             promptParams.conversationMessages = [{ role: 'user', content: userMessage }];
             promptParams.provider = provider || this._provider;
+            promptParams.configurationId = credentials?.configurationId;
+            promptParams.apiKeys = credentials?.apiKeys;
+            promptParams.CredentialScope = credentials?.CredentialScope;
 
             const runner = new AIPromptRunner();
             const result = await runner.ExecutePrompt(promptParams);

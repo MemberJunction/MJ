@@ -1,7 +1,7 @@
-import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPIKey, ErrorAnalyzer, AIErrorInfo, ResolveFileInputStrategy, AIPromptConfiguration, EncodeToolTurnsAsText, AIModelConfiguration } from '@memberjunction/ai';
+import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPIKey, ErrorAnalyzer, AIErrorInfo, ResolveFileInputStrategy, AIPromptConfiguration, EncodeToolTurnsAsText, AIModelConfiguration, CredentialScopeAllows, type AICredentialScope } from '@memberjunction/ai';
 import { GetToolCallingDecision, GetToolCallingMode, NativeToolCallingDecision, RecordToolCallingDecision, RecordToolCallingMode, ResolveNativeToolCalling, ResolveToolChoiceForRequest } from './nativeToolCallingGate';
 import { AIModelRunner } from './AIModelRunner';
-import { ValidationAttempt, AIPromptRunResult, AIModelSelectionInfo } from '@memberjunction/ai-core-plus';
+import { ValidationAttempt, AIPromptRunResult, AIModelSelectionInfo, PickPromptExecutionScope } from '@memberjunction/ai-core-plus';
 import { BaseEntitySaveQueue, LogErrorEx, LogStatus, LogStatusEx, IsVerboseLoggingEnabled, Metadata, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { CleanJSON, RepairJSONEscaping, MJGlobal, JSONValidator, ValidationResult, ValidationErrorInfo, ValidationErrorType, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { MJAIPromptModelEntity, MJAIModelVendorEntity, MJAIConfigurationEntity, MJAIVendorEntity, MJTemplateEntityExtended, MJAICredentialBindingEntity, MJCredentialEntity } from '@memberjunction/core-entities';
@@ -418,6 +418,11 @@ export class AIPromptRunner {
    * IMPORTANT: When ANY credential ID is found (priorities 1-4), the system uses
    * the Credentials path and ignores legacy methods (priorities 5-6).
    *
+   * Each tier is consulted only if {@link CredentialScopeAllows} the run's
+   * {@link AIPromptParams.CredentialScope} to use its source. Under `'RuntimeOnly'` that leaves
+   * priority 1 and the `apiKeys` entry for this driver class; bindings, the vendor default and the
+   * environment are skipped.
+   *
    * @param driverClass - The driver class name (e.g., 'OpenAILLM')
    * @param promptId - The prompt ID for looking up AIPromptModel credentials
    * @param modelId - The model ID for looking up AIPromptModel and AIModelVendor credentials
@@ -439,6 +444,34 @@ export class AIPromptRunner {
       return await this.resolveCredentialById(params.credentialId, 'per-request override', params, verbose);
     }
 
+    // Priorities 2-5 are the platform's MJ Credentials; a scope that rules them out skips straight
+    // to the caller's keys (and, if the scope allows it, the environment).
+    if (CredentialScopeAllows(params.CredentialScope, 'PlatformCredential')) {
+      const platformCredential = await this.resolvePlatformCredential(promptId, modelId, vendorId, params, verbose);
+      if (platformCredential) return platformCredential;
+    }
+
+    // No credential bindings found - fall back to legacy methods
+    if (verbose) {
+      this.logStatus(`   Using legacy API key resolution for driver ${driverClass}`, true, params);
+    }
+
+    // Priority 6 & 7: Legacy apiKeys array and environment variables (the latter only if the scope allows)
+    return GetAIAPIKey(driverClass, params.apiKeys, verbose, params.CredentialScope);
+  }
+
+  /**
+   * Priorities 2-5 of {@link resolveCredentialForExecution}: the platform's MJ Credentials —
+   * `AICredentialBinding`s on the prompt-model, the model-vendor and the vendor, then the vendor's
+   * default credential. `undefined` when none resolves.
+   */
+  private async resolvePlatformCredential(
+    promptId: string | undefined,
+    modelId: string | undefined,
+    vendorId: string | undefined,
+    params: AIPromptParams,
+    verbose: boolean
+  ): Promise<string | undefined> {
     // Ensure CredentialEngine is configured for binding lookups
     await CredentialEngine.Instance.Config(false, params.contextUser);
 
@@ -485,13 +518,7 @@ export class AIPromptRunner {
       }
     }
 
-    // No credential bindings found - fall back to legacy methods
-    if (verbose) {
-      this.logStatus(`   Using legacy API key resolution for driver ${driverClass}`, true, params);
-    }
-
-    // Priority 6 & 7: Legacy apiKeys array and environment variables
-    return GetAIAPIKey(driverClass, params.apiKeys, verbose);
+    return undefined;
   }
 
   /**
@@ -651,6 +678,10 @@ export class AIPromptRunner {
    * 6. Legacy: params.apiKeys[] array
    * 7. Legacy: AI_VENDOR_API_KEY__<DRIVER> environment variables
    *
+   * Each tier counts only if {@link CredentialScopeAllows} the run's scope to use its source: under
+   * `'RuntimeOnly'` only 1 and 6 count, so a candidate the caller has no key for is unavailable —
+   * which is what keeps failover on the caller's keys.
+   *
    * @param driverClass - The driver class name (e.g., 'OpenAILLM')
    * @param promptId - The prompt ID for looking up AIPromptModel bindings
    * @param modelId - The model ID for looking up AIPromptModel and AIModelVendor bindings
@@ -671,6 +702,18 @@ export class AIPromptRunner {
       return true;
     }
 
+    // Priorities 2-5: the platform's MJ Credentials, when the scope allows them
+    if (CredentialScopeAllows(params?.CredentialScope, 'PlatformCredential') && this.hasPlatformCredential(promptId, modelId, vendorId)) {
+      return true;
+    }
+
+    // Priority 6 & 7: Legacy methods - check if API key is available (the environment only if the scope allows)
+    const apiKey = GetAIAPIKey(driverClass, params?.apiKeys, params?.verbose, params?.CredentialScope);
+    return this.isValidAPIKey(apiKey);
+  }
+
+  /** Priorities 2-5 of {@link hasCredentialsAvailable}: whether a platform MJ Credential applies. */
+  private hasPlatformCredential(promptId: string | undefined, modelId: string | undefined, vendorId: string | undefined): boolean {
     // Priority 2: PromptModel bindings
     if (promptId && modelId) {
       const promptModel = AIEngine.Instance.PromptModels.find(
@@ -708,9 +751,7 @@ export class AIPromptRunner {
       }
     }
 
-    // Priority 6 & 7: Legacy methods - check if API key is available
-    const apiKey = GetAIAPIKey(driverClass, params?.apiKeys, params?.verbose);
-    return this.isValidAPIKey(apiKey);
+    return false;
   }
 
   /**
@@ -796,7 +837,7 @@ export class AIPromptRunner {
         // Select model using the appropriate prompt — capture the FULL result
         selection = await this.selectModel(modelSelectionPrompt, params.override?.modelId, params.contextUser, params.configurationId, params.override?.vendorId, params);
         if (!selection.model) {
-          throw new Error(this.buildNoModelFoundMessage(modelSelectionPrompt.Name, selection.selectionInfo));
+          throw new Error(this.buildNoModelFoundMessage(modelSelectionPrompt.Name, selection.selectionInfo, params.CredentialScope));
         }
 
         // Tell the template which path this run is actually taking, BEFORE it renders. The loop
@@ -882,7 +923,7 @@ export class AIPromptRunner {
 
         selection = await this.selectModel(modelSelectionPrompt, params.override?.modelId, params.contextUser, params.configurationId, params.override?.vendorId, params);
         if (!selection.model) {
-          throw new Error(this.buildNoModelFoundMessage(modelSelectionPrompt.Name, selection.selectionInfo));
+          throw new Error(this.buildNoModelFoundMessage(modelSelectionPrompt.Name, selection.selectionInfo, params.CredentialScope));
         }
       }
 
@@ -1020,7 +1061,7 @@ export class AIPromptRunner {
       allCandidates = modelResult.allCandidates || [];
       credentialAvailability = modelResult.credentialAvailability;
       if (!selectedModel) {
-        throw new Error(this.buildNoModelFoundMessage(modelSelectionPrompt.Name, modelSelectionInfo));
+        throw new Error(this.buildNoModelFoundMessage(modelSelectionPrompt.Name, modelSelectionInfo, params.CredentialScope));
       }
     }
 
@@ -1213,7 +1254,7 @@ export class AIPromptRunner {
         selectorPromptId: prompt.ResultSelectorPromptID,
       };
 
-      const aiSelectedResult = await this.ParallelCoordinator.selectBestResult(successfulResults, selectionConfig, undefined, params.cancellationToken);
+      const aiSelectedResult = await this.ParallelCoordinator.selectBestResult(successfulResults, selectionConfig, undefined, params.cancellationToken, PickPromptExecutionScope(params));
       if (aiSelectedResult) {
         selectedResult = aiSelectedResult;
       }
@@ -2787,7 +2828,7 @@ export class AIPromptRunner {
    * Includes details about which models were considered and why they were unavailable
    * so the error message is actionable for end users (e.g., missing API credentials).
    */
-  private buildNoModelFoundMessage(promptName: string, selectionInfo?: AIModelSelectionInfo): string {
+  private buildNoModelFoundMessage(promptName: string, selectionInfo?: AIModelSelectionInfo, credentialScope?: AICredentialScope): string {
     const base = `No suitable model found for prompt ${promptName}`;
 
     if (!selectionInfo?.modelsConsidered || selectionInfo.modelsConsidered.length === 0) {
@@ -2803,9 +2844,14 @@ export class AIPromptRunner {
       }).join(', ');
 
       const suffix = unavailableModels.length > 5 ? ` (${unavailableModels.length} total)` : '';
+      // When the scope rules out the platform's credentials, "configure them" would point the reader
+      // at exactly the fallback the caller ruled out.
+      const platformAllowed = CredentialScopeAllows(credentialScope, 'Environment') || CredentialScopeAllows(credentialScope, 'PlatformCredential');
+      const remedy = platformAllowed
+        ? `Please configure API credentials in your environment or AI Credential settings.`
+        : `The credential scope is ${credentialScope}, so only the API keys supplied with this run count; supply a key for one of these vendors.`;
       return `${base}. No valid API credentials/keys are configured for any of the candidate model-vendor combinations. ` +
-        `Tried: ${triedSummary}${suffix}. ` +
-        `Please configure API credentials in your environment or AI Credential settings.`;
+        `Tried: ${triedSummary}${suffix}. ${remedy}`;
     }
 
     return `${base}. ${selectionInfo.selectionReason || 'Unknown reason'}`;
@@ -3300,7 +3346,7 @@ export class AIPromptRunner {
         return result;
 
       } catch (error) {
-        lastError = error as Error;
+        lastError = this.asModelError(error as Error | ChatResult);
 
         // Analyze error to get error info
         const errorInfo = ErrorAnalyzer.analyzeError(lastError);
@@ -3760,6 +3806,16 @@ export class AIPromptRunner {
       );
 
       // Create LLM instance with vendor-specific driver class
+      // No key under a scope that rules out the environment must not reach a driver: the OpenAI and
+      // Anthropic SDKs read OPENAI_API_KEY / ANTHROPIC_API_KEY themselves when handed none. Selection
+      // and failover already skip unkeyed candidates; parallel tasks are planned without the scope.
+      if (!apiKey?.trim() && !CredentialScopeAllows(params.CredentialScope, 'Environment')) {
+        throw new Error(
+          `No credentials found for driver class '${driverClass}': the credential scope is ${params.CredentialScope}, ` +
+          `and this run carries no API key for it.`
+        );
+      }
+
       llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, driverClass, apiKey);
 
       // Prepare chat parameters
@@ -4765,6 +4821,22 @@ export class AIPromptRunner {
   }
 
   /**
+   * The Error a failover attempt records for a caught value. A streaming call rejects with its failed
+   * ChatResult (BaseLLM) rather than an Error, so its `.message` was undefined and every such failure
+   * reached the prompt run and the agent run as "Unknown error". Keeps the driver's classification on
+   * it, which ErrorAnalyzer then honours; any other rejected value (a bare `{ status: 429 }`) is
+   * classified as itself before it is wrapped, so wrapping never loses what it said.
+   */
+  private asModelError(caught: Error | ChatResult): Error {
+    if (caught instanceof Error) {
+      return caught;
+    }
+    const wrapped: Error & { errorInfo?: AIErrorInfo } = new Error(caught?.errorMessage || caught?.statusText || 'Model execution failed');
+    wrapped.errorInfo = caught?.errorInfo ?? ErrorAnalyzer.analyzeError(caught);
+    return wrapped;
+  }
+
+  /**
    * Filters out all candidates from a vendor when a vendor-level error occurs.
    * Vendor-level errors affect all models from that vendor:
    * - Authentication: Invalid API key
@@ -5607,9 +5679,11 @@ export class AIPromptRunner {
         }
         
         // Run the repair prompt
+        // The repair runs inside the caller's run, so it runs on the caller's user, configuration and
+        // credentials — under RuntimeOnly it must not reach a key the caller's prompt could not.
         const repairResult = await this.ExecutePrompt({
+          ...PickPromptExecutionScope(params),
           parentPromptRunId: currentPromptRun.ID,
-          contextUser: params.contextUser,
           prompt: repairPrompt,
           data: {
             ERROR_MESSAGE: trueError,
