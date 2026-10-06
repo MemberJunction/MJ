@@ -63,6 +63,35 @@ describe('PGConnectionManager', () => {
             expect(manager.Config).not.toBeNull();
         });
 
+        it('passes the statement and idle-in-transaction timeouts to every backend at startup', async () => {
+            await manager.Initialize({
+                Host: 'localhost',
+                Database: 'testdb',
+                User: 'user',
+                Password: 'pass',
+                StatementTimeoutMs: 2000,
+                IdleInTransactionSessionTimeoutMs: 5000,
+            });
+
+            const lastConfig = (pg.Pool as unknown as { lastConfig?: Record<string, unknown> }).lastConfig;
+            expect(lastConfig?.statement_timeout).toBe(2000);
+            expect(lastConfig?.idle_in_transaction_session_timeout).toBe(5000);
+        });
+
+        it('sets no server-side timeout when none is configured or the value is 0', async () => {
+            await manager.Initialize({
+                Host: 'localhost',
+                Database: 'testdb',
+                User: 'user',
+                Password: 'pass',
+                StatementTimeoutMs: 0,
+            });
+
+            const lastConfig = (pg.Pool as unknown as { lastConfig?: Record<string, unknown> }).lastConfig;
+            expect(lastConfig).not.toHaveProperty('statement_timeout');
+            expect(lastConfig).not.toHaveProperty('idle_in_transaction_session_timeout');
+        });
+
         it('should configure numeric type parsers on the pool', async () => {
             await manager.Initialize({
                 Host: 'localhost',

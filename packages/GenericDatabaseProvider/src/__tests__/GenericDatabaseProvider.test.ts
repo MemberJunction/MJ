@@ -1787,7 +1787,7 @@ describe('RenderedSQL in ExecuteQueryFromSpec', () => {
         expect(result.RenderedSQL).toMatch(/\bTOP\s+10\b/i);
     });
 
-    it('RenderedSQL shows MaxRows outer-wrap transformation for unparseable SQL', async () => {
+    it('RenderedSQL shows the MaxRows cap applied to unparseable SQL', async () => {
         // Simulate a DB execution failure
         vi.spyOn(provider, 'ExecuteSQL').mockRejectedValueOnce(
             new Error('The ORDER BY clause is invalid')
@@ -1809,10 +1809,9 @@ ORDER BY Cnt DESC`,
         const result = await provider.ExecuteQueryFromSpec(spec, mockUser);
 
         expect(result.Success).toBe(false);
-        // RenderedSQL reveals the outer-wrap transformation that the error message alone cannot
+        // RenderedSQL reveals the cap transformation that the error message alone cannot
         expect(result.RenderedSQL).toBeDefined();
-        expect(result.RenderedSQL).toMatch(/_mj_capped/);
-        expect(result.RenderedSQL).toMatch(/\bTOP\s+10\b/i);
+        expect(result.RenderedSQL).toMatch(/^SELECT TOP 10 t\.ID/);
         // Nunjucks tokens should be resolved
         expect(result.RenderedSQL).not.toContain('{{');
         expect(result.RenderedSQL).toMatch(/2024-01-01/);
