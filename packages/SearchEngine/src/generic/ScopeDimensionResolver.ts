@@ -348,9 +348,24 @@ export class ScopeDimensionResolver {
         ({ Value: value, Provenance: provenance } =
             this.applyDefaultValue(dim, restricts, value, provenance, diagnostics));
 
-        if (value === undefined && dim.required) {
+        if (dim.required && value === undefined) {
             throw new ScopeDimensionError(
                 `Required dimension "${dim.name}" could not be resolved for scope "${input.Scope.Name}".`
+            );
+        }
+        if (dim.required && dim.inheritanceMode !== 'cascading' && this.isEmptyValue(value)) {
+            // Resolved, but to NOTHING: an expansion query with no rows, or an empty caller set. A
+            // required dimension exists to be the bound, so "nothing reachable" is a refusal, never a
+            // search. It must not be left to the template: under the `{% if x | length %}` idiom an
+            // empty set removes the clause, and without an `{% else %}` the lane runs unbounded — the
+            // same inversion `meetAgainstSet` refuses when a narrowing meets to nothing. (A bare
+            // `{% if x %}` keeps the clause, since `[]` is truthy, and renders `IN ('')`.)
+            //
+            // Cascading is the one declared case where empty is meaningful: untagged content applies
+            // to everyone, so a reader who reaches no tagged value still has something to see.
+            throw new ScopeDimensionError(
+                `Required dimension "${dim.name}" resolved to no value for scope "${input.Scope.Name}": ` +
+                `nothing is reachable for this user, so there is nothing to search.`
             );
         }
 
@@ -369,6 +384,16 @@ export class ScopeDimensionResolver {
         // one an attacker would most like erased.
         if (value === undefined && provenance !== 'DiscardedCaller') provenance = 'Absent';
         return { Value: value, Provenance: provenance, Note: note };
+    }
+
+    /**
+     * A value that resolved to nothing: an empty set, or a blank string. `undefined` is "not resolved"
+     * and is reported separately, so it is not "empty" here.
+     */
+    private isEmptyValue(value: SecondaryScopeValue | undefined): boolean {
+        if (Array.isArray(value)) return value.length === 0;
+        if (typeof value === 'string') return value.trim().length === 0;
+        return false;
     }
 
     /**
