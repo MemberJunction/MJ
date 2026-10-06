@@ -1,4 +1,5 @@
-import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef, ViewContainerRef, ViewChild, ElementRef, HostListener } from '@angular/core';
+import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef, ViewContainerRef, ViewChild, ElementRef, HostListener, inject } from '@angular/core';
+import { AngularAdapterService } from '@memberjunction/ng-react';
 import { ActivatedRoute, Router, NavigationEnd } from '@angular/router';
 import { Subscription, combineLatest, Subject } from 'rxjs';
 import { filter, takeUntil } from 'rxjs/operators';
@@ -393,6 +394,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     this.leftOfUserMenuApps = this.appManager.GetNavBarApps('Left of User Menu')
       .filter(app => !(app.HideNavBarIconWhenActive && UUIDsEqual(app.ID, this.activeApp?.ID)));
   }
+
+  /** Warms the React runtime (CDN scripts) after login; see initializeShell(). Field-injected so the constructor signature is unchanged. */
+  private reactAdapter = inject(AngularAdapterService);
 
   constructor(
     private appManager: ApplicationManager,
@@ -803,6 +807,11 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     // state changes (apps loaded, searchableEntities populated, etc.) to prevent
     // NG0100 ExpressionChangedAfterItHasBeenCheckedError in dev mode
     this.cdr.detectChanges();
+
+    // Explorer is a host where users routinely open interactive component artifacts, so warm the
+    // React runtime in the background now that the user is signed in. ArtifactsModule no longer
+    // does this on construction (#4802). Non-blocking; preload() logs and retries on demand.
+    this.reactAdapter.preload();
   }
 
   /**
