@@ -259,7 +259,11 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         if (this._configured && !forceRefresh) return;
 
         this._defaultMaxResults = config.DefaultMaxResults ?? 20;
-        this._defaultOverfetchFactor = Math.max(1, config.DefaultPermissionOverfetchFactor ?? 2);
+        // `??` passes NaN/Infinity through; a non-finite default would have become the provider topK.
+        const configuredDefault = config.DefaultPermissionOverfetchFactor;
+        this._defaultOverfetchFactor = typeof configuredDefault === 'number' && Number.isFinite(configuredDefault)
+            ? Math.max(1, configuredDefault)
+            : 2;
         this._providerEntries = [];
 
         // Ensure SearchEngineBase has loaded provider + scope metadata
@@ -365,14 +369,15 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             const topK = params.MaxResults ?? this._defaultMaxResults;
             const mode = params.Mode ?? 'full';
             const isPreview = mode === 'preview';
-            const overfetchFactor = Math.max(1, params.PermissionOverfetchFactor ?? this._defaultOverfetchFactor);
-            const providerTopK = Math.max(topK, Math.ceil(topK * overfetchFactor));
 
             // ──────────────────────────────────────────────────────────
             // Resolve scopes (when supplied)
             // ──────────────────────────────────────────────────────────
             const resolvedScopes = this.resolveScopes(params.ScopeIDs);
             const isUnconstrained = resolvedScopes.length === 0 || resolvedScopes.some(s => s.Scope.IsGlobal);
+
+            const overfetchFactor = this.ResolvePermissionOverfetchFactor(params, resolvedScopes);
+            const providerTopK = Math.max(topK, Math.ceil(topK * overfetchFactor));
 
             // ──────────────────────────────────────────────────────────
             // Cache lookup (next PR #2532). Skip preview searches — they're already
@@ -1672,6 +1677,50 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         }
         return null;
     }
+
+    /**
+     * The per-provider over-fetch multiplier for this search, in priority order: the caller's
+     * `SearchParams.PermissionOverfetchFactor`; else the **largest** `permissionOverfetchFactor` any
+     * resolved scope declares in its `ScopeConfig`; else the engine default. Never below 1.
+     *
+     * The largest wins across scopes, not the first: over-fetch exists to compensate for late
+     * permission filtering, and a lane trimmed heavily by it needs the extra candidates whichever
+     * scope it belongs to — a larger factor only costs provider work, never correctness. This is also
+     * why a scope may declare it at all: the scope's author knows how sparse its lanes are after
+     * permissions, and every caller shouldn't have to.
+     */
+    protected ResolvePermissionOverfetchFactor(params: SearchParams, resolvedScopes: ScopeBundle[]): number {
+        if (typeof params.PermissionOverfetchFactor === 'number' && Number.isFinite(params.PermissionOverfetchFactor)) {
+            return this.clampOverfetchFactor(params.PermissionOverfetchFactor, 'the caller');
+        }
+        const declared = resolvedScopes
+            .map(bundle => this.scopeOverfetchFactor(bundle.Scope.ScopeConfig))
+            .filter((factor): factor is number => factor !== undefined);
+        if (declared.length > 0) return this.clampOverfetchFactor(Math.max(...declared), 'a scope');
+        return this.clampOverfetchFactor(this._defaultOverfetchFactor, 'the engine default');
+    }
+
+    /** A scope's declared `ScopeConfig.permissionOverfetchFactor`, when it is a finite number. Anything else is "not declared". */
+    private scopeOverfetchFactor(scopeConfigJson: string | null | undefined): number | undefined {
+        const factor = this.parseJson(scopeConfigJson)?.permissionOverfetchFactor;
+        return typeof factor === 'number' && Number.isFinite(factor) ? factor : undefined;
+    }
+
+    /**
+     * Hold the factor to `[1, MAX_OVERFETCH_FACTOR]`. Below 1 would under-fetch the caller's own `topK`;
+     * above the ceiling, a single metadata edit would multiply every provider call for every caller of
+     * the scope (vector providers bill per candidate). A clamped value is logged so the author sees it.
+     */
+    private clampOverfetchFactor(factor: number, from: string): number {
+        const clamped = Math.min(SearchEngine.MAX_OVERFETCH_FACTOR, Math.max(1, factor));
+        if (clamped !== factor) {
+            LogStatus(`SearchEngine: permission over-fetch factor ${factor} from ${from} clamped to ${clamped} (allowed range 1–${SearchEngine.MAX_OVERFETCH_FACTOR}).`);
+        }
+        return clamped;
+    }
+
+    /** Ceiling on the per-provider over-fetch multiplier, whatever its source. */
+    private static readonly MAX_OVERFETCH_FACTOR = 20;
 
     private async runReRanker(
         query: string,

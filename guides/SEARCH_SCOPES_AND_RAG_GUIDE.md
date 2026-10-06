@@ -239,6 +239,8 @@ No scope duplication needed.
 
 `effectiveTopK = userTopK * permissionOverfetchFactor` compensates for residual filtering. Default 2. Tune higher for corpora where permission sparsity is high (>50% of matches filtered).
 
+The factor is resolved per search, in this order: the caller's `SearchParams.PermissionOverfetchFactor`; else the **largest** `permissionOverfetchFactor` declared by any resolved scope's `ScopeConfig`; else the engine default (`SearchEngineConfig.DefaultPermissionOverfetchFactor`, 2). Whatever the source, the value is held to **1–20** (a value below 1 means no over-fetch; above 20 is clamped and logged, since one metadata edit would otherwise multiply every provider call for every caller of the scope). The largest wins across scopes because a lane trimmed heavily by late permission checks needs the extra candidates whichever scope it belongs to, and a larger factor only costs provider work. Declare it on the scope when its author knows the lanes are sparse after permissions — for example a scope whose hits are re-checked per participant of a shared conversation — so every caller doesn't have to know to pass it.
+
 ### Observability
 
 The engine logs `lateFilteredCount` per search whenever the residual safety net trims anything. If this is consistently non-zero for a provider, that provider's push-down is incomplete and should be fixed.
