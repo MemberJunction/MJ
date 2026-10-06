@@ -1,6 +1,6 @@
 # Architecture & flow diagrams skill (built on archify)
 
-**Status:** proposal · **Phase 0 shipped** with this plan (Mermaid fix, see below)
+**Status:** Phases 0–3 built in this PR (see the *As built* notes under each phase) · Phase 4 in progress
 
 ## Goal
 
@@ -22,7 +22,7 @@ and PNG/JPEG/WebP/SVG/WebM export.
 | Model writes | short text DSL | typed JSON with explicit layout |
 | Layout | automatic | model-placed, routes automatic |
 | Validation | syntax only | schema + layout, repairable diagnostics |
-| Output | SVG | interactive standalone HTML (~728 KB template, mostly fonts) |
+| Output | SVG | interactive standalone HTML (~728 KB template: ~405 KB viewer JS, ~286 KB CSS, 90 KB embedded fonts) |
 | Types | many (incl. ERD, Gantt, pie…) | architecture, workflow, sequence, dataflow, lifecycle — **no ERD** |
 | Cost | a few hundred tokens | ~3–10k tokens of instructions + a repair loop |
 
@@ -76,6 +76,24 @@ browser gate wants.
    - This replaces archify's "read the references" step and gives progressive disclosure without
      multi-file skills.
 
+**As built (Phase 1).**
+- `packages/AI/Diagrams` vendors archify v3.0.1 at `vendor/archify/`, pinned in `UPSTREAM.json`.
+  - It also vendors `references/`, `SKILL.md` and `brand-marks/catalog.json`: the Get Reference action needs the first, the sync diffs the second, and the renderers read the third.
+  - It leaves out upstream's pre-rendered `examples/*.html` (`UPSTREAM.json` `exclude`). They are about 760 KB each, and the tests re-render the JSON specs.
+- **The shims** are `archify-shims.patch`, all in `renderers/shared/cli.mjs`:
+  - input from, and output to, an in-memory job;
+  - no repository-evidence reads, since a server has no checkout;
+  - no fetching of brand marks from URLs a spec names (an SSRF guard). Catalog marks still work.
+- **"In-process" means a fresh `worker_threads` worker per render, in the same process.** archify's renderers are CLI scripts that render as they load. An ES module evaluates once per module graph, so re-importing in the main thread would never re-run, or would leak a module per render. The worker gets an empty `env`, a 512 MB heap and a 30 s cap. All 15 upstream examples render in 40–80 ms each.
+- **The `SVG` is made self-contained.** The plan didn't call for this, but embedding needs it. archify styles its SVG from the page CSS, so a bare SVG renders black.
+  - The rules the SVG uses are copied into a `<style>`, scoped to its own id, using the light theme with colors resolved to literals.
+  - A solid background is added, because MJ's dark-mode cards would otherwise hide the text.
+  - The style has no quotes or `--`, because MJ's markdown smartypants rewrites those.
+- **Lite template:** fonts make up only 90 KB of the 728 KB. The lite template drops them for MJ's font stacks, saving about 12%. The rest is viewer JS and CSS that the interactive page needs.
+- **The actions live in `@memberjunction/core-actions`,** next to the other visualization actions, and delegate to the package.
+  - `Render Architecture Diagram` also returns `TIMEOUT`.
+  - Its optional `BrowserCheck` gate returns `BROWSER_CHECK_FAILED`. It runs on `MermaidRenderer`'s Chromium through the new `WithIsolatedPage`.
+
 ## Phase 2 — the skill and agent wiring
 
 - **New skill "Architecture & Flow Diagrams".**
@@ -96,6 +114,14 @@ browser gate wants.
   - **Verify first** that the Data artifact's Plan-tab markdown pipeline passes inline SVG.
 - **Sage.** Already `AcceptsSkills: All` + `Auto`, so it picks the skill up for "how does X work"
   questions. Nothing else to change.
+
+**As built (Phase 2).**
+- **The skill** is in `metadata/ai-skills/.core-skills.json` and `templates/architecture-flow-diagrams.skill.md` (about 4k tokens).
+- **The Report Writer** gets both actions and a short how-to in its own prompt. It can't activate skills, so it never sees the skill's Instructions.
+- **Query Builder: verified that the Plan tab keeps inline SVG only inside a ```` ```svg ```` fence** (the svg-renderer extension plus DOMPurify's svg profile). A raw `<svg>` breaks, and the plan-only view has `enableHtml` off.
+  - **The parent renders lineage on request,** since it already accepts skills.
+  - The Strategist is unchanged. It writes a plan for every query, so making it run archify would add that cost to every query.
+- **Sage: confirmed,** with no change.
 
 ## Phase 3 — keeping our copy current
 
@@ -126,6 +152,14 @@ the job.
    - Vendored code is ordinary third-party code under review.
    - If a sync PR from an earlier month is still open, update that PR rather than opening a second.
 
+**As built (Phase 3).**
+- `.github/workflows/archify-sync.yml` plus `.github/scripts/archify-sync.mjs`, with 36 tests. Cron: the 1st of each month, plus `workflow_dispatch`.
+- **Two jobs.** The job that runs the freshly downloaded upstream code (shims, lite template, the example re-render tests) holds no write token. The job that opens or updates the PR holds the bot token, never runs upstream code, and refuses a patch outside the vendored paths.
+- **When a sync can't be applied cleanly** (the shims no longer apply, or the tests fail), it still opens the PR, as a draft with a CAUTION banner, and the run fails. A SHA mismatch aborts with no PR.
+- **The PR body** carries every release between the pinned tag and the new one, not only the newest.
+- **Severity values:** archify uses `normal | security`, not `critical`, so read "severity: critical" above as `security`.
+- **The regression run is the package's upstream-example test**, not a call through the action.
+
 **Shipping.** Code ships in the package version. The skill row ships in the release's consolidated
 metadata-sync migration (`metadata/CLAUDE.md` §1b), like any other metadata.
 
@@ -149,9 +183,9 @@ a skill's scripts.
 ## Risks and open questions
 
 - **Upstream churn.** Covered by tag pinning plus example re-render tests.
-- **Artifact weight.** The lite template must hold up visually.
+- **Artifact weight.** The lite template must hold up visually. *As built:* fonts were only 90 KB of the 728 KB. The interactive page is about 640 KB, mostly viewer code.
 - **Rollout depends on Chromium.** Any host that wants Mermaid or the archify browser gate needs
-  Chromium in its MJAPI image. Should the published Docker image ship it?
-- **Query Builder Plan tab.** Does its markdown sanitizer keep inline SVG?
+  Chromium in its MJAPI image. *Resolved:* `docker/MJAPI/Dockerfile` installs Chromium's headless shell, about 650 MB. `--build-arg INSTALL_CHROMIUM=false` leaves it out. archify rendering itself needs no browser.
+- **Query Builder Plan tab.** Does its markdown sanitizer keep inline SVG? *Resolved:* yes, inside an `svg` fence (see Phase 2, as built).
 - **One skill or two.** Should this be its own skill, or a section of Data Visualization? A separate
   skill keeps Data Visualization lean and its description sharp.

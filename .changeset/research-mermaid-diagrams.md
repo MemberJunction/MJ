@@ -20,3 +20,7 @@ Also adds `plans/archify-diagram-skill.md`, a plan for an architecture-diagram s
 - **New actions `Render Architecture Diagram` and `Get Architecture Diagram Reference`.**
   - The first returns the SVG, and the standalone page as a file output with visibility `Always`. It has an optional browser-readability gate on the same Chromium as `Create Mermaid Diagram` (new `MermaidRenderer.WithIsolatedPage`).
   - The second serves a type's schema, its example, or an archify reference document.
+- **New core skill "Architecture & Flow Diagrams"** (`Auto`), bundling both actions. Its instructions are MJ's rewrite of archify's `SKILL.md`: a type router, authoring defaults, layout heuristics, and a diagnostics-driven repair loop.
+- **Research Report Writer** is granted both actions and told to use them when the diagram is the deliverable, embedding the returned SVG.
+- **Query Builder** draws a data-lineage `dataflow` diagram on request and puts it in the Data artifact's Plan tab inside an `svg` fence. The Mermaid ER diagram stays.
+- **Monthly archify sync job** (`.github/workflows/archify-sync.yml`). It opens or updates one review PR when archify publishes a new release, and does nothing otherwise.
