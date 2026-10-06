@@ -34,7 +34,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (441 classes)
+// @memberjunction/core-entities (447 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -473,6 +473,12 @@ import {
     MJVersionLabelRestoreEntity,
     MJViewTypeEntity,
     MJWebSearchProviderEntity,
+    MJWorkQueueDeduplicationEntity,
+    MJWorkQueueDeliveryEntity,
+    MJWorkQueueMessageEntity,
+    MJWorkQueueSubscriptionEntity,
+    MJWorkQueueTopicEntity,
+    MJWorkQueueTransportEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
     QueryPermissionProvider,
@@ -1158,6 +1164,12 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJVersionLabelRestoreEntity,
     MJViewTypeEntity,
     MJWebSearchProviderEntity,
+    MJWorkQueueDeduplicationEntity,
+    MJWorkQueueDeliveryEntity,
+    MJWorkQueueMessageEntity,
+    MJWorkQueueSubscriptionEntity,
+    MJWorkQueueTopicEntity,
+    MJWorkQueueTransportEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
     QueryPermissionProvider,
@@ -1304,16 +1316,16 @@ const CLASS_REGISTRATIONS_2: any[] = [
     RubricScaleLevelsPanel,
     RubricVersionFormPolicy,
     RubricVersionSummaryPanel,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     RubricVersionsPanel,
     SkillHierarchyPanel,
     TagHierarchyPanel,
     TemplateCategoryHierarchyPanel,
     TestSuiteHierarchyPanel,
     UserHeaderPanel,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     UserOverviewPanel,
     UserViewCategoryHierarchyPanel,
 ];
@@ -1330,7 +1342,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 602;
+export const CLASS_REGISTRATIONS_COUNT = 608;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
