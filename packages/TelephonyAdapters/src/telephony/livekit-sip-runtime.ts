@@ -1,3 +1,12 @@
+/**
+ * @fileoverview Process-wide holder for the startup-constructed LiveKit SIP service and inbound call handlers,
+ * so the outbound `PlaceLiveKitSipCall` GraphQL resolver reaches the SAME service (and so the same call tracker and handoff wiring)
+ * the inbound webhook uses, and external packages (such as Contact Center) can register custom ingress handlers to intercept
+ * or route calls before default agent lookup.
+ *
+ * @module @memberjunction/telephony-adapters
+ */
+
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import type { LiveKitRoomWebhookEvent } from '@memberjunction/livekit-room-server';
 import { MJGlobal } from '@memberjunction/global';
@@ -27,9 +36,14 @@ export interface LiveKitSipInboundHandlerResult {
     Outcome?: LiveKitSipInboundResult;
 }
 
-/** Hook for external packages (like Contact Center) to intercept and route inbound LiveKit SIP calls. */
+/**
+ * Hook for external packages (like Contact Center) to intercept and route inbound LiveKit SIP calls.
+ * If HandleInboundCall throws an error or returns Handled: false, LiveKitSipTelephonyService falls back to the default AI-agent path.
+ */
 export interface ILiveKitSipInboundHandler {
     HandleInboundCall: (context: LiveKitSipInboundCallContext) => Promise<LiveKitSipInboundHandlerResult>;
+    /** Optional teardown hook invoked when a LiveKit room finishes. */
+    HandleRoomFinished?: (roomName: string, contextUser: UserInfo, provider: IMetadataProvider) => Promise<void>;
 }
 
 /** Binds the startup-constructed LiveKit SIP service (called from server boot). */

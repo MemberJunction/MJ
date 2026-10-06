@@ -146,16 +146,20 @@ export class RoomHandoffEngine extends BaseSingleton<RoomHandoffEngine> {
     }
 
     private emitHandoffEvent(event: RoomHandoffEvent): void {
-        try {
-            this.deps.Observer?.OnHandoffEvent?.(event);
-        } catch (err) {
-            LogError(`[RoomHandoffEngine] collaborator observer error: ${err instanceof Error ? err.message : String(err)}`);
+        if (this.deps.Observer?.OnHandoffEvent) {
+            void Promise.resolve()
+                .then(() => this.deps.Observer?.OnHandoffEvent?.(event))
+                .catch((err) => {
+                    LogError(`[RoomHandoffEngine] collaborator observer error: ${err instanceof Error ? err.message : String(err)}`);
+                });
         }
         for (const obs of this.registeredObservers) {
-            try {
-                void obs.OnHandoffEvent?.(event);
-            } catch (err) {
-                LogError(`[RoomHandoffEngine] registered observer error: ${err instanceof Error ? err.message : String(err)}`);
+            if (obs.OnHandoffEvent) {
+                void Promise.resolve()
+                    .then(() => obs.OnHandoffEvent?.(event))
+                    .catch((err) => {
+                        LogError(`[RoomHandoffEngine] registered observer error: ${err instanceof Error ? err.message : String(err)}`);
+                    });
             }
         }
     }

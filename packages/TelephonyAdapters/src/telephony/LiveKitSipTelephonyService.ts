@@ -182,6 +182,16 @@ export class LiveKitSipTelephonyService {
     public async HandleWebhookEvent(event: LiveKitRoomWebhookEvent, contextUser: UserInfo, provider: IMetadataProvider): Promise<LiveKitSipInboundResult> {
         if (event.Event === 'room_finished') {
             this.handledRooms.delete(roomKey(event.RoomName));
+            const handler = this.inboundHandler ?? GetLiveKitSipInboundHandler();
+            if (handler?.HandleRoomFinished) {
+                try {
+                    await handler.HandleRoomFinished(event.RoomName, contextUser, provider);
+                } catch (finishErr) {
+                    LogError(
+                        `[Telephony][LiveKitSip] custom inbound handler HandleRoomFinished threw error for room ${event.RoomName}: ${finishErr instanceof Error ? finishErr.message : String(finishErr)}`
+                    );
+                }
+            }
             return { accepted: false, reason: 'room finished' };
         }
         if (event.Event !== 'participant_joined' || !event.IsSipParticipant || !event.RoomName.startsWith(this.roomPrefix)) {
@@ -263,8 +273,8 @@ export class LiveKitSipTelephonyService {
                     MetadataProvider: provider,
                     HangUp: () => this.hangUpLeg(event.RoomName, event.ParticipantIdentity),
                 });
-                if (handledResult.Handled && handledResult.Outcome) {
-                    return handledResult.Outcome;
+                if (handledResult.Handled) {
+                    return handledResult.Outcome ?? { accepted: true };
                 }
             } catch (handlerErr) {
                 LogError(

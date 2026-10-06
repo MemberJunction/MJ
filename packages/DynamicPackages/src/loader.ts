@@ -363,7 +363,7 @@ async function loadOne(
         const startup = entry.StartupExport ? mod[entry.StartupExport] : undefined;
         let ranStartupExport = false;
         if (typeof startup === 'function') {
-            const context: DynamicPackageStartupContext = { ProcessId: options.processId };
+            const context: DynamicPackageStartupContext = { ProcessId: report.ProcessId };
             await Promise.resolve((startup as (ctx?: DynamicPackageStartupContext) => unknown)(context));
             ranStartupExport = true;
         } else if (entry.StartupExport) {
