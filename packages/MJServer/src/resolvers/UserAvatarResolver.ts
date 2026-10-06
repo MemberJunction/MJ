@@ -17,6 +17,10 @@
  * system user, the caller's ID is logged. It works the same whether or not the caller holds Update
  * on `MJ: Users`.
  *
+ * Scope-limited sessions are refused (`IsScopeLimitedPrincipal`). An anonymous magic-link guest IS
+ * the shared Anonymous principal, so "their own row" belongs to every guest, and a system-user save
+ * goes around the entity permissions and RLS that confine any magic-link session.
+ *
  * `MJUserEntityServer` accepts this save: the system user is the seeded `Type='Owner'` user, which
  * is exempt from its invariants, and the save changes neither `Type` nor `Name` in any case.
  *
@@ -28,6 +32,7 @@ import type { MJUserEntity } from '@memberjunction/core-entities';
 import { AppContext } from '../types.js';
 import { GetReadWriteProvider } from '../util.js';
 import { GetSystemUser } from '../auth/index.js';
+import { IsScopeLimitedPrincipal } from '../auth/scopeLimitedPrincipal.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { ValidateAvatarInput } from './avatarInputValidation.js';
 
@@ -58,6 +63,9 @@ export class UserAvatarResolver extends ResolverBase {
     const caller = ctx.userPayload?.userRecord as UserInfo | undefined;
     if (!caller?.ID) {
       throw new Error('User is not authenticated');
+    }
+    if (IsScopeLimitedPrincipal(caller)) {
+      return { Success: false, ErrorMessage: 'Changing your avatar is not permitted for scope-limited sessions.' };
     }
     await this.CheckAPIKeyScopeAuthorization('entity:update', 'MJ: Users', ctx.userPayload);
 

@@ -148,6 +148,16 @@ describe('UserAvatarResolver.UpdateMyAvatar', () => {
     expect(state.entity).toBeUndefined();
   });
 
+  it.each([
+    ['an anonymous magic-link guest (the shared Anonymous principal)', { ...CALLER, IsMagicLinkAnonymous: true }],
+    ['a resource-scoped magic-link session', { ...CALLER, MagicLinkScope: { ResourceID: 'r-1', ResourceType: 'Conversation' } }],
+  ])('refuses %s without touching the database', async (_label, caller) => {
+    const result = await resolver.UpdateMyAvatar(ctxFor(caller), PNG, null);
+    expect(result.Success).toBe(false);
+    expect(result.ErrorMessage).toContain('scope-limited');
+    expect(state.entity).toBeUndefined();
+  });
+
   it('runs the API key scope check as entity:update on MJ: Users, and stops if it throws', async () => {
     scopeCheck.mockImplementation(async () => {
       throw new Error('scope denied');
