@@ -119,7 +119,8 @@ import {
     AgentDecisionAnswerSummary,
     AgentFinishIf,
     SummarizeDecisionAnswers,
-    SystemPlaceholderManager
+    SystemPlaceholderManager,
+    StopContinuationMode
 } from '@memberjunction/ai-core-plus';
 import { MJActionEntityExtended, ActionResult, ActionParam, AIDirective, RuntimeAPIKeyResolver, RunActionParams } from '@memberjunction/actions-base';
 import { TemplateEngineServer } from '@memberjunction/templates';
@@ -237,6 +238,23 @@ interface AgentRunTokenStats {
  * Compact representation of a single action's execution result, used for
  * building the markdown summary that goes into conversation messages.
  */
+/**
+ * A stopped run's step with its outcome. The full-stack resume reads every step of the run, not
+ * only completed results: it needs the prompt steps' recorded message stacks, and it needs to
+ * know which requested actions finished before the stop.
+ */
+export interface StoppedRunStackStepRecord extends StoppedRunStepRecord {
+    Status: MJAIAgentRunStepEntityExtended['Status'];
+    Success: MJAIAgentRunStepEntityExtended['Success'];
+}
+
+/** What the pre-execution phase loaded about a user-stopped predecessor, applied once the phase settles. */
+interface StoppedRunContinuation {
+    RunID: string;
+    Mode: StopContinuationMode;
+    Steps: StoppedRunStackStepRecord[];
+}
+
 interface ActionResultSummary {
     actionName: string;
     success: boolean;
@@ -2260,7 +2278,12 @@ export class BaseAgent {
                 }
             }
 
-            const [config] = await Promise.all([
+            // The user's new message, captured by identity before anything below adds to the list, so a
+            // resumed stopped run can be spliced in ahead of it once the parallel phase settles.
+            const continuationMessage = wrappedParams.conversationMessages[wrappedParams.conversationMessages.length - 1];
+
+            // Positions matter: [0] is the config and [5] the stopped-run continuation.
+            const [config, , , , , stoppedRunContinuation] = await Promise.all([
                 this.loadAgentConfiguration(params.agent),
                 this.preloadAgentData(wrappedParams),
                 this.InjectContextMemory(
@@ -2290,13 +2313,16 @@ export class BaseAgent {
                 // conversationId). Runs here so the results are in the messages before
                 // the pre-turn compaction check and the first prompt.
                 this.injectPriorTurnToolResults(wrappedParams),
-                // If the previous turn was STOPPED by the user, carry its completed action and tool
-                // results forward so this turn continues the work instead of redoing it.
-                this.injectStoppedRunResults(wrappedParams),
+                // If the previous turn was STOPPED by the user, load what it did so this turn continues
+                // the work instead of redoing it. Applied below, after this phase settles.
+                this.loadStoppedRunContinuation(wrappedParams),
                 // Decision discovery (plan Task 3.1), off unless the decisionsEnabled and decisionDiscovery prompt
                 // params are true: may add a <suggested_agent> system message, within DECISION_DISCOVERY_TIMEOUT_MS.
                 this.InjectDecisionDiscovery(params.agent, params.contextUser, wrappedParams.conversationMessages, params.data)
             ]);
+
+            // Resume (or summarize) a run the user stopped, now that nothing else is writing the list.
+            this.applyStoppedRunContinuation(wrappedParams, stoppedRunContinuation, continuationMessage);
 
             // Inject scope-resolved prompt parts (role-faithful) for this agent's prompt, alongside
             // memory/RAG. Synchronous — parts are cached on AIEngine. Uses the same run scope.
@@ -7725,33 +7751,330 @@ The context is now within limits. Please retry your request with the recovered c
      * that path skips it, and the next turn would redo every action the stopped run had already
      * finished (observed: a stopped Sage run had five weather lookups and fifteen searches done;
      * "keep going" redid all of them). This path looks at the newest root run for this agent in
-     * the conversation and, when it is one the user stopped, injects the results of its
-     * completed Actions and Tool steps as one transient message that says to continue, not
-     * restart. A settled newest run means the normal path already has the context, so nothing
-     * is added here.
+     * the conversation and, when it is one the user stopped, carries it forward per
+     * {@link ExecuteAgentParams.stopContinuationMode}: by default its own message stack is resumed
+     * so the agent picks up where it stopped; in summary mode its completed Actions and Tool results
+     * go in as one transient message that says to continue, not restart. A settled newest run means
+     * the normal path already has the context, so nothing is added here. During execution the two
+     * halves run separately: {@link loadStoppedRunContinuation} in the parallel phase, then
+     * {@link applyStoppedRunContinuation} once it settles.
      *
      * Same gates as the sibling: root depth, a conversation, no history floor. Fail-soft.
      * @protected
      */
     protected async injectStoppedRunResults(params: ExecuteAgentParams): Promise<void> {
+        const continuationMessage = params.conversationMessages[params.conversationMessages.length - 1];
+        const continuation = await this.loadStoppedRunContinuation(params);
+        this.applyStoppedRunContinuation(params, continuation, continuationMessage);
+    }
+
+    /**
+     * The I/O half of {@link injectStoppedRunResults}: finds a user-stopped predecessor and loads its
+     * steps (every step for the full-stack resume, only completed results for the summary). Runs inside
+     * the pre-execution parallel phase; nothing here touches the message list.
+     * @protected
+     */
+    protected async loadStoppedRunContinuation(params: ExecuteAgentParams): Promise<StoppedRunContinuation | null> {
         if (!params.conversationId || this._depth !== 0 || params.ConversationHistoryFrom) {
+            return null;
+        }
+        try {
+            const runId = await this.findUserStoppedPredecessorRunId(params);
+            if (!runId) {
+                return null;
+            }
+            const mode = params.stopContinuationMode ?? BaseAgent.DefaultStopContinuationMode;
+            const steps = mode === 'full_stack'
+                ? await this.loadStoppedRunStack(runId, params)
+                : await this.loadStoppedRunResultSteps(runId, params);
+            return { RunID: runId, Mode: mode, Steps: steps };
+        } catch (error) {
+            this.logStatus(`[StoppedRunResults] Skipped (contained error): ${error instanceof Error ? error.message : error}`, true, params);
+            return null;
+        }
+    }
+
+    /**
+     * The message half of {@link injectStoppedRunResults}, applied once the pre-execution phase has
+     * settled so it never races the memory and RAG injections running beside the load.
+     *
+     * Full stack: the stopped run's own turns are spliced in ahead of the user's new message, in the
+     * shape the loop built while running, so the agent resumes where it stopped. When the stack cannot
+     * be resumed (no recorded prompt, or its anchor is missing) this falls back to the summary.
+     * Summary: the completed results go in as one carried-forward message. Fail-soft.
+     * @protected
+     */
+    protected applyStoppedRunContinuation(
+        params: ExecuteAgentParams,
+        continuation: StoppedRunContinuation | null,
+        continuationMessage: ChatMessage | undefined
+    ): void {
+        if (!continuation) {
             return;
         }
         try {
-            const stoppedRunId = await this.findUserStoppedPredecessorRunId(params);
-            if (!stoppedRunId) {
+            if (continuation.Mode === 'full_stack' && this.tryResumeStoppedRunStack(params, continuation, continuationMessage)) {
                 return;
             }
-            const steps = await this.loadStoppedRunResultSteps(stoppedRunId, params);
+            const steps = continuation.Steps.filter(BaseAgent.isCarriedForwardResultStep);
             const body = BaseAgent.BuildStoppedRunResultsMessage(steps, BaseAgent.maxStoppedRunResultChars);
             if (!body) {
                 return;
             }
             params.conversationMessages.push(this.buildCarryForwardMessage(body));
-            this.logStatus(`[StoppedRunResults] Carried ${steps.length} completed step result(s) forward from stopped run ${stoppedRunId}`, true, params);
+            this.logStatus(`[StoppedRunResults] Carried ${steps.length} completed step result(s) forward from stopped run ${continuation.RunID}`, true, params);
         } catch (error) {
             this.logStatus(`[StoppedRunResults] Skipped (contained error): ${error instanceof Error ? error.message : error}`, true, params);
         }
+    }
+
+    /**
+     * The full-stack half of {@link applyStoppedRunContinuation}: true when the stopped run's turns were
+     * spliced in. Any failure leaves the messages untouched and returns false, so the caller carries
+     * the results as a summary instead of losing them.
+     * @private
+     */
+    private tryResumeStoppedRunStack(
+        params: ExecuteAgentParams,
+        continuation: StoppedRunContinuation,
+        continuationMessage: ChatMessage | undefined
+    ): boolean {
+        try {
+            const resumed = this.buildResumedStoppedRunTurns(continuation.Steps, params);
+            if (resumed && BaseAgent.SpliceResumedTurns(params.conversationMessages, resumed, continuationMessage)) {
+                this.logStatus(`[StoppedRunResume] Resumed ${resumed.length} message(s) from stopped run ${continuation.RunID}`, true, params);
+                return true;
+            }
+            this.logStatus(`[StoppedRunResume] Stack of stopped run ${continuation.RunID} could not be resumed; carrying its results as a summary`, true, params);
+        } catch (error) {
+            this.logStatus(`[StoppedRunResume] Resume failed (${error instanceof Error ? error.message : error}); carrying its results as a summary`, true, params);
+        }
+        return false;
+    }
+
+    /** The mode a run uses when the caller does not set {@link ExecuteAgentParams.stopContinuationMode}. */
+    public static readonly DefaultStopContinuationMode: StopContinuationMode = 'full_stack';
+
+    /**
+     * Placed just before the user's new message when a stopped run's stack is resumed, so the model
+     * knows the turns above it were interrupted and what follows is how to continue.
+     */
+    public static readonly StoppedRunResumeNotice =
+        '[Note: The user stopped the previous execution at this point. The instruction that follows is the continuation request.]';
+
+    /** Result code and message for an action the stopped run requested but never ran. */
+    private static readonly stoppedBeforeRunResultCode = 'NOT_EXECUTED';
+    private static readonly stoppedBeforeRunMessage = 'Not executed: the user stopped the run before this action finished.';
+
+    /**
+     * The stopped run's turns in the shape the loop builds, or null when they cannot be recovered.
+     *
+     * The last prompt step recorded the run's whole message stack as it went into that prompt; the
+     * first prompt step recorded the stack the run started from (history plus this run's injections,
+     * which the new run adds for itself). The difference is the run's own turns. If the last prompt
+     * completed, its decision and the steps after it are rebuilt with the loop's own builders.
+     * @protected
+     */
+    protected buildResumedStoppedRunTurns(steps: StoppedRunStackStepRecord[], params: ExecuteAgentParams): AgentChatMessage[] | null {
+        const prompts = steps.filter(s => s.StepType === 'Prompt');
+        if (prompts.length === 0) {
+            return null;
+        }
+        const lastPrompt = prompts[prompts.length - 1];
+        const loopTurns = BaseAgent.ExtractStoppedRunLoopTurns(
+            BaseAgent.readPromptStepStack(prompts[0]),
+            BaseAgent.readPromptStepStack(lastPrompt)
+        );
+        if (!loopTurns) {
+            return null;
+        }
+        const decision = lastPrompt.Status === 'Completed' ? BaseAgent.readPromptStepDecision(lastPrompt) : null;
+        const tail = this.buildStoppedRunTail(decision, steps.filter(s => s.StepNumber > lastPrompt.StepNumber), params);
+        return [...loopTurns, ...tail].map(BaseAgent.restampResumedTurn);
+    }
+
+    /**
+     * The run's own turns: what follows the run's starting message in its last recorded stack, minus
+     * the per-request runtime-state fragments (the new run appends its own). The starting message is
+     * matched at its original position first, so a repeated message earlier in the history ("keep
+     * going" twice) cannot be mistaken for it. Null when it cannot be found.
+     */
+    public static ExtractStoppedRunLoopTurns(
+        firstStack: AgentChatMessage[] | null,
+        lastStack: AgentChatMessage[] | null
+    ): AgentChatMessage[] | null {
+        if (!firstStack?.length || !lastStack?.length) {
+            return null;
+        }
+        const key = (m: ChatMessage): string => `${m.role}\u0000${JSON.stringify(m.content)}`;
+        const startKey = key(firstStack[firstStack.length - 1]);
+        const expectedAt = firstStack.length - 1;
+        const at = lastStack[expectedAt] && key(lastStack[expectedAt]) === startKey
+            ? expectedAt
+            : lastStack.map(key).lastIndexOf(startKey);
+        if (at < 0) {
+            return null;
+        }
+        return lastStack.slice(at + 1).filter(m => m.metadata?.volatileState !== true);
+    }
+
+    /**
+     * Inserts resumed turns ahead of the user's new message (and ahead of the stopped run's own reply
+     * to the user, when that sits right before it), followed by {@link StoppedRunResumeNotice}. The new
+     * message is found by identity, captured before the pre-execution phase added anything. Returns
+     * false, changing nothing, when it is not a user message still in the list.
+     */
+    public static SpliceResumedTurns(
+        messages: ChatMessage[],
+        resumed: AgentChatMessage[],
+        continuationMessage: ChatMessage | undefined
+    ): boolean {
+        const at = continuationMessage ? messages.indexOf(continuationMessage) : -1;
+        if (at < 0 || continuationMessage?.role !== 'user') {
+            return false;
+        }
+        const notice: AgentChatMessage = { role: 'user', content: BaseAgent.StoppedRunResumeNotice };
+        const previous = messages[at - 1] as AgentChatMessage | undefined;
+        const stoppedReplyAt = previous?.role === 'assistant' && !previous.toolCalls?.length ? at - 1 : at;
+        messages.splice(at, 0, notice);
+        messages.splice(stoppedReplyAt, 0, ...resumed);
+        return true;
+    }
+
+    /**
+     * What the stopped run's last completed prompt decided, rebuilt as the loop would have written it:
+     * the model's native call turn when results go back natively, the invocation record and the results
+     * of the actions that finished (and a not-executed result for the ones that did not) for an Actions
+     * turn, otherwise the completed results as a carried-forward message. Any native call left without
+     * a result is then answered, so the history is valid for every provider.
+     * @protected
+     */
+    protected buildStoppedRunTail(
+        decision: BaseAgentNextStep | null,
+        tailSteps: StoppedRunStackStepRecord[],
+        params: ExecuteAgentParams
+    ): AgentChatMessage[] {
+        const tail: AgentChatMessage[] = [];
+        if (!decision) {
+            return tail;
+        }
+        const scratch: ExecuteAgentParams = { ...params, conversationMessages: tail };
+        const native = decision.nativeTurn?.sendResultsNatively === true;
+        if (native && decision.nativeTurn) {
+            tail.push(BuildAssistantToolCallTurn(decision.nativeTurn) as AgentChatMessage);
+        }
+        if (decision.step === 'Actions' && decision.actions?.length) {
+            if (!native) {
+                tail.push({ role: 'user', content: this.buildActionInvocationMessage(decision.actions) });
+            }
+            const summaries = this.summarizeStoppedRunActions(decision.actions, tailSteps);
+            this.appendActionResults(scratch, summaries, this.buildActionResultsMessage(summaries), undefined, decision);
+        } else {
+            const results = BaseAgent.BuildStoppedRunResultsMessage(tailSteps.filter(BaseAgent.isCarriedForwardResultStep), BaseAgent.maxStoppedRunResultChars);
+            if (results) {
+                tail.push(this.buildCarryForwardMessage(results));
+            }
+        }
+        this.reconcileUnansweredToolCalls(scratch);
+        return tail;
+    }
+
+    /** One result per requested action, in request order: its completed step's result, or not executed. @private */
+    private summarizeStoppedRunActions(requested: AgentAction[], tailSteps: StoppedRunStackStepRecord[]): ActionResultSummary[] {
+        const completed = tailSteps.filter(s => s.StepType === 'Actions' && s.Status === 'Completed');
+        const used = new Set<StoppedRunStackStepRecord>();
+        return requested.map(action => {
+            const step = completed.find(s => !used.has(s) && BaseAgent.readStoppedActionName(s) === action.name);
+            const summary = step ? this.summarizeStoppedActionStep(action.name, step) : null;
+            if (!step || !summary) {
+                return {
+                    actionName: action.name,
+                    success: false,
+                    params: [],
+                    resultCode: BaseAgent.stoppedBeforeRunResultCode,
+                    message: BaseAgent.stoppedBeforeRunMessage,
+                };
+            }
+            used.add(step);
+            return summary;
+        });
+    }
+
+    /**
+     * A completed action step as the loop summarizes a live action result: output parameters only,
+     * with large media swapped for placeholders. Null when the step's output cannot be read.
+     * @private
+     */
+    private summarizeStoppedActionStep(actionName: string, step: StoppedRunStackStepRecord): ActionResultSummary | null {
+        let output: { actionResult?: { success?: boolean; resultCode?: string; message?: string; parameters?: ActionParam[] } };
+        try {
+            output = step.OutputData ? JSON.parse(step.OutputData) : {};
+        } catch {
+            return null;
+        }
+        const result = output.actionResult;
+        if (!result) {
+            return null;
+        }
+        const success = result.success === true;
+        const outputParams = (result.parameters ?? []).filter(p => p.Type === 'Both' || p.Type === 'Output');
+        const actionEntity = ActionEngineServer.Instance.Actions?.find(a => a.Name === actionName);
+        return {
+            actionName,
+            success,
+            params: this.interceptLargeBinaryContent(outputParams, actionEntity),
+            resultCode: result.resultCode || (success ? 'SUCCESS' : 'ERROR'),
+            message: result.message || (success ? 'Action completed' : 'Unknown error'),
+        };
+    }
+
+    /** The message stack a prompt step recorded as its input, or null. @private */
+    private static readPromptStepStack(step: StoppedRunStackStepRecord): AgentChatMessage[] | null {
+        try {
+            const input: { conversationMessages?: AgentChatMessage[] } = step.InputData ? JSON.parse(step.InputData) : {};
+            return Array.isArray(input.conversationMessages) ? input.conversationMessages : null;
+        } catch {
+            return null;
+        }
+    }
+
+    /** The decision a completed prompt step recorded, or null. @private */
+    private static readPromptStepDecision(step: StoppedRunStackStepRecord): BaseAgentNextStep | null {
+        try {
+            const output: { nextStep?: BaseAgentNextStep } = step.OutputData ? JSON.parse(step.OutputData) : {};
+            return output.nextStep ?? null;
+        } catch {
+            return null;
+        }
+    }
+
+    /** The action an Actions step ran, from its recorded input, or null. @private */
+    private static readStoppedActionName(step: StoppedRunStackStepRecord): string | null {
+        try {
+            const input: { actionName?: string } = step.InputData ? JSON.parse(step.InputData) : {};
+            return input.actionName ?? null;
+        } catch {
+            return null;
+        }
+    }
+
+    /**
+     * A resumed turn re-dated to this run's first turn. The stopped run's turn numbers mean nothing
+     * to this run's counter, and expiry compares the two, so a resumed result ages from now.
+     * @private
+     */
+    private static restampResumedTurn(message: AgentChatMessage): AgentChatMessage {
+        return message.metadata?.turnAdded !== undefined
+            ? { ...message, metadata: { ...message.metadata, turnAdded: 0 } }
+            : message;
+    }
+
+    /** A step whose result the summary carries: a completed, successful Actions or Tool step. @private */
+    private static isCarriedForwardResultStep(step: StoppedRunStackStepRecord): boolean {
+        const types: ReadonlyArray<string> = BaseAgent.stoppedRunCarryForwardPredicate.stepTypes;
+        return types.includes(step.StepType) &&
+            step.Status === BaseAgent.stoppedRunCarryForwardPredicate.stepStatus &&
+            step.Success === true;
     }
 
     /**
@@ -7799,16 +8122,36 @@ The context is now within limits. Please retry your request with the recovered c
         return run && MJAIAgentRunEntityExtended.IsUserStopped(run.Status, run.CancellationReason) ? run.ID : null;
     }
 
-    /** The completed, successful Actions and Tool steps of a stopped run, in step order. @private */
-    private async loadStoppedRunResultSteps(runId: string, params: ExecuteAgentParams): Promise<StoppedRunStepRecord[]> {
+    /**
+     * Every step of a stopped run, in step order: the full-stack resume reads the prompt steps'
+     * recorded stacks and which requested actions completed. Read from the database, since the run
+     * was stopped moments ago.
+     * @private
+     */
+    private async loadStoppedRunStack(runId: string, params: ExecuteAgentParams): Promise<StoppedRunStackStepRecord[]> {
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-        const steps = await rv.RunView<StoppedRunStepRecord>({
+        const steps = await rv.RunView<StoppedRunStackStepRecord>({
+            EntityName: 'MJ: AI Agent Run Steps',
+            ExtraFilter: `AgentRunID='${runId}'`,
+            OrderBy: 'StepNumber ASC',
+            Fields: ['StepNumber', 'StepType', 'StepName', 'Status', 'Success', 'InputData', 'OutputData'],
+            ResultType: 'simple',
+            BypassCache: true,
+        }, params.contextUser);
+        return steps.Success ? (steps.Results || []) : [];
+    }
+
+    /** The completed, successful Actions and Tool steps of a stopped run, in step order. @private */
+    private async loadStoppedRunResultSteps(runId: string, params: ExecuteAgentParams): Promise<StoppedRunStackStepRecord[]> {
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const steps = await rv.RunView<StoppedRunStackStepRecord>({
             EntityName: 'MJ: AI Agent Run Steps',
             ExtraFilter: `AgentRunID='${runId}' AND StepType IN (${BaseAgent.stoppedRunCarryForwardPredicate.stepTypes.map(t => `'${t}'`).join(', ')}) ` +
                 `AND Status='${BaseAgent.stoppedRunCarryForwardPredicate.stepStatus}' AND Success=1`,
             OrderBy: 'StepNumber ASC',
-            Fields: ['StepNumber', 'StepType', 'StepName', 'InputData', 'OutputData'],
+            Fields: ['StepNumber', 'StepType', 'StepName', 'Status', 'Success', 'InputData', 'OutputData'],
             ResultType: 'simple',
+            BypassCache: true,
         }, params.contextUser);
         return steps.Success ? (steps.Results || []) : [];
     }
@@ -11123,6 +11466,46 @@ The context is now within limits. Please retry your request with the recovered c
 
         const desc = param.Description ? ` — ${param.Description}` : '';
         return `\`${param.Name}\`${requiredMarker}${suffix}${desc}${defaultStr}`;
+    }
+
+    /**
+     * The `user`-role record of what the model asked to run on an Actions turn ("[You invoked ...]").
+     * Shared by the live Actions step and the stopped-run resume, so a resumed turn reads exactly
+     * like one the loop wrote. See the Actions step for why it is a user-role annotation.
+     * @protected
+     */
+    protected buildActionInvocationMessage(actions: AgentAction[]): string {
+        if (actions.length === 1) {
+            const aa = actions[0];
+            if (!aa.params || Object.keys(aa.params).length === 0) {
+                return `[You invoked the **${aa.name}** action.]`;
+            }
+            const paramsList = Object.entries(aa.params)
+                .map(([key, value]) => `• **${key}**: ${this.formatParamValueForMessage(value)}`)
+                .join('\n');
+            return `[You invoked the **${aa.name}** action with parameters:\n${paramsList}\n]`;
+        }
+        return `[You invoked **${actions.length} actions** in parallel:\n\n` + actions.map((aa, index) => {
+            const actionText = `${index + 1}. **${aa.name}**`;
+            if (!aa.params || Object.keys(aa.params).length === 0) {
+                return actionText;
+            }
+            const paramsList = Object.entries(aa.params)
+                .map(([key, value]) => `   • **${key}**: ${this.formatParamValueForMessage(value)}`)
+                .join('\n');
+            return `${actionText}\n${paramsList}`;
+        }).join('\n\n') + '\n]';
+    }
+
+    /**
+     * The action-results message body: a header naming any failures, then each result in the
+     * compact markdown shape. Shared by the live Actions step and the stopped-run resume.
+     * @protected
+     */
+    protected buildActionResultsMessage(actionSummaries: ActionResultSummary[]): string {
+        const failed = actionSummaries.filter(a => !a.success).length;
+        const header = failed > 0 ? `${failed} of ${actionSummaries.length} action(s) failed:` : 'Action results:';
+        return `${header}\n${this.formatActionResultsAsMarkdown(actionSummaries)}`;
     }
 
     /**
@@ -14828,41 +15211,7 @@ The context is now within limits. Please retry your request with the recovered c
             // which (pre-guardrail) looped forever. Phrasing it in second person under the `user`
             // role keeps the memory while removing the false assistant-prose exemplar. The
             // human-facing narration is emitted separately via onProgress above.
-            let actionMessage: string;
-            if (actions.length === 1) {
-                const aa = actions[0];
-                actionMessage = `[You invoked the **${aa.name}** action`;
-
-                // Add parameters if they exist
-                if (aa.params && Object.keys(aa.params).length > 0) {
-                    const paramsList = Object.entries(aa.params)
-                        .map(([key, value]) => {
-                            const displayValue = this.formatParamValueForMessage(value);
-                            return `• **${key}**: ${displayValue}`;
-                        })
-                        .join('\n');
-                    actionMessage += ` with parameters:\n${paramsList}\n]`;
-                } else {
-                    actionMessage += '.]';
-                }
-            } else {
-                actionMessage = `[You invoked **${actions.length} actions** in parallel:\n\n` + actions.map((aa, index) => {
-                    let actionText = `${index + 1}. **${aa.name}**`;
-
-                    // Add parameters if they exist
-                    if (aa.params && Object.keys(aa.params).length > 0) {
-                        const paramsList = Object.entries(aa.params)
-                            .map(([key, value]) => {
-                                const displayValue = this.formatParamValueForMessage(value);
-                                return `   • **${key}**: ${displayValue}`;
-                            })
-                            .join('\n');
-                        actionText += `\n${paramsList}`;
-                    }
-
-                    return actionText;
-                }).join('\n\n') + '\n]';
-            }
+            const actionMessage = this.buildActionInvocationMessage(actions);
 
             if (addConversationMessage) {
                 // Record as a `user`-role environment annotation (no metadata - permanent record).
@@ -15014,10 +15363,7 @@ The context is now within limits. Please retry your request with the recovered c
             const failedActions = actionSummaries.filter(a => !a.success);
 
             // Add user message with the results — compact markdown instead of JSON
-            const header = failedActions.length > 0
-                ? `${failedActions.length} of ${actionSummaries.length} action(s) failed:`
-                : `Action results:`;
-            const resultsMessage = `${header}\n${this.formatActionResultsAsMarkdown(actionSummaries)}`;
+            const resultsMessage = this.buildActionResultsMessage(actionSummaries);
 
             // Build metadata from AI Agent Actions configuration
             // If multiple actions, use the most restrictive (shortest) expiration settings
