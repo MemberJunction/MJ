@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import type { RealtimeToolDefinition } from '@memberjunction/ai';
 import { BaseRealtimeChannelClient } from '@memberjunction/realtime-runtime';
+import type { MediaStagePlacement } from '@memberjunction/ng-realtime-media';
 import { RealtimeSurfaceStageModel } from '../lib/components/realtime/realtime-surface-stage.model';
+
+const ANYWHERE: readonly MediaStagePlacement[] = ['stage', 'pip', 'tab', 'hidden'];
 
 /** A channel plugin with a name and nothing else. */
 class TestChannel extends BaseRealtimeChannelClient {
@@ -182,20 +185,77 @@ describe('RealtimeSurfaceStageModel', () => {
     });
   });
 
-  it('replaces the surfaces array and the placements map only when something changes', () => {
+  describe("the channel's placement (its registry row's UIConfig)", () => {
+    /** A channel whose registry row places its surface. */
+    const placed = (name: string, Default: MediaStagePlacement, Allowed: readonly MediaStagePlacement[] = ANYWHERE) => {
+      const channel = new TestChannel(name);
+      channel.ApplySurfacePlacement({ Default, Allowed });
+      return channel;
+    };
+
+    it('starts a surface where its channel places it, so a picture-in-picture surface is created at once', () => {
+      const model = new RealtimeSurfaceStageModel();
+      model.Register(new TestChannel('Whiteboard'));
+      model.Register(placed('Camera', 'pip'));
+      expect(placements(model)).toEqual({ Whiteboard: 'tab', Camera: 'pip' });
+      expect(surfaces(model)).toEqual(['Camera:pip']);
+    });
+
+    it("refuses a move to a placement the channel does not allow, and lists where each channel's surface may go", () => {
+      const model = new RealtimeSurfaceStageModel();
+      model.Register(new TestChannel('Whiteboard'));
+      model.Register(placed('Camera', 'pip', ['pip', 'hidden']));
+      expect(model.Move('Camera', 'stage')).toBe(false);
+      expect(model.Move('Camera', 'tab')).toBe(false);
+      expect(model.Move('Camera', 'hidden')).toBe(true);
+      expect(Object.fromEntries(model.AllowedPlacements)).toEqual({ Whiteboard: ANYWHERE, Camera: ['pip', 'hidden'] });
+      expect(model.AllowedFor('Nobody')).toEqual([]);
+    });
+
+    it('ignores a saved move the channel does not allow', () => {
+      const model = new RealtimeSurfaceStageModel();
+      model.LoadMoves([{ SurfaceKey: 'Camera', Placement: 'stage' }]);
+      model.Register(placed('Camera', 'pip', ['pip', 'hidden']));
+      expect(placements(model)).toEqual({ Camera: 'pip' });
+    });
+
+    it('returns a surface to where its channel places it on a reset', () => {
+      const model = new RealtimeSurfaceStageModel();
+      model.Register(placed('Camera', 'pip'));
+      model.Move('Camera', 'hidden');
+      model.ResetLayout();
+      expect(placements(model)).toEqual({ Camera: 'pip' });
+    });
+
+    it('sends a surface leaving the stage where its channel places it, or the first other placement it allows', () => {
+      const model = new RealtimeSurfaceStageModel();
+      model.Register(new TestChannel('Whiteboard'));
+      model.Register(placed('Camera', 'pip'));
+      model.Register(placed('Avatar', 'stage', ['stage', 'hidden']));
+      expect(model.OffStagePlacement('Whiteboard')).toBe('tab');
+      expect(model.OffStagePlacement('Camera')).toBe('pip');
+      expect(model.OffStagePlacement('Avatar')).toBe('hidden');
+    });
+  });
+
+  it('replaces the surfaces array and the placements maps only when something changes', () => {
     const whiteboard = new TestChannel('Whiteboard');
     const model = new RealtimeSurfaceStageModel();
     model.Register(whiteboard);
     model.SetActiveTab('Whiteboard');
     const shown = model.Surfaces;
     const placed = model.Placements;
+    const allowed = model.AllowedPlacements;
     model.SetActiveTab(null);
     model.Register(whiteboard);
     model.KeepOnly([whiteboard]);
     expect(model.Surfaces).toBe(shown);
     expect(model.Placements).toBe(placed);
+    expect(model.AllowedPlacements).toBe(allowed);
     model.Move('Whiteboard', 'stage');
     expect(model.Surfaces).not.toBe(shown);
     expect(model.Placements).not.toBe(placed);
+    model.KeepOnly([]);
+    expect(model.AllowedPlacements).not.toBe(allowed);
   });
 });

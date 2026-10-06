@@ -88,7 +88,7 @@ export function ResolveSurfacePlacements(
         if (surface === stage) {
             continue;
         }
-        const placement = wanted.get(surface.Key) === 'stage' ? displacedPlacement(surface) : (wanted.get(surface.Key) ?? surface.DefaultPlacement);
+        const placement = wanted.get(surface.Key) === 'stage' ? PlacementOffStage(surface) : (wanted.get(surface.Key) ?? surface.DefaultPlacement);
         if (placement === 'pip') {
             result.Pips.push(surface);
         } else if (placement === 'tab') {
@@ -182,8 +182,11 @@ function pickStage(
     return contenders[0] ?? null;
 }
 
-/** Where a surface displaced from the stage goes: its default, or the first allowed of PiP, tab, hidden. */
-function displacedPlacement(surface: MediaSurface): MediaPlacement {
+/**
+ * Where a surface goes when it leaves the stage, displaced by another or sent off it: its default, or the first allowed of
+ * PiP, tab, hidden.
+ */
+export function PlacementOffStage(surface: MediaSurface): MediaPlacement {
     if (surface.DefaultPlacement !== 'stage' && allows(surface, surface.DefaultPlacement)) {
         return surface.DefaultPlacement;
     }

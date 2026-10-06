@@ -4,6 +4,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import type { MediaStagePlacement } from '@memberjunction/ng-realtime-media';
+import { MEDIA_PLACEMENTS } from '@memberjunction/ai-realtime-client/media';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { Subscription } from 'rxjs';
 import { UserInfo } from '@memberjunction/core';
@@ -162,14 +163,17 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy, AfterVie
 
   /**
    * Where each channel's surface is placed, by channel key (a channel not listed is on its tab). A channel whose
-   * surface is elsewhere shows where in its pane, with "Bring it here".
+   * surface is elsewhere shows where in its pane, with "Bring it here" when its channel allows the tab.
    */
   @Input() SurfacePlacements: ReadonlyMap<string, MediaStagePlacement> = new Map();
+
+  /** Where each channel lets the user move its surface, by channel key (a channel not listed allows anywhere). */
+  @Input() AllowedPlacements: ReadonlyMap<string, readonly MediaStagePlacement[]> = new Map();
 
   /** The user asked to move a channel's surface (from "Move to…" or "Bring it here"). */
   @Output() MoveRequested = new EventEmitter<RealtimeSurfaceMove>();
 
-  /** The user asked to put every surface back on its tab. */
+  /** The user asked to put every surface back where its channel places it. */
   @Output() ResetLayoutRequested = new EventEmitter<void>();
 
   /** The panel's tab state (add / focus / dedupe / flash) — see the model for the rules. */
@@ -253,6 +257,11 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy, AfterVie
   /** Where a channel's surface is placed. */
   public PlacementOf(key: string): MediaStagePlacement {
     return this.SurfacePlacements.get(key) ?? 'tab';
+  }
+
+  /** Where a channel lets the user move its surface. */
+  public AllowedOf(key: string): readonly MediaStagePlacement[] {
+    return this.AllowedPlacements.get(key) ?? MEDIA_PLACEMENTS;
   }
 
   /** Where a moved channel's surface is, as its tab says it: "on the stage", "in picture-in-picture", "hidden". */

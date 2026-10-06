@@ -109,6 +109,12 @@ export {
     type VisualPerceptionOptions,
     type ChannelExposureSettings,
 } from './channels/base-realtime-channel-client';
+// Where a channel's surface shows and may move, from its registry row's `UIConfig`.
+export {
+    DEFAULT_CHANNEL_SURFACE_PLACEMENT,
+    ReadChannelSurfacePlacement,
+    type ChannelSurfacePlacement,
+} from './channels/channel-surface-placement';
 
 // Channel contract v2 — the runtime half (events, outputs, verb results, `ContextTool` addressing).
 // The declarative half (descriptors, scoping, policy) lives in `@memberjunction/ai-core-plus`.

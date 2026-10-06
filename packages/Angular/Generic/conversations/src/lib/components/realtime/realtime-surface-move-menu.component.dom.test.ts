@@ -28,6 +28,15 @@ describe('RealtimeSurfaceMoveMenuComponent (DOM)', () => {
     expect(items.map((item) => item.getAttribute('aria-disabled'))).toEqual([null, null, 'true', null, null]);
   });
 
+  it('lists only the placements the channel allows', () => {
+    const f = renderComponentFixture(RealtimeSurfaceMoveMenuComponent, {
+      inputs: { Key: 'Camera', Title: 'Camera', Placement: 'pip', Allowed: ['pip', 'tab'] },
+    });
+    const items = open(f);
+    expect(items.map((item) => item.textContent?.trim())).toEqual(['Picture-in-picture', 'Tab', 'Reset layout']);
+    expect(items.map((item) => item.getAttribute('aria-disabled'))).toEqual(['true', null, null]);
+  });
+
   it('asks for the chosen placement', () => {
     const f = render('stage');
     const moves: RealtimeSurfaceMove[] = capture(f.componentInstance.MoveRequested);

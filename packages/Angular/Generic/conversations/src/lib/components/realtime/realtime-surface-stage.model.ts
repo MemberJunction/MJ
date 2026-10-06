@@ -1,18 +1,16 @@
-import { ResolveSurfacePlacements, type MediaPlacementMove, type MediaSurface } from '@memberjunction/ai-realtime-client/media';
+import { PlacementOffStage, ResolveSurfacePlacements, type MediaPlacementMove, type MediaSurface } from '@memberjunction/ai-realtime-client/media';
 import type { MediaStagePlacement, MediaStageSurface } from '@memberjunction/ng-realtime-media';
 import type { BaseRealtimeChannelClient } from '@memberjunction/realtime-runtime';
 import { RecordSurfaceMove } from './realtime-surface-placement-prefs';
 
-/** Where a channel's surface may go. */
-const ALLOWED_PLACEMENTS: readonly MediaStagePlacement[] = ['stage', 'pip', 'tab', 'hidden'];
-
 /**
  * Which channel surfaces the call overlay's stage (`mj-media-stage`) holds, and where each one shows.
  *
- * **Placement.** Every surface starts on its tab. The user moves it to the stage (it fills the call), into a
- * picture-in-picture box, back to its tab, or out of sight; the moves are kept in order, one per surface, and resolved
- * by `ResolveSurfacePlacements`, so the most recent move to the stage wins it, the surface it displaces returns to its
- * tab, and picture-in-picture boxes stack newest first. The host saves {@link Moves} and loads them back
+ * **Placement.** Every surface starts where its channel's registry row places it (`SurfacePlacement`: its tab, unless the
+ * row says otherwise). The user moves it to the stage (it fills the call), into a picture-in-picture box, to its tab, or
+ * out of sight, within the placements the row allows; the moves are kept in order, one per surface, and resolved by
+ * `ResolveSurfacePlacements`, so the most recent move to the stage wins it, the surface it displaces returns to where its
+ * channel places it, and picture-in-picture boxes stack newest first. The host saves {@link Moves} and loads them back
  * ({@link LoadMoves}), so a layout carries over to later sessions.
  *
  * **Creation.** A channel's surface is created the first time it is seen (its tab shows it, or it is on the stage or
@@ -33,6 +31,7 @@ export class RealtimeSurfaceStageModel {
   /** Picture-in-picture surfaces, newest first. */
   private pipOrder: readonly string[] = [];
   private surfaces: readonly MediaStageSurface[] = [];
+  private allowedPlacements: ReadonlyMap<string, readonly MediaStagePlacement[]> = new Map();
 
   /** The stage's surfaces. The array is replaced only when a surface or a placement changes, so it binds cheaply. */
   public get Surfaces(): readonly MediaStageSurface[] {
@@ -42,6 +41,11 @@ export class RealtimeSurfaceStageModel {
   /** Where each registered channel's surface is placed, by key. Replaced only when a placement changes. */
   public get Placements(): ReadonlyMap<string, MediaStagePlacement> {
     return this.placements;
+  }
+
+  /** Where the user may move each registered channel's surface, by key. Replaced only when the channels change. */
+  public get AllowedPlacements(): ReadonlyMap<string, readonly MediaStagePlacement[]> {
+    return this.allowedPlacements;
   }
 
   /** The user's moves, oldest first, one per surface: what the host saves. */
@@ -64,9 +68,24 @@ export class RealtimeSurfaceStageModel {
     return this.plugins.get(key) ?? null;
   }
 
+  /** Where the user may move a channel's surface; nowhere for a channel without a surface in this session. */
+  public AllowedFor(key: string): readonly MediaStagePlacement[] {
+    return this.allowedPlacements.get(key) ?? [];
+  }
+
+  /**
+   * Where a channel's surface goes when it leaves the stage (the user leaves the focus layout, or the channel lets go of
+   * it): where its channel places it, or the first of picture-in-picture, tab and hidden that it allows.
+   */
+  public OffStagePlacement(key: string): MediaStagePlacement {
+    const plugin = this.plugins.get(key);
+    return plugin ? PlacementOffStage(surfaceOf(plugin)) : 'tab';
+  }
+
   /** A channel with a surface got its tab. Registering its key again follows the channel's new plugin instance. */
   public Register(plugin: BaseRealtimeChannelClient): void {
     this.plugins.set(plugin.ChannelName, plugin);
+    this.updateAllowedPlacements();
     this.update();
   }
 
@@ -78,6 +97,7 @@ export class RealtimeSurfaceStageModel {
         this.seen.delete(key);
       }
     }
+    this.updateAllowedPlacements();
     this.update();
   }
 
@@ -94,11 +114,11 @@ export class RealtimeSurfaceStageModel {
   }
 
   /**
-   * Moves a channel's surface. Returns `false`, changing nothing, for a channel without a surface in this session or
-   * the placement it already has.
+   * Moves a channel's surface. Returns `false`, changing nothing, for a channel without a surface in this session, a
+   * placement its channel does not allow, or the placement it already has.
    */
   public Move(key: string, placement: MediaStagePlacement): boolean {
-    if (!this.plugins.has(key) || this.placements.get(key) === placement) {
+    if (!this.AllowedFor(key).includes(placement) || this.placements.get(key) === placement) {
       return false;
     }
     this.moves = RecordSurfaceMove(this.moves, { SurfaceKey: key, Placement: placement });
@@ -106,7 +126,7 @@ export class RealtimeSurfaceStageModel {
     return true;
   }
 
-  /** Forgets every move: each surface returns to its tab. */
+  /** Forgets every move: each surface returns to where its channel places it. */
   public ResetLayout(): void {
     this.moves = [];
     this.update();
@@ -122,6 +142,14 @@ export class RealtimeSurfaceStageModel {
     const surfaces = [...this.plugins.keys()].filter((key) => this.seen.has(key)).map((key) => this.surfaceFor(key));
     if (!sameSurfaces(surfaces, this.surfaces)) {
       this.surfaces = surfaces;
+    }
+  }
+
+  /** Rebuilds {@link AllowedPlacements} from the registered channels, keeping the map when nothing in it changed. */
+  private updateAllowedPlacements(): void {
+    const allowed = new Map([...this.plugins].map(([key, plugin]) => [key, plugin.SurfacePlacement.Allowed]));
+    if (!sameAllowedPlacements(allowed, this.allowedPlacements)) {
+      this.allowedPlacements = allowed;
     }
   }
 
@@ -148,9 +176,17 @@ export class RealtimeSurfaceStageModel {
   }
 }
 
-/** A channel's surface as the layout model sees it: on its tab unless moved. */
+/** A channel's surface as the layout model sees it: where its channel places it unless moved, and where it may go. */
 function surfaceOf(plugin: BaseRealtimeChannelClient): MediaSurface {
-  return { Key: plugin.ChannelName, Label: plugin.TabTitle, DefaultPlacement: 'tab', AllowedPlacements: ALLOWED_PLACEMENTS };
+  const { Default, Allowed } = plugin.SurfacePlacement;
+  return { Key: plugin.ChannelName, Label: plugin.TabTitle, DefaultPlacement: Default, AllowedPlacements: Allowed };
+}
+
+function sameAllowedPlacements(
+  a: ReadonlyMap<string, readonly MediaStagePlacement[]>,
+  b: ReadonlyMap<string, readonly MediaStagePlacement[]>
+): boolean {
+  return a.size === b.size && [...a].every(([key, allowed]) => b.get(key) === allowed);
 }
 
 function samePlacements(a: ReadonlyMap<string, MediaStagePlacement>, b: ReadonlyMap<string, MediaStagePlacement>): boolean {

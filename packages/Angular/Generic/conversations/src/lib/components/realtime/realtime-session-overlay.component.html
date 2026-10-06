@@ -149,6 +149,7 @@
           (ActiveChannelChange)="OnActiveChannelChange($event)"
           (ChannelSlotChange)="OnChannelSlotChange($event)"
           [SurfacePlacements]="SurfaceStage.Placements"
+          [AllowedPlacements]="SurfaceStage.AllowedPlacements"
           (MoveRequested)="OnMoveRequested($event)"
           (ResetLayoutRequested)="OnResetLayout()">
         </mj-realtime-surface-tabs>
@@ -180,6 +181,7 @@
             [Key]="key"
             [Title]="plugin.TabTitle"
             Placement="pip"
+            [Allowed]="SurfaceStage.AllowedFor(key)"
             (MoveRequested)="OnMoveRequested($event)"
             (ResetLayoutRequested)="OnResetLayout()">
           </mj-realtime-surface-move-menu>
@@ -215,6 +217,7 @@
             [Key]="stagePlugin.ChannelName"
             [Title]="stagePlugin.TabTitle"
             Placement="stage"
+            [Allowed]="SurfaceStage.AllowedFor(stagePlugin.ChannelName)"
             (MoveRequested)="OnMoveRequested($event)"
             (ResetLayoutRequested)="OnResetLayout()">
           </mj-realtime-surface-move-menu>

@@ -190,8 +190,11 @@ describe('RealtimeSurfaceTabsComponent: ChannelSlotChange (DOM)', () => {
 describe('RealtimeSurfaceTabsComponent: moving surfaces (DOM)', () => {
   afterEach(() => clearOverlayContainers());
 
-  const render = (placements: ReadonlyMap<string, 'stage' | 'tab' | 'hidden'> = new Map()) =>
-    renderComponentFixture(RealtimeSurfaceTabsComponent, { inputs: { State: {} as RealtimeSessionState, SurfacePlacements: placements } });
+  type Placement = 'stage' | 'pip' | 'tab' | 'hidden';
+  const render = (placements: ReadonlyMap<string, Placement> = new Map(), allowed: ReadonlyMap<string, readonly Placement[]> = new Map()) =>
+    renderComponentFixture(RealtimeSurfaceTabsComponent, {
+      inputs: { State: {} as RealtimeSessionState, SurfacePlacements: placements, AllowedPlacements: allowed },
+    });
 
   const settle = async (f: ReturnType<typeof render>): Promise<void> => {
     await f.whenStable();
@@ -236,5 +239,17 @@ describe('RealtimeSurfaceTabsComponent: moving surfaces (DOM)', () => {
     expect(slots).toEqual([]);
     click(f, '.s-pane__away button');
     expect(moves).toEqual([{ Key: 'Whiteboard', Placement: 'tab' }]);
+  });
+
+  it('offers only the placements the channel allows: no "Bring it here" without the tab, and a menu without it', async () => {
+    const f = render(new Map([['Camera', 'pip']]), new Map([['Camera', ['pip', 'hidden'] as const]]));
+    register(f, 'Camera', true);
+    await settle(f);
+    expect(query(f, '.s-pane__away span')?.textContent?.trim()).toBe('Camera is in picture-in-picture.');
+    expect(query(f, '.s-pane__away button')).toBeNull();
+    (query(f, 'mj-realtime-surface-move-menu button') as HTMLButtonElement).click();
+    f.detectChanges();
+    const items = (overlayQueryAll('mj-menu-item') as HTMLElement[]).map((item) => item.textContent?.trim());
+    expect(items).toEqual(['Picture-in-picture', 'Hide', 'Reset layout']);
   });
 });

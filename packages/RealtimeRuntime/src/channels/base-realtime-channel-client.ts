@@ -31,6 +31,7 @@ import { SynthesizeChannelDescriptor } from './channel-descriptor-synthesis';
 import { ChannelPerceptionCoalescer, DEFAULT_CHANNEL_PERCEPTION_OPTIONS, type ChannelPerceptionOptions } from './channel-perception';
 import { FormatChannelNote } from './channel-state-delta';
 import { VisualPerceptionPump, type VisualFrameReason } from './channel-visual-pump';
+import { DEFAULT_CHANNEL_SURFACE_PLACEMENT, type ChannelSurfacePlacement } from './channel-surface-placement';
 import type { ParsedDelegationArtifact } from '../session/delegation-result-parser';
 
 /**
@@ -472,6 +473,25 @@ export abstract class BaseRealtimeChannelClient<TSurface extends object = object
    */
   public OnSurfacePlacementChange(_placement: MediaPlacement): void {
     // default: a surface looks the same wherever it is placed
+  }
+
+  private surfacePlacement: ChannelSurfacePlacement = DEFAULT_CHANNEL_SURFACE_PLACEMENT;
+
+  /**
+   * Where this channel's surface shows when a call starts, and where the user may move it: from the channel's registry
+   * row (`UIConfig.Placement` and `UIConfig.AllowedPlacements`). A channel without a row, or whose row says nothing,
+   * starts on its tab and can go anywhere.
+   */
+  public get SurfacePlacement(): ChannelSurfacePlacement {
+    return this.surfacePlacement;
+  }
+
+  /**
+   * Sets {@link SurfacePlacement}. The runtime calls it with the registry row's placement when it builds the channel, before
+   * the channel mounts, as it applies exposure policy with {@link ApplyExposure}.
+   */
+  public ApplySurfacePlacement(placement: ChannelSurfacePlacement): void {
+    this.surfacePlacement = placement;
   }
 
   /**

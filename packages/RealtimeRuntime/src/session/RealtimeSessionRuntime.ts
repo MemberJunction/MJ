@@ -1,6 +1,6 @@
 import { BehaviorSubject, Observable, Subject, Subscription } from 'rxjs';
 import { Metadata, IMetadataProvider } from '@memberjunction/core';
-import { UserInfoEngine } from '@memberjunction/core-entities';
+import { UserInfoEngine, type MJAIAgentChannelEntity } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { GraphQLDataProvider, GraphQLRealtimeSessionClient } from '@memberjunction/graphql-dataprovider';
 import { MJGlobal } from '@memberjunction/global';
@@ -49,6 +49,7 @@ import { RealtimeSessionEventHub, type IRealtimeSessionEventSource, type Realtim
 import { BuildNarrationInstructions } from '../narration/narration-template';
 import { ParseDelegationResultJson, ParsedDelegationArtifact, FormatToolName } from './delegation-result-parser';
 import { BaseRealtimeChannelClient, RealtimeChannelContext } from '../channels/base-realtime-channel-client';
+import { DEFAULT_CHANNEL_SURFACE_PLACEMENT, ReadChannelSurfacePlacement, type ChannelSurfacePlacement } from '../channels/channel-surface-placement';
 import { IRealtimeMediaHost, IRealtimeSessionRecorder } from '../hosts/IRealtimeMediaHost';
 import { ChannelActionDispatcher, type DispatchableChannel } from '../channels/channel-action-dispatcher';
 import { BuildChannelCatalogNote, type ChannelCatalogEntry } from '../channels/channel-catalog-note';
@@ -190,6 +191,21 @@ interface RealtimeChannelDefinitionRow {
   Name: string;
   ClientPluginClass: string;
   IsActive: boolean;
+  /** Where the channel's surface shows and may move, from the row's `UIConfig`. */
+  SurfacePlacement: ChannelSurfacePlacement;
+}
+
+/**
+ * A registry row's surface placement. A row whose `UIConfig` is not valid JSON places its surface as a row without one
+ * does, so one bad row never costs the session its other channels.
+ */
+function readRowSurfacePlacement(row: MJAIAgentChannelEntity): ChannelSurfacePlacement {
+  try {
+    return ReadChannelSurfacePlacement(row.UIConfigObject);
+  } catch {
+    console.warn(`[RealtimeSession] Channel '${row.Name}' has a UIConfig that is not valid JSON; its surface starts on its tab.`);
+    return DEFAULT_CHANNEL_SURFACE_PLACEMENT;
+  }
 }
 
 /**
@@ -2116,6 +2132,7 @@ export class RealtimeSessionRuntime {
     for (const row of rows) {
       const plugin = this.resolveChannelPlugin(row);
       if (plugin) {
+        plugin.ApplySurfacePlacement(row.SurfacePlacement);
         prepared.push({ Plugin: plugin, Key: plugin.ChannelName, Registry: row.IsActive ? 'active' : 'inactive' });
       }
     }
@@ -2127,7 +2144,8 @@ export class RealtimeSessionRuntime {
       const existing = FindPreparedChannel(prepared, plugin.ChannelName);
       if (existing) {
         // The host's instance replaces the registry's (it may carry the host's collaborators); the
-        // registry row's state — notably the kill switch — still applies.
+        // registry row's state — notably the kill switch, and where its surface shows — still applies.
+        plugin.ApplySurfacePlacement(existing.Plugin.SurfacePlacement);
         existing.Plugin = plugin;
         existing.HostDeclaration = declaration;
       } else {
@@ -2186,7 +2204,7 @@ export class RealtimeSessionRuntime {
       console.warn('[RealtimeSession] A host-declared channel names neither ClientPluginClass nor Create — ignoring it.');
       return null;
     }
-    return this.resolveChannelPlugin({ ID: key, Name: key, ClientPluginClass: key, IsActive: true });
+    return this.resolveChannelPlugin({ Name: key, ClientPluginClass: key, IsActive: true });
   }
 
   /**
@@ -2260,8 +2278,13 @@ export class RealtimeSessionRuntime {
     try {
       const engine = AIEngineBase.GetProviderInstance<AIEngineBase>(this.Provider, AIEngineBase) as AIEngineBase;
       await engine.Config(false, undefined, this.Provider);
-      return (engine.AgentChannels ?? [])
-        .map<RealtimeChannelDefinitionRow>(c => ({ ID: c.ID, Name: c.Name, ClientPluginClass: c.ClientPluginClass, IsActive: c.IsActive }));
+      return (engine.AgentChannels ?? []).map<RealtimeChannelDefinitionRow>((c) => ({
+        ID: c.ID,
+        Name: c.Name,
+        ClientPluginClass: c.ClientPluginClass,
+        IsActive: c.IsActive,
+        SurfacePlacement: readRowSurfacePlacement(c),
+      }));
     } catch (error) {
       console.warn('[RealtimeSession] Channel registry unavailable — starting with no channels:', error);
       return [];
@@ -2276,7 +2299,7 @@ export class RealtimeSessionRuntime {
    * An inactive row is resolved quietly: it only needs to be named, and a missing plugin for a
    * channel nobody wants is not worth a warning.
    */
-  private resolveChannelPlugin(row: RealtimeChannelDefinitionRow): BaseRealtimeChannelClient | null {
+  private resolveChannelPlugin(row: Pick<RealtimeChannelDefinitionRow, 'Name' | 'ClientPluginClass' | 'IsActive'>): BaseRealtimeChannelClient | null {
     const key = row.ClientPluginClass?.trim();
     const quiet = !row.IsActive;
     if (!key) {

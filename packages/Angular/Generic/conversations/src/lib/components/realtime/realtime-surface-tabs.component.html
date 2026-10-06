@@ -52,6 +52,7 @@
             [Key]="tab.Key"
             [Title]="tab.Title"
             [Placement]="PlacementOf(tab.Key)"
+            [Allowed]="AllowedOf(tab.Key)"
             (MoveRequested)="MoveRequested.emit($event)"
             (ResetLayoutRequested)="ResetLayoutRequested.emit()">
           </mj-realtime-surface-move-menu>
@@ -89,10 +90,12 @@
               <div class="s-pane__away" role="status">
                 <i [class]="AwayIcon(tab.Key)" aria-hidden="true"></i>
                 <span>{{ tab.Title }} is {{ AwayText(tab.Key) }}.</span>
-                <button type="button" mjButton Variant="secondary" Size="sm"
-                        (click)="MoveRequested.emit({ Key: tab.Key, Placement: 'tab' })">
-                  Bring it here
-                </button>
+                @if (AllowedOf(tab.Key).includes('tab')) {
+                  <button type="button" mjButton Variant="secondary" Size="sm"
+                          (click)="MoveRequested.emit({ Key: tab.Key, Placement: 'tab' })">
+                    Bring it here
+                  </button>
+                }
               </div>
             } @else if (tab.Data?.Plugin) {
               <!-- Registry-resolved channel: its surface lives on the overlay's stage, which lays it

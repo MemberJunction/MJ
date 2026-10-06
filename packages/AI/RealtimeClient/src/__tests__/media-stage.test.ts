@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
     LayoutMediaStage,
+    PlacementOffStage,
     ResolveSurfacePlacements,
     SelectDisplayParticipants,
     SelectScreenSharer,
@@ -161,6 +162,23 @@ describe('surface placement', () => {
             const big = surface('big', 'stage', { AllowedPlacements: ['stage', 'tab'] });
             const placed = ResolveSurfacePlacements([big, whiteboard], [moved('whiteboard', 'stage')]);
             expect(keys(placed.Tabs)).toEqual(['big']);
+        });
+    });
+
+    describe('PlacementOffStage', () => {
+        it('sends a surface off the stage to its default', () => {
+            expect(PlacementOffStage(whiteboard)).toBe('tab');
+            expect(PlacementOffStage(camera)).toBe('pip');
+        });
+
+        it('sends a surface whose default is the stage to the first of PiP, tab and hidden it allows', () => {
+            expect(PlacementOffStage(avatar)).toBe('pip');
+            expect(PlacementOffStage(surface('big', 'stage', { AllowedPlacements: ['stage', 'hidden'] }))).toBe('hidden');
+        });
+
+        it('skips a default the surface does not allow, and hides one that allows nothing off the stage', () => {
+            expect(PlacementOffStage(surface('odd', 'pip', { AllowedPlacements: ['stage', 'tab'] }))).toBe('tab');
+            expect(PlacementOffStage(surface('only', 'stage', { AllowedPlacements: ['stage'] }))).toBe('hidden');
         });
     });
 

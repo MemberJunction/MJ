@@ -5,6 +5,7 @@ import type { VideoSourceState } from '@memberjunction/ai-realtime-client';
 import type { RealtimeToolDefinition } from '@memberjunction/ai';
 import {
   BaseRealtimeChannelClient,
+  type ChannelSurfacePlacement,
   type RealtimeChannelFocusEvent,
   type RealtimeConnectionState,
 } from '@memberjunction/realtime-runtime';
@@ -144,10 +145,13 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
     }
   };
 
-  /** A live call in console chrome with the whiteboard's tab open in the panel. */
-  const renderWithBoard = async () => {
+  /** A live call in console chrome with the whiteboard's tab open in the panel, placed as its registry row says. */
+  const renderWithBoard = async (placement?: ChannelSurfacePlacement) => {
     const session = fakeSession();
     const board = new TestWhiteboardChannel();
+    if (placement) {
+      board.ApplySurfacePlacement(placement);
+    }
     const f = renderComponentFixture(RealtimeSessionOverlayComponent, {
       providers: [
         { provide: RealtimeSessionService, useValue: session.service },
@@ -340,6 +344,51 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
       expect(savedPipLayouts.at(-1)).toBe('{}');
       expect(savedLayouts.at(-1)).toBe('[]');
       expect(surface(f).classList.contains('stage-surface--pip')).toBe(false);
+    });
+  });
+
+  describe("the channel's placement (its registry row's UIConfig)", () => {
+    /** Opens a "Move to…" menu and lists its items. */
+    const menuItems = async (f: Awaited<ReturnType<typeof renderWithBoard>>['f'], menuSelector: string): Promise<Array<string | undefined>> => {
+      (query(f, `${menuSelector} button`) as HTMLButtonElement).click();
+      await settle();
+      const items = (overlayQueryAll('mj-menu-item') as HTMLElement[]).map((item) => item.textContent?.trim());
+      clearOverlayContainers();
+      return items;
+    };
+
+    it('starts the board in a box when its channel places it there, and offers no tab when the channel allows none', async () => {
+      const { f, board } = await renderWithBoard({ Default: 'pip', Allowed: ['stage', 'pip', 'hidden'] });
+      expect(surface(f).classList.contains('stage-surface--pip')).toBe(true);
+      expect(query(f, '.s-pane__away span')?.textContent?.trim()).toBe('Whiteboard is in picture-in-picture.');
+      expect(query(f, '.s-pane__away button')).toBeNull();
+      expect(await menuItems(f, '.stage-pip-bar mj-realtime-surface-move-menu')).toEqual(['Stage', 'Picture-in-picture', 'Hide', 'Reset layout']);
+      expect(board.Placements).toEqual(['pip']);
+      expect(savedLayouts).toEqual([]);
+    });
+
+    it('sends the board back to its box, not a tab, when the user leaves the stage', async () => {
+      const { f, board } = await renderWithBoard({ Default: 'pip', Allowed: ['stage', 'pip', 'hidden'] });
+      await pick(f, '.stage-pip-bar mj-realtime-surface-move-menu', 'Stage');
+      expect(f.componentInstance.ChannelFocusMode).toBe(true);
+      expect(await menuItems(f, '.board-focus-pill mj-realtime-surface-move-menu')).toEqual(['Stage', 'Picture-in-picture', 'Hide', 'Reset layout']);
+      click(f, '.board-focus-pill__btn[title="Show thread"]');
+      await settle();
+      expect(f.componentInstance.ChannelFocusMode).toBe(false);
+      expect(surface(f).classList.contains('stage-surface--pip')).toBe(true);
+      expect(savedLayouts.at(-1)).toBe('[{"SurfaceKey":"Whiteboard","Placement":"pip"}]');
+      expect(board.Placements).toEqual(['pip', 'stage', 'pip']);
+    });
+
+    it('sends the board back to its box when the channel lets go of the stage', async () => {
+      const { f, board, focus$ } = await renderWithBoard({ Default: 'pip', Allowed: ['stage', 'pip', 'hidden'] });
+      focus$.next({ Channel: board, Focused: true });
+      await settle();
+      expect(f.componentInstance.ChannelFocusMode).toBe(true);
+      focus$.next({ Channel: board, Focused: false });
+      await settle();
+      expect(f.componentInstance.ChannelFocusMode).toBe(false);
+      expect(surface(f).classList.contains('stage-surface--pip')).toBe(true);
     });
   });
 });
