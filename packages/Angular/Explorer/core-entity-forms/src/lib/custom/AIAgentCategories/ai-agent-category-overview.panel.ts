@@ -145,7 +145,7 @@ export class AIAgentCategoryOverviewPanel extends BaseFormPanel<MJAIAgentCategor
         try {
             const rv = new RunView();
             const res = await rv.RunView<AgentRow>({
-                EntityName: 'AI Agents',
+                EntityName: 'MJ: AI Agents',
                 ExtraFilter: `CategoryID = '${this.Record.ID}'`,
                 Fields: ['ID', 'Name', 'Status'],
                 MaxRows: 20,

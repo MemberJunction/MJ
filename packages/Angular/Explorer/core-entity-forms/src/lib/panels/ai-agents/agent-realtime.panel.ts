@@ -39,7 +39,7 @@ interface BridgeIdentityRow {
  *   - its bridge agent identities ('MJ: AI Bridge Agent Identities' for this
  *     agent).
  *
- * Registers against the 'AI Agents' entity, `after-fields` slot. The AI Agent
+ * Registers against the 'MJ: AI Agents' entity, `after-fields` slot. The AI Agent
  * form is a full custom override whose template doesn't emit the `after-fields`
  * marker, so this panel falls through to the container's always-present
  * `after-everything` slot and mounts at the bottom of the form — functional,

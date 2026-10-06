@@ -144,7 +144,7 @@ export class EmployeeOverviewPanel extends BaseFormPanel<MJEmployeeEntity> imple
         try {
             const rv = new RunView();
             const res = await rv.RunView<DirectReportRow>({
-                EntityName: 'Employees',
+                EntityName: 'MJ: Employees',
                 ExtraFilter: `SupervisorID = '${this.Record.ID}'`,
                 Fields: ['ID', 'FirstName', 'LastName', 'Title'],
                 MaxRows: 20,

@@ -145,7 +145,7 @@ export class CompanyOverviewPanel extends BaseFormPanel<MJCompanyEntity> impleme
         try {
             const rv = new RunView();
             const res = await rv.RunView<EmployeeRow>({
-                EntityName: 'Employees',
+                EntityName: 'MJ: Employees',
                 ExtraFilter: `CompanyID = '${this.Record.ID}'`,
                 Fields: ['ID', 'FirstName', 'LastName', 'Title'],
                 MaxRows: 20,

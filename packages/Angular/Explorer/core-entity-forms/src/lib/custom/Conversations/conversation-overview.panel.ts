@@ -157,7 +157,7 @@ export class ConversationOverviewPanel extends BaseFormPanel<MJConversationEntit
         try {
             const rv = new RunView();
             const res = await rv.RunView<ConversationDetailRow>({
-                EntityName: 'Conversation Details',
+                EntityName: 'MJ: Conversation Details',
                 ExtraFilter: `ConversationID = '${this.Record.ID}'`,
                 Fields: ['ID', 'Role', 'Message', '__mj_CreatedAt'],
                 OrderBy: '__mj_CreatedAt DESC',
