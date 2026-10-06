@@ -422,8 +422,8 @@ it offers on the open form, through the same checks as the user's own choices: f
 the form was read and a section on it has fields, and section keys, a tab or a section to sit inside
 only when the dialog lists them. It starts from its default for the rest, and the user confirms
 placement. A claim the form cannot confirm is dropped, and the summary says so until the user picks
-that claim. A field claim writes the chosen field names into `configuration.fields`; `fields` is
-reserved for that use on a field panel.
+that claim or the dialog reads the form's sections. A field claim writes the chosen field names into
+`configuration.fields`; `fields` is reserved for that use on a field panel.
 `configuration.fields` is written only when a panel is placed as a field claim, and a later placement
 change never removes it: a panel moved off its field claim keeps drawing the fields it was built for,
 and the host shows those fields again unless the new placement replaces the section or tab that
