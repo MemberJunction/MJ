@@ -36,6 +36,8 @@ type Config = { tabs: Tab[]; activeTabId: string };
 interface Harness {
     /** Runs the private method under test. */
     sync: (navigatedAt: number) => Promise<void>;
+    /** Runs it the way `InitializeShell` does, with no `navigatedAt` — so the default applies. */
+    syncWithDefault: () => Promise<void>;
     setActiveTab: ReturnType<typeof vi.fn>;
     reads: number;
 }
@@ -46,7 +48,7 @@ interface Harness {
  *                read and the guard's re-read apart.
  * @param matching the tab `findTabForUrl` resolves to.
  */
-function harness(configs: Config[], matching: Tab): Harness {
+function harness(configs: Config[], matching: Tab, seededNavigationAt = 0): Harness {
     const shell = Object.create(ShellComponent.prototype) as ShellComponent;
     const setActiveTab = vi.fn();
     let reads = 0;
@@ -59,12 +61,15 @@ function harness(configs: Config[], matching: Tab): Harness {
     // Shadowed rather than exercised: which tab a url resolves to is a separate concern with its
     // own tests, and fixing it here keeps these tests about ordering alone.
     open['findTabForUrl'] = async () => matching;
+    // `Object.create` runs no field initialisers, so the real seed is supplied here.
+    open['lastNavigationAt'] = seededNavigationAt;
 
+    const run = shell as unknown as {
+        syncWorkspaceWithUrl(url: string, navigatedAt?: number): Promise<void>;
+    };
     return {
-        sync: (navigatedAt: number) =>
-            (shell as unknown as {
-                syncWorkspaceWithUrl(url: string, navigatedAt: number): Promise<void>;
-            }).syncWorkspaceWithUrl('/nav/deals', navigatedAt),
+        sync: (navigatedAt: number) => run.syncWorkspaceWithUrl('/nav/deals', navigatedAt),
+        syncWithDefault: () => run.syncWorkspaceWithUrl('/nav/deals'),
         setActiveTab,
         get reads() {
             return reads;
@@ -138,6 +143,43 @@ describe('an activation stamped in the future cannot block a sync', () => {
         );
         await h.sync(now - 5_000);
         expect(h.setActiveTab).not.toHaveBeenCalled();
+    });
+});
+
+/**
+ * THE STARTUP CALL TAKES THE DEFAULT, and the default is the field — not a fresh clock reading.
+ *
+ * `InitializeShell` ends by settling a deep-linked url against the restored workspace, and calls
+ * `syncWorkspaceWithUrl(url)` with no second argument. Raised in review as untested, and it is the one
+ * path where the field's value is load-bearing rather than incidental: by then the first NavigationEnd
+ * has already been missed, so the default is construction time.
+ *
+ * Defaulting to `Date.now()` instead — which is what the parameter would do if the field were dropped
+ * — makes the startup sync newer than every activation and so unable ever to yield. The second test
+ * fails on that change; the first does not, which is why both are here.
+ */
+describe('the startup sync, which passes no navigatedAt', () => {
+    it('still activates the url\'s tab when nothing newer has happened', async () => {
+        const h = harness(
+            [{ tabs: [NAV_TAB, { id: 'tab-record', lastAccessedAt: AT(1_000) }], activeTabId: 'tab-record' }],
+            NAV_TAB,
+            5_000,
+        );
+        await h.syncWithDefault();
+        expect(h.setActiveTab).toHaveBeenCalledWith('tab-nav');
+    });
+
+    it('reads the seeded field, so an activation after it still wins', async () => {
+        const h = harness(
+            [{ tabs: [NAV_TAB, { id: 'tab-record', lastAccessedAt: AT(Date.now() - 1_000) }], activeTabId: 'tab-record' }],
+            NAV_TAB,
+            Date.now() - 5_000,
+        );
+        await h.syncWithDefault();
+        expect(
+            h.setActiveTab,
+            'the default must be the stamp, not a fresh clock reading that can never lose',
+        ).not.toHaveBeenCalled();
     });
 });
 
