@@ -10,7 +10,7 @@ import {
     ViewContainerRef,
     inject,
 } from '@angular/core';
-import { Subject, takeUntil } from 'rxjs';
+import { Subject, skip, takeUntil } from 'rxjs';
 import { BaseEntity, LogError } from '@memberjunction/core';
 import { InteractiveFormsEngine } from '@memberjunction/core-entities';
 import { BaseFormComponent } from '../base-form-component';
@@ -80,9 +80,11 @@ export class FormFieldPanelSlotComponent implements OnInit, OnChanges, OnDestroy
         this.recordRefresh?.Refreshed$.pipe(takeUntil(this.destroy$)).subscribe((record) => {
             for (const ref of this.mounted) ref.instance.OnRecordRefreshed(record);
         });
+        // The engine's subject replays the current rows on subscribe, which ngOnChanges has
+        // already mounted.
         try {
             InteractiveFormsEngine.Instance.Contributions$
-                .pipe(takeUntil(this.destroy$))
+                .pipe(skip(1), takeUntil(this.destroy$))
                 .subscribe(() => this.remount());
         } catch {
             // No engine here — compiled registrations are the only source.

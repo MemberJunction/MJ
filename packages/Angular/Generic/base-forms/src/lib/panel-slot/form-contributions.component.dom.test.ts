@@ -38,6 +38,19 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => ({
     },
 }));
 
+/** How many times the composer resolved its grids. */
+const resolves = vi.hoisted(() => ({ count: 0 }));
+vi.mock('./form-contribution', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('./form-contribution')>();
+    return {
+        ...actual,
+        ResolveFormContributions: (...args: Parameters<typeof actual.ResolveFormContributions>) => {
+            resolves.count++;
+            return actual.ResolveFormContributions(...args);
+        },
+    };
+});
+
 import { FormContributionsComponent } from './form-contributions.component';
 import { InvalidateFormContributionRegistrationCache } from './collect-form-contribution-registrations';
 import { BaseFormPanel } from './base-form-panel';
@@ -98,6 +111,7 @@ const stockGrids = (f: ReturnType<typeof render>) => f.componentInstance.StockGr
 beforeEach(() => {
     engine.rows = [];
     settings.clear();
+    resolves.count = 0;
     InvalidateFormContributionRegistrationCache();
 });
 
@@ -118,6 +132,11 @@ describe('FormContributionsComponent (DOM)', () => {
     it('fills in the grid again when the user hides the compiled panel that claimed it', () => {
         settings.set('mj.formPanels.hidden.zzz_composerentity', JSON.stringify([`related:${ORDERS}:CustomerID`]));
         expect(stockGrids(render())).toEqual([ORDERS, INVOICES]);
+    });
+
+    it('resolves once when the form opens, not again for the engine\'s replay of its rows', () => {
+        render();
+        expect(resolves.count).toBe(1);
     });
 
     it('follows the engine when a row arrives after the form drew', () => {

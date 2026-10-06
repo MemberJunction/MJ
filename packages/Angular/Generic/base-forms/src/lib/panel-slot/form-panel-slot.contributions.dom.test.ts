@@ -16,6 +16,8 @@ import type { BaseFormComponent } from '../base-form-component';
 /** The panels a host has mounted and not yet removed, by the registration each was mounted from. */
 const hoisted = vi.hoisted(() => ({
     live: new Set<{ Registration: unknown }>(),
+    /** Every registration a host asked to mount, in call order. */
+    mounts: [] as unknown[],
 }));
 
 const engine = {
@@ -52,8 +54,10 @@ vi.mock('@memberjunction/core', async (importOriginal) => ({
 }));
 
 vi.mock('./mount-form-contribution', () => ({
-    MountFormContribution: (_anchor: unknown, registration: FormContributionRegistration) =>
-        ({ instance: { Registration: registration }, location: { nativeElement: document.createElement('div') } }),
+    MountFormContribution: (_anchor: unknown, registration: FormContributionRegistration) => {
+        hoisted.mounts.push(registration);
+        return { instance: { Registration: registration }, location: { nativeElement: document.createElement('div') } };
+    },
 }));
 
 import { FormPanelSlotComponent } from './form-panel-slot.component';
@@ -160,6 +164,7 @@ const flush = async () => { for (let i = 0; i < 10; i++) await Promise.resolve()
 
 beforeEach(() => {
     hoisted.live.clear();
+    hoisted.mounts = [];
     logError.mockClear();
     engine.Loaded = true;
     engine.IsPermissionConstrained = false;
@@ -322,5 +327,24 @@ describe('FormPanelSlotComponent (DOM) — the user hides or shows a panel', () 
         SetPanelHidden(ENTITY, 'header', false);
         slots.NotifyPanelsChanged();
         expect(mountedKeys()).toEqual(['class:header@after-fields']);
+    });
+});
+
+/**
+ * The engine's subject replays its rows on subscribe, right after ngOnChanges mounted the panels.
+ * That replay must not mount every panel a second time.
+ */
+describe('slot hosts (DOM) — opening the form mounts each panel once', () => {
+    const mountsOf = (key: string) => hoisted.mounts
+        .filter((reg) => (reg as FormContributionRegistration).Metadata.contributionKey === key).length;
+
+    it('mounts a slot panel once', () => {
+        renderSlot('after-fields');
+        expect(mountsOf('header')).toBe(1);
+    });
+
+    it('mounts a field claim once', () => {
+        renderFieldSlot(['Street']);
+        expect(mountsOf('address')).toBe(1);
     });
 });

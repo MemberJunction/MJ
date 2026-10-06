@@ -1,5 +1,5 @@
 import { ChangeDetectorRef, Component, Input, OnChanges, OnDestroy, OnInit, SimpleChanges, inject } from '@angular/core';
-import { Subject, takeUntil } from 'rxjs';
+import { Subject, skip, takeUntil } from 'rxjs';
 import { BaseEntity } from '@memberjunction/core';
 import { InteractiveFormsEngine } from '@memberjunction/core-entities';
 import { BaseFormComponent } from '../base-form-component';
@@ -61,9 +61,11 @@ export class FormContributionsComponent implements OnChanges, OnInit, OnDestroy 
     }
 
     public ngOnInit(): void {
+        // The engine's subject replays the current rows on subscribe, which ngOnChanges has
+        // already resolved.
         try {
             InteractiveFormsEngine.Instance.Contributions$
-                .pipe(takeUntil(this.destroy$))
+                .pipe(skip(1), takeUntil(this.destroy$))
                 .subscribe(() => this.refreshAndMark());
         } catch {
             // No engine here — compiled registrations are the only source.

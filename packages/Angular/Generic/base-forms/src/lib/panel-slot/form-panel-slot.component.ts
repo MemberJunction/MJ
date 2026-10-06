@@ -13,7 +13,7 @@ import {
     ViewContainerRef,
     inject,
 } from '@angular/core';
-import { Subject, filter, take, takeUntil, type Observable, type Subscription } from 'rxjs';
+import { Subject, filter, skip, take, takeUntil, type Observable, type Subscription } from 'rxjs';
 import { BaseEntity, LogError } from '@memberjunction/core';
 import { InteractiveFormsEngine } from '@memberjunction/core-entities';
 import { BaseFormComponent } from '../base-form-component';
@@ -140,10 +140,11 @@ export class FormPanelSlotComponent implements OnInit, OnChanges, OnDestroy {
             this.notifyMountedPanels(record);
         });
         // Rows can arrive after the first paint (cold engine, a contribution saved in another
-        // tab). Without this the slot would keep showing whatever it mounted first.
+        // tab). Without this the slot would keep showing whatever it mounted first. The engine's
+        // subject replays the current rows on subscribe, which ngOnChanges has already mounted.
         try {
             InteractiveFormsEngine.Instance.Contributions$
-                .pipe(takeUntil(this.destroy$))
+                .pipe(skip(1), takeUntil(this.destroy$))
                 .subscribe(() => this.remount());
         } catch {
             // No engine here — compiled registrations are the only source.
