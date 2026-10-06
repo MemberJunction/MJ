@@ -6,7 +6,13 @@ vi.mock('@angular/core', () => ({
   Input: () => () => undefined,
   Output: () => () => undefined,
   EventEmitter: class { emit() {} },
+  inject: vi.fn(() => ({})),
 }));
+// EntityRecordResource injects WorkspaceStateManager and builds agent context
+// from ng-base-forms (forms Phase A/B); neither is under test here, and the
+// real modules would drag Angular's DI through the mocked @angular/core.
+vi.mock('@memberjunction/ng-base-application', () => ({ WorkspaceStateManager: class {} }));
+vi.mock('@memberjunction/ng-base-forms', () => ({ BuildFormAgentContext: vi.fn(() => ({})) }));
 vi.mock('@memberjunction/ng-shared', () => ({
   BaseResourceComponent: class {
     public NotifyEditModeChanged = vi.fn<(editing: boolean) => void>();
