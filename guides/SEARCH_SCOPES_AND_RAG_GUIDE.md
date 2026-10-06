@@ -235,13 +235,31 @@ No scope duplication needed.
 | `StorageSearchProvider` | Already folder-path / account-permission bounded via `MJ: File Storage Account Permissions`. |
 | 3rd-party index providers | Use the engine's native permission/ACL filter. Documented in the "how to add a provider" guide. |
 
+### The origin-record gate for derived content
+
+A content item or chunk is a row of its own entity, but it was *derived* from another record — the file, task or conversation it was extracted from — and the right to read it belongs to that origin. Row-level security on `MJ: Content Items` / `MJ: Content Item Chunks` can only say who may read the content table; it cannot see the origin's own row filters.
+
+So after a content result passes the entity-level ownership and row-filter check, `SearchEngine.VerifyOriginRecords` follows chunk → item (→ root item, for a split child) → `MJ: Entity Record Documents` → the origin record, and keeps the result only when the origin is a row the user may read, verified exactly as the result's own entity was (`PK IN (...)` under the origin entity's row filter, as the user). Content with no Entity Record Document has no origin and passes unchanged; non-content entities are untouched. The hook is `protected`, so a host can extend the rule to another derived-content family (reusing the protected `ReadableOriginRecordIDs` for the origin check), and it fails closed.
+
+Consequences for an app that indexes documents behind its own permissions:
+- **Every lookup runs as the user, and that adds grants a chunk reader did not need before.** Anyone who should see chunk hits needs read on the base `MJ: Content Items` (the chunk → item hop reads it, through the base entity even for IS-A subtypes, because `RootParentID` is a view-computed column a subtype's view does not project). Anyone who should see hits derived from a record needs read on `MJ: Entity Record Documents`. Grant both under the app's row filters. Without the item grant, every chunk hit is dropped; without the document grant, the document-bearing hits are, and crawled content still passes.
+- **Field-level security on a link column counts as a failed hop, never as "no origin".** If the user's roles deny `ContentItemID`, `ParentID`, `RootParentID`, `EntityRecordDocumentID`, or a document's `Entity` / `RecordID`, the lookup comes back without that column and the rows that depended on it are dropped.
+- A split child (an item with a `ParentID`) is judged by its own document first, and by its root's only when it has none. A root is its own `RootParentID` in the view and is never re-read. A child whose root the view cannot resolve (`RootParentID` null, or its own id) is dropped.
+- An origin's `RecordID` is read as a key segment: a bare value, or `Field|value` pairs. A composite-key segment is used only when it names exactly the origin entity's primary-key fields; any other is dropped and never reaches the SQL.
+- Changing who may read the *origin* record takes effect on the next uncached search (the result cache holds entries up to 30 s); nothing in the index needs to change. Push-down (the scope's `MetadataFilter`) stays the recall mechanism; this gate is the truth.
+- Cost: the hops are sequential `PK IN (...)` reads. A chunk group does up to four (chunks → items → root items when any hit is a split child without its own document → documents when any item has one), plus one view per origin entity, issued together in one `RunViews` batch. An item group does up to three plus the origin batch; crawled chunk content (no documents) costs two. Groups run in parallel.
+
+**Prefixed record ids — a fix for every entity, not only content.** The late check reads each result's `RecordID` as a key segment, so a result written with the prefixed encoding (`ID|<value>`, what `CompositeKey.ToRecordID()` writes) is now checked against its value and kept when readable. Before, `ID IN ('ID|<value>')` could never match, so such results were dropped as unauthorized. The same parsing applies to composite keys, with the same rule: a segment naming a field that is not a primary key is dropped.
+
 ### Overfetch factor tuning
 
 `effectiveTopK = userTopK * permissionOverfetchFactor` compensates for residual filtering. Default 2. Tune higher for corpora where permission sparsity is high (>50% of matches filtered).
 
 ### Observability
 
-The engine logs `lateFilteredCount` per search whenever the residual safety net trims anything. If this is consistently non-zero for a provider, that provider's push-down is incomplete and should be fixed.
+The engine logs `lateFilteredCount` per search whenever the residual safety net (the entity-level and row-filter steps of `filterByPermissions`) trims anything. If this is consistently non-zero for a provider, that provider's push-down is incomplete and should be fixed.
+
+The origin-record gate drops by design — no provider can push an origin record's own row filters into a content index — so its removals are counted separately and logged as `SearchEngine: origin-record gate removed N result(s) …`. They do not count toward `lateFilteredCount`. A steady non-zero origin-gate count is not a push-down defect; it means users are matching content they may not open, which costs `topK` recall (raise `permissionOverfetchFactor`, or narrow the scope).
 
 ### Test requirements (Phase 1F integration)
 
@@ -400,6 +418,7 @@ Wrap these steps in an MJ Action invoked by the onboarding workflow so every new
 The engine logs at key points (check `LogStatus` / `LogError` output):
 - `SearchEngine: Search complete in Nms - K result(s) [across N scope(s)]` — per-search completion.
 - `SearchEngine: Residual permission filter removed X result(s)` — non-zero values indicate incomplete provider push-down.
+- `SearchEngine: origin-record gate removed X result(s) …` — content derived from records the user may not read. Expected, and not counted in the residual figure above.
 - `SearchEngine: Re-ranker "DriverClass" returned N result(s) (input=I, outputTopN=O)` — re-rank stage telemetry.
 - `AgentPreExecutionRAG: Exception searching scope "NAME"` — per-scope search failures.
 - `AgentPreExecutionRAG: Template "ID" render failed` — template-rendering failures fall back to `lastUserMessage`.

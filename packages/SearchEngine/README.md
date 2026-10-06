@@ -85,7 +85,7 @@ The provider is registered in `metadata/search-providers/.search-providers.json`
 1. **Reciprocal Rank Fusion (RRF)**:
    Results from `TagSearchProvider` participate in `SearchFusion.Fuse()`. When an item matches across both direct entity LIKE-search and tag-weighted retrieval, RRF boosts the record's final rank, and `SearchFusion.Deduplicate()` combines score breakdowns (`ScoreBreakdown.Tag` + `ScoreBreakdown.Entity`) and merges tags.
 2. **Security & Permission Push-Down**:
-   `SearchEngine` automatically validates entity read permissions and executes `verifyOwnershipAndRowFilters` on tag results via `RunView`, guaranteeing that users only see records they are permitted to view.
+   `SearchEngine` automatically validates entity read permissions and executes `verifyOwnershipAndRowFilters` on tag results via `RunView`, guaranteeing that users only see records they are permitted to view. For content items and chunks, the protected `VerifyOriginRecords` gate then follows the result to the record it was derived from (through `MJ: Entity Record Documents`) and keeps it only when that origin record is readable under the origin entity's own permissions and row filters. See [SEARCH_SCOPES_AND_RAG_GUIDE.md § 4](../../guides/SEARCH_SCOPES_AND_RAG_GUIDE.md#4-permission-push-down-section-36).
 3. **Automatic Record Name Enrichment**:
    `SearchEnricher.Enrich()` resolves canonical record names using `GetEntityRecordNames` for all tag results and attaches entity icons.
 

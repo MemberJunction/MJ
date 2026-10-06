@@ -20,7 +20,10 @@
  * @module @memberjunction/search-engine
  */
 
-import { CompositeKey, EntityInfo, EntityPermissionType, IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import {
+    CompositeKey, EntityInfo, EntityPermissionType, IMetadataProvider, KeyValuePair, LogError, LogStatus, Metadata, RunView, RunViewParams,
+    RunViewResult, UserInfo
+} from '@memberjunction/core';
 import {
     SearchEngineBase,
     MJSearchProviderEntity,
@@ -92,6 +95,46 @@ const UNBOUNDED_SCOPE_DIAGNOSTIC =
 
 // Keep the default re-ranker registration alive under tree-shaking
 LoadNoopReRanker();
+
+/** Where a content entity sits in the derived-content family (see `SearchEngine.VerifyOriginRecords`). */
+type ContentFamilyLevel = 'chunk' | 'item';
+
+/** The MJ record a content row was derived from, as its Entity Record Document names it. */
+interface ContentOriginRef {
+    EntityName: string;
+    /**
+     * A key segment: compact (bare value) today, possibly `ID|…` from writers that move to `ToRecordID()`.
+     * Parsed with `CompositeKey.FromURLSegment`, which reads both.
+     */
+    RecordID: string;
+}
+
+/**
+ * The columns of `MJ: Content Items` the origin walk reads. For a root item (no `ParentID`) the view gives
+ * `RootParentID` the row's own id; for a child it is null when the view cannot walk the `ParentID` chain.
+ */
+interface ContentItemRow {
+    ID: string;
+    ParentID: string | null;
+    RootParentID: string | null;
+    EntityRecordDocumentID: string | null;
+}
+
+/** The columns of `MJ: Entity Record Documents` the origin walk reads. `Entity` is the view's join to the entity's name. */
+interface EntityRecordDocumentRow {
+    ID: string;
+    Entity: string | null;
+    RecordID: string | null;
+}
+
+/** One origin entity's readability check, asked in the `RunViews` batch of `SearchEngine.ReadableOriginRecordIDs`. */
+interface OriginReadCheck {
+    EntityName: string;
+    Entity: EntityInfo;
+    /** The record ids as the Entity Record Documents carry them. */
+    RecordIDs: string[];
+    Params: RunViewParams;
+}
 
 /**
  * Configuration options for the SearchEngine.
@@ -479,8 +522,15 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             results = this._fusion.Deduplicate(results);
 
             const beforePermCount = results.length;
-            results = await this.filterByPermissions(results, contextUser);
-            const lateFilteredCount = beforePermCount - results.length;
+            const permissionStats = { OriginGateRemoved: 0 };
+            results = await this.filterByPermissions(results, contextUser, permissionStats);
+            if (permissionStats.OriginGateRemoved > 0) {
+                // By design, not a push-down gap: content derived from a record the user may not read.
+                const removed = permissionStats.OriginGateRemoved;
+                LogStatus(`SearchEngine: origin-record gate removed ${removed} result(s) derived from records the user may not read.`);
+            }
+            // Origin-gate removals are counted above, so this stays the push-down signal it always was.
+            const lateFilteredCount = beforePermCount - results.length - permissionStats.OriginGateRemoved;
             if (lateFilteredCount > 0) {
                 // Observability: Section 3.6 — if a provider's push-down is complete, this
                 // number should be zero (the safety net should never trim anything).
@@ -1898,26 +1948,34 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
     }
 
     // ────────────────────────────────────────────────────────────────
-    // Permission filtering (residual late safety net)
+    // Permission filtering (residual late safety net, then the origin-record gate)
     // ────────────────────────────────────────────────────────────────
 
     /**
-     * Filter search results by entity-level and row-level security permissions.
+     * Filter search results by entity-level and row-level security permissions, then by whether the user
+     * may read the record each content result was derived from.
      *
-     * **This is a safety net.** Providers are expected to do per-provider permission
-     * push-down (Section 3.6 of plans/search-scopes-rag-plus.md). If this filter is
-     * removing more than a handful of results in practice, the responsible provider's
-     * push-down is incomplete and should be fixed.
+     * **Steps 1–4 are a safety net.** Providers are expected to do per-provider permission
+     * push-down (Section 3.6 of plans/search-scopes-rag-plus.md). If those steps remove more
+     * than a handful of results in practice, the responsible provider's push-down is incomplete
+     * and should be fixed. **Step 5 is not**: it drops by design, because no provider can push
+     * an origin record's own row filters down into a content index. Its removals are counted
+     * into `stats.OriginGateRemoved`, so the late-filter count keeps its meaning.
      *
      * Groups results by entity for efficient permission checking:
      * 1. Unknown entities are excluded (fail closed).
      * 2. If the user lacks entity-level CanRead, all results for that entity are dropped.
      * 3. If the user is exempt from RLS, all results pass through.
      * 4. If RLS applies, a RunView validates which record IDs the user can read.
+     * 5. Content items and chunks are kept only when the user may read the record they were
+     *    derived from ({@link VerifyOriginRecords}).
+     *
+     * @param stats optional per-call counters; `OriginGateRemoved` is incremented by step 5's removals
      */
     protected async filterByPermissions(
         results: SearchResultItem[],
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        stats?: { OriginGateRemoved: number }
     ): Promise<SearchResultItem[]> {
         if (results.length === 0) return results;
 
@@ -1932,7 +1990,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         const promises: Promise<void>[] = [];
         for (const [entityName, groupResults] of byEntity) {
             promises.push(
-                this.filterEntityResults(entityName, groupResults, contextUser, permitted)
+                this.filterEntityResults(entityName, groupResults, contextUser, permitted, stats)
             );
         }
         await Promise.all(promises);
@@ -1965,14 +2023,16 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
 
     /**
      * Check permissions for a single entity's batch of results.
-     * Permitted results are pushed into the shared `permitted` array.
+     * Permitted results are pushed into the shared `permitted` array; rows the origin-record gate removes are
+     * counted into `stats` when it is supplied.
      * On any error, results are excluded (fail closed).
      */
     private async filterEntityResults(
         entityName: string,
         entityResults: SearchResultItem[],
         contextUser: UserInfo,
-        permitted: SearchResultItem[]
+        permitted: SearchResultItem[],
+        stats?: { OriginGateRemoved: number }
     ): Promise<void> {
         try {
             const md = this.ProviderToUse;
@@ -1995,39 +2055,54 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                 EntityPermissionType.Read,
                 ''
             );
-            if (!rlsClause) {
-                // No row filter, or the user is exempt from row filtering. That settles WHICH ROWS of
-                // this entity they may see — it does not establish that these results ARE this
-                // entity's rows. `EntityName` is provider output, and for the vector and 3rd-party
-                // lanes it comes from the index: vector metadata's `Entity` key, or the index name.
-                // Admitting on that label alone lets whoever writes the index choose which entity's
-                // permissions get evaluated, so a label naming an entity the user CAN read admits
-                // documents that are not that entity's records at all.
-                //
-                // Results from a lane that queried the entity directly need no such check — their ids
-                // came out of a RunView against it. So pass those through untouched (this is the hot
-                // path and its cost is unchanged) and verify only the rest.
-                const selfEvident: SearchResultItem[] = [];
-                const unverified: SearchResultItem[] = [];
-                for (const item of entityResults) {
-                    (SearchEngine.lanesWithSelfEvidentOwnership.has(item.SourceType) ? selfEvident : unverified)
-                        .push(item);
-                }
-                permitted.push(...selfEvident);
-                if (unverified.length > 0) {
-                    await this.verifyOwnershipAndRowFilters(entity, unverified, undefined, contextUser, permitted);
-                }
-                return;
-            }
 
-            // A row filter applies — validate record IDs via RunView. Unchanged: this path already
-            // verified ownership as a side effect of filtering, for every lane.
-            await this.verifyOwnershipAndRowFilters(entity, entityResults, rlsClause, contextUser, permitted);
+            // A row the user may read is not yet a row they may be shown: content derived from a record they
+            // cannot read is still theirs to miss, so the admitted rows pass the origin gate next.
+            const ownRows = await this.admitOwnRows(entity, entityResults, rlsClause, contextUser);
+            const kept = await this.VerifyOriginRecords(entity, ownRows, contextUser);
+            if (stats) stats.OriginGateRemoved += Math.max(0, ownRows.length - kept.length);
+            permitted.push(...kept);
         } catch (error) {
             // Fail closed — if anything goes wrong, exclude the results
             const msg = error instanceof Error ? error.message : String(error);
             LogError(`SearchEngine: Permission filtering failed for entity "${entityName}": ${msg}`);
         }
+    }
+
+    /**
+     * Gate 1: the results that are rows of `entity` the user may read.
+     *
+     * With no row filter (or a user exempt from row filtering) that settles WHICH ROWS of this entity they may
+     * see — it does not establish that these results ARE this entity's rows. `EntityName` is provider output,
+     * and for the vector and 3rd-party lanes it comes from the index: vector metadata's `Entity` key, or the
+     * index name. Admitting on that label alone lets whoever writes the index choose which entity's
+     * permissions get evaluated, so a label naming an entity the user CAN read admits documents that are not
+     * that entity's records at all.
+     *
+     * Results from a lane that queried the entity directly need no such check — their ids came out of a
+     * RunView against it. So those pass untouched (this is the hot path and its cost is unchanged) and only
+     * the rest are verified. When a row filter applies, every lane is verified: ownership is checked as a side
+     * effect of filtering.
+     */
+    private async admitOwnRows(
+        entity: EntityInfo,
+        entityResults: SearchResultItem[],
+        rlsClause: string,
+        contextUser: UserInfo
+    ): Promise<SearchResultItem[]> {
+        const ownRows: SearchResultItem[] = [];
+        if (rlsClause) {
+            await this.verifyOwnershipAndRowFilters(entity, entityResults, rlsClause, contextUser, ownRows);
+            return ownRows;
+        }
+        const unverified: SearchResultItem[] = [];
+        for (const item of entityResults) {
+            (SearchEngine.lanesWithSelfEvidentOwnership.has(item.SourceType) ? ownRows : unverified).push(item);
+        }
+        if (unverified.length > 0) {
+            await this.verifyOwnershipAndRowFilters(entity, unverified, undefined, contextUser, ownRows);
+        }
+        return ownRows;
     }
 
     /**
@@ -2055,11 +2130,49 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         contextUser: UserInfo,
         permitted: SearchResultItem[]
     ): Promise<void> {
+        const validKeys = await this.readableRecordKeys(entity, entityResults.map(r => r.RecordID), rlsClause, contextUser);
+        if (!validKeys) return; // fail closed — already logged
+
+        for (const item of entityResults) {
+            const key = this.recordMatchKey(entity, item.RecordID);
+            if (key !== null && validKeys.has(key)) {
+                permitted.push(item);
+            }
+        }
+    }
+
+    /**
+     * Ask the database, as `contextUser`, which of `recordIDs` are rows of `entity` the user may read:
+     * `PK IN (...)`, ANDed with `rlsClause` when one applies, run through RunView so the user's own row
+     * filters apply as well. Returns the matching keys in {@link canonicalKeyValues} form, or `null`
+     * when the question could not be asked (no primary key, no usable record id, RunView failed) — the
+     * caller fails closed.
+     */
+    private async readableRecordKeys(
+        entity: EntityInfo,
+        recordIDs: string[],
+        rlsClause: string | undefined,
+        contextUser: UserInfo
+    ): Promise<Set<string> | null> {
+        const params = this.readableKeysParams(entity, recordIDs, rlsClause);
+        if (!params) return null;
+        const rv = new RunView();
+        return this.readableKeySet(entity, await rv.RunView<Record<string, unknown>>(params, contextUser));
+    }
+
+    /**
+     * The RunView behind {@link readableRecordKeys}, projecting only the key. `null` when it cannot be asked:
+     * the entity has no primary key, or no record id names a key of it (both logged).
+     *
+     * `MaxRows` is the number of ids, since each matches at most one row: left unset, the entity's
+     * `UserViewMaxRows` could truncate the answer and silently drop readable results.
+     */
+    private readableKeysParams(entity: EntityInfo, recordIDs: string[], rlsClause: string | undefined): RunViewParams | null {
         const pkField = entity.FirstPrimaryKey; // first-pk-ok: presence check; Name is only used under the PrimaryKeys.length === 1 branch
         if (!pkField) {
             // Cannot verify without a primary key — exclude results
             LogError(`SearchEngine: Entity "${entity.Name}" has no primary key, cannot verify result ownership`);
-            return;
+            return null;
         }
 
         // `RecordID` is a compact CompositeKey segment: the bare value for a single-column key, a
@@ -2068,48 +2181,408 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         // alone could never match the segment, and this check fails closed, so every composite-key
         // result would have been dropped as unauthorized.
         const membership = entity.PrimaryKeys.length === 1
-            ? this.buildSingleKeyMembership(pkField.Name, entityResults)
-            : this.buildCompositeKeyMembership(entity, entityResults);
+            ? this.buildSingleKeyMembership(entity, pkField.Name, recordIDs)
+            : this.buildCompositeKeyMembership(entity, recordIDs);
+        if (!membership) return null;
         // Without a row filter this is a pure existence check against the entity's own view.
         const filter = rlsClause ? `(${membership}) AND (${rlsClause})` : membership;
 
-        const rv = new RunView();
-        const result = await rv.RunView<Record<string, unknown>>({
+        return {
             EntityName: entity.Name,
             ExtraFilter: filter,
             Fields: entity.PrimaryKeys.map(pk => pk.Name),
-            ResultType: 'simple'
-        }, contextUser);
-
-        if (!result.Success) {
-            // RunView failed — fail closed, exclude all results
-            LogError(`SearchEngine: ownership/RLS RunView failed for entity "${entity.Name}": ${result.ErrorMessage ?? 'unknown error'}`);
-            return;
-        }
-
-        const validKeys = new Set(
-            result.Results.map(r => this.canonicalKeyValues(entity, CompositeKey.FromEntityRecord(entity, r)))
-        );
-
-        for (const item of entityResults) {
-            const key = CompositeKey.FromURLSegment(entity, item.RecordID);
-            if (validKeys.has(this.canonicalKeyValues(entity, key))) {
-                permitted.push(item);
-            }
-        }
+            ResultType: 'simple',
+            MaxRows: recordIDs.length
+        };
     }
 
-    /** `PK IN ('a','b',...)` — the fast path for the overwhelmingly common single-column key. */
-    private buildSingleKeyMembership(pkFieldName: string, results: SearchResultItem[]): string {
-        const ids = results.map(r => `'${EscapeSQLString(r.RecordID)}'`).join(',');
+    /** The keys a {@link readableKeysParams} RunView returned, in {@link canonicalKeyValues} form; `null` (logged) when it failed. */
+    private readableKeySet(entity: EntityInfo, result: RunViewResult<Record<string, unknown>> | undefined): Set<string> | null {
+        if (!result?.Success) {
+            // RunView failed — fail closed, exclude all results
+            LogError(`SearchEngine: ownership/RLS RunView failed for entity "${entity.Name}": ${result?.ErrorMessage ?? 'unknown error'}`);
+            return null;
+        }
+        return new Set(
+            result.Results.map(r => this.canonicalKeyValues(entity, CompositeKey.FromEntityRecord(entity, r)))
+        );
+    }
+
+    /**
+     * `PK IN ('a','b',...)` — the fast path for the overwhelmingly common single-column key. Each id is
+     * read as a key segment first, so a bare value and a prefixed `ID|value` segment (the encoding
+     * `CompositeKey.ToRecordID()` writes) both compare on the value alone.
+     */
+    private buildSingleKeyMembership(entity: EntityInfo, pkFieldName: string, recordIDs: string[]): string {
+        const values = recordIDs.map(id => {
+            const key = CompositeKey.FromURLSegment(entity, id);
+            return String(key.KeyValuePairs[0]?.Value ?? id);
+        });
+        const ids = values.map(v => `'${EscapeSQLString(v)}'`).join(',');
         return `${pkFieldName} IN (${ids})`;
     }
 
-    /** `(F1='v1' AND F2='v2') OR (...)` — one term per composite-key result. */
-    private buildCompositeKeyMembership(entity: EntityInfo, results: SearchResultItem[]): string {
-        return results
-            .map(r => `(${CompositeKey.FromURLSegment(entity, r.RecordID).ToWhereClause()})`)
-            .join(' OR ');
+    /**
+     * `(F1='v1' AND F2='v2') OR (...)` — one term per composite-key record. The field names come from the
+     * record id, so only a segment {@link parseCompositeKey} accepts reaches the SQL, under the metadata's own
+     * names; any other is dropped (logged). Empty when no segment is usable.
+     */
+    private buildCompositeKeyMembership(entity: EntityInfo, recordIDs: string[]): string {
+        const terms: string[] = [];
+        for (const id of recordIDs) {
+            const key = this.parseCompositeKey(entity, id);
+            if (key) terms.push(`(${key.ToWhereClause()})`);
+            else LogError(`SearchEngine: record id "${id}" does not name the primary key of "${entity.Name}"; dropping it`);
+        }
+        return terms.join(' OR ');
+    }
+
+    /**
+     * A composite-key segment rebuilt on `entity`'s own primary-key names, or `null` when it names a field that
+     * is not a primary key of `entity` or leaves one out. Names match case-insensitively and are replaced by
+     * the metadata's, so nothing parsed from a record id is interpolated into SQL as an identifier.
+     */
+    private parseCompositeKey(entity: EntityInfo, recordID: string): CompositeKey | null {
+        const pairs = CompositeKey.FromURLSegment(entity, recordID).KeyValuePairs;
+        if (pairs.length !== entity.PrimaryKeys.length) return null;
+        const rebuilt: KeyValuePair[] = [];
+        for (const pk of entity.PrimaryKeys) {
+            const match = pairs.find(kv => kv.FieldName.trim().toLowerCase() === pk.Name.trim().toLowerCase());
+            if (!match) return null;
+            rebuilt.push(new KeyValuePair(pk.Name, match.Value));
+        }
+        return CompositeKey.FromKeyValuePairs(rebuilt);
+    }
+
+    /**
+     * The {@link canonicalKeyValues} form of the key `recordID` names in `entity`, to match against the rows a
+     * readability check returned. `null` for a composite-key segment {@link parseCompositeKey} rejects.
+     */
+    private recordMatchKey(entity: EntityInfo, recordID: string): string | null {
+        if (entity.PrimaryKeys.length === 1) return this.canonicalKeyValues(entity, CompositeKey.FromURLSegment(entity, recordID));
+        const key = this.parseCompositeKey(entity, recordID);
+        return key ? this.canonicalKeyValues(entity, key) : null;
+    }
+
+    // ────────────────────────────────────────────────────────────────────────────────────────────
+    // Origin records: a second gate for content derived from another MJ record
+    // ────────────────────────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Second gate, after a result is known to be a readable row of its own entity: may the user also
+     * read the record the row was DERIVED from?
+     *
+     * Row-level security on a content entity settles who may read the content table. It cannot say
+     * whether the person may read the file, task or conversation that content was extracted from —
+     * that permission lives on the origin entity, under its own row filters. Without this gate, a
+     * chunk of a document the user may not open passes the first gate and is quoted anyway.
+     *
+     * For `MJ: Content Items` and `MJ: Content Item Chunks` (and any IS-A subtype of either) the
+     * default follows chunk → item (→ root item, for a split child) → `MJ: Entity Record Documents`
+     * → the origin record, and keeps a result only when the origin is a row the user may read,
+     * verified the way {@link verifyOwnershipAndRowFilters} verifies the result's own entity. A
+     * content row with no Entity Record Document (crawled, uploaded, external) has no origin and
+     * passes unchanged, as does every result of a non-content entity.
+     *
+     * Every lookup runs as the user, and that is a NEW requirement on who may see content hits: read on
+     * the base `MJ: Content Items` for anyone who sees chunk hits (the chunk → item hop reads it), and read
+     * on `MJ: Entity Record Documents` for anyone who sees hits derived from a record (the item → document
+     * hop reads it). An app that indexes documents behind its own permissions grants those, under its
+     * own row filters. Without them the affected rows are dropped: every row of the group for the chunk
+     * and item hops, only the document-bearing rows for the document hop.
+     *
+     * The origin's own permissions are checked once; an origin that is itself a content row is not walked
+     * again. Protected so a host can extend the rule to another derived-content family. Fails closed: a
+     * lookup that reports failure, or returns a row without a column it asked for (field-level security),
+     * drops the rows that depended on it; a lookup that throws drops the whole group. It never widens.
+     */
+    protected async VerifyOriginRecords(
+        entity: EntityInfo,
+        results: SearchResultItem[],
+        contextUser: UserInfo
+    ): Promise<SearchResultItem[]> {
+        if (results.length === 0) return results;
+        const level = this.contentFamilyLevel(entity);
+        if (!level) return results;
+        try {
+            const origins = await this.resolveContentOrigins(entity, level, results, contextUser);
+            return await this.keepReadableOrigins(entity, results, origins, contextUser);
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            LogError(`SearchEngine: origin-record check failed for entity "${entity.Name}": ${msg}`);
+            return [];
+        }
+    }
+
+    /**
+     * Where `entity` sits in the content family: `'chunk'` for `MJ: Content Item Chunks` or a subtype,
+     * `'item'` for `MJ: Content Items` or a subtype, `null` for anything else. Walks `ParentID` on the
+     * request's provider; a cycle in the metadata ends the walk rather than looping.
+     */
+    private contentFamilyLevel(entity: EntityInfo): ContentFamilyLevel | null {
+        const provider = this.ProviderToUse;
+        const visited = new Set<string>();
+        let current: EntityInfo | undefined = entity;
+        while (current && !visited.has(current.ID)) {
+            if (current.Name === 'MJ: Content Item Chunks') return 'chunk';
+            if (current.Name === 'MJ: Content Items') return 'item';
+            visited.add(current.ID);
+            current = current.ParentID ? provider.EntityByID(current.ParentID) : undefined;
+        }
+        return null;
+    }
+
+    /**
+     * A content result's `RecordID` as the key value the origin lookups query and the origin map is keyed by.
+     * Read as a key segment, exactly as gate 1 reads it, so a prefixed `ID|value` id resolves to its value.
+     * Empty when the segment does not name the entity's key.
+     */
+    private contentRecordKey(entity: EntityInfo, recordID: string): string {
+        // canonicalKeyValues of a single-column key is the NormalizeUUID'd value itself.
+        const key = CompositeKey.FromURLSegment(entity, recordID);
+        return this.canonicalKeyValues(entity, key); // first-pk-ok: the content family is single-column by design (IS-A subtypes share the base key)
+    }
+
+    /**
+     * Resolve each result to its origin record. The returned map is keyed by {@link contentRecordKey}; a
+     * value of `null` means "a content row with no origin" (it passes); a missing key means a link in the
+     * chain could not be read as this user (it is dropped).
+     *
+     * Failures are scoped to the rows that depended on the failed hop. Every row depends on the chunk
+     * and item hops, so a failed lookup there throws and the caller drops the group. Only split children
+     * depend on the root hop, and only document-bearing items on the Entity Record Document hop, so a
+     * failure there leaves just those rows unresolved and lets the rest through on their own merits.
+     */
+    private async resolveContentOrigins(
+        entity: EntityInfo,
+        level: ContentFamilyLevel,
+        results: SearchResultItem[],
+        contextUser: UserInfo
+    ): Promise<Map<string, ContentOriginRef | null>> {
+        const recordIDs = Array.from(new Set(results.map(r => this.contentRecordKey(entity, r.RecordID)))).filter(id => id !== '');
+        const itemOfRecord = level === 'chunk'
+            ? await this.lookupChunkItems(entity, recordIDs, contextUser)
+            : new Map(recordIDs.map(id => [id, id]));
+        const itemIDs = Array.from(new Set(itemOfRecord.values()));
+        const erdOfItem = await this.lookupItemOrigins(itemIDs, contextUser);
+        const erdIDs = Array.from(new Set(Array.from(erdOfItem.values()).filter((id): id is string => id !== null)));
+        const originOfErd = await this.lookupEntityRecordDocuments(erdIDs, contextUser);
+
+        const origins = new Map<string, ContentOriginRef | null>();
+        for (const id of recordIDs) {
+            const itemID = itemOfRecord.get(id);
+            if (itemID === undefined) continue;             // the chunk is not a row the user can read
+            const erdID = erdOfItem.get(itemID);
+            if (erdID === undefined) continue;              // the item (or its root) is not a row the user can read
+            if (erdID === null) { origins.set(id, null); continue; } // external content: no origin
+            const origin = originOfErd.get(erdID);
+            if (origin) origins.set(id, origin);            // else: the document is not readable → dropped
+        }
+        return origins;
+    }
+
+    /**
+     * chunk id → owning Content Item id, read through the chunk entity's own view as the user. Every
+     * chunk result depends on this hop, so a failed lookup throws and the group is dropped.
+     */
+    private async lookupChunkItems(entity: EntityInfo, chunkIDs: string[], contextUser: UserInfo): Promise<Map<string, string>> {
+        const pkName = entity.FirstPrimaryKey.Name; // first-pk-ok: IS-A family shares the parent's single-column key
+        const rows = await this.runLookup<Record<string, unknown>>(entity.Name, [pkName, 'ContentItemID'], pkName, chunkIDs, contextUser);
+        if (!rows) throw new Error(`lookup of "${entity.Name}" failed; every result depends on it`);
+        const map = new Map<string, string>();
+        for (const row of rows) {
+            const itemID = row['ContentItemID'];
+            if (typeof row[pkName] === 'string' && typeof itemID === 'string') {
+                map.set(NormalizeUUID(row[pkName]), NormalizeUUID(itemID));
+            }
+        }
+        return map;
+    }
+
+    /**
+     * Content Item id → its Entity Record Document id, `null` when it has none.
+     *
+     * Always read through the base `MJ: Content Items`, whatever entity the result was labelled with:
+     * `RootParentID` is a view-computed column, and an IS-A subtype's view projects only its parent's
+     * base columns, so reading a subtype would silently lose the root link and let a split child
+     * through as "no origin". The key is shared across the family, so the base view holds every row.
+     *
+     * A split child is judged by its own document first and by its root's only when it has none — one more
+     * hop, taken once. A failed root lookup leaves only those children unresolved (dropped); a failed item
+     * lookup throws, since every row depends on it.
+     */
+    private async lookupItemOrigins(itemIDs: string[], contextUser: UserInfo): Promise<Map<string, string | null>> {
+        const fields = ['ID', 'ParentID', 'RootParentID', 'EntityRecordDocumentID'];
+        const rows = await this.runLookup<ContentItemRow>('MJ: Content Items', fields, 'ID', itemIDs, contextUser);
+        if (!rows) throw new Error('lookup of "MJ: Content Items" failed; every result depends on it');
+
+        const map = new Map<string, string | null>();
+        const rootOfChild = this.classifyItemRows(rows, map);
+        if (rootOfChild.size === 0) return map;
+
+        const roots = Array.from(new Set(rootOfChild.values()));
+        const rootRows = (await this.runLookup<ContentItemRow>('MJ: Content Items', fields, 'ID', roots, contextUser)) ?? [];
+        const docOfRoot = new Map(rootRows.map(r => [NormalizeUUID(r.ID), r.EntityRecordDocumentID ? NormalizeUUID(r.EntityRecordDocumentID) : null]));
+        for (const [child, root] of rootOfChild) {
+            const doc = docOfRoot.get(root);
+            if (doc !== undefined) map.set(child, doc); // an unreadable root leaves the child unresolved → dropped
+        }
+        return map;
+    }
+
+    /**
+     * Sort item rows: an item with its own document, or a root (no `ParentID`) with none, goes straight into
+     * `map`; a split child with no document of its own is returned as child → root, to be judged by its root.
+     * The view gives a root its own id as `RootParentID`, so a root is never re-read. A child whose
+     * `RootParentID` is missing or names itself (the view could not walk its `ParentID` chain) goes nowhere:
+     * unresolved, so dropped, rather than passed as "no origin".
+     */
+    private classifyItemRows(rows: ContentItemRow[], map: Map<string, string | null>): Map<string, string> {
+        const rootOfChild = new Map<string, string>();
+        for (const row of rows) {
+            const id = NormalizeUUID(row.ID);
+            const root = row.RootParentID ? NormalizeUUID(row.RootParentID) : null;
+            if (row.EntityRecordDocumentID) map.set(id, NormalizeUUID(row.EntityRecordDocumentID));
+            else if (!row.ParentID) map.set(id, null);                 // a root with no document: no origin
+            else if (root && root !== id) rootOfChild.set(id, root);   // a split child: judged by its root
+            else LogError(`SearchEngine: content item ${id} has a ParentID but no resolvable root; its hits are dropped`);
+        }
+        return rootOfChild;
+    }
+
+    /**
+     * Entity Record Document id → the (entity, record) it documents, read as the user. Only document-bearing
+     * items depend on this hop, so a failed lookup resolves nothing here and drops those rows alone. A
+     * document that names no entity or record resolves nothing either.
+     */
+    private async lookupEntityRecordDocuments(erdIDs: string[], contextUser: UserInfo): Promise<Map<string, ContentOriginRef>> {
+        const map = new Map<string, ContentOriginRef>();
+        if (erdIDs.length === 0) return map;
+        const fields = ['ID', 'Entity', 'RecordID'];
+        const rows = (await this.runLookup<EntityRecordDocumentRow>('MJ: Entity Record Documents', fields, 'ID', erdIDs, contextUser)) ?? [];
+        for (const row of rows) {
+            if (row.Entity && row.RecordID) map.set(NormalizeUUID(row.ID), { EntityName: row.Entity, RecordID: row.RecordID });
+        }
+        return map;
+    }
+
+    /**
+     * One `Fields` projection of `entityName` where `keyField IN (ids)`, as the user. `null` (logged) when the
+     * RunView fails, or when a row comes back without one of `fields`: field-level security drops a denied
+     * column from the projection silently, and reading the absent column as null would turn "may not see the
+     * link" into "has no origin" and let the hit through. The caller decides how far the failure reaches.
+     * `MaxRows` is the number of ids (each matches at most one row), so `UserViewMaxRows` cannot truncate it.
+     */
+    private async runLookup<T extends object>(
+        entityName: string,
+        fields: string[],
+        keyField: string,
+        ids: string[],
+        contextUser: UserInfo
+    ): Promise<T[] | null> {
+        if (ids.length === 0) return [];
+        const rv = new RunView();
+        const result = await rv.RunView<T>({
+            EntityName: entityName,
+            Fields: fields,
+            ExtraFilter: `${keyField} IN (${ids.map(id => `'${EscapeSQLString(id)}'`).join(',')})`,
+            ResultType: 'simple',
+            MaxRows: ids.length
+        }, contextUser);
+        if (!result.Success) {
+            LogError(`SearchEngine: origin lookup of "${entityName}" failed for user ${contextUser.ID}: ${result.ErrorMessage ?? 'unknown error'}`);
+            return null;
+        }
+        const missing = fields.find(field => result.Results.some(row => !Object.prototype.hasOwnProperty.call(row, field)));
+        if (missing) {
+            LogError(`SearchEngine: origin lookup of "${entityName}" returned no "${missing}" column for user ${contextUser.ID} ` +
+                '(denied by field-level security?); the rows that depend on it are dropped');
+            return null;
+        }
+        return result.Results;
+    }
+
+    /**
+     * Keep the results whose origin record the user may read. Origins are verified through
+     * {@link ReadableOriginRecordIDs}: one batch, one view per origin entity.
+     */
+    private async keepReadableOrigins(
+        entity: EntityInfo,
+        results: SearchResultItem[],
+        origins: Map<string, ContentOriginRef | null>,
+        contextUser: UserInfo
+    ): Promise<SearchResultItem[]> {
+        const idsByEntity = new Map<string, Set<string>>();
+        for (const origin of origins.values()) {
+            if (!origin) continue;
+            const ids = idsByEntity.get(origin.EntityName) ?? new Set<string>();
+            ids.add(origin.RecordID);
+            idsByEntity.set(origin.EntityName, ids);
+        }
+        const readable = await this.ReadableOriginRecordIDs(
+            new Map(Array.from(idsByEntity, ([entityName, ids]) => [entityName, Array.from(ids)])),
+            contextUser
+        );
+
+        return results.filter(r => {
+            const origin = origins.get(this.contentRecordKey(entity, r.RecordID));
+            if (origin === undefined) return false;
+            if (origin === null) return true;
+            return readable.get(origin.EntityName)?.has(origin.RecordID) ?? false;
+        });
+    }
+
+    /**
+     * For each origin entity, those of its record ids the user may read under that entity's own permissions and
+     * row filters — the check {@link verifyOwnershipAndRowFilters} gives a result's own entity. All entities are
+     * asked in one `RunViews` batch. An entity the provider does not know, the user may not read at all, or
+     * whose view fails gets no entry, so only the rows derived from it are dropped.
+     *
+     * Protected so a host extending {@link VerifyOriginRecords} to another derived-content family can reuse it.
+     *
+     * @param idsByEntity origin entity name → record ids, each a bare key value or a key segment
+     * @returns origin entity name → the ids (as given) of the rows the user may read
+     */
+    protected async ReadableOriginRecordIDs(
+        idsByEntity: Map<string, string[]>,
+        contextUser: UserInfo
+    ): Promise<Map<string, Set<string>>> {
+        const readable = new Map<string, Set<string>>();
+        const checks = this.originReadChecks(idsByEntity, contextUser);
+        if (checks.length === 0) return readable;
+        const rv = new RunView();
+        const results = await rv.RunViews<Record<string, unknown>>(checks.map(c => c.Params), contextUser);
+        checks.forEach((check, i) => {
+            const keys = this.readableKeySet(check.Entity, results[i]);
+            if (!keys) return; // logged; only the rows derived from this entity are dropped
+            readable.set(check.EntityName, new Set(check.RecordIDs.filter(id => {
+                const key = this.recordMatchKey(check.Entity, id);
+                return key !== null && keys.has(key);
+            })));
+        });
+        return readable;
+    }
+
+    /** The readability view for each origin entity the user may read at all. The rest get none: not readable. */
+    private originReadChecks(idsByEntity: Map<string, string[]>, contextUser: UserInfo): OriginReadCheck[] {
+        const checks: OriginReadCheck[] = [];
+        for (const [entityName, recordIDs] of idsByEntity) {
+            let entity: EntityInfo | undefined;
+            try {
+                entity = this.ProviderToUse.EntityByName(entityName);
+            } catch {
+                entity = undefined;
+            }
+            if (!entity) {
+                LogError(`SearchEngine: origin entity "${entityName}" is not in metadata; the hits derived from it are dropped`);
+                continue;
+            }
+            if (!entity.GetUserPermisions(contextUser)?.CanRead) continue;
+            const rlsClause = entity.GetEffectiveRowFilterWhereClause(contextUser, EntityPermissionType.Read, '') || undefined;
+            const params = this.readableKeysParams(entity, recordIDs, rlsClause);
+            if (params) checks.push({ EntityName: entityName, Entity: entity, RecordIDs: recordIDs, Params: params });
+        }
+        return checks;
     }
 
     /**
