@@ -39,7 +39,7 @@ interface BridgeIdentityRow {
  *   - its bridge agent identities ('MJ: AI Bridge Agent Identities' for this
  *     agent).
  *
- * Registers against the 'AI Agents' entity, `after-fields` slot. The AI Agent
+ * Registers against the 'MJ: AI Agents' entity, `after-fields` slot. The AI Agent
  * form is a full custom override whose template doesn't emit the `after-fields`
  * marker, so this panel falls through to the container's always-present
  * `after-everything` slot and mounts at the bottom of the form — functional,
@@ -51,7 +51,7 @@ interface BridgeIdentityRow {
     key: 'ai-agents:realtime',
     skipNullKeyWarning: true,
     metadata: {
-        entity: 'AI Agents',
+        entity: 'MJ: AI Agents',
         slot: 'after-fields',
         sortKey: 40,
     },
@@ -69,6 +69,10 @@ export class AgentRealtimePanel extends BaseFormPanel<MJAIAgentEntity> implement
     public LoadError: string | null = null;
     public Pairings: CoAgentPairingRow[] = [];
     public Identities: BridgeIdentityRow[] = [];
+    /** Set when the co-agent pairing query fails; the other sections still show. */
+    public PairingsError: string | null = null;
+    /** Set when the bridge identity query fails; the other sections still show. */
+    public IdentitiesError: string | null = null;
 
     private prettyTypeConfigCache: string | null | undefined = undefined;
 
@@ -107,6 +111,8 @@ export class AgentRealtimePanel extends BaseFormPanel<MJAIAgentEntity> implement
 
         this.Loading = true;
         this.LoadError = null;
+        this.PairingsError = null;
+        this.IdentitiesError = null;
         try {
             const rv = RunView.FromMetadataProvider(this.FormComponent.ProviderToUse);
             const results = await rv.RunViews([
@@ -132,6 +138,8 @@ export class AgentRealtimePanel extends BaseFormPanel<MJAIAgentEntity> implement
                 role: UUIDsEqual(p.CoAgentID, agentId) ? 'as-coagent' : 'as-target',
             }));
             this.Identities = (results[1]?.Success ? results[1].Results : []) as BridgeIdentityRow[];
+            this.PairingsError = results[0]?.Success ? null : this.loadErrorText('co-agent pairings', results[0]?.ErrorMessage);
+            this.IdentitiesError = results[1]?.Success ? null : this.loadErrorText('bridge identities', results[1]?.ErrorMessage);
         } catch (error) {
             console.error('Error loading agent realtime panel data:', error);
             this.LoadError = 'Failed to load realtime setup.';
@@ -139,6 +147,11 @@ export class AgentRealtimePanel extends BaseFormPanel<MJAIAgentEntity> implement
             this.Loading = false;
             this.cdr.markForCheck();
         }
+    }
+
+    /** A short "could not load" line for one section, with the underlying message when there is one. */
+    private loadErrorText(what: string, detail: string | undefined): string {
+        return detail ? `Could not load ${what}: ${detail}` : `Could not load ${what}.`;
     }
 
     public PairingTypeIcon(type: string): string {

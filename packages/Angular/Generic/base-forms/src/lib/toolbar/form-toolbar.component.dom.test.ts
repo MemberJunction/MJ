@@ -4,6 +4,7 @@ import { renderComponentFixture, query, queryAll, capture } from '@memberjunctio
 import { MjFormToolbarComponent } from './form-toolbar.component';
 import { DEFAULT_TOOLBAR_CONFIG } from '../types/toolbar-config';
 import type { BeforeSaveEventArgs, BeforeRefreshEventArgs, BeforeCloneEventArgs } from '../types/form-events';
+import type { FormToolbarItemConfig } from '../types/form-toolbar-item';
 import { RecordCloneService, RecordCloneSlideInComponent } from '@memberjunction/ng-record-clone';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { TOOLBAR_PINS_SETTING_KEY } from './form-toolbar.component';
@@ -809,4 +810,51 @@ describe('MjFormToolbarComponent (DOM)', () => {
       expect(out[0].ItemKey).toBe('custom-action');
     });
   });
+});
+
+
+/**
+ * `right` and `overflow` were both declared in the public placement type and neither was
+ * drawn — an item registered for either rendered nowhere, with nothing to tell the caller
+ * that had happened. A registered item has to appear somewhere.
+ */
+describe('MjFormToolbarComponent (DOM) — items placed beside the section controls', () => {
+    const item = (over: Partial<FormToolbarItemConfig> = {}): FormToolbarItemConfig => ({
+        Key: 'manage-form-panels',
+        Text: 'Panels',
+        Description: 'Turn off or remove the panels added to this form',
+        Icon: 'fa-solid fa-layer-group',
+        Mode: 'both',
+        Placement: 'right',
+        ...over,
+    });
+
+    const rightButtons = (f: Fx) =>
+        (f.componentInstance.ResolvedRightItems as Array<{ Key: string }>).map((i) => i.Key);
+
+    it('draws an item placed on the right', () => {
+        const f = render({ RegisteredItems: [item()] });
+        expect(rightButtons(f)).toEqual(['manage-form-panels']);
+        expect((f.nativeElement as HTMLElement).textContent).toContain('Panels');
+    });
+
+    // The More menu lists only `actions` items, so those items join the right group rather than vanish.
+    it('draws an item placed in the overflow group there too', () => {
+        const f = render({ RegisteredItems: [item({ Placement: 'overflow' })] });
+        expect(rightButtons(f)).toEqual(['manage-form-panels']);
+    });
+
+    it('keeps it out of the record-action group', () => {
+        const f = render({ RegisteredItems: [item()] });
+        const actions = (f.componentInstance.ResolvedActionItems as Array<{ Key: string }>).map((i) => i.Key);
+        expect(actions).not.toContain('manage-form-panels');
+    });
+
+    it('raises the click like any other toolbar item', async () => {
+        const clicked = vi.fn();
+        const f = render({ RegisteredItems: [item({ OnClick: clicked })] });
+        const right = f.componentInstance.ResolvedRightItems[0];
+        await f.componentInstance.OnToolbarItemClick(right, new MouseEvent('click'));
+        expect(clicked).toHaveBeenCalled();
+    });
 });

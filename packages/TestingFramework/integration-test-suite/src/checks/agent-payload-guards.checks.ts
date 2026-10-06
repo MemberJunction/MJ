@@ -26,11 +26,13 @@
  *   IT: Payload Parent  → delegates once to a child, never writes payload itself.
  *   IT: Payload Child   → PayloadDownstreamPaths=["customer.*"], PayloadUpstreamPaths=["analysis.*:add,update"].
  *   IT: Payload Scoped Child → PayloadScope="/analysis".
+ *   IT: Payload Empty-Grant Child → PayloadUpstreamPaths=[] (PG4), same prompt as IT: Payload Child.
  *   IT: Self-Write Restricted → PayloadSelfWritePaths=["notes.*"].
  *
- * SELF-CLEANING: every run tree a check spawns is FK-ordered deep-deleted in Teardown. Checks that
- * must vary un-seeded config (PG4 empty-upstream, PG8 disabled-child, PG9 malformed-downstream)
- * snapshot the field, save, run, and RESTORE in a finally — the AL7 "deactivate-in-fixture" pattern.
+ * SELF-CLEANING: every run tree a check spawns is FK-ordered deep-deleted in Teardown. A check that
+ * must vary un-seeded config (PG9 malformed-downstream) snapshots the field, saves, runs, and
+ * RESTORES in a finally — the AL7 "deactivate-in-fixture" pattern. Prefer a seeded fixture: a
+ * run-time save reaches the server's cached agent only after its debounced engine refresh.
  */
 import { Assert, AssertEqual, IntegrationCheckRegistry, NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 import type { MJAIAgentEntity } from '@memberjunction/core-entities';
@@ -49,6 +51,7 @@ interface PayloadGuardsFixture {
     SelfWrite?: MJAIAgentEntity;
     ChildID: string;
     ScopedChildID: string;
+    EmptyGrantChildID: string;
     /** Every root run ID a check produced, deep-deleted in Teardown. */
     CreatedRootRunIds: string[];
     Skip?: string;
@@ -281,22 +284,24 @@ export const PayloadGuardsChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             const fx = guardOrSkip('PG4'); if (!fx) return;
             const marker = NewMarker('IT-PG4');
-            await withAgentFieldOverride(ctx, 'IT: Payload Child', 'PayloadUpstreamPaths', '[]', async () => {
-                const rootRunId = await RunWithCompliance(
-                    () => runParent(ctx, fx, { __marker: marker }, 'IT: Payload Child'),
-                    async (id) => /analysis\.?result|IT-ANALYSIS-OK/i.test(await childPromptText(ctx, id, fx.ChildID)),
-                    'PG4 empty-grant'
-                );
-                const run = await ReadRun(ctx.Provider, ctx.User, rootRunId);
-                const finalPayload = ParseJsonObject(run?.FinalPayload);
-                Assert(!('analysis' in finalPayload) && !('secret' in finalPayload),
-                    `PG4: empty upstream grant still merged child changes: ${JSON.stringify(finalPayload)}`);
-                // Best-effort: the framework's "no upstream paths" warning should surface in a step's OutputData.
-                const steps = await ReadSteps(ctx.Provider, ctx.User, rootRunId);
-                const warned = steps.some((s) => (s.OutputData ?? '').includes('No upstream paths specified'));
-                if (warned) console.log('      → PG4: "No upstream paths specified" warning surfaced in step OutputData');
-                else console.log('      → PG4: no-merge proven; warning string not surfaced in step OutputData (outcome is the load-bearing proof)');
-            });
+            // Delegates to a child SEEDED with PayloadUpstreamPaths=[] rather than overriding
+            // 'IT: Payload Child' at run time. A run-time save reaches the server's cached agent only
+            // after its debounced engine refresh, so the run merged with the child's seeded
+            // ['analysis.*:add,update'] grant and this check failed on cache timing, not on the guard.
+            const rootRunId = await RunWithCompliance(
+                () => runParent(ctx, fx, { __marker: marker }, 'IT: Payload Empty-Grant Child'),
+                async (id) => /analysis\.?result|IT-ANALYSIS-OK/i.test(await childPromptText(ctx, id, fx.EmptyGrantChildID)),
+                'PG4 empty-grant'
+            );
+            const run = await ReadRun(ctx.Provider, ctx.User, rootRunId);
+            const finalPayload = ParseJsonObject(run?.FinalPayload);
+            Assert(!('analysis' in finalPayload) && !('secret' in finalPayload),
+                `PG4: empty upstream grant still merged child changes: ${JSON.stringify(finalPayload)}`);
+            // Best-effort: the framework's "no upstream paths" warning should surface in a step's OutputData.
+            const steps = await ReadSteps(ctx.Provider, ctx.User, rootRunId);
+            const warned = steps.some((s) => (s.OutputData ?? '').includes('No upstream paths specified'));
+            if (warned) console.log('      → PG4: "No upstream paths specified" warning surfaced in step OutputData');
+            else console.log('      → PG4: no-merge proven; warning string not surfaced in step OutputData (outcome is the load-bearing proof)');
         }
     },
     {
@@ -564,15 +569,16 @@ for (const check of PayloadGuardsChecks) {
 
 IntegrationCheckRegistry.Instance.RegisterLifecycle('agent-payload-guards', {
     Setup: async (ctx: IntegrationCheckContext) => {
-        fixture = { ChildID: '', ScopedChildID: '', CreatedRootRunIds: [] };
+        fixture = { ChildID: '', ScopedChildID: '', EmptyGrantChildID: '', CreatedRootRunIds: [] };
         const client = ResolveClient(ctx.Provider, ctx.User);
-        const [parent, child, scoped, selfWrite] = await Promise.all([
+        const [parent, child, scoped, emptyGrant, selfWrite] = await Promise.all([
             LoadAgentByName(ctx.Provider, ctx.User, 'IT: Payload Parent'),
             LoadAgentByName(ctx.Provider, ctx.User, 'IT: Payload Child'),
             LoadAgentByName(ctx.Provider, ctx.User, 'IT: Payload Scoped Child'),
+            LoadAgentByName(ctx.Provider, ctx.User, 'IT: Payload Empty-Grant Child'),
             LoadAgentByName(ctx.Provider, ctx.User, 'IT: Self-Write Restricted')
         ]);
-        if (!parent || !child || !scoped || !selfWrite) {
+        if (!parent || !child || !scoped || !emptyGrant || !selfWrite) {
             fixture.Skip = 'IT payload roster not seeded — run: npx mj sync push --dir=metadata-optional/integration-test';
             return;
         }
@@ -581,6 +587,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('agent-payload-guards', {
         fixture.SelfWrite = selfWrite;
         fixture.ChildID = child.ID;
         fixture.ScopedChildID = scoped.ID;
+        fixture.EmptyGrantChildID = emptyGrant.ID;
     },
     Teardown: async (ctx: IntegrationCheckContext) => {
         const fx = fixture;
