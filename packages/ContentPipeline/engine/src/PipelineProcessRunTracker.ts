@@ -163,7 +163,7 @@ export class PipelineProcessRunTracker extends GenericProcessRunTracker implemen
 
     /**
      * Records the platform never handed to the processor — Discover's produced items, a splitting
-     * reader's children — get one additional detail row each.
+     * extractor's children — get one additional detail row each.
      *
      * `RecordID` is the child's real key once committed, or its ephemeral URL identity when the run
      * is a test and nothing was committed.

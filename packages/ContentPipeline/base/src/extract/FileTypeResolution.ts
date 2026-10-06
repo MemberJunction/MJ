@@ -80,20 +80,20 @@ export function ResolveFileType(inputs: FileTypeInputs): ResolvedFileType {
     return { FileType: null, Evidence: null };
 }
 
-/** What Extract should do when a file type did not resolve to a reader. */
+/** What Extract should do when a file type did not resolve to a extractor. */
 export type UnresolvedStrategy =
-    /** A recognized non-text signature: go down the multi-modal path, reader or not. */
+    /** A recognized non-text signature: go down the multi-modal path, extractor or not. */
     | 'MultiModal'
-    /** A recognized text format: use its matching reader. */
+    /** A recognized text format: use its matching extractor. */
     | 'TextReader'
     /** Nothing recognized it: attempt a sanity-checked plain-text read. */
     | 'PlainTextFallback';
 
 /**
- * The three-way fallback for a file type with no matching reader.
+ * The three-way fallback for a file type with no matching extractor.
  *
  * A recognized non-text signature proceeds down the multi-modal path **regardless of whether a text
- * reader exists for it** — "this is an image, not a document" is Extract doing its job, not Extract
+ * extractor exists for it** — "this is an image, not a document" is Extract doing its job, not Extract
  * failing.
  */
 export function ClassifyUnresolved(fileType: string | null): UnresolvedStrategy {

@@ -70,7 +70,7 @@ export class WorkingRecord {
 
     /**
      * Records this one produced that the platform never handed to the processor — Discover's found
-     * items, a splitting reader's blocks.
+     * items, a splitting extractor's blocks.
      *
      * The processor commits them (live) or reports them (test), and each gets its own detail row, so
      * a Discover-into-Extract test can show per-item results.

@@ -1,24 +1,24 @@
 import { describe, expect, it } from 'vitest';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseContentReader, ReadResult } from '@memberjunction/content-pipeline-base';
-import { SelectReader } from '../ReaderCascade.js';
+import { BaseContentExtractor, ExtractResult } from '@memberjunction/content-pipeline-base';
+import { SelectReader } from '../ExtractorCascade.js';
 
-function reader(key: string, types: string[]) {
-    @RegisterClass(BaseContentReader, key)
-    class R extends BaseContentReader {
+function extractor(key: string, types: string[]) {
+    @RegisterClass(BaseContentExtractor, key)
+    class R extends BaseContentExtractor {
         public readonly Key = key;
         public readonly SupportedFileTypes = types;
-        public async Read(): Promise<ReadResult> {
+        public async Extract(): Promise<ExtractResult> {
             return { Blocks: [] };
         }
     }
     return R;
 }
 
-reader('cascade-pdf', ['pdf']);
-reader('cascade-sheet', ['xlsx', 'csv']);
-reader('cascade-html', ['html']);
-reader('cascade-any', ['*']);
+extractor('cascade-pdf', ['pdf']);
+extractor('cascade-sheet', ['xlsx', 'csv']);
+extractor('cascade-html', ['html']);
+extractor('cascade-any', ['*']);
 
 describe('SelectReader — rung precedence', () => {
     it('takes an explicit override first', () => {
@@ -78,7 +78,7 @@ describe('SelectReader — non-applicable candidates fall through', () => {
     });
 
     it('skips a higher-priority candidate that does not support the file type', () => {
-        // A source holding both PDFs and spreadsheets escalates its PDFs without that reader
+        // A source holding both PDFs and spreadsheets escalates its PDFs without that extractor
         // having to handle anything else.
         const selected = SelectReader({
             FileType: 'xlsx',

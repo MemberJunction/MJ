@@ -7,7 +7,7 @@
  *
  * Matching is **by URL**, used as an effectively unique identifier for a source-and-location
  * combination even where it is not a literal URL. The one hard requirement this places on a
- * splitting reader is that the identifier it assigns each child must be stable across re-runs. A
+ * splitting extractor is that the identifier it assigns each child must be stable across re-runs. A
  * separate `DisplayLink` field carries where a user should be sent, so reusing `URL` for
  * reconciliation identity does not conflict with display.
  *

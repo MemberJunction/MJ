@@ -46,7 +46,7 @@ describe('ConfidenceScale', () => {
         expect(ConfidenceScale.FileTypeSignature).toBeGreaterThan(ConfidenceScale.FileTypeExtension);
     });
 
-    it('ranks a real reader above the last-resort plain-text read', () => {
+    it('ranks a real extractor above the last-resort plain-text read', () => {
         expect(ConfidenceScale.ReaderText).toBeGreaterThan(ConfidenceScale.FallbackText);
     });
 });
@@ -68,7 +68,7 @@ describe('ResolveConfidence', () => {
     });
 
     it('can invert a precedence rule, which is the point and the risk', () => {
-        // A deployment whose readers find better titles than its listing pages do.
+        // A deployment whose extractors find better titles than its listing pages do.
         const c = ResolveConfidence({ Confidence: { ReaderTitle: 1 } });
         expect(c.ReaderTitle).toBeLessThan(ConfidenceScale.FileTypeExtension + 2);
     });

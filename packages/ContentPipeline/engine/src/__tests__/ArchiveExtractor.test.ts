@@ -1,20 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import { RegisterClass } from '@memberjunction/global';
-import { ReadRequest, WorkingRecord, WorkingRecordIdentity } from '@memberjunction/content-pipeline-base';
-import { ArchiveReader, ArchiveMember } from '../readers/ArchiveReader.js';
-import { PlainTextReader } from '../readers/PlainTextReader.js';
-import { HtmlReader } from '../readers/HtmlReader.js';
+import { ExtractRequest, WorkingRecord, WorkingRecordIdentity } from '@memberjunction/content-pipeline-base';
+import { ArchiveExtractor, ArchiveMember } from '../extractors/ArchiveExtractor.js';
+import { PlainTextExtractor } from '../extractors/PlainTextExtractor.js';
+import { HtmlExtractor } from '../extractors/HtmlExtractor.js';
 
-/** A reader standing in for a real archive format. */
-@RegisterClass(ArchiveReader, 'TestArchive')
-class TestArchiveReader extends ArchiveReader {
+/** A extractor standing in for a real archive format. */
+@RegisterClass(ArchiveExtractor, 'TestArchive')
+class TestArchiveReader extends ArchiveExtractor {
     public Members: ArchiveMember[] = [];
     protected async Unpack(): Promise<ArchiveMember[]> {
         return this.Members;
     }
 }
 
-function request(signal?: AbortSignal): ReadRequest {
+function request(signal?: AbortSignal): ExtractRequest {
     return {
         Content: new Uint8Array(),
         FileType: 'zip',
@@ -29,60 +29,60 @@ function member(path: string, text: string): ArchiveMember {
     return { Path: path, Content: new TextEncoder().encode(text) };
 }
 
-describe('ArchiveReader', () => {
+describe('ArchiveExtractor', () => {
     it('returns one block per member', async () => {
-        const reader = new TestArchiveReader();
-        reader.Members = [member('a.txt', 'alpha'), member('b.txt', 'beta')];
-        const result = await reader.Read(request());
+        const extractor = new TestArchiveReader();
+        extractor.Members = [member('a.txt', 'alpha'), member('b.txt', 'beta')];
+        const result = await extractor.Extract(request());
         expect(result.Blocks).toHaveLength(2);
         expect(result.Blocks.map((b) => b.Text)).toEqual(['alpha', 'beta']);
     });
 
     it("keys each block by the member's path, so identity survives re-extraction", async () => {
-        const reader = new TestArchiveReader();
-        reader.Members = [member('docs/intro.md', '# Intro')];
-        const result = await reader.Read(request());
+        const extractor = new TestArchiveReader();
+        extractor.Members = [member('docs/intro.md', '# Intro')];
+        const result = await extractor.Extract(request());
         expect(result.Blocks[0].Key).toBe('docs/intro.md');
     });
 
     it("names each member's own file type, so the cascade routes it correctly", async () => {
-        const reader = new TestArchiveReader();
-        reader.Members = [member('sheet.xlsx', 'data'), member('page.html', '<p>x</p>')];
-        const result = await reader.Read(request());
+        const extractor = new TestArchiveReader();
+        extractor.Members = [member('sheet.xlsx', 'data'), member('page.html', '<p>x</p>')];
+        const result = await extractor.Extract(request());
         expect(result.Blocks.map((b) => b.FileType)).toEqual(['xlsx', 'html']);
     });
 
     it('derives a readable title from the member path', async () => {
-        const reader = new TestArchiveReader();
-        reader.Members = [member('deep/folder/Quarterly Report.pdf', 'x')];
-        const result = await reader.Read(request());
+        const extractor = new TestArchiveReader();
+        extractor.Members = [member('deep/folder/Quarterly Report.pdf', 'x')];
+        const result = await extractor.Extract(request());
         expect(result.Blocks[0].Title).toBe('Quarterly Report');
     });
 
     it('stops unpacking when the signal fires', async () => {
-        const reader = new TestArchiveReader();
-        reader.Members = [member('a.txt', 'a'), member('b.txt', 'b')];
+        const extractor = new TestArchiveReader();
+        extractor.Members = [member('a.txt', 'a'), member('b.txt', 'b')];
         const controller = new AbortController();
         controller.abort();
-        const result = await reader.Read(request(controller.signal));
+        const result = await extractor.Extract(request(controller.signal));
         expect(result.Blocks).toHaveLength(0);
     });
 
     it('returns nothing rather than guessing when unpacking is not implemented', async () => {
-        const result = await new ArchiveReader().Read(request());
+        const result = await new ArchiveExtractor().Extract(request());
         expect(result.Blocks).toEqual([]);
     });
 
     it('declares the archive formats it handles, and not others', () => {
-        const reader = new ArchiveReader();
-        expect(reader.Supports('zip')).toBe(true);
-        expect(reader.Supports('pdf')).toBe(false);
+        const extractor = new ArchiveExtractor();
+        expect(extractor.Supports('zip')).toBe(true);
+        expect(extractor.Supports('pdf')).toBe(false);
     });
 });
 
-describe('PlainTextReader', () => {
+describe('PlainTextExtractor', () => {
     it('decodes bytes and marks itself a fallback', async () => {
-        const result = await new PlainTextReader().Read({
+        const result = await new PlainTextExtractor().Extract({
             ...request(),
             Content: new TextEncoder().encode('hello'),
         });
@@ -91,12 +91,12 @@ describe('PlainTextReader', () => {
     });
 
     it('returns no block for empty content', async () => {
-        const result = await new PlainTextReader().Read(request());
+        const result = await new PlainTextExtractor().Extract(request());
         expect(result.Blocks).toEqual([]);
     });
 
     it("supports everything, which is only appropriate for the fallback rung", () => {
-        expect(new PlainTextReader().Supports('anything-at-all')).toBe(true);
+        expect(new PlainTextExtractor().Supports('anything-at-all')).toBe(true);
     });
 });
 
@@ -113,34 +113,34 @@ describe('members that are not text', () => {
     it('does NOT decode a PDF member as UTF-8', async () => {
         // The defect: every member was decoded as UTF-8, so a PDF inside a zip became mojibake that
         // looked like a successful extraction and was then chunked, embedded and served.
-        const reader = new TestArchiveReader();
+        const extractor = new TestArchiveReader();
         const pdf = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x37, 0x00, 0x01, 0x02, 0xff, 0xfe]);
-        reader.Members = [{ Path: 'report.pdf', Content: pdf }];
-        const result = await reader.Read(request());
+        extractor.Members = [{ Path: 'report.pdf', Content: pdf }];
+        const result = await extractor.Extract(request());
         expect(result.Blocks[0].Text).toBe('');
         expect(result.Blocks[0].Content).toEqual(pdf);
         expect(result.Blocks[0].FileType).toBe('pdf');
     });
 
     it('still decodes a genuinely textual member', async () => {
-        const reader = new TestArchiveReader();
-        reader.Members = [member('notes.txt', 'plain readable text')];
-        const result = await reader.Read(request());
+        const extractor = new TestArchiveReader();
+        extractor.Members = [member('notes.txt', 'plain readable text')];
+        const result = await extractor.Extract(request());
         expect(result.Blocks[0].Text).toBe('plain readable text');
         expect(result.Blocks[0].Content).toBeUndefined();
     });
 
     it('treats a member with a null byte as binary whatever its extension claims', async () => {
-        const reader = new TestArchiveReader();
-        reader.Members = [{ Path: 'lies.txt', Content: new Uint8Array([0x68, 0x69, 0x00, 0x68, 0x69]) }];
-        const result = await reader.Read(request());
+        const extractor = new TestArchiveReader();
+        extractor.Members = [{ Path: 'lies.txt', Content: new Uint8Array([0x68, 0x69, 0x00, 0x68, 0x69]) }];
+        const result = await extractor.Extract(request());
         expect(result.Blocks[0].Text).toBe('');
         expect(result.Blocks[0].Content).toBeDefined();
     });
 });
 
 
-describe('HtmlReader', () => {
+describe('HtmlExtractor', () => {
     const html = (body: string) => ({
         ...request(),
         Content: new TextEncoder().encode(body),
@@ -148,7 +148,7 @@ describe('HtmlReader', () => {
     });
 
     it('extracts readable text through MJ’s TextExtractor rather than a second implementation', async () => {
-        const result = await new HtmlReader().Read(
+        const result = await new HtmlExtractor().Extract(
             html('<html><head><title>Quarterly</title><style>p{color:red}</style></head><body><p>Revenue rose.</p><script>x()</script></body></html>'),
         );
         expect(result.Blocks).toHaveLength(1);
@@ -158,12 +158,12 @@ describe('HtmlReader', () => {
     });
 
     it('takes the document title when it has one', async () => {
-        const result = await new HtmlReader().Read(html('<html><head><title>Quarterly</title></head><body><p>Body.</p></body></html>'));
+        const result = await new HtmlExtractor().Extract(html('<html><head><title>Quarterly</title></head><body><p>Body.</p></body></html>'));
         expect(result.Blocks[0].Title).toBe('Quarterly');
     });
 
     it('reports no blocks for a document that yields no text, rather than an empty one', async () => {
-        const result = await new HtmlReader().Read(html('<html><body><script>only()</script></body></html>'));
+        const result = await new HtmlExtractor().Extract(html('<html><body><script>only()</script></body></html>'));
         expect(result.Blocks).toHaveLength(0);
     });
 });

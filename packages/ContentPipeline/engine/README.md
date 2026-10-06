@@ -1,7 +1,7 @@
 # @memberjunction/content-pipeline
 
 The generic processor that runs content pipeline stages, the two places the pipeline touches a
-database, and the built-in stages and readers.
+database, and the built-in stages and extractors.
 
 The working record and the stage contract live in
 [`@memberjunction/content-pipeline-base`](../base/README.md); start there if you are writing a stage.
@@ -17,7 +17,7 @@ PipelineProcessor         hydrate → run the configured stage(s) → commit, or
       ↓ Run(workingRecord, context)
 Stages                    Discover · Extract · Tag · Segment · Embed · Delete
       ↓
-Drivers                   readers, segmenters, classifiers, vector writers
+Drivers                   extractors, segmenters, classifiers, vector targets
 ```
 
 A stage never learns whether a filter or a queue supplied its record, and never touches storage.
@@ -30,7 +30,7 @@ miss:
 1. `ServerBootstrap` must declare `@memberjunction/content-pipeline` as a dependency, and its
    `prebuild` regenerates the committed class-registration manifest that imports it.
 2. `ContentPipelineStartup` then registers the `'Pipeline Stage'` work type and forces the stage and
-   reader classes into the bundle at server boot.
+   extractor classes into the bundle at server boot.
 
 Without (1), `@RegisterForStartup` never fires, because nothing imports the module — a Record
 Process with `WorkType = 'Pipeline Stage'` fails with "unsupported WorkType" and every stage name
@@ -76,8 +76,8 @@ Three things they do that are easy to get wrong:
 
 ## Drivers
 
-The framework ships **no** Discover drivers, classifiers, vector writers or durable-copy stores, and
-only a plain-text reader plus an archive reader whose unpacking is left to the deployment. Each is a
+The framework ships **no** Discover drivers, classifiers, vector targets or durable-copy stores, and
+only a plain-text extractor plus an archive extractor whose unpacking is left to the deployment. Each is a
 registered contract resolved by name, so adding one means writing a class and registering it.
 
 `scripts/` holds runnable examples — `e2e.mjs` stands up a real HTTP server and drives

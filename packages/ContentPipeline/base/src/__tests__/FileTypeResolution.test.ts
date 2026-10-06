@@ -59,12 +59,12 @@ describe('ResolveFileType — precedence', () => {
 });
 
 describe('ClassifyUnresolved — the three-way fallback', () => {
-    it('routes a recognized non-text format to multi-modal, reader or not', () => {
+    it('routes a recognized non-text format to multi-modal, extractor or not', () => {
         expect(ClassifyUnresolved('png')).toBe('MultiModal');
         expect(ClassifyUnresolved('mp4')).toBe('MultiModal');
     });
 
-    it('routes a recognized text format to its reader', () => {
+    it('routes a recognized text format to its extractor', () => {
         expect(ClassifyUnresolved('html')).toBe('TextReader');
     });
 

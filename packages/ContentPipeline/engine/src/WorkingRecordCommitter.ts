@@ -83,7 +83,7 @@ export class WorkingRecordCommitter {
 
     /**
      * Commit a record produced by working on another one — Discover's found items, a splitting
-     * reader's blocks.
+     * extractor's blocks.
      *
      * Differs from {@link Commit} only in what it links: a child carries whatever columns tie it to
      * the record that produced it — a discovered item its source, an expanded item its parent item,

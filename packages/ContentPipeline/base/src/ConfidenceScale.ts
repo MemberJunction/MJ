@@ -4,7 +4,7 @@
  *
  * A confidence score is a claim about how much a kind of evidence deserves to be believed. The
  * defaults here encode one reasonable view of that, but a deployment knows things the framework
- * cannot: that its sources declare file types carelessly, or that its HTML reader finds better
+ * cannot: that its sources declare file types carelessly, or that its HTML extractor finds better
  * titles than its listing pages do. Those are legitimate reasons to disagree, and disagreeing should
  * not require a release.
  *
@@ -14,7 +14,7 @@
  * which one did.
  *
  * Only the ORDERING is load-bearing. The absolute numbers are arbitrary, which is also why
- * overriding one in isolation is usually a mistake — raise a reader's text confidence above a
+ * overriding one in isolation is usually a mistake — raise a extractor's text confidence above a
  * declaration's and you have changed a precedence rule, not a dial.
  *
  * @module @memberjunction/content-pipeline-base
@@ -23,7 +23,7 @@
 /**
  * The default scale, ordered by how much the evidence deserves to be believed.
  *
- * What matters is that a reader that parsed the document beats a listing page that guessed, and that
+ * What matters is that a extractor that parsed the document beats a listing page that guessed, and that
  * a last-resort plain-text read loses to anything that actually understood the format.
  */
 export const ConfidenceScale = {
@@ -39,11 +39,11 @@ export const ConfidenceScale = {
     /** A content type recognised from the document's own structure. */
     ContentTypeStructural: 7,
 
-    /** Text produced by a reader that understands the format. */
+    /** Text produced by a extractor that understands the format. */
     ReaderText: 6,
-    /** A title a reader found in the document's own structure. */
+    /** A title a extractor found in the document's own structure. */
     ReaderTitle: 6,
-    /** Text from the last-resort plain-text read — loses to any real reader that runs later. */
+    /** Text from the last-resort plain-text read — loses to any real extractor that runs later. */
     FallbackText: 2,
 
     /** A chunk's text, a verbatim slice of its parent's. */

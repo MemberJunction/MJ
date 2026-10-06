@@ -1,6 +1,6 @@
 /**
  * @file ContentPipelineStartup.ts
- * Registers the `Pipeline Stage` Record Process work type, and the built-in stages and readers, at
+ * Registers the `Pipeline Stage` Record Process work type, and the built-in stages and extractors, at
  * server boot.
  *
  * Without this, a Record Process with `WorkType = 'Pipeline Stage'` fails with "unsupported
@@ -17,10 +17,10 @@ import { IMetadataProvider, IStartupSink, LogStatusEx, RegisterForStartup, UserI
 import { BaseSingleton } from '@memberjunction/global';
 import { RegisterPipelineWorkType } from './PipelineStageRegistration.js';
 import { LoadContentPipelineStages } from './stages/index.js';
-import { LoadContentPipelineReaders } from './readers/index.js';
+import { LoadContentPipelineReaders } from './extractors/index.js';
 
 @RegisterForStartup({
-    description: 'Content pipeline: Pipeline Stage work type, built-in stages and readers',
+    description: 'Content pipeline: Pipeline Stage work type, built-in stages and extractors',
 })
 export class ContentPipelineStartup extends BaseSingleton<ContentPipelineStartup> implements IStartupSink {
     public static get Instance(): ContentPipelineStartup {

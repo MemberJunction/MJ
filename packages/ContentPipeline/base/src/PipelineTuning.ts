@@ -28,7 +28,7 @@ export interface PipelineTuning {
      */
     MinimumPrintableRatio?: number;
     /**
-     * Maximum characters a reader should return for one block. Unset means no limit.
+     * Maximum characters a extractor should return for one block. Unset means no limit.
      *
      * A guard for a source that occasionally serves something enormous, where the cost lands in
      * tagging and embedding rather than in the read itself.

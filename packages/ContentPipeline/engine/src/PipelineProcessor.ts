@@ -104,7 +104,7 @@ export interface ProgressReporter {
     ReportProgress(key: string, message: string): void;
     /**
      * Record one outcome for a record the platform never handed to the processor — Discover's found
-     * items, a splitting reader's blocks. Each gets its own detail row, which is what lets a
+     * items, a splitting extractor's blocks. Each gets its own detail row, which is what lets a
      * Discover-into-Extract test show per-item results.
      */
     RecordChildOutcome?(parentRecord: RecordRef, childKey: string, result: RecordResult): Promise<void>;

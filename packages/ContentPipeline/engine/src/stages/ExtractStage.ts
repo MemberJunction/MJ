@@ -2,7 +2,7 @@
  * @fileoverview {@link ExtractStage} — turning a located record into text.
  *
  * Runs over Content Item; ready when `ExtractionStatus = 'Pending'`. Fetches, resolves a file type,
- * selects a reader, reads, and proposes what it found — using the confidence mechanism throughout,
+ * selects a extractor, reads, and proposes what it found — using the confidence mechanism throughout,
  * so a better finding wins on merit rather than by running last.
  *
  * Its core computation is a pure operation over a candidate's bytes rather than a database
@@ -43,7 +43,7 @@ import {
 } from '@memberjunction/content-pipeline-base';
 import { ContentSourceConfigurationResolver } from '../ContentSourceConfigurationResolver.js';
 import { ContentFetcher } from '../ContentFetcher.js';
-import { SelectReader, SourceExtractorCandidate } from '../ReaderCascade.js';
+import { SelectReader, SourceExtractorCandidate } from '../ExtractorCascade.js';
 
 /** The registered name. */
 export const EXTRACT_STAGE = 'Extract';
@@ -177,7 +177,7 @@ export class ExtractStage extends BasePipelineStage {
         }
     }
 
-    /** Select a reader, read, and propose what came back. */
+    /** Select a extractor, read, and propose what came back. */
     private async read(
         record: WorkingRecord,
         context: StageContext,
@@ -200,7 +200,7 @@ export class ExtractStage extends BasePipelineStage {
             return this.plainTextFallback(record, content, fileType, context, confidence);
         }
 
-        const result = await selected.Reader.Read({
+        const result = await selected.Extractor.Extract({
             Content: content,
             FileType: fileType,
             URL: url,
@@ -282,12 +282,12 @@ export class ExtractStage extends BasePipelineStage {
         const text = new TextDecoder('utf-8', { fatal: false }).decode(content);
         if (!IsPlausibleText(text, ResolveTuning(context.Configuration).MinimumPrintableRatio)) {
             return Outcome.Fatal(
-                `No reader handles '${fileType || 'unknown'}' and a plain-text read produced unreadable content`,
+                `No extractor handles '${fileType || 'unknown'}' and a plain-text read produced unreadable content`,
             );
         }
         record.Propose('Text', text, confidence.FallbackText, `${EXTRACT_STAGE}.PlainTextFallback`);
         record.SetExtension(EXTRACT_STAGE, 'isFallback', true);
-        return Outcome.Complete(`read as plain text (no reader for '${fileType || 'unknown'}')`);
+        return Outcome.Complete(`read as plain text (no extractor for '${fileType || 'unknown'}')`);
     }
 
     /**
@@ -446,7 +446,7 @@ export class ExtractStage extends BasePipelineStage {
     /**
      * Turn an extra block into a **child** Content Item.
      *
-     * A reader returning several blocks has found an artifact that EXPANDS into other items — a zip
+     * A extractor returning several blocks has found an artifact that EXPANDS into other items — a zip
      * extracting to files, a CSV whose rows become items of their own. Each child is a Content Item
      * in its own right, linked to the one it came out of by `ParentID`, which nests to arbitrary
      * depth so a zip inside a zip needs no special case.
@@ -490,14 +490,14 @@ export class ExtractStage extends BasePipelineStage {
             child.Propose('FileType', block.FileType, confidence.FileTypeDeclared, `${EXTRACT_STAGE}.Split`);
         }
         if (block.ExtractorKeyOverride) {
-            // A reader that knows what one of its own children is does not make the cascade work it
+            // A extractor that knows what one of its own children is does not make the cascade work it
             // out again.
             child.SetExtension(EXTRACT_STAGE, 'keyOverride', block.ExtractorKeyOverride);
         }
         return child;
     }
 
-    /** The source's settings, and the reader-cascade rungs that come from configuration. */
+    /** The source's settings, and the extractor-cascade rungs that come from configuration. */
     private async resolveSource(record: WorkingRecord, context: StageContext): Promise<ResolvedSource> {
         const contentSourceID = record.GetExtension<string>('Pipeline', 'contentSourceID') ?? '';
         const resolver = new ContentSourceConfigurationResolver(context.Provider, context.ContextUser);

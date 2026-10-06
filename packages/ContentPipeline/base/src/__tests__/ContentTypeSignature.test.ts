@@ -70,7 +70,7 @@ describe('column signatures', () => {
     });
 
     it('lets a reference spreadsheet fall through on its own', async () => {
-        // Its columns match nothing, so it reaches the generic reader without a special case.
+        // Its columns match nothing, so it reaches the generic extractor without a special case.
         const matches = await CheckContentTypeSignatures(probe('Lookup,Value\nA,1', 'csv'));
         expect(matches).toEqual([]);
     });

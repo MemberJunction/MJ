@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { RegisterClass } from '@memberjunction/global';
 import {
-    BaseContentReader,
-    ReadRequest,
-    ReadResult,
+    BaseContentExtractor,
+    ExtractRequest,
+    ExtractResult,
     StageContext,
     WorkingRecord,
     WorkingRecordIdentity,
@@ -12,13 +12,13 @@ import { ExtractStage } from '../stages/ExtractStage.js';
 import { ContentFetcher } from '../ContentFetcher.js';
 import { ContentSourceConfigurationResolver } from '../ContentSourceConfigurationResolver.js';
 
-let blocks: ReadResult = { Blocks: [{ Text: 'read by the html reader', Title: 'Document title' }] };
+let blocks: ExtractResult = { Blocks: [{ Text: 'read by the html extractor', Title: 'Document title' }] };
 
-@RegisterClass(BaseContentReader, 'extract-html')
-class HtmlTestReader extends BaseContentReader {
+@RegisterClass(BaseContentExtractor, 'extract-html')
+class HtmlTestReader extends BaseContentExtractor {
     public readonly Key = 'extract-html';
     public readonly SupportedFileTypes = ['html'];
-    public async Read(_request: ReadRequest): Promise<ReadResult> {
+    public async Extract(_request: ExtractRequest): Promise<ExtractResult> {
         return blocks;
     }
 }
@@ -52,7 +52,7 @@ function stubFetch(text: string): void {
 
 beforeEach(() => {
     vi.restoreAllMocks();
-    blocks = { Blocks: [{ Text: 'read by the html reader', Title: 'Document title' }] };
+    blocks = { Blocks: [{ Text: 'read by the html extractor', Title: 'Document title' }] };
     vi.spyOn(ContentSourceConfigurationResolver.prototype, 'Resolve').mockResolvedValue({
         ContentSourceID: 'SRC-1',
         URL: 'https://x.test',
@@ -66,15 +66,15 @@ beforeEach(() => {
 });
 
 describe('ExtractStage — reading', () => {
-    it('reads with the content-type default reader and proposes the text', async () => {
+    it('reads with the content-type default extractor and proposes the text', async () => {
         stubFetch('<html>body</html>');
         const record = itemAt('https://x.test/page.html');
         const outcome = await new ExtractStage().Run(record, contextWith({ ContentTypeExtractorKey: 'extract-html' }));
         expect(outcome.Status).toBe('Complete');
-        expect(record.Get('Text')).toBe('read by the html reader');
+        expect(record.Get('Text')).toBe('read by the html extractor');
     });
 
-    it('proposes a title the reader found in the document structure', async () => {
+    it('proposes a title the extractor found in the document structure', async () => {
         stubFetch('<html>body</html>');
         const record = itemAt('https://x.test/page.html');
         await new ExtractStage().Run(record, contextWith({ ContentTypeExtractorKey: 'extract-html' }));
@@ -96,14 +96,14 @@ describe('ExtractStage — reading', () => {
         expect(record.Get('FileType')).toBe('html');
     });
 
-    it('records which reader actually ran', async () => {
+    it('records which extractor actually ran', async () => {
         stubFetch('<html>body</html>');
         const record = itemAt('https://x.test/page.html');
         await new ExtractStage().Run(record, contextWith({ ContentTypeExtractorKey: 'extract-html' }));
         expect(record.GetExtension<string>('Extract', 'extractorKey')).toBe('extract-html');
     });
 
-    it('skips when the reader finds no content', async () => {
+    it('skips when the extractor finds no content', async () => {
         stubFetch('<html></html>');
         blocks = { Blocks: [] };
         const record = itemAt('https://x.test/page.html');
@@ -115,7 +115,7 @@ describe('ExtractStage — reading', () => {
 describe('ExtractStage — an artifact that expands into other items', () => {
     it('makes EVERY block a child and leaves the container intact', async () => {
         // Applying the first block to the container would lose the container and mislabel one of
-        // its members as the whole thing — the failure Betty's zip reader guards against.
+        // its members as the whole thing — the failure Betty's zip extractor guards against.
         stubFetch('<html>body</html>');
         blocks = { Blocks: [{ Text: 'first', Key: 'a' }, { Text: 'second', Key: 'b' }, { Text: 'third', Key: 'c' }] };
         const record = itemAt('https://x.test/bundle.html');
@@ -148,7 +148,7 @@ describe('ExtractStage — an artifact that expands into other items', () => {
         expect(record.Children[0].Get('Date')).toBe(authored);
     });
 
-    it("carries a reader's routing instruction onto the child", async () => {
+    it("carries a extractor's routing instruction onto the child", async () => {
         stubFetch('<html>body</html>');
         blocks = { Blocks: [{ Text: 'first', Key: 'a' }, { Text: 'sheet', Key: 'b', ExtractorKeyOverride: 'extract-html' }] };
         const record = itemAt('https://x.test/page.html');
@@ -158,7 +158,7 @@ describe('ExtractStage — an artifact that expands into other items', () => {
 });
 
 describe('ExtractStage — the plain-text fallback is sanity-checked', () => {
-    it('accepts readable text when no reader handles the format', async () => {
+    it('accepts readable text when no extractor handles the format', async () => {
         stubFetch('Plain readable content.');
         const record = itemAt('https://x.test/file.bizarre');
         const outcome = await new ExtractStage().Run(record, contextWith());
@@ -175,7 +175,7 @@ describe('ExtractStage — the plain-text fallback is sanity-checked', () => {
         expect(record.Get('Text')).toBeNull();
     });
 
-    it('marks fallback text with low confidence, so a real reader later wins', async () => {
+    it('marks fallback text with low confidence, so a real extractor later wins', async () => {
         stubFetch('Plain readable content.');
         const record = itemAt('https://x.test/file.bizarre');
         await new ExtractStage().Run(record, contextWith());

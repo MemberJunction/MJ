@@ -167,7 +167,7 @@ export async function CheckContentTypeSignatures(probe: SignatureProbe): Promise
  *
  * Subclass and declare the columns; no per-content-type parsing code. A linked reference
  * spreadsheet inside a structured document resolves cleanly this way — its columns do not match, so
- * it falls through to the generic reader on its own.
+ * it falls through to the generic extractor on its own.
  */
 export abstract class BaseColumnSignature extends BaseContentTypeSignature {
     /** The content type this recognizes. */
