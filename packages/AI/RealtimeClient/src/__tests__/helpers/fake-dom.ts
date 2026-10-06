@@ -11,6 +11,16 @@ export class FakeVideoElement {
     public playsInline = false;
     public autoplay = false;
     public srcObject: MediaStream | null = null;
+    public src = '';
+    public disableRemotePlayback = false;
+    /** `HTMLMediaElement.readyState`; 4 (enough data) unless a test says the element is waiting. */
+    public readyState = 4;
+    public ended = false;
+    /** How many times `currentTime` was set (a seek). */
+    public Seeks = 0;
+    private time = 0;
+    /** How many times `load()` reset the element. */
+    public Loads = 0;
     /** The current frame's size. Zero until the test says the stream has produced a frame. */
     public videoWidth = 0;
     public videoHeight = 0;
@@ -23,6 +33,29 @@ export class FakeVideoElement {
 
     public pause(): void {
         this.Paused = true;
+    }
+
+    public get paused(): boolean {
+        return this.Paused;
+    }
+
+    public removeAttribute(name: string): void {
+        if (name === 'src') {
+            this.src = '';
+        }
+    }
+
+    public load(): void {
+        this.Loads++;
+    }
+
+    public get currentTime(): number {
+        return this.time;
+    }
+
+    public set currentTime(value: number) {
+        this.time = value;
+        this.Seeks++;
     }
 
     /** Simulates the stream producing frames of the given size. */

@@ -19,5 +19,6 @@ export * from './model';
 export * from './channelVideoSource';
 export * from './displayCapture';
 export * from './videoPacing';
+export * from './videoPlayout';
 export * from './videoSourceArbiter';
 export * from '../audio/audioMeter';
