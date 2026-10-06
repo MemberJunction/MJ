@@ -19354,6 +19354,220 @@ export const MJEntityFieldSchema = z.object({
 export type MJEntityFieldEntityType = z.infer<typeof MJEntityFieldSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Entity Form Contributions
+ */
+export const MJEntityFormContributionSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    EntityID: z.string().describe(`
+        * * Field Name: EntityID
+        * * Display Name: Parent Entity
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: Parent form entity the panel mounts on.`),
+    ComponentID: z.string().describe(`
+        * * Field Name: ComponentID
+        * * Display Name: Component
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Components (vwComponents.ID)
+        * * Description: MJ: Components row (Type=Widget) whose Specification declares componentRole=form-panel.`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)`),
+    Slot: z.union([z.literal('after-everything'), z.literal('after-fields'), z.literal('after-related'), z.literal('before-fields'), z.literal('top-area')]).describe(`
+        * * Field Name: Slot
+        * * Display Name: Slot
+        * * SQL Data Type: nvarchar(30)
+        * * Default Value: after-fields
+    * * Value List Type: List
+    * * Possible Values 
+    *   * after-everything
+    *   * after-fields
+    *   * after-related
+    *   * before-fields
+    *   * top-area
+        * * Description: Slot inside the generated form: top-area, before-fields, after-fields, after-related, after-everything.`),
+    SortKey: z.number().describe(`
+        * * Field Name: SortKey
+        * * Display Name: Sort Key
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Order among panels drawn in the same place; higher renders earlier.`),
+    ContributionKey: z.string().nullable().describe(`
+        * * Field Name: ContributionKey
+        * * Display Name: Contribution Key
+        * * SQL Data Type: nvarchar(256)
+        * * Description: Last-wins identity shared with compiled registrations and MJ: Form Chrome Rules. Null derives related:<entity>:<join> for related claims, otherwise the row never collapses.`),
+    RelatedEntityID: z.string().nullable().describe(`
+        * * Field Name: RelatedEntityID
+        * * Display Name: Related Entity
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: When set, this panel replaces the related-entity grid for that relationship on the parent form.`),
+    RelatedJoinField: z.string().nullable().describe(`
+        * * Field Name: RelatedJoinField
+        * * Display Name: Related Join Field
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Disambiguates two FKs to the same related entity (BillToPersonID vs ShipToPersonID).`),
+    ReplacesSectionKey: z.string().nullable().describe(`
+        * * Field Name: ReplacesSectionKey
+        * * Display Name: Replaces Section Key
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Section key of one baked block, or rail key of one tab, this contribution stands in for. The panel draws in its place. Mutually exclusive with every other claim.`),
+    ReplacesSectionKeys: z.string().nullable().describe(`
+        * * Field Name: ReplacesSectionKeys
+        * * Display Name: Replaces Section Keys
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of section keys this contribution stands in for, all within one tab. The panel draws in the place of the first of them and the others are not drawn. Mutually exclusive with every other claim.`),
+    ReplacesFieldNames: z.string().nullable().describe(`
+        * * Field Name: ReplacesFieldNames
+        * * Display Name: Replaces Field Names
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of field names this contribution stands in for, all within one section. The panel draws inside that section, at SectionPosition, and the named fields are not drawn. Mutually exclusive with every other claim.`),
+    InSectionKey: z.string().nullable().describe(`
+        * * Field Name: InSectionKey
+        * * Display Name: In Section Key
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Section key of a section this contribution draws inside, replacing nothing. SectionPosition says whether it draws at the start or the end. Mutually exclusive with every other claim.`),
+    SectionPosition: z.union([z.literal('end'), z.literal('start')]).nullable().describe(`
+        * * Field Name: SectionPosition
+        * * Display Name: Section Position
+        * * SQL Data Type: nvarchar(10)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * end
+    *   * start
+        * * Description: Where inside its section the panel draws: start or end. Applies to InSectionKey and to a ReplacesFieldNames claim; null means start.`),
+    Inclusion: z.union([z.literal('More'), z.literal('None'), z.literal('Primary')]).nullable().describe(`
+        * * Field Name: Inclusion
+        * * Display Name: Inclusion
+        * * SQL Data Type: nvarchar(10)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * More
+    *   * None
+    *   * Primary
+        * * Description: L1 chrome inclusion: Primary (own rail item), More (folder), None (hidden). Null = default rail behavior.`),
+    ChromeGroup: z.union([z.literal('details'), z.literal('more')]).nullable().describe(`
+        * * Field Name: ChromeGroup
+        * * Display Name: Chrome Group
+        * * SQL Data Type: nvarchar(10)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * details
+    *   * more
+        * * Description: Pin to the details or more chrome bucket instead of an own rail item.`),
+    Presentation: z.union([z.literal('bare'), z.literal('panel')]).describe(`
+        * * Field Name: Presentation
+        * * Display Name: Presentation
+        * * SQL Data Type: nvarchar(10)
+        * * Default Value: panel
+    * * Value List Type: List
+    * * Possible Values 
+    *   * bare
+    *   * panel
+        * * Description: panel = wrapped in a collapsible section with header; bare = hero strip with no chrome and no rail item.`),
+    Title: z.string().nullable().describe(`
+        * * Field Name: Title
+        * * Display Name: Title
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Section header and rail label. Null falls back to Name.`),
+    Icon: z.string().nullable().describe(`
+        * * Field Name: Icon
+        * * Display Name: Icon
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Font Awesome class for the section header and rail item.`),
+    Scope: z.union([z.literal('Global'), z.literal('Role'), z.literal('User')]).describe(`
+        * * Field Name: Scope
+        * * Display Name: Scope
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: User
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Global
+    *   * Role
+    *   * User
+        * * Description: Who sees the contribution: User (UserID), Role (RoleID) or Global.`),
+    UserID: z.string().nullable().describe(`
+        * * Field Name: UserID
+        * * Display Name: User
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
+    RoleID: z.string().nullable().describe(`
+        * * Field Name: RoleID
+        * * Display Name: Role
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)`),
+    Precedence: z.number().describe(`
+        * * Field Name: Precedence
+        * * Display Name: Precedence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Last-wins precedence against compiled registrations sharing ContributionKey. Ties go to the compiled registration; a row wins only when strictly higher.`),
+    Status: z.union([z.literal('Active'), z.literal('Inactive'), z.literal('Pending')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+    *   * Pending
+        * * Description: Active rows render. Pending rows are drafts awaiting activation. Inactive rows are history.`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON passed to the component as contribution.configuration so one component can serve several rows.`),
+    Notes: z.string().nullable().describe(`
+        * * Field Name: Notes
+        * * Display Name: Notes
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Free-form authoring notes; agents append an iteration log here.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Entity: z.string().describe(`
+        * * Field Name: Entity
+        * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)`),
+    Component: z.string().describe(`
+        * * Field Name: Component
+        * * Display Name: Component
+        * * SQL Data Type: nvarchar(500)`),
+    RelatedEntity: z.string().nullable().describe(`
+        * * Field Name: RelatedEntity
+        * * Display Name: Related Entity
+        * * SQL Data Type: nvarchar(255)`),
+    User: z.string().nullable().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)`),
+    Role: z.string().nullable().describe(`
+        * * Field Name: Role
+        * * Display Name: Role
+        * * SQL Data Type: nvarchar(50)`),
+});
+
+export type MJEntityFormContributionEntityType = z.infer<typeof MJEntityFormContributionSchema>;
+
+/**
  * zod schema definition for the entity MJ: Entity Form Overrides
  */
 export const MJEntityFormOverrideSchema = z.object({
@@ -86566,6 +86780,20 @@ export interface MJEntityEntity_IEntityFormConfiguration {
      * `inclusion: 'Primary'` is never capped by this number.
      */
     PrimaryRelatedBudget?: number;
+
+    /**
+     * Default empty-section behaviour for this form's related sections when a
+     * relationship does not set `UI.whenEmpty` itself.
+     * `'show'` | `'hide'` | `'more'` — see `IEntityRelationshipUIConfiguration.whenEmpty`.
+     * Omit to treat as `'show'`.
+     */
+    RelatedWhenEmpty?: 'show' | 'hide' | 'more';
+
+    /**
+     * Default for prefetching related-section row counts (badges) when a
+     * relationship does not set `UI.showCount` itself. Omit to treat as `true`.
+     */
+    ShowRelatedCounts?: boolean;
 }
 
 /**
@@ -91703,6 +91931,756 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
 
 
 /**
+ * MJ: Entity Form Contributions - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: EntityFormContribution
+ * * Base View: vwEntityFormContributions
+ * * @description Metadata-registered form contribution: mounts a form-panel Component on a parent entity's form at a slot or inside a section, optionally standing in for baked sections, a rail tab, a set of fields or a related grid. Peer of compiled BaseFormPanel registrations.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Entity Form Contributions')
+export class MJEntityFormContributionEntity extends BaseEntity<MJEntityFormContributionEntityType> {
+    /**
+    * Loads the MJ: Entity Form Contributions record from the database
+    * @param ID: string - primary key value to load the MJ: Entity Form Contributions record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJEntityFormContributionEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Entity Form Contributions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * ReplacesFieldNames: If Replaces Field Names is provided, it must be a valid, non-empty JSON array of field names.
+    * * ReplacesSectionKeys: If Replaces Section Keys is provided, it must be a valid JSON array containing at least one element. It cannot be empty or just an empty array structure.
+    * * Table-Level: Only one of the following fields can be set at a time: Replaces Section Key, Related Entity ID, Replaces Field Names, Replaces Section Keys, or In Section Key. This prevents conflicting configuration definitions.
+    * * Table-Level: If the presentation style is set to 'bare', then both Inclusion and ChromeGroup must be left empty.
+    * * Table-Level: If a Related Join Field is specified, a Related Entity must also be provided to ensure the join field has a valid target entity.
+    * * Table-Level: Ensures that the assigned User or Role matches the selected Scope. A 'User' scope requires a User ID and no Role ID, a 'Role' scope requires a Role ID and no User ID, and a 'Global' scope requires both User ID and Role ID to be empty.
+    * * Table-Level: If a Section Position is specified, either the Replaces Field Names or the In Section Key must also be provided to define the context of the position.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateReplacesFieldNamesIsNonEmptyJsonArray(result);
+        this.ValidateReplacesSectionKeysIsNonEmptyJsonArray(result);
+        this.ValidateMutuallyExclusiveReplacementAndRelationshipFields(result);
+        this.ValidatePresentationBareInclusionAndChromeGroup(result);
+        this.ValidateRelatedJoinFieldRequiresRelatedEntityID(result);
+        this.ValidateScopeAssociations(result);
+        this.ValidateSectionPositionDependencies(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * If Replaces Field Names is provided, it must be a valid, non-empty JSON array of field names.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateReplacesFieldNamesIsNonEmptyJsonArray(result: ValidationResult) {
+        if (this.ReplacesFieldNames != null) {
+            let isValid = false;
+            try {
+                const trimmed = this.ReplacesFieldNames.trim();
+                if (trimmed.startsWith("[")) {
+                    const parsed = JSON.parse(trimmed);
+                    if (Array.isArray(parsed) && parsed.length > 0) {
+                        isValid = true;
+                    }
+                }
+            } catch (e) {
+                // JSON parsing failed
+            }
+    
+            if (!isValid) {
+                result.Errors.push(new ValidationErrorInfo(
+                    "ReplacesFieldNames",
+                    "Replaces Field Names must be a valid, non-empty JSON array (e.g., [\"FieldName\"]).",
+                    this.ReplacesFieldNames,
+                    ValidationErrorType.Failure
+                ));
+            }
+        }
+    }
+
+    /**
+    * If Replaces Section Keys is provided, it must be a valid JSON array containing at least one element. It cannot be empty or just an empty array structure.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateReplacesSectionKeysIsNonEmptyJsonArray(result: ValidationResult) {
+    	if (this.ReplacesSectionKeys != null) {
+    		let isValid = false;
+    		let isEmpty = true;
+    		try {
+    			const value = this.ReplacesSectionKeys.trim();
+    			if (value.startsWith("[")) {
+    				const parsed = JSON.parse(value);
+    				if (Array.isArray(parsed)) {
+    					isValid = true;
+    					if (parsed.length > 0) {
+    						isEmpty = false;
+    					}
+    				}
+    			}
+    		} catch (e) {
+    			isValid = false;
+    		}
+    
+    		if (!isValid) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"ReplacesSectionKeys",
+    				"Replaces Section Keys must be a valid JSON array.",
+    				this.ReplacesSectionKeys,
+    				ValidationErrorType.Failure
+    			));
+    		} else if (isEmpty) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"ReplacesSectionKeys",
+    				"Replaces Section Keys array cannot be empty.",
+    				this.ReplacesSectionKeys,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
+    }
+
+    /**
+    * Only one of the following fields can be set at a time: Replaces Section Key, Related Entity ID, Replaces Field Names, Replaces Section Keys, or In Section Key. This prevents conflicting configuration definitions.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateMutuallyExclusiveReplacementAndRelationshipFields(result: ValidationResult) {
+    	let count = 0;
+    	if (this.ReplacesSectionKey != null) {
+    		count++;
+    	}
+    	if (this.RelatedEntityID != null) {
+    		count++;
+    	}
+    	if (this.ReplacesFieldNames != null) {
+    		count++;
+    	}
+    	if (this.ReplacesSectionKeys != null) {
+    		count++;
+    	}
+    	if (this.InSectionKey != null) {
+    		count++;
+    	}
+    
+    	if (count > 1) {
+    		const message = "Only one of ReplacesSectionKey, RelatedEntityID, ReplacesFieldNames, ReplacesSectionKeys, or InSectionKey may be specified.";
+    		if (this.ReplacesSectionKey != null) {
+    			result.Errors.push(new ValidationErrorInfo("ReplacesSectionKey", message, this.ReplacesSectionKey, ValidationErrorType.Failure));
+    		}
+    		if (this.RelatedEntityID != null) {
+    			result.Errors.push(new ValidationErrorInfo("RelatedEntityID", message, this.RelatedEntityID, ValidationErrorType.Failure));
+    		}
+    		if (this.ReplacesFieldNames != null) {
+    			result.Errors.push(new ValidationErrorInfo("ReplacesFieldNames", message, this.ReplacesFieldNames, ValidationErrorType.Failure));
+    		}
+    		if (this.ReplacesSectionKeys != null) {
+    			result.Errors.push(new ValidationErrorInfo("ReplacesSectionKeys", message, this.ReplacesSectionKeys, ValidationErrorType.Failure));
+    		}
+    		if (this.InSectionKey != null) {
+    			result.Errors.push(new ValidationErrorInfo("InSectionKey", message, this.InSectionKey, ValidationErrorType.Failure));
+    		}
+    	}
+    }
+
+    /**
+    * If the presentation style is set to 'bare', then both Inclusion and ChromeGroup must be left empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidatePresentationBareInclusionAndChromeGroup(result: ValidationResult) {
+    	if (this.Presentation === "bare") {
+    		if (this.Inclusion != null || this.ChromeGroup != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"Presentation",
+    				"When Presentation is set to 'bare', both Inclusion and ChromeGroup must be empty.",
+    				this.Presentation,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
+    }
+
+    /**
+    * If a Related Join Field is specified, a Related Entity must also be provided to ensure the join field has a valid target entity.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateRelatedJoinFieldRequiresRelatedEntityID(result: ValidationResult) {
+    	if (this.RelatedJoinField != null && this.RelatedJoinField.trim() !== "" && this.RelatedEntityID == null) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"RelatedEntityID",
+    			"A Related Entity must be specified when a Related Join Field is provided.",
+    			this.RelatedEntityID,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Ensures that the assigned User or Role matches the selected Scope. A 'User' scope requires a User ID and no Role ID, a 'Role' scope requires a Role ID and no User ID, and a 'Global' scope requires both User ID and Role ID to be empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateScopeAssociations(result: ValidationResult) {
+    	if (this.Scope === 'User') {
+    		if (this.UserID == null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"UserID",
+    				"A User must be specified when the Scope is set to 'User'.",
+    				this.UserID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    		if (this.RoleID != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"RoleID",
+    				"Role cannot be specified when the Scope is set to 'User'.",
+    				this.RoleID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	} else if (this.Scope === 'Role') {
+    		if (this.RoleID == null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"RoleID",
+    				"A Role must be specified when the Scope is set to 'Role'.",
+    				this.RoleID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    		if (this.UserID != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"UserID",
+    				"User cannot be specified when the Scope is set to 'Role'.",
+    				this.UserID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	} else if (this.Scope === 'Global') {
+    		if (this.UserID != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"UserID",
+    				"User cannot be specified when the Scope is set to 'Global'.",
+    				this.UserID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    		if (this.RoleID != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"RoleID",
+    				"Role cannot be specified when the Scope is set to 'Global'.",
+    				this.RoleID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
+    }
+
+    /**
+    * If a Section Position is specified, either the Replaces Field Names or the In Section Key must also be provided to define the context of the position.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateSectionPositionDependencies(result: ValidationResult) {
+    	// If SectionPosition is provided, at least one of ReplacesFieldNames or InSectionKey must also be provided
+    	if (this.SectionPosition != null && this.ReplacesFieldNames == null && this.InSectionKey == null) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"SectionPosition",
+    			"When Section Position is specified, you must also provide either Replaces Field Names or In Section Key.",
+    			this.SectionPosition,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Parent Entity
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: Parent form entity the panel mounts on.
+    */
+    get EntityID(): string {
+        return this.Get('EntityID');
+    }
+    set EntityID(value: string) {
+        this.Set('EntityID', value);
+    }
+
+    /**
+    * * Field Name: ComponentID
+    * * Display Name: Component
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Components (vwComponents.ID)
+    * * Description: MJ: Components row (Type=Widget) whose Specification declares componentRole=form-panel.
+    */
+    get ComponentID(): string {
+        return this.Get('ComponentID');
+    }
+    set ComponentID(value: string) {
+        this.Set('ComponentID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Slot
+    * * Display Name: Slot
+    * * SQL Data Type: nvarchar(30)
+    * * Default Value: after-fields
+    * * Value List Type: List
+    * * Possible Values 
+    *   * after-everything
+    *   * after-fields
+    *   * after-related
+    *   * before-fields
+    *   * top-area
+    * * Description: Slot inside the generated form: top-area, before-fields, after-fields, after-related, after-everything.
+    */
+    get Slot(): 'after-everything' | 'after-fields' | 'after-related' | 'before-fields' | 'top-area' {
+        return this.Get('Slot');
+    }
+    set Slot(value: 'after-everything' | 'after-fields' | 'after-related' | 'before-fields' | 'top-area') {
+        this.Set('Slot', value);
+    }
+
+    /**
+    * * Field Name: SortKey
+    * * Display Name: Sort Key
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Order among panels drawn in the same place; higher renders earlier.
+    */
+    get SortKey(): number {
+        return this.Get('SortKey');
+    }
+    set SortKey(value: number) {
+        this.Set('SortKey', value);
+    }
+
+    /**
+    * * Field Name: ContributionKey
+    * * Display Name: Contribution Key
+    * * SQL Data Type: nvarchar(256)
+    * * Description: Last-wins identity shared with compiled registrations and MJ: Form Chrome Rules. Null derives related:<entity>:<join> for related claims, otherwise the row never collapses.
+    */
+    get ContributionKey(): string | null {
+        return this.Get('ContributionKey');
+    }
+    set ContributionKey(value: string | null) {
+        this.Set('ContributionKey', value);
+    }
+
+    /**
+    * * Field Name: RelatedEntityID
+    * * Display Name: Related Entity
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: When set, this panel replaces the related-entity grid for that relationship on the parent form.
+    */
+    get RelatedEntityID(): string | null {
+        return this.Get('RelatedEntityID');
+    }
+    set RelatedEntityID(value: string | null) {
+        this.Set('RelatedEntityID', value);
+    }
+
+    /**
+    * * Field Name: RelatedJoinField
+    * * Display Name: Related Join Field
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Disambiguates two FKs to the same related entity (BillToPersonID vs ShipToPersonID).
+    */
+    get RelatedJoinField(): string | null {
+        return this.Get('RelatedJoinField');
+    }
+    set RelatedJoinField(value: string | null) {
+        this.Set('RelatedJoinField', value);
+    }
+
+    /**
+    * * Field Name: ReplacesSectionKey
+    * * Display Name: Replaces Section Key
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Section key of one baked block, or rail key of one tab, this contribution stands in for. The panel draws in its place. Mutually exclusive with every other claim.
+    */
+    get ReplacesSectionKey(): string | null {
+        return this.Get('ReplacesSectionKey');
+    }
+    set ReplacesSectionKey(value: string | null) {
+        this.Set('ReplacesSectionKey', value);
+    }
+
+    /**
+    * * Field Name: ReplacesSectionKeys
+    * * Display Name: Replaces Section Keys
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of section keys this contribution stands in for, all within one tab. The panel draws in the place of the first of them and the others are not drawn. Mutually exclusive with every other claim.
+    */
+    get ReplacesSectionKeys(): string | null {
+        return this.Get('ReplacesSectionKeys');
+    }
+    set ReplacesSectionKeys(value: string | null) {
+        this.Set('ReplacesSectionKeys', value);
+    }
+
+    /**
+    * * Field Name: ReplacesFieldNames
+    * * Display Name: Replaces Field Names
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of field names this contribution stands in for, all within one section. The panel draws inside that section, at SectionPosition, and the named fields are not drawn. Mutually exclusive with every other claim.
+    */
+    get ReplacesFieldNames(): string | null {
+        return this.Get('ReplacesFieldNames');
+    }
+    set ReplacesFieldNames(value: string | null) {
+        this.Set('ReplacesFieldNames', value);
+    }
+
+    /**
+    * * Field Name: InSectionKey
+    * * Display Name: In Section Key
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Section key of a section this contribution draws inside, replacing nothing. SectionPosition says whether it draws at the start or the end. Mutually exclusive with every other claim.
+    */
+    get InSectionKey(): string | null {
+        return this.Get('InSectionKey');
+    }
+    set InSectionKey(value: string | null) {
+        this.Set('InSectionKey', value);
+    }
+
+    /**
+    * * Field Name: SectionPosition
+    * * Display Name: Section Position
+    * * SQL Data Type: nvarchar(10)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * end
+    *   * start
+    * * Description: Where inside its section the panel draws: start or end. Applies to InSectionKey and to a ReplacesFieldNames claim; null means start.
+    */
+    get SectionPosition(): 'end' | 'start' | null {
+        return this.Get('SectionPosition');
+    }
+    set SectionPosition(value: 'end' | 'start' | null) {
+        this.Set('SectionPosition', value);
+    }
+
+    /**
+    * * Field Name: Inclusion
+    * * Display Name: Inclusion
+    * * SQL Data Type: nvarchar(10)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * More
+    *   * None
+    *   * Primary
+    * * Description: L1 chrome inclusion: Primary (own rail item), More (folder), None (hidden). Null = default rail behavior.
+    */
+    get Inclusion(): 'More' | 'None' | 'Primary' | null {
+        return this.Get('Inclusion');
+    }
+    set Inclusion(value: 'More' | 'None' | 'Primary' | null) {
+        this.Set('Inclusion', value);
+    }
+
+    /**
+    * * Field Name: ChromeGroup
+    * * Display Name: Chrome Group
+    * * SQL Data Type: nvarchar(10)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * details
+    *   * more
+    * * Description: Pin to the details or more chrome bucket instead of an own rail item.
+    */
+    get ChromeGroup(): 'details' | 'more' | null {
+        return this.Get('ChromeGroup');
+    }
+    set ChromeGroup(value: 'details' | 'more' | null) {
+        this.Set('ChromeGroup', value);
+    }
+
+    /**
+    * * Field Name: Presentation
+    * * Display Name: Presentation
+    * * SQL Data Type: nvarchar(10)
+    * * Default Value: panel
+    * * Value List Type: List
+    * * Possible Values 
+    *   * bare
+    *   * panel
+    * * Description: panel = wrapped in a collapsible section with header; bare = hero strip with no chrome and no rail item.
+    */
+    get Presentation(): 'bare' | 'panel' {
+        return this.Get('Presentation');
+    }
+    set Presentation(value: 'bare' | 'panel') {
+        this.Set('Presentation', value);
+    }
+
+    /**
+    * * Field Name: Title
+    * * Display Name: Title
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Section header and rail label. Null falls back to Name.
+    */
+    get Title(): string | null {
+        return this.Get('Title');
+    }
+    set Title(value: string | null) {
+        this.Set('Title', value);
+    }
+
+    /**
+    * * Field Name: Icon
+    * * Display Name: Icon
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Font Awesome class for the section header and rail item.
+    */
+    get Icon(): string | null {
+        return this.Get('Icon');
+    }
+    set Icon(value: string | null) {
+        this.Set('Icon', value);
+    }
+
+    /**
+    * * Field Name: Scope
+    * * Display Name: Scope
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: User
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Global
+    *   * Role
+    *   * User
+    * * Description: Who sees the contribution: User (UserID), Role (RoleID) or Global.
+    */
+    get Scope(): 'Global' | 'Role' | 'User' {
+        return this.Get('Scope');
+    }
+    set Scope(value: 'Global' | 'Role' | 'User') {
+        this.Set('Scope', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    */
+    get UserID(): string | null {
+        return this.Get('UserID');
+    }
+    set UserID(value: string | null) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: RoleID
+    * * Display Name: Role
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)
+    */
+    get RoleID(): string | null {
+        return this.Get('RoleID');
+    }
+    set RoleID(value: string | null) {
+        this.Set('RoleID', value);
+    }
+
+    /**
+    * * Field Name: Precedence
+    * * Display Name: Precedence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Last-wins precedence against compiled registrations sharing ContributionKey. Ties go to the compiled registration; a row wins only when strictly higher.
+    */
+    get Precedence(): number {
+        return this.Get('Precedence');
+    }
+    set Precedence(value: number) {
+        this.Set('Precedence', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+    *   * Pending
+    * * Description: Active rows render. Pending rows are drafts awaiting activation. Inactive rows are history.
+    */
+    get Status(): 'Active' | 'Inactive' | 'Pending' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Inactive' | 'Pending') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON passed to the component as contribution.configuration so one component can serve several rows.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * * Field Name: Notes
+    * * Display Name: Notes
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Free-form authoring notes; agents append an iteration log here.
+    */
+    get Notes(): string | null {
+        return this.Get('Notes');
+    }
+    set Notes(value: string | null) {
+        this.Set('Notes', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string {
+        return this.Get('Entity');
+    }
+
+    /**
+    * * Field Name: Component
+    * * Display Name: Component
+    * * SQL Data Type: nvarchar(500)
+    */
+    get Component(): string {
+        return this.Get('Component');
+    }
+
+    /**
+    * * Field Name: RelatedEntity
+    * * Display Name: Related Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get RelatedEntity(): string | null {
+        return this.Get('RelatedEntity');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string | null {
+        return this.Get('User');
+    }
+
+    /**
+    * * Field Name: Role
+    * * Display Name: Role
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Role(): string | null {
+        return this.Get('Role');
+    }
+}
+
+
+/**
  * MJ: Entity Form Overrides - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: EntityFormOverride
@@ -93309,6 +94287,27 @@ export interface MJEntityRelationshipEntity_IEntityRelationshipUIConfiguration {
      * after lead contributions such as Overview). Omit = 0.
      */
     sortKey?: number;
+
+    /**
+     * What the parent form does with this section when it has 0 rows.
+     * Counts are fetched in one batched round trip when the record loads.
+     *
+     * - `'show'` — always show (use when users create the first row here).
+     * - `'hide'` — hide while empty. The "show empty fields" toolbar toggle reveals it.
+     * - `'more'` — move into the More folder while empty; returns to its normal
+     *   placement once it has rows.
+     *
+     * Omit = inherit the parent entity's `UI.Form.RelatedWhenEmpty`, else `'show'`.
+     */
+    whenEmpty?: 'show' | 'hide' | 'more';
+
+    /**
+     * Prefetch this section's row count when the record loads and show it as a
+     * badge. Set `false` for known-expensive related entities.
+     *
+     * Omit = inherit the parent entity's `UI.Form.ShowRelatedCounts`, else `true`.
+     */
+    showCount?: boolean;
 }
 
 /**

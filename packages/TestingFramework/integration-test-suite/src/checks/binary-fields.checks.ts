@@ -55,7 +55,7 @@ interface VectorSurface {
     BinaryField: string;
 }
 
-/** Every binary vector companion column shipped by V202610050350__v6.2.x__Binary_Vector_Columns. */
+/** Every binary vector companion column shipped by V202610061614__v6.2.x__Binary_Vector_Columns. */
 const VECTOR_SURFACES: readonly VectorSurface[] = [
     { Entity: 'MJ: Entity Record Documents', JsonField: 'VectorJSON', BinaryField: 'VectorBinary' },
     { Entity: 'MJ: AI Agent Notes', JsonField: 'EmbeddingVector', BinaryField: 'EmbeddingVectorBinary' },
