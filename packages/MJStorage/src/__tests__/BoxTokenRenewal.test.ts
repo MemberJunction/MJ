@@ -75,7 +75,9 @@ vi.mock('box-node-sdk', () => {
 });
 
 // Keep any real Box settings in a developer's mj.config out of the driver's constructor.
-vi.mock('../config', () => ({ GetProviderConfig: () => undefined }));
+// Both names are mocked because the lts/6.1 driver still calls the pre-rename
+// getProviderConfig, and this test is backported there unchanged.
+vi.mock('../config', () => ({ GetProviderConfig: () => undefined, getProviderConfig: () => undefined }));
 
 /** Fake `https://api.box.com/oauth2/token` that issues tokens with a real expiry. */
 async function FakeTokenEndpoint(_url: string | URL | Request, init?: RequestInit): Promise<Response> {
