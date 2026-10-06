@@ -405,7 +405,7 @@ What a panel author should know:
   own key / slot / title / configuration — and reports validation back through the same
   `BaseFormPanel.Validate()` contract your panel implements. A panel can change only the fields it
   claims in `replacesFieldNames`, and only while the form is in edit mode.
-- **`Validate()` runs on Save.** `BaseFormComponent.Save()` awaits every mounted panel's
+- **`Validate()` runs on Save.** `BaseFormComponent.SaveRecord()` awaits every mounted panel's
   `Validate()` (through `ValidateAsync()`) and refuses the save when one fails. `Validate()` may
   return a `ValidationResult` or a Promise of one. Synchronous callers read
   `LastKnownValidation()`, so a panel that validates asynchronously should override it to return
@@ -419,6 +419,9 @@ A generated panel may propose its placement in `formContribution` (slot, a secti
 a related entity, or a section to sit inside). The apply dialog starts from every claim the open
 form can honour and from its default for the rest; the user confirms placement. A field claim writes
 the chosen field names into `configuration.fields`; `fields` is reserved for that use on a field panel.
+`configuration.fields` is written only when a panel is placed as a field claim, and a later placement
+change never removes it: a panel moved off its field claim keeps drawing the fields it was built for,
+while the host shows those fields again.
 
 Rows are authored by an OpenApp under `metadata/entity-form-contributions/`, or by an agent through
 the `Create` / `Modify` / `Activate Form Contribution Version` actions. The actions change only the

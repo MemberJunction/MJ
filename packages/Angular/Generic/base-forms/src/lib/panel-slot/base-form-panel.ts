@@ -194,7 +194,7 @@ export interface FormContributionCountSpec {
  * `Record` is guaranteed to be set before the first change-detection pass.
  *
  * Optional `Validate()` returns a validation result, or a Promise of one.
- * `BaseFormComponent.Save()` awaits every mounted panel's result and refuses the
+ * `BaseFormComponent.SaveRecord()` awaits every mounted panel's result and refuses the
  * save when one fails. Panels that don't validate anything beyond what the
  * record itself does can leave this method off.
  */
@@ -280,14 +280,14 @@ export abstract class BaseFormPanel<TRecord extends BaseEntity = BaseEntity> {
 
     /**
      * Override to add per-panel validation that should block the parent form's
-     * Save(). Return `{ Success: true, Errors: [] }` when valid, or include
+     * `SaveRecord()`. Return `{ Success: true, Errors: [] }` when valid, or include
      * `ValidationErrorInfo` entries to surface field-level errors. The default
      * implementation reports valid (panels that don't need extra validation
      * can leave this method off).
      *
      * May return a Promise: a panel that validates against the server has no
      * synchronous answer. `BaseFormComponent.ValidateAsync()` awaits it, which is
-     * what Save() calls.
+     * what `SaveRecord()` calls.
      */
     public Validate(): ValidationResult | Promise<ValidationResult> {
         // Inline construction — ValidationResult is a class in @memberjunction/core,

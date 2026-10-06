@@ -313,15 +313,6 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
   }
 
   /**
-   * Flex order, in precedence: where the user put this panel, then where its host said
-   * to put it, then the form's section order.
-   *
-   * The user's own placement has to win. `Order` is a fixed number a host supplies — a
-   * contribution panel derives one from its slot — and taking it unconditionally meant
-   * dragging such a panel wrote a new section order that nothing ever read, so the panel
-   * did not move and the drag looked broken.
-   */
-  /**
    * The host form, when this panel sits in one.
    *
    * `Form` stays `unknown` because the panel is reused outside a form host; this narrows
@@ -342,6 +333,15 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
     return this.ClaimableFieldNames.length > 0 && !!this.FieldPanelForm?.record;
   }
 
+  /**
+   * Flex order, in precedence: where the user put this panel, then where its host said
+   * to put it, then the form's section order.
+   *
+   * The user's own placement has to win. `Order` is a fixed number a host supplies — a
+   * contribution panel derives one from its slot — and taking it unconditionally meant
+   * dragging such a panel wrote a new section order that nothing ever read, so the panel
+   * did not move and the drag looked broken.
+   */
   @HostBinding('style.order')
   get CssOrder(): number {
     const formRef = this.Form as {

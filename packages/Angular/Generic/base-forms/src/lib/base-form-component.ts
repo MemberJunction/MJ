@@ -485,7 +485,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
 
   /**
    * {@link Validate}, merged with every mounted panel's validator, awaited. This is what
-   * `Save()` calls.
+   * `SaveRecord()` calls.
    *
    * It starts from `Validate()`, so a subclass that overrides `Validate()` still gates the
    * save; the panels' last-known state is left out of that call, because their awaited
@@ -1168,12 +1168,13 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     return next;
   }
 
+  /** Memo for {@link resolveHiddenSectionKeys}. */
+  private _resolvedHiddenKeysMemo: { claimed: string[]; configured: string[] | undefined; merged: string[] } | null = null;
+
   /**
    * Config HiddenSectionKeys plus section keys winning contributions asked
    * to hide (related-entity claims and `replacesSectionKey` field panels).
    */
-  private _resolvedHiddenKeysMemo: { claimed: string[]; configured: string[] | undefined; merged: string[] } | null = null;
-
   private resolveHiddenSectionKeys(
     entity: EntityInfo | undefined,
     regs: readonly FormContributionRegistration[] | null,
