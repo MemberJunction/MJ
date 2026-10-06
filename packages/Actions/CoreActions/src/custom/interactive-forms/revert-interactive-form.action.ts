@@ -21,6 +21,10 @@ import {
  *   - Flip the previously-pointed Component to Status='Inactive', target
  *     Component to Status='Active'.
  *
+ * The override is saved first. If a Component's status then cannot be saved,
+ * the action returns `PERSIST_FAILED` and says which Component; the override
+ * stays re-pointed.
+ *
  * Old Component rows are never deleted — they remain as immutable history.
  * A subsequent revert can move forward again to any version.
  *
@@ -133,10 +137,14 @@ export class RevertInteractiveFormAction extends BaseAction {
             const newActive = await LoadComponent(provider, user, target.ID);
             if (newActive) {
                 newActive.Status = MapToComponentStatus('Active');
-                await newActive.Save();
+                if (!(await newActive.Save())) {
+                    return statusNotUpdated(override.ID, target.ID, target.ID, newActive.LatestResult?.CompleteMessage);
+                }
             }
             currentComponent.Status = MapToComponentStatus('Inactive');
-            await currentComponent.Save();
+            if (!(await currentComponent.Save())) {
+                return statusNotUpdated(override.ID, target.ID, currentComponent.ID, currentComponent.LatestResult?.CompleteMessage);
+            }
 
             AddOutput(params, "OverrideID", override.ID);
             AddOutput(params, "ComponentID", target.ID);
@@ -155,6 +163,13 @@ export class RevertInteractiveFormAction extends BaseAction {
             return Failure("UNEXPECTED_ERROR", message);
         }
     }
+}
+
+/** The result when the override was re-pointed but a Component's status could not be saved. */
+function statusNotUpdated(overrideID: string, targetID: string, componentID: string, reason: string | undefined): ActionResultSimple {
+    return Failure("PERSIST_FAILED",
+        `Override ${overrideID} was re-pointed to Component ${targetID}, but the status of Component ${componentID} ` +
+        `was not updated: ${reason ?? 'unknown error'}`);
 }
 
 /** Tree-shaking guard. */

@@ -390,6 +390,23 @@ describe('RevertInteractiveFormAction', () => {
         expect(hoisted.components.get('COMP-NEW')!.record.Status).toBe('Deprecated');
     });
 
+    it.each([['the target component', 'COMP-OLD'], ['the previous component', 'COMP-NEW']])(
+        'returns PERSIST_FAILED, not SUCCESS, when the status of %s cannot be saved',
+        async (_label, failingID) => {
+            seedOverride('OVER-1', { ComponentID: 'COMP-NEW', Status: 'Active' });
+            seedComponent('COMP-NEW', { Name: 'F', Version: '1.1.0', Status: 'Published' });
+            seedComponent('COMP-OLD', { Name: 'F', Version: '1.0.0', Status: 'Deprecated' });
+            hoisted.failingSaves.add(failingID);
+            const r = await run(new RevertInteractiveFormAction(), mkParams({
+                ActiveOverrideID: 'OVER-1', TargetComponentID: 'COMP-OLD',
+            }));
+            expect(r.Success).toBe(false);
+            expect(r.ResultCode).toBe('PERSIST_FAILED');
+            expect(r.Message).toContain(`status of Component ${failingID} was not updated`);
+            expect(r.Message).toContain('Override OVER-1 was re-pointed to Component COMP-OLD');
+        },
+    );
+
     it('is a no-op when target Component is already the Active component', async () => {
         seedOverride('OVER-1', { ComponentID: 'COMP-CURRENT', Status: 'Active' });
         seedComponent('COMP-CURRENT', { Name: 'F', Version: '1.0.0', Status: 'Published' });
