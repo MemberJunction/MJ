@@ -666,6 +666,15 @@ export abstract class BaseRealtimeChannelClient<TSurface extends object = object
     return [];
   }
 
+  /**
+   * Whether this channel shows the agent's video: it sinks outbound video ({@link GetSunkTracks}). The runtime marks it
+   * as used when the video arrives, and a host presents its surface as the agent (the call overlay puts it in the agent's
+   * place in the call rather than in the focus layout).
+   */
+  public get ShowsAgentVideo(): boolean {
+    return this.GetSunkTracks().some((t) => t.Direction === 'outbound' && String(t.Modality).trim().toLowerCase() === 'video');
+  }
+
   // ── Contract v2: descriptor, state, verbs, events, open/complete ───────────
 
   /**

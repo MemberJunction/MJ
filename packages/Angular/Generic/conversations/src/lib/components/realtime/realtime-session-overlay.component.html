@@ -47,6 +47,12 @@
         </div>
       }
 
+      <!-- The agent's place above the thread in the console: the agent's video (the Avatar) lies over it while it presents.
+           Outside the scrolling body, so it stays in view as the conversation grows. -->
+      @if (!ShowHero) {
+        <div class="call-presenter" [class.call-presenter--on]="PresenterOnStage" #presenterSlot></div>
+      }
+
       <div class="call-body" [class.call-body--hero]="ShowHero && state !== 'connecting'">
         @if (!IsReviewing && state === 'connecting') {
           <div class="call-connecting">
@@ -55,17 +61,21 @@
         } @else if (ShowHero) {
           <!-- PURE-AUDIO HERO (level 0): the orb IS the interface — it breathes with the
                audio inside expanding sound-wave rings; nothing to read, nothing to configure. -->
-          <div class="hero" [attr.data-state]="state" role="status" aria-live="polite">
-            <div class="hero__stage">
-              <span class="hero__ring" aria-hidden="true"></span>
-              <span class="hero__ring hero__ring--2" aria-hidden="true"></span>
-              <span class="hero__ring hero__ring--3" aria-hidden="true"></span>
-              <div class="hero__orb" [attr.data-state]="HeroOrbState(state)" aria-hidden="true"></div>
-            </div>
-            <div class="hero__eq" aria-hidden="true">
-              <span></span><span></span><span></span><span></span><span></span>
-              <span></span><span></span><span></span><span></span>
-            </div>
+          <div class="hero" [class.hero--presenting]="PresenterOnStage" [attr.data-state]="state" role="status" aria-live="polite">
+            @if (!PresenterOnStage) {
+              <div class="hero__stage">
+                <span class="hero__ring" aria-hidden="true"></span>
+                <span class="hero__ring hero__ring--2" aria-hidden="true"></span>
+                <span class="hero__ring hero__ring--3" aria-hidden="true"></span>
+                <div class="hero__orb" [attr.data-state]="HeroOrbState(state)" aria-hidden="true"></div>
+              </div>
+              <div class="hero__eq" aria-hidden="true">
+                <span></span><span></span><span></span><span></span><span></span>
+                <span></span><span></span><span></span><span></span>
+              </div>
+            }
+            <!-- The agent's place in the hero: the agent's video (the Avatar) lies over it while it presents. -->
+            <div class="hero__presenter" [class.hero__presenter--on]="PresenterOnStage" #presenterSlot></div>
             <div class="hero__name">{{ AgentName }}</div>
             <div class="hero__sub">{{ HeroStateLabel(state) }}</div>
             <button type="button" class="hero__reveal" (click)="OnTextReveal()"
@@ -165,12 +175,14 @@
 
     <!-- THE STAGE: every channel surface lives here, in one layer over the overlay. A surface
          is created the first time it is seen, lies over its tab's slot while that tab is
-         active, fills the overlay while its channel holds focus, and otherwise waits out of
-         sight — so collapsing the panel, switching tabs or entering focus never reloads it.
+         active, fills the overlay while its channel holds focus (or, for the agent's video,
+         lies in the agent's place in the call), and otherwise waits out of sight — so
+         collapsing the panel, switching tabs or entering focus never reloads it.
          The pane tells each channel when its surface goes out of sight, so it can pause. -->
     <mj-media-stage class="call-stage"
                     [Surfaces]="SurfaceStage.Surfaces"
                     [TabSlot]="StageSlot?.Element ?? null"
+                    [StageSlot]="StageSurfaceSlot"
                     [ActiveTabKey]="StageSlot?.Key ?? null"
                     [PipRects]="PipRects"
                     (PipRectChange)="OnPipRectChange($event)">
@@ -178,6 +190,18 @@
         @if (SurfaceStage.PluginFor(key); as plugin) {
           <div class="stage-frame" role="region" [attr.aria-label]="plugin.TabTitle">
             <mj-realtime-channel-pane [Plugin]="plugin" [Visible]="visible" [Placement]="placement"></mj-realtime-channel-pane>
+            <!-- A surface presenting the agent has no focus pill, so its "Move to…" menu rides on it. -->
+            @if (placement === 'stage' && plugin.ShowsAgentVideo) {
+              <mj-realtime-surface-move-menu
+                class="stage-presenter-move"
+                [Key]="key"
+                [Title]="plugin.TabTitle"
+                Placement="stage"
+                [Allowed]="SurfaceStage.AllowedFor(key)"
+                (MoveRequested)="OnMoveRequested($event)"
+                (ResetLayoutRequested)="OnResetLayout()">
+              </mj-realtime-surface-move-menu>
+            }
           </div>
         }
       </ng-template>

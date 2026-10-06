@@ -29,8 +29,8 @@ import {
 } from '../pip-geometry';
 
 /**
- * Where `mj-media-stage` shows a surface: filling the stage, in a picture-in-picture box over it, over the tab slot
- * while the surface's tab is the active one, or out of sight.
+ * Where `mj-media-stage` shows a surface: filling the stage (or over the host's stage slot), in a picture-in-picture
+ * box over it, over the tab slot while the surface's tab is the active one, or out of sight.
  */
 export type MediaStagePlacement = MediaPlacement;
 
@@ -133,8 +133,9 @@ let nextStageId = 0;
  * whiteboard keeps its view, a stream keeps playing and nothing reloads.
  *
  * The host positions the stage over the area it covers (it fills its positioned parent). A `stage` surface fills
- * it; a `tab` surface covers {@link TabSlot}, an element the host's tab panel keeps for the active tab, and is
- * followed as the panel resizes or slides; a `pip` surface floats in a box the user drags by its bar, resizes from
+ * it, or covers {@link StageSlot} when the host gives one (such as the agent's place in a call); a `tab` surface
+ * covers {@link TabSlot}, an element the host's tab panel keeps for the active tab. Both slots are followed as they
+ * resize or slide; a `pip` surface floats in a box the user drags by its bar, resizes from
  * its corner, or moves with the arrow keys, stacked in the bottom-right corner until moved ({@link PipRects},
  * {@link PipRectChange}); any other surface stays alive, out of sight. So does every surface while the stage itself
  * has no size (a hidden ancestor). Each surface's template learns whether it is on screen (`Visible`), so the host
@@ -152,6 +153,7 @@ let nextStageId = 0;
         class="stage-surface"
         [attr.data-surface]="surface.Key"
         [class.stage-surface--stage]="surface.Placement === 'stage'"
+        [class.stage-surface--in-slot]="surface.Placement === 'stage' && StageSlot !== null"
         [class.stage-surface--pip]="surface.Placement === 'pip'"
         [class.stage-surface--top]="surface.Key === TopPipKey"
         [class.stage-surface--hidden]="!IsShown(surface)"
@@ -196,6 +198,8 @@ export class MediaStageComponent implements AfterViewInit, OnDestroy {
   private readonly zone = inject(NgZone);
   private tabSlot: HTMLElement | null = null;
   private slotRect: MediaStageBox | null = null;
+  private stageSlot: HTMLElement | null = null;
+  private stageSlotRect: MediaStageBox | null = null;
   /** The stage's size, once measured; picture-in-picture boxes are placed in it. */
   private stageSize: MediaStageSize | null = null;
   /** Whether the stage itself has a size; a hidden ancestor (a minimized call) puts every surface out of sight. */
@@ -207,6 +211,7 @@ export class MediaStageComponent implements AfterViewInit, OnDestroy {
   private settleFrame: number | null = null;
   private settleUntil = 0;
   private viewReady = false;
+  private destroyed = false;
 
   /** The surfaces, each with its placement. */
   @Input() public Surfaces: readonly MediaStageSurface[] = [];
@@ -229,6 +234,26 @@ export class MediaStageComponent implements AfterViewInit, OnDestroy {
   }
   public get TabSlot(): HTMLElement | null {
     return this.tabSlot;
+  }
+
+  /**
+   * The element a `stage` surface covers instead of filling the stage, or `null` (the default) to fill it. It is followed
+   * like {@link TabSlot}, and while it has no size the stage surface is out of sight.
+   */
+  @Input()
+  public set StageSlot(value: HTMLElement | null) {
+    if (value === this.stageSlot) {
+      return;
+    }
+    this.unobserve(this.stageSlot);
+    this.stageSlot = value;
+    this.observe(value);
+    if (this.viewReady) {
+      this.settle();
+    }
+  }
+  public get StageSlot(): HTMLElement | null {
+    return this.stageSlot;
   }
 
   /**
@@ -264,12 +289,14 @@ export class MediaStageComponent implements AfterViewInit, OnDestroy {
       this.resizeObserver = new ResizeObserver(() => this.measure());
       this.resizeObserver.observe(this.host.nativeElement);
       this.observe(this.tabSlot);
+      this.observe(this.stageSlot);
     }
     // The view was just checked; measuring now would change it inside the same pass.
     queueMicrotask(() => this.settle());
   }
 
   public ngOnDestroy(): void {
+    this.destroyed = true;
     this.endGesture();
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
@@ -281,13 +308,25 @@ export class MediaStageComponent implements AfterViewInit, OnDestroy {
 
   /** Whether a surface is on screen. */
   public IsShown(surface: MediaStageSurface): boolean {
-    return this.stageShown && (surface.Placement === 'stage' || surface.Placement === 'pip' || this.TabRectFor(surface) !== null);
+    if (!this.stageShown) {
+      return false;
+    }
+    if (surface.Placement === 'stage') {
+      return this.stageSlot === null || this.stageSlotRect !== null;
+    }
+    return surface.Placement === 'pip' || this.TabRectFor(surface) !== null;
   }
 
-  /** The box of a surface placed by geometry (over the tab slot, or picture-in-picture), or `null` when it has none. */
+  /**
+   * The box of a surface placed by geometry (over the stage slot or the tab slot, or picture-in-picture), or `null` when
+   * it has none (a stage surface with no slot fills the stage).
+   */
   public BoxFor(surface: MediaStageSurface): MediaStageBox | null {
     if (surface.Placement === 'pip') {
       return this.pipBoxFor(surface);
+    }
+    if (surface.Placement === 'stage') {
+      return this.stageSlotRect;
     }
     return this.TabRectFor(surface);
   }
@@ -397,9 +436,18 @@ export class MediaStageComponent implements AfterViewInit, OnDestroy {
     gesture.Handle.removeEventListener('pointercancel', this.onPointerUp);
   }
 
-  /** Measures now, then follows the slot frame by frame for a moment, so a sliding panel is tracked. */
+  /**
+   * Measures now and again once the current change detection pass is over (a slot's own bindings, such as the class that
+   * gives it its size, can update after the stage's inputs in the same pass), then follows the slot frame by frame for a
+   * moment, so a sliding panel is tracked.
+   */
   private settle(): void {
     this.measure();
+    queueMicrotask(() => {
+      if (!this.destroyed) {
+        this.measure();
+      }
+    });
     this.settleUntil = performance.now() + SETTLE_MS;
     if (this.settleFrame !== null || typeof requestAnimationFrame === 'undefined') {
       return;
@@ -424,27 +472,23 @@ export class MediaStageComponent implements AfterViewInit, OnDestroy {
     const stage = this.host.nativeElement.getBoundingClientRect();
     const shown = stage.width > 0 && stage.height > 0;
     const size = shown ? { Width: stage.width, Height: stage.height } : this.stageSize;
-    const next = this.readSlotRect(stage);
-    if (shown === this.stageShown && sameRect(next, this.slotRect) && sameSize(size, this.stageSize)) {
+    const next = readSlotRect(this.tabSlot, stage);
+    const nextStageSlot = readSlotRect(this.stageSlot, stage);
+    if (
+      shown === this.stageShown &&
+      sameRect(next, this.slotRect) &&
+      sameRect(nextStageSlot, this.stageSlotRect) &&
+      sameSize(size, this.stageSize)
+    ) {
       return;
     }
     this.zone.run(() => {
       this.stageShown = shown;
       this.slotRect = next;
+      this.stageSlotRect = nextStageSlot;
       this.stageSize = size;
       this.cdr.markForCheck();
     });
-  }
-
-  private readSlotRect(stage: DOMRect): MediaStageBox | null {
-    if (!this.tabSlot) {
-      return null;
-    }
-    const slot = this.tabSlot.getBoundingClientRect();
-    if (slot.width <= 0 || slot.height <= 0) {
-      return null;
-    }
-    return { Left: slot.left - stage.left, Top: slot.top - stage.top, Width: slot.width, Height: slot.height };
   }
 
   private observe(element: HTMLElement | null): void {
@@ -458,6 +502,18 @@ export class MediaStageComponent implements AfterViewInit, OnDestroy {
       this.resizeObserver.unobserve(element);
     }
   }
+}
+
+/** A slot's box relative to the stage, or `null` for no slot, or one with no size (hidden). */
+function readSlotRect(slot: HTMLElement | null, stage: DOMRect): MediaStageBox | null {
+  if (!slot) {
+    return null;
+  }
+  const box = slot.getBoundingClientRect();
+  if (box.width <= 0 || box.height <= 0) {
+    return null;
+  }
+  return { Left: box.left - stage.left, Top: box.top - stage.top, Width: box.width, Height: box.height };
 }
 
 function sameRect(a: MediaStageBox | null, b: MediaStageBox | null): boolean {

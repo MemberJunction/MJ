@@ -148,6 +148,12 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
       if (this.classList.contains('s-pane__slot')) {
         return new DOMRect(600, 48, 380, 500);
       }
+      if (this.classList.contains('hero__presenter--on')) {
+        return new DOMRect(300, 80, 300, 400);
+      }
+      if (this.classList.contains('call-presenter--on')) {
+        return new DOMRect(240, 64, 126, 168);
+      }
       return this.tagName === 'MJ-MEDIA-STAGE' ? new DOMRect(0, 0, 1000, 600) : new DOMRect(0, 0, 0, 0);
     });
   });
@@ -467,8 +473,11 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
       return { source, attached };
     };
 
-    /** A call with the Avatar channel in it, placed as its registry row places it, and the agent's video the test sends. */
-    const renderWithAvatar = async () => {
+    /**
+     * A call with the Avatar channel in it, placed as its registry row places it, and the agent's video the test sends.
+     * Other channels (a whiteboard) can join it.
+     */
+    const renderWithAvatar = async (chrome: 'orb' | 'console' = 'console', others: BaseRealtimeChannelClient[] = []) => {
       const session = fakeSession();
       const video$ = new BehaviorSubject<MediaVideoSource | null>(null);
       const avatar = new RealtimeAvatarChannel();
@@ -489,30 +498,80 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
           { provide: RealtimeSessionService, useValue: session.service },
           { provide: ErrorHandler, useValue: { handleError: (error: unknown) => reported.push(error) } },
         ],
-        inputs: { Chrome: 'console' },
+        inputs: { Chrome: chrome },
         autoDetect: true,
       });
-      session.channels$.next([avatar]);
+      session.channels$.next([avatar, ...others]);
       await settle();
-      return { f, avatar, video$, ...session };
+      /** The agent's video arrives, and the runtime marks the Avatar as used. */
+      const sendVideo = async () => {
+        const video = player();
+        video$.next(video.source);
+        session.activity$.next(avatar);
+        await settle();
+        return video;
+      };
+      return { f, avatar, video$, sendVideo, ...session };
     };
 
-    it("shows nothing of the avatar while the agent sends no video", async () => {
+    const avatarBox = (f: Awaited<ReturnType<typeof renderWithAvatar>>['f']): HTMLElement | null => query(f, '[data-surface="Avatar"]') as HTMLElement | null;
+    const place = (element: HTMLElement | null) => [element?.style.left, element?.style.top, element?.style.width, element?.style.height];
+
+    it('shows nothing of the avatar while the agent sends no video', async () => {
       const { f } = await renderWithAvatar();
-      expect(query(f, '[data-surface="Avatar"]')).toBeNull();
+      expect(avatarBox(f)).toBeNull();
+      expect(f.componentInstance.ChannelFocusMode).toBe(false);
+      expect(query(f, '.call-presenter--on')).toBeNull();
+    });
+
+    it("puts the agent's video above the thread in the console, labelled as AI-generated, without the focus layout", async () => {
+      const { f, sendVideo } = await renderWithAvatar('console');
+      const { attached } = await sendVideo();
+      expect(f.componentInstance.PresenterOnStage).toBe(true);
+      expect(f.componentInstance.ChannelFocusMode).toBe(false);
+      expect(query(f, '.board-focus-pill')).toBeNull();
+      expect(avatarBox(f)?.classList.contains('stage-surface--in-slot')).toBe(true);
+      expect(place(avatarBox(f))).toEqual(['240px', '64px', '126px', '168px']);
+      expect(query(f, 'mj-realtime-avatar-surface .tile__chip')?.textContent?.trim()).toBe('AI-generated video');
+      expect(attached).toHaveLength(1);
+    });
+
+    it("puts the agent's video in the orb's place in the hero", async () => {
+      const { f, sendVideo } = await renderWithAvatar('orb');
+      expect(query(f, '.hero__orb')).not.toBeNull();
+      await sendVideo();
+      expect(query(f, '.hero__orb')).toBeNull();
+      expect(query(f, '.hero__name')?.textContent?.trim()).toBe(f.componentInstance.AgentName);
+      expect(place(avatarBox(f))).toEqual(['300px', '80px', '300px', '400px']);
       expect(f.componentInstance.ChannelFocusMode).toBe(false);
     });
 
-    it("puts the agent's video on the stage when it arrives, labelled as AI-generated", async () => {
-      const { f, avatar, video$, activity$ } = await renderWithAvatar();
-      const { source, attached } = player();
-      video$.next(source);
-      activity$.next(avatar);
+    it('does not open the panel when the video arrives', async () => {
+      const { f, sendVideo } = await renderWithAvatar('console');
+      await sendVideo();
+      expect(f.componentInstance.DetailsPeek).toBe(false);
+    });
+
+    it("moves the avatar from its own menu, and the hero's orb comes back", async () => {
+      const { f, sendVideo } = await renderWithAvatar('orb');
+      await sendVideo();
+      await pick(f, '.stage-presenter-move', 'Picture-in-picture');
+      expect(avatarBox(f)?.classList.contains('stage-surface--pip')).toBe(true);
+      expect(f.componentInstance.PresenterOnStage).toBe(false);
+      expect(query(f, '.hero__orb')).not.toBeNull();
+      expect(savedLayouts.at(-1)).toBe('[{"SurfaceKey":"Avatar","Placement":"pip"}]');
+    });
+
+    it('gives the stage to a whiteboard moved there, and the avatar goes to picture-in-picture', async () => {
+      const board = new TestWhiteboardChannel();
+      const { f, sendVideo } = await renderWithAvatar('console', [board]);
+      await sendVideo();
+      f.componentInstance.OnMoveRequested({ Key: 'Whiteboard', Placement: 'stage' });
       await settle();
-      expect(query(f, '[data-surface="Avatar"]')?.classList.contains('stage-surface--stage')).toBe(true);
       expect(f.componentInstance.ChannelFocusMode).toBe(true);
-      expect(query(f, 'mj-realtime-avatar-surface .tile__chip')?.textContent?.trim()).toBe('AI-generated video');
-      expect(attached).toHaveLength(1);
+      expect(surface(f).classList.contains('stage-surface--stage')).toBe(true);
+      expect(surface(f).classList.contains('stage-surface--in-slot')).toBe(false);
+      expect(avatarBox(f)?.classList.contains('stage-surface--pip')).toBe(true);
     });
   });
 });

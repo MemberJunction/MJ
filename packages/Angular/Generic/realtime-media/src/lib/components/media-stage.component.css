@@ -18,6 +18,11 @@
   inset: 0;
 }
 
+/* A stage surface in the host's stage slot is placed by its box instead. */
+.stage-surface--in-slot {
+  inset: auto;
+}
+
 /* A picture-in-picture box floats over everything else on the stage; the one touched last floats highest. */
 .stage-surface--pip {
   z-index: 2;

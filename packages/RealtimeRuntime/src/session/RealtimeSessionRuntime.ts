@@ -296,11 +296,6 @@ function microphoneStartError(reason: LocalMediaFailure, message: string): Error
   return error;
 }
 
-/** Whether a channel shows the agent's video: it sinks outbound video. */
-function sinksAgentVideo(channel: BaseRealtimeChannelClient): boolean {
-  return channel.GetSunkTracks().some((t) => t.Direction === 'outbound' && String(t.Modality).trim().toLowerCase() === 'video');
-}
-
 /** The microphone a session start opened, or why it could not. */
 type OpenedMicrophone = { Stream: MediaStream; Error: null } | { Stream: null; Error: Error };
 
@@ -3052,7 +3047,7 @@ export class RealtimeSessionRuntime {
     }
     this._agentVideo$.next(video);
     for (const channel of this._activeChannels$.value) {
-      if (sinksAgentVideo(channel)) {
+      if (channel.ShowsAgentVideo) {
         this.noteChannelActivity(channel);
       }
     }

@@ -1,4 +1,4 @@
-import { Component, ElementRef, EventEmitter, HostListener, Input, Output, OnDestroy, AfterViewInit, ChangeDetectorRef, NgZone, TemplateRef, ViewChild, inject } from '@angular/core';
+import { Component, ElementRef, EventEmitter, HostListener, Input, Output, OnDestroy, AfterViewInit, AfterViewChecked, ChangeDetectorRef, NgZone, TemplateRef, ViewChild, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Subscription } from 'rxjs';
 import type { VideoSourceState } from '@memberjunction/ai-realtime-client';
@@ -159,7 +159,7 @@ export interface RealtimeStartLiveRequest {
   templateUrl: './realtime-session-overlay.component.html',
   styleUrl: './realtime-session-overlay.component.css'
 })
-export class RealtimeSessionOverlayComponent extends BaseAngularComponent implements AfterViewInit, OnDestroy {
+export class RealtimeSessionOverlayComponent extends BaseAngularComponent implements AfterViewInit, AfterViewChecked, OnDestroy {
   private _agentName = 'Sage';
 
   /**
@@ -618,11 +618,35 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   /**
    * True while a channel's surface is on the stage (FOCUS mode): the main call column collapses
    * (`.board-focus` on the overlay) and a compact floating call pill (orb + state +
-   * mute / show-thread / move / end) rides over the surface.
+   * mute / show-thread / move / end) rides over the surface. A surface that presents the agent
+   * ({@link PresenterOnStage}) takes the agent's place in the call instead, so it is not focus mode.
    */
   public get ChannelFocusMode(): boolean {
-    return this.SurfaceStage.StageKey !== null;
+    return this.SurfaceStage.StageKey !== null && !this.PresenterOnStage;
   }
+
+  /**
+   * Whether the surface on the stage presents the agent: its channel shows the agent's video (the Avatar). It lies over
+   * {@link PresenterSlot}, in the agent's place in the call (the hero, or above the thread in the console), rather than
+   * filling the overlay.
+   */
+  public get PresenterOnStage(): boolean {
+    return this.StagePlugin?.ShowsAgentVideo ?? false;
+  }
+
+  /** The agent's place in the call, as last reported to the stage, or `null` while the call shows none. */
+  public PresenterSlot: HTMLElement | null = null;
+
+  /** The element the stage lays its stage surface over: the agent's place while it presents, else none (it fills the stage). */
+  public get StageSurfaceSlot(): HTMLElement | null {
+    return this.PresenterOnStage ? this.PresenterSlot : null;
+  }
+
+  /** The agent's place in the call: in the hero, or above the thread in the console. */
+  @ViewChild('presenterSlot') private presenterSlotRef?: ElementRef<HTMLElement>;
+
+  /** The presenter slot last reported through {@link PresenterSlot}. */
+  private reportedPresenterSlot: HTMLElement | null = null;
 
   /** Mic-muted state reflected on the focus pill's mute button. */
   public FocusPillMuted = false;
@@ -746,6 +770,24 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
    */
   public OnActiveChannelChange(channelKey: string | null): void {
     this.realtime.SetFocusedChannel(channelKey);
+  }
+
+  ngAfterViewChecked(): void {
+    this.reportPresenterSlot();
+  }
+
+  /** Reports the agent's place in the call when the element changed (the chrome switched, or the call body changed). */
+  private reportPresenterSlot(): void {
+    const element = this.presenterSlotRef?.nativeElement ?? null;
+    if (element === this.reportedPresenterSlot) {
+      return;
+    }
+    this.reportedPresenterSlot = element;
+    // The view was just checked and the stage binds the slot, so it hears about it in a fresh turn.
+    queueMicrotask(() => {
+      this.PresenterSlot = element;
+      this.cdr.markForCheck();
+    });
   }
 
   ngAfterViewInit(): void {
@@ -1198,6 +1240,10 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
       return;
     }
     this.revealedChannelKeys.add(plugin.ChannelName);
+    if (plugin.ShowsAgentVideo) {
+      this.revealPresenter(plugin);
+      return;
+    }
     this.DetailsPeek = true; // the panel shows via the same on-demand mechanism Details uses
     // FIRST USE: a non-whiteboard channel was tab-less until now — register its tab
     // SYNCHRONOUSLY (before the reveal/focus below) so the channel exists to be revealed.
@@ -1216,6 +1262,17 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
       this.pendingRevealKey = plugin.ChannelName;
     }
     // DetailsPeek flipped — surfacePanelEarned changed; re-resolve (marks for check).
+    this.recomputeUi();
+  }
+
+  /**
+   * The agent's video arrived: its channel's surface goes where its row places it (the stage is the agent's place in the
+   * call) and gets its tab, where it can be moved from, without opening the panel: the video shows in the call itself.
+   */
+  private revealPresenter(plugin: BaseRealtimeChannelClient): void {
+    if (plugin.HasSurface()) {
+      this.registerPluginChannelTab(plugin);
+    }
     this.recomputeUi();
   }
 

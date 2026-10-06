@@ -47,7 +47,7 @@ class TestSurfaceComponent implements OnInit, OnDestroy {
   standalone: true,
   imports: [MediaStageComponent, MediaStageSurfaceDirective, MediaStagePipActionsDirective, TestSurfaceComponent],
   template: `
-    <mj-media-stage [Surfaces]="Surfaces" [TabSlot]="Slot" [ActiveTabKey]="ActiveTabKey" [PipRects]="PipRects" (PipRectChange)="Changes.push($event)">
+    <mj-media-stage [Surfaces]="Surfaces" [TabSlot]="Slot" [StageSlot]="StageSlot" [ActiveTabKey]="ActiveTabKey" [PipRects]="PipRects" (PipRectChange)="Changes.push($event)">
       <ng-template mjMediaStageSurface let-key let-visible="Visible" let-placement="Placement">
         <mj-test-surface [Key]="key" [Visible]="visible" [Placement]="placement"></mj-test-surface>
       </ng-template>
@@ -61,6 +61,7 @@ class StageHostComponent {
   @Input() public Surfaces: MediaStageSurface[] = [];
   @Input() public ActiveTabKey: string | null = null;
   @Input() public Slot: HTMLElement | null = null;
+  @Input() public StageSlot: HTMLElement | null = null;
   @Input() public PipRects: ReadonlyMap<string, MediaPipRect> = new Map();
   public readonly Changes: MediaStagePipRectChange[] = [];
 }
@@ -172,6 +173,65 @@ describe('MediaStageComponent (DOM)', () => {
     expect(box(f, 'whiteboard').classList.contains('stage-surface--stage')).toBe(true);
     expect(isHidden(f, 'whiteboard')).toBe(false);
     expect(box(f, 'whiteboard').style.left).toBe('');
+  });
+
+  describe("the host's stage slot", () => {
+    const place = (element: HTMLElement) => [element.style.left, element.style.top, element.style.width, element.style.height];
+
+    it('covers the stage slot with a stage surface instead of filling the stage', async () => {
+      const f = await render({ Surfaces: [{ Key: 'avatar', Placement: 'stage' }], StageSlot: slotAt(40, 60, 300, 400) });
+      const avatar = box(f, 'avatar');
+      expect(place(avatar)).toEqual(['40px', '60px', '300px', '400px']);
+      expect(avatar.classList.contains('stage-surface--stage')).toBe(true);
+      expect(avatar.classList.contains('stage-surface--in-slot')).toBe(true);
+      expect(isHidden(f, 'avatar')).toBe(false);
+    });
+
+    it('leaves picture-in-picture and tab surfaces where they are', async () => {
+      const f = await render({
+        Surfaces: [
+          { Key: 'avatar', Placement: 'stage' },
+          { Key: 'board', Placement: 'tab' },
+          { Key: 'camera', Placement: 'pip', PipIndex: 0 },
+        ],
+        ActiveTabKey: 'board',
+        Slot: slotAt(500, 40, 300, 400),
+        StageSlot: slotAt(40, 60, 300, 400),
+      });
+      expect(place(box(f, 'board'))).toEqual(['500px', '40px', '300px', '400px']);
+      expect(box(f, 'camera').classList.contains('stage-surface--in-slot')).toBe(false);
+      expect(isHidden(f, 'camera')).toBe(false);
+    });
+
+    it('keeps a stage surface out of sight while its slot has no size, and fills the stage again without a slot', async () => {
+      const f = await render({ Surfaces: [{ Key: 'avatar', Placement: 'stage' }], StageSlot: slotAt(0, 0, 0, 0) });
+      expect(isHidden(f, 'avatar')).toBe(true);
+      set(f, { StageSlot: null });
+      expect(isHidden(f, 'avatar')).toBe(false);
+      expect(box(f, 'avatar').classList.contains('stage-surface--in-slot')).toBe(false);
+      expect(box(f, 'avatar').style.left).toBe('');
+      expect(TestSurfaceComponent.Created).toEqual(['avatar']);
+    });
+
+    it('measures the stage slot again once the pass is over, as when its size comes from its own bindings', async () => {
+      const slot = slotAt(0, 0, 0, 0);
+      const f = await render({ Surfaces: [{ Key: 'avatar', Placement: 'stage' }] });
+      set(f, { StageSlot: slot });
+      slot.Move(40, 60, 300, 400);
+      await Promise.resolve();
+      f.detectChanges();
+      expect(place(box(f, 'avatar'))).toEqual(['40px', '60px', '300px', '400px']);
+      expect(isHidden(f, 'avatar')).toBe(false);
+    });
+
+    it('follows the stage slot as it moves', async () => {
+      const slot = slotAt(40, 60, 300, 400);
+      const f = await render({ Surfaces: [{ Key: 'avatar', Placement: 'stage' }], StageSlot: slot });
+      slot.Move(20, 80, 200, 260);
+      step();
+      f.detectChanges();
+      expect(place(box(f, 'avatar'))).toEqual(['20px', '80px', '200px', '260px']);
+    });
   });
 
   it("keeps a surface's content as its placement changes, and tells it each placement", async () => {
