@@ -214,6 +214,7 @@ export class AgentMemoryContextBuilder {
      * @param payload - The agent's current payload (for template rendering).
      * @param logStatus - Optional verbose-aware status logger.
      * @param logError - Optional error logger (used when RAG injection fails non-fatally).
+     * @param activeSkillIDs - The skills active for this run; a lone active skill is the search's skill principal.
      * @returns The structured RAG result, or `null` if no scopes produced results.
      */
     public async InjectPreExecutionRAG(
@@ -227,7 +228,8 @@ export class AgentMemoryContextBuilder {
         secondaryScopes?: Record<string, SecondaryScopeValue>,
         payload?: unknown,
         logStatus?: AgentMemoryStatusLogger,
-        logError?: AgentMemoryErrorLogger
+        logError?: AgentMemoryErrorLogger,
+        activeSkillIDs?: string[]
     ): Promise<AgentPreExecutionRAGResult | null> {
         try {
             if (!contextUser) return null;
@@ -242,7 +244,8 @@ export class AgentMemoryContextBuilder {
                 primaryScopeRecordId,
                 primaryScopeEntityId,
                 secondaryScopes,
-                contextUser
+                contextUser,
+                activeSkillIDs
             });
 
             if (!result) return null;

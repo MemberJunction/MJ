@@ -2276,7 +2276,9 @@ export class BaseAgent {
                     primaryScopeEntityId,
                     primaryScopeRecordId,
                     secondaryScopes,
-                    params.payload
+                    params.payload,
+                    // Phase 1 has already activated requested + persisted conversation skills.
+                    this.activeSkillIDsForRun(params)
                 ),
                 // Carry the previous turn's tool results forward (no-op without a
                 // conversationId). Runs here so the results are in the messages before
@@ -3909,6 +3911,7 @@ export class BaseAgent {
      * @param primaryScopeRecordId - Multi-tenant primary scope record ID.
      * @param secondaryScopes - Multi-tenant secondary scope dimensions.
      * @param payload - The agent's current payload (for template rendering).
+     * @param activeSkillIDs - The skills active for this run; a lone active skill is the search's skill principal.
      * @returns The structured RAG result, or `null` if no scopes produced results.
      */
     protected async InjectPreExecutionRAG(
@@ -3920,7 +3923,8 @@ export class BaseAgent {
         primaryScopeEntityId?: string,
         primaryScopeRecordId?: string,
         secondaryScopes?: Record<string, SecondaryScopeValue>,
-        payload?: unknown
+        payload?: unknown,
+        activeSkillIDs?: string[]
     ): Promise<AgentPreExecutionRAGResult | null> {
         // Delegate to the shared builder so the Realtime agent type injects pre-execution RAG
         // identically. Verbose status + non-fatal error logging are threaded through from this instance.
@@ -3935,7 +3939,8 @@ export class BaseAgent {
             secondaryScopes,
             payload,
             (message, verboseOnly) => this.logStatus(message, verboseOnly),
-            (error, options) => this.logError(error, options)
+            (error, options) => this.logError(error, options),
+            activeSkillIDs
         );
 
         // Store for inclusion in result (externally observable behavior preserved)

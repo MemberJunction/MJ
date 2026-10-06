@@ -1,5 +1,6 @@
 /**
- * agent-rag-search.checks.ts — the 'agent-rag-search' bundle (RS1–RS7), agents-extended-suite §10.
+ * agent-rag-search.checks.ts — the 'agent-rag-search' bundle (RS1–RS7), agents-extended-suite §10, and
+ * the 'agent-rag-gate' bundle (RG1–RG2).
  *
  * SPLIT TIER: a DETERMINISTIC engine core (RS1/RS2/RS3/RS7 — no LLM, keyword path only) + LIVE agent
  * legs (RS4/RS6). The keyword path is fully deterministic: EntitySearchProvider LIKE over the seeded
@@ -16,6 +17,12 @@
  * DETERMINISM (§3): structural observables only — returned RecordIDs / SourceCounts, the Scoped Search
  * Actions step, the injected result + <retrieved_context> in the assembled prompt — never model prose.
  *
+ * 'agent-rag-gate' (IT107, deterministic tier) shares this file's fixture lifecycle and runs pre-execution RAG
+ * DIRECTLY — `new AgentPreExecutionRAG().Execute(...)`, no model — so its scope-permission gate is covered by
+ * the deterministic lane: RG1 a permitted run retrieves the seeded notes, RG2 a refused run returns null and
+ * writes exactly one Forbidden search-log row. (IT62 is live-model tier as a whole, so checks added to
+ * 'agent-rag-search' never run in the deterministic lane even without RequiresLiveModel.)
+ *
  * DEFERRED: RS5 (SearchScopeAccess='None' → ACCESS_DENIED) — no seeded agent has BOTH
  * SearchScopeAccess='None' AND a Scoped Search action grant, so the action's None gate isn't reachable
  * without a new roster agent (documented in the deliverable).
@@ -26,14 +33,15 @@
  */
 import { RunView } from '@memberjunction/core';
 import type { UserInfo } from '@memberjunction/core';
-import { NormalizeUUID } from '@memberjunction/global';
+import { EscapeSQLString, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { AIEngine } from '@memberjunction/aiengine';
-import { AgentRunner } from '@memberjunction/ai-agents';
+import { AgentPreExecutionRAG, AgentRunner } from '@memberjunction/ai-agents';
+import type { AgentPreExecutionRAGResult } from '@memberjunction/ai-agents';
 import { SearchEngine } from '@memberjunction/search-engine';
 import type { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended } from '@memberjunction/ai-core-plus';
 import { MJAIPromptRunEntityExtended } from '@memberjunction/ai-core-plus';
-import type { MJAIAgentNoteEntity, MJSearchExecutionLogEntity } from '@memberjunction/core-entities';
+import type { MJAIAgentEntity, MJAIAgentNoteEntity, MJSearchExecutionLogEntity } from '@memberjunction/core-entities';
 import { findUserByEmail, SEEDED_NOGRANT_EMAIL } from '@memberjunction/testing-integration';
 import { Assert, AssertEqual, settle } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
@@ -42,6 +50,7 @@ import { NamedCheck, IntegrationCheckContext, AgentRagSearchFixture } from '@mem
 const FIXTURE_TAG = '(mj-integration-test — safe to delete)';
 const SETTLE_MS = Number(process.env.AGENT_SETTLE_MS ?? 4000);
 const EXCLUDE_MARKER = 'IT-SCOPE-EXCLUDED';
+const IT_SCOPE_NAME = 'IT: Integration Test Scope';
 
 class ModelNonCompliance extends Error {}
 function assertP(cond: boolean, message: string): void {
@@ -128,6 +137,7 @@ interface StepRow {
   StepName: string;
   TargetLogID: string | null;
   StepNumber: number;
+  OutputData: string | null;
 }
 async function stepsFor(ctx: IntegrationCheckContext, runId: string): Promise<StepRow[]> {
   const r = await new RunView().RunView<StepRow>(
@@ -135,7 +145,7 @@ async function stepsFor(ctx: IntegrationCheckContext, runId: string): Promise<St
       EntityName: 'MJ: AI Agent Run Steps',
       ExtraFilter: `AgentRunID='${runId}'`,
       OrderBy: 'StepNumber',
-      Fields: ['StepType', 'StepName', 'TargetLogID', 'StepNumber'],
+      Fields: ['StepType', 'StepName', 'TargetLogID', 'StepNumber', 'OutputData'],
       ResultType: 'simple',
       BypassCache: true,
     },
@@ -144,19 +154,6 @@ async function stepsFor(ctx: IntegrationCheckContext, runId: string): Promise<St
   return r.Success ? r.Results : [];
 }
 
-/** All chat-message text across a run's Prompt steps (assembled-prompt content, in order). */
-async function allPromptMessages(ctx: IntegrationCheckContext, runId: string): Promise<string> {
-  const steps = await stepsFor(ctx, runId);
-  const parts: string[] = [];
-  for (const s of steps.filter((x) => x.StepType === 'Prompt' && x.TargetLogID)) {
-    const run = await ctx.Provider.GetEntityObject<MJAIPromptRunEntityExtended>('MJ: AI Prompt Runs', ctx.User);
-    if (await run.Load(s.TargetLogID!)) {
-      const { chatMessages } = run.ParseMessagesData();
-      parts.push(chatMessages.map((m) => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content))).join('\n'));
-    }
-  }
-  return parts.join('\n');
-}
 async function firstPromptMessages(ctx: IntegrationCheckContext, runId: string): Promise<string | null> {
   const steps = await stepsFor(ctx, runId);
   const first = steps.find((s) => s.StepType === 'Prompt' && s.TargetLogID);
@@ -169,6 +166,84 @@ async function firstPromptMessages(ctx: IntegrationCheckContext, runId: string):
   }
   const { chatMessages } = run.ParseMessagesData();
   return chatMessages.map((m) => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content))).join('\n');
+}
+
+/** The `<retrieved_context>…</retrieved_context>` block in a prompt, or null. The user's own message never counts. */
+function retrievedContextBlock(text: string): string | null {
+  const match = /<retrieved_context>[\s\S]*?<\/retrieved_context>/.exec(text);
+  return match ? match[0] : null;
+}
+
+/** One action parameter as an Actions step records it (`actionResult.parameters` in OutputData). */
+interface RecordedActionParam {
+  Name?: string;
+  Value?: unknown;
+}
+
+/** The serialized value of a named action parameter from an Actions step's OutputData, or null. */
+function actionParamText(step: StepRow, paramName: string): string | null {
+  if (!step.OutputData) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(step.OutputData) as { actionResult?: { parameters?: RecordedActionParam[] } };
+    const param = parsed.actionResult?.parameters?.find((p) => (p.Name ?? '').toLowerCase() === paramName.toLowerCase());
+    return param ? JSON.stringify(param.Value ?? null) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The seeded notes the IT scope's ExtraFilter keeps. */
+function inScopeNoteIds(fx: AgentRagSearchFixture): string[] {
+  return fx.SeededNoteIds.filter((id) => !fx.ExcludedNoteIds.includes(id));
+}
+
+/** Run pre-execution RAG directly, as the given agent and user — the no-LLM leg of the agent path. */
+async function runPreExecutionRAG(ctx: IntegrationCheckContext, agent: MJAIAgentEntity, query: string): Promise<AgentPreExecutionRAGResult | null> {
+  await SearchEngine.Instance.Config({}, ctx.User, false);
+  return new AgentPreExecutionRAG().Execute({ agent, lastUserMessage: query, contextUser: ctx.User });
+}
+
+/** The search-log fields RG1/RG2 read. */
+type ForbiddenLogRow = Pick<MJSearchExecutionLogEntity, 'ID' | 'AIAgentID' | 'FailureReason'>;
+
+/** Success search-log rows this user wrote for exactly this query, re-polled briefly: the audit write is fire-and-forget. */
+async function successRows(ctx: IntegrationCheckContext, query: string): Promise<Array<Pick<MJSearchExecutionLogEntity, 'ID' | 'SearchScopeID'>>> {
+  for (let attempt = 0; ; attempt++) {
+    const r = await new RunView().RunView<Pick<MJSearchExecutionLogEntity, 'ID' | 'SearchScopeID'>>(
+      {
+        EntityName: 'MJ: Search Execution Logs',
+        ExtraFilter: `Status='Success' AND UserID='${EscapeSQLString(ctx.User.ID)}' AND Query='${EscapeSQLString(query)}'`,
+        Fields: ['ID', 'SearchScopeID'],
+        ResultType: 'simple',
+        BypassCache: true,
+      },
+      ctx.User,
+    );
+    Assert(r.Success, `Search Execution Log read failed: ${r.ErrorMessage ?? ''}`);
+    if (r.Results.length > 0 || attempt >= 5) return r.Results;
+    await new Promise<void>((resolve) => setTimeout(resolve, 500));
+  }
+}
+
+/** Forbidden search-log rows this user wrote for the IT scope and exactly this query. */
+async function forbiddenRows(ctx: IntegrationCheckContext, query: string): Promise<ForbiddenLogRow[]> {
+  const fx = requireFixture(ctx);
+  const r = await new RunView().RunView<ForbiddenLogRow>(
+    {
+      EntityName: 'MJ: Search Execution Logs',
+      ExtraFilter:
+        `Status='Forbidden' AND SearchScopeID='${EscapeSQLString(fx.ScopeID)}' AND UserID='${EscapeSQLString(ctx.User.ID)}' ` +
+        `AND Query='${EscapeSQLString(query)}'`,
+      Fields: ['ID', 'AIAgentID', 'FailureReason'],
+      ResultType: 'simple',
+      BypassCache: true,
+    },
+    ctx.User,
+  );
+  Assert(r.Success, `Search Execution Log read failed: ${r.ErrorMessage ?? ''}`);
+  return r.Results;
 }
 
 export const AgentRagSearchChecks: NamedCheck[] = [
@@ -302,11 +377,21 @@ export const AgentRagSearchChecks: NamedCheck[] = [
           steps.some((s) => s.StepType === 'Actions'),
           'IT: Search Agent did not invoke the Scoped Search action',
         );
-        // Framework: the search results (the sentinel) were injected back into the run's context — the
-        // agent action path reaches the same corpus the engine path (RS1) does.
-        const messages = await allPromptMessages(ctx, run.ID);
-        Assert(messages.includes(fx.Marker), 'the Scoped Search results (sentinel marker) were not injected into the run');
-        console.log(`      → run ${run.ID} invoked Scoped Search and received the sentinel results`);
+        // Phase-P: the model searched for the sentinel (the action's Query input carries the marker).
+        const actionSteps = steps.filter((s) => s.StepType === 'Actions');
+        assertP(
+          actionSteps.some((s) => (actionParamText(s, 'Query') ?? '').includes(fx.Marker)),
+          'IT: Search Agent did not pass the sentinel marker to Scoped Search',
+        );
+        // Framework: the action's Results OUTPUT carries the seeded in-scope notes — the agent action path
+        // reaches the same corpus the engine path (RS1) does. Read from the action result, not from the
+        // prompt: the user's own message already carries the marker, so a prompt-wide match proves nothing.
+        const results = actionSteps.map((s) => (actionParamText(s, 'Results') ?? '').toLowerCase()).join('\n');
+        Assert(
+          inScopeNoteIds(fx).some((id) => results.includes(NormalizeUUID(id).toLowerCase())),
+          'the Scoped Search action result did not contain any seeded in-scope sentinel note',
+        );
+        console.log(`      → run ${run.ID} invoked Scoped Search and its result carried the seeded sentinel notes`);
       });
     },
   },
@@ -326,8 +411,14 @@ export const AgentRagSearchChecks: NamedCheck[] = [
       const run = await runSearchAgent(ctx, agent, `Tell me about ${fx.Marker} sentinel notes.`);
       const first = await firstPromptMessages(ctx, run.ID);
       Assert(!!first, 'could not read the first assembled prompt of the run');
-      Assert(first!.includes('<retrieved_context>'), 'pre-execution RAG did not inject a <retrieved_context> block into turn-1');
-      Assert(first!.includes(fx.Marker), 'the injected <retrieved_context> did not contain the seeded sentinel');
+      // Read INSIDE the block: the user's own message carries the marker, so a prompt-wide match proves nothing.
+      const block = retrievedContextBlock(first!);
+      Assert(!!block, 'pre-execution RAG did not inject a <retrieved_context> block into turn-1');
+      Assert(block!.includes(`Results from "${IT_SCOPE_NAME}"`), 'the <retrieved_context> block carries no results from the IT scope');
+      Assert(
+        block!.includes(fx.Marker),
+        'the <retrieved_context> block carries IT-scope results but not the seeded sentinel text (the injected result lines do not include the note text)',
+      );
       console.log('      → pre-execution RAG injected <retrieved_context> with the sentinel into turn-1');
     },
   },
@@ -351,112 +442,201 @@ for (const check of AgentRagSearchChecks) {
   IntegrationCheckRegistry.Instance.Register(check);
 }
 
-IntegrationCheckRegistry.Instance.RegisterLifecycle('agent-rag-search', {
-  Setup: async (ctx: IntegrationCheckContext) => {
-    const marker = `ITRAG${Date.now()
-      .toString(36)
-      .replace(/[^a-z0-9]/gi, '')}`;
-    // Resolve the seeded scope ID by name.
-    const scopeR = await new RunView().RunView<{ ID: string }>(
+/**
+ * 'agent-rag-gate' (IT107, deterministic): pre-execution RAG's scope-permission gate, exercised by calling
+ * `AgentPreExecutionRAG.Execute()` directly (no model). It seeds no corpus (a note save embeds, which the
+ * deterministic lane cannot rely on): the proof is the search log, a Success row for a granted run and a Forbidden row for a refused one.
+ *
+ * RG2 refuses through the AGENT (an unsaved copy of IT: Search Agent set to SearchScopeAccess='None'), not
+ * through the seeded no-grant user: that user holds no roles, so it cannot read `MJ: AI Agent Search Scopes`
+ * or `MJ: Search Scope Permissions` (the resolver fails, and a resolver failure writes no Forbidden row) nor
+ * create a `MJ: Search Execution Logs` row; and its search returns nothing anyway (RS3), so a null result for
+ * it would not show the gate ran.
+ */
+export const AgentRagGateChecks: NamedCheck[] = [
+  {
+    Id: 'agent-rag-gate.RG1',
+    Name: 'RG1: (deterministic) pre-execution RAG run directly for a granted user searches the IT scope: a Success search-log row, no Forbidden row',
+    Fn: async (ctx): Promise<void> => {
+      const fx = requireFixture(ctx);
+      const agent = await resolveSearchAgent(ctx);
+      const query = `${fx.LogQueryPrefix} ${fx.Marker} granted`;
+      const result = await runPreExecutionRAG(ctx, agent, query);
+      // The gate bundle seeds no corpus (a note save embeds, which the deterministic lane cannot rely on),
+      // so the result may be null when the scope holds nothing; the proof that the gate ALLOWED the search is
+      // the engine's own audit row, which it writes for every search it ran.
+      if (result) {
+        Assert(result.queriedScopeIDs.some((id) => UUIDsEqual(id, fx.ScopeID)), 'the IT scope was not among the scopes pre-execution RAG searched');
+      }
+      AssertEqual((await forbiddenRows(ctx, query)).length, 0, 'a granted run must write no Forbidden row');
+      const ran = await successRows(ctx, query);
+      Assert(ran.length >= 1, 'a granted run must leave a Success search-log row for this query (the gate let the search run)');
+      Assert(ran.every((r) => !r.SearchScopeID || UUIDsEqual(r.SearchScopeID, fx.ScopeID)), 'the Success row names a scope other than the IT scope');
+      console.log(`      → granted: ${ran.length} Success row(s), no Forbidden row${result ? `, ${result.combinedResults.length} result(s)` : ', empty corpus'}`);
+    },
+  },
+  {
+    Id: 'agent-rag-gate.RG2',
+    Name: "RG2: (deterministic) pre-execution RAG for an agent with SearchScopeAccess='None' returns null and writes exactly one Forbidden row",
+    Fn: async (ctx): Promise<void> => {
+      const fx = requireFixture(ctx);
+      const seeded = await resolveSearchAgent(ctx);
+      // A fresh, NEVER-SAVED copy, so the cached seeded agent and other bundles are untouched.
+      const refused = await ctx.Provider.GetEntityObject<MJAIAgentEntity>('MJ: AI Agents', ctx.User);
+      Assert(await refused.Load(seeded.ID), `could not load IT: Search Agent (${seeded.ID})`);
+      refused.SearchScopeAccess = 'None';
+      const query = `${fx.LogQueryPrefix} ${fx.Marker} sentinel refused`;
+      AssertEqual(await runPreExecutionRAG(ctx, refused, query), null, "an agent with SearchScopeAccess='None' must get no pre-execution retrieval");
+      const rows = await forbiddenRows(ctx, query);
+      AssertEqual(rows.length, 1, 'exactly one Forbidden search-log row for the IT scope and this query');
+      Assert(!!rows[0].AIAgentID && UUIDsEqual(rows[0].AIAgentID, seeded.ID), 'the Forbidden row must be attributed to the agent');
+      Assert((rows[0].FailureReason ?? '').includes("SearchScopeAccess='None'"), `unexpected FailureReason: ${rows[0].FailureReason ?? ''}`);
+      console.log('      → refused: null result, one Forbidden row attributed to the agent');
+    },
+  },
+];
+
+for (const check of AgentRagGateChecks) {
+  IntegrationCheckRegistry.Instance.Register(check);
+}
+
+/** Seeds the sentinel corpus both bundles search. */
+/** The fixture both bundles share, before any corpus: the seeded scope's ID, a marker and the log prefix. */
+async function createRagFixture(ctx: IntegrationCheckContext): Promise<AgentRagSearchFixture> {
+  const marker = `ITRAG${Date.now()
+    .toString(36)
+    .replace(/[^a-z0-9]/gi, '')}`;
+  // Resolve the seeded scope ID by name.
+  const scopeR = await new RunView().RunView<{ ID: string }>(
+    {
+      EntityName: 'MJ: Search Scopes',
+      ExtraFilter: `Name='${IT_SCOPE_NAME}'`,
+      Fields: ['ID'],
+      ResultType: 'simple',
+      BypassCache: true,
+    },
+    ctx.User,
+  );
+  Assert(scopeR.Success && scopeR.Results.length === 1, "seeded 'IT: Integration Test Scope' not found — push metadata-optional/integration-test");
+  const fx: AgentRagSearchFixture = {
+    ScopeID: scopeR.Results[0].ID,
+    Marker: marker,
+    LogQueryPrefix: 'mj-integration-test rag',
+    SeededNoteIds: [],
+    ExcludedNoteIds: [],
+    CreatedRunIds: [],
+  };
+  ctx.AgentRagSearchFixture = fx;
+  return fx;
+}
+
+/**
+ * The gate bundle's setup: the fixture with NO sentinel notes. Saving an `MJ: AI Agent Notes` row generates an
+ * embedding (`MJAIAgentNoteEntityServer.Save`), which the deterministic lane cannot rely on; RG1 and RG2 prove
+ * the gate through the search log instead.
+ */
+async function setupRagGateFixture(ctx: IntegrationCheckContext): Promise<void> {
+  await createRagFixture(ctx);
+}
+
+/** Seeds the sentinel corpus the live bundle searches. */
+async function setupRagFixture(ctx: IntegrationCheckContext): Promise<void> {
+  const fx = await createRagFixture(ctx);
+  // Seed the sentinel corpus: two in-scope notes + one excluded (carries the scope's exclusion marker).
+  fx.SeededNoteIds.push(await seedNote(ctx, `${fx.Marker} sentinel alpha note ${FIXTURE_TAG}`));
+  fx.SeededNoteIds.push(await seedNote(ctx, `${fx.Marker} sentinel beta note ${FIXTURE_TAG}`));
+  const excludedId = await seedNote(ctx, `${fx.Marker} sentinel gamma ${EXCLUDE_MARKER} note ${FIXTURE_TAG}`);
+  fx.SeededNoteIds.push(excludedId);
+  fx.ExcludedNoteIds.push(excludedId);
+}
+
+/** Removes the corpus, the prefixed search-log rows and any runs the live legs created. */
+async function teardownRagFixture(ctx: IntegrationCheckContext): Promise<void> {
+  const fx = ctx.AgentRagSearchFixture;
+  if (!fx) {
+    return;
+  }
+  await deleteSentinelNotes(ctx, fx);
+  await sweepPrefixedSearchLogs(ctx, fx);
+  await deleteCreatedRuns(ctx, fx);
+  ctx.AgentRagSearchFixture = undefined;
+}
+
+async function deleteSentinelNotes(ctx: IntegrationCheckContext, fx: AgentRagSearchFixture): Promise<void> {
+  for (const id of fx.SeededNoteIds) {
+    try {
+      const note = await ctx.Provider.GetEntityObject<MJAIAgentNoteEntity>('MJ: AI Agent Notes', ctx.User);
+      if (await note.Load(id)) {
+        await note.Delete();
+      }
+    } catch (e) {
+      console.error('rag note cleanup failed:', e);
+    }
+  }
+}
+
+/** SearchExecutionLog audit rows carrying our prefix (best-effort, bounded re-poll for the fire-and-forget write). */
+async function sweepPrefixedSearchLogs(ctx: IntegrationCheckContext, fx: AgentRagSearchFixture): Promise<void> {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const logs = await new RunView().RunView<MJSearchExecutionLogEntity>(
       {
-        EntityName: 'MJ: Search Scopes',
-        ExtraFilter: `Name='IT: Integration Test Scope'`,
-        Fields: ['ID'],
-        ResultType: 'simple',
+        EntityName: 'MJ: Search Execution Logs',
+        ExtraFilter: `Query LIKE '${fx.LogQueryPrefix}%'`,
+        ResultType: 'entity_object',
         BypassCache: true,
       },
       ctx.User,
     );
-    Assert(scopeR.Success && scopeR.Results.length === 1, "seeded 'IT: Integration Test Scope' not found — push metadata-optional/integration-test");
-    const fx: AgentRagSearchFixture = {
-      ScopeID: scopeR.Results[0].ID,
-      Marker: marker,
-      LogQueryPrefix: 'mj-integration-test rag',
-      SeededNoteIds: [],
-      ExcludedNoteIds: [],
-      CreatedRunIds: [],
-    };
-    ctx.AgentRagSearchFixture = fx;
-    // Seed the sentinel corpus: two in-scope notes + one excluded (carries the scope's exclusion marker).
-    fx.SeededNoteIds.push(await seedNote(ctx, `${marker} sentinel alpha note ${FIXTURE_TAG}`));
-    fx.SeededNoteIds.push(await seedNote(ctx, `${marker} sentinel beta note ${FIXTURE_TAG}`));
-    const excludedId = await seedNote(ctx, `${marker} sentinel gamma ${EXCLUDE_MARKER} note ${FIXTURE_TAG}`);
-    fx.SeededNoteIds.push(excludedId);
-    fx.ExcludedNoteIds.push(excludedId);
-  },
-  Teardown: async (ctx: IntegrationCheckContext) => {
-    const fx = ctx.AgentRagSearchFixture;
-    if (!fx) {
-      return;
-    }
-    // Sentinel notes.
-    for (const id of fx.SeededNoteIds) {
+    const rows = logs.Success ? logs.Results : [];
+    for (const row of rows) {
       try {
-        const note = await ctx.Provider.GetEntityObject<MJAIAgentNoteEntity>('MJ: AI Agent Notes', ctx.User);
-        if (await note.Load(id)) {
-          await note.Delete();
-        }
+        await row.Delete();
       } catch (e) {
-        console.error('rag note cleanup failed:', e);
+        console.error('rag log cleanup failed:', e);
       }
     }
-    // SearchExecutionLog audit rows carrying our prefix (best-effort, bounded re-poll for the fire-and-forget write).
-    for (let attempt = 0; attempt < 4; attempt++) {
-      const logs = await new RunView().RunView<MJSearchExecutionLogEntity>(
+    if (rows.length === 0 && attempt > 0) {
+      break;
+    }
+    await settle(300);
+  }
+}
+
+/** Run steps → runs, for every run the live legs created. */
+async function deleteCreatedRuns(ctx: IntegrationCheckContext, fx: AgentRagSearchFixture): Promise<void> {
+  for (const runId of Array.from(new Set(fx.CreatedRunIds))) {
+    try {
+      const steps = await new RunView().RunView<{ ID: string }>(
         {
-          EntityName: 'MJ: Search Execution Logs',
-          ExtraFilter: `Query LIKE '${fx.LogQueryPrefix}%'`,
-          ResultType: 'entity_object',
+          EntityName: 'MJ: AI Agent Run Steps',
+          ExtraFilter: `AgentRunID='${runId}'`,
+          Fields: ['ID'],
+          ResultType: 'simple',
           BypassCache: true,
         },
         ctx.User,
       );
-      const rows = logs.Success ? logs.Results : [];
-      for (const row of rows) {
-        try {
-          await row.Delete();
-        } catch (e) {
-          console.error('rag log cleanup failed:', e);
-        }
-      }
-      if (rows.length === 0 && attempt > 0) {
-        break;
-      }
-      await settle(300);
-    }
-    // Run steps → runs.
-    for (const runId of Array.from(new Set(fx.CreatedRunIds))) {
-      try {
-        const steps = await new RunView().RunView<{ ID: string }>(
-          {
-            EntityName: 'MJ: AI Agent Run Steps',
-            ExtraFilter: `AgentRunID='${runId}'`,
-            Fields: ['ID'],
-            ResultType: 'simple',
-            BypassCache: true,
-          },
-          ctx.User,
-        );
-        if (steps.Success) {
-          for (const s of steps.Results) {
-            try {
-              const step = await ctx.Provider.GetEntityObject<MJAIAgentRunStepEntityExtended>('MJ: AI Agent Run Steps', ctx.User);
-              if (await step.Load(s.ID)) {
-                await step.Delete();
-              }
-            } catch (e) {
-              console.error('rag step cleanup failed:', e);
+      if (steps.Success) {
+        for (const s of steps.Results) {
+          try {
+            const step = await ctx.Provider.GetEntityObject<MJAIAgentRunStepEntityExtended>('MJ: AI Agent Run Steps', ctx.User);
+            if (await step.Load(s.ID)) {
+              await step.Delete();
             }
+          } catch (e) {
+            console.error('rag step cleanup failed:', e);
           }
         }
-        const run = await ctx.Provider.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', ctx.User);
-        if (await run.Load(runId)) {
-          await run.Delete();
-        }
-      } catch (e) {
-        console.error('rag run cleanup failed:', e);
       }
+      const run = await ctx.Provider.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', ctx.User);
+      if (await run.Load(runId)) {
+        await run.Delete();
+      }
+    } catch (e) {
+      console.error('rag run cleanup failed:', e);
     }
-    ctx.AgentRagSearchFixture = undefined;
-  },
-});
+  }
+}
+
+IntegrationCheckRegistry.Instance.RegisterLifecycle('agent-rag-search', { Setup: setupRagFixture, Teardown: teardownRagFixture });
+IntegrationCheckRegistry.Instance.RegisterLifecycle('agent-rag-gate', { Setup: setupRagGateFixture, Teardown: teardownRagFixture });

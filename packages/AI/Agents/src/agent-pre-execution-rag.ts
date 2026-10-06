@@ -7,36 +7,47 @@
  *
  *   1. Load the agent's active `AIAgentSearchScope` rows where Phase IN ('PreExecution','Both')
  *      and the row is within its Status + StartAt/EndAt window.
- *   2. For each active scope, render the `QueryTemplateID` via MJ TemplateEngineServer
- *      (or fall back to `lastUserMessage`).
- *   3. Call `SearchEngine.Search()` with `ScopeIDs: [scopeId]`, honoring per-agent overrides
+ *   2. For each active scope, check that the acting user may SEARCH it, through the shared
+ *      `SearchScopePermissionResolver` with the agent (and the run's lone active skill, if any) as
+ *      principals and the run's tenant; the bar is above `Read`, as in the Scoped Search action.
+ *      A refused scope is skipped and logged as `Forbidden`.
+ *   3. Render the `QueryTemplateID` via MJ TemplateEngineServer (or fall back to `lastUserMessage`).
+ *   4. Call `SearchEngine.Search()` with `ScopeIDs: [scopeId]`, honoring per-agent overrides
  *      (MaxResults, MinScore, FusionWeightsOverride) and the agent's multi-tenant context
  *      (PrimaryScopeRecordID, SecondaryScopes).
- *   4. Cross-scope RRF when multiple scopes produced results.
- *   5. Format results as a `<retrieved_context>` system message and return.
+ *   5. Cross-scope RRF when multiple scopes produced results.
+ *   6. Format results as a `<retrieved_context>` system message and return.
  *
  * @module @memberjunction/ai-agents
  */
 
-import { LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
+import { IsVerboseLoggingEnabled, LogError, LogStatus, LogStatusEx, RunView, UserInfo } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import {
     MJAIAgentEntity,
     MJAIAgentSearchScopeEntity,
+    MJAISkillEntity,
     SearchEngineBase,
     MJSearchScopeEntity,
     MJTemplateEntityExtended,
     MJTemplateContentEntity,
 } from '@memberjunction/core-entities';
+import { AIEngine } from '@memberjunction/aiengine';
 import {
     SearchEngine,
     SearchResultItem,
     SearchContext,
     FusionWeightsByProvider,
     SearchFusion,
+    GetSearchScopePermissionResolver,
+    EffectivePermission,
 } from '@memberjunction/search-engine';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { ChatMessage } from '@memberjunction/ai';
 import { SecondaryScopeValue } from '@memberjunction/ai-core-plus';
+
+/** `MJ: Search Execution Logs.FailureReason` is NVARCHAR(500). */
+const FAILURE_REASON_MAX_LENGTH = 500;
 
 /**
  * Parameters for executing pre-execution RAG for an agent.
@@ -60,6 +71,13 @@ export interface AgentPreExecutionRAGParams {
     secondaryScopes?: Record<string, SecondaryScopeValue>;
     /** Calling user — threaded through to SearchEngine + Metadata. */
     contextUser: UserInfo;
+    /**
+     * The skills active for this run (`BaseAgent.activeSkillIDsForRun`). Phase 1 of
+     * `BaseAgent.Execute()` activates requested and persisted conversation skills before this phase
+     * runs, so the set is already settled here. When exactly one skill is active it is the skill
+     * principal for the permission gate and the search, as in the Scoped Search action.
+     */
+    activeSkillIDs?: string[];  // case-violation-ok-legacy-back-compat: named to match the rest of AgentPreExecutionRAGParams (agent, lastUserMessage, contextUser), which predate the rule
     /**
      * Phase 2C: when true, consume SearchEngine.streamSearch() instead of
      * the synchronous Search() per scope. The final aggregate is identical
@@ -127,19 +145,21 @@ export class AgentPreExecutionRAG {
             SecondaryScopes: params.secondaryScopes
         };
         const hasContext = !!(searchContext.PrimaryScopeRecordID || (searchContext.SecondaryScopes && Object.keys(searchContext.SecondaryScopes).length > 0));
+        const principal = await this.resolveSkillPrincipal(params);
+        if (!principal.ok) return null;
 
-        // 2–3. For each agent-scope row, render the query and run scoped search.
+        // 2–4. For each agent-scope row, check permission, render the query and run scoped search.
         const perScopeResults: ScopeSearchResult[] = [];
         for (const row of agentScopeRows) {
-            const r = await this.searchOneAgentScope(row, params, searchContext, hasContext);
+            const r = await this.searchOneAgentScope(row, params, searchContext, hasContext, principal.skill);
             if (r) perScopeResults.push(r);
         }
         if (perScopeResults.length === 0) return null;
 
-        // 4. Cross-scope RRF when multiple scopes contributed
+        // 5. Cross-scope RRF when multiple scopes contributed
         const combined = this.combineAcrossScopes(perScopeResults);
 
-        // 5. Format for system-message injection
+        // 6. Format for system-message injection
         const formatted = this.formatAsSystemMessage(perScopeResults);
 
         return {
@@ -164,20 +184,20 @@ export class AgentPreExecutionRAG {
     /**
      * Resolve + render the query for one agent-scope row, run the search
      * (sync or streaming), and shape the per-scope result. Returns null when
-     * the row is unusable (inactive scope, empty query, search failure, or
-     * empty result set) — the caller decides whether to keep iterating.
+     * the row is unusable (inactive scope, nothing to search, refused scope,
+     * empty query, search failure, or empty result set) — the caller decides
+     * whether to keep iterating.
      */
     private async searchOneAgentScope(
         row: MJAIAgentSearchScopeEntity,
         params: AgentPreExecutionRAGParams,
         searchContext: SearchContext,
         hasContext: boolean,
+        skill: MJAISkillEntity | null,
     ): Promise<ScopeSearchResult | null> {
-        const scope = SearchEngineBase.Instance.GetActiveScopeByID(row.SearchScopeID);
-        if (!scope) {
-            LogStatus(`AgentPreExecutionRAG: Scope "${row.SearchScopeID}" not active — skipping.`);
-            return null;
-        }
+        const scope = await this.searchableScope(row, params, skill);
+        if (!scope) return null;
+
         const query = await this.resolveQuery(row, scope, params);
         if (!query || !query.trim()) return null;
 
@@ -187,7 +207,7 @@ export class AgentPreExecutionRAG {
 
         try {
             const sr = params.streamingEnabled
-                ? await this.streamSearchOneScope({ scope, query, maxResults, minScore, fusionWeights, searchContext, hasContext, params })
+                ? await this.streamSearchOneScope({ scope, query, maxResults, minScore, fusionWeights, searchContext, hasContext, params, skill })
                 : await SearchEngine.Instance.Search({
                     Query: query,
                     MaxResults: maxResults,
@@ -201,6 +221,8 @@ export class AgentPreExecutionRAG {
                     // agent. Without this, the analytics dashboard's "top
                     // searches by agent" view is blind to the RAG path.
                     AIAgentID: params.agent.ID,
+                    // The skill principal the gate judged, bound as Principals.SkillID (as the action does).
+                    AISkillID: skill?.ID,
                 }, params.contextUser);
 
             if (sr.Success && sr.Results.length > 0) {
@@ -226,6 +248,138 @@ export class AgentPreExecutionRAG {
     }
 
     /**
+     * The scope for this row, or null when the row should not be searched: the scope is inactive,
+     * there is nothing to search, or the acting user may not search it.
+     *
+     * Nothing to search: no query template and an empty message. `BaseAgent` passes `''` when the
+     * last user message is multimodal; such a run neither resolves a permission nor writes a
+     * Forbidden row carrying an empty query.
+     *
+     * The gate runs before the query is rendered: a refused scope costs nothing, and the Forbidden row
+     * logs what the person asked rather than a template rendering they never got.
+     */
+    private async searchableScope(
+        row: MJAIAgentSearchScopeEntity,
+        params: AgentPreExecutionRAGParams,
+        skill: MJAISkillEntity | null,
+    ): Promise<MJSearchScopeEntity | null> {
+        const scope = SearchEngineBase.Instance.GetActiveScopeByID(row.SearchScopeID);
+        if (!scope) {
+            LogStatus(`AgentPreExecutionRAG: Scope "${row.SearchScopeID}" not active — skipping.`);
+            return null;
+        }
+        if (!row.QueryTemplateID && !params.lastUserMessage?.trim()) return null;
+        return (await this.scopePermitted(scope, params, skill)) ? scope : null;
+    }
+
+    /**
+     * The skill principal, by the Scoped Search action's rule (`resolveSkillPrincipalID`): Phase 1 of
+     * `BaseAgent.Execute()` (`preActivateRequestedSkills`, which also loads persisted `MJ: Conversation
+     * Skills`) has finished before this phase, so the run's active skills are known here. When exactly
+     * one is active it is the principal, so its `SearchScopeAccess` can veto a scope here as it does in
+     * the action (`SkillNone`, `SkillAssignedNotListed`). When several are active, none is: nothing
+     * names one of them, and the action searches with no skill principal in the same case.
+     *
+     * `ok: false` when the lone active skill is not in the AIEngine cache. The action refuses a skill
+     * it cannot load rather than search with an unjudged principal; pre-execution retrieval is
+     * skipped for the same reason.
+     */
+    private async resolveSkillPrincipal(
+        params: AgentPreExecutionRAGParams,
+    ): Promise<{ ok: true; skill: MJAISkillEntity | null } | { ok: false }> {
+        const active = params.activeSkillIDs ?? [];
+        if (active.length === 0) return { ok: true, skill: null };
+        if (active.length > 1) {
+            LogStatusEx({
+                message: `AgentPreExecutionRAG: ${active.length} skills are active in this run — searching with no skill principal.`,
+                verboseOnly: true,
+                isVerboseEnabled: IsVerboseLoggingEnabled,
+            });
+            return { ok: true, skill: null };
+        }
+        await AIEngine.Instance.Config(false, params.contextUser);
+        const skill = AIEngine.Instance.Skills.find(s => UUIDsEqual(s.ID, active[0]));
+        if (skill) return { ok: true, skill };
+        LogError(`AgentPreExecutionRAG: active skill "${active[0]}" is not in the AI metadata cache; `
+            + 'skipping pre-execution retrieval rather than searching with an unjudged skill principal.');
+        return { ok: false };
+    }
+
+    /**
+     * The gate the other scoped search paths already apply — the Scoped Search action and the GraphQL
+     * resolver both refuse a scope the acting user may not SEARCH — applied here too. An agent's scope
+     * ASSIGNMENT (`MJ: AI Agent Search Scopes`) says which scopes the agent reads from; it is not a
+     * grant to the person asking. Without this, pre-execution RAG searched every assigned scope for
+     * every user before the first tool call: the one scoped search path that never asked.
+     *
+     * The bar is the same as the action's: the permission must resolve as allowed AND above `Read`.
+     * `Read` lets a person see a scope in a picker; it does not let them run a search in it, and the
+     * action and resolver both refuse it (`scoped-search.action.ts`, `SearchKnowledgeResolver.ts`).
+     *
+     * The principals are the action's: the agent, and the run's lone active skill when there is one
+     * (see {@link resolveSkillPrincipal}).
+     *
+     * A refused scope is skipped (the others still run) and the attempt is written to the search log as
+     * Forbidden, where the other denials land. A resolver failure is not a decision: that scope is
+     * skipped and the error logged, with no Forbidden row — the same handling as the action and the
+     * GraphQL resolvers — rather than aborting every scope.
+     */
+    private async scopePermitted(
+        scope: MJSearchScopeEntity,
+        params: AgentPreExecutionRAGParams,
+        skill: MJAISkillEntity | null,
+    ): Promise<boolean> {
+        const startTime = Date.now();
+        let verdict: EffectivePermission;
+        try {
+            verdict = await GetSearchScopePermissionResolver().ResolveEffectivePermission({
+                User: params.contextUser,
+                SearchScopeID: scope.ID,
+                Agent: params.agent,
+                Skill: skill,
+                PrimaryScopeRecordID: params.primaryScopeRecordId ?? null,
+                ContextUser: params.contextUser,
+            });
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            LogError(`AgentPreExecutionRAG: permission for scope "${scope.Name}" could not be resolved; skipping the scope: ${msg}`);
+            return false;
+        }
+        if (verdict.Allowed && verdict.Level !== 'Read') return true;
+        await this.logRefusal(scope, params, skill, verdict, startTime);
+        return false;
+    }
+
+    /** Write the `Forbidden` search-log row for one refused scope; the console line is verbose-only, as in the action. */
+    private async logRefusal(
+        scope: MJSearchScopeEntity,
+        params: AgentPreExecutionRAGParams,
+        skill: MJAISkillEntity | null,
+        verdict: EffectivePermission,
+        startTime: number,
+    ): Promise<void> {
+        const reason = verdict.Allowed && verdict.Level === 'Read'
+            ? `${verdict.Reason} — Read grants visibility of the scope, not the right to search it.`
+            : verdict.Reason;
+        LogStatusEx({
+            message: `AgentPreExecutionRAG: scope "${scope.Name}" refused for the acting user — ${reason} (source=${verdict.Source}). Skipping it.`,
+            verboseOnly: true,
+            isVerboseEnabled: IsVerboseLoggingEnabled,
+        });
+        await SearchEngine.Instance.LogForbiddenSearch({
+            Query: params.lastUserMessage,
+            ScopeIDs: [scope.ID],
+            // A resolver Reason names principals and can outrun the column.
+            FailureReason: reason.substring(0, FAILURE_REASON_MAX_LENGTH),
+            StartTime: startTime,
+            ContextUser: params.contextUser,
+            AIAgentID: params.agent.ID,
+            AISkillID: skill?.ID ?? null,
+            PrimaryScopeRecordID: params.primaryScopeRecordId ?? null,
+        });
+    }
+
+    /**
      * Phase 2C streaming-mode helper — consume `SearchEngine.streamSearch()`
      * and shape the events back into a `SearchResult` so the rest of the
      * pipeline doesn't need to know about streaming. Per-provider trace
@@ -242,6 +396,7 @@ export class AgentPreExecutionRAG {
         searchContext: SearchContext;
         hasContext: boolean;
         params: AgentPreExecutionRAGParams;
+        skill: MJAISkillEntity | null;
     }): Promise<Awaited<ReturnType<typeof SearchEngine.Instance.Search>>> {
         let finalResults: SearchResultItem[] = [];
         let sourceCounts = { Vector: 0, FullText: 0, Entity: 0, Storage: 0 };
@@ -257,6 +412,7 @@ export class AgentPreExecutionRAG {
             FusionWeightsOverride: input.fusionWeights,
             Mode: 'full',
             AIAgentID: input.params.agent.ID,
+            AISkillID: input.skill?.ID,
         }, input.params.contextUser)) {
             if (ev.phase === 'provider') {
                 traces.push(`### Provider \`${ev.providerName}\` returned ${ev.results.length} rows in ${ev.durationMs}ms`);
