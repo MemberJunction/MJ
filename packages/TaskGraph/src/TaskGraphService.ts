@@ -115,6 +115,11 @@ export type TaskGraphParentMetadata = {
     failureSemantics?: 'block' | 'edges';
     submittedByAgentRunID: string | null;
     /**
+     * The per-task output budget the continuation carries, from the spec's `continuationOutputChars`.
+     * Absent means the dispatcher's default. Persisted for the same reason as everything else here.
+     */
+    continuationOutputChars?: number;
+    /**
      * Who the graph belongs to.
      *
      * Stored here rather than on a Task column because `Task.UserID` already means something else —
@@ -208,6 +213,10 @@ export function ParseTaskGraphParentMetadata(raw: string | null | undefined): Ta
                 : 'message',
             failureSemantics: parsed.failureSemantics === 'edges' ? 'edges' : 'block',
             reinvokeDepth: Number.isFinite(parsed.reinvokeDepth) ? Number(parsed.reinvokeDepth) : 0,
+            // A budget must be a positive whole number of characters; anything else means "default".
+            continuationOutputChars: Number.isInteger(parsed.continuationOutputChars) && Number(parsed.continuationOutputChars) > 0
+                ? Number(parsed.continuationOutputChars)
+                : undefined,
             // Guarded like the others: this is read to explain a settlement after the fact, and an
             // arbitrary string arriving from a hand edit should read as "unknown", not be echoed.
             continuationDeliveredAs: DELIVERY_OUTCOMES.has(parsed.continuationDeliveredAs as string)
@@ -232,6 +241,7 @@ export function BuildTaskGraphParentInputPayload(args: {
     submittedByUserID: string | null;
     invocation?: { data?: unknown; context?: unknown } | null;
     startPaused?: boolean;
+    continuationOutputChars?: number;
 }): Record<string, unknown> {
     return {
         continuation: args.continuation,
@@ -239,6 +249,7 @@ export function BuildTaskGraphParentInputPayload(args: {
         failureSemantics: args.failureSemantics,
         submittedByAgentRunID: args.submittedByAgentRunID,
         submittedByUserID: args.submittedByUserID,
+        ...(args.continuationOutputChars !== undefined ? { continuationOutputChars: args.continuationOutputChars } : {}),
         ...(args.invocation
             ? { invocation: { data: args.invocation.data, context: args.invocation.context } }
             : {}),
@@ -1537,6 +1548,7 @@ export class TaskGraphService {
             continuation: spec.continuation ?? 'message',
             reinvokeDepth: context.ReinvokeDepth ?? 0,
             failureSemantics: spec.failureSemantics ?? 'block',
+            continuationOutputChars: spec.continuationOutputChars,
             submittedByAgentRunID: context.AgentRunID ?? null,
             submittedByUserID: context.ContextUser?.ID ?? null,
             invocation: sanitized.Envelope

@@ -576,6 +576,13 @@ export function ExplainProjectDeleteFailure(dbMessage: string | null | undefined
  */
 export class ConversationEngine extends BaseEngine<ConversationEngine> {
     /**
+     * How many recent messages a turn is given when the caller names no window: the run resolver's
+     * default for every chat turn, and the window a workflow's follow-up turn is given. One value,
+     * so a turn the server starts on its own sees the same history a person's turn does.
+     */
+    public static readonly DefaultHistoryMessages = 20;
+
+    /**
      * Returns the global instance of the class. This is a singleton class, so there is only
      * one instance of it in the application. Do not directly create new instances of it,
      * always use this method to get the instance.

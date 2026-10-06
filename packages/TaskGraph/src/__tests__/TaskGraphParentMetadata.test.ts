@@ -117,6 +117,26 @@ describe('ParseTaskGraphParentMetadata', () => {
     });
 });
 
+describe('continuationOutputChars — the graph\'s own output budget for the continuation', () => {
+    it('round-trips a positive whole number', () => {
+        const raw = JSON.stringify({ continuation: 'reinvoke', reinvokeDepth: 0, submittedByAgentRunID: null, continuationOutputChars: 2500 });
+        expect(ParseTaskGraphParentMetadata(raw).continuationOutputChars).toBe(2500);
+    });
+
+    it('reads anything that is not a positive whole number as "use the default"', () => {
+        for (const bad of [0, -1, 2.5, 'lots', null, NaN]) {
+            const raw = JSON.stringify({ continuation: 'message', reinvokeDepth: 0, submittedByAgentRunID: null, continuationOutputChars: bad });
+            expect(ParseTaskGraphParentMetadata(raw).continuationOutputChars).toBeUndefined();
+        }
+    });
+
+    it('is written only when the spec set one', () => {
+        const base = { continuation: 'message' as const, reinvokeDepth: 0, failureSemantics: 'block' as const, submittedByAgentRunID: null, submittedByUserID: null };
+        expect(BuildTaskGraphParentInputPayload(base)).not.toHaveProperty('continuationOutputChars');
+        expect(BuildTaskGraphParentInputPayload({ ...base, continuationOutputChars: 4000 })).toMatchObject({ continuationOutputChars: 4000 });
+    });
+});
+
 describe('continuationDeliveredAs — how a settlement ended, kept in the row', () => {
     // Written by the same compare-and-swap that sets the timestamp, and read afterwards to tell a
     // settlement that was ANNOUNCED from one that was found too late to announce. Untyped, that

@@ -21,6 +21,8 @@ import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { AgentRunner } from '@memberjunction/ai-agents';
 import { ChatMessageRole } from '@memberjunction/ai';
 import type { ProviderFactory, TaskContinuationDeliverer, TaskContinuationParams } from '@memberjunction/task-graph';
+import { AIEngine } from '@memberjunction/aiengine';
+import { TemplateEngineServer } from '@memberjunction/templates';
 import { PubSubManager } from '../generic/PubSubManager.js';
 import { BROADCAST_SESSION_ID, PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
 
@@ -30,8 +32,6 @@ const MAX_LISTED_TASKS = 20;
 /** How far up `ParentRunID` a reinvoke looks for the conversation's root agent. */
 const MAX_PARENT_HOPS = 20;
 
-/** How many recent conversation messages a follow-up turn is given, on top of the outcome. */
-const FOLLOW_UP_HISTORY_MESSAGES = 20;
 
 /**
  * Delivers a finished graph's outcome — as a conversation message, or by starting the submitting
@@ -46,6 +46,14 @@ const FOLLOW_UP_HISTORY_MESSAGES = 20;
  * run submits, and the cap finally compares against something real.
  */
 export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer {
+    /**
+     * The seeded prompt (metadata/prompts/.workflow-follow-up-prompt.json) whose template is the
+     * follow-up turn: the rendered outcome plus the instruction to present it. Model-facing text
+     * lives in metadata so it is tuned with `mj sync push`, not a code deploy; this class only
+     * renders the template with the outcome as data.
+     */
+    public static readonly FollowUpPromptName = 'Workflow Follow-Up';
+
     /**
      * @param providerFactory mints a fresh provider per delivery, for the same reason the dispatcher
      *        does: deliveries run outside any request and concurrently with task execution, so
@@ -160,9 +168,10 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
             }
 
             const runner = new AgentRunner();
+            const followUp = await this.renderFollowUpMessage(params);
             const turnFor = (contextUser: UserInfo) => ({
                 agent,
-                conversationMessages: [{ role: ChatMessageRole.user, content: this.renderReinvokeMessage(params) }],
+                conversationMessages: [{ role: ChatMessageRole.user, content: followUp }],
                 contextUser,
                 // The conversation's own model configuration, so the follow-up is answered by the
                 // same model set as the turn that submitted the graph rather than the global default.
@@ -289,7 +298,8 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
             const rows = await ConversationEngine.LoadWindowRowsFresh(conversationID, owner, provider);
             const window = ConversationEngine.AssembleContextWindow(rows, {
                 excludeDetailIds: [replyID],
-                maxTailMessages: FOLLOW_UP_HISTORY_MESSAGES,
+                // The same window a normal turn gets (RunAIAgentResolver), so the two cannot drift apart.
+                maxTailMessages: ConversationEngine.DefaultHistoryMessages,
             });
             // Never hand back something the caller cannot spread: an engine that answers with no
             // window is the same as no history.
@@ -361,16 +371,39 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
         return current;
     }
 
-    /** The outcome plus the instruction that turns a status report into a delivered result. */
-    private renderReinvokeMessage(params: TaskContinuationParams): string {
-        return [
-            this.renderMessage(params),
-            '',
-            'Present these results to the user now, in full and in the form they asked for in their request above — ' +
-            'if they asked for a table, give exactly the columns they named, in that order, one row per item, with no extra columns; ' +
-            'if a value is missing, say so in the cell rather than dropping the row. ' +
-            'Do not ask whether they want to see them, do not summarize them away, and do not start the workflow again.',
-        ].join('\n');
+    /**
+     * The follow-up turn's message: the {@link FollowUpPromptName} template rendered with the
+     * outcome as data. The instruction that turns a status report into a delivered result is the
+     * template's, not this code's. When the prompt is not present in this environment or the
+     * render fails, the outcome alone is used and the gap is logged: a follow-up that presents the
+     * results without the steering is still far better than one that never arrives.
+     */
+    private async renderFollowUpMessage(params: TaskContinuationParams): Promise<string> {
+        const outcome = this.renderMessage(params);
+        try {
+            await AIEngine.Instance.Config(false, this.contextUser);
+            const target = TaskGraphContinuationDeliverer.FollowUpPromptName.toLowerCase();
+            const prompt = AIEngine.Instance.Prompts.find((p) => p.Name.trim().toLowerCase() === target);
+            if (!prompt?.TemplateText) {
+                LogError(`[TaskGraphContinuationDeliverer] The '${TaskGraphContinuationDeliverer.FollowUpPromptName}' prompt is not present in this environment — the follow-up carries the outcome without its instruction`);
+                return outcome;
+            }
+            // Markdown and JSON pass through as written: autoescape would turn quotes and brackets
+            // in task output into HTML entities.
+            const rendered = await TemplateEngineServer.Instance.RenderTemplateSimple(
+                prompt.TemplateText,
+                { outcome, workflowName: params.WorkflowName, summary: params.Summary, tasks: params.Tasks },
+                { autoescape: false },
+            );
+            if (!rendered.Success || !rendered.Output) {
+                LogError(`[TaskGraphContinuationDeliverer] Rendering '${TaskGraphContinuationDeliverer.FollowUpPromptName}' failed: ${rendered.Message ?? 'no output'} — the follow-up carries the outcome alone`);
+                return outcome;
+            }
+            return rendered.Output;
+        } catch (e) {
+            LogError(`[TaskGraphContinuationDeliverer] Could not render '${TaskGraphContinuationDeliverer.FollowUpPromptName}' — the follow-up carries the outcome alone`, undefined, e);
+            return outcome;
+        }
     }
 
     /** The conversation a detail belongs to. */

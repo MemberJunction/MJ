@@ -352,7 +352,7 @@ export class WebSearchEngine extends BaseSingleton<WebSearchEngine> {
             Notice:
                 'IncludeAnswer was requested but no available provider can synthesize an answer, so plain ' +
                 `results were served from ${this._entries.map((e) => e.Name).join(', ')} instead. ` +
-                'Configure Tavily or Perplexity to get answers.',
+                'No configured provider declares the Answer capability; add one that does to get synthesized answers.',
         };
     }
 

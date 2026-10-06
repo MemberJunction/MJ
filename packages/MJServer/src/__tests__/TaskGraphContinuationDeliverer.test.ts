@@ -30,8 +30,41 @@ vi.mock('@memberjunction/core-entities', () => ({
     MJAIAgentRunEntity: class {},
     MJConversationEntity: class {},
     ConversationEngine: {
+        DefaultHistoryMessages: 20,
         LoadWindowRowsFresh: (...a: unknown[]) => loadWindowRows(...a),
         AssembleContextWindow: (...a: unknown[]) => assembleWindow(...a),
+    },
+}));
+
+/**
+ * The seeded "Workflow Follow-Up" prompt and the template engine that renders it. The template
+ * here stands in for metadata/prompts/templates/system/workflow-follow-up.template.md: the outcome
+ * as data, then the instruction. `followUpPrompt.present` lets a test take the prompt away.
+ */
+const followUpPrompt = vi.hoisted(() => ({
+    present: true,
+    template: '{{ outcome }}\n\nPRESENT THE RESULTS NOW (from the seeded prompt)',
+}));
+vi.mock('@memberjunction/aiengine', () => ({
+    AIEngine: {
+        get Instance() {
+            return {
+                Config: vi.fn(async () => undefined),
+                get Prompts() {
+                    return followUpPrompt.present ? [{ Name: 'Workflow Follow-Up', TemplateText: followUpPrompt.template }] : [];
+                },
+            };
+        },
+    },
+}));
+vi.mock('@memberjunction/templates', () => ({
+    TemplateEngineServer: {
+        get Instance() {
+            return {
+                // A faithful-enough stand-in for RenderTemplateSimple: substitutes the one variable the template uses.
+                RenderTemplateSimple: vi.fn(async (text: string, data: { outcome: string }) => ({ Success: true, Output: text.replace('{{ outcome }}', data.outcome) })),
+            };
+        },
     },
 }));
 
@@ -395,7 +428,7 @@ describe('Reinvoke — restarting the conversation\'s agent', () => {
         expect(turn.conversationMessages).toHaveLength(3);
         expect(turn.conversationMessages[0].content).toContain('give me a table');
         expect(turn.conversationMessages[2].content).toContain('Weekly digest');
-        expect(turn.conversationMessages[2].content).toMatch(/exactly the columns they named/);
+        expect(turn.conversationMessages[2].content).toContain('PRESENT THE RESULTS NOW (from the seeded prompt)');
     });
 
     it('still runs on the outcome alone when the history cannot be loaded', async () => {
@@ -441,8 +474,21 @@ describe('Reinvoke — restarting the conversation\'s agent', () => {
         const content: string = runAgentInConversation.mock.calls[0][0].conversationMessages.at(-1).content;
         expect(content).toContain('Output of **Build table**');
         expect(content).toContain('| São Paulo | 72°F |');
-        expect(content).toMatch(/Present these results to the user now/);
-        expect(content).toMatch(/do not start the workflow again/i);
+        // The instruction is the seeded prompt's, rendered around the outcome — not this code's.
+        expect(content).toContain('PRESENT THE RESULTS NOW (from the seeded prompt)');
+    });
+
+    it('runs on the outcome alone, and says so, when the follow-up prompt is not in this environment', async () => {
+        followUpPrompt.present = false;
+        try {
+            const h = reinvokeHarness();
+            await h.deliverer.Reinvoke(params());
+            const content: string = runAgentInConversation.mock.calls[0][0].conversationMessages.at(-1).content;
+            expect(content).toContain('Weekly digest');
+            expect(content).not.toContain('PRESENT THE RESULTS NOW');
+        } finally {
+            followUpPrompt.present = true;
+        }
     });
 
     it('stamps depth + 1 — the value that makes MAX_REINVOKE_DEPTH real', async () => {
@@ -497,6 +543,7 @@ describe('Reinvoke — restarting the conversation\'s agent', () => {
         expect(reply.Save).toHaveBeenCalledTimes(2);
         expect(reply.Status).toBe('Complete');
         expect(reply.Message).toContain('Weekly digest');
-        expect(reply.Message).not.toMatch(/Present these results/);
+        // The plain post is the outcome for a person to read; the prompt's instruction never reaches it.
+        expect(reply.Message).not.toContain('PRESENT THE RESULTS NOW');
     });
 });

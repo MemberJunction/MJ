@@ -424,10 +424,10 @@ type GraphState = {
 export const MAX_CONTINUATION_OUTPUT_CHARS = 6000;
 
 /** The output a continuation carries for one task: the payload, cut at the cap with a marker. */
-export function TruncateContinuationOutput(payload: string | null | undefined): string | undefined {
+export function TruncateContinuationOutput(payload: string | null | undefined, maxChars: number = MAX_CONTINUATION_OUTPUT_CHARS): string | undefined {
     if (!payload) return undefined;
-    if (payload.length <= MAX_CONTINUATION_OUTPUT_CHARS) return payload;
-    return `${payload.slice(0, MAX_CONTINUATION_OUTPUT_CHARS)}\n…[truncated ${payload.length - MAX_CONTINUATION_OUTPUT_CHARS} chars; the task record holds the full output]`;
+    if (payload.length <= maxChars) return payload;
+    return `${payload.slice(0, maxChars)}\n…[truncated ${payload.length - maxChars} chars; the task record holds the full output]`;
 }
 
 export class TaskGraphDispatcher implements IShutdownable {
@@ -1990,6 +1990,8 @@ export class TaskGraphDispatcher implements IShutdownable {
 
         const tasks = [...graph.entityById.values()];
         const agentMessages = await this.loadTaskAgentMessages(provider, tasks);
+        // The graph's own budget when its spec set one, else the default — see TaskGraphSpec.continuationOutputChars.
+        const outputChars = meta.continuationOutputChars ?? MAX_CONTINUATION_OUTPUT_CHARS;
         const params: TaskContinuationParams = {
             ParentTaskID: parent.ID,
             WorkflowName: parent.Name,
@@ -2003,9 +2005,9 @@ export class TaskGraphDispatcher implements IShutdownable {
                 Summary: t.OutputPayload ? `output available (${t.OutputPayload.length} chars)` : undefined,
                 // A bounded copy of the payload itself — see `TaskContinuationParams.Tasks` for
                 // why a reference alone left the follow-up turn unable to present anything.
-                Output: TruncateContinuationOutput(t.OutputPayload),
+                Output: TruncateContinuationOutput(t.OutputPayload, outputChars),
                 // The agent's own answer, beside the payload — see `TaskContinuationParams.Tasks.Message`.
-                Message: TruncateContinuationOutput(agentMessages.get(t.ID)),
+                Message: TruncateContinuationOutput(agentMessages.get(t.ID), outputChars),
                 ErrorMessage: t.ErrorMessage ?? undefined,
             })),
             Summary: summary,

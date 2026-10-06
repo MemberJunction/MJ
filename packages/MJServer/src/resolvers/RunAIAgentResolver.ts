@@ -939,7 +939,7 @@ export class RunAIAgentResolver extends ResolverBase {
             const messages = await this.loadConversationHistoryWithAttachments(
                 conversationId,
                 currentUser,
-                maxHistoryMessages || 20,
+                maxHistoryMessages || ConversationEngine.DefaultHistoryMessages,
                 p,
                 // The UI creates the agent-response placeholder row ('⏳ ...') before invoking
                 // this mutation — exclude it so the model never sees an empty assistant turn.

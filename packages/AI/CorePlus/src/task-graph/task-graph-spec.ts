@@ -369,6 +369,15 @@ export type TaskGraphSpec = {
      * downstream work the producer intended to be gated on success.
      */
     failureSemantics?: 'block' | 'edges';
+
+    /**
+     * How many characters of each task's output (and of each agent's message) the continuation
+     * carries back to the conversation when the graph settles. Default `MAX_CONTINUATION_OUTPUT_CHARS`
+     * in the dispatcher. Persisted on the parent task, since the instance that settles a graph is
+     * routinely not the one that accepted it. Not yet exposed on the `TaskGraph.Submit` remote
+     * operation's input, which is generated from metadata.
+     */
+    continuationOutputChars?: number;
 };
 
 /**
