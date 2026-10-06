@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { renderComponentFixture, query, text, ExpectNoAxeViolations } from '@memberjunction/ng-test-utils';
 import type { MediaVideoSource } from '@memberjunction/ai-realtime-client/media';
@@ -30,7 +30,30 @@ function render(video: MediaVideoSource | null = null) {
   return { fixture, video$ };
 }
 
+/** Frame callbacks the tile's video registered: jsdom has none of its own. */
+let frames: Array<() => void> = [];
+const frame = (): void => {
+  const pending = frames;
+  frames = [];
+  pending.forEach((callback) => callback());
+};
+
 describe('RealtimeAvatarSurfaceComponent (DOM)', () => {
+  beforeEach(() => {
+    frames = [];
+    Object.defineProperty(HTMLVideoElement.prototype, 'requestVideoFrameCallback', {
+      configurable: true,
+      value: (callback: () => void) => frames.push(callback),
+    });
+    Object.defineProperty(HTMLVideoElement.prototype, 'cancelVideoFrameCallback', { configurable: true, value: () => undefined });
+  });
+
+  afterEach(() => {
+    Reflect.deleteProperty(HTMLVideoElement.prototype, 'requestVideoFrameCallback');
+    Reflect.deleteProperty(HTMLVideoElement.prototype, 'cancelVideoFrameCallback');
+    vi.useRealTimers();
+  });
+
   it("shows the agent's initials until the video arrives", () => {
     const { fixture } = render();
     expect(text(fixture, '.tile__initials')).toBe('SL');
@@ -40,10 +63,24 @@ describe('RealtimeAvatarSurfaceComponent (DOM)', () => {
   it("shows the agent's video, named, with the AI badge and the AI-generated label", () => {
     const video = player();
     const { fixture } = render(video);
+    frame();
+    fixture.detectChanges();
     expect(video.Attached).toEqual([query(fixture, 'video')]);
     expect(text(fixture, '.tile__name')).toContain('Sage Lee');
     expect(text(fixture, '.tile__role')).toBe('AI');
     expect(text(fixture, '.tile__chip')).toBe('AI-generated video');
+  });
+
+  it("shows the agent's initials until the video's first frame, and again after a second without one", () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'performance'] });
+    const { fixture } = render(player());
+    expect(text(fixture, '.tile__initials')).toBe('SL');
+    frame();
+    fixture.detectChanges();
+    expect(query(fixture, '.tile__initials')).toBeNull();
+    vi.advanceTimersByTime(1300);
+    fixture.detectChanges();
+    expect(text(fixture, '.tile__initials')).toBe('SL');
   });
 
   it('follows a newer video, and lets go of the one it showed', () => {
@@ -83,6 +120,7 @@ describe('RealtimeAvatarSurfaceComponent (DOM)', () => {
 
   it("renames the tile when the agent's name changes after the video arrived", () => {
     const { fixture } = render(player());
+    frame();
     fixture.componentRef.setInput('AgentName', 'Ada');
     fixture.detectChanges();
     expect(text(fixture, '.tile__name')).toContain('Ada');

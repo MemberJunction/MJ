@@ -466,6 +466,23 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
   });
 
   describe('the Avatar channel', () => {
+    /** Frame callbacks the avatar tile's video registered: jsdom has none of its own. */
+    let frames: Array<() => void> = [];
+
+    beforeEach(() => {
+      frames = [];
+      Object.defineProperty(HTMLVideoElement.prototype, 'requestVideoFrameCallback', {
+        configurable: true,
+        value: (callback: () => void) => frames.push(callback),
+      });
+      Object.defineProperty(HTMLVideoElement.prototype, 'cancelVideoFrameCallback', { configurable: true, value: () => undefined });
+    });
+
+    afterEach(() => {
+      Reflect.deleteProperty(HTMLVideoElement.prototype, 'requestVideoFrameCallback');
+      Reflect.deleteProperty(HTMLVideoElement.prototype, 'cancelVideoFrameCallback');
+    });
+
     /** A player source that records where it was attached. */
     const player = () => {
       const attached: HTMLVideoElement[] = [];
@@ -503,11 +520,15 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
       });
       session.channels$.next([avatar, ...others]);
       await settle();
-      /** The agent's video arrives, and the runtime marks the Avatar as used. */
+      /** The agent's video arrives, the runtime marks the Avatar as used, and the video's first frame shows. */
       const sendVideo = async () => {
         const video = player();
         video$.next(video.source);
         session.activity$.next(avatar);
+        await settle();
+        const pending = frames;
+        frames = [];
+        pending.forEach((callback) => callback());
         await settle();
         return video;
       };

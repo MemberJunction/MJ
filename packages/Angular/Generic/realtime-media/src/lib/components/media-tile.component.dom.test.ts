@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderComponentFixture, query, queryAll } from '@memberjunction/ng-test-utils';
 import type { MediaParticipant, MediaVideoSource } from '@memberjunction/ai-realtime-client/media';
 import { MediaTileComponent } from './media-tile.component';
@@ -179,6 +179,73 @@ describe('MediaTileComponent (DOM)', () => {
       const f = render(participant({ Video: { camera } }));
       f.destroy();
       expect(camera.Detaches).toBe(1);
+    });
+  });
+  describe('out of frames (StallAfterMs)', () => {
+    /** Frame callbacks the tile's video registered: jsdom has none of its own. */
+    let frames: Array<() => void> = [];
+    const frame = (): void => {
+      const pending = frames;
+      frames = [];
+      pending.forEach((callback) => callback());
+    };
+
+    beforeEach(() => {
+      frames = [];
+      Object.defineProperty(HTMLVideoElement.prototype, 'requestVideoFrameCallback', {
+        configurable: true,
+        value: (callback: () => void) => frames.push(callback),
+      });
+      Object.defineProperty(HTMLVideoElement.prototype, 'cancelVideoFrameCallback', { configurable: true, value: () => undefined });
+    });
+
+    afterEach(() => {
+      Reflect.deleteProperty(HTMLVideoElement.prototype, 'requestVideoFrameCallback');
+      Reflect.deleteProperty(HTMLVideoElement.prototype, 'cancelVideoFrameCallback');
+      vi.useRealTimers();
+    });
+
+    it('shows the picture until the first frame, then the video and its label', () => {
+      const f = render(participant({ Role: 'agent', Video: { avatar: elementSource() } }), { StallAfterMs: 1000 });
+      expect(query(f, '.tile__placeholder')).not.toBeNull();
+      expect(query(f, '.tile__video')?.classList.contains('tile__video--stalled')).toBe(true);
+      expect(query(f, '.tile__chip')).toBeNull();
+      frame();
+      f.detectChanges();
+      expect(query(f, '.tile__placeholder')).toBeNull();
+      expect(query(f, '.tile__video')?.classList.contains('tile__video--stalled')).toBe(false);
+      expect(query(f, '.tile__chip')?.textContent?.trim()).toBe('AI-generated video');
+    });
+
+    it('cross-fades to the picture once no frame has come for the stall time, and back on the next frame', () => {
+      vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'performance'] });
+      const f = render(participant({ Video: { camera: elementSource() } }), { StallAfterMs: 1000 });
+      frame();
+      f.detectChanges();
+      vi.advanceTimersByTime(900);
+      f.detectChanges();
+      expect(query(f, '.tile__placeholder')).toBeNull();
+      vi.advanceTimersByTime(400);
+      f.detectChanges();
+      expect(query(f, '.tile__placeholder')?.classList.contains('tile__placeholder--over-video')).toBe(true);
+      frame();
+      f.detectChanges();
+      expect(query(f, '.tile__placeholder')).toBeNull();
+    });
+
+    it('starts the wait again for a new video', () => {
+      const f = render(participant({ Video: { camera: elementSource() } }), { StallAfterMs: 1000 });
+      frame();
+      f.detectChanges();
+      f.componentRef.setInput('Participant', participant({ Video: { camera: elementSource() } }));
+      f.detectChanges();
+      expect(query(f, '.tile__placeholder')).not.toBeNull();
+    });
+
+    it('always shows the video without a stall time, and watches nothing', () => {
+      const f = render(participant({ Video: { camera: elementSource() } }));
+      expect(query(f, '.tile__placeholder')).toBeNull();
+      expect(frames).toEqual([]);
     });
   });
 });

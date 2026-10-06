@@ -1,23 +1,28 @@
 import {
   AfterViewInit,
   ChangeDetectionStrategy,
+  ChangeDetectorRef,
   Component,
   ElementRef,
   EventEmitter,
   Input,
+  NgZone,
   OnDestroy,
   Output,
   ViewChild,
+  inject,
 } from '@angular/core';
 import type { MediaParticipant, MediaVideoSource } from '@memberjunction/ai-realtime-client/media';
 import { MediaAudioMeterComponent, type MediaAudioMeterSettings } from './audio-meter.component';
 import { MediaVideoBinding } from '../media-video-binding';
+import { VideoFrameWatch } from '../video-frame-watch';
 
 /**
  * `mj-media-tile`: one participant. Their video (the preferred one, else a shared screen, the camera, the avatar),
  * or their picture or initials when there is none; name, role badge, mute and screen-sharing indicators, an
  * "AI-generated video" label while it shows an avatar, connection quality, an active-speaker ring, an optional audio
- * meter and a pin button.
+ * meter and a pin button. With {@link StallAfterMs} set, a video that stops sending frames cross-fades to the picture or
+ * initials until its frames come back.
  *
  * The tile never plays audio: a voice must not stop because its tile left the screen, so the host plays each
  * voice once, outside the layout.
@@ -33,14 +38,15 @@ import { MediaVideoBinding } from '../media-video-binding';
         #video
         class="tile__video"
         [class.tile__video--hidden]="!HasVideo"
+        [class.tile__video--stalled]="Stalled"
         [class.tile__video--mirrored]="IsMirrored"
         autoplay
         playsinline
         [muted]="true"
       ></video>
 
-      @if (!HasVideo) {
-        <div class="tile__placeholder">
+      @if (!HasVideo || Stalled) {
+        <div class="tile__placeholder" [class.tile__placeholder--over-video]="Stalled">
           @if (AvatarUrl) {
             <img [src]="AvatarUrl" [alt]="Participant?.DisplayName ?? ''" />
           } @else {
@@ -104,9 +110,17 @@ import { MediaVideoBinding } from '../media-video-binding';
 export class MediaTileComponent implements AfterViewInit, OnDestroy {
   @ViewChild('video') private videoRef?: ElementRef<HTMLVideoElement>;
 
+  private readonly zone = inject(NgZone);
+  private readonly cdr = inject(ChangeDetectorRef);
   private participant: MediaParticipant | null = null;
   private viewReady = false;
   private readonly video = new MediaVideoBinding();
+  /** Watches the attached video for frames while {@link StallAfterMs} is set. */
+  private frameWatch: VideoFrameWatch | null = null;
+  /** The source {@link frameWatch} watches. */
+  private watchedSource: MediaVideoSource | null = null;
+  /** Whether the attached video's frames are coming: false until its first frame, and after a stall. */
+  private framesFlowing = false;
 
 
   /** Show the active-speaker ring. */
@@ -127,6 +141,11 @@ export class MediaTileComponent implements AfterViewInit, OnDestroy {
   @Input() public MeterSettings: MediaAudioMeterSettings = {};
   /** Mirror the camera, as a self-view does. A shared screen or an avatar is never mirrored. */
   @Input() public Mirror = false;
+  /**
+   * After this many milliseconds without a new frame, the video cross-fades to the picture or initials until its frames
+   * come back; until its first frame, too. `null` (the default): the video always shows. Read when a video is attached.
+   */
+  @Input() public StallAfterMs: number | null = null;
 
   /** Emits when the user clicks the pin button. */
   @Output() public TogglePin = new EventEmitter<void>();
@@ -157,6 +176,11 @@ export class MediaTileComponent implements AfterViewInit, OnDestroy {
     return this.chooseVideo() !== null;
   }
 
+  /** Whether the video is out of frames ({@link StallAfterMs}): it has sent none yet, or none for that long. */
+  public get Stalled(): boolean {
+    return this.StallAfterMs !== null && this.HasVideo && !this.framesFlowing;
+  }
+
   /** Whether the video shown is mirrored: {@link Mirror} is on and the camera is what shows. */
   public get IsMirrored(): boolean {
     const camera = this.Participant?.Video.camera;
@@ -174,7 +198,7 @@ export class MediaTileComponent implements AfterViewInit, OnDestroy {
    */
   public get IsAvatarVideo(): boolean {
     const avatar = this.Participant?.Video.avatar;
-    return avatar !== undefined && this.chooseVideo() === avatar;
+    return avatar !== undefined && this.chooseVideo() === avatar && !this.Stalled;
   }
 
   /** The participant's level reader, or `null` when there is none to meter. */
@@ -188,12 +212,45 @@ export class MediaTileComponent implements AfterViewInit, OnDestroy {
   }
 
   public ngOnDestroy(): void {
+    this.stopFrameWatch();
     this.video.Release();
   }
 
-  /** Attaches the chosen video when it differs from the attached one. */
+  /** Attaches the chosen video when it differs from the attached one, and watches its frames when asked to. */
   private syncVideo(): void {
     this.video.Bind(this.chooseVideo(), this.videoRef?.nativeElement);
+    this.syncFrameWatch();
+  }
+
+  /** Watches the attached video's frames while {@link StallAfterMs} is set: a new source starts out of frames. */
+  private syncFrameWatch(): void {
+    const source = this.video.Source;
+    const element = this.videoRef?.nativeElement;
+    if (!source || !element || this.StallAfterMs === null) {
+      this.stopFrameWatch();
+      return;
+    }
+    if (source === this.watchedSource) {
+      return;
+    }
+    this.stopFrameWatch();
+    this.watchedSource = source;
+    const watch = new VideoFrameWatch(this.StallAfterMs, (stalled) =>
+      this.zone.run(() => {
+        this.framesFlowing = !stalled;
+        this.cdr.markForCheck();
+      })
+    );
+    this.frameWatch = watch;
+    // Frames arrive many times a second; only a change of state enters Angular.
+    this.zone.runOutsideAngular(() => watch.Watch(element));
+  }
+
+  private stopFrameWatch(): void {
+    this.frameWatch?.Stop();
+    this.frameWatch = null;
+    this.watchedSource = null;
+    this.framesFlowing = false;
   }
 
   /** The preferred video, else a shared screen, the camera, the avatar. */
