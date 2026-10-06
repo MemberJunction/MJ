@@ -18,7 +18,6 @@ import { BaseSingleton } from '@memberjunction/global';
 import { RegisterPipelineWorkType } from './PipelineStageRegistration.js';
 import { LoadContentPipelineStages } from './stages/index.js';
 import { LoadContentPipelineReaders } from './readers/index.js';
-import './PipelineRunNowOperation.js';
 
 @RegisterForStartup({
     description: 'Content pipeline: Pipeline Stage work type, built-in stages and readers',

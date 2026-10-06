@@ -75,8 +75,13 @@ export abstract class BasePipelineStage {
      * The column on {@link Entity} that says whether a record is ready for this stage — e.g.
      * `ExtractionStatus`. The committer advances it, and a Record Process row's readiness filter
      * reads it.
+     *
+     * `null` for a stage whose readiness is not a status column. Discover is the case: a source is
+     * ready when its schedule is due or someone set `ForceDiscovery`, and a completed walk clears
+     * that bit. A status column there would be a second mechanism for a decision the schedule
+     * already owns, and one that has to be re-armed by hand to run again.
      */
-    public abstract readonly StatusField: string;
+    public abstract readonly StatusField: string | null;
 
     /**
      * The value {@link StatusField} takes when this stage succeeds.

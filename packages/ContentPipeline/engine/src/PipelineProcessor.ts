@@ -113,7 +113,7 @@ export interface ProgressReporter {
 /**
  * Runs configured stages over one record at a time.
  *
- * Constructed once per run by {@link PipelineRecordProcessRunner}, which resolves the stage
+ * Constructed once per run by the registered work-type factory, which resolves the stage
  * instances up front so nothing is looked up per record.
  */
 export class PipelineProcessor implements IRecordProcessor {

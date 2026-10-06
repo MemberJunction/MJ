@@ -42,7 +42,7 @@ export const DISCOVER_STAGE = 'Discover';
 export class DiscoverStage extends BasePipelineStage {
     public readonly Name = DISCOVER_STAGE;
     public readonly Entity: WorkingRecordEntity = 'Content Source';
-    public readonly StatusField = 'DiscoveryStatus';
+    public readonly StatusField: string | null = null;
 
     public override get Declaration(): StageDeclaration {
         return {
@@ -87,6 +87,14 @@ export class DiscoverStage extends BasePipelineStage {
 
         context.ReportProgress(`found ${found} item(s)`);
         record.SetExtension(DISCOVER_STAGE, 'itemCount', found);
+        // A completed walk clears the one-shot and stamps when it happened. Together these ARE the
+        // readiness answer — "schedule due OR ForceDiscovery" — so there is no status to re-arm, and
+        // a cancelled walk above leaves the bit set and the source still due.
+        record.SetExtension('Pipeline', 'columns', {
+            ...(record.GetExtension<Record<string, unknown>>('Pipeline', 'columns') ?? {}),
+            ForceDiscovery: false,
+            LastDiscoveredAt: new Date(),
+        });
         return Outcome.Complete(`found ${found} item(s)`);
     }
 

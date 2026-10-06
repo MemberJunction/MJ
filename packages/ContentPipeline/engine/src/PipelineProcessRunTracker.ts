@@ -13,7 +13,7 @@
  *
  * **This is the one seam the Work Queue replaces.** Once the queue exists, its delivery row *is*
  * live status and the detail row goes back to being written once, at the end. Swapping this tracker
- * out in {@link PipelineRecordProcessRunner} is the whole change; no stage is affected.
+ * out in the work type's registered tracker pairing is the whole change; no stage is affected.
  *
  * @module @memberjunction/content-pipeline
  */
@@ -50,7 +50,7 @@ interface OpenDetail {
  * The pipeline's tracker: open a detail row on start, update it as the stage reports progress,
  * finalize it when the record settles.
  *
- * Constructed together with the processor by {@link PipelineRecordProcessRunner} so the two share a
+ * Constructed together with the processor by the work type's registered pairing so the two share a
  * direct object reference rather than being wired through Record Set Processing, which has no way
  * to pass one.
  */

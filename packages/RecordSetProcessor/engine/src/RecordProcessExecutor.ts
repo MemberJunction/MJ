@@ -13,6 +13,7 @@ import {
     FilterSource,
     IRecordProcessor,
     IRecordSetSource,
+    IProcessRunTracker,
     ListSource,
     ProcessRunResult,
     ProgressInfo,
@@ -58,6 +59,17 @@ export interface RunRecordProcessOptions {
     lastRunAt?: Date | null;
     /** Progress callback. */
     onProgress?: (progress: ProgressInfo) => void;
+    /**
+     * The tracker to record this run with. Defaults to `GenericProcessRunTracker`.
+     *
+     * A work type whose processor is paired with a tracker — one that writes live progress, or a
+     * detail row per produced child — has to be able to supply it HERE rather than by wrapping the
+     * executor, because the executor is what the scheduler and the on-change trigger call. Without
+     * this, a run triggered any way other than through the wrapper silently loses whatever the
+     * paired tracker records, which is the kind of difference nobody notices until the rows are
+     * missing.
+     */
+    tracker?: IProcessRunTracker;
 }
 
 /** Builds and runs a RecordSetProcessor pass from a Record Process definition. */
@@ -94,9 +106,15 @@ export class RecordProcessExecutor {
             }
         }
 
+        // An injected tracker wins; otherwise a work type may supply the one its processor is paired
+        // with. Resolving it HERE rather than at each call site is what makes a scheduled run and an
+        // on-change run record the same thing a manual one does.
+        const tracker = options.tracker ?? this.resolveTracker(rp, options.dryRun);
+
         return RecordSetProcessor.Instance.Process({
             source: this.BuildSource(rp, provider, options.singleRecordID, options.scope),
-            processor: this.BuildProcessor(rp, options.dryRun, provider),
+            processor: this.BuildProcessor(rp, options.dryRun, provider, tracker),
+            tracker,
             contextUser: options.contextUser,
             provider,
             dryRun: options.dryRun,
@@ -111,6 +129,21 @@ export class RecordProcessExecutor {
             lastRunAt,
             onProgress: options.onProgress,
             configuration: { recordProcessName: rp.Name, workType: rp.WorkType, scopeType: rp.ScopeType },
+        });
+    }
+
+    /** The tracker a work type's processor is paired with, if it registered one. */
+    private resolveTracker(rp: MJRecordProcessEntity, dryRun?: boolean): IProcessRunTracker | undefined {
+        return RecordProcessorRegistry.Instance.ResolveTracker({
+            WorkType: rp.WorkType,
+            Configuration: rp.Configuration,
+            InputMapping: rp.InputMapping,
+            OutputMapping: rp.OutputMapping,
+            EntityID: rp.EntityID,
+            RecordProcessID: rp.ID,
+            RecordProcessName: rp.Name,
+            DryRun: dryRun,
+            RecordProcess: rp,
         });
     }
 
@@ -178,7 +211,12 @@ export class RecordProcessExecutor {
      * dry-run the inner work runs but the mapping only previews (nothing is saved), so EVERY work type's
      * dry-run is side-effect-free, not just FieldRules.
      */
-    public BuildProcessor(rp: MJRecordProcessEntity, dryRun?: boolean, provider?: IMetadataProvider): IRecordProcessor {
+    public BuildProcessor(
+        rp: MJRecordProcessEntity,
+        dryRun?: boolean,
+        provider?: IMetadataProvider,
+        tracker?: IProcessRunTracker,
+    ): IRecordProcessor {
         if (rp.WorkType === 'FieldRules') {
             const ruleSet = rp.Configuration ? SafeJSONParse<FieldRuleSet>(rp.Configuration) : undefined;
             if (!ruleSet || !Array.isArray(ruleSet.Rules)) {
@@ -210,7 +248,7 @@ export class RecordProcessExecutor {
             // Not a built-in work type — consult the pluggable registry. This is the open seam that
             // lets external packages (e.g. Predictive Studio's 'ML Model' scoring) register a processor
             // factory for their own work type WITHOUT this package depending on them.
-            base = this.resolveFromRegistry(rp, dryRun);
+            base = this.resolveFromRegistry(rp, dryRun, tracker);
         }
 
         const outputMapping = rp.OutputMapping ? SafeJSONParse<OutputMappingConfig>(rp.OutputMapping) : undefined;
@@ -259,7 +297,11 @@ export class RecordProcessExecutor {
      * per-run context. Throws the same "unsupported WorkType" error as before when nothing is registered,
      * so behavior is unchanged for genuinely-unknown work types.
      */
-    private resolveFromRegistry(rp: MJRecordProcessEntity, dryRun?: boolean): IRecordProcessor {
+    private resolveFromRegistry(
+        rp: MJRecordProcessEntity,
+        dryRun?: boolean,
+        tracker?: IProcessRunTracker,
+    ): IRecordProcessor {
         const context: RecordProcessorBuildContext = {
             WorkType: rp.WorkType,
             Configuration: rp.Configuration,
@@ -269,6 +311,7 @@ export class RecordProcessExecutor {
             RecordProcessID: rp.ID,
             RecordProcessName: rp.Name,
             DryRun: dryRun,
+            Tracker: tracker,
             RecordProcess: rp,
         };
         const resolved = RecordProcessorRegistry.Instance.Resolve(context);

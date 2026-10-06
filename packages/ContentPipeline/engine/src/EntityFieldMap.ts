@@ -83,7 +83,8 @@ export function GetEntityFieldMap(entity: WorkingRecordEntity): EntityFieldMap {
  */
 const StatusFields: Record<WorkingRecordEntity, readonly string[]> = {
     'Content Item': ['ExtractionStatus', 'TaggingStatus', 'SegmentationStatus', 'EmbeddingStatus'],
-    'Content Source': ['DiscoveryStatus'],
+    // Discover advances no status column — see BasePipelineStage.StatusField.
+    'Content Source': [],
     'Content Item Chunk': ['TaggingStatus', 'EmbeddingStatus'],
 };
 

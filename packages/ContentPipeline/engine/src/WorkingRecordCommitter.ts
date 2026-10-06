@@ -51,7 +51,7 @@ export class WorkingRecordCommitter {
      * @param statusField The status column for the stage that just ran.
      * @param status What to set it to.
      */
-    public async Commit(record: WorkingRecord, statusField: string, status: string): Promise<CommitResult> {
+    public async Commit(record: WorkingRecord, statusField: string | null, status: string): Promise<CommitResult> {
         const entityObject = await this.load(record);
         const created = !record.Identity.IsPersisted;
         const written = await this.applyChangedFields(record, entityObject);
@@ -60,8 +60,10 @@ export class WorkingRecordCommitter {
         // without this they were silently dropped on every parent commit.
         written.push(...this.applyColumns(record, entityObject));
 
-        entityObject.Set(statusField, status);
-        written.push(statusField);
+        if (statusField) {
+            entityObject.Set(statusField, status);
+            written.push(statusField);
+        }
 
         this.applyConfidence(record, entityObject, written);
         this.applyCompletionSignal(record, entityObject, statusField, written);

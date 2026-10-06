@@ -17,8 +17,6 @@ export * from './ReaderCascade.js';
 export * from './PipelineStageRegistration.js';
 export * from './ContentPipelineStartup.js';
 export * from './PipelineProcessRunTracker.js';
-export * from './PipelineRecordProcessRunner.js';
-export * from './PipelineRunNowOperation.js';
 export * from './readers/index.js';
 export * from './stages/index.js';
 export * from './MJVectorStoreWriter.js';

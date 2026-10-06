@@ -14,6 +14,7 @@ import { IRecordProcessor } from '@memberjunction/record-set-processor-base';
 import { SafeJSONParse } from '@memberjunction/global';
 import { StageScope } from '@memberjunction/content-pipeline-base';
 import { DefaultStorageFactories, PipelineProcessor, PipelineProcessorConfig, ProgressReporter } from './PipelineProcessor.js';
+import { PipelineProcessRunTracker } from './PipelineProcessRunTracker.js';
 
 /** The `WorkType` value a pipeline Record Process row carries. */
 export const PIPELINE_STAGE_WORK_TYPE = 'Pipeline Stage';
@@ -53,6 +54,11 @@ export function BuildPipelineProcessor(
     context: RecordProcessorBuildContext,
     progress?: ProgressReporter,
 ): IRecordProcessor {
+    // The tracker the executor resolved for this run, when it is ours. The pipeline's tracker is
+    // also its progress sink — live per-record status and a detail row per produced child — so the
+    // processor has to be handed the same instance the run will record through.
+    const paired = context.Tracker instanceof PipelineProcessRunTracker ? context.Tracker : undefined;
+    progress = progress ?? paired;
     const parsed = context.Configuration
         ? SafeJSONParse<PipelineRecordProcessConfiguration>(context.Configuration)
         : undefined;
@@ -96,4 +102,11 @@ function ResolveScope(context: RecordProcessorBuildContext): StageScope {
  */
 export function RegisterPipelineWorkType(): void {
     RecordProcessorRegistry.Instance.Register(PIPELINE_STAGE_WORK_TYPE, BuildPipelineProcessor);
+    // Registering the pairing rather than wrapping the executor is what makes it hold for every
+    // trigger. A scheduled run and an on-change run reach the executor directly; neither could know
+    // to ask for this tracker, and without it both silently lose live progress and child detail rows.
+    RecordProcessorRegistry.Instance.RegisterTracker(
+        PIPELINE_STAGE_WORK_TYPE,
+        () => new PipelineProcessRunTracker(),
+    );
 }
