@@ -220,7 +220,7 @@
   border-radius: 10px;
   background: var(--mj-bg-surface-elevated, #fff);
   border: 1px solid var(--mj-border-default, #e2e8f0);
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
+  box-shadow: var(--mj-shadow-lg);
   min-width: 180px;
 }
 .lk-room__layout-option {
