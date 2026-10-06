@@ -1345,6 +1345,32 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /**
+     * Optional replay form of an UPDATE for the SQL log only (never executed). Receives just the
+     * fields this save CHANGED. A recording that carried the whole row would, on replay, overwrite
+     * every column of the target row with the recording database's values — including settings a
+     * deploying application tuned on purpose (an MJ metadata sync that only flipped
+     * `AllowUserSearchAPI` on 'MJ: Content Items' also reset that consumer's
+     * `TrustServerCacheCompletely`). Dialects whose update procs keep unpassed columns override
+     * this. Default: no replay form, the plain save SQL is logged.
+     */
+    protected RenderReplayUpdateSQL(
+        _binding: SaveCallBinding,
+        _entity: BaseEntity,
+        _changedFieldValues: Map<EntityFieldInfo, unknown>,
+    ): string | undefined {
+        return undefined;
+    }
+
+    /** The entries of a save's parameter map whose fields this save actually changed. */
+    private changedFieldValues(entity: BaseEntity, fieldValues: Map<EntityFieldInfo, unknown>): Map<EntityFieldInfo, unknown> {
+        const changed = new Map<EntityFieldInfo, unknown>();
+        for (const [f, value] of fieldValues) {
+            if (entity.GetFieldByName(f.Name)?.Dirty) changed.set(f, value);
+        }
+        return changed;
+    }
+
+    /**
      * Concrete implementation of the abstract save-SQL builder defined on
      * `DatabaseProviderBase`. Iterates fields via the single `IsSPParameter`
      * predicate, applies provider-specific value coercion, encrypts, then
@@ -1418,9 +1444,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         const baseSaveSQL = this.WrapSaveCallForResult(binding, entity, spName);
         let saveSQL = baseSaveSQL;
         // A CREATE's logged form is guarded on the primary key so a migration replay of
-        // the recording converges on a database that already holds the row (#4503).
-        // Updates and dialects without a replay form log the plain save SQL.
-        const replaySQL = isNew ? this.RenderReplaySaveSQL(binding, entity, fieldValueMap) : undefined;
+        // the recording converges on a database that already holds the row (#4503). An
+        // UPDATE's logged form carries only the fields this save changed, so a replay never
+        // resets the target's other columns. Dialects without a replay form log the plain save SQL.
+        const replaySQL = isNew
+            ? this.RenderReplaySaveSQL(binding, entity, fieldValueMap)
+            : this.RenderReplayUpdateSQL(binding, entity, this.changedFieldValues(entity, fieldValueMap));
         const simpleSQL = replaySQL ?? baseSaveSQL.sql;
 
         // 5. Optionally wrap with record-change emission.
