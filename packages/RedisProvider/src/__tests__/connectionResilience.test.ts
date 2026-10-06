@@ -65,6 +65,7 @@ function createMockRedis() {
             return Promise.resolve(next);
         }),
         pipeline: vi.fn(() => pipe),
+        eval: vi.fn((): Promise<unknown> => Promise.resolve(1)),
         publish: vi.fn().mockResolvedValue(1),
         subscribe: vi.fn().mockResolvedValue('OK'),
         unsubscribe: vi.fn().mockResolvedValue('OK'),
@@ -405,6 +406,105 @@ describe('RedisLocalStorageProvider — surviving an outage', () => {
         });
 
         /**
+         * The lock, lease and channel methods arrived alongside this outage handling rather than
+         * before it, so they were never put behind the same check — and each one issues a command
+         * that ioredis's offline queue holds until the outage ends. Every case below makes the
+         * commands never settle, as that queue does, and requires the call to answer anyway.
+         */
+        describe('lock, lease and channel calls', () => {
+            const HUNG = Symbol('hung');
+            /** Resolves to HUNG if `p` has not settled within `ms` — the offline queue's failure mode. */
+            function within<T>(p: Promise<T>, ms = 250): Promise<T | typeof HUNG> {
+                return Promise.race([p, new Promise<typeof HUNG>(r => setTimeout(() => r(HUNG), ms))]);
+            }
+            const NEVER = (): Promise<never> => new Promise<never>(() => undefined);
+
+            function disconnected() {
+                const provider = newProvider();
+                const client = constructed[0];
+                bringUp(client);
+                client._fire('close');
+                client.set.mockImplementation(NEVER);
+                client.eval.mockImplementation(NEVER);
+                client.publish.mockImplementation(NEVER);
+                client.subscribe.mockImplementation(NEVER);
+                client.set.mockClear(); client.eval.mockClear(); client.publish.mockClear(); client.subscribe.mockClear();
+                return { provider, client };
+            }
+
+            it('refuses a key lock with KeyLockTimeoutError, without running the work', async () => {
+                const { provider, client } = disconnected();
+                const work = vi.fn(async () => 'written');
+
+                const outcome = await within(provider.WithKeyLock('slot', 'RunViewCache', work).catch((e: Error) => e));
+
+                expect(outcome).not.toBe(HUNG);
+                expect((outcome as Error).name).toBe('KeyLockTimeoutError'); // the name the caller turns into "invalidate"
+                expect((outcome as Error).message).toMatch(/unreachable/);    // and not reported as contention
+                expect(work).not.toHaveBeenCalled();
+                expect(client.set).not.toHaveBeenCalled();
+            });
+
+            it('does not acquire a lease', async () => {
+                const { provider, client } = disconnected();
+                expect(await within(provider.TryAcquireLease('engine-sweep', 30_000))).toBe(false);
+                expect(client.set).not.toHaveBeenCalled();
+            });
+
+            it('reports a held lease as NOT renewed, so the holder stops relying on it', async () => {
+                const provider = newProvider();
+                const client = constructed[0];
+                bringUp(client);
+                expect(await provider.TryAcquireLease('engine-sweep', 30_000)).toBe(true);
+                client._fire('close');
+                client.eval.mockImplementation(NEVER);
+                client.eval.mockClear();
+
+                expect(await within(provider.RenewLease('engine-sweep', 30_000))).toBe(false);
+                expect(client.eval).not.toHaveBeenCalled();
+            });
+
+            it('releases a lease without waiting on Redis — it expires on its own TTL', async () => {
+                const provider = newProvider();
+                const client = constructed[0];
+                bringUp(client);
+                expect(await provider.TryAcquireLease('engine-sweep', 30_000)).toBe(true);
+                client._fire('close');
+                client.eval.mockImplementation(NEVER);
+                client.eval.mockClear();
+
+                expect(await within(provider.ReleaseLease('engine-sweep'))).not.toBe(HUNG);
+                expect(client.eval).not.toHaveBeenCalled();
+            });
+
+            it('answers an index-group read with nothing', async () => {
+                const { provider, client } = disconnected();
+                expect(await within(provider.GetIndexGroupKeys('RunViewCache', 'Users'))).toEqual([]);
+                expect(client.eval).not.toHaveBeenCalled();
+            });
+
+            it('drops a fire-and-forget channel message', async () => {
+                const { provider, client } = disconnected();
+                provider.PublishMessage('push-status-updates', '{}');
+                expect(client.publish).not.toHaveBeenCalled();
+            });
+
+            it('reports zero receivers for an awaited channel message', async () => {
+                const { provider, client } = disconnected();
+                expect(await within(provider.PublishMessageAndWait('aborts', '{}'))).toBe(0);
+                expect(client.publish).not.toHaveBeenCalled();
+            });
+
+            it('rejects a new channel subscription loudly, so the caller can degrade', async () => {
+                const { provider, client } = disconnected();
+                const outcome = await within(provider.SubscribeToChannel('aborts', () => undefined).catch((e: Error) => e));
+                expect(outcome).not.toBe(HUNG);
+                expect((outcome as Error).message).toMatch(/unreachable/);
+                expect(client.subscribe).not.toHaveBeenCalled();
+            });
+        });
+
+        /**
          * Startup is exempt from failing fast: queueing briefly is what lets the cache warm, and
          * nothing can be stale before anything is cached. Only a lost connection changes the answer.
          */
@@ -502,6 +602,27 @@ describe('RedisLocalStorageProvider — surviving an outage', () => {
          * The symmetric half. This process wrote while it could not tell anyone, so its SIBLINGS are
          * stale with respect to those writes; bumping the epoch is what makes them flush.
          */
+        /**
+         * An index-group read only happens on the save/delete path: an entity just changed and its
+         * peers' slots needed maintaining. Answering "none" alone would let that change vanish — the
+         * caller writes nothing, so nothing is recorded, the epoch never moves, and peers keep those
+         * slots after the reconnect. The read must record the change itself.
+         */
+        it("bumps the epoch after a save that hit an index-group read during the outage, so peers' slots are flushed", async () => {
+            const { provider, sub, client } = await withSubscriber();
+            client._setEpoch(7);
+
+            client._fire('close');
+            expect(await provider.GetIndexGroupKeys('RunViewCache', 'Users')).toEqual([]);
+            client._fire('ready');
+            sub._fire('close');
+            sub._fire('connect');
+            await settle();
+
+            expect(client.incr).toHaveBeenCalledWith(EPOCH_KEY);
+            expect(provider.LastSeenEpoch).toBe(8);
+        });
+
         it('bumps the epoch when it mutated while disconnected, so siblings flush too', async () => {
             const { provider, sub, client } = await withSubscriber();
             client._setEpoch(7);

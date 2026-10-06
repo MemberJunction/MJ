@@ -315,8 +315,15 @@ return 0
  * (a bug, which must not be silently downgraded to an invalidation).
  */
 export class KeyLockTimeoutError extends Error {
-    public constructor(public readonly LockKey: string, waitedMs: number) {
-        super(`timed out after ${waitedMs} ms waiting for another process's lock`);
+    /**
+     * @param LockKey The lock that could not be taken.
+     * @param waitedMs How long the attempt waited.
+     * @param reason Why, when it was not contention — e.g. Redis being unreachable. Defaults to the
+     *   contention message. The class (and so its `name`) is kept either way, because the caller's
+     *   correct response is the same: do not write, invalidate instead.
+     */
+    public constructor(public readonly LockKey: string, waitedMs: number, reason?: string) {
+        super(reason ?? `timed out after ${waitedMs} ms waiting for another process's lock`);
         this.name = 'KeyLockTimeoutError';
     }
 }
@@ -1112,9 +1119,17 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
             const cat = category || DEFAULT_CATEGORY;
             const prefix = escapeGlob(this._keyPrefix);
             const escapedCat = escapeGlob(cat);
-            const entryKeys = await this.scanKeys(`${prefix}:${escapedCat}:*`);
+            // Index groups go FIRST, entries second. A write can land between the two scans, adding
+            // its entry and indexing it in a group. Scanning both and deleting together removed that
+            // group while the new entry survived — a live slot no index lists, which a save on another
+            // server can no longer find, so it is served stale until it expires. In this order the
+            // worst a racing write leaves is a group naming an entry that was then deleted, and a read
+            // of the group prunes dead members (GetIndexGroupKeys). A missing member heals itself; a
+            // missing index does not.
             const groupKeys = await this.scanKeys(`${prefix}:__group__:${escapedCat}:*`);
-            await this.deleteKeys([...entryKeys, ...groupKeys, this.buildCategorySetKey(cat)]);
+            await this.deleteKeys([...groupKeys, this.buildCategorySetKey(cat)]);
+            const entryKeys = await this.scanKeys(`${prefix}:${escapedCat}:*`);
+            await this.deleteKeys(entryKeys);
 
             // Publish category-level change event
             this.publishChange(cat, cat, 'category_cleared');
@@ -1173,6 +1188,15 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
      * @returns The live keys, without the Redis prefix/category prefix
      */
     public async GetIndexGroupKeys(category: string, group: string): Promise<string[]> {
+        if (this.shouldFailFast) {
+            // Only the save/delete path asks this — an entity just changed and its peers' slots need
+            // maintaining, which cannot happen now. Answering "none" alone would be wrong: the caller
+            // would write nothing, so nothing would record the change, the epoch would not move, and
+            // peers would keep those slots after the reconnect. Recording it makes reconciliation bump
+            // the epoch so they flush.
+            this.noteMutationWhileDisconnected();
+            return [];
+        }
         try {
             const cat = category || DEFAULT_CATEGORY;
             const groupSetKey = this.buildGroupSetKey(cat, group);
@@ -1197,6 +1221,11 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
      */
     public async WithKeyLock<T>(key: string, category: string, work: () => Promise<T>): Promise<T> {
         const lockKey = `${this._keyPrefix}:__lock__:${category || DEFAULT_CATEGORY}:${key}`;
+        if (this.shouldFailFast) {
+            // The SET NX would queue and never settle (see shouldFailFast). The caller's answer to a
+            // lock it cannot take is to invalidate rather than write, which is right here too.
+            throw new KeyLockTimeoutError(lockKey, 0, 'Redis is unreachable, so the lock was not attempted');
+        }
         const token = randomUUID();
         await this.acquireLock(lockKey, token);
         // Work longer than the TTL used to lose the lock silently: it expired, another process took
@@ -1262,6 +1291,9 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
      * runs a periodic job per period. The lease is not released; it expires.
      */
     public async TryAcquireLease(name: string, ttlMs: number): Promise<boolean> {
+        if (this.shouldFailFast) {
+            return false; // not acquired: this tick's sweep or warm-up simply does not run here
+        }
         const token = randomUUID();
         const claimed = (await this._client.set(this.leaseKey(name), token, 'PX', Math.max(1, Math.floor(ttlMs)), 'NX')) === 'OK';
         if (claimed) {
@@ -1282,6 +1314,9 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
         if (!token) {
             return false;
         }
+        if (this.shouldFailFast) {
+            return false; // a lease that cannot be renewed must not be assumed held
+        }
         const extended = await this._client.eval(RENEW_LOCK_SCRIPT, 1, this.leaseKey(name), token, String(Math.max(1, Math.floor(ttlMs))));
         return Number(extended) === 1;
     }
@@ -1293,6 +1328,9 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
             return;
         }
         this._leaseTokens.delete(name);
+        if (this.shouldFailFast) {
+            return; // the lease expires on its own TTL; nothing is lost by not deleting it now
+        }
         await this.releaseLock(this.leaseKey(name), token);
     }
 
@@ -1562,8 +1600,10 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
      * Creates the subscriber connection and subscribes it to the cache-invalidation channel.
      *
      * The message listener is attached before subscribing, so nothing that arrives is missed. On
-     * failure the connection is closed and cleared: a subscriber left in place would read as
-     * "already listening" to every later caller while delivering nothing.
+     * failure the connection is closed and cleared. A retry does not depend on that —
+     * {@link StartListening} resets its own in-flight promise and opens a fresh subscriber — but the
+     * failed client would otherwise stay open, reconnecting in the background with unlimited retries,
+     * and once it got back in it would resubscribe and deliver every invalidation a second time.
      */
     private async openSubscriber(): Promise<void> {
         const subscriber = this.createSubscriberClient();
@@ -1727,7 +1767,11 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
         };
 
         // Bump the shared epoch, then publish carrying its new value. The counter lives here
-        // because every mutation already routes through this method. INCR has to precede PUBLISH so
+        // because every PUBLISHED mutation routes through this method. A category whose publish mode
+        // is 'none' returns above without bumping it, and correctly: the epoch tells a reconnecting
+        // process whether it missed an EVENT, and no process ever receives one for such a category,
+        // so there is nothing to miss. A write made while disconnected is recorded separately, before
+        // this method is reached (see noteMutationWhileDisconnected). INCR has to precede PUBLISH so
         // the payload can carry the result, which costs a second round trip — off the caller's path,
         // since this method is fire-and-forget.
         this._client.incr(this.buildEpochKey()).then((epoch) => {
@@ -1772,6 +1816,9 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
         if (!this._enablePubSub) {
             return;
         }
+        if (this.shouldFailFast) {
+            return; // nobody can hear it; fire-and-forget callers already accept a lost message
+        }
         this._client.publish(fullChannel, payload).catch((err) => {
             if (this._enableLogging) {
                 LogError(`Redis pub/sub publish failed on "${fullChannel}": ${(err as Error).message}`);
@@ -1801,6 +1848,9 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
         if (!this._enablePubSub) {
             throw new Error(`Redis pub/sub: cannot publish on "${channel}" — the provider was created without enablePubSub`);
         }
+        if (this.shouldFailFast) {
+            return 0; // the truthful receiver count while Redis is unreachable
+        }
         return this._client.publish(fullChannel, payload);
     }
 
@@ -1826,6 +1876,11 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
         const fullChannel = this.qualifyChannel(channel);
         if (!this._enablePubSub) {
             return () => undefined;
+        }
+        if (this.shouldFailFast) {
+            // The SUBSCRIBE would queue and never settle. Fail loudly instead, so the caller can
+            // degrade and say so rather than await forever.
+            throw new Error(`Redis is unreachable; cannot subscribe to "${channel}" until it reconnects`);
         }
 
         await this.StartListening();

@@ -94,6 +94,38 @@ describeRedis('Integration: index groups and TTL', () => {
         expect(await provider.GetItem('other', 'Metadata')).toBe(1);
     });
 
+    /**
+     * A write racing a category clear must not leave a live entry that no index group lists — a save on
+     * another server finds slots only through the group, so such an entry is served stale until it
+     * expires. The write is injected right after the clear's FIRST scan: with entries scanned first,
+     * that lands between the two scans, its entry escapes the entry scan while its group is scanned
+     * and deleted. With groups deleted first, every landing point leaves entry and index consistent.
+     */
+    it('a write racing a category clear never leaves a live entry missing from its index group', async () => {
+        await provider.SetItem('existing', { v: 1 }, 'RaceCat', { IndexGroup: 'Widgets' });
+        const internals = provider as unknown as { scanKeys: (pattern: string) => Promise<string[]> };
+        const realScan = internals.scanKeys.bind(provider);
+        let injected = false;
+        internals.scanKeys = async (pattern: string) => {
+            const keys = await realScan(pattern);
+            if (!injected) {
+                injected = true;
+                await provider.SetItem('racer', { v: 2 }, 'RaceCat', { IndexGroup: 'Widgets' });
+            }
+            return keys;
+        };
+        try {
+            expect((await provider.ClearCategoryChecked('RaceCat')).Ok).toBe(true);
+        } finally {
+            internals.scanKeys = realScan;
+        }
+
+        const racerIsLive = (await provider.GetItem('racer', 'RaceCat')) !== null;
+        const indexed = await provider.GetIndexGroupKeys('RaceCat', 'Widgets');
+        // Either the racer was cleared along with the rest, or it survived AND is still indexed.
+        expect(!racerIsLive || indexed.includes('racer')).toBe(true);
+    });
+
     it('ClearSharedCacheCategories: a dry run counts without deleting; a clear deletes and notifies', async () => {
         await provider.SetItem('G8|a', 1, CAT, { IndexGroup: 'G8' });
         await provider.SetItem('meta', 1, 'ClearTest');
@@ -196,6 +228,39 @@ describeRedis('Integration: index groups and TTL', () => {
             expect(await other.TryAcquireLease('renew-probe', 1000)).toBe(false);
         } finally {
             await provider.ReleaseLease('renew-probe');
+            await other.Disconnect();
+        }
+    });
+
+    /**
+     * The owner check inside the release and renew scripts — `GET key == token` before acting.
+     *
+     * The test above cannot reach it: a process that never acquired the lease has no token, so
+     * `RenewLease` returns false in JavaScript before the script runs. The case the check exists for
+     * is a STALE holder: its lease expired mid-work, another process took it, and the original then
+     * renews or releases with the token it still has. Without the check that renew extends — and that
+     * release deletes — the NEW owner's key, so two processes believe they hold it. Both scripts are
+     * shared with WithKeyLock's renewal and release, so this pins the lock path too.
+     */
+    it("a stale holder cannot renew or release a lease another process has since taken", async () => {
+        const other = new RedisLocalStorageProvider({ url: REDIS_URL, keyPrefix: prefix, enableLogging: false });
+        const key = `${prefix}:__lease__:stale-probe`;
+        try {
+            expect(await provider.TryAcquireLease('stale-probe', 300)).toBe(true);
+            await new Promise(resolve => setTimeout(resolve, 450));      // the first holder's lease expires
+            expect(await other.TryAcquireLease('stale-probe', 5000)).toBe(true);
+            const newOwnersToken = await raw.get(key);
+            expect(newOwnersToken).not.toBeNull();
+
+            // The stale holder still has its old token, so these DO reach the scripts.
+            expect(await provider.RenewLease('stale-probe', 60000)).toBe(false);
+            const ttlAfterStaleRenew = await raw.pttl(key);
+            expect(ttlAfterStaleRenew).toBeLessThanOrEqual(5000);        // not extended to 60s
+
+            await provider.ReleaseLease('stale-probe');
+            expect(await raw.get(key)).toBe(newOwnersToken);             // the new owner's lease survives
+        } finally {
+            await other.ReleaseLease('stale-probe');
             await other.Disconnect();
         }
     });

@@ -1204,6 +1204,7 @@ describe('RedisLocalStorageProvider', () => {
             type MockSubscriber = {
                 subscribe: ReturnType<typeof vi.fn>;
                 unsubscribe: ReturnType<typeof vi.fn>;
+                disconnect: ReturnType<typeof vi.fn>;
                 _simulateMessage: (channel: string, message: string) => void;
             };
             const subscriberOf = (p: RedisLocalStorageProvider): MockSubscriber =>
@@ -1274,6 +1275,41 @@ describe('RedisLocalStorageProvider', () => {
                 subscriberOf(p)._simulateMessage('mj:abort', 'payload');
 
                 expect(handler).toHaveBeenCalledWith('payload');
+                await p.Disconnect();
+            });
+
+            /**
+             * A subscriber whose first subscribe failed must be DISCONNECTED, not just abandoned.
+             *
+             * Retrying is not what is at stake: StartListening tracks its own in-flight promise and
+             * resets it on failure, so a later call opens a fresh subscriber either way (the test
+             * above). What only `discardSubscriber` does is close the failed client. Left open, that
+             * ioredis client keeps reconnecting in the background for good — retries are unlimited by
+             * default — and when it does get back in it resubscribes its channels, so this process
+             * then hears every cache invalidation twice: once per client.
+             */
+            it('disconnects the subscriber that failed to start, instead of leaking it', async () => {
+                const p = new RedisLocalStorageProvider({ enablePubSub: true, enableLogging: false, keyPrefix: 'mj' });
+                const internals = p as unknown as { createSubscriberClient: () => MockSubscriber };
+                const createSubscriber = internals.createSubscriberClient.bind(p);
+                const clients: MockSubscriber[] = [];
+                internals.createSubscriberClient = () => {
+                    const client = createSubscriber();
+                    if (clients.length === 0) {
+                        client.subscribe.mockRejectedValueOnce(new Error('redis down'));
+                    }
+                    clients.push(client);
+                    return client;
+                };
+
+                await expect(p.StartListening()).rejects.toThrow('redis down');
+                await p.StartListening();
+
+                expect(clients).toHaveLength(2);
+                expect(clients[0].disconnect).toHaveBeenCalledTimes(1);   // the failed one is closed
+                expect(clients[1].disconnect).not.toHaveBeenCalled();     // the working one is kept
+                expect(subscriberOf(p)).toBe(clients[1]);
+                expect(clients[1].subscribe).toHaveBeenCalledWith('mj:__pubsub__');
                 await p.Disconnect();
             });
         });
