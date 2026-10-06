@@ -1,5 +1,5 @@
 /**
- * The guarded-write procedures of `V202610041457__v6.2.x__Work_Queue_Guarded_Write_Sprocs.sql` (plan 12 / CD9).
+ * The guarded-write procedures of `V202610061701__v6.2.x__Work_Queue_Guarded_Write_Sprocs.sql` (plan 12 / CD9).
  * Keys match the builder methods that call them; `procedureParity.test.ts` checks that every name and its parameter
  * list, in order, exists in the migration exactly as the builders render it.
  */

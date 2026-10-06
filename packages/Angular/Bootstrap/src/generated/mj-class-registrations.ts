@@ -27,13 +27,14 @@ import {
     SaveEntityGraphOperation,
 } from '@memberjunction/core';
 
-// @memberjunction/ai-vectors-memory (2 classes)
+// @memberjunction/ai-vectors-memory (3 classes)
 import {
+    BaseVectorAccelerator,
     SimpleVectorDatabase,
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (446 classes)
+// @memberjunction/core-entities (447 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -257,6 +258,7 @@ import {
     MJEntityFieldEntityExtended,
     MJEntityFieldPermissionEntity,
     MJEntityFieldValueEntity,
+    MJEntityFormContributionEntity,
     MJEntityFormOverrideEntity,
     MJEntityOrganicKeyEntity,
     MJEntityOrganicKeyRelatedEntityEntity,
@@ -846,6 +848,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     OpenAIRealtimeClient,
     xAIRealtimeClient,
     SaveEntityGraphOperation,
+    BaseVectorAccelerator,
     SimpleVectorDatabase,
     SimpleVectorServiceProvider,
     AIAgentPermissionProvider,
@@ -1037,11 +1040,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJDashboardPermissionEntity,
     MJDashboardPermissionEntityExtended,
     MJDashboardUserPreferenceEntity,
-    MJDashboardUserStateEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJDashboardUserStateEntity,
     MJDataContextEntity,
     MJDataContextItemEntity,
     MJDatasetEntity,
@@ -1074,6 +1077,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJEntityFieldEntityExtended,
     MJEntityFieldPermissionEntity,
     MJEntityFieldValueEntity,
+    MJEntityFormContributionEntity,
     MJEntityFormOverrideEntity,
     MJEntityOrganicKeyEntity,
     MJEntityOrganicKeyRelatedEntityEntity,
@@ -1240,12 +1244,12 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJTagEntity,
     MJTagScopeEntity,
     MJTagSuggestionEntity,
-    MJTagSynonymEntity,
-    MJTaggedItemEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJTagSynonymEntity,
+    MJTaggedItemEntity,
     MJTaskDependencyEntity,
     MJTaskEntity,
     MJTaskTypeEntity,
@@ -1444,12 +1448,12 @@ const CLASS_REGISTRATIONS_2: any[] = [
     TestSuiteHierarchyPanel,
     UserHeaderPanel,
     UserOverviewPanel,
-    UserViewCategoryHierarchyPanel,
-    TagEngineBase,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    UserViewCategoryHierarchyPanel,
+    TagEngineBase,
     AIAnalyticsResourceComponent,
     AIOverviewHubComponent,
     APIKeysResourceComponent,
@@ -1586,7 +1590,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 722;
+export const CLASS_REGISTRATIONS_COUNT = 724;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -970,7 +970,35 @@ export class SyncEngine {
     
     return null;
   }
-  
+
+  /**
+   * Builds the payload a record's `sync.checksum` is calculated over. Pull and push must
+   * both use this, or the first push after a pull sees a checksum mismatch on every
+   * record (#4530).
+   *
+   * A record with no composition axes hashes its bare fields object; one with any
+   * non-empty collections, embeds or extension hashes `{ fields, ...axes }`. Empty axes
+   * are omitted, matching what pull writes to disk.
+   */
+  static BuildRecordChecksumPayload(
+    fields: Record<string, unknown>,
+    collections?: RecordData['collections'],
+    embeds?: RecordData['embeds'],
+    extension?: RecordData['extension']
+  ): Record<string, unknown> {
+    const hasCollections = !!collections && Object.keys(collections).length > 0;
+    const hasEmbeds = !!embeds && Object.keys(embeds).length > 0;
+    const hasExtension = !!extension && Object.keys(extension).length > 0;
+    if (!hasCollections && !hasEmbeds && !hasExtension) {
+      return fields;
+    }
+    const payload: Record<string, unknown> = { fields };
+    if (hasCollections) payload.collections = collections;
+    if (hasEmbeds) payload.embeds = embeds;
+    if (hasExtension) payload.extension = extension;
+    return payload;
+  }
+
   /**
    * Calculate SHA256 checksum for data
    * 

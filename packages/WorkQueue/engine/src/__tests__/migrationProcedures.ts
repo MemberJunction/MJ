@@ -4,7 +4,7 @@ import type { SqlStatement } from '../sql/WorkQueueSqlExecutor';
 
 /** The migration that defines every spWorkQueue* procedure (plan 12 / CD9). */
 export const PROCEDURES_MIGRATION = fileURLToPath(
-    new URL('../../../../../migrations/v6/V202610041457__v6.2.x__Work_Queue_Guarded_Write_Sprocs.sql', import.meta.url),
+    new URL('../../../../../migrations/v6/V202610061701__v6.2.x__Work_Queue_Guarded_Write_Sprocs.sql', import.meta.url),
 );
 
 export interface MigrationProcedure {

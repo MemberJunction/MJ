@@ -3167,6 +3167,29 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
+  packages/AI/Vectors/MemoryServer:
+    dependencies:
+      '@memberjunction/ai-vectors-memory':
+        specifier: 6.2.0-edge.2
+        version: link:../Memory
+      '@memberjunction/core':
+        specifier: 6.2.0-edge.2
+        version: link:../../../MJCore
+      '@memberjunction/global':
+        specifier: 6.2.0-edge.2
+        version: link:../../../MJGlobal
+    devDependencies:
+      '@types/node':
+        specifier: 24.10.11
+        version: 24.10.11
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+    optionalDependencies:
+      usearch:
+        specifier: 2.26.2
+        version: 2.26.2
+
   packages/AI/Vectors/Providers/Pinecone:
     dependencies:
       '@memberjunction/ai-vectordb':
@@ -6747,6 +6770,9 @@ importers:
       '@memberjunction/ng-artifacts':
         specifier: 6.2.0-edge.2
         version: link:../artifacts
+      '@memberjunction/ng-base-forms':
+        specifier: 6.2.0-edge.2
+        version: link:../base-forms
       '@memberjunction/ng-base-types':
         specifier: 6.2.0-edge.2
         version: link:../base-types
@@ -11451,9 +11477,15 @@ importers:
       '@memberjunction/ai-bridge-livekit':
         specifier: 6.2.0-edge.2
         version: link:../AI/RealtimeBridge/Providers/LiveKit
+      '@memberjunction/ai-bridge-livekit-native':
+        specifier: 6.2.0-edge.2
+        version: link:../AI/RealtimeBridge/Providers/LiveKitNative
       '@memberjunction/ai-bridge-server':
         specifier: 6.2.0-edge.2
         version: link:../AI/RealtimeBridge/Server
+      '@memberjunction/ai-prompts':
+        specifier: 6.2.0-edge.2
+        version: link:../AI/Prompts
       '@memberjunction/core':
         specifier: 6.2.0-edge.2
         version: link:../MJCore
@@ -11463,9 +11495,18 @@ importers:
       '@memberjunction/global':
         specifier: 6.2.0-edge.2
         version: link:../MJGlobal
+      '@memberjunction/network-utils':
+        specifier: 6.2.0-edge.2
+        version: link:../NetworkUtils
+      '@memberjunction/storage':
+        specifier: 6.2.0-edge.2
+        version: link:../MJStorage
       livekit-server-sdk:
         specifier: ^2.9.7
         version: 2.15.4
+      mpg123-decoder:
+        specifier: ^1.0.3
+        version: 1.0.3
     devDependencies:
       '@types/node':
         specifier: 24.10.11
@@ -11482,6 +11523,9 @@ importers:
       '@memberjunction/ai':
         specifier: 6.2.0-edge.2
         version: link:../AI/Core
+      '@memberjunction/ai-bridge-livekit-native':
+        specifier: 6.2.0-edge.2
+        version: link:../AI/RealtimeBridge/Providers/LiveKitNative
       '@memberjunction/communication-sendgrid':
         specifier: 6.2.0-edge.2
         version: link:../Communication/providers/sendgrid
@@ -14624,6 +14668,9 @@ importers:
       '@memberjunction/ai-vectors-memory':
         specifier: 6.2.0-edge.2
         version: link:../AI/Vectors/Memory
+      '@memberjunction/ai-vectors-memory-server':
+        specifier: 6.2.0-edge.2
+        version: link:../AI/Vectors/MemoryServer
       '@memberjunction/ai-vectors-pgvector':
         specifier: 6.2.0-edge.2
         version: link:../AI/Vectors/Providers/pgvector
@@ -18825,6 +18872,9 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  '@eshaz/web-worker@1.2.2':
+    resolution: {integrity: sha512-WxXiHFmD9u/owrzempiDlBB1ZYqiLnm9s6aPc8AlFQalq2tKmqdmMr9GXOupDgzXtqnBipj8Un0gkIm7Sjf8mw==}
+
   '@eslint-community/eslint-utils@4.9.1':
     resolution: {integrity: sha512-phrYmNiYppR7znFEdqgfWHXR6NCkZEK7hwWDHZUjit/2/U0r6XvkDl0SYnoM51Hq7FhCGdLDT6zxCCOY1hexsQ==}
     engines: {node: ^12.22.0 || ^14.17.0 || >=16.0.0}
@@ -22569,6 +22619,9 @@ packages:
   '@vonage/voice@1.21.0':
     resolution: {integrity: sha512-RqmQifzvPWSXO1Jd1JZjis8ty5OD9d0hX2xQHB5r5cP9Hx4vVlX7aDgZsUNy7J5BTeTpNTgrfMFkeeNGYuRcpQ==}
     engines: {node: '>=20'}
+
+  '@wasm-audio-decoders/common@9.0.7':
+    resolution: {integrity: sha512-WRaUuWSKV7pkttBygml/a6dIEpatq2nnZGFIoPTc5yPLkxL6Wk4YaslPM98OPQvWacvNZ+Py9xROGDtrFBDzag==}
 
   '@webassemblyjs/ast@1.14.1':
     resolution: {integrity: sha512-nuBEDgQfm1ccRp/8bCQrx1frohyufl4JlbMMZ4P1wpeOfDhF6FQkxZJ1b/e+PLwr6X1Nhw6OLme5usuBWYBvuQ==}
@@ -27371,6 +27424,9 @@ packages:
   mp4box@0.5.4:
     resolution: {integrity: sha512-GcCH0fySxBurJtvr0dfhz0IxHZjc1RP+F+I8xw+LIwkU1a+7HJx8NCDiww1I5u4Hz6g4eR1JlGADEGJ9r4lSfA==}
 
+  mpg123-decoder@1.0.3:
+    resolution: {integrity: sha512-+fjxnWigodWJm3+4pndi+KUg9TBojgn31DPk85zEsim7C6s0X5Ztc/hQYdytXkwuGXH+aB0/aEkG40Emukv6oQ==}
+
   mri@1.2.0:
     resolution: {integrity: sha512-tzzskb3bG8LvYGFF/mDTpq3jpI6Q9wc3LEmBaghu+DdCssd1FakN7Bc0hVNmEyGq1bq3RgfkCb3cmQLpNPOroA==}
     engines: {node: '>=4'}
@@ -27582,6 +27638,10 @@ packages:
 
   node-gyp-build-optional-packages@5.2.2:
     resolution: {integrity: sha512-s+w+rBWnpTMwSFbaE0UXsRlg7hU4FjekKU4eyAih5T8nJuNZT1nNsskXpxmeqSK9UzkBl6UgRlnKc8hz8IEqOw==}
+    hasBin: true
+
+  node-gyp-build@4.8.4:
+    resolution: {integrity: sha512-LA4ZjwlnUblHVgq0oBF3Jl/6h/Nvs5fzBLwdEF4nuxnFdsfajde4WfxtJr3CaiH+F6ewcIB/q4jQ4UzPyid+CQ==}
     hasBin: true
 
   node-gyp@12.2.0:
@@ -29295,6 +29355,9 @@ packages:
     resolution: {integrity: sha512-a2B9Y0KlNXl9u/vsW6sTIu9vGEpfKu2wRV6l1H3XEas/0gUIzGzBoP/IouTcUQbm9JWZLH3COxyn03TYlFax6w==}
     engines: {node: '>=10'}
 
+  simple-yenc@1.0.4:
+    resolution: {integrity: sha512-5gvxpSd79e9a3V4QDYUqnqxeD4HGlhCakVpb6gMnDD7lexJggSBJRBO5h52y/iJrdXRilX9UCuDaIJhSWm5OWw==}
+
   sisteransi@1.0.5:
     resolution: {integrity: sha512-bLGGlR1QxBcynn2d5YmDX4MGjlZvy2MRBDRNHLJ8VI6l6+9FUiyTFNJ0IveOSP0bcXgVDPRcfGqA0pjaqUpfVg==}
 
@@ -30298,6 +30361,10 @@ packages:
     resolution: {integrity: sha512-Pp6GSwGP/NrPIrxVFAIkOQeyw8lFenOHijQWkUTrDvrF4ALqylP2C/KCkeS9dpUM3KvYRQhna5vt7IL95+ZQ9w==}
     peerDependencies:
       react: 19.1.0
+
+  usearch@2.26.2:
+    resolution: {integrity: sha512-jz4MKg09LFn6CP/fh9MwY7NV3qQUcXrQIt92LV7CMx44AEnGP1QenhHReua3ETqzgoIYcISJ+SsDoX0DOpFh9Q==}
+    engines: {node: '>=22'}
 
   util-deprecate@1.0.2:
     resolution: {integrity: sha512-EPD5q1uXyFxJpCrLnCc1nHnq3gOa6DZBocAIiI2TaSCA7VCJ1UJDMagCzIkXNsUYfD1daK//LTEQ8xiIbrHtcw==}
@@ -35361,6 +35428,8 @@ snapshots:
   '@esbuild/win32-x64@0.28.2':
     optional: true
 
+  '@eshaz/web-worker@1.2.2': {}
+
   '@eslint-community/eslint-utils@4.9.1(eslint@8.56.0)':
     dependencies:
       eslint: 8.56.0
@@ -40010,6 +40079,11 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
     optional: true
+
+  '@wasm-audio-decoders/common@9.0.7':
+    dependencies:
+      '@eshaz/web-worker': 1.2.2
+      simple-yenc: 1.0.4
 
   '@webassemblyjs/ast@1.14.1':
     dependencies:
@@ -45833,6 +45907,10 @@ snapshots:
   mp4box@0.5.4:
     optional: true
 
+  mpg123-decoder@1.0.3:
+    dependencies:
+      '@wasm-audio-decoders/common': 9.0.7
+
   mri@1.2.0: {}
 
   mrmime@2.0.1: {}
@@ -46054,6 +46132,9 @@ snapshots:
   node-gyp-build-optional-packages@5.2.2:
     dependencies:
       detect-libc: 2.1.2
+    optional: true
+
+  node-gyp-build@4.8.4:
     optional: true
 
   node-gyp@12.2.0:
@@ -48121,6 +48202,8 @@ snapshots:
     dependencies:
       semver: 7.7.4
 
+  simple-yenc@1.0.4: {}
+
   sisteransi@1.0.5: {}
 
   slash@3.0.0: {}
@@ -49234,6 +49317,13 @@ snapshots:
   use-sync-external-store@1.6.0(react@19.1.0):
     dependencies:
       react: 19.1.0
+
+  usearch@2.26.2:
+    dependencies:
+      bindings: 1.5.0
+      node-addon-api: 8.8.0
+      node-gyp-build: 4.8.4
+    optional: true
 
   util-deprecate@1.0.2: {}
 
