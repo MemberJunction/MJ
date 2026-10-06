@@ -13,11 +13,11 @@
 
 import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, FileStorageEngineBase, MJAISkillEntity, MJEnvironmentEntityExtended, MJConversationSkillEntity, MJAIVendorEntity } from '@memberjunction/core-entities';
 import { BuildActionToolSet, FilterDeclarableActions, SanitizeToolName } from './native-tools/action-tool-builder';
-import { BuildNativeToolSet, SUB_AGENT_TOOL_PREFIX, type NativeToolBinding } from './native-tools/control-tools';
+import { BuildNativeToolSet, COMPLETE_TASK_TOOL, SUB_AGENT_TOOL_PREFIX, type NativeToolBinding } from './native-tools/control-tools';
 import { BuildAssistantToolCallTurn, BuildToolResultTurn, CompactToolResultContent, type NativeToolResult } from './native-tools/tool-result-turns';
 import { LooksLikeLoopEnvelope } from './native-tools/dual-channel';
 import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIPromptRunEntityExtended, ResolvePromptRunUserID } from "@memberjunction/ai-core-plus";
-import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase } from '@memberjunction/core';
+import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase, ToPlainJSON } from '@memberjunction/core';
 import { AgentRunWatchdog } from './agent-run-watchdog';
 import { AIPromptRunner, GetToolCallingDecision, AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, MakeAIAPIKeyResolver, IRealtimeSession, IsPrefixPromptCache, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice, DecisionQuestion, DecisionAnswer } from '@memberjunction/ai';
@@ -4821,15 +4821,22 @@ export class BaseAgent {
     /**
      * The `tool_choice` for this turn (§8.3).
      *
-     * `'auto'` normally, `'none'` on the last turn this run will be allowed.
+     * `'auto'` normally; on the last turn this run will be allowed, a forced `complete_task` call.
      *
      * **Why the final turn is special.** A tool call is a request to continue: the framework runs
      * the action, feeds the result back, and the model decides again. On the last permitted
      * iteration there is no "again" — the limit check fires the moment the turn returns, so the
      * action is executed, paid for, and its result discarded, and the run ends with no answer for
      * the user because the model spent its last turn asking a question instead of answering one.
-     * Forcing `'none'` converts that turn into what the framework actually needs from it: a
-     * terminal envelope.
+     * The final turn is forced to what the framework actually needs from it: a terminal answer.
+     *
+     * **Why `complete_task` and not `'none'`.** Under implicit control flow, `'none'` forbids the
+     * model's only way to store its result — `payload_change_request` and `complete_task` are tools
+     * too — so a forced `'none'` turn can end the run but never deliver the payload. Naming
+     * `complete_task` forces the one call that does both. A model that is NOT on implicit control
+     * flow never receives `complete_task` (the runner strips control tools), and the runner then
+     * downgrades the named choice to `'none'`: the envelope turn the hybrid needs. Providers also
+     * enforce a named choice more reliably than `'none'`.
      *
      * **What this does NOT fix.** Models call a tool on a measurable share of turns whose right
      * answer was chat, completion or delegation. Those are not predictable
@@ -4837,14 +4844,14 @@ export class BaseAgent {
      * address them. That belongs to the prompt, and is why the native-mode Actions section names
      * the cases explicitly.
      *
-     * Subclasses may narrow this further; the base contract is that a forced `'none'` must never be
-     * relaxed to `'auto'` on a turn the framework has already decided is terminal.
+     * Subclasses may narrow this further; the base contract is that a forced terminal choice must
+     * never be relaxed to `'auto'` on a turn the framework has already decided is terminal.
      *
      * @param params The run parameters, for the per-run iteration override
-     * @returns `'none'` on the final permitted iteration, otherwise `'auto'`
+     * @returns `{ name: 'complete_task' }` on the final permitted iteration, otherwise `'auto'`
      */
     protected resolveToolChoiceForTurn(params: ExecuteAgentParams): ChatToolChoice {
-        return this.isFinalPermittedIteration(params) ? 'none' : 'auto';
+        return this.isFinalPermittedIteration(params) ? { name: COMPLETE_TASK_TOOL } : 'auto';
     }
 
     /**
@@ -7566,11 +7573,20 @@ The context is now within limits. Please retry your request with the recovered c
 
         // if we need to retry make sure we add the retry message to the conversation messages
         if (guardrailCheckedStep.step === 'Retry' && guardrailCheckedStep.payloadToolCallId && guardrailCheckedStep.nativeTurn?.sendResultsNatively) {
-            // the payload-only turn is answered as a tool result for the payload_change_request call.
+            // A payload-only turn, or a complete_task that failed Success validation, is answered as a
+            // tool result for that call — the feedback is what the model reads next.
             params.conversationMessages.push(BuildToolResultTurn([{
                 toolCallId: guardrailCheckedStep.payloadToolCallId,
-                toolName: 'payload_change_request',
+                toolName: this.nativeToolNameForCall(guardrailCheckedStep, guardrailCheckedStep.payloadToolCallId),
                 content: guardrailCheckedStep.retryInstructions || 'Payload change applied.',
+                isError: false
+            }], { turnAdded: this._promptTurnCount, messageType: 'action-result' }) as AgentChatMessage);
+        } else if (guardrailCheckedStep.step === 'Success' && guardrailCheckedStep.payloadToolCallId && guardrailCheckedStep.nativeTurn?.sendResultsNatively) {
+            // complete_task ended the run: answer the call so the history never ends on a dangling tool_use.
+            params.conversationMessages.push(BuildToolResultTurn([{
+                toolCallId: guardrailCheckedStep.payloadToolCallId,
+                toolName: this.nativeToolNameForCall(guardrailCheckedStep, guardrailCheckedStep.payloadToolCallId),
+                content: 'Task complete.',
                 isError: false
             }], { turnAdded: this._promptTurnCount, messageType: 'action-result' }) as AgentChatMessage);
         } else if (guardrailCheckedStep.step === 'Retry' && (guardrailCheckedStep.message || guardrailCheckedStep.errorMessage || guardrailCheckedStep.retryInstructions)) {
@@ -7584,6 +7600,11 @@ The context is now within limits. Please retry your request with the recovered c
         return guardrailCheckedStep;
     }
  
+    /** The tool name the model used for a call on this turn — `payload_change_request` when it cannot be found. */
+    private nativeToolNameForCall(step: BaseAgentNextStep, toolCallId: string): string {
+        return step.nativeTurn?.toolCalls.find((c) => c.id === toolCallId)?.name ?? 'payload_change_request';
+    }
+
     /**
      * Executes a batch of artifact tool calls, recording each as its own
      * `Tool` AIAgentRunStep (a sibling of the Prompt step that requested them)
@@ -13481,8 +13502,10 @@ The context is now within limits. Please retry your request with the recovered c
      * by one in-flight sub-agent would race the others' reads.
      *
      * Uses `structuredClone` (Node 17+) where available; falls back to a JSON
-     * round-trip for environments without it. Returns the original value on
-     * non-cloneable inputs.
+     * round-trip (`ToPlainJSON`) for environments without it AND when
+     * `structuredClone` throws (a Proxy such as a live JSONType `<Field>Object`
+     * view, or functions). Returns the original value — with an error logged —
+     * only when even the JSON clone fails.
      *
      * **JSON fallback caveats** — the round-trip is *not* shape-preserving:
      *   - `Date` → ISO string
@@ -13502,12 +13525,20 @@ The context is now within limits. Please retry your request with the recovered c
     protected cloneSubAgentPayload<T>(payload: T): T {
         if (payload === null || payload === undefined) return payload;
         if (typeof payload !== 'object') return payload;
-        try {
-            if (typeof globalThis.structuredClone === 'function') {
+        if (typeof globalThis.structuredClone === 'function') {
+            try {
                 return globalThis.structuredClone(payload);
+            } catch {
+                // DataCloneError — typically a Proxy (a live JSONType `<Field>Object` view) or an
+                // object holding functions. Fall through to the JSON clone below; returning the
+                // original here would silently give the sub-agent the caller's LIVE object and lose
+                // payload isolation.
             }
-            return JSON.parse(JSON.stringify(payload)) as T;
-        } catch {
+        }
+        try {
+            return ToPlainJSON(payload);
+        } catch (error) {
+            LogError(`BaseAgent.cloneSubAgentPayload: payload could not be cloned (${error instanceof Error ? error.message : String(error)}); sub-agent will share the caller's object`);
             return payload;
         }
     }
