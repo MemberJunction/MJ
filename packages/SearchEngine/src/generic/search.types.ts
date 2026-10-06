@@ -7,6 +7,7 @@
  *
  * @module @memberjunction/search-engine
  */
+import type { UserInfo } from '@memberjunction/core';
 
 /**
  * Source types that can contribute to search results.
@@ -120,6 +121,36 @@ export interface SearchParams {
      * itself, the caller that selects scopes does.
      */
     AISkillID?: string | null;
+    /**
+     * Everyone besides `contextUser` who will see this search's results. When set, a result
+     * survives only if **every** reader may read it: the engine runs its permission safety net
+     * (entity read, row filters, ownership, origin records) once for the caller and once per
+     * reader, and keeps the intersection. Use it for a shared conversation, where the asker's
+     * reach is the ceiling but not the floor — a document one participant can't open must not
+     * be quoted to the room because another participant could. Readers never widen a result set.
+     *
+     * Server-side callers pass **hydrated** `UserInfo` objects (with `UserRoles`, e.g. from `UserCache`):
+     * permissions and row filters are evaluated from a reader's roles, so a bare `{ ID }` reads nothing
+     * and empties the result. The engine does not resolve IDs to users, and nothing in the GraphQL
+     * surface sets this today.
+     *
+     * Two limits, both failing closed: `storage-file` results are refused when an audience is present
+     * (their permissions are evaluated by the storage lane for the caller only, and cannot be re-checked
+     * per reader), and `streamSearch`'s per-provider partial events are not audience-filtered — only the
+     * fused/final results are. Show a room the final results, never the partials.
+     */
+    Audience?: SearchAudience;
+}
+
+/**
+ * The people, other than the caller, who will see a search's results. See {@link SearchParams.Audience}.
+ */
+export interface SearchAudience {
+    /**
+     * Readers besides the caller, as hydrated `UserInfo` objects (roles included). The caller is always
+     * a reader; listing them again, or listing a reader twice, is harmless.
+     */
+    Readers: UserInfo[];
 }
 
 /**

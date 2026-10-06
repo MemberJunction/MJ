@@ -47,6 +47,7 @@ import {
     FusionWeightsByProvider,
     DimensionExplanation,
     ScopePrincipals,
+    SearchAudience,
 } from './search.types';
 import { BaseSearchProvider, SearchProviderConfig } from './ISearchProvider';
 import { SearchFusion, LabeledResultList } from './SearchFusion';
@@ -486,6 +487,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                 // number should be zero (the safety net should never trim anything).
                 LogStatus(`SearchEngine: Residual permission filter removed ${lateFilteredCount} result(s) — consider tightening provider push-down.`);
             }
+            results = await this.FilterForAudience(results, params.Audience, contextUser);
 
             const scoreThreshold = params.MinScore ?? 0;
             if (scoreThreshold > 0) {
@@ -786,8 +788,85 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             // into expansion queries. Two searches identical but for the active skill are NOT
             // interchangeable, so they must not share a cache entry.
             AISkillID: params.AISkillID ?? undefined,
+            // The audience narrows the result set, so a search the caller ran alone must never be
+            // served from the cache to a room, nor a room's result to the caller alone. Sorted so
+            // the same readers in any order share an entry.
+            AudienceReaderIDs: this.audienceReaderIDs(params.Audience, contextUser),
         };
         return `${userKey}|${trimmed}|${this.stableStringify(projection)}`;
+    }
+
+    /**
+     * The readers an audience actually adds: one per distinct ID (case-insensitive), the caller's own
+     * ID and readers with no ID left out. Empty when the audience changes nothing.
+     */
+    private distinctReaders(audience: SearchAudience | undefined, contextUser: UserInfo): UserInfo[] {
+        if (!audience) return [];
+        const seen = new Set<string>();
+        const callerID = contextUser.ID?.toLowerCase();
+        if (callerID) seen.add(callerID);
+        const readers: UserInfo[] = [];
+        for (const reader of audience.Readers) {
+            const id = reader.ID?.toLowerCase();
+            if (!id || seen.has(id)) continue;
+            seen.add(id);
+            readers.push(reader);
+        }
+        return readers;
+    }
+
+    /** The distinct reader IDs, lower-cased and sorted, for the cache key. `undefined` when the audience adds no reader, so it keys like no audience. */
+    private audienceReaderIDs(audience: SearchAudience | undefined, contextUser: UserInfo): string[] | undefined {
+        const ids = this.distinctReaders(audience, contextUser).map(r => r.ID.toLowerCase()).sort();
+        return ids.length > 0 ? ids : undefined;
+    }
+
+    /**
+     * Keep only the results every reader in `audience` may read, on top of the caller's own filter.
+     * Each reader gets the same safety net the caller did, so a shared conversation's results are the
+     * intersection of what every participant may see — the asker's reach is the ceiling, each other
+     * reader's reach lowers it. Readers are checked in parallel; a reader with the caller's own ID, or
+     * listed twice, is checked once.
+     *
+     * Two things the pass cannot do, both fail closed:
+     * - **Storage hits are refused under an audience.** `filterByPermissions` passes `storage-file`
+     *   results through: their permission model is the storage provider's, evaluated for the caller
+     *   when the lane ran, and it cannot be re-run here for another user. A hit nobody has re-checked
+     *   for the room is not shown to the room.
+     * - **A reader with no roles can read nothing.** Permissions and row filters are evaluated from
+     *   `UserInfo.UserRoles`, so a reader passed as a bare `{ ID }` drops every result. Pass hydrated
+     *   users (from `UserCache`, or however the host loads them).
+     *
+     * Protected so a host can change how an audience combines (a host that materializes a shared
+     * reach in one query can replace the per-reader pass). The default is the intersection.
+     */
+    protected async FilterForAudience(
+        results: SearchResultItem[],
+        audience: SearchAudience | undefined,
+        contextUser: UserInfo
+    ): Promise<SearchResultItem[]> {
+        const readers = this.distinctReaders(audience, contextUser);
+        if (readers.length === 0 || results.length === 0) return results;
+
+        const checkable = results.filter(r => r.ResultType !== 'storage-file');
+        if (checkable.length < results.length) {
+            LogStatus(`SearchEngine: ${results.length - checkable.length} storage result(s) refused under an audience — storage permissions are evaluated for the caller only and cannot be re-checked per reader.`);
+        }
+        for (const reader of readers) {
+            if (!reader.UserRoles?.length) {
+                LogStatus(`SearchEngine: Audience reader ${reader.ID} carries no UserRoles — permissions resolve to nothing, so the shared result set will be empty. Pass hydrated UserInfo objects.`);
+            }
+        }
+
+        const survivors = await Promise.all(readers.map(reader => this.filterByPermissions(checkable, reader)));
+        const keptByEveryReader = survivors.map(list => new Set(list));
+        readers.forEach((reader, i) => {
+            const dropped = checkable.length - survivors[i].length;
+            if (dropped > 0) {
+                LogStatus(`SearchEngine: Audience reader ${reader.ID} cannot read ${dropped} result(s) the caller can — removed from the shared result set.`);
+            }
+        });
+        return checkable.filter(r => keptByEveryReader.every(set => set.has(r)));
     }
 
     /** Insert into the LRU cache, evicting oldest entries when over capacity. */

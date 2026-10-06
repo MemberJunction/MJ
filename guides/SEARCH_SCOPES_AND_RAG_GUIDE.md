@@ -235,6 +235,19 @@ No scope duplication needed.
 | `StorageSearchProvider` | Already folder-path / account-permission bounded via `MJ: File Storage Account Permissions`. |
 | 3rd-party index providers | Use the engine's native permission/ACL filter. Documented in the "how to add a provider" guide. |
 
+### Searching for an audience
+
+Everything above is about one person: the caller. When the results will be shown to **several** people — an agent answering in a shared conversation — the caller's reach is the ceiling, not the floor: a document one participant can't open must not be quoted to the room because another participant could.
+
+`SearchParams.Audience.Readers` names the other people who will see the results. The engine runs its permission safety net once for the caller and once per reader (in parallel), and keeps the intersection. Readers can only remove results, never add them. The audience is part of the result-cache key, so a search the caller ran alone is never served to a room, nor the reverse. The GraphQL surface does not expose this today — it is for server-side callers such as a host's conversation turn handler.
+
+Three rules for callers:
+- **Pass hydrated `UserInfo` objects** (with `UserRoles`, e.g. from `UserCache`). Permissions and row filters are evaluated from a reader's roles; a bare `{ ID }` reads nothing, and the room gets an empty result. The engine logs this case.
+- **Storage hits are refused under an audience.** `MJ: File Storage Account Permissions` are evaluated by the storage lane for the caller when the lane runs, and cannot be re-run for another user, so a `storage-file` result is dropped rather than shown on the caller's permission alone. Per-reader storage checks are a follow-up.
+- **Only the fused/final results are audience-filtered.** `streamSearch`'s per-provider partial events arrive before any permission pass; never render them to a room.
+
+Audience filtering raises the residual-filter rate, so a host serving rooms should raise the over-fetch factor (below). Push-down should still carry as much of the audience as the scope can express (a server-derived dimension computed over every participant), for the same recall reasons given above. The audience pass is the truth; push-down is the recall.
+
 ### Overfetch factor tuning
 
 `effectiveTopK = userTopK * permissionOverfetchFactor` compensates for residual filtering. Default 2. Tune higher for corpora where permission sparsity is high (>50% of matches filtered).
