@@ -137,11 +137,19 @@ Every agent has one of three access levels:
 |---|---|
 | `All` | Can use any scope including Global. `__Scoped_Search` does not restrict. |
 | `Assigned` | Can use ONLY scopes in its `MJ: AI Agent Search Scopes` rows. `__Scoped_Search` rejects anything else with `ACCESS_DENIED`. |
-| `None` | No search capability. `__Scoped_Search` rejects all requests. |
+| `None` | No search capability. `__Scoped_Search` rejects all requests, and pre-execution RAG searches nothing. |
 
 ### Pre-Execution RAG
 
 When an agent has any active `Phase IN ('PreExecution','Both')` rows, `BaseAgent` automatically runs `AgentPreExecutionRAG` during Phase 2 (in parallel with config load, data preload, and memory injection). The results are formatted as a `<retrieved_context>` system message and unshifted onto the conversation messages.
+
+**The same permission gate as `__Scoped_Search`.** An assignment row says which scopes the agent reads from; it is not a grant to the person asking. Before searching each scope, `AgentPreExecutionRAG` resolves `ResolveEffectivePermission` for the acting user, with the agent as principal, the run's `PrimaryScopeRecordID` as tenant, and — when exactly one skill is active in the run — that skill as a second principal (several active skills: none, the action's rule). The bar is the action's: allowed **and above `Read`**. In practice:
+
+- `SearchScopeAccess='None'` → no pre-execution retrieval.
+- `Assigned` → each scope needs a `MJ: Search Scope Permissions` grant at `Search` or `Manage` for the user or one of their roles.
+- `All` → the agent supplies `Search` when the user has no grant of their own and may run the agent. A user or role grant at `Read` is found first and refuses the scope, as it does for the action and the GraphQL resolver.
+
+A refused scope is skipped (the others still run) and logged as one `Forbidden` row in `MJ: Search Execution Logs`; a resolver failure skips the scope with a `LogError` and no `Forbidden` row. A turn with no query text (an empty or multimodal last message, and no query template) skips the scope before the gate.
 
 **Zero added latency** — Phase 2 already has slower tasks running in parallel; RAG slots alongside them without extending the critical path.
 
@@ -178,7 +186,7 @@ Four consequences worth being explicit about, because a skill is a principal tha
 - **A bad value fails closed.** A non-UUID, or an ID that will not load, is rejected with `INVALID_PARAM` rather than being dropped. Silently continuing would bind an unjudged ID into the expansion query.
 - **The caller must be allowed to use it on this agent.** Loading a skill is not permission to wield it as a principal. Because `SkillUnscopedAll` grants `Search` on any scope, and AISkill permissions are open by default (no permission rows means everyone may View and Run), an unchecked ID would be a scope grant for the asking. `SearchScopePermissionResolver` intersects the skill against `GetSkillsForAgent(agent, user)` — agent-accepted ∩ user-permitted ∩ Active, the same call `BaseAgent.preActivateRequestedSkills` gates real activation on — and refuses with `PrincipalNotActivatable`, which the action returns as `ACCESS_DENIED`, attributed to the skill in the Forbidden log.
 
-  The two principals are judged at **different points, for a reason**. A skill is judged wherever it is named, because a skill is only ever supplied to steer: it binds into `Principals.SkillID` and, for a `restricts: true` dimension, the expansion query's output *is* the bound — so judging it only at the `All` fallback would let a user who holds their own grant name any skill and widen with it. An agent is judged only where it **widens** (its `All` fallback), because elsewhere `AIAgentID` is attribution — the pre-execution RAG path threads it purely so `SearchExecutionLog` can attribute the search, and gating that would turn an analytics field into a retrieval outage. `ExplainScope` applies both gates, so a preview cannot promise what the search would refuse.
+  The two principals are judged at **different points, for a reason**. A skill is judged wherever it is named, because a skill is only ever supplied to steer: it binds into `Principals.SkillID` and, for a `restricts: true` dimension, the expansion query's output *is* the bound — so judging it only at the `All` fallback would let a user who holds their own grant name any skill and widen with it. An agent is judged only where it **widens** (its `All` fallback). Every agent-mediated search supplies the running agent as a principal — `__Scoped_Search` and pre-execution RAG both do — and where it only restricts, checking whether the caller may run it would let an agent missing from the AI metadata cache refuse users whose own grant covers the scope. `ExplainScope` applies both gates, so a preview cannot promise what the search would refuse.
 
 - **Containment of a principal id is the QUERY AUTHOR's job, not the platform's.** An expansion query
   is server-authored SQL, but MJ renders query parameters through Nunjucks with `autoescape: false`
@@ -403,6 +411,7 @@ The engine logs at key points (check `LogStatus` / `LogError` output):
 - `SearchEngine: Re-ranker "DriverClass" returned N result(s) (input=I, outputTopN=O)` — re-rank stage telemetry.
 - `AgentPreExecutionRAG: Exception searching scope "NAME"` — per-scope search failures.
 - `AgentPreExecutionRAG: Template "ID" render failed` — template-rendering failures fall back to `lastUserMessage`.
+- `AgentPreExecutionRAG: permission for scope "NAME" could not be resolved` — the resolver threw; that scope was skipped. Refused scopes log only at verbose level; read them from the `Forbidden` rows in `MJ: Search Execution Logs`.
 
 Key signals to watch:
 - Consistent `lateFilteredCount > 0` → fix provider push-down.

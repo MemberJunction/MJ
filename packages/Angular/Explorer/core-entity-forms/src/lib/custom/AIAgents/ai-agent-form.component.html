@@ -1029,7 +1029,7 @@
                         <i class="fa-solid fa-user-check"></i>
                         <div class="agent-search-access-text">
                           <div class="agent-search-access-title">Assigned</div>
-                          <div class="agent-search-access-desc">Can use ONLY scopes listed below. Other scopes are rejected with ACCESS_DENIED.</div>
+                          <div class="agent-search-access-desc">Can use ONLY scopes listed below, for users with a Search grant on the scope (directly or through a role). Other scopes are rejected with ACCESS_DENIED.</div>
                         </div>
                       </label>
                       <label class="agent-search-access-option" [class.active]="record.SearchScopeAccess === 'None'">
@@ -1037,7 +1037,7 @@
                         <i class="fa-solid fa-ban"></i>
                         <div class="agent-search-access-text">
                           <div class="agent-search-access-title">None</div>
-                          <div class="agent-search-access-desc">No search capability. The Scoped Search action is disabled for this agent.</div>
+                          <div class="agent-search-access-desc">No search capability. The Scoped Search action and pre-execution retrieval are disabled for this agent.</div>
                         </div>
                       </label>
                     </div>
@@ -1047,7 +1047,7 @@
                       <div class="agent-search-grid-header">
                         <h4>Assigned Scopes</h4>
                         <p class="section-description">
-                          <strong>Pre-Execution</strong> scopes are injected automatically before the first LLM call.
+                          <strong>Pre-Execution</strong> scopes are searched before the first LLM call, for users who may search them.
                           <strong>Agent-Invoked</strong> scopes are callable via the Scoped Search tool during execution.
                           <strong>Both</strong> covers both paths.
                         </p>
@@ -1087,7 +1087,7 @@
                               <div style="font-weight: 600; margin-bottom: 4px;">{{ s.ScopeName }}</div>
                               @if (s.Permissions.length === 0) {
                                 <div style="color: var(--mj-text-muted); font-size: 0.9em;">
-                                  No explicit permissions. Access falls back to this agent's <code>SearchScopeAccess</code> setting.
+                                  No explicit permissions. Users need a Search grant (directly or through a role) unless this agent's access is <code>All</code>.
                                 </div>
                               } @else {
                                 <ul style="margin: 4px 0 0 16px; padding: 0;">

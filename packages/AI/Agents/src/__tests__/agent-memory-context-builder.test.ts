@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { GetExamplesParams, GetNotesParams } from '../agent-context-injector';
+import type { AgentPreExecutionRAGParams } from '../agent-pre-execution-rag';
 
 // ---- Mocks for the underlying retrieval collaborators ------------------------------------------
 // The builder is the thin orchestration wrapper; we mock the collaborators so the tests are
@@ -22,7 +23,7 @@ vi.mock('../agent-context-injector', () => ({
     }
 }));
 
-const ragExecute = vi.fn(async () => null as unknown);
+const ragExecute = vi.fn(async (_params: AgentPreExecutionRAGParams) => null as unknown);
 vi.mock('../agent-pre-execution-rag', () => ({
     AgentPreExecutionRAG: class {
         Execute = ragExecute;
@@ -403,6 +404,17 @@ describe('AgentMemoryContextBuilder', () => {
             expect(arg.recentMessages).toHaveLength(5);
             expect(arg.recentMessages![0].content).toBe('msg-3');
             expect(arg.recentMessages![4].content).toBe('msg-7');
+        });
+
+        it('passes the run\'s active skill IDs through to the RAG engine', async () => {
+            ragExecute.mockResolvedValueOnce(null);
+            const builder = new AgentMemoryContextBuilder();
+
+            await builder.InjectPreExecutionRAG(
+                'hi', makeAgent({}), fakeUser, [], [], undefined, undefined, undefined, undefined, undefined, undefined, ['skill-1']
+            );
+
+            expect(ragExecute.mock.calls[0][0].activeSkillIDs).toEqual(['skill-1']);
         });
 
         it('returns null and calls the error logger when RAG execution throws', async () => {
