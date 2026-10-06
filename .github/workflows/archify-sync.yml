@@ -1,0 +1,108 @@
+name: Sync vendored archify
+
+# Keeps @memberjunction/ai-diagrams' vendored copy of archify (github.com/tt-a1i/archify) on
+# upstream's stable release — plans/archify-diagram-skill.md, Phase 3. All logic lives in
+# .github/scripts/archify-sync.mjs; its header explains the decisions.
+#
+# Monthly is enough: we pin to release tags and review every bump, so a faster cadence would only
+# queue up more PRs to review. A month with no upstream release produces nothing — no PR, no
+# issue, no comment. To pull a `security` release in early, run this by hand (workflow_dispatch).
+#
+# Never merges. It opens (or force-updates) one PR from chore/archify-sync into next.
+#
+# TWO JOBS, ON PURPOSE: `prepare` builds and runs freshly downloaded, not-yet-reviewed upstream
+# code (the example regression tests), so it holds no write token and no secret. `publish` holds
+# the bot PAT and never runs upstream code: it applies prepare's patch, commits and pushes.
+
+on:
+  schedule:
+    - cron: '0 9 1 * *' # 09:00 UTC on the 1st of each month
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: archify-sync
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Check upstream and prepare the sync
+    if: github.repository_owner == 'MemberJunction'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      action: ${{ steps.check.outputs.action }}
+    steps:
+      - name: Checkout next
+        uses: actions/checkout@v4
+        with:
+          ref: next
+          persist-credentials: false
+
+      - name: Set up pnpm and node
+        uses: ./.github/actions/mj-setup
+        with:
+          install: 'false'
+
+      # noop | create | update; exits non-zero (blocked) when the open sync PR has someone else's
+      # commits. Cheap and install-free, so a month with no release costs seconds.
+      - name: Compare stable.json with UPSTREAM.json
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node .github/scripts/archify-sync.mjs check
+
+      - name: Install dependencies
+        if: steps.check.outputs.action != 'noop'
+        run: pnpm install --frozen-lockfile
+
+      # Deliberately no token in env: this step executes the new upstream code.
+      - name: Vendor the release, re-apply shims, run the upstream example tests
+        if: steps.check.outputs.action != 'noop'
+        run: node .github/scripts/archify-sync.mjs prepare --out "$RUNNER_TEMP/archify-sync"
+
+      - name: Upload the prepared sync
+        if: steps.check.outputs.action != 'noop'
+        uses: actions/upload-artifact@v4
+        with:
+          name: archify-sync
+          path: ${{ runner.temp }}/archify-sync
+          retention-days: 7
+
+  publish:
+    name: Open or update the sync PR
+    needs: prepare
+    if: needs.prepare.outputs.action == 'create' || needs.prepare.outputs.action == 'update'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Every write goes through MJ_GH_BOT_GITHUB_TOKEN (as in generate-release-notes.yml): a PR or a
+    # push made with GITHUB_TOKEN triggers no CI, and this PR's CI is its review.
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout next
+        uses: actions/checkout@v4
+        with:
+          ref: next
+          persist-credentials: false
+
+      - name: Set up node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Download the prepared sync
+        uses: actions/download-artifact@v4
+        with:
+          name: archify-sync
+          path: ${{ runner.temp }}/archify-sync
+
+      # Fails the run AFTER opening a draft PR when the shims or tests failed; see the script header.
+      - name: Commit, push, and open or update the PR
+        env:
+          GH_TOKEN: ${{ secrets.MJ_GH_BOT_GITHUB_TOKEN }}
+        run: node .github/scripts/archify-sync.mjs publish --in "$RUNNER_TEMP/archify-sync"
