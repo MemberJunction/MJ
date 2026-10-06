@@ -1106,11 +1106,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJTagEntity,
     MJTagScopeEntity,
     MJTagSuggestionEntity,
-    MJTagSynonymEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJTagSynonymEntity,
     MJTaggedItemEntity,
     MJTaskDependencyEntity,
     MJTaskEntity,
@@ -1310,11 +1310,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     TemplateCategoryHierarchyPanel,
     TestSuiteHierarchyPanel,
     UserHeaderPanel,
-    UserOverviewPanel,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    UserOverviewPanel,
     UserViewCategoryHierarchyPanel,
 ];
 
@@ -1330,7 +1330,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 601;
+export const CLASS_REGISTRATIONS_COUNT = 602;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
