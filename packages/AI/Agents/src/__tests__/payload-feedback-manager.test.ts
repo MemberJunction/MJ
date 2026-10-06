@@ -101,6 +101,16 @@ describe('PayloadFeedbackManager.QueryAgent', () => {
             expect(asked.PromptName).toBeUndefined();
         });
 
+        it('asks on the run\'s execution scope, so the decision spends the run\'s credentials', async () => {
+            const { manager, ask } = makeManager();
+            ask.mockResolvedValueOnce(likelihoods(0.9));
+            const scope = { apiKeys: [{ driverClass: 'GeminiLLM', apiKey: 'sk-gemini' }], configurationId: 'config-1', CredentialScope: 'RuntimeOnly' as const };
+
+            await manager.QueryAgent(manager.GenerateQuestions([truncation()]), { ExecutionScope: scope }, USER);
+
+            expect(ask.mock.calls[0][0].ExecutionScope).toBe(scope);
+        });
+
         it('keeps the decision call\'s result, so the caller can link its prompt run to a step', async () => {
             const { manager, ask } = makeManager();
             const result = likelihoods(0.9);
