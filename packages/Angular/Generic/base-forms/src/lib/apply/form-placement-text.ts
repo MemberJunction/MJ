@@ -26,7 +26,10 @@ import {
 export interface PlacementSummaryNotes {
     /** The fields the dialog's starting answers stood in for, by entity field name. */
     FieldsStoodInFor?: readonly string[];
-    /** A proposal's claim the seed dropped because the form could not confirm it. */
+    /**
+     * A proposal's claim the seed dropped because the form could not confirm it. The summary
+     * leaves it out while the answers make that claim themselves.
+     */
     DroppedClaim?: FormPlacementDroppedClaim | null;
 }
 
@@ -261,6 +264,30 @@ function describeDroppedClaim(claim: FormPlacementDroppedClaim, context: FormPla
 }
 
 /**
+ * Whether the answers make the dropped claim themselves, so the panel is saved with it: every
+ * field it named is chosen in field mode, every section it named is chosen in section mode,
+ * its tab is chosen in tab mode, or its section is the one the panel is placed in.
+ */
+function answersMakeClaim(claim: FormPlacementDroppedClaim, state: FormPlacementState, context: FormPlacementContext): boolean {
+    switch (claim.Kind) {
+        case 'field': {
+            if (state.ReplaceMode !== 'field') return false;
+            const chosen = ChosenFieldNames(state, context);
+            return claim.FieldNames.every((name) => chosen.includes(name));
+        }
+        case 'section': {
+            if (state.ReplaceMode !== 'section') return false;
+            const chosen = ChosenSectionKeys(state, context);
+            return claim.SectionKeys.every((key) => chosen.includes(key));
+        }
+        case 'rail-tab':
+            return state.ReplaceMode === 'rail-tab' && state.ReplaceRailKey.trim() === claim.RailKey;
+        case 'in-section':
+            return state.ReplaceMode === 'none' && state.InSectionKey.trim() === claim.SectionKey;
+    }
+}
+
+/**
  * The sentences that follow the summary when an answer will not land the way it reads.
  *
  * A panel moved off a field claim keeps its `configuration.fields`, so it still draws those
@@ -285,7 +312,7 @@ function summaryCaveats(
                 ? ' It no longer stands in for them, so edits made to them in the panel are not saved.'
                 : ' The form also shows its own inputs for them, and edits made to them in the panel are not saved.');
     }
-    if (notes.DroppedClaim) {
+    if (notes.DroppedClaim && !answersMakeClaim(notes.DroppedClaim, state, context)) {
         caveats += ` This panel was built to ${describeDroppedClaim(notes.DroppedClaim, context)} on this form,`
             + ' but the form could not confirm it, so the panel is saved without that claim.';
     }

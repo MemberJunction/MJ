@@ -1098,6 +1098,7 @@ describe('Order in a position — before the form has been read', () => {
     });
 });
 
+/** The summary reports a proposal claim the apply seed dropped until the answers make that claim. */
 describe('SummarizePlacement — a proposal claim the seed dropped', () => {
     const state = (): FormPlacementState => InitialPlacementState(PROPOSAL, CONTEXT);
     const END = 'on this form, but the form could not confirm it, so the panel is saved without that claim.';
@@ -1117,6 +1118,43 @@ describe('SummarizePlacement — a proposal claim the seed dropped', () => {
 
     it('says nothing when no claim was dropped', () => {
         expect(SummarizePlacement(state(), CONTEXT, undefined, { DroppedClaim: null })).not.toContain('could not confirm');
+    });
+
+    /** Answers that make the dropped claim themselves save the panel with it, so the line is left out. */
+    it.each<[string, FormPlacementDroppedClaim, Partial<FormPlacementState>]>([
+        ['its fields, in field mode', { Kind: 'field', FieldNames: ['Name', 'Description'] },
+            { ReplaceMode: 'field', ReplaceFieldSectionKey: 'details', ReplaceFieldNames: ['Description', 'Name'] }],
+        ['its sections, in section mode', { Kind: 'section', SectionKeys: ['details', 'scheduleCapacity'] },
+            { ReplaceMode: 'section', ReplaceSectionKeys: ['details', 'scheduleCapacity'] }],
+        ['its tab, in tab mode', { Kind: 'rail-tab', RailKey: DETAILS_SECTION_KEY },
+            { ReplaceMode: 'rail-tab', ReplaceRailKey: DETAILS_SECTION_KEY }],
+        ['its section, as the place the panel sits in', { Kind: 'in-section', SectionKey: 'details' },
+            { ReplaceMode: 'none', InSectionKey: 'details' }],
+    ])('leaves the line out when the answers choose %s', (_label, claim, answers) => {
+        expect(SummarizePlacement({ ...state(), ...answers }, CONTEXT, undefined, { DroppedClaim: claim }))
+            .not.toContain('could not confirm');
+    });
+
+    it.each<[string, FormPlacementDroppedClaim, Partial<FormPlacementState>]>([
+        ['only some of its fields', { Kind: 'field', FieldNames: ['Name', 'Description'] },
+            { ReplaceMode: 'field', ReplaceFieldSectionKey: 'details', ReplaceFieldNames: ['Name'] }],
+        ['its fields outside field mode', { Kind: 'field', FieldNames: ['Name'] },
+            { ReplaceMode: 'none', ReplaceFieldSectionKey: 'details', ReplaceFieldNames: ['Name'] }],
+        ['only one of its sections', { Kind: 'section', SectionKeys: ['details', 'scheduleCapacity'] },
+            { ReplaceMode: 'section', ReplaceSectionKeys: ['details'] }],
+        ['its section outside section mode', { Kind: 'section', SectionKeys: ['details'] },
+            { ReplaceMode: 'none', ReplaceSectionKeys: ['details'] }],
+        ['another tab', { Kind: 'rail-tab', RailKey: DETAILS_SECTION_KEY },
+            { ReplaceMode: 'rail-tab', ReplaceRailKey: MORE_SECTION_KEY }],
+        ['its tab outside tab mode', { Kind: 'rail-tab', RailKey: DETAILS_SECTION_KEY },
+            { ReplaceMode: 'none', ReplaceRailKey: DETAILS_SECTION_KEY }],
+        ['another section to sit in', { Kind: 'in-section', SectionKey: 'details' },
+            { ReplaceMode: 'none', InSectionKey: 'scheduleCapacity' }],
+        ['its section to sit in while replacing a section', { Kind: 'in-section', SectionKey: 'details' },
+            { ReplaceMode: 'section', ReplaceSectionKeys: ['scheduleCapacity'], InSectionKey: 'details' }],
+    ])('keeps the line when the answers choose %s', (_label, claim, answers) => {
+        expect(SummarizePlacement({ ...state(), ...answers }, CONTEXT, undefined, { DroppedClaim: claim }))
+            .toContain('could not confirm');
     });
 });
 

@@ -158,8 +158,8 @@ export class MjFormPlacementDialogComponent extends BaseAngularComponent {
 
     /**
      * A proposal's claim the caller's seed dropped because this form could not confirm it, for
-     * the summary to report. Null when the seed dropped none. The seed sets it, and resetting the
-     * answers clears it.
+     * the summary to report while the answers do not make that claim. Null when the seed dropped
+     * none. The seed sets it, and resetting the answers clears it.
      */
     public DroppedProposalClaim: FormPlacementDroppedClaim | null = null;
 

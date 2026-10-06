@@ -14,7 +14,6 @@ import {
     PlacementStateFromContribution,
     type FormPlacementContext,
     type FormPlacementDecision,
-    type FormPlacementState,
 } from './form-placement';
 
 /**
@@ -1083,7 +1082,7 @@ describe('MjFormPlacementDialogComponent (DOM) — editing a saved row', () => {
         public Proposal: FormContributionSpec = GRID_ROW;
         public Decision: FormPlacementDecision | null = null;
         /** What the drawer's seed does: read the row back against the dialog's context, switched on. */
-        public Seed = (dialog: { State: FormPlacementState; Context: FormPlacementContext }): void => {
+        public Seed = (dialog: MjFormPlacementDialogComponent): void => {
             dialog.State = PlacementStateFromContribution(this.Proposal, dialog.Context, true);
         };
     }
@@ -1095,7 +1094,12 @@ describe('MjFormPlacementDialogComponent (DOM) — editing a saved row', () => {
         return { service: { Probe: () => pending }, answer };
     }
 
-    function mount(context: FormPlacementContext, proposal: FormContributionSpec, probe = deferredProbe()) {
+    function mount(
+        context: FormPlacementContext,
+        proposal: FormContributionSpec,
+        probe = deferredProbe(),
+        seed?: (dialog: MjFormPlacementDialogComponent) => void,
+    ) {
         TestBed.configureTestingModule({
             imports: [CommonModule, FormsModule, AlertStub, ButtonStub, MjIconPickerComponent, PreviewStub],
             declarations: [MjFormPlacementDialogComponent, EditHost],
@@ -1104,6 +1108,7 @@ describe('MjFormPlacementDialogComponent (DOM) — editing a saved row', () => {
         const fixture = TestBed.createComponent(EditHost);
         fixture.componentInstance.Context = context;
         fixture.componentInstance.Proposal = proposal;
+        if (seed) fixture.componentInstance.Seed = seed;
         fixture.detectChanges();
         const dialog = fixture.debugElement.query(By.directive(MjFormPlacementDialogComponent))
             .componentInstance as MjFormPlacementDialogComponent;
@@ -1166,6 +1171,31 @@ describe('MjFormPlacementDialogComponent (DOM) — editing a saved row', () => {
             mounted.dialog.State = { ...mounted.dialog.State, Title: 'Who they are' };
             await answer(mounted);
             expect(mounted.dialog.State.Title).toBe('Who they are');
+        });
+
+        it('stops saying a dropped claim could not be confirmed once the user picks that claim on the form it read', async () => {
+            /** What the apply service's seed does on a form it has not read: it drops the field claim. */
+            const dropFieldClaim = (dialog: MjFormPlacementDialogComponent): void => {
+                dialog.State = { ...PlacementStateFromContribution(fieldRow, dialog.Context, true), ReplaceMode: 'none', ReplaceFieldNames: [] };
+                dialog.DroppedProposalClaim = { Kind: 'field', FieldNames: ['Name'] };
+            };
+            const summary = () => (mounted.fixture.nativeElement as HTMLElement).querySelector('.mj-placement-summary')?.textContent ?? '';
+            const mounted = mount(DRAWER_CONTEXT, fieldRow, deferredProbe(), dropFieldClaim);
+            mounted.dialog.State = { ...mounted.dialog.State, Title: 'Who they are' };
+            await answer(mounted);
+            expect(summary(), 'the changed answer keeps the seed from running again').toContain('could not confirm');
+
+            const host = mounted.fixture.nativeElement as HTMLElement;
+            host.querySelector<HTMLInputElement>('input[name="mj-replace"][value="field"]')!.click();
+            mounted.fixture.detectChanges();
+            await mounted.fixture.whenStable();
+            mounted.fixture.detectChanges();
+            host.querySelector<HTMLInputElement>('.mj-placement-fieldpick-item input[type="checkbox"]')!.click();
+            mounted.fixture.detectChanges();
+
+            expect(mounted.dialog.ChosenFields).toEqual(['Name']);
+            expect(summary()).toContain('standing in for the Name field');
+            expect(summary()).not.toContain('could not confirm');
         });
     });
 
