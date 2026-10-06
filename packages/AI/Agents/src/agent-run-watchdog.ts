@@ -1,7 +1,6 @@
 import { BaseSingleton, ShutdownRegistry, IShutdownable } from '@memberjunction/global';
 import { DatabaseProviderBase, UserInfo, LogError, LogStatus } from '@memberjunction/core';
 import { MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
-import { USER_CANCEL_ABORT_REASON, EXTERNAL_CANCEL_ABORT_REASON } from './agent-run-abort-reasons';
 
 /** The provider's SQL dialect, referenced via indexed access so we don't take a direct
  *  dependency on `@memberjunction/sql-dialect` just to name the type. */
@@ -87,6 +86,16 @@ const SP_CANCEL = 'spCancelAIAgentRun';
  * PostgreSQL unchanged.
  */
 export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements IShutdownable {
+    /**
+     * The abort reason the stop relay raises when a run's row was marked `Cancelled` with
+     * `CancellationReason = 'User Request'` (the Stop button). BaseAgent maps it back to the same
+     * reason on the run it finalizes, so the row the UI wrote and the row the agent writes agree.
+     */
+    public static readonly UserCancelAbortReason = 'Cancelled by user request';
+
+    /** The abort reason the stop relay raises for a row cancelled with any other reason. */
+    public static readonly ExternalCancelAbortReason = 'Cancelled externally';
+
     private _config: AgentRunWatchdogConfig = DEFAULT_CONFIG;
     private _trackedRuns = new Set<string>();
     /** The abort controller each tracked run registered, keyed by lowercased run ID. */
@@ -121,7 +130,7 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
      *
      * @param abortController The run's own abort controller. When supplied, the stop relay aborts
      *   it as soon as the run's row is seen marked `Cancelled` by someone else (the Stop button),
-     *   with {@link USER_CANCEL_ABORT_REASON} when the row says `User Request`. Without it the run
+     *   with {@link UserCancelAbortReason} when the row says `User Request`. Without it the run
      *   is still heart-beaten and swept, but a stop cannot reach it.
      */
     public Track(runID: string, provider: DatabaseProviderBase, contextUser: UserInfo, abortController?: AbortController): void {
@@ -155,7 +164,7 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
      *
      * @returns true when a controller was registered for the run and had not already fired.
      */
-    public RequestCancel(runID: string, reason: string = USER_CANCEL_ABORT_REASON): boolean {
+    public RequestCancel(runID: string, reason: string = AgentRunWatchdog.UserCancelAbortReason): boolean {
         const controller = runID ? this._abortControllers.get(runID.toLowerCase()) : undefined;
         if (!controller || controller.signal.aborted) {
             return false;
@@ -363,7 +372,7 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
 
     /** Maps a run row's `CancellationReason` to the abort reason the owning agent will see. */
     private static abortReasonFor(cancellationReason: string | null): string {
-        return cancellationReason === MJAIAgentRunEntityExtended.UserRequestCancellationReason ? USER_CANCEL_ABORT_REASON : EXTERNAL_CANCEL_ABORT_REASON;
+        return cancellationReason === MJAIAgentRunEntityExtended.UserRequestCancellationReason ? AgentRunWatchdog.UserCancelAbortReason : AgentRunWatchdog.ExternalCancelAbortReason;
     }
 
     /**

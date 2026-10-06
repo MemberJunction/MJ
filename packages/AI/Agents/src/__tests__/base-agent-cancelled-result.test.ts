@@ -2,7 +2,7 @@
  * What a user-stopped run leaves behind.
  *
  * The Stop button marks the run's row `Cancelled` / `User Request`; the watchdog's stop relay
- * aborts the run's signal with {@link USER_CANCEL_ABORT_REASON}; `Execute`'s catch routes the
+ * aborts the run's signal with {@link AgentRunWatchdog.UserCancelAbortReason}; `Execute`'s catch routes the
  * abort to `createCancelledResult`. Two things that result has to get right, pinned here:
  *
  * 1. `Save()` writes every column, so the reason must be set from the abort signal, or the
@@ -16,7 +16,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { BaseAgent } from '../base-agent';
 import { AgentRunWatchdog } from '../agent-run-watchdog';
-import { USER_CANCEL_ABORT_REASON, EXTERNAL_CANCEL_ABORT_REASON, AGENT_TIMEOUT_ABORT_REASON } from '../agent-run-abort-reasons';
 
 interface FakeStep { StepNumber: number; PayloadAtEnd: string | null }
 
@@ -56,15 +55,15 @@ function cancel(agent: BaseAgent, reason: string) {
 
 describe('BaseAgent.CancellationReasonForAbort', () => {
     it('maps the stop relay\'s user-cancel reason to User Request', () => {
-        expect(BaseAgent.CancellationReasonForAbort(USER_CANCEL_ABORT_REASON)).toBe('User Request');
+        expect(BaseAgent.CancellationReasonForAbort(AgentRunWatchdog.UserCancelAbortReason)).toBe('User Request');
     });
     it('maps the wall-clock guard\'s reason (by its constant prefix, not its wording) to Timeout', () => {
-        expect(BaseAgent.CancellationReasonForAbort(`${AGENT_TIMEOUT_ABORT_REASON}: agent 'X' ran past 7200000ms`)).toBe('Timeout');
+        expect(BaseAgent.CancellationReasonForAbort(`${BaseAgent.AgentTimeoutAbortReason}: agent 'X' ran past 7200000ms`)).toBe('Timeout');
         // The old free-text match is gone on purpose: a message that merely mentions the setting is not the guard.
         expect(BaseAgent.CancellationReasonForAbort("some caller mentioned maxExecutionTimeMs")).toBe('System');
     });
     it('maps anything else (upstream token, shutdown, external cancel) to System', () => {
-        expect(BaseAgent.CancellationReasonForAbort(EXTERNAL_CANCEL_ABORT_REASON)).toBe('System');
+        expect(BaseAgent.CancellationReasonForAbort(AgentRunWatchdog.ExternalCancelAbortReason)).toBe('System');
         expect(BaseAgent.CancellationReasonForAbort('upstream cancellation')).toBe('System');
         expect(BaseAgent.CancellationReasonForAbort(undefined)).toBe('System');
     });
@@ -98,14 +97,14 @@ describe('BaseAgent.createCancelledResult', () => {
         };
         const untrack = vi.spyOn(AgentRunWatchdog.Instance, 'Untrack');
 
-        const result = await cancel(agentWithRun(run), USER_CANCEL_ABORT_REASON);
+        const result = await cancel(agentWithRun(run), AgentRunWatchdog.UserCancelAbortReason);
 
         expect(result.success).toBe(false);
         expect(run.Status).toBe('Cancelled');
         expect(run.Success).toBe(false);
         expect(run.CancellationReason).toBe('User Request');
         expect(run.FinalPayload).toBe('{"done":["step one"]}');
-        expect(run.ErrorMessage).toBe(USER_CANCEL_ABORT_REASON);
+        expect(run.ErrorMessage).toBe(AgentRunWatchdog.UserCancelAbortReason);
         expect(run.CompletedAt).toBeInstanceOf(Date);
         expect(run.Save).toHaveBeenCalledTimes(1);
         expect(untrack).toHaveBeenCalledWith(RUN_ID);
@@ -115,7 +114,7 @@ describe('BaseAgent.createCancelledResult', () => {
         // The loop's own checks pass fixed messages ('Cancelled during prompt execution'); the
         // signal the watchdog aborted is what knows it was the user.
         const controller = new AbortController();
-        controller.abort(USER_CANCEL_ABORT_REASON);
+        controller.abort(AgentRunWatchdog.UserCancelAbortReason);
         const run: FakeRun = { ID: RUN_ID, FinalPayload: null, Steps: [], Save: vi.fn(async () => true) };
 
         await cancel(agentWithRun(run, controller), 'Cancelled during prompt execution');
@@ -131,13 +130,13 @@ describe('BaseAgent.createCancelledResult', () => {
             Steps: [{ StepNumber: 1, PayloadAtEnd: '{"older":true}' }],
             Save: vi.fn(async () => true),
         };
-        await cancel(agentWithRun(run), USER_CANCEL_ABORT_REASON);
+        await cancel(agentWithRun(run), AgentRunWatchdog.UserCancelAbortReason);
         expect(run.FinalPayload).toBe('{"kept":true}');
     });
 
     it('records Timeout for the wall-clock guard and leaves FinalPayload null when no step recorded one', async () => {
         const run: FakeRun = { ID: RUN_ID, FinalPayload: null, Steps: [], Save: vi.fn(async () => true) };
-        await cancel(agentWithRun(run), `${AGENT_TIMEOUT_ABORT_REASON}: agent 'X' ran past 10ms`);
+        await cancel(agentWithRun(run), `${BaseAgent.AgentTimeoutAbortReason}: agent 'X' ran past 10ms`);
         expect(run.CancellationReason).toBe('Timeout');
         expect(run.FinalPayload).toBeNull();
     });

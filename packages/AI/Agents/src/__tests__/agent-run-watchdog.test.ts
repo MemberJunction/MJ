@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { GetGlobalObjectStore, ShutdownRegistry } from '@memberjunction/global';
 import type { DatabaseProviderBase, UserInfo } from '@memberjunction/core';
 import { AgentRunWatchdog } from '../agent-run-watchdog';
-import { USER_CANCEL_ABORT_REASON, EXTERNAL_CANCEL_ABORT_REASON } from '../agent-run-abort-reasons';
 
 /** Predictable T-SQL-flavored dialect so we can assert on the generated SQL. The watchdog now
  *  reaches the DB only through stored procs (writes) + the base view (reads), so the proc-call
@@ -193,7 +192,7 @@ describe('AgentRunWatchdog stop relay (cancellation poll)', () => {
         await vi.advanceTimersByTimeAsync(3_000);
 
         expect(controller.signal.aborted).toBe(true);
-        expect(controller.signal.reason).toBe(USER_CANCEL_ABORT_REASON);
+        expect(controller.signal.reason).toBe(AgentRunWatchdog.UserCancelAbortReason);
         // Aborted runs leave the guarded set — nothing else to heartbeat for them.
         expect(wd.TrackedCount).toBe(0);
         expect(wd.IsStoppable(RUN_A)).toBe(false);
@@ -236,7 +235,11 @@ describe('AgentRunWatchdog stop relay (cancellation poll)', () => {
         await vi.advanceTimersByTimeAsync(3_000);
 
         expect(controller.signal.aborted).toBe(true);
-        expect(controller.signal.reason).toBe(EXTERNAL_CANCEL_ABORT_REASON);
+        expect(controller.signal.reason).toBe(AgentRunWatchdog.ExternalCancelAbortReason);
+    });
+
+    it('raises distinct reasons for a user stop and an external cancel, so a reader never confuses them', () => {
+        expect(AgentRunWatchdog.UserCancelAbortReason).not.toBe(AgentRunWatchdog.ExternalCancelAbortReason);
     });
 
     it('RequestCancel aborts in-process without waiting for the poll, once', () => {
@@ -247,7 +250,7 @@ describe('AgentRunWatchdog stop relay (cancellation poll)', () => {
 
         expect(wd.RequestCancel(RUN_A)).toBe(true);
         expect(controller.signal.aborted).toBe(true);
-        expect(controller.signal.reason).toBe(USER_CANCEL_ABORT_REASON);
+        expect(controller.signal.reason).toBe(AgentRunWatchdog.UserCancelAbortReason);
         // Already fired and untracked: a second request is a no-op.
         expect(wd.RequestCancel(RUN_A)).toBe(false);
         expect(wd.RequestCancel(RUN_B)).toBe(false);

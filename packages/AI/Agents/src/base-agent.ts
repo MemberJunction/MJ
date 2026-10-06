@@ -19,7 +19,6 @@ import { LooksLikeLoopEnvelope } from './native-tools/dual-channel';
 import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIPromptRunEntityExtended, ResolvePromptRunUserID } from "@memberjunction/ai-core-plus";
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase, ToPlainJSON } from '@memberjunction/core';
 import { AgentRunWatchdog } from './agent-run-watchdog';
-import { USER_CANCEL_ABORT_REASON, AGENT_TIMEOUT_ABORT_REASON } from './agent-run-abort-reasons';
 import { AIPromptRunner, GetToolCallingDecision, AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, MakeAIAPIKeyResolver, IRealtimeSession, IsPrefixPromptCache, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice, DecisionQuestion, DecisionAnswer } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
@@ -988,6 +987,13 @@ export class BaseAgent {
     protected static readonly DEFAULT_ABSOLUTE_MAX_ITERATIONS = 5000;
 
     private _agentRun: MJAIAgentRunEntityExtended | null = null;
+
+    /**
+     * The prefix of the abort reason the wall-clock guard in {@link Execute} raises when a run
+     * outlives `maxExecutionTimeMs`. The guard appends the agent and the budget after it; a reader
+     * ({@link CancellationReasonForAbort}) checks the prefix, never the wording after it.
+     */
+    public static readonly AgentTimeoutAbortReason = 'Agent execution exceeded maxExecutionTimeMs';
 
     /**
      * The abort controller that governs the current `Execute` call (the merged timeout/upstream
@@ -2033,7 +2039,7 @@ export class BaseAgent {
         const timeoutId = setTimeout(() => {
             if (!timeoutController.signal.aborted) {
                 timeoutController.abort(
-                    `${AGENT_TIMEOUT_ABORT_REASON}: agent '${params.agent.Name}' ran past ${agentTimeoutMS}ms`
+                    `${BaseAgent.AgentTimeoutAbortReason}: agent '${params.agent.Name}' ran past ${agentTimeoutMS}ms`
                 );
             }
         }, agentTimeoutMS);
@@ -17562,15 +17568,15 @@ The context is now within limits. Please retry your request with the recovered c
 
     /**
      * Maps the reason an abort signal carried to the run's `CancellationReason` value: the
-     * watchdog's stop relay raises {@link USER_CANCEL_ABORT_REASON} for a row marked
-     * `User Request`; the wall-clock guard's reason starts with {@link AGENT_TIMEOUT_ABORT_REASON};
+     * watchdog's stop relay raises {@link AgentRunWatchdog.UserCancelAbortReason} for a row marked
+     * `User Request`; the wall-clock guard's reason starts with {@link AgentTimeoutAbortReason};
      * anything else (an upstream caller's token, a shutdown) is `System`.
      */
     public static CancellationReasonForAbort(reason: string | null | undefined): NonNullable<MJAIAgentRunEntityExtended['CancellationReason']> {
-        if (reason === USER_CANCEL_ABORT_REASON) {
+        if (reason === AgentRunWatchdog.UserCancelAbortReason) {
             return 'User Request';
         }
-        if (reason && reason.startsWith(AGENT_TIMEOUT_ABORT_REASON)) {
+        if (reason && reason.startsWith(BaseAgent.AgentTimeoutAbortReason)) {
             return 'Timeout';
         }
         return 'System';
