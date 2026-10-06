@@ -63,6 +63,7 @@ const VIEW = {
   Status: 'Pending',
   CreatedAt: '2026-10-03T10:00:00.000Z',
   ExpiresAt: '2026-10-03T10:00:45.000Z',
+  InteractionID: 'int-123',
 };
 
 describe('HumanHandoffResolver', () => {
