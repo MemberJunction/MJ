@@ -290,7 +290,8 @@ export interface ChannelOnboardingDetails {
  * `ClassFactory.CreateInstance` → {@link Initialize}(ctx) → zero or more
  * {@link BindSurface}/{@link UnbindSurface} cycles (the Angular overlay creates the surface the
  * first time it is shown and keeps it until the channel leaves the session; another host may
- * recreate it) → {@link Dispose} at teardown.
+ * recreate it), each telling the plugin when its surface goes in and out of sight
+ * ({@link OnSurfaceVisibilityChange}) → {@link Dispose} at teardown.
  * {@link ApplyAgentTool} MUST work with NO surface bound (apply to the state engine
  * directly; skip the UI garnish) — tool calls can arrive before the surface is first shown.
  *
@@ -449,6 +450,17 @@ export abstract class BaseRealtimeChannelClient<TSurface extends object = object
    */
   public UnbindSurface(): void {
     // default: nothing to release
+  }
+
+  /**
+   * Called by the host when the bound surface comes into sight or goes out of it (the panel collapsed or hidden,
+   * another tab active, the call minimized). The surface stays bound and keeps its state; a channel can pause work
+   * nobody sees, such as a screenshot poll, and resume it when the surface is shown again. The host calls it right
+   * after {@link BindSurface} with the surface's current visibility, then on every change, and not after
+   * {@link UnbindSurface}. Default: no-op, so a surface keeps running out of sight.
+   */
+  public OnSurfaceVisibilityChange(_visible: boolean): void {
+    // default: nothing to pause
   }
 
   /**

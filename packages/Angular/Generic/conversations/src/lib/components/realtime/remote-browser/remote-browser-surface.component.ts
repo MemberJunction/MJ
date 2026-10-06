@@ -127,14 +127,13 @@ export type RemoteBrowserSelectionFetcher = () => Promise<string>;
  * tab's pane. It renders the SERVER-hosted browser the agent drives: a refreshing screenshot
  * `<img>` with the current URL above it and a small "live" indicator. The agent's
  * `browser_*` tools mutate the page through the channel plugin; this surface only PERCEIVES
- * it, polling its {@link Fetch} callback every {@link SNAPSHOT_POLL_MS} ms while bound.
+ * it, polling its {@link Fetch} callback every {@link SNAPSHOT_POLL_MS} ms while bound and on screen.
  *
  * The surface is transport-agnostic — it never touches GraphQL directly. The channel plugin
  * wires the {@link Fetch} callback (closing over the session id + provider) in `BindSurface`
  * before the surface's first change detection, so the `ngOnInit` poll has it. Polling stops
  * in `ngOnDestroy` (the channel left the session / the overlay was torn down) so no traffic
- * continues after unbind; it keeps running while the surface is out of sight (panel collapsed,
- * another tab active).
+ * continues after unbind, and pauses while the surface is out of sight ({@link Visible}).
  * View-only in v1 — there is no takeover input.
  *
  * ### Two render paths: pushed screencast (preferred) vs. snapshot poll (fallback)
@@ -353,6 +352,29 @@ export class RemoteBrowserSurfaceComponent implements OnInit, OnDestroy {
   @Input() FetchSelection: RemoteBrowserSelectionFetcher | null = null;
 
   /**
+   * Whether the surface is on screen, set by the channel plugin when the host reports it
+   * (`OnSurfaceVisibilityChange`). Out of sight, the snapshot poll pauses: nobody sees it, and the
+   * agent's frames come from the channel's own video bridge. Back in sight, the surface fetches a
+   * snapshot at once and polls again. The pushed screencast is unaffected.
+   */
+  @Input()
+  set Visible(value: boolean) {
+    if (value === this._visible) {
+      return;
+    }
+    this._visible = value;
+    if (!value) {
+      this.stopPolling();
+    } else if (this.initialized) {
+      this.resumePolling();
+    }
+  }
+  get Visible(): boolean {
+    return this._visible;
+  }
+  private _visible = true;
+
+  /**
    * Whether the server is PUSHING live screencast frames for this session (the backend advertised the
    * `ScreenStreaming` capability and the start succeeded). When `true` the surface paints pushed frames
    * onto its `<canvas>` via {@link RenderFrame} and does NOT poll; when `false` it uses the snapshot
@@ -465,6 +487,8 @@ export class RemoteBrowserSurfaceComponent implements OnInit, OnDestroy {
   private polling = false;
   /** Set on destroy so an in-flight poll's late resolution doesn't touch a torn-down view. */
   private destroyed = false;
+  /** Set in `ngOnInit`: polling starts there, so a visibility change before it must not start it early. */
+  private initialized = false;
   /** Reused decode target for pushed frames — avoids allocating an `Image` per frame. */
   private readonly frameImage = new Image();
   /** The most recent un-painted frame data URL, drained on the next animation frame (drop-old coalescing). */
@@ -526,18 +550,26 @@ export class RemoteBrowserSurfaceComponent implements OnInit, OnDestroy {
   private readonly onCanvasBlur = (): void => { this.surfaceFocused = false; };
 
   ngOnInit(): void {
-    // In streaming mode the server pushes frames — never start the poll (it would be redundant traffic).
-    if (this.Streaming) {
-      return;
-    }
-    void this.pollOnce();
-    this.startPolling();
+    this.initialized = true;
+    this.resumePolling();
   }
 
   ngOnDestroy(): void {
     this.destroyed = true;
     this.stopPolling();
     this.detachTakeoverListeners();
+  }
+
+  /**
+   * Polls now and every {@link SNAPSHOT_POLL_MS} ms, unless the server pushes frames (the poll would be redundant
+   * traffic) or the surface is out of sight.
+   */
+  private resumePolling(): void {
+    if (this.Streaming || !this._visible || this.destroyed) {
+      return;
+    }
+    void this.pollOnce();
+    this.startPolling();
   }
 
   /** Starts the interval poll OUTSIDE Angular's zone so it doesn't trigger CD on every tick. */

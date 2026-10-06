@@ -4,7 +4,10 @@ import { TestBed } from '@angular/core/testing';
 import { renderComponentFixture, query } from '@memberjunction/ng-test-utils';
 import { MediaStageComponent, MediaStageSurfaceDirective, type MediaStageSurface } from './media-stage.component';
 
-/** A surface's content: records each creation and destruction, so a test can tell a move from a re-creation. */
+/**
+ * A surface's content: records each creation and destruction, so a test can tell a move from a re-creation, and the
+ * visibility its template is given.
+ */
 @Component({
   selector: 'mj-test-surface',
   standalone: true,
@@ -13,7 +16,13 @@ import { MediaStageComponent, MediaStageSurfaceDirective, type MediaStageSurface
 class TestSurfaceComponent implements OnInit, OnDestroy {
   public static Created: string[] = [];
   public static Destroyed: string[] = [];
+  /** The latest visibility each surface was given, by key. */
+  public static Visibility = new Map<string, boolean>();
   @Input() public Key = '';
+  @Input()
+  public set Visible(value: boolean) {
+    TestSurfaceComponent.Visibility.set(this.Key, value);
+  }
   public ngOnInit(): void {
     TestSurfaceComponent.Created.push(this.Key);
   }
@@ -27,7 +36,9 @@ class TestSurfaceComponent implements OnInit, OnDestroy {
   imports: [MediaStageComponent, MediaStageSurfaceDirective, TestSurfaceComponent],
   template: `
     <mj-media-stage [Surfaces]="Surfaces" [TabSlot]="Slot" [ActiveTabKey]="ActiveTabKey">
-      <ng-template mjMediaStageSurface let-key><mj-test-surface [Key]="key"></mj-test-surface></ng-template>
+      <ng-template mjMediaStageSurface let-key let-visible="Visible">
+        <mj-test-surface [Key]="key" [Visible]="visible"></mj-test-surface>
+      </ng-template>
     </mj-media-stage>
   `,
 })
@@ -49,6 +60,21 @@ function slotAt(left: number, top: number, width: number, height: number) {
   });
 }
 
+/** The stage's own box: jsdom lays nothing out, so a stage with no box would count as off screen. */
+let stageBox = { left: 0, top: 0, width: 1000, height: 800 };
+
+/** ResizeObserver callbacks the stage registered, so a test can report a size change. */
+let resizeCallbacks: ResizeObserverCallback[] = [];
+
+class FakeResizeObserver {
+  public constructor(callback: ResizeObserverCallback) {
+    resizeCallbacks.push(callback);
+  }
+  public observe(): void {}
+  public unobserve(): void {}
+  public disconnect(): void {}
+}
+
 describe('MediaStageComponent (DOM)', () => {
   let queued: Map<number, FrameRequestCallback>;
   let nextId: number;
@@ -56,6 +82,14 @@ describe('MediaStageComponent (DOM)', () => {
   beforeEach(() => {
     TestSurfaceComponent.Created = [];
     TestSurfaceComponent.Destroyed = [];
+    TestSurfaceComponent.Visibility = new Map();
+    stageBox = { left: 0, top: 0, width: 1000, height: 800 };
+    resizeCallbacks = [];
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const b = this.tagName === 'MJ-MEDIA-STAGE' ? stageBox : { left: 0, top: 0, width: 0, height: 0 };
+      return new DOMRect(b.left, b.top, b.width, b.height);
+    });
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
     queued = new Map();
     nextId = 0;
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
@@ -65,7 +99,13 @@ describe('MediaStageComponent (DOM)', () => {
     vi.stubGlobal('cancelAnimationFrame', (id: number) => queued.delete(id));
   });
 
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  /** Reports a size change to the stage, as the browser does when an ancestor is hidden or shown. */
+  const resized = (): void => resizeCallbacks.forEach((callback) => callback([], {} as ResizeObserver));
 
   /** Runs every queued animation frame once. */
   const step = (): void => {
@@ -169,5 +209,35 @@ describe('MediaStageComponent (DOM)', () => {
     expect(run).toHaveBeenCalledTimes(1);
     f.detectChanges();
     expect(box(f, 'whiteboard').style.left).toBe('500px');
+  });
+
+  it('tells each surface whether it is on screen', async () => {
+    const f = await render({
+      Surfaces: [{ Key: 'whiteboard', Placement: 'tab' }, { Key: 'browser', Placement: 'tab' }],
+      ActiveTabKey: 'whiteboard',
+      Slot: slotAt(500, 40, 300, 400),
+    });
+    expect(Object.fromEntries(TestSurfaceComponent.Visibility)).toEqual({ whiteboard: true, browser: false });
+    set(f, { ActiveTabKey: 'browser' });
+    expect(Object.fromEntries(TestSurfaceComponent.Visibility)).toEqual({ whiteboard: false, browser: true });
+  });
+
+  it('puts every surface out of sight while the stage itself has no size, and back when it has one again', async () => {
+    const f = await render({
+      Surfaces: [{ Key: 'whiteboard', Placement: 'stage' }, { Key: 'browser', Placement: 'tab' }],
+      ActiveTabKey: 'browser',
+      Slot: slotAt(500, 40, 300, 400),
+    });
+    expect(Object.fromEntries(TestSurfaceComponent.Visibility)).toEqual({ whiteboard: true, browser: true });
+    stageBox = { left: 0, top: 0, width: 0, height: 0 };
+    resized();
+    f.detectChanges();
+    expect(Object.fromEntries(TestSurfaceComponent.Visibility)).toEqual({ whiteboard: false, browser: false });
+    expect(isHidden(f, 'whiteboard')).toBe(true);
+    stageBox = { left: 0, top: 0, width: 1000, height: 800 };
+    resized();
+    f.detectChanges();
+    expect(Object.fromEntries(TestSurfaceComponent.Visibility)).toEqual({ whiteboard: true, browser: true });
+    expect(TestSurfaceComponent.Created).toEqual(['whiteboard', 'browser']);
   });
 });

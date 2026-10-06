@@ -56,4 +56,13 @@ describe('BaseRealtimeChannelClient — optional client surface', () => {
     expect(ch.GetSurfaceComponent()).toBe(FakeSurface);
     expect(ch.HasSurface()).toBe(true);
   });
+
+  it('ignores surface visibility by default, so a surface keeps running out of sight', () => {
+    const ch = new SurfaceChannel();
+    ch.BindSurface();
+    expect(() => {
+      ch.OnSurfaceVisibilityChange(false);
+      ch.OnSurfaceVisibilityChange(true);
+    }).not.toThrow();
+  });
 });

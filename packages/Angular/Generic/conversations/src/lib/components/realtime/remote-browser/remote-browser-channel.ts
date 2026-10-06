@@ -503,6 +503,13 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
     void this.startAudioStream(instance);
   }
 
+  /** Pauses the surface's snapshot poll while it is out of sight; the screencast and the audio keep running. */
+  public override OnSurfaceVisibilityChange(visible: boolean): void {
+    if (this.surface) {
+      this.surface.Visible = visible;
+    }
+  }
+
   public override UnbindSurface(): void {
     this.humanInputSub?.unsubscribe();
     this.humanInputSub = null;

@@ -31,6 +31,8 @@ class TestBoardComponent implements OnInit, OnDestroy {
 /** A whiteboard channel whose surface records its life. The whiteboard's tab registers as soon as the channel is live. */
 class TestWhiteboardChannel extends BaseRealtimeChannelClient<TestBoardComponent> {
   public FocusExits = 0;
+  /** Every visibility the host reported for the surface, in order. */
+  public readonly Visibility: boolean[] = [];
   public get ChannelName(): string { return 'Whiteboard'; }
   public get ToolNamePrefix(): string { return 'Whiteboard_'; }
   public get TabTitle(): string { return 'Whiteboard'; }
@@ -41,6 +43,7 @@ class TestWhiteboardChannel extends BaseRealtimeChannelClient<TestBoardComponent
   public override BindSurface(): void { lifecycle.push('bound'); }
   public override UnbindSurface(): void { lifecycle.push('unbound'); }
   public override RequestFocusExit(): void { this.FocusExits++; }
+  public override OnSurfaceVisibilityChange(visible: boolean): void { this.Visibility.push(visible); }
 }
 
 /** The session the overlay reads: its channel set and focus requests are driven by the test. */
@@ -79,16 +82,18 @@ function fakeSession() {
 /**
  * DOM spec for the overlay's stage: a channel's surface is created once and kept while the panel collapses, while its
  * channel holds focus (it fills the stage) and when focus ends; it goes only when its channel leaves the session.
- * Real overlay, panel and stage; the session and the channel are fakes. jsdom lays nothing out, so the panel's slot
- * is given a box.
+ * Real overlay, panel and stage; the session and the channel are fakes. jsdom lays nothing out, so the stage and the
+ * panel's slot are given boxes.
  */
 describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
   beforeEach(() => {
     lifecycle.length = 0;
     reported.length = 0;
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
-      const slot = this.classList.contains('s-pane__slot');
-      return new DOMRect(slot ? 600 : 0, slot ? 48 : 0, slot ? 380 : 0, slot ? 500 : 0);
+      if (this.classList.contains('s-pane__slot')) {
+        return new DOMRect(600, 48, 380, 500);
+      }
+      return this.tagName === 'MJ-MEDIA-STAGE' ? new DOMRect(0, 0, 1000, 600) : new DOMRect(0, 0, 0, 0);
     });
   });
 
@@ -177,6 +182,16 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
     await settle();
     expect(lifecycle.slice(2)).toEqual(['bound', 'created']);
     expect(isShown(f)).toBe(true);
+  });
+
+  it('tells the channel when its surface goes out of sight and comes back', async () => {
+    const { f, board } = await renderWithBoard();
+    expect(board.Visibility).toEqual([true]);
+    click(f, '.surface__toggle');
+    await settle();
+    click(f, '.surface__toggle');
+    await settle();
+    expect(board.Visibility).toEqual([true, false, true]);
   });
 
   it('drops the surface when its channel leaves the session, ending its focus', async () => {

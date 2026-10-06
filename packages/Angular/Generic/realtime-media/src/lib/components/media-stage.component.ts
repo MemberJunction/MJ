@@ -27,9 +27,11 @@ export interface MediaStageSurface {
   Placement: MediaStagePlacement;
 }
 
-/** What a surface template receives: its key, as `let-key`. */
+/** What a surface template receives: its key, as `let-key`, and whether it is on screen, as `let-visible="Visible"`. */
 export interface MediaStageSurfaceContext {
   $implicit: string;
+  /** Whether the surface is on screen now: its placement shows it and the stage itself is on screen. */
+  Visible: boolean;
 }
 
 /** Marks the host's template for a surface's content: `<ng-template mjMediaStageSurface let-key>`. */
@@ -63,7 +65,9 @@ const SETTLE_MS = 600;
  *
  * The host positions the stage over the area it covers (it fills its positioned parent). A `stage` surface fills
  * it; a `tab` surface covers {@link TabSlot}, an element the host's tab panel keeps for the active tab, and is
- * followed as the panel resizes or slides; any other surface stays alive, out of sight.
+ * followed as the panel resizes or slides; any other surface stays alive, out of sight. So does every surface
+ * while the stage itself has no size (a hidden ancestor). Each surface's template learns whether it is on screen
+ * (`Visible`), so the host can tell the surface to pause work nobody sees.
  */
 @Component({
   selector: 'mj-media-stage',
@@ -83,7 +87,10 @@ const SETTLE_MS = 600;
         [style.height.px]="TabRectFor(surface)?.Height ?? null"
       >
         @if (SurfaceTemplate) {
-          <ng-container [ngTemplateOutlet]="SurfaceTemplate.Template" [ngTemplateOutletContext]="{ $implicit: surface.Key }"></ng-container>
+          <ng-container
+            [ngTemplateOutlet]="SurfaceTemplate.Template"
+            [ngTemplateOutletContext]="{ $implicit: surface.Key, Visible: IsShown(surface) }"
+          ></ng-container>
         }
       </div>
     }
@@ -96,6 +103,8 @@ export class MediaStageComponent implements AfterViewInit, OnDestroy {
   private readonly zone = inject(NgZone);
   private tabSlot: HTMLElement | null = null;
   private slotRect: StageRect | null = null;
+  /** Whether the stage itself has a size; a hidden ancestor (a minimized call) puts every surface out of sight. */
+  private stageShown = true;
   private resizeObserver: ResizeObserver | null = null;
   private settleFrame: number | null = null;
   private settleUntil = 0;
@@ -149,7 +158,7 @@ export class MediaStageComponent implements AfterViewInit, OnDestroy {
 
   /** Whether a surface is on screen. */
   public IsShown(surface: MediaStageSurface): boolean {
-    return surface.Placement === 'stage' || this.TabRectFor(surface) !== null;
+    return this.stageShown && (surface.Placement === 'stage' || this.TabRectFor(surface) !== null);
   }
 
   /** The box of a surface shown over the tab slot, or `null` when it isn't. */
@@ -177,25 +186,27 @@ export class MediaStageComponent implements AfterViewInit, OnDestroy {
   }
 
   /**
-   * Reads the slot's box relative to the stage; a slot with no size (hidden) counts as no slot. Runs outside Angular
-   * while following the slot, and enters it only when the box changed.
+   * Reads whether the stage is on screen and the slot's box relative to it; a slot with no size (hidden) counts as no
+   * slot. Runs outside Angular while following the slot, and enters it only when something changed.
    */
   private measure(): void {
-    const next = this.readSlotRect();
-    if (sameRect(next, this.slotRect)) {
+    const stage = this.host.nativeElement.getBoundingClientRect();
+    const shown = stage.width > 0 && stage.height > 0;
+    const next = this.readSlotRect(stage);
+    if (shown === this.stageShown && sameRect(next, this.slotRect)) {
       return;
     }
     this.zone.run(() => {
+      this.stageShown = shown;
       this.slotRect = next;
       this.cdr.markForCheck();
     });
   }
 
-  private readSlotRect(): StageRect | null {
+  private readSlotRect(stage: DOMRect): StageRect | null {
     if (!this.tabSlot) {
       return null;
     }
-    const stage = this.host.nativeElement.getBoundingClientRect();
     const slot = this.tabSlot.getBoundingClientRect();
     if (slot.width <= 0 || slot.height <= 0) {
       return null;

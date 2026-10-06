@@ -155,15 +155,16 @@
     <!-- THE STAGE: every channel surface lives here, in one layer over the overlay. A surface
          is created the first time it is seen, lies over its tab's slot while that tab is
          active, fills the overlay while its channel holds focus, and otherwise waits out of
-         sight — so collapsing the panel, switching tabs or entering focus never reloads it. -->
+         sight — so collapsing the panel, switching tabs or entering focus never reloads it.
+         The pane tells each channel when its surface goes out of sight, so it can pause. -->
     <mj-media-stage class="call-stage"
                     [Surfaces]="SurfaceStage.Surfaces"
                     [TabSlot]="StageSlot?.Element ?? null"
                     [ActiveTabKey]="StageSlot?.Key ?? null">
-      <ng-template mjMediaStageSurface let-key>
+      <ng-template mjMediaStageSurface let-key let-visible="Visible">
         @if (SurfaceStage.PluginFor(key); as plugin) {
           <div class="stage-frame" role="region" [attr.aria-label]="plugin.TabTitle">
-            <mj-realtime-channel-pane [Plugin]="plugin"></mj-realtime-channel-pane>
+            <mj-realtime-channel-pane [Plugin]="plugin" [Visible]="visible"></mj-realtime-channel-pane>
           </div>
         }
       </ng-template>
