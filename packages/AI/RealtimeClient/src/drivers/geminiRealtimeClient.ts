@@ -5,6 +5,7 @@ import {
     JSONValue,
     RealtimeDiagLog,
     RealtimeIdleSignal,
+    IsPcmAudioMimeType,
     ParseDurationToMs,
     RealtimeSessionResumption,
     RealtimeToolBatchBarrier,
@@ -271,6 +272,8 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     private pendingUserText = '';
     /** Accumulates in-flight thought text deltas until finalized on turn completion. */
     private pendingThoughtText = '';
+    /** MIME types of model output this session dropped, so each is reported once. */
+    private droppedOutputTypes = new Set<string>();
     /** True while a model turn is in flight; gates (queues) client-triggered sends. */
     private responseActive = false;
     /** The kind of the turn currently in flight; stamped at send time, reset on turnComplete. */
@@ -1086,12 +1089,28 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
             if (part.thought) {
                 continue; // Thoughts are reasoning summaries, never spoken audio
             }
-            const data = part.inlineData?.data;
-            if (data) {
-                this.markGenerationStarted();
-                this.playback?.Enqueue(Base64ToArrayBuffer(data));
+            const inline = part.inlineData;
+            if (!inline?.data) {
+                continue;
             }
+            // A part that names a non-PCM type (e.g. video/mp4 avatar frames) must never reach PCM
+            // playback, where it would play as noise. A part with no type plays, as it always has.
+            if (inline.mimeType && !IsPcmAudioMimeType(inline.mimeType)) {
+                this.reportDroppedOutput(inline.mimeType);
+                continue;
+            }
+            this.markGenerationStarted();
+            this.playback?.Enqueue(Base64ToArrayBuffer(inline.data));
         }
+    }
+
+    /** Reports each MIME type of dropped model output once per session, not once per part. */
+    private reportDroppedOutput(mimeType: string): void {
+        if (this.droppedOutputTypes.has(mimeType)) {
+            return;
+        }
+        this.droppedOutputTypes.add(mimeType);
+        console.warn(`[GeminiRealtimeClient] Dropped model output of type ${mimeType}: only PCM audio is played on this session.`);
     }
 
     /**

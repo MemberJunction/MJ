@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+    IsPcmAudioMimeType,
     RealtimeModalityRegistry,
     RealtimeTrackKey,
     ResolveMaxInboundVideoStreams,
@@ -226,5 +227,15 @@ describe('ResolveMaxInboundVideoStreams', () => {
         for (const bad of [0, -2, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
             expect(ResolveMaxInboundVideoStreams(true, bad), String(bad)).toBe(1);
         }
+    });
+});
+
+describe('IsPcmAudioMimeType', () => {
+    it.each(['audio/pcm', 'audio/pcm;rate=24000', 'audio/pcm; rate=16000', 'AUDIO/PCM;rate=24000'])('accepts %s', (mime) => {
+        expect(IsPcmAudioMimeType(mime)).toBe(true);
+    });
+
+    it.each(['video/mp4', 'image/jpeg', 'audio/mpeg', 'audio/pcmx', 'audio/wav', ''])('rejects %s', (mime) => {
+        expect(IsPcmAudioMimeType(mime)).toBe(false);
     });
 });

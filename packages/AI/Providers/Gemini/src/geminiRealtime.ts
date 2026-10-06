@@ -43,6 +43,7 @@ import {
     REALTIME_SHARED_CONFIG_KEYS,
     ExtractToolSchedulingHint,
     ParseDurationToMs,
+    IsPcmAudioMimeType,
     RealtimeSessionResumption,
     type RealtimeResumeAttempt,
 } from '@memberjunction/ai';
@@ -944,6 +945,9 @@ class GeminiRealtimeSession implements IRealtimeSession {
     /** Accumulates in-flight thought text deltas until finalized on turn completion. */
     private pendingThoughtText = '';
 
+    /** MIME types of model output this session dropped, so each is reported once. */
+    private droppedOutputTypes = new Set<string>();
+
     /**
      * Fingerprint of the tool set bound at connect time (set via {@link SetConnectTimeTools});
      * {@link RegisterTools} compares against it to no-op identical re-registrations.
@@ -1535,11 +1539,27 @@ class GeminiRealtimeSession implements IRealtimeSession {
             if (part.thought) {
                 continue;
             }
-            const data = part.inlineData?.data;
-            if (data) {
-                this.outputHandler(GeminiRealtimeSession.base64ToArrayBuffer(data));
+            const inline = part.inlineData;
+            if (!inline?.data) {
+                continue;
             }
+            // A part that names a non-PCM type (e.g. video/mp4 avatar frames) must never reach the
+            // audio output, where it would play as noise. A part with no type plays, as it always has.
+            if (inline.mimeType && !IsPcmAudioMimeType(inline.mimeType)) {
+                this.reportDroppedOutput(inline.mimeType);
+                continue;
+            }
+            this.outputHandler(GeminiRealtimeSession.base64ToArrayBuffer(inline.data));
         }
+    }
+
+    /** Reports each MIME type of dropped model output once per session, not once per part. */
+    private reportDroppedOutput(mimeType: string): void {
+        if (this.droppedOutputTypes.has(mimeType)) {
+            return;
+        }
+        this.droppedOutputTypes.add(mimeType);
+        console.warn(`[GeminiRealtime] Dropped model output of type ${mimeType}: only PCM audio is played on this session.`);
     }
 
     /**

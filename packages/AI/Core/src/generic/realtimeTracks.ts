@@ -137,6 +137,15 @@ export function RealtimeTrackKey(descriptor: Pick<RealtimeTrackDescriptor, 'Moda
 }
 
 /**
+ * Whether a MIME type names raw PCM audio: `audio/pcm`, with or without parameters such as
+ * `;rate=24000`. Realtime drivers use it to route the parts a provider streams back: PCM goes to
+ * audio playback, and anything else (for example `video/mp4` avatar frames) must not.
+ */
+export function IsPcmAudioMimeType(mimeType: string): boolean {
+    return /^audio\/pcm\s*(;.*)?$/i.test(mimeType.trim());
+}
+
+/**
  * How many concurrent inbound video streams a model accepts, given its declared capability.
  *
  * `0` when the model does not accept inbound video at all; otherwise the declared maximum, defaulting
