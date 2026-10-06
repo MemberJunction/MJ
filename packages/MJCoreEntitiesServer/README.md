@@ -93,6 +93,7 @@ Extends the Component entity with automatic vector embedding generation:
 
 - **Automatic Embeddings**: Generates vector embeddings for FunctionalRequirements and TechnicalDesign fields
 - **Model Tracking**: Stores the AI model ID used for each embedding
+- **Binary Companions**: Also writes `FunctionalRequirementsVectorBinary` / `TechnicalDesignVectorBinary` (float32 bytes), which readers decode much faster than the JSON vectors
 - **Smart Updates**: Only regenerates embeddings when source text changes
 - **Parallel Processing**: Generates multiple embeddings concurrently for performance
 
@@ -108,7 +109,7 @@ Extends the Query entity with automatic Template management similar to AIPromptE
 
 Extends the agent note entity to keep the in-process vector store in sync with persisted state:
 
-- **Vector Store Invariant**: Overrides `Save()` and `Delete()` so that `AIEngine.Instance._noteVectorService` contains an entry for a note iff its persisted `Status='Active'` and its `EmbeddingVector` is non-null
+- **Vector Store Invariant**: Overrides `Save()` and `Delete()` so that `AIEngine.Instance._noteVectorService` contains an entry for a note iff its persisted `Status='Active'` and it has a stored vector (`EmbeddingVectorBinary` or `EmbeddingVector`)
 - **Inline Maintenance**: When a note's Status flips between `Active` and any other value, or when a note is deleted, the corresponding vector store entry is added/removed in the same operation — eliminating the need for an MJAPI restart after note revocation (e.g., during MemoryManagerAgent consolidation or contradiction resolution)
 - **Consolidation Field Persistence**: New `AIAgentNote` columns introduced by `V202604260056__v5.30.x__Memory_Consolidation_Schema.sql` (`ConsolidatedIntoNoteID`, `ConsolidationCount`, `DerivedFromNoteIDs`, `ProtectionTier`, `ImportanceScore`) persist via the standard generated setters — no custom logic needed in this override
 
@@ -232,7 +233,7 @@ The helper:
 
 ### Using Vector Embeddings in Your Entity
 
-1. **Add database fields** for storing vectors and model IDs
+1. **Add database fields** for storing vectors and model IDs — a JSON vector column plus a `VARBINARY(MAX)` binary companion (see the [Binary Fields Guide](../../guides/BINARY_FIELDS_GUIDE.md))
 2. **Override EmbedTextLocal** using the helper function
 3. **Call GenerateEmbeddings** in your Save method:
 
@@ -242,12 +243,15 @@ public async Save(): Promise<boolean> {
         {
             fieldName: "Content",
             vectorFieldName: "ContentVector",
-            modelFieldName: "ContentVectorModelID"
+            modelFieldName: "ContentVectorModelID",
+            binaryVectorFieldName: "ContentVectorBinary"   // optional; set and cleared with the JSON field
         }
     ]);
     return await super.Save();
 }
 ```
+
+The note, example, component, query and tag entity servers all write both the JSON and the binary vector column. Readers should load with `ReadStoredVector(binary, json)` from `@memberjunction/ai-vectors-memory`, which prefers the binary column and falls back to JSON.
 
 ## Common Use Cases
 
@@ -449,4 +453,4 @@ When contributing new server-side entities:
 
 ## License
 
-This package is part of the MemberJunction open-source project.
+This package is part of the MemberJunction project.

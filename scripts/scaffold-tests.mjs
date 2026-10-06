@@ -111,10 +111,15 @@ const pkgName = pkgJson.name || 'unknown';
 
 // 4. Create starter test file
 const nodeStarter = `import { describe, it, expect } from 'vitest';
+import * as publicApi from '../index';
 
 describe('${pkgName}', () => {
-  it('should have a passing test', () => {
-    expect(true).toBe(true);
+  // Starter smoke: importing the entry point exercises the module graph (decorators, class
+  // registrations) and proves the package loads with a non-empty API. Replace it with assertions
+  // about this package's real exports/behavior. (A vacuous \`expect(true)\` is rejected by the
+  // spec anti-pattern lint — see scripts/check-spec-antipatterns.mjs.)
+  it('loads its public API surface', () => {
+    expect(Object.keys(publicApi).length).toBeGreaterThan(0);
   });
 });
 `;

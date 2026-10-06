@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { RegisterClass } from '@memberjunction/global';
 import type { MJAIRemoteBrowserProviderEntity } from '@memberjunction/core-entities';
 import {
@@ -12,7 +12,7 @@ import {
     RemoteBrowserScreencastFrame,
     RemoteBrowserEngineBase,
 } from '@memberjunction/remote-browser-base';
-import { RemoteBrowserEngine } from '../remote-browser-engine';
+import { MAX_DEAD_HANDLE_RECOVERIES, NormalizeInstanceKey, RemoteBrowserEngine } from '../remote-browser-engine';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Test doubles — a fake session + a fake driver registered under known DriverClasses.
@@ -471,5 +471,311 @@ describe('RemoteBrowserEngine — agent-session-keyed lifecycle', () => {
         expect(engine().GetSessionForAgentSession('agent-sess-end')).toBeUndefined();
         // Idempotent — ending an agent session with no browser is a benign no-op.
         expect(await engine().EndSessionForAgentSession('agent-sess-end')).toBe(false);
+    });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// #3531 — TWO browsers in ONE agent session, told apart by `instanceKey`.
+//
+// The whole agent-session-keyed surface above is keyed by agent session ALONE, which silently makes
+// "one browser per session" a framework invariant: the second surface's lazy-start finds the first
+// one's mapping, returns it, and both surfaces drive the same Chrome. `instanceKey` is what names
+// the second browser. Omitting it must keep every assertion above true, which is why these tests
+// live beside them rather than replacing them.
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe('RemoteBrowserEngine — multiple instances per agent session (#3531)', () => {
+    it('starts a SEPARATE browser per instanceKey within one agent session', async () => {
+        stubBase([makeProvider()]);
+        const left = await engine().StartSessionForAgentSession('sess-multi', undefined, undefined, 'left');
+        const right = await engine().StartSessionForAgentSession('sess-multi', undefined, undefined, 'right');
+
+        // Two distinct live sessions — the defect returned `right === left`.
+        expect(right).not.toBe(left);
+        expect(engine().ActiveSessions.length).toBe(2);
+
+        // Each key resolves back to its OWN browser, which is what makes the second surface drivable.
+        expect(engine().GetSessionForAgentSession('sess-multi', 'left')).toBe(left);
+        expect(engine().GetSessionForAgentSession('sess-multi', 'right')).toBe(right);
+
+        await engine().EndSessionForAgentSession('sess-multi', 'left');
+        await engine().EndSessionForAgentSession('sess-multi', 'right');
+    });
+
+    it('keeps the unkeyed instance distinct from a named one', async () => {
+        stubBase([makeProvider()]);
+        // The unkeyed instance is the one every existing caller gets. A named instance must not
+        // hijack it, or adding a second surface would silently move the first surface's browser.
+        const unkeyed = await engine().StartSessionForAgentSession('sess-mixed');
+        const named = await engine().StartSessionForAgentSession('sess-mixed', undefined, undefined, 'secondary');
+
+        expect(named).not.toBe(unkeyed);
+        expect(engine().GetSessionForAgentSession('sess-mixed')).toBe(unkeyed);
+        // An empty / whitespace key is NOT a third instance — it is the unkeyed one, so a caller
+        // threading an absent value through as '' lands where it did before the argument existed.
+        expect(engine().GetSessionForAgentSession('sess-mixed', '')).toBe(unkeyed);
+        expect(engine().GetSessionForAgentSession('sess-mixed', '   ')).toBe(unkeyed);
+        expect(engine().ActiveSessions.length).toBe(2);
+
+        await engine().EndSessionForAgentSession('sess-mixed');
+        await engine().EndSessionForAgentSession('sess-mixed', 'secondary');
+    });
+
+    it('treats an instanceKey case- and whitespace-insensitively', async () => {
+        stubBase([makeProvider()]);
+        // The key crosses the wire as a GraphQL argument typed by hand in a channel config, so
+        // 'Primary' and 'primary' being two browsers would be a spelling trap, not a feature.
+        const first = await engine().StartSessionForAgentSession('sess-case', undefined, undefined, 'Primary');
+        const again = await engine().StartSessionForAgentSession('sess-case', undefined, undefined, '  primary ');
+
+        expect(again).toBe(first);
+        expect(engine().ActiveSessions.length).toBe(1);
+        await engine().EndSessionForAgentSession('sess-case', 'PRIMARY');
+        expect(engine().GetSessionForAgentSession('sess-case', 'primary')).toBeUndefined();
+    });
+
+    it('does not let one agent session bleed into another that uses the same instanceKey', async () => {
+        stubBase([makeProvider()]);
+        // Both interviews name their second surface 'resume'. The composite key must stay scoped to
+        // the agent session — otherwise two concurrent candidates share a browser, which is the
+        // same-key-collides failure the naive `${id}:${key}` concatenation invites.
+        const a = await engine().StartSessionForAgentSession('sess-a', undefined, undefined, 'resume');
+        const b = await engine().StartSessionForAgentSession('sess-b', undefined, undefined, 'resume');
+
+        expect(b).not.toBe(a);
+        expect(engine().GetSessionForAgentSession('sess-a', 'resume')).toBe(a);
+        expect(engine().GetSessionForAgentSession('sess-b', 'resume')).toBe(b);
+
+        await engine().EndSessionForAgentSession('sess-a', 'resume');
+        await engine().EndSessionForAgentSession('sess-b', 'resume');
+    });
+
+    it('coalesces concurrent starts PER INSTANCE, not per agent session', async () => {
+        stubBase([makeProvider()]);
+        // The coalescing map is keyed the same way the session map is. Keyed by agent session alone
+        // it would collapse two DIFFERENT surfaces racing to start into one browser — the duplicate
+        // -browser fix turning into a missing-browser bug.
+        const results = await Promise.all([
+            engine().StartSessionForAgentSession('sess-race2', undefined, undefined, 'left'),
+            engine().StartSessionForAgentSession('sess-race2', undefined, undefined, 'left'),
+            engine().StartSessionForAgentSession('sess-race2', undefined, undefined, 'right'),
+            engine().StartSessionForAgentSession('sess-race2', undefined, undefined, 'right'),
+        ]);
+        expect(results[1]).toBe(results[0]);
+        expect(results[3]).toBe(results[2]);
+        expect(results[2]).not.toBe(results[0]);
+        expect(engine().ActiveSessions.length).toBe(2);
+
+        await engine().EndSessionForAgentSession('sess-race2', 'left');
+        await engine().EndSessionForAgentSession('sess-race2', 'right');
+    });
+
+    it('ends only the named instance and leaves its siblings live', async () => {
+        stubBase([makeProvider()]);
+        const left = await engine().StartSessionForAgentSession('sess-end-one', undefined, undefined, 'left');
+        await engine().StartSessionForAgentSession('sess-end-one', undefined, undefined, 'right');
+
+        expect(await engine().EndSessionForAgentSession('sess-end-one', 'right')).toBe(true);
+        expect(engine().GetSessionForAgentSession('sess-end-one', 'right')).toBeUndefined();
+        // The surviving surface is still driveable — a shared teardown would have killed both.
+        expect(engine().GetSessionForAgentSession('sess-end-one', 'left')).toBe(left);
+        expect(engine().ActiveSessions.length).toBe(1);
+
+        await engine().EndSessionForAgentSession('sess-end-one', 'left');
+        expect(engine().ActiveSessions.length).toBe(0);
+    });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// The instance-key grammar itself (#3531) — exported because THREE layers compare it: the engine's
+// session map, the resolver's per-surface stream sets, and the screencast/audio envelopes a client
+// routes on. These pin the contract those layers share.
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe('NormalizeInstanceKey', () => {
+    it('collapses every "no instance named" spelling to null', () => {
+        // null is the unnamed instance — the one every pre-#3531 caller means. A distinct '' instance
+        // would silently strand a caller that threads an absent value through as an empty string.
+        expect(NormalizeInstanceKey(undefined)).toBeNull();
+        expect(NormalizeInstanceKey(null)).toBeNull();
+        expect(NormalizeInstanceKey('')).toBeNull();
+        expect(NormalizeInstanceKey('   ')).toBeNull();
+        expect(NormalizeInstanceKey('\t\n')).toBeNull();
+    });
+
+    it('lowercases and trims a named instance', () => {
+        expect(NormalizeInstanceKey('Primary')).toBe('primary');
+        expect(NormalizeInstanceKey('  Left  ')).toBe('left');
+        expect(NormalizeInstanceKey('RESUME')).toBe('resume');
+    });
+
+    it('keeps distinct names distinct', () => {
+        expect(NormalizeInstanceKey('left')).not.toBe(NormalizeInstanceKey('right'));
+    });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// #3598 — a dead handle heals instead of poisoning the session.
+//
+// The map keeps a handle after the browser behind it is gone, so every later call throws forever.
+// These pin the healing AND its two guard rails: a live browser's real errors never cost it its
+// state, and a browser that dies on arrival surfaces as a fault rather than an infinite relaunch.
+// ──────────────────────────────────────────────────────────────────────────────
+
+const DEAD = new Error('Browser not launched. Call Launch() before using the adapter.');
+
+/** The engine session id holding a given live session — by identity, never by position. */
+function engineSessionIdOf(session: IRemoteBrowserSession): string {
+    const handle = engine().ActiveSessions.find((h) => h.Session === session);
+    if (!handle) {
+        throw new Error('Test setup: that session is not in ActiveSessions.');
+    }
+    return handle.SessionID;
+}
+
+describe('RemoteBrowserEngine — dead-handle recovery (#3598)', () => {
+    // The engine is a process singleton, so a test that fails before its own teardown would leak a
+    // live session into the next one and turn one real failure into a cascade of fake ones.
+    afterEach(async () => {
+        await engine().ReconcileOrphans();
+    });
+
+    it('replaces the dead browser and re-maps the agent session to the new one', async () => {
+        stubBase([makeProvider()]);
+        const dead = await engine().StartSessionForAgentSession('sess-dead');
+        expect(engine().ActiveSessions.length).toBe(1);
+
+        const healed = await engine().RecoverDeadAgentSession('sess-dead', DEAD);
+
+        expect(healed).not.toBeNull();
+        expect(healed).not.toBe(dead);
+        // The mapping now points at the REPLACEMENT — the part the original bug never did.
+        expect(engine().GetSessionForAgentSession('sess-dead')).toBe(healed);
+        // And the corpse is gone rather than accumulating beside its replacement.
+        expect(engine().ActiveSessions.length).toBe(1);
+
+        await engine().EndSessionForAgentSession('sess-dead');
+    });
+
+    it('leaves a healthy browser completely alone when the error is a real answer', async () => {
+        stubBase([makeProvider()]);
+        const live = await engine().StartSessionForAgentSession('sess-selector');
+
+        // A bad selector must not cost this browser its cookies, its login or its scroll position.
+        const result = await engine().RecoverDeadAgentSession('sess-selector', new Error('waiting for selector "#nope" failed'));
+
+        expect(result).toBeNull();
+        expect(engine().GetSessionForAgentSession('sess-selector')).toBe(live);
+        expect(engine().ActiveSessions.length).toBe(1);
+
+        await engine().EndSessionForAgentSession('sess-selector');
+    });
+
+    it('heals only the instance that faulted, leaving its sibling untouched', async () => {
+        stubBase([makeProvider()]);
+        const left = await engine().StartSessionForAgentSession('sess-two', undefined, undefined, 'left');
+        const right = await engine().StartSessionForAgentSession('sess-two', undefined, undefined, 'right');
+
+        const healed = await engine().RecoverDeadAgentSession('sess-two', DEAD, { InstanceKey: 'right' });
+
+        expect(healed).not.toBeNull();
+        expect(healed).not.toBe(right);
+        expect(engine().GetSessionForAgentSession('sess-two', 'left')).toBe(left);   // untouched
+        expect(engine().GetSessionForAgentSession('sess-two', 'right')).toBe(healed);
+        expect(engine().ActiveSessions.length).toBe(2);
+
+        await engine().EndSessionForAgentSession('sess-two', 'left');
+        await engine().EndSessionForAgentSession('sess-two', 'right');
+    });
+
+    it('coalesces simultaneous fault reports onto ONE replacement', async () => {
+        stubBase([makeProvider()]);
+        await engine().StartSessionForAgentSession('sess-storm');
+        // The ~700ms snapshot poll and the next agent action both meet the dead handle at once.
+        // Without coalescing each launches its own replacement — one dead browser becomes two live.
+        const results = await Promise.all([
+            engine().RecoverDeadAgentSession('sess-storm', DEAD),
+            engine().RecoverDeadAgentSession('sess-storm', DEAD),
+            engine().RecoverDeadAgentSession('sess-storm', DEAD),
+        ]);
+        expect(results[1]).toBe(results[0]);
+        expect(results[2]).toBe(results[0]);
+        expect(engine().ActiveSessions.length).toBe(1);
+
+        await engine().EndSessionForAgentSession('sess-storm');
+    });
+
+    it('stops relaunching after MAX_DEAD_HANDLE_RECOVERIES and says so', async () => {
+        stubBase([makeProvider()]);
+        await engine().StartSessionForAgentSession('sess-doomed');
+        // A browser that dies immediately after every relaunch is a configuration fault. Relaunching
+        // forever converts a visible error into a hang plus a stream of orphaned Chromes.
+        for (let i = 0; i < MAX_DEAD_HANDLE_RECOVERIES; i++) {
+            expect(await engine().RecoverDeadAgentSession('sess-doomed', DEAD)).not.toBeNull();
+        }
+        expect(await engine().RecoverDeadAgentSession('sess-doomed', DEAD)).toBeNull();
+        // Budget exhausted, but the LAST replacement is still live — giving up means reporting the
+        // fault, not tearing the surface down.
+        expect(engine().GetSessionForAgentSession('sess-doomed')).toBeDefined();
+
+        await engine().EndSessionForAgentSession('sess-doomed');
+    });
+
+    it('gives a re-opened surface a fresh recovery budget', async () => {
+        stubBase([makeProvider()]);
+        await engine().StartSessionForAgentSession('sess-reopen');
+        for (let i = 0; i < MAX_DEAD_HANDLE_RECOVERIES; i++) {
+            await engine().RecoverDeadAgentSession('sess-reopen', DEAD);
+        }
+        expect(await engine().RecoverDeadAgentSession('sess-reopen', DEAD)).toBeNull();
+
+        // Ending the surface retires the budget with it, so a later surface reusing the key is not
+        // born unable to heal.
+        await engine().EndSessionForAgentSession('sess-reopen');
+        await engine().StartSessionForAgentSession('sess-reopen');
+        expect(await engine().RecoverDeadAgentSession('sess-reopen', DEAD)).not.toBeNull();
+
+        await engine().EndSessionForAgentSession('sess-reopen');
+    });
+
+    it('does nothing when the agent session holds no browser at all', async () => {
+        stubBase([makeProvider()]);
+        // Nothing mapped: either never started or another caller already healed it. The ordinary
+        // lazy-start path is the right next step, not a second relaunch from here.
+        expect(await engine().RecoverDeadAgentSession('sess-nothing', DEAD)).toBeNull();
+        expect(engine().ActiveSessions.length).toBe(0);
+    });
+
+    it('re-attaches the screencast so the person sees the browser the agent is describing', async () => {
+        stubBase([makeProvider({ features: { ScreenStreaming: true } })]);
+        const dead = (await engine().StartSessionForAgentSession('sess-view')) as FakeSession;
+        const frames: RemoteBrowserScreencastFrame[] = [];
+        await engine().PipeScreencastToTrack(engineSessionIdOf(dead), (f) => frames.push(f));
+        expect(dead.ScreencastStarted).toBe(true);
+
+        const healed = (await engine().RecoverDeadAgentSession('sess-view', DEAD)) as FakeSession;
+
+        // Healing the backend WITHOUT this is worse than the original bug: a working browser the
+        // person cannot see, with the agent narrating a page that is not on their screen.
+        expect(healed.ScreencastStarted).toBe(true);
+        healed.EmitFrame({ DataBase64: 'AFTER', Width: 2, Height: 2, SequenceNumber: 1 });
+        expect(frames.map((f) => f.DataBase64)).toEqual(['AFTER']);
+
+        await engine().EndSessionForAgentSession('sess-view');
+    });
+
+    it('does not resurrect a screencast the host deliberately stopped', async () => {
+        stubBase([makeProvider({ features: { ScreenStreaming: true } })]);
+        const dead = await engine().StartSessionForAgentSession('sess-stopped');
+        const engineSessionID = engineSessionIdOf(dead);
+        await engine().PipeScreencastToTrack(engineSessionID, () => {});
+        await engine().StopScreencast(engineSessionID);
+
+        const healed = (await engine().RecoverDeadAgentSession('sess-stopped', DEAD)) as FakeSession;
+
+        // A host that released the view must not get it back because the browser happened to die.
+        expect(healed.ScreencastStarted).toBe(false);
+
+        await engine().EndSessionForAgentSession('sess-stopped');
     });
 });

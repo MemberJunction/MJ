@@ -9,9 +9,9 @@ import {
     IGraphAdminLike,
     IGoogleWorkspaceAdminLike,
     ITelephonyCarrierLike,
-    buildGraphMailboxPayload,
-    buildGoogleWorkspaceMailboxPayload,
-    buildCarrierNumberOrderPayload,
+    BuildGraphMailboxPayload,
+    BuildGoogleWorkspaceMailboxPayload,
+    BuildCarrierNumberOrderPayload,
 } from '../identity-provisioner';
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -163,7 +163,7 @@ describe('request → payload mapping (pure)', () => {
     describe('buildGraphMailboxPayload', () => {
         it('derives MailNickname from the local part and carries tenant/usage config', () => {
             expect(
-                buildGraphMailboxPayload(
+                BuildGraphMailboxPayload(
                     request({ Configuration: { TenantId: 'tid-1', UsageLocation: 'US' } }),
                 ),
             ).toEqual({
@@ -175,22 +175,22 @@ describe('request → payload mapping (pure)', () => {
             });
         });
         it('defaults DisplayName to the address when none supplied', () => {
-            expect(buildGraphMailboxPayload(request({ DisplayName: undefined })).DisplayName).toBe(
+            expect(BuildGraphMailboxPayload(request({ DisplayName: undefined })).DisplayName).toBe(
                 'sage@customer.com',
             );
         });
         it('throws when RequestedValue is missing', () => {
-            expect(() => buildGraphMailboxPayload(request({ RequestedValue: undefined }))).toThrow();
+            expect(() => BuildGraphMailboxPayload(request({ RequestedValue: undefined }))).toThrow();
         });
     });
 
     describe('buildGoogleWorkspaceMailboxPayload', () => {
         it('derives Domain from the address when not supplied', () => {
-            expect(buildGoogleWorkspaceMailboxPayload(request()).Domain).toBe('customer.com');
+            expect(BuildGoogleWorkspaceMailboxPayload(request()).Domain).toBe('customer.com');
         });
         it('honors explicit Domain + OrgUnitPath config', () => {
             expect(
-                buildGoogleWorkspaceMailboxPayload(
+                BuildGoogleWorkspaceMailboxPayload(
                     request({ Configuration: { Domain: 'corp.com', OrgUnitPath: '/agents' } }),
                 ),
             ).toEqual({
@@ -201,21 +201,21 @@ describe('request → payload mapping (pure)', () => {
             });
         });
         it('throws when RequestedValue is missing', () => {
-            expect(() => buildGoogleWorkspaceMailboxPayload(request({ RequestedValue: undefined }))).toThrow();
+            expect(() => BuildGoogleWorkspaceMailboxPayload(request({ RequestedValue: undefined }))).toThrow();
         });
     });
 
     describe('buildCarrierNumberOrderPayload', () => {
         it('passes through requested number + region', () => {
             expect(
-                buildCarrierNumberOrderPayload(
+                BuildCarrierNumberOrderPayload(
                     request({ IdentityType: 'PhoneNumber', RequestedValue: '+15551112222', Configuration: { Region: 'US-415' } }),
                 ),
             ).toEqual({ RequestedNumber: '+15551112222', Region: 'US-415', Label: 'Sage' });
         });
         it('omits requested number when none supplied and falls back Label to AgentID', () => {
             expect(
-                buildCarrierNumberOrderPayload(
+                BuildCarrierNumberOrderPayload(
                     request({ IdentityType: 'PhoneNumber', RequestedValue: undefined, DisplayName: undefined }),
                 ),
             ).toEqual({ Label: 'agent-1' });

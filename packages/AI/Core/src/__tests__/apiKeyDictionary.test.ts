@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { AIAPIKeys, GetAIAPIKey, GetAIAPIKeyGlobal } from '../generic/apiKeyDictionary';
+import { AIAPIKeys, AICredentialScope, CredentialScopeAllows, GetAIAPIKey, GetAIAPIKeyGlobal, MakeAIAPIKeyResolver } from '../generic/apiKeyDictionary';
 import { MJGlobal } from '@memberjunction/global';
 
 describe('AIAPIKeys', () => {
@@ -114,6 +114,63 @@ describe('GetAIAPIKey', () => {
     });
 });
 
+describe('CredentialScopeAllows', () => {
+    it('Any (and an omitted scope) allows every source', () => {
+        for (const scope of ['Any', undefined] as const) {
+            expect(CredentialScopeAllows(scope, 'Runtime')).toBe(true);
+            expect(CredentialScopeAllows(scope, 'PlatformCredential')).toBe(true);
+            expect(CredentialScopeAllows(scope, 'Environment')).toBe(true);
+        }
+    });
+
+    it('RuntimeOnly allows only what the caller supplied', () => {
+        expect(CredentialScopeAllows('RuntimeOnly', 'Runtime')).toBe(true);
+        expect(CredentialScopeAllows('RuntimeOnly', 'PlatformCredential')).toBe(false);
+        expect(CredentialScopeAllows('RuntimeOnly', 'Environment')).toBe(false);
+    });
+
+    it('fails closed on a value outside the type — an untyped caller gets an error, not the platform key', () => {
+        expect(() => CredentialScopeAllows('runtimeonly' as AICredentialScope, 'Environment')).toThrow(/Unknown AI credential scope/);
+    });
+});
+
+describe('GetAIAPIKey with a RuntimeOnly credential scope', () => {
+    beforeEach(() => {
+        (AIAPIKeys as Record<string, Record<string, string>>)['_cachedAPIKeys'] = {};
+        process.env['AI_VENDOR_API_KEY__VERTEXLLM'] = 'platform-key';
+    });
+
+    afterEach(() => {
+        delete process.env['AI_VENDOR_API_KEY__VERTEXLLM'];
+    });
+
+    it('still answers with the run key for a driver class the run carries', () => {
+        const runKeys = [{ driverClass: 'GeminiLLM', apiKey: 'customer-key' }];
+        expect(GetAIAPIKey('GeminiLLM', runKeys, false, 'RuntimeOnly')).toBe('customer-key');
+    });
+
+    it('never falls back to the platform key for a driver class the run does not carry', () => {
+        // The #601 failover: the org keyed GeminiLLM, failover reached VertexLLM, and the platform paid.
+        const runKeys = [{ driverClass: 'GeminiLLM', apiKey: 'customer-key' }];
+        expect(GetAIAPIKey('VertexLLM', runKeys, false, 'RuntimeOnly')).toBeUndefined();
+    });
+
+    it('has no key at all when the run carries none — a caller that dropped apiKeys fails loudly', () => {
+        expect(GetAIAPIKey('VertexLLM', undefined, false, 'RuntimeOnly')).toBeUndefined();
+        expect(GetAIAPIKey('VertexLLM', [], false, 'RuntimeOnly')).toBeUndefined();
+    });
+
+    it('defaults to Any, which keeps the platform fallback', () => {
+        expect(GetAIAPIKey('VertexLLM', [{ driverClass: 'GeminiLLM', apiKey: 'customer-key' }])).toBe('platform-key');
+    });
+
+    it('reaches MakeAIAPIKeyResolver too', () => {
+        const resolve = MakeAIAPIKeyResolver([{ driverClass: 'GeminiLLM', apiKey: 'customer-key' }], false, 'RuntimeOnly');
+        expect(resolve('GeminiLLM')).toBe('customer-key');
+        expect(resolve('VertexLLM')).toBeUndefined();
+    });
+});
+
 describe('GetAIAPIKeyGlobal', () => {
     it('should throw error when class factory cannot create instance', () => {
         vi.spyOn(MJGlobal.Instance.ClassFactory, 'CreateInstance').mockReturnValue(null);
@@ -129,5 +186,74 @@ describe('GetAIAPIKeyGlobal', () => {
         const result = GetAIAPIKeyGlobal('TestDriver');
 
         expect(result).toBe('factory-key');
+    });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// #3532 — one malformed AI model row must not take out prompt execution.
+//
+// `AIDriverName.toUpperCase()` threw `Cannot read properties of null (reading 'toUpperCase')` for a
+// model row with a null DriverClass, naming neither the row nor the operation. It surfaced as
+// ExecuteSimplePrompt being completely unusable.
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe('AIAPIKeys.GetAPIKey — a driver name that is missing (#3532)', () => {
+    it('returns undefined instead of throwing on null / undefined / empty', () => {
+        const keys = new AIAPIKeys();
+        // A row with no driver class has no key. That is an answer every caller already handles —
+        // they check for a falsy key — and none of them expected this to throw.
+        expect(() => keys.GetAPIKey(null as unknown as string)).not.toThrow();
+        expect(keys.GetAPIKey(null as unknown as string)).toBeUndefined();
+        expect(keys.GetAPIKey(undefined as unknown as string)).toBeUndefined();
+        expect(keys.GetAPIKey('')).toBeUndefined();
+    });
+
+    it('still resolves a real driver name', () => {
+        process.env['AI_VENDOR_API_KEY__TESTDRIVER3532'] = 'sk-test';
+        try {
+            expect(new AIAPIKeys().GetAPIKey('TestDriver3532')).toBe('sk-test');
+        } finally {
+            delete process.env['AI_VENDOR_API_KEY__TESTDRIVER3532'];
+        }
+    });
+
+    it('GetAIAPIKey survives a missing driver name too', () => {
+        expect(() => GetAIAPIKey(null as unknown as string)).not.toThrow();
+        expect(GetAIAPIKey(null as unknown as string)).toBeUndefined();
+    });
+});
+
+describe('MakeAIAPIKeyResolver', () => {
+    /**
+     * A way for a run's keys to reach code that spends them without that code holding the list.
+     * Precedence is the one `GetAIAPIKey` already applies, so a caller that swaps a bare
+     * `GetAIAPIKey(driverClass)` for a resolver cannot change behaviour by accident.
+     */
+    let originalEnv: NodeJS.ProcessEnv;
+    beforeEach(() => { originalEnv = { ...process.env }; });
+    afterEach(() => { process.env = originalEnv; });
+
+    it('prefers the run\'s key for that driver class over the platform\'s', () => {
+        process.env['AI_VENDOR_API_KEY__OPENAILLM'] = 'platform-key';
+        const resolve = MakeAIAPIKeyResolver([{ driverClass: 'OpenAILLM', apiKey: 'sk-customer' }]);
+        expect(resolve('OpenAILLM')).toBe('sk-customer');
+    });
+
+    it('falls back to the platform key PER DRIVER CLASS — a run keyed for one vendor still uses ours for another', () => {
+        process.env['AI_VENDOR_API_KEY__OPENAIIMAGEGENERATOR'] = 'platform-image-key';
+        const resolve = MakeAIAPIKeyResolver([{ driverClass: 'OpenAILLM', apiKey: 'sk-customer' }]);
+        expect(resolve('OpenAIImageGenerator')).toBe('platform-image-key');
+    });
+
+    it('is exactly the platform lookup when the run has no keys, so no caller special-cases that', () => {
+        process.env['AI_VENDOR_API_KEY__OPENAILLM'] = 'platform-key';
+        expect(MakeAIAPIKeyResolver()('OpenAILLM')).toBe('platform-key');
+        expect(MakeAIAPIKeyResolver([])('OpenAILLM')).toBe('platform-key');
+    });
+
+    it('answers undefined — never an empty string — when neither source has a key', () => {
+        // Callers branch on falsiness to skip a vendor; '' and undefined must not diverge.
+        delete process.env['AI_VENDOR_API_KEY__NOSUCHDRIVER'];
+        expect(MakeAIAPIKeyResolver([])('NoSuchDriver')).toBeUndefined();
     });
 });

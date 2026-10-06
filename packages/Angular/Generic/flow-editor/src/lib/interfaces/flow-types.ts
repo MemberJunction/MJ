@@ -2,6 +2,12 @@
  * Core interfaces for the generic flow editor.
  * These types are entity-agnostic — consumers map their domain data to/from these.
  */
+import type { MJAIPromptEntity } from '@memberjunction/core-entities';
+
+/**
+ * Prompt option shape for flow editor prompt pickers.
+ */
+export type PromptOption = Pick<MJAIPromptEntity, 'ID' | 'Name' | 'AIModelType' | 'AIModelTypeID'>;
 
 // ---------------------------------------------------------------------------
 // Node Types
@@ -95,6 +101,8 @@ export interface FlowConnection {
   Priority?: number;
   Style?: FlowConnectionStyle;
   Color?: string;
+  /** Stroke width in px. Active/flowing edges use a thicker value so they read at a glance. */
+  StrokeWidth?: number;
   Animated?: boolean;
   Selected?: boolean;
   /** Opaque data payload — consumers store domain-specific data here */
@@ -177,8 +185,44 @@ export interface FlowCanvasClickEvent {
 /** Context menu target type */
 export type FlowContextMenuTarget = 'node' | 'connection';
 
-/** Context menu action */
-export type FlowContextMenuAction = 'edit' | 'remove';
+/** Built-in design-time actions. Hosts may emit any other `ID` string. */
+export type FlowContextMenuAction = 'edit' | 'remove' | string;
+
+/** One row in the canvas context menu. The host may replace the default Edit/Remove set. */
+export type FlowContextMenuItem = {
+    ID: string;
+    Label: string;
+    Icon?: string;
+    Danger?: boolean;
+    Disabled?: boolean;
+    Shortcut?: string;
+};
+
+/**
+ * Fired BEFORE the canvas menu opens. Mutate `Items` to replace the default set; `Cancel = true`
+ * suppresses the menu. A `Before*` handler must not be async — the emitter reads `Cancel`/`Items`
+ * when `emit()` returns.
+ */
+export class FlowBeforeContextMenuEventArgs {
+    public Cancel = false;
+    constructor(
+        public readonly Target: FlowContextMenuTarget,
+        public readonly Node: FlowNode | null,
+        public readonly Connection: FlowConnection | null,
+        public readonly MouseEvent: MouseEvent,
+        public Items: FlowContextMenuItem[],
+    ) {}
+}
+
+/** Fired AFTER a menu item is chosen. Built-in `edit`/`remove` still run unless ReadOnly. */
+export class FlowAfterContextMenuActionEventArgs {
+    constructor(
+        public readonly ActionID: string,
+        public readonly Target: FlowContextMenuTarget,
+        public readonly Node: FlowNode | null,
+        public readonly Connection: FlowConnection | null,
+    ) {}
+}
 
 // ---------------------------------------------------------------------------
 // State Types (for undo/redo)
@@ -196,6 +240,17 @@ export interface FlowSnapshot {
 
 /** Direction for auto-layout */
 export type FlowLayoutDirection = 'horizontal' | 'vertical';
+
+/**
+ * How the canvas toolbar presents itself.
+ *
+ * `shown` is the full bar. `minimized` is a chip that restores it. `hidden` leaves only a
+ * recover tab — otherwise a host that hid the bar would have no way back from the canvas.
+ */
+export type FlowToolbarVisibility = 'shown' | 'hidden' | 'minimized';
+
+/** Horizontal placement of the canvas toolbar (and of its minimized / hidden recover control). */
+export type FlowToolbarAlign = 'left' | 'center' | 'right';
 
 /** Result of an auto-layout operation */
 export interface FlowLayoutResult {

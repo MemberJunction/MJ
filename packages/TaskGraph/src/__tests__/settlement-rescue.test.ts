@@ -14,6 +14,8 @@
 import { describe, it, expect } from 'vitest';
 import {
     IsSettlementExpired,
+    IsSubmittingRunReady,
+    SUBMITTER_PARK_GRACE_MS,
     SelectUnsettledGraphIDs,
     SweepCutoff,
     UNSETTLED_SWEEP_WINDOW_HOURS,
@@ -102,6 +104,64 @@ describe('IsSettlementExpired — deliver late, but say that it was late', () =>
         // Clock skew between an app server and the database is ordinary. A negative age must read as
         // "just settled", never wrap into expiry.
         expect(IsSettlementExpired(new Date(NOW.getTime() + 3600_000), NOW)).toBe(false);
+    });
+});
+
+describe('IsSubmittingRunReady — the graph can finish before its submitter parks (R2-2)', () => {
+    // `finalizeAgentRun` parks the run AFTER the graph is durable and dispatchable, so a fast graph
+    // settles first. Both of the settled branch's writes then land wrong — the lifecycle write
+    // silently returns on its `Paused` guard, and the cost write is overwritten by finalize's own
+    // full-row save — and the pass then claims the delivery marker, making itself the last pass ever
+    // to look at the graph. The run stays Paused forever, with nothing logged.
+
+    it('defers while the run is still Running', () => {
+        expect(IsSubmittingRunReady('Running', 0)).toBe(false);
+        expect(IsSubmittingRunReady('Running', 1_000)).toBe(false);
+    });
+
+    it('proceeds once the run has parked — the case settlement exists for', () => {
+        expect(IsSubmittingRunReady('Paused', 0)).toBe(true);
+    });
+
+    it('proceeds for a run that already reached its own terminal state', () => {
+        // Completed/Failed/Cancelled happened for the run's own reasons; the lifecycle write's guard
+        // declines them, which is right. Delivery must not be held hostage to that.
+        for (const status of ['Completed', 'Failed', 'Cancelled']) {
+            expect(IsSubmittingRunReady(status, 0)).toBe(true);
+        }
+    });
+
+    it('stops waiting once the grace period is past — a dead submitter must not eat the outcome', () => {
+        // "Not parked yet" and "the submitting process died before parking" are indistinguishable
+        // from here. Waiting forever on the second loses the outcome of work that actually
+        // completed, which is strictly worse than announcing it late.
+        expect(IsSubmittingRunReady('Running', SUBMITTER_PARK_GRACE_MS)).toBe(false);
+        expect(IsSubmittingRunReady('Running', SUBMITTER_PARK_GRACE_MS + 1)).toBe(true);
+    });
+
+    it('honours a caller-supplied grace rather than hardcoding it', () => {
+        expect(IsSubmittingRunReady('Running', 500, 1_000)).toBe(false);
+        expect(IsSubmittingRunReady('Running', 1_500, 1_000)).toBe(true);
+    });
+
+    it('does not read a negative age as ready — clock skew is ordinary', () => {
+        expect(IsSubmittingRunReady('Running', -60_000)).toBe(false);
+    });
+
+    it('reads as a GATE, not as a report — the sense of the answer is the fix', () => {
+        // The one this suite could not catch, recorded so it cannot come back. `IsSubmittingRunReady`
+        // was always correct; the dispatcher inverted it at the call site and returned 'ready' from
+        // both branches, so the gate never deferred and R2-2 was inert. A decision extracted for
+        // testability is only half the job — the wiring is the other half, and only IT74's TX13
+        // could see it. Pinning the sense here at least makes a future inversion a two-place change.
+        expect(IsSubmittingRunReady('Running', 0)).toBe(false);   // false ⇒ DEFER
+        expect(IsSubmittingRunReady('Paused', 0)).toBe(true);     // true  ⇒ PROCEED
+    });
+
+    it('the grace is short relative to the delivery window it sits inside', () => {
+        // If the grace ever exceeded the rescue window, a deferred graph would age out of the sweep
+        // before it was ever allowed to proceed — deferral would become permanent loss.
+        expect(SUBMITTER_PARK_GRACE_MS).toBeLessThan(UNSETTLED_SWEEP_WINDOW_HOURS * 3600_000);
     });
 });
 

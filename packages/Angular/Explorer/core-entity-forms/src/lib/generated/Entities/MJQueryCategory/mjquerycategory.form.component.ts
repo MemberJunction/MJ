@@ -18,6 +18,7 @@ export class MJQueryCategoryFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'categoryDetails', sectionName: 'Category Details', isExpanded: true },
             { sectionKey: 'cacheSettings', sectionName: 'Cache Settings', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJQueries', sectionName: 'Queries', isExpanded: false },
             { sectionKey: 'mJQueryCategories', sectionName: 'Query Categories', isExpanded: false }

@@ -87,6 +87,26 @@ export const PRODUCT_FIELDS = [
         Entity: 'Products',
         EntityFieldValues: [],
     },
+    {
+        ID: 'f-prod-categoryname',
+        EntityID: PRODUCT_ENTITY_ID,
+        Name: 'CategoryName',
+        Type: 'nvarchar',
+        Length: 255,
+        IsPrimaryKey: false,
+        IsSoftPrimaryKey: false,
+        IsSoftForeignKey: false,
+        AllowsNull: true,
+        AutoIncrement: false,
+        IsVirtual: true,
+        IsNameField: false,
+        AllowUpdateAPI: false,
+        ValueListType: 'None',
+        Sequence: 4,
+        Status: 'Active',
+        Entity: 'Products',
+        EntityFieldValues: [],
+    },
 ];
 
 export const PRODUCT_ENTITY_DATA = {

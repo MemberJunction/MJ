@@ -12,9 +12,14 @@ There are four distinct operations. Know which one you're doing before you start
 | Operation | Frequency | Who | Automation today |
 |---|---|---|---|
 | 1. Routine Edge release | on demand | Release engineer | Reviewed PR: `release/*` prep branch → `main` |
-| 2. LTS candidate cut | per cycle (~bimonthly) | Cert owner | Scripted-manual |
+| 2. LTS candidate cut | per cycle (~bimonthly) | Cert owner | Button (`cut-candidate` job) |
 | 3. LTS line patch release | as fixes land on a line | Cert owner | **One button** (`Publish LTS line release` workflow) |
 | 4. Certification flip | once per certification | Cert owner | Scripted-manual |
+
+> **Red publish run with an open `chore/backmerge-v*` PR?** That is a designed state, not a
+> broken one — the release shipped and only the back-merge is outstanding. Go straight to
+> [*Recovery: released, but the back-merge did not land*](#recovery-released-but-the-back-merge-did-not-land)
+> and do not re-run the release.
 
 ---
 
@@ -82,52 +87,90 @@ Pointing the button at a prep branch would fix the first problem and make the se
 Merging a reviewed PR is already a single click, and `publish.yml` does everything after
 the push — so there was nothing left for a button to add.
 
-`publish-lts.yml` (operation 3) remains a button and is unaffected: line patches ship
+The LTS line release (operation 3) remains a button and is unaffected: line patches ship
 backported fixes that were already reviewed on `next`.
 
 ---
 
 ## 2. LTS candidate cut (the pre-exit dance)
 
-Trigger: the cert owner declares the stream ready — "current `6.1.0-edge.N` is our candidate."
-The cut happens at the **tip of `next`**. It takes minutes and freezes nothing.
+Trigger: the cert owner declares the stream ready ("current `6.1.0-edge.N` is our candidate").
+The cut happens at the **tip of `next`**. It is one workflow dispatch, takes about as long as
+an Edge release, and freezes nothing: merges after it simply ride the next stream.
 
-Worked example — cutting line 6.1 while `next` streams `6.1.0-edge.12`:
+Actions -> "Build and publish new package versions" -> Run workflow -> leave the ref at
+`next` -> `cut_line: 6.1` -> `confirm_branch: lts/6.1`. That is invocation 4 in
+`publish.yml`; the job is `cut-candidate`, the logic is `ci/candidate-cut.mjs`.
 
-1. **Announce** the cut moment (a courtesy, not a freeze; merges after it simply ride the
-   next stream).
-2. On up-to-date `next`: `npx changeset pre exit` → commit.
-3. `npx changeset version` — accumulated changesets resolve; the repo versions to plain
-   **`6.1.0`**. `pnpm install`, commit `pnpm-lock.yaml`.
-4. Push to `next`; tag the version commit **`v6.1.0`** and push the tag.
-5. **Branch `lts/6.1` from that tag** and push the branch. This is the candidate's home.
-6. **Publish 6.1.0 from the line branch** (operation 3's mechanics) — npm tag **`lts-6.1`**,
-   GitHub Release with `make_latest: false`. It must NOT go through `next → main`; the era
-   gate will (correctly) refuse it there.
-7. Back on `next`, immediately: `npx changeset pre enter edge` + commit, then seed the next
-   stream with a minor changeset ("open the 6.2 stream"). The next routine release is
-   `6.2.0-edge.0`.
-8. Open the certification tracking issue; gates run against 6.1.0 **on `lts/6.1`**.
-9. Cert fixes: land on `next` first → label `backport lts/6.1` → bot cherry-picks → line
-   patch builds (6.1.1, 6.1.2, …). Certification names whichever build passes.
+**Before you press it** (the job checks all three and refuses otherwise):
 
-Pinning an *older* edge build instead of the tip is possible (branch at that exact commit,
-run steps 2–3 on the branch) but leaves `next`'s stream tuple stale — it then needs its own
-exit/version/re-enter dance. Avoid; cut the tip.
+1. `release-lines.json` on `next` carries `lines["6.1"]` as `{ "status": "candidate",
+   "candidateDate": "YYYY-MM-DD" }`. That is a reviewed PR (CODEOWNERS: the cert owner);
+   status fields never arrive by direct push, so the job only appends the mechanical
+   `newest` and `releases` fields afterwards.
+2. The newest Edge build is published. The job cuts the tip regardless and only reports
+   how many commits sit between the last Edge tag and the tip; a large unpublished batch is
+   your call, not its.
+3. Nothing named `lts/6.1`, `v6.1.0` or `@memberjunction/core@6.1.0` exists yet.
+
+Also, once per repo and not something the job can do: an admin creates a ruleset for
+`lts/**` (pull request required, no force-push, no deletion). `lts/5` was found unprotected
+on 2026-09-03; a line born without the ruleset stays that way until someone notices.
+
+**What the job does**, in an order where nothing is pushed until the packages are on npm:
+
+1. Preflight (above), then `changeset pre exit`, `changeset version` (accumulated
+   changesets resolve; every `@memberjunction/*` package versions to plain **`6.1.0`**),
+   `pnpm install` and a lockfile commit, and a frozen install as the proof the lockfile is
+   in sync. All local commits so far.
+2. Build, then `changeset publish --tag lts-6.1`. Verified against the registry:
+   `lts-6.1` points at 6.1.0 and `latest` did not move.
+3. Commit the post-release generated files, tag **`v6.1.0`**.
+4. `changeset pre enter edge` plus the seed changeset (`.changeset/open-6-2-edge-stream.md`,
+   a `minor`), so the next routine release is `6.2.0-edge.0`. Without the seed a patch-only
+   merge would version Edge to `6.1.1-edge.0`, which the line's own first patch owns; this
+   was reproduced on a scratch clone, so the seed is load-bearing, not a courtesy.
+5. Push `next` (merging in anything that landed during the build, bounded retries; only the
+   lockfile may auto-resolve), push the tag, create **`lts/6.1`** at the tag, create the
+   GitHub Release with `--latest=false`, append `lines["6.1"].newest` and
+   `releases["6.1.0"]` to the ledger, dispatch docs and release notes.
+
+**If it fails.** Before the publish step: `next`, npm and GitHub are untouched, re-dispatch.
+After it: the packages are on npm and the run stops red at the first step it could not
+complete. That is "released, not yet recorded", the same posture as every other release path
+here; finish the remaining steps by hand from the run log, do not re-run.
+
+**Afterwards.** Open the certification tracking issue; gates run against 6.1.0 **on
+`lts/6.1`**. Cert fixes land on `next` first -> label `backport lts/6.1` -> bot cherry-picks
+-> line patch builds (6.1.1, 6.1.2, ...) via operation 3. Certification names whichever
+build passes.
+
+Pinning an *older* Edge build instead of the tip is not something the job supports, on
+purpose: it would leave `next`'s stream tuple stale and need its own exit/version/re-enter
+dance. Cut the tip.
 
 ---
 
 ## 3. LTS line patch release
 
-One button. Actions → **"Publish LTS line release"** → pick the **line branch** (`lts/5`,
-`lts/6.1`, …) in the branch selector → type the same branch name in the confirmation box →
-Run workflow. The confirmation exists because the branch picker defaults to `next`, and
-this workflow must never run there (it refuses, but don't rely on the refusal).
+One button, but read the inputs before you press it: the workflow is **`publish.yml`**, and
+you dispatch it **from `next`** — not from the line. Actions → **"Build and publish new
+package versions"** → leave the branch selector on `next` → set `line_branch` to the line
+(`lts/5`, `lts/6.1`, …) → type the same value into `confirm_branch` → Run workflow. The job
+checks out the line branch itself.
+
+There is no `publish-lts.yml`. It was retired because npm trusted publishing (OIDC) is scoped
+per package to the workflow **filename** `publish.yml`; a second publishing file would mean a
+second trusted publisher entered by hand on ~300 packages. The line is a **parameter rather
+than the ref** for a second reason: the maintained copy of the workflow always runs, so a
+release can never execute stale workflow code that was never backported to the line. Picking
+an `lts/*` ref in the dialog cannot silently do the wrong thing either — that ref's
+`publish.yml` has no `line_branch` input, so GitHub rejects the dispatch outright.
 
 The workflow automates the verified manual sequence: `changeset version` (normal mode —
 backported changesets resolve to a patch, or a minor pre-certification in the bootstrap
 era) → lockfile refresh → build → `changeset publish --tag lts-<line>` (tag derived from
-the branch name) → push the release commit + git tag to the line branch → GitHub Release
+`line_branch`) → push the release commit + git tag to the line branch → GitHub Release
 with `make_latest: false`. It refuses pre-mode leakage, empty changesets, and
 prerelease-shaped versions, and asserts afterward that npm `latest` did not move.
 
@@ -141,12 +184,21 @@ the package manager per branch; match it when working by hand.)
 
 Hard rules, either path: line publishes never merge to `main` or back to `next`; `latest`
 never moves here; GitHub Releases from a line stay `make_latest: false` until the line is
-the newest certified. **Do not `workflow_dispatch` the routine `publish.yml` from a line
-branch** — verified unsafe (dry-check 2026-08-01): its publish step would land on `latest`
-and its main-gated steps silently skip.
+the newest certified. **Dispatch from `next` and name the line in `line_branch`; never
+dispatch from the line ref itself.**
+
+That rule reads the same as the old one but for a different reason, so it is worth stating
+plainly: the 2026-08-01 dry-check found the *then-current* `publish.yml` unsafe to dispatch
+from a line, because its publish step ran a bare `changeset publish` (no `--tag`, so a line
+build would have landed on `latest`) and its `main`-gated steps silently skipped. The
+dedicated `publish-lts` job and the dispatch guard fixed exactly that. What survives is the
+ref discipline: dispatch the maintained copy, not whatever the line happens to carry.
 
 DB-touching line changes need their §12 label (`metadata-migration`, `codegen-repair`, or
-`security-exception`) — the line guard enforces this on `lts/*` PRs.
+`security-exception`). The line guard that is supposed to enforce this on `lts/*` PRs is
+**not built yet** (process doc §15 item 6), so today the label is a review convention and
+the human reading the migration diff is the only control. Do not treat a green line PR as
+evidence that the labels were checked.
 
 **Release notes for a line release do go live** — this is the one operation where they do,
 because the docs site builds the certified line. But they have to *reach* the line branch:
@@ -170,6 +222,76 @@ When the gates pass on a specific line build (say 6.1.2):
 
 ---
 
+## Recovery: released, but the back-merge did not land
+
+**A red publish run with an open `chore/backmerge-v*` PR is a designed state, not a broken
+one.** Read this before touching anything — the instinct to "fix" it by hand is how you end
+up with two competing back-merge branches.
+
+`publish.yml` does its last two jobs after the packages are already on npm: merge `main`
+back into `next`, and record the release in `release-lines.json`. If the back-merge cannot
+be completed, the release itself is **fine** — packages published, tag pushed, GitHub
+Release created — and only the merge is outstanding.
+
+Two things cause it, and the workflow responds to both the same way:
+
+| Cause | What it looks like |
+|---|---|
+| **A real conflict.** `ci/back-merge.mjs` refuses to auto-resolve anything but `pnpm-lock.yaml`, because `next` accumulates hours of merges while a release builds and guessing would silently discard them. | The step log names the conflicting paths. |
+| **A rejected push.** `next` is protected; the release App must hold a ruleset bypass, and that is GitHub configuration living outside this repo. | `GH013: Repository rule violations found for refs/heads/next`. |
+
+### What the workflow already did for you
+
+1. Opened **`chore/backmerge-v<version>` → `next`**, carrying `main`'s actual tip with the
+   failure output in the PR body. It is idempotent: re-running the job reuses the open PR
+   and will not push over a branch you have been resolving conflicts on.
+2. Recorded the release in `release-lines.json` anyway — that step is independent and does
+   not wait for the back-merge.
+3. **Failed the run deliberately.** The release is not complete until the PR merges, and a
+   green run would say otherwise.
+
+### What ELSE stopped, that nobody tells you about
+
+`publish.yml` is the trigger for two `workflow_run` workflows, and **both refuse to run when
+the triggering run did not conclude `success`** ("Error out if the trigger did not succeed").
+So a failed back-merge silently takes them with it:
+
+| Workflow | Consequence of the skip |
+|---|---|
+| [`docker.yml`](../.github/workflows/docker.yml) | **None during the Edge era.** It skips any prerelease version by design — *"no Docker image for Edge builds, by decision, not by omission."* Nothing to catch up. |
+| [`docs.yml`](../.github/workflows/docs.yml) | **Real.** The `/v6/` docs set builds from `main`, which the release DID advance, so the published site silently keeps documenting the previous release. |
+
+When v6.1.0-edge.6 failed this way on 2026-09-11, the docs site stayed on the 2026-09-02
+(edge.5) build and nothing surfaced it — the release PR was recovered, the ledger was
+recorded, and the stale docs went unnoticed until someone went looking.
+
+**Catching docs up is a manual dispatch:** Actions → *Update package documentation* → Run
+workflow (it carries `workflow_dispatch`). Check the last successful run first — if a later
+release already deployed, you do not need this.
+
+### What you do
+
+1. Open the PR. Resolve conflicts there and merge it. That is the whole recovery.
+2. Dispatch *Update package documentation* to catch up the docs site (see above) — the
+   failed run skipped it.
+3. If the run is red but there is **no** PR, the fallback itself failed — check its step,
+   then finish by hand: `git checkout next && git merge origin/main`.
+4. If the run warns *"main is already an ancestor of next — nothing to back-merge"*, the
+   merge had in fact landed before the step reported failure. Nothing is outstanding; read
+   the back-merge step's log to find out why it failed anyway.
+
+**Do not re-run the publish workflow to fix this.** The packages are already on npm; a
+re-run cannot republish them and will not help.
+
+### Preventing the rejected-push case
+
+[`DEPLOYMENT.md`](../DEPLOYMENT.md) Step 0 item 2 runs **Actions → "Verify the release App token"**. It is
+read-only, takes under a minute, and reports whether the App's bypass on `next` is still
+live. A revoked bypass is invisible until a release is half-done, which is exactly how
+v6.1.0-edge.6 went ([#4382](https://github.com/MemberJunction/MJ/pull/4382)).
+
+---
+
 ## Safety rails (all operations)
 
 - `latest` moves **only** in operation 4. No build ever publishes to it.
@@ -179,7 +301,8 @@ When the gates pass on a specific line build (say 6.1.2):
 - Lines never merge into `main` or `next`. Fixes flow `next` → line, never the reverse.
 - The post-publish `main` → `next` back-merge **aborts rather than auto-resolving** a
   conflict outside `pnpm-lock.yaml`. An abort means the release succeeded and only the
-  back-merge is outstanding — finish it by hand, don't re-run the release.
+  back-merge is outstanding — **never re-run the release**. `publish.yml` now opens a PR
+  for you; see *Recovery: released, but the back-merge did not land* above.
 - A green `docs.yml` does **not** mean your docs change shipped. It checks out `lts/5` on
   every trigger but an explicit-`ref` dispatch, so a `main` push rebuilds the LTS site and
   reports success while ignoring the commit that triggered it.

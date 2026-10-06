@@ -1,12 +1,34 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
-import axios, { AxiosRequestConfig, Method } from "axios";
 import { JSONParamHelper } from "../utilities/json-param-helper";
+import { SafeFetch, SSRFError } from "@memberjunction/network-utils";
+
+/** Authentication configuration accepted by the HTTP Request action. */
+interface HTTPAuthConfig {
+    type?: string;
+    username?: string;
+    password?: string;
+    token?: string;
+    key?: string;
+    value?: string;
+    location?: string;
+}
+
+/** Mutable request context assembled from the action parameters before the fetch is made. */
+interface HTTPRequestContext {
+    url: URL;
+    headers: Record<string, string>;
+    body?: BodyInit;
+}
 
 /**
- * Action that makes HTTP requests with full control over headers, authentication, and request options
- * 
+ * Action that makes HTTP requests with full control over headers, authentication, and request options.
+ *
+ * The target URL is caller-controlled, so it is routed through {@link SafeFetch}, which blocks
+ * private/loopback/link-local/reserved addresses (including the cloud metadata endpoint) and
+ * re-validates every redirect hop to defeat DNS-rebinding / redirect SSRF bypasses.
+ *
  * @example
  * ```typescript
  * // Simple GET request
@@ -17,7 +39,7 @@ import { JSONParamHelper } from "../utilities/json-param-helper";
  *     Value: 'https://api.example.com/data'
  *   }]
  * });
- * 
+ *
  * // POST request with JSON body
  * await runAction({
  *   ActionName: 'HTTP Request',
@@ -35,29 +57,14 @@ import { JSONParamHelper } from "../utilities/json-param-helper";
  *     Value: { 'Content-Type': 'application/json' }
  *   }]
  * });
- * 
- * // Request with authentication
- * await runAction({
- *   ActionName: 'HTTP Request',
- *   Params: [{
- *     Name: 'URL',
- *     Value: 'https://api.example.com/protected'
- *   }, {
- *     Name: 'Authentication',
- *     Value: {
- *       type: 'bearer',
- *       token: 'your-api-token'
- *     }
- *   }]
- * });
  * ```
  */
 @RegisterClass(BaseAction, "HTTP Request")
 export class HTTPRequestAction extends BaseAction {
-    
+
     /**
      * Makes an HTTP request with configurable options
-     * 
+     *
      * @param params - The action parameters containing:
      *   - URL: Target URL (required)
      *   - Method: HTTP method (GET, POST, PUT, DELETE, etc.) - default: GET
@@ -68,113 +75,66 @@ export class HTTPRequestAction extends BaseAction {
      *   - Timeout: Request timeout in milliseconds - default: 30000
      *   - FollowRedirects: Boolean - default: true
      *   - MaxRedirects: Number - default: 5
-     *   - ValidateStatus: Function string to validate response status
-     *   - ResponseType: "json" | "text" | "arraybuffer" | "stream" - default: "json"
-     * 
+     *   - ResponseType: "json" | "text" | "arraybuffer" - default: "json"
+     *
      * @returns Response object with status, headers, and body
      */
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
             const url = this.getParamValue(params, 'url');
-            const method = (this.getParamValue(params, 'method') || 'GET').toUpperCase() as Method;
-            const headers = JSONParamHelper.getJSONParam(params, 'headers') || {};
+            const method = (this.getParamValue(params, 'method') || 'GET').toUpperCase();
+            const headers = (JSONParamHelper.getJSONParam(params, 'headers') as Record<string, string> | undefined) || {};
             const body = JSONParamHelper.getJSONParam(params, 'body');
             const bodyType = this.getParamValue(params, 'bodytype') || 'json';
-            const authentication = JSONParamHelper.getJSONParam(params, 'authentication');
+            const authentication = JSONParamHelper.getJSONParam(params, 'authentication') as HTTPAuthConfig | undefined;
             const timeout = this.getNumericParam(params, 'timeout', 30000);
             const followRedirects = this.getBooleanParam(params, 'followredirects', true);
             const maxRedirects = this.getNumericParam(params, 'maxredirects', 5);
-            const responseType = this.getParamValue(params, 'responsetype') || 'json';
+            const responseType = (this.getParamValue(params, 'responsetype') || 'json').toLowerCase();
 
-            // Validate URL
             if (!url) {
-                return {
-                    Success: false,
-                    Message: "URL parameter is required",
-                    ResultCode: "MISSING_URL"
-                };
+                return { Success: false, Message: "URL parameter is required", ResultCode: "MISSING_URL" };
             }
 
-            // Build request config
-            const config: AxiosRequestConfig = {
-                url,
-                method,
-                headers: { ...headers },
-                timeout,
-                maxRedirects: followRedirects ? maxRedirects : 0,
-                responseType: responseType as any,
-                validateStatus: () => true // We'll handle status validation ourselves
-            };
+            let context: HTTPRequestContext;
+            try {
+                context = { url: new URL(String(url)), headers: { ...headers } };
+            } catch {
+                return { Success: false, Message: `Invalid URL: ${url}`, ResultCode: "INVALID_URL" };
+            }
 
-            // Handle authentication
             if (authentication) {
-                const authResult = this.configureAuthentication(config, authentication);
+                const authResult = this.configureAuthentication(context, authentication);
                 if (!authResult.success) {
-                    return {
-                        Success: false,
-                        Message: authResult.error,
-                        ResultCode: "AUTH_CONFIG_ERROR"
-                    };
+                    return { Success: false, Message: authResult.error, ResultCode: "AUTH_CONFIG_ERROR" };
                 }
             }
 
-            // Handle request body
-            if (body && ['POST', 'PUT', 'PATCH'].includes(method)) {
-                const bodyResult = this.configureRequestBody(config, body, bodyType);
+            if (body !== undefined && body !== null && ['POST', 'PUT', 'PATCH'].includes(method)) {
+                const bodyResult = this.configureRequestBody(context, body, bodyType);
                 if (!bodyResult.success) {
-                    return {
-                        Success: false,
-                        Message: bodyResult.error,
-                        ResultCode: "BODY_CONFIG_ERROR"
-                    };
+                    return { Success: false, Message: bodyResult.error, ResultCode: "BODY_CONFIG_ERROR" };
                 }
             }
 
-            // Make request
-            const response = await axios(config);
-
-            // Prepare response data
-            let responseData = response.data;
-            if (responseType === 'arraybuffer' && Buffer.isBuffer(responseData)) {
-                responseData = responseData.toString('base64');
-            }
-
-            // Add output parameters
-            params.Params.push({
-                Name: 'ResponseStatus',
-                Type: 'Output',
-                Value: response.status
+            const response = await SafeFetch(context.url.href, {
+                method,
+                headers: context.headers,
+                body: context.body,
+                signal: AbortSignal.timeout(timeout),
+                MaxRedirects: followRedirects ? maxRedirects : 0
             });
 
-            params.Params.push({
-                Name: 'ResponseHeaders',
-                Type: 'Output',
-                Value: response.headers
-            });
-
-            params.Params.push({
-                Name: 'ResponseData',
-                Type: 'Output',
-                Value: responseData
-            });
-
-            // Check if request was successful (2xx status)
-            const isSuccess = response.status >= 200 && response.status < 300;
-
-            return {
-                Success: true,
-                ResultCode: isSuccess ? "SUCCESS" : `HTTP_${response.status}`,
-                Message: JSON.stringify({
-                    status: response.status,
-                    statusText: response.statusText,
-                    headers: response.headers,
-                    data: responseData,
-                    requestUrl: url,
-                    requestMethod: method
-                }, null, 2)
-            };
+            return await this.buildResult(params, response, responseType, String(url), method);
 
         } catch (error) {
+            if (error instanceof SSRFError) {
+                return {
+                    Success: false,
+                    Message: "URL resolves to a private or reserved address and was blocked",
+                    ResultCode: "SSRF_BLOCKED"
+                };
+            }
             return {
                 Success: false,
                 Message: `HTTP request failed: ${error instanceof Error ? error.message : String(error)}`,
@@ -184,9 +144,70 @@ export class HTTPRequestAction extends BaseAction {
     }
 
     /**
-     * Configure authentication for the request
+     * Reads the response, populates output parameters, and builds the action result.
      */
-    private configureAuthentication(config: AxiosRequestConfig, auth: any): { success: boolean; error?: string } {
+    private async buildResult(
+        params: RunActionParams,
+        response: Response,
+        responseType: string,
+        requestUrl: string,
+        requestMethod: string
+    ): Promise<ActionResultSimple> {
+        const responseHeaders = this.headersToObject(response.headers);
+        const responseData = await this.readResponseBody(response, responseType);
+
+        params.Params.push({ Name: 'ResponseStatus', Type: 'Output', Value: response.status });
+        params.Params.push({ Name: 'ResponseHeaders', Type: 'Output', Value: responseHeaders });
+        params.Params.push({ Name: 'ResponseData', Type: 'Output', Value: responseData });
+
+        const isSuccess = response.status >= 200 && response.status < 300;
+        return {
+            Success: true,
+            ResultCode: isSuccess ? "SUCCESS" : `HTTP_${response.status}`,
+            Message: JSON.stringify({
+                status: response.status,
+                statusText: response.statusText,
+                headers: responseHeaders,
+                data: responseData,
+                requestUrl,
+                requestMethod
+            }, null, 2)
+        };
+    }
+
+    /**
+     * Reads the response body in the requested representation.
+     * `arraybuffer` is returned as a base64 string; unknown types fall back to text.
+     */
+    private async readResponseBody(response: Response, responseType: string): Promise<unknown> {
+        if (responseType === 'arraybuffer' || responseType === 'binary') {
+            const buffer = await response.arrayBuffer();
+            return Buffer.from(buffer).toString('base64');
+        }
+        const text = await response.text();
+        if (responseType === 'json') {
+            try {
+                return text.length > 0 ? JSON.parse(text) : null;
+            } catch {
+                return text; // Not valid JSON — return raw text rather than failing.
+            }
+        }
+        return text;
+    }
+
+    /** Converts a fetch `Headers` object into a plain record. */
+    private headersToObject(headers: Headers): Record<string, string> {
+        const result: Record<string, string> = {};
+        headers.forEach((value, name) => {
+            result[name] = value;
+        });
+        return result;
+    }
+
+    /**
+     * Configure authentication for the request (basic, bearer, or apikey).
+     */
+    private configureAuthentication(context: HTTPRequestContext, auth: HTTPAuthConfig): { success: boolean; error?: string } {
         if (!auth.type) {
             return { success: false, error: "Authentication type is required" };
         }
@@ -196,18 +217,14 @@ export class HTTPRequestAction extends BaseAction {
                 if (!auth.username || !auth.password) {
                     return { success: false, error: "Basic auth requires username and password" };
                 }
-                config.auth = {
-                    username: auth.username,
-                    password: auth.password
-                };
+                context.headers['Authorization'] = `Basic ${Buffer.from(`${auth.username}:${auth.password}`).toString('base64')}`;
                 break;
 
             case 'bearer':
                 if (!auth.token) {
                     return { success: false, error: "Bearer auth requires token" };
                 }
-                config.headers = config.headers || {};
-                config.headers['Authorization'] = `Bearer ${auth.token}`;
+                context.headers['Authorization'] = `Bearer ${auth.token}`;
                 break;
 
             case 'apikey':
@@ -215,11 +232,9 @@ export class HTTPRequestAction extends BaseAction {
                     return { success: false, error: "API key auth requires key name and value" };
                 }
                 if (auth.location === 'query') {
-                    config.params = config.params || {};
-                    config.params[auth.key] = auth.value;
+                    context.url.searchParams.set(auth.key, auth.value);
                 } else {
-                    config.headers = config.headers || {};
-                    config.headers[auth.key] = auth.value;
+                    context.headers[auth.key] = auth.value;
                 }
                 break;
 
@@ -231,26 +246,28 @@ export class HTTPRequestAction extends BaseAction {
     }
 
     /**
-     * Configure request body based on type
+     * Configure request body based on type (json, form, text, binary).
      */
-    private configureRequestBody(config: AxiosRequestConfig, body: any, bodyType: string): { success: boolean; error?: string } {
+    private configureRequestBody(context: HTTPRequestContext, body: unknown, bodyType: string): { success: boolean; error?: string } {
+        const hasContentType = Object.keys(context.headers).some(h => h.toLowerCase() === 'content-type');
+
         switch (bodyType.toLowerCase()) {
             case 'json':
-                config.data = body;
-                if (!config.headers!['Content-Type']) {
-                    config.headers!['Content-Type'] = 'application/json';
+                context.body = typeof body === 'string' ? body : JSON.stringify(body);
+                if (!hasContentType) {
+                    context.headers['Content-Type'] = 'application/json';
                 }
                 break;
 
             case 'form':
-                if (typeof body === 'object') {
+                if (typeof body === 'object' && body !== null) {
                     const formData = new URLSearchParams();
-                    for (const [key, value] of Object.entries(body)) {
+                    for (const [key, value] of Object.entries(body as Record<string, unknown>)) {
                         formData.append(key, String(value));
                     }
-                    config.data = formData.toString();
-                    if (!config.headers!['Content-Type']) {
-                        config.headers!['Content-Type'] = 'application/x-www-form-urlencoded';
+                    context.body = formData.toString();
+                    if (!hasContentType) {
+                        context.headers['Content-Type'] = 'application/x-www-form-urlencoded';
                     }
                 } else {
                     return { success: false, error: "Form body type requires an object" };
@@ -258,21 +275,16 @@ export class HTTPRequestAction extends BaseAction {
                 break;
 
             case 'text':
-                config.data = String(body);
-                if (!config.headers!['Content-Type']) {
-                    config.headers!['Content-Type'] = 'text/plain';
+                context.body = String(body);
+                if (!hasContentType) {
+                    context.headers['Content-Type'] = 'text/plain';
                 }
                 break;
 
             case 'binary':
-                if (typeof body === 'string') {
-                    // Assume base64 encoded
-                    config.data = Buffer.from(body, 'base64');
-                } else {
-                    config.data = body;
-                }
-                if (!config.headers!['Content-Type']) {
-                    config.headers!['Content-Type'] = 'application/octet-stream';
+                context.body = typeof body === 'string' ? Buffer.from(body, 'base64') : Buffer.from(String(body));
+                if (!hasContentType) {
+                    context.headers['Content-Type'] = 'application/octet-stream';
                 }
                 break;
 
@@ -309,8 +321,9 @@ export class HTTPRequestAction extends BaseAction {
     /**
      * Get parameter value by name (case-insensitive)
      */
-    private getParamValue(params: RunActionParams, name: string): any {
+    private getParamValue(params: RunActionParams, name: string): string | undefined {
         const param = params.Params.find(p => p.Name.toLowerCase() === name.toLowerCase());
-        return param?.Value;
+        const value = param?.Value;
+        return value === undefined || value === null ? undefined : String(value);
     }
 }

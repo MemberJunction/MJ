@@ -1,7 +1,7 @@
 import { ChangeDetectorRef, Directive, OnInit, OnDestroy, Input, inject } from "@angular/core";
 import { Subject, Subscription } from "rxjs";
 import { filter, takeUntil } from "rxjs/operators";
-import { BaseEntity } from "@memberjunction/core";
+import { BaseEntity, LogError } from "@memberjunction/core";
 import { BaseNavigationComponent } from "./base-navigation-component";
 import { ResourceData } from "@memberjunction/core-entities";
 import { NavigationService, TabQueryParamUpdateGuard } from "./navigation.service";
@@ -107,6 +107,20 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
         this._resourceCloseRequestedEvent = value;
     }
 
+    private _resourceEditModeChangedEvent: ((editing: boolean) => void) | null = null;
+    /**
+     * Wired by the tab container. `true` means the hosted form just entered edit
+     * mode; the shell PROMOTES (pins) a records preview tab on that edge so the
+     * record is never replaced by the next plain open — VS Code's
+     * promote-on-modify. `false` is informational; promotion is sticky.
+     */
+    public get ResourceEditModeChangedEvent(): ((editing: boolean) => void) | null {
+        return this._resourceEditModeChangedEvent;
+    }
+    public set ResourceEditModeChangedEvent(value: ((editing: boolean) => void) | null) {
+        this._resourceEditModeChangedEvent = value;
+    }
+
     private _displayNameChangedEvent: ((newName: string) => void) | null = null;
     public get DisplayNameChangedEvent(): ((newName: string) => void) | null {
         return this._displayNameChangedEvent;
@@ -168,12 +182,30 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
     /**
      * Push query param changes to the URL. Creates a browser history entry.
      * Safe to call during OnQueryParamsChanged — auto-suppressed to prevent loops.
+     *
+     * The write is ALWAYS scoped to this component's own tab. A component that cannot
+     * identify its tab does not write at all — see the guard below.
      */
     protected UpdateQueryParams(params: Record<string, string | null>): void {
         if (this._suppressQueryParamSync) return;
         const tabId = this.getTabId();
         if (!tabId) {
-            this.navigationService.UpdateActiveTabQueryParams(params);
+            // Deliberately NO fallback to "the active tab". The active tab is whatever the user is
+            // looking at RIGHT NOW — which, for a background dashboard finishing an async load, is
+            // somebody else's deep link. That fallback silently rewrote the visible tab's URL from an
+            // invisible tab (a background Studio dashboard replacing a Review tab's ?id=…&tab=… with
+            // its own ?section=… twelve seconds after the user navigated). A correctly scoped write
+            // is already harmless from a background tab, so refusing here costs nothing and closes
+            // the corruption entirely.
+            //
+            // Fix the HOST, not this guard: whoever renders a resource component must give it a tab
+            // id — Data.Configuration.tabId (what the tab container sets) or the ParentTabId input
+            // (what a wrapper rendering a child dashboard sets).
+            LogError(
+                `${this.constructor.name}.UpdateQueryParams: no tab id — query-param update DROPPED ` +
+                `(params: ${Object.keys(params).join(', ') || 'none'}). The host rendering this component must set ` +
+                `ParentTabId or Data.Configuration.tabId; writing to the active tab would corrupt whichever tab the user is viewing.`
+            );
             return;
         }
 
@@ -295,6 +327,39 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
         this.reboundTabId = tabId;
         this._lastDeliveredParamsKey = null;
         this.setupInitialParamDelivery();
+        this.onTabIdRebound(tabId);
+    }
+
+    /**
+     * Hook for a host that instantiates CHILD resource components: re-home them here.
+     *
+     * A host stamps its children with its tab id when it creates them, which is a SNAPSHOT. A cache
+     * reattach moves the host to a different tab without recreating anything, so a child left
+     * holding the birth tab's id would go on reading and — worse — writing that tab's params from
+     * inside a tab it no longer belongs to. That is the same cross-tab corruption this class refuses
+     * elsewhere, just arriving by a slower route, so the stamp has to move when the host does.
+     *
+     * Default is a no-op: a component with no children has nothing to re-home.
+     */
+    protected onTabIdRebound(_tabId: string): void {
+        // no children by default
+    }
+
+    /**
+     * Re-homes a child this component created to `tabId`.
+     *
+     * The `ParentTabId` stamp is cleared FIRST and deliberately: `getTabId()` prefers it over the
+     * rebound id, so leaving the old stamp in place would make the child's own `RebindTabId` a
+     * no-op — it early-returns when `getTabId()` already matches — and the child would keep
+     * answering with the tab it was born in. Clearing it lets the rebind be the authority, and the
+     * child re-delivers the NEW tab's current params exactly as a fresh mount would.
+     */
+    protected rehomeChildToTab(child: BaseResourceComponent | null | undefined, tabId: string): void {
+        if (!child) {
+            return;
+        }
+        child.ParentTabId = null;
+        child.RebindTabId(tabId);
     }
 
     private getQueryParamUpdateGuard(): TabQueryParamUpdateGuard {
@@ -388,6 +453,33 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
         if (this._resourceCloseRequestedEvent) {
             this._resourceCloseRequestedEvent();
         }
+    }
+
+    /**
+     * Tell the host shell the hosted form's edit mode changed. Subclasses that
+     * host an editable form call this from the form's EditModeChanged output.
+     */
+    protected NotifyEditModeChanged(editing: boolean): void {
+        if (this._resourceEditModeChangedEvent) {
+            this._resourceEditModeChangedEvent(editing);
+        }
+    }
+
+    /**
+     * True when this resource holds in-progress user edits that a silent
+     * replacement would destroy.
+     *
+     * Since #4345 the PRIMARY protection is promotion: the shell pins a records
+     * preview tab on the `ResourceEditModeChangedEvent(true)` edge. This read
+     * remains as the fallback the pool predicate consults for resources that
+     * report edit state without raising that event, so such a tab still leaves
+     * the consumption pool while editing.
+     *
+     * Default false: most resources are read-only surfaces with nothing to
+     * lose. Resources that host an editable form override it.
+     */
+    public IsEditing(): boolean {
+        return false;
     }
 
     abstract GetResourceDisplayName(data: ResourceData): Promise<string>

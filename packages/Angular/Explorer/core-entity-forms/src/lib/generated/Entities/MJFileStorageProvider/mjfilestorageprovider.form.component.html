@@ -168,9 +168,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Files','ProviderID')"
-                [NewRecordValues]="NewRecordValues('MJ: Files')"
+                [NewRecordValues]="NewRecordValues('MJ: Files','ProviderID')"
                 [AllowLoad]="IsSectionExpanded('mJFiles')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJFiles', $event.totalRowCount)"
                 >
@@ -193,9 +193,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: File Storage Accounts','ProviderID')"
-                [NewRecordValues]="NewRecordValues('MJ: File Storage Accounts')"
+                [NewRecordValues]="NewRecordValues('MJ: File Storage Accounts','ProviderID')"
                 [AllowLoad]="IsSectionExpanded('mJFileStorageAccounts')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJFileStorageAccounts', $event.totalRowCount)"
                 >
@@ -218,9 +218,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agents','RecordingStorageProviderID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Agents')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agents','RecordingStorageProviderID')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentsRecordingStorageProviderID')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentsRecordingStorageProviderID', $event.totalRowCount)"
                 >
@@ -243,9 +243,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Configurations','DefaultStorageProviderID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Configurations')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Configurations','DefaultStorageProviderID')"
                 [AllowLoad]="IsSectionExpanded('mJAIConfigurations')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIConfigurations', $event.totalRowCount)"
                 >
@@ -268,9 +268,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agents','AttachmentStorageProviderID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Agents')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agents','AttachmentStorageProviderID')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentsAttachmentStorageProviderID')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentsAttachmentStorageProviderID', $event.totalRowCount)"
                 >

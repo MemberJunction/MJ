@@ -12,6 +12,7 @@
  *   sync.connector.built          — connector instance constructed (class + import path)
  *   sync.connector.test           — TestConnection result (success + duration)
  *   sync.entity-map.start         — per-IO sync starting (direction, watermark, externalObjectName)
+ *   sync.entity-map.skipped       — per-IO sync skipped without contacting the source (skippedReason)
  *   sync.fetch.batch.start        — outbound API fetch about to fire (page/offset/cursor + URL hints)
  *   sync.fetch.batch.complete     — fetch returned (record count, duration, hasMore)
  *   sync.record.decision          — per-record action (Create/Update/Skip/Delete) + reason + matchKey
@@ -42,6 +43,8 @@ export type SyncLogEvent =
     | 'sync.connector.built'
     | 'sync.connector.test'
     | 'sync.entity-map.start'
+    | 'sync.entity-map.exclusions'
+    | 'sync.entity-map.skipped'
     | 'sync.resume.keyset'
     | 'sync.partition.reconcile'
     | 'sync.fetch.batch.start'
@@ -67,19 +70,19 @@ import type { IntegrationProgressEmitter } from '@memberjunction/integration-pro
 
 export interface SyncLoggerContext {
     /** CompanyIntegration ID — the per-run anchor for filtering. */
-    ciId: string;
+    CiId: string;
     /** Integration name (HubSpot / YourMembership / …). */
-    integration: string | null | undefined;
+    Integration: string | null | undefined;
     /** Sync run ID for cross-correlation with run details rows. */
-    runId?: string | null;
+    RunId?: string | null;
 }
 
 export interface SyncLogEntry {
-    ts: string;
-    event: SyncLogEvent;
-    ciId: string;
-    integration?: string | null;
-    runId?: string | null;
+    ts: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+    event: SyncLogEvent;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+    ciId: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+    integration?: string | null;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+    runId?: string | null;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
     /** Free-form, event-specific structured data. */
     [key: string]: unknown;
 }
@@ -114,13 +117,23 @@ export class SyncLogger {
     }
 
     /** Update the runId once the run record has been created. */
+    public AttachRunId(runId: string): void {
+        this.ctx.RunId = runId;
+    }
+
+    /** @deprecated Use {@link AttachRunId}. */
     public attachRunId(runId: string): void {
-        this.ctx.runId = runId;
+        return this.AttachRunId(runId);
     }
 
     /** Set the integration name once it's resolved from LoadRunConfiguration. */
+    public AttachIntegrationName(name: string | null | undefined): void {
+        this.ctx.Integration = name;
+    }
+
+    /** @deprecated Use {@link AttachIntegrationName}. */
     public attachIntegrationName(name: string | null | undefined): void {
-        this.ctx.integration = name;
+        return this.AttachIntegrationName(name);
     }
 
     /**
@@ -131,8 +144,13 @@ export class SyncLogger {
      * MJAPI restart. Terminal run.complete/run.fail are owned by the caller (which
      * awaits the emitter's async terminal write), so they are NOT forwarded here.
      */
-    public attachEmitter(emitter: IntegrationProgressEmitter): void {
+    public AttachEmitter(emitter: IntegrationProgressEmitter): void {
         this.emitter = emitter;
+    }
+
+    /** @deprecated Use {@link AttachEmitter}. */
+    public attachEmitter(emitter: IntegrationProgressEmitter): void {
+        return this.AttachEmitter(emitter);
     }
 
     /**
@@ -141,8 +159,13 @@ export class SyncLogger {
      * (watermark / keyset AfterKey / cursor / batchIndex) lets the run pick back up. Best-effort —
      * no emitter attached → no-op.
      */
-    public checkpoint(stage: string, resumableState: Record<string, unknown>): void {
+    public Checkpoint(stage: string, resumableState: Record<string, unknown>): void {
         this.emitter?.checkpoint(stage, resumableState);
+    }
+
+    /** @deprecated Use {@link Checkpoint}. */
+    public checkpoint(stage: string, resumableState: Record<string, unknown>): void {
+        return this.Checkpoint(stage, resumableState);
     }
 
     /**
@@ -153,17 +176,22 @@ export class SyncLogger {
      * condition is visible over GraphQL instead of a swallowed console.warn, WITHOUT affecting
      * run success. Goes to console.warn so it's also greppable in the tee'd log.
      */
-    public warning(stage: string, code: string, message: string, data?: Record<string, unknown>): void {
-        this.emit('sync.warning', { stage, code, message, warningData: data });
+    public Warning(stage: string, code: string, message: string, data?: Record<string, unknown>): void {
+        this.Emit('sync.warning', { stage, code, message, warningData: data });
     }
 
-    public emit(event: SyncLogEvent, data: Record<string, unknown> = {}): void {
+    /** @deprecated Use {@link Warning}. */
+    public warning(stage: string, code: string, message: string, data?: Record<string, unknown>): void {
+        return this.Warning(stage, code, message, data);
+    }
+
+    public Emit(event: SyncLogEvent, data: Record<string, unknown> = {}): void {
         const entry: SyncLogEntry = {
             ts: new Date().toISOString(),
             event,
-            ciId: this.ctx.ciId,
-            integration: this.ctx.integration ?? null,
-            runId: this.ctx.runId ?? null,
+            ciId: this.ctx.CiId,
+            integration: this.ctx.Integration ?? null,
+            runId: this.ctx.RunId ?? null,
             ...data,
         };
         const line = JSON.stringify(entry);
@@ -178,6 +206,11 @@ export class SyncLogger {
             console.log(line);
         }
         this.forwardToEmitter(event, data);
+    }
+
+    /** @deprecated Use {@link Emit}. */
+    public emit(event: SyncLogEvent, data: Record<string, unknown> = {}): void {
+        return this.Emit(event, data);
     }
 
     /**

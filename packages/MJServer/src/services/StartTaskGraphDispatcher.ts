@@ -24,6 +24,7 @@ import { DurableEntityActionRegistry } from '@memberjunction/actions-base';
 import { CreateTaskGraphProviderFactory } from './TaskGraphProviderFactory.js';
 import { TaskGraphActionRunner } from './TaskGraphActionRunner.js';
 import { TaskGraphAgentRunner } from './TaskGraphAgentRunner.js';
+import { randomBytes } from 'node:crypto';
 import { DurableEntityActionTaskSubmitter } from './DurableEntityActionTaskSubmitter.js';
 import { TaskGraphContinuationDeliverer } from './TaskGraphContinuationDeliverer.js';
 import { PubSubManager } from '../generic/PubSubManager.js';
@@ -39,6 +40,19 @@ import { TaskGraphFrameBroadcaster } from '../resolvers/TaskGraphFrameResolver.j
  *
  * The dispatcher self-registers with `ShutdownRegistry`, so the caller does not wire teardown.
  */
+/**
+ * A per-process identity for the claim protocol.
+ *
+ * Host and pid are kept because they are what a human reads in a log; the random suffix is what
+ * makes the value actually unique. Generated once per call, so a restart is a new instance — which
+ * is correct: the previous process's claims should expire rather than be inherited.
+ */
+function defaultInstanceID(): string {
+    const host = process.env.HOSTNAME ?? 'mjapi';
+    const entropy = randomBytes(4).toString('hex');
+    return `${host}-${process.pid}-${entropy}`;
+}
+
 export async function StartTaskGraphDispatcher(
     pool: sql.ConnectionPool,
     contextUser: UserInfo,
@@ -52,7 +66,13 @@ export async function StartTaskGraphDispatcher(
         providerFactory,
         new TaskGraphAgentRunner(),
         contextUser,
-        { InstanceID: instanceID ?? `${process.env.HOSTNAME ?? 'mjapi'}-${process.pid}` },
+        // A RANDOM SUFFIX, because host+pid is not unique in the deployments this runs in (C2).
+        // `HOSTNAME` is not exported to child processes under systemd or pm2, and a containerised
+        // process is routinely pid 1 — so two hosts default to the same `mjapi-1`. A shared instance
+        // id defeats every `ClaimedBy=@me` guard at once: A's heartbeat renews B's lease, and A's
+        // stale terminal write lands over B's live execution. An explicit `instanceID` still wins,
+        // for hosts that have a real identity to supply.
+        { InstanceID: instanceID ?? defaultInstanceID() },
         // Without this the dispatcher had nowhere to deliver: a finished graph logged its outcome,
         // marked itself delivered, and said nothing to the conversation that asked for it.
         new TaskGraphContinuationDeliverer(providerFactory, contextUser),

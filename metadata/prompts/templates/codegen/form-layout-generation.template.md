@@ -94,16 +94,23 @@ Fields marked with `[Inherited from ...]` below come from a parent entity in thi
 
 ### Field Status Legend
 {% for field in fields %}
-{% if field.HasExistingCategory %}
-- 🔒 **{{ field.Name }}** - Currently in "{{ field.ExistingCategory }}" (LOCKED - do not include in output)
+{% if field.IsNewField %}
+- 🆕 **{{ field.Name }}** - NEW field — categorize; you may also polish displayName / extendedType / codeType
+{% elif field.ReviewDisplayName and field.ReviewExtendedType %}
+- ✏️ **{{ field.Name }}** - Currently in "{{ field.ExistingCategory }}" (REVIEW: category is fixed; revise only displayName, extendedType, codeType)
+{% elif field.ReviewDisplayName %}
+- ✏️ **{{ field.Name }}** - Currently in "{{ field.ExistingCategory }}" (REVIEW: category is fixed; revise only displayName)
+{% elif field.ReviewExtendedType %}
+- ✏️ **{{ field.Name }}** - Currently in "{{ field.ExistingCategory }}" (REVIEW: category is fixed; revise only extendedType, codeType)
+{% elif field.HasExistingCategory %}
+- 🔒 **{{ field.Name }}** - Currently in "{{ field.ExistingCategory }}" (LOCKED - context only; do not include in output)
 {% else %}
-- 🔄 **{{ field.Name }}** - {% if field.ExistingCategory %}Currently in "{{ field.ExistingCategory }}", {% endif %}NEEDS categorization (can be reassigned)
+- 🔄 **{{ field.Name }}** - {% if field.ExistingCategory %}Currently in "{{ field.ExistingCategory }}", {% endif %}blank — categorize only (keep the current displayName/extendedType)
 {% endif %}
 {% endfor %}
 
 **Your task for field categorization:**
-- Categorize fields marked with 🔄 (these may be new OR existing fields that allow recategorization)
-- DO NOT include fields marked with 🔒 in your output
+- Return `fieldCategories` entries ONLY for 🆕, 🔄 and ✏️ fields. Entries for 🔒 fields are discarded by the caller.
 - REUSE the existing categories listed above whenever possible
 
 ---
@@ -202,11 +209,18 @@ For each field, you must also determine:
   - "__mj_CreatedAt" → "Created At"
 
 **2. Extended Type** - Specifies special UI treatment for the field
-- Valid values: `'Code'`, `'Email'`, `'FaceTime'`, `'Geo'`, `'GeoLatitude'`, `'GeoLongitude'`, `'GeoCountry'`, `'GeoStateProvince'`, `'GeoCity'`, `'GeoPostalCode'`, `'GeoAddress'`, `'MSTeams'`, `'SIP'`, `'SMS'`, `'Skype'`, `'Tel'`, `'URL'`, `'WhatsApp'`, `'ZoomMtg'`, or `null`
+- Valid values: `'Code'`, `'Color'`, `'Email'`, `'FaceTime'`, `'Geo'`, `'GeoLatitude'`, `'GeoLongitude'`, `'GeoCountry'`, `'GeoStateProvince'`, `'GeoCity'`, `'GeoPostalCode'`, `'GeoAddress'`, `'HTML'`, `'Icon'`, `'Image'`, `'JSON'`, `'Markdown'`, `'MSTeams'`, `'Other'`, `'SIP'`, `'SMS'`, `'Skype'`, `'Tel'`, `'URL'`, `'WhatsApp'`, `'ZoomMtg'`, or `null`
 - Use `'Email'` for email address fields - creates clickable mailto: links
 - Use `'URL'` for web address fields - creates clickable hyperlinks
 - Use `'Tel'` for phone number fields - creates clickable tel: links
 - Use `'Code'` for code/script fields (requires CodeType to be set)
+- Use `'JSON'` for JSON documents - validated on save and pretty-printed in forms
+- Use `'Markdown'` for Markdown formatted text
+- Use `'HTML'` for HTML content/markup
+- Use `'Image'` for image URLs, data URIs, or base64 image strings
+- Use `'Icon'` for FontAwesome or CSS icon class names
+- Use `'Color'` for CSS colors (hex, rgb, hsl)
+- Use `'Other'` for custom/special formats not covered by other types
 - **Geographic types** - Use these for address/location fields to enable automatic geocoding:
   - `'GeoAddress'` for street address fields (Address, Address1, StreetAddress, BillToAddress1, ShipToAddress1)
   - `'GeoCity'` for city fields (City, BillToCity, ShipToCity)
@@ -431,8 +445,8 @@ Use the field statistics provided above to classify the entity:
 
 ### Constraints
 
-- Each field must appear exactly ONCE
-- ALL fields from the input must be included
+- Return `fieldCategories` entries ONLY for 🆕, 🔄 and ✏️ fields. Do NOT include 🔒 locked fields in the output.
+- Each included field must appear exactly ONCE
 - Field names must exactly match the provided field list (case-sensitive)
 - Category names should be consistent (if multiple fields in same category, use exact same category string)
 - **Every field must have**: `displayName`, `extendedType`, and `codeType` properties
@@ -441,7 +455,7 @@ Use the field statistics provided above to classify the entity:
 ## Important Rules
 
 - You **must** return ONLY the JSON object, no other text before or after
-- Every field in the input must appear in the output
+- Only include fields that require categorization or review (🆕, 🔄, ✏️) — omit 🔒 locked fields
 - Use domain-specific category names, NOT generic labels
 - Consider the business context and user workflow
 - Keep related fields in the same category

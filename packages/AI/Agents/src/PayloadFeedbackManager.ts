@@ -10,10 +10,11 @@
  */
 
 import { LogStatus, LogError, UserInfo } from '@memberjunction/core';
-import { PayloadWarning } from './PayloadChangeAnalyzer';
-import { AIEngine } from '@memberjunction/aiengine';
-import { AIPromptRunner } from '@memberjunction/ai-prompts';
-import { AIPromptParams } from '@memberjunction/ai-core-plus';
+import { DecisionAnswer, DecisionQuestion } from '@memberjunction/ai';
+import { AIDecisionRunResult } from '@memberjunction/ai-prompts';
+import type { AIPromptExecutionScope } from '@memberjunction/ai-core-plus';
+import { PayloadWarning, PayloadWarningType } from './PayloadChangeAnalyzer';
+import { AgentDecisionService } from './AgentDecisionService';
 
 /**
  * Represents a single feedback question about a payload change
@@ -36,6 +37,11 @@ export interface PayloadFeedbackResponse {
     questionId: string;
     intended: boolean;
     explanation?: string;
+    /**
+     * The decision model's probability, in [0, 1], that the change was intended. Absent when the
+     * change was accepted by default because no decision answered it.
+     */
+    probability?: number;
 }
 
 /**
@@ -59,26 +65,103 @@ export interface PayloadFeedbackConfig {
     maxQuestionsPerBatch?: number;
     /** Temperature for feedback queries (lower = more deterministic) */
     temperature?: number;
+    /**
+     * A change is judged intended when the decision model's probability is at or above this
+     * threshold (0 to 1).
+     * @default 0.5
+     */
+    intendedThreshold?: number;
+    /**
+     * The decision prompt that answers the questions.
+     * @default 'Default Decision' ({@link AgentDecisionService.DEFAULT_PROMPT_NAME})
+     */
+    decisionPromptName?: string;
 }
+
+/**
+ * What the decision model reads about the step that changed the payload, and the options for the
+ * call. It never carries the payload itself.
+ */
+export interface PayloadFeedbackContext {
+    /** The agent's stated reasoning for the step. */
+    Reasoning?: string;
+    /** The reasoning the agent gave with its payload change request. */
+    ChangeReasoning?: string;
+    /** The agent's message for the step. */
+    Message?: string;
+    /** The agent asking, recorded on the decision's prompt run. */
+    AgentID?: string;
+    /**
+     * Aborts the decision call. The call is also bounded by
+     * {@link PayloadFeedbackManager.DECISION_TIMEOUT_MS}.
+     */
+    CancellationToken?: AbortSignal;
+    /** The run's execution scope, so the decision spends the run's credentials, not the platform's. */
+    ExecutionScope?: AIPromptExecutionScope;
+}
+
+/** The probability at or above which a change is judged intended, unless configured. */
+const DEFAULT_INTENDED_THRESHOLD = 0.5;
+
+/** The questions one decision call carries, unless `maxQuestionsPerBatch` says otherwise. */
+const DEFAULT_MAX_QUESTIONS_PER_CALL = 10;
+
+/** The most characters of each reasoning or message field the decision state carries. */
+const MAX_CONTEXT_TEXT = 4000;
+
+/** The most removed key names listed for one change. */
+const MAX_LISTED_KEYS = 10;
 
 /**
  * Manages feedback collection for suspicious payload changes
  */
 export class PayloadFeedbackManager {
+    /**
+     * The longest the decision call may take. Past it the call is aborted and every change is
+     * accepted, as on any other failure. The same bound as the catalog narrowing decision.
+     */
+    public static readonly DECISION_TIMEOUT_MS = 30000;
+
     private config: PayloadFeedbackConfig;
-    
-    constructor(config?: PayloadFeedbackConfig) {
+    private decisionService: AgentDecisionService;
+    private _lastDecisionResult: AIDecisionRunResult | undefined;
+
+    /**
+     * @param config - Feedback settings. See {@link PayloadFeedbackConfig}.
+     * @param decisionService - Answers the questions in {@link QueryAgent}. Defaults to a new
+     *   {@link AgentDecisionService}.
+     */
+    constructor(config?: PayloadFeedbackConfig, decisionService?: AgentDecisionService) {
         this.config = {
-            maxQuestionsPerBatch: 10,
+            maxQuestionsPerBatch: DEFAULT_MAX_QUESTIONS_PER_CALL,
             temperature: 0.1,
+            intendedThreshold: DEFAULT_INTENDED_THRESHOLD,
             ...config
         };
+        this.decisionService = decisionService ?? new AgentDecisionService();
     }
-    
+
+    /**
+     * The probability at or above which a change is judged intended: `intendedThreshold`, or 0.5
+     * when that is not a number from 0 to 1.
+     */
+    public get IntendedThreshold(): number {
+        const threshold = this.config.intendedThreshold;
+        return typeof threshold === 'number' && threshold >= 0 && threshold <= 1 ? threshold : DEFAULT_INTENDED_THRESHOLD;
+    }
+
+    /**
+     * The result of the most recent decision call {@link QueryAgent} made, so the caller can link
+     * its prompt run to a run step and count its cost. Undefined until a call is made.
+     */
+    public get LastDecisionResult(): AIDecisionRunResult | undefined {
+        return this._lastDecisionResult;
+    }
+
     /**
      * Generate feedback questions from warnings
      */
-    public generateQuestions(warnings: PayloadWarning[]): PayloadFeedbackQuestion[] {
+    public GenerateQuestions(warnings: PayloadWarning[]): PayloadFeedbackQuestion[] {
         const questions: PayloadFeedbackQuestion[] = [];
         const feedbackWarnings = warnings.filter(w => w.requiresFeedback);
         
@@ -89,6 +172,11 @@ export class PayloadFeedbackManager {
         }
         
         return questions;
+    }
+
+    /** @deprecated Use {@link GenerateQuestions}. */
+    public generateQuestions(warnings: PayloadWarning[]): PayloadFeedbackQuestion[] {
+        return this.GenerateQuestions(warnings);
     }
     
     /**
@@ -134,128 +222,249 @@ export class PayloadFeedbackManager {
     }
     
     /**
-     * Query the AI agent about suspicious changes using MemberJunction AI Prompts system.
+     * Asks whether each suspicious payload change was intended: one Likelihood per question, all
+     * in one decision call. The state is the agent's reasoning and message for the step plus a
+     * compact list of the changes (paths, and sizes or types), never the payload itself.
      *
-     * @param questions - Array of feedback questions to ask about payload changes
-     * @param conversationContext - Context from the conversation (for reference)
-     * @param contextUser - User context for the prompt execution
-     * @returns Array of responses indicating whether each change was intended
+     * A change is `intended` when its probability is at or above {@link IntendedThreshold}, and
+     * its explanation carries the probability. When no decision answers a change (no context user,
+     * a failed, throwing, cancelled or timed-out call, a missing answer, or more questions than one
+     * call carries), the change is accepted, as it always was, and its explanation says why. Never
+     * throws.
+     *
+     * @param questions - The questions from {@link GenerateQuestions}
+     * @param context - The agent's reasoning and message for the step, and the call's options
+     * @param contextUser - The user the decision runs as
+     * @returns One response per question, in the same order
      */
-    public async queryAgent(
+    public async QueryAgent(
         questions: PayloadFeedbackQuestion[],
-        conversationContext: Record<string, unknown>,
+        context: PayloadFeedbackContext,
         contextUser?: UserInfo
     ): Promise<PayloadFeedbackResponse[]> {
         if (questions.length === 0) {
             return [];
         }
-
-        // Find the payload feedback prompt
-        const promptName = 'Payload Change Feedback Query';
-        const prompt = AIEngine.Instance.Prompts.find(
-            p => p.Name.trim().toLowerCase() === promptName.toLowerCase() &&
-                 p.Category?.trim().toLowerCase() === 'mj: system'
-        );
-
-        if (!prompt) {
-            // Fallback: accept all changes if prompt not configured
-            LogStatus(`PayloadFeedbackManager: Prompt "${promptName}" not found in MJ: System category. Accepting all changes by default.`);
-            return questions.map(q => ({
-                questionId: q.id,
-                intended: true,
-                explanation: 'Accepted by default (feedback prompt not configured)'
-            }));
+        if (!contextUser) {
+            return questions.map(q => this.acceptedByDefault(q, 'no context user for the decision call'));
         }
 
-        try {
-            // Build template parameters
-            const templateData = this.buildFeedbackTemplateParams(questions);
-
-            // Execute the prompt
-            const runner = new AIPromptRunner();
-            const promptParams = new AIPromptParams();
-            promptParams.prompt = prompt;
-            promptParams.data = templateData;
-            if (contextUser) {
-                promptParams.contextUser = contextUser;
-            }
-
-            const result = await runner.ExecutePrompt<{ responses: Array<{ questionNumber: number; intended: boolean; explanation?: string }> }>(promptParams);
-
-            if (!result.success || !result.result?.responses) {
-                LogError('PayloadFeedbackManager: Failed to get valid response from feedback prompt', undefined, result.errorMessage);
-                // Fallback to accepting all changes
-                return questions.map(q => ({
-                    questionId: q.id,
-                    intended: true,
-                    explanation: 'Accepted by default (prompt execution failed)'
-                }));
-            }
-
-            // Map LLM responses back to our format
-            return this.mapLLMResponsesToFeedback(questions, result.result.responses);
-        } catch (error) {
-            LogError('PayloadFeedbackManager: Error querying agent for feedback', undefined, error);
-            // Fallback to accepting all changes
-            return questions.map(q => ({
-                questionId: q.id,
-                intended: true,
-                explanation: 'Accepted by default (error during feedback query)'
-            }));
+        const asked = questions.slice(0, this.maxQuestionsPerCall());
+        const result = await this.askDecisions(asked, context ?? {}, contextUser);
+        this._lastDecisionResult = result;
+        if (!result.success) {
+            const reason = result.errorMessage || 'no error message';
+            LogError(`PayloadFeedbackManager: the payload change decisions failed, so every change is accepted: ${reason}`);
+            return questions.map(q => this.acceptedByDefault(q, `the decision call failed: ${reason}`));
         }
+
+        return questions.map((question, i) => i < asked.length
+            ? this.mapAnswerToFeedback(question, result.Answers[this.questionKey(i)])
+            : this.acceptedByDefault(question, `over the limit of ${asked.length} questions per decision call`));
+    }
+
+    /** @deprecated Use {@link QueryAgent}. */
+    public async queryAgent(
+        questions: PayloadFeedbackQuestion[],
+        context: PayloadFeedbackContext,
+        contextUser?: UserInfo
+    ): Promise<PayloadFeedbackResponse[]> {
+        return this.QueryAgent(questions, context, contextUser);
     }
 
     /**
-     * Map LLM responses back to PayloadFeedbackResponse format
+     * Describes one flagged change in a line: what the analyzer saw, where, and the names of any
+     * removed keys. The analyzer's message carries the sizes or types, never payload content.
      */
-    private mapLLMResponsesToFeedback(
+    public DescribeChange(warning: PayloadWarning): string {
+        const where = warning.path ? `"${warning.path}"` : 'the payload root';
+        const keys = this.removedKeyNames(warning);
+        const removed = keys.length > 0 ? ` (removed: ${keys.join(', ')})` : '';
+        return `${warning.message} at ${where}${removed}`;
+    }
+
+    /**
+     * The message that lists the changes judged unintended and asks the agent to confirm them or put
+     * them back, or `undefined` when every change was judged intended. It reverts nothing itself, and
+     * it never carries the original values, so it tells the agent how to rebuild them.
+     */
+    public BuildUnintendedChangesMessage(
         questions: PayloadFeedbackQuestion[],
-        llmResponses: Array<{ questionNumber: number; intended: boolean; explanation?: string }>
-    ): PayloadFeedbackResponse[] {
-        return questions.map((q, index) => {
-            const questionNumber = index + 1;
-            const llmResponse = llmResponses.find(r => r.questionNumber === questionNumber);
-
-            if (llmResponse) {
-                return {
-                    questionId: q.id,
-                    intended: llmResponse.intended,
-                    explanation: llmResponse.explanation
-                };
+        responses: PayloadFeedbackResponse[]
+    ): string | undefined {
+        const lines: string[] = [];
+        const unintended: PayloadWarning[] = [];
+        for (const response of responses) {
+            const question = questions.find(q => q.id === response.questionId);
+            if (question && !response.intended) {
+                const probability = typeof response.probability === 'number'
+                    ? ` (probability it was intended: ${response.probability.toFixed(2)})`
+                    : '';
+                lines.push(`- ${this.DescribeChange(question.warning)}${probability}`);
+                unintended.push(question.warning);
             }
+        }
+        if (lines.length === 0) {
+            return undefined;
+        }
+        return [
+            'Payload change check: these changes to the payload may not have been intended.',
+            ...lines,
+            'Nothing was reverted. If you meant a change, confirm it in your reasoning and carry on.',
+            this.restoreInstructions(unintended)
+        ].join('\n');
+    }
 
-            // Default to intended if no matching response found
-            return {
-                questionId: q.id,
-                intended: true,
-                explanation: 'No explicit response from LLM - assuming intended'
+    /**
+     * How the agent puts the listed changes back: a removed key is added again under `newElements`,
+     * and any other change is set again under `updateElements`. The message has no original values,
+     * so the agent rebuilds them from their source, or says what was lost.
+     */
+    private restoreInstructions(warnings: PayloadWarning[]): string {
+        const steps: string[] = [];
+        if (warnings.some(w => w.type === PayloadWarningType.KeyRemoval)) {
+            steps.push('add each removed key back under newElements');
+        }
+        if (warnings.some(w => w.type !== PayloadWarningType.KeyRemoval)) {
+            steps.push('set each shortened or changed value again under updateElements');
+        }
+        return `If not, put the data back with a payloadChangeRequest: ${steps.join(', and ')}. `
+            + 'The original values are not shown here, so rebuild each one from where it came from '
+            + '(an action result, a sub-agent result or the conversation). If you cannot, say in your message what was lost.';
+    }
+
+    /**
+     * Asks the questions in one call. Never throws, and never waits longer than
+     * {@link PayloadFeedbackManager.DECISION_TIMEOUT_MS} or past the run's cancellation: a throw, a
+     * timeout and a cancelled run each come back as a failed result, so the caller accepts every
+     * change. Stopping also aborts the call.
+     */
+    private async askDecisions(
+        questions: PayloadFeedbackQuestion[],
+        context: PayloadFeedbackContext,
+        contextUser: UserInfo
+    ): Promise<AIDecisionRunResult> {
+        const runToken = context.CancellationToken;
+        if (runToken?.aborted) {
+            return this.failedResult('the run was cancelled');
+        }
+        const controller = new AbortController();
+        let stop: (reason: string) => void = () => undefined;
+        const stopped = new Promise<AIDecisionRunResult>(resolve => {
+            stop = (reason: string): void => {
+                controller.abort(reason);
+                resolve(this.failedResult(reason));
             };
         });
+        const relayRunAbort = (): void => stop('the run was cancelled');
+        runToken?.addEventListener('abort', relayRunAbort, { once: true });
+        const timeoutMS = PayloadFeedbackManager.DECISION_TIMEOUT_MS;
+        const timer = setTimeout(() => stop(`timed out after ${timeoutMS} ms`), timeoutMS);
+        try {
+            const ask = this.decisionService.Ask({
+                State: this.buildDecisionState(questions, context),
+                Questions: this.buildDecisionQuestions(questions),
+                ContextUser: contextUser,
+                AgentID: context.AgentID,
+                PromptName: this.config.decisionPromptName,
+                CancellationToken: controller.signal,
+                ExecutionScope: context.ExecutionScope
+            });
+            return await Promise.race([ask, stopped]);
+        } catch (error) {
+            return this.failedResult(error instanceof Error ? error.message : String(error));
+        } finally {
+            clearTimeout(timer);
+            runToken?.removeEventListener('abort', relayRunAbort);
+        }
     }
-    
-    /**
-     * Build template parameters for the feedback prompt
-     * 
-     * @todo This should prepare the data structure to pass to the stored prompt template
-     */
-    private buildFeedbackTemplateParams(questions: PayloadFeedbackQuestion[]): Record<string, any> {
+
+    /** A decision result that answered nothing, and why. */
+    private failedResult(errorMessage: string): AIDecisionRunResult {
+        return { success: false, errorMessage, Answers: {} };
+    }
+
+    /** One Likelihood per question: "Given the agent's stated reasoning, this change was intended: ...". */
+    private buildDecisionQuestions(questions: PayloadFeedbackQuestion[]): Record<string, DecisionQuestion> {
+        const result: Record<string, DecisionQuestion> = {};
+        questions.forEach((question, i) => {
+            result[this.questionKey(i)] = {
+                Kind: 'Likelihood',
+                Instructions: `Given the agent's stated reasoning, this change was intended: ${this.DescribeChange(question.warning)}`
+            };
+        });
+        return result;
+    }
+
+    /** The agent's reasoning and message, then the numbered changes. Never the payload. */
+    private buildDecisionState(questions: PayloadFeedbackQuestion[], context: PayloadFeedbackContext): string {
+        const sections = [
+            this.contextSection("The agent's reasoning for this step", context.Reasoning),
+            this.contextSection("The agent's reasoning for the payload change", context.ChangeReasoning),
+            this.contextSection("The agent's message", context.Message)
+        ].filter((section): section is string => section !== undefined);
+        if (sections.length === 0) {
+            sections.push('The agent gave no reasoning or message for this step.');
+        }
+        const changes = questions.map((q, i) => `${i + 1}. ${this.DescribeChange(q.warning)}`);
+        sections.push(`The payload changes in question (paths, and sizes or types):\n${changes.join('\n')}`);
+        return sections.join('\n\n');
+    }
+
+    /** A labelled, capped block of the agent's text, or `undefined` when there is none. */
+    private contextSection(label: string, text: string | undefined): string | undefined {
+        const trimmed = typeof text === 'string' ? text.trim() : '';
+        return trimmed ? `${label}:\n${trimmed.slice(0, MAX_CONTEXT_TEXT)}` : undefined;
+    }
+
+    /** The key names a key-removal warning recorded, if any. */
+    private removedKeyNames(warning: PayloadWarning): string[] {
+        const details: unknown = warning.details;
+        if (typeof details !== 'object' || details === null || !('removedKeys' in details) || !Array.isArray(details.removedKeys)) {
+            return [];
+        }
+        const keys: unknown[] = details.removedKeys;
+        return keys.filter((key): key is string => typeof key === 'string').slice(0, MAX_LISTED_KEYS);
+    }
+
+    /** Maps one answer to the feedback shape. Anything but a numeric Likelihood is accepted by default. */
+    private mapAnswerToFeedback(question: PayloadFeedbackQuestion, answer: DecisionAnswer | undefined): PayloadFeedbackResponse {
+        if (answer?.Kind !== 'Likelihood' || !Number.isFinite(answer.Probability)) {
+            return this.acceptedByDefault(question, 'no usable answer for this change');
+        }
+        const threshold = this.IntendedThreshold;
         return {
-            questions: questions.map((q, i) => ({
-                number: i + 1,
-                text: q.question,
-                context: q.context,
-                warningType: q.warning.type,
-                severity: q.warning.severity
-            })),
-            totalQuestions: questions.length,
-            timestamp: new Date().toISOString()
+            questionId: question.id,
+            intended: answer.Probability >= threshold,
+            probability: answer.Probability,
+            explanation: `Probability the change was intended: ${answer.Probability.toFixed(2)} (threshold ${threshold})`
         };
     }
-    
+
+    /** Accepts the change, as it always was, and says why. */
+    private acceptedByDefault(question: PayloadFeedbackQuestion, reason: string): PayloadFeedbackResponse {
+        return {
+            questionId: question.id,
+            intended: true,
+            explanation: `Accepted by default (${reason})`
+        };
+    }
+
+    /** The question key for position `index`. Keys are labels for code; the model reads the instructions. */
+    private questionKey(index: number): string {
+        return `change_${index + 1}`;
+    }
+
+    /** `maxQuestionsPerBatch`, or 10 when that is not a positive whole number. */
+    private maxQuestionsPerCall(): number {
+        const max = this.config.maxQuestionsPerBatch;
+        return typeof max === 'number' && Number.isInteger(max) && max > 0 ? max : DEFAULT_MAX_QUESTIONS_PER_CALL;
+    }
+
     /**
      * Process feedback responses and determine final result
      */
-    public processFeedback(
+    public ProcessFeedback(
         questions: PayloadFeedbackQuestion[],
         responses: PayloadFeedbackResponse[]
     ): PayloadFeedbackResult {
@@ -281,11 +490,19 @@ export class PayloadFeedbackManager {
             requiresRevision: rejectedChanges.length > 0
         };
     }
+
+    /** @deprecated Use {@link ProcessFeedback}. */
+    public processFeedback(
+        questions: PayloadFeedbackQuestion[],
+        responses: PayloadFeedbackResponse[]
+    ): PayloadFeedbackResult {
+        return this.ProcessFeedback(questions, responses);
+    }
     
     /**
      * Log feedback results
      */
-    public logFeedbackResults(result: PayloadFeedbackResult): void {
+    public LogFeedbackResults(result: PayloadFeedbackResult): void {
         if (result.responses.length === 0) {
             return;
         }
@@ -304,5 +521,10 @@ export class PayloadFeedbackManager {
         if (result.requiresRevision) {
             LogStatus(`\n   ⚠️  Agent needs to revise the payload`);
         }
+    }
+
+    /** @deprecated Use {@link LogFeedbackResults}. */
+    public logFeedbackResults(result: PayloadFeedbackResult): void {
+        return this.LogFeedbackResults(result);
     }
 }

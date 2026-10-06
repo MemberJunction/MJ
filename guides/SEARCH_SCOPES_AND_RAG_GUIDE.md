@@ -79,7 +79,7 @@ Create `metadata/search-scopes/.your-scope.json`:
 ]
 ```
 
-Run `npx mj sync push --dir=metadata --include="search-scopes"`.
+Run `pnpm mj sync push --dir=metadata --include="search-scopes"`.
 
 ### Personal vs. Organization-wide scopes
 - Set `OwnerUserID=<user-id>` for **personal scopes** (only visible to that user in the selector UI).
@@ -163,6 +163,32 @@ The action accepts two optional inputs whose values flow into `SearchParams.Sear
 |---|---|---|
 | `PrimaryScopeRecordID` | string (UUID) | Primary tenant key (e.g. `OrganizationID`). Available in templates as `{{ context.PrimaryScopeRecordID }}`. |
 | `SecondaryScopes` | JSON string | Flat object of additional dimensions as `{ "<key>": <value> }`. Each value must be `string \| number \| boolean \| string[]`. Available in templates as `{{ context.SecondaryScopes.<key> }}`. Incompatible value types are dropped at parse time with a log; malformed JSON falls back to `undefined` rather than failing the call. |
+
+#### The skill principal
+
+A third optional input, `AISkillID`, is **not** a SearchContext value and does not reach those templates. It is a *principal*, in the same sense the calling agent is:
+
+| Input | Type | Purpose |
+|---|---|---|
+| `AISkillID` | string (UUID) | The AI Skill this search runs under. Threaded onto `SearchParams.AISkillID` → `Principals.SkillID`, which a dimension's expansion query can bind. Also handed to `ResolveEffectivePermission`, so the skill's own `SearchScopeAccess` applies. |
+
+Four consequences worth being explicit about, because a skill is a principal that can both widen and deny:
+
+- **It is judged.** `AISkill.SearchScopeAccess` can reject a scope the user's roles allow (`None`, or `Assigned` without this scope listed) and can grant one they do not (`All`). The action resolves and passes the skill *before* the permission gate, so those rules fire — and denial rows are attributed to it.
+- **A bad value fails closed.** A non-UUID, or an ID that will not load, is rejected with `INVALID_PARAM` rather than being dropped. Silently continuing would bind an unjudged ID into the expansion query.
+- **The caller must be allowed to use it on this agent.** Loading a skill is not permission to wield it as a principal. Because `SkillUnscopedAll` grants `Search` on any scope, and AISkill permissions are open by default (no permission rows means everyone may View and Run), an unchecked ID would be a scope grant for the asking. `SearchScopePermissionResolver` intersects the skill against `GetSkillsForAgent(agent, user)` — agent-accepted ∩ user-permitted ∩ Active, the same call `BaseAgent.preActivateRequestedSkills` gates real activation on — and refuses with `PrincipalNotActivatable`, which the action returns as `ACCESS_DENIED`, attributed to the skill in the Forbidden log.
+
+  The two principals are judged at **different points, for a reason**. A skill is judged wherever it is named, because a skill is only ever supplied to steer: it binds into `Principals.SkillID` and, for a `restricts: true` dimension, the expansion query's output *is* the bound — so judging it only at the `All` fallback would let a user who holds their own grant name any skill and widen with it. An agent is judged only where it **widens** (its `All` fallback), because elsewhere `AIAgentID` is attribution — the pre-execution RAG path threads it purely so `SearchExecutionLog` can attribute the search, and gating that would turn an analytics field into a retrieval outage. `ExplainScope` applies both gates, so a preview cannot promise what the search would refuse.
+
+- **Containment of a principal id is the QUERY AUTHOR's job, not the platform's.** An expansion query
+  is server-authored SQL, but MJ renders query parameters through Nunjucks with `autoescape: false`
+  (`QueryParameterProcessor`), so escaping is opt-in — `| sqlString`, or a declared validation chain.
+  The gate above decides *whether* a principal may steer the bound; it does not make the id safe to
+  interpolate. Write the predicate so a malformed value narrows rather than widens: e.g.
+  `TRY_CONVERT(uniqueidentifier, …)`, which degrades anything unparseable to NULL and therefore
+  to an empty bound.
+
+Omit the input and the principal is null, which is the behaviour for every caller that does not pass it.
 
 Example agent tool call selecting only Finance-department content for Org `O1`:
 
@@ -655,8 +681,10 @@ to internal UUIDs without leaking those UUIDs to the prompt.
 ### Embedding regeneration contract (operations note)
 
 Several entities (`MJ: AI Agent Notes`, `MJ: AI Agent Examples`,
-`MJ: Queries`) maintain `EmbeddingVector` + `EmbeddingModelID` columns
-that the Vector search provider consumes. Embeddings are regenerated
+`MJ: Queries`) maintain `EmbeddingVector` + `EmbeddingVectorBinary` +
+`EmbeddingModelID` columns that the Vector search provider consumes (the
+binary column holds the same vector as float32 bytes; see the
+[Binary Fields Guide](BINARY_FIELDS_GUIDE.md)). Embeddings are regenerated
 inside the entity's server-side `Save()` override **only when the
 fields they're derived from are dirty**:
 
@@ -669,8 +697,9 @@ fields they're derived from are dirty**:
 **Implication for ops**: any code path that bypasses `BaseEntity.Save()`
 — direct `INSERT`/`UPDATE` SQL, raw `mj sync` of pre-computed metadata,
 restoration from a logical backup that doesn't replay through entity
-saves — will produce records whose `EmbeddingVector` is stale or
-missing. Vector search will then return outdated matches (or skip the
+saves — will produce records whose `EmbeddingVector` / `EmbeddingVectorBinary`
+are stale, missing, or out of step with each other (readers prefer the
+binary column). Vector search will then return outdated matches (or skip the
 record entirely if the column is `NULL`).
 
 **Operational guidance**:
@@ -691,7 +720,7 @@ records.
 
 ### How to enable vector search for an existing entity (in-process)
 
-Several core entities ship with `EmbeddingVector` + `EmbeddingModelID`
+Several core entities ship with `EmbeddingVector` + `EmbeddingVectorBinary` + `EmbeddingModelID`
 columns whose contents are auto-populated by their server-side
 `Save()` override (see "Embedding regeneration contract" above).
 Today: `MJ: Queries`, `MJ: AI Agent Notes`, `MJ: AI Agent Examples`.
@@ -737,6 +766,7 @@ INSERT INTO __mj.VectorIndex (
     '{
         "entityName": "MJ: Queries",
         "vectorField": "EmbeddingVector",
+        "binaryVectorField": "EmbeddingVectorBinary",
         "filter": "EmbeddingVector IS NOT NULL",
         "titleField": "Name",
         "snippetField": "Description"
@@ -748,7 +778,8 @@ INSERT INTO __mj.VectorIndex (
 | Key | Purpose |
 |---|---|
 | `entityName` | The entity whose rows hold the vectors. Used for `RunView`. |
-| `vectorField` | The column name. Stored as JSON-stringified `number[]`. |
+| `vectorField` | The JSON vector column (JSON-stringified `number[]`). |
+| `binaryVectorField` | Optional binary companion (float32 bytes). When set, the driver fetches it and prefers it over `vectorField` — a copy instead of a JSON parse — falling back to JSON for rows with no valid binary value. |
 | `filter` | Optional `ExtraFilter` for the load — typically `EmbeddingVector IS NOT NULL` so unembedded rows are skipped. |
 | `titleField` | Field used as the result's display Title. Falls back to entity NameField. |
 | `snippetField` | Field used as the result's display Snippet. |
@@ -808,5 +839,11 @@ deliberately rather than as part of the vector wiring.
 - **Single-process.** Two MJAPI replicas each maintain their own
   in-memory cache. For sticky-session deployments that's fine; for
   load-balanced multi-replica setups, prefer Pinecone/Qdrant.
+- **Metadata filters are evaluated in memory.** The scope's
+  `MetadataFilter` and the `Entity` push-down are applied to each row
+  (`Entity` / `EntityName`, `RecordID` and `SourceType` resolve as on
+  the remote drivers; anything else reads the row's column). A filter
+  using an operator outside `$eq $ne $gt $gte $lt $lte $in $nin $exists
+  $and $or` fails the query instead of running unfiltered.
 
 - Re-ranker catalog entity + visual configuration UI.

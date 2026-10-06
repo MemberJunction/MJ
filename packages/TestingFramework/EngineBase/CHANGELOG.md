@@ -1,5 +1,444 @@
 # @memberjunction/testing-engine-base
 
+## 6.2.0-edge.2
+
+### Minor Changes
+
+- 4d647e6: Add Rubrics, a core way to score any record against a published set of weighted criteria.
+
+  What ships:
+  - Schema for rubrics, versions, criteria, scales, anchors, bands, evaluations, and score rows, plus layered consensus views. Published versions are frozen. Raw writes to a frozen row throw 51101–51110. A draft version delete is an `INSTEAD OF DELETE` trigger. `MJ: Test Rubrics` is deprecated in metadata.
+  - `RubricScoring` and `RubricVersionDiff` in `@memberjunction/rubrics-base`. The outcome ladder is Incomplete, NotApplicableFailure, GateFailed, Passed or BelowThreshold, then Scored. The publish base is the highest Published or Retired version.
+  - `@memberjunction/rubrics`: LLM, agent, deterministic, and human evaluators. Actions are Evaluate Record Against Rubric, Get Rubric, Get Rubric Subject, Get Rubric Consensus, Create Rubric Draft, and Submit Human Rubric. Create Rubric Draft and the architect import do not publish. The evaluation agent does not call Get Rubric Consensus.
+  - Presentational widgets in `@memberjunction/ng-rubrics`, Explorer forms, and a Rubrics application. The agent form has a Rubrics tab.
+  - Six guide-example rubrics stay Draft. Seven agent rubrics publish at 1.0.0 and bind to their agents. Marketing Agent is not bound. Shipped self-check links and the sampling job stay Disabled. A test that already has an `llm-judge` oracle keeps it.
+  - Testing: rubric resolution, a `rubric` oracle, judge calibration, per-criterion spread on `--flaky-check`, `mj rubric`, and `mj test promote-criteria`. `Test.RubricID` and `TestSuite.RubricID` select a rubric. `TestSuiteRun.Score` is stored.
+  - The deterministic integration bundle is IT98 at sequence 49.
+
+  `GeneratePluralName` keeps the head of a name verbatim and pluralizes only the tail, preserving that tail's case. A linear scan finds the tail, so `user_profile` and `userProfile` no longer produce the same view name, a leading character such as Ä stays on the head, and `Contact Person` pluralizes to `Contact People`. The base view for a criterion is `vwRubricCriteria`.
+
+### Patch Changes
+
+- Updated dependencies [e97d95c]
+- Updated dependencies [2552b1e]
+- Updated dependencies [21f9e15]
+- Updated dependencies [4248fb3]
+- Updated dependencies [0adaf76]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [705ab4e]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [5986939]
+- Updated dependencies [4d647e6]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [369e229]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [2854a2e]
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/core-entities@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+
+## 6.2.0-edge.1
+
+### Patch Changes
+
+- Updated dependencies [a50948e]
+- Updated dependencies [0eeb89d]
+- Updated dependencies [a3539d2]
+- Updated dependencies [41274aa]
+- Updated dependencies [67f6c85]
+- Updated dependencies [eb3a8d3]
+- Updated dependencies [e1dd673]
+- Updated dependencies [307da67]
+- Updated dependencies [a7da50b]
+- Updated dependencies [17cc774]
+- Updated dependencies [80905a1]
+- Updated dependencies [6b08ebf]
+  - @memberjunction/core-entities@6.2.0-edge.1
+  - @memberjunction/core@6.2.0-edge.1
+  - @memberjunction/global@6.2.0-edge.1
+
+## 6.2.0-edge.0
+
+### Minor Changes
+
+- d122a41: DOM-grounded selection and replay scripts for Computer Use tests.
+
+  A Computer Use test currently pays full vision-model price on every run, re-deriving
+  the same sequence of clicks against a build that changed nothing it touches. This makes
+  the first passing run _compile_ a replay script that later runs _execute_ through the
+  same browser adapter — no screenshots, no model calls — with the model returning only
+  when replay stops working, which is exactly when a fresh derivation is worth paying for.
+
+  **DOM selection.** Element grounding hands the model an indexed list of the page's
+  interactive elements (role, accessible name, selector) so it acts by index instead of by
+  coordinate; a recorded target is then the element the model actually chose rather than
+  where its bounding box happened to be. `resolveActionLocator` narrows an ambiguous
+  selector to a single locator before acting — preferring visible matches, then the
+  smallest by area, which for a `:has-text()` ancestor chain is the element the model
+  meant. A multi-match is a guaranteed strict-mode throw today (and worse than a lost
+  click: the page does not change, so the loop detector ends the run as `LoopDetected`), so
+  disambiguating cannot regress any action that currently works.
+
+  **Replay.** Each step carries a multi-signal locator (selector primary; role + name as
+  the heal fallback), a fail-fast precondition, and a postcondition that confirms the step
+  advanced the page the way the recording did. Scripts are keyed by build hash, app
+  version, and goal hash: an exact build match replays with no healing expected, any
+  mismatch replays with healing, and a changed goal falls back to the model. Variable
+  _values_ are never stored — recording tokenizes them to `%name%` and replay substitutes
+  fresh values — so a script holds no credentials and stays valid when the values change.
+  A replayed run is scored by deterministic goal postconditions distilled from the passing
+  run, not by a model verdict, which is what keeps the tier free.
+
+  **Storage.** Scripts live in the test row, at `Configuration.ReplayScript` on
+  `MJ: Tests`. That column already exists, so there is **no migration** — this registers
+  JSONType metadata on it (`ITestConfiguration`, alongside the ~20 JSONType columns already
+  registered this way) and CodeGen emits a typed `ConfigurationObject` accessor. Reads are
+  free because the TestingEngine already caches the entity. `ITestConfiguration` declares
+  only framework-level properties over an index signature, so each driver's own
+  configuration passes through untouched and a future framework option is an interface edit
+  rather than a migration. The script shape necessarily exists twice — once as
+  `ComputerUseTrace`, once as the JSONType, because CodeGen emits the definition into
+  `core-entities`, which sits below the engine package. `__tests__/script-store.test-d.ts`
+  holds the two field-for-field with vitest `expectTypeOf`, checked by tsc through
+  `typecheck` in `vitest.config.ts` — the same idiom as the related-record-collection type
+  tests in `core-entities`. The assertions were confirmed to fail on injected drift rather
+  than assumed to work, since that precedent's own typecheck program was once empty and
+  every assertion passing for free.
+
+  **Fallback and review.** A diverged replay falls back to the model within the same
+  attempt. The re-derived script does not take effect on its own: it lands in
+  `PendingReplayScript` and replay keeps using the promoted `ReplayScript` until someone
+  runs `mj test scripts`, sees what changed, and promotes it — so a UI change can never
+  rewrite the suite unnoticed. The listing separates routine selector churn from a moved
+  target, verb, or URL. A test's first script skips the gate, having no baseline to be
+  diffed against. Until a pending script is promoted, the affected tests fall back on
+  every run: they stay green and pay full model price, which is the cost of not letting
+  the suite rewrite itself. The fallback restarts clean rather than inheriting
+  the failed replay's memo, and a replay is never re-recorded (that would launder healed
+  selectors into storage without re-deriving them). A test can refuse the pathway with
+  `Configuration.AllowLLMFallback: false`, which makes a divergence the result instead —
+  the right setting wherever a silent re-derivation would paper over the regression the
+  test exists to catch. Defaults to `true`.
+
+  Also adds `tier` and `ReplayTelemetry` (healed/diverged counts) to the testing-framework
+  result types, so drift is visible per attempt and survives a green fallback. Design doc:
+  `plans/regression-testing/dom-selection-and-replay-design.md`.
+
+  **MetadataSync — JSON sub-property externalization.** `pull.externalizeFields` accepted
+  entity fields only, so it could move a whole column into a side file but not a single
+  property inside a JSON column. An entry may now be a dotted path (`Configuration.ReplayScript`),
+  which externalizes that leaf and leaves an `@file:` reference in its place; push already
+  resolves nested references, so there is no push-side change. A property the record does not
+  carry is skipped entirely, and a whole-field config wins over its dotted paths. Pull's
+  existing-file discovery moved to `lib/existing-record-files.ts`.
+
+  **MJExplorer — a readiness beacon for automation.** The shell publishes `data-mj-ready="true"`
+  on `<html>` when the active route's resource has finished loading, so a browser-driven suite
+  can poll a fact instead of comparing screenshot hashes. The attribute is inert — nothing in
+  the product reads it and no styling keys off it — and it is published from the `loading`
+  accessor so all ~22 assignment sites stay correct.
+
+  **Prompt model change.** The Computer Use controller and judge prompts in core `metadata/prompts`
+  move from `Gemini 3.1 Flash-Lite` to `Gemini 3.6 Flash` and gain `Temperature`/`Seed` for
+  determinism. This applies to every instance that syncs `metadata/`, not only the regression suite.
+
+### Patch Changes
+
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [7be1684]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [d122a41]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [683f652]
+- Updated dependencies [a8be410]
+- Updated dependencies [f48dffc]
+- Updated dependencies [630bb88]
+- Updated dependencies [44faf83]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [a17a228]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [104125c]
+- Updated dependencies [5513c2a]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [2c590b0]
+  - @memberjunction/core-entities@6.2.0-edge.0
+  - @memberjunction/core@6.2.0-edge.0
+  - @memberjunction/global@6.2.0-edge.0
+
+## 6.1.0
+
+### Patch Changes
+
+- f5ec13b: Record the new public surface these two packages gained in the test-coverage work so it lands in their changelogs.
+
+  `@memberjunction/unit-testing` now ships the AI test harness — a scriptable `TestLLM` that subclasses the real `BaseLLM`, real-typed `ChatResult` factories, and the realistic catalog fixture — exported from the package index. `@memberjunction/testing-engine-base` adds the optional `skippedChecks`/`skippedTests` fields to `TestRunResult`/`TestSuiteRunResult` that the Skipped-status reporting reads. Both are additive; no runtime behavior changes for existing consumers.
+
+- Updated dependencies [834f8d7]
+- Updated dependencies [a987913]
+- Updated dependencies [e533ce5]
+- Updated dependencies [b1b24d7]
+- Updated dependencies [2c826f7]
+- Updated dependencies [61b5612]
+- Updated dependencies [ee15cf7]
+- Updated dependencies [b7819d2]
+- Updated dependencies [394d276]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [4586215]
+- Updated dependencies [197fdf8]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [0d3094c]
+- Updated dependencies [255d506]
+- Updated dependencies [0ec1980]
+- Updated dependencies [1940a4d]
+- Updated dependencies [07cb22e]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [711c208]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [2412415]
+- Updated dependencies [06ccfb2]
+- Updated dependencies [9699d0e]
+- Updated dependencies [394d276]
+- Updated dependencies [43f9133]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [2cc08e1]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [2d14c62]
+- Updated dependencies [394d276]
+- Updated dependencies [c996a56]
+- Updated dependencies [de6eb14]
+- Updated dependencies [38d4482]
+- Updated dependencies [052b4c7]
+- Updated dependencies [8ec1515]
+- Updated dependencies [9a905e8]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [c996a56]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [051e0ff]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [8d880cc]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [cefc302]
+- Updated dependencies [841e6ea]
+- Updated dependencies [394d276]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [080f4cd]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [d66a26a]
+- Updated dependencies [c643ba3]
+- Updated dependencies [e9e9873]
+- Updated dependencies [1d88e00]
+- Updated dependencies [647bd71]
+- Updated dependencies [8288711]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [48ff99f]
+- Updated dependencies [076fa5d]
+- Updated dependencies [9f73528]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [27e4d09]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [23c2521]
+- Updated dependencies [2741d46]
+- Updated dependencies [048c5ce]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [98841bb]
+- Updated dependencies [53c341c]
+- Updated dependencies [b46330e]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [53d256f]
+- Updated dependencies [0677595]
+- Updated dependencies [2be2960]
+- Updated dependencies [cf2484c]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [0967ba7]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [de343b5]
+- Updated dependencies [5fc861f]
+- Updated dependencies [1748491]
+- Updated dependencies [4cdfdcf]
+- Updated dependencies [7fefca2]
+- Updated dependencies [a1a8989]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+- Updated dependencies [905820a]
+- Updated dependencies [ca3657d]
+- Updated dependencies [1bd9674]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [d078c54]
+- Updated dependencies [7fcdc2d]
+- Updated dependencies [15319b4]
+- Updated dependencies [d0a2a55]
+- Updated dependencies [4b1257f]
+- Updated dependencies [ca4feb4]
+- Updated dependencies [1c0d586]
+  - @memberjunction/global@6.1.0
+  - @memberjunction/core@6.1.0
+  - @memberjunction/core-entities@6.1.0
+
+## 6.1.0-edge.7
+
+### Patch Changes
+
+- Updated dependencies [a987913]
+- Updated dependencies [61b5612]
+- Updated dependencies [ee15cf7]
+- Updated dependencies [c996a56]
+- Updated dependencies [c996a56]
+- Updated dependencies [076fa5d]
+- Updated dependencies [cf2484c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [4cdfdcf]
+- Updated dependencies [7fcdc2d]
+  - @memberjunction/core-entities@6.1.0-edge.7
+  - @memberjunction/core@6.1.0-edge.7
+  - @memberjunction/global@6.1.0-edge.7
+
+## 6.1.0-edge.6
+
+### Patch Changes
+
+- Updated dependencies [2c826f7]
+- Updated dependencies [b7819d2]
+- Updated dependencies [197fdf8]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [0d3094c]
+- Updated dependencies [0ec1980]
+- Updated dependencies [43f9133]
+- Updated dependencies [2cc08e1]
+- Updated dependencies [2d14c62]
+- Updated dependencies [38d4482]
+- Updated dependencies [8d880cc]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [e9e9873]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [9f73528]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [98841bb]
+- Updated dependencies [0677595]
+- Updated dependencies [2be2960]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [1748491]
+- Updated dependencies [7fefca2]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+  - @memberjunction/core-entities@6.1.0-edge.6
+  - @memberjunction/core@6.1.0-edge.6
+  - @memberjunction/global@6.1.0-edge.6
+
+## 6.1.0-edge.5
+
+### Patch Changes
+
+- Updated dependencies [b1b24d7]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [1940a4d]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [d66a26a]
+- Updated dependencies [23c2521]
+- Updated dependencies [5fc861f]
+- Updated dependencies [905820a]
+  - @memberjunction/core-entities@6.1.0-edge.5
+  - @memberjunction/core@6.1.0-edge.5
+  - @memberjunction/global@6.1.0-edge.5
+
+## 6.1.0-edge.4
+
+### Patch Changes
+
+- Updated dependencies [e533ce5]
+- Updated dependencies [4586215]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [de6eb14]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [647bd71]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [53c341c]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [a1a8989]
+- Updated dependencies [d078c54]
+  - @memberjunction/core-entities@6.1.0-edge.4
+  - @memberjunction/global@6.1.0-edge.4
+  - @memberjunction/core@6.1.0-edge.4
+
+## 6.1.0-edge.3
+
+### Patch Changes
+
+- f5ec13b: Record the new public surface these two packages gained in the test-coverage work so it lands in their changelogs.
+
+  `@memberjunction/unit-testing` now ships the AI test harness — a scriptable `TestLLM` that subclasses the real `BaseLLM`, real-typed `ChatResult` factories, and the realistic catalog fixture — exported from the package index. `@memberjunction/testing-engine-base` adds the optional `skippedChecks`/`skippedTests` fields to `TestRunResult`/`TestSuiteRunResult` that the Skipped-status reporting reads. Both are additive; no runtime behavior changes for existing consumers.
+
+- Updated dependencies [834f8d7]
+- Updated dependencies [07cb22e]
+- Updated dependencies [711c208]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [06ccfb2]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [8ec1515]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [051e0ff]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [cefc302]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [c643ba3]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [2741d46]
+- Updated dependencies [048c5ce]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [b46330e]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [53d256f]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [ca3657d]
+- Updated dependencies [1bd9674]
+- Updated dependencies [d0a2a55]
+- Updated dependencies [4b1257f]
+  - @memberjunction/global@6.1.0-edge.3
+  - @memberjunction/core@6.1.0-edge.3
+  - @memberjunction/core-entities@6.1.0-edge.3
+
 ## 6.1.0-edge.2
 
 ### Patch Changes

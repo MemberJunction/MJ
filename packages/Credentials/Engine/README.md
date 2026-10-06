@@ -140,4 +140,4 @@ Every credential operation (Decrypt, Create, Update, Validate) is logged to the 
 
 ## License
 
-ISC
+Business Source License 1.1 — see [LICENSE](../../../LICENSE) for details.

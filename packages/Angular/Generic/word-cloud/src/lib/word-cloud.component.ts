@@ -8,7 +8,7 @@ import {
   ChangeDetectionStrategy,
 } from '@angular/core';
 import { WordCloudItem, WordCloudItemEvent, WordCloudLayoutItem } from './word-cloud.types';
-import { computeWordCloudLayout, WordCloudLayoutConfig } from './word-cloud.layout';
+import { ComputeWordCloudLayout, WordCloudLayoutConfig } from './word-cloud.layout';
 
 /** Fixed palette for categorical color mode, using MJ design-token-friendly CSS values. */
 const CATEGORICAL_PALETTE: string[] = [
@@ -198,7 +198,7 @@ export class MJWordCloudComponent implements OnChanges {
       MaxItems: this.MaxItems,
     };
 
-    const result = computeWordCloudLayout(this.Items, config);
+    const result = ComputeWordCloudLayout(this.Items, config);
     this.ViewBox = result.ViewBox;
     this.LayoutItems = this.applyColors(result.Items);
   }

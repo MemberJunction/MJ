@@ -3,15 +3,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 /* ------------------------------------------------------------------ */
 /*  Hoisted mocks                                                     */
 /* ------------------------------------------------------------------ */
-const mockAxiosPost = vi.hoisted(() => vi.fn());
-const mockIsAxiosError = vi.hoisted(() => vi.fn().mockReturnValue(false));
+const mockHttpPost = vi.hoisted(() => vi.fn());
+const mockIsHttpError = vi.hoisted(() => vi.fn().mockReturnValue(false));
 
-vi.mock('axios', () => ({
-  default: {
-    post: mockAxiosPost,
-    get: vi.fn(),
-  },
-  isAxiosError: mockIsAxiosError,
+vi.mock('@memberjunction/network-utils', () => ({
+  HttpPost: mockHttpPost,
+  IsHttpError: mockIsHttpError,
 }));
 
 vi.mock('../config', () => ({
@@ -151,8 +148,8 @@ describe('RexRecommendationsProvider', () => {
   /* ---- GetAccessToken ---- */
   describe('GetAccessToken', () => {
     it('should return token on successful API call', async () => {
-      mockAxiosPost.mockResolvedValueOnce({
-        data: {
+      mockHttpPost.mockResolvedValueOnce({
+        Data: {
           results: [{ 'rasa-token': 'mock-token-123' }],
           metadata: {},
         },
@@ -165,8 +162,8 @@ describe('RexRecommendationsProvider', () => {
     });
 
     it('should return null when API returns empty results', async () => {
-      mockAxiosPost.mockResolvedValueOnce({
-        data: { results: [], metadata: {} },
+      mockHttpPost.mockResolvedValueOnce({
+        Data: { results: [], metadata: {} },
       });
 
       const fn = (provider as unknown as Record<string, () => Promise<string | null>>)['GetAccessToken']
@@ -175,8 +172,8 @@ describe('RexRecommendationsProvider', () => {
       expect(token).toBeNull();
     });
 
-    it('should return null when axios throws', async () => {
-      mockAxiosPost.mockRejectedValueOnce(new Error('network error'));
+    it('should return null when the request throws', async () => {
+      mockHttpPost.mockRejectedValueOnce(new Error('network error'));
 
       const fn = (provider as unknown as Record<string, () => Promise<string | null>>)['GetAccessToken']
         .bind(provider);
@@ -199,7 +196,7 @@ describe('RexRecommendationsProvider', () => {
     });
 
     it('should return error when token cannot be obtained', async () => {
-      mockAxiosPost.mockRejectedValueOnce(new Error('auth fail'));
+      mockHttpPost.mockRejectedValueOnce(new Error('auth fail'));
 
       const request = {
         Options: { EntityDocumentID: 'doc-1' },

@@ -50,6 +50,19 @@ function prov(ctx: IntegrationCheckContext): DatabaseProviderBase {
     return ctx.Provider as unknown as DatabaseProviderBase;
 }
 
+/**
+ * A schema-qualified table name in whichever dialect is running.
+ *
+ * The raw-SQL legs below used T-SQL brackets (`[__mj].[UserRoutine]`), which PostgreSQL rejects
+ * outright with `syntax error at or near "["`. That failed the fixture SETUP, so the bundle lost
+ * five oracles to one unquotable statement — UR10 on the error itself, then UR11-UR14 on the run
+ * rows and notifications the un-seeded fixture never produced. Matches the helper in
+ * `open-app-teardown.checks.ts`, which is the same fix for the same reason.
+ */
+function tbl(provider: DatabaseProviderBase, table: string): string {
+    return provider.Dialect.QuoteSchema(provider.MJCoreSchemaName, table);
+}
+
 /** True-DB-state fetch of a single row by ID (BypassCache) — direct SQL writes below bypass entity events. */
 async function fetchById(entity: string, id: string, user: UserInfo): Promise<Row> {
     const result = await new RunView().RunView({ EntityName: entity, ExtraFilter: `ID='${id}'`, ResultType: 'simple', BypassCache: true }, user);
@@ -290,7 +303,7 @@ export const UserRoutinesChecks: NamedCheck[] = [
             // (bypassing the entity server) to emulate a legacy/externally-created row.
             f.RoutineSeed = await makeRoutine(ctx, 'Seed Candidate', (x) => { x.Status = 'Active'; });
             await provider.ExecuteSQL(
-                `UPDATE [${provider.MJCoreSchemaName}].[UserRoutine] SET NextRunAt = NULL WHERE ID = '${f.RoutineSeed.ID}'`,
+                `UPDATE ${tbl(provider, 'UserRoutine')} SET ${provider.Dialect.QuoteIdentifier('NextRunAt')} = NULL WHERE ${provider.Dialect.QuoteIdentifier('ID')} = ${provider.Dialect.QuoteStringLiteral(f.RoutineSeed.ID)}`,
                 [],
                 { isMutation: true, description: 'user-routines: null NextRunAt for the seeding fixture' },
                 user
@@ -375,24 +388,46 @@ export const UserRoutinesChecks: NamedCheck[] = [
             f.RoutineDue!.NotifyCondition = 'OnChange';
             Assert(await f.RoutineDue!.Save(), `re-arming the routine failed: ${f.RoutineDue!.LatestResult?.CompleteMessage}`);
 
+            // Snapshot the run rows that exist BEFORE this pass, and assert on the DELTA.
+            //
+            // The shipped "User Routine Dispatcher" scheduled job is Active with a per-minute cron,
+            // so from the moment the Save above makes this routine due, the live sweep inside MJAPI
+            // is entitled to claim it too. ConcurrencyMode=Skip does not prevent that: it serialises
+            // SCHEDULED runs against each other, and the driver below is constructed in-process
+            // against a fabricated MJScheduledJobEntity that is never saved, so the engine cannot
+            // see it. A global count assertion here is therefore a race against the product, and it
+            // resolves differently depending on where MJAPI's poll tick — anchored to boot time,
+            // not to the wall clock — happens to land inside this bundle's ~3 second window.
+            const before = new Set((await fetchRuns(f.RoutineDue!.ID, user)).map(r => String(r.ID)));
+
             const driver = new UserRoutineDispatcherDriver();
             const result = await driver.Execute(await makeDispatcherContext(ctx));
             Assert(result.Success, `second dispatcher sweep failed: ${result.ErrorMessage}`);
+            // The property the old exact-count assertion was really protecting — that a sweep does
+            // not double-run a routine it claimed — stated directly against OUR sweep, where it is
+            // deterministic, instead of inferred from a row count anyone else may also write to.
+            AssertEqual(Number(result.Details?.RoutinesRun), 1, 'this sweep must claim and run the routine exactly once');
 
             const runs = await fetchRuns(f.RoutineDue!.ID, user);
-            AssertEqual(runs.length, 2, 'a second run row exists after the second pass');
-            const secondRun = runs[1];
-            AssertEqual(String(secondRun.Status), 'Success', `second run status (error: ${secondRun.ErrorMessage ?? 'none'})`);
-            AssertEqual(String(secondRun.ResultHash), String(runs[0].ResultHash), 'identical expression must produce an identical hash');
-            AssertEqual(secondRun.NotificationSent, false, 'OnChange with an unchanged hash must NOT notify');
+            const newRuns = runs.filter(r => !before.has(String(r.ID)));
+            Assert(newRuns.length >= 1, `the second pass must produce at least one run row (got ${newRuns.length})`);
 
-            const notifications = await new RunView().RunView({
-                EntityName: 'MJ: User Notifications',
-                ExtraFilter: `UserID='${user.ID}' AND ResourceConfiguration LIKE '%${String(secondRun.ID)}%'`,
-                ResultType: 'simple',
-                BypassCache: true,
-            }, user);
-            AssertEqual(notifications.Results.length, 0, 'no notification row for the unchanged second run');
+            // Every run in this window replays the same expression against the same data, so the
+            // OnChange contract has to hold for ALL of them regardless of which dispatcher produced
+            // each one. Checking every new row is strictly stronger than checking the one at index 1.
+            for (const run of newRuns) {
+                AssertEqual(String(run.Status), 'Success', `second run status (error: ${run.ErrorMessage ?? 'none'})`);
+                AssertEqual(String(run.ResultHash), String(runs[0].ResultHash), 'identical expression must produce an identical hash');
+                AssertEqual(run.NotificationSent, false, 'OnChange with an unchanged hash must NOT notify');
+
+                const notifications = await new RunView().RunView({
+                    EntityName: 'MJ: User Notifications',
+                    ExtraFilter: `UserID='${user.ID}' AND ResourceConfiguration LIKE '%${String(run.ID)}%'`,
+                    ResultType: 'simple',
+                    BypassCache: true,
+                }, user);
+                AssertEqual(notifications.Results.length, 0, 'no notification row for the unchanged second run');
+            }
         }
     },
     {
@@ -515,7 +550,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('user-routines', {
         for (const runId of f.OrphanedRunIds) {
             try {
                 await provider.ExecuteSQL(
-                    `DELETE FROM [${provider.MJCoreSchemaName}].[UserNotification] WHERE ResourceConfiguration LIKE '%${runId}%'`,
+                    `DELETE FROM ${tbl(provider, 'UserNotification')} WHERE ${provider.Dialect.QuoteIdentifier('ResourceConfiguration')} LIKE ${provider.Dialect.QuoteStringLiteral(`%${runId}%`)}`,
                     [],
                     { isMutation: true, description: 'user-routines: cleanup notifications for cascade-deleted runs' },
                     user
@@ -539,7 +574,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('user-routines', {
                     // direct SQL (scoped to the exact run IDs this suite created).
                     try {
                         await provider.ExecuteSQL(
-                            `DELETE FROM [${provider.MJCoreSchemaName}].[UserNotification] WHERE ResourceConfiguration LIKE '%${run.ID}%'`,
+                            `DELETE FROM ${tbl(provider, 'UserNotification')} WHERE ${provider.Dialect.QuoteIdentifier('ResourceConfiguration')} LIKE ${provider.Dialect.QuoteStringLiteral(`%${run.ID}%`)}`,
                             [],
                             { isMutation: true, description: 'user-routines: cleanup in-app notifications' },
                             user

@@ -1,7 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
-import axios from "axios";
+import { HttpPost } from "@memberjunction/network-utils";
 import { JSONParamHelper } from "../utilities/json-param-helper";
 
 /**
@@ -174,24 +174,24 @@ export class TeamsWebhookAction extends BaseAction {
             }
 
             // Send to Teams
-            const response = await axios.post(webhookURL, payload, {
-                headers: {
+            const response = await HttpPost<number | string>(webhookURL, payload, {
+                Headers: {
                     'Content-Type': 'application/json'
                 },
-                validateStatus: () => true // Handle all status codes
+                ThrowOnError: false // Handle all status codes
             });
 
             // Check response
-            if (response.status === 200) {
+            if (response.Status === 200) {
                 // Success response from Teams is "1"
-                const isSuccess = response.data === 1 || response.data === "1";
+                const isSuccess = response.Data === 1 || response.Data === "1";
                 
                 if (isSuccess) {
                     // Add output parameters
                     params.Params.push({
                         Name: 'TeamsResponse',
                         Type: 'Output',
-                        Value: response.data
+                        Value: response.Data
                     });
 
                     params.Params.push({
@@ -205,32 +205,32 @@ export class TeamsWebhookAction extends BaseAction {
                         ResultCode: "MESSAGE_SENT",
                         Message: JSON.stringify({
                             message: "Teams message sent successfully",
-                            response: response.data,
+                            response: response.Data,
                             payload: payload
                         }, null, 2)
                     };
                 } else {
                     return {
                         Success: false,
-                        Message: `Teams webhook returned unexpected response: ${response.data}`,
+                        Message: `Teams webhook returned unexpected response: ${response.Data}`,
                         ResultCode: "UNEXPECTED_RESPONSE"
                     };
                 }
-            } else if (response.status === 400) {
+            } else if (response.Status === 400) {
                 // Bad request - usually malformed payload
                 return {
                     Success: false,
-                    Message: `Invalid payload: ${response.data || 'Bad Request'}`,
+                    Message: `Invalid payload: ${response.Data || 'Bad Request'}`,
                     ResultCode: "INVALID_PAYLOAD"
                 };
-            } else if (response.status === 413) {
+            } else if (response.Status === 413) {
                 // Payload too large
                 return {
                     Success: false,
                     Message: "Payload too large. Teams webhooks have a size limit.",
                     ResultCode: "PAYLOAD_TOO_LARGE"
                 };
-            } else if (response.status === 429) {
+            } else if (response.Status === 429) {
                 // Rate limited
                 return {
                     Success: false,
@@ -241,8 +241,8 @@ export class TeamsWebhookAction extends BaseAction {
                 // Other error
                 return {
                     Success: false,
-                    Message: `Teams webhook failed: HTTP ${response.status} - ${response.data}`,
-                    ResultCode: `HTTP_${response.status}`
+                    Message: `Teams webhook failed: HTTP ${response.Status} - ${response.Data}`,
+                    ResultCode: `HTTP_${response.Status}`
                 };
             }
 

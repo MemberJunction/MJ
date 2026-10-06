@@ -25,6 +25,18 @@ export interface PGConnectionConfig {
     IdleTimeoutMillis?: number;
     /** Connection timeout in milliseconds (default: 30000) */
     ConnectionTimeoutMillis?: number;
+    /**
+     * Server-side limit on how long one statement may run, in milliseconds. Sent in the startup
+     * packet as `statement_timeout`, so it applies to every backend from its first statement, and
+     * PostgreSQL cancels the statement itself when it is exceeded. Omitted or 0 means no limit.
+     */
+    StatementTimeoutMs?: number;
+    /**
+     * Server-side limit on how long a session may sit idle inside an open transaction, in
+     * milliseconds, sent as `idle_in_transaction_session_timeout`. PostgreSQL ends a session that
+     * exceeds it, which releases the transaction's locks. Omitted or 0 means no limit.
+     */
+    IdleInTransactionSessionTimeoutMs?: number;
     /** MemberJunction schema name (default: __mj) */
     MJCoreSchemaName?: string;
     /**
@@ -108,6 +120,7 @@ export class PGConnectionManager {
             // Optional libpq startup options (e.g. `-c statement_timeout=30000`) — applied
             // by every backend from connection #1, including the verify-SELECT-1 below.
             ...(config.Options ? { options: config.Options } : {}),
+            ...PGConnectionManager.serverTimeouts(config),
         });
 
         // Verify connectivity
@@ -117,6 +130,18 @@ export class PGConnectionManager {
         } finally {
             client.release();
         }
+    }
+
+    /** The server-side timeouts to put in the pool config, leaving out any that are unset or 0. */
+    private static serverTimeouts(config: PGConnectionConfig): Pick<pg.PoolConfig, 'statement_timeout' | 'idle_in_transaction_session_timeout'> {
+        const timeouts: Pick<pg.PoolConfig, 'statement_timeout' | 'idle_in_transaction_session_timeout'> = {};
+        if (config.StatementTimeoutMs && config.StatementTimeoutMs > 0) {
+            timeouts.statement_timeout = config.StatementTimeoutMs;
+        }
+        if (config.IdleInTransactionSessionTimeoutMs && config.IdleInTransactionSessionTimeoutMs > 0) {
+            timeouts.idle_in_transaction_session_timeout = config.IdleInTransactionSessionTimeoutMs;
+        }
+        return timeouts;
     }
 
     /**
@@ -154,7 +179,7 @@ export class PGConnectionManager {
      *
      * Race-safe: clears `_pool` *before* awaiting `pool.end()` so concurrent
      * callers (e.g. parallel `Refresh()` → `Config()` → `Initialize()` paths
-     * during `mj sync push --parallel-batch-size > 1`) can't both observe a
+     * during `mj sync push --isolated-transactions`) can't both observe a
      * non-null `_pool` and both invoke `pool.end()` on the same pool, which
      * `pg-pool` rejects with `Called end on pool more than once`. The local
      * `pool` reference keeps the awaited end() bound to the correct instance.

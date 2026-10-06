@@ -3,7 +3,8 @@
  *
  * Covers: default-agent resolution failure surfaces a notification + returns null,
  * successful run returns the underlying ExecuteAgentResult, agent failure surfaces
- * a notification + returns null, isProcessing$ toggles around the call, candidate
+ * a notification + returns a failed ExecuteAgentResult (so the chat bubble can
+ * show the real error instead of "Unknown error"), isProcessing$ toggles around the call, candidate
  * agent filtering excludes the resolved agent / non-Active / Sub-Agent invocation
  * modes / agents with ParentID.
  */
@@ -77,7 +78,12 @@ vi.mock('@memberjunction/ai-agent-client', () => {
     };
 });
 
-vi.mock('@memberjunction/ai-core-plus', () => ({}));
+vi.mock('@memberjunction/ai-core-plus', async () => {
+    // Import the helper from source so this test exercises the real function
+    // without loading @memberjunction/ai-core-plus (which pulls BaseEntity).
+    const { coerceFailedExecuteAgentResult } = await import('../../../AI/CorePlus/src/agent-failure-message');
+    return { coerceFailedExecuteAgentResult };
+});
 
 vi.mock('@memberjunction/global', () => ({
     UUIDsEqual: (a: string, b: string): boolean =>
@@ -261,6 +267,61 @@ describe('ConversationAgentRunner', () => {
             const names = data.ALL_AVAILABLE_AGENTS.map((a: { Name: string }) => a.Name);
             expect(names).toEqual(['Research']);
         });
+
+        it('narrows ALL_AVAILABLE_AGENTS to the host\'s allowed list (case-insensitive IDs)', async () => {
+            const research2 = { ...otherActiveAgent, ID: 'other-2', Name: 'Writer' };
+            withAgents(sageAgent, otherActiveAgent, research2);
+            await runner.processMessage({
+                conversationId: 'c1',
+                message: { ID: 'm1' } as never,
+                conversationDetailId: 'cd1',
+                AllowedAgentIDs: ['SAGE-UUID', 'OTHER-2'],
+            });
+
+            const names = hoisted.sessionRun.mock.calls[0][0].Data.ALL_AVAILABLE_AGENTS.map((a: { Name: string }) => a.Name);
+            expect(names).toEqual(['Writer']);
+        });
+
+        it('an empty allowed list leaves the manager nobody to delegate to', async () => {
+            await runner.processMessage({
+                conversationId: 'c1',
+                message: { ID: 'm1' } as never,
+                conversationDetailId: 'cd1',
+                AllowedAgentIDs: [],
+            });
+
+            expect(hoisted.sessionRun.mock.calls[0][0].Data.ALL_AVAILABLE_AGENTS).toEqual([]);
+        });
+    });
+
+    describe('history floor', () => {
+        beforeEach(() => {
+            withAgents(sageAgent);
+            hoisted.sessionRun.mockResolvedValue({ Success: true, Result: {} });
+        });
+
+        it('sends AgentHistoryFrom when the host sets one', async () => {
+            const floor = new Date('2026-09-01T12:00:00.000Z');
+            await runner.processMessage({
+                conversationId: 'c1',
+                message: { ID: 'm1' } as never,
+                conversationDetailId: 'cd1',
+                AgentHistoryFrom: floor,
+            });
+
+            expect(hoisted.sessionRun.mock.calls[0][0].AgentHistoryFrom).toBe(floor);
+        });
+
+        it('leaves it off otherwise', async () => {
+            await runner.processMessage({
+                conversationId: 'c1',
+                message: { ID: 'm1' } as never,
+                conversationDetailId: 'cd1',
+                AgentHistoryFrom: null,
+            });
+
+            expect(hoisted.sessionRun.mock.calls[0][0]).not.toHaveProperty('AgentHistoryFrom');
+        });
     });
 
     describe('explicit agent ID wins', () => {
@@ -286,7 +347,7 @@ describe('ConversationAgentRunner', () => {
             withAgents(sageAgent);
         });
 
-        it('surfaces a notification and returns null when the session reports failure', async () => {
+        it('surfaces a notification and returns a failed ExecuteAgentResult when the session reports failure', async () => {
             hoisted.sessionRun.mockResolvedValue({ Success: false, ErrorMessage: 'timeout' });
 
             const result = await runner.processMessage({
@@ -295,13 +356,33 @@ describe('ConversationAgentRunner', () => {
                 conversationDetailId: 'cd1',
             });
 
-            expect(result).toBeNull();
+            expect(result).toEqual({ success: false, errorMessage: 'timeout' });
             expect(notify).toHaveBeenCalledOnce();
             expect(notify.mock.calls[0][0]).toBe('error');
             expect(notify.mock.calls[0][1]).toContain('timeout');
         });
 
-        it('surfaces a notification and returns null when the session throws', async () => {
+        it('forces success false when the envelope failed but Result.success is still true', async () => {
+            const source = { success: true, payload: { x: 1 } };
+            hoisted.sessionRun.mockResolvedValue({
+                Success: false,
+                ErrorMessage: 'envelope failed',
+                Result: source,
+            });
+
+            const result = await runner.processMessage({
+                conversationId: 'c1',
+                message: { ID: 'm1' } as never,
+                conversationDetailId: 'cd1',
+            });
+
+            expect(result?.success).toBe(false);
+            expect(result?.errorMessage).toBe('envelope failed');
+            expect(result?.payload).toEqual({ x: 1 });
+            expect(source.success).toBe(true);
+        });
+
+        it('surfaces a notification and returns a failed ExecuteAgentResult when the session throws', async () => {
             const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
             try {
                 hoisted.sessionRun.mockRejectedValue(new Error('network'));
@@ -312,7 +393,8 @@ describe('ConversationAgentRunner', () => {
                     conversationDetailId: 'cd1',
                 });
 
-                expect(result).toBeNull();
+                expect(result?.success).toBe(false);
+                expect(result?.errorMessage).toContain('network');
                 expect(notify).toHaveBeenCalledOnce();
                 expect(notify.mock.calls[0][1]).toContain('network');
             } finally {

@@ -209,4 +209,4 @@ export { ComponentSpec } from '@memberjunction/interactive-component-types';
 
 ## License
 
-ISC
+Business Source License 1.1 — see [LICENSE](../../../LICENSE) for details.

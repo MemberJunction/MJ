@@ -197,10 +197,15 @@ const codegenConfig = {
       when: 'after',
     },
     {
+      // Boot check: start the API, give it 30s to come up, then kill it.
+      // isDaemon makes reaching that timeout the pass — MJAPI is a server and
+      // never exits on its own, so without it this step always failed and
+      // reported a working install as a failed one (#4562).
       workingDirectory: './packages/MJAPI',
       command: 'npm',
       args: ['start'],
       timeout: 30000,
+      isDaemon: true,
       when: 'after',
     },
   ],
@@ -222,11 +227,16 @@ const mjServerConfig = {
   userHandling: {
     autoCreateNewUsers: true,
     newUserLimitedToAuthorizedDomains: false,
+    // Authorized EMAIL domains for auto-provisioned users, e.g. ['example.com', '*.example.org'].
+    // Matched against the email domain of the verified identity token — NOT the browser Origin.
     newUserAuthorizedDomains: [],
-    newUserRoles: ['UI', 'Developer'],
+    // 'UI' only — 'Developer'/'Integration' hold unfiltered update on MJ: Users on the baseline
+    // seed, which would let an auto-provisioned user set their own Type to 'Owner' (issue #4260).
+    newUserRoles: ['UI'],
     updateCacheWhenNotFound: true,
     updateCacheWhenNotFoundDelay: 5000,
-    contextUserForNewUserCreation: 'not.set@nowhere.com',
+    // Matched against User.Name first, then User.Email — 'System' is the seeded system user.
+    contextUserForNewUserCreation: 'System',
     CreateUserApplicationRecords: true,
     UserApplications: ['Admin'],
   },

@@ -329,9 +329,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Record Process Watermarks','RecordProcessID')"
-                [NewRecordValues]="NewRecordValues('MJ: Record Process Watermarks')"
+                [NewRecordValues]="NewRecordValues('MJ: Record Process Watermarks','RecordProcessID')"
                 [AllowLoad]="IsSectionExpanded('mJRecordProcessWatermarks')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJRecordProcessWatermarks', $event.totalRowCount)"
                 >
@@ -354,9 +354,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Process Runs','RecordProcessID')"
-                [NewRecordValues]="NewRecordValues('MJ: Process Runs')"
+                [NewRecordValues]="NewRecordValues('MJ: Process Runs','RecordProcessID')"
                 [AllowLoad]="IsSectionExpanded('mJProcessRuns')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJProcessRuns', $event.totalRowCount)"
                 >
@@ -379,11 +379,61 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: ML Model Scoring Bindings','RecordProcessID')"
-                [NewRecordValues]="NewRecordValues('MJ: ML Model Scoring Bindings')"
+                [NewRecordValues]="NewRecordValues('MJ: ML Model Scoring Bindings','RecordProcessID')"
                 [AllowLoad]="IsSectionExpanded('mJMLModelScoringBindings')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJMLModelScoringBindings', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Feature Values Section -->
+    <mj-collapsible-panel
+        SectionKey="mJFeatureValues"
+        SectionName="Feature Values"
+        Icon="fa fa-history"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJFeatureValues')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Feature Values','RecordProcessID')"
+                [NewRecordValues]="NewRecordValues('MJ: Feature Values','RecordProcessID')"
+                [AllowLoad]="IsSectionExpanded('mJFeatureValues')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJFeatureValues', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Feature Value Caches Section -->
+    <mj-collapsible-panel
+        SectionKey="mJFeatureValueCaches"
+        SectionName="Feature Value Caches"
+        Icon="fa fa-database"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJFeatureValueCaches')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Feature Value Caches','RecordProcessID')"
+                [NewRecordValues]="NewRecordValues('MJ: Feature Value Caches','RecordProcessID')"
+                [AllowLoad]="IsSectionExpanded('mJFeatureValueCaches')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJFeatureValueCaches', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

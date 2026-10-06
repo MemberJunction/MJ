@@ -98,9 +98,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Content Sources','ContentSourceTypeID')"
-                [NewRecordValues]="NewRecordValues('MJ: Content Sources')"
+                [NewRecordValues]="NewRecordValues('MJ: Content Sources','ContentSourceTypeID')"
                 [AllowLoad]="IsSectionExpanded('mJContentSources')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJContentSources', $event.totalRowCount)"
                 >
@@ -123,9 +123,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Content Items','ContentSourceTypeID')"
-                [NewRecordValues]="NewRecordValues('MJ: Content Items')"
+                [NewRecordValues]="NewRecordValues('MJ: Content Items','ContentSourceTypeID')"
                 [AllowLoad]="IsSectionExpanded('mJContentItems')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJContentItems', $event.totalRowCount)"
                 >
@@ -148,9 +148,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Content Process Run Details','ContentSourceTypeID')"
-                [NewRecordValues]="NewRecordValues('MJ: Content Process Run Details')"
+                [NewRecordValues]="NewRecordValues('MJ: Content Process Run Details','ContentSourceTypeID')"
                 [AllowLoad]="IsSectionExpanded('mJContentProcessRunDetails')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJContentProcessRunDetails', $event.totalRowCount)"
                 >

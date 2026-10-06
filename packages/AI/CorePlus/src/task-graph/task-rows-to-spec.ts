@@ -20,7 +20,7 @@
 import type { MJTaskEntity } from '@memberjunction/core-entities';
 import { TaskNode, type TaskGraphSpec, type TaskGraphSpecNode, type TaskNodeBase } from './task-graph-spec';
 import type { GraphNodePosition } from './graph-layout';
-import type { TaskGraphNodeKind } from './task-graph-spec';
+import type { TaskGraphNodeConfigMap, TaskGraphNodeKind } from './task-graph-spec';
 
 /**
  * The Task columns a run view reads.
@@ -49,6 +49,8 @@ export type TaskRunRow = {
 
 /** The dependency columns a run view reads. */
 export type TaskRunEdge = {
+    /** The `MJ: Task Dependencies` row ID — required by debug verbs that name an edge. */
+    ID?: string;
     TaskID: string;
     DependsOnTaskID: string;
     Condition?: string | null;
@@ -84,6 +86,7 @@ export function ProjectTaskRowsToSpec(
         if (!known.has(edge.TaskID) || !known.has(edge.DependsOnTaskID)) continue;
         const list = dependsOnByTask.get(edge.TaskID) ?? [];
         list.push({
+            id: edge.ID,
             tempId: edge.DependsOnTaskID,
             condition: edge.Condition ?? undefined,
             exclusiveGroup: edge.ExclusiveGroup ?? undefined,
@@ -148,6 +151,12 @@ function nodeFor(
             return TaskNode.While(base, config?.while ?? { condition: '' });
         case 'External':
             return TaskNode.External(base, config?.external ?? { domain: 'external' });
+        case 'Decision':
+            return TaskNode.Decision(base, {
+                promptName: config?.decision?.promptName,
+                state: config?.decision?.state,
+                questions: config?.decision?.questions ?? {},
+            });
         case 'Human':
         default:
             return TaskNode.Human(base, {
@@ -164,6 +173,7 @@ type StoredConfiguration = {
     forEach?: { collectionPath: string };
     while?: { condition: string };
     external?: { domain: string; ref?: string };
+    decision?: Partial<TaskGraphNodeConfigMap['Decision']>;
     inputMapping?: string;
     outputMapping?: string;
     layout?: { x?: number; y?: number; width?: number; height?: number };

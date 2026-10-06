@@ -1,5 +1,5 @@
 import { RegisterClass } from '@memberjunction/global';
-import { LinkedInBaseAction } from '../linkedin-base.action';
+import { LinkedInBaseAction, LinkedInCollectionResponse, LinkedInFollowerStatistics, LinkedInProfile } from '../linkedin-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { LogStatus, LogError } from '@memberjunction/core';
 import { BaseAction } from '@memberjunction/actions';
@@ -94,9 +94,9 @@ export class LinkedInGetFollowersAction extends LinkedInBaseAction {
             }
 
             // Get follower statistics
-            const response = await this.axiosInstance.get('/organizationalEntityFollowerStatistics', { params });
+            const response = await this.httpClient.Get<LinkedInCollectionResponse<LinkedInFollowerStatistics>>('/organizationalEntityFollowerStatistics', { Query: params });
 
-            const stats = response.data.elements?.[0] || {};
+            const stats = response.Data.elements?.[0] || {};
             
             const result: any = {
                 followerCount: stats.followerCounts?.organicFollowerCount || 0,
@@ -116,16 +116,16 @@ export class LinkedInGetFollowersAction extends LinkedInBaseAction {
 
             // Get demographics if available
             try {
-                const demographicsResponse = await this.axiosInstance.get('/organizationalEntityFollowerStatistics', {
-                    params: {
+                const demographicsResponse = await this.httpClient.Get<LinkedInCollectionResponse<LinkedInFollowerStatistics>>('/organizationalEntityFollowerStatistics', {
+                    Query: {
                         q: 'organizationalEntity',
                         organizationalEntity: organizationUrn,
                         projection: '(followerCountsByAssociationType,followerCountsByFunction,followerCountsBySeniority,followerCountsByIndustry,followerCountsByRegion,followerCountsByCountry)'
                     }
                 });
 
-                if (demographicsResponse.data.elements?.[0]) {
-                    const demographics = demographicsResponse.data.elements[0];
+                if (demographicsResponse.Data.elements?.[0]) {
+                    const demographics = demographicsResponse.Data.elements[0];
                     result.demographics = {
                         byFunction: demographics.followerCountsByFunction || [],
                         bySeniority: demographics.followerCountsBySeniority || [],
@@ -152,18 +152,18 @@ export class LinkedInGetFollowersAction extends LinkedInBaseAction {
     private async getPersonalFollowers(userUrn: string): Promise<any> {
         try {
             // Get basic profile information including follower count
-            const response = await this.axiosInstance.get('/me', {
-                params: {
+            const response = await this.httpClient.Get<LinkedInProfile>('/me', {
+                Query: {
                     projection: '(id,firstName,lastName,headline,publicProfileUrl,followerCount)'
                 }
             });
 
             return {
-                followerCount: response.data.followerCount || 0,
+                followerCount: response.Data.followerCount || 0,
                 profileInfo: {
-                    name: `${response.data.firstName?.localized?.en_US || ''} ${response.data.lastName?.localized?.en_US || ''}`.trim(),
-                    headline: response.data.headline?.localized?.en_US || '',
-                    profileUrl: response.data.publicProfileUrl || ''
+                    name: `${response.Data.firstName?.localized?.en_US || ''} ${response.Data.lastName?.localized?.en_US || ''}`.trim(),
+                    headline: response.Data.headline?.localized?.en_US || '',
+                    profileUrl: response.Data.publicProfileUrl || ''
                 },
                 note: 'LinkedIn API provides limited follower statistics for personal profiles'
             };

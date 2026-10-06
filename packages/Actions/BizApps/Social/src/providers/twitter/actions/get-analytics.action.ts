@@ -1,5 +1,5 @@
 import { RegisterClass } from '@memberjunction/global';
-import { TwitterBaseAction, Tweet, TwitterMetrics } from '../twitter-base.action';
+import { Tweet, TwitterApiResponse, TwitterBaseAction, TwitterMetrics } from '../twitter-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { LogStatus, LogError } from '@memberjunction/core';
 import { SocialAnalytics } from '../../../base/base-social.action';
@@ -71,8 +71,8 @@ export class TwitterGetAnalyticsAction extends TwitterBaseAction {
                 const batch = tweetIds.slice(i, i + batchSize);
                 const ids = batch.join(',');
 
-                const response = await this.axiosInstance.get('/tweets', {
-                    params: {
+                const response = await this.httpClient.Get<TwitterApiResponse<Tweet[]>>('/tweets', {
+                    Query: {
                         'ids': ids,
                         'tweet.fields': 'id,text,created_at,public_metrics,organic_metrics,promoted_metrics',
                         'expansions': 'author_id',
@@ -80,8 +80,8 @@ export class TwitterGetAnalyticsAction extends TwitterBaseAction {
                     }
                 });
 
-                if (response.data.data) {
-                    for (const tweet of response.data.data) {
+                if (response.Data.data) {
+                    for (const tweet of response.Data.data) {
                         const metrics: TwitterMetrics = {
                             impression_count: 0,
                             engagement_count: 0,

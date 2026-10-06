@@ -6,5 +6,6 @@
  * @author MemberJunction.com
  */
 
+export * from './dead-handle';
 export * from './remote-browser-engine';
 export * from './remote-browser-channel';

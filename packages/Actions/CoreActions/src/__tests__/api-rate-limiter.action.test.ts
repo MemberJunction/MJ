@@ -50,8 +50,10 @@ vi.mock('@memberjunction/actions', () => ({
     },
 }));
 
-vi.mock('axios', () => ({
-    default: vi.fn(async () => ({ status: 200, statusText: 'OK', headers: {}, data: {} })),
+vi.mock('@memberjunction/network-utils', () => ({
+    HttpRequest: vi.fn(async () => ({ Status: 200, StatusText: 'OK', Headers: {}, Data: {}, Ok: true, Url: 'https://example.com' })),
+    IsHttpError: vi.fn(() => false),
+    SSRFError: class SSRFError extends Error {},
 }));
 
 import { BaseSingleton } from '@memberjunction/global';

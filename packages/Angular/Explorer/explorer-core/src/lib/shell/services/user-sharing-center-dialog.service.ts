@@ -17,7 +17,7 @@ export class UserSharingCenterDialogService {
 
     constructor(private dialogService: MJDialogService) {}
 
-    open(containerRef: ViewContainerRef): void {
+    Open(containerRef: ViewContainerRef): void {
         if (this.dialogRef) return;
 
         this.dialogRef = this.dialogService.open({
@@ -34,12 +34,27 @@ export class UserSharingCenterDialogService {
         });
     }
 
-    close(): void {
+    /** @deprecated Use {@link Open}. */
+    open(containerRef: ViewContainerRef): void {
+        return this.Open(containerRef);
+    }
+
+    Close(): void {
         this.dialogRef?.Close();
         this.dialogRef = null;
     }
 
-    get isOpen(): boolean {
+    /** @deprecated Use {@link Close}. */
+    close(): void {
+        return this.Close();
+    }
+
+    get IsOpen(): boolean {
         return this.dialogRef !== null;
+    }
+
+    /** @deprecated Use {@link IsOpen}. */
+    get isOpen(): boolean {
+        return this.IsOpen;
     }
 }

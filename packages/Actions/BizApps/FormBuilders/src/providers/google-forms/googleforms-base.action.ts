@@ -1,7 +1,7 @@
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormBuilderAction, FormResponse, FormAnswer } from '../../base/base-form-builder.action';
 import { UserInfo, LogError, LogStatus } from '@memberjunction/core';
-import axios, { AxiosInstance, AxiosError } from 'axios';
+import { HttpClient, HttpError, IsHttpError } from '@memberjunction/network-utils';
 import { BaseAction } from '@memberjunction/actions';
 
 /**
@@ -141,43 +141,36 @@ export abstract class GoogleFormsBaseAction extends BaseFormBuilderAction {
         return 'https://forms.googleapis.com/v1';
     }
 
-    private axiosInstance: AxiosInstance | null = null;
+    private httpClientInstance: HttpClient | null = null;
     private currentAccessToken: string | null = null;
 
     /**
-     * Get axios instance with Google Forms authentication (OAuth 2.0)
+     * Get the HTTP client configured with Google Forms authentication (OAuth 2.0)
      */
-    protected getAxiosInstance(accessToken: string): AxiosInstance {
-        if (!this.axiosInstance || this.currentAccessToken !== accessToken) {
+    protected getHttpClient(accessToken: string): HttpClient {
+        if (!this.httpClientInstance || this.currentAccessToken !== accessToken) {
             this.currentAccessToken = accessToken;
-            this.axiosInstance = axios.create({
-                baseURL: this.apiBaseUrl,
-                timeout: 60000,
-                headers: {
+            this.httpClientInstance = new HttpClient({
+                BaseURL: this.apiBaseUrl,
+                Timeout: 60000,
+                Headers: {
                     'Accept': 'application/json',
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${accessToken}`
-                }
-            });
-
-            // Add response interceptor for rate limiting
-            this.axiosInstance.interceptors.response.use(
-                (response) => {
-                    return response;
                 },
-                async (error: AxiosError) => {
-                    if (error.response?.status === 429) {
-                        const retryAfter = error.response.headers['retry-after'];
+                OnRetry: async (error) => {
+                    if (error.Status === 429) {
+                        const retryAfter = error.Headers['retry-after'];
                         const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : 60000;
                         LogStatus(`Google Forms rate limit hit. Waiting ${waitTime}ms before retry...`);
                         await this.sleep(waitTime);
-                        return this.axiosInstance!.request(error.config!);
+                        return true;
                     }
-                    return Promise.reject(error);
+                    return false;
                 }
-            );
+            });
         }
-        return this.axiosInstance;
+        return this.httpClientInstance;
     }
 
     /**
@@ -208,12 +201,12 @@ export abstract class GoogleFormsBaseAction extends BaseFormBuilderAction {
                 params.filter = options.filter;
             }
 
-            const response = await this.getAxiosInstance(accessToken).get(
+            const response = await this.getHttpClient(accessToken).Get<GoogleFormsResponsesResult>(
                 `/forms/${formId}/responses`,
-                { params }
+                { Query: params }
             );
 
-            return response.data;
+            return response.Data;
         } catch (error) {
             LogError('Failed to get Google Forms responses:', error);
             throw this.handleGoogleFormsError(error);
@@ -278,11 +271,11 @@ export abstract class GoogleFormsBaseAction extends BaseFormBuilderAction {
         accessToken: string
     ): Promise<GoogleFormsResponseItem> {
         try {
-            const response = await this.getAxiosInstance(accessToken).get(
+            const response = await this.getHttpClient(accessToken).Get<GoogleFormsResponseItem>(
                 `/forms/${formId}/responses/${responseId}`
             );
 
-            return response.data;
+            return response.Data;
         } catch (error) {
             LogError('Failed to get single Google Forms response:', error);
             throw this.handleGoogleFormsError(error);
@@ -297,11 +290,11 @@ export abstract class GoogleFormsBaseAction extends BaseFormBuilderAction {
         accessToken: string
     ): Promise<GoogleFormsDetails> {
         try {
-            const response = await this.getAxiosInstance(accessToken).get(
+            const response = await this.getHttpClient(accessToken).Get<GoogleFormsDetails>(
                 `/forms/${formId}`
             );
 
-            return response.data;
+            return response.Data;
         } catch (error) {
             LogError('Failed to get Google Forms details:', error);
             throw this.handleGoogleFormsError(error);
@@ -401,10 +394,10 @@ export abstract class GoogleFormsBaseAction extends BaseFormBuilderAction {
      * Handle Google Forms-specific errors
      */
     protected handleGoogleFormsError(error: any): Error {
-        if (axios.isAxiosError(error)) {
-            const axiosError = error as AxiosError;
-            const status = axiosError.response?.status;
-            const data = axiosError.response?.data as any;
+        if (IsHttpError(error)) {
+            const httpError = error as HttpError;
+            const status = httpError.Status;
+            const data = httpError.Data as any;
 
             if (status === 401) {
                 return new Error('Invalid Google Forms access token. Please check your authentication or refresh your OAuth token.');

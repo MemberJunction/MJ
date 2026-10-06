@@ -119,7 +119,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
     }
 
 
-    private _IneligibleEntities: string[] = [];// ['Entities', 'MJ: Entity Fields', 'MJ: Entity Field Values', 'MJ: Entity Relationships', 'MJ: Record Changes']; // default ineligible entities --- turned off for now
+    private _IneligibleEntities: string[] = [];// ['Entities', 'MJ: Entity Fields', 'MJ: Entity Field Values', 'MJ: Entity Relationships', 'MJ: Record Changes']; // default ineligible entities --- turned off for now — case-violation-ok-legacy-back-compat: reached by bracket access outside the declaring class, where a same-named key on an unrelated object is indistinguishable
     /**
      * A list of entities that will automatically be excluded from all calls to this class. This array is used as a "safety"
      * mechanism to prevent the system from trying to replay changes to these entities which wouldn't negatively affect system integrity
@@ -135,7 +135,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
     }
 
 
-    private _EligibleEntities: EntityInfo[];
+    private _EligibleEntities: EntityInfo[];  // case-violation-ok-legacy-back-compat: the name is also a string literal that resolves this member at runtime, so renaming it breaks the lookup
     /**
      * A list of the entities that are eligible for external change detection. This is determined by using the underlying
      * database view vwEntitiesWithExternalChangeTracking which is a view that is maintained by the MJ system and is used to
@@ -340,17 +340,12 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
     private buildDeleteItem(entity: EntityInfo, row: Record<string, unknown>): ChangeDetectionItem {
         const item = new ChangeDetectionItem();
         item.Entity = entity;
-        const ck = new CompositeKey();
         const recordID = row.RecordID as string;
-
-        // Legacy data may have a bare value instead of Field|Value format
+        // Reads both the Field|Value form and legacy bare values (mapped onto the entity's first key).
+        const ck = CompositeKey.FromURLSegment(entity, recordID);
         if (recordID.indexOf(CompositeKey.DefaultValueDelimiter) === -1) {
-            ck.LoadFromSingleKeyValuePair(entity.PrimaryKeys[0].Name, recordID);
             item.LegacyKey = true;
             item.LegacyKeyValue = recordID;
-        }
-        else {
-            ck.LoadFromConcatenatedString(recordID);
         }
 
         item.PrimaryKey = ck;

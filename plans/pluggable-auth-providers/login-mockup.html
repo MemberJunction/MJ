@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MJ Explorer — Pluggable Auth Login (mockup)</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+<style>
+  /* ============================================================
+     MemberJunction design tokens (subset) — light + dark
+     Mirrors the real login screen's gradient/wave token names.
+     ============================================================ */
+  :root {
+    --mj-brand-primary: #0076b6;
+    --mj-brand-primary-hover: #0a5e90;
+    --mj-bg-page: #eef2f7;
+    --mj-bg-surface: #ffffff;
+    --mj-bg-surface-hover: #f4f7fb;
+    --mj-border-default: #e2e8f0;
+    --mj-border-strong: #cbd5e1;
+    --mj-text-primary: #1f2a37;
+    --mj-text-secondary: #4a5568;
+    --mj-text-muted: #7b8794;
+    --mj-text-inverse: #ffffff;
+    --mj-shadow-card: 0 18px 50px rgba(20, 40, 80, 0.18);
+
+    --mj-login-grad-start: #0a4d8c;
+    --mj-login-grad-mid:   #0076b6;
+    --mj-login-grad-end:   #38b6d3;
+    --mj-login-wave-1: #1e63b0;
+    --mj-login-wave-2: #5ad1e6;
+    --mj-login-wave-3: #9fd8f1;
+    --mj-radius: 14px;
+  }
+  [data-theme="dark"] {
+    --mj-bg-page: #0f141b;
+    --mj-bg-surface: #1a212b;
+    --mj-bg-surface-hover: #222c38;
+    --mj-border-default: #2c3744;
+    --mj-border-strong: #3a4757;
+    --mj-text-primary: #e7edf5;
+    --mj-text-secondary: #aab6c4;
+    --mj-text-muted: #7e8a99;
+    --mj-shadow-card: 0 18px 50px rgba(0, 0, 0, 0.55);
+    --mj-login-grad-start: #06243f;
+    --mj-login-grad-mid:   #0a4d77;
+    --mj-login-grad-end:   #126b86;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+    background: var(--mj-bg-page);
+    color: var(--mj-text-primary);
+    display: grid;
+    place-items: center;
+  }
+
+  /* The login surface — two panes, matches MJ Explorer's .login-wrapper */
+  .login-wrapper {
+    position: relative;
+    width: min(1120px, 94vw);
+    height: min(720px, 92vh);
+    display: grid;
+    grid-template-columns: 1.15fr 1fr;
+    background: var(--mj-bg-surface);
+    border-radius: 22px;
+    overflow: hidden;
+    box-shadow: var(--mj-shadow-card);
+  }
+
+  /* ---- Left: animated wave banner ---- */
+  .main-banner { position: relative; overflow: hidden; }
+  .login-bg-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .login-wave { transform-origin: center; animation: drift 18s ease-in-out infinite; }
+  .login-wave-2 { animation-duration: 22s; animation-direction: reverse; }
+  .login-wave-3 { animation-duration: 26s; }
+  @keyframes drift {
+    0%, 100% { transform: translateY(0) scale(1); }
+    50%      { transform: translateY(-22px) scale(1.04); }
+  }
+  .banner-content {
+    position: absolute; inset: 0; z-index: 2;
+    padding: 56px;
+    display: flex; flex-direction: column; justify-content: space-between;
+    color: var(--mj-text-inverse);
+  }
+  .wordmark {
+    font-size: 26px; font-weight: 800; letter-spacing: 0.5px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .wordmark .cube {
+    width: 34px; height: 34px; border-radius: 9px;
+    background: rgba(255,255,255,0.16);
+    border: 1px solid rgba(255,255,255,0.4);
+    display: grid; place-items: center; font-size: 16px;
+  }
+  .banner-headline { font-size: 52px; line-height: 1.05; font-weight: 800; margin: 0; }
+  .banner-sub { margin-top: 16px; font-size: 16px; max-width: 34ch; opacity: 0.92; }
+  .banner-foot { font-size: 13px; opacity: 0.8; }
+
+  /* ---- Right: login / provider picker ---- */
+  .login-pane {
+    position: relative;
+    padding: 56px 56px 40px;
+    display: flex; flex-direction: column; justify-content: center;
+  }
+  .login-pane h3 { font-size: 30px; margin: 0 0 6px; color: var(--mj-text-primary); }
+  .login-pane .lede { margin: 0 0 28px; color: var(--mj-text-secondary); font-size: 15px; }
+
+  .provider-list { display: flex; flex-direction: column; gap: 12px; }
+  .provider-btn {
+    display: flex; align-items: center; gap: 14px;
+    width: 100%; padding: 14px 18px;
+    background: var(--mj-bg-surface);
+    border: 1.5px solid var(--mj-border-default);
+    border-radius: var(--mj-radius);
+    color: var(--mj-text-primary);
+    font-size: 15.5px; font-weight: 600;
+    cursor: pointer; text-align: left;
+    transition: border-color .15s, background .15s, transform .08s, box-shadow .15s;
+  }
+  .provider-btn:hover {
+    border-color: var(--mj-brand-primary);
+    background: var(--mj-bg-surface-hover);
+    box-shadow: 0 6px 18px rgba(0, 118, 182, 0.12);
+  }
+  .provider-btn:active { transform: translateY(1px); }
+  .provider-btn .ico {
+    width: 30px; height: 30px; flex: 0 0 30px;
+    display: grid; place-items: center; font-size: 19px;
+    border-radius: 8px;
+  }
+  .provider-btn .label { flex: 1; }
+  .provider-btn .chev { color: var(--mj-text-muted); font-size: 13px; }
+  .provider-btn.is-default {
+    border-color: var(--mj-brand-primary);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 14%, transparent);
+  }
+  .default-pill {
+    margin-left: 8px; font-size: 10.5px; font-weight: 700; letter-spacing: .4px;
+    text-transform: uppercase; color: var(--mj-brand-primary);
+    background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
+    padding: 2px 7px; border-radius: 999px;
+  }
+
+  /* brand icon chips */
+  .ico.workos    { background:#111; color:#fff; }
+  .ico.microsoft { background:#f3f3f3; color:#0a0a0a; }
+  .ico.okta      { background:#007dc1; color:#fff; }
+  .ico.google    { background:#fff; color:#4285f4; border:1px solid var(--mj-border-default); }
+  .ico.auth0     { background:#eb5424; color:#fff; }
+
+  .divider { display:flex; align-items:center; gap:12px; margin:22px 0 6px; color:var(--mj-text-muted); font-size:12.5px; }
+  .divider::before, .divider::after { content:""; height:1px; flex:1; background:var(--mj-border-default); }
+  .foot-note { margin-top: 18px; font-size: 12.5px; color: var(--mj-text-muted); line-height:1.5; }
+
+  /* top-right controls (theme + demo toggle), mirrors real .theme-toggle */
+  .controls { position: absolute; top: 18px; right: 20px; z-index: 5; display:flex; gap:8px; }
+  .ctl {
+    border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface);
+    color: var(--mj-text-secondary); border-radius: 9px; padding: 8px 11px;
+    cursor: pointer; font-size: 13px;
+  }
+  .ctl:hover { color: var(--mj-text-primary); border-color: var(--mj-border-strong); }
+
+  /* single-provider variant */
+  .single-cta {
+    width:100%; padding:16px; border:none; border-radius:var(--mj-radius);
+    background:var(--mj-brand-primary); color:#fff; font-size:16px; font-weight:700; cursor:pointer;
+  }
+  .single-cta:hover { background:var(--mj-brand-primary-hover); }
+  body.mode-single .provider-list, body.mode-single .divider, body.mode-single .multi-only { display:none; }
+  body:not(.mode-single) .single-wrap { display:none; }
+
+  @media (max-width: 860px) {
+    .login-wrapper { grid-template-columns: 1fr; height: auto; }
+    .main-banner { min-height: 230px; }
+    .banner-headline { font-size: 38px; }
+  }
+</style>
+</head>
+<body class="mode-multi">
+  <div class="controls">
+    <button class="ctl" onclick="document.documentElement.dataset.theme = document.documentElement.dataset.theme==='dark'?'light':'dark'">
+      <i class="fa-solid fa-circle-half-stroke"></i> Theme
+    </button>
+    <button class="ctl" onclick="document.body.classList.toggle('mode-single')">
+      <i class="fa-solid fa-toggle-on"></i> Toggle 1 vs 2+ providers
+    </button>
+  </div>
+
+  <div class="login-wrapper">
+    <!-- LEFT: animated wave banner -->
+    <div class="main-banner">
+      <svg class="login-bg-svg" viewBox="0 0 1110 1080" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+        <defs>
+          <linearGradient id="bg" x1="0" y1="0" x2="1" y2="0.3">
+            <stop offset="0%"  stop-color="var(--mj-login-grad-start)"/>
+            <stop offset="60%" stop-color="var(--mj-login-grad-mid)"/>
+            <stop offset="100%" stop-color="var(--mj-login-grad-end)"/>
+          </linearGradient>
+        </defs>
+        <rect width="1110" height="1080" fill="url(#bg)"/>
+        <path class="login-wave login-wave-1" fill="var(--mj-login-wave-1)" fill-opacity="0.25"
+              d="M 550,-20 C 400,180 780,300 700,540 C 620,780 300,880 450,1100 L 580,1100 C 430,880 750,780 830,540 C 910,300 530,180 680,-20 Z"/>
+        <path class="login-wave login-wave-2" fill="var(--mj-login-wave-2)" fill-opacity="0.30"
+              d="M 720,-20 C 900,200 550,380 650,540 C 750,700 1050,820 880,1100 L 990,1100 C 1160,820 860,700 760,540 C 660,380 1010,200 830,-20 Z"/>
+        <path class="login-wave login-wave-3" fill="var(--mj-login-wave-3)" fill-opacity="0.20"
+              d="M 450,-20 C 520,200 750,280 690,440 C 630,600 350,720 480,1100 L 580,1100 C 450,720 730,600 790,440 C 850,280 620,200 550,-20 Z"/>
+      </svg>
+      <div class="banner-content">
+        <div class="wordmark"><span class="cube"><i class="fa-solid fa-cubes"></i></span> MemberJunction</div>
+        <div>
+          <h1 class="banner-headline">Welcome<br/>Back</h1>
+          <p class="banner-sub">Choose how you'd like to sign in. Your administrator configured these options.</p>
+        </div>
+        <div class="banner-foot">Secured by MemberJunction · pluggable authentication</div>
+      </div>
+    </div>
+
+    <!-- RIGHT: provider picker (2+) OR single CTA -->
+    <div class="login-pane">
+      <h3>Log In</h3>
+      <p class="lede multi-only">Continue with one of your organization's sign-in options.</p>
+
+      <!-- MULTI (2+ ClientVisible Active providers) -->
+      <div class="provider-list">
+        <button class="provider-btn is-default">
+          <span class="ico microsoft"><i class="fa-brands fa-microsoft"></i></span>
+          <span class="label">Sign in with Microsoft <span class="default-pill">Default</span></span>
+          <span class="chev"><i class="fa-solid fa-arrow-right"></i></span>
+        </button>
+        <button class="provider-btn">
+          <span class="ico workos"><i class="fa-solid fa-bolt"></i></span>
+          <span class="label">Sign in with WorkOS</span>
+          <span class="chev"><i class="fa-solid fa-arrow-right"></i></span>
+        </button>
+        <button class="provider-btn">
+          <span class="ico okta"><i class="fa-solid fa-circle-nodes"></i></span>
+          <span class="label">Sign in with Okta</span>
+          <span class="chev"><i class="fa-solid fa-arrow-right"></i></span>
+        </button>
+        <button class="provider-btn">
+          <span class="ico google"><i class="fa-brands fa-google"></i></span>
+          <span class="label">Sign in with Google</span>
+          <span class="chev"><i class="fa-solid fa-arrow-right"></i></span>
+        </button>
+      </div>
+
+      <div class="divider">configured in Admin → Authentication Providers</div>
+
+      <!-- SINGLE (exactly 1 provider → no picker, direct CTA) -->
+      <div class="single-wrap">
+        <button class="single-cta"><i class="fa-brands fa-microsoft"></i>&nbsp; Log in with Microsoft</button>
+        <p class="foot-note">When only one provider is enabled, MJ skips the picker and signs in directly — identical to today's single-<code>AUTH_TYPE</code> behavior.</p>
+      </div>
+
+      <p class="foot-note multi-only">
+        The picker appears only when <strong>2+ active, client-visible providers</strong> exist. The list, order, icons, and default
+        are driven by the <code>MJ: Authentication Providers</code> metadata — no rebuild required.
+      </p>
+    </div>
+  </div>
+</body>
+</html>

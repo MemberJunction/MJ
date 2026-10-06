@@ -4,18 +4,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 /*  Hoisted mocks – must be declared before any import that pulls     */
 /*  the module under test.                                            */
 /* ------------------------------------------------------------------ */
-const mockAxiosPost = vi.hoisted(() => vi.fn());
-const mockAxiosIsAxiosError = vi.hoisted(() => vi.fn().mockReturnValue(false));
-const mockAxiosIsCancel = vi.hoisted(() => vi.fn().mockReturnValue(false));
+const mockHttpPost = vi.hoisted(() => vi.fn());
+const mockIsHttpError = vi.hoisted(() => vi.fn().mockReturnValue(false));
+const mockIsCancellation = vi.hoisted(() => vi.fn().mockReturnValue(false));
 
-vi.mock('axios', () => ({
-  default: {
-    post: mockAxiosPost,
-    isAxiosError: mockAxiosIsAxiosError,
-    isCancel: mockAxiosIsCancel,
-  },
-  isAxiosError: mockAxiosIsAxiosError,
-  isCancel: mockAxiosIsCancel,
+vi.mock('@memberjunction/network-utils', () => ({
+  HttpPost: mockHttpPost,
+  IsHttpError: mockIsHttpError,
+  IsCancellationError: mockIsCancellation,
 }));
 
 vi.mock('../config', () => ({
@@ -120,8 +116,8 @@ describe('BettyBotLLM', () => {
   /* ---- GetJWTToken ---- */
   describe('GetJWTToken', () => {
     it('should call settings endpoint and return token on success', async () => {
-      mockAxiosPost.mockResolvedValueOnce({
-        data: {
+      mockHttpPost.mockResolvedValueOnce({
+        Data: {
           status: 'SUCCESS',
           errorMessage: '',
           enabledFeatures: [],
@@ -133,17 +129,17 @@ describe('BettyBotLLM', () => {
       expect(result).not.toBeNull();
       expect(result!.status).toBe('SUCCESS');
       expect(result!.token).toBe('jwt-123');
-      expect(mockAxiosPost).toHaveBeenCalledWith(
+      expect(mockHttpPost).toHaveBeenCalledWith(
         'https://betty-api.test.co/settings',
         { token: 'test-api-key' },
-        { signal: undefined },
+        { Signal: undefined },
       );
     });
 
     it('should return cached token if still valid', async () => {
       // First call – fetches the token
-      mockAxiosPost.mockResolvedValueOnce({
-        data: {
+      mockHttpPost.mockResolvedValueOnce({
+        Data: {
           status: 'SUCCESS',
           errorMessage: '',
           enabledFeatures: [],
@@ -152,30 +148,30 @@ describe('BettyBotLLM', () => {
       });
       await llm.GetJWTToken();
 
-      // Second call should use cached token (no second axios call)
+      // Second call should use cached token (no second HTTP call)
       const result = await llm.GetJWTToken();
       expect(result).not.toBeNull();
       expect(result!.token).toBe('jwt-cached');
-      expect(mockAxiosPost).toHaveBeenCalledTimes(1);
+      expect(mockHttpPost).toHaveBeenCalledTimes(1);
     });
 
     it('should force-refresh token when forceRefresh is true', async () => {
-      mockAxiosPost
+      mockHttpPost
         .mockResolvedValueOnce({
-          data: { status: 'SUCCESS', errorMessage: '', enabledFeatures: [], token: 'jwt-1' },
+          Data: { status: 'SUCCESS', errorMessage: '', enabledFeatures: [], token: 'jwt-1' },
         })
         .mockResolvedValueOnce({
-          data: { status: 'SUCCESS', errorMessage: '', enabledFeatures: [], token: 'jwt-2' },
+          Data: { status: 'SUCCESS', errorMessage: '', enabledFeatures: [], token: 'jwt-2' },
         });
 
       await llm.GetJWTToken();
       const result = await llm.GetJWTToken(true);
       expect(result!.token).toBe('jwt-2');
-      expect(mockAxiosPost).toHaveBeenCalledTimes(2);
+      expect(mockHttpPost).toHaveBeenCalledTimes(2);
     });
 
-    it('should return null when axios throws', async () => {
-      mockAxiosPost.mockRejectedValueOnce(new Error('network error'));
+    it('should return null when the request throws', async () => {
+      mockHttpPost.mockRejectedValueOnce(new Error('network error'));
       const result = await llm.GetJWTToken();
       expect(result).toBeNull();
     });
@@ -185,8 +181,8 @@ describe('BettyBotLLM', () => {
   describe('nonStreamingChatCompletion', () => {
     it('should return error result when no user message is present', async () => {
       // First mock JWT call
-      mockAxiosPost.mockResolvedValueOnce({
-        data: { status: 'SUCCESS', errorMessage: '', enabledFeatures: [], token: 'jwt' },
+      mockHttpPost.mockResolvedValueOnce({
+        Data: { status: 'SUCCESS', errorMessage: '', enabledFeatures: [], token: 'jwt' },
       });
 
       const params = {
@@ -203,7 +199,7 @@ describe('BettyBotLLM', () => {
     });
 
     it('should return error result when JWT retrieval fails', async () => {
-      mockAxiosPost.mockRejectedValueOnce(new Error('jwt fail'));
+      mockHttpPost.mockRejectedValueOnce(new Error('jwt fail'));
 
       const params = {
         messages: [{ role: ChatMessageRole.user, content: 'hello' }],
@@ -218,12 +214,12 @@ describe('BettyBotLLM', () => {
 
     it('should return successful result with response data', async () => {
       // JWT call
-      mockAxiosPost.mockResolvedValueOnce({
-        data: { status: 'SUCCESS', errorMessage: '', enabledFeatures: [], token: 'jwt' },
+      mockHttpPost.mockResolvedValueOnce({
+        Data: { status: 'SUCCESS', errorMessage: '', enabledFeatures: [], token: 'jwt' },
       });
       // Betty response call
-      mockAxiosPost.mockResolvedValueOnce({
-        data: {
+      mockHttpPost.mockResolvedValueOnce({
+        Data: {
           status: 'ok',
           errorMessage: '',
           conversationId: 1,
@@ -247,11 +243,11 @@ describe('BettyBotLLM', () => {
     });
 
     it('should include references as additional choices', async () => {
-      mockAxiosPost.mockResolvedValueOnce({
-        data: { status: 'SUCCESS', errorMessage: '', enabledFeatures: [], token: 'jwt' },
+      mockHttpPost.mockResolvedValueOnce({
+        Data: { status: 'SUCCESS', errorMessage: '', enabledFeatures: [], token: 'jwt' },
       });
-      mockAxiosPost.mockResolvedValueOnce({
-        data: {
+      mockHttpPost.mockResolvedValueOnce({
+        Data: {
           status: 'ok',
           errorMessage: '',
           conversationId: 1,
@@ -295,18 +291,18 @@ describe('BettyBotLLM', () => {
         cancellationToken: controller.signal,
       });
 
-      expect(mockAxiosPost).not.toHaveBeenCalled();
+      expect(mockHttpPost).not.toHaveBeenCalled();
       expect(result.success).toBe(false);
       expect(result.statusText).toBe('cancelled');
     });
 
-    it('should forward the token to axios on both the settings and response calls', async () => {
+    it('should forward the token to the HTTP layer on both the settings and response calls', async () => {
       const controller = new AbortController();
-      mockAxiosPost.mockResolvedValueOnce({
-        data: { status: 'SUCCESS', errorMessage: '', enabledFeatures: [], token: 'jwt' },
+      mockHttpPost.mockResolvedValueOnce({
+        Data: { status: 'SUCCESS', errorMessage: '', enabledFeatures: [], token: 'jwt' },
       });
-      mockAxiosPost.mockResolvedValueOnce({
-        data: { status: 'ok', errorMessage: '', conversationId: 1, response: 'Hi', references: [] },
+      mockHttpPost.mockResolvedValueOnce({
+        Data: { status: 'ok', errorMessage: '', conversationId: 1, response: 'Hi', references: [] },
       });
 
       await callNonStreaming({
@@ -315,19 +311,19 @@ describe('BettyBotLLM', () => {
         cancellationToken: controller.signal,
       });
 
-      expect(mockAxiosPost.mock.calls[0][2]).toEqual({ signal: controller.signal });
-      const responseConfig = mockAxiosPost.mock.calls[1][2] as { signal?: AbortSignal };
-      expect(responseConfig.signal).toBe(controller.signal);
+      expect(mockHttpPost.mock.calls[0][2]).toEqual({ Signal: controller.signal });
+      const responseConfig = mockHttpPost.mock.calls[1][2] as { Signal?: AbortSignal };
+      expect(responseConfig.Signal).toBe(controller.signal);
     });
 
-    it('should report an axios cancellation as a cancelled result', async () => {
+    it('should report a request cancellation as a cancelled result', async () => {
       const controller = new AbortController();
-      mockAxiosPost.mockResolvedValueOnce({
-        data: { status: 'SUCCESS', errorMessage: '', enabledFeatures: [], token: 'jwt' },
+      mockHttpPost.mockResolvedValueOnce({
+        Data: { status: 'SUCCESS', errorMessage: '', enabledFeatures: [], token: 'jwt' },
       });
       const canceled = new Error('canceled');
-      mockAxiosIsCancel.mockReturnValueOnce(true);
-      mockAxiosPost.mockRejectedValueOnce(canceled);
+      mockIsCancellation.mockReturnValueOnce(true);
+      mockHttpPost.mockRejectedValueOnce(canceled);
 
       const result = await callNonStreaming({
         messages: [{ role: ChatMessageRole.user, content: 'hi' }],

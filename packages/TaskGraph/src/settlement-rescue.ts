@@ -31,6 +31,48 @@ export const UNSETTLED_SWEEP_WINDOW_HOURS = 24;
  */
 export const UNSETTLED_STARTUP_WINDOW_HOURS = 24 * 30;
 
+/**
+ * How long a settled graph waits for its submitting run to park before giving up on it.
+ *
+ * `BaseAgent.finalizeAgentRun` parks the run within moments of the graph becoming dispatchable, so
+ * the honest window is seconds; anything beyond this means the submitting process is gone. Generous
+ * enough that a loaded machine does not trip it, short enough that a dead submitter cannot hold a
+ * completed workflow's announcement hostage for a day.
+ */
+export const SUBMITTER_PARK_GRACE_MS = 5 * 60_000;
+
+/**
+ * Whether this pass's writes to the submitting run will mean anything yet.
+ *
+ * **The `Running` case is the whole point.** A graph can settle before the run that submitted it has
+ * parked at all: `finalizeAgentRun` sets `Paused` *after* the graph is durable and dispatchable, so
+ * a fast graph finishes first. Both of the settled branch's writes then land wrong — the lifecycle
+ * write silently returns (its guard is `Status === 'Paused'`), and the cost write is overwritten
+ * moments later by finalize's own full-row save carrying the nulls it held before the dispatcher
+ * wrote anything. Neither failure is visible, and the pass then claims the delivery marker, making
+ * itself the last pass ever to look at the graph. The run stays `Paused` forever.
+ *
+ * Every other status proceeds: `Paused` is the case settlement exists for, and a run already
+ * `Completed`/`Failed`/`Cancelled` reached that for its own reasons — the lifecycle write's own
+ * guard declines it, which is correct, and delivery should not be held up by it.
+ *
+ * **Bounded, because "not parked yet" and "the submitter died before parking" look identical from
+ * here.** Waiting forever on the second loses the outcome of work that actually completed, which is
+ * strictly worse than announcing it late — so past the grace period the caller proceeds and says
+ * why. The run stays `Running`, which is visibly wrong and belongs to whatever reconciles abandoned
+ * runs, not to the graph that finished correctly.
+ *
+ * @param settledForMs how long ago the graph reached its terminal status
+ */
+export function IsSubmittingRunReady(
+    runStatus: string,
+    settledForMs: number,
+    graceMs: number = SUBMITTER_PARK_GRACE_MS,
+): boolean {
+    if (runStatus !== 'Running') return true;
+    return settledForMs > graceMs;
+}
+
 /** The shape the third sweep arm selects — everything needed to judge "settled but undelivered". */
 export type UnsettledCandidate = {
     ID: string | null;

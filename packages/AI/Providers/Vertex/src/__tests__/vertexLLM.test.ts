@@ -34,6 +34,15 @@ describe('VertexLLM', () => {
     ...(keyPath ? { keyFilePath: keyPath } : {})
   });
 
+  describe('Thought signature origin', () => {
+    it('scopes the signatures it mints to the Vertex endpoint, so they are never replayed to Google AI Studio', () => {
+      const llm = new VertexLLM(JSON.stringify({ project: 'test-project', location: 'us-central1' }));
+      const scoped = llm as unknown as { ThoughtSignatureEndpoint: string; thoughtSignatureOrigin(model: string): string };
+      expect(scoped.ThoughtSignatureEndpoint).toBe('vertex');
+      expect(scoped.thoughtSignatureOrigin('gemini-3-flash')).toBe('vertex:gemini-3-flash');
+    });
+  });
+
   describe('Constructor - Credential Formats', () => {
     it('should accept ADC credentials format', () => {
       const creds = JSON.stringify({
@@ -255,6 +264,8 @@ describe('VertexLLM', () => {
       expect(result.data.choices[0].message.content.toLowerCase()).toContain('alice');
     }, 30000);
 
+    // KNOWN LIMITATION: the streaming path is inherited from GeminiLLM and exercised by
+    // its suite; running it here needs live Vertex credentials.
     it.skip('should support streaming with callbacks (inherited from GeminiLLM)', async () => {
       if (!shouldRunIntegrationTests) {
         console.log('Skipping integration test - credentials not configured');

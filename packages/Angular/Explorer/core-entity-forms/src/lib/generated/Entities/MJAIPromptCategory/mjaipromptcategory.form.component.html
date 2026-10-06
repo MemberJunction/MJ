@@ -63,6 +63,48 @@
 
     </mj-collapsible-panel>
 
+    <!-- Details Section -->
+    <mj-collapsible-panel
+        SectionKey="details"
+        SectionName="Details"
+        Icon="fa fa-align-left"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ParentIDDepth"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ParentIDPath"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ParentIDIsLeaf"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ParentIDChildCount"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
     <!-- System Metadata Section -->
     <mj-collapsible-panel
         SectionKey="systemMetadata"
@@ -109,9 +151,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Prompts','CategoryID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Prompts')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Prompts','CategoryID')"
                 [AllowLoad]="IsSectionExpanded('mJAIPrompts')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIPrompts', $event.totalRowCount)"
                 >
@@ -134,9 +176,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Prompt Categories','ParentID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Prompt Categories')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Prompt Categories','ParentID')"
                 [AllowLoad]="IsSectionExpanded('mJAIPromptCategories')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIPromptCategories', $event.totalRowCount)"
                 >

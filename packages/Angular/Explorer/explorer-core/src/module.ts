@@ -62,16 +62,26 @@ import { ChatTasksResource } from './lib/resource-wrappers/chat-tasks-resource.c
 import { ArtifactResource } from './lib/resource-wrappers/artifact-resource.component';
 import { NotificationsResource } from './lib/resource-wrappers/notifications-resource.component';
 import { OAuthCallbackComponent } from './lib/oauth/oauth-callback.component';
+import { ClaimRedeemComponent } from './lib/identity-claims/claim-redeem.component';
 import { SearchModule } from '@memberjunction/ng-search';
 import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
 import { PaginationComponent } from '@memberjunction/ng-pagination';
 import { ConversationFeedbackResource } from './lib/conversation-feedback';
 import { LiveKitRoomResource } from './lib/resource-wrappers/livekit-room-resource.component';
-import { MJLiveKitRoomComponent } from '@memberjunction/ng-mj-livekit-room';
+import { HumanHandoffConsoleResource } from './lib/resource-wrappers/human-handoff-console-resource.component';
+import { MeetingsResource } from './lib/resource-wrappers/meetings-resource.component';
+import { MJConversationOffersComponent } from '@memberjunction/ng-conversation-offers';
+import {
+  MJLiveKitRoomComponent,
+  MJMeetingListComponent,
+  MJMeetingScheduleFormComponent,
+  MJMeetingLobbyComponent,
+} from '@memberjunction/ng-mj-livekit-room';
 
 @NgModule({
   declarations: [
     OAuthCallbackComponent,
+    ClaimRedeemComponent,
     ResourceContainerComponent,
     DashboardResource,
     EntityRecordResource,
@@ -97,6 +107,8 @@ import { MJLiveKitRoomComponent } from '@memberjunction/ng-mj-livekit-room';
     DashboardPreferencesDialogComponent,
     ConversationFeedbackResource,
     LiveKitRoomResource,
+    HumanHandoffConsoleResource,
+    MeetingsResource,
   ],
   imports: [
     MarkdownModule,
@@ -139,6 +151,10 @@ import { MJLiveKitRoomComponent } from '@memberjunction/ng-mj-livekit-room';
     MJWindowTitlebarComponent,
     PaginationComponent,
     MJLiveKitRoomComponent,
+    MJMeetingListComponent,
+    MJMeetingScheduleFormComponent,
+    MJMeetingLobbyComponent,
+    MJConversationOffersComponent,
     MJEmptyStateComponent,
     MJAlertComponent
   ],
@@ -158,7 +174,8 @@ import { MJLiveKitRoomComponent } from '@memberjunction/ng-mj-livekit-room';
     UserNotificationsComponent,
     ListDetailResource,
     DashboardPreferencesDialogComponent,
-    ConversationFeedbackResource
+    ConversationFeedbackResource,
+    MeetingsResource
   ],
   providers: [
     { provide: RouteReuseStrategy, useClass: CustomReuseStrategy },

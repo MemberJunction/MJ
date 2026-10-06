@@ -90,7 +90,7 @@ export class LiveKitAgentStateComponent {
   @Input() public ShowLabel = true;
 
   /** The human-readable label for the current state. */
-  public get labelText(): string {
+  public get labelText(): string {  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
     switch (this.State) {
       case 'listening':
         return 'listening';

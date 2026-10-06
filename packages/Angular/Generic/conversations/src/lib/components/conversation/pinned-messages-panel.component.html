@@ -11,7 +11,11 @@
   </div>
 
   <div class="pins-body">
-    @if (pinnedMessages.length === 0) {
+    <!-- Rows are fetched on first open now, so "empty" and "not loaded yet" are different
+         states — showing the empty state during the fetch would claim there are no pins. -->
+    @if (isLoading) {
+      <mj-loading text="Loading pinned messages…" size="small"></mj-loading>
+    } @else if (pinnedMessages.length === 0) {
       <mj-empty-state class="pins-empty" Size="compact"
         Icon="fa-solid fa-thumbtack"
         Title="No pinned messages" />
@@ -36,10 +40,12 @@
             <i class="fas fa-arrow-up-right-from-square"></i>
             Jump to message
           </button>
-          <button class="pin-action-btn unpin-btn" (click)="OnUnpin(message)" title="Unpin this message">
-            <i class="fas fa-thumbtack"></i>
-            Unpin
-          </button>
+          @if (AllowUnpin) {
+            <button class="pin-action-btn unpin-btn" (click)="OnUnpin(message)" title="Unpin this message">
+              <i class="fas fa-thumbtack"></i>
+              Unpin
+            </button>
+          }
         </div>
       </div>
     }

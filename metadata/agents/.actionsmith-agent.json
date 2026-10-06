@@ -21,7 +21,21 @@
       "PayloadSelfWritePaths": "[\"name\", \"description\", \"inputSchema\", \"outputSchema\", \"permissions\", \"resultCodes\", \"testCases\", \"limits\", \"code\", \"testResults\", \"iterationsUsed\", \"actionId\", \"approvalStatus\", \"status\", \"message\"]",
       "FinalPayloadValidation": "{\"status\": \"string:!empty\", \"actionId\": \"any\", \"testResults\": \"any\"}",
       "FinalPayloadValidationMode": "Warn",
-      "MaxIterationsPerRun": 20
+      "MaxIterationsPerRun": 20,
+      "TypeConfiguration": {
+        "realtime": {
+          "directActions": {
+            "enabled": true,
+            "timeoutMs": 5000,
+            "actionNames": [
+              "Find Candidate Actions",
+              "Find Candidate Agents",
+              "Get Entity List",
+              "Get Entity Details"
+            ]
+          }
+        }
+      }
     },
     "relatedEntities": {
       "MJ: AI Agent Prompts": [
@@ -162,14 +176,57 @@
             "checksum": "913cc4254ee7a0a969b5bf5a069060aac35b7e18418b002360513066aaad2e17"
           }
         }
+      ],
+      "MJ: AI Agent Rubrics": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "RubricID": "@lookup:MJ: Rubrics.Name=Catalog contract",
+            "Purpose": "Evaluation",
+            "IsDefault": true,
+            "Status": "Active",
+            "EvaluatorConfig": {
+              "EvaluatorType": "AIPrompt",
+              "PromptName": "Rubric Judge - ActionSmith"
+            }
+          },
+          "primaryKey": {
+            "ID": "74F68F51-FDDB-4268-8240-DA19715F5545"
+          },
+          "sync": {
+            "lastModified": "2026-10-02T21:42:24.902Z",
+            "checksum": "9cb43065f31d66a4a448e8df6adaa2f61e83cd61aecd53818051150cd167f2a0"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "RubricID": "@lookup:MJ: Rubrics.Name=Catalog contract",
+            "Purpose": "SelfCheck",
+            "IsDefault": true,
+            "Status": "Disabled",
+            "MaxSelfCheckAttempts": 1,
+            "EvaluatorConfig": {
+              "EvaluatorType": "AIPrompt",
+              "PromptName": "Rubric Judge - ActionSmith"
+            }
+          },
+          "primaryKey": {
+            "ID": "4B435F6F-4193-4968-BE50-A35F98E55E99"
+          },
+          "sync": {
+            "lastModified": "2026-10-02T21:42:24.913Z",
+            "checksum": "6398e7ebc18198d34563a7cd4db7a20dc8eb9b91f1aa480c507dafc5c7c749a5"
+          }
+        }
       ]
     },
     "primaryKey": {
       "ID": "AF804075-E543-46E5-8D8F-2A0B8094628C"
     },
     "sync": {
-      "lastModified": "2026-04-23T23:50:59.984Z",
-      "checksum": "7998c7f1c9b16a43b1971328f80d5d8cccaf136ac3712789da904fa466d25105"
+      "lastModified": "2026-09-12T15:03:56.757Z",
+      "checksum": "20e19c356f5c074a49cc9c86bc4b77fbbeb53cae6b8e0bc9bfae70a080dbff12"
     }
   }
 ]

@@ -1,0 +1,14 @@
+{
+  "name": "standard",
+  "description": "The realistic shape: 24 schemas × 120 tables (2,880 tables). The default test bed.",
+  "schemaCount": 24,
+  "tablesPerSchema": 120,
+  "seed": {
+    "hubRows": 5,
+    "lookupRows": 4,
+    "childRows": 8,
+    "grandchildRows": 6,
+    "xrefRows": 6,
+    "bridgeRows": 4
+  }
+}

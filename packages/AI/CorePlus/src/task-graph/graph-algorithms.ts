@@ -526,6 +526,39 @@ export type ExclusiveGroupResolution = {
  *                       under `failureSemantics: 'edges'`, where a failed step's outgoing paths are
  *                       its recovery paths.
  */
+/**
+ * Which of two competing edges wins: higher priority, then lower sequence, then edge id.
+ *
+ * **The id is a tiebreak, not a preference** — and without it this ordering is not total. Priority
+ * and sequence both default to 0 and `Submit` persists those defaults, so a hand-authored or
+ * LLM-authored spec routinely produces a genuine tie; dependencies load with no `ORDER BY`, so the
+ * winner was decided by row order, which can differ between polls of the same graph. The worst
+ * interleaving is not a wrong branch but NO branch: poll 1 picks `X→B` and skips C; poll 2's row
+ * order flips, picks `Y→C` — already Skipped — and skips B. Both branches Skipped, and the graph
+ * settles Complete having executed neither.
+ *
+ * Also used to ask whether an unevaluable edge could have beaten the winner, so the two questions
+ * cannot disagree about what "beats" means.
+ */
+export function CompareEdgePrecedence(a: EvaluatedEdge, b: EvaluatedEdge): number {
+    // ORDINAL, NOT COLLATED (R3-7). `localeCompare` with no arguments sorts under the host's ICU
+    // locale, and the sign genuinely flips: `'aa070000'` vs `'ab070000'` compares one way under
+    // `en` and the other under `da`, where the `aa` digraph collates as `å`. Dependency IDs are
+    // UUIDs, so `aa` sequences are routine.
+    //
+    // Two instances with different `LANG` would then resolve the same `(priority=0, sequence=0)`
+    // tie — the persisted default for hand- and LLM-authored specs — DIFFERENTLY, and since this
+    // same comparator decides the unevaluable-dominance test, hold-versus-resolve diverges with it.
+    // The worst interleaving is R2-5's own catastrophe across instances rather than across polls:
+    // both XOR branches Skipped, graph settles Complete having executed neither.
+    //
+    // R2-5's shipped test runs both input orders in ONE process and cannot see this; Round 2's plan
+    // prescribed `localeCompare`, so this corrects the prescription rather than a slip.
+    if (b.priority !== a.priority) return b.priority - a.priority;
+    if (a.sequence !== b.sequence) return a.sequence - b.sequence;
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+}
+
 export function ResolveExclusiveGroups(
     edges: readonly EvaluatedEdge[],
     terminalDecides: ReadonlySet<TaskGraphNodeStatus> = new Set<TaskGraphNodeStatus>(['Complete']),
@@ -543,25 +576,48 @@ export function ResolveExclusiveGroups(
     /** Targets a kept edge points at, anywhere in this resolution. */
     const keptTargets = new Set<string>();
 
+    const loseWholeGroup = (group: readonly EvaluatedEdge[]): void => {
+        for (const e of group) { loserEdgeIDs.push(e.id); candidateSeeds.push(e.taskId); }
+    };
+
     for (const group of byGroup.values()) {
         // Every edge in a group leaves the same origin (the validator enforces it), so any member
         // answers "has the origin finished?".
-        if (!terminalDecides.has(group[0].originStatus)) continue;
+        const originStatus = group[0].originStatus;
 
-        if (group.some((e) => e.conditionOutcome === 'unevaluable')) {
+        // A FORK ON A STEP THAT WAS ITSELF SKIPPED TAKES NO BRANCH (R2-8).
+        //
+        // `Skipped` is not in `terminalDecides`, so this group used to fall through as undecided and
+        // every edge stayed live — and `Skipped` satisfies prerequisites, so whichever target had
+        // its OTHER prerequisites healthy simply ran, chosen by graph accident with its guard never
+        // consulted. Ordinary conditional edges out of the same origin ARE decided (`DecideGate`
+        // drops them); the exclusive dialect was the one that bypassed the guard.
+        //
+        // Every branch loses. Join survival already protects a target another live route reaches, so
+        // this removes only the routes that genuinely were not taken — which is what the walker
+        // concluded by never standing at the origin in the first place.
+        if (originStatus === 'Skipped') { loseWholeGroup(group); continue; }
+
+        if (!terminalDecides.has(originStatus)) continue;
+
+        const satisfied = group.filter((e) => e.conditionOutcome === 'satisfied');
+        const unevaluable = group.filter((e) => e.conditionOutcome === 'unevaluable');
+        const winner = satisfied.length > 0 ? [...satisfied].sort(CompareEdgePrecedence)[0] : null;
+
+        // HOLD ONLY IF A BROKEN GUARD COULD HAVE CHANGED THE ANSWER (R2-3 refinement).
+        //
+        // Holding on ANY unevaluable member is too blunt: an edge that could never have won tells us
+        // nothing about the outcome, and stalling a fork whose winner is already known trades a
+        // decided branch for a permanent wait. With nothing satisfied at all, any unevaluable edge
+        // could have been the winner, so there is nothing to dominate it and the hold stands.
+        if (unevaluable.length > 0 &&
+            (!winner || unevaluable.some((u) => CompareEdgePrecedence(u, winner) < 0))) {
             for (const e of group) holdTaskIDs.push(e.taskId);
             continue;
         }
 
-        const satisfied = group.filter((e) => e.conditionOutcome === 'satisfied');
-        if (satisfied.length === 0) {
-            for (const e of group) { loserEdgeIDs.push(e.id); candidateSeeds.push(e.taskId); }
-            continue;
-        }
+        if (!winner) { loseWholeGroup(group); continue; }
 
-        const winner = [...satisfied].sort(
-            (a, b) => (b.priority - a.priority) || (a.sequence - b.sequence),
-        )[0];
         for (const e of group) {
             if (e.id === winner.id) { keptEdgeIDs.push(e.id); keptTargets.add(e.taskId); }
             else { loserEdgeIDs.push(e.id); candidateSeeds.push(e.taskId); }
@@ -619,4 +675,136 @@ export function ConfirmSkipSeeds(
     // edge that does not gate a task starting cannot argue that it will start.
     const reached = new Set(liveEdges.filter(isGatingEdge).map((e) => e.taskId));
     return seedTaskIDs.filter((id) => !reached.has(id));
+}
+
+/** An edge that may be cut at run time — it has a condition, or it is one path of an exclusive fork. */
+export type RoutedTaskGraphEdge = TaskGraphEdge & {
+    /**
+     * True when the edge can be cut at run time: a condition that comes out false drops it, and an
+     * exclusive fork that picks another path loses it. A task every one of whose routes in can be
+     * cut may end `Skipped`.
+     */
+    mayBeCut?: boolean;
+};
+
+/**
+ * For each task, the tasks certain to have RUN — started, and not skipped — whenever it runs,
+ * itself included.
+ *
+ * This is what "has this step answered by the time that one finishes?" means on a graph, and it is
+ * stricter than ancestry. A task runs only once every gating predecessor is terminal, and at least
+ * one of them ran (a task whose every route in was cut is skipped). So:
+ *
+ * - a predecessor that can never be skipped certainly ran, and so did everything certain for it;
+ * - of the rest, only what is certain for EVERY predecessor is certain, because any one of them may
+ *   be the branch that ran.
+ *
+ * A task can be skipped only when every gating route into it can be cut: its edge is conditional or
+ * exclusive, or its origin can itself be skipped. An entry task is never skipped by the engine.
+ * Operator verbs (skip, override) and a declared early finish are deliberate interventions and are
+ * not modelled.
+ *
+ * Only `Prerequisite` edges count, matching {@link ComputeEligibleTasks}: an edge that does not gate
+ * a task starting cannot make anything certain before it.
+ *
+ * @returns the certain set per task, or `null` when the gating edges form a cycle (reported on its
+ *          own by {@link DetectCycle}; no order exists to reason about)
+ */
+export function ComputeCertainlyRun(
+    taskIDs: readonly string[],
+    edges: readonly RoutedTaskGraphEdge[],
+): Map<string, ReadonlySet<string>> | null {
+    const known = new Set(taskIDs);
+    const routesIn = new Map<string, RoutedTaskGraphEdge[]>();
+    for (const e of edges) {
+        if (!isGatingEdge(e) || !known.has(e.taskId) || !known.has(e.dependsOnTaskId) || e.taskId === e.dependsOnTaskId) continue;
+        const list = routesIn.get(e.taskId);
+        if (list) list.push(e); else routesIn.set(e.taskId, [e]);
+    }
+
+    const order = topologicalOrder(taskIDs, routesIn);
+    if (!order) return null;
+
+    const skippable = new Set<string>();
+    const certain = new Map<string, ReadonlySet<string>>();
+    for (const id of order) {
+        const routes = routesIn.get(id) ?? [];
+        if (routes.length > 0 && routes.every((r) => r.mayBeCut || skippable.has(r.dependsOnTaskId))) skippable.add(id);
+
+        const ran = new Set<string>([id]);
+        const origins = [...new Set(routes.map((r) => r.dependsOnTaskId))];
+        // What every predecessor is certain of — whichever of them ran.
+        if (origins.length > 0) {
+            const [first, ...rest] = origins.map((o) => certain.get(o) ?? new Set<string>());
+            for (const candidate of first) {
+                if (rest.every((s) => s.has(candidate))) ran.add(candidate);
+            }
+        }
+        // Everything a predecessor that cannot be skipped is certain of.
+        for (const origin of origins) {
+            if (skippable.has(origin)) continue;
+            for (const c of certain.get(origin) ?? []) ran.add(c);
+        }
+        certain.set(id, ran);
+    }
+    return certain;
+}
+
+/**
+ * Every task that depends on `taskID`, directly or through others, over edges of any type.
+ *
+ * Any type, because the question it answers is "can this task have started before that one?", and
+ * an Optional or Corequisite edge is still an arrow the author drew from one to the other.
+ */
+export function ComputeDownstream(taskID: string, edges: readonly TaskGraphEdge[]): Set<string> {
+    return walkFrom(taskID, buildDependentsAdjacency(edges));
+}
+
+/** Every task `taskID` depends on, directly or through others, over edges of any type. */
+export function ComputeUpstream(taskID: string, edges: readonly TaskGraphEdge[]): Set<string> {
+    return walkFrom(taskID, buildDependsOnAdjacency(edges));
+}
+
+/** Everything reachable from `start` over `adjacency`, not including `start` unless a cycle returns to it. */
+function walkFrom(start: string, adjacency: ReadonlyMap<string, readonly string[]>): Set<string> {
+    const seen = new Set<string>();
+    const stack = [...(adjacency.get(start) ?? [])];
+    while (stack.length > 0) {
+        const id = stack.pop()!;
+        if (seen.has(id)) continue;
+        seen.add(id);
+        stack.push(...(adjacency.get(id) ?? []));
+    }
+    return seen;
+}
+
+/** Kahn's algorithm over the given routes in; `null` when they form a cycle. */
+function topologicalOrder(
+    taskIDs: readonly string[],
+    routesIn: ReadonlyMap<string, readonly TaskGraphEdge[]>,
+): string[] | null {
+    const ids = [...new Set(taskIDs)];
+    const remaining = new Map<string, number>();
+    const dependents = new Map<string, string[]>();
+    for (const id of ids) {
+        const origins = new Set((routesIn.get(id) ?? []).map((r) => r.dependsOnTaskId));
+        remaining.set(id, origins.size);
+        for (const origin of origins) {
+            const list = dependents.get(origin);
+            if (list) list.push(id); else dependents.set(origin, [id]);
+        }
+    }
+
+    const ready = ids.filter((id) => remaining.get(id) === 0);
+    const order: string[] = [];
+    while (ready.length > 0) {
+        const id = ready.shift()!;
+        order.push(id);
+        for (const dependent of dependents.get(id) ?? []) {
+            const left = (remaining.get(dependent) ?? 0) - 1;
+            remaining.set(dependent, left);
+            if (left === 0) ready.push(dependent);
+        }
+    }
+    return order.length === ids.length ? order : null;
 }

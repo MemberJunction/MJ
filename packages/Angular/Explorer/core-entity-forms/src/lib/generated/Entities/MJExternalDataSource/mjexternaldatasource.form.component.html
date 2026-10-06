@@ -146,9 +146,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Queries','ExternalDataSourceID')"
-                [NewRecordValues]="NewRecordValues('MJ: Queries')"
+                [NewRecordValues]="NewRecordValues('MJ: Queries','ExternalDataSourceID')"
                 [AllowLoad]="IsSectionExpanded('mJQueries')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJQueries', $event.totalRowCount)"
                 >
@@ -171,9 +171,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entities','ExternalDataSourceID')"
-                [NewRecordValues]="NewRecordValues('MJ: Entities')"
+                [NewRecordValues]="NewRecordValues('MJ: Entities','ExternalDataSourceID')"
                 [AllowLoad]="IsSectionExpanded('mJEntities')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJEntities', $event.totalRowCount)"
                 >

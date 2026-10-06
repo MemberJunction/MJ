@@ -196,9 +196,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Duplicate Runs','SourceListID')"
-                [NewRecordValues]="NewRecordValues('MJ: Duplicate Runs')"
+                [NewRecordValues]="NewRecordValues('MJ: Duplicate Runs','SourceListID')"
                 [AllowLoad]="IsSectionExpanded('mJDuplicateRuns')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJDuplicateRuns', $event.totalRowCount)"
                 >
@@ -221,9 +221,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: List Details','ListID')"
-                [NewRecordValues]="NewRecordValues('MJ: List Details')"
+                [NewRecordValues]="NewRecordValues('MJ: List Details','ListID')"
                 [AllowLoad]="IsSectionExpanded('mJListDetails')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJListDetails', $event.totalRowCount)"
                 >
@@ -246,9 +246,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: List Invitations','ListID')"
-                [NewRecordValues]="NewRecordValues('MJ: List Invitations')"
+                [NewRecordValues]="NewRecordValues('MJ: List Invitations','ListID')"
                 [AllowLoad]="IsSectionExpanded('mJListInvitations')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJListInvitations', $event.totalRowCount)"
                 >
@@ -271,9 +271,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: List Shares','ListID')"
-                [NewRecordValues]="NewRecordValues('MJ: List Shares')"
+                [NewRecordValues]="NewRecordValues('MJ: List Shares','ListID')"
                 [AllowLoad]="IsSectionExpanded('mJListShares')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJListShares', $event.totalRowCount)"
                 >
@@ -296,9 +296,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Record Processes','ScopeListID')"
-                [NewRecordValues]="NewRecordValues('MJ: Record Processes')"
+                [NewRecordValues]="NewRecordValues('MJ: Record Processes','ScopeListID')"
                 [AllowLoad]="IsSectionExpanded('mJRecordProcesses')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJRecordProcesses', $event.totalRowCount)"
                 >

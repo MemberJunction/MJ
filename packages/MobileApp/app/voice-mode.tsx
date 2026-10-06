@@ -4,82 +4,131 @@ import { ActivityIndicator, Animated, Easing, Pressable, StyleSheet, Text, View 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Icons } from '@/components/Icon';
 import { Type } from '@/theme/tokens';
-import { resolveTargetAgent } from '@/data/services/agents';
-import {
-    RealtimeVoiceService,
-    type VoiceSessionState,
-    type VoiceTranscript,
-    type VoiceUnavailableReason,
-} from '@/voice/realtime-voice-service';
+import { ResolveTargetAgent } from '@/data/services/agents';
+import { GetDefaultAgentId, SetDefaultAgent } from '@/data/preferences';
+import { AgentPicker } from '@/components/AgentPicker';
+import type { RealtimeCaption, RealtimeConnectionState } from '@memberjunction/realtime-runtime';
+import { MobileVoiceSession } from '@/voice/MobileVoiceSession';
+
+/** Why voice could not start, when it could not. */
+type VoiceUnavailableReason = 'provider' | 'permission' | 'backend' | 'unknown';
 
 /** Dark background for the immersive voice takeover (intentionally static, not a theme token). */
 const DARK_BG = '#0d0d12';
 
 /**
- * Voice mode — fullscreen immersive takeover, wired to {@link RealtimeVoiceService}.
+ * Voice mode — fullscreen immersive takeover, wired to {@link MobileVoiceSession}.
  *
  * Route: `/voice-mode` (Expo Router, `app/voice-mode.tsx`); pushed from the chat composer
  *   (with the active `conversationId`) and the new-conversation / artifact mic buttons.
- * Behavior: on mount it resolves the default agent, requests mic permission, mints a
- *   client-direct realtime session (`StartRealtimeClientSession`), and connects the
- *   ElevenLabs driver — surfacing live connection state, an audio-reactive orb/waveform, and
- *   live transcripts. Final transcripts persist to the conversation server-side.
- * Graceful fallback: when the feature can't run (no native PCM audio in this build, denied
- *   mic permission, missing server support, or no configured provider) the screen shows a
- *   clear "Voice isn't available" card instead of crashing — see {@link unavailableCopy}.
+ * Behavior: on mount it resolves the default agent and asks the shared realtime runtime to start
+ *   a client-direct session. The runtime mints it server-side, resolves the provider's client
+ *   driver, and connects over WebRTC; this screen only renders connection state, an
+ *   audio-reactive orb, and live captions. Final captions persist to the conversation server-side.
+ * Graceful fallback: when the feature can't run — the resolved provider needs a PCM audio plane
+ *   this build does not ship, mic permission was denied, or the deployment has no realtime model
+ *   configured — the screen shows a clear "Voice isn't available" card rather than opening a
+ *   session that would be silent in both directions. See {@link unavailableCopy}.
  * Mockup: `plans/mobile-app-react-native/html/voice-mode.html`.
  */
 export default function VoiceModeScreen() {
-    const { conversationId } = useLocalSearchParams<{ conversationId?: string }>();
+    const { conversationId, agentId } = useLocalSearchParams<{ conversationId?: string; agentId?: string }>();
 
-    const serviceRef = useRef<RealtimeVoiceService | null>(null);
-    const [state, setState] = useState<VoiceSessionState>('idle');
+    // Which agent this call is with. Seeded from the route (a caller that already knows), then the
+    // user's Profile default, and re-pinned to whatever the runtime actually resolved so the chip
+    // never claims an agent the session is not really talking to.
+    const [preferredAgentId, setPreferredAgentId] = useState<string | undefined>(agentId ?? GetDefaultAgentId());
+    const [agentName, setAgentName] = useState<string | null>(null);
+    const [pickerOpen, setPickerOpen] = useState(false);
+    // Bumped to restart the session — switching agent mid-call means a new session, since the
+    // agent's identity and tool set are fixed when the session is minted.
+    const [sessionEpoch, setSessionEpoch] = useState(0);
+
+    const serviceRef = useRef<MobileVoiceSession | null>(null);
+    const [state, setState] = useState<RealtimeConnectionState | 'idle' | 'unavailable'>('idle');
     const [reason, setReason] = useState<VoiceUnavailableReason | null>(null);
-    const [transcripts, setTranscripts] = useState<VoiceTranscript[]>([]);
+    const [transcripts, setTranscripts] = useState<RealtimeCaption[]>([]);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const [liveLevel, setLiveLevel] = useState<number | null>(null);
 
     // ── Session lifecycle ───────────────────────────────────────────────────────
     useEffect(() => {
-        const service = new RealtimeVoiceService();
+        const service = new MobileVoiceSession();
         serviceRef.current = service;
 
-        const unsubscribe = service.on((event) => {
-            switch (event.Type) {
-                case 'state':
-                    setState(event.State);
-                    setReason(event.Reason ?? null);
-                    break;
-                case 'transcript':
-                    setTranscripts((prev) => appendTranscript(prev, event.Transcript));
-                    break;
-                case 'error':
-                    setErrorMessage(event.Error.Message);
-                    break;
-            }
-        });
+        // The runtime publishes state as observables rather than a single event stream, so each
+        // concern subscribes to the one it renders.
+        const subs = [
+            service.ConnectionState$.subscribe((s) => {
+                if (s === 'error') {
+                    // The runtime reports every start failure the same way — as 'error' — so the
+                    // screen has to ask WHY before it can say anything useful. A declined provider
+                    // and a denied microphone are both entirely explainable; only what is left over
+                    // deserves "something went wrong".
+                    const declined = service.DeclinedProvider;
+                    const failure = service.LastStartError;
+                    if (declined) {
+                        setReason('provider');
+                        setState('unavailable');
+                        return;
+                    }
+                    if (failure) {
+                        setErrorMessage(failure.message);
+                        setReason(/permission|denied|not granted/i.test(failure.message) ? 'permission' : 'unknown');
+                        setState('unavailable');
+                        return;
+                    }
+                    // No recorded start failure means the PROVIDER failed mid-call. The runtime
+                    // does not tear down on a provider error — it surfaces the state and leaves the
+                    // call open — so showing the fallback without ending the session would leave a
+                    // hot microphone and a billing connection behind this screen.
+                    void service.EndRealtimeSession();
+                }
+                setState(s);
+            }),
+            service.Captions$.subscribe((c) => setTranscripts([...c])),
+        ];
 
         void (async () => {
-            const agent = await resolveTargetAgent('');
-            if (!agent) {
+            try {
+                const agent = await ResolveTargetAgent('', preferredAgentId);
+                if (!agent) {
+                    setReason('backend');
+                    setState('unavailable');
+                    return;
+                }
+                setAgentName(agent.name ?? null);
+                // The runtime mints, checks this host's provider capability, and connects — or
+                // closes the minted session and reports 'error' when we cannot carry that provider.
+                // It does not throw: a failed start is reported through ConnectionState$ with the
+                // cause on LastStartError, which the ConnectionState$ subscription reads.
+                await service.StartRealtimeSession(
+                    agent.id,
+                    conversationId ?? null,
+                    null,
+                    agent.name ?? null,
+                );
+            } catch (e) {
+                // Only the agent lookup can land here; the session start reports through the
+                // runtime. Kept so a resolver failure still produces a screen rather than an
+                // unhandled rejection.
+                const message = e instanceof Error ? e.message : String(e);
+                setErrorMessage(message);
                 setReason('backend');
                 setState('unavailable');
-                return;
             }
-            await service.start({ TargetAgentID: agent.id, ConversationID: conversationId ?? null });
         })();
 
         return () => {
-            unsubscribe();
-            void service.stop();
-            serviceRef.current = null;
+            subs.forEach((s) => s.unsubscribe());
+            void service.EndRealtimeSession();
         };
-    }, [conversationId]);
+    }, [conversationId, preferredAgentId, sessionEpoch]);
 
     // ── Live audio-level poll (drives the waveform when the driver meters audio) ──
     useEffect(() => {
         const interval = setInterval(() => {
-            const activity = serviceRef.current?.getAudioActivity() ?? null;
+            const activity = serviceRef.current?.GetAudioActivity() ?? null;
             const level = activity ? (activity.OutputLevel ?? activity.InputLevel) : null;
             setLiveLevel(level);
         }, 90);
@@ -119,13 +168,15 @@ export default function VoiceModeScreen() {
     const ripple2Opacity = ripple2.interpolate({ inputRange: [0, 1], outputRange: [0.5, 0] });
 
     const close = () => {
-        void serviceRef.current?.stop();
+        // Deliberately NOT ending the session here. `router.back()` unmounts this screen, and the
+        // effect's cleanup ends it — ending it here too would run two teardowns concurrently,
+        // because the runtime flips its active flag only at the end of one.
         router.back();
     };
 
     // ── Graceful fallback (unavailable / error) ──────────────────────────────────
     if (state === 'unavailable') {
-        return <FallbackScreen title="Voice isn't available" body={unavailableCopy(reason)} onClose={close} />;
+        return <FallbackScreen title="Voice isn't available" body={unavailableCopy(reason, serviceRef.current?.DeclinedProvider)} onClose={close} />;
     }
     if (state === 'error') {
         return (
@@ -152,10 +203,37 @@ export default function VoiceModeScreen() {
                     )}
                     <Text style={[styles.listeningText, { color: status.accent }]}>{status.label}</Text>
                 </View>
+                <Pressable
+                    style={styles.agentChip}
+                    onPress={() => setPickerOpen(true)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Talking to ${agentName ?? 'an agent'}. Tap to change.`}
+                >
+                    <Text style={styles.agentChipText} numberOfLines={1}>{agentName ?? 'Agent'}</Text>
+                    <Icons.ChevronDown size={14} color="#b9b9c4" strokeWidth={2.4} />
+                </Pressable>
                 <Pressable hitSlop={8} style={styles.closeBtn} onPress={close}>
                     <Icons.ChevronLeft size={18} color="#f6f6f8" strokeWidth={2.2} />
                 </Pressable>
             </View>
+
+            <AgentPicker
+                Visible={pickerOpen}
+                Title="Talk to"
+                Subtitle="Switching starts a new call — an agent's identity is fixed when the session is created."
+                SelectedName={agentName ?? undefined}
+                OnClose={() => setPickerOpen(false)}
+                OnSelect={({ ID, Name }) => {
+                    setPickerOpen(false);
+                    if (ID === preferredAgentId) return;
+                    // Remember it as the account default too, so the next call and the next typed
+                    // message both go to whoever the user just chose.
+                    SetDefaultAgent(ID, Name);
+                    setAgentName(Name);
+                    setPreferredAgentId(ID);
+                    setSessionEpoch((n) => n + 1);
+                }}
+            />
 
             <View style={styles.stage}>
                 <View style={styles.orbFrame}>
@@ -173,7 +251,7 @@ export default function VoiceModeScreen() {
 
             <View style={styles.transcriptCard}>
                 <Text style={styles.transcriptLabel}>
-                    {latest ? `${latest.Role === 'User' ? 'YOU' : 'AGENT'} · ${latest.Kind === 'narration' ? 'NOTE' : 'LIVE'}` : status.label.toUpperCase()}
+                    {latest ? `${latest.Role === 'User' ? 'YOU' : 'AGENT'} · LIVE` : status.label.toUpperCase()}
                 </Text>
                 <Text style={styles.transcript}>
                     {latest ? latest.Text : status.hint}
@@ -221,38 +299,24 @@ function FallbackScreen({ title, body, onClose }: { title: string; body: string;
     );
 }
 
-/** Appends a final transcript, replacing the previous same-role turn on a barge-in correction. */
-function appendTranscript(prev: VoiceTranscript[], next: VoiceTranscript): VoiceTranscript[] {
-    if (next.ReplacesPrevious) {
-        for (let i = prev.length - 1; i >= 0; i--) {
-            if (prev[i].Role === next.Role) {
-                const copy = prev.slice();
-                copy[i] = next;
-                return copy;
-            }
-        }
-    }
-    // Keep the list bounded — only the most recent turns matter for a live call.
-    return [...prev, next].slice(-8);
-}
 
 /** Human copy for each reason a voice session couldn't start. */
-function unavailableCopy(reason: VoiceUnavailableReason | null): string {
+function unavailableCopy(reason: VoiceUnavailableReason | null, providerLabel?: string | null): string {
     switch (reason) {
         case 'permission':
             return 'Microphone access is off. Enable it in your device Settings to talk with your agents.';
         case 'backend':
             return "This workspace's server doesn't have voice enabled yet. You can still chat by text.";
         case 'provider':
-            return 'No voice provider is configured for this workspace. Ask an administrator to enable one.';
-        case 'audio':
+            return `This workspace's voice provider (${providerLabel ?? 'unknown'}) needs audio support this app build doesn't have. Ask an administrator to enable a WebRTC provider, or chat by text.`;
+        case 'unknown':
         default:
-            return 'Real-time voice needs a native audio module that isn’t in this build. Chat by text for now — the voice pipeline activates automatically once low-latency audio streaming is available.';
+            return 'Voice could not start. You can still chat by text.';
     }
 }
 
 /** Status pill styling + copy per session state. */
-function statusFor(state: VoiceSessionState): {
+function statusFor(state: RealtimeConnectionState | 'idle' | 'unavailable'): {
     label: string;
     hint: string;
     accent: string;
@@ -301,6 +365,8 @@ const styles = StyleSheet.create({
     listeningPill: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 8, paddingRight: 14, paddingVertical: 6, borderRadius: 999, borderWidth: 1 },
     listeningDot: { width: 8, height: 8, borderRadius: 4 },
     listeningText: { fontSize: 12.5, fontWeight: Type.semibold },
+    agentChip: { flexDirection: 'row', alignItems: 'center', gap: 5, maxWidth: 150, marginLeft: 10, paddingLeft: 12, paddingRight: 9, paddingVertical: 6, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.08)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)' },
+    agentChipText: { flexShrink: 1, fontSize: 12.5, fontWeight: Type.semibold, color: '#f6f6f8' },
     closeBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.08)', alignItems: 'center', justifyContent: 'center' },
 
     stage: { alignItems: 'center', paddingTop: 30 },

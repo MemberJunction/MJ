@@ -304,4 +304,4 @@ The engine loads the job list ONCE at `StartPolling` time. Runtime changes to th
 
 ## License
 
-ISC
+Business Source License 1.1 — see [LICENSE](../../../LICENSE) for details.

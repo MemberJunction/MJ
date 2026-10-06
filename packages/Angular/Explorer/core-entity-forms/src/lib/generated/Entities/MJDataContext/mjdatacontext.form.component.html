@@ -109,9 +109,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Data Context Items','DataContextID')"
-                [NewRecordValues]="NewRecordValues('MJ: Data Context Items')"
+                [NewRecordValues]="NewRecordValues('MJ: Data Context Items','DataContextID')"
                 [AllowLoad]="IsSectionExpanded('mJDataContextItems')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJDataContextItems', $event.totalRowCount)"
                 >
@@ -134,9 +134,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversations','DataContextID')"
-                [NewRecordValues]="NewRecordValues('MJ: Conversations')"
+                [NewRecordValues]="NewRecordValues('MJ: Conversations','DataContextID')"
                 [AllowLoad]="IsSectionExpanded('mJConversations')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJConversations', $event.totalRowCount)"
                 >

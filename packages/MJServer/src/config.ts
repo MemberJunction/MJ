@@ -1,17 +1,40 @@
 import { z } from 'zod';
+import { DEFAULT_WORK_QUEUE_CONFIG, WorkQueueSchema } from './services/workQueueConfig.js';
 import { cosmiconfigSync } from 'cosmiconfig';
 import { LogError, LogStatus, LogStatusEx } from '@memberjunction/core';
 import { mergeConfigs, parseBooleanEnv } from '@memberjunction/config';
+import { TelemetryEnabledDefault } from './telemetryConfigUnits.js';
+import { RealtimeEnabledDefault } from './realtimeConfigUnits.js';
 
 const explorer = cosmiconfigSync('mj', { searchStrategy: 'global' });
 
 const userHandlingInfoSchema = z.object({
   autoCreateNewUsers: z.boolean().optional().default(false),
+  /** When true, auto-provisioning is restricted to the domains in `newUserAuthorizedDomains`. */
   newUserLimitedToAuthorizedDomains: z.boolean().optional().default(false),
+  /**
+   * Authorized **email domains** for auto-provisioned users — e.g. `['example.com', '*.example.org']`.
+   *
+   * These are matched against the domain of the email address in the verified identity token, NOT
+   * against the browser `Origin` / frontend hostname. If you are upgrading from a build that
+   * compared these to the request origin, replace any frontend hostnames here (`app.example.com`,
+   * `localhost`) with the email domains your users actually sign in with.
+   *
+   * `*` wildcards are supported and match in full: `*.example.com` matches `mail.example.com` but
+   * NOT `example.com` — list both if you need both.
+   */
   newUserAuthorizedDomains: z.array(z.string()).optional().default([]),
   newUserRoles: z.array(z.string()).optional().default([]),
   updateCacheWhenNotFound: z.boolean().optional().default(false),
   updateCacheWhenNotFoundDelay: z.number().optional().default(30000),
+  /**
+   * The internal user whose context creates new user records. Matched against `User.Name` FIRST,
+   * then `User.Email` — so either spelling of an existing user resolves. On a stock database the
+   * system user is `Name='System'` / `Email='not.set@nowhere.com'`; both reach it.
+   *
+   * When unset, or when the value matches no user, resolution falls back to the system user and
+   * then to the lowest-ID active Owner. See `src/auth/principals.ts`.
+   */
   contextUserForNewUserCreation: z.string().optional().default(''),
   CreateUserApplicationRecords: z.boolean().optional().default(false),
   UserApplications: z.array(z.string()).optional().default([]),
@@ -131,6 +154,23 @@ const scheduledJobsSchema = z.object({
   staleLockCleanupInterval: z.number().optional().default(300000), // 5 minutes in ms
 });
 
+/**
+ * Integration sync worker (PR 1 item 8). When enabled, this process polls
+ * `CompanyIntegrationRun` for `Status='Queued'` rows, atomically claims them, executes
+ * the sync, and releases. The claim sproc is the mutual exclusion, so any number of
+ * processes may run a worker against the same database.
+ */
+const integrationSyncWorkerSchema = z.object({
+  /** Master switch — off by default so existing deployments keep running syncs inline. */
+  enabled: z.boolean().optional().default(false),
+  /** Email of the user the worker executes syncs as. */
+  systemUserEmail: z.string().optional().default('system@memberjunction.org'),
+  /** How often to poll the queue, in ms. */
+  pollingIntervalMs: z.number().optional().default(15000),
+  /** Maximum runs this worker executes concurrently. */
+  maxConcurrentRuns: z.number().optional().default(3),
+});
+
 const queryDialectSchema = z.object({
   /** When true, saving a Query entity auto-generates QuerySQL entries for configured target dialects */
   autoConvertOnSave: zodBooleanWithTransforms().default(false),
@@ -162,9 +202,14 @@ const multiTenancySchema = z.object({
 });
 
 const telemetrySchema = z.object({
-  enabled: zodBooleanWithTransforms().default(
-    process.env.MJ_TELEMETRY_ENABLED !== 'false' // Enabled by default unless explicitly disabled
-  ),
+  // NOTE: MJ_TELEMETRY_ENABLED is read in DEFAULT_SERVER_CONFIG, not here.
+  //
+  // A Zod `.default()` only fires when the key is ABSENT from the parsed object, and
+  // DEFAULT_SERVER_CONFIG — the base of the config merge — always supplies `telemetry.enabled`.
+  // The key is therefore never absent, so a `.default(process.env...)` here could never take
+  // effect. Owning it in one place keeps the env var working and stops this line from claiming
+  // a behaviour it does not have.
+  enabled: zodBooleanWithTransforms().default(true),
   level: z.enum(['minimal', 'standard', 'verbose', 'debug']).optional().default('standard'),
 });
 
@@ -186,6 +231,29 @@ const cacheSettingsSchema = z.object({
   evictionSweepIntervalSeconds: z.number().optional().default(300),
   /** Enable verbose cache logging (hits, misses, evictions). Default: false. */
   verboseLogging: z.boolean().optional().default(false),
+  /**
+   * Entity names whose FULL ROW may ride along with a cache-invalidation broadcast.
+   *
+   * The cache-invalidation subscription is delivered to EVERY connected client with no per-user
+   * filter (see CacheInvalidationResolver), so any row named here is disclosed to every signed-in
+   * session, whatever row-level security or tenant scoping would otherwise apply to reading it.
+   *
+   * Defaults to `[]`: invalidation still carries the entity name and primary key, which is all a
+   * client needs to evict, and the client re-fetches through the normal read path where access
+   * control applies. Listing an entity re-enables the apply-in-place optimisation for it — correct
+   * only for reference data every signed-in user is allowed to read.
+   *
+   * What the re-fetch costs depends on the consumer. `ConversationEngine` re-reads the ONE record
+   * by primary key. `BaseEngine` (every engine subclass with `AutoRefresh`, the default) applies a
+   * remote save in place only when the row is present, so without it a remote save falls through to
+   * a full reload of each matching config — a `RunView` of that entity, not a keyed read. Remote
+   * deletes still apply in place from the primary key. Engine-cached reference entities that every
+   * signed-in user may read are the ones worth listing here.
+   *
+   * `['*']` opts every entity in, restoring the previous behaviour. Only safe on a deployment where
+   * every signed-in user may read every row of every entity.
+   */
+  recordDataBroadcastEntities: z.array(z.string()).optional().default([]),
 });
 
 const loggingSettingsSchema = z.object({
@@ -293,7 +361,11 @@ const magicLinkSchema = z.object({
    * from attaching a privileged role (e.g. Owner) to an external magic-link user.
    */
   grantableRoleNames: z.array(z.string()).optional().default([]),
-  /** Email of the internal user whose context provisions magic-link users (falls back to userHandling.contextUserForNewUserCreation). */
+  /**
+   * The internal user whose context provisions magic-link users, matched against `User.Name` then
+   * `User.Email` (falls back to `userHandling.contextUserForNewUserCreation`, then to the system
+   * user, then to the lowest-ID active Owner).
+   */
   contextUserForProvisioning: z.string().optional(),
   /**
    * Guard against bolting an external magic-link role/app onto an EXISTING account
@@ -356,7 +428,10 @@ const widgetSchema = z.object({
   rateLimitWindowMs: z.coerce.number().optional().default(60_000),
   /** Server-wide default hard ceiling (minutes) on a voice session when an instance omits one (W4). */
   voiceDefaultMaxSessionMinutes: z.coerce.number().optional().default(10),
-  /** Email/name of the internal user whose context READS widget config at mint time (falls back to system/Owner). */
+  /**
+   * The internal user whose context READS widget config at mint time, matched against `User.Name`
+   * then `User.Email` (falls back to the system user, then the lowest-ID active Owner).
+   */
   contextUserForLookup: z.string().optional(),
   /**
    * Host-identity public keys (PEM), keyed by widget PublicKey, for the `host-identity` auth
@@ -396,10 +471,20 @@ const twilioTelephonySchema = z.object({
   apiKeySecret: z.string().optional(),
   /** The publicly reachable `wss://…/telephony/twilio/media` URL Twilio's <Connect><Stream> connects to. */
   streamPublicUrl: z.string(),
-  /** Optional shared secret gating the public webhook/WSS endpoints (defense-in-depth beyond signature verification). */
+  /**
+   * Reserved; currently unused. The Media-Streams websocket is authenticated by a per-call token MJ mints and
+   * embeds in the TwiML (`<Parameter name="mjToken">`), and webhooks by `X-Twilio-Signature`.
+   */
   webhookSigningSecret: z.string().optional(),
-  /** Optional status-callback URL Twilio posts call lifecycle events to. */
+  /**
+   * URL Twilio posts outbound-call lifecycle events to. Defaults to `<public URL>/telephony/twilio/status`, the
+   * route that ends the bridge session when a call is busy / unanswered / failed / completed.
+   */
   statusCallbackUrl: z.string().optional(),
+  /** URL Twilio posts the async answering-machine verdict to. Defaults to `<public URL>/telephony/twilio/amd`. */
+  amdStatusCallbackUrl: z.string().optional(),
+  /** What to do when a machine or fax answers an outbound call: `hangup` (default) ends it, `continue` only logs the verdict. */
+  onMachine: z.enum(['hangup', 'continue']).optional(),
 }).passthrough();
 
 /**
@@ -421,8 +506,14 @@ const vonageTelephonySchema = z.object({
   mediaPublicUrl: z.string(),
   /** Vonage account signature secret — HMAC key for signed-request `sig` AND HS256 webhook-JWT verification. */
   signatureSecret: z.string().optional(),
-  /** Optional event-webhook URL Vonage posts call lifecycle events to (passed on outbound createCall). */
+  /**
+   * Event-webhook URL Vonage posts call lifecycle events to (passed on outbound createCall). Defaults to
+   * `<public URL>/telephony/vonage/event`, the route that ends the bridge session when a call is busy /
+   * unanswered / failed / completed.
+   */
   eventUrl: z.string().optional(),
+  /** What to do when a machine answers an outbound call — Vonage's `machine_detection`: `hangup` (default) or `continue`. */
+  onMachine: z.enum(['hangup', 'continue']).optional(),
 }).passthrough();
 
 /**
@@ -476,17 +567,126 @@ const teamsMeetingsSchema = z.object({
   modelSampleRate: z.coerce.number().optional().default(16000),
 }).passthrough();
 
+/**
+ * LiveKit SIP binding: phone calls carried by a SIP trunk and landed in a LiveKit room (every conversation lives in a room;
+ * the carrier is only the pipe). LiveKit credentials default to the `LIVEKIT_URL` / `LIVEKIT_API_KEY` /
+ * `LIVEKIT_API_SECRET` env vars the Meet room already uses. When `livekitSip` is omitted, the LiveKit SIP webhook is not mounted.
+ * Point a LiveKit project webhook at `<public URL>/telephony/livekit-sip/webhook` (the signature is verified with the API secret).
+ */
+const livekitSipTelephonySchema = z.object({
+  /** LiveKit server URL (`wss://…`). Defaults to `LIVEKIT_URL`. */
+  serverUrl: z.string().optional(),
+  /** LiveKit API key. Defaults to `LIVEKIT_API_KEY`. */
+  apiKey: z.string().optional(),
+  /** LiveKit API secret (resolved upstream — never inlined). Defaults to `LIVEKIT_API_SECRET`. */
+  apiSecret: z.string().optional(),
+  /** Inbound calls land in a room whose name starts with this. Defaults to `call-`. */
+  roomPrefix: z.string().optional(),
+  /** The numbers (E.164) this deployment answers. Each routes to the agent identity registered for it (on the LiveKit provider). */
+  numbers: z.array(z.string()).optional(),
+  /** The LiveKit inbound trunk id, when created by hand. */
+  inboundTrunkId: z.string().optional(),
+  /** The LiveKit OUTBOUND trunk used to dial out (outbound calls, fallback legs, transfers to a number). Dialing out is off without it. */
+  outboundTrunkId: z.string().optional(),
+  /** The caller ID presented on calls dialed out through the outbound trunk. */
+  outboundFromNumber: z.string().optional(),
+  /** Create the inbound trunk and dispatch rule at startup when missing (idempotent). Defaults to false. */
+  autoProvision: zodBooleanWithTransforms().optional().default(false),
+  /** Source addresses the inbound trunk accepts calls from (the carrier's SIP signalling addresses). Used when provisioning. */
+  allowedAddresses: z.array(z.string()).optional(),
+  /** The carrier behind the trunk, for configuration checks only (no carrier API is called). */
+  carrier: z
+    .object({
+      type: z.literal('twilio-elastic-sip'),
+      /** The LiveKit SIP URI the Twilio trunk's origination URI points at, e.g. `sip:<project>.sip.livekit.cloud`. */
+      originationUri: z.string().optional(),
+      /** The trunk's Termination SIP URI on Twilio (`<name>.pstn.twilio.com`). Needed only when dialing out. */
+      terminationUri: z.string().optional(),
+      /** How Twilio authenticates LiveKit's outbound requests. */
+      terminationAuth: z.enum(['credential-list', 'ip-acl']).optional(),
+      /** The Twilio numbers associated with the trunk (E.164). */
+      numbers: z.array(z.string()).optional(),
+    })
+    .optional(),
+}).passthrough();
+
+/**
+ * Outbound-call policy applied to every `PlaceTwilioCall` / `PlaceVonageCall` / `PlaceRingCentralCall`
+ * mutation, on top of the caller's right to run the agent. Defaults are deliberately conservative.
+ * The rate limiter is in-memory and therefore PER PROCESS: with N MJAPI instances a user can place up to
+ * N × `maxCallsPerUserPerHour` calls.
+ */
+const outboundTelephonySchema = z.object({
+  /** Destination prefixes a call may go to (E.164, e.g. `+1`). An empty list refuses every destination. Defaults to `['+1']`. */
+  allowedPrefixes: z.array(z.string()).optional().default(['+1']),
+  /**
+   * Destination prefixes that are always refused, even when an allowed prefix matches. Deliberately has NO default
+   * here: when omitted, `@memberjunction/telephony-adapters` applies its own `DEFAULT_BLOCKED_PREFIXES` (NANP
+   * premium-rate plus the Caribbean +1 countries abused for toll fraud), so the list lives in exactly one place.
+   * Setting this REPLACES that list.
+   */
+  blockedPrefixes: z.array(z.string()).optional(),
+  /** Max outbound calls one user may place per rolling hour (per process). Defaults to 20. */
+  maxCallsPerUserPerHour: z.coerce.number().int().positive().optional().default(20),
+}).passthrough();
+
 const telephonySchema = z.object({
   /** Master switch. When false (or when no vendor block is present), telephony routes are not mounted. */
   enabled: zodBooleanWithTransforms().default(false),
+  /**
+   * Email of the user INBOUND calls run as. A caller is an anonymous member of the public, so the call needs a
+   * principal to create its agent session and run the agent. Point this at a DEDICATED LEAST-PRIVILEGE user.
+   * There is deliberately no fallback: if unset, unknown, inactive, or the system user, inbound calls are
+   * rejected with a polite message and the rejection is logged. Applies to Twilio, Vonage and RingCentral.
+   */
+  inboundRunAsUserEmail: z.string().optional(),
+  /** Maximum length of one phone call, in seconds. The bridge session is stopped (and the call hung up) at the cap. Defaults to 1800. */
+  maxCallSeconds: z.coerce.number().int().positive().optional().default(1800),
+  /**
+   * Most phone calls (every carrier together, both directions) the server carries at once. Past it an inbound
+   * caller hears "all agents are busy" and an outbound request is refused. Keep it at or below the realtime
+   * model plan's concurrent-session limit. Defaults to 25.
+   */
+  maxConcurrentCalls: z.coerce.number().int().positive().optional().default(25),
+  /** Outbound destination policy + per-user rate limit (see {@link outboundTelephonySchema}). */
+  outbound: outboundTelephonySchema.optional().default({}),
+  /**
+   * The places the agent may hand a live call to, by name (the agent names a target, never a number, an email or an agent
+   * id). `kind` is `number` (the default; a phone number), `user` (a person at an Explorer console, who may accept or
+   * decline; `userEmail`, optional `fallbackNumber` the room dials if they do not take it) or `agent` (another MJ AI agent,
+   * by `agentName`). `user` and `agent` targets work on calls that live in a LiveKit room; a carrier call can only transfer to
+   * a `number`. Every number is validated at startup against the outbound allow/block lists; an invalid entry is dropped
+   * and logged. Empty (the default) means the agent cannot hand calls over at all.
+   */
+  transferTargets: z
+    .array(
+      z.object({
+        name: z.string().min(1),
+        kind: z.enum(['number', 'user', 'agent']).optional(),
+        number: z.string().optional(),
+        userEmail: z.string().optional(),
+        fallbackNumber: z.string().optional(),
+        agentName: z.string().optional(),
+        description: z.string().optional(),
+      }),
+    )
+    .optional()
+    .default([]),
   /** Twilio Programmable Voice + Media Streams binding. */
   twilio: twilioTelephonySchema.optional(),
   /** Vonage Voice + WebSocket-media binding. */
   vonage: vonageTelephonySchema.optional(),
   /** RingCentral Call Control + media-stream binding. */
   ringcentral: ringcentralTelephonySchema.optional(),
+  /** LiveKit SIP binding: phone calls carried by a SIP trunk, landed in a LiveKit room. */
+  livekitSip: livekitSipTelephonySchema.optional(),
   /** Microsoft Teams meetings (Graph cloud-communications + ACS application-hosted media) binding. */
   teams: teamsMeetingsSchema.optional(),
+}).passthrough();
+
+const realtimeSchema = z.object({
+  /** Master switch. When false, the WebRTC SDP broker router is not mounted. Defaults to true. */
+  enabled: zodBooleanWithTransforms().default(true),
 }).passthrough();
 
 const configInfoSchema = z.object({
@@ -494,6 +694,7 @@ const configInfoSchema = z.object({
   magicLink: magicLinkSchema.optional().default({}),
   widget: widgetSchema.optional().default({}),
   telephony: telephonySchema.optional().default({}),
+  realtime: realtimeSchema.optional().default({}),
   databaseSettings: databaseSettingsInfoSchema,
   viewingSystem: viewingSystemInfoSchema.optional(),
   restApiOptions: restApiOptionsSchema.optional().default({}),
@@ -501,6 +702,8 @@ const configInfoSchema = z.object({
   authProviders: z.array(authProviderSchema).optional(),
   componentRegistries: z.array(componentRegistrySchema).optional(),
   scheduledJobs: scheduledJobsSchema.optional().default({}),
+  integrationSyncWorker: integrationSyncWorkerSchema.optional().default({}),
+  workQueue: WorkQueueSchema.optional().default({}),
   telemetry: telemetrySchema.optional().default({}),
   queryDialects: queryDialectSchema.optional().default({}),
   multiTenancy: multiTenancySchema.optional().default({}),
@@ -547,9 +750,11 @@ export type UserHandlingInfo = z.infer<typeof userHandlingInfoSchema>;
 export type MagicLinkConfig = z.infer<typeof magicLinkSchema>;
 export type WidgetConfig = z.infer<typeof widgetSchema>;
 export type TelephonyConfig = z.infer<typeof telephonySchema>;
+export type RealtimeConfig = z.infer<typeof realtimeSchema>;
 export type TwilioTelephonyConfig = z.infer<typeof twilioTelephonySchema>;
 export type VonageTelephonyConfig = z.infer<typeof vonageTelephonySchema>;
 export type RingCentralTelephonyConfig = z.infer<typeof ringcentralTelephonySchema>;
+export type LiveKitSipTelephonyConfig = z.infer<typeof livekitSipTelephonySchema>;
 export type TeamsMeetingsConfig = z.infer<typeof teamsMeetingsSchema>;
 export type DatabaseSettingsInfo = z.infer<typeof databaseSettingsInfoSchema>;
 export type ViewingSystemSettingsInfo = z.infer<typeof viewingSystemInfoSchema>;
@@ -559,6 +764,8 @@ export type SqlLoggingInfo = z.infer<typeof sqlLoggingSchema>;
 export type AuthProviderConfig = z.infer<typeof authProviderSchema>;
 export type ComponentRegistryConfig = z.infer<typeof componentRegistrySchema>;
 export type ScheduledJobsConfig = z.infer<typeof scheduledJobsSchema>;
+export type IntegrationSyncWorkerConfig = z.infer<typeof integrationSyncWorkerSchema>;
+export type { WorkQueueConfig } from './services/workQueueConfig.js';
 export type TelemetryConfig = z.infer<typeof telemetrySchema>;
 export type QueryDialectConfig = z.infer<typeof queryDialectSchema>;
 export type MultiTenancyConfig = z.infer<typeof multiTenancySchema>;
@@ -611,10 +818,23 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
     autoCreateNewUsers: true,
     newUserLimitedToAuthorizedDomains: false,
     newUserAuthorizedDomains: [],
-    newUserRoles: ['UI', 'Developer'],
+    // 'UI' ONLY, deliberately (issue #4260). Auto-provisioning is on by default above, with no
+    // domain restriction, so this list is the standing authority of anyone the configured IdP will
+    // issue a token for. On the baseline seed 'Developer' and 'Integration' hold unfiltered
+    // CanUpdate on ~439 of the database's ~446 entities, so defaulting every such identity into
+    // either grants broad data-plane access no host should hand out by default. (The MJ: Users
+    // escalation this list also used to guard against — writing your own Type to 'Owner' — is now
+    // closed at the entity layer regardless of role: see MJUserEntityServer in
+    // @memberjunction/core-entities-server.) 'UI' carries the end-user surface (conversations,
+    // views, dashboards, settings) and no write on MJ: Users. Hosts that need more grant it
+    // per-deployment.
+    newUserRoles: ['UI'],
     updateCacheWhenNotFound: true,
     updateCacheWhenNotFoundDelay: 5000,
-    contextUserForNewUserCreation: 'not.set@nowhere.com',
+    // The seeded system user, named by `Name`. Its Email ('not.set@nowhere.com') resolves too —
+    // resolution tries both columns — but naming it this way keeps the default readable as what it
+    // is, rather than as an address nobody can receive mail at.
+    contextUserForNewUserCreation: 'System',
     CreateUserApplicationRecords: true,
     UserApplications: []
   },
@@ -671,9 +891,31 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
     staleLockCleanupInterval: 300000
   },
 
-  // Telemetry defaults
+  // Integration sync worker defaults (off — syncs run inline unless a worker is enabled)
+  integrationSyncWorker: {
+    enabled: false,
+    systemUserEmail: 'not.set@nowhere.com',
+    pollingIntervalMs: 15000,
+    maxConcurrentRuns: 3
+  },
+
+  // Work queue host defaults (off until an instance opts in)
+  workQueue: DEFAULT_WORK_QUEUE_CONFIG,
+
+  // Realtime WebRTC SDP broker defaults (on by default; can be disabled via MJ_REALTIME_ENABLED=false)
+  realtime: {
+    enabled: RealtimeEnabledDefault(process.env.MJ_REALTIME_ENABLED),
+  },
+
+  // Telemetry defaults — on unless the operator turns it off via MJ_TELEMETRY_ENABLED.
+  //
+  // The env read lives HERE rather than in telemetrySchema for the same reason as
+  // loggingSettings.graphql.logVariables below: this object is the merge BASE, so any key it
+  // supplies is always present by the time Zod parses, and a schema-level `.default()` can never
+  // fire. An unset (or empty) variable leaves telemetry enabled; anything parseBooleanEnv reads as
+  // false ('false', '0', 'no', 'off') disables it.
   telemetry: {
-    enabled: true,
+    enabled: TelemetryEnabledDefault(process.env.MJ_TELEMETRY_ENABLED),
     level: 'standard'
   },
 
@@ -696,42 +938,22 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
     },
   },
 
-  // Auth providers (environment-driven)
-  authProviders: [
-    // Microsoft Azure AD / Entra ID
-    process.env.TENANT_ID && process.env.WEB_CLIENT_ID ? {
-      name: 'azure',
-      type: 'msal',
-      issuer: `https://login.microsoftonline.com/${process.env.TENANT_ID}/v2.0`,
-      audience: process.env.WEB_CLIENT_ID,
-      jwksUri: `https://login.microsoftonline.com/${process.env.TENANT_ID}/discovery/v2.0/keys`,
-      clientId: process.env.WEB_CLIENT_ID,
-      tenantId: process.env.TENANT_ID
-    } : null,
-
-    // Auth0
-    process.env.AUTH0_DOMAIN && process.env.AUTH0_CLIENT_ID ? {
-      name: 'auth0',
-      type: 'auth0',
-      issuer: `https://${process.env.AUTH0_DOMAIN}/`,
-      audience: process.env.AUTH0_CLIENT_ID,
-      jwksUri: `https://${process.env.AUTH0_DOMAIN}/.well-known/jwks.json`,
-      clientId: process.env.AUTH0_CLIENT_ID,
-      clientSecret: process.env.AUTH0_CLIENT_SECRET,
-      domain: process.env.AUTH0_DOMAIN
-    } : null,
-    // AWS Cognito
-    process.env.COGNITO_USER_POOL_ID && process.env.COGNITO_CLIENT_ID && process.env.AWS_REGION ? {
-      name: 'cognito',
-      type: 'cognito',
-      issuer: `https://cognito-idp.${process.env.AWS_REGION}.amazonaws.com/${process.env.COGNITO_USER_POOL_ID}`,
-      audience: process.env.COGNITO_CLIENT_ID,
-      jwksUri: `https://cognito-idp.${process.env.AWS_REGION}.amazonaws.com/${process.env.COGNITO_USER_POOL_ID}/.well-known/jwks.json`,
-      clientId: process.env.COGNITO_CLIENT_ID,
-      region: process.env.AWS_REGION,
-      userPoolId: process.env.COGNITO_USER_POOL_ID
-    } : null,
-  ].filter(Boolean),
+  // Auth providers.
+  //
+  // Empty by design. This used to be a hard-coded block that enumerated Entra / Auth0 / Cognito
+  // inline and built each config from its environment variables. That made env-var configuration
+  // a closed domain: a third-party provider could register a driver class and take a metadata row
+  // or an explicit entry here, but it could never offer the "set two variables and you're done"
+  // experience, because the enumeration lived in core.
+  //
+  // Each provider class now owns its own mapping via the optional static
+  // `ConfigFromEnvironment` (see IEnvironmentConfigurableProvider in @memberjunction/auth-providers),
+  // and `initializeAuthProviders()` collects them through the ClassFactory registry.
+  //
+  // Discovery cannot happen here: this literal is evaluated when config.ts is imported, which is
+  // BEFORE @memberjunction/auth-providers loads and the driver classes register. It is deferred to
+  // registration time, where the registry is populated.
+  authProviders: [],
 };
 
 /**
@@ -740,9 +962,14 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
  * startup summary `Config` line. Declared before `configInfo` so the assignment
  * inside `loadConfig()` (invoked below) is not in its temporal dead zone.
  */
-export let configFilePath: string | undefined;
+export let ConfigFilePath: string | undefined;
 
-export const configInfo: ConfigInfo = loadConfig();
+export {
+  /** @deprecated Use {@link ConfigFilePath} instead. */
+  ConfigFilePath as configFilePath,
+};
+
+export const configInfo: ConfigInfo = LoadConfig();  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
 
 export const {
   dbUsername,
@@ -769,7 +996,7 @@ export const {
   restApiOptions: RESTApiOptions,
 } = configInfo;
 
-export function loadConfig() {
+export function LoadConfig() {
   const configSearchResult = explorer.search(process.cwd());
 
   // Start with DEFAULT_SERVER_CONFIG as base
@@ -779,7 +1006,7 @@ export function loadConfig() {
   if (configSearchResult && !configSearchResult.isEmpty) {
     // Resolved config-file path. Surfaced in the startup summary `Config` line at standard
     // level (see StartupLogger). Demoted to verbose-only here to avoid a duplicate inline line.
-    configFilePath = configSearchResult.filepath;
+    ConfigFilePath = configSearchResult.filepath;
     LogStatusEx({ message: `Config file found at ${configSearchResult.filepath}`, verboseOnly: true });
 
     // Merge user config with defaults (user config takes precedence)
@@ -795,4 +1022,9 @@ export function loadConfig() {
     throw new Error('Configuration validation failed');
   }
   return configParsing.data;
+}
+
+/** @deprecated Use {@link LoadConfig}. */
+export function loadConfig() {
+  return LoadConfig();
 }

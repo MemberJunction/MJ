@@ -35,9 +35,19 @@ export class TaskGraphActionRunner implements TaskActionRunner {
                 Filters: [],
             });
 
+            const output = this.buildOutput(result.Params);
+            const unstorable = this.findUnstorableOutput(output);
+            if (unstorable) {
+                const message =
+                    `Action "${action.Name}" returned output param "${unstorable.Name}", which cannot be stored ` +
+                    `as the step's result: ${unstorable.Reason}. Output params of a durable step must be plain data.`;
+                LogError(`[TaskGraphActionRunner] Task ${params.TaskID}: ${message}`);
+                return { Success: false, ErrorMessage: message, ActionLogID: result.LogEntry?.ID };
+            }
+
             return {
                 Success: result.Success,
-                Output: this.buildOutput(result.Params),
+                Output: output,
                 ErrorMessage: result.Success ? undefined : result.Message,
                 // The engine already wrote the log; this is the only place its id is in hand. Without
                 // carrying it out, a workflow's action step has no path back to its own execution
@@ -49,6 +59,24 @@ export class TaskGraphActionRunner implements TaskActionRunner {
             LogError(`[TaskGraphActionRunner] Task ${params.TaskID} failed: ${message}`);
             return { Success: false, ErrorMessage: message };
         }
+    }
+
+    /**
+     * The first output param that cannot be written to the Task row as JSON, or null.
+     *
+     * Checked here because this is the last place that knows the action's and the param's NAMES: the
+     * dispatcher serializes the whole Output later and, for a live object (an entity, an observable),
+     * fails with a bare "Converting circular structure to JSON" that names neither.
+     */
+    private findUnstorableOutput(output: Record<string, unknown>): { Name: string; Reason: string } | null {
+        for (const [Name, value] of Object.entries(output)) {
+            try {
+                JSON.stringify(value);
+            } catch (e) {
+                return { Name, Reason: e instanceof Error ? e.message.split('\n')[0] : String(e) };
+            }
+        }
+        return null;
     }
 
     /**
@@ -75,25 +103,26 @@ export class TaskGraphActionRunner implements TaskActionRunner {
     }
 
     /**
-     * Rebuilds the action's parameters from the task's stored payload.
+     * Rebuilds the action's parameters from the task's input, one parameter per key.
      *
-     * **The values here have been through redaction**, because `Task.InputPayload` is persistent,
-     * user-visible storage and nothing writes a raw `ActionParam[]` there. A parameter the binding
-     * marked as not-logged therefore arrives absent rather than secret — the action sees a missing
-     * value, which is the honest consequence of choosing not to persist it, and the reason durable
-     * dispatch is opt-in per binding rather than the default.
+     * For a **durable entity-action** graph the input was written by `RedactParamsToRecord`
+     * (`@memberjunction/actions-base`) at deferral time, so its values have been through redaction:
+     * a parameter the binding marked as not-logged arrives absent rather than secret — the action
+     * sees a missing value, which is the honest consequence of choosing not to persist it, and the
+     * reason durable dispatch is opt-in per binding rather than the default. Every other graph's
+     * input is whatever its spec authored. This method re-applies no redaction rule in either case.
      *
-     * Dependency outputs are merged underneath the task's own input so a node's explicit parameters
-     * always win over an upstream node that happened to emit the same key.
+     * `InputPayload` already carries the dependency outputs: the dispatcher merges them underneath
+     * the task's own input (`mergedPayload`) before calling this runner, so a node's explicit
+     * parameters win and a step with an input mapping gets exactly the parameters it declared.
+     * `DependencyOutputs` is keyed by upstream task ID, not by parameter name, so it is deliberately
+     * not read here — spreading it would hand the action one extra parameter per dependency, named
+     * by a GUID and holding that task's whole output.
      */
     private buildParams(params: TaskActionRunParams): ActionParam[] {
-        const merged: Record<string, unknown> = {};
-        for (const [name, value] of params.DependencyOutputs) {
-            merged[name] = value;
+        if (!params.InputPayload || typeof params.InputPayload !== 'object') {
+            return [];
         }
-        if (params.InputPayload && typeof params.InputPayload === 'object') {
-            Object.assign(merged, params.InputPayload as Record<string, unknown>);
-        }
-        return Object.entries(merged).map(([Name, Value]) => ({ Name, Value, Type: 'Input' }));
+        return Object.entries(params.InputPayload as Record<string, unknown>).map(([Name, Value]) => ({ Name, Value, Type: 'Input' }));
     }
 }

@@ -8,30 +8,41 @@ name: Integration Tier
 #
 # HOST-BASED lane (no Docker regression images). This PR gate provisions the DB directly on
 # the runner: a throwaway SQL Server container, THIS branch's locally-built `mj` CLI applies
-# the committed migrations, then `mj sync push` reconciles the committed metadata, and the
-# aggregator runs in-process against it. No AssociationDB, no live CodeGen, no MJAPI/Explorer:
+# the committed migrations, then `mj sync push` reconciles the committed metadata, a locally
+# built MJAPI is booted against that DB (so the CLIENT-transport members run instead of
+# skipping), and the aggregator runs against it. No AssociationDB, no live CodeGen:
 #
 #   * The DETERMINISTIC suites touch only core __mj entities. `mj migrate` applies the
 #     committed CodeGen_Run_*.sql migrations AND the repeatable R__RefreshMetadata, which
 #     together provision every core view / proc / EntityField row — so no live `mj codegen`
 #     pass is needed. (Running one here would also mask the exact metadata-vs-migration drift
-#     that the separate "Test metadata sync push" gate exists to catch.)
+#     that the `mj sync push` step below surfaces.)
 #   * AssociationDB is only required by the Predictive Studio tier, which is gated OFF here.
 #   * `mj sync push --dir=metadata` pushes the default metadata dir — which includes the inert
 #     "Integration Test" TestType (metadata/test-types/). A SECOND push then applies the sibling
 #     `metadata-optional/integration-test/` root, which holds the actual test-only records — the
-#     IT01–IT66 Tests (67 records), the integration suite hierarchy, the RLS security principals
+#     IT01–IT75 Tests (75 records), the integration suite hierarchy, the RLS security principals
 #     (users + scoped role + grant), AND the synthetic AI stack the live tier drives (14 `IT: *`
-#     agents, 14 prompts, 42 model bindings, a skill, a search scope) — 242 records in total.
-#     It is kept out of `metadata/` so those synthetic accounts never reach a production DB
-#     (R2). Order matters: this root after metadata (the IT records @lookup the TestType by name), and
-#     its own directoryOrder (tests → test-suites → roles → entity-permissions → users) resolves
+#     agents, 14 prompts, 42 model bindings, a skill, a search scope). It is kept out of
+#     `metadata/` so those synthetic accounts never reach a production DB (R2). Order matters:
+#     this root after metadata (the IT records @lookup the TestType by name), and its own
+#     directoryOrder (tests → test-suites → roles → entity-permissions → users) resolves
 #     every @lookup ref.
-#   * The gated tiers all SKIP cleanly here: Predictive Studio (PS_INTEGRATION unset),
-#     Live Model (RUN_AGENT_TESTS unset), and the client suite (no live MJAPI reachable).
+#   * MJAPI boots with MJ_API_KEY so the 19 client-transport members (client-cache,
+#     permission-engine, runview-matrix, entity-writes, transaction-groups, …) authenticate
+#     via x-mj-api-key and actually execute. The suite metadata sequences ALL server-transport
+#     members BEFORE all client-transport members: the first client bundle rebinds the
+#     process-global provider to GraphQL (issue #3251), so a server member sequenced after it
+#     would hard-error. Keep that ordering when adding members.
+#   * Remaining gated tiers report REAL 'Skipped' results here (never false-green 'Passed'):
+#     Predictive Studio (PS_INTEGRATION unset) always; the mutation-gated checks run in the
+#     NIGHTLY schedule lane (RUN_MUTATION_TESTS=1 below) but skip on PR/push; the Live Model
+#     suite runs in the WEEKLY lane (separate job below).
 #
-# The migrate/sync CORRECTNESS gate is a SEPARATE workflow ("Test metadata sync push"): here
-# migrate + sync are the aggregator's SETUP, not its system-under-test.
+# There is no separate metadata-correctness workflow: the `mj sync push --dir=metadata` step in
+# this job IS where invalid committed metadata is caught. It is the aggregator's SETUP rather
+# than its system-under-test, but it fails the job, which is why `metadata/**` is in the paths
+# filter above — otherwise a metadata-only PR merges unchecked and reds the push backstop on next.
 #
 # This host-based lane is the sole CI home for the integration tier. The earlier container-based
 # lane (a reusable that provisioned via the Docker regression stack's db-setup) was removed along
@@ -41,9 +52,11 @@ on:
   pull_request:
     branches: [next]
     paths:
-      - 'package-lock.json'
+      - 'pnpm-lock.yaml'
       - 'packages/**'
       - 'migrations/**'
+      # The job runs `mj sync push --dir=metadata`, so a metadata-only PR must run this gate.
+      - 'metadata/**'
       # All integration test/suite/type metadata AND the RLS fixtures now live under this one
       # optional sibling root (kept out of the default-pushed metadata/ tree — R2).
       - 'metadata-optional/**'
@@ -51,24 +64,118 @@ on:
       - 'tsconfig*'
       - 'turbo.json'
       - '.github/workflows/integration.yml'
+      # The drift gate's own script. The changed-paths filter in the `changes` job below also
+      # matches it, but that job only runs if the workflow starts at all — so without this entry
+      # a script-only PR never reaches the filter and the gate cannot catch its own regressions.
+      - 'scripts/codegen-idempotency-check.mjs'
   # Full backstop: every merge into next runs the gate, so a filter-missed break (paths are a
   # heuristic; migrations + runtime @RegisterClass wiring can couple files no filter foresees)
   # can never merge silently and red the next PR (R3, mirrors test.yml).
   push:
     branches: [next]
   workflow_dispatch:
+    inputs:
+      run_live_model:
+        description: 'Also run the Live Model suite (real LLM calls — costs budget). Off by default so a manual re-run of the deterministic gate does not silently spend the weekly budget.'
+        type: boolean
+        default: false
+  # Scheduled lanes for the tiers the PR gate cannot afford or cannot key:
+  #   0 6 * * *   NIGHTLY — deterministic suite WITH RUN_MUTATION_TESTS=1 (the save/delete
+  #               cache-invalidation checks S17/S23/S24/S29/S30/S31b/C10 — the bug class that
+  #               shipped twice — cost nothing on a throwaway CI DB), plus the cross-server
+  #               Redis invalidation rig (two MJAPI processes + Redis; the fingerprint bugs of
+  #               2026-07 proved this can be 100% broken with every single-process tier green).
+  #   30 6 * * 0  WEEKLY (Sun) — the "Integration Tests — Live Model" suite, budget-capped,
+  #               gated on the INTEGRATION_LIVE_MODEL_KEYS secret (see that job).
+  schedule:
+    - cron: '0 6 * * *'
+    - cron: '30 6 * * 0'
 
 # Cancel superseded PR runs for the same ref. EXCEPTION: push (merge to next) events get a
 # per-commit group and are NEVER cancelled — every merge's backstop must run to completion
 # (github.ref is refs/heads/next for every merge, so a shared group would let a later merge
 # kill an earlier one's backstop). Mirrors test.yml.
+# EXCEPTION 2: schedule events get a per-cron group so the Sunday weekly cron (30 6 * * 0) does
+# not cancel the in-flight nightly (0 6 * * *) — both fire on refs/heads/next and would otherwise
+# share a group, killing the nightly mutation/rig/drift lanes ~30 min in every Sunday.
+permissions:
+  contents: read
+
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}${{ github.event_name == 'push' && format('-{0}', github.sha) || '' }}
+  group: ${{ github.workflow }}-${{ github.ref }}${{ github.event_name == 'push' && format('-{0}', github.sha) || '' }}${{ github.event_name == 'schedule' && format('-{0}', github.event.schedule) || '' }}
   cancel-in-progress: ${{ github.event_name != 'push' }}
 
 jobs:
+  changes:
+    name: Detect PR changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      codegen: ${{ steps.filter.outputs.codegen }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check changed paths
+        id: filter
+        env:
+          PR_BASE_REF: ${{ github.base_ref }}
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch --no-tags origin "$PR_BASE_REF"
+            CHANGED="$(git diff --name-only "origin/$PR_BASE_REF...HEAD")"
+            # scripts/codegen-idempotency-check.mjs IS the gate: a change to it must run the gate,
+            # or the gate cannot catch its own regressions. #4386's probe-cleanup hole sat cosmetic
+            # and then went fatal under 6805744ae4 without a single run of the gate on the change
+            # that caused it, because nothing in this filter matched.
+            if echo "$CHANGED" | grep -qE '^(packages/CodeGenLib/|packages/MJCore/src/generic/(providerBase|entityInfo)\.ts|packages/MJGlobal/src/util\.ts|migrations/|metadata/|.*generated/|\.github/workflows/integration\.yml|scripts/codegen-idempotency-check\.mjs)'; then
+              echo "codegen=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "codegen=false" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "codegen=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  # Lockfile preflight (MJ#4650). Every heavy job below installs for itself, so a lockfile that
+  # does not resolve used to fail ALL of them — each after minutes, each under a name implying the
+  # PR broke that thing. On #4604 one stale lockfile produced "Build failed" (1m25s), "Integration
+  # failed" (1m31s), "CodeGen drift gate failed" (1m27s) and three more; none had reached the work
+  # it is named for, and the drift gate in particular never created its database, so it could not
+  # catch the drift that PR was introducing (MJ#4647).
+  #
+  # This resolves the lockfile alone, in seconds, and the jobs below depend on it. A bad lockfile
+  # now SKIPS them instead of failing them — "could not run" and "ran and found a problem" stop
+  # reporting the same state, which is also what lets a ruleset treat them differently (MJ#4648).
+  # Resolve-only: it writes no node_modules and is not a substitute for each job's own install.
+  preflight:
+    name: Lockfile resolves
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Resolve against the committed lockfile
+        run: pnpm install --frozen-lockfile --lockfile-only
+
   integration-sqlserver:
     name: Integration (SQL Server, deterministic)
+    needs: [preflight]
+    # Runs on PRs, merges, dispatch, and the NIGHTLY cron (with the mutation tier armed).
+    # The weekly Sunday cron is the live-model lane's trigger — the deterministic suite
+    # already ran that morning's nightly, so skip it there.
+    if: github.event_name != 'schedule' || github.event.schedule == '0 6 * * *'
     timeout-minutes: 60
     runs-on: ubuntu-latest
     # Both the committed mj.config.cjs and the aggregator's own config layer read DB creds
@@ -82,6 +189,13 @@ jobs:
       CODEGEN_DB_USERNAME: sa
       CODEGEN_DB_PASSWORD: VeryStr0ngP@ssw0rd
       DB_TRUST_SERVER_CERTIFICATE: 'true'
+      # Turbo remote cache — opt-in, and inert while TURBO_TOKEN is unset. Fork PRs never
+      # receive it, so they degrade to a cold local cache rather than failing. Rationale and
+      # setup instructions live once, on the build job in test.yml.
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_API: ${{ vars.TURBO_API }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -115,7 +229,7 @@ jobs:
           exit 1
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
 
       - name: Create SQL database
         run: docker run --rm --network local-net mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "CREATE DATABASE [test];"
@@ -135,8 +249,9 @@ jobs:
       # (open-app-teardown-tests.ts imports it directly, and it is NOT a testing-integration
       # dep), and the mj CLI (migrate + sync push). --filter skips the Angular/Explorer half
       # of the monorepo this lane never touches. Built once; every step below reuses it.
-      - name: Build integration graph + CLI
-        run: npx turbo build --filter=@memberjunction/cli --filter=@memberjunction/testing-integration --filter=@memberjunction/integration-test-suite --filter=@memberjunction/open-app-engine
+      - name: Build integration graph + CLI + MJAPI
+        # mj_api added so the lane can BOOT MJAPI for the client-transport members.
+        run: npx turbo build --filter=@memberjunction/cli --filter=@memberjunction/testing-integration --filter=@memberjunction/integration-test-suite --filter=@memberjunction/open-app-engine --filter=mj_api
 
       # Provision the DB (aggregator SETUP): apply the committed migrations — which include the
       # committed CodeGen output and the repeatable R__RefreshMetadata that refreshes every core
@@ -152,7 +267,7 @@ jobs:
           MJ_MIGRATION_REQUEST_TIMEOUT: '120000'
         run: node packages/MJCLI/bin/run.js sync push --dir=metadata --ci
 
-      # The optional integration root holds the actual test-only records — the IT01–IT66 Tests, the
+      # The optional integration root holds the actual test-only records — the IT01–IT75 Tests, the
       # integration suite, AND the RLS security principals (users + scoped role + entity-permission
       # grant). (The inert "Integration Test" TestType itself lives in metadata/ and came in with the
       # main push above.) This root is deliberately kept OUT of the default-pushed metadata/ tree so
@@ -181,12 +296,650 @@ jobs:
             exit 1
           fi
 
+      # Boot MJAPI against the provisioned DB so the client-transport members execute
+      # instead of skipping. MJ_API_KEY is a throwaway per-run system key: MJServer
+      # accepts it via the x-mj-api-key header, and the test process presents the same
+      # value (bootstrapIntegrationClient → GraphQLProviderConfigData.mjAPIKey). No auth
+      # provider env is configured, so authProviders resolves empty — API-key auth is the
+      # only path, which is exactly what the client bundles use.
+      - name: Boot MJAPI (client-transport members)
+        env:
+          MJ_API_KEY: mj-integration-ci-${{ github.run_id }}
+          GRAPHQL_PORT: '4000'
+          # A dispatcher claims from the WHOLE Task table, so MJAPI's own one competes with the
+          # dispatcher IT74 builds — and MJAPI executes what it wins with the REAL agent runner
+          # instead of the bundle's stub, so those tasks never reach the stub's recorder and the
+          # checks read them as "never ran" (expected 4, got 0). Immediately-eligible root tasks
+          # lose this race most often, which is why it presented as an intermittent failure.
+          MJ_DISABLE_TASK_GRAPH_DISPATCHER: '1'
+        run: |
+          (cd packages/MJAPI && node dist/index.js > /tmp/mjapi.log 2>&1 &)
+          echo "Waiting for MJAPI /healthcheck..."
+          for i in $(seq 1 36); do
+            if curl -fsS http://localhost:4000/healthcheck >/dev/null 2>&1; then
+              echo "MJAPI is up (attempt $i)."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::MJAPI failed to boot within 3 minutes — the 19 client-transport members would skip. Log tail:"
+          tail -200 /tmp/mjapi.log
+          exit 1
+
       # The deterministic tier via the single entry path: `mj test suite` loads the private
       # suite package through mj.config.cjs `testing.checkModules`, dispatches every IT
       # record in "Integration Tests — Deterministic", and exits non-zero on failures.
       # No live-model pin needed: the deterministic suite contains no live-model members
       # (they live in the separate "Integration Tests — Live Model" suite), and LLM creds
-      # come from the local .env, which CI does not have. PS_INTEGRATION stays unset. No
-      # MJAPI is up, so client-transport members skip on the MJAPI preflight.
+      # come from the local .env, which CI does not have. PS_INTEGRATION stays unset.
+      # MJ_API_KEY (same value MJAPI booted with) arms the client-transport members.
+      # RUN_MUTATION_TESTS=1 on the nightly cron arms the save/delete cache-invalidation
+      # checks — PR/push runs keep them Skipped (visible in the summary, never false-green).
       - name: Run integration tier (mj test)
-        run: pnpm run test:integration
+        env:
+          MJ_API_KEY: mj-integration-ci-${{ github.run_id }}
+          GRAPHQL_PORT: '4000'
+          RUN_MUTATION_TESTS: ${{ github.event_name == 'schedule' && '1' || '' }}
+          # live-model is DEFAULT-ON since 2026-07-20 (tiers.ts: only an explicit '0'
+          # disables). This lane has no LLM credentials, so pin it off explicitly —
+          # tiers.ts's own doc comment assumes CI does this, and nothing did.
+          RUN_AGENT_TESTS: '0'
+        run: |
+          set -o pipefail
+          pnpm run test:integration 2>&1 | tee /tmp/integration.log
+
+      # Surface the suite's own pass/fail/skip accounting in the job summary so a run
+      # where coverage silently shrank (skips) is one click away from being noticed.
+      - name: Publish suite summary
+        if: always()
+        run: |
+          {
+            echo '## Integration tier result'
+            echo '```'
+            grep -E '\[(SUITE_COMPLETE|SUMMARY|DURATION|FAILURES|SKIPPED)\]' /tmp/integration.log || echo 'No suite summary found in the log.'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Dump MJAPI log on failure
+        if: failure()
+        run: tail -300 /tmp/mjapi.log || true
+
+  # ── WEEKLY live-model lane (Sunday 06:30 UTC + manual dispatch) ─────────────────────────
+  # Runs "Integration Tests — Live Model" (15 tests: prompt-runner, agent-runner, shipped
+  # agents, carry-forward, payload guards, skills, plan mode, compaction e2e, memory guards,
+  # rag-search, wire-callback) — the tier the 242-record synthetic AI stack is seeded FOR,
+  # which previously never ran anywhere. Real LLM calls cost real money: the suite's own
+  # budget guards apply, and the lane runs weekly, not nightly.
+  #
+  # GATED on the INTEGRATION_LIVE_MODEL_KEYS secret: a dotenv-format blob of the provider
+  # keys the live tier needs (AI_VENDOR_API_KEY__<DriverClass>=... lines, per
+  # packages/TestingFramework/integration-test-suite/docs/build-engineering-runbook.md —
+  # note missing keys FAIL the live tier, they do not skip). Without the secret the job's
+  # steps are skipped and it finishes green with a prominent ::warning — loudly flagged, not a
+  # silent pass.
+  integration-live-model:
+    name: Integration (Live Model, weekly)
+    needs: [preflight]
+    if: (github.event_name == 'schedule' && github.event.schedule == '30 6 * * 0') || (github.event_name == 'workflow_dispatch' && github.event.inputs.run_live_model == 'true')
+    timeout-minutes: 90
+    runs-on: ubuntu-latest
+    env:
+      DB_HOST: localhost
+      DB_DATABASE: test
+      DB_USERNAME: sa
+      DB_PASSWORD: VeryStr0ngP@ssw0rd
+      CODEGEN_DB_USERNAME: sa
+      CODEGEN_DB_PASSWORD: VeryStr0ngP@ssw0rd
+      DB_TRUST_SERVER_CERTIFICATE: 'true'
+      # Turbo remote cache — opt-in, and inert while TURBO_TOKEN is unset. Fork PRs never
+      # receive it, so they degrade to a cold local cache rather than failing. Rationale and
+      # setup instructions live once, on the build job in test.yml.
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_API: ${{ vars.TURBO_API }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
+    steps:
+      - name: Check live-model prerequisites
+        id: prereq
+        env:
+          LIVE_KEYS: ${{ secrets.INTEGRATION_LIVE_MODEL_KEYS }}
+        run: |
+          if [ -z "$LIVE_KEYS" ]; then
+            echo "READY=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Live-model lane NOT run — secret INTEGRATION_LIVE_MODEL_KEYS is not configured (dotenv blob of AI_VENDOR_API_KEY__* lines). The live tier has NOT been validated." | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            echo "READY=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout repo
+        if: steps.prereq.outputs.READY == 'true'
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Create docker network
+        if: steps.prereq.outputs.READY == 'true'
+        run: docker network create -d bridge local-net
+
+      - name: Create SQL Server container
+        if: steps.prereq.outputs.READY == 'true'
+        run: docker run --rm -d --network local-net --name sql -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=VeryStr0ngP@ssw0rd" -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest
+
+      - name: Wait for SQL Server to be ready
+        if: steps.prereq.outputs.READY == 'true'
+        run: |
+          for i in $(seq 1 30); do
+            if docker run --rm --network local-net mcr.microsoft.com/mssql-tools \
+                 /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "SELECT 1" >/dev/null 2>&1; then
+              echo "SQL Server is ready (attempt $i)."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "SQL Server did not become ready within the timeout." >&2
+          exit 1
+
+      - name: Set up pnpm
+        if: steps.prereq.outputs.READY == 'true'
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+
+      - name: Create SQL database
+        if: steps.prereq.outputs.READY == 'true'
+        run: docker run --rm --network local-net mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "CREATE DATABASE [test];"
+
+      - name: Set up node
+        if: steps.prereq.outputs.READY == 'true'
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        if: steps.prereq.outputs.READY == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Build integration graph + CLI + MJAPI
+        if: steps.prereq.outputs.READY == 'true'
+        run: npx turbo build --filter=@memberjunction/cli --filter=@memberjunction/testing-integration --filter=@memberjunction/integration-test-suite --filter=@memberjunction/open-app-engine --filter=mj_api
+
+      - name: Migrate + sync push (main and integration metadata)
+        if: steps.prereq.outputs.READY == 'true'
+        env:
+          MJ_MIGRATION_REQUEST_TIMEOUT: '120000'
+        run: |
+          node packages/MJCLI/bin/run.js migrate
+          node packages/MJCLI/bin/run.js sync push --dir=metadata --ci
+          node packages/MJCLI/bin/run.js sync push --dir=metadata-optional/integration-test --ci
+
+      - name: Write live-model provider keys to .env
+        if: steps.prereq.outputs.READY == 'true'
+        env:
+          LIVE_KEYS: ${{ secrets.INTEGRATION_LIVE_MODEL_KEYS }}
+        run: |
+          printf '%s\n' "$LIVE_KEYS" >> .env
+          # MJAPI boots with cwd packages/MJAPI and loads dotenv cwd-relative, so the keys must also
+          # land there or the server process never sees them (IT63's agent runs server-side).
+          printf '%s\n' "$LIVE_KEYS" >> packages/MJAPI/.env
+
+      - name: Boot MJAPI (wire-callback members)
+        if: steps.prereq.outputs.READY == 'true'
+        env:
+          MJ_API_KEY: mj-integration-ci-${{ github.run_id }}
+          GRAPHQL_PORT: '4000'
+        run: |
+          (cd packages/MJAPI && node dist/index.js > /tmp/mjapi.log 2>&1 &)
+          for i in $(seq 1 36); do
+            curl -fsS http://localhost:4000/healthcheck >/dev/null 2>&1 && { echo "MJAPI is up."; exit 0; }
+            sleep 5
+          done
+          echo "::error::MJAPI failed to boot"; tail -200 /tmp/mjapi.log; exit 1
+
+      - name: Run Live Model suite
+        if: steps.prereq.outputs.READY == 'true'
+        env:
+          MJ_API_KEY: mj-integration-ci-${{ github.run_id }}
+          GRAPHQL_PORT: '4000'
+          RUN_AGENT_TESTS: '1'
+        run: |
+          set -o pipefail
+          MJ_INTEGRATION_TEST=1 node packages/MJCLI/bin/run.js test suite "Integration Tests — Live Model" 2>&1 | tee /tmp/live-model.log
+
+      - name: Publish suite summary
+        if: always() && steps.prereq.outputs.READY == 'true'
+        run: |
+          {
+            echo '## Live Model tier result'
+            echo '```'
+            grep -E '\[(SUITE_COMPLETE|SUMMARY|DURATION|FAILURES|SKIPPED)\]' /tmp/live-model.log || echo 'No suite summary found in the log.'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Dump MJAPI log on failure
+        if: failure() && steps.prereq.outputs.READY == 'true'
+        run: tail -300 /tmp/mjapi.log || true
+
+  # ── NIGHTLY cross-server invalidation rig ──────────────────────────────────────────────
+  # Two MJAPI processes + shared Redis: proves a BaseEntity.Save() in process A invalidates
+  # the cached read in process B (RedisLocalStorageProvider pub/sub → DispatchCacheChange →
+  # remote-invalidate). The July-2026 fingerprint bugs (31f38be52, d4947ed73) showed this
+  # can be 100% broken while every unit test and the whole single-process integration tier
+  # stay green — the failure only manifests when a second server's lookup misses.
+  cross-server-invalidation:
+    name: Cross-server invalidation rig (nightly)
+    needs: [preflight]
+    # workflow_dispatch also runs it so the rig can be re-run on demand without waiting for the cron.
+    if: (github.event_name == 'schedule' && github.event.schedule == '0 6 * * *') || github.event_name == 'workflow_dispatch'
+    timeout-minutes: 45
+    runs-on: ubuntu-latest
+    env:
+      DB_HOST: localhost
+      DB_DATABASE: test
+      DB_USERNAME: sa
+      DB_PASSWORD: VeryStr0ngP@ssw0rd
+      CODEGEN_DB_USERNAME: sa
+      CODEGEN_DB_PASSWORD: VeryStr0ngP@ssw0rd
+      DB_TRUST_SERVER_CERTIFICATE: 'true'
+      # Turbo remote cache — opt-in, and inert while TURBO_TOKEN is unset. Fork PRs never
+      # receive it, so they degrade to a cold local cache rather than failing. Rationale and
+      # setup instructions live once, on the build job in test.yml.
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_API: ${{ vars.TURBO_API }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
+    services:
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Create docker network
+        run: docker network create -d bridge local-net
+
+      - name: Create SQL Server container
+        run: docker run --rm -d --network local-net --name sql -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=VeryStr0ngP@ssw0rd" -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest
+
+      - name: Wait for SQL Server to be ready
+        run: |
+          for i in $(seq 1 30); do
+            if docker run --rm --network local-net mcr.microsoft.com/mssql-tools \
+                 /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "SELECT 1" >/dev/null 2>&1; then
+              echo "SQL Server is ready (attempt $i)."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "SQL Server did not become ready within the timeout." >&2
+          exit 1
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+
+      - name: Create SQL database
+        run: docker run --rm --network local-net mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "CREATE DATABASE [test];"
+
+      - name: Set up node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build integration graph + CLI + MJAPI
+        run: npx turbo build --filter=@memberjunction/cli --filter=@memberjunction/testing-integration --filter=@memberjunction/integration-test-suite --filter=@memberjunction/open-app-engine --filter=mj_api
+
+      - name: Migrate + sync push
+        env:
+          MJ_MIGRATION_REQUEST_TIMEOUT: '120000'
+        run: |
+          node packages/MJCLI/bin/run.js migrate
+          node packages/MJCLI/bin/run.js sync push --dir=metadata --ci
+          node packages/MJCLI/bin/run.js sync push --dir=metadata-optional/integration-test --ci
+
+      - name: Boot two MJAPI processes on shared Redis
+        env:
+          MJ_API_KEY: mj-integration-ci-${{ github.run_id }}
+          REDIS_URL: redis://localhost:6379
+        run: |
+          (cd packages/MJAPI && GRAPHQL_PORT=4000 node dist/index.js > /tmp/mjapi-a.log 2>&1 &)
+          (cd packages/MJAPI && GRAPHQL_PORT=4001 node dist/index.js > /tmp/mjapi-b.log 2>&1 &)
+          for PORT in 4000 4001; do
+            UP=0
+            for i in $(seq 1 36); do
+              curl -fsS "http://localhost:${PORT}/healthcheck" >/dev/null 2>&1 && { UP=1; break; }
+              sleep 5
+            done
+            if [ "$UP" != "1" ]; then
+              echo "::error::MJAPI on port ${PORT} failed to boot"
+              tail -200 "/tmp/mjapi-$([ "$PORT" = "4000" ] && echo a || echo b).log"
+              exit 1
+            fi
+            echo "MJAPI on ${PORT} is up."
+          done
+
+      - name: Run cross-server invalidation rig
+        env:
+          RUN_CROSS_SERVER: '1'
+          MJ_API_KEY: mj-integration-ci-${{ github.run_id }}
+          MJAPI_A_URL: http://localhost:4000/
+          MJAPI_B_URL: http://localhost:4001/
+        run: npx tsx packages/TestingFramework/integration-test-suite/rigs/cross-server-invalidation-tests.ts
+
+      - name: Dump MJAPI logs on failure
+        if: failure()
+        run: |
+          echo "---- MJAPI A ----"; tail -200 /tmp/mjapi-a.log || true
+          echo "---- MJAPI B ----"; tail -200 /tmp/mjapi-b.log || true
+
+  # ── NIGHTLY CodeGen drift gate ─────────────────────────────────────────────────────────
+  # Runs `mj codegen` against the freshly-migrated + metadata-synced DB and diffs the result
+  # against the COMMITTED generated artifacts. Catches two documented, otherwise-silent
+  # failure classes: (1) the stale-JSONType footgun — CodeGen run against stale definitions
+  # "silently deletes properties from the generated types" (migrations/CLAUDE.md) — because
+  # output generated from a CLEAN migrated+synced DB will differ from artifacts committed
+  # from a stale one; (2) the c31d487cb class — schema changed, nobody re-ran CodeGen, the
+  # column is absent rather than wrong, so nothing errors and no test notices.
+  # Blocking gate: committed generated artifacts must match output from a clean DB.
+  codegen-drift:
+    name: CodeGen drift gate
+    needs: [changes, preflight]
+    if: |
+      (github.event_name == 'schedule' && github.event.schedule == '0 6 * * *') ||
+      github.event_name == 'workflow_dispatch' ||
+      needs.changes.outputs.codegen == 'true'
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    env:
+      DB_HOST: localhost
+      DB_DATABASE: test
+      DB_USERNAME: sa
+      DB_PASSWORD: VeryStr0ngP@ssw0rd
+      CODEGEN_DB_USERNAME: sa
+      CODEGEN_DB_PASSWORD: VeryStr0ngP@ssw0rd
+      DB_TRUST_SERVER_CERTIFICATE: 'true'
+      # Explicitly disable AI in non-AI drift gate to prevent reliance on LLM keys or network.
+      MJ_CODEGEN_NO_AI: '1'
+      # Skip BEFORE/AFTER commands in mj.config — drift gate only checks generated file output
+      MJ_CODEGEN_SKIP_COMMANDS: '1'
+      # Turbo remote cache — opt-in, and inert while TURBO_TOKEN is unset. Fork PRs never
+      # receive it, so they degrade to a cold local cache rather than failing. Rationale and
+      # setup instructions live once, on the build job in test.yml.
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_API: ${{ vars.TURBO_API }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Create docker network
+        run: docker network create -d bridge local-net
+
+      - name: Create SQL Server container
+        run: docker run --rm -d --network local-net --name sql -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=VeryStr0ngP@ssw0rd" -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest
+
+      - name: Wait for SQL Server to be ready
+        run: |
+          for i in $(seq 1 30); do
+            if docker run --rm --network local-net mcr.microsoft.com/mssql-tools \
+                 /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "SELECT 1" >/dev/null 2>&1; then
+              echo "SQL Server is ready (attempt $i)."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "SQL Server did not become ready within the timeout." >&2
+          exit 1
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+
+      - name: Create SQL database
+        run: docker run --rm --network local-net mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "CREATE DATABASE [test];"
+
+      - name: Set up node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build CLI + CodeGen graph
+        run: npx turbo build --filter=@memberjunction/cli --filter=@memberjunction/codegen-lib
+
+      - name: Migrate + sync push
+        env:
+          MJ_MIGRATION_REQUEST_TIMEOUT: '120000'
+        run: |
+          node packages/MJCLI/bin/run.js migrate
+          node packages/MJCLI/bin/run.js sync push --dir=metadata --ci
+          # This push is the gate's SETUP, not its system-under-test, and it writes `sync` blocks
+          # back into every record it touches — documented behaviour (metadata/CLAUDE.md rule 1)
+          # that rule 1b forbids a PR from committing. Undo ONLY that, so a PR which merely adds a
+          # metadata record is not failed for it. A minted primaryKey — or any other write-back —
+          # leaves the file dirty and still reds the drift step below.
+          node scripts/ci-restore-sync-only-metadata.mjs
+
+      - name: Run CodeGen against the migrated DB
+        id: codegen
+        run: node packages/MJCLI/bin/run.js codegen --no-ai --skip-commands
+
+      - name: Verify CodeGen idempotency (warm-twice and single-column)
+        id: idempotency
+        run: |
+          node scripts/codegen-idempotency-check.mjs --stage warm-twice --no-ai --skip-first-run
+          node scripts/codegen-idempotency-check.mjs --stage single-column --no-ai
+
+      - name: Diff committed generated artifacts
+        id: drift
+        run: |
+          # Ignore run logs and the SQL output scratch dir; everything else that moved is drift.
+          git checkout -- pnpm-lock.yaml 2>/dev/null || true
+          rm -f codegen.output.log
+          # CodeGen writes a run file on EVERY run, empty when it has nothing to emit.
+          # It is scratch output, not committed state — the line above only ever removed
+          # the log, so this file made the gate unpassable even with zero real drift.
+          # UNTRACKED ones only: committed CodeGen_Run migrations exist under migrations/v2
+          # and carry a V<timestamp>__ prefix, so they must never be swept up here.
+          git ls-files --others --exclude-standard -- migrations/ \
+            | grep -E '/CodeGen_Run_[^/]*\.sql$' | xargs -r rm -f || true
+          git status --porcelain -- packages/ metadata/ migrations/ > /tmp/drift.txt || true
+          if [ -s /tmp/drift.txt ]; then
+            echo "::error::CodeGen output DIFFERS from committed artifacts (drift). Files:"
+            cat /tmp/drift.txt
+            # A filename alone does not say WHAT moved, and these artifacts are megabytes — so the
+            # only way to act on this failure used to be reproducing the whole job locally. Emit the
+            # shape of the change (per-file +/-) and a bounded excerpt instead. Bounded because a
+            # full regeneration of __mj.ts is ~100k lines and would bury the log.
+            git diff --stat -- packages/ metadata/ migrations/ > /tmp/drift-stat.txt || true
+            git diff -- packages/ metadata/ migrations/ | head -c 100000 > /tmp/drift-diff.txt || true
+            echo "--- change shape ---"
+            cat /tmp/drift-stat.txt
+            echo "--- first 100KB of diff ---"
+            cat /tmp/drift-diff.txt
+            exit 1
+          fi
+          echo "No drift — committed generated artifacts match a clean-DB CodeGen run."
+
+      - name: Publish drift verdict
+        if: always()
+        run: |
+          {
+            echo "## CodeGen drift gate"
+            echo "| Step | Outcome |"
+            echo "|---|---|"
+            echo "| mj codegen | ${{ steps.codegen.outcome }} |"
+            echo "| idempotency checks | ${{ steps.idempotency.outcome }} |"
+            echo "| drift diff | ${{ steps.drift.outcome }} |"
+            if [ -s /tmp/drift.txt ]; then
+              echo ''
+              echo '```'
+              cat /tmp/drift.txt
+              echo '```'
+            fi
+            if [ -s /tmp/drift-stat.txt ]; then
+              echo ''
+              echo '<details><summary>What changed</summary>'
+              echo ''
+              echo '```'
+              cat /tmp/drift-stat.txt
+              echo '```'
+              echo ''
+              echo '</details>'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ── WEEKLY AI CodeGen drift gate ───────────────────────────────────────────────────────
+  # Runs the CodeGen idempotency and drift suite with live AI models enabled.
+  codegen-drift-ai:
+    name: CodeGen drift gate (weekly AI-assisted)
+    needs: [preflight]
+    if: (github.event_name == 'schedule' && github.event.schedule == '30 6 * * 0') || (github.event_name == 'workflow_dispatch' && inputs.run_live_model)
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    env:
+      DB_HOST: localhost
+      DB_DATABASE: test
+      DB_USERNAME: sa
+      DB_PASSWORD: VeryStr0ngP@ssw0rd
+      CODEGEN_DB_USERNAME: sa
+      CODEGEN_DB_PASSWORD: VeryStr0ngP@ssw0rd
+      DB_TRUST_SERVER_CERTIFICATE: 'true'
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_API: ${{ vars.TURBO_API }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
+      INTEGRATION_LIVE_MODEL_KEYS: ${{ secrets.INTEGRATION_LIVE_MODEL_KEYS }}
+      # Skip BEFORE/AFTER commands in mj.config — drift gate only checks generated file output
+      MJ_CODEGEN_SKIP_COMMANDS: '1'
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Create docker network
+        run: docker network create -d bridge local-net
+
+      - name: Create SQL Server container
+        run: docker run --rm -d --network local-net --name sql -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=VeryStr0ngP@ssw0rd" -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest
+
+      - name: Wait for SQL Server to be ready
+        run: |
+          for i in $(seq 1 30); do
+            if docker run --rm --network local-net mcr.microsoft.com/mssql-tools \
+                 /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "SELECT 1" >/dev/null 2>&1; then
+              echo "SQL Server is ready (attempt $i)."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "SQL Server did not become ready within the timeout." >&2
+          exit 1
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+
+      - name: Create SQL database
+        run: docker run --rm --network local-net mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "CREATE DATABASE [test];"
+
+      - name: Set up node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build CLI + CodeGen graph
+        run: npx turbo build --filter=@memberjunction/cli --filter=@memberjunction/codegen-lib
+
+      - name: Migrate + sync push
+        env:
+          MJ_MIGRATION_REQUEST_TIMEOUT: '120000'
+        run: |
+          node packages/MJCLI/bin/run.js migrate
+          node packages/MJCLI/bin/run.js sync push --dir=metadata --ci
+          # Setup push, not the system-under-test — undo its documented `sync` write-back only, so a
+          # metadata-adding PR is not failed for it. Same reasoning as the PR-gate lane above.
+          node scripts/ci-restore-sync-only-metadata.mjs
+
+      - name: Run CodeGen (AI enabled)
+        id: codegen
+        run: node packages/MJCLI/bin/run.js codegen --skip-commands
+
+      - name: Verify CodeGen idempotency (warm-twice and single-column with AI)
+        id: idempotency
+        run: |
+          node scripts/codegen-idempotency-check.mjs --stage warm-twice --skip-first-run
+          node scripts/codegen-idempotency-check.mjs --stage single-column
+
+      - name: Diff committed generated artifacts
+        id: drift
+        continue-on-error: true
+        run: |
+          git checkout -- pnpm-lock.yaml 2>/dev/null || true
+          rm -f codegen.output.log
+          # CodeGen writes a run file on EVERY run, empty when it has nothing to emit.
+          # It is scratch output, not committed state — the line above only ever removed
+          # the log, so this file made the gate unpassable even with zero real drift.
+          # UNTRACKED ones only: committed CodeGen_Run migrations exist under migrations/v2
+          # and carry a V<timestamp>__ prefix, so they must never be swept up here.
+          git ls-files --others --exclude-standard -- migrations/ \
+            | grep -E '/CodeGen_Run_[^/]*\.sql$' | xargs -r rm -f || true
+          git status --porcelain -- packages/ metadata/ migrations/ > /tmp/drift.txt || true
+          if [ -s /tmp/drift.txt ]; then
+            echo "::error::CodeGen output DIFFERS from committed artifacts (drift). Files:"
+            cat /tmp/drift.txt
+            # A filename alone does not say WHAT moved, and these artifacts are megabytes — so the
+            # only way to act on this failure used to be reproducing the whole job locally. Emit the
+            # shape of the change (per-file +/-) and a bounded excerpt instead. Bounded because a
+            # full regeneration of __mj.ts is ~100k lines and would bury the log.
+            git diff --stat -- packages/ metadata/ migrations/ > /tmp/drift-stat.txt || true
+            git diff -- packages/ metadata/ migrations/ | head -c 100000 > /tmp/drift-diff.txt || true
+            echo "--- change shape ---"
+            cat /tmp/drift-stat.txt
+            echo "--- first 100KB of diff ---"
+            cat /tmp/drift-diff.txt
+            exit 1
+          fi
+          echo "No drift — committed generated artifacts match a clean-DB CodeGen run."
+
+      - name: Publish drift verdict
+        if: always()
+        run: |
+          {
+            echo "## CodeGen drift gate (AI-assisted)"
+            echo "| Step | Outcome |"
+            echo "|---|---|"
+            echo "| mj codegen | ${{ steps.codegen.outcome }} |"
+            echo "| idempotency checks | ${{ steps.idempotency.outcome }} |"
+            echo "| drift diff | ${{ steps.drift.outcome }} |"
+            if [ -s /tmp/drift.txt ]; then
+              echo ''
+              echo '```'
+              cat /tmp/drift.txt
+              echo '```'
+            fi
+            if [ -s /tmp/drift-stat.txt ]; then
+              echo ''
+              echo '<details><summary>What changed</summary>'
+              echo ''
+              echo '```'
+              cat /tmp/drift-stat.txt
+              echo '```'
+              echo ''
+              echo '</details>'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

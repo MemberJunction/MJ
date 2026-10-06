@@ -1,18 +1,24 @@
-import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
+import { ActionResultSimple, RunActionParams, RuntimeAPIKeyResolver, RuntimeCredentialScope } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
-import { RunView, UserInfo } from "@memberjunction/core";
-import { MJGlobal, UUIDsEqual } from "@memberjunction/global";
+import { UUIDsEqual } from "@memberjunction/global";
 import {
-    BaseImageGenerator,
+    AIAPIKey,
     ImageGenerationParams,
     ImageGenerationResult,
-    ImageEditParams,
     GeneratedImage,
-    GetAIAPIKey
+    GetAIAPIKey,
+    CredentialScopeAllows,
 } from "@memberjunction/ai";
 import { MJAIModelEntityExtended, MediaOutput } from "@memberjunction/ai-core-plus";
 import { AIEngineBase } from "@memberjunction/ai-engine-base";
+import {
+    AIImageEditRunParams,
+    AIImageGenerationRunParams,
+    AIImageGenerationRunner,
+    AIImageRunOptions,
+    AIImageRunResult,
+} from "@memberjunction/ai-prompts";
 
 /**
  * Action that generates images using AI image generation models (DALL-E, Gemini, etc.)
@@ -71,6 +77,76 @@ import { AIEngineBase } from "@memberjunction/ai-engine-base";
  * });
  * ```
  */
+/**
+ * Resolve the key an image generator should use.
+ *
+ * Inside an agent run, `resolve` is the run's {@link RuntimeAPIKeyResolver}: the RUN'S key for the
+ * driver class first, then the platform's — the same order the run's prompts use, so a run on a
+ * customer's OpenAI key now generates its images on that key too. Outside a run (or when the agent
+ * refuses this action the run's key) it is undefined / answers undefined, and `GetAIAPIKey` gives
+ * the platform key as it always did. Then the vendor-name fallback that was always here — but
+ * actually USED this time: the previous code found a key by vendor name and then handed the empty
+ * driver-class result to the generator, so that branch never produced an image.
+ *
+ * @deprecated Kept for compatibility only: `GenerateImageAction` no longer calls it. Use
+ * {@link BuildImageGenerationAPIKeys}, which the action and the runner use.
+ */
+export function ResolveImageGenerationAPIKey(driverClass: string, vendorName: string | undefined, resolve?: RuntimeAPIKeyResolver): string {
+    const key = findImageGenerationAPIKey(driverClass, vendorName, resolve);
+    if (key) return key;
+    throw new Error(`No API key found for ${driverClass} or vendor ${vendorName || 'unknown'}`);
+}
+
+/**
+ * {@link ResolveImageGenerationAPIKey}'s lookup, answering undefined rather than throwing when nothing
+ * resolves. Under a `'RuntimeOnly'` scope only `resolve` answers: the platform key is never a fallback.
+ */
+function findImageGenerationAPIKey(driverClass: string, vendorName: string | undefined, resolve?: RuntimeAPIKeyResolver, scope: RuntimeCredentialScope = 'Any'): string | undefined {
+    const platformKey = (name: string): string | undefined => CredentialScopeAllows(scope, 'Environment') ? GetAIAPIKey(name) : undefined;
+    const byDriver = resolve?.(driverClass) || platformKey(driverClass);
+    if (byDriver) return byDriver;
+    const byVendor = vendorName ? resolve?.(vendorName) || platformKey(vendorName) : '';
+    return byVendor || undefined;
+}
+
+/** One vendor an image run may reach: the driver class that serves it, and the vendor's name. */
+export interface ImageGenerationKeySource {
+    /** The driver class the runner builds for this vendor. */
+    DriverClass: string;
+    /** The vendor's name, for the vendor-name key fallback. */
+    VendorName?: string;
+}
+
+/**
+ * The keys an image run hands the runner as `APIKeys`: at most one per driver class, resolved as
+ * {@link ResolveImageGenerationAPIKey} does. A key reaches only the candidates of its own driver
+ * class, so a run's own key survives failover to another vendor only if that vendor's class has
+ * one here.
+ *
+ * `sources` should be in the order the runner tries its candidates. When two sources share a driver
+ * class, the first whose key resolves wins, so the key a class carries is the one for the vendor the
+ * runner reaches first. A class with no key anywhere is left out: the runner may still resolve a
+ * credential binding for it, and otherwise skips it.
+ *
+ * Under a `'RuntimeOnly'` `scope` only the run's own keys are collected, and the runner (given the
+ * same scope) skips every class without one rather than resolving a platform credential for it.
+ */
+export function BuildImageGenerationAPIKeys(sources: ImageGenerationKeySource[], resolve?: RuntimeAPIKeyResolver, scope: RuntimeCredentialScope = 'Any'): AIAPIKey[] {
+    const keys: AIAPIKey[] = [];
+    for (const source of sources) {
+        if (keys.some(k => k.driverClass === source.DriverClass)) continue;
+        const apiKey = findImageGenerationAPIKey(source.DriverClass, source.VendorName, resolve, scope);
+        if (apiKey) keys.push({ driverClass: source.DriverClass, apiKey });
+    }
+    return keys;
+}
+
+/** The runner options for one action call, and the model the caller named, if any. */
+interface PreparedImageRun {
+    PinnedModel?: MJAIModelEntityExtended;
+    RunOptions: AIImageRunOptions;
+}
+
 @RegisterClass(BaseAction, "Generate Image")
 export class GenerateImageAction extends BaseAction {
 
@@ -82,7 +158,8 @@ export class GenerateImageAction extends BaseAction {
      *
      * @param params - The action parameters containing:
      *   - Prompt: Text description of the image to generate or edit instructions (required)
-     *   - Model: Model name/ID to use (optional, uses default if not specified)
+     *   - Model: Model name or API name to pin (optional; when not specified, the `Default Image
+     *     Generation` prompt's bindings choose, with failover between them)
      *   - NumberOfImages: Number of images to generate (optional, default: 1)
      *   - Size: Image size like "1024x1024" (optional)
      *   - Quality: Quality level - "standard" or "hd" (optional)
@@ -97,17 +174,6 @@ export class GenerateImageAction extends BaseAction {
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
             const prompt = this.getParamValue(params, 'prompt');
-            const modelName = this.getParamValue(params, 'model');
-            const numberOfImages = this.getNumberParam(params, 'numberofimages', 1);
-            const size = this.getParamValue(params, 'size') || '1024x1024';
-            const quality = this.getParamValue(params, 'quality');
-            const style = this.getParamValue(params, 'style');
-            const negativePrompt = this.getParamValue(params, 'negativeprompt');
-            const outputFormat = this.getParamValue(params, 'outputformat') || 'base64';
-            const sourceImage = this.getParamValue(params, 'sourceimage');
-            const mask = this.getParamValue(params, 'mask');
-
-            // Validate prompt
             if (!prompt) {
                 return {
                     Success: false,
@@ -116,103 +182,10 @@ export class GenerateImageAction extends BaseAction {
                 };
             }
 
-            // Get image generator model and create instance
-            const { generator, model, apiName } = await this.prepareImageGenerator(
-                params.ContextUser,
-                modelName
-            );
-
-            let result: ImageGenerationResult;
-
-            if (sourceImage) {
-                // Image-to-image: use EditImage when source image is provided
-                result = await this.executeImageEdit(generator, {
-                    prompt,
-                    apiName,
-                    sourceImage,
-                    mask,
-                    numberOfImages,
-                    size,
-                    outputFormat,
-                    negativePrompt
-                });
-            } else {
-                // Text-to-image: use GenerateImage
-                result = await this.executeImageGeneration(generator, {
-                    prompt,
-                    apiName,
-                    numberOfImages,
-                    size,
-                    outputFormat,
-                    quality,
-                    style,
-                    negativePrompt
-                });
-            }
-
-            if (!result.success) {
-                return {
-                    Success: false,
-                    Message: `Image generation failed: ${result.errorMessage || 'Unknown error'}`,
-                    ResultCode: "GENERATION_FAILED"
-                };
-            }
-
-            if (!result.images || result.images.length === 0) {
-                return {
-                    Success: false,
-                    Message: "No images were generated",
-                    ResultCode: "NO_IMAGES"
-                };
-            }
-
-            // Format output images
-            const outputImages = result.images.map((img, index) => this.formatImageOutput(img, index));
-
-            // Add output parameters
-            params.Params.push({
-                Name: 'Images',
-                Type: 'Output',
-                Value: outputImages
-            });
-
-            params.Params.push({
-                Name: 'ImageCount',
-                Type: 'Output',
-                Value: result.images.length
-            });
-
-            if (result.revisedPrompt) {
-                params.Params.push({
-                    Name: 'RevisedPrompt',
-                    Type: 'Output',
-                    Value: result.revisedPrompt
-                });
-            }
-
-            params.Params.push({
-                Name: 'ModelUsed',
-                Type: 'Output',
-                Value: model.Name
-            });
-
-            // Build response - NOTE: images data is in output params, not in Message
-            // This keeps Message lightweight for LLM context (base64 images are ~700K tokens each)
-            const responseData = {
-                message: `Successfully generated ${result.images.length} image(s)`,
-                model: model.Name,
-                imageCount: result.images.length,
-                // Images are available in the 'Images' output parameter
-                // Use the provided placeholder references in your response
-                revisedPrompt: result.revisedPrompt
-            };
-
-            return {
-                Success: true,
-                ResultCode: "IMAGES_GENERATED",
-                Message: JSON.stringify(responseData, null, 2)
-            };
-
+            const { PinnedModel, RunOptions } = await this.prepareImageRun(params, this.getParamValue(params, 'model'));
+            const runResult = await this.runImageOperation(params, prompt, RunOptions);
+            // The model that answered, which after failover may not be the first choice
+            return this.toActionResult(params, runResult, runResult.ModelName ?? PinnedModel?.Name ?? '');
         } catch (error) {
             return {
                 Success: false,
@@ -223,87 +196,188 @@ export class GenerateImageAction extends BaseAction {
     }
 
     /**
-     * Prepare an image generator instance using proper metadata lookup
+     * Build the runner options for this call.
+     *
+     * - **The model is pinned only when the caller named one.** Otherwise the `Default Image
+     *   Generation` prompt's bindings choose, and its failover reaches the other models. As shipped,
+     *   its top binding is the highest-PowerRank active image model, the one this action used to
+     *   pick itself.
+     * - **`APIKeys` holds a key for every driver class the run may reach** (see
+     *   {@link BuildImageGenerationAPIKeys}), so a run's own key carries across vendors on failover.
+     *   Within a model the sources follow the runner's vendor order exactly; across models they
+     *   follow PowerRank. That order matters only when two vendors share a driver class that has no
+     *   key of its own, where it picks whose vendor-name key the class carries.
+     * - **The calling agent** (`Context.AgentID`, stamped by BaseAgent) is recorded on the run row.
+     *
+     * The keys rank as they do for chat prompts: a credential bound to the prompt-model, the
+     * model-vendor or the vendor, or a default credential of the vendor's credential type, wins
+     * over them. Only with none of those is the key the generator gets the one this action resolves.
      */
-    private async prepareImageGenerator(
-        contextUser: UserInfo | undefined,
-        modelName?: string
-    ): Promise<{ generator: BaseImageGenerator; model: MJAIModelEntityExtended; apiName: string }> {
-        // Ensure AIEngine is loaded
-        await AIEngineBase.Instance.Config(false, contextUser);
+    private async prepareImageRun(params: RunActionParams, modelName?: string): Promise<PreparedImageRun> {
+        await AIEngineBase.Instance.Config(false, params.ContextUser);
+        const imageModels = this.activeImageModels();
+        const pinned = modelName ? this.findNamedModel(imageModels, modelName) : undefined;
+        const sources = pinned ? this.pinnedKeySources(pinned) : imageModels.flatMap(m => this.keySources(m));
+        const runOptions: AIImageRunOptions = {
+            ContextUser: params.ContextUser,
+            APIKeys: BuildImageGenerationAPIKeys(sources, params.RuntimeAPIKeyResolver, params.CredentialScope)
+        };
+        if (params.CredentialScope) {
+            runOptions.CredentialScope = params.CredentialScope;
+        }
+        if (pinned) {
+            runOptions.ModelID = pinned.ID;
+        }
+        const agentId = this.contextAgentID(params);
+        if (agentId) {
+            runOptions.AgentID = agentId;
+        }
+        return { PinnedModel: pinned, RunOptions: runOptions };
+    }
 
-        // Find image generator models
-        const imageGeneratorModels = AIEngineBase.Instance.Models.filter(
+    /** The active image models, highest PowerRank first. */
+    private activeImageModels(): MJAIModelEntityExtended[] {
+        const models = AIEngineBase.Instance.Models.filter(
             m => m.AIModelType?.toLowerCase() === 'image generator' && m.IsActive
         );
-
-        if (imageGeneratorModels.length === 0) {
+        if (models.length === 0) {
             throw new Error('No active image generator models found');
         }
+        return [...models].sort((a, b) => (b.PowerRank || 0) - (a.PowerRank || 0));
+    }
 
-        // Select model - use specified or highest power
-        let model: MJAIModelEntityExtended;
-        if (modelName) {
-            const foundModel = imageGeneratorModels.find(
-                m => m.Name.toLowerCase() === modelName.toLowerCase() ||
-                     (m.APIName && m.APIName.toLowerCase() === modelName.toLowerCase())
-            );
-            if (!foundModel) {
-                throw new Error(`Image generator model '${modelName}' not found`);
-            }
-            model = foundModel;
-        } else {
-            // Get highest power image generator model
-            model = imageGeneratorModels.reduce((best, current) =>
-                (current.PowerRank || 0) > (best.PowerRank || 0) ? current : best
-            );
+    /** The image model the caller named, by name or API name. */
+    private findNamedModel(models: MJAIModelEntityExtended[], modelName: string): MJAIModelEntityExtended {
+        const wanted = modelName.toLowerCase();
+        const found = models.find(m => m.Name.toLowerCase() === wanted || (m.APIName && m.APIName.toLowerCase() === wanted));
+        if (!found) {
+            throw new Error(`Image generator model '${modelName}' not found`);
         }
+        return found;
+    }
 
-        // Find the inference provider from ModelVendors (populated by AIEngineBase)
-        // Inference providers have DriverClass set
-        const inferenceProvider = model.ModelVendors.find(mv =>
-            mv.DriverClass && mv.DriverClass.length > 0 && mv.Status === 'Active'
-        );
-
-        if (!inferenceProvider) {
+    /** The named model's key sources. A named model with no active inference provider cannot run. */
+    private pinnedKeySources(model: MJAIModelEntityExtended): ImageGenerationKeySource[] {
+        const sources = this.keySources(model);
+        if (sources.length === 0) {
             throw new Error(`No active inference provider found for model '${model.Name}'`);
         }
-
-        // Get API key using the vendor's driver class
-        const driverClass = inferenceProvider.DriverClass;
-        const apiName = inferenceProvider.APIName || model.APIName || model.Name;
-        const apiKey = GetAIAPIKey(driverClass);
-
-        if (!apiKey) {
-            // Try getting by vendor name as fallback
-            const vendor = AIEngineBase.Instance.Vendors.find(v => UUIDsEqual(v.ID, inferenceProvider.VendorID));
-            const vendorApiKey = vendor ? GetAIAPIKey(vendor.Name) : null;
-            if (!vendorApiKey) {
-                throw new Error(`No API key found for ${driverClass} or vendor ${vendor?.Name || 'unknown'}`);
-            }
-        }
-
-        const generator = MJGlobal.Instance.ClassFactory.CreateInstance<BaseImageGenerator>(
-            BaseImageGenerator,
-            driverClass,
-            apiKey
-        );
-
-        if (!generator) {
-            throw new Error(`Failed to create image generator instance for ${driverClass}. Ensure the provider is registered.`);
-        }
-
-        return { generator, model, apiName };
+        return sources;
     }
 
     /**
-     * Execute text-to-image generation
+     * A model's active inference vendors, in the order the runner tries them (Priority, highest
+     * first), each with the driver class the runner builds for it.
+     */
+    private keySources(model: MJAIModelEntityExtended): ImageGenerationKeySource[] {
+        return model.ModelVendors
+            .filter(mv => mv.Status === 'Active' && AIEngineBase.Instance.IsInferenceProvider(mv) && (mv.DriverClass || model.DriverClass))
+            .sort((a, b) => (b.Priority || 0) - (a.Priority || 0))
+            .map(mv => ({
+                DriverClass: mv.DriverClass || model.DriverClass,
+                VendorName: AIEngineBase.Instance.Vendors.find(v => UUIDsEqual(v.ID, mv.VendorID))?.Name
+            }));
+    }
+
+    /** The calling agent's ID, which BaseAgent stamps on the action's context. */
+    private contextAgentID(params: RunActionParams): string | undefined {
+        const context = params.Context as Record<string, unknown> | undefined;
+        const agentId = context?.AgentID;
+        return typeof agentId === 'string' && agentId.trim().length > 0 ? agentId : undefined;
+    }
+
+    /** Runs the edit when a source image is given, otherwise the generation. */
+    private runImageOperation(params: RunActionParams, prompt: string, runOptions: AIImageRunOptions): Promise<AIImageRunResult> {
+        const numberOfImages = this.getNumberParam(params, 'numberofimages', 1);
+        const size = this.getParamValue(params, 'size') || '1024x1024';
+        const outputFormat = this.getParamValue(params, 'outputformat') || 'base64';
+        const negativePrompt = this.getParamValue(params, 'negativeprompt');
+        const sourceImage = this.getParamValue(params, 'sourceimage');
+        if (sourceImage) {
+            // Image-to-image: use EditImage when source image is provided
+            const mask = this.getParamValue(params, 'mask');
+            return this.executeImageEdit(runOptions, { prompt, sourceImage, mask, numberOfImages, size, outputFormat, negativePrompt });
+        }
+        const quality = this.getParamValue(params, 'quality');
+        const style = this.getParamValue(params, 'style');
+        return this.executeImageGeneration(runOptions, { prompt, numberOfImages, size, outputFormat, quality, style, negativePrompt });
+    }
+
+    /** Maps the runner's result onto the action's result codes and output params. */
+    private toActionResult(params: RunActionParams, runResult: AIImageRunResult, modelName: string): ActionResultSimple {
+        if (!runResult.Success) {
+            return {
+                Success: false,
+                Message: `Image generation failed: ${runResult.ErrorMessage || 'Unknown error'}`,
+                ResultCode: "GENERATION_FAILED"
+            };
+        }
+
+        const result = runResult.ImageResult;
+        if (!result?.images || result.images.length === 0) {
+            return {
+                Success: false,
+                Message: "No images were generated",
+                ResultCode: "NO_IMAGES"
+            };
+        }
+
+        this.addOutputParams(params, result, modelName);
+
+        // Build response - NOTE: images data is in output params, not in Message
+        // This keeps Message lightweight for LLM context (base64 images are ~700K tokens each)
+        const responseData = {
+            message: `Successfully generated ${result.images.length} image(s)`,
+            model: modelName,
+            imageCount: result.images.length,
+            // Images are available in the 'Images' output parameter
+            // Use the provided placeholder references in your response
+            revisedPrompt: result.revisedPrompt
+        };
+
+        return {
+            Success: true,
+            ResultCode: "IMAGES_GENERATED",
+            Message: JSON.stringify(responseData, null, 2)
+        };
+    }
+
+    /** Adds the Images, ImageCount, RevisedPrompt and ModelUsed output params. */
+    private addOutputParams(params: RunActionParams, result: ImageGenerationResult, modelName: string): void {
+        params.Params.push({
+            Name: 'Images',
+            Type: 'Output',
+            Value: result.images.map((img, index) => this.formatImageOutput(img, index))
+        });
+
+        params.Params.push({
+            Name: 'ImageCount',
+            Type: 'Output',
+            Value: result.images.length
+        });
+
+        if (result.revisedPrompt) {
+            params.Params.push({
+                Name: 'RevisedPrompt',
+                Type: 'Output',
+                Value: result.revisedPrompt
+            });
+        }
+
+        params.Params.push({
+            Name: 'ModelUsed',
+            Type: 'Output',
+            Value: modelName
+        });
+    }
+
+    /**
+     * Execute text-to-image generation through the image runner
      */
     private async executeImageGeneration(
-        generator: BaseImageGenerator,
+        runOptions: AIImageRunOptions,
         options: {
             prompt: string;
-            apiName: string;
             numberOfImages: number;
             size: string;
             outputFormat: string;
@@ -311,10 +385,10 @@ export class GenerateImageAction extends BaseAction {
             style?: string;
             negativePrompt?: string;
         }
-    ): Promise<ImageGenerationResult> {
-        const genParams: ImageGenerationParams = {
+    ): Promise<AIImageRunResult> {
+        const genParams: AIImageGenerationRunParams = {
+            ...runOptions,
             prompt: options.prompt,
-            model: options.apiName,
             n: options.numberOfImages,
             size: options.size,
             outputFormat: options.outputFormat === 'url' ? 'url' : 'b64_json'
@@ -330,17 +404,16 @@ export class GenerateImageAction extends BaseAction {
             genParams.negativePrompt = options.negativePrompt;
         }
 
-        return generator.GenerateImage(genParams);
+        return new AIImageGenerationRunner().RunImageGeneration(genParams);
     }
 
     /**
-     * Execute image-to-image editing
+     * Execute image-to-image editing through the image runner
      */
     private async executeImageEdit(
-        generator: BaseImageGenerator,
+        runOptions: AIImageRunOptions,
         options: {
             prompt: string;
-            apiName: string;
             sourceImage: string;
             mask?: string;
             numberOfImages: number;
@@ -348,10 +421,10 @@ export class GenerateImageAction extends BaseAction {
             outputFormat: string;
             negativePrompt?: string;
         }
-    ): Promise<ImageGenerationResult> {
-        const editParams: ImageEditParams = {
+    ): Promise<AIImageRunResult> {
+        const editParams: AIImageEditRunParams = {
+            ...runOptions,
             prompt: options.prompt,
-            model: options.apiName,
             image: options.sourceImage,
             n: options.numberOfImages,
             size: options.size,
@@ -365,7 +438,7 @@ export class GenerateImageAction extends BaseAction {
             editParams.negativePrompt = options.negativePrompt;
         }
 
-        return generator.EditImage(editParams);
+        return new AIImageGenerationRunner().RunImageEdit(editParams);
     }
 
     /**

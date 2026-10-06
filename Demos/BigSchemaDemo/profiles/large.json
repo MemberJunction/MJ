@@ -1,0 +1,14 @@
+{
+  "name": "large",
+  "description": "Upper bound of the brief: 36 schemas × 150 tables (5,400 tables).",
+  "schemaCount": 36,
+  "tablesPerSchema": 150,
+  "seed": {
+    "hubRows": 5,
+    "lookupRows": 4,
+    "childRows": 8,
+    "grandchildRows": 6,
+    "xrefRows": 6,
+    "bridgeRows": 4
+  }
+}

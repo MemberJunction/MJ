@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT88 - User Privilege Elevation Guard",
+    "Description": "Issue #4260 on the real stack: ClassFactory resolves MJUserEntityServer for MJ: Users and the provider builds it (UE1), a non-Owner changing User.Type is refused by the guard's Validate() with the error attributed to Type (UE2), an Owner may still change Type so the admin path stays open (UE3), and — where a non-Owner principal actually holds CanUpdate on MJ: Users — a real Save() of a Type change does not succeed, attempted inside an always-rolled-back transaction (UE4). The guard's branch logic is unit-covered in MJCoreEntitiesServer; this bundle proves the wiring. Server transport; no fixtures created and nothing persisted.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Issue #4260 on the real stack: ClassFactory resolves MJUserEntityServer for MJ: Users and the provider builds it (UE1), a non-Owner changing User.Type is refused by the guard's Validate() with the error attributed to Type (UE2), an Owner may still change Type so the admin path stays open (UE3), and — where a non-Owner principal actually holds CanUpdate on MJ: Users — a real Save() of a Type change does not succeed, attempted inside an always-rolled-back transaction (UE4). The guard's branch logic is unit-covered in MJCoreEntitiesServer; this bundle proves the wiring. Server transport; no fixtures created and nothing persisted."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "user-elevation"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "C0DC4621-7B36-45F2-81DB-3C986EC7276D"
+  },
+  "sync": {
+    "lastModified": "2026-09-09T11:23:36.392Z",
+    "checksum": "d32dae8688fa92e7e17e01a59e8057609afd5104abd60e957d041736cfddb8b7"
+  }
+}

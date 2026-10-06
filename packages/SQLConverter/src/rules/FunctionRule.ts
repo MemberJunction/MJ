@@ -1,10 +1,10 @@
 import type { IConversionRule, ConversionContext, StatementType } from './types.js';
 import {
-  convertIdentifiers, convertDateFunctions, convertCharIndex,
-  convertStringConcat, convertTopToLimit, convertIIF,
-  removeNPrefix, convertCommonFunctions, emitDropOverloadsBlock,
+  ConvertIdentifiers, ConvertDateFunctions, ConvertCharIndex,
+  ConvertStringConcat, ConvertTopToLimit, ConvertIIF,
+  RemoveNPrefix, ConvertCommonFunctions, EmitDropOverloadsBlock,
 } from './ExpressionHelpers.js';
-import { resolveType } from './TypeResolver.js';
+import { ResolveType } from './TypeResolver.js';
 
 export class FunctionRule implements IConversionRule {
   Name = 'FunctionRule';
@@ -28,8 +28,8 @@ export class FunctionRule implements IConversionRule {
     const builtin = getHandwrittenFunction(funcName);
     if (builtin) return builtin;
 
-    let result = convertIdentifiers(sql);
-    result = removeNPrefix(result);
+    let result = ConvertIdentifiers(sql);
+    result = RemoveNPrefix(result);
 
     // Replace @@ROWCOUNT/@@ERROR first
     result = result.replace(/@@ROWCOUNT/gi, '_v_row_count');
@@ -48,12 +48,12 @@ export class FunctionRule implements IConversionRule {
     result = result.replace(/\btinyint\b/gi, 'SMALLINT');
 
     // Common functions
-    result = convertCommonFunctions(result);
-    result = convertTopToLimit(result);
-    result = convertStringConcat(result, context.TableColumns);
-    result = convertDateFunctions(result);
+    result = ConvertCommonFunctions(result);
+    result = ConvertTopToLimit(result);
+    result = ConvertStringConcat(result, context.TableColumns);
+    result = ConvertDateFunctions(result);
     result = result.replace(/\bLEN\s*\(/gi, 'LENGTH(');
-    result = convertCharIndex(result);
+    result = ConvertCharIndex(result);
 
     // Inline table-valued functions
     if (/RETURNS\s+TABLE\s+AS\s+RETURN/i.test(result)) {
@@ -96,7 +96,7 @@ export class FunctionRule implements IConversionRule {
       // Strip the schema/quoting from funcName for the pg_proc lookup.
       // funcName here is the form `__mj."FuncName"` (or unquoted variant).
       const bareName = funcName.replace(/^__mj\.\s*/, '').replace(/^"|"$/g, '');
-      const dropBlock = emitDropOverloadsBlock(bareName);
+      const dropBlock = EmitDropOverloadsBlock(bareName);
       return `${dropBlock}CREATE OR REPLACE FUNCTION ${funcName}(${params})\n${returnsClause} AS $$\n${query}\n$$ LANGUAGE sql;`;
     }
     return sql;
@@ -150,7 +150,7 @@ export class FunctionRule implements IConversionRule {
       body = body.replace(/\bEND\s*(?=\s*(?:ELSE|$))/gi, 'END IF');
 
       // String concat
-      body = convertStringConcat(body, context?.TableColumns);
+      body = ConvertStringConcat(body, context?.TableColumns);
       body = body.replace(/\bISNULL\s*\(/gi, 'COALESCE(');
 
       const declareBlock = declares.length > 0 ? 'DECLARE\n' + declares.join('\n') + '\n' : '';
@@ -159,7 +159,7 @@ export class FunctionRule implements IConversionRule {
       //   CREATE OR REPLACE FUNCTION __mj."FuncName"(...) RETURNS ...
       // We need just `FuncName` (no schema, no quotes).
       const nameMatch = header.match(/CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+(?:__mj\.)?"?(\w+)"?/i);
-      const dropBlock = nameMatch ? emitDropOverloadsBlock(nameMatch[1]) : '';
+      const dropBlock = nameMatch ? EmitDropOverloadsBlock(nameMatch[1]) : '';
       return `${dropBlock}${header}\nAS $$\n${declareBlock}BEGIN\n${body.trim()}\nEND;\n$$ LANGUAGE plpgsql;`;
     }
 
@@ -182,7 +182,7 @@ export class FunctionRule implements IConversionRule {
    * Delegates to the centralized TypeResolver.
    */
   private mapType(typeStr: string): string {
-    return resolveType(typeStr);
+    return ResolveType(typeStr);
   }
 }
 

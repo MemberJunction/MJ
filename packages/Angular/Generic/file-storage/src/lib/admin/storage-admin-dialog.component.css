@@ -1,0 +1,565 @@
+:host {
+  display: block;
+}
+
+.mj-storage-admin-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 460px;
+  color: var(--mj-text-primary);
+}
+
+/* Tabs */
+.mj-storage-admin-tabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--mj-border-default);
+  padding-bottom: 8px;
+}
+
+.mj-tab-btn {
+  background: transparent;
+  border: none;
+  border-radius: var(--mj-radius-md, 8px);
+  padding: 8px 14px;
+  font-size: 0.86rem;
+  font-weight: 500;
+  color: var(--mj-text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.15s ease;
+}
+
+.mj-tab-btn:hover {
+  background: color-mix(in srgb, var(--mj-text-primary) 6%, var(--mj-bg-surface));
+  color: var(--mj-text-primary);
+}
+
+.mj-tab-btn.active {
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
+  font-weight: 600;
+}
+
+.mj-tab-count {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: var(--mj-radius-full, 9999px);
+  background: color-mix(in srgb, var(--mj-text-primary) 8%, var(--mj-bg-surface));
+  color: var(--mj-text-secondary);
+}
+
+.mj-tab-btn.active .mj-tab-count {
+  background: var(--mj-brand-primary);
+  color: var(--mj-text-inverse, #ffffff);
+}
+
+/* Pane */
+.mj-tab-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.mj-admin-pane-desc {
+  font-size: 0.82rem;
+  color: var(--mj-text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: var(--mj-radius-md, 8px);
+  background: var(--mj-bg-surface-sunken, color-mix(in srgb, var(--mj-text-primary) 3%, var(--mj-bg-surface)));
+  border: 1px solid var(--mj-border-default);
+}
+
+.mj-admin-pane-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.mj-admin-search-wrapper {
+  position: relative;
+  flex: 1;
+  max-width: 440px;
+  display: flex;
+  align-items: center;
+}
+
+.mj-admin-search-wrapper > i {
+  position: absolute;
+  left: 10px;
+  font-size: 0.8rem;
+  color: var(--mj-text-muted);
+}
+
+.mj-admin-search-wrapper input {
+  width: 100%;
+  padding: 7px 32px 7px 32px;
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-sm, 6px);
+  background: var(--mj-bg-surface-sunken, color-mix(in srgb, var(--mj-text-primary) 3%, var(--mj-bg-surface)));
+  color: var(--mj-text-primary);
+  font-size: 0.82rem;
+  outline: none;
+  transition: all 0.12s ease;
+}
+
+.mj-admin-search-wrapper input:focus {
+  border-color: var(--mj-brand-primary);
+  background: var(--mj-bg-surface);
+}
+
+.mj-clear-btn {
+  position: absolute;
+  right: 8px;
+  background: none;
+  border: none;
+  color: var(--mj-text-muted);
+  cursor: pointer;
+  padding: 2px;
+}
+
+.mj-admin-loading {
+  padding: 40px;
+  display: flex;
+  justify-content: center;
+}
+
+.mj-empty-cta {
+  margin-top: 14px;
+}
+
+/* Tables */
+.mj-admin-table-container {
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md, 8px);
+  overflow: hidden;
+  background: var(--mj-bg-surface);
+}
+
+.mj-admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+  text-align: left;
+}
+
+.mj-admin-table th {
+  padding: 10px 14px;
+  background: var(--mj-bg-surface-sunken, color-mix(in srgb, var(--mj-text-primary) 3%, var(--mj-bg-surface)));
+  color: var(--mj-text-secondary);
+  font-weight: 600;
+  border-bottom: 1px solid var(--mj-border-default);
+}
+
+.mj-admin-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--mj-border-default);
+  vertical-align: middle;
+}
+
+.mj-admin-table tr:last-child td {
+  border-bottom: none;
+}
+
+.mj-admin-table tr:hover td {
+  background: color-mix(in srgb, var(--mj-text-primary) 2%, var(--mj-bg-surface));
+}
+
+.mj-row-inactive {
+  opacity: 0.6;
+}
+
+/* Cells */
+.mj-account-name-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mj-account-title {
+  font-weight: 600;
+  color: var(--mj-text-primary);
+}
+
+.mj-account-desc {
+  font-size: 0.74rem;
+  color: var(--mj-text-muted);
+}
+
+.mj-provider-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
+  font-weight: 500;
+}
+
+.mj-provider-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mj-provider-icon-circle {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.mj-provider-name {
+  font-weight: 600;
+  color: var(--mj-text-primary);
+}
+
+.mj-provider-desc {
+  font-size: 0.74rem;
+  color: var(--mj-text-muted);
+}
+
+.mj-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: var(--mj-radius-full, 9999px);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.mj-status-badge--success {
+  background: color-mix(in srgb, var(--mj-status-success, #10b981) 14%, var(--mj-bg-surface));
+  color: var(--mj-status-success, #10b981);
+}
+
+.mj-status-badge--warning {
+  background: color-mix(in srgb, var(--mj-status-warning, #f59e0b) 14%, var(--mj-bg-surface));
+  color: var(--mj-status-warning, #f59e0b);
+}
+
+.mj-status-badge--info {
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
+}
+
+.mj-status-badge--muted {
+  background: color-mix(in srgb, var(--mj-text-primary) 8%, var(--mj-bg-surface));
+  color: var(--mj-text-muted);
+}
+
+.mj-role-count-badge {
+  font-size: 0.74rem;
+  color: var(--mj-text-secondary);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.mj-code-pill {
+  font-family: var(--mj-font-mono, monospace);
+  font-size: 0.74rem;
+  background: var(--mj-bg-surface-sunken, color-mix(in srgb, var(--mj-text-primary) 5%, var(--mj-bg-surface)));
+  border: 1px solid var(--mj-border-default);
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--mj-text-secondary);
+}
+
+.mj-priority-pill {
+  font-size: 0.74rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--mj-text-primary) 6%, var(--mj-bg-surface));
+  color: var(--mj-text-secondary);
+}
+
+.mj-action-button-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.mj-action-icon-btn {
+  background: transparent;
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-sm, 6px);
+  width: 28px;
+  height: 28px;
+  font-size: 0.78rem;
+  color: var(--mj-text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.12s;
+}
+
+.mj-action-icon-btn:hover {
+  background: color-mix(in srgb, var(--mj-text-primary) 8%, var(--mj-bg-surface));
+  color: var(--mj-text-primary);
+  border-color: var(--mj-brand-primary);
+}
+
+.mj-action-icon-btn--danger:hover {
+  background: color-mix(in srgb, var(--mj-status-error, #ef4444) 15%, var(--mj-bg-surface));
+  color: var(--mj-status-error, #ef4444);
+  border-color: var(--mj-status-error, #ef4444);
+}
+
+.mj-text-right {
+  text-align: right;
+}
+
+.mj-text-center {
+  text-align: center;
+}
+
+/* Toggle Switch */
+.mj-toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 20px;
+  cursor: pointer;
+}
+
+.mj-toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.mj-toggle-slider {
+  position: absolute;
+  inset: 0;
+  background-color: color-mix(in srgb, var(--mj-text-primary) 20%, var(--mj-bg-surface));
+  border-radius: 20px;
+  transition: 0.2s ease;
+}
+
+.mj-toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 14px;
+  width: 14px;
+  left: 3px;
+  bottom: 3px;
+  background-color: var(--mj-bg-surface);
+  border-radius: 50%;
+  transition: 0.2s ease;
+}
+
+.mj-toggle-switch input:checked + .mj-toggle-slider {
+  background-color: var(--mj-brand-primary);
+}
+
+.mj-toggle-switch input:checked + .mj-toggle-slider:before {
+  transform: translateX(16px);
+}
+
+/* Account Form */
+.mj-account-editor-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 4px 0;
+}
+
+.mj-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.mj-form-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.mj-form-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--mj-text-secondary);
+}
+
+.mj-required {
+  color: var(--mj-status-error, #ef4444);
+}
+
+.mj-form-input, .mj-form-select, .mj-form-textarea {
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-sm, 6px);
+  padding: 8px 10px;
+  font-size: 0.84rem;
+  color: var(--mj-text-primary);
+  background: var(--mj-bg-surface);
+  outline: none;
+  font-family: inherit;
+  transition: border-color 0.12s;
+}
+
+.mj-form-input:focus, .mj-form-select:focus, .mj-form-textarea:focus {
+  border-color: var(--mj-brand-primary);
+}
+
+.mj-form-hint {
+  font-size: 0.72rem;
+  color: var(--mj-text-muted);
+}
+
+.mj-credential-input-row {
+  display: flex;
+  gap: 8px;
+}
+
+.mj-credential-input-row .mj-form-select {
+  flex: 1;
+}
+
+.mj-form-checkbox-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 0;
+}
+
+.mj-checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.mj-checkbox-hint {
+  margin-left: 22px;
+}
+
+.mj-roles-checklist {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px;
+  max-height: 140px;
+  overflow-y: auto;
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-sm, 6px);
+  padding: 10px;
+  background: var(--mj-bg-surface-sunken, color-mix(in srgb, var(--mj-text-primary) 3%, var(--mj-bg-surface)));
+}
+
+.mj-role-check-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  color: var(--mj-text-primary);
+  cursor: pointer;
+}
+
+/* Delete Confirm */
+.mj-delete-confirm-body {
+  display: flex;
+  gap: 16px;
+  padding: 10px 0;
+}
+
+.mj-delete-confirm-icon {
+  font-size: 2.2rem;
+  color: var(--mj-status-error, #ef4444);
+  flex-shrink: 0;
+}
+
+.mj-delete-confirm-title {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--mj-text-primary);
+  margin: 0 0 6px 0;
+}
+
+.mj-delete-confirm-subtitle {
+  font-size: 0.8rem;
+  color: var(--mj-text-secondary);
+  line-height: 1.4;
+  margin: 0;
+}
+
+/* Dialog Action Buttons */
+.mj-admin-btn {
+  padding: 7px 14px;
+  border-radius: var(--mj-radius-sm, 6px);
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid transparent;
+  transition: all 0.12s;
+}
+
+.mj-admin-btn-primary {
+  background: var(--mj-brand-primary);
+  color: var(--mj-text-inverse, #ffffff);
+}
+
+.mj-admin-btn-primary:hover {
+  background: var(--mj-brand-primary-hover);
+}
+
+.mj-admin-btn-secondary {
+  background: var(--mj-bg-surface);
+  border-color: var(--mj-border-default);
+  color: var(--mj-text-secondary);
+}
+
+.mj-admin-btn-secondary:hover {
+  background: color-mix(in srgb, var(--mj-text-primary) 8%, var(--mj-bg-surface));
+  color: var(--mj-text-primary);
+}
+
+.mj-admin-btn-danger {
+  background: var(--mj-status-error, #ef4444);
+  color: var(--mj-text-inverse, #ffffff);
+}
+
+.mj-admin-btn-danger:hover {
+  background: color-mix(in srgb, var(--mj-text-primary, #000000) 15%, var(--mj-status-error, #ef4444));
+}
+
+.mj-admin-btn-link {
+  background: none;
+  border: none;
+  color: var(--mj-brand-primary);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+}
+
+.mj-admin-btn-link:hover {
+  text-decoration: underline;
+}

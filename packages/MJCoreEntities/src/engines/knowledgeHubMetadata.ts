@@ -1,17 +1,21 @@
-import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, IMetadataProvider, UserInfo } from "@memberjunction/core";
-import { NormalizeUUID } from "@memberjunction/global";
+import { BaseEngine, BaseEngineRegistry, BaseEnginePropertyConfig, BaseEntity, IMetadataProvider, UserInfo } from "@memberjunction/core";
+import { NormalizeUUID, UUIDsEqual } from "@memberjunction/global";
 import {
     MJEntityDocumentEntity,
     MJVectorIndexEntity,
     MJContentSourceEntity,
     MJContentTypeEntity,
     MJContentSourceTypeEntity,
-    MJContentFileTypeEntity
+    MJContentFileTypeEntity,
+    MJFeaturePipelineTypeEntity
 } from "../generated/entity_subclasses";
 
 /**
- * Caches Knowledge Hub metadata: entity documents, vector indexes, vector databases,
- * content sources, content types, content source types, and content file types.
+ * Caches Knowledge Hub metadata: entity documents, content sources, content types, content source
+ * types, content file types, and feature pipeline types.
+ *
+ * Vector indexes are NOT cached here — `AIEngineBase` (`@memberjunction/ai-engine-base`) owns the single
+ * `MJ: Vector Indexes` cache, and {@link VectorIndexes} / {@link GetVectorIndexByID} proxy it.
  * Provides helper methods for lookups and filtering. Uses BaseEngine for automatic
  * caching and entity-event auto-refresh.
  */
@@ -34,11 +38,11 @@ export class KnowledgeHubMetadataEngine extends BaseEngine<KnowledgeHubMetadataE
     }
 
     private _entityDocuments: MJEntityDocumentEntity[] = [];
-    private _vectorIndexes: MJVectorIndexEntity[] = [];
     private _contentSources: MJContentSourceEntity[] = [];
     private _contentTypes: MJContentTypeEntity[] = [];
     private _contentSourceTypes: MJContentSourceTypeEntity[] = [];
     private _contentFileTypes: MJContentFileTypeEntity[] = [];
+    private _featurePipelineTypes: MJFeaturePipelineTypeEntity[] = [];
 
     /**
      * Lazily-built `NormalizeUUID(ID) → row` indexes, one per cached array (keyed by array name),
@@ -53,12 +57,6 @@ export class KnowledgeHubMetadataEngine extends BaseEngine<KnowledgeHubMetadataE
                 Type: 'entity',
                 EntityName: 'MJ: Entity Documents',
                 PropertyName: '_entityDocuments',
-                CacheLocal: true
-            },
-            {
-                Type: 'entity',
-                EntityName: 'MJ: Vector Indexes',
-                PropertyName: '_vectorIndexes',
                 CacheLocal: true
             },
             {
@@ -84,6 +82,12 @@ export class KnowledgeHubMetadataEngine extends BaseEngine<KnowledgeHubMetadataE
                 EntityName: 'MJ: Content File Types',
                 PropertyName: '_contentFileTypes',
                 CacheLocal: true
+            },
+            {
+                Type: 'entity',
+                EntityName: 'MJ: Feature Pipeline Types',
+                PropertyName: '_featurePipelineTypes',
+                CacheLocal: true
             }
         ];
         await this.Load(c, provider, forceRefresh, contextUser);
@@ -98,9 +102,16 @@ export class KnowledgeHubMetadataEngine extends BaseEngine<KnowledgeHubMetadataE
         return this._entityDocuments;
     }
 
-    /** All vector indexes in the system */
+    /**
+     * All vector indexes in the system — a proxy for `AIEngineBase.VectorIndexes`, which owns the cache.
+     *
+     * Resolved through {@link BaseEngineRegistry} rather than an import because `@memberjunction/ai-engine-base`
+     * depends on this package (a direct import would be a circular dependency). Resolved per access, so it
+     * always reflects the owner's live array. Empty until `AIEngineBase` has loaded; callers that can import
+     * it should use `AIEngineBase.Instance` (or `AIEngine.Instance` server-side) directly.
+     */
     public get VectorIndexes(): MJVectorIndexEntity[] {
-        return this._vectorIndexes;
+        return BaseEngineRegistry.Instance.TryGetCachedRecords<MJVectorIndexEntity>('MJ: Vector Indexes', { unfilteredOnly: true }) ?? [];
     }
 
     /** All content sources */
@@ -121,6 +132,14 @@ export class KnowledgeHubMetadataEngine extends BaseEngine<KnowledgeHubMetadataE
     /** All content file types (.pdf, .html, etc.) */
     public get ContentFileTypes(): MJContentFileTypeEntity[] {
         return this._contentFileTypes;
+    }
+
+    /**
+     * All feature pipeline types (LLM, and any other registered types), both Active and Disabled.
+     * @throws {PermissionConstrainedError} if the engine skipped loading because the user lacks read access.
+     */
+    public get FeaturePipelineTypes(): MJFeaturePipelineTypeEntity[] {
+        return this.GetConfigData<MJFeaturePipelineTypeEntity>('_featurePipelineTypes');
     }
 
     // ================================================================
@@ -189,10 +208,10 @@ export class KnowledgeHubMetadataEngine extends BaseEngine<KnowledgeHubMetadataE
         return this._entityDocuments.filter(d => d.Entity?.trim().toLowerCase() === lower);
     }
 
-    /** Find a vector index by ID (case-insensitive UUID comparison). O(1) after first hit. */
+    /** Find a vector index by ID (case-insensitive UUID comparison). Proxies the `AIEngineBase` cache — see {@link VectorIndexes}. */
     public GetVectorIndexByID(id: string): MJVectorIndexEntity | undefined {
         if (!id) return undefined;
-        return this.getIDIndex('vectorIndexes', this._vectorIndexes, v => v.ID).get(NormalizeUUID(id));
+        return this.VectorIndexes.find(v => UUIDsEqual(v.ID, id));
     }
 
     /**

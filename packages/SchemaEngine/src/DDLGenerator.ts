@@ -215,14 +215,19 @@ export class DDLGenerator {
 }
 
 // ─── Re-exports (backward compatibility) ────────────────────────────
-export { ValidateIdentifier, EscapeSqlString } from './utils.js';
+export { ValidateIdentifier } from './utils.js';
 
 /** Resolve the SQL type for a column via SQLDialect. */
-export function resolveSqlType(col: ColumnDefinition, platform: DatabasePlatform): string {
+export function ResolveSqlType(col: ColumnDefinition, platform: DatabasePlatform): string {
   return col.RawSqlType ?? GetDialect(platform).ResolveAbstractType({
     type: col.Type,
     maxLength: col.MaxLength,
     precision: col.Precision,
     scale: col.Scale,
   });
+}
+
+/** @deprecated Use {@link ResolveSqlType}. */
+export function resolveSqlType(col: ColumnDefinition, platform: DatabasePlatform): string {
+  return ResolveSqlType(col, platform);
 }

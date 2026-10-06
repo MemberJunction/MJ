@@ -90,4 +90,4 @@ A built-in layout switcher (gated by `EnableLayoutSwitcher`) lets users change l
 
 ## License
 
-ISC © MemberJunction.com
+Business Source License 1.1 — see [LICENSE](../../../../LICENSE) for details.

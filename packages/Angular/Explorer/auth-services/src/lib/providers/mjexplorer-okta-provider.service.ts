@@ -32,7 +32,7 @@ export class MJOktaProvider extends MJAuthBase {
    * Factory function to provide Angular dependencies required by Okta
    * Stored as a static property for the factory to access without instantiation
    */
-  static angularProviderFactory = (environment: Record<string, unknown>) => [
+  static AngularProviderFactory = (environment: Record<string, unknown>) => [
     {
       provide: 'oktaConfig',
       useValue: {
@@ -44,6 +44,15 @@ export class MJOktaProvider extends MJAuthBase {
       }
     }
   ];
+
+  /** @deprecated Use {@link AngularProviderFactory}. */
+  static get angularProviderFactory() {
+    return this.AngularProviderFactory;
+  }
+  /** @deprecated Use {@link AngularProviderFactory}. */
+  static set angularProviderFactory(value) {
+    this.AngularProviderFactory = value;
+  }
 
   constructor(@Inject('oktaConfig') private oktaConfig: OktaAuthOptions & { domain?: string }) {
     const config: AngularAuthProviderConfig = {

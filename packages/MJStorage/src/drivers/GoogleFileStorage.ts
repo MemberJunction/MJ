@@ -15,7 +15,7 @@ import {
   StorageObjectMetadata,
   StorageProviderConfig,
 } from '../generic/FileStorageBase';
-import { getProviderConfig } from '../config';
+import { GetProviderConfig } from '../config';
 
 /**
  * Google Cloud Storage implementation of the FileStorageBase interface.
@@ -64,7 +64,7 @@ export class GoogleFileStorage extends FileStorageBase {
     super();
 
     // Try to get config from centralized configuration
-    const config = getProviderConfig('googleCloud');
+    const config = GetProviderConfig('googleCloud');
 
     // Handle credentials from config or env vars
     let credentials;
@@ -250,7 +250,7 @@ export class GoogleFileStorage extends FileStorageBase {
 
     const [UploadUrl] = await file.getSignedUrl(options);
 
-    return { UploadUrl };
+    return { UploadUrl, HttpMethod: 'PUT' };
   }
 
   /**
@@ -639,6 +639,14 @@ export class GoogleFileStorage extends FileStorageBase {
    * Google Cloud Storage supports ranged streaming via `File.createReadStream({ start, end })`.
    */
   public override get SupportsStreaming(): boolean {
+    return true;
+  }
+
+  public override get SupportsPreAuthUpload(): boolean {
+    return true;
+  }
+
+  public override get SupportsPreAuthDownload(): boolean {
     return true;
   }
 

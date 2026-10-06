@@ -20,7 +20,9 @@
  *
  * @module phases/ConfigurePhase
  * @see InstallConfig — the full configuration interface.
- * @see InstallConfigDefaults — default values for auto-mode.
+ * @see InstallConfigDefaults — pre-`configure` defaults read by earlier
+ *   phases; most fields prompted for here are not in that set, and in
+ *   `--yes` mode each prompt resolves to its own default instead.
  */
 
 import path from 'node:path';
@@ -300,9 +302,9 @@ export class ConfigurePhase {
     config.DatabaseHost = config.DatabaseHost ?? await this.promptInput(
       emitter, 'db-host', 'Database server hostname:', 'localhost', yes
     );
-    config.DatabasePort = config.DatabasePort ?? parseInt(await this.promptInput(
-      emitter, 'db-port', 'Database server port:', '1433', yes
-    ), 10);
+    config.DatabasePort = config.DatabasePort ?? await this.promptPort(
+      emitter, 'db-port', 'Database server port:', 1433, yes
+    );
     config.DatabaseName = config.DatabaseName ?? await this.promptInput(
       emitter, 'db-name', 'Database name:', 'MemberJunction', yes
     );
@@ -327,12 +329,12 @@ export class ConfigurePhase {
     );
 
     // Ports
-    config.APIPort = config.APIPort ?? parseInt(await this.promptInput(
-      emitter, 'api-port', 'GraphQL API port:', '4000', yes
-    ), 10);
-    config.ExplorerPort = config.ExplorerPort ?? parseInt(await this.promptInput(
-      emitter, 'explorer-port', 'Explorer UI port:', '4200', yes
-    ), 10);
+    config.APIPort = config.APIPort ?? await this.promptPort(
+      emitter, 'api-port', 'GraphQL API port:', 4000, yes
+    );
+    config.ExplorerPort = config.ExplorerPort ?? await this.promptPort(
+      emitter, 'explorer-port', 'Explorer UI port:', 4200, yes
+    );
 
     // Auth provider
     if (!config.AuthProvider) {
@@ -600,7 +602,9 @@ ${versionSection}${newUserSection}  output: [],
     // Try to replace existing newUserSetup block
     const existingPattern = /newUserSetup:\s*\{[^}]*\}/;
     if (existingPattern.test(content)) {
-      return content.replace(existingPattern, newUserBlock);
+      // Function replacement: the block embeds the user's name and email, which
+      // may contain `$`. See issue #3171.
+      return content.replace(existingPattern, () => newUserBlock);
     }
 
     // Insert before the closing of module.exports
@@ -665,7 +669,8 @@ ${versionSection}${newUserSection}  output: [],
     const line = `mjRepoVersion: '${version}'`;
     const existing = /mjRepoVersion\s*:\s*'[^']*'/;
     if (existing.test(content)) {
-      return content.replace(existing, line);
+      // Function replacement — see the note in patchNewUserSetup (#3171).
+      return content.replace(existing, () => line);
     }
 
     const marker = 'module.exports = {';
@@ -838,7 +843,11 @@ ${versionSection}${newUserSection}  output: [],
     const pattern = new RegExp(`^\\s*${name}\\s*=.*$`, 'm');
     const newLine = `${name}='${value}'`;
     if (pattern.test(content)) {
-      return content.replace(pattern, newLine);
+      // Function replacement, NOT a string: `value` is a secret we were handed,
+      // and a string replacement would expand `$$`/`$&`/`` $` ``/`$'` inside it —
+      // writing a corrupted password, or splicing a neighbouring .env line into
+      // the middle of one. See issue #3171.
+      return content.replace(pattern, () => newLine);
     }
     const suffix = content.endsWith('\n') ? '' : '\n';
     return `${content}${suffix}${newLine}\n`;
@@ -1138,7 +1147,10 @@ ${versionSection}${newUserSection}  output: [],
         `(["']?${field}["']?\\s*[:=]\\s*)(?:["']{2}|["']\\s*["'])`,
       );
       if (emptyPattern.test(content)) {
-        content = content.replace(emptyPattern, `$1'${value}'`);
+        // Function replacement: the `$1` back-reference is ours and intentional,
+        // but `value` is data — as a string replacement its own `$&`/`` $` ``/`$'`
+        // would expand too. See issue #3171.
+        content = content.replace(emptyPattern, (_match, prefix: string) => `${prefix}'${value}'`);
         continue;
       }
 
@@ -1152,7 +1164,11 @@ ${versionSection}${newUserSection}  output: [],
         );
         const match = content.match(valuedPattern);
         if (match && scaffoldDefault.test(match[2])) {
-          content = content.replace(valuedPattern, `$1${value}$3`);
+          // Function replacement — see the note on the empty-value patch above.
+          content = content.replace(
+            valuedPattern,
+            (_match, prefix: string, _oldValue: string, suffix: string) => `${prefix}${value}${suffix}`,
+          );
         }
       }
     }
@@ -1191,6 +1207,27 @@ ${versionSection}${newUserSection}  output: [],
         Resolve: resolve,
       });
     });
+  }
+
+  /**
+   * Emit a text input prompt for a port number and return it parsed, falling
+   * back to `defaultValue` when the answer is not a positive integer.
+   *
+   * These prompts used to be dead code — a default was always applied before
+   * `ConfigurePhase` could ask — so a non-numeric answer here never had a
+   * chance to write `DB_PORT=NaN` to `.env`. The `--yes`-mode fix (#4562) made
+   * them live, so an unguarded `parseInt` is now reachable from real input.
+   */
+  private async promptPort(
+    emitter: InstallerEventEmitter,
+    id: string,
+    message: string,
+    defaultValue: number,
+    yes: boolean
+  ): Promise<number> {
+    const answer = await this.promptInput(emitter, id, message, String(defaultValue), yes);
+    const parsed = parseInt(answer, 10);
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : defaultValue;
   }
 
   /**

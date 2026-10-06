@@ -388,7 +388,7 @@ describe('OpenAIRealtime', () => {
             expect(driver.Fake.Sent.some((e) => e.type === 'response.create')).toBe(false);
         });
 
-        it('RequestSpokenUpdate sends response.create with per-response instructions when idle', async () => {
+        it('RequestSpokenUpdate sends response.create carrying the session prompt AHEAD of the direction', async () => {
             const session = (await driver.StartSession({ Model: 'gpt-realtime', SystemPrompt: 'sys' })) as OpenAIRealtimeSession;
             driver.Fake.Sent = [];
             session.RequestSpokenUpdate('Briefly say the report agent is drafting.');
@@ -396,7 +396,43 @@ describe('OpenAIRealtime', () => {
             const respond = driver.Fake.Sent[0];
             expect(respond.type).toBe('response.create');
             if (respond.type === 'response.create') {
-                expect(respond.response?.instructions).toBe('Briefly say the report agent is drafting.');
+                expect(respond.response?.instructions).toBe('sys\n\nBriefly say the report agent is drafting.');
+            }
+        });
+
+        /**
+         * #4591 · bizapps-caliber#397 — the identity half of the rule the BLANK case already knew.
+         *
+         * `response.instructions` is a full override of the session prompt, so a non-blank direction
+         * wipes the co-agent identity exactly as `''` would. The visible symptom downstream was an
+         * interviewer opening a hiring assessment as "ChatGPT" on the one turn that rides this method,
+         * while every other turn in the same session gave her configured name.
+         */
+        it('RequestSpokenUpdate never sends a direction that would wipe the session identity', async () => {
+            const session = (await driver.StartSession({
+                Model: 'gpt-realtime',
+                SystemPrompt: 'You are Sam Rivera, Support Team Lead.',
+            })) as OpenAIRealtimeSession;
+            driver.Fake.Sent = [];
+            session.RequestSpokenUpdate('Open the conversation: greet them and introduce yourself.');
+            const respond = driver.Fake.Sent[0];
+            expect(respond.type).toBe('response.create');
+            if (respond.type === 'response.create') {
+                expect(respond.response?.instructions).toContain('Sam Rivera');
+                // The direction stays LAST — the most recent line is the one the model weights hardest.
+                expect(respond.response?.instructions).toMatch(/Sam Rivera[\s\S]*Open the conversation/);
+            }
+        });
+
+        it('RequestSpokenUpdate sends the direction alone when the session carried no prompt', async () => {
+            const session = (await driver.StartSession({ Model: 'gpt-realtime', SystemPrompt: '' })) as OpenAIRealtimeSession;
+            driver.Fake.Sent = [];
+            session.RequestSpokenUpdate('progress update');
+            const respond = driver.Fake.Sent[0];
+            expect(respond.type).toBe('response.create');
+            if (respond.type === 'response.create') {
+                // Nothing to preserve, so nothing is prepended — a leading blank line would be noise.
+                expect(respond.response?.instructions).toBe('progress update');
             }
         });
 
@@ -730,6 +766,36 @@ describe('OpenAIRealtime', () => {
                 item_id: 'i',
             } as RealtimeServerEvent);
             expect(fn).not.toHaveBeenCalled();
+        });
+
+        it('clears every registered callback-handler field on Close, mirroring Gemini/ElevenLabs', async () => {
+            // A handler closure typically captures the caller's dispatch/UI context. If Close()
+            // left these set, that context would stay reachable for as long as the caller happens
+            // to retain the closed session object — the gap this test guards against.
+            const session = (await driver.StartSession({ Model: 'gpt-realtime', SystemPrompt: 'sys' })) as OpenAIRealtimeSession;
+            session.OnOutput(vi.fn());
+            session.OnTranscript(vi.fn());
+            session.OnToolCall(vi.fn());
+            session.OnInterruption(vi.fn());
+            session.OnUsage(vi.fn());
+            session.OnError(vi.fn());
+            session.OnClose(vi.fn());
+
+            await session.Close();
+
+            const handlerFields = [
+                'outputHandler',
+                'transcriptHandler',
+                'toolCallHandler',
+                'interruptionHandler',
+                'usageHandler',
+                'errorHandler',
+                'closeHandler',
+            ] as const;
+            const privateSession = session as unknown as Record<(typeof handlerFields)[number], unknown>;
+            for (const field of handlerFields) {
+                expect(privateSession[field]).toBeUndefined();
+            }
         });
     });
 });
@@ -1174,7 +1240,7 @@ describe('QA hardening regressions (plan A-items)', () => {
     describe('A2: profile-gated live reconfigure', () => {
         it('OpenAI still advertises and performs live reconfigure with its transcription model', async () => {
             const session = (await driver.StartSession({ Model: 'gpt-realtime-2.1', SystemPrompt: 'sys' })) as OpenAIRealtimeSession;
-            expect(session.Capabilities).toEqual({ CanReconfigureTurnMode: true });
+            expect(session.Capabilities).toEqual({ CanReconfigureTurnMode: true, SupportsDynamicToolSet: true });
             const before = driver.Fake.Sent.length;
             session.Reconfigure({ DisableAutoResponse: true });
             const frame = driver.Fake.Sent.slice(before)[0];
@@ -1191,7 +1257,7 @@ describe('QA hardening regressions (plan A-items)', () => {
                 ...OPENAI_REALTIME_PROFILE,
                 supportsLiveReconfigure: false,
             });
-            expect(session.Capabilities).toEqual({ CanReconfigureTurnMode: false });
+            expect(session.Capabilities).toEqual({ CanReconfigureTurnMode: false, SupportsDynamicToolSet: true });
             const before = driver.Fake.Sent.length;
             session.Reconfigure({ DisableAutoResponse: true });
             expect(driver.Fake.Sent.length).toBe(before);

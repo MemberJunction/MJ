@@ -217,9 +217,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: ML Training Runs','ResultingModelID')"
-                [NewRecordValues]="NewRecordValues('MJ: ML Training Runs')"
+                [NewRecordValues]="NewRecordValues('MJ: ML Training Runs','ResultingModelID')"
                 [AllowLoad]="IsSectionExpanded('mJMLTrainingRuns')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJMLTrainingRuns', $event.totalRowCount)"
                 >
@@ -242,9 +242,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: ML Model Scoring Bindings','MLModelID')"
-                [NewRecordValues]="NewRecordValues('MJ: ML Model Scoring Bindings')"
+                [NewRecordValues]="NewRecordValues('MJ: ML Model Scoring Bindings','MLModelID')"
                 [AllowLoad]="IsSectionExpanded('mJMLModelScoringBindings')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJMLModelScoringBindings', $event.totalRowCount)"
                 >

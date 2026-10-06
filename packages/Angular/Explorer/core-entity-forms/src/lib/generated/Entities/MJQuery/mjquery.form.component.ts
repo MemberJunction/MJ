@@ -20,7 +20,6 @@ export class MJQueryFormComponent extends BaseFormComponent {
             { sectionKey: 'performanceQuality', sectionName: 'Performance & Quality', isExpanded: true },
             { sectionKey: 'cachingExecutionSettings', sectionName: 'Caching & Execution Settings', isExpanded: true },
             { sectionKey: 'aIEmbeddings', sectionName: 'AI & Embeddings', isExpanded: true },
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJDataContextItems', sectionName: 'Data Context Items', isExpanded: false },
             { sectionKey: 'mJQueryFields', sectionName: 'Query Fields', isExpanded: false },
@@ -29,7 +28,8 @@ export class MJQueryFormComponent extends BaseFormComponent {
             { sectionKey: 'mJQueryParameters', sectionName: 'Query Parameters', isExpanded: false },
             { sectionKey: 'mJQueryDependenciesQueryID', sectionName: 'Query Dependencies (Query)', isExpanded: false },
             { sectionKey: 'mJQueryEntities', sectionName: 'Query Entities', isExpanded: false },
-            { sectionKey: 'mJQuerySQLs', sectionName: 'Query SQLs', isExpanded: false }
+            { sectionKey: 'mJQuerySQLs', sectionName: 'Query SQLs', isExpanded: false },
+            { sectionKey: 'mJMaterializedResultQueries', sectionName: 'Materialized Result Queries', isExpanded: false }
         ]);
     }
 }

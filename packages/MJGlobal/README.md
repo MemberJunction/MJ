@@ -343,7 +343,7 @@ if (!result.Success) {
 
 ### SafeExpressionEvaluator
 
-Evaluates boolean expressions against context objects securely, blocking injection patterns like `eval()`, `require()`, `process.`, template literals, and more.
+Evaluates boolean expressions against context objects securely. The expression is parsed and every AST node checked against an **allowlist** before it is compiled, so constructs outside the supported grammar — `eval()`, `require()`, `.constructor`, computed member keys built at runtime, calls to anything unlisted — are refused at validation time and never reach the compiler.
 
 ```typescript
 import { SafeExpressionEvaluator } from '@memberjunction/global';
@@ -363,7 +363,7 @@ if (result.success) {
 }
 ```
 
-Supports comparisons (`==`, `!=`, `<`, `>`, `<=`, `>=`), logical operators (`&&`, `||`, `!`), dot-notation property access, bracket-notation array access, and safe string/array methods (`.includes()`, `.startsWith()`, `.some()`, `.every()`, etc.).
+Supports comparisons (`==`, `!=`, `<`, `>`, `<=`, `>=`), logical operators (`&&`, `||`, `!`), `typeof`, dot-notation property access including optional chaining (`payload?.customer?.tier`), bracket-notation access with a **literal** index/key, safe string/array methods (`.includes()`, `.startsWith()`, `.some()`, `.every()`, etc.), and the safe globals exported as `SAFE_EXPRESSION_GLOBALS` — `Math`, `Number`, `String`, `Boolean`, `Array`, `Object`, `JSON`, `Date`, `parseInt`, `parseFloat`, `isNaN`, `isFinite` — callable as namespace methods (`Math.abs(x)`, `Object.keys(x)`) or bare functions (`Number(x)`). Regex literals, `in`/`instanceof`, and methods outside the safe list are not supported.
 
 ### SQLExpressionValidator
 
@@ -513,6 +513,32 @@ IsValueEncrypted('$ENC$keyId$AES-256-GCM$iv$ciphertext$authTag'); // true
 IsValueEncrypted('[!ENCRYPTED$]');                                 // true (sentinel)
 IsValueEncrypted('plain text');                                    // false
 IsEncryptedSentinel('[!ENCRYPTED$]');                              // true
+```
+
+### Binary Encoding
+
+Above the database, MemberJunction represents a binary column (`varbinary` / `binary` / `image`, PostgreSQL `bytea`) as a **base64 string** — in `BaseEntity` fields, caches, `RunView` rows and GraphQL alike. These helpers convert and validate it. The codec is picked once per process from the fastest the host offers (native `Uint8Array.fromBase64`/`toBase64`, Node `Buffer`, then `atob`/`btoa`); every codec accepts and produces the same strings. See the [Binary Fields Guide](../../guides/BINARY_FIELDS_GUIDE.md).
+
+| Function | Description |
+|---|---|
+| `BytesToBase64(bytes)` | Bytes to standard, padded base64 |
+| `Base64ToBytes(b64)` | Base64 to bytes; throws on invalid input |
+| `TryBase64ToBytes(b64)` | Same, but returns `null` for null/undefined or invalid input |
+| `IsValidBase64(value)` | Canonical base64 only: standard alphabet, optional padding, no whitespace, data-URI prefix or URL-safe alphabet |
+| `HasValidBase64Shape(value)` | Length/padding shape check only |
+| `Base64DecodedByteLength(b64)` | Decoded byte count without decoding (for size checks) |
+| `IsByteArray(value)` | True for a `Uint8Array` (including a Node `Buffer`) |
+| `ReplaceByteArraysWithBase64(row)` | Replaces top-level byte arrays in a row with base64; copy-on-write, never mutates the input |
+| `Float32VectorToBytes(values)` / `BytesToFloat32Vector(bytes)` | A vector as little-endian float32 bytes (4 per value, no header); decode returns `null` for empty or misaligned input |
+| `Float32VectorToBase64(values)` / `Base64ToFloat32Vector(b64)` | The same, as the base64 value stored in a binary vector field such as `VectorBinary` |
+| `GetBase64Codec()` / `Base64Codecs` | The codec in use / every available codec (diagnostics and tests) |
+
+```typescript
+import { Float32VectorToBase64, Base64ToFloat32Vector, TryBase64ToBytes } from '@memberjunction/global';
+
+doc.VectorBinary = Float32VectorToBase64(embedding);        // write
+const vector = Base64ToFloat32Vector(doc.VectorBinary);     // Float32Array | null
+const bytes = TryBase64ToBytes(file.Content);               // Uint8Array | null
 ```
 
 ### String and JSON Utilities

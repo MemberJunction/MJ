@@ -1,0 +1,331 @@
+# EntityField prune replayed from history — diagnosis and remediation plan
+
+**Status:** proposed · **Opened:** 2026-09-10 · **Repos affected:** `MJ`, `bizapps-orders`, `bizapps-common`, `more-cheese`
+
+A clean, from-zero install of MJ core plus the BizApps stack produces databases where a
+`BaseView` exposes columns that have no matching `__mj.EntityField` row. Every
+`BaseEntity.Save()` against such an entity then fails, because `SQLServerDataProvider` builds
+its `@ResultTable` from entity metadata and executes `INSERT INTO @ResultTable EXEC
+spCreate<Entity>` — the proc returns N columns, the table variable has M, and SQL Server
+raises *"Column name or number of supplied values does not match table definition"* (Msg 213).
+
+This document records what was measured, corrects a diagnosis that does not survive the
+evidence, and sequences the fix.
+
+---
+
+## 1. What the symptom is NOT
+
+The intuitive reading — *migration authors added columns to a view and forgot to append the
+CodeGen `EntityField` block* — is **false for four of the five affected entities**. Every
+claimed-missing field was checked against the shipped migrations by searching for its
+`IF NOT EXISTS (… AND Name = '<field>')` guard:
+
+| Entity | Field(s) | View alias | `EntityField` INSERT present? |
+|---|---|---|---|
+| `MJ_BizApps_Orders: Product Categories` | `RootParentProductCategoryID` | yes | **yes** — `V202607061432` |
+| `MJ_BizApps_Orders: Product Categories` | `ParentProductCategoryIDDepth` / `Path` / `IsLeaf` / `ChildCount` | yes | **yes** — `V202608251540` |
+| `MJ_BizApps_Orders: Price Tiers` | `ProductPrice` | yes | **yes** |
+| `MJ_BizApps_Common: Activity Files` / `Activity Links` | `Activity` | yes | **yes** (×5) |
+| `MJ_BizApps_Common: Addresses` | `__mj_Latitude`, `__mj_Longitude` | yes | **no — the one true omission** |
+
+The rows are not missing because nobody wrote them. They are written, and then deleted.
+
+**Note the repo.** `Addresses` is a **bizapps-common** entity — `MJ_BizApps_Common: Addresses`,
+`BaseView` `vwAddresses`, `SchemaName` `__mj_BizAppsCommon` (`B202602271452`, line 961). MJ core
+has no `Address` table, no `vwAddresses`, and no `AddressEntity` in the generated ORM. Any heal
+for the geo fields belongs in bizapps-common. **Do not author an MJ-core migration for it.**
+
+---
+
+## 2. What actually deletes them
+
+`spDeleteUnneededEntityFields` reconciles `EntityField` against the columns visible in the
+entity's `BaseView` **at the moment it runs**. That is correct against a finished schema — which
+is what CodeGen runs against. A versioned migration replays it from a point in history where the
+schema is, by definition, not finished, so the procedure correctly concludes the rows are
+unneeded and removes them.
+
+This was diagnosed once already, in the header of
+`bizapps-common/migrations/V202608140700__v5.34.x__Layered_Base_Views_EntityFields.sql`:
+
+```
+--   line  116  INSERT the 29 EntityField rows for the layered columns
+--   line 3121  EXEC spDeleteUnneededEntityFields   <-- deletes them again
+```
+
+> *"It is the sequencing that is wrong, not the procedure."*
+>
+> *"Measured: 22 → 36 fields on a database where vwPeople already existed, versus 0 of 14 on a
+> clean in-order install. Every developer machine is in the first state and every real host is
+> in the second."*
+>
+> *"A later `mj codegen` also repairs it, because by then the wrappers exist — but hosts run
+> migrations, not CodeGen, so the migrations must stand on their own."*
+
+That is this bug, one schema over, with the measurement already done. It also explains the fact
+no other theory accounts for: the generated entity classes and every developer database have
+these fields, while a clean replay does not.
+
+**Scale:** `spDeleteUnneededEntityFields` appears as **76 `EXEC` statements across 79 migration
+files** in these four repos (MJ 49/61, bizapps-common 15/10, bizapps-orders 8/7, more-cheese 4/1
+— statements/files).
+
+---
+
+## 3. Why it is emitted into migrations at all
+
+CodeGen already knows this statement does not belong in a replayable migration. It tags it:
+
+```ts
+// manage-metadata.ts — deleteUnneededEntityFields()
+const result = await this.LogSQLAndExecute(pool, sSQL, label, true);
+//                                                          ^^^^ isRecurringScript
+```
+
+and the logger honours the tag:
+
+```ts
+// sql_logging.ts — appendToSQLLogFile()
+if (isRecurringScript && SQLLogging.OmitRecurringScriptsFromLog) {
+    return; // not written into the migration
+}
+```
+
+The switch is `omitRecurringScriptsFromLog`. It is set wrong nearly everywhere:
+
+```
+bizapps-orders    omitRecurringScriptsFromLog: false          (mj.config.cjs:259)
+more-cheese       omitRecurringScriptsFromLog: false          (mj.config.cjs:89)
+bizapps-common    true  (line 123)  /  false (line 183)       — both, in one file
+MJ core           not set → zod default false
+```
+
+MJ contradicts itself on the intended default:
+
+```ts
+config.ts:363    omitRecurringScriptsFromLog: z.boolean().default(false),   // schema default
+config.ts:1048   omitRecurringScriptsFromLog: true,                          // fallback config
+```
+
+The fallback expresses the correct posture. The zod default is the opposite, so **a repo with a
+`sqlOutput` block that simply omits the key silently selects the hazardous behaviour.** Omission
+should be safe; today it is the trap.
+
+### What the flag actually suppresses
+
+Everything CodeGen marks recurring is a metadata *reconciler*: default column widths,
+update-entities-from-schema, sync-schema-info, the entity heal, and the `EntityField` prune. All
+structural DDL — materialized tables, wrapper views, special date fields, default-constraint
+drops — passes `false` and is unaffected. `Entity` and `EntityField` `INSERT`s are non-recurring
+and are unaffected. **Turning the flag on removes no statement a host needs.**
+
+---
+
+## 4. The sequencing trap that decides whether heals survive
+
+**Reconcilers in versioned migrations replay from an intermediate schema state and are wrong there.**
+
+A reconciler in a **versioned** migration replays from an intermediate schema state and is wrong there — the fix is omission, which the `omitRecurringScriptsFromLog` default now handles. A reconciler in the **repeatable** (`R__RefreshMetadata.sql`) runs after every versioned migration, at final schema state, and is correct there — leave it broad. Scoping the repeatable removes metadata maintenance for every non-core schema on every host, and after Phase 1 nothing else provides it.
+
+### What the prune actually deletes, and what follows from it
+
+`spDeleteUnneededEntityFields` left-joins `vwEntityFields` against `vwSQLColumnsAndEntityFields` on
+`EntityID` + field name and deletes where `actual.column_id IS NULL` — i.e. **only where no physical
+column backs the row at the moment it runs.** Two consequences, and they pull in opposite directions:
+
+- **Mid-replay of a repo's own history it is destructive.** The `EntityField` INSERT has landed; the
+  `ALTER VIEW` that adds the column has not. The row has no column behind it, so it is deleted. That
+  is this defect, and it is why omission (Phase 1) is the fix.
+- **On a settled database it is a no-op.** Every healed field has a real column behind it, so the
+  prune matches and deletes nothing.
+
+**The heals are therefore durable, and an earlier draft of this section said otherwise.** It claimed
+a heal at the end of an app repo "does not survive a subsequent core upgrade." It does: the heal
+restores fields that *have* columns, and a later prune leaves them alone. The claim was asserted from
+the invocation count without reading the procedure — the count was right and the consequence was not.
+
+**The residual, stated at its real size — and re-measured, because the first figure was wrong.**
+An earlier revision of this paragraph said "60 committed migration files." It was 61 then and it is
+61 now; the number was mis-measured, not stale. Worse, "60 files across 49 `EXEC` blocks" conflates
+two different things: 19 of those files only *define* the procedure or mention it in a comment. The
+figures that mean something, with the commands that produce them so the next person re-measures
+instead of re-quoting:
+
+```bash
+# 61 — files under migrations/ that mention the procedure at all
+git grep -l 'spDeleteUnneededEntityFields' HEAD -- 'migrations/' | wc -l
+# 49 — EXEC call sites (they are single-line; parameters are on the same line)
+git grep -h -iE 'EXEC[[:space:]]+.*spDeleteUnneededEntityFields' HEAD -- 'migrations/' | wc -l
+# 0 — call sites that pass @IncludedSchemaNames
+git grep -h -iE 'EXEC[[:space:]]+.*spDeleteUnneededEntityFields.*@IncludedSchemaNames' HEAD -- 'migrations/' | wc -l
+```
+
+So: **49 `EXEC` call sites spread over 42 files, 0 of them passing `@IncludedSchemaNames`** — every
+one carries `@ExcludedSchemaNames='sys,staging'` and nothing else. They therefore evaluate every
+non-excluded schema, which is a hazard for any ordering in which a core migration executes while an
+app's schema is half-built (a core migrate interleaved with an app install — not the documented
+sequential path).
+
+The parameter itself is **already there**: `V202608260829__v6.1.x__Heal_SPs_IncludedSchemaNames.sql`
+added `@IncludedSchemaNames NVARCHAR(MAX) = NULL` to `spDeleteUnneededEntityFields` and its sibling
+heal procedures, defaulting to today's behaviour. Retiring this class is therefore a call-site
+change, not a procedure change. It is worth doing and it is **not** a precondition for Phase 3 —
+that was the overstatement.
+
+---
+
+## 5. Scoping: by schema, not by entity
+
+Scoping the prune to *processed/modified entities* is tempting and is wrong. The prune is itself
+the discovery mechanism for stale fields:
+
+```ts
+const result = await this.LogSQLAndExecute(pool, sSQL, label, true);
+if (result && result.length > 0) {
+    ManageMetadataBase.addNewEntitiesToModifiedList(result.map(r => r.Entity));
+}
+```
+
+It marks entities modified **based on what it deleted**. An entity whose column was dropped
+produces no new field and no changed field — nothing else in CodeGen flags it — so it enters the
+modified list only because the prune found it. Scope to processed entities and that entity is
+never evaluated and its stale field survives indefinitely. The failure is silent and permanent.
+
+Schema scoping has no such circularity: it narrows which schemas are eligible without narrowing
+which entities inside them are compared. It is also already implemented and wired:
+
+```ts
+// heal-schema-params.ts — buildHealSchemaRoutineParams()
+const include = (options.includeSchemas ?? []).map(s => s.trim()).filter(s => s.length > 0);
+if (include.length > 0) { values.push(`'${include.join(',')}'`); names.push('IncludedSchemaNames'); }
+```
+
+All three app repos already set `includeSchemas`, so **new** captures from them are already
+scoped. `@EntityIDs` is populated only on the late-phase geo-regen path; the main pass passes
+`undefined`, which degrades to an unscoped full scan.
+
+---
+
+## 6. Plan
+
+### Phase 1 — stop the bleeding (configuration only, no code)
+
+Set `omitRecurringScriptsFromLog: true` in:
+
+- `bizapps-orders/mj.config.cjs` (line 259)
+- `more-cheese/mj.config.cjs` (line 89)
+- `bizapps-common/mj.config.cjs` (line 183 — the second `sqlOutput` block; line 123 is already correct)
+
+No new migration captured after this carries a prune. Nothing structural is lost (§3).
+
+### Phase 2 — MJ core: the two real defects
+
+1. **Flip the zod default** at `config.ts:363` to `true`, matching the fallback at `config.ts:1048`,
+   so omission is safe rather than hazardous. This has real blast radius across every consumer —
+   land it deliberately, with a changeset, not as a drive-by.
+2. **Stop core emitting reconcilers into versioned migrations.** Versioned migrations replay from
+   an intermediate schema state; the fix is omission via `omitRecurringScriptsFromLog: true` (or
+   `--omit-recurring`). In repeatable migrations (`R__RefreshMetadata.sql`), reconcilers run after
+   every versioned migration at final schema state, where they remain broad.
+
+This is the phase that makes Phase 3 durable (§4).
+
+### Phase 3 — heal, once, per repo
+
+Last migration in each of **bizapps-orders** and **bizapps-common**. Follow the shape of
+`bizapps-common/V202608140700` — it is the same fix and it is already proven in this family:
+
+- `IF NOT EXISTS … INSERT` lifted verbatim, so it is idempotent and safe where rows already exist
+- **hardcoded UUIDs** — never `NEWID()`
+- apply-time `(SELECT COALESCE(MAX([Sequence]),0) FROM … WHERE EntityID = …) + 1` — never a literal `Sequence`
+- placed after every statement that could prune the rows it inserts
+- **no MJ-core migration** — the Addresses geo fields are bizapps-common's (§1)
+- **Precondition:** any CodeGen capture must be generated against an MJ that contains `2f305df1ac` (source-linked workspace, e.g. `M5` joined workspace / `mj dev workspace`), **not** published `@memberjunction/codegen-lib@6.1.0-edge.5` (published 2026-09-02, which predates #4292's literal-Sequence fix and still emits literal Sequences with the `+100000` park).
+
+Scope must be **measured, not assumed** — see §7.
+
+### Phase 4 — guards, so "don't do it again" is not the mechanism
+
+Port the guards to app repos **before** Phase 3 lands, so the gates catch any bad capture immediately:
+
+- **New CI gate, all four repos:** reject any migration containing `spDeleteUnneededEntityFields` (`check-migration-no-prune.mjs`).
+  Deterministic, cheap, catches the class at authoring time.
+- **Port modern positional `check-migration-entityfield-sequence.mjs`** to `bizapps-orders` and `more-cheese`, and **upgrade** `bizapps-common` from `.sh` to `.mjs`.
+  (The legacy `.sh` matched only the 6-digit `100000` band; #4292 replaced it in MJ with the positional `.mjs` parser covering both quoting dialects, masked comments/strings, and self-tests). bizapps-orders carries **829 of 886** `EntityField`
+  INSERTs with a literal `Sequence`, the exact pattern that "cannot fail on a working dev database
+  … fails only on fresh installs."
+- **T-SQL parse gate (`SET PARSEONLY ON`) in CI:** Convention gates inspect migrations purely as **text** (filenames, changesets, sequences, prune statements). Not one of them would catch syntax bugs like `V202609092230`'s unescaped single quote in `'item's'`, which was well-formed by all textual conventions but completely invalid T-SQL. The parse gate (`parse_migrations` job running against a SQL Server container with `SET PARSEONLY ON -b`) closes this entire defect class without requiring full schema execution or seed data.
+- **PostgreSQL parity gate assigned to release-time:** Feature PRs ship T-SQL only; PG counterparts are converter output the build engineer generates at release (`mj sql-convert`). The parity gate on `bizapps-orders` was moved off `pull_request` (retaining `workflow_dispatch` / release run) because 23 pre-existing migrations lacked PG counterparts on `next`, creating an unpassable PR gate.
+- **Gate scope is a claim, and the right claim differs per gate.** Three gates in this workstream were
+  examined for the same `V`-vs-`B` question and got three different answers. The **prune gate** must see
+  baselines: a reconciler replays from an intermediate state wherever it sits — widened to `[VB]`. The
+  **sequence gate** must not: a baseline is a wholesale snapshot of a finished schema and the first thing
+  to run, so its `EntityField` literals are self-consistent and have nothing to collide with (verified —
+  166 literals across 12 entities in more-cheese and 121 across 10 in bizapps-common, with **zero**
+  duplicate `(EntityID, Sequence)` pairs; bizapps-orders' baseline is not a third data point — it carries
+  **no `EntityField` rows at all**, they live in `V202607061432__…__Tables_and_Objects.sql`, which a
+  `V`-only gate already covers, so "no duplicates there" is vacuous and proves nothing either way).
+  It stays `V`-only, which is what its own SCOPE comment said all along. The **filename validator** must see baselines — a baseline's *name* is not "literal by
+  construction" — and must additionally fail on `COUNT == 0`, because it was reporting *"All 0 migration
+  filenames are valid!"* over a directory with a migration in it. The lesson is not "widen scope": it is
+  **write the scope's reason into the fixture that pins it.** A fixture reading `'B-prefix is in scope'`
+  states a behaviour and pins nothing; one reading `'baselines are skipped — literal by construction'`
+  makes the next person argue with the reason instead of silently inverting it.
+- **Base SHA resolution in CI (`steps.base.outputs.sha`):** Replaced static `github.event.pull_request.base.sha` across all app repos with a fresh fetch of the base tip to avoid diffing against months-old base snapshots on long-lived branches.
+- **Do not** ship a migration that `RAISERROR`s on a view↔EntityField mismatch. It would brick a
+  host upgrade on a benign difference. Put that assertion in the clean-room replay, where a
+  failure costs a CI run instead of a customer's install.
+
+---
+
+## 7. What must be verified before Phase 3 is written
+
+Phase 3 is the only phase whose correctness cannot be established by reading, and it is the one
+that fails in the familiar way — green on every developer machine, red on every clean install.
+
+1. **Which prune ate each field.** From a captured Flyway replay log, per entity. A heal placed
+   *before* the prune that killed it passes locally and regresses on the next clean install —
+   the same shape as the bug being fixed.
+2. **Whether Phases 1 + 2 alone already fix it.** Run the clean install with Phases 1 and 2
+   applied and nothing else. Whatever is still missing afterward is the real Phase 3 scope. It may
+   be materially smaller than the five entities listed in §1, or empty.
+3. **Confirm the failure mode, not just the absence.** For each field reported missing, record
+   whether no row exists, or a row exists under a different name, and what its `Sequence` is.
+4. **Search the replay log for `UQ_EntityField_EntityID_Sequence` violations** as well as
+   foreign-key errors — MJ's own guidance notes these surface as an unrelated FK error.
+
+---
+
+## 8. Adjacent defects found while diagnosing (not blockers)
+
+Recorded so they are not rediscovered; each deserves its own change.
+
+- **`${mjSchema}` substituted into `EntityField` *names*.** 40 occurrences in bizapps-orders
+  migrations read `Name = '${mjSchema}_Latitude'` / `'${mjSchema}_Longitude'` — a blanket
+  `__mj` → `${mjSchema}` replacement that consumed the field name. It works only because
+  `mjSchema` resolves to `__mj`; on a host with a non-default core schema the `EntityField` name
+  will not match the view column, which CodeGen hardcodes as `__mj_Latitude`.
+- **A live `Sequence` collision.** `bizapps-orders/V202609061900`, entity
+  `66D82C24-9C9F-4CD6-B019-53C20274AB00`: `Sequence` 43 and 44 are each claimed by two different
+  fields in the same file.
+- **`MAX(Sequence) + N` where N > 1 is self-inflating.** `MAX` is re-evaluated per statement, so
+  an intended contiguous block `+19, +20, +21, +22` yields a runaway rather than four adjacent
+  values. Harmless today, but it makes `Sequence` values unstable and order-dependent.
+
+---
+
+## 9. Reference — evidence index
+
+| Claim | Where to re-check it |
+|---|---|
+| Addresses is bizapps-common | `bizapps-common/migrations/B202602271452…sql:961` |
+| `EntityField` INSERTs exist for 4/5 entities | grep `Name = '<field>'` across each repo's `migrations/*.sql` |
+| Prune deletes them; prior diagnosis | `bizapps-common/migrations/V202608140700…sql`, header |
+| Prune tagged recurring | `MJ/packages/CodeGenLib/src/Database/manage-metadata.ts:5438` |
+| Flag honoured | `MJ/packages/CodeGenLib/src/Misc/sql_logging.ts:275` |
+| Default contradiction | `MJ/packages/CodeGenLib/src/Config/config.ts:363` vs `:1048` |
+| Schema scoping already wired | `MJ/packages/CodeGenLib/src/Database/heal-schema-params.ts:60-64` |
+| Prune is the discovery mechanism | `MJ/packages/CodeGenLib/src/Database/manage-metadata.ts:5438-5442` |
+| 48 unscoped core prunes | grep `spDeleteUnneededEntityFields @ExcludedSchemaNames='sys,staging'` in `MJ/migrations/v*/` |
+| `@ResultTable` is provider-side | `SQLServerDataProvider` — `INSERT INTO @ResultTable EXEC spCreate<Entity>` |

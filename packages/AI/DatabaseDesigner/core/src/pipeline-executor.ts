@@ -10,6 +10,7 @@
  */
 
 import { Metadata, RunView, UserInfo, LogError } from '@memberjunction/core';
+import { EscapeSQLString } from '@memberjunction/global';
 import { MJEntitySettingEntity } from '@memberjunction/core-entities';
 import {
     SchemaEngine,
@@ -28,7 +29,6 @@ import {
     type PipelineStepSummary,
     type BatchPipelineExecutionResult,
     UDT_SETTINGS,
-    escapeSqlLiteral,
 } from './interfaces.js';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -158,7 +158,7 @@ export class DatabaseDesignerPipelineExecutor {
         // Step 1: Resolve the entity ID from Entities metadata.
         const entityResult = await rv.RunView<{ ID: string }>({
             EntityName: 'MJ: Entities',
-            ExtraFilter: `BaseTable = '${escapeSqlLiteral(tableName)}' AND SchemaName = '${escapeSqlLiteral(schemaName)}'`,
+            ExtraFilter: `BaseTable = '${EscapeSQLString(tableName)}' AND SchemaName = '${EscapeSQLString(schemaName)}'`,
             Fields: ['ID'],
             ResultType: 'simple',
         }, contextUser);
@@ -180,7 +180,7 @@ export class DatabaseDesignerPipelineExecutor {
             Scale: number | null;
         }>({
             EntityName: 'MJ: Entity Fields',
-            ExtraFilter: `EntityID = '${escapeSqlLiteral(entityID)}'`,
+            ExtraFilter: `EntityID = '${EscapeSQLString(entityID)}'`,
             Fields: ['Name', 'Type', 'AllowsNull', 'MaxLength', 'Precision', 'Scale'],
             OrderBy: 'Sequence ASC',
             ResultType: 'simple',
@@ -220,7 +220,7 @@ export class DatabaseDesignerPipelineExecutor {
      * @param tables - Table definitions to sort. Not mutated.
      * @returns A new array with the same tables in dependency order.
      */
-    public static sortByFKDependency(tables: TableDefinition[]): TableDefinition[] {
+    public static SortByFKDependency(tables: TableDefinition[]): TableDefinition[] {
         if (tables.length <= 1) return [...tables];
 
         // Build an index from "schema.table" → original array index for fast lookup
@@ -275,6 +275,11 @@ export class DatabaseDesignerPipelineExecutor {
         }
 
         return sorted;
+    }
+
+    /** @deprecated Use {@link SortByFKDependency}. */
+    public static sortByFKDependency(tables: TableDefinition[]): TableDefinition[] {
+        return this.SortByFKDependency(tables);
     }
 
     /**
@@ -530,8 +535,8 @@ export class DatabaseDesignerPipelineExecutor {
         const dbResult = await rv.RunView<{ ID: string; Name: string }>({
             EntityName: 'MJ: Entities',
             ExtraFilter: (
-                `BaseTable = '${escapeSqlLiteral(tableDefinition.TableName)}' ` +
-                `AND SchemaName = '${escapeSqlLiteral(tableDefinition.SchemaName)}'`
+                `BaseTable = '${EscapeSQLString(tableDefinition.TableName)}' ` +
+                `AND SchemaName = '${EscapeSQLString(tableDefinition.SchemaName)}'`
             ),
             Fields: ['ID', 'Name'],
             ResultType: 'simple',
@@ -703,8 +708,8 @@ export class DatabaseDesignerPipelineExecutor {
             const dbResult = await rv.RunView<{ ID: string; Name: string }>({
                 EntityName: 'MJ: Entities',
                 ExtraFilter: (
-                    `BaseTable = '${escapeSqlLiteral(tableDefinition.TableName)}' ` +
-                    `AND SchemaName = '${escapeSqlLiteral(tableDefinition.SchemaName)}'`
+                    `BaseTable = '${EscapeSQLString(tableDefinition.TableName)}' ` +
+                    `AND SchemaName = '${EscapeSQLString(tableDefinition.SchemaName)}'`
                 ),
                 Fields: ['ID', 'Name'],
                 ResultType: 'simple',

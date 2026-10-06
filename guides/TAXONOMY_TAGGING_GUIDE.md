@@ -52,6 +52,7 @@ erDiagram
         decimal MinWeight
         bit RequiresReview
         nvarchar EmbeddingVector "JSON-encoded float array"
+        varbinary EmbeddingVectorBinary "same vector, float32 bytes"
         uuid EmbeddingModelID FK
     }
 
@@ -228,7 +229,7 @@ Lower the band and you trade precision for recall (more auto-applied, fewer revi
 
 1. Calls `TagEngineBase.CreateTag()` to insert and save the `MJ:Tag` row.
 2. Snapshots the parent's `TagScope` rows to the child (or marks the child `IsGlobal=1` if the parent is global).
-3. Embeds the new tag's name + description and writes the JSON vector + `EmbeddingModelID` back to the row via `Save()`.
+3. Embeds the new tag's name + description and writes the JSON vector, its binary companion and `EmbeddingModelID` back to the row via `Save()`.
 4. Inserts the embedding into the in-memory `SimpleVectorService` so subsequent calls in the same run can match it.
 
 ---
@@ -481,9 +482,10 @@ All knobs live on `ContentSource.Configuration`, a JSON blob that CodeGen expose
 
 ## Embeddings
 
-Tag embeddings power the Tier 3 semantic-match path and the merge-candidate emitter. Each tag has two new columns:
+Tag embeddings power the Tier 3 semantic-match path and the merge-candidate emitter. Each tag has three embedding columns:
 
 - **`EmbeddingVector`** — `NVARCHAR(MAX)` JSON-encoded float array (the same shape used by `MJ:AI Agent Notes.EmbeddingVector`).
+- **`EmbeddingVectorBinary`** — `VARBINARY(MAX)` holding the same vector as little-endian float32 bytes. Readers (`TagEngine`, `TagHealthJob`) load it with `ReadStoredVector` and fall back to the JSON column. See the [Binary Fields Guide](BINARY_FIELDS_GUIDE.md).
 - **`EmbeddingModelID`** — FK to `AIModel` so we can detect "the global embedding model changed → these vectors are stale."
 
 ### The Save() hook refresh
@@ -491,7 +493,7 @@ Tag embeddings power the Tier 3 semantic-match path and the merge-candidate emit
 [`MJTagEntityServer`](../packages/MJCoreEntitiesServer/src/custom/MJTagEntityServer.server.ts) overrides `Save()` to:
 
 1. Validate the `IsGlobal` ⊕ `TagScope` invariant.
-2. Detect when `Name` or `Description` is dirty (or it's the first save) and re-embed via `GenerateEmbeddingByFieldName('Name', 'EmbeddingVector', 'EmbeddingModelID')`. If `Name` is empty, it nulls out the cache.
+2. Detect when `Name` or `Description` is dirty (or it's the first save) and re-embed the combined `Name: Description` text via `EmbedTextLocal`, writing `EmbeddingVector`, `EmbeddingVectorBinary` and `EmbeddingModelID`. If `Name` is empty, it nulls out all three.
 3. Sync the in-memory `SimpleVectorService` on `TagEngine.Instance` so the new vector is searchable immediately.
 
 This means the autotagger does not pay a cold-start embedding cost — `refreshTagEmbeddings()` ([TagEngine.ts:186](../packages/AI/Knowledge/TagEngine/src/TagEngine.ts#L186)) hydrates the in-memory vector service from the DB cache, falling back to the LLM only for tags that are missing a vector or whose `EmbeddingModelID` doesn't match the currently configured model.
@@ -581,7 +583,7 @@ Goal: bulk-import a synonym mapping from a CSV or spreadsheet.
    ```
 
 2. Add a `.mj-sync.json` for the directory pointing at `MJ: Tag Synonyms`.
-3. `npx mj sync push --dir=metadata --include="tag-synonyms"`.
+3. `pnpm mj sync push --dir=metadata --include="tag-synonyms"`.
 4. Restart MJAPI so `TagEngineBase.Config()` reloads the synonym map.
 
 ---

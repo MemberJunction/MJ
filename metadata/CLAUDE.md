@@ -16,13 +16,22 @@ When creating or editing metadata JSON files, **NEVER** include the following fi
 The `sync` blocks will be automatically added/updated when `mj sync push` runs.
 
 ### 1b. Release-Time Metadata Sync — NO Per-PR Metadata_Sync Migrations
+**Installs receive metadata only through migrations, and individual PRs never ship metadata migration SQL** (so reviewers should not flag its absence). The full model, the Open App recipe, and how to diagnose rows missing after a fresh install: [Release Metadata Migrations](../guides/RELEASE_METADATA_MIGRATIONS_GUIDE.md).
+
 **Do NOT hand-author `*__Metadata_Sync.sql` migrations for metadata changes** (new AI models, prompts, agents, etc.). The release workflow is:
 
 1. PRs contribute ONLY the declarative metadata JSON changes (fields + `@lookup` refs + `uuidgen` primaryKey, no `sync`).
-2. At build time, the build engineer takes all merged PRs on `next` and runs `mj sync push` against a clean DB at the last released version.
+2. At build time, the build engineer starts from a clean DB at the last released version, runs `mj migrate` to apply every migration merged to `next` since that release, then runs `mj sync push`. The build engineer does **not** run CodeGen: each developer's PR already carries its migration plus its CodeGen output (SQL and generated code), and CodeGen is idempotent, so rerunning it is a wasted no-op.
 3. That push generates ONE consolidated metadata-sync migration for the release (SQL Server + PostgreSQL) and writes the `sync` blocks back into the JSON files.
+4. **Post-Sync Verification**: After applying a new `Metadata_Sync` migration to a from-nothing database, verify that `SELECT COUNT(*) FROM [__mj].[EntityField] WHERE ID IN (<ids in file>)` matches the count of `-- Save MJ: Entity Fields` blocks. `spUpdateEntityField` is a full-row procedure that silently no-ops when an ID is absent rather than throwing a SQL error.
 
 Hand-authoring per-PR sync migrations duplicates this step, creates many small migrations instead of one per build, and risks drift from the real push output.
+
+### 1c. JSON-Type Fields: Author as Native JSON Objects (Never Escaped Strings)
+When setting JSON-type values (such as `Configuration`, `DisplayComponentConfiguration`, `RelatedRecordCollection`, etc.) in metadata JSON files:
+- **Format as clean, nested JSON objects** directly in the metadata file (e.g. `"Configuration": { "Hierarchy": { "IsHierarchy": true } }`).
+- **Do NOT escape as strings** (`"Configuration": "{\"Hierarchy\":...}"`).
+- `mj sync` automatically serializes nested JSON objects to string values when pushing to the database, keeping the metadata source files readable and easy to diff.
 
 ### 2. File Naming Conventions
 - **Metadata files**: Must match the filePattern in `.mj-sync.json` (typically `.*.json` for dot-prefixed files)
@@ -58,6 +67,16 @@ All agents in MemberJunction currently use the "Loop" agent type, which provides
 - **ActionID**: Reference to action using `@lookup:`
 - **Status**: Typically "Active"
 
+#### AI Agent Rubrics
+Nest under the agent as `relatedEntities["MJ: AI Agent Rubrics"]`.
+- **AgentID**: `@parent:ID`
+- **RubricID**: `@lookup:MJ: Rubrics.Name=...` for a rubric authored under `metadata/rubrics/`
+- **Purpose**: `Evaluation`, `SelfCheck`, or `ProductionSampling`
+- **IsDefault**: true for the rubric used when a caller does not name one
+- **Status**: `Active` or `Disabled`
+- **PassThreshold**, **SampleRate**, **MaxSelfCheckAttempts**, **EvaluatorConfig**: optional overrides
+- **primaryKey**: a UUID from `uuidgen`. Do not add a `sync` block.
+
 #### AI Prompts
 - **Name**: Unique prompt name
 - **Description**: Purpose of the prompt
@@ -67,6 +86,13 @@ All agents in MemberJunction currently use the "Loop" agent type, which provides
 - **ResponseFormat**: Typically "JSON" for agent prompts
 - **PromptRole**: "System" for agent system prompts
 - **PromptPosition**: "First" for primary prompts
+
+#### Deprecating an AI Model Vendor
+`Status` values differ per entity — always check the target entity's allowed values, they are not interchangeable.
+- Vendor row (`MJ: AI Model Vendors`): `Status: "Inactive"`.
+- Its paired cost row (`MJ: AI Model Costs`): `Status: "Expired"` plus an `EndedAt` ISO timestamp.
+- `"Inactive"` is **not** a valid cost `Status` — the CHECK constraint allows only `Active`, `Pending`, `Expired`, `Invalid`, and a bad value fails `mj sync push` in CI.
+- Run `mj sync validate --dir=metadata` before opening a PR.
 
 ### 5. Template Variable Conventions
 Agent prompt templates receive these standard variables:
@@ -175,16 +201,16 @@ metadata/
 Run from the **repository root** (not from inside `metadata/`):
 ```bash
 # Push all metadata
-npx mj sync push --dir=metadata
+pnpm mj sync push --dir=metadata
 
 # Push only specific entity directories (use --include)
-npx mj sync push --dir=metadata --include="prompts"
+pnpm mj sync push --dir=metadata --include="prompts"
 
 # Exclude problematic directories (use --exclude)
-npx mj sync push --dir=metadata --exclude="api-application-scopes"
+pnpm mj sync push --dir=metadata --exclude="api-application-scopes"
 
 # Multiple patterns (comma-separated)
-npx mj sync push --dir=metadata --include="prompts,agents"
+pnpm mj sync push --dir=metadata --include="prompts,agents"
 ```
 
 **Important:**
@@ -298,7 +324,7 @@ When a migration creates a new lookup or reference table (e.g., `AIAgentRequestT
    }
    ```
 3. Create the seed data file (e.g., `.agent-request-types.json`) as a JSON array of records. Each record has a `"fields"` object with the column values. **Omit `primaryKey` and `sync`** — see rule 1.
-4. Push with: `npx mj sync push --dir=metadata --include="agent-request-types"`
+4. Push with: `pnpm mj sync push --dir=metadata --include="agent-request-types"`
 
 **Why metadata files over SQL INSERTs:**
 - Version-controlled, declarative, and human-readable
@@ -332,6 +358,14 @@ When creating new applications with custom dashboards:
 5. Register the component in the module's declarations and exports
 
 > **Note**: every `BaseResourceComponent` subclass must call `this.NotifyLoadComplete()` when its initial load finishes, or direct URL navigation hangs on the loading screen. See [`packages/Angular/CLAUDE.md`](../packages/Angular/CLAUDE.md).
+
+### 17. Clone Configurations (`entities/.clone-configurations.json`)
+
+`metadata/entities/.clone-configurations.json` seeds each entity's `Configuration.Clone` bag, which the record-cloning engine reads.
+
+- **It is the only file that may set `Configuration` on the entities it covers.** `mj sync push` writes the whole `Configuration` field, so a second file setting it on the same entity would overwrite this one, depending on push order. `packages/RecordCloning/base/src/__tests__/ShippedCloneConfigurations.test.ts` fails if any entity's `Configuration` is set in more than one `metadata/entities` file. To add another bag (for example `Hierarchy`) to one of these entities, add it here.
+- **Relationship keys:** a bare child entity name matches every FK from that child. When the child has more than one FK to the root, use the qualified `"<Child>.<JoinField>"` form so each edge gets its own policy. For example, `MJ: AI Agent Relationships` has both `AgentID` and `SubAgentID`, so the `MJ: AI Agents` bag uses `"MJ: AI Agent Relationships.AgentID"`. A bare key applies only to edges from the root's own entity; below it (rows of a copied prompt or step), only relationship-ID and `"<Child>.<JoinField>"` keys match, so a child that hangs from a deeper entity, such as step paths from steps, is keyed by its join column.
+- The same test also checks that every enabled root skips relationships it doesn't list, that `NotCloneable` entities are never listed as `Deep`, and that agent credentials, company integrations, clone logs and agent runs stay `NotCloneable`.
 
 ## Remember
 The metadata system is designed to be declarative and version-controlled. Let the MetadataSync tool handle all the system-level bookkeeping while you focus on defining the business logic and behavior of your agents.

@@ -21,6 +21,7 @@ export class MJTagFormComponent extends BaseFormComponent {
             { sectionKey: 'tagLifecycle', sectionName: 'Tag Lifecycle', isExpanded: true },
             { sectionKey: 'tagConfiguration', sectionName: 'Tag Configuration', isExpanded: true },
             { sectionKey: 'aIIntelligence', sectionName: 'AI Intelligence', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJTaggedItems', sectionName: 'Tagged Items', isExpanded: false },
             { sectionKey: 'mJTagsParentID', sectionName: 'Tags', isExpanded: false },

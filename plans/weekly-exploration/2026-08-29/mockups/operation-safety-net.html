@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Operation Safety Net</title>
+<style>
+  :root {
+    --mj-bg-page: #f8f9fa;
+    --mj-bg-surface: white;
+    --mj-bg-surface-card: #f5f7fa;
+    --mj-bg-surface-sunken: #f0f2f5;
+    --mj-text-primary: #334155;
+    --mj-text-secondary: #64748b;
+    --mj-text-muted: #94a3b8;
+    --mj-brand-primary: #264FAF;
+    --mj-border-default: #e2e8f0;
+    --mj-border-subtle: #f1f5f9;
+    --mj-status-success: #16a34a;
+    --mj-status-success-bg: #f0fdf4;
+    --mj-status-warning: #ea580c;
+    --mj-status-warning-bg: #fff7ed;
+    --mj-status-error: #dc2626;
+    --mj-status-error-bg: #fef2f2;
+    --mj-status-info: #0284c7;
+    --mj-status-info-bg: #f0f9ff;
+    --sidebar-width: 230px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--mj-bg-page); color: var(--mj-text-primary); line-height: 1.5; display: flex; min-height: 100vh; font-size: 14px;
+  }
+  .sidebar { width: var(--sidebar-width); min-width: var(--sidebar-width); background: var(--mj-bg-surface); border-right: 1px solid var(--mj-border-default); position: fixed; top:0; left:0; bottom:0; overflow-y:auto; }
+  .brand { padding: 18px 16px; border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--mj-brand-primary); font-size: 15px; }
+  .nav-section { padding: 14px 16px 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--mj-text-muted); }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 16px; color: var(--mj-text-secondary); font-weight: 500; border-left: 3px solid transparent; }
+  .nav-item.active { color: var(--mj-brand-primary); border-left-color: var(--mj-brand-primary); background: color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-bg-surface)); font-weight: 600; }
+  .nav-item i { width: 16px; text-align: center; font-size: 13px; }
+
+  .main { margin-left: var(--sidebar-width); flex: 1; display: flex; flex-direction: column; position: relative; }
+  .topbar { background: var(--mj-bg-surface); border-bottom: 1px solid var(--mj-border-default); padding: 16px 28px; display: flex; align-items: center; justify-content: space-between; }
+  .topbar h1 { font-size: 19px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+  .topbar h1 i { color: var(--mj-brand-primary); }
+  .topbar .sub { color: var(--mj-text-secondary); font-size: 12.5px; margin-top: 3px; }
+  .btn { border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); color: var(--mj-text-secondary); padding: 7px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; cursor: default; }
+  .btn-primary { background: var(--mj-brand-primary); border-color: var(--mj-brand-primary); color: white; }
+  .btn-danger { background: white; border-color: var(--mj-status-error); color: var(--mj-status-error); }
+  .btn-sm { padding: 4px 10px; font-size: 12px; }
+
+  .content { padding: 22px 28px 90px; }
+
+  .card { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; overflow: hidden; margin-bottom: 20px; }
+  .card-header { padding: 14px 18px; border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; justify-content: space-between; }
+  .card-header h2 { font-size: 14.5px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .card-header h2 i { color: var(--mj-brand-primary); }
+
+  .op-row { display: flex; align-items: center; gap: 14px; padding: 13px 18px; border-bottom: 1px solid var(--mj-border-subtle); }
+  .op-row:last-child { border-bottom: none; }
+  .op-icon { width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .op-icon.human { background: var(--mj-status-info-bg); color: var(--mj-status-info); }
+  .op-icon.agent { background: color-mix(in srgb, var(--mj-brand-primary) 12%, white); color: var(--mj-brand-primary); }
+  .op-main { flex: 1; }
+  .op-title { font-weight: 700; font-size: 13px; }
+  .op-meta { font-size: 11.5px; color: var(--mj-text-muted); margin-top: 2px; }
+  .op-status { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; margin-right: 10px; }
+  .op-status.available { background: var(--mj-status-success-bg); color: var(--mj-status-success); }
+  .op-status.expired { background: var(--mj-bg-surface-sunken); color: var(--mj-text-muted); }
+  .op-status.partial { background: var(--mj-status-warning-bg); color: var(--mj-status-warning); }
+  .op-status.undone { background: var(--mj-bg-surface-sunken); color: var(--mj-text-muted); }
+
+  .preview-panel { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; }
+  .preview-panel .card-header { background: var(--mj-bg-surface-card); }
+  .pp-body { padding: 18px; }
+  .pp-summary { display: flex; gap: 20px; margin-bottom: 16px; }
+  .pp-stat { flex: 1; background: var(--mj-bg-surface-card); border-radius: 8px; padding: 10px 14px; text-align: center; }
+  .pp-stat .n { font-size: 20px; font-weight: 800; }
+  .pp-stat .l { font-size: 10.5px; text-transform: uppercase; color: var(--mj-text-muted); font-weight: 700; margin-top: 2px; }
+  .pp-stat.ok .n { color: var(--mj-status-success); }
+  .pp-stat.no .n { color: var(--mj-text-muted); }
+
+  .undo-list-title { font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--mj-text-muted); letter-spacing: .04em; margin: 14px 0 8px; }
+  .undo-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--mj-border-subtle); font-size: 12.5px; }
+  .undo-item:last-child { border-bottom: none; }
+  .undo-item i { width: 16px; text-align: center; }
+  .undo-item.ok i { color: var(--mj-status-success); }
+  .undo-item.no i { color: var(--mj-text-muted); }
+  .undo-item .reason { color: var(--mj-text-muted); font-size: 11.5px; margin-left: auto; }
+
+  .toast { position: absolute; bottom: 22px; left: 50%; transform: translateX(-50%); background: #1e293b; color: white; padding: 12px 18px; border-radius: 10px; display: flex; align-items: center; gap: 14px; box-shadow: 0 8px 24px rgba(0,0,0,.18); font-size: 13px; }
+  .toast i.done { color: var(--mj-status-success); }
+  .toast .undo-link { color: #93c5fd; font-weight: 700; cursor: default; }
+  .toast .close { color: #94a3b8; cursor: default; margin-left: 4px; }
+
+  .footer-note { padding: 4px 28px 24px; color: var(--mj-text-muted); font-size: 11.5px; }
+</style>
+</head>
+<body>
+  <div class="sidebar">
+    <div class="brand"><i class="fa-solid fa-diagram-project"></i> MemberJunction</div>
+    <div class="nav-section">Admin</div>
+    <div class="nav-item"><i class="fa-solid fa-shield-halved"></i> Permissions</div>
+    <div class="nav-item"><i class="fa-solid fa-database"></i> Entity Admin</div>
+    <div class="nav-section">Dev Tools</div>
+    <div class="nav-item"><i class="fa-solid fa-universal-access"></i> Accessibility Audit</div>
+    <div class="nav-item"><i class="fa-solid fa-heart-pulse"></i> Data Health</div>
+    <div class="nav-item"><i class="fa-solid fa-language"></i> Localization Center</div>
+    <div class="nav-item active"><i class="fa-solid fa-clock-rotate-left"></i> Operations &amp; Safety Net</div>
+    <div class="nav-section">Data</div>
+    <div class="nav-item"><i class="fa-solid fa-users"></i> Contacts</div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <h1><i class="fa-solid fa-clock-rotate-left"></i> Operations &amp; Safety Net</h1>
+        <div class="sub">Undo bulk &amp; agent-driven changes &middot; New: Operation Safety Net</div>
+      </div>
+      <div style="display:flex; gap:10px;">
+        <button class="btn"><i class="fa-solid fa-filter"></i> All Types</button>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="card">
+        <div class="card-header"><h2><i class="fa-solid fa-list-ul"></i> Recent Operations</h2><span style="font-size:12px; color:var(--mj-text-muted);">Newest first</span></div>
+        <div>
+          <div class="op-row">
+            <div class="op-icon agent"><i class="fa-solid fa-robot"></i></div>
+            <div class="op-main">
+              <div class="op-title">Membership Renewal Agent &mdash; bulk status update</div>
+              <div class="op-meta">AgentRun &middot; 214 Contact records &middot; 2 minutes ago &middot; initiated by Betty (agent)</div>
+            </div>
+            <span class="op-status available">Available</span>
+            <button class="btn btn-sm btn-danger"><i class="fa-solid fa-rotate-left"></i> Undo</button>
+          </div>
+          <div class="op-row">
+            <div class="op-icon human"><i class="fa-solid fa-user"></i></div>
+            <div class="op-main">
+              <div class="op-title">Bulk Update: &ldquo;Lapsed 2025 Segment&rdquo; view &rarr; Status = Inactive</div>
+              <div class="op-meta">BulkUpdate &middot; 487 Contact records &middot; 41 minutes ago &middot; Jordan T.</div>
+            </div>
+            <span class="op-status available">Available</span>
+            <button class="btn btn-sm btn-danger"><i class="fa-solid fa-rotate-left"></i> Undo</button>
+          </div>
+          <div class="op-row">
+            <div class="op-icon human"><i class="fa-solid fa-user"></i></div>
+            <div class="op-main">
+              <div class="op-title">Dues Adjustment Import &mdash; Q3 rate change</div>
+              <div class="op-meta">Import &middot; 1,204 Membership records &middot; yesterday, 4:12 PM &middot; Priya N.</div>
+            </div>
+            <span class="op-status partial">Partially Undone</span>
+            <button class="btn btn-sm" disabled style="opacity:.6;"><i class="fa-solid fa-circle-info"></i> View Detail</button>
+          </div>
+          <div class="op-row">
+            <div class="op-icon agent"><i class="fa-solid fa-robot"></i></div>
+            <div class="op-main">
+              <div class="op-title">Data cleanup pass &mdash; TaskGraph &ldquo;Normalize Phone Formats&rdquo;</div>
+              <div class="op-meta">TaskGraphRun &middot; 3,012 Contact records &middot; 3 days ago</div>
+            </div>
+            <span class="op-status expired">Expired</span>
+            <button class="btn btn-sm" disabled style="opacity:.5;"><i class="fa-solid fa-rotate-left"></i> Undo</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="preview-panel">
+        <div class="card-header">
+          <h2><i class="fa-solid fa-eye"></i> Undo Preview &mdash; Membership Renewal Agent</h2>
+          <span style="font-size:12px; color:var(--mj-text-muted);">Review before confirming</span>
+        </div>
+        <div class="pp-body">
+          <div class="pp-summary">
+            <div class="pp-stat ok"><div class="n">211</div><div class="l">Will Restore</div></div>
+            <div class="pp-stat no"><div class="n">2</div><div class="l">Not Undoable</div></div>
+            <div class="pp-stat no"><div class="n">1</div><div class="l">Change Tracking Off</div></div>
+          </div>
+
+          <div class="undo-list-title">Sample of what will be restored</div>
+          <div class="undo-item ok"><i class="fa-solid fa-check"></i> Contact &ldquo;Elena Ruiz&rdquo; &mdash; Status: Renewed &rarr; Active (pre-agent value)</div>
+          <div class="undo-item ok"><i class="fa-solid fa-check"></i> Contact &ldquo;Tomas Diaz&rdquo; &mdash; RenewalDate: 2027-03-01 &rarr; (cleared)</div>
+          <div class="undo-item ok"><i class="fa-solid fa-check"></i> &hellip;209 more Contact records</div>
+
+          <div class="undo-list-title">Not undoable</div>
+          <div class="undo-item no"><i class="fa-solid fa-triangle-exclamation" style="color:var(--mj-status-warning);"></i> Renewal confirmation email already sent to 214 contacts <span class="reason">external side effect</span></div>
+          <div class="undo-item no"><i class="fa-solid fa-triangle-exclamation" style="color:var(--mj-status-warning);"></i> Contact &ldquo;New Signup #4471&rdquo; was created by this operation <span class="reason">will be deleted, not reverted</span></div>
+          <div class="undo-item no"><i class="fa-solid fa-ban" style="color:var(--mj-text-muted);"></i> 1 Donation record touched <span class="reason">TrackRecordChanges disabled on this entity</span></div>
+
+          <div style="display:flex; gap:10px; margin-top:16px;">
+            <button class="btn btn-danger"><i class="fa-solid fa-rotate-left"></i> Confirm Undo (211 records)</button>
+            <button class="btn"><i class="fa-solid fa-xmark"></i> Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="toast">
+      <i class="fa-solid fa-circle-check done"></i>
+      <span>Bulk update applied to 487 records.</span>
+      <span class="undo-link">Undo</span>
+      <span class="close"><i class="fa-solid fa-xmark"></i></span>
+    </div>
+
+    <div class="footer-note">Mockup for <code>plans/weekly-exploration/2026-08-29/idea-3-operation-safety-net.md</code> &middot; illustrative data, not connected to a live system.</div>
+  </div>
+<script>
+const ICON_MAP = {
+  'fa-diagram-project':'◈','fa-shield-halved':'🛡','fa-database':'🗄','fa-universal-access':'♿',
+  'fa-heart-pulse':'♥','fa-vial':'⚗','fa-users':'👥','fa-building':'🏢','fa-sliders':'⚙',
+  'fa-play':'▶','fa-circle-info':'ℹ','fa-list-check':'☑','fa-circle-exclamation':'⛔',
+  'fa-triangle-exclamation':'⚠','fa-chart-bar':'📊','fa-id-card':'🪪','fa-language':'🌐',
+  'fa-globe':'🌐','fa-plus':'+','fa-wand-magic-sparkles':'✨','fa-table-cells':'▦','fa-inbox':'📥',
+  'fa-clock-rotate-left':'↺','fa-check':'✓','fa-pen':'✎','fa-eye':'👁','fa-code':'</>',
+  'fa-filter':'▼','fa-list-ul':'≡','fa-robot':'🤖','fa-user':'👤','fa-rotate-left':'↺',
+  'fa-ban':'⊘','fa-xmark':'✕','fa-circle-check':'✓'
+};
+document.querySelectorAll('i[class*="fa-"]').forEach(el => {
+  const cls = [...el.classList].find(c => ICON_MAP[c]);
+  el.textContent = cls ? ICON_MAP[cls] : '•';
+  el.style.fontStyle = 'normal';
+});
+
+</script>
+</body>
+</html>

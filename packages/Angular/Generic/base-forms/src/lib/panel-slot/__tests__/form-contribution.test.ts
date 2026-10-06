@@ -1,0 +1,720 @@
+import { describe, it, expect } from 'vitest';
+import type { FormPanelRegistrationMetadata, FormPanelSlot } from '../base-form-panel';
+import {
+    CollapseFormPanelRegistrations,
+    ContributionClaimedFieldNames,
+    ContributionSectionKey,
+    ContributionSpecToRegistration,
+    ContributionHiddenSectionKeys,
+    FormContributionEntityMatches,
+    FormSectionCamelCase,
+    IsWildcardPlaceClaim,
+    RelatedContributionKey,
+    RelatedEntitySectionKey,
+    ResolveContributionKey,
+    ResolveFormContributionWinners,
+    ResolveFormContributions,
+    StripJoinFieldBrackets,
+    type FormContributionRegistration,
+    type FormContributionRelationship,
+    ReplacedSectionKeys,
+    ContributionDrawsInSection,
+    ContributionSectionPosition,
+    PlacedInSectionKey,
+} from '../form-contribution';
+
+const PEOPLE = 'MJ_BizApps_Common: People';
+const ORDERS = 'MJ_BizApps_Orders: Order Headers';
+const TICKETS = 'MJ_BizApps_Orders: Event Order Lines';
+const ADDR = 'MJ_BizApps_Common: Addresses';
+
+function rel(
+    related: string,
+    id: string,
+    join: string,
+    extras?: Partial<FormContributionRelationship>,
+): FormContributionRelationship {
+    return {
+        RelatedEntity: related,
+        RelatedEntityID: id,
+        RelatedEntityJoinField: join,
+        DisplayInForm: true,
+        Sequence: 10,
+        ...extras,
+    };
+}
+
+function reg(
+    meta: Partial<FormPanelRegistrationMetadata> & Pick<FormPanelRegistrationMetadata, 'entity' | 'slot'>,
+    priority = 0,
+): FormContributionRegistration {
+    return { Priority: priority, Metadata: { sortKey: 0, ...meta } };
+}
+
+const billTo = rel(ORDERS, 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'BillToPersonID', { Sequence: 1 });
+const shipTo = rel(ORDERS, 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'ShipToPersonID', { Sequence: 2 });
+const tickets = rel(TICKETS, 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'PersonID', { Sequence: 3, DisplayName: 'Event tickets' });
+const addresses = rel(ADDR, 'cccccccc-cccc-cccc-cccc-cccccccccccc', 'RecordID', { Sequence: 4 });
+
+describe('FormSectionCamelCase', () => {
+    it('matches CodeGen: spaces become camel humps, punctuation becomes spaces', () => {
+        // Underscores stay (they are not stripped); only the first char is lowercased —
+        // same as CodeGenLib angular-codegen.ts camelCase.
+        expect(FormSectionCamelCase('MJ_BizApps_Orders: Order Headers')).toBe('mJBizAppsOrdersOrderHeaders');
+        expect(FormSectionCamelCase('Order Headers BillToPersonID')).toBe('orderHeadersBillToPersonID');
+    });
+
+    it('prefixes a leading digit and falls back when empty', () => {
+        expect(FormSectionCamelCase('123 go')).toBe('_123Go');
+        expect(FormSectionCamelCase('@@@')).toBe('section');
+    });
+});
+
+describe('RelatedEntitySectionKey', () => {
+    it('is camelCase(related entity) when the relationship is unique', () => {
+        expect(RelatedEntitySectionKey(tickets, [tickets, addresses])).toBe(FormSectionCamelCase(TICKETS));
+    });
+
+    it('appends the join field when two FKs point at the same entity', () => {
+        const peers = [billTo, shipTo];
+        expect(RelatedEntitySectionKey(billTo, peers)).toBe(FormSectionCamelCase(`${ORDERS} BillToPersonID`));
+        expect(RelatedEntitySectionKey(shipTo, peers)).toBe(FormSectionCamelCase(`${ORDERS} ShipToPersonID`));
+    });
+
+    it('strips wrapping brackets on the join field before camelCase', () => {
+        const wrapped = rel(ORDERS, billTo.RelatedEntityID, '[BillToPersonID]');
+        const other = rel(ORDERS, billTo.RelatedEntityID, '[ShipToPersonID]');
+        expect(RelatedEntitySectionKey(wrapped, [wrapped, other])).toBe(
+            FormSectionCamelCase(`${ORDERS} BillToPersonID`),
+        );
+    });
+});
+
+describe('ResolveContributionKey', () => {
+    it('uses an explicit contributionKey when set', () => {
+        expect(ResolveContributionKey({
+            entity: PEOPLE,
+            slot: 'after-related',
+            contributionKey: 'custom.tickets',
+            relatedEntity: TICKETS,
+        })).toBe('custom.tickets');
+    });
+
+    it('derives related:${entity}:${join} for a claim', () => {
+        expect(ResolveContributionKey({
+            entity: PEOPLE,
+            slot: 'after-related',
+            relatedEntity: TICKETS,
+            relatedJoinField: '[PersonID]',
+        })).toBe(RelatedContributionKey(TICKETS, 'PersonID'));
+    });
+
+    it('returns empty when the panel is an extra (no related, no key)', () => {
+        expect(ResolveContributionKey({ entity: PEOPLE, slot: 'after-fields' })).toBe('');
+    });
+});
+
+describe('ResolveFormContributions', () => {
+    const isaChildId = 'dddddddd-dddd-dddd-dddd-dddddddddddd';
+
+    it('emits a stock grid for an unclaimed, unbaked DisplayInForm relationship', () => {
+        const result = ResolveFormContributions({
+            EntityName: PEOPLE,
+            RelatedEntities: [tickets],
+            IsaChildEntityIDs: [],
+            Registrations: [],
+            BakedSectionKeys: [],
+            ShowRelatedEntities: true,
+        });
+        expect(result.StockGrids).toHaveLength(1);
+        expect(result.StockGrids[0].RelatedEntity).toBe(TICKETS);
+        expect(result.StockGrids[0].DisplayName).toBe('Event tickets');
+        expect(result.HiddenBakedSectionKeys).toEqual([]);
+    });
+
+    it('skips a stock grid when the form already baked that section', () => {
+        const baked = RelatedEntitySectionKey(addresses, [addresses]);
+        const result = ResolveFormContributions({
+            EntityName: PEOPLE,
+            RelatedEntities: [addresses],
+            IsaChildEntityIDs: [],
+            Registrations: [],
+            BakedSectionKeys: [baked],
+            ShowRelatedEntities: true,
+        });
+        expect(result.StockGrids).toEqual([]);
+    });
+
+    it('skips IS-A child relationships (CodeGen does too)', () => {
+        const child = rel('MJ: Event Order Line ISA', isaChildId, 'ID', { Sequence: 1 });
+        const result = ResolveFormContributions({
+            EntityName: PEOPLE,
+            RelatedEntities: [child],
+            IsaChildEntityIDs: [isaChildId],
+            Registrations: [],
+            BakedSectionKeys: [],
+            ShowRelatedEntities: true,
+        });
+        expect(result.StockGrids).toEqual([]);
+    });
+
+    it('skips DisplayInForm=false', () => {
+        const hidden = rel(TICKETS, tickets.RelatedEntityID, 'PersonID', { DisplayInForm: false });
+        const result = ResolveFormContributions({
+            EntityName: PEOPLE,
+            RelatedEntities: [hidden],
+            IsaChildEntityIDs: [],
+            Registrations: [],
+            BakedSectionKeys: [],
+            ShowRelatedEntities: true,
+        });
+        expect(result.StockGrids).toEqual([]);
+    });
+
+    it('does not emit stock grids when ShowRelatedEntities is false', () => {
+        const result = ResolveFormContributions({
+            EntityName: PEOPLE,
+            RelatedEntities: [tickets],
+            IsaChildEntityIDs: [],
+            Registrations: [],
+            BakedSectionKeys: [],
+            ShowRelatedEntities: false,
+        });
+        expect(result.StockGrids).toEqual([]);
+    });
+
+    it('a related claim replaces the stock grid and hides a baked section', () => {
+        const baked = RelatedEntitySectionKey(tickets, [tickets]);
+        const claim = reg({
+            entity: PEOPLE,
+            slot: 'after-related' as FormPanelSlot,
+            relatedEntity: TICKETS,
+            relatedJoinField: 'PersonID',
+            sortKey: 80,
+        }, 10);
+        const result = ResolveFormContributions({
+            EntityName: PEOPLE,
+            RelatedEntities: [tickets, addresses],
+            IsaChildEntityIDs: [],
+            Registrations: [claim],
+            BakedSectionKeys: [baked],
+            ShowRelatedEntities: true,
+        });
+        expect(result.StockGrids.map((g) => g.RelatedEntity)).toEqual([ADDR]);
+        expect(result.HiddenBakedSectionKeys).toEqual([baked]);
+        expect(result.Winners.some((w) => w.Kind === 'registered' && w.RelatedEntity === TICKETS)).toBe(true);
+    });
+
+    it('highest Priority wins when two panels claim the same relationship', () => {
+        const low = reg({
+            entity: PEOPLE,
+            slot: 'after-related',
+            relatedEntity: TICKETS,
+            sortKey: 10,
+        }, 1);
+        const high = reg({
+            entity: PEOPLE,
+            slot: 'after-fields',
+            relatedEntity: TICKETS,
+            sortKey: 5,
+        }, 50);
+        const result = ResolveFormContributions({
+            EntityName: PEOPLE,
+            RelatedEntities: [tickets],
+            IsaChildEntityIDs: [],
+            Registrations: [low, high],
+            BakedSectionKeys: [],
+            ShowRelatedEntities: true,
+        });
+        const claimed = result.Winners.filter((w) => w.Kind === 'registered' && w.RelatedEntity === TICKETS);
+        expect(claimed).toHaveLength(1);
+        expect(claimed[0].Priority).toBe(50);
+        expect(claimed[0].Slot).toBe('after-fields');
+        expect(result.StockGrids).toEqual([]);
+    });
+
+    it('BillTo and ShipTo are distinct contribution keys', () => {
+        const claimBill = reg({
+            entity: PEOPLE,
+            slot: 'after-related',
+            relatedEntity: ORDERS,
+            relatedJoinField: 'BillToPersonID',
+        }, 1);
+        const result = ResolveFormContributions({
+            EntityName: PEOPLE,
+            RelatedEntities: [billTo, shipTo],
+            IsaChildEntityIDs: [],
+            Registrations: [claimBill],
+            BakedSectionKeys: [],
+            ShowRelatedEntities: true,
+        });
+        expect(result.StockGrids).toHaveLength(1);
+        expect(result.StockGrids[0].RelatedJoinField).toBe('ShipToPersonID');
+    });
+
+    it('ignores registrations for a different entity', () => {
+        const other = reg({
+            entity: 'MJ_BizApps_Common: Organizations',
+            slot: 'after-related',
+            relatedEntity: TICKETS,
+        }, 99);
+        const result = ResolveFormContributions({
+            EntityName: PEOPLE,
+            RelatedEntities: [tickets],
+            IsaChildEntityIDs: [],
+            Registrations: [other],
+            BakedSectionKeys: [],
+            ShowRelatedEntities: true,
+        });
+        expect(result.StockGrids).toHaveLength(1);
+        expect(result.Winners.filter((w) => w.Kind === 'registered')).toEqual([]);
+    });
+
+    it('wildcard extras apply; wildcard related claims do not', () => {
+        const extra = reg({ entity: '*', slot: 'after-fields', contributionKey: 'fleet.predictions', sortKey: 40 });
+        const badClaim = reg({ entity: '*', slot: 'after-related', relatedEntity: TICKETS }, 99);
+        const result = ResolveFormContributions({
+            EntityName: PEOPLE,
+            RelatedEntities: [tickets],
+            IsaChildEntityIDs: [],
+            Registrations: [extra, badClaim],
+            BakedSectionKeys: [],
+            ShowRelatedEntities: true,
+        });
+        expect(result.Winners.some((w) => w.ContributionKey === 'fleet.predictions')).toBe(true);
+        expect(result.StockGrids).toHaveLength(1);
+    });
+
+    it('a header contribution can sit in before-fields and replace Details', () => {
+        const hero = reg({
+            entity: 'MJ_BizApps_Orders: Order Headers',
+            slot: 'before-fields',
+            contributionKey: 'header',
+            replacesSectionKey: 'details',
+            sortKey: 100,
+        }, 10);
+        const result = ResolveFormContributions({
+            EntityName: 'MJ_BizApps_Orders: Order Headers',
+            RelatedEntities: [],
+            IsaChildEntityIDs: [],
+            Registrations: [hero],
+            BakedSectionKeys: [],
+            ShowRelatedEntities: true,
+        });
+        const winner = result.Winners.find((w) => w.ContributionKey === 'header');
+        expect(winner?.Slot).toBe('before-fields');
+        expect(winner?.ReplacesSectionKey).toBe('details');
+        expect(result.StockGrids).toEqual([]);
+    });
+
+    it('two headers with the same contributionKey last-wins by Priority', () => {
+        const common = reg({
+            entity: PEOPLE,
+            slot: 'before-fields',
+            contributionKey: 'header',
+            replacesSectionKey: 'personalIdentity',
+        }, 0);
+        const orders = reg({
+            entity: PEOPLE,
+            slot: 'before-fields',
+            contributionKey: 'header',
+            replacesSectionKey: 'personalIdentity',
+        }, 10);
+        const collapsed = CollapseFormPanelRegistrations([common, orders]);
+        expect(collapsed).toHaveLength(1);
+        expect(collapsed[0].Priority).toBe(10);
+    });
+
+    it('two extras without a contributionKey do not collapse', () => {
+        const a = reg({ entity: PEOPLE, slot: 'after-fields', sortKey: 10 });
+        const b = reg({ entity: PEOPLE, slot: 'before-fields', sortKey: 20 });
+        const result = ResolveFormContributions({
+            EntityName: PEOPLE,
+            RelatedEntities: [],
+            IsaChildEntityIDs: [],
+            Registrations: [a, b],
+            BakedSectionKeys: [],
+            ShowRelatedEntities: true,
+        });
+        expect(result.Winners.filter((w) => w.Kind === 'registered')).toHaveLength(2);
+    });
+});
+
+describe('ContributionHiddenSectionKeys', () => {
+    it('returns the CodeGen section key for each claimed relationship', () => {
+        const keys = ContributionHiddenSectionKeys(
+            PEOPLE,
+            [tickets, addresses],
+            [],
+            [reg({ entity: PEOPLE, slot: 'after-related', relatedEntity: TICKETS })],
+        );
+        expect(keys).toEqual([RelatedEntitySectionKey(tickets, [tickets, addresses])]);
+    });
+
+    it('includes replacesSectionKey for a field-panel takeover', () => {
+        const keys = ContributionHiddenSectionKeys(
+            PEOPLE,
+            [],
+            [],
+            [reg({
+                entity: PEOPLE,
+                slot: 'before-fields',
+                contributionKey: 'header',
+                replacesSectionKey: 'personalIdentity',
+                sortKey: 100,
+            })],
+        );
+        expect(keys).toEqual(['personalIdentity']);
+    });
+
+    it('hides both a field section and a related grid when one winner claims both', () => {
+        const keys = ContributionHiddenSectionKeys(
+            PEOPLE,
+            [tickets],
+            [],
+            [reg({
+                entity: PEOPLE,
+                slot: 'before-fields',
+                contributionKey: 'header',
+                replacesSectionKey: 'details',
+                relatedEntity: TICKETS,
+            })],
+        );
+        expect(keys).toContain('details');
+        expect(keys).toContain(RelatedEntitySectionKey(tickets, [tickets]));
+    });
+
+    it('ignores a wildcard registration that tries to replace a field section', () => {
+        const keys = ContributionHiddenSectionKeys(
+            PEOPLE,
+            [],
+            [],
+            [reg({
+                entity: '*',
+                slot: 'before-fields',
+                replacesSectionKey: 'details',
+            }, 99)],
+        );
+        expect(keys).toEqual([]);
+    });
+
+    it('returns empty when nothing is claimed', () => {
+        expect(ContributionHiddenSectionKeys(PEOPLE, [tickets], [], [])).toEqual([]);
+    });
+});
+
+describe('StripJoinFieldBrackets', () => {
+    it('trims and unwraps', () => {
+        expect(StripJoinFieldBrackets(' [PersonID] ')).toBe('PersonID');
+        expect(StripJoinFieldBrackets(undefined)).toBe('');
+    });
+});
+
+describe('CollapseFormPanelRegistrations — source tie-break', () => {
+    const meta: FormPanelRegistrationMetadata = {
+        entity: PEOPLE,
+        slot: 'before-fields' as FormPanelSlot,
+        contributionKey: 'header',
+    };
+
+    it('keeps the compiled registration when a metadata row ties on precedence', () => {
+        const compiled = { Priority: 0, Metadata: meta, Source: 'class' as const };
+        const row = { Priority: 0, Metadata: meta, Source: 'metadata' as const, ComponentID: 'c1' };
+        expect(CollapseFormPanelRegistrations([row, compiled])).toEqual([compiled]);
+        expect(CollapseFormPanelRegistrations([compiled, row])).toEqual([compiled]);
+    });
+
+    it('lets a metadata row win only with strictly higher precedence', () => {
+        const compiled = { Priority: 0, Metadata: meta, Source: 'class' as const };
+        const row = { Priority: 1, Metadata: meta, Source: 'metadata' as const, ComponentID: 'c1' };
+        expect(CollapseFormPanelRegistrations([compiled, row])).toEqual([row]);
+    });
+
+    it('treats a registration with no Source as compiled', () => {
+        const legacy = { Priority: 0, Metadata: meta };
+        const row = { Priority: 0, Metadata: meta, Source: 'metadata' as const, ComponentID: 'c1' };
+        expect(CollapseFormPanelRegistrations([row, legacy])).toEqual([legacy]);
+    });
+});
+
+/**
+ * Between two rows at the same precedence, the narrower audience wins: the user's own row over a
+ * role's, a role's over everyone's. A compiled panel still wins a tie with any row.
+ */
+describe('CollapseFormPanelRegistrations — scope tie-break', () => {
+    const meta: FormPanelRegistrationMetadata = { entity: PEOPLE, slot: 'after-fields' as FormPanelSlot, contributionKey: 'skip:ltv' };
+    const row = (scope: 'User' | 'Role' | 'Global', priority = 0): FormContributionRegistration =>
+        ({ Priority: priority, Metadata: meta, Source: 'metadata', Scope: scope, RowID: scope });
+
+    it('lets the user\'s own row beat an everyone row at equal precedence, whichever comes first', () => {
+        const mine = row('User');
+        const everyone = row('Global');
+        expect(CollapseFormPanelRegistrations([everyone, mine])).toEqual([mine]);
+        expect(CollapseFormPanelRegistrations([mine, everyone])).toEqual([mine]);
+    });
+
+    it('lets a role row beat an everyone row at equal precedence', () => {
+        const role = row('Role');
+        expect(CollapseFormPanelRegistrations([row('Global'), role])).toEqual([role]);
+        expect(CollapseFormPanelRegistrations([role, row('Global')])).toEqual([role]);
+    });
+
+    it('keeps the compiled panel over a row of any scope at equal precedence', () => {
+        const compiled: FormContributionRegistration = { Priority: 0, Metadata: meta, Source: 'class' };
+        expect(CollapseFormPanelRegistrations([row('User'), compiled, row('Role')])).toEqual([compiled]);
+    });
+
+    it('still lets a higher precedence win over a narrower scope', () => {
+        const everyone = row('Global', 2);
+        expect(CollapseFormPanelRegistrations([row('User', 1), everyone])).toEqual([everyone]);
+    });
+});
+
+/**
+ * One collapse for the whole form. A row that takes key K from a compiled panel may name another
+ * slot; every host filters the same winners by its own slot, so K draws once, where the row says.
+ */
+describe('ResolveFormContributionWinners', () => {
+    const compiledK: FormContributionRegistration = {
+        Priority: 3, Source: 'class',
+        Metadata: { entity: PEOPLE, slot: 'after-fields', contributionKey: 'header' },
+    };
+    const rowK: FormContributionRegistration = {
+        Priority: 4, Source: 'metadata', Scope: 'User', RowID: 'row-k',
+        Metadata: { entity: PEOPLE, slot: 'before-fields', contributionKey: 'header' },
+    };
+    const inSlot = (slot: FormPanelSlot) =>
+        ResolveFormContributionWinners(PEOPLE, [compiledK, rowK]).Winners.filter((r) => r.Metadata.slot === slot);
+
+    it('keeps only the row, which outranks the compiled panel on the key', () => {
+        expect(ResolveFormContributionWinners(PEOPLE, [compiledK, rowK]).Winners).toEqual([rowK]);
+    });
+
+    it('draws the key once, in the row\'s slot, and the compiled panel\'s slot gets nothing for it', () => {
+        expect(inSlot('before-fields')).toEqual([rowK]);
+        expect(inSlot('after-fields')).toEqual([]);
+    });
+
+    it('drops registrations for another entity and keeps wildcard ones, whatever they claim', () => {
+        const other = reg({ entity: 'Other', slot: 'after-fields', contributionKey: 'x' });
+        const wildcardClaim = reg({ entity: '*', slot: 'after-fields', replacesFieldNames: ['Name'] });
+        const wildcardExtra = reg({ entity: '*', slot: 'after-fields' });
+        expect(ResolveFormContributionWinners(PEOPLE, [other, wildcardClaim, wildcardExtra]).Winners).toEqual([wildcardClaim, wildcardExtra]);
+    });
+
+    it('files as rail items only this entity\'s keyed winners that draw a section', () => {
+        const bare = reg({ entity: PEOPLE, slot: 'before-fields', contributionKey: 'hero', presentation: 'bare' });
+        const wildcard = reg({ entity: '*', slot: 'after-fields', contributionKey: 'fleet' });
+        const keyless = reg({ entity: PEOPLE, slot: 'after-fields' });
+        const resolved = ResolveFormContributionWinners(PEOPLE, [compiledK, rowK, bare, wildcard, keyless]);
+        expect([...resolved.RailItems.keys()]).toEqual(['header']);
+        expect(resolved.RailItems.get('header')).toBe(rowK);
+    });
+
+    it('files each rail item under the section key its panel draws', () => {
+        const row: FormContributionRegistration = {
+            Priority: 0, Source: 'metadata', RowID: 'row-t',
+            Metadata: { entity: PEOPLE, slot: 'after-related', relatedEntity: TICKETS, relatedJoinField: 'PersonID' },
+        };
+        const compiled = reg({ entity: PEOPLE, slot: 'after-related', relatedEntity: ADDR, relatedJoinField: 'RecordID' });
+        const resolved = ResolveFormContributionWinners(PEOPLE, [row, compiled]);
+        expect([...resolved.RailItems.keys()]).toEqual([ContributionSectionKey(row), ContributionSectionKey(compiled)]);
+    });
+
+    // A compiled grid panel files under `contactMethods`; a row keyed `contactMethods` files there too.
+    it('keeps the higher-ranked of two winners filed under one section key, whatever the order', () => {
+        const compiledGrid = reg({ entity: PEOPLE, slot: 'after-related', relatedEntity: 'Acme: Contact Methods', relatedJoinField: 'PersonID' });
+        const row: FormContributionRegistration = {
+            Priority: 5, Source: 'metadata', Scope: 'User', RowID: 'row-cm',
+            Metadata: { entity: PEOPLE, slot: 'after-related', contributionKey: 'contactMethods' },
+        };
+        expect(ContributionSectionKey(compiledGrid)).toBe(ContributionSectionKey(row));
+        expect(ResolveFormContributionWinners(PEOPLE, [compiledGrid, row]).RailItems.get('contactMethods')).toBe(row);
+        expect(ResolveFormContributionWinners(PEOPLE, [row, compiledGrid]).RailItems.get('contactMethods')).toBe(row);
+    });
+
+    it('returns the same value for the same list, so a form resolves it once', () => {
+        const list = [compiledK, rowK];
+        expect(ResolveFormContributionWinners(PEOPLE, list)).toBe(ResolveFormContributionWinners(PEOPLE, list));
+    });
+
+    it('compares keys exactly: a key differing only in case is another key', () => {
+        const lower: FormContributionRegistration = { ...rowK, Metadata: { ...rowK.Metadata, contributionKey: 'Header' } };
+        expect(ResolveFormContributionWinners(PEOPLE, [compiledK, lower]).Winners).toHaveLength(2);
+    });
+});
+
+/**
+ * The section key a registration's panel draws under. A row's panel draws under its contribution
+ * key; a compiled panel's template names its own, which by convention is its `contributionKey`, or
+ * for a grid claim with no key, the related entity's name in camelCase without its schema.
+ */
+describe('ContributionSectionKey', () => {
+    const row = (meta: Partial<FormPanelRegistrationMetadata>, rowID: string | undefined = 'row-9'): FormContributionRegistration =>
+        ({ Priority: 0, Source: 'metadata', RowID: rowID, Metadata: { entity: PEOPLE, slot: 'after-related', ...meta } });
+
+    it('keys a row by its contribution key, derived for a grid claim', () => {
+        expect(ContributionSectionKey(row({ contributionKey: ' skip:ltv ' }))).toBe('skip:ltv');
+        expect(ContributionSectionKey(row({ relatedEntity: TICKETS, relatedJoinField: '[PersonID]' }))).toBe(`related:${TICKETS}:PersonID`);
+    });
+
+    it('keys a row with no key by its row', () => {
+        expect(ContributionSectionKey(row({}))).toBe('contribution:row-9');
+    });
+
+    it('keys a compiled panel by its own key', () => {
+        expect(ContributionSectionKey(reg({ entity: PEOPLE, slot: 'after-related', contributionKey: 'addresses', relatedEntity: ADDR }))).toBe('addresses');
+    });
+
+    it('keys a compiled grid claim with no key the way its template names the section', () => {
+        const contactMethods = reg({ entity: PEOPLE, slot: 'after-related', relatedEntity: 'MJ_BizApps_Common: Contact Methods', relatedJoinField: 'PersonID' });
+        expect(ContributionSectionKey(contactMethods)).toBe('contactMethods');
+        const lowerCase = reg({ entity: PEOPLE, slot: 'after-related', relatedEntity: 'Acme: Contact methods' });
+        expect(ContributionSectionKey(lowerCase)).toBe('contactMethods');
+    });
+
+    it('gives a compiled panel with neither no key', () => {
+        expect(ContributionSectionKey(reg({ entity: PEOPLE, slot: 'after-fields' }))).toBe('');
+    });
+});
+
+/** One mapping from a spec to a registration, for a saved row and for both previews. */
+describe('ContributionSpecToRegistration', () => {
+    it('carries every claim and placement the spec makes', () => {
+        const reg = ContributionSpecToRegistration(PEOPLE, {
+            presentation: 'panel', title: 'Address', slot: 'after-fields', sortKey: 5, icon: 'fa-solid fa-house',
+            replacesFieldNames: ['Street', 'City'], replacesSectionKeys: ['identity', 'profile'],
+            inSectionKey: 'profile', sectionPosition: 'end', inclusion: 'More', chromeGroup: 'details',
+            configuration: { compact: true },
+        }, 'COMP-1');
+        expect(reg).toEqual({
+            Priority: 0, Source: 'metadata', ComponentID: 'COMP-1', Title: 'Address', Icon: 'fa-solid fa-house',
+            Presentation: 'panel', Configuration: { compact: true },
+            Metadata: {
+                entity: PEOPLE, slot: 'after-fields', sortKey: 5, presentation: 'panel',
+                replacesFieldNames: ['Street', 'City'], replacesSectionKeys: ['identity', 'profile'],
+                inSectionKey: 'profile', sectionPosition: 'end', inclusion: 'More', chromeGroup: 'details',
+            },
+        });
+    });
+
+    it('keeps only the spec\'s own key and falls back to the default slot', () => {
+        const reg = ContributionSpecToRegistration(PEOPLE, {
+            presentation: 'panel', title: 'Tickets', relatedEntity: TICKETS, relatedJoinField: 'PersonID',
+        });
+        expect(reg.Metadata).toEqual({
+            entity: PEOPLE, slot: 'after-fields', sortKey: 0, presentation: 'panel', relatedEntity: TICKETS, relatedJoinField: 'PersonID',
+        });
+        expect(reg.ComponentID).toBeUndefined();
+    });
+});
+
+describe('FormContributionEntityMatches', () => {
+    it('is exact, case-sensitive equality or the wildcard', () => {
+        expect(FormContributionEntityMatches(PEOPLE, PEOPLE)).toBe(true);
+        expect(FormContributionEntityMatches('*', PEOPLE)).toBe(true);
+        expect(FormContributionEntityMatches('People', PEOPLE)).toBe(false);
+        expect(FormContributionEntityMatches('mj_bizapps_common: people', PEOPLE)).toBe(false);
+        expect(FormContributionEntityMatches(null, PEOPLE)).toBe(false);
+        expect(FormContributionEntityMatches(undefined, PEOPLE)).toBe(false);
+        expect(FormContributionEntityMatches('', PEOPLE)).toBe(false);
+    });
+
+    it('does not strip the MJ: prefix — that fuzzy match is what this replaces', () => {
+        expect(FormContributionEntityMatches('Users', 'MJ: Users')).toBe(false);
+        expect(FormContributionEntityMatches('MJ: Users', 'MJ: Users')).toBe(true);
+    });
+});
+
+/**
+ * Field claims are reported apart from section claims because they hide different things:
+ * a section key removes a whole card, a field name removes one input from inside one. A
+ * function that merged them would take a section off the form for a claim on one field.
+ */
+describe('ContributionClaimedFieldNames', () => {
+    it('names every field a winner stands in for', () => {
+        const names = ContributionClaimedFieldNames(
+            PEOPLE, [], [],
+            [reg({ entity: PEOPLE, slot: 'after-fields', contributionKey: 'ltv', replacesFieldNames: ['LifetimeValue'] })],
+        );
+        expect(names).toEqual(['LifetimeValue']);
+    });
+
+    it('names a whole group of fields, de-duplicated across winners', () => {
+        const names = ContributionClaimedFieldNames(
+            PEOPLE, [], [],
+            [
+                reg({ entity: PEOPLE, slot: 'after-fields', contributionKey: 'addr',
+                      replacesFieldNames: ['Street', 'City', 'PostalCode'] }),
+                reg({ entity: PEOPLE, slot: 'after-fields', contributionKey: 'ltv',
+                      replacesFieldNames: ['City', 'LifetimeValue'] }),
+            ],
+        );
+        expect(names).toEqual(['Street', 'City', 'PostalCode', 'LifetimeValue']);
+    });
+
+    it('reports nothing for a contribution that claims a section instead', () => {
+        const names = ContributionClaimedFieldNames(
+            PEOPLE, [], [],
+            [reg({ entity: PEOPLE, slot: 'before-fields', contributionKey: 'hero', replacesSectionKey: 'personalIdentity' })],
+        );
+        expect(names).toEqual([]);
+    });
+
+    it('does not hide the section the claimed field lives in', () => {
+        const registrations = [reg({
+            entity: PEOPLE, slot: 'after-fields', contributionKey: 'ltv', replacesFieldNames: ['LifetimeValue'],
+        })];
+        expect(ContributionHiddenSectionKeys(PEOPLE, [], [], registrations)).toEqual([]);
+    });
+});
+
+/** A wildcard panel acts on every form: its field claim hides those fields wherever they are drawn. */
+describe('A wildcard field claim', () => {
+    const wildcard = reg({ entity: '*', slot: 'after-fields', contributionKey: 'fleet.address', replacesFieldNames: ['Street'] });
+
+    it('claims its fields on any entity', () => {
+        expect(ContributionClaimedFieldNames(PEOPLE, [], [], [wildcard])).toEqual(['Street']);
+        expect(ContributionClaimedFieldNames('Some Other Entity', [], [], [wildcard])).toEqual(['Street']);
+    });
+
+    it('is not a place claim, which a wildcard grid, section, tab or placement claim is', () => {
+        expect(IsWildcardPlaceClaim(wildcard.Metadata)).toBe(false);
+        expect(IsWildcardPlaceClaim({ entity: '*', slot: 'after-related', relatedEntity: TICKETS })).toBe(true);
+        expect(IsWildcardPlaceClaim({ entity: '*', slot: 'before-fields', replacesSectionKey: '__mj_form_details' })).toBe(true);
+        expect(IsWildcardPlaceClaim({ entity: '*', slot: 'after-fields', inSectionKey: 'profile' })).toBe(true);
+        expect(IsWildcardPlaceClaim({ entity: PEOPLE, slot: 'before-fields', replacesSectionKey: 'details' })).toBe(false);
+    });
+});
+
+describe('Section claims on registrations', () => {
+    it('lists every replaced section once, the single key first', () => {
+        expect(ReplacedSectionKeys({ replacesSectionKey: 'a', replacesSectionKeys: ['b', 'a', ' c '] })).toEqual(['a', 'b', 'c']);
+        expect(ReplacedSectionKeys({})).toEqual([]);
+    });
+
+    it('treats a panel placed in a section like a field claim: the section hosts it', () => {
+        expect(ContributionDrawsInSection({ inSectionKey: 'profile' })).toBe(true);
+        expect(ContributionDrawsInSection({ replacesFieldNames: ['Name'] })).toBe(true);
+        expect(ContributionDrawsInSection({})).toBe(false);
+    });
+
+    it('ignores the section a wildcard panel names, so its slot hosts it', () => {
+        expect(PlacedInSectionKey({ entity: PEOPLE, inSectionKey: ' profile ' })).toBe('profile');
+        expect(PlacedInSectionKey({ entity: '*', inSectionKey: 'profile' })).toBe('');
+        expect(ContributionDrawsInSection({ entity: '*', inSectionKey: 'profile' })).toBe(false);
+        expect(ContributionDrawsInSection({ entity: '*', replacesFieldNames: ['Name'] })).toBe(true);
+    });
+
+    it('draws at the start of its section unless it asks for the end', () => {
+        expect(ContributionSectionPosition({})).toBe('start');
+        expect(ContributionSectionPosition({ sectionPosition: 'end' })).toBe('end');
+    });
+
+    it('hides every section a winner stands in for', () => {
+        const keys = ContributionHiddenSectionKeys('E', [], [], [
+            { Priority: 0, Metadata: { entity: 'E', slot: 'before-fields', contributionKey: 'k', replacesSectionKeys: ['identity', 'profile'] } },
+        ]);
+        expect(keys).toEqual(['identity', 'profile']);
+    });
+});

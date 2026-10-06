@@ -18,9 +18,10 @@
  *     rather than throwing or silently claiming atomicity
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { DatabaseProviderBase } from '../generic/databaseProviderBase';
 import { RunInEntityTransaction } from '../generic/entityTransactionScope';
+import * as Logging from '../generic/logging';
 
 /**
  * A minimal DatabaseProviderBase that records transaction calls and emulates the real depth
@@ -35,7 +36,12 @@ class RecordingProvider {
     }
 
     public get IsInTransaction(): boolean {
-        return this.depth > 0;
+        // SQL Server leaves this false so RunMaybeSerial can fan out.
+        return false;
+    }
+
+    public get CurrentTransactionDepth(): number {
+        return this.depth;
     }
 
     public async BeginTransaction(): Promise<void> {
@@ -119,6 +125,26 @@ describe('DatabaseProviderBase.BeginEntityTransaction', () => {
         await scope.Commit();
 
         expect(provider.Calls).toEqual(['begin:1', 'rollback:1']);
+    });
+
+    it('IsNested follows CurrentTransactionDepth even when IsInTransaction is false', async () => {
+        const outer = await provider.BeginEntityTransaction();
+        const inner = await provider.BeginEntityTransaction();
+        expect(outer.IsNested).toBe(false);
+        expect(inner.IsNested).toBe(true);
+        expect(provider.CurrentTransactionDepth).toBe(2);
+        await inner.Commit();
+        await outer.Commit();
+    });
+
+    it('logs when a scope settles at a different depth than it began', async () => {
+        const spy = vi.spyOn(Logging, 'LogError');
+        const first = await provider.BeginEntityTransaction();
+        const second = await provider.BeginEntityTransaction();
+        await first.Commit();
+        await second.Commit();
+        expect(spy).toHaveBeenCalled();
+        spy.mockRestore();
     });
 });
 

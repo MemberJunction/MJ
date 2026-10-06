@@ -52,45 +52,207 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
   private settingsLoaded = false;
 
   // View state
-  public viewMode: 'grid' | 'list' | 'priority-matrix' = 'grid';
+  public ViewMode: 'grid' | 'list' | 'priority-matrix' = 'grid';
+
+  /** @deprecated Use {@link ViewMode}. */
+  public get viewMode(): 'grid' | 'list' | 'priority-matrix' {
+    return this.ViewMode;
+  }
+  /** @deprecated Use {@link ViewMode}. */
+  public set viewMode(value: 'grid' | 'list' | 'priority-matrix') {
+    this.ViewMode = value;
+  }
   public isLoading = true;
-  public showFilters = true;
-  public expandedPromptId: string | null = null;
+  public ShowFilters = true;
+
+  /** @deprecated Use {@link ShowFilters}. */
+  public get showFilters() {
+    return this.ShowFilters;
+  }
+  /** @deprecated Use {@link ShowFilters}. */
+  public set showFilters(value) {
+    this.ShowFilters = value;
+  }
+  public ExpandedPromptId: string | null = null;
+
+  /** @deprecated Use {@link ExpandedPromptId}. */
+  public get expandedPromptId(): string | null {
+    return this.ExpandedPromptId;
+  }
+  /** @deprecated Use {@link ExpandedPromptId}. */
+  public set expandedPromptId(value: string | null) {
+    this.ExpandedPromptId = value;
+  }
 
   // Data
-  public prompts: PromptWithTemplate[] = [];
-  public filteredPrompts: PromptWithTemplate[] = [];
-  public categories: MJAIPromptCategoryEntity[] = [];
-  public types: MJAIPromptTypeEntity[] = [];
+  public Prompts: PromptWithTemplate[] = [];
+
+  /** @deprecated Use {@link Prompts}. */
+  public get prompts(): PromptWithTemplate[] {
+    return this.Prompts;
+  }
+  /** @deprecated Use {@link Prompts}. */
+  public set prompts(value: PromptWithTemplate[]) {
+    this.Prompts = value;
+  }
+  public FilteredPrompts: PromptWithTemplate[] = [];
+
+  /** @deprecated Use {@link FilteredPrompts}. */
+  public get filteredPrompts(): PromptWithTemplate[] {
+    return this.FilteredPrompts;
+  }
+  /** @deprecated Use {@link FilteredPrompts}. */
+  public set filteredPrompts(value: PromptWithTemplate[]) {
+    this.FilteredPrompts = value;
+  }
+  public Categories: MJAIPromptCategoryEntity[] = [];
+
+  /** @deprecated Use {@link Categories}. */
+  public get categories(): MJAIPromptCategoryEntity[] {
+    return this.Categories;
+  }
+  /** @deprecated Use {@link Categories}. */
+  public set categories(value: MJAIPromptCategoryEntity[]) {
+    this.Categories = value;
+  }
+  public Types: MJAIPromptTypeEntity[] = [];
+
+  /** @deprecated Use {@link Types}. */
+  public get types(): MJAIPromptTypeEntity[] {
+    return this.Types;
+  }
+  /** @deprecated Use {@link Types}. */
+  public set types(value: MJAIPromptTypeEntity[]) {
+    this.Types = value;
+  }
 
   // Filtering
-  public searchTerm = '';
+  public SearchTerm = '';
+
+  /** @deprecated Use {@link SearchTerm}. */
+  public get searchTerm() {
+    return this.SearchTerm;
+  }
+  /** @deprecated Use {@link SearchTerm}. */
+  public set searchTerm(value) {
+    this.SearchTerm = value;
+  }
   private searchSubject = new BehaviorSubject<string>('');
-  public selectedCategory = 'all';
-  public selectedType = 'all';
-  public selectedStatus = 'all';
+  public SelectedCategory = 'all';
+
+  /** @deprecated Use {@link SelectedCategory}. */
+  public get selectedCategory() {
+    return this.SelectedCategory;
+  }
+  /** @deprecated Use {@link SelectedCategory}. */
+  public set selectedCategory(value) {
+    this.SelectedCategory = value;
+  }
+  public SelectedType = 'all';
+
+  /** @deprecated Use {@link SelectedType}. */
+  public get selectedType() {
+    return this.SelectedType;
+  }
+  /** @deprecated Use {@link SelectedType}. */
+  public set selectedType(value) {
+    this.SelectedType = value;
+  }
+  public SelectedStatus = 'all';
+
+  /** @deprecated Use {@link SelectedStatus}. */
+  public get selectedStatus() {
+    return this.SelectedStatus;
+  }
+  /** @deprecated Use {@link SelectedStatus}. */
+  public set selectedStatus(value) {
+    this.SelectedStatus = value;
+  }
 
   // Detail panel
-  public selectedPrompt: PromptWithTemplate | null = null;
-  public detailPanelVisible = false;
+  public SelectedPrompt: PromptWithTemplate | null = null;
+
+  /** @deprecated Use {@link SelectedPrompt}. */
+  public get selectedPrompt(): PromptWithTemplate | null {
+    return this.SelectedPrompt;
+  }
+  /** @deprecated Use {@link SelectedPrompt}. */
+  public set selectedPrompt(value: PromptWithTemplate | null) {
+    this.SelectedPrompt = value;
+  }
+  public DetailPanelVisible = false;
+
+  /** @deprecated Use {@link DetailPanelVisible}. */
+  public get detailPanelVisible() {
+    return this.DetailPanelVisible;
+  }
+  /** @deprecated Use {@link DetailPanelVisible}. */
+  public set detailPanelVisible(value) {
+    this.DetailPanelVisible = value;
+  }
 
   // Sorting
-  public sortColumn: string = 'Name';
-  public sortDirection: 'asc' | 'desc' = 'asc';
+  public SortColumn: string = 'Name';
+
+  /** @deprecated Use {@link SortColumn}. */
+  public get sortColumn(): string {
+    return this.SortColumn;
+  }
+  /** @deprecated Use {@link SortColumn}. */
+  public set sortColumn(value: string) {
+    this.SortColumn = value;
+  }
+  public SortDirection: 'asc' | 'desc' = 'asc';
+
+  /** @deprecated Use {@link SortDirection}. */
+  public get sortDirection(): 'asc' | 'desc' {
+    return this.SortDirection;
+  }
+  /** @deprecated Use {@link SortDirection}. */
+  public set sortDirection(value: 'asc' | 'desc') {
+    this.SortDirection = value;
+  }
 
   // Loading messages
-  public loadingMessages = [
+  public LoadingMessages = [
     'Loading AI prompts...',
     'Fetching templates...',
     'Organizing categories...',
     'Almost there...'
   ];
-  public currentLoadingMessage = this.loadingMessages[0];
+
+  /** @deprecated Use {@link LoadingMessages}. */
+  public get loadingMessages() {
+    return this.LoadingMessages;
+  }
+  /** @deprecated Use {@link LoadingMessages}. */
+  public set loadingMessages(value) {
+    this.LoadingMessages = value;
+  }
+  public CurrentLoadingMessage = this.LoadingMessages[0];
+
+  /** @deprecated Use {@link CurrentLoadingMessage}. */
+  public get currentLoadingMessage() {
+    return this.CurrentLoadingMessage;
+  }
+  /** @deprecated Use {@link CurrentLoadingMessage}. */
+  public set currentLoadingMessage(value) {
+    this.CurrentLoadingMessage = value;
+  }
   private loadingMessageIndex = 0;
   private loadingMessageInterval: any;
 
   protected override destroy$ = new Subject<void>();
-  public selectedPromptForTest: MJAIPromptEntityExtended | null = null;
+  public SelectedPromptForTest: MJAIPromptEntityExtended | null = null;
+
+  /** @deprecated Use {@link SelectedPromptForTest}. */
+  public get selectedPromptForTest(): MJAIPromptEntityExtended | null {
+    return this.SelectedPromptForTest;
+  }
+  /** @deprecated Use {@link SelectedPromptForTest}. */
+  public set selectedPromptForTest(value: MJAIPromptEntityExtended | null) {
+    this.SelectedPromptForTest = value;
+  }
 
   // === Permission Checks ===
   /** Cache for permission checks to avoid repeated calculations */
@@ -169,8 +331,13 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
   /**
    * Clears the permission cache. Call this when user context changes or permissions are updated.
    */
-  public clearPermissionCache(): void {
+  public ClearPermissionCache(): void {
     this._permissionCache.clear();
+  }
+
+  /** @deprecated Use {@link ClearPermissionCache}. */
+  public clearPermissionCache(): void {
+    return this.ClearPermissionCache();
   }
 
   constructor(
@@ -219,8 +386,8 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
       distinctUntilChanged(),
       takeUntil(this.destroy$)
     ).subscribe(searchTerm => {
-      this.searchTerm = searchTerm;
-      this.applyFilters();
+      this.SearchTerm = searchTerm;
+      this.ApplyFilters();
       this.saveUserPreferencesDebounced();
     });
   }
@@ -251,28 +418,28 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
    */
   private applyUserPreferencesFromStorage(prefs: PromptManagementUserPreferences): void {
     if (prefs.viewMode) {
-      this.viewMode = prefs.viewMode;
+      this.ViewMode = prefs.viewMode;
     }
     if (prefs.showFilters !== undefined) {
-      this.showFilters = prefs.showFilters;
+      this.ShowFilters = prefs.showFilters;
     }
     if (prefs.searchTerm) {
-      this.searchTerm = prefs.searchTerm;
+      this.SearchTerm = prefs.searchTerm;
     }
     if (prefs.selectedCategory) {
-      this.selectedCategory = prefs.selectedCategory;
+      this.SelectedCategory = prefs.selectedCategory;
     }
     if (prefs.selectedType) {
-      this.selectedType = prefs.selectedType;
+      this.SelectedType = prefs.selectedType;
     }
     if (prefs.selectedStatus) {
-      this.selectedStatus = prefs.selectedStatus;
+      this.SelectedStatus = prefs.selectedStatus;
     }
     if (prefs.sortColumn) {
-      this.sortColumn = prefs.sortColumn;
+      this.SortColumn = prefs.sortColumn;
     }
     if (prefs.sortDirection) {
-      this.sortDirection = prefs.sortDirection;
+      this.SortDirection = prefs.sortDirection;
     }
   }
 
@@ -281,14 +448,14 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
    */
   private getCurrentPreferences(): PromptManagementUserPreferences {
     return {
-      viewMode: this.viewMode,
-      showFilters: this.showFilters,
-      searchTerm: this.searchTerm,
-      selectedCategory: this.selectedCategory,
-      selectedType: this.selectedType,
-      selectedStatus: this.selectedStatus,
-      sortColumn: this.sortColumn,
-      sortDirection: this.sortDirection
+      viewMode: this.ViewMode,
+      showFilters: this.ShowFilters,
+      searchTerm: this.SearchTerm,
+      selectedCategory: this.SelectedCategory,
+      selectedType: this.SelectedType,
+      selectedStatus: this.SelectedStatus,
+      sortColumn: this.SortColumn,
+      sortDirection: this.SortDirection
     };
   }
 
@@ -314,8 +481,8 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
 
   private startLoadingMessages(): void {
     this.loadingMessageInterval = setInterval(() => {
-      this.loadingMessageIndex = (this.loadingMessageIndex + 1) % this.loadingMessages.length;
-      this.currentLoadingMessage = this.loadingMessages[this.loadingMessageIndex];
+      this.loadingMessageIndex = (this.loadingMessageIndex + 1) % this.LoadingMessages.length;
+      this.CurrentLoadingMessage = this.LoadingMessages[this.loadingMessageIndex];
     }, 2000);
   }
 
@@ -329,8 +496,8 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
 
       // Get cached data from AIEngineBase
       const prompts = AIEngineBase.Instance.Prompts;
-      this.categories = AIEngineBase.Instance.PromptCategories;
-      this.types = AIEngineBase.Instance.PromptTypes;
+      this.Categories = AIEngineBase.Instance.PromptCategories;
+      this.Types = AIEngineBase.Instance.PromptTypes;
 
       // Get cached data from TemplateEngineBase
       const templates = TemplateEngineBase.Instance.Templates as MJTemplateEntity[];
@@ -346,11 +513,11 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
         templateContentMap.set(tc.TemplateID, contents);
       });
 
-      const categoryMap = new Map(this.categories.map(c => [c.ID, c.Name]));
-      const typeMap = new Map(this.types.map(t => [t.ID, t.Name]));
+      const categoryMap = new Map(this.Categories.map(c => [c.ID, c.Name]));
+      const typeMap = new Map(this.Types.map(t => [t.ID, t.Name]));
 
       // Combine the data - keep the actual entity objects
-      this.prompts = prompts.map(prompt => {
+      this.Prompts = prompts.map(prompt => {
         const template = templateMap.get(prompt.ID);
         
         // Add the extra properties directly to the entity
@@ -362,8 +529,8 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
         return prompt as PromptWithTemplate;
       });
 
-      this.filteredPrompts = [...this.prompts];
-      this.applyFilters();
+      this.FilteredPrompts = [...this.Prompts];
+      this.ApplyFilters();
     } catch (error) {
       console.error('Error loading prompt data:', error);
       MJNotificationService.Instance.CreateSimpleNotification('Error loading prompts', 'error', 3000);
@@ -377,43 +544,68 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
   }
 
   private applyInitialState(state: any): void {
-    if (state.viewMode) this.viewMode = state.viewMode;
-    if (state.showFilters !== undefined) this.showFilters = state.showFilters;
-    if (state.searchTerm) this.searchTerm = state.searchTerm;
-    if (state.selectedCategory) this.selectedCategory = state.selectedCategory;
-    if (state.selectedType) this.selectedType = state.selectedType;
-    if (state.selectedStatus) this.selectedStatus = state.selectedStatus;
+    if (state.viewMode) this.ViewMode = state.viewMode;
+    if (state.showFilters !== undefined) this.ShowFilters = state.showFilters;
+    if (state.searchTerm) this.SearchTerm = state.searchTerm;
+    if (state.selectedCategory) this.SelectedCategory = state.selectedCategory;
+    if (state.selectedType) this.SelectedType = state.selectedType;
+    if (state.selectedStatus) this.SelectedStatus = state.selectedStatus;
   }
 
-  public onSearchChange(value: string): void {
+  public OnSearchChange(value: string): void {
     this.searchSubject.next(value);
   }
 
+  /** @deprecated Use {@link OnSearchChange}. */
+  public onSearchChange(value: string): void {
+    return this.OnSearchChange(value);
+  }
+
+  public ToggleFilters(): void {
+    this.ShowFilters = !this.ShowFilters;
+    this.saveUserPreferencesDebounced();
+  }
+
+  /** @deprecated Use {@link ToggleFilters}. */
   public toggleFilters(): void {
-    this.showFilters = !this.showFilters;
+    return this.ToggleFilters();
+  }
+
+  public ToggleFilterPanel(): void {
+    this.ShowFilters = !this.ShowFilters;
     this.saveUserPreferencesDebounced();
   }
 
+  /** @deprecated Use {@link ToggleFilterPanel}. */
   public toggleFilterPanel(): void {
-    this.showFilters = !this.showFilters;
+    return this.ToggleFilterPanel();
+  }
+
+  public SetViewMode(mode: 'grid' | 'list' | 'priority-matrix'): void {
+    this.ViewMode = mode;
+    this.ExpandedPromptId = null;
     this.saveUserPreferencesDebounced();
   }
 
+  /** @deprecated Use {@link SetViewMode}. */
   public setViewMode(mode: 'grid' | 'list' | 'priority-matrix'): void {
-    this.viewMode = mode;
-    this.expandedPromptId = null;
-    this.saveUserPreferencesDebounced();
+    return this.SetViewMode(mode);
   }
 
+  public TogglePromptExpansion(promptId: string): void {
+    this.ExpandedPromptId = this.ExpandedPromptId === promptId ? null : promptId;
+  }
+
+  /** @deprecated Use {@link TogglePromptExpansion}. */
   public togglePromptExpansion(promptId: string): void {
-    this.expandedPromptId = this.expandedPromptId === promptId ? null : promptId;
+    return this.TogglePromptExpansion(promptId);
   }
 
-  public applyFilters(): void {
-    this.filteredPrompts = this.prompts.filter(prompt => {
+  public ApplyFilters(): void {
+    this.FilteredPrompts = this.Prompts.filter(prompt => {
       // Search filter
-      if (this.searchTerm) {
-        const searchLower = this.searchTerm.toLowerCase();
+      if (this.SearchTerm) {
+        const searchLower = this.SearchTerm.toLowerCase();
         const matchesSearch = 
           prompt.Name?.toLowerCase().includes(searchLower) ||
           prompt.Description?.toLowerCase().includes(searchLower) ||
@@ -424,44 +616,54 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
       }
 
       // Category filter
-      if (this.selectedCategory !== 'all' && !UUIDsEqual(prompt.CategoryID, this.selectedCategory)) {
+      if (this.SelectedCategory !== 'all' && !UUIDsEqual(prompt.CategoryID, this.SelectedCategory)) {
         return false;
       }
 
       // Type filter
-      if (this.selectedType !== 'all' && !UUIDsEqual(prompt.TypeID, this.selectedType)) {
+      if (this.SelectedType !== 'all' && !UUIDsEqual(prompt.TypeID, this.SelectedType)) {
         return false;
       }
 
       // Status filter
-      if (this.selectedStatus !== 'all') {
+      if (this.SelectedStatus !== 'all') {
         const isActive = prompt.Status === 'Active';
-        if (this.selectedStatus === 'active' && !isActive) return false;
-        if (this.selectedStatus === 'inactive' && isActive) return false;
+        if (this.SelectedStatus === 'active' && !isActive) return false;
+        if (this.SelectedStatus === 'inactive' && isActive) return false;
       }
 
       return true;
     });
 
     // Apply sorting
-    this.filteredPrompts = this.applySorting(this.filteredPrompts);
+    this.FilteredPrompts = this.applySorting(this.FilteredPrompts);
     this.cdr.markForCheck();
+  }
+
+  /** @deprecated Use {@link ApplyFilters}. */
+  public applyFilters(): void {
+    return this.ApplyFilters();
   }
 
   /**
    * Sort the prompts by the specified column
    */
-  public sortBy(column: string): void {
-    if (this.sortColumn === column) {
+  public SortBy(column: string): void {
+    if (this.SortColumn === column) {
       // Toggle direction if same column
-      this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+      this.SortDirection = this.SortDirection === 'asc' ? 'desc' : 'asc';
     } else {
       // New column, default to ascending
-      this.sortColumn = column;
-      this.sortDirection = 'asc';
+      this.SortColumn = column;
+      this.SortDirection = 'asc';
     }
-    this.applyFilters();
+    this.ApplyFilters();
     this.saveUserPreferencesDebounced();
+  }
+
+  /** @deprecated Use {@link SortBy}. */
+  public sortBy(column: string): void {
+    return this.SortBy(column);
   }
 
   /**
@@ -472,7 +674,7 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
       let valueA: string | boolean | null | undefined;
       let valueB: string | boolean | null | undefined;
 
-      switch (this.sortColumn) {
+      switch (this.SortColumn) {
         case 'Name':
           valueA = a.Name;
           valueB = b.Name;
@@ -499,70 +701,104 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
       const strB = (valueB ?? '').toString().toLowerCase();
 
       let comparison = strA.localeCompare(strB);
-      return this.sortDirection === 'desc' ? -comparison : comparison;
+      return this.SortDirection === 'desc' ? -comparison : comparison;
     });
   }
 
+  public OnCategoryChange(categoryId: string): void {
+    this.SelectedCategory = categoryId;
+    this.ApplyFilters();
+    this.saveUserPreferencesDebounced();
+  }
+
+  /** @deprecated Use {@link OnCategoryChange}. */
   public onCategoryChange(categoryId: string): void {
-    this.selectedCategory = categoryId;
-    this.applyFilters();
+    return this.OnCategoryChange(categoryId);
+  }
+
+  public OnTypeChange(typeId: string): void {
+    this.SelectedType = typeId;
+    this.ApplyFilters();
     this.saveUserPreferencesDebounced();
   }
 
+  /** @deprecated Use {@link OnTypeChange}. */
   public onTypeChange(typeId: string): void {
-    this.selectedType = typeId;
-    this.applyFilters();
+    return this.OnTypeChange(typeId);
+  }
+
+  public OnStatusChange(status: string): void {
+    this.SelectedStatus = status;
+    this.ApplyFilters();
     this.saveUserPreferencesDebounced();
   }
 
+  /** @deprecated Use {@link OnStatusChange}. */
   public onStatusChange(status: string): void {
-    this.selectedStatus = status;
-    this.applyFilters();
-    this.saveUserPreferencesDebounced();
+    return this.OnStatusChange(status);
   }
 
+  public OpenPrompt(promptId: string): void {
+    this.navigationService.OpenEntityRecord('MJ: AI Prompts', CompositeKey.FromID(promptId));
+  }
+
+  /** @deprecated Use {@link OpenPrompt}. */
   public openPrompt(promptId: string): void {
-    const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: promptId }]);
-    this.navigationService.OpenEntityRecord('MJ: AI Prompts', compositeKey);
+    return this.OpenPrompt(promptId);
   }
 
   /**
    * Show the detail panel for a prompt
    */
-  public showPromptDetails(prompt: PromptWithTemplate, event?: Event): void {
+  public ShowPromptDetails(prompt: PromptWithTemplate, event?: Event): void {
     if (event) {
       event.stopPropagation();
     }
-    this.selectedPrompt = prompt;
-    this.detailPanelVisible = true;
+    this.SelectedPrompt = prompt;
+    this.DetailPanelVisible = true;
+  }
+
+  /** @deprecated Use {@link ShowPromptDetails}. */
+  public showPromptDetails(prompt: PromptWithTemplate, event?: Event): void {
+    return this.ShowPromptDetails(prompt, event);
   }
 
   /**
    * Close the detail panel
    */
-  public closeDetailPanel(): void {
-    this.detailPanelVisible = false;
+  public CloseDetailPanel(): void {
+    this.DetailPanelVisible = false;
     // Delay clearing selectedPrompt for smoother animation
     setTimeout(() => {
-      if (!this.detailPanelVisible) {
-        this.selectedPrompt = null;
+      if (!this.DetailPanelVisible) {
+        this.SelectedPrompt = null;
       }
     }, 300);
+  }
+
+  /** @deprecated Use {@link CloseDetailPanel}. */
+  public closeDetailPanel(): void {
+    return this.CloseDetailPanel();
   }
 
   /**
    * Open the full entity record from the detail panel
    */
-  public openPromptFromPanel(): void {
-    if (this.selectedPrompt) {
-      this.openPrompt(this.selectedPrompt.ID);
+  public OpenPromptFromPanel(): void {
+    if (this.SelectedPrompt) {
+      this.OpenPrompt(this.SelectedPrompt.ID);
     }
     // Intent moved to the full record — a lingering panel paints over the
     // records view and greets the user with stale chrome on return.
-    this.closeDetailPanel();
+    this.CloseDetailPanel();
   }
 
-  public testPrompt(promptId: string, event?: Event): void {
+  /** @deprecated Use {@link OpenPromptFromPanel}. */
+  public openPromptFromPanel(): void {
+    return this.OpenPromptFromPanel();
+  }
+
+  public TestPrompt(promptId: string, event?: Event): void {
     if (event) {
       event.stopPropagation();
     }
@@ -571,18 +807,33 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
     this.testHarnessService.openForPrompt(promptId);
   }
 
-  public closeTestHarness(): void {
-    // No longer needed - window manages its own closure
-    this.selectedPromptForTest = null;
+  /** @deprecated Use {@link TestPrompt}. */
+  public testPrompt(promptId: string, event?: Event): void {
+    return this.TestPrompt(promptId, event);
   }
 
-  public createNewPrompt(): void {
+  public CloseTestHarness(): void {
+    // No longer needed - window manages its own closure
+    this.SelectedPromptForTest = null;
+  }
+
+  /** @deprecated Use {@link CloseTestHarness}. */
+  public closeTestHarness(): void {
+    return this.CloseTestHarness();
+  }
+
+  public CreateNewPrompt(): void {
     // Use the standard MemberJunction pattern to open a new AI Prompt form
     // Empty CompositeKey indicates a new record
     this.navigationService.OpenEntityRecord('MJ: AI Prompts', new CompositeKey([]));
   }
 
-  public getPromptIcon(prompt: PromptWithTemplate): string {
+  /** @deprecated Use {@link CreateNewPrompt}. */
+  public createNewPrompt(): void {
+    return this.CreateNewPrompt();
+  }
+
+  public GetPromptIcon(prompt: PromptWithTemplate): string {
     if (prompt.TypeName?.toLowerCase().includes('system')) {
       return 'fa-solid fa-cogs';
     } else if (prompt.TypeName?.toLowerCase().includes('user')) {
@@ -593,62 +844,92 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
     return 'fa-solid fa-comment-dots';
   }
 
-  public getStatusClass(status: string): string {
+  /** @deprecated Use {@link GetPromptIcon}. */
+  public getPromptIcon(prompt: PromptWithTemplate): string {
+    return this.GetPromptIcon(prompt);
+  }
+
+  public GetStatusClass(status: string): string {
     return status === 'Active' ? 'active' : 'inactive';
   }
 
+  /** @deprecated Use {@link GetStatusClass}. */
+  public getStatusClass(status: string): string {
+    return this.GetStatusClass(status);
+  }
+
+  public get HasActiveFilters(): boolean {
+    return this.SearchTerm !== '' ||
+           this.SelectedCategory !== 'all' ||
+           this.SelectedType !== 'all' ||
+           this.SelectedStatus !== 'all';
+  }
+
+  /** @deprecated Use {@link HasActiveFilters}. */
   public get hasActiveFilters(): boolean {
-    return this.searchTerm !== '' ||
-           this.selectedCategory !== 'all' ||
-           this.selectedType !== 'all' ||
-           this.selectedStatus !== 'all';
+    return this.HasActiveFilters;
   }
 
   /** Number of currently-applied filter criteria inside the popover (excludes searchTerm — surfaced separately in the header toolbar). */
   public get ActiveFilterCount(): number {
     let n = 0;
-    if (this.selectedCategory && this.selectedCategory !== 'all') n++;
-    if (this.selectedType && this.selectedType !== 'all') n++;
-    if (this.selectedStatus && this.selectedStatus !== 'all') n++;
+    if (this.SelectedCategory && this.SelectedCategory !== 'all') n++;
+    if (this.SelectedType && this.SelectedType !== 'all') n++;
+    if (this.SelectedStatus && this.SelectedStatus !== 'all') n++;
     return n;
   }
 
   /** Reset only the filters inside the popover (not the toolbar search). */
-  public resetPopoverFilters(): void {
-    this.selectedCategory = 'all';
-    this.selectedType = 'all';
-    this.selectedStatus = 'all';
-    this.applyFilters();
+  public ResetPopoverFilters(): void {
+    this.SelectedCategory = 'all';
+    this.SelectedType = 'all';
+    this.SelectedStatus = 'all';
+    this.ApplyFilters();
     this.saveUserPreferencesDebounced();
   }
 
+  /** @deprecated Use {@link ResetPopoverFilters}. */
+  public resetPopoverFilters(): void {
+    return this.ResetPopoverFilters();
+  }
+
   /** View-mode options for the shared <mj-view-toggle>. */
-  public readonly promptViewOptions = [
+  public readonly PromptViewOptions = [
     { key: 'grid', icon: 'fa-solid fa-grip', title: 'Grid View' },
     { key: 'list', icon: 'fa-solid fa-list', title: 'List View' },
   ];
 
+  /** @deprecated Use {@link PromptViewOptions}. */
+  public get promptViewOptions() {
+    return this.PromptViewOptions;
+  }
+
   /** Values record consumed by the centralized <mj-filter-panel> (excludes searchTerm — surfaced in the page-header toolbar). */
-  public get promptFilterValues(): Record<string, unknown> {
+  public get PromptFilterValues(): Record<string, unknown> {
     return {
-      categoryId: this.selectedCategory,
-      typeId: this.selectedType,
-      status: this.selectedStatus,
+      categoryId: this.SelectedCategory,
+      typeId: this.SelectedType,
+      status: this.SelectedStatus,
     };
   }
 
+  /** @deprecated Use {@link PromptFilterValues}. */
+  public get promptFilterValues(): Record<string, unknown> {
+    return this.PromptFilterValues;
+  }
+
   /** Field config consumed by the centralized <mj-filter-panel>. */
-  public get promptFilterFields(): FilterFieldConfig[] {
+  public get PromptFilterFields(): FilterFieldConfig[] {
     return [
       {
         key: 'categoryId',
         type: 'dropdown',
         label: 'Category',
         icon: 'fa-solid fa-folder',
-        filterable: this.categories.length > 10,
+        filterable: this.Categories.length > 10,
         options: [
           { text: 'All Categories', value: 'all' },
-          ...this.categories.map(c => ({ text: c.Name ?? '', value: c.ID })),
+          ...this.Categories.map(c => ({ text: c.Name ?? '', value: c.ID })),
         ],
       },
       {
@@ -658,7 +939,7 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
         icon: 'fa-solid fa-tag',
         options: [
           { text: 'All Types', value: 'all' },
-          ...this.types.map(t => ({ text: t.Name ?? '', value: t.ID })),
+          ...this.Types.map(t => ({ text: t.Name ?? '', value: t.ID })),
         ],
       },
       {
@@ -675,37 +956,62 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
     ];
   }
 
+  /** @deprecated Use {@link PromptFilterFields}. */
+  public get promptFilterFields(): FilterFieldConfig[] {
+    return this.PromptFilterFields;
+  }
+
   /** Receive the updated values record from <mj-filter-panel> and apply it. */
+  public OnFilterValuesChange(values: Record<string, unknown>): void {
+    this.SelectedCategory = (values['categoryId'] as string) ?? 'all';
+    this.SelectedType     = (values['typeId']     as string) ?? 'all';
+    this.SelectedStatus   = (values['status']     as string) ?? 'all';
+    this.ApplyFilters();
+    this.saveUserPreferencesDebounced();
+  }
+
+  /** @deprecated Use {@link OnFilterValuesChange}. */
   public onFilterValuesChange(values: Record<string, unknown>): void {
-    this.selectedCategory = (values['categoryId'] as string) ?? 'all';
-    this.selectedType     = (values['typeId']     as string) ?? 'all';
-    this.selectedStatus   = (values['status']     as string) ?? 'all';
-    this.applyFilters();
-    this.saveUserPreferencesDebounced();
+    return this.OnFilterValuesChange(values);
   }
 
-  public get filteredPromptsAsEntities(): MJAIPromptEntityExtended[] {
+  public get FilteredPromptsAsEntities(): MJAIPromptEntityExtended[] {
     // The prompts are already MJAIPromptEntityExtended instances with extra properties
-    return this.filteredPrompts as MJAIPromptEntityExtended[];
+    return this.FilteredPrompts as MJAIPromptEntityExtended[];
   }
 
-  public clearFilters(): void {
-    this.searchTerm = '';
-    this.selectedCategory = 'all';
-    this.selectedType = 'all';
-    this.selectedStatus = 'all';
+  /** @deprecated Use {@link FilteredPromptsAsEntities}. */
+  public get filteredPromptsAsEntities(): MJAIPromptEntityExtended[] {
+    return this.FilteredPromptsAsEntities;
+  }
+
+  public ClearFilters(): void {
+    this.SearchTerm = '';
+    this.SelectedCategory = 'all';
+    this.SelectedType = 'all';
+    this.SelectedStatus = 'all';
     this.searchSubject.next('');
-    this.applyFilters();
+    this.ApplyFilters();
     this.saveUserPreferencesDebounced();
+  }
+
+  /** @deprecated Use {@link ClearFilters}. */
+  public clearFilters(): void {
+    return this.ClearFilters();
   }
 
   /** Empty-state CTA: clear filters when the list is narrowed, otherwise create. */
-  public onEmptyStateAction(): void {
-    if (this.hasActiveFilters) {
-      this.clearFilters();
+  public OnEmptyStateAction(): void {
+    if (this.HasActiveFilters) {
+      this.ClearFilters();
     } else {
-      this.createNewPrompt();
+      this.CreateNewPrompt();
     }
+  }
+
+  /** @deprecated Use {@link OnEmptyStateAction}. */
+  public onEmptyStateAction(): void {
+    return this.OnEmptyStateAction();
   }
 
   // BaseResourceComponent abstract method implementations

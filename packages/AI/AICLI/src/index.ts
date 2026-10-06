@@ -10,11 +10,14 @@ export { AgentAuditService } from './services/AgentAuditService';
 
 // Export utilities
 export { OutputFormatter } from './lib/output-formatter';
-export { ExecutionLogger, createExecutionLogger } from './lib/execution-logger';
-export { initializeMJProvider, getConnectionPool, closeMJProvider } from './lib/mj-provider';
-export { loadAIConfig } from './config';
+export { ExecutionLogger, CreateExecutionLogger, createExecutionLogger } from './lib/execution-logger';
+export { InitializeMJProvider, initializeMJProvider, GetConnectionPool, getConnectionPool, CloseMJProvider, closeMJProvider } from './lib/mj-provider';
+export { LoadAIConfig, loadAIConfig } from './config';
 export { AuditAnalyzer } from './lib/audit-analyzer';
 export { AuditFormatter } from './lib/audit-formatter';
+// The audit renderer's format union — exported so the CLI can type its resolved
+// format value instead of casting.
+export type { AuditOutputFormat } from './lib/audit-formatter';
 
 // Export types for AgentAuditService
 export type {

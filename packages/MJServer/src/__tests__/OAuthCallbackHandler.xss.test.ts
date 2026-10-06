@@ -16,7 +16,10 @@ interface PageRenderer {
 }
 
 function makeRenderer(): PageRenderer {
-    const handler = new OAuthCallbackHandler({ publicUrl: 'https://example.test' });
+    const handler = new OAuthCallbackHandler({
+        publicUrl: 'https://example.test',
+        allowedFrontendOrigins: ['*'],
+    });
     return handler as unknown as PageRenderer;
 }
 

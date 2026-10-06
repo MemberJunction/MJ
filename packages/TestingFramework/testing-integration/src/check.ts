@@ -60,6 +60,17 @@ export interface RlsFixture {
     EntityName: string;
     /** True iff discovery found two distinct users with DIFFERENT non-empty Read RLS clauses. */
     Usable: boolean;
+    /**
+     * The effective Read RLS clauses discovery actually compared to set `Usable` — UserA's and
+     * UserB's, in that order. Empty strings when `Usable` is false.
+     *
+     * Carried on the fixture rather than left to be re-derived by each check, because discovery runs
+     * ONCE per suite against the SERVER provider while client-transport checks hold a Network
+     * provider that does not reproduce these clauses (it returns empty for every user). A check that
+     * re-derived them there saw two identical clauses and reported a cache leak that did not exist.
+     */
+    ClauseA: string;
+    ClauseB: string;
     /** Why the fixture is unusable (for the skip note), when Usable is false. */
     Reason?: string;
     /**
@@ -90,6 +101,91 @@ export interface RlsFixture {
      * Replaces the incidental reliance on `anonymous@magic-link.local`. Undefined ⇒ RLS10 skips-as-pass.
      */
     SeededNoGrant?: UserInfo;
+}
+
+/**
+ * Fixture for the `fls-enforcement` bundle: the three seeded Field-Level-Security test users
+ * (metadata-optional/integration-test) plus the runtime state the bundle's lifecycle provisions —
+ * it enables `EnableFieldLevelSecurity` on the target entity through the REAL server entity path
+ * (so the snapshot/reconciliation code gets live coverage), and teardown restores the flag and
+ * deletes every permission row the snapshot wrote.
+ *
+ * `Usable=false` + `Reason` ⇒ the seed is absent or the entity is already FLS-enabled by a real
+ * administrator (the bundle refuses to mutate a configured entity) — checks skip-as-pass.
+ * `EnableError` is different: the seed IS present but enabling through the entity path FAILED.
+ * That is a product bug (it has happened — the snapshot/guard collision), so checks FAIL on it
+ * rather than skipping.
+ */
+export interface FlsFixture {
+    /** True iff seeded users resolved, the entity was FLS-disabled, and Setup enabled it successfully. */
+    Usable: boolean;
+    /** Why the fixture is unusable (seed absent / entity pre-configured), when Usable is false. */
+    Reason?: string;
+    /** Set when the seed was present but enabling field security through the entity path failed — a product bug, not a skip. */
+    EnableError?: string;
+    /** Seeded user holding ONLY the FLS Reader role (read-only; Email tightened to Deny, BCMID row deleted). */
+    Reader?: UserInfo;
+    /** Seeded user holding ONLY the FLS Writer role (read+create+update+delete; fully allowed). */
+    Writer?: UserInfo;
+    /** Seeded user holding Writer + Denier + Neutral — the cross-role aggregation user. */
+    Multi?: UserInfo;
+    /** The FLS target entity name ('MJ: Employees'). */
+    EntityName: string;
+    /** The four seeded FLS role IDs, resolved by name from live metadata. */
+    RoleIDs?: { Reader: string; Writer: string; Denier: string; Neutral: string };
+    /** ID of the fixture Employee row Setup seeds (via Pool SQL), for the load/update/round-trip checks. */
+    FixtureEmployeeID?: string;
+    /** An existing Company ID for creating Employee rows (Employee.CompanyID is required). */
+    CompanyID?: string;
+    /** Employee rows the checks created (create-suppression), swept by teardown. */
+    CreatedEmployeeIds: string[];
+}
+
+/**
+ * Fixture for the `fls-enforcement-client` bundle (client transport, needs MJAPI): the
+ * over-the-wire Field-Level Security leg. The lifecycle provisions everything THROUGH the wire
+ * as the system-key identity — enables field security on the target entity (the snapshot runs
+ * inside MJAPI), tightens the reader role's Email rule, mints one user API key each for the
+ * seeded reader and writer users, and builds two secondary GraphQLDataProvider connections
+ * authenticated AS those users. That gives genuinely restricted/unrestricted WIRE identities —
+ * a passed contextUser cannot change what the server returns (see RLS7's notes), so per-user
+ * enforcement over the wire is only observable through per-user authentication.
+ */
+export interface FlsClientFixture {
+    /** True iff seeded users resolved over the wire, the entity was FLS-disabled, and provisioning succeeded. */
+    Usable: boolean;
+    /** Why the fixture is unusable (seed absent / entity pre-configured), when Usable is false. */
+    Reason?: string;
+    /** Set when the seed was present but wire provisioning FAILED — a product bug, not a skip. */
+    ProvisionError?: string;
+    /** The FLS target entity name ('MJ: Employees'). */
+    EntityName: string;
+    /** Secondary GraphQL provider authenticated as the seeded restricted reader (user API key). */
+    ReaderProvider?: IMetadataProvider;
+    /** Secondary GraphQL provider authenticated as the seeded unrestricted writer (user API key). */
+    WriterProvider?: IMetadataProvider;
+    /**
+     * Secondary GraphQL provider for the seeded MULTI-role user — entity-level create/update via
+     * the Writer role, plus a field-level write denial via the Denier role. The only identity
+     * that can reach field-level create suppression and update refusal over the wire; a
+     * read-only one is stopped by the entity gate first. Absent when the multi user is not
+     * seeded, which skips the write-path checks rather than failing them.
+     */
+    MultiProvider?: IMetadataProvider;
+    /** Row ID of the denier role's write-denied field rule, restored in teardown. */
+    DenierEfpRowID?: string;
+    /** IDs of rows created over the wire by the write-path checks, deleted in teardown. */
+    CreatedEmployeeIDs: string[];
+    /** IDs of the minted `MJ: API Keys` rows, deleted (after their usage logs) in teardown. */
+    CreatedKeyIds: string[];
+    /** IDs of the `MJ: API Key Scopes` rules granting the minted keys `full_access` (deleted before the keys). */
+    CreatedScopeRuleIds: string[];
+    /** ID of the fixture Employee row created over the wire by the writer identity. */
+    FixtureEmployeeID?: string;
+    /** ID of the fixture Company created over the wire when the table was empty (deleted after the employee). */
+    CreatedCompanyID?: string;
+    /** ID of the reader role's Email permission row (tightened to Deny; restored in teardown). */
+    ReaderEfpRowID?: string;
 }
 
 /** An accumulator of `{ entity, id }` rows a mutating bundle created and must delete in FK-safe order. */
@@ -258,6 +354,41 @@ export interface EntityGraphClientFixture {
 }
 
 /**
+ * Accumulator fixture for the `record-cloning` bundle (client transport; IT96).
+ *
+ * Setup creates NO rows, so a deterministic-only run writes nothing: it only stamps the per-run
+ * prefix and start time. The mutating checks provision the throwaway subject user (and its API-key
+ * connection, the denied identity) on first use and append every row they, or a clone they ran,
+ * created. Teardown sweeps FK-safe: clone log items, clone logs and `ClonedFrom` links first, then
+ * `CreatedRows` in reverse creation order (retried so a parent that still has a child is picked up
+ * on a later pass), then everything hanging off the throwaway users, then the users themselves.
+ */
+export interface RecordCloningFixture {
+    /** Unique per-run prefix stamped on every row the bundle creates. */
+    Prefix: string;
+    /** When the bundle started. */
+    StartedAt: Date;
+    /** The throwaway source user (UI role only, one app, three settings, one query category), once provisioned. */
+    SubjectUserID?: string;
+    /** The subject's `MJ: Query Categories` row, the child RC5 forces to collide. */
+    SubjectQueryCategoryID?: string;
+    /** Secondary GraphQL provider authenticated as the subject through a user API key: the identity without clone authorizations. */
+    DeniedProvider?: IMetadataProvider;
+    /** Why provisioning the subject or its key failed, when it did. */
+    ProvisionError?: string;
+    /** Every row created by the bundle or by a clone it executed, in creation order. */
+    CreatedRows: CreatedRow[];
+    /** Throwaway users; their roles, applications, settings, audit logs and keys are swept before them. */
+    UserIDs: string[];
+    /** Clone logs the bundle's Executes returned (successes and refusals); teardown deletes exactly these. */
+    CloneLogIDs: string[];
+    /** Minted `MJ: API Keys` rows. */
+    ApiKeyIDs: string[];
+    /** `MJ: API Key Scopes` rows granting the minted keys `full_access`. */
+    ApiKeyScopeIDs: string[];
+}
+
+/**
  * Shared fixture for the `open-app-teardown` bundle: the throwaway `__mj` metadata rows seeded for the
  * teardown scenario (a used app's SchemaInfo/Entity/EntityField + a blocking RecordChange + a link-less
  * nav Application), reused by OAT1/OAT2 and removed in FK-safe order in teardown.
@@ -386,6 +517,18 @@ export interface ConversationCompactionFixture {
     AgentRuns: Array<{ Delete(): Promise<boolean> }>;
     /** Tagged MJ: AI Agent Run Steps fixture rows (deleted first). */
     Steps: Array<{ Delete(): Promise<boolean> }>;
+    /**
+     * Rows the transcript-window checks create that REFERENCE a conversation detail —
+     * `MJ: Conversation Detail Artifacts` junctions. Deleted before the details they point at.
+     */
+    WindowJunctions: Array<{ Delete(): Promise<boolean> }>;
+    /**
+     * Rows the transcript-window checks create that details reference, or that the junctions
+     * reference — agent sessions, artifact versions, artifacts. Deleted LAST (after the
+     * details and conversations), in reverse insertion order so a version goes before its
+     * artifact.
+     */
+    WindowRoots: Array<{ Delete(): Promise<boolean> }>;
 }
 
 /**
@@ -501,6 +644,10 @@ export interface IntegrationCheckContext {
     Fixtures?: RunQueryFixtures;
     /** Discovered two-user RLS fixture for the `rls-isolation` bundle (suite-scoped). */
     RlsFixture?: RlsFixture;
+    /** Seeded + lifecycle-provisioned fixture for the `fls-enforcement` bundle. */
+    FlsFixture?: FlsFixture;
+    /** Wire-provisioned fixture for the `fls-enforcement-client` bundle (client transport). */
+    FlsClientFixture?: FlsClientFixture;
     /** Shared fixture for the `record-process-facade` bundle (setup → checks → teardown). */
     RpFacadeFixture?: RecordProcessFacadeFixture;
     /** Shared fixture for the `scheduled-jobs` bundle. */
@@ -525,8 +672,12 @@ export interface IntegrationCheckContext {
     EntityWritesFixture?: EntityWritesFixture;
     /** Accumulator fixture for the `entity-graph-client` bundle (client transport, mutating). */
     EntityGraphClientFixture?: EntityGraphClientFixture;
+    /** Accumulator fixture for the `record-cloning` bundle (client transport, IT96). */
+    RecordCloningFixture?: RecordCloningFixture;
     /** Shared fixture for the `transaction-groups` bundle (client transport, mutating). */
     TransactionGroupsFixture?: TransactionGroupsFixture;
+    /** Fixture for the `transaction-groups-batched` bundle — same shape, its own per-run prefix. */
+    TransactionGroupsBatchedFixture?: TransactionGroupsFixture;
     /** Shared fixture for the `user-routines` bundle. */
     UserRoutinesFixture?: UserRoutinesFixture;
     /** Shared fixture for the `permission-engine` bundle's mutation checks (PE11/PE12) only. */

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { TestMetadataProvider } from './mocks/TestMetadataProvider';
 import { LocalCacheManager } from '../generic/localCacheManager';
 import { ProviderConfigDataBase, ILocalStorageProvider } from '../generic/interfaces';
+import { RunViewParams } from '../views/runView';
 import { GetGlobalObjectStore } from '@memberjunction/global';
 
 function resetLocalCacheManager() {
@@ -21,7 +22,7 @@ describe('Core Performance Optimizations', () => {
                 SetItem: async (key: string, value: string) => {},
                 Remove: async (key: string) => {},
                 GetItems: async (keys: string[]) => new Map()
-            } as any);
+            } as unknown as ILocalStorageProvider);
         });
 
         it('should correctly build entities and link fields, fieldValues, permissions, relationships, settings and organicKeys', async () => {
@@ -161,7 +162,7 @@ describe('Core Performance Optimizations', () => {
                     }
                     return map;
                 }
-            } as any;
+            } as unknown as ILocalStorageProvider;
 
             // Reset the singleton via the global object store (canonical pattern used
             // throughout the MJCore test suite). vi.spyOn doesn't work here because
@@ -180,8 +181,8 @@ describe('Core Performance Optimizations', () => {
             const fingerprint1 = 'Users|filter1|order1|entity_object|10|0|agg1';
             const fingerprint2 = 'Roles|filter2|order2|entity_object|10|0|agg2';
 
-            const runViewParams1 = { EntityName: 'Users' } as any;
-            const runViewParams2 = { EntityName: 'Roles' } as any;
+            const runViewParams1: RunViewParams = { EntityName: 'Users' };
+            const runViewParams2: RunViewParams = { EntityName: 'Roles' };
 
             // Store some mock run view results (this triggers addToEntityIndex)
             await LocalCacheManager.Instance.SetRunViewResult(

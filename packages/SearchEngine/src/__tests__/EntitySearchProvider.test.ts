@@ -9,6 +9,8 @@ const { mockRunViewFn, mockEntities, mockLogErrorEx } = vi.hoisted(() => {
     const mockEntities: Array<{
         Name: string;
         AllowUserSearchAPI: boolean;
+        /** Entities searchable purely through a full-text index declare no per-field flags. */
+        FullTextSearchEnabled?: boolean;
         Icon?: string;
         Fields: Array<{
             Name: string;
@@ -17,20 +19,39 @@ const { mockRunViewFn, mockEntities, mockLogErrorEx } = vi.hoisted(() => {
             Sequence?: number;
         }>;
         NameField?: { Name: string };
+        /** Primary key column(s). Defaults to a single `ID` when omitted (see MockMetadata). */
+        PrimaryKeys?: Array<{ Name: string }>;
     }> = [];
     return { mockRunViewFn, mockEntities, mockLogErrorEx };
 });
 
-vi.mock('@memberjunction/core', () => {
+vi.mock('@memberjunction/core', async () => {
+    // The real CompositeKey: the provider now builds each result's RecordID from the entity's
+    // primary-key metadata through it, and that serialization is what these tests assert on.
+    const actual = await vi.importActual<typeof import('@memberjunction/core')>('@memberjunction/core');
+    // Entities the tests push without an explicit PrimaryKeys get the common single `ID` key.
+    // `HasSearchFields` is derived here rather than written by each test because the real
+    // EntityInfo computes it the same way (`_Fields.some(f => f.IncludeInUserSearchAPI)`).
+    // Deriving it keeps the double honest: a test that pushes an entity with no searchable
+    // field gets the same `false` production would, without having to remember to say so.
+    const withDerived = (e: (typeof mockEntities)[number] | undefined) =>
+        e
+            ? {
+                  ...e,
+                  PrimaryKeys: e.PrimaryKeys ?? [{ Name: 'ID' }],
+                  HasSearchFields: e.Fields.some(f => f.IncludeInUserSearchAPI),
+              }
+            : undefined;
+    const allWithDerived = () => mockEntities.map(e => withDerived(e)!);
     class MockMetadata {
-        get Entities() { return mockEntities; }
-        EntityByName(name: string) { return mockEntities.find(e => e.Name === name); }
+        get Entities() { return allWithDerived(); }
+        EntityByName(name: string) { return withDerived(mockEntities.find(e => e.Name === name)); }
         // Multi-provider migration: EntitySearchProvider uses this.ProviderToUse, which falls
         // back to Metadata.Provider. Expose a static Provider that returns the same
         // mockEntities list so the search has a metadata catalog to walk.
         static Provider = {
-            get Entities() { return mockEntities; },
-            EntityByName(name: string) { return mockEntities.find(e => e.Name === name); },
+            get Entities() { return allWithDerived(); },
+            EntityByName(name: string) { return withDerived(mockEntities.find(e => e.Name === name)); },
         };
     }
     class MockRunView {
@@ -39,6 +60,7 @@ vi.mock('@memberjunction/core', () => {
     return {
         Metadata: MockMetadata,
         RunView: MockRunView,
+        CompositeKey: actual.CompositeKey,
         LogError: vi.fn(),
         LogStatus: vi.fn(),
         LogErrorEx: mockLogErrorEx,
@@ -93,6 +115,83 @@ describe('EntitySearchProvider', () => {
 
             const results = await provider.Search('test', 10, undefined, contextUser);
             expect(results).toEqual([]);
+        });
+
+        // MJ#4581 / MJ#4582 draw a line the fan-out did not: an entity that declares NO
+        // IncludeInUserSearchAPI field at all has no search surface, so `UserSearchString`
+        // against it is a documented no-op and the provider returns the UNFILTERED table.
+        // The scorer then discards every row (matchedFields === 0), so the only thing the
+        // round-trip produced was load. Screening here is what stops the query being issued.
+        it('does not query an entity that declares no searchable fields', async () => {
+            mockEntities.push({
+                Name: 'MJ: Employees',
+                AllowUserSearchAPI: true,
+                Fields: [
+                    { Name: 'ID', IncludeInUserSearchAPI: false, IsNameField: false, Sequence: 1 },
+                ],
+            });
+
+            mockRunViewFn.mockResolvedValue({ Success: true, Results: [] });
+
+            const results = await provider.Search('Kligo', 10, undefined, contextUser);
+
+            expect(mockRunViewFn).not.toHaveBeenCalled();
+            expect(results).toEqual([]);
+        });
+
+        // A full-text-search entity with no per-field flags is NOT exempted, and the reason is
+        // this provider's own scorer: convertResults counts which IncludeInUserSearchAPI fields
+        // contain the query, so with none declared every row scores matchedFields === 0 and is
+        // dropped. Querying it would buy a per-keystroke round-trip whose results are discarded.
+        // FullTextSearchProvider is what covers those entities (SourceType 'fulltext').
+        it('does not query a full-text-search entity that declares no per-field search flags', async () => {
+            mockEntities.push({
+                Name: 'MJ: Content Items',
+                AllowUserSearchAPI: true,
+                FullTextSearchEnabled: true,
+                Fields: [
+                    { Name: 'ID', IncludeInUserSearchAPI: false, IsNameField: false, Sequence: 1 },
+                ],
+            });
+
+            mockRunViewFn.mockResolvedValue({ Success: true, Results: [] });
+
+            const results = await provider.Search('Kligo', 10, undefined, contextUser);
+
+            expect(mockRunViewFn).not.toHaveBeenCalled();
+            expect(results).toEqual([]);
+        });
+
+        it('still queries entities that do declare a searchable field', async () => {
+            mockEntities.push({
+                Name: 'MJ: Employees',
+                AllowUserSearchAPI: true,
+                Fields: [
+                    { Name: 'ID', IncludeInUserSearchAPI: false, IsNameField: false, Sequence: 1 },
+                ],
+            });
+            mockEntities.push({
+                Name: 'People',
+                AllowUserSearchAPI: true,
+                Fields: [
+                    { Name: 'LastName', IncludeInUserSearchAPI: true, IsNameField: true, Sequence: 1 },
+                ],
+                NameField: { Name: 'LastName' },
+            });
+
+            mockRunViewFn.mockResolvedValue({
+                Success: true,
+                Results: [{ ID: 'rec-1', LastName: 'Kligo' }],
+            });
+
+            await provider.Search('Kligo', 10, undefined, contextUser);
+
+            // Exactly one entity was worth querying, and it was the one with a search surface.
+            expect(mockRunViewFn).toHaveBeenCalledTimes(1);
+            expect(mockRunViewFn).toHaveBeenCalledWith(
+                expect.objectContaining({ EntityName: 'People' }),
+                contextUser
+            );
         });
 
         it('should call RunView with UserSearchString for searchable entities', async () => {
@@ -205,6 +304,26 @@ describe('EntitySearchProvider', () => {
             const twoFieldResults = await provider.Search('test', 10, undefined, contextUser);
 
             expect(twoFieldResults[0].Score).toBeGreaterThan(oneFieldResults[0].Score);
+        });
+
+        it('should drop records where zero searchable fields matched the query (no 0.15 zombie leak)', async () => {
+            mockEntities.push({
+                Name: 'People',
+                AllowUserSearchAPI: true,
+                Fields: [
+                    { Name: 'Name', IncludeInUserSearchAPI: true, IsNameField: true, Sequence: 1 },
+                ],
+                NameField: { Name: 'Name' },
+            });
+
+            // RunView returns a row that did not actually match the query
+            mockRunViewFn.mockResolvedValueOnce({
+                Success: true,
+                Results: [{ ID: 'rec-1', Name: 'completely unrelated' }],
+            });
+
+            const results = await provider.Search('needle', 10, undefined, contextUser);
+            expect(results).toHaveLength(0);
         });
 
         it('should filter by EntityNames when provided', async () => {
@@ -357,6 +476,67 @@ describe('EntitySearchProvider', () => {
 
             const results = await provider.Search('document', 10, undefined, contextUser);
             expect(results[0].Title).toBe('My Document');
+        });
+    });
+
+    /**
+     * RecordID is a compact CompositeKey segment built from the entity's REAL primary key
+     * column(s) — the bare value for a single-column key, "F1|v1||F2|v2" for a composite one.
+     * Reading `record.ID` yielded '' for every entity whose key isn't called ID, and SearchFusion
+     * drops empty RecordIDs, so this lane silently contributed nothing for those entities.
+     */
+    describe('Search — RecordID honors the entity primary key', () => {
+        it('uses the value of a single primary key that is not named ID', async () => {
+            mockEntities.push({
+                Name: 'Individuals',
+                AllowUserSearchAPI: true,
+                PrimaryKeys: [{ Name: 'individual_id' }],
+                Fields: [{ Name: 'Name', IncludeInUserSearchAPI: true, IsNameField: true, Sequence: 1 }],
+                NameField: { Name: 'Name' },
+            });
+            mockRunViewFn.mockResolvedValue({
+                Success: true,
+                Results: [{ individual_id: 'ind-42', Name: 'Ada Lovelace' }],  // no ID column at all
+            });
+
+            const results = await provider.Search('Ada', 10, undefined, contextUser);
+
+            expect(results).toHaveLength(1);
+            expect(results[0].RecordID).toBe('ind-42');
+            expect(results[0].ID).toBe('ind-42');
+        });
+
+        it('emits the full prefixed segment for a composite primary key', async () => {
+            mockEntities.push({
+                Name: 'Order Lines',
+                AllowUserSearchAPI: true,
+                PrimaryKeys: [{ Name: 'OrderID' }, { Name: 'LineNo' }],
+                Fields: [{ Name: 'Description', IncludeInUserSearchAPI: true, IsNameField: true, Sequence: 1 }],
+                NameField: { Name: 'Description' },
+            });
+            mockRunViewFn.mockResolvedValue({
+                Success: true,
+                Results: [{ OrderID: 'o1', LineNo: 3, Description: 'Widget' }],
+            });
+
+            const results = await provider.Search('Widget', 10, undefined, contextUser);
+
+            expect(results).toHaveLength(1);
+            expect(results[0].RecordID).toBe('OrderID|o1||LineNo|3');
+        });
+
+        it('still emits the bare value for the common single ID key', async () => {
+            mockEntities.push({
+                Name: 'People',
+                AllowUserSearchAPI: true,
+                Fields: [{ Name: 'Name', IncludeInUserSearchAPI: true, IsNameField: true, Sequence: 1 }],
+                NameField: { Name: 'Name' },
+            });
+            mockRunViewFn.mockResolvedValue({ Success: true, Results: [{ ID: 'rec-1', Name: 'Test Person' }] });
+
+            const results = await provider.Search('Test', 10, undefined, contextUser);
+
+            expect(results[0].RecordID).toBe('rec-1');
         });
     });
 

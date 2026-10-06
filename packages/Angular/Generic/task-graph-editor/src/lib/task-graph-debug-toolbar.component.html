@@ -1,0 +1,48 @@
+<div class="dbg-bar" role="toolbar" aria-label="Workflow debugger">
+  @if (Settled) {
+    <span class="dbg-pill dbg-pill-done" title="Every step has finished">
+      <i class="fa-solid fa-check" aria-hidden="true"></i>
+      Finished
+    </span>
+  } @else if (Paused) {
+    <span class="dbg-pill" title="Nothing new starts until you continue or step">
+      <i class="fa-solid fa-pause" aria-hidden="true"></i>
+      Paused
+    </span>
+    <button type="button" class="dbg-btn dbg-btn-go" [disabled]="Busy || !Enabled"
+            (click)="Resume.emit()" title="Continue (F5) — run until the next breakpoint or the end"
+            aria-label="Continue">
+      <i class="fa-solid fa-play" aria-hidden="true"></i>
+    </button>
+    <button type="button" class="dbg-btn dbg-btn-labeled" [disabled]="Busy || !Enabled"
+            (click)="Step.emit()"
+            title="Step Over (F10) — run the next ready step, then pause again"
+            aria-label="Step over">
+      <i class="fa-solid fa-share dbg-icon-over" aria-hidden="true"></i>
+      <span class="dbg-btn-text">Over</span>
+    </button>
+    <button type="button" class="dbg-btn dbg-btn-labeled" [disabled]="Busy || !Enabled"
+            (click)="StepWave.emit()"
+            title="Step Into (F11) — run every step that is ready right now, then pause. On a fork, all ready branches run."
+            aria-label="Step into">
+      <i class="fa-solid fa-turn-down" aria-hidden="true"></i>
+      <span class="dbg-btn-text">Into</span>
+    </button>
+  } @else {
+    <span class="dbg-pill dbg-pill-run" title="The dispatcher is claiming and running steps">
+      <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+      Running
+    </span>
+    <button type="button" class="dbg-btn" [disabled]="Busy || !Enabled"
+            (click)="Pause.emit()" title="Pause (F5) — nothing new starts; steps already running will finish"
+            aria-label="Pause">
+      <i class="fa-solid fa-pause" aria-hidden="true"></i>
+    </button>
+  }
+  <span class="dbg-sep" aria-hidden="true"></span>
+  <button type="button" class="dbg-btn dbg-btn-stop" [disabled]="Busy || Settled || !Enabled"
+          (click)="Cancel.emit()" title="Stop (Shift+F5) — cancel the remaining steps"
+          aria-label="Stop">
+    <i class="fa-solid fa-stop" aria-hidden="true"></i>
+  </button>
+</div>

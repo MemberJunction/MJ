@@ -27,11 +27,24 @@ on:
       - 'scripts/verify-bundle-smoke.mjs'
       - '.github/workflows/claude-pack.yml'
 
+# Least-privilege token: nothing in this workflow writes to the repository.
+permissions:
+  contents: read
+
 jobs:
   verify-dist-fresh:
     name: Verify dist is up to date
     runs-on: ubuntu-latest
     timeout-minutes: 5
+
+    env:
+      # Turbo remote cache — opt-in, and inert while TURBO_TOKEN is unset. Fork PRs never
+      # receive it, so they degrade to a cold local cache rather than failing. Rationale and
+      # setup instructions live once, on the build job in test.yml.
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_API: ${{ vars.TURBO_API }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
 
     steps:
       - name: Checkout repo
@@ -91,6 +104,12 @@ jobs:
     name: E2E mj bundle round-trip
     runs-on: ubuntu-latest
     timeout-minutes: 15
+
+    env: # Turbo remote cache — see the note on verify-dist-fresh above.
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_API: ${{ vars.TURBO_API }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
 
     steps:
       - name: Checkout repo

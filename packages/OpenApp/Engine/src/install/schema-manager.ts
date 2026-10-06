@@ -9,17 +9,100 @@
  * consistent logging, connection pooling, and provider abstraction.
  */
 import { DatabaseProviderBase } from '@memberjunction/core';
+import { EscapeSQLString } from '@memberjunction/global';
 
 /**
- * Reserved schema names that apps cannot claim.
+ * Schemas the DATABASE PLATFORM owns. MJ did not create these and cannot recreate what they
+ * carry, which is precisely why an Open App may never claim one — with or without the
+ * double-underscore override.
+ *
+ * Stored lowercase and matched lowercase: SQL Server compares identifiers case-insensitively
+ * and PostgreSQL folds unquoted DDL to lowercase, so `DBO` and `INFORMATION_SCHEMA` name the
+ * same physical schemas as their canonical spellings.
+ *
+ * **What makes this list load-bearing rather than tidy.** Every name here already exists in a
+ * stock database, so an app declaring one is never *created* — `HandleSchemaCreation` finds it
+ * present and ADOPTS it on the default path, no flag involved. `mj app remove` then hands the
+ * adopted name to `DropAppSchema`, which drops it for real. So the danger is not "MJ refuses a
+ * name it should allow", it is "MJ silently takes ownership of a schema it must never delete".
+ *
+ * The three groups, and why each exists in every database of its platform:
+ * - `dbo` / `public` are the platforms' default schemas, and the direct analogue of each other.
+ *   MJ's own generated PG migrations target `public` (`SET search_path TO __mj, public`) and the
+ *   extensions they rely on (`pgcrypto`, `uuid-ossp`) install into it, so dropping it takes
+ *   unqualified `gen_random_uuid()` with it.
+ * - `sys` / `information_schema` are the catalogs.
+ * - `db_owner` … `db_denydatawriter` are SQL Server's nine FIXED DATABASE ROLES. SQL Server
+ *   creates one schema per fixed role in every database. They accept tables and they DROP
+ *   cleanly (verified on SQL Server 2022), which is the whole hazard. The repo already treats
+ *   them as system schemas: `MJCLI/src/baseline/introspector-mssql.ts` excludes this exact list.
+ *
+ * PostgreSQL's `pg_*` schemas are covered by {@link PG_RESERVED_PREFIX} instead of being listed,
+ * because `pg_temp_N` / `pg_toast_temp_N` are created per session and cannot be enumerated ahead
+ * of time.
  */
-const RESERVED_SCHEMAS = new Set([
+const PLATFORM_SCHEMAS = new Set([
+  // SQL Server — default, catalogs, guest
   'dbo',
   'sys',
   'guest',
-  'INFORMATION_SCHEMA',
-  '__mj'
+  // SQL Server — one schema per fixed database role, present in every database
+  'db_owner',
+  'db_accessadmin',
+  'db_securityadmin',
+  'db_ddladmin',
+  'db_backupoperator',
+  'db_datareader',
+  'db_datawriter',
+  'db_denydatareader',
+  'db_denydatawriter',
+  // PostgreSQL — default schema
+  'public',
+  // ANSI — present on both
+  'information_schema'
 ]);
+
+/**
+ * PostgreSQL reserves the entire `pg_` prefix for system use, and creates `pg_temp_N` /
+ * `pg_toast_temp_N` per backend session. A prefix rule covers the per-session names that an
+ * enumerated list structurally cannot, and subsumes `pg_catalog` / `pg_toast`.
+ */
+const PG_RESERVED_PREFIX = 'pg_';
+
+/**
+ * Schemas MEMBERJUNCTION owns. Blocked by exact match regardless of the override.
+ *
+ * `__mj_udt` is here because MJ core creates it (migrations/v5/V202604292210) as the sandbox for
+ * user-defined tables. It sits inside the `__mj_` app namespace opened up below, so without this
+ * entry an app could adopt it and `mj app remove` would CASCADE-drop every user-defined table in
+ * the database.
+ */
+const MJ_SCHEMAS = new Set([
+  '__mj',
+  '__mj_udt'
+]);
+
+/**
+ * Who owns `normalized`, or `undefined` if it is claimable. One decision in one place, so the
+ * error message can name the real owner instead of asserting MJ owns `dbo`.
+ */
+function ReservedOwnerOf(normalized: string): 'the database platform' | 'MemberJunction' | undefined {
+  if (PLATFORM_SCHEMAS.has(normalized) || normalized.startsWith(PG_RESERVED_PREFIX)) {
+    return 'the database platform';
+  }
+  if (MJ_SCHEMAS.has(normalized)) {
+    return 'MemberJunction';
+  }
+  return undefined;
+}
+
+/**
+ * The namespace MJ Open Apps live in: `__mj_<AppName>` (`__mj_BizAppsCommon`,
+ * `__mj_BizAppsForms`, …). It is the convention every first-party app ships and the manifest
+ * schema already permits it (see `schemaNameRegex` in manifest-schema.ts, "May start with up
+ * to two underscores"). Everything else under `__` stays reserved for MJ internals.
+ */
+export const MJ_APP_SCHEMA_PREFIX = '__mj_';
 
 /**
  * Result of a schema operation.
@@ -29,6 +112,11 @@ export interface SchemaOperationResult {
   Success: boolean;
   /** Error message if the operation failed */
   ErrorMessage?: string;
+  /**
+   * Non-fatal: the operation succeeded but not in the intended shape (e.g. the schema was
+   * created without the intended owner). Callers must surface it to the operator.
+   */
+  Warning?: string;
 }
 
 /**
@@ -36,34 +124,106 @@ export interface SchemaOperationResult {
  */
 export interface ValidateSchemaNameOptions {
   /**
-   * Allow schema names starting with `__`. Exact-match reserved names (e.g. `__mj`, `dbo`)
+   * Allow a `__`-prefixed schema name that is outside the `__mj_<AppName>` app namespace
+   * (which needs no override). Exact-match reserved names (`__mj`, `__mj_UDT`, `dbo`, …)
    * remain blocked regardless of this flag. Dangerous; MJ-internal apps only.
    */
-  allowDoubleUnderscore?: boolean;
+  allowDoubleUnderscore?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
- * Validates that a schema name is allowed (not reserved, no double underscores).
+ * Options for {@link CreateAppSchema}.
+ */
+export interface CreateAppSchemaOptions extends ValidateSchemaNameOptions {
+  /**
+   * MJ core schema whose owner the new app schema should share (SQL Server only — see
+   * {@link CreateAppSchema}). Defaults to `__mj`.
+   */
+  CoreSchema?: string;
+}
+
+/**
+ * Which of {@link ValidateSchemaName}'s rules refused a name. `Malformed` covers both the
+ * empty/whitespace-only and the leading/trailing-whitespace branches — neither is a naming
+ * *policy* decision, so MJ claims no ownership of the name: a caller must not describe it as
+ * one MJ is protecting, only as one nothing can be addressed by.
+ */
+export type SchemaNameRule = 'Malformed' | 'ReservedByPlatform' | 'ReservedByMJ' | 'MJNamespace';
+
+/**
+ * Result of {@link ValidateSchemaName}. Carries which rule refused the name, and whether a
+ * caller option would have permitted it, so a caller can name a remedy instead of just quoting
+ * `ErrorMessage` back at the operator.
+ */
+export interface SchemaNameValidation extends SchemaOperationResult {
+  /** Which rule refused the name. Absent when Success. */
+  Rule?: SchemaNameRule;
+  /**
+   * The caller option that would have permitted this name, when one exists — it is offered by the
+   * install, upgrade AND remove options alike. Absent means nothing unblocks it. Callers branch on
+   * `OverriddenBy` first, then on `Rule` for the classes `OverriddenBy` cannot distinguish (see
+   * `BuildSchemaDropRefusalMessage` in install-orchestrator.ts).
+   */
+  OverriddenBy?: 'AllowDoubleUnderscoreSchema';
+}
+
+/**
+ * Validates that a schema name is one an Open App is allowed to claim.
+ *
+ * The rule, in one place: MemberJunction owns the `__` namespace. Names MJ itself uses are
+ * reserved by exact match and are never available. `__mj_<AppName>` is the documented home
+ * for MJ Open Apps. Any other `__` name is rejected unless the caller passes
+ * `allowDoubleUnderscore`.
  *
  * @param schemaName - The schema name to validate
  * @param options - Optional overrides; see {@link ValidateSchemaNameOptions}
- * @returns Validation result
+ * @returns Validation result, classified by {@link SchemaNameRule} on rejection
  */
 export function ValidateSchemaName(
   schemaName: string,
   options: ValidateSchemaNameOptions = {}
-): SchemaOperationResult {
-  if (RESERVED_SCHEMAS.has(schemaName)) {
+): SchemaNameValidation {
+  if (!schemaName || schemaName.trim().length === 0) {
     return {
       Success: false,
-      ErrorMessage: `Schema name '${schemaName}' is reserved and cannot be used by an Open App`
+      ErrorMessage: 'Schema name is required and cannot be empty',
+      Rule: 'Malformed'
     };
   }
 
-  if (!options.allowDoubleUnderscore && schemaName.startsWith('__')) {
+  // Callers act on the raw `schemaName` — CreateAppSchema/DropAppSchema hand it straight to
+  // Dialect.CanonicalSchemaName, which does not trim. Accepting a name that needs trimming would
+  // validate one identifier and create a different one, so reject it instead of normalizing it.
+  if (schemaName !== schemaName.trim()) {
     return {
       Success: false,
-      ErrorMessage: `Schema names starting with '__' are reserved for MJ internals`
+      ErrorMessage: `Schema name '${schemaName}' has leading or trailing whitespace`,
+      Rule: 'Malformed'
+    };
+  }
+
+  const normalized = schemaName.toLowerCase();
+
+  const owner = ReservedOwnerOf(normalized);
+  if (owner) {
+    return {
+      Success: false,
+      ErrorMessage: `Schema name '${schemaName}' is reserved by ${owner} and cannot be used by an Open App`,
+      Rule: owner === 'the database platform' ? 'ReservedByPlatform' : 'ReservedByMJ'
+    };
+  }
+
+  const isMJAppNamespace =
+    normalized.startsWith(MJ_APP_SCHEMA_PREFIX) && normalized.length > MJ_APP_SCHEMA_PREFIX.length;
+
+  if (!options.allowDoubleUnderscore && normalized.startsWith('__') && !isMJAppNamespace) {
+    return {
+      Success: false,
+      ErrorMessage:
+        `Schema name '${schemaName}' is not available: names starting with '__' are reserved for MemberJunction. ` +
+        `MJ Open Apps use the '${MJ_APP_SCHEMA_PREFIX}<AppName>' convention; any other app should choose a name that does not start with '__'.`,
+      Rule: 'MJNamespace',
+      OverriddenBy: 'AllowDoubleUnderscoreSchema'
     };
   }
 
@@ -85,7 +245,7 @@ export async function SchemaExists(
   // and PostgreSQL, so schema existence needs no dialect branch (sys.schemas is
   // SQL-Server-only and errors on PG).
   const results = await provider.ExecuteSQL<Record<string, unknown>>(
-    `SELECT 1 AS Exists_ FROM information_schema.schemata WHERE schema_name = '${EscapeSqlString(schemaName)}'`
+    `SELECT 1 AS Exists_ FROM information_schema.schemata WHERE schema_name = '${EscapeSQLString(schemaName)}'`
   );
   return results.length > 0;
 }
@@ -93,14 +253,30 @@ export async function SchemaExists(
 /**
  * Creates a new database schema for an Open App.
  *
+ * **SQL Server: the schema is created owned by the core schema's owner.** SQL Server's
+ * ownership chaining skips the permission check on an object a view references only when both
+ * have the same owner, and an object's owner is its schema's owner. A plain `CREATE SCHEMA`
+ * makes the INSTALLING login the owner, so an app view reading `__mj.Task` breaks the chain and
+ * the API login is asked for SELECT on `__mj.Task` itself (MJ#4756). Creating the schema
+ * `AUTHORIZATION <core owner>` (usually `dbo`) keeps the chain intact, so granting the app view
+ * is enough. If the installer may not assign that owner (or could not grant on the objects its
+ * migrations create once it no longer owns them), the schema is still created (install
+ * must not fail on it) and a {@link SchemaOperationResult.Warning} names the consequence and the
+ * remedy.
+ *
+ * **PostgreSQL is untouched**: it has no ownership chaining through schemas — a view checks its
+ * base tables' privileges as the VIEW's owner, not the schema's — so the owner of the schema
+ * changes nothing there.
+ *
  * @param schemaName - The schema name to create
  * @param provider - MJ database provider
- * @returns Operation result
+ * @param options - Validation overrides and the core schema; see {@link CreateAppSchemaOptions}
+ * @returns Operation result; `Warning` set when the SQL Server owner could not be assigned
  */
 export async function CreateAppSchema(
   schemaName: string,
   provider: DatabaseProviderBase,
-  options: ValidateSchemaNameOptions = {}
+  options: CreateAppSchemaOptions = {}
 ): Promise<SchemaOperationResult> {
   const validation = ValidateSchemaName(schemaName, options);
   if (!validation.Success) {
@@ -120,8 +296,25 @@ export async function CreateAppSchema(
     };
   }
 
+  const quotedSchema = provider.Dialect.QuoteIdentifier(canonical);
   try {
-    await provider.ExecuteSQL(`CREATE SCHEMA ${provider.Dialect.QuoteIdentifier(canonical)}`);
+    if (provider.Dialect.PlatformKey !== 'sqlserver') {
+      await provider.ExecuteSQL(`CREATE SCHEMA ${quotedSchema}`);
+      return { Success: true };
+    }
+
+    const coreSchema = options.CoreSchema ?? '__mj';
+    const owner = await ResolveCoreSchemaOwner(coreSchema, provider);
+    if ('Reason' in owner) {
+      await provider.ExecuteSQL(`CREATE SCHEMA ${quotedSchema}`);
+      return { Success: true, Warning: BuildOwnerFallbackWarning(schemaName, coreSchema, owner) };
+    }
+
+    // The owner name comes from the catalog, not from us, so it may contain `]` — the SQL Server
+    // dialect's QuoteIdentifier doubles an embedded `]`, so pass the raw name.
+    await provider.ExecuteSQL(
+      `CREATE SCHEMA ${quotedSchema} AUTHORIZATION ${provider.Dialect.QuoteIdentifier(owner.OwnerName)}`
+    );
     return { Success: true };
   }
   catch (error: unknown) {
@@ -129,6 +322,161 @@ export async function CreateAppSchema(
     return {
       Success: false,
       ErrorMessage: `Failed to create schema '${schemaName}': ${message}`
+    };
+  }
+}
+
+/**
+ * Result of {@link ResolveCoreSchemaOwner}. When the owner cannot be assigned, `Reason` says why,
+ * because the two causes need different remedies: a missing/invisible core schema is a
+ * configuration or visibility problem, while a permission gap is fixed by installing as db_owner.
+ */
+type CoreSchemaOwner =
+  | { CanAssign: true; OwnerName: string }
+  | { CanAssign: false; Reason: 'CoreSchemaNotFound' }
+  | { CanAssign: false; Reason: 'MissingPermission'; OwnerName: string };
+
+/** The operator-facing Warning for {@link CreateAppSchema}'s installer-owned fallback, per cause. */
+function BuildOwnerFallbackWarning(
+  schemaName: string,
+  coreSchema: string,
+  owner: Extract<CoreSchemaOwner, { CanAssign: false }>
+): string {
+  const consequence =
+    `SQL Server ownership chaining to '${coreSchema}' will not apply, so app views reading core tables ` +
+    `need explicit SELECT grants on those tables for every role that reads the views. `;
+  if (owner.Reason === 'CoreSchemaNotFound') {
+    return (
+      `Schema '${schemaName}' was created owned by the installing login because core schema '${coreSchema}' ` +
+      `was not found or is not visible to the installing login, so its owner could not be determined. ` +
+      consequence +
+      `Remedy: check that the configured MJ core schema ('${coreSchema}') is correct and visible to the ` +
+      `installing login, then reinstall, or see the Open App README section "Schema ownership on SQL Server".`
+    );
+  }
+  return (
+    `Schema '${schemaName}' was created owned by the installing login, not '${owner.OwnerName}' ` +
+    `(the owner of core schema '${coreSchema}'), because the installing login cannot both assign that owner ` +
+    `and grant on the schema's objects afterwards (that needs IMPERSONATE on the owner and CONTROL on the database). ` +
+    consequence +
+    `Remedy: remove the app without --keep-data, which drops the schema and all of its data (with ` +
+    `--keep-data the next install reuses the schema as-is), and install it again as a member of db_owner, ` +
+    `which may both assign '${owner.OwnerName}' as owner and grant on the schema's objects afterwards. ` +
+    `To keep the data instead, run ` +
+    `ALTER AUTHORIZATION ON SCHEMA::[${schemaName.replace(/]/g, ']]')}] TO [${owner.OwnerName.replace(/]/g, ']]')}] ` +
+    `as db_owner after scripting out the schema's grants, because it drops them — see the Open App ` +
+    `README section "Schema ownership on SQL Server".`
+  );
+}
+
+/**
+ * SQL Server only. Reads who owns `coreSchema` and whether the executing principal may make
+ * that user the owner of a new schema AND still finish the install afterwards.
+ *
+ * Two permissions, both required:
+ * - `CREATE SCHEMA … AUTHORIZATION <user>` requires IMPERSONATE on that user (db_owner members and
+ *   dbo have it implicitly).
+ * - CONTROL on the database. Once the schema belongs to someone else, the installer is no longer
+ *   the owner of the objects its migrations create, and `GRANT … ON <app object>` needs CONTROL on
+ *   that object. Verified on SQL Server 2022: a db_ddladmin login granted only IMPERSONATE on dbo
+ *   created the schema and its views, then failed the migration's `GRANT SELECT` ("Cannot find the
+ *   object … or you do not have permission"). Keeping the installer as owner is the only shape in
+ *   which such a login's install can finish, so it takes the warned fallback instead.
+ * We ASK first with `HAS_PERMS_BY_NAME` rather than attempting the
+ * CREATE and catching Msg 15151: that error ("Cannot find the user … or you do not have
+ * permission") is the same one a genuinely missing user raises, so catching it would conflate a
+ * permission gap with a real fault. The probe was verified to predict the CREATE's outcome for
+ * db_owner, sysadmin and a db_ddladmin-only login. No row (core schema missing or invisible) or a
+ * NULL owner is `CoreSchemaNotFound` — the permissions were never measured, so it must not be
+ * reported as a permission gap.
+ */
+async function ResolveCoreSchemaOwner(
+  coreSchema: string,
+  provider: DatabaseProviderBase
+): Promise<CoreSchemaOwner> {
+  const rows = await provider.ExecuteSQL<{
+    OwnerName: string | null;
+    CurrentUser: string | null;
+    CanImpersonateOwner: number | null;
+    CanControlDatabase: number | null;
+  }>(
+    `SELECT USER_NAME(s.principal_id) AS OwnerName, USER_NAME() AS CurrentUser, ` +
+    // QUOTENAME (owner and database): HAS_PERMS_BY_NAME parses the securable as an identifier, so
+    // a raw name containing `.`, `[` or `]` returns 0/NULL even for db_owner (verified on SQL
+    // Server 2022, for an owner `john.smith` and a database `mj.review_4760`).
+    `HAS_PERMS_BY_NAME(QUOTENAME(USER_NAME(s.principal_id)), 'USER', 'IMPERSONATE') AS CanImpersonateOwner, ` +
+    `HAS_PERMS_BY_NAME(QUOTENAME(DB_NAME()), 'DATABASE', 'CONTROL') AS CanControlDatabase ` +
+    `FROM sys.schemas s WHERE s.name = '${EscapeSQLString(coreSchema)}'`
+  );
+  const row = rows[0];
+  if (!row?.OwnerName) {
+    return { CanAssign: false, Reason: 'CoreSchemaNotFound' };
+  }
+  // The installer already owns the core schema (e.g. the least-privilege login that ran MJ's
+  // migrations): naming itself needs no IMPERSONATE, and its migrations keep owning their objects,
+  // so CONTROL on the database is not needed either (verified on SQL Server 2022, db_ddladmin).
+  if (row.OwnerName === row.CurrentUser) {
+    return { CanAssign: true, OwnerName: row.OwnerName };
+  }
+  if (row.CanImpersonateOwner === 1 && row.CanControlDatabase === 1) {
+    return { CanAssign: true, OwnerName: row.OwnerName };
+  }
+  return { CanAssign: false, Reason: 'MissingPermission', OwnerName: row.OwnerName };
+}
+
+/**
+ * SQL Server only. Checks, before an app's migrations run against an EXISTING schema, that the
+ * executing login may run them: migrations write the schema's Skyway history table and `GRANT`
+ * on the objects they create, and both need CONTROL on the schema. Its owner and db_owner members
+ * have that; a login that neither owns the schema nor was granted CONTROL does not. That is the
+ * state the README retrofit (MJ#4756) leaves a db_ddladmin installer in once `dbo` owns the
+ * schema. Verified on SQL Server 2022: its history INSERT is denied, its `GRANT` fails with
+ * Msg 15151, and `HAS_PERMS_BY_NAME(…, 'SCHEMA', 'CONTROL')` predicted both outcomes for owner,
+ * db_owner, db_ddladmin (with and without db_datawriter) and an explicit `GRANT CONTROL ON SCHEMA`.
+ *
+ * Install's create path does not need this: {@link CreateAppSchema} leaves the installer as owner
+ * unless it has CONTROL on the database.
+ *
+ * @param schemaName - The app schema the migrations will run in
+ * @param provider - MJ database provider
+ * @returns `Success: false` with the owner, the login and the remedies when the login lacks
+ *   CONTROL; `Success: true` when it has it, when the schema does not exist yet, or on PostgreSQL
+ */
+export async function CheckCanMigrateAppSchema(
+  schemaName: string,
+  provider: DatabaseProviderBase
+): Promise<SchemaOperationResult> {
+  if (provider.Dialect.PlatformKey !== 'sqlserver') {
+    return { Success: true };
+  }
+  try {
+    // Existence comes from the sys.schemas row, not the permission bit: HAS_PERMS_BY_NAME returns
+    // 0 (not NULL) for a schema that does not exist (verified on SQL Server 2022).
+    const rows = await provider.ExecuteSQL<{ OwnerName: string | null; CurrentUser: string | null; CanControlSchema: number | null }>(
+      `SELECT USER_NAME(s.principal_id) AS OwnerName, USER_NAME() AS CurrentUser, ` +
+      `HAS_PERMS_BY_NAME(QUOTENAME(s.name), 'SCHEMA', 'CONTROL') AS CanControlSchema ` +
+      `FROM sys.schemas s WHERE s.name = '${EscapeSQLString(schemaName)}'`
+    );
+    const row = rows[0];
+    if (!row || row.CanControlSchema === 1) {
+      return { Success: true };
+    }
+    const login = row.CurrentUser ?? 'the installing login';
+    return {
+      Success: false,
+      ErrorMessage:
+        `Cannot run migrations in schema '${schemaName}': it is owned by '${row.OwnerName}', not by '${login}', ` +
+        `and '${login}' lacks CONTROL on it, so the migrations could neither record their history in the schema ` +
+        `nor grant on its objects. Run the install or upgrade as a member of db_owner, or grant the login ` +
+        `CONTROL on the schema: GRANT CONTROL ON SCHEMA::[${schemaName.replace(/]/g, ']]')}] TO ` +
+        `[${login.replace(/]/g, ']]')}]; — see the Open App README section "Schema ownership on SQL Server".`
+    };
+  }
+  catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      Success: false,
+      ErrorMessage: `Could not check whether the installing login may run migrations in schema '${schemaName}': ${message}`
     };
   }
 }
@@ -166,7 +514,7 @@ export async function DropAppSchema(
       // schema (the legacy-split fragments). It will NOT touch an unrelated app's schema unless two
       // apps adopted names differing only by case — which canonicalization now prevents at install.
       const matches = await provider.ExecuteSQL<{ schema_name: string }>(
-        `SELECT schema_name FROM information_schema.schemata WHERE lower(schema_name) = lower('${EscapeSqlString(schemaName)}')`
+        `SELECT schema_name FROM information_schema.schemata WHERE lower(schema_name) = lower('${EscapeSQLString(schemaName)}')`
       );
       for (const m of matches) {
         await provider.ExecuteSQL(`DROP SCHEMA ${provider.Dialect.QuoteIdentifier(m.schema_name)} CASCADE`);
@@ -210,7 +558,7 @@ async function DropAllSchemaObjects(
   schemaName: string,
   provider: DatabaseProviderBase
 ): Promise<void> {
-  const escaped = EscapeSqlString(schemaName);
+  const escaped = EscapeSQLString(schemaName);
 
   // Drop foreign keys first to avoid dependency issues
   await provider.ExecuteSQL(`
@@ -272,7 +620,9 @@ async function DropAllSchemaObjects(
 
 /**
  * Escapes a string for use in SQL string literals (prevents SQL injection).
+ *
+ * @deprecated Import `EscapeSQLString` from `@memberjunction/global` instead — it is the one
+ * canonical escaper. This alias remains only so external callers do not break; it will be
+ * removed in the next major.
  */
-export function EscapeSqlString(value: string): string {
-  return value.replace(/'/g, "''");
-}
+export const EscapeSqlString = (value: string | null | undefined): string => EscapeSQLString(value);

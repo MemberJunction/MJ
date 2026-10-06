@@ -77,7 +77,7 @@ export abstract class QueryResultEnricherBase {
  *
  * @param key the `EnricherKey` to resolve
  */
-export function resolveQueryResultEnricher(key: string): QueryResultEnricherBase | null {
+export function ResolveQueryResultEnricher(key: string): QueryResultEnricherBase | null {
     if (!key) {
         return null;
     }
@@ -89,4 +89,9 @@ export function resolveQueryResultEnricher(key: string): QueryResultEnricherBase
         return null;
     }
     return factory.CreateInstance<QueryResultEnricherBase>(QueryResultEnricherBase, key);
+}
+
+/** @deprecated Use {@link ResolveQueryResultEnricher}. */
+export function resolveQueryResultEnricher(key: string): QueryResultEnricherBase | null {
+    return ResolveQueryResultEnricher(key);
 }

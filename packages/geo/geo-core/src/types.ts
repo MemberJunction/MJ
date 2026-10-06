@@ -48,6 +48,42 @@ export interface ExistingGeoCodeInfo {
     LocationType: string;
     SourceFieldHash: string | null;
     Status: string;
+    /**
+     * Needed to tell a transient failure from a settled one — see
+     * {@link PERMANENT_SKIP_RETRY_COUNT}. Without it, a batch caller cannot decide whether a
+     * `failed` row is worth another attempt, and re-attempts every one of them on every pass.
+     */
+    RetryCount: number;
+}
+
+/**
+ * The `RetryCount` sentinel that marks an address as settled: geocoding ran, produced no result,
+ * and will produce no result again until the address itself changes ("Conference Room B").
+ *
+ * Encoded in `RetryCount` rather than `Status` because `GeocodeStatus` is only
+ * `success | failed | pending` — there is no "not geocodable" member — so the outcome has to
+ * live somewhere, and a count far above any real retry limit is what the code chose.
+ *
+ * The consequence is that every reader has to know the convention. The retry job does
+ * (`Status='failed' AND RetryCount < maxRetries`), which is why it stops re-attempting.
+ * {@link IsSettledGeoCode} exists so nobody has to rediscover it.
+ */
+export const PERMANENT_SKIP_RETRY_COUNT = 9999;
+
+/**
+ * Whether this row represents a finished question — one no further attempt can change while the
+ * source address is unchanged.
+ *
+ * `success` is obvious. The other case is an address that genuinely cannot be geocoded, which is
+ * just as settled: re-asking produces the same nothing, at the cost of a write, a provider call
+ * and another write, per record, per pass, forever.
+ *
+ * A plain `failed` is NOT settled — that is a transient API error, and retrying it is the retry
+ * job's whole purpose.
+ */
+export function IsSettledGeoCode(status: string | null | undefined, retryCount: number | null | undefined): boolean {
+    if (status === 'success') return true;
+    return status === 'failed' && (retryCount ?? 0) >= PERMANENT_SKIP_RETRY_COUNT;
 }
 
 /**

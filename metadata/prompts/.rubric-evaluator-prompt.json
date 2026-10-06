@@ -1,0 +1,33 @@
+[
+  {
+    "fields": {
+      "Name": "Rubric Evaluator",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/rubrics/rubric-evaluator.template.md",
+      "ResponseFormat": "JSON",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+      "Status": "Active",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "Description": "The parent prompt of the LLM rubric evaluator. Renders the rubric's instructions, each criterion's rendered text (Criteria[].Text), the rules, and the reply contract the engine parses (SinglePass: decisions[]; PerCriterion: chosen + probabilities). The judge prompt renders into its judgePrompt slot. The subject is not in this template: it arrives as a separate, delimited user message. Swap it (SystemPromptID / SystemPromptName) only with a prompt that returns the same JSON. Template data: Rubric, Mode, Criteria, Subject; see the Rubrics Guide.",
+      "EffortLevel": 1
+    },
+    "primaryKey": {
+      "ID": "71932BB5-CEC3-4484-947C-EB17704F992C"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rubric Criterion",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/rubrics/rubric-criterion.template.md",
+      "ResponseFormat": "Any",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+      "Status": "Active",
+      "Description": "Renders one rubric criterion as text: name, key, gate, description, guidance, hints, the evidence rule, the not-applicable rule, and its scale with each level's anchor. Rendered only, never sent to a model on its own. The LLM evaluator places the result in Criteria[].Text, and the Decision evaluator uses it as each Score question's instructions, so both describe a criterion the same way. Template data: Rubric, Criterion."
+    },
+    "primaryKey": {
+      "ID": "28949388-5D65-4116-A865-1159A91AFB06"
+    }
+  }
+]

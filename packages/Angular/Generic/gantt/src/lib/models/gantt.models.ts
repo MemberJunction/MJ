@@ -1,3 +1,33 @@
+export {
+    GANTT_ZOOM_LEVEL_NAMES,
+    GANTT_ZOOM_PERCENT,
+    AfterZoomChangeEventArgs,
+    BeforeZoomChangeEventArgs,
+    CancellableGanttEventArgs,
+    GanttZoomLevelFromPercent,
+    GanttZoomPercent,
+    IsGanttZoomLevelName,
+    NextZoomInLevel,
+    NextZoomOutLevel,
+} from './gantt-zoom';
+export type { GanttZoomLevelName } from './gantt-zoom';
+export {
+    AfterColumnResizeEventArgs,
+    AfterGridResizeEventArgs,
+    BeforeColumnResizeEventArgs,
+    BeforeGridResizeEventArgs,
+    ClampGanttGridWidth,
+    GANTT_DEFAULT_GRID_WIDTH,
+    SanitizeColumnWidths,
+} from './gantt-layout';
+export {
+    BuildGanttTaskTooltipHtml,
+    EscapeGanttHtml,
+    EnsureGanttTooltipStyles,
+    GANTT_GRID_CELL_TOOLTIP_SELECTOR,
+} from './gantt-tooltip';
+export type { GanttTooltipFields } from './gantt-tooltip';
+
 /**
  * A single item (bar) on the Gantt timeline.
  */
@@ -44,8 +74,10 @@ export interface GanttColumnDef {
     Name: string;
     /** Display label for the column header. */
     Label: string;
-    /** Column width in pixels. Use `'*'` for flex. */
+    /** Column width in pixels. Use `'*'` for flex when the grid is not independently scrollable. */
     Width?: number | string;
+    /** Allow the user to drag the column border. Default follows the chart `EnableColumnResize` input. */
+    Resize?: boolean;
     /** Text alignment. */
     Align?: 'left' | 'center' | 'right';
     /** Show as tree column (with expand/collapse). Only one column should be tree. */

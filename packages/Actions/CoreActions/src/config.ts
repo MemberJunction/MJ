@@ -12,8 +12,39 @@ const apiIntegrationsSchema = z.object({
    * Perplexity AI API Key for AI-powered web search
    * Used by: Perplexity Search action
    * Get your API key from: https://www.perplexity.ai/settings/api
+   *
+   * Serves two distinct products behind one key, selected by the action's `Mode` parameter:
+   * `search` (default) calls Perplexity's raw `/search` endpoint, which returns structured
+   * title/url/snippet results at a flat per-query price; `answer` calls the Sonar chat models,
+   * which return prose plus citations and are billed per token.
+   *
+   * For a web-search role prefer `braveApiKey` below — an independent index with lower latency.
+   * Use this when a synthesised answer is genuinely what the caller wants.
    */
   perplexityApiKey: z.string().optional(),
+
+  /**
+   * Brave Search API Key for independent web search
+   * Used by: Brave Search action
+   * Get your API key from: https://api-dashboard.search.brave.com/
+   *
+   * This is the recommended web-search credential for new deployments. Brave serves from its
+   * own index rather than reselling Google's or Bing's, so it does not share a failure mode
+   * with the SERP-proxy vendors or with `google.customSearch` below. It returns the same
+   * title/url/snippet shape the Google action returns, which is what makes it a migration
+   * rather than a rewrite.
+   *
+   * NOTE: Brave retired its free tier in early 2026. Keys now meter against a stored card
+   * with no spending cap, so set a budget alert before pointing production traffic at it.
+   */
+  braveApiKey: z.string().optional(),
+
+  /**
+   * Tavily API Key for search built for LLM consumption
+   * Used by: Tavily Search action
+   * Get your API key from: https://app.tavily.com (keys are prefixed `tvly-`)
+   */
+  tavilyApiKey: z.string().optional(),
 
   /**
    * Gamma API Key for presentation generation
@@ -33,6 +64,18 @@ const apiIntegrationsSchema = z.object({
      * Used by: Google Custom Search action
      * Get your API key from: https://developers.google.com/custom-search/v1/overview
      * Get your CX from: https://programmablesearchengine.google.com/
+     *
+     * NOTE: the Custom Search JSON API is CLOSED TO NEW CUSTOMERS. Projects that already have it
+     * enabled are served until 2027-01-01, when the API is discontinued. New deployments should
+     * configure `braveApiKey` above instead — it is the only credential here that yields the same
+     * title/url/snippet result shape from an index that is not Google's.
+     *
+     * Google's stated successor (Vertex AI Search, since renamed Agent Search) searches your own
+     * indexed content or up to 50 verified domains rather than the public web, and yields neither
+     * an API key nor a CX. Gemini's `google_search` grounding does reach the public index, but
+     * returns expiring redirect URLs with no snippets, and its terms forbid caching or analysing
+     * the results — so neither is a drop-in for this action. `perplexityApiKey` is a reasonable
+     * fallback, but note its default mode is an answer engine rather than a search index.
      */
     customSearch: z.object({
       /**
@@ -79,7 +122,7 @@ let _config: CoreActionsConfig | null = null;
  * Gets the Core Actions configuration, loading it from mj.config.cjs if not already loaded
  * @returns The Core Actions configuration object
  */
-export function getCoreActionsConfig(): CoreActionsConfig {
+export function GetCoreActionsConfig(): CoreActionsConfig {
   if (_config) {
     return _config;
   }
@@ -87,27 +130,33 @@ export function getCoreActionsConfig(): CoreActionsConfig {
   try {
     const result = explorer.search();
     if (!result || result.isEmpty) {
-      LogStatus('No mj.config.cjs found, using default Core Actions configuration');
-      _config = coreActionsConfigSchema.parse({});
-      return _config;
+      LogStatus('No mj.config.cjs found; reading Core Actions API keys from the environment only');
     }
 
-    // Extract only the fields relevant to Core Actions
+    // Extract only the fields relevant to Core Actions.
+    //
+    // This runs whether or not a config file was found. Every key below documents
+    // an environment-variable fallback, and until this was hoisted out of the
+    // no-config early return, a deployment that set only environment variables
+    // silently got an empty config and every action reported its key as missing.
+    const fileConfig = result?.config;
     const rawConfig = {
       apiIntegrations: {
-        perplexityApiKey: result.config?.perplexityApiKey || process.env.PERPLEXITY_API_KEY,
-        gammaApiKey: result.config?.gammaApiKey || process.env.GAMMA_API_KEY,
+        perplexityApiKey: fileConfig?.perplexityApiKey || process.env.PERPLEXITY_API_KEY,
+        tavilyApiKey: fileConfig?.tavilyApiKey || process.env.TAVILY_API_KEY,
+        braveApiKey: fileConfig?.braveApiKey || process.env.BRAVE_SEARCH_API_KEY,
+        gammaApiKey: fileConfig?.gammaApiKey || process.env.GAMMA_API_KEY,
         google: {
           customSearch: {
-            apiKey: result.config?.google?.customSearch?.apiKey ||
-                    result.config?.googleCustomSearchApiKey ||  // Backwards compatibility
+            apiKey: fileConfig?.google?.customSearch?.apiKey ||
+                    fileConfig?.googleCustomSearchApiKey ||  // Backwards compatibility
                     process.env.GOOGLE_CUSTOM_SEARCH_API_KEY,
-            cx: result.config?.google?.customSearch?.cx ||
-                result.config?.googleCustomSearchCx ||  // Backwards compatibility
+            cx: fileConfig?.google?.customSearch?.cx ||
+                fileConfig?.googleCustomSearchCx ||  // Backwards compatibility
                 process.env.GOOGLE_CUSTOM_SEARCH_CX,
           },
           geocoding: {
-            apiKey: result.config?.google?.geocoding?.apiKey ||
+            apiKey: fileConfig?.google?.geocoding?.apiKey ||
                     process.env.GOOGLE_GEOCODING_API_KEY ||
                     process.env.GOOGLE_MAPS_API_KEY,
           },
@@ -123,18 +172,33 @@ export function getCoreActionsConfig(): CoreActionsConfig {
   }
 }
 
+/** @deprecated Use {@link GetCoreActionsConfig}. */
+export function getCoreActionsConfig(): CoreActionsConfig {
+  return GetCoreActionsConfig();
+}
+
 /**
  * Gets the API integrations configuration
  * @returns The API integrations configuration object
  */
-export function getApiIntegrationsConfig(): ApiIntegrationsConfig {
-  const config = getCoreActionsConfig();
+export function GetApiIntegrationsConfig(): ApiIntegrationsConfig {
+  const config = GetCoreActionsConfig();
   return config.apiIntegrations;
+}
+
+/** @deprecated Use {@link GetApiIntegrationsConfig}. */
+export function getApiIntegrationsConfig(): ApiIntegrationsConfig {
+  return GetApiIntegrationsConfig();
 }
 
 /**
  * Clears the cached configuration (useful for testing)
  */
-export function clearCoreActionsConfig(): void {
+export function ClearCoreActionsConfig(): void {
   _config = null;
+}
+
+/** @deprecated Use {@link ClearCoreActionsConfig}. */
+export function clearCoreActionsConfig(): void {
+  return ClearCoreActionsConfig();
 }

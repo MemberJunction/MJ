@@ -1,0 +1,26 @@
+[
+  {
+    "fields": {
+      "Name": "EntitlementGrant",
+      "Description": "Entitlement grant claim for purchased or allocated passes, tickets, and subscriptions.",
+      "DriverClass": "EntitlementGrantClaimDriver",
+      "DefaultExpirationDays": 30,
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "A138A77E-81C5-45C7-B91F-C1198A6F0110"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MagicLink",
+      "Description": "Single-use magic link email claim for account linking and verification.",
+      "DriverClass": "MagicLinkClaimDriver",
+      "DefaultExpirationDays": 7,
+      "IsActive": false
+    },
+    "primaryKey": {
+      "ID": "B249B88F-92D6-46D8-CA20-D22A9B701221"
+    }
+  }
+]

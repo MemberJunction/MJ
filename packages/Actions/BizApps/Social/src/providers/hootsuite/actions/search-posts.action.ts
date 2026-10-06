@@ -1,5 +1,5 @@
 import { RegisterClass } from '@memberjunction/global';
-import { HootSuiteBaseAction, HootSuitePost } from '../hootsuite-base.action';
+import { HootSuiteAnalytics, HootSuiteBaseAction, HootSuitePost, HootSuiteResponse } from '../hootsuite-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { LogStatus, LogError } from '@memberjunction/core';
 import { SearchParams, SocialPost } from '../../../base/base-social.action';
@@ -172,8 +172,8 @@ export class HootSuiteSearchPostsAction extends HootSuiteBaseAction {
 
         for (const post of posts) {
             try {
-                const response = await this.axiosInstance.get(`/analytics/posts/${post.id}`);
-                const analytics = response.data;
+                const response = await this.httpClient.Get<HootSuiteAnalytics>(`/analytics/posts/${post.id}`);
+                const analytics = response.Data;
                 
                 enrichedPosts.push({
                     ...post,

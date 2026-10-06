@@ -56,7 +56,7 @@ vi.mock('node:os', () => ({
 // Import after mocks
 // ---------------------------------------------------------------------------
 
-import { getSkywayConfig, type MJConfig } from '../config';
+import { GetSkywayConfig, type MJConfig } from '../config';
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -78,7 +78,7 @@ const baseConfig: MJConfig = {
 
 describe('getSkywayConfig', () => {
   it('should return valid Skyway config with database settings', async () => {
-    const skyway = await getSkywayConfig(baseConfig);
+    const skyway = await GetSkywayConfig(baseConfig);
     expect(skyway.Database.Server).toBe('localhost');
     expect(skyway.Database.Port).toBe(1433);
     expect(skyway.Database.Database).toBe('MemberJunction');
@@ -87,65 +87,65 @@ describe('getSkywayConfig', () => {
   });
 
   it('should set TrustServerCertificate from config', async () => {
-    const skyway = await getSkywayConfig({ ...baseConfig, dbTrustServerCertificate: true });
+    const skyway = await GetSkywayConfig({ ...baseConfig, dbTrustServerCertificate: true });
     expect(skyway.Database.Options?.TrustServerCertificate).toBe(true);
   });
 
   it('should strip filesystem: prefix from migration locations', async () => {
-    const skyway = await getSkywayConfig(baseConfig);
+    const skyway = await GetSkywayConfig(baseConfig);
     expect(skyway.Migrations.Locations).toEqual(['./migrations']);
     expect(skyway.Migrations.Locations[0]).not.toContain('filesystem:');
   });
 
   it('should use custom schema as DefaultSchema', async () => {
-    const skyway = await getSkywayConfig(baseConfig, undefined, 'custom_schema');
+    const skyway = await GetSkywayConfig(baseConfig, undefined, 'custom_schema');
     expect(skyway.Migrations.DefaultSchema).toBe('custom_schema');
   });
 
   it('should use coreSchema as default DefaultSchema', async () => {
-    const skyway = await getSkywayConfig(baseConfig);
+    const skyway = await GetSkywayConfig(baseConfig);
     expect(skyway.Migrations.DefaultSchema).toBe('__mj');
   });
 
   it('should use custom dir and strip filesystem: prefix', async () => {
-    const skyway = await getSkywayConfig(baseConfig, undefined, undefined, 'filesystem:./custom-migrations');
+    const skyway = await GetSkywayConfig(baseConfig, undefined, undefined, 'filesystem:./custom-migrations');
     expect(skyway.Migrations.Locations).toEqual(['./custom-migrations']);
   });
 
   it('should prepend filesystem: then strip it when dir lacks prefix', async () => {
-    const skyway = await getSkywayConfig(baseConfig, undefined, undefined, './custom-migrations');
+    const skyway = await GetSkywayConfig(baseConfig, undefined, undefined, './custom-migrations');
     expect(skyway.Migrations.Locations).toEqual(['./custom-migrations']);
   });
 
   it('should omit BaselineVersion when not set (Skyway auto-detects)', async () => {
-    const skyway = await getSkywayConfig(baseConfig);
+    const skyway = await GetSkywayConfig(baseConfig);
     expect(skyway.Migrations.BaselineVersion).toBeUndefined();
     expect(skyway.Migrations.BaselineOnMigrate).toBe(true);
   });
 
   it('should pass BaselineVersion when explicitly set in config', async () => {
-    const skyway = await getSkywayConfig({ ...baseConfig, baselineVersion: '202602151200' });
+    const skyway = await GetSkywayConfig({ ...baseConfig, baselineVersion: '202602151200' });
     expect(skyway.Migrations.BaselineVersion).toBe('202602151200');
   });
 
   it('should always set flyway:defaultSchema placeholder', async () => {
-    const skyway = await getSkywayConfig(baseConfig);
+    const skyway = await GetSkywayConfig(baseConfig);
     expect(skyway.Placeholders).toBeDefined();
     expect(skyway.Placeholders!['flyway:defaultSchema']).toBe('__mj');
   });
 
   it('should set flyway:defaultSchema to custom schema when provided', async () => {
-    const skyway = await getSkywayConfig(baseConfig, undefined, 'custom');
+    const skyway = await GetSkywayConfig(baseConfig, undefined, 'custom');
     expect(skyway.Placeholders!['flyway:defaultSchema']).toBe('custom');
   });
 
   it('should add mjSchema placeholder for non-core schemas', async () => {
-    const skyway = await getSkywayConfig(baseConfig, undefined, 'custom');
+    const skyway = await GetSkywayConfig(baseConfig, undefined, 'custom');
     expect(skyway.Placeholders!['mjSchema']).toBe('__mj');
   });
 
   it('should not add mjSchema placeholder when schema matches coreSchema', async () => {
-    const skyway = await getSkywayConfig(baseConfig, undefined, '__mj');
+    const skyway = await GetSkywayConfig(baseConfig, undefined, '__mj');
     expect(skyway.Placeholders!['mjSchema']).toBeUndefined();
   });
 
@@ -159,7 +159,7 @@ describe('getSkywayConfig', () => {
         ],
       },
     };
-    const skyway = await getSkywayConfig(configWithPlaceholders);
+    const skyway = await GetSkywayConfig(configWithPlaceholders);
     // flyway: prefixed placeholders should be skipped (handled separately)
     expect(skyway.Placeholders!['bcsaasSchema']).toBe('__bcsaas');
     // flyway:defaultSchema is always set
@@ -168,7 +168,7 @@ describe('getSkywayConfig', () => {
 
   it('should clone remote repo when tag is provided', async () => {
     const { simpleGit } = await import('simple-git');
-    const skyway = await getSkywayConfig(baseConfig, 'v1.0.0');
+    const skyway = await GetSkywayConfig(baseConfig, 'v1.0.0');
     expect(simpleGit).toHaveBeenCalled();
     // Location should use the temp directory (with filesystem: stripped)
     expect(skyway.Migrations.Locations[0]).toContain('/tmp/mj-test-123');

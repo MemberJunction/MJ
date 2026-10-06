@@ -1,5 +1,6 @@
 import { Command, Flags } from '@oclif/core';
-import { isInsideMonorepo, spawnInherit } from '../../../lib/regression/docker-helpers.js';
+import { IsInsideMonorepo, SpawnInherit } from '../../../lib/regression/docker-helpers.js';
+import { TEST_FORMAT_FLAG } from '../../../lib/format-compat.js';
 
 const REGRESSION_RESULTS_DIR = 'docker/regression/test-results';
 const EXTERNAL_RESULTS_DIR = 'test-results';
@@ -22,12 +23,7 @@ export default class TestRegressionCompare extends Command {
       description: 'Show only differences.',
       default: false,
     }),
-    format: Flags.string({
-      char: 'f',
-      description: 'Output format.',
-      options: ['console', 'json', 'markdown'],
-      default: 'console',
-    }),
+    format: TEST_FORMAT_FLAG,
     output: Flags.string({
       char: 'o',
       description: 'Output file path.',
@@ -48,7 +44,7 @@ export default class TestRegressionCompare extends Command {
 
     // Results live under docker/regression/test-results in the monorepo, or
     // ./test-results when running externally (where remote/up wrote them).
-    const resultsDir = isInsideMonorepo() ? REGRESSION_RESULTS_DIR : EXTERNAL_RESULTS_DIR;
+    const resultsDir = IsInsideMonorepo() ? REGRESSION_RESULTS_DIR : EXTERNAL_RESULTS_DIR;
 
     // --tag flips us to DB mode (results.json doesn't carry Tags), so drop
     // --from-json when the user asks for tag filtering.
@@ -58,13 +54,15 @@ export default class TestRegressionCompare extends Command {
     }
     if (flags.tag) args.push('--tag', flags.tag);
     if (flags['diff-only']) args.push('--diff-only');
-    if (flags.format && flags.format !== 'console') args.push('--format', flags.format);
+    // Forward only an explicit choice — the child command applies the same TTY
+    // detection we would, against the stdio it inherits from us.
+    if (flags.format) args.push('--format', flags.format);
     if (flags.output) args.push('--output', flags.output);
     if (flags.verbose) args.push('--verbose');
 
     // Re-invoke the same `mj` binary. argv[1] is the entry script path.
     const mjBin = process.argv[1] ?? 'mj';
-    const code = await spawnInherit(process.execPath, [mjBin, ...args]);
+    const code = await SpawnInherit(process.execPath, [mjBin, ...args]);
     if (code !== 0) this.exit(code);
   }
 }

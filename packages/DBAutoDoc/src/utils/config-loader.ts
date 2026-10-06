@@ -11,7 +11,7 @@ export class ConfigLoader {
    * Load configuration from file
    * Supports environment variable expansion using ${ENV_VAR} syntax
    */
-  public static async load(configPath: string): Promise<DBAutoDocConfig> {
+  public static async Load(configPath: string): Promise<DBAutoDocConfig> {
     try {
       const content = await fs.readFile(configPath, 'utf-8');
 
@@ -32,6 +32,11 @@ export class ConfigLoader {
     }
   }
 
+  /** @deprecated Use {@link Load}. */
+  public static async load(configPath: string): Promise<DBAutoDocConfig> {
+    return this.Load(configPath);
+  }
+
   /**
    * Expand environment variables in string
    * Supports ${VAR_NAME} syntax
@@ -49,7 +54,7 @@ export class ConfigLoader {
   /**
    * Save configuration to file
    */
-  public static async save(config: DBAutoDocConfig, configPath: string): Promise<void> {
+  public static async Save(config: DBAutoDocConfig, configPath: string): Promise<void> {
     try {
       const dir = path.dirname(configPath);
       await fs.mkdir(dir, { recursive: true });
@@ -61,10 +66,15 @@ export class ConfigLoader {
     }
   }
 
+  /** @deprecated Use {@link Save}. */
+  public static async save(config: DBAutoDocConfig, configPath: string): Promise<void> {
+    return this.Save(config, configPath);
+  }
+
   /**
    * Create default configuration
    */
-  public static createDefault(): DBAutoDocConfig {
+  public static CreateDefault(): DBAutoDocConfig {
     return {
       version: '1.0.0',
       database: {
@@ -117,6 +127,11 @@ export class ConfigLoader {
         exclude: ['sysdiagrams', '__MigrationHistory']
       }
     };
+  }
+
+  /** @deprecated Use {@link CreateDefault}. */
+  public static createDefault(): DBAutoDocConfig {
+    return this.CreateDefault();
   }
 
   /**

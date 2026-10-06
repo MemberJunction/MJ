@@ -88,4 +88,4 @@ This package wraps the excellent [sqlglot](https://github.com/tobymao/sqlglot) P
 
 ## License
 
-ISC
+Business Source License 1.1 — see [LICENSE](../../LICENSE) for details.

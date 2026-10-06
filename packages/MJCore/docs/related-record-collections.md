@@ -3,18 +3,20 @@
 > A parent record and the rows that point at it — loaded, validated and persisted as **one unit**,
 > from a single `entity.Save()`, on the server *and* in the browser.
 
-This is the horizontal counterpart to [IS-A relationships](./isa-relationships.md). IS-A is
+This is the horizontal 1:N counterpart to [IS-A relationships](./isa-relationships.md). IS-A is
 *vertical*: one logical record spread across parent and child tables sharing a primary key. A
-related-record collection is *horizontal*: a header plus N rows that carry a foreign key back to it —
-order lines, journal entry lines, payment allocations, an action's parameters.
+related-record collection is *horizontal*: a header plus N rows that carry a foreign key **back to
+it** — order lines, journal entry lines, payment allocations, an action's parameters. For the
+inverted 1:1 — an owner-held FK such as `Deal.OrderID` — see
+[Embedded Records](./embedded-records.md).
 
-| | IS-A subtype | Related-record collection |
-|---|---|---|
-| MJ vocabulary | `ChildEntities`, `IsChildType`, `_childEntity` | `RelatedEntities`, `EntityRelationshipInfo` |
-| Primary key | **Shared** with the parent | **Its own** |
-| Cardinality | At most one per parent | Many per parent |
-| Join | Same PK | `RelatedEntityJoinField` (a real FK) |
-| Declared by | Schema (`Entity.ParentID`) | `EntityRelationship.RelatedRecordCollection` |
+| | IS-A subtype | Related-record collection | Embedded record |
+|---|---|---|---|
+| MJ vocabulary | `ChildEntities`, `IsChildType`, `_childEntity` | `RelatedEntities`, `EntityRelationshipInfo` | `DeclareEmbeddedRecord`, `{Field}_Object` |
+| Primary key | **Shared** with the parent | **Its own** | **Its own** |
+| Cardinality | At most one per parent | Many per parent | At most one |
+| Join | Same PK | FK **on the related row** | FK **on the owner** |
+| Declared by | Schema (`Entity.ParentID`) | `EntityRelationship.RelatedRecordCollection` | `EntityField.EmbeddedRecord` |
 
 **The word "child" means IS-A subtype in MJCore and nothing else.** That is why this feature says
 *related records* throughout — `DeclareRelatedRecords`, `RelatedRecordCollection`, `RelatedEntity`,
@@ -76,6 +78,36 @@ export class OrderEntity extends mjBizAppsOrdersOrderEntity {
 `ClassFactory` priority auto-increments by load order, so a server-only subclass extending this one
 still wins server-side with no configuration — and the browser keeps the collection.
 
+### At runtime — `DeclareRelatedRecordsDynamic` (generic engines only)
+
+`DeclareRelatedRecords` is protected, so only the class itself can call it. Engines that work on
+*any* entity need to attach a collection from outside, to a relationship the class never declared.
+`DeclareRelatedRecordsDynamic(options)` is the public entry point for that. It takes the same
+`RelatedRecordCollectionOptions` and returns the same `RelatedRecordCollection`:
+
+```typescript
+// Record Cloning's materializer, when the parent has no writable collection for this relationship
+const lines = parent.DeclareRelatedRecordsDynamic({
+    Name: '_mj_clone_Order_Lines_OrderHeaderID',
+    RelatedEntity: 'MJ_BizApps_Orders: Order Lines',
+    RelatedEntityJoinField: 'OrderHeaderID',
+    Source: 'database',
+    ReadOnly: false,
+});
+```
+
+- It registers the collection on **that instance only**. Other instances, and the other tier,
+  don't get it.
+- It throws if a companion with that name is already registered. Look for an existing declared
+  collection first. The cloning materializer reuses a writable collection that matches the child
+  entity and join field.
+- Once registered, the collection behaves like any other. `Save()` includes its rows in the
+  parent's save plan.
+- Current callers: `CloneMaterializer` (`@memberjunction/record-cloning`) and `mj sync push`, which
+  resolves a record's `collections` key to a relationship and declares a collection when the class has none.
+
+In entity code, don't use it. Declare the collection in metadata or on a shared subclass (above).
+
 ---
 
 ## 2. What happens on `Save()` — the local flow
@@ -107,15 +139,17 @@ flowchart TD
     Accept --> Done([return true])
 
     Node -.->|any node fails| Rollback[scope.Rollback]
-    Rollback --> Failed([return false<br/><b>nothing persisted</b>])
+    Rollback --> Restore[Put every record back<br/>as it was before Save<br/><i>IS-A parents included</i>]
+    Restore --> Failed([return false<br/><b>nothing persisted</b>])
 
     style Single fill:#1b5e20,stroke:#66bb6a,color:#fff
     style Guarantees fill:#0d47a1,stroke:#64b5f6,color:#fff
     style Rollback fill:#b71c1c,stroke:#ef5350,color:#fff
+    style Restore fill:#b71c1c,stroke:#ef5350,color:#fff
     style Failed fill:#b71c1c,stroke:#ef5350,color:#fff
 ```
 
-Three properties of that diagram are the whole design:
+Four properties of that diagram are the whole design:
 
 **A single-node plan is the old path, untouched.** An entity with no collections — or whose
 collections are empty — takes the byte-for-byte original save. That is what makes this safe to
@@ -129,6 +163,13 @@ path to quietly skip a guarantee the single-record path has.
 **Validation runs over the complete set — including removals — before anything is written.** A
 cross-record invariant ("debits must equal credits") therefore sees the whole graph, rather than
 being evaluated after half of it has landed.
+
+**A failure leaves every record as it was before `Save()`.** Each node that saved before the failure
+was finalized as saved and clean, and so was each IS-A parent above it. The rollback undoes their
+writes, and the graph puts them back in memory too: saved flags, values and pending edits. The same
+`Save()` can then simply be called again. A delete graph works the same way: a record it deletes is
+reset with `NewRecord()` only once the graph commits, so a rollback leaves it saved and a retry
+deletes it.
 
 ---
 
@@ -453,6 +494,11 @@ await order.Delete();   // OnRemove:'delete' collections cascade — related rec
 Records still go through their own `Delete()`, so soft-delete, Record Changes and entity actions
 all behave normally.
 
+The one transaction is the server's. There, a failed delete rolls back and every record stays saved,
+so the same `Delete()` can be retried. A client provider has no transaction to open, so the deletes run
+one at a time: a failure partway leaves the earlier deletes done, and their records reset. For an
+atomic delete from the browser, expose a remote operation that deletes the graph on the server.
+
 ### Validating across records
 
 ```typescript
@@ -629,7 +675,35 @@ same record cannot produce a phantom cycle.
 
 ---
 
-## 7. Behavior changes for adopters
+## 7. Polymorphic IS-A Child Support in Collections & Embedded Records
+
+When an entity hierarchy uses [IS-A inheritance](./isa-relationships.md) (e.g. `Order Lines` with subtypes `Event Order Lines`, `Subscription Order Lines`), a `RelatedRecordCollection` (and `EmbeddedRecord`) can hold **polymorphic IS-A leaf entity instances** directly:
+
+```typescript
+// Add a polymorphic IS-A leaf entity directly to order.Lines
+const eventLine = await provider.GetEntityObject<EventOrderLineEntity>('MJ_BizApps_Orders: Event Order Lines');
+eventLine.NewRecord();
+eventLine.ProductID = eventProduct.ID;
+eventLine.Quantity = 1;
+eventLine.CheckInAt = new Date();
+
+order.Lines.Add(eventLine); // stamps OrderHeaderID onto eventLine
+```
+
+### How it works across the wire
+
+1. **Wire Serialization**: Each wire item carries its specific `EntityName` (e.g. `'MJ_BizApps_Orders: Event Order Lines'`), falling back to the collection's declared `RelatedEntityName` for standard homogeneous records.
+2. **Wire Deserialization**: Server-side rehydration reads `row.EntityName` and instantiates the proper IS-A subclass via `provider.GetEntityObject(entityName, user)`.
+3. **IS-A Validation & Persistence**:
+   - Because `EventOrderLineEntity` is an IS-A leaf node, it inherits and shares all base `OrderLine` fields (`OrderHeaderID`, `ProductID`, `Quantity`, `UnitPrice`) through its internal IS-A parent chain.
+   - When the graph saves, BaseEntity's native IS-A pipeline validates both parent and child fields, and persists the parent table row and the child table row atomically within the same database transaction.
+4. **Removals**: Polymorphic deletions preserve `__entityName` in the removal payload so the correct IS-A entity is loaded and deleted.
+
+The exact same polymorphic mechanism applies to [Embedded Records](./embedded-records.md) via `EmbeddedRecordWire.EntityName`.
+
+---
+
+## 8. Behavior changes for adopters
 
 Declaring a collection changes two things about the parent, both of them fixes:
 
@@ -646,6 +720,7 @@ Entities without collections are unaffected in every respect.
 ## See also
 
 - [IS-A Relationships](./isa-relationships.md) — the vertical counterpart
+- [Embedded Records](./embedded-records.md) — the owner-held 1:1 counterpart
 - [Transactions & Batching Guide](../../../guides/TRANSACTIONS_AND_BATCHING_GUIDE.md) — provider
   transactions vs TransactionGroups vs entity graphs, and which you want
 - [Remote Operations Showcase](./REMOTE_OPERATIONS_SHOWCASE.md) — the primitive the network path rides on

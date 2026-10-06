@@ -1,9 +1,9 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
-import axios from "axios";
+import { HttpPost, IsHttpError } from "@memberjunction/network-utils";
 import { GeocodingProviderRegistry, IGeocodingProvider, ProviderGeocodeResult } from "@memberjunction/geo-core";
-import { getApiIntegrationsConfig } from "../../config";
+import { GetApiIntegrationsConfig } from "../../config";
 
 // ---------------------------------------------------------------------------
 // Shared types
@@ -65,7 +65,7 @@ interface GoogleAddressValidationResponse {
 // ---------------------------------------------------------------------------
 
 function getGoogleApiKey(): string | undefined {
-    const config = getApiIntegrationsConfig();
+    const config = GetApiIntegrationsConfig();
     return config.google?.geocoding?.apiKey
         || process.env.GOOGLE_GEOCODING_API_KEY
         || process.env.GOOGLE_MAPS_API_KEY;
@@ -367,13 +367,13 @@ export class ValidateAddressAction extends BaseAction {
         };
 
         try {
-            const response = await axios.post<GoogleAddressValidationResponse>(
+            const response = await HttpPost<GoogleAddressValidationResponse>(
                 `https://addressvalidation.googleapis.com/v1:validateAddress?key=${apiKey}`,
                 requestBody,
-                { timeout: 10000 }
+                { Timeout: 10000 }
             );
 
-            const result = response.data.result;
+            const result = response.Data.result;
             if (!result) {
                 return { Success: false, ResultCode: 'EMPTY_RESPONSE', Message: 'Empty response from Google Address Validation API' };
             }
@@ -421,7 +421,7 @@ export class ValidateAddressAction extends BaseAction {
                 Message: JSON.stringify(validationResult, null, 2)
             };
         } catch (error) {
-            if (axios.isAxiosError(error) && error.response?.status === 403) {
+            if (IsHttpError(error) && error.Status === 403) {
                 return {
                     Success: false,
                     ResultCode: 'API_NOT_ENABLED',

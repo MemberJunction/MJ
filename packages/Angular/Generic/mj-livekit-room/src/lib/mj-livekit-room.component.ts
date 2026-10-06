@@ -1,9 +1,9 @@
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, Input, OnInit, Output, ViewChild, inject } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, DestroyRef, EventEmitter, Input, OnInit, Output, ViewChild, inject } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UUIDsEqual } from '@memberjunction/global';
 import { RunView } from '@memberjunction/core';
-import { GraphQLDataProvider, GraphQLLiveKitClient, RealtimeModelVoices, RealtimeVoiceOption } from '@memberjunction/graphql-dataprovider';
-import { LiveKitRoomComponent, type LiveKitRoomLayout } from '@memberjunction/ng-livekit-room';
+import { GraphQLDataProvider, GraphQLLiveKitClient, LiveKitRoomTurnState, RealtimeModelVoices, RealtimeVoiceOption } from '@memberjunction/graphql-dataprovider';
+import { LiveKitRoomComponent, LiveKitTurnStateComponent, SummarizeFloor, type LiveKitRoomLayout } from '@memberjunction/ng-livekit-room';
 import { MJStorageMediaPlayerComponent } from '@memberjunction/ng-media-player';
 import type {
   LiveKitDataMessage,
@@ -13,6 +13,18 @@ import type {
   LiveKitRoomError,
   LiveKitRoomState,
 } from '@memberjunction/livekit-room-core';
+import { TURN_POLL_DEFAULT_INTERVAL_MS, TurnStatePoller } from './turn-state-poller';
+import {
+  BuildRosterTurnBadge,
+  ParseTurnAddressing,
+  ParseTurnMode,
+  ShouldPollTurnState,
+  TURN_ADDRESSING_OPTIONS,
+  TURN_MODE_OPTIONS,
+  type RosterTurnBadge,
+  type TurnAddressingChoice,
+  type TurnModeChoice,
+} from './turn-taking-options';
 
 /** How the MJ binding obtains its room: start an agent in a room, or just join an existing room. */
 export type MJLiveKitConnectionMode = 'agent' | 'join';
@@ -49,7 +61,7 @@ export interface AgentInRoom {
   selector: 'mj-livekit-agent-room',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [LiveKitRoomComponent, MJStorageMediaPlayerComponent],
+  imports: [LiveKitRoomComponent, LiveKitTurnStateComponent, MJStorageMediaPlayerComponent],
   template: `
     @if (recordingFileId && showRecordingPanel) {
       <div class="mj-lk-recording">
@@ -124,6 +136,11 @@ export interface AgentInRoom {
               @for (a of agentsInRoom; track a.SessionBridgeID) {
                 <div class="mj-lk-agents__row">
                   <span class="mj-lk-agents__name"><i class="fa-solid fa-robot"></i> {{ a.Name }}</span>
+                  @if (RosterBadges.get(a.SessionBridgeID.toLowerCase()); as badge) {
+                    <span class="mj-lk-agents__turn" [class.mj-lk-agents__turn--floor]="badge.HasFloor" [title]="badge.Label + (badge.HasFloor ? ' - has the floor' : '')">
+                      <i class="fa-solid" [class.fa-microphone-lines]="badge.HasFloor" [class.fa-microphone-lines-slash]="!badge.HasFloor" aria-hidden="true"></i>
+                    </span>
+                  }
                   <button type="button" class="mj-lk-agents__remove" title="Remove agent"
                     [disabled]="a.Removing" (click)="RemoveAgent(a)">
                     <i class="fa-solid" [class.fa-xmark]="!a.Removing" [class.fa-spinner]="a.Removing" [class.fa-spin]="a.Removing"></i>
@@ -160,6 +177,22 @@ export interface AgentInRoom {
                     }
                   </div>
                 }
+                @if (EnableTurnTaking) {
+                  <div class="mj-lk-agents__overrides">
+                    <select class="mj-input mj-lk-agents__select mj-lk-agents__select--sm" (change)="OnAddTurnModeChange($event)" title="Turn-taking mode">
+                      <option value="">Default turn mode</option>
+                      @for (o of TurnModeOptions; track o.Value) {
+                        <option [value]="o.Value" [title]="o.Hint" [selected]="o.Value === AddTurnMode">{{ o.Label }}</option>
+                      }
+                    </select>
+                    <select class="mj-input mj-lk-agents__select mj-lk-agents__select--sm" (change)="OnAddTurnAddressingChange($event)" title="How the agent decides it was addressed">
+                      <option value="">Default addressing</option>
+                      @for (o of TurnAddressingOptions; track o.Value) {
+                        <option [value]="o.Value" [title]="o.Hint" [selected]="o.Value === AddTurnAddressing">{{ o.Label }}</option>
+                      }
+                    </select>
+                  </div>
+                }
               }
               @if (addError) {
                 <div class="mj-lk-agents__error">{{ addError }}</div>
@@ -182,6 +215,29 @@ export interface AgentInRoom {
               </button>
             }
           </div>
+        </div>
+      }
+
+      @if (EnableTurnTaking && resolvedRoomName) {
+        <div class="mj-lk-turn">
+          @if (ShowTurnPanel) {
+            <div class="mj-lk-turn__panel">
+              <div class="mj-lk-agents__head mj-lk-turn__head">
+                <span>Turn-taking</span>
+                <button type="button" class="mj-lk-recording__close" title="Close" (click)="ToggleTurnPanel()">
+                  <i class="fa-solid fa-xmark"></i>
+                </button>
+              </div>
+              <mj-livekit-turn-state [State]="TurnState"></mj-livekit-turn-state>
+              @if (TurnError) {
+                <div class="mj-lk-agents__error">{{ TurnError }}</div>
+              }
+            </div>
+          }
+          <button type="button" class="mj-lk-agents__toggle" [class.mj-lk-turn__pill--active]="ShowTurnPanel"
+            title="Who has the floor, hand-offs, backchannels and the agent turn cap" (click)="ToggleTurnPanel()">
+            <i class="fa-solid fa-people-arrows"></i> {{ TurnPillLabel }}
+          </button>
         </div>
       }
       </div>
@@ -340,6 +396,41 @@ export interface AgentInRoom {
         font-size: 0.75rem;
         color: var(--mj-status-error-text, var(--mj-status-error));
       }
+      .mj-lk-agents__turn {
+        flex: none;
+        color: var(--mj-text-muted);
+      }
+      .mj-lk-agents__turn--floor {
+        color: var(--mj-brand-primary);
+      }
+      .mj-lk-turn {
+        position: absolute;
+        right: 16px;
+        bottom: 84px;
+        z-index: 40;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 8px;
+      }
+      .mj-lk-turn__panel {
+        width: 300px;
+        max-height: 60vh;
+        overflow-y: auto;
+        padding: 10px;
+        border: 1px solid var(--mj-border-default);
+        border-radius: 10px;
+        background: var(--mj-bg-surface-elevated, var(--mj-bg-surface));
+        box-shadow: var(--mj-shadow-md, 0 6px 20px rgba(0, 0, 0, 0.25));
+      }
+      .mj-lk-turn__head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .mj-lk-turn__pill--active {
+        border-color: var(--mj-brand-primary);
+      }
       .mj-lk-recording {
         margin-bottom: 12px;
         padding: 12px;
@@ -400,7 +491,16 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
   /** The display name the local user joins as. Defaults to the authenticated user server-side. */
   @Input() public DisplayName: string | null = null;
   /** Turn-taking mode for the agent. */
-  @Input() public TurnMode: 'Passive' | 'Active' | 'Hybrid' | null = null;
+  @Input() public TurnMode: TurnModeChoice | null = null;
+  /**
+   * How the agent decides it was addressed: `Auto` (the default: the model's own judgement when it can give it,
+   * name matching otherwise), `ModelSide`, or `Regex`. Applies to the INITIAL agent; agents added in-room pick their own.
+   */
+  @Input() public TurnAddressing: TurnAddressingChoice | null = null;
+  /** Show the turn-taking panel (floor holder, hand-offs, backchannels, loop cap) and per-agent mode pickers. */
+  @Input() public EnableTurnTaking = true;
+  /** How often the turn-taking panel refreshes, in ms (clamped to a sensible minimum). */
+  @Input() public TurnPollIntervalMs = TURN_POLL_DEFAULT_INTERVAL_MS;
   /** Resolve the connection automatically on init. */
   @Input() public AutoStart = true;
 
@@ -423,6 +523,11 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
   /** Per-session VOICE override for the INITIAL agent (from the host's pre-join picker). */
   @Input() public RealtimeVoice: string | null = null;
   /**
+   * Start the initial agent able to bring a person, a phone number or another agent into this same room (a "transfer to a human"
+   * that the visitor never leaves the room for). Honoured only when the server has handoff configured; otherwise ignored.
+   */
+  @Input() public EnableHandoff = false;
+  /**
    * Whether the dev model/voice pickers are shown in the in-room "Add an agent" control. The HOST
    * computes this (the `Realtime: Advanced Session Controls` authorization) and passes it down — this
    * generic component never evaluates authorizations itself.
@@ -432,51 +537,175 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
   @Input() public AvailableModels: RealtimeModelVoices[] = [];
 
   /** True briefly after the invite link is copied (drives the "Link copied" pill state). */
-  public inviteCopied = false;
+  public InviteCopied = false;
+
+  /** @deprecated Use {@link InviteCopied}. */
+  public get inviteCopied() {
+    return this.InviteCopied;
+  }
+  /** @deprecated Use {@link InviteCopied}. */
+  public set inviteCopied(value) {
+    this.InviteCopied = value;
+  }
 
   /** Whether the floating agents panel is open. */
-  public showAgentsPanel = false;
+  public ShowAgentsPanel = false;
+
+  /** @deprecated Use {@link ShowAgentsPanel}. */
+  public get showAgentsPanel() {
+    return this.ShowAgentsPanel;
+  }
+  /** @deprecated Use {@link ShowAgentsPanel}. */
+  public set showAgentsPanel(value) {
+    this.ShowAgentsPanel = value;
+  }
   /** The agent bots currently bridged into the room (the first is the one started on join). */
-  public agentsInRoom: AgentInRoom[] = [];
+  public AgentsInRoom: AgentInRoom[] = [];
+
+  /** @deprecated Use {@link AgentsInRoom}. */
+  public get agentsInRoom(): AgentInRoom[] {
+    return this.AgentsInRoom;
+  }
+  /** @deprecated Use {@link AgentsInRoom}. */
+  public set agentsInRoom(value: AgentInRoom[]) {
+    this.AgentsInRoom = value;
+  }
   /** The target id chosen in the "Add an agent" picker. */
-  public addTargetId: string | null = null;
+  public AddTargetId: string | null = null;
+
+  /** @deprecated Use {@link AddTargetId}. */
+  public get addTargetId(): string | null {
+    return this.AddTargetId;
+  }
+  /** @deprecated Use {@link AddTargetId}. */
+  public set addTargetId(value: string | null) {
+    this.AddTargetId = value;
+  }
   /** The MODEL override chosen in the "Add an agent" picker (dev-only; null = co-agent/target default). */
-  public addModelId: string | null = null;
+  public AddModelId: string | null = null;
+
+  /** @deprecated Use {@link AddModelId}. */
+  public get addModelId(): string | null {
+    return this.AddModelId;
+  }
+  /** @deprecated Use {@link AddModelId}. */
+  public set addModelId(value: string | null) {
+    this.AddModelId = value;
+  }
   /** The VOICE override chosen in the "Add an agent" picker (dev-only; null = co-agent/target default). */
-  public addVoice: string | null = null;
+  public AddVoice: string | null = null;
+
+  /** @deprecated Use {@link AddVoice}. */
+  public get addVoice(): string | null {
+    return this.AddVoice;
+  }
+  /** @deprecated Use {@link AddVoice}. */
+  public set addVoice(value: string | null) {
+    this.AddVoice = value;
+  }
   /** Exposed for template use — platform-safe UUID equality (SQL upper vs PG lower). */
   public UUIDsEqual = UUIDsEqual;
   /** True while an Add request is in flight. */
-  public addingAgent = false;
+  public AddingAgent = false;
+
+  /** @deprecated Use {@link AddingAgent}. */
+  public get addingAgent() {
+    return this.AddingAgent;
+  }
+  /** @deprecated Use {@link AddingAgent}. */
+  public set addingAgent(value) {
+    this.AddingAgent = value;
+  }
   /** Last add error, shown under the picker. */
-  public addError: string | null = null;
+  public AddError: string | null = null;
+
+  /** @deprecated Use {@link AddError}. */
+  public get addError(): string | null {
+    return this.AddError;
+  }
+  /** @deprecated Use {@link AddError}. */
+  public set addError(value: string | null) {
+    this.AddError = value;
+  }
   /** True while an "End meeting" (stop all agents + leave) is in flight. */
-  public endingMeeting = false;
+  public EndingMeeting = false;
+
+  /** @deprecated Use {@link EndingMeeting}. */
+  public get endingMeeting() {
+    return this.EndingMeeting;
+  }
+  /** @deprecated Use {@link EndingMeeting}. */
+  public set endingMeeting(value) {
+    this.EndingMeeting = value;
+  }
+
+  // ── Turn-taking ────────────────────────────────────────────────────────────────────
+  /** The turn-mode choices for the add-agent picker. */
+  public readonly TurnModeOptions = TURN_MODE_OPTIONS;
+  /** The addressing choices for the add-agent picker. */
+  public readonly TurnAddressingOptions = TURN_ADDRESSING_OPTIONS;
+  /** The turn mode chosen in the "Add an agent" picker (null = the room's default). */
+  public AddTurnMode: TurnModeChoice | null = null;
+  /** The addressing mode chosen in the "Add an agent" picker (null = Auto). */
+  public AddTurnAddressing: TurnAddressingChoice | null = null;
+  /** Whether the turn-taking panel is open. */
+  public ShowTurnPanel = false;
+  /** The room's latest turn-taking state (`null` until the first poll of a room with agents answers). */
+  public TurnState: LiveKitRoomTurnState | null = null;
+  /** The latest turn-taking poll error, shown in the panel. */
+  public TurnError: string | null = null;
+  /** The label on the turn-taking pill; names the floor holder when there is one. */
+  public TurnPillLabel = 'Turns';
+  /** Each seated agent's turn-taking badge, keyed by lowercase bridge-session id. */
+  public RosterBadges = new Map<string, RosterTurnBadge>();
+
+  private readonly destroyRef = inject(DestroyRef);
+  private turnPoller: TurnStatePoller | null = null;
 
   /** The inner Generic room — used to trigger the local disconnect when ending/leaving the meeting. */
   @ViewChild(LiveKitRoomComponent) private roomComponent?: LiveKitRoomComponent;
 
   /** Available agents not already in the room (by target id) — the "Add" picker options. */
-  public get availableToAdd(): { ID: string; Name: string }[] {
-    const present = new Set(this.agentsInRoom.map((a) => (a.TargetAgentID ?? '').toLowerCase()));
+  public get AvailableToAdd(): { ID: string; Name: string }[] {
+    const present = new Set(this.AgentsInRoom.map((a) => (a.TargetAgentID ?? '').toLowerCase()));
     return this.AvailableAgents.filter((a) => !present.has(a.ID.toLowerCase()));
   }
 
+  /** @deprecated Use {@link AvailableToAdd}. */
+  public get availableToAdd(): { ID: string; Name: string }[] {
+    return this.AvailableToAdd;
+  }
+
   /** Voices for the model chosen in the add-agent picker (empty when no model picked or it has none). */
-  public get addVoices(): RealtimeVoiceOption[] {
-    const model = this.AvailableModels.find((m) => UUIDsEqual(m.ModelID, this.addModelId));
+  public get AddVoices(): RealtimeVoiceOption[] {
+    const model = this.AvailableModels.find((m) => UUIDsEqual(m.ModelID, this.AddModelId));
     return model?.Voices ?? [];
   }
 
+  /** @deprecated Use {@link AddVoices}. */
+  public get addVoices(): RealtimeVoiceOption[] {
+    return this.AddVoices;
+  }
+
   /** Records the add-agent MODEL choice; clears the voice so it can't outlive a model switch. */
+  public OnAddModelChange(event: Event): void {
+    this.AddModelId = (event.target as HTMLSelectElement).value || null;
+    this.AddVoice = null;
+  }
+
+  /** @deprecated Use {@link OnAddModelChange}. */
   public onAddModelChange(event: Event): void {
-    this.addModelId = (event.target as HTMLSelectElement).value || null;
-    this.addVoice = null;
+    return this.OnAddModelChange(event);
   }
 
   /** Records the add-agent VOICE choice. */
+  public OnAddVoiceChange(event: Event): void {
+    this.AddVoice = (event.target as HTMLSelectElement).value || null;
+  }
+
+  /** @deprecated Use {@link OnAddVoiceChange}. */
   public onAddVoiceChange(event: Event): void {
-    this.addVoice = (event.target as HTMLSelectElement).value || null;
+    return this.OnAddVoiceChange(event);
   }
 
   // ── Forwarded UI gates (see LiveKitRoomComponent) ────────────────────────────────
@@ -553,19 +782,73 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
 
   // ── View state ─────────────────────────────────────────────────────────────────
   /** Whether the binding is resolving the token/session. */
-  public loading = false;
+  public Loading = false;
+
+  /** @deprecated Use {@link Loading}. */
+  public get loading() {
+    return this.Loading;
+  }
+  /** @deprecated Use {@link Loading}. */
+  public set loading(value) {
+    this.Loading = value;
+  }
   /** The token/session-resolution error, if any. */
   public errorMessage: string | null = null;
   /** The resolved LiveKit server URL. */
-  public serverUrl: string | null = null;
+  public ServerUrl: string | null = null;
+
+  /** @deprecated Use {@link ServerUrl}. */
+  public get serverUrl(): string | null {
+    return this.ServerUrl;
+  }
+  /** @deprecated Use {@link ServerUrl}. */
+  public set serverUrl(value: string | null) {
+    this.ServerUrl = value;
+  }
   /** The resolved access token. */
-  public token: string | null = null;
+  public Token: string | null = null;
+
+  /** @deprecated Use {@link Token}. */
+  public get token(): string | null {
+    return this.Token;
+  }
+  /** @deprecated Use {@link Token}. */
+  public set token(value: string | null) {
+    this.Token = value;
+  }
   /** The display name passed to the room. */
-  public resolvedDisplayName: string | null = null;
+  public ResolvedDisplayName: string | null = null;
+
+  /** @deprecated Use {@link ResolvedDisplayName}. */
+  public get resolvedDisplayName(): string | null {
+    return this.ResolvedDisplayName;
+  }
+  /** @deprecated Use {@link ResolvedDisplayName}. */
+  public set resolvedDisplayName(value: string | null) {
+    this.ResolvedDisplayName = value;
+  }
   /** The resolved room name (for recording calls). */
-  public resolvedRoomName: string | null = null;
+  public ResolvedRoomName: string | null = null;
+
+  /** @deprecated Use {@link ResolvedRoomName}. */
+  public get resolvedRoomName(): string | null {
+    return this.ResolvedRoomName;
+  }
+  /** @deprecated Use {@link ResolvedRoomName}. */
+  public set resolvedRoomName(value: string | null) {
+    this.ResolvedRoomName = value;
+  }
   /** Whether a recording is currently in progress. */
-  public isRecording = false;
+  public IsRecording = false;
+
+  /** @deprecated Use {@link IsRecording}. */
+  public get isRecording() {
+    return this.IsRecording;
+  }
+  /** @deprecated Use {@link IsRecording}. */
+  public set isRecording(value) {
+    this.IsRecording = value;
+  }
   /** The active egress id, when recording. */
   private currentEgressId: string | null = null;
 
@@ -574,11 +857,30 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
    * (the server registers the egress MP4 and returns its file id) or resolved for an already-recorded room
    * on join. Drives the {@link MJStorageMediaPlayerComponent} playback panel.
    */
-  public recordingFileId: string | null = null;
+  public RecordingFileId: string | null = null;
+
+  /** @deprecated Use {@link RecordingFileId}. */
+  public get recordingFileId(): string | null {
+    return this.RecordingFileId;
+  }
+  /** @deprecated Use {@link RecordingFileId}. */
+  public set recordingFileId(value: string | null) {
+    this.RecordingFileId = value;
+  }
   /** Whether the recording playback panel is shown (dismissable). */
-  public showRecordingPanel = true;
+  public ShowRecordingPanel = true;
+
+  /** @deprecated Use {@link ShowRecordingPanel}. */
+  public get showRecordingPanel() {
+    return this.ShowRecordingPanel;
+  }
+  /** @deprecated Use {@link ShowRecordingPanel}. */
+  public set showRecordingPanel(value) {
+    this.ShowRecordingPanel = value;
+  }
 
   public ngOnInit(): void {
+    this.destroyRef.onDestroy(() => this.turnPoller?.Dispose());
     if (this.AutoStart) {
       void this.Start();
     }
@@ -597,18 +899,18 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
 
   /** Resolves the connection (mints a token and, in agent mode, starts the agent session). */
   public async Start(): Promise<void> {
-    this.loading = true;
+    this.Loading = true;
     this.errorMessage = null;
     this.cdr.markForCheck();
     try {
       const client = new GraphQLLiveKitClient(this.ProviderToUse as unknown as GraphQLDataProvider);
-      this.resolvedDisplayName = this.DisplayName;
+      this.ResolvedDisplayName = this.DisplayName;
       const connect = this.Mode === 'agent' ? this.startAgentSession(client) : this.joinRoom(client);
       await this.withTimeout(connect, this.ConnectTimeoutMs);
     } catch (err) {
       this.fail(err instanceof Error ? err.message : String(err));
     } finally {
-      this.loading = false;
+      this.Loading = false;
       this.cdr.markForCheck();
     }
   }
@@ -655,27 +957,35 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
       RealtimeVoice: this.RealtimeVoice ?? undefined,
       RoomName: this.RoomName ?? undefined,
       TurnMode: this.TurnMode ?? undefined,
+      EnableHandoff: this.EnableHandoff || undefined,
+      TurnAddressing: this.TurnAddressing ?? undefined,
     });
     if (!result.Success) {
       this.fail(result.ErrorMessage ?? 'Failed to start the agent session.');
       return;
     }
-    this.serverUrl = result.ServerUrl;
-    this.token = result.ClientToken;
-    this.resolvedRoomName = result.RoomName;
+    this.ServerUrl = result.ServerUrl;
+    this.Token = result.ClientToken;
+    this.ResolvedRoomName = result.RoomName;
     // Surface a prior recording for this resolved room (the server may have generated the room name).
     void this.loadExistingRecording(result.RoomName);
     // Track the agent we just brought in as the first entry in the in-room roster.
-    this.agentsInRoom = [
+    this.AgentsInRoom = [
       { SessionBridgeID: result.SessionBridgeID, TargetAgentID: this.TargetAgentID, Name: this.AgentName ?? 'Agent' },
     ];
     this.SessionStarted.emit({ SessionBridgeID: result.SessionBridgeID, RoomName: result.RoomName });
+    this.syncTurnPolling();
   }
 
   /** Picker selection handler for the in-room "Add an agent" control (native select; no FormsModule dep). */
+  public OnAddTargetChange(event: Event): void {
+    this.AddTargetId = (event.target as HTMLSelectElement).value || null;
+    this.AddError = null;
+  }
+
+  /** @deprecated Use {@link OnAddTargetChange}. */
   public onAddTargetChange(event: Event): void {
-    this.addTargetId = (event.target as HTMLSelectElement).value || null;
-    this.addError = null;
+    return this.OnAddTargetChange(event);
   }
 
   /**
@@ -683,39 +993,43 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
    * and appends it to the roster. The new bot joins the live room alongside the existing participants.
    */
   public async AddAgent(): Promise<void> {
-    if (!this.addTargetId || !this.resolvedRoomName || this.addingAgent) {
+    if (!this.AddTargetId || !this.ResolvedRoomName || this.AddingAgent) {
       return;
     }
-    const target = this.AvailableAgents.find((a) => UUIDsEqual(a.ID, this.addTargetId));
-    this.addingAgent = true;
-    this.addError = null;
+    const target = this.AvailableAgents.find((a) => UUIDsEqual(a.ID, this.AddTargetId));
+    this.AddingAgent = true;
+    this.AddError = null;
     this.cdr.markForCheck();
     try {
       const client = new GraphQLLiveKitClient(this.ProviderToUse as unknown as GraphQLDataProvider);
       const result = await client.StartAgentRoomSession({
         AgentID: this.AgentID ?? undefined,
         AgentName: target?.Name ?? undefined,
-        TargetAgentID: this.addTargetId,
-        RealtimeModelID: this.addModelId ?? undefined,
-        RealtimeVoice: this.addVoice ?? undefined,
-        RoomName: this.resolvedRoomName,
-        TurnMode: this.TurnMode ?? undefined,
+        TargetAgentID: this.AddTargetId,
+        RealtimeModelID: this.AddModelId ?? undefined,
+        RealtimeVoice: this.AddVoice ?? undefined,
+        RoomName: this.ResolvedRoomName,
+        TurnMode: this.AddTurnMode ?? this.TurnMode ?? undefined,
+        TurnAddressing: this.AddTurnAddressing ?? this.TurnAddressing ?? undefined,
       });
       if (!result.Success) {
-        this.addError = result.ErrorMessage ?? 'Failed to add the agent.';
+        this.AddError = result.ErrorMessage ?? 'Failed to add the agent.';
         return;
       }
-      this.agentsInRoom = [
-        ...this.agentsInRoom,
-        { SessionBridgeID: result.SessionBridgeID, TargetAgentID: this.addTargetId, Name: target?.Name ?? 'Agent' },
+      this.AgentsInRoom = [
+        ...this.AgentsInRoom,
+        { SessionBridgeID: result.SessionBridgeID, TargetAgentID: this.AddTargetId, Name: target?.Name ?? 'Agent' },
       ];
-      this.addTargetId = null;
-      this.addModelId = null;
-      this.addVoice = null;
+      this.AddTargetId = null;
+      this.AddModelId = null;
+      this.AddVoice = null;
+      this.AddTurnMode = null;
+      this.AddTurnAddressing = null;
+      this.syncTurnPolling();
     } catch (err) {
-      this.addError = err instanceof Error ? err.message : String(err);
+      this.AddError = err instanceof Error ? err.message : String(err);
     } finally {
-      this.addingAgent = false;
+      this.AddingAgent = false;
       this.cdr.markForCheck();
     }
   }
@@ -731,7 +1045,8 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
       const client = new GraphQLLiveKitClient(this.ProviderToUse as unknown as GraphQLDataProvider);
       const ok = await client.StopAgentRoomSession(agent.SessionBridgeID);
       if (ok) {
-        this.agentsInRoom = this.agentsInRoom.filter((a) => a.SessionBridgeID !== agent.SessionBridgeID);
+        this.AgentsInRoom = this.AgentsInRoom.filter((a) => a.SessionBridgeID !== agent.SessionBridgeID);
+        this.syncTurnPolling();
       } else {
         agent.Removing = false;
       }
@@ -751,22 +1066,23 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
    * billable agent sessions in an empty room.
    */
   public async EndMeeting(): Promise<void> {
-    if (this.endingMeeting) {
+    if (this.EndingMeeting) {
       return;
     }
-    this.endingMeeting = true;
+    this.EndingMeeting = true;
     this.cdr.markForCheck();
     try {
-      if (this.resolvedRoomName) {
+      if (this.ResolvedRoomName) {
         const client = new GraphQLLiveKitClient(this.ProviderToUse as unknown as GraphQLDataProvider);
-        await client.EndRoom(this.resolvedRoomName);
+        await client.EndRoom(this.ResolvedRoomName);
       }
-      this.agentsInRoom = [];
+      this.AgentsInRoom = [];
+      this.syncTurnPolling();
     } catch {
       /* best-effort — fall through and still disconnect the local user */
     } finally {
       await this.roomComponent?.Leave();
-      this.endingMeeting = false;
+      this.EndingMeeting = false;
       this.cdr.markForCheck();
     }
   }
@@ -775,23 +1091,28 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
    * Builds the shareable invite URL for THIS room: the current page URL with a `room=<roomName>` query
    * param. Opening it lands the invitee on the Live Room in join mode for the same room.
    */
-  public get inviteUrl(): string {
+  public get InviteUrl(): string {
     const url = new URL(window.location.href);
-    url.searchParams.set('room', this.resolvedRoomName ?? '');
+    url.searchParams.set('room', this.ResolvedRoomName ?? '');
     return url.toString();
+  }
+
+  /** @deprecated Use {@link InviteUrl}. */
+  public get inviteUrl(): string {
+    return this.InviteUrl;
   }
 
   /** Copies {@link inviteUrl} to the clipboard and flips the pill to "Link copied" briefly. */
   public async CopyInvite(): Promise<void> {
-    if (!this.resolvedRoomName) {
+    if (!this.ResolvedRoomName) {
       return;
     }
     try {
-      await navigator.clipboard.writeText(this.inviteUrl);
-      this.inviteCopied = true;
+      await navigator.clipboard.writeText(this.InviteUrl);
+      this.InviteCopied = true;
       this.cdr.markForCheck();
       setTimeout(() => {
-        this.inviteCopied = false;
+        this.InviteCopied = false;
         this.cdr.markForCheck();
       }, 2000);
     } catch {
@@ -810,37 +1131,101 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
       this.fail(result.ErrorMessage ?? 'Failed to obtain a room token.');
       return;
     }
-    this.serverUrl = result.ServerUrl;
-    this.token = result.Token;
-    this.resolvedRoomName = this.RoomName;
+    this.ServerUrl = result.ServerUrl;
+    this.Token = result.Token;
+    this.ResolvedRoomName = this.RoomName;
+    this.syncTurnPolling();
+  }
+
+  /** Records the add-agent turn-mode choice. */
+  public OnAddTurnModeChange(event: Event): void {
+    this.AddTurnMode = ParseTurnMode((event.target as HTMLSelectElement).value);
+  }
+
+  /** Records the add-agent addressing choice. */
+  public OnAddTurnAddressingChange(event: Event): void {
+    this.AddTurnAddressing = ParseTurnAddressing((event.target as HTMLSelectElement).value);
+  }
+
+  /** Opens or closes the turn-taking panel, starting or stopping the live refresh to match. */
+  public ToggleTurnPanel(): void {
+    this.ShowTurnPanel = !this.ShowTurnPanel;
+    this.syncTurnPolling();
+    this.cdr.markForCheck();
+  }
+
+  /** Starts or stops polling the room's turn-taking state to match what is on screen and who is seated. */
+  private syncTurnPolling(): void {
+    const room = this.ResolvedRoomName;
+    if (!room || !ShouldPollTurnState(this.EnableTurnTaking, room, this.AgentsInRoom.length, this.ShowTurnPanel)) {
+      this.turnPoller?.Stop();
+      return;
+    }
+    this.ensureTurnPoller().Start(room);
+  }
+
+  private ensureTurnPoller(): TurnStatePoller {
+    if (!this.turnPoller) {
+      const client = new GraphQLLiveKitClient(this.ProviderToUse as unknown as GraphQLDataProvider);
+      this.turnPoller = new TurnStatePoller((room) => client.GetRoomTurnState(room), this.TurnPollIntervalMs);
+      this.turnPoller.State$.subscribe((state) => this.onTurnState(state));
+      this.turnPoller.Error$.subscribe((error) => {
+        this.TurnError = error;
+        this.cdr.markForCheck();
+      });
+    }
+    return this.turnPoller;
+  }
+
+  private onTurnState(state: LiveKitRoomTurnState | null): void {
+    this.TurnState = state;
+    this.TurnPillLabel = state && state.Agents.length > 0 ? SummarizeFloor(state).Label : 'Turns';
+    this.RosterBadges = this.buildRosterBadges(state);
+    this.cdr.markForCheck();
+  }
+
+  private buildRosterBadges(state: LiveKitRoomTurnState | null): Map<string, RosterTurnBadge> {
+    const badges = new Map<string, RosterTurnBadge>();
+    for (const agent of this.AgentsInRoom) {
+      const badge = BuildRosterTurnBadge(state, agent.SessionBridgeID);
+      if (badge) {
+        badges.set(agent.SessionBridgeID.toLowerCase(), badge);
+      }
+    }
+    return badges;
   }
 
   /** Toggles room recording via the RealtimeBridge GraphQL surface (server-authorized egress). */
-  public async onToggleRecording(): Promise<void> {
-    if (!this.resolvedRoomName) {
+  public async OnToggleRecording(): Promise<void> {
+    if (!this.ResolvedRoomName) {
       return;
     }
     const client = new GraphQLLiveKitClient(this.ProviderToUse as unknown as GraphQLDataProvider);
-    if (!this.isRecording) {
-      const result = await client.StartRecording(this.resolvedRoomName);
+    if (!this.IsRecording) {
+      const result = await client.StartRecording(this.ResolvedRoomName);
       if (result.Success) {
-        this.isRecording = true;
+        this.IsRecording = true;
         this.currentEgressId = result.EgressID;
       } else {
         this.fail(result.ErrorMessage ?? 'Failed to start recording.');
       }
     } else if (this.currentEgressId) {
       const stopped = await client.StopRecording(this.currentEgressId);
-      this.isRecording = false;
+      this.IsRecording = false;
       this.currentEgressId = null;
       // The server registers the egress MP4 as an MJ: Files row on stop and returns its id — surface it
       // in the playback panel. Absent when meeting-recording storage isn't configured server-side.
       if (stopped.Success && stopped.RecordingFileID) {
-        this.recordingFileId = stopped.RecordingFileID;
-        this.showRecordingPanel = true;
+        this.RecordingFileId = stopped.RecordingFileID;
+        this.ShowRecordingPanel = true;
       }
     }
     this.cdr.markForCheck();
+  }
+
+  /** @deprecated Use {@link OnToggleRecording}. */
+  public async onToggleRecording(): Promise<void> {
+    return this.OnToggleRecording();
   }
 
   /**
@@ -866,7 +1251,7 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
       );
       const fileId = result.Success ? result.Results[0]?.RecordingFileID ?? null : null;
       if (fileId) {
-        this.recordingFileId = fileId;
+        this.RecordingFileId = fileId;
         this.cdr.markForCheck();
       }
     } catch {

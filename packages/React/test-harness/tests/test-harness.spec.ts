@@ -13,9 +13,9 @@ describe('ReactTestHarness', () => {
   });
 
   it('should initialize browser context', async () => {
+    // initialize() rejects on failure (which fails the test); on success the harness is usable.
     await harness.initialize();
-    // If no error is thrown, initialization was successful
-    expect(true).toBe(true);
+    expect(harness).toBeInstanceOf(ReactTestHarness);
   });
 
   it('should execute simple component', async () => {

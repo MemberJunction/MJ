@@ -205,9 +205,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Process Run Details','ActionExecutionLogID')"
-                [NewRecordValues]="NewRecordValues('MJ: Process Run Details')"
+                [NewRecordValues]="NewRecordValues('MJ: Process Run Details','ActionExecutionLogID')"
                 [AllowLoad]="IsSectionExpanded('mJProcessRunDetails')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJProcessRunDetails', $event.totalRowCount)"
                 >
@@ -230,9 +230,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: User Routine Runs','ActionExecutionLogID')"
-                [NewRecordValues]="NewRecordValues('MJ: User Routine Runs')"
+                [NewRecordValues]="NewRecordValues('MJ: User Routine Runs','ActionExecutionLogID')"
                 [AllowLoad]="IsSectionExpanded('mJUserRoutineRuns')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJUserRoutineRuns', $event.totalRowCount)"
                 >
