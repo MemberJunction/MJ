@@ -22,10 +22,13 @@ import {
  * override, or another user's, returns FORBIDDEN for every caller (see
  * `CheckPersonalWrite` in `_shared.ts`): shared forms are managed from Form
  * Builder or the form's Manage drawer. The target's Component and Override flip
- * to Active in one entity transaction. The prior Active sibling is set aside after
- * that transaction, its Component first and its Override last; if one of those
- * saves fails, the action returns `PERSIST_FAILED` and the target stays Active.
- * The prior Override stays Active until its own save succeeds.
+ * to Active in one entity transaction. Each prior Active sibling is set aside after
+ * that transaction: its Override first, then its Component. Every prior is tried.
+ * If a save fails, the action returns `PERSIST_FAILED` that names each prior row
+ * not updated, and the target stays Active. A prior whose Override could not be
+ * set aside is still Active, so a retry sets it aside. A prior whose Override is
+ * set aside but whose Component status could not be updated is not found by a
+ * retry, and its Component keeps its old status.
  *
  * Idempotency. If the target Override is already Active, the caller's other
  * Active overrides on the entity are set aside and the action returns SUCCESS
@@ -156,10 +159,13 @@ async function findPriorActiveOverrides(
 }
 
 /**
- * Sets each prior version aside: its Component to Deprecated, then its Override to Inactive.
- * Returns `PERSIST_FAILED` at the first save that fails, or null when every prior is set aside.
- * The Override is saved last, so a prior that is not fully set aside is still Active and a later
- * lookup finds it again.
+ * Sets each prior version aside: its Override to Inactive, then its Component to Deprecated.
+ * Every prior is tried. Returns `PERSIST_FAILED` that names each prior row not updated, or null
+ * when every prior is set aside.
+ *
+ * The Override is saved first, so a Component that cannot be saved never leaves a second Active
+ * override. When a prior's Override save fails, its Component is left as it is, so the prior
+ * stays fully Active and a later lookup finds it again.
  */
 async function setPriorsAside(
     provider: IMetadataProvider,
@@ -167,29 +173,33 @@ async function setPriorsAside(
     targetID: string,
     priors: PriorActiveOverride[],
 ): Promise<ActionResultSimple | null> {
+    const failures: string[] = [];
     for (const prior of priors) {
-        const priorC = await LoadComponent(provider, user, prior.ComponentID);
-        if (priorC) {
-            priorC.Status = MapToComponentStatus('Inactive');
-            if (!(await priorC.Save())) {
-                return notSetAside(targetID, `component ${prior.ComponentID}`, priorC.LatestResult?.CompleteMessage);
-            }
-        }
         const priorO = await LoadOverride(provider, user, prior.ID);
         if (priorO) {
             priorO.Status = 'Inactive';
             if (!(await priorO.Save())) {
-                return notSetAside(targetID, `override ${prior.ID}`, priorO.LatestResult?.CompleteMessage);
+                failures.push(`The prior override ${prior.ID} could not be set aside (${reasonOf(priorO)}).`);
+                continue;
+            }
+        }
+        const priorC = await LoadComponent(provider, user, prior.ComponentID);
+        if (priorC) {
+            priorC.Status = MapToComponentStatus('Inactive');
+            if (!(await priorC.Save())) {
+                failures.push(`The prior override ${prior.ID} is set aside, but the status of its component ` +
+                    `${prior.ComponentID} could not be updated (${reasonOf(priorC)}).`);
             }
         }
     }
-    return null;
+    return failures.length > 0
+        ? Failure("PERSIST_FAILED", `Override ${targetID} is now Active. ${failures.join(' ')}`)
+        : null;
 }
 
-/** The result when the target is Active but a prior version's row could not be set aside. */
-function notSetAside(targetID: string, what: string, reason: string | undefined): ActionResultSimple {
-    return Failure("PERSIST_FAILED",
-        `Override ${targetID} is now Active, but the prior ${what} could not be set aside: ${reason ?? 'unknown error'}`);
+/** Why an entity's last save failed, as its latest result reports it. */
+function reasonOf(entity: { LatestResult?: { CompleteMessage?: string } | null }): string {
+    return entity.LatestResult?.CompleteMessage ?? 'unknown error';
 }
 
 /** Tree-shaking guard. */

@@ -21,9 +21,10 @@ import {
  *   - Flip the previously-pointed Component to Status='Inactive', target
  *     Component to Status='Active'.
  *
- * The override is saved first. If a Component's status then cannot be saved,
- * the action returns `PERSIST_FAILED` and says which Component; the override
- * stays re-pointed.
+ * The override is saved first. Both Component status saves are then tried, even
+ * when the first fails. If either fails, the action returns `PERSIST_FAILED` that
+ * names every Component whose status was not updated; the override stays
+ * re-pointed.
  *
  * Old Component rows are never deleted — they remain as immutable history.
  * A subsequent revert can move forward again to any version.
@@ -134,16 +135,22 @@ export class RevertInteractiveFormAction extends BaseAction {
             }
 
             // Flip Component statuses to reflect the new active selection.
+            const notUpdated: string[] = [];
             const newActive = await LoadComponent(provider, user, target.ID);
             if (newActive) {
                 newActive.Status = MapToComponentStatus('Active');
                 if (!(await newActive.Save())) {
-                    return statusNotUpdated(override.ID, target.ID, target.ID, newActive.LatestResult?.CompleteMessage);
+                    notUpdated.push(`Component ${target.ID} (${newActive.LatestResult?.CompleteMessage ?? 'unknown error'})`);
                 }
             }
             currentComponent.Status = MapToComponentStatus('Inactive');
             if (!(await currentComponent.Save())) {
-                return statusNotUpdated(override.ID, target.ID, currentComponent.ID, currentComponent.LatestResult?.CompleteMessage);
+                notUpdated.push(`Component ${currentComponent.ID} (${currentComponent.LatestResult?.CompleteMessage ?? 'unknown error'})`);
+            }
+            if (notUpdated.length > 0) {
+                return Failure("PERSIST_FAILED",
+                    `Override ${override.ID} was re-pointed to Component ${target.ID}, but the status of ` +
+                    `${notUpdated.join(' and ')} was not updated.`);
             }
 
             AddOutput(params, "OverrideID", override.ID);
@@ -163,13 +170,6 @@ export class RevertInteractiveFormAction extends BaseAction {
             return Failure("UNEXPECTED_ERROR", message);
         }
     }
-}
-
-/** The result when the override was re-pointed but a Component's status could not be saved. */
-function statusNotUpdated(overrideID: string, targetID: string, componentID: string, reason: string | undefined): ActionResultSimple {
-    return Failure("PERSIST_FAILED",
-        `Override ${overrideID} was re-pointed to Component ${targetID}, but the status of Component ${componentID} ` +
-        `was not updated: ${reason ?? 'unknown error'}`);
 }
 
 /** Tree-shaking guard. */
