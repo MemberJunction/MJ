@@ -31,10 +31,14 @@ interface EmployeeRow {
             <div class="mj-overview-card">
                 <div class="mj-card-header">
                     <div class="mj-card-title"><i class="fa-solid fa-users" style="color: var(--mj-brand-primary, #38bdf8);"></i> Company Team</div>
-                    <span class="mj-card-badge">{{ Employees.length }} Members</span>
+                    @if (!LoadError) {
+                        <span class="mj-card-badge">{{ Employees.length }} Members</span>
+                    }
                 </div>
                 <div class="mj-card-body">
-                    @if (Employees.length === 0) {
+                    @if (LoadError) {
+                        <span class="mj-load-error">{{ LoadError }}</span>
+                    } @else if (Employees.length === 0) {
                         <span style="font-size: 12px; color: var(--mj-text-muted);">No employees assigned directly to this company.</span>
                     } @else {
                         @for (emp of Employees; track emp.ID) {
@@ -123,6 +127,7 @@ interface EmployeeRow {
         }
         .mj-metric-label { color: var(--mj-text-secondary, #94a3b8); }
         .mj-metric-val { font-weight: 600; color: var(--mj-text-primary, #f8fafc); font-family: monospace; }
+        .mj-load-error { font-size: 12px; color: var(--mj-status-error); }
         .mj-pill { font-size: 10.5px; font-weight: 700; padding: 2px 6px; border-radius: 4px; }
         .mj-pill-green { background: rgba(16, 185, 129, 0.15); color: #10b981; }
         .mj-pill-blue { background: rgba(56, 189, 248, 0.15); color: #38bdf8; }
@@ -131,6 +136,8 @@ interface EmployeeRow {
 export class CompanyOverviewPanel extends BaseFormPanel<MJCompanyEntity> implements OnInit {
     private cdr = inject(ChangeDetectorRef);
     public Employees: EmployeeRow[] = [];
+    /** Set when the query fails, so the card shows the failure instead of an empty list. */
+    public LoadError: string | null = null;
 
     public get Company(): MJCompanyEntity | null {
         return this.Record;
@@ -151,12 +158,20 @@ export class CompanyOverviewPanel extends BaseFormPanel<MJCompanyEntity> impleme
                 MaxRows: 20,
                 ResultType: 'simple'
             });
-            if (res.Success && res.Results) {
-                this.Employees = res.Results;
-                this.cdr.markForCheck();
+            if (res.Success) {
+                this.Employees = res.Results ?? [];
+            } else {
+                this.showLoadError(res.ErrorMessage);
             }
         } catch (e) {
             console.error('Failed to load company employees:', e);
+            this.showLoadError(e instanceof Error ? e.message : undefined);
         }
+        this.cdr.markForCheck();
+    }
+
+    /** Shows a short "could not load" line, with the underlying message when there is one. */
+    private showLoadError(detail: string | undefined): void {
+        this.LoadError = detail ? `Could not load employees: ${detail}` : 'Could not load employees.';
     }
 }
