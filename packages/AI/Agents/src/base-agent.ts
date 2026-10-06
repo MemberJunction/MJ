@@ -212,6 +212,7 @@ import { GetValueFromPath, SetMappedValue } from '@memberjunction/ai-core-plus';
 import { AgentDataPreloader } from './AgentDataPreloader';
 import { ClientToolRequestManager } from './ClientToolRequestManager';
 import { ConversationMessageResolver } from './utils/ConversationMessageResolver';
+import { FormatSkillFileListing, READ_SKILL_FILE_ACTION_NAME, type SkillFileRef } from './skill-files';
 import { ForEachOperation, WhileOperation } from '@memberjunction/ai-core-plus';
 import _ from 'lodash';
 
@@ -15193,7 +15194,8 @@ The context is now within limits. Please retry your request with the recovered c
             await this.persistConversationSkillActivation(skill, params);
         }
 
-        const activationMessage = this.buildSkillActivationMessage(newlyActivated);
+        const activationMessage = this.buildSkillActivationMessage(newlyActivated) +
+            await this.enableSkillFiles(newlyActivated, params);
         params.conversationMessages.push({
             role: 'user',
             content: activationMessage,
@@ -15341,7 +15343,8 @@ The context is now within limits. Please retry your request with the recovered c
             await this.persistConversationSkillActivation(skill, params);
         }
 
-        const activationMessage = this.buildSkillActivationMessage(newlyActivated);
+        const activationMessage = this.buildSkillActivationMessage(newlyActivated) +
+            await this.enableSkillFiles(newlyActivated, params);
         if (!params.conversationMessages) {
             params.conversationMessages = [];
         }
@@ -15604,6 +15607,58 @@ The context is now within limits. Please retry your request with the recovered c
                 subAgentIds,
                 agentIds: activatingAgentIds
             });
+        }
+    }
+
+    /**
+     * Progressive disclosure for multi-file skills. When any of `skills` has `MJ: AI Skill Files`, adds
+     * the `Read Skill File` action to this agent's run (same `specific` scope as
+     * {@link enableSkillCapabilities}) and returns a listing of the file paths to append to the
+     * activation message; the file contents stay out of the prompt until the agent reads one. Returns
+     * '' — and changes nothing — when no activated skill has files, so skills without files behave
+     * exactly as before. One `Fields`-narrowed read per activation (never per turn); fails soft: a read
+     * error or a missing action leaves the skill active without its files.
+     *
+     * @protected
+     */
+    protected async enableSkillFiles(skills: MJAISkillEntity[], params: ExecuteAgentParams): Promise<string> {
+        const files = await this.loadSkillFileRefs(skills, params.contextUser);
+        if (files.length === 0) {
+            return '';
+        }
+        const action = ActionEngineServer.Instance.Actions.find(
+            a => a.Name === READ_SKILL_FILE_ACTION_NAME && a.Status === 'Active');
+        if (!action) {
+            LogError(`Skill files are available but the "${READ_SKILL_FILE_ACTION_NAME}" action is not active; the agent cannot read them`);
+            return '';
+        }
+        (params.actionChanges ??= []).push({
+            scope: 'specific',
+            mode: 'add',
+            actionIds: [action.ID],
+            agentIds: [params.agent.ID]
+        });
+        return FormatSkillFileListing(skills, files);
+    }
+
+    /** The (SkillID, Path) of every file of `skills` — paths only, never content. [] on any failure. */
+    protected async loadSkillFileRefs(skills: MJAISkillEntity[], contextUser?: UserInfo): Promise<SkillFileRef[]> {
+        if (skills.length === 0) {
+            return [];
+        }
+        try {
+            const rv = new RunView(); // file precedent for reads (ProviderToUse is an IMetadataProvider, not an IRunViewProvider)
+            const result = await rv.RunView<SkillFileRef>({
+                EntityName: 'MJ: AI Skill Files',
+                ExtraFilter: `SkillID IN (${skills.map(s => `'${EscapeSQLString(s.ID)}'`).join(',')})`,
+                Fields: ['SkillID', 'Path'],
+                OrderBy: 'Path',
+                ResultType: 'simple'
+            }, contextUser);
+            return result.Success ? result.Results : [];
+        } catch (e) {
+            LogError(`Failed to list skill files: ${e instanceof Error ? e.message : String(e)}`);
+            return [];
         }
     }
 

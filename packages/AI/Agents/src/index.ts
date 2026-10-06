@@ -39,6 +39,8 @@ export * from './finish-if-state';
 export * from './MemoryWriteManager';
 export * from './SkillMarkdownConverter';
 export * from './SkillImportExportService';
+export * from './SkillSources';
+export * from './skill-files';
 export * from './operations/AISkillMarkdownOperations';
 export * from './pipeline';
 export * from './file-input-resolver';

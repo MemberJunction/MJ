@@ -570,6 +570,9 @@ importers:
       sql-formatter:
         specifier: ^15.7.0
         version: 15.7.0
+      yaml:
+        specifier: ^2.8.2
+        version: 2.8.2
     devDependencies:
       '@types/lodash':
         specifier: ^4.17.23

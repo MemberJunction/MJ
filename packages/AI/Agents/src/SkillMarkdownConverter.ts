@@ -16,27 +16,32 @@
  *   - Generate PDF
  * subAgents:
  *   - Report Formatter Agent
+ * license: MIT
+ * metadata:
+ *   version: 1.2.0
  * ---
  *
  * Instructions body — plain markdown, appended to an accepting agent's system
  * prompt when the skill is activated.
  * ```
  *
+ * The frontmatter is real YAML (the `yaml` package), so an Anthropic-style SKILL.md parses as
+ * written. MJ models six keys; every other key (`license`, `metadata`, `allowed-tools`, a key a
+ * newer MJ or another tool adds) is kept verbatim in {@link SkillMarkdownFrontmatter.extra} and
+ * written back by {@link SkillMarkdownConverter.Serialize}, so a round trip loses nothing.
+ *
  * `codeOnlyActions` (optional) names the subset of `actions` bundled with `AISkillAction.ExposeToModel = 0`:
  * kept with the skill for export and tooling, but left out of the agent's run — not described to the
  * model, not executable by the agent; application code invokes them. Written on export only when the
- * skill has such rows, so files exported before the key existed are byte-identical. A file without the
+ * skill has such rows, so files exported before the key existed are unchanged. A file without the
  * key expresses no opinion about the flag (the importer keeps surviving rows' flags as they were); a
  * file with the key but no names under it says "nothing is code-only", which is how an author puts the
  * last code-only action back into the run — delete its line, keep the key.
  *
- * Deliberately NOT a general-purpose YAML parser — the frontmatter shape is fixed and small
- * (flat scalar keys + simple string-list keys), so a hand-rolled parser avoids taking on a new
- * dependency for a narrow, fully-controlled need. Unknown keys — scalar or list — are skipped, so a
- * file written by a newer MJ still parses here.
- *
  * @module @memberjunction/ai-agents
  */
+import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
+import type { JSONObject, JSONValue } from '@memberjunction/ai';
 
 /**
  * The frontmatter fields of a SKILL.md file. `actions`/`subAgents` are Action/Agent NAMES (not
@@ -51,6 +56,12 @@ export interface SkillMarkdownFrontmatter {
     subAgents?: string[];
     /** Names within `actions` whose `AISkillAction.ExposeToModel` is 0. Absent = the file expresses no opinion. */
     codeOnlyActions?: string[];
+    /** The `license` key, when it is a scalar. Also kept verbatim in {@link extra}. */
+    license?: string;
+    /** `metadata.version` — the version the skill's author declares. Also kept verbatim in {@link extra}. */
+    version?: string;
+    /** Every key MJ does not model, verbatim, so {@link SkillMarkdownConverter.Serialize} can write it back. */
+    extra?: JSONObject;
 }
 
 /**
@@ -73,6 +84,8 @@ export interface SerializeSkillMarkdownParams {
     /** Subset of `actionNames` bundled with `ExposeToModel = 0`; emitted as `codeOnlyActions` when non-empty. */
     codeOnlyActionNames?: string[];
     subAgentNames?: string[];
+    /** Keys MJ does not model (from a parse, or `AISkill.Frontmatter`), written after the modelled ones. */
+    extraFrontmatter?: JSONObject;
     instructions: string;
 }
 
@@ -80,37 +93,25 @@ const FRONTMATTER_DELIMITER = '---';
 
 /** The frontmatter keys whose value is a list of names. */
 type SkillListKey = 'actions' | 'subAgents' | 'codeOnlyActions';
-const LIST_KEYS: ReadonlySet<string> = new Set<SkillListKey>(['actions', 'subAgents', 'codeOnlyActions']);
+const LIST_KEYS: readonly SkillListKey[] = ['actions', 'subAgents', 'codeOnlyActions'];
+/** The keys MJ models; everything else lands in `extra`. */
+const MODELLED_KEYS: ReadonlySet<string> = new Set<string>(['name', 'description', 'category', ...LIST_KEYS]);
 
 export class SkillMarkdownConverter {
     /**
      * Parses a SKILL.md document into its frontmatter + instructions body. Throws with a clear
-     * message on malformed input (missing/unterminated frontmatter block, missing required `name`).
+     * message on malformed input (missing/unterminated frontmatter block, invalid YAML, a
+     * frontmatter that is not a key/value mapping, missing required `name`, empty body).
      */
     public static Parse(markdownText: string): ParsedSkillMarkdown {
-        const normalized = markdownText.replace(/\r\n/g, '\n').trim();
-        const lines = normalized.split('\n');
-
-        if (lines[0]?.trim() !== FRONTMATTER_DELIMITER) {
-            throw new Error('Invalid SKILL.md: expected a frontmatter block starting with "---"');
-        }
-
-        const closingIndex = lines.findIndex((line, idx) => idx > 0 && line.trim() === FRONTMATTER_DELIMITER);
-        if (closingIndex === -1) {
-            throw new Error('Invalid SKILL.md: frontmatter block is not terminated with a closing "---"');
-        }
-
-        const frontmatterLines = lines.slice(1, closingIndex);
-        const instructions = lines.slice(closingIndex + 1).join('\n').trim();
-
-        const frontmatter = this.parseFrontmatterLines(frontmatterLines);
-        if (!frontmatter.name || frontmatter.name.trim().length === 0) {
+        const { yamlText, instructions } = this.splitDocument(markdownText);
+        const frontmatter = this.toFrontmatter(this.parseMapping(yamlText));
+        if (!frontmatter.name) {
             throw new Error('Invalid SKILL.md: frontmatter is missing the required "name" field');
         }
         if (!instructions) {
             throw new Error('Invalid SKILL.md: the Instructions body (after the frontmatter block) is empty');
         }
-
         return { frontmatter, instructions };
     }
 
@@ -118,122 +119,103 @@ export class SkillMarkdownConverter {
      * Serializes skill data into a SKILL.md document. The inverse of {@link Parse}.
      */
     public static Serialize(params: SerializeSkillMarkdownParams): string {
-        const lines: string[] = [FRONTMATTER_DELIMITER];
-        lines.push(`name: ${this.escapeScalar(params.name)}`);
-        if (params.description) {
-            lines.push(`description: ${this.escapeScalar(params.description)}`);
+        const doc: JSONObject = { name: params.name };
+        if (params.description) doc.description = params.description;
+        if (params.category) doc.category = params.category;
+        if (params.actionNames?.length) doc.actions = params.actionNames;
+        if (params.codeOnlyActionNames?.length) doc.codeOnlyActions = params.codeOnlyActionNames;
+        if (params.subAgentNames?.length) doc.subAgents = params.subAgentNames;
+        for (const [key, value] of Object.entries(params.extraFrontmatter ?? {})) {
+            if (!MODELLED_KEYS.has(key)) doc[key] = value; // a modelled key always comes from its column
         }
-        if (params.category) {
-            lines.push(`category: ${this.escapeScalar(params.category)}`);
-        }
-        if (params.actionNames && params.actionNames.length > 0) {
-            lines.push('actions:');
-            for (const name of params.actionNames) {
-                lines.push(`  - ${this.escapeScalar(name)}`);
-            }
-        }
-        if (params.codeOnlyActionNames && params.codeOnlyActionNames.length > 0) {
-            lines.push('codeOnlyActions:');
-            for (const name of params.codeOnlyActionNames) {
-                lines.push(`  - ${this.escapeScalar(name)}`);
-            }
-        }
-        if (params.subAgentNames && params.subAgentNames.length > 0) {
-            lines.push('subAgents:');
-            for (const name of params.subAgentNames) {
-                lines.push(`  - ${this.escapeScalar(name)}`);
-            }
-        }
-        lines.push(FRONTMATTER_DELIMITER);
-        lines.push('');
-        lines.push(params.instructions.trim());
-        lines.push('');
-
-        return lines.join('\n');
+        // lineWidth 0: never fold a long description across lines.
+        const yamlText = stringifyYaml(doc, { lineWidth: 0 }).trimEnd();
+        return [FRONTMATTER_DELIMITER, yamlText, FRONTMATTER_DELIMITER, '', params.instructions.trim(), ''].join('\n');
     }
 
-    /**
-     * Parses the frontmatter line block into a {@link SkillMarkdownFrontmatter}. Supports flat
-     * `key: value` scalars and `key:` followed by `  - item` list entries — nothing more complex
-     * (no nested objects, no multiline scalars). Unknown keys are ignored rather than erroring, so
-     * a future field addition doesn't break parsing of older SKILL.md files.
-     */
-    private static parseFrontmatterLines(lines: string[]): SkillMarkdownFrontmatter {
-        const result: SkillMarkdownFrontmatter = { name: '' };
-        // The list key whose items follow; 'ignore' = an unknown list key, whose items are skipped rather
-        // than rejected, so a file written by a newer MJ (a key this parser has never heard of) still parses.
-        let currentListKey: SkillListKey | 'ignore' | null = null;
-
-        for (const rawLine of lines) {
-            if (rawLine.trim().length === 0) {
-                continue;
-            }
-
-            const listItemMatch = rawLine.match(/^\s*-\s+(.*)$/);
-            if (listItemMatch && currentListKey) {
-                if (currentListKey !== 'ignore') {
-                    const value = this.unescapeScalar(listItemMatch[1]);
-                    (result[currentListKey] ??= []).push(value);
-                }
-                continue;
-            }
-
-            const keyValueMatch = rawLine.match(/^([A-Za-z][A-Za-z0-9_]*)\s*:\s*(.*)$/);
-            if (!keyValueMatch) {
-                throw new Error(`Invalid SKILL.md frontmatter line: "${rawLine}"`);
-            }
-
-            const [, key, rawValue] = keyValueMatch;
-            const value = rawValue.trim();
-
-            if (this.isListKey(key)) {
-                currentListKey = key;
-                if (value.length > 0) {
-                    // Inline list form, e.g. "actions: [Run Query, Generate PDF]" — split on commas.
-                    const inline = value.replace(/^\[/, '').replace(/\]$/, '');
-                    result[key] = inline.split(',').map(s => this.unescapeScalar(s.trim())).filter(s => s.length > 0);
-                    currentListKey = null;
-                } else {
-                    // Block form. The key is present, so the list exists from here even if no `- item`
-                    // follows: "present but empty" is an explicit empty list, distinct from an absent
-                    // key. That distinction matters for `codeOnlyActions`, where absent means "no
-                    // opinion, keep each row's flag" and empty means "nothing is code-only" — without
-                    // it, deleting the last name from the list would silently keep that action
-                    // code-only on re-import.
-                    result[key] ??= [];
-                }
-                continue;
-            }
-
-            // A `key:` with nothing after it opens a list this parser does not know — skip its items.
-            currentListKey = value.length === 0 ? 'ignore' : null;
-            if (key === 'name' || key === 'description' || key === 'category') {
-                result[key] = this.unescapeScalar(value);
-            }
-            // Unknown scalar keys are silently ignored (forward-compatibility).
+    /** Splits a document into the text between the two `---` lines and the trimmed body after them. */
+    private static splitDocument(markdownText: string): { yamlText: string; instructions: string } {
+        const lines = markdownText.replace(/\r\n/g, '\n').trim().split('\n');
+        if (lines[0]?.trim() !== FRONTMATTER_DELIMITER) {
+            throw new Error('Invalid SKILL.md: expected a frontmatter block starting with "---"');
         }
-
-        return result;
+        const closingIndex = lines.findIndex((line, idx) => idx > 0 && line.trim() === FRONTMATTER_DELIMITER);
+        if (closingIndex === -1) {
+            throw new Error('Invalid SKILL.md: frontmatter block is not terminated with a closing "---"');
+        }
+        return {
+            yamlText: lines.slice(1, closingIndex).join('\n'),
+            instructions: lines.slice(closingIndex + 1).join('\n').trim()
+        };
     }
 
-    private static isListKey(key: string): key is SkillListKey {
-        return LIST_KEYS.has(key);
+    /** YAML-parses the frontmatter and insists on a key/value mapping (an empty block is an empty one). */
+    private static parseMapping(yamlText: string): JSONObject {
+        let parsed: JSONValue;
+        try {
+            parsed = parseYaml(yamlText) ?? {};
+        } catch (e) {
+            throw new Error(`Invalid SKILL.md frontmatter: ${e instanceof Error ? e.message : String(e)}`);
+        }
+        if (!this.isMapping(parsed)) {
+            throw new Error('Invalid SKILL.md frontmatter: expected "key: value" lines (a YAML mapping)');
+        }
+        return parsed;
     }
 
-    /** Quotes a scalar value if it contains a colon or leading/trailing whitespace that would otherwise break the simple parser. */
-    private static escapeScalar(value: string): string {
-        if (/^\s|\s$|:/.test(value)) {
-            return `"${value.replace(/"/g, '\\"')}"`;
+    /** Maps the parsed YAML onto the modelled fields and keeps the rest in `extra`. */
+    private static toFrontmatter(data: JSONObject): SkillMarkdownFrontmatter {
+        const result: SkillMarkdownFrontmatter = {
+            name: this.scalar(data, 'name') ?? '',
+            description: this.scalar(data, 'description'),
+            category: this.scalar(data, 'category')
+        };
+        for (const key of LIST_KEYS) {
+            // A present key is a list even with nothing under it: for `codeOnlyActions`, absent means
+            // "no opinion, keep each row's flag" and empty means "nothing is code-only".
+            if (key in data) result[key] = this.list(data, key);
         }
-        return value;
+        const extra = Object.fromEntries(Object.entries(data).filter(([key]) => !MODELLED_KEYS.has(key)));
+        if (Object.keys(extra).length > 0) {
+            result.extra = extra;
+            result.license = this.scalar(extra, 'license');
+            const metadata = extra.metadata;
+            result.version = this.isMapping(metadata) ? this.scalar(metadata, 'version') : undefined;
+        }
+        return this.dropUndefined(result);
     }
 
-    /** Strips the quoting {@link escapeScalar} applies, if present. */
-    private static unescapeScalar(value: string): string {
-        const trimmed = value.trim();
-        if (trimmed.startsWith('"') && trimmed.endsWith('"') && trimmed.length >= 2) {
-            return trimmed.slice(1, -1).replace(/\\"/g, '"');
+    /** A scalar value as a trimmed string; undefined when absent, null or empty. Throws on a list or mapping. */
+    private static scalar(data: JSONObject, key: string): string | undefined {
+        const value = data[key];
+        if (value === undefined || value === null) return undefined;
+        if (typeof value === 'object') {
+            throw new Error(`Invalid SKILL.md frontmatter: "${key}" must be a single value, not a list or mapping`);
         }
-        return trimmed;
+        const text = String(value).trim();
+        return text.length > 0 ? text : undefined;
+    }
+
+    /** A list of names. `key:` with nothing under it is an empty list; a lone scalar is a one-item list. */
+    private static list(data: JSONObject, key: string): string[] {
+        const value = data[key];
+        if (value === null || value === undefined) return [];
+        const items = Array.isArray(value) ? value : [value];
+        if (items.some(item => typeof item === 'object' && item !== null)) {
+            throw new Error(`Invalid SKILL.md frontmatter: "${key}" must be a list of names`);
+        }
+        return items.filter(item => item !== null).map(item => String(item).trim()).filter(item => item.length > 0);
+    }
+
+    private static isMapping(value: JSONValue | undefined): value is JSONObject {
+        return typeof value === 'object' && value !== null && !Array.isArray(value);
+    }
+
+    /** Removes undefined-valued optional fields so an absent key stays absent (`toEqual`/`in` checks). */
+    private static dropUndefined(fm: SkillMarkdownFrontmatter): SkillMarkdownFrontmatter {
+        for (const key of Object.keys(fm) as (keyof SkillMarkdownFrontmatter)[]) {
+            if (fm[key] === undefined) delete fm[key];
+        }
+        return fm;
     }
 }
