@@ -19,6 +19,8 @@ import {
     ChosenSectionKeys,
     KeepEditedRowKey,
     type FormPlacementContext,
+    type FormPlacementDroppedClaim,
+    type FormPlacementState,
 } from '../form-placement';
 import {
     DescribeFieldList,
@@ -1100,6 +1102,28 @@ describe('Order in a position — before the form has been read', () => {
  * The line under "Where it goes" and the summary beside Apply describe one answer. They read
  * the same lookup, so they name the same grid, panel, tab or fields.
  */
+describe('SummarizePlacement — a proposal claim the seed dropped', () => {
+    const state = (): FormPlacementState => InitialPlacementState(PROPOSAL, CONTEXT);
+    const END = 'on this form, but the form could not confirm it, so the panel is saved without that claim.';
+
+    it.each<[string, FormPlacementDroppedClaim, string]>([
+        ['fields, by their labels', { Kind: 'field', FieldNames: ['SeatLimit', 'Bogus'] }, 'stand in for the Seat Limit and Bogus fields'],
+        ['one section', { Kind: 'section', SectionKeys: ['contactInfo'] }, 'stand in for the contactInfo section'],
+        ['several sections', { Kind: 'section', SectionKeys: ['contactInfo', 'billing'] }, 'stand in for the contactInfo and billing sections'],
+        ['the Details tab', { Kind: 'rail-tab', RailKey: DETAILS_SECTION_KEY }, 'stand in for the Details tab'],
+        ['the More tab', { Kind: 'rail-tab', RailKey: MORE_SECTION_KEY }, 'stand in for the More tab'],
+        ['another tab, by its key', { Kind: 'rail-tab', RailKey: 'enrollments' }, 'stand in for the enrollments tab'],
+        ['a place inside a section', { Kind: 'in-section', SectionKey: 'profile' }, 'sit inside the profile section'],
+    ])('names %s', (_label, claim, built) => {
+        expect(SummarizePlacement(state(), CONTEXT, undefined, { DroppedClaim: claim }))
+            .toContain(` This panel was built to ${built} ${END}`);
+    });
+
+    it('says nothing when no claim was dropped', () => {
+        expect(SummarizePlacement(state(), CONTEXT, undefined, { DroppedClaim: null })).not.toContain('could not confirm');
+    });
+});
+
 describe('DescribePlacementLine', () => {
     const base = () => InitialPlacementState(PROPOSAL, CONTEXT);
 

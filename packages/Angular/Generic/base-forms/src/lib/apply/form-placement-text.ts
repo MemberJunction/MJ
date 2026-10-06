@@ -6,7 +6,7 @@
  * so they always name the same sections, fields, grid, panel or tab.
  */
 
-import { DETAILS_SECTION_TITLE, SlotChromeGroup } from '../chrome/form-chrome';
+import { DETAILS_SECTION_KEY, DETAILS_SECTION_TITLE, MORE_SECTION_KEY, SlotChromeGroup } from '../chrome/form-chrome';
 import {
     ChosenFieldNames,
     ChosenSectionKeys,
@@ -17,9 +17,18 @@ import {
     ShowsRail,
     SlotIsOnForm,
     type FormPlacementContext,
+    type FormPlacementDroppedClaim,
     type FormPlacementSection,
     type FormPlacementState,
 } from './form-placement';
+
+/** What the dialog knows about its starting answers that the summary reports. */
+export interface PlacementSummaryNotes {
+    /** The fields the dialog's starting answers stood in for, by entity field name. */
+    FieldsStoodInFor?: readonly string[];
+    /** A proposal's claim the seed dropped because the form could not confirm it. */
+    DroppedClaim?: FormPlacementDroppedClaim | null;
+}
 
 /**
  * How one section reads in the list, told apart from the tab that contains it.
@@ -108,14 +117,13 @@ export function DescribePlacementLine(state: FormPlacementState, context: FormPl
  * form allows — a panel that is active but invisible behind a full form — reads plainly.
  *
  * @param visibleTo Who sees the panel, from {@link DescribeVisibleTo}.
- * @param fieldsStoodInFor The fields the dialog's starting answers stood in for, by entity field
- * name. Empty when they stood in for none.
+ * @param notes What the dialog's starting answers stood in for, and what its seed dropped.
  */
 export function SummarizePlacement(
     state: FormPlacementState,
     context: FormPlacementContext,
     visibleTo = DescribeVisibleTo('User'),
-    fieldsStoodInFor: readonly string[] = [],
+    notes: PlacementSummaryNotes = {},
 ): string {
     const target = placementTarget(state, context);
     const inSection = target.Mode === 'none' ? target.Section : null;
@@ -137,7 +145,7 @@ export function SummarizePlacement(
     parts.push(`visible to ${visibleTo}`);
     parts.push(state.ActivateNow ? 'starting now' : state.KeepOff ? 'kept off' : 'saved as a draft');
 
-    return `${parts.join(', ')}.${summaryCaveats(state, context, inSection, fieldsStoodInFor)}`;
+    return `${parts.join(', ')}.${summaryCaveats(state, context, inSection, notes)}`;
 }
 
 /** What the answers point at on the form, looked up once for every sentence that names it. */
@@ -231,6 +239,27 @@ function hidesAnyFieldSection(state: FormPlacementState, context: FormPlacementC
     });
 }
 
+/** A tab by the name the rail gives it: Details and More by title, any other tab by its key. */
+function tabTitle(railKey: string): string {
+    if (railKey === DETAILS_SECTION_KEY) return DETAILS_SECTION_TITLE;
+    if (railKey === MORE_SECTION_KEY) return 'More';
+    return railKey;
+}
+
+/** What a dropped proposal claim would have done, as the end of "built to …". */
+function describeDroppedClaim(claim: FormPlacementDroppedClaim, context: FormPlacementContext): string {
+    switch (claim.Kind) {
+        case 'field':
+            return `stand in for ${DescribeFieldList(claim.FieldNames.map((name) => fieldLabel(context, name)))}`;
+        case 'section':
+            return `stand in for the ${DescribeSectionList(claim.SectionKeys)} section${claim.SectionKeys.length > 1 ? 's' : ''}`;
+        case 'rail-tab':
+            return `stand in for the ${tabTitle(claim.RailKey)} tab`;
+        case 'in-section':
+            return `sit inside the ${claim.SectionKey} section`;
+    }
+}
+
 /**
  * The sentences that follow the summary when an answer will not land the way it reads.
  *
@@ -242,8 +271,9 @@ function summaryCaveats(
     state: FormPlacementState,
     context: FormPlacementContext,
     inSection: FormPlacementSection | null,
-    fieldsStoodInFor: readonly string[],
+    notes: PlacementSummaryNotes,
 ): string {
+    const fieldsStoodInFor = notes.FieldsStoodInFor ?? [];
     let caveats = '';
     if (state.ReplaceMode === 'field') {
         caveats += ' The chosen position does not apply: a panel standing in for a field renders inside that field\'s section.';
@@ -254,6 +284,10 @@ function summaryCaveats(
             + (hidesAnyFieldSection(state, context, fieldsStoodInFor)
                 ? ' It no longer stands in for them, so edits made to them in the panel are not saved.'
                 : ' The form also shows its own inputs for them, and edits made to them in the panel are not saved.');
+    }
+    if (notes.DroppedClaim) {
+        caveats += ` This panel was built to ${describeDroppedClaim(notes.DroppedClaim, context)} on this form,`
+            + ' but the form could not confirm it, so the panel is saved without that claim.';
     }
     if (state.ReplaceMode !== 'field' && !inSection && context.SlotsVerified && !SlotIsOnForm(context, state.Slot)) {
         caveats += ` This form does not emit ${state.Slot}, so the panel renders at the bottom instead.`;

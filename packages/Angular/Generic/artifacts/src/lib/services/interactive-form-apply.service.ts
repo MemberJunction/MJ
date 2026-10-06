@@ -468,11 +468,13 @@ export class InteractiveFormApplyService {
             // panel would read as "replace that panel", which the author cannot have meant, and
             // the order among the panels in one position is the host's.
             dialog.SeedState = (d) => {
-                d.State = this.offeredClaimsOnly(PlacementStateFromContribution(
+                const offered = this.offeredClaimsOnly(PlacementStateFromContribution(
                     { ...proposal, contributionKey: undefined, sortKey: undefined },
                     d.Context,
                     !d.Context.FullCustomForm,
                 ), d);
+                d.State = offered.State;
+                d.DroppedProposalClaim = offered.Dropped;
             };
             // The preview draws the component itself, not a placeholder, before anything is saved.
             dialog.PanelComponentSpec = component;
@@ -496,24 +498,45 @@ export class InteractiveFormApplyService {
 
     /**
      * The seeded answers kept to the claims the dialog offers, through the guards it applies to
-     * the user's own choices: a field claim only when it offers fields, a section or tab claim
-     * only on a section or tab it lists, and a place inside a section only in a section it lists.
-     * A claim it does not offer falls back to replacing nothing.
+     * the user's own choices, and the claim it dropped, if any. A claim it does not offer falls
+     * back to replacing nothing at the chosen slot.
      *
      * The seed reads the proposal as it reads a saved row, which keeps every section, tab, field
      * and in-section claim as stated while the form is unread. When the dialog reads the form
      * later and the user has changed nothing, it seeds again, so a claim the form can honour
      * comes back.
      */
-    private offeredClaimsOnly(state: FormPlacementState, dialog: MjFormPlacementDialogComponent): FormPlacementState {
+    private offeredClaimsOnly(
+        state: FormPlacementState,
+        dialog: MjFormPlacementDialogComponent,
+    ): { State: FormPlacementState; Dropped: MjFormPlacementDialogComponent['DroppedProposalClaim'] } {
+        const dropped = this.claimNotOffered(state, dialog);
+        return dropped
+            ? { State: { ...state, ReplaceMode: 'none', ReplaceFieldNames: [], InSectionKey: '' }, Dropped: dropped }
+            : { State: state, Dropped: null };
+    }
+
+    /**
+     * The seeded claim the dialog does not offer, or null when it offers it: a field claim when it
+     * offers no fields, a section or tab claim on a section or tab it does not list, and a place
+     * inside a section it does not list. A seeded answer holds at most one of these.
+     */
+    private claimNotOffered(
+        state: FormPlacementState,
+        dialog: MjFormPlacementDialogComponent,
+    ): MjFormPlacementDialogComponent['DroppedProposalClaim'] {
         const listed = new Set(dialog.PlaceableSections.map((section) => section.Key));
         const sectionKeys = state.ReplaceSectionKeys.length > 0 ? state.ReplaceSectionKeys : [state.ReplaceSectionKey];
-        const offered = state.ReplaceMode === 'field' ? dialog.CanReplaceField
-            : state.ReplaceMode === 'section' ? sectionKeys.every((key) => listed.has(key))
-            : state.ReplaceMode === 'rail-tab' ? dialog.RailTabs.some((tab) => tab.Key === state.ReplaceRailKey)
-            : true;
-        const placed = listed.has(state.InSectionKey) ? state : { ...state, InSectionKey: '' };
-        return offered ? placed : { ...placed, ReplaceMode: 'none', ReplaceFieldNames: [] };
+        switch (state.ReplaceMode) {
+            case 'field':
+                return dialog.CanReplaceField ? null : { Kind: 'field', FieldNames: [...state.ReplaceFieldNames] };
+            case 'section':
+                return sectionKeys.every((key) => listed.has(key)) ? null : { Kind: 'section', SectionKeys: [...sectionKeys] };
+            case 'rail-tab':
+                return dialog.RailTabs.some((tab) => tab.Key === state.ReplaceRailKey) ? null : { Kind: 'rail-tab', RailKey: state.ReplaceRailKey };
+            default:
+                return state.InSectionKey && !listed.has(state.InSectionKey) ? { Kind: 'in-section', SectionKey: state.InSectionKey } : null;
+        }
     }
 
     /**

@@ -323,6 +323,17 @@ export interface FormPlacementState {
     KeepOff: boolean;
 }
 
+/**
+ * A proposal's claim the dialog does not offer because the form could not confirm it: the
+ * fields, sections or tab the panel was built to stand in for, or the section it was built to
+ * sit inside.
+ */
+export type FormPlacementDroppedClaim =
+    | { Kind: 'field'; FieldNames: readonly string[] }
+    | { Kind: 'section'; SectionKeys: readonly string[] }
+    | { Kind: 'rail-tab'; RailKey: string }
+    | { Kind: 'in-section'; SectionKey: string };
+
 /** The answers, in the shape the write path consumes. */
 export interface FormPlacementDecision {
     /** Merged into `spec.formContribution` before the create action runs. */

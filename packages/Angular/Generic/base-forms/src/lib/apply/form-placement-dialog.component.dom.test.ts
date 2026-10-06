@@ -778,17 +778,18 @@ describe('MjFormPlacementDialogComponent (DOM) — moving a panel off its field 
     };
     const WARNING = 'This panel keeps drawing the fields it was set to stand in for';
 
-    /** Opens the dialog seeded from a saved row, as the Manage drawer does. */
-    function renderSeeded(row: FormContributionSpec, context: FormPlacementContext = withFields) {
+    /** Opens the dialog seeded from a saved row, as the Manage drawer does, unless a test passes its own seed. */
+    function renderSeeded(
+        row: FormContributionSpec,
+        context: FormPlacementContext = withFields,
+        seed = (dialog: MjFormPlacementDialogComponent): void => {
+            dialog.State = PlacementStateFromContribution(row, dialog.Context, true);
+        },
+    ) {
         return renderComponentFixture(MjFormPlacementDialogComponent, {
             imports: [CommonModule, FormsModule, AlertStub, ButtonStub, MjIconPickerComponent],
             declarations: [MjFormPlacementDialogComponent],
-            inputs: {
-                ProbeForm: false, Context: context, Proposal: row, ComponentName: 'Seats',
-                SeedState: (dialog: MjFormPlacementDialogComponent) => {
-                    dialog.State = PlacementStateFromContribution(row, dialog.Context, true);
-                },
-            },
+            inputs: { ProbeForm: false, Context: context, Proposal: row, ComponentName: 'Seats', SeedState: seed },
         });
     }
 
@@ -841,6 +842,43 @@ describe('MjFormPlacementDialogComponent (DOM) — moving a panel off its field 
         await pickReplaceMode(f, 'none');
         expect(f.componentInstance.State.ReplaceMode).toBe('none');
         expect(summary(f)).not.toContain(WARNING);
+    });
+
+    describe('a proposal claim the seed dropped', () => {
+        const DROPPED = 'on this form, but the form could not confirm it, so the panel is saved without that claim.';
+        const derived: FormPlacementContext = { ...withFields, TargetsVerified: false };
+        const fieldRow: FormContributionSpec = { slot: 'after-fields', presentation: 'panel', title: 'Seats', replacesFieldNames: ['SeatLimit'] };
+
+        /** What the apply service's seed does when the form cannot confirm a field claim. */
+        const dropFieldClaim = (dialog: MjFormPlacementDialogComponent): void => {
+            dialog.State = { ...PlacementStateFromContribution(fieldRow, dialog.Context, true), ReplaceMode: 'none', ReplaceFieldNames: [] };
+            dialog.DroppedProposalClaim = { Kind: 'field', FieldNames: ['SeatLimit'] };
+        };
+
+        it('says the panel is saved without the claim the form could not confirm', () => {
+            const f = renderSeeded(fieldRow, derived, dropFieldClaim);
+            expect(summary(f)).toContain(`This panel was built to stand in for the Seat Limit field ${DROPPED}`);
+        });
+
+        it('says nothing when the seed dropped no claim', () => {
+            const f = renderSeeded(fieldRow, derived, (dialog) => {
+                dialog.State = PlacementStateFromContribution(fieldRow, dialog.Context, true);
+            });
+            expect(summary(f)).not.toContain('could not confirm');
+        });
+
+        it('forgets the dropped claim when the answers are reset and the seed drops none', () => {
+            const unconfirmed: FormPlacementContext = { ...derived, FullCustomForm: true };
+            const f = renderSeeded(fieldRow, unconfirmed, (dialog) => {
+                if (dialog.Context.FullCustomForm) dropFieldClaim(dialog);
+            });
+            expect(summary(f)).toContain(DROPPED);
+
+            f.componentRef.setInput('Context', derived);
+            f.detectChanges();
+            expect(f.componentInstance.DroppedProposalClaim).toBeNull();
+            expect(summary(f)).not.toContain('could not confirm');
+        });
     });
 
     it('names a field by its field name when the form was not read', async () => {

@@ -19,6 +19,7 @@ import {
     ResolvePlacementDecision,
     type FormPlacementContext,
     type FormPlacementDecision,
+    type FormPlacementDroppedClaim,
     type FormPlacementSection,
     type FormPlacementField,
     type FormPlacementRailItem,
@@ -155,11 +156,19 @@ export class MjFormPlacementDialogComponent extends BaseAngularComponent {
 
     public State: FormPlacementState = InitialPlacementState(null, this._context);
 
+    /**
+     * A proposal's claim the caller's seed dropped because this form could not confirm it, for
+     * the summary to report. Null when the seed dropped none. The seed sets it, and resetting the
+     * answers clears it.
+     */
+    public DroppedProposalClaim: FormPlacementDroppedClaim | null = null;
+
     /** Starts the answers from the default, then from the caller's seed when it can run. */
     private resetState(): void {
         this.State = InitialPlacementState(this._proposal, this._context);
         this.seededAnswers = null;
         this.seededFieldNames = [];
+        this.DroppedProposalClaim = null;
         this.applySeed();
     }
 
@@ -201,7 +210,10 @@ export class MjFormPlacementDialogComponent extends BaseAngularComponent {
     }
 
     public get Summary(): string {
-        return SummarizePlacement(this.answers, this._context, this.VisibleTo, this.seededFieldNames);
+        return SummarizePlacement(this.answers, this._context, this.VisibleTo, {
+            FieldsStoodInFor: this.seededFieldNames,
+            DroppedClaim: this.DroppedProposalClaim,
+        });
     }
 
     /** The answers as they are applied: keeping a panel off counts only where it is offered. */
