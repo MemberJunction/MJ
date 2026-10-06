@@ -281,6 +281,7 @@ describe('InteractiveFormPanelComponent (DOM) — a failure inside the panel', (
   const handle = (invoke: () => unknown) => ({ hasMethod: () => true, invokeMethod: invoke }) as unknown as MJReactComponent;
   const reported = (isValid: boolean, errors: string[]) =>
     ({ type: FormPanelEventNames.ValidationChanged, payload: { isValid, errors } });
+  const hostError = (source: string) => ({ type: 'error', payload: { error: 'Render blew up', source } });
 
   it('does not block when Validate rejects, and shows the failure naming the panel', async () => {
     const f = mounted();
@@ -339,6 +340,61 @@ describe('InteractiveFormPanelComponent (DOM) — a failure inside the panel', (
 
     expect(text(f, 'mj-alert')).toContain('Render blew up');
     expect(text(f, 'mj-alert')).toContain('Lifetime value');
+  });
+
+  it('keeps an error the React host reported when a later Validate answers', async () => {
+    const f = mounted();
+    await f.componentInstance.OnReactComponentEvent(hostError('react'));
+    f.componentInstance.ReactComponent = handle(() => ({ isValid: true, errors: [] }));
+
+    await f.componentInstance.Validate();
+    f.detectChanges();
+
+    expect(text(f, 'mj-alert')).toContain('Render blew up');
+  });
+
+  it('keeps an error the React host reported when Validate throws, and logs the validator failure', async () => {
+    logError.mockClear();
+    const f = mounted();
+    await f.componentInstance.OnReactComponentEvent(hostError('react'));
+    f.componentInstance.ReactComponent = handle(() => Promise.reject(new Error('boom')));
+
+    await f.componentInstance.Validate();
+
+    expect(f.componentInstance.RenderError).toContain('Render blew up');
+    expect(logError).toHaveBeenCalledWith(expect.stringContaining('boom'));
+  });
+
+  it('clears an error the React host reported when the panel loads its spec again', async () => {
+    vi.spyOn(InteractiveFormsEngine.Instance, 'Config').mockResolvedValue(undefined);
+    vi.spyOn(InteractiveFormsEngine.Instance, 'GetComponentByID').mockResolvedValue({
+      Name: 'LTV strip', Specification: JSON.stringify({ name: 'LTV', componentRole: 'form-panel' }),
+    } as unknown as MJComponentEntity);
+    const f = render(contribution());
+    await f.componentInstance.OnReactComponentEvent(hostError('react'));
+
+    await (f.componentInstance as unknown as PanelInternals).loadSpec();
+
+    expect(f.componentInstance.RenderError).toBeNull();
+  });
+
+  it('logs a host error that mj-react-component does not log itself, such as a render timeout', async () => {
+    logError.mockClear();
+    const f = render(contribution());
+
+    await f.componentInstance.OnReactComponentEvent(hostError('render'));
+
+    expect(logError).toHaveBeenCalledWith(expect.stringContaining('Render blew up'));
+  });
+
+  it.each(['initialization', 'react'])('does not log again a host error from %s, which mj-react-component logged', async (source) => {
+    logError.mockClear();
+    const f = render(contribution());
+
+    await f.componentInstance.OnReactComponentEvent(hostError(source));
+
+    expect(logError).not.toHaveBeenCalled();
+    expect(f.componentInstance.RenderError).toContain('Render blew up');
   });
 
   it('answers LastKnownValidation from the last state the panel reported', async () => {

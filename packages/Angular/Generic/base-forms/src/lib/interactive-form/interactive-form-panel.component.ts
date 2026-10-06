@@ -19,6 +19,9 @@ import { ContributionSectionKey } from '../panel-slot/form-contribution';
 import { BuildFormPanelHostProps } from './form-panel-host-props.builder';
 import { FormFieldEditCoordinator } from '../form-field-edit.coordinator';
 
+/** Where a panel failure came from: the panel's validator, or `<mj-react-component>`. */
+type RenderErrorSource = 'validate' | 'render';
+
 /**
  * Generic host for a metadata form contribution (`MJ: Entity Form Contributions` row →
  * `componentRole: 'form-panel'` React component). Mounted by `<mj-form-panel-slot>` for
@@ -52,10 +55,14 @@ export class InteractiveFormPanelComponent extends BaseContributionPanel impleme
      * A failure after the React component loaded, shown above it: an `error` event from
      * `<mj-react-component>` (initialization, render timeout, or a throw its error boundary
      * caught), or a `Validate` that threw. A throw during render stays inside this panel's
-     * subtree, so the rest of the form renders and saves normally. A later `Validate` that
-     * answers clears it.
+     * subtree, so the rest of the form renders and saves normally.
+     *
+     * An `error` event stays until the panel loads its spec again, and a `Validate` that throws
+     * does not replace it. A `Validate` failure clears when a later `Validate` answers.
      */
     public RenderError: string | null = null;
+    /** Where {@link RenderError} came from, or null when it is empty. */
+    private renderErrorSource: RenderErrorSource | null = null;
 
     private lastValidation: FormPanelValidateResult | null = null;
     private lastEditMode: boolean | null = null;
@@ -143,9 +150,14 @@ export class InteractiveFormPanelComponent extends BaseContributionPanel impleme
                 break;
             }
             case 'error': {
-                // `<mj-react-component>` logs initialization failures and error-boundary catches itself.
-                const detail = (event.payload as { error?: unknown } | null | undefined)?.error;
-                this.setRenderError(`${this.Title} failed: ${detail ? String(detail) : 'unknown error'}`);
+                const payload = event.payload as { error?: unknown; source?: unknown } | null | undefined;
+                const message = `${this.Title} failed: ${payload?.error ? String(payload.error) : 'unknown error'}`;
+                // `<mj-react-component>` logs initialization failures and error-boundary catches
+                // itself; a render timeout or an error the panel raises is logged here.
+                if (payload?.source !== 'initialization' && payload?.source !== 'react') {
+                    LogError(`InteractiveFormPanelComponent: ${message}`);
+                }
+                this.setRenderError(message, 'render');
                 break;
             }
         }
@@ -173,8 +185,9 @@ export class InteractiveFormPanelComponent extends BaseContributionPanel impleme
      * covers both shapes.
      *
      * A validator that throws or rejects does not block the save by itself. It is logged and
-     * shown in the panel ({@link RenderError}), and the result falls back to the last
-     * `ValidationChanged` state, so a failure the panel reported before still blocks.
+     * shown in the panel ({@link RenderError}) unless the panel already shows an `error` event,
+     * and the result falls back to the last `ValidationChanged` state, so a failure the panel
+     * reported before still blocks.
      */
     public override async Validate(): Promise<ValidationResult> {
         let live: FormPanelValidateResult | undefined;
@@ -183,10 +196,12 @@ export class InteractiveFormPanelComponent extends BaseContributionPanel impleme
                 const returned = this.ReactComponent.invokeMethod(FormPanelMethodNames.Validate) as
                     FormPanelValidateResult | Promise<FormPanelValidateResult> | undefined;
                 live = await Promise.resolve(returned);
-                this.setRenderError(null);
+                if (this.renderErrorSource === 'validate') this.setRenderError(null);
             } catch (err) {
                 LogError(`InteractiveFormPanelComponent.Validate: panel validator threw: ${err instanceof Error ? err.message : String(err)}`);
-                this.setRenderError(`${this.Title} could not check its values.`);
+                if (this.renderErrorSource !== 'render') {
+                    this.setRenderError(`${this.Title} could not check its values.`, 'validate');
+                }
             }
         }
         const state = live && typeof live === 'object' && 'isValid' in live ? live : this.lastValidation;
@@ -205,7 +220,8 @@ export class InteractiveFormPanelComponent extends BaseContributionPanel impleme
         return result;
     }
 
-    private setRenderError(message: string | null): void {
+    private setRenderError(message: string | null, source: RenderErrorSource | null = null): void {
+        this.renderErrorSource = message ? source : null;
         if (this.RenderError === message) return;
         this.RenderError = message;
         this.cdr.markForCheck();
@@ -277,6 +293,7 @@ export class InteractiveFormPanelComponent extends BaseContributionPanel impleme
     }
 
     private async loadSpec(): Promise<void> {
+        this.setRenderError(null);
         const supplied = this.Contribution?.ComponentSpec;
         if (supplied) {
             this.componentSpec = IsFormPanelRole(supplied) ? supplied : null;
