@@ -3,11 +3,11 @@ import { CommonModule } from '@angular/common';
 import { RunView } from '@memberjunction/core';
 import { RegisterClassEx } from '@memberjunction/global';
 import { BaseFormPanel } from '@memberjunction/ng-base-forms';
-import { MJConversationEntity } from '@memberjunction/core-entities';
+import { MJConversationDetailEntity, MJConversationEntity } from '@memberjunction/core-entities';
 
 interface ConversationDetailRow {
     ID: string;
-    Role: string;
+    Role: MJConversationDetailEntity['Role'];
     Message: string;
     CreatedAt: string;
 }
@@ -72,7 +72,7 @@ interface ConversationDetailRow {
                                 <span class="mj-metric-label" style="text-overflow: ellipsis; overflow: hidden; white-space: nowrap; max-width: 200px;">
                                     <strong>{{ msg.Role }}:</strong> {{ msg.Message }}
                                 </span>
-                                <span class="mj-pill" [class.mj-pill-blue]="msg.Role === 'user'" [class.mj-pill-green]="msg.Role !== 'user'">
+                                <span class="mj-pill" [class.mj-pill-blue]="msg.Role === 'User'" [class.mj-pill-green]="msg.Role !== 'User'">
                                     {{ msg.Role }}
                                 </span>
                             </div>

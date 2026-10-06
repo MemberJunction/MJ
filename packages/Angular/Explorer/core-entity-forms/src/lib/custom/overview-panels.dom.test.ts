@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import type { Type } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { RunView, type BaseEntity, type RunViewParams, type RunViewResult } from '@memberjunction/core';
-import { queryAll } from '@memberjunction/ng-test-utils';
+import { query, queryAll } from '@memberjunction/ng-test-utils';
 import type { BaseFormPanel } from '@memberjunction/ng-base-forms';
 import { CompanyOverviewPanel } from './Companies/company-overview.panel';
 import { EmployeeOverviewPanel } from './Employees/employee-overview.panel';
@@ -182,5 +182,29 @@ describe.each(CASES)('$Name (DOM)', (c) => {
         expect(errorLines(fixture)).toEqual(Array(c.ErrorLines).fill(`Could not load ${c.Noun}: Entity Example not found in metadata`));
         expect(pageText(fixture)).not.toContain(c.EmptyText);
         expect(badgeTexts(fixture).filter((t) => /^\d/.test(t))).toEqual([]);
+    });
+});
+
+describe('ConversationOverviewPanel role display (DOM)', () => {
+    const conversation = CASES.find((c) => c.Name === 'ConversationOverviewPanel')!;
+
+    it('colors User turns differently from AI turns', async () => {
+        stubRunView(viewResult(conversation.Rows));
+        const fixture = await render(conversation);
+        const pills = queryAll(fixture, '.mj-pill');
+        const userPill = pills.find((p) => p.textContent?.trim() === 'User');
+        const aiPill = pills.find((p) => p.textContent?.trim() === 'AI');
+        expect(userPill?.classList.contains('mj-pill-blue')).toBe(true);
+        expect(userPill?.classList.contains('mj-pill-green')).toBe(false);
+        expect(aiPill?.classList.contains('mj-pill-green')).toBe(true);
+        expect(aiPill?.classList.contains('mj-pill-blue')).toBe(false);
+    });
+
+    it('counts User prompts and agent responses', async () => {
+        stubRunView(viewResult(conversation.Rows));
+        const fixture = await render(conversation);
+        const values = queryAll(fixture, '.mj-metric-val').map((v) => v.textContent?.trim());
+        expect(values).toEqual(['2', '1', '1']);
+        expect(query(fixture, '.mj-load-error')).toBeNull();
     });
 });
