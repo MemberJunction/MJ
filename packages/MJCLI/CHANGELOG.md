@@ -1,5 +1,334 @@
 # Change Log - @memberjunction/cli
 
+## 6.2.0-edge.2
+
+### Minor Changes
+
+- 4d647e6: Add Rubrics, a core way to score any record against a published set of weighted criteria.
+
+  What ships:
+  - Schema for rubrics, versions, criteria, scales, anchors, bands, evaluations, and score rows, plus layered consensus views. Published versions are frozen. Raw writes to a frozen row throw 51101–51110. A draft version delete is an `INSTEAD OF DELETE` trigger. `MJ: Test Rubrics` is deprecated in metadata.
+  - `RubricScoring` and `RubricVersionDiff` in `@memberjunction/rubrics-base`. The outcome ladder is Incomplete, NotApplicableFailure, GateFailed, Passed or BelowThreshold, then Scored. The publish base is the highest Published or Retired version.
+  - `@memberjunction/rubrics`: LLM, agent, deterministic, and human evaluators. Actions are Evaluate Record Against Rubric, Get Rubric, Get Rubric Subject, Get Rubric Consensus, Create Rubric Draft, and Submit Human Rubric. Create Rubric Draft and the architect import do not publish. The evaluation agent does not call Get Rubric Consensus.
+  - Presentational widgets in `@memberjunction/ng-rubrics`, Explorer forms, and a Rubrics application. The agent form has a Rubrics tab.
+  - Six guide-example rubrics stay Draft. Seven agent rubrics publish at 1.0.0 and bind to their agents. Marketing Agent is not bound. Shipped self-check links and the sampling job stay Disabled. A test that already has an `llm-judge` oracle keeps it.
+  - Testing: rubric resolution, a `rubric` oracle, judge calibration, per-criterion spread on `--flaky-check`, `mj rubric`, and `mj test promote-criteria`. `Test.RubricID` and `TestSuite.RubricID` select a rubric. `TestSuiteRun.Score` is stored.
+  - The deterministic integration bundle is IT98 at sequence 49.
+
+  `GeneratePluralName` keeps the head of a name verbatim and pluralizes only the tail, preserving that tail's case. A linear scan finds the tail, so `user_profile` and `userProfile` no longer produce the same view name, a leading character such as Ä stays on the head, and `Contact Person` pluralizes to `Contact People`. The base view for a criterion is `vwRubricCriteria`.
+
+### Patch Changes
+
+- ca98152: `mj agent init --skip-docker-check` now does what its description says: it skips the Docker availability probe and assumes Docker is running. It previously decided Docker was _unavailable_, so the stack was never started and the user was told to launch Docker Desktop — exactly the users who pass the flag (remote daemon, colima, Podman) got no environment. Pass `--no-start` to scaffold without starting the stack.
+- 43c6e4c: `mj agent init` now pins the workspace it creates to the CLI's own release, and the workspace's container no longer reports success when provisioning fails.
+
+  Previously the scaffolded `docker/Dockerfile` installed `@memberjunction/cli` unpinned — npm's `latest`, which can be a different major line — and the entrypoint ran `mj install --yes` with no tag, which takes the newest stable GitHub release. A workspace created by an edge CLI therefore ran a v5 CLI against a v6 install, and the entrypoint's `|| echo "Notice: … completed or skipped."` guards hid any failure that caused.
+  - `mj agent init` writes `MJ_VERSION` to `.env`: its own version, read from its package.json (not `this.config.version`, which is the version of whatever package root oclif resolved). `docker-compose.yml` requires it, the Dockerfile installs `@memberjunction/cli@$MJ_VERSION`, and the entrypoint passes `--tag v$MJ_VERSION` to `mj install`.
+  - The entrypoint no longer masks failures of `mj install`, `mj app install`, `mj sync push` (now `--ci`, so it cannot hang on an interactive prompt in a headless container) or `mj migrate`. Each provisioning step that must not run twice records its own completion on the workspace volume, so a failed step is retried on the next start without re-running the steps before it — previously a failure after `mj install` left `package.json` behind and every later start skipped the Open App install and metadata push entirely. Workspaces provisioned by the earlier script are treated as provisioned.
+
+- d4e30c3: PostgreSQL migration conversion fixes found while converting the v6.2.0-edge.2 migrations.
+  - sql-converter: BIT literals in `INSERT INTO t (...) SELECT ...` (CodeGen's EntityPermission grants) and in `COALESCE(<boolean column>, 0|1) = 0|1` (CodeGen's search-flag hygiene) are rewritten to TRUE/FALSE.
+  - cli: `migrate convert --bake-codegen` and `migrate rebake` disable SQLOutput while baking, so CodeGen's no-artifact guard no longer silently refuses the capture's metadata SQL; forward baking now applies the captured CodeGen to the working database (the generator never executed it), so later migrations bake against the objects earlier ones created.
+  - codegen-lib: a layered entity's base-view GRANTs are guarded once, not twice (the nested `DO $if_view_exists$` did not parse on PostgreSQL); the PostgreSQL view-regeneration fallback now restores dependents of dependents and their functions after DROP ... CASCADE.
+
+- Updated dependencies [e97d95c]
+- Updated dependencies [2552b1e]
+- Updated dependencies [8fd1c46]
+- Updated dependencies [1580f34]
+- Updated dependencies [21f9e15]
+- Updated dependencies [4248fb3]
+- Updated dependencies [01fafc6]
+- Updated dependencies [0adaf76]
+- Updated dependencies [513e608]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [662d68f]
+- Updated dependencies [705ab4e]
+- Updated dependencies [125f40a]
+- Updated dependencies [d4e30c3]
+- Updated dependencies [7e57b48]
+- Updated dependencies [2ceedb4]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [5986939]
+- Updated dependencies [4d647e6]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [369e229]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [2854a2e]
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/aiengine@6.2.0-edge.2
+  - @memberjunction/core-entities@6.2.0-edge.2
+  - @memberjunction/codegen-lib@6.2.0-edge.2
+  - @memberjunction/server-bootstrap-lite@6.2.0-edge.2
+  - @memberjunction/installer@6.2.0-edge.2
+  - @memberjunction/open-app-engine@6.2.0-edge.2
+  - @memberjunction/sql-converter@6.2.0-edge.2
+  - @memberjunction/generic-database-provider@6.2.0-edge.2
+  - @memberjunction/sqlserver-dataprovider@6.2.0-edge.2
+  - @memberjunction/metadata-sync@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+  - @memberjunction/testing-cli@6.2.0-edge.2
+  - @memberjunction/ai-cli@6.2.0-edge.2
+  - @memberjunction/query-gen@6.2.0-edge.2
+  - @memberjunction/db-auto-doc@6.2.0-edge.2
+  - @memberjunction/cli-core@6.2.0-edge.2
+  - @memberjunction/config@6.2.0-edge.2
+  - @memberjunction/dynamic-packages@6.2.0-edge.2
+  - @memberjunction/sqlglot-ts@6.2.0-edge.2
+  - @memberjunction/standards@6.2.0-edge.2
+
+## 6.2.0-edge.1
+
+### Patch Changes
+
+- 80905a1: Rename public class members and exported functions to PascalCase, per MJ's naming convention,
+  **without breaking a single consumer**.
+
+  Every renamed symbol keeps its old name beside the new one as a `@deprecated` stub that forwards to
+  it — a delegating method or function, a getter/setter pair for a property, and for Angular a
+  readable accessor pair for an `@Input` and a second `@Output` sharing the same `EventEmitter`, so a
+  template still binding the old name keeps receiving events. Old names still compile, still resolve,
+  and still behave identically; the deprecation tag rides through to the published `.d.ts`, so editors
+  point callers at the replacement. Where a package re-exports through an explicit `export { … }`
+  list, the new name is added alongside the old, so the correct name is actually on the public surface
+  rather than merely declared.
+
+  The rename is deliberately refused wherever a mechanical stub would not be equivalent, because
+  several of those shapes change a type contract while still compiling in the package that declares
+  them:
+  - an **optional** property or parameter property — TypeScript has no optional accessor, so a stub
+    would promote `foo?` to a required member and break every object literal that omits it;
+  - a class that is a **data shape** (no methods, or `@ObjectType`/`@InputType`) — object literals are
+    assigned to it, and an accessor stub changes what they must supply;
+  - a property whose **subclass redeclares it**, since TypeScript forbids a property overriding an
+    accessor (TS2610);
+  - a name whose PascalCase form is **already bound** in that file or class;
+  - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
+    overload sets and abstract members.
+
+  **One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+  backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+  the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+  `EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+  `copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+  field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+  fields silently. Same-version deployments, which is the supported configuration, see no change.
+
+  Each package was verified against its own pre-change baseline rather than against zero, because
+  several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
+  with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
+  `@Input` alias passed `tsc` while breaking six template reads.
+
+- Updated dependencies [ddcd666]
+- Updated dependencies [a50948e]
+- Updated dependencies [0eeb89d]
+- Updated dependencies [48f77ea]
+- Updated dependencies [a3539d2]
+- Updated dependencies [41274aa]
+- Updated dependencies [67f6c85]
+- Updated dependencies [eb3a8d3]
+- Updated dependencies [e1dd673]
+- Updated dependencies [9b8a84e]
+- Updated dependencies [307da67]
+- Updated dependencies [a7da50b]
+- Updated dependencies [0080f80]
+- Updated dependencies [17cc774]
+- Updated dependencies [80905a1]
+- Updated dependencies [6b08ebf]
+- Updated dependencies [351ba9f]
+  - @memberjunction/aiengine@6.2.0-edge.1
+  - @memberjunction/core-entities@6.2.0-edge.1
+  - @memberjunction/server-bootstrap-lite@6.2.0-edge.1
+  - @memberjunction/core@6.2.0-edge.1
+  - @memberjunction/standards@6.2.0-edge.1
+  - @memberjunction/codegen-lib@6.2.0-edge.1
+  - @memberjunction/ai-cli@6.2.0-edge.1
+  - @memberjunction/config@6.2.0-edge.1
+  - @memberjunction/db-auto-doc@6.2.0-edge.1
+  - @memberjunction/dynamic-packages@6.2.0-edge.1
+  - @memberjunction/generic-database-provider@6.2.0-edge.1
+  - @memberjunction/global@6.2.0-edge.1
+  - @memberjunction/installer@6.2.0-edge.1
+  - @memberjunction/metadata-sync@6.2.0-edge.1
+  - @memberjunction/open-app-engine@6.2.0-edge.1
+  - @memberjunction/query-gen@6.2.0-edge.1
+  - @memberjunction/sql-converter@6.2.0-edge.1
+  - @memberjunction/sqlglot-ts@6.2.0-edge.1
+  - @memberjunction/sqlserver-dataprovider@6.2.0-edge.1
+  - @memberjunction/testing-cli@6.2.0-edge.1
+  - @memberjunction/cli-core@6.2.0-edge.1
+
+## 6.2.0-edge.0
+
+### Minor Changes
+
+- 73fa918: Enhance agent-first tooling across MemberJunction with machine-readable diagnostics, hardened secret redaction, and native CLI execution trace auditing:
+  - **Machine-Readable Diagnostics (`mj doctor --format json`)**: Added canonical format flag and `--scope [install|runtime|ai|metadata|agent]` filtering to `mj doctor`. When JSON format is requested, suppress all terminal formatting and output structured diagnostics adhering to the `Diagnostics.toJSON()` schema, exiting non-zero on failure.
+  - **Diagnostic Codes & Subsystem Probes**: Added stable machine-readable check codes, scopes, contextual evidence, and actionable remediation descriptors. Added checks for `MJ_BASE_ENCRYPTION_KEY` and AI provider credentials (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `GROQ_API_KEY`, `MISTRAL_API_KEY`).
+  - **Hardened Secret Redaction**: Extended credential pattern matching in `ReportGenerator` across sensitive environment variable names (`KEY`, `TOKEN`, `SECRET`, `PASSWORD`, `CREDENTIAL`, etc.) and high-entropy token shapes (`sk-...`, `Bearer ...`, `ghp_...`, JWTs) across file snapshots, markdown reports, and container service logs.
+  - **Native CLI Trace Auditing**: Updated `citizen-builder/scripts/query-run-history.sh` to delegate to native `mj ai audit agent-run`, supporting `--format json`, step-by-step inspections, error audits, and agent name filtering.
+  - **Citizen Agent Builder Documentation & Skills**: Detailed the complete 11-step agent engineering loop in `citizen-builder/AGENTS.md` and `README.md`, updated skill templates (`test-agent`, `package-agent`) to use native JSON auditing, and bundled updated template assets into `@memberjunction/cli`.
+
+- d122a41: DOM-grounded selection and replay scripts for Computer Use tests.
+
+  A Computer Use test currently pays full vision-model price on every run, re-deriving
+  the same sequence of clicks against a build that changed nothing it touches. This makes
+  the first passing run _compile_ a replay script that later runs _execute_ through the
+  same browser adapter — no screenshots, no model calls — with the model returning only
+  when replay stops working, which is exactly when a fresh derivation is worth paying for.
+
+  **DOM selection.** Element grounding hands the model an indexed list of the page's
+  interactive elements (role, accessible name, selector) so it acts by index instead of by
+  coordinate; a recorded target is then the element the model actually chose rather than
+  where its bounding box happened to be. `resolveActionLocator` narrows an ambiguous
+  selector to a single locator before acting — preferring visible matches, then the
+  smallest by area, which for a `:has-text()` ancestor chain is the element the model
+  meant. A multi-match is a guaranteed strict-mode throw today (and worse than a lost
+  click: the page does not change, so the loop detector ends the run as `LoopDetected`), so
+  disambiguating cannot regress any action that currently works.
+
+  **Replay.** Each step carries a multi-signal locator (selector primary; role + name as
+  the heal fallback), a fail-fast precondition, and a postcondition that confirms the step
+  advanced the page the way the recording did. Scripts are keyed by build hash, app
+  version, and goal hash: an exact build match replays with no healing expected, any
+  mismatch replays with healing, and a changed goal falls back to the model. Variable
+  _values_ are never stored — recording tokenizes them to `%name%` and replay substitutes
+  fresh values — so a script holds no credentials and stays valid when the values change.
+  A replayed run is scored by deterministic goal postconditions distilled from the passing
+  run, not by a model verdict, which is what keeps the tier free.
+
+  **Storage.** Scripts live in the test row, at `Configuration.ReplayScript` on
+  `MJ: Tests`. That column already exists, so there is **no migration** — this registers
+  JSONType metadata on it (`ITestConfiguration`, alongside the ~20 JSONType columns already
+  registered this way) and CodeGen emits a typed `ConfigurationObject` accessor. Reads are
+  free because the TestingEngine already caches the entity. `ITestConfiguration` declares
+  only framework-level properties over an index signature, so each driver's own
+  configuration passes through untouched and a future framework option is an interface edit
+  rather than a migration. The script shape necessarily exists twice — once as
+  `ComputerUseTrace`, once as the JSONType, because CodeGen emits the definition into
+  `core-entities`, which sits below the engine package. `__tests__/script-store.test-d.ts`
+  holds the two field-for-field with vitest `expectTypeOf`, checked by tsc through
+  `typecheck` in `vitest.config.ts` — the same idiom as the related-record-collection type
+  tests in `core-entities`. The assertions were confirmed to fail on injected drift rather
+  than assumed to work, since that precedent's own typecheck program was once empty and
+  every assertion passing for free.
+
+  **Fallback and review.** A diverged replay falls back to the model within the same
+  attempt. The re-derived script does not take effect on its own: it lands in
+  `PendingReplayScript` and replay keeps using the promoted `ReplayScript` until someone
+  runs `mj test scripts`, sees what changed, and promotes it — so a UI change can never
+  rewrite the suite unnoticed. The listing separates routine selector churn from a moved
+  target, verb, or URL. A test's first script skips the gate, having no baseline to be
+  diffed against. Until a pending script is promoted, the affected tests fall back on
+  every run: they stay green and pay full model price, which is the cost of not letting
+  the suite rewrite itself. The fallback restarts clean rather than inheriting
+  the failed replay's memo, and a replay is never re-recorded (that would launder healed
+  selectors into storage without re-deriving them). A test can refuse the pathway with
+  `Configuration.AllowLLMFallback: false`, which makes a divergence the result instead —
+  the right setting wherever a silent re-derivation would paper over the regression the
+  test exists to catch. Defaults to `true`.
+
+  Also adds `tier` and `ReplayTelemetry` (healed/diverged counts) to the testing-framework
+  result types, so drift is visible per attempt and survives a green fallback. Design doc:
+  `plans/regression-testing/dom-selection-and-replay-design.md`.
+
+  **MetadataSync — JSON sub-property externalization.** `pull.externalizeFields` accepted
+  entity fields only, so it could move a whole column into a side file but not a single
+  property inside a JSON column. An entry may now be a dotted path (`Configuration.ReplayScript`),
+  which externalizes that leaf and leaves an `@file:` reference in its place; push already
+  resolves nested references, so there is no push-side change. A property the record does not
+  carry is skipped entirely, and a whole-field config wins over its dotted paths. Pull's
+  existing-file discovery moved to `lib/existing-record-files.ts`.
+
+  **MJExplorer — a readiness beacon for automation.** The shell publishes `data-mj-ready="true"`
+  on `<html>` when the active route's resource has finished loading, so a browser-driven suite
+  can poll a fact instead of comparing screenshot hashes. The attribute is inert — nothing in
+  the product reads it and no styling keys off it — and it is published from the `loading`
+  accessor so all ~22 assignment sites stay correct.
+
+  **Prompt model change.** The Computer Use controller and judge prompts in core `metadata/prompts`
+  move from `Gemini 3.1 Flash-Lite` to `Gemini 3.6 Flash` and gain `Temperature`/`Seed` for
+  determinism. This applies to every instance that syncs `metadata/`, not only the regression suite.
+
+### Patch Changes
+
+- 130a280: `mj agent init` scaffolds a workspace with a `.env` again. The bundled template under
+  `src/init-templates/citizen-builder/` creates `.env` from its `.env.example`, but that file was
+  caught by the repo's `.env.*` ignore rule (only the root `citizen-builder/.env.example` was
+  whitelisted) — so it existed only where it was authored, and every clean checkout, CI included,
+  scaffolded a workspace with no `.env`. The file is now tracked and whitelisted; the two
+  `agent-init` tests that pinned this pass on a clean checkout.
+- 8f23b23: Fix `mj app install` rejecting every first-party BizApp schema (#3302). The installer blocked any schema name starting with `__`, but MJ's own app convention is `__mj_<AppName>` — so installing `bizapps-common`, `-forms`, `-tasks`, `-caliber` or `-ats` required the hidden `--dangerously-ignore-dbl-underscore-schema-rule` flag. `__mj_<AppName>` is now the documented app namespace and installs with no flag; `__mj_UDT` joins the reserved set (MJ core owns it as the user-defined-table sandbox); reserved-name matching is now case-insensitive; and the schema name is validated before an app can adopt an already-existing schema, which previously bypassed the guard entirely.
+
+  Opening `__mj_` made every first-party schema name reachable on the default install path, which put weight on the reserved set that it could not previously carry. The set now covers every schema the **database platform** owns, on both dialects: PostgreSQL's `public` and the whole `pg_` prefix (which also covers the per-session `pg_temp_N` / `pg_toast_temp_N` schemas an enumerated list cannot), and SQL Server's nine fixed database-role schemas (`db_owner`, `db_accessadmin`, `db_securityadmin`, `db_ddladmin`, `db_backupoperator`, `db_datareader`, `db_datawriter`, `db_denydatareader`, `db_denydatawriter`). Each of these exists in a stock database, which is exactly what made them dangerous: an app declaring one was never _creating_ a schema, it was **adopting** one on the default path with no flag — and `mj app remove` would then drop it. Verified against SQL Server 2022: all nine accept tables and all nine `DROP SCHEMA` cleanly. The reserved-name error now names the real owner ("reserved by the database platform" vs "by MemberJunction") rather than claiming MJ owns `dbo`.
+
+  `mj app upgrade` now validates the schema name too. Validation previously lived only on the install path, so a v2 manifest could rename its schema to `public` or `db_owner` and the upgrade would run that version's migrations straight into it.
+
+  Installing an app that adopts a schema another installed app already owns now emits a warning. Sharing remains supported and the install still succeeds, but the operator is told that `mj app remove` will from then on skip the schema and metadata cleanup for **both** apps, to avoid destroying the co-tenant's data.
+
+  **Behaviour change for existing installs.** An app installed under a name that is reserved only as of this release — `public` on PostgreSQL, or a casing like `PUBLIC` / `Dbo` / `__mj_udt` that case-insensitive matching now catches — can no longer have its schema dropped, with or without any flag. `mj app remove` refuses, and the app lands in status `Error` while staying installed; reinstalling fails on the same name. This is deliberate (these are schemas MJ must never drop), and `mj app remove <app> --keep-data` is the way out: it unregisters the app and leaves the schema in place. An app installed under a different `__`-prefixed name outside the `__mj_<AppName>` namespace is not stuck the same way: re-running `mj app remove <app> --dangerously-ignore-dbl-underscore-schema-rule` — the same override its install needed — drops the schema.
+
+  Deferred, tracked separately: an optional `coreSchemaName` on `ValidateSchemaNameOptions` so a non-default `MJCoreSchema` is reserved too (#4559), factoring the duplicated rollback drop-result block into a shared helper so the install-rollback path gains the same classified remedy text as remove (#4560), and a shared mock for the three orchestrator suites' identical `vi.mock` spread (#4561).
+
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [37891d3]
+- Updated dependencies [6ad6434]
+- Updated dependencies [73fa918]
+- Updated dependencies [ee5c033]
+- Updated dependencies [ce55864]
+- Updated dependencies [662d47e]
+- Updated dependencies [7be1684]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [3062639]
+- Updated dependencies [d122a41]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [8f23b23]
+- Updated dependencies [9b5b489]
+- Updated dependencies [683f652]
+- Updated dependencies [a8be410]
+- Updated dependencies [b87e4ac]
+- Updated dependencies [ce55864]
+- Updated dependencies [f48dffc]
+- Updated dependencies [2771f01]
+- Updated dependencies [630bb88]
+- Updated dependencies [7658d68]
+- Updated dependencies [44faf83]
+- Updated dependencies [58faa68]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [e6c8f53]
+- Updated dependencies [a17a228]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [2cd8411]
+- Updated dependencies [104125c]
+- Updated dependencies [5513c2a]
+- Updated dependencies [e9dbf77]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [3d633ed]
+- Updated dependencies [2c590b0]
+  - @memberjunction/aiengine@6.2.0-edge.0
+  - @memberjunction/core-entities@6.2.0-edge.0
+  - @memberjunction/installer@6.2.0-edge.0
+  - @memberjunction/codegen-lib@6.2.0-edge.0
+  - @memberjunction/core@6.2.0-edge.0
+  - @memberjunction/generic-database-provider@6.2.0-edge.0
+  - @memberjunction/sqlserver-dataprovider@6.2.0-edge.0
+  - @memberjunction/db-auto-doc@6.2.0-edge.0
+  - @memberjunction/testing-cli@6.2.0-edge.0
+  - @memberjunction/metadata-sync@6.2.0-edge.0
+  - @memberjunction/open-app-engine@6.2.0-edge.0
+  - @memberjunction/server-bootstrap-lite@6.2.0-edge.0
+  - @memberjunction/sql-converter@6.2.0-edge.0
+  - @memberjunction/ai-cli@6.2.0-edge.0
+  - @memberjunction/query-gen@6.2.0-edge.0
+  - @memberjunction/cli-core@6.2.0-edge.0
+  - @memberjunction/config@6.2.0-edge.0
+  - @memberjunction/dynamic-packages@6.2.0-edge.0
+  - @memberjunction/global@6.2.0-edge.0
+  - @memberjunction/sqlglot-ts@6.2.0-edge.0
+  - @memberjunction/standards@6.2.0-edge.0
+
 ## 6.1.0
 
 ### Minor Changes

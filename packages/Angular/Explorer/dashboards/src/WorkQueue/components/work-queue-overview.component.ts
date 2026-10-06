@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
-import { formatAge, needsAttention } from '../work-queue-agent-context';
+import { FormatAge, NeedsAttention } from '../work-queue-agent-context';
 import type { WorkQueueOverviewRow, WorkQueueRecordOpenRequest } from '../work-queue-types';
 
 interface OverviewGroup {
@@ -43,11 +43,11 @@ export class WorkQueueOverviewComponent {
     }
 
     public NeedsAttention(row: WorkQueueOverviewRow): boolean {
-        return row.Error !== null || (row.Stats !== null && needsAttention({ DeadLettered: row.Stats.DeadLettered, BlockedKeys: row.Stats.BlockedKeys }));
+        return row.Error !== null || (row.Stats !== null && NeedsAttention({ DeadLettered: row.Stats.DeadLettered, BlockedKeys: row.Stats.BlockedKeys }));
     }
 
     public Age(seconds: number | null | undefined): string {
-        return formatAge(seconds);
+        return FormatAge(seconds);
     }
 
     public Count(value: number | null | undefined): string {

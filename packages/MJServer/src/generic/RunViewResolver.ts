@@ -3,7 +3,7 @@ import { AppContext } from '../types.js';
 import { ResolverBase } from './ResolverBase.js';
 import { LogError, LogStatus, EntityInfo, FieldSecurityError, RunViewWithCacheCheckResult, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckParams, AggregateResult, CompositeKey } from '@memberjunction/core';
 
-import { UUIDsEqual } from '@memberjunction/global';
+import { ReplaceByteArraysWithBase64, UUIDsEqual } from '@memberjunction/global';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GetReadOnlyProvider } from '../util.js';
 import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
@@ -45,13 +45,13 @@ export class AggregateExpressionInput {
   @Field(() => String, {
     description: 'SQL expression for the aggregate (e.g., "SUM(OrderTotal)", "COUNT(*)", "AVG(Price)")'
   })
-  expression: string;
+  expression: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => String, {
     nullable: true,
     description: 'Optional alias for the result (used in error messages and debugging)'
   })
-  alias?: string;
+  alias?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 /**
@@ -60,22 +60,22 @@ export class AggregateExpressionInput {
 @ObjectType()
 export class AggregateResultOutput {
   @Field(() => String, { description: 'The expression that was calculated' })
-  expression: string;
+  expression: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => String, { description: 'The alias (or expression if no alias provided)' })
-  alias: string;
+  alias: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => String, {
     nullable: true,
     description: 'The calculated value as a JSON string (preserves type information)'
   })
-  value?: string;
+  value?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => String, {
     nullable: true,
     description: 'Error message if calculation failed'
   })
-  error?: string;
+  error?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 //****************************************************************************
@@ -200,6 +200,13 @@ export class RunViewByIDInput {
       "Optional source-of-truth selector for a base-view materialization: 'Live' (default) reads the entity's live base view; 'Materialized' reads its materialized snapshot wrapper view (materialized_vw<CodeName>). Only request 'Materialized' for an entity that actually has a base-view materialization: it resolves to the wrapper view by naming convention with NO existence check or fallback, so requesting it for a non-materialized entity targets a view that does not exist and the query errors.",
   })
   DataSource?: 'Live' | 'Materialized';
+
+  @Field(() => Boolean, {
+    nullable: true,
+    description:
+      'Optional, when true the binary fields of the entity (varbinary / bytea columns) are returned, as base64 strings. They are omitted by default because they are usually large and lists rarely read them. A binary field named explicitly in Fields is always returned.',
+  })
+  IncludeBinaryFields?: boolean;
 }
 
 @InputType()
@@ -321,6 +328,13 @@ export class RunViewByNameInput {
       "Optional source-of-truth selector for a base-view materialization: 'Live' (default) reads the entity's live base view; 'Materialized' reads its materialized snapshot wrapper view (materialized_vw<CodeName>). Only request 'Materialized' for an entity that actually has a base-view materialization: it resolves to the wrapper view by naming convention with NO existence check or fallback, so requesting it for a non-materialized entity targets a view that does not exist and the query errors.",
   })
   DataSource?: 'Live' | 'Materialized';
+
+  @Field(() => Boolean, {
+    nullable: true,
+    description:
+      'Optional, when true the binary fields of the entity (varbinary / bytea columns) are returned, as base64 strings. They are omitted by default because they are usually large and lists rarely read them. A binary field named explicitly in Fields is always returned.',
+  })
+  IncludeBinaryFields?: boolean;
 }
 
 @InputType()
@@ -428,6 +442,13 @@ export class RunDynamicViewInput {
       "Optional source-of-truth selector for a base-view materialization: 'Live' (default) reads the entity's live base view; 'Materialized' reads its materialized snapshot wrapper view (materialized_vw<CodeName>). Only request 'Materialized' for an entity that actually has a base-view materialization: it resolves to the wrapper view by naming convention with NO existence check or fallback, so requesting it for a non-materialized entity targets a view that does not exist and the query errors.",
   })
   DataSource?: 'Live' | 'Materialized';
+
+  @Field(() => Boolean, {
+    nullable: true,
+    description:
+      'Optional, when true the binary fields of the entity (varbinary / bytea columns) are returned, as base64 strings. They are omitted by default because they are usually large and lists rarely read them. A binary field named explicitly in Fields is always returned.',
+  })
+  IncludeBinaryFields?: boolean;
 }
 
 @InputType()
@@ -564,6 +585,13 @@ export class RunViewGenericInput {
       "Optional source-of-truth selector for a base-view materialization: 'Live' (default) reads the entity's live base view; 'Materialized' reads its materialized snapshot wrapper view (materialized_vw<CodeName>). Only request 'Materialized' for an entity that actually has a base-view materialization: it resolves to the wrapper view by naming convention with NO existence check or fallback, so requesting it for a non-materialized entity targets a view that does not exist and the query errors.",
   })
   DataSource?: 'Live' | 'Materialized';
+
+  @Field(() => Boolean, {
+    nullable: true,
+    description:
+      'Optional, when true the binary fields of the entity (varbinary / bytea columns) are returned, as base64 strings. They are omitted by default because they are usually large and lists rarely read them. A binary field named explicitly in Fields is always returned.',
+  })
+  IncludeBinaryFields?: boolean;
 }
 
 //****************************************************************************
@@ -573,22 +601,22 @@ export class RunViewGenericInput {
 @InputType()
 export class RunViewCacheStatusInput {
   @Field(() => String, { description: 'The maximum __mj_UpdatedAt value from cached results' })
-  maxUpdatedAt: string;
+  maxUpdatedAt: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => Int, { description: 'The number of rows in cached results' })
-  rowCount: number;
+  rowCount: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 @InputType()
 export class RunViewWithCacheCheckInput {
   @Field(() => RunDynamicViewInput, { description: 'The RunView parameters' })
-  params: RunDynamicViewInput;
+  params: RunDynamicViewInput;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => RunViewCacheStatusInput, {
     nullable: true,
     description: 'Optional cache status - if provided, server will check if cache is current'
   })
-  cacheStatus?: RunViewCacheStatusInput;
+  cacheStatus?: RunViewCacheStatusInput;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 @ObjectType()
@@ -596,21 +624,21 @@ export class DifferentialDataOutput {
   @Field(() => [RunViewGenericResultRow], {
     description: 'Records that have been created or updated since the client\'s maxUpdatedAt'
   })
-  updatedRows: RunViewGenericResultRow[];
+  updatedRows: RunViewGenericResultRow[];  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => [String], {
     description: 'Primary key values (as concatenated strings) of records that have been deleted'
   })
-  deletedRecordIDs: string[];
+  deletedRecordIDs: string[];  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 @ObjectType()
 export class RunViewWithCacheCheckResultOutput {
   @Field(() => Int, { description: 'The index of this view in the batch request' })
-  viewIndex: number;
+  viewIndex: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => String, { description: "'current', 'differential', 'stale', or 'error'" })
-  status: string;
+  status: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => [RunViewGenericResultRow], {
     nullable: true,
@@ -622,34 +650,34 @@ export class RunViewWithCacheCheckResultOutput {
     nullable: true,
     description: 'Differential update data - only populated when status is differential'
   })
-  differentialData?: DifferentialDataOutput;
+  differentialData?: DifferentialDataOutput;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => String, { nullable: true, description: 'Max __mj_UpdatedAt from results when stale or differential' })
-  maxUpdatedAt?: string;
+  maxUpdatedAt?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => Int, { nullable: true, description: 'Row count of results when stale or differential (total after applying delta)' })
-  rowCount?: number;
+  rowCount?: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => String, { nullable: true, description: 'Error message if status is error' })
-  errorMessage?: string;
+  errorMessage?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => [AggregateResultOutput], {
     nullable: true,
     description: 'Aggregate results when status is stale and aggregates were requested (B40 — previously never marshalled, so CacheLocal callers got no aggregates at all)'
   })
-  aggregateResults?: AggregateResultOutput[];
+  aggregateResults?: AggregateResultOutput[];  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 @ObjectType()
 export class RunViewsWithCacheCheckOutput {
   @Field(() => Boolean, { description: 'Whether the overall operation succeeded' })
-  success: boolean;
+  success: boolean;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => [RunViewWithCacheCheckResultOutput], { description: 'Results for each view in the batch' })
-  results: RunViewWithCacheCheckResultOutput[];
+  results: RunViewWithCacheCheckResultOutput[];  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => String, { nullable: true, description: 'Overall error message if success is false' })
-  errorMessage?: string;
+  errorMessage?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 //****************************************************************************
@@ -1219,6 +1247,7 @@ export class RunViewResolver extends ResolverBase {
           // DataSource must be forwarded on this transport too (same as the InternalRunView/RunViews maps):
           // otherwise a CacheLocal batch's DataSource:'Materialized' request silently reads the live view.
           DataSource: item.params.DataSource,
+          IncludeBinaryFields: item.params.IncludeBinaryFields,
           AfterKey: item.params.AfterKey
             ? CompositeKey.FromKeyValuePairs(item.params.AfterKey.KeyValuePairs)
             : undefined,
@@ -1322,7 +1351,9 @@ export class RunViewResolver extends ResolverBase {
       returnResult.push({
         PrimaryKey: primaryKey,
         EntityID: entityId,
-        Data: JSON.stringify(row),
+        // Binary columns arrive as base64 from the providers; this is the safety net for any
+        // row that still holds a byte array, which JSON.stringify would emit as {type,data}.
+        Data: JSON.stringify(ReplaceByteArraysWithBase64(row)),
       });
     }
     return returnResult;

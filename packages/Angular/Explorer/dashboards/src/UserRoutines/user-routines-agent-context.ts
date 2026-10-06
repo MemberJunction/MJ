@@ -32,7 +32,7 @@ export interface UserRoutinesAgentState {
 }
 
 /** Bounded, secret-free context published via SetAgentContext. */
-export function buildUserRoutinesAgentContext(state: UserRoutinesAgentState): Record<string, unknown> {
+export function BuildUserRoutinesAgentContext(state: UserRoutinesAgentState): Record<string, unknown> {
     const names = state.Routines.map((r) => r.Name).filter((n) => !!n);
     const bounded = names.slice(0, USER_ROUTINE_NAME_LIST_CAP);
     const selected = state.SelectedRoutineID
@@ -56,12 +56,17 @@ export function buildUserRoutinesAgentContext(state: UserRoutinesAgentState): Re
     return context;
 }
 
+/** @deprecated Use {@link BuildUserRoutinesAgentContext}. */
+export function buildUserRoutinesAgentContext(state: UserRoutinesAgentState): Record<string, unknown> {
+    return BuildUserRoutinesAgentContext(state);
+}
+
 /**
  * Tolerant routine resolver: exact ID → exact name → partial name contains
  * (all case-insensitive). Returns a structured failure listing available names
  * (bounded) on a miss.
  */
-export function resolveRoutineByIDOrName(
+export function ResolveRoutineByIDOrName(
     routines: RoutineSummaryRow[],
     rawRef: unknown
 ): { ok: true; value: RoutineSummaryRow } | { ok: false; error: string } {
@@ -91,6 +96,14 @@ export function resolveRoutineByIDOrName(
         };
     }
     return { ok: false, error: `No routine matches '${ref}'. ${availableNames(routines)}` };
+}
+
+/** @deprecated Use {@link ResolveRoutineByIDOrName}. */
+export function resolveRoutineByIDOrName(
+    routines: RoutineSummaryRow[],
+    rawRef: unknown
+): { ok: true; value: RoutineSummaryRow } | { ok: false; error: string } {
+    return ResolveRoutineByIDOrName(routines, rawRef);
 }
 
 function availableNames(routines: RoutineSummaryRow[]): string {

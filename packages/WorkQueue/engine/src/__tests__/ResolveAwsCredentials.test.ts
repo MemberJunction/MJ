@@ -3,8 +3,8 @@ import type { UserInfo } from '@memberjunction/core';
 
 const credentialEngine = vi.hoisted(() => ({
     Config: vi.fn(async () => undefined),
-    getCredentialById: vi.fn(),
-    getCredential: vi.fn(),
+    GetCredentialById: vi.fn(),
+    GetCredential: vi.fn(),
 }));
 
 const assumeRole = vi.hoisted(() => vi.fn(() => async () => ({ accessKeyId: 'ASIA', secretAccessKey: 's', sessionToken: 't' })));
@@ -19,8 +19,8 @@ const CREDENTIAL_ID = '11111111-2222-4333-8444-555555555555';
 
 beforeEach(() => {
     credentialEngine.Config.mockClear();
-    credentialEngine.getCredentialById.mockReset();
-    credentialEngine.getCredential.mockReset();
+    credentialEngine.GetCredentialById.mockReset();
+    credentialEngine.GetCredential.mockReset();
 });
 
 describe('ToAwsCredentials', () => {
@@ -50,15 +50,15 @@ describe('ResolveAwsCredentials', () => {
     });
 
     it('loads and decrypts the configured credential under the WorkQueue subsystem', async () => {
-        credentialEngine.getCredentialById.mockReturnValue({ ID: CREDENTIAL_ID, Name: 'AWS Work Queue' });
-        credentialEngine.getCredential.mockResolvedValue({ values: { AccessKeyId: 'AKIA', SecretAccessKey: 'secret' } });
+        credentialEngine.GetCredentialById.mockReturnValue({ ID: CREDENTIAL_ID, Name: 'AWS Work Queue' });
+        credentialEngine.GetCredential.mockResolvedValue({ values: { AccessKeyId: 'AKIA', SecretAccessKey: 'secret' } });
         expect(await ResolveAwsCredentials(CREDENTIAL_ID, 'us-east-1', USER)).toEqual({ accessKeyId: 'AKIA', secretAccessKey: 'secret' });
         expect(credentialEngine.Config).toHaveBeenCalledWith(false, USER);
-        expect(credentialEngine.getCredential).toHaveBeenCalledWith('AWS Work Queue', { credentialId: CREDENTIAL_ID, contextUser: USER, subsystem: 'WorkQueue' });
+        expect(credentialEngine.GetCredential).toHaveBeenCalledWith('AWS Work Queue', { credentialId: CREDENTIAL_ID, contextUser: USER, subsystem: 'WorkQueue' });
     });
 
     it('fails clearly when the credential does not exist', async () => {
-        credentialEngine.getCredentialById.mockReturnValue(undefined);
+        credentialEngine.GetCredentialById.mockReturnValue(undefined);
         await expect(ResolveAwsCredentials(CREDENTIAL_ID, 'us-east-1', USER)).rejects.toThrow(`Credential ${CREDENTIAL_ID} was not found`);
     });
 });

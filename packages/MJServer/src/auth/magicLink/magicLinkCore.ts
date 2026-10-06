@@ -13,13 +13,23 @@ import type { MagicLinkJWTClaims, MagicLinkScopeEntry, RedeemErrorCode } from '.
 export const MAGIC_LINK_TOKEN_PREFIX = 'mj_ml_';
 
 /** Generates a cryptographically random raw magic-link token. */
-export function generateRawToken(): string {
+export function GenerateRawToken(): string {
   return MAGIC_LINK_TOKEN_PREFIX + randomBytes(32).toString('hex');
 }
 
+/** @deprecated Use {@link GenerateRawToken}. */
+export function generateRawToken(): string {
+  return GenerateRawToken();
+}
+
 /** Generates an opaque per-session id (anonymous-session forensics correlation). */
-export function generateSessionId(): string {
+export function GenerateSessionId(): string {
   return randomBytes(16).toString('base64url');
+}
+
+/** @deprecated Use {@link GenerateSessionId}. */
+export function generateSessionId(): string {
+  return GenerateSessionId();
 }
 
 /**
@@ -28,8 +38,13 @@ export function generateSessionId(): string {
  * carries the full 256 bits. Both write (CreateInvite) and read (RedeemInvite)
  * paths call this, so the encoding stays internally consistent.
  */
-export function hashToken(rawToken: string): string {
+export function HashToken(rawToken: string): string {
   return createHash('sha256').update(rawToken).digest('base64url');
+}
+
+/** @deprecated Use {@link HashToken}. */
+export function hashToken(rawToken: string): string {
+  return HashToken(rawToken);
 }
 
 /** Minimal shape of an invite needed for redemption eligibility. */
@@ -54,7 +69,7 @@ function normalizeName(name: string): string {
  * (including an external user already holding a restricted magic-link session)
  * from minting invites.
  */
-export function canIssueInvites(
+export function CanIssueInvites(
   userType: string | null | undefined,
   userRoleNames: readonly string[],
   issuerRoleNames: readonly string[],
@@ -69,13 +84,22 @@ export function canIssueInvites(
   return userRoleNames.some((r) => allowed.has(normalizeName(r)));
 }
 
+/** @deprecated Use {@link CanIssueInvites}. */
+export function canIssueInvites(
+  userType: string | null | undefined,
+  userRoleNames: readonly string[],
+  issuerRoleNames: readonly string[],
+): boolean {
+  return CanIssueInvites(userType, userRoleNames, issuerRoleNames);
+}
+
 /**
  * Pure check for WHAT role an invite may grant. The restricted role is always
  * grantable; any other role must be explicitly listed in `grantableRoleNames`.
  * Applied to every caller (Owners included) so a privileged role can never be
  * attached to an external magic-link user unless the deployment opts in.
  */
-export function isRoleGrantable(
+export function IsRoleGrantable(
   roleName: string | null | undefined,
   restrictedRoleName: string,
   grantableRoleNames: readonly string[],
@@ -88,8 +112,17 @@ export function isRoleGrantable(
   return allowed.has(target);
 }
 
+/** @deprecated Use {@link IsRoleGrantable}. */
+export function isRoleGrantable(
+  roleName: string | null | undefined,
+  restrictedRoleName: string,
+  grantableRoleNames: readonly string[],
+): boolean {
+  return IsRoleGrantable(roleName, restrictedRoleName, grantableRoleNames);
+}
+
 /** Pure redemption-eligibility check. Returns ok + an error code when not. */
-export function evaluateInvite(invite: InviteEvaluationInput, nowMs: number): { ok: boolean; errorCode?: RedeemErrorCode } {
+export function EvaluateInvite(invite: InviteEvaluationInput, nowMs: number): { ok: boolean; errorCode?: RedeemErrorCode } {
   if (invite.Status === 'Revoked') {
     return { ok: false, errorCode: 'revoked' };
   }
@@ -106,75 +139,43 @@ export function evaluateInvite(invite: InviteEvaluationInput, nowMs: number): { 
   return { ok: true };
 }
 
-/** SQL dialect for {@link buildConsumeInviteSQL}. */
-export type ConsumeInviteDialect = 'sqlserver' | 'postgresql';
+/** @deprecated Use {@link EvaluateInvite}. */
+export function evaluateInvite(invite: InviteEvaluationInput, nowMs: number): { ok: boolean; errorCode?: RedeemErrorCode } {
+  return EvaluateInvite(invite, nowMs);
+}
 
-/** SQL Server table identifier — bracket-quoted `[schema].[table]` (word chars only). */
-const QUALIFIED_TABLE_PATTERN = /^\[\w+\]\.\[\w+\]$/;
 /** PostgreSQL table identifier — `schema.table` (word chars only); auto-quoted downstream. */
 const QUALIFIED_TABLE_PATTERN_PG = /^\w+\.\w+$/;
 
 /**
- * Builds the atomic compare-and-swap UPDATE that consumes one use of an invite,
- * in the given SQL dialect.
+ * Builds the PostgreSQL atomic compare-and-swap UPDATE that consumes one use of an invite.
  *
- * The WHERE clause re-checks every eligibility condition at the DB level, so the
- * increment and the guard are a single atomic operation: concurrent redemptions
- * of a single-use link race on the row and exactly one matches. This is what
- * actually enforces single-use — the JS-side `evaluateInvite` is only a friendly
- * pre-check. The matched row's ID is returned to the caller (via `OUTPUT` on SQL
- * Server, `RETURNING` on PostgreSQL) so it can detect a win (exactly one row).
+ * PostgreSQL only. SQL Server consumes through the granted `spConsumeMagicLinkInvite` procedure,
+ * because its runtime roles are never granted table DML (#4753). PostgreSQL needs neither: its
+ * runtime roles hold INSERT/UPDATE/DELETE on every `__mj` table
+ * (V202605040300__v5.33.x__Unblock_PostgreSQL_End_To_End.pg-only.sql), and no PG counterpart of
+ * the procedure exists — the release-time converter leaves `CREATE PROCEDURE` unhandled.
  *
- * The invite ID MUST be bound as a parameter by the caller (`@p0` on SQL Server,
- * `$1` on PostgreSQL) — it is never interpolated into the string, so this builder
- * is injection-safe regardless of the ID's contents.
+ * The WHERE re-checks every eligibility condition (the same predicate as the procedure), so the
+ * increment and the guard are one atomic statement: concurrent redemptions of a single-use link
+ * serialize on the row lock and exactly one matches. `RETURNING ID` yields the row iff the guard
+ * matched. The invite ID MUST be bound by the caller as `$1` — it is never interpolated.
  *
- * **SQL Server** — `OUTPUT` goes `INTO` a table variable (not a bare OUTPUT):
- * SQL Server forbids a bare OUTPUT clause on a table that has enabled triggers,
- * and CodeGen adds an `__mj_UpdatedAt` trigger to every MJ table. The trailing
- * SELECT returns the matched row(s) regardless of trigger behavior.
- *
- * **PostgreSQL** — the `UPDATE … WHERE` guard IS itself the atomic single-use
- * gate: the row is locked for the UPDATE's duration, so concurrent redemptions
- * serialize and only the first matching `Status='Active' AND UseCount < MaxUses`
- * wins; `RETURNING` yields the row iff the guard matched (equivalent to the SS
- * `OUTPUT`-into-table win-detect). PascalCase identifiers are auto-quoted by
- * `PostgreSQLDataProvider.ExecuteSQL`, so the table is passed unquoted (`schema.table`).
- *
- * `qualifiedTable` is asserted to match the dialect's whitelist pattern before
- * interpolation. The caller derives it from `EntityInfo` (never user input), so
- * this is defense-in-depth: even a future careless caller cannot turn this into
- * an injection vector — a non-conforming table throws.
- *
- * @param qualifiedTable  `[schema].[table]` (sqlserver) or `schema.table` (postgresql) for MagicLinkInvite
- * @param dialect         target SQL dialect (defaults to `'sqlserver'`)
+ * `qualifiedTable` is `schema.table` unquoted (PostgreSQLDataProvider.ExecuteSQL auto-quotes the
+ * PascalCase identifiers) and is asserted against a whitelist before interpolation — the caller
+ * never passes user input, so this is defense-in-depth.
  */
-export function buildConsumeInviteSQL(qualifiedTable: string, dialect: ConsumeInviteDialect = 'sqlserver'): string {
-  if (dialect === 'postgresql') {
-    if (!QUALIFIED_TABLE_PATTERN_PG.test(qualifiedTable)) {
-      throw new Error(`buildConsumeInviteSQL: refusing to build SQL for non-whitelisted table identifier '${qualifiedTable}'.`);
-    }
-    return (
-      `UPDATE ${qualifiedTable} ` +
-      `SET UseCount = UseCount + 1, ` +
-      `ConsumedAt = COALESCE(ConsumedAt, (now() AT TIME ZONE 'utc')), ` +
-      `Status = CASE WHEN UseCount + 1 >= MaxUses THEN 'Consumed' ELSE Status END ` +
-      `WHERE ID = $1 AND Status = 'Active' AND UseCount < MaxUses AND ExpiresAt > (now() AT TIME ZONE 'utc') ` +
-      `RETURNING ID;`
-    );
-  }
-  if (!QUALIFIED_TABLE_PATTERN.test(qualifiedTable)) {
-    throw new Error(`buildConsumeInviteSQL: refusing to build SQL for non-whitelisted table identifier '${qualifiedTable}'.`);
+export function BuildConsumeInvitePostgresSQL(qualifiedTable: string): string {
+  if (!QUALIFIED_TABLE_PATTERN_PG.test(qualifiedTable)) {
+    throw new Error(`BuildConsumeInvitePostgresSQL: refusing to build SQL for non-whitelisted table identifier '${qualifiedTable}'.`);
   }
   return (
-    `DECLARE @consumed TABLE (ID UNIQUEIDENTIFIER); ` +
     `UPDATE ${qualifiedTable} ` +
     `SET UseCount = UseCount + 1, ` +
-    `ConsumedAt = COALESCE(ConsumedAt, SYSUTCDATETIME()), ` +
+    `ConsumedAt = COALESCE(ConsumedAt, (now() AT TIME ZONE 'utc')), ` +
     `Status = CASE WHEN UseCount + 1 >= MaxUses THEN 'Consumed' ELSE Status END ` +
-    `OUTPUT INSERTED.ID INTO @consumed ` +
-    `WHERE ID = @p0 AND Status = 'Active' AND UseCount < MaxUses AND ExpiresAt > SYSUTCDATETIME(); ` +
-    `SELECT ID FROM @consumed;`
+    `WHERE ID = $1 AND Status = 'Active' AND UseCount < MaxUses AND ExpiresAt > (now() AT TIME ZONE 'utc') ` +
+    `RETURNING ID;`
   );
 }
 
@@ -184,7 +185,7 @@ export function buildConsumeInviteSQL(qualifiedTable: string, dialect: ConsumeIn
  * of scopes across multiple redeemed links — carried in the re-minted JWT, never as
  * roles on a shared user, so anonymous sessions can't accrete into a superuser.
  */
-export function unionScopes(prior: readonly MagicLinkScopeEntry[] | undefined, next: MagicLinkScopeEntry): MagicLinkScopeEntry[] {
+export function UnionScopes(prior: readonly MagicLinkScopeEntry[] | undefined, next: MagicLinkScopeEntry): MagicLinkScopeEntry[] {
   const result = [...(prior ?? [])];
   if (!result.some((s) => s.inviteId === next.inviteId)) {
     result.push(next);
@@ -192,8 +193,13 @@ export function unionScopes(prior: readonly MagicLinkScopeEntry[] | undefined, n
   return result;
 }
 
+/** @deprecated Use {@link UnionScopes}. */
+export function unionScopes(prior: readonly MagicLinkScopeEntry[] | undefined, next: MagicLinkScopeEntry): MagicLinkScopeEntry[] {
+  return UnionScopes(prior, next);
+}
+
 /** Builds the session-token claims (pure). */
-export function buildSessionClaims(args: {
+export function BuildSessionClaims(args: {
   issuer: string;
   audience: string;
   inviteId: string;
@@ -236,9 +242,35 @@ export function buildSessionClaims(args: {
     mj_app_id: args.applicationId,
     mj_role: args.roleName,
     mj_invited_by: args.invitedByUserId,
-    mj_scopes: unionScopes(args.priorScopes, scopeEntry),
+    mj_scopes: UnionScopes(args.priorScopes, scopeEntry),
     mj_anon: args.anonymous ? true : undefined,
     mj_sid: args.sessionId,
     mj_magic_link: true,
   };
+}
+
+/** @deprecated Use {@link BuildSessionClaims}. */
+export function buildSessionClaims(args: {
+  issuer: string;
+  audience: string;
+  inviteId: string;
+  email: string;
+  firstName?: string;
+  lastName?: string;
+  applicationId: string;
+  roleName: string;
+  invitedByUserId?: string;
+  /** True for anonymous sessions — the server enforces scope from mj_scopes, not roles. */
+  anonymous?: boolean;
+  /** Opaque per-session id (anonymous forensics correlation). */
+  sessionId?: string;
+  /** Prior session's scope union to carry forward (multi-link anonymous sessions). */
+  priorScopes?: readonly MagicLinkScopeEntry[];
+  /** Resource-share/embed scope for this link's entry. */
+  resourceType?: string;
+  resourceId?: string;
+  nowSeconds: number;
+  ttlSeconds: number;
+}): MagicLinkJWTClaims {
+  return BuildSessionClaims(args);
 }

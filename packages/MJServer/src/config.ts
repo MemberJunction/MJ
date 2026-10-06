@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { DEFAULT_WORK_QUEUE_CONFIG, workQueueSchema } from './services/workQueueConfig.js';
+import { DEFAULT_WORK_QUEUE_CONFIG, WorkQueueSchema } from './services/workQueueConfig.js';
 import { cosmiconfigSync } from 'cosmiconfig';
 import { LogError, LogStatus, LogStatusEx } from '@memberjunction/core';
 import { mergeConfigs, parseBooleanEnv } from '@memberjunction/config';
@@ -231,6 +231,29 @@ const cacheSettingsSchema = z.object({
   evictionSweepIntervalSeconds: z.number().optional().default(300),
   /** Enable verbose cache logging (hits, misses, evictions). Default: false. */
   verboseLogging: z.boolean().optional().default(false),
+  /**
+   * Entity names whose FULL ROW may ride along with a cache-invalidation broadcast.
+   *
+   * The cache-invalidation subscription is delivered to EVERY connected client with no per-user
+   * filter (see CacheInvalidationResolver), so any row named here is disclosed to every signed-in
+   * session, whatever row-level security or tenant scoping would otherwise apply to reading it.
+   *
+   * Defaults to `[]`: invalidation still carries the entity name and primary key, which is all a
+   * client needs to evict, and the client re-fetches through the normal read path where access
+   * control applies. Listing an entity re-enables the apply-in-place optimisation for it — correct
+   * only for reference data every signed-in user is allowed to read.
+   *
+   * What the re-fetch costs depends on the consumer. `ConversationEngine` re-reads the ONE record
+   * by primary key. `BaseEngine` (every engine subclass with `AutoRefresh`, the default) applies a
+   * remote save in place only when the row is present, so without it a remote save falls through to
+   * a full reload of each matching config — a `RunView` of that entity, not a keyed read. Remote
+   * deletes still apply in place from the primary key. Engine-cached reference entities that every
+   * signed-in user may read are the ones worth listing here.
+   *
+   * `['*']` opts every entity in, restoring the previous behaviour. Only safe on a deployment where
+   * every signed-in user may read every row of every entity.
+   */
+  recordDataBroadcastEntities: z.array(z.string()).optional().default([]),
 });
 
 const loggingSettingsSchema = z.object({
@@ -448,10 +471,20 @@ const twilioTelephonySchema = z.object({
   apiKeySecret: z.string().optional(),
   /** The publicly reachable `wss://…/telephony/twilio/media` URL Twilio's <Connect><Stream> connects to. */
   streamPublicUrl: z.string(),
-  /** Optional shared secret gating the public webhook/WSS endpoints (defense-in-depth beyond signature verification). */
+  /**
+   * Reserved; currently unused. The Media-Streams websocket is authenticated by a per-call token MJ mints and
+   * embeds in the TwiML (`<Parameter name="mjToken">`), and webhooks by `X-Twilio-Signature`.
+   */
   webhookSigningSecret: z.string().optional(),
-  /** Optional status-callback URL Twilio posts call lifecycle events to. */
+  /**
+   * URL Twilio posts outbound-call lifecycle events to. Defaults to `<public URL>/telephony/twilio/status`, the
+   * route that ends the bridge session when a call is busy / unanswered / failed / completed.
+   */
   statusCallbackUrl: z.string().optional(),
+  /** URL Twilio posts the async answering-machine verdict to. Defaults to `<public URL>/telephony/twilio/amd`. */
+  amdStatusCallbackUrl: z.string().optional(),
+  /** What to do when a machine or fax answers an outbound call: `hangup` (default) ends it, `continue` only logs the verdict. */
+  onMachine: z.enum(['hangup', 'continue']).optional(),
 }).passthrough();
 
 /**
@@ -473,8 +506,14 @@ const vonageTelephonySchema = z.object({
   mediaPublicUrl: z.string(),
   /** Vonage account signature secret — HMAC key for signed-request `sig` AND HS256 webhook-JWT verification. */
   signatureSecret: z.string().optional(),
-  /** Optional event-webhook URL Vonage posts call lifecycle events to (passed on outbound createCall). */
+  /**
+   * Event-webhook URL Vonage posts call lifecycle events to (passed on outbound createCall). Defaults to
+   * `<public URL>/telephony/vonage/event`, the route that ends the bridge session when a call is busy /
+   * unanswered / failed / completed.
+   */
   eventUrl: z.string().optional(),
+  /** What to do when a machine answers an outbound call — Vonage's `machine_detection`: `hangup` (default) or `continue`. */
+  onMachine: z.enum(['hangup', 'continue']).optional(),
 }).passthrough();
 
 /**
@@ -528,15 +567,119 @@ const teamsMeetingsSchema = z.object({
   modelSampleRate: z.coerce.number().optional().default(16000),
 }).passthrough();
 
+/**
+ * LiveKit SIP binding: phone calls carried by a SIP trunk and landed in a LiveKit room (every conversation lives in a room;
+ * the carrier is only the pipe). LiveKit credentials default to the `LIVEKIT_URL` / `LIVEKIT_API_KEY` /
+ * `LIVEKIT_API_SECRET` env vars the Meet room already uses. When `livekitSip` is omitted, the LiveKit SIP webhook is not mounted.
+ * Point a LiveKit project webhook at `<public URL>/telephony/livekit-sip/webhook` (the signature is verified with the API secret).
+ */
+const livekitSipTelephonySchema = z.object({
+  /** LiveKit server URL (`wss://…`). Defaults to `LIVEKIT_URL`. */
+  serverUrl: z.string().optional(),
+  /** LiveKit API key. Defaults to `LIVEKIT_API_KEY`. */
+  apiKey: z.string().optional(),
+  /** LiveKit API secret (resolved upstream — never inlined). Defaults to `LIVEKIT_API_SECRET`. */
+  apiSecret: z.string().optional(),
+  /** Inbound calls land in a room whose name starts with this. Defaults to `call-`. */
+  roomPrefix: z.string().optional(),
+  /** The numbers (E.164) this deployment answers. Each routes to the agent identity registered for it (on the LiveKit provider). */
+  numbers: z.array(z.string()).optional(),
+  /** The LiveKit inbound trunk id, when created by hand. */
+  inboundTrunkId: z.string().optional(),
+  /** The LiveKit OUTBOUND trunk used to dial out (outbound calls, fallback legs, transfers to a number). Dialing out is off without it. */
+  outboundTrunkId: z.string().optional(),
+  /** The caller ID presented on calls dialed out through the outbound trunk. */
+  outboundFromNumber: z.string().optional(),
+  /** Create the inbound trunk and dispatch rule at startup when missing (idempotent). Defaults to false. */
+  autoProvision: zodBooleanWithTransforms().optional().default(false),
+  /** Source addresses the inbound trunk accepts calls from (the carrier's SIP signalling addresses). Used when provisioning. */
+  allowedAddresses: z.array(z.string()).optional(),
+  /** The carrier behind the trunk, for configuration checks only (no carrier API is called). */
+  carrier: z
+    .object({
+      type: z.literal('twilio-elastic-sip'),
+      /** The LiveKit SIP URI the Twilio trunk's origination URI points at, e.g. `sip:<project>.sip.livekit.cloud`. */
+      originationUri: z.string().optional(),
+      /** The trunk's Termination SIP URI on Twilio (`<name>.pstn.twilio.com`). Needed only when dialing out. */
+      terminationUri: z.string().optional(),
+      /** How Twilio authenticates LiveKit's outbound requests. */
+      terminationAuth: z.enum(['credential-list', 'ip-acl']).optional(),
+      /** The Twilio numbers associated with the trunk (E.164). */
+      numbers: z.array(z.string()).optional(),
+    })
+    .optional(),
+}).passthrough();
+
+/**
+ * Outbound-call policy applied to every `PlaceTwilioCall` / `PlaceVonageCall` / `PlaceRingCentralCall`
+ * mutation, on top of the caller's right to run the agent. Defaults are deliberately conservative.
+ * The rate limiter is in-memory and therefore PER PROCESS: with N MJAPI instances a user can place up to
+ * N × `maxCallsPerUserPerHour` calls.
+ */
+const outboundTelephonySchema = z.object({
+  /** Destination prefixes a call may go to (E.164, e.g. `+1`). An empty list refuses every destination. Defaults to `['+1']`. */
+  allowedPrefixes: z.array(z.string()).optional().default(['+1']),
+  /**
+   * Destination prefixes that are always refused, even when an allowed prefix matches. Deliberately has NO default
+   * here: when omitted, `@memberjunction/telephony-adapters` applies its own `DEFAULT_BLOCKED_PREFIXES` (NANP
+   * premium-rate plus the Caribbean +1 countries abused for toll fraud), so the list lives in exactly one place.
+   * Setting this REPLACES that list.
+   */
+  blockedPrefixes: z.array(z.string()).optional(),
+  /** Max outbound calls one user may place per rolling hour (per process). Defaults to 20. */
+  maxCallsPerUserPerHour: z.coerce.number().int().positive().optional().default(20),
+}).passthrough();
+
 const telephonySchema = z.object({
   /** Master switch. When false (or when no vendor block is present), telephony routes are not mounted. */
   enabled: zodBooleanWithTransforms().default(false),
+  /**
+   * Email of the user INBOUND calls run as. A caller is an anonymous member of the public, so the call needs a
+   * principal to create its agent session and run the agent. Point this at a DEDICATED LEAST-PRIVILEGE user.
+   * There is deliberately no fallback: if unset, unknown, inactive, or the system user, inbound calls are
+   * rejected with a polite message and the rejection is logged. Applies to Twilio, Vonage and RingCentral.
+   */
+  inboundRunAsUserEmail: z.string().optional(),
+  /** Maximum length of one phone call, in seconds. The bridge session is stopped (and the call hung up) at the cap. Defaults to 1800. */
+  maxCallSeconds: z.coerce.number().int().positive().optional().default(1800),
+  /**
+   * Most phone calls (every carrier together, both directions) the server carries at once. Past it an inbound
+   * caller hears "all agents are busy" and an outbound request is refused. Keep it at or below the realtime
+   * model plan's concurrent-session limit. Defaults to 25.
+   */
+  maxConcurrentCalls: z.coerce.number().int().positive().optional().default(25),
+  /** Outbound destination policy + per-user rate limit (see {@link outboundTelephonySchema}). */
+  outbound: outboundTelephonySchema.optional().default({}),
+  /**
+   * The places the agent may hand a live call to, by name (the agent names a target, never a number, an email or an agent
+   * id). `kind` is `number` (the default; a phone number), `user` (a person at an Explorer console, who may accept or
+   * decline; `userEmail`, optional `fallbackNumber` the room dials if they do not take it) or `agent` (another MJ AI agent,
+   * by `agentName`). `user` and `agent` targets work on calls that live in a LiveKit room; a carrier call can only transfer to
+   * a `number`. Every number is validated at startup against the outbound allow/block lists; an invalid entry is dropped
+   * and logged. Empty (the default) means the agent cannot hand calls over at all.
+   */
+  transferTargets: z
+    .array(
+      z.object({
+        name: z.string().min(1),
+        kind: z.enum(['number', 'user', 'agent']).optional(),
+        number: z.string().optional(),
+        userEmail: z.string().optional(),
+        fallbackNumber: z.string().optional(),
+        agentName: z.string().optional(),
+        description: z.string().optional(),
+      }),
+    )
+    .optional()
+    .default([]),
   /** Twilio Programmable Voice + Media Streams binding. */
   twilio: twilioTelephonySchema.optional(),
   /** Vonage Voice + WebSocket-media binding. */
   vonage: vonageTelephonySchema.optional(),
   /** RingCentral Call Control + media-stream binding. */
   ringcentral: ringcentralTelephonySchema.optional(),
+  /** LiveKit SIP binding: phone calls carried by a SIP trunk, landed in a LiveKit room. */
+  livekitSip: livekitSipTelephonySchema.optional(),
   /** Microsoft Teams meetings (Graph cloud-communications + ACS application-hosted media) binding. */
   teams: teamsMeetingsSchema.optional(),
 }).passthrough();
@@ -560,7 +703,7 @@ const configInfoSchema = z.object({
   componentRegistries: z.array(componentRegistrySchema).optional(),
   scheduledJobs: scheduledJobsSchema.optional().default({}),
   integrationSyncWorker: integrationSyncWorkerSchema.optional().default({}),
-  workQueue: workQueueSchema.optional().default({}),
+  workQueue: WorkQueueSchema.optional().default({}),
   telemetry: telemetrySchema.optional().default({}),
   queryDialects: queryDialectSchema.optional().default({}),
   multiTenancy: multiTenancySchema.optional().default({}),
@@ -611,6 +754,7 @@ export type RealtimeConfig = z.infer<typeof realtimeSchema>;
 export type TwilioTelephonyConfig = z.infer<typeof twilioTelephonySchema>;
 export type VonageTelephonyConfig = z.infer<typeof vonageTelephonySchema>;
 export type RingCentralTelephonyConfig = z.infer<typeof ringcentralTelephonySchema>;
+export type LiveKitSipTelephonyConfig = z.infer<typeof livekitSipTelephonySchema>;
 export type TeamsMeetingsConfig = z.infer<typeof teamsMeetingsSchema>;
 export type DatabaseSettingsInfo = z.infer<typeof databaseSettingsInfoSchema>;
 export type ViewingSystemSettingsInfo = z.infer<typeof viewingSystemInfoSchema>;
@@ -818,9 +962,14 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
  * startup summary `Config` line. Declared before `configInfo` so the assignment
  * inside `loadConfig()` (invoked below) is not in its temporal dead zone.
  */
-export let configFilePath: string | undefined;
+export let ConfigFilePath: string | undefined;
 
-export const configInfo: ConfigInfo = loadConfig();
+export {
+  /** @deprecated Use {@link ConfigFilePath} instead. */
+  ConfigFilePath as configFilePath,
+};
+
+export const configInfo: ConfigInfo = LoadConfig();  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
 
 export const {
   dbUsername,
@@ -847,7 +996,7 @@ export const {
   restApiOptions: RESTApiOptions,
 } = configInfo;
 
-export function loadConfig() {
+export function LoadConfig() {
   const configSearchResult = explorer.search(process.cwd());
 
   // Start with DEFAULT_SERVER_CONFIG as base
@@ -857,7 +1006,7 @@ export function loadConfig() {
   if (configSearchResult && !configSearchResult.isEmpty) {
     // Resolved config-file path. Surfaced in the startup summary `Config` line at standard
     // level (see StartupLogger). Demoted to verbose-only here to avoid a duplicate inline line.
-    configFilePath = configSearchResult.filepath;
+    ConfigFilePath = configSearchResult.filepath;
     LogStatusEx({ message: `Config file found at ${configSearchResult.filepath}`, verboseOnly: true });
 
     // Merge user config with defaults (user config takes precedence)
@@ -873,4 +1022,9 @@ export function loadConfig() {
     throw new Error('Configuration validation failed');
   }
   return configParsing.data;
+}
+
+/** @deprecated Use {@link LoadConfig}. */
+export function loadConfig() {
+  return LoadConfig();
 }

@@ -1,5 +1,101 @@
 # @memberjunction/auth-providers
 
+## 6.2.0-edge.2
+
+### Patch Changes
+
+- Updated dependencies [e97d95c]
+- Updated dependencies [21f9e15]
+- Updated dependencies [4248fb3]
+- Updated dependencies [0adaf76]
+- Updated dependencies [705ab4e]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [5986939]
+- Updated dependencies [4d647e6]
+- Updated dependencies [369e229]
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+
+## 6.2.0-edge.1
+
+### Patch Changes
+
+- 9d4a28a: fix: cache/dispose provider and driver instances that were being silently rebuilt or leaked on every call
+
+  Memory-leak audit findings (Round 15, 2026-09-19):
+  - **`CommunicationEngine.GetProvider()`** constructed a brand-new provider instance (Twilio/Gmail/MSGraph/etc.) via `ClassFactory.CreateInstance` on every single send — including once per recipient during a bulk `SendMessages()` call. Because each provider's own SDK-client cache (`MJLruCache`) lives on the instance, this silently defeated the earlier fix that added those caches: they were rebuilt empty and thrown away on every call in production, causing sawtooth GC pressure and SDK-client/socket churn on every bulk send. `GetProvider()` now caches resolved provider instances by name, bounded by the small, admin-managed number of registered communication providers.
+  - **`FileStorageEngine.RefreshDriverCache()`** dropped every cached storage driver — including live SDK clients (S3Client, BlobServiceClient, etc.) — with no disposal, and is reachable from ordinary end-user activity (`UploadFile()` force-refreshes the whole driver cache any time a requested `storageAccountId` isn't found). `FileStorageBase` gains a `Dispose()` hook (no-op by default, since most of the storage SDKs used here expose no explicit teardown API); `AWSFileStorage` overrides it to destroy its `S3Client`, mirroring the destroy-before-reassign it already does internally on re-init. `FileStorageEngine` now disposes every cached driver before clearing the cache.
+  - **`AuthProviderFactory.register()`/`clear()`** dropped the previous `BaseAuthProvider` instance — each holding a live `https.Agent` keep-alive socket pool and `jwksClient` — with no cleanup, on every admin-triggered auth-catalog refresh. `BaseAuthProvider` now retains its HTTP agent and exposes `Dispose()` to destroy it; `IAuthProvider.Dispose()` is optional. `register()` disposes the provider it's replacing (but not when the same instance re-registers itself); `clear()` disposes every provider first.
+
+  No behavior changes to any success path. 19 new unit tests cover the caching/disposal semantics, including edge cases (failed lookups aren't cached, throwing `Dispose()` doesn't block disposing sibling drivers, same-instance re-registration isn't disposed, providers with no `Dispose()` method are tolerated).
+
+- 80905a1: Rename public class members and exported functions to PascalCase, per MJ's naming convention,
+  **without breaking a single consumer**.
+
+  Every renamed symbol keeps its old name beside the new one as a `@deprecated` stub that forwards to
+  it — a delegating method or function, a getter/setter pair for a property, and for Angular a
+  readable accessor pair for an `@Input` and a second `@Output` sharing the same `EventEmitter`, so a
+  template still binding the old name keeps receiving events. Old names still compile, still resolve,
+  and still behave identically; the deprecation tag rides through to the published `.d.ts`, so editors
+  point callers at the replacement. Where a package re-exports through an explicit `export { … }`
+  list, the new name is added alongside the old, so the correct name is actually on the public surface
+  rather than merely declared.
+
+  The rename is deliberately refused wherever a mechanical stub would not be equivalent, because
+  several of those shapes change a type contract while still compiling in the package that declares
+  them:
+  - an **optional** property or parameter property — TypeScript has no optional accessor, so a stub
+    would promote `foo?` to a required member and break every object literal that omits it;
+  - a class that is a **data shape** (no methods, or `@ObjectType`/`@InputType`) — object literals are
+    assigned to it, and an accessor stub changes what they must supply;
+  - a property whose **subclass redeclares it**, since TypeScript forbids a property overriding an
+    accessor (TS2610);
+  - a name whose PascalCase form is **already bound** in that file or class;
+  - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
+    overload sets and abstract members.
+
+  **One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+  backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+  the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+  `EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+  `copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+  field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+  fields silently. Same-version deployments, which is the supported configuration, see no change.
+
+  Each package was verified against its own pre-change baseline rather than against zero, because
+  several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
+  with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
+  `@Input` alias passed `tsc` while breaking six template reads.
+
+- Updated dependencies [a3539d2]
+- Updated dependencies [41274aa]
+- Updated dependencies [a7da50b]
+- Updated dependencies [17cc774]
+- Updated dependencies [80905a1]
+  - @memberjunction/core@6.2.0-edge.1
+  - @memberjunction/global@6.2.0-edge.1
+
+## 6.2.0-edge.0
+
+### Patch Changes
+
+- Updated dependencies [7be1684]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [683f652]
+- Updated dependencies [f48dffc]
+- Updated dependencies [630bb88]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [a17a228]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [104125c]
+- Updated dependencies [5513c2a]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [2c590b0]
+  - @memberjunction/core@6.2.0-edge.0
+  - @memberjunction/global@6.2.0-edge.0
+
 ## 6.1.0
 
 ### Minor Changes

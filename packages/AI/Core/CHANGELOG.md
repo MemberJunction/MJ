@@ -1,5 +1,193 @@
 # Change Log - @memberjunction/ai
 
+## 6.2.0-edge.2
+
+### Minor Changes
+
+- 79279f2: Text-to-speech, speech-to-text and video now have runners, like chat, embeddings and images.
+  - **`AITextToSpeechRunner`** (`TTS` models), **`AISpeechToTextRunner`** (`Speech to Text` models) and **`AIVideoRunner`** (`Video` models) select a model from a carrier prompt's bindings, or a pinned `ModelID`, resolve its credential, fail over, and record every call as an AI Prompt Run. The run row never holds audio or video. Text-to-speech records the characters sent in the `Characters` measure unless the driver reports its own quantity; speech-to-text records the audio's seconds when the provider reports them; video records seconds only when a driver reports them, which HeyGen's does not. They share their lifecycle through a new `BaseMediaRunner`.
+  - New metadata: the `Default Text To Speech`, `Default Speech To Text` and `Default Video Generation` prompts, which the runners use when no prompt is named.
+  - **`BaseAudioGenerator` is split** into `BaseTextToSpeech` and `BaseSpeechToText`. `BaseAudioGenerator` is deprecated but keeps working: it implements both, and every driver still extends it and stays registered against it under the same key. `OpenAIAudioGenerator` also registers against both new classes, `ElevenLabsAudioGenerator` against `BaseTextToSpeech`, and `GroqAudioGenerator` against `BaseSpeechToText`. The split-and-join transcription loop is also exported as `TranscribeAudioWithSplitting`.
+  - `VideoResult` gains an optional `usage`, for a driver that reports the video's length.
+  - `SpeechResult` and `VideoResult` gain an optional `errorInfo`. The OpenAI, ElevenLabs, Groq and HeyGen audio and video drivers now fill it from the error their SDK threw, keeping its HTTP status, so a caller can tell a rejected request from an outage. The runners fail over on it: a 400 or 422 no longer fails over to every other candidate.
+  - The media runners take `TimeoutMS` and `CancellationToken`, which bound each driver call as `timeoutMS` and `cancellationToken` bound a chat call.
+  - `BaseModelRunner` gains `ResolveUsageToRecord` and `ApplyUsageToRunRecord`, which the image runner now uses too, so every non-chat runner records units the same way.
+
+  Nothing called the audio or video drivers before, so no existing caller changes behavior.
+
+- 2552b1e: AI model & vendor metadata refresh (off-cycle research run for v6.2.0-edge.2, 2026-10-02).
+  - Adds **Claude Sonnet 5.5** (`claude-sonnet-5-5`, released 2026-09-28) on Anthropic, Amazon Bedrock and OpenRouter at $2/$10 per 1M, cache read $0.20.
+  - Adds **GPT-6.1 Sol** (`gpt-6.1-sol`, released 2026-09-29) on OpenAI, Azure, Amazon Bedrock and OpenRouter at $2/$10 per 1M, cache read $0.10. No Azure cost row: Microsoft has not published the rate.
+  - Adds the missing cost rows for Claude Opus 5.5 on Bedrock ($4/$20) and GPT-6 Sol ($2/$10) and GPT-6 Luna ($0.10/$0.50) on Azure, and a GLM 5.3 OpenRouter row ($1.40/$4.40). GLM 5.3's OpenRouter output cap becomes 131,072.
+  - Re-rates Groq GPT-OSS-120B ($0.15/$0.60) and GPT-OSS-20B ($0.075/$0.30), Cerebras GPT-OSS-120B ($0.35/$0.75) and Z.AI GLM 5.1 ($1.40/$4.40), expiring the superseded rows.
+  - Retires seven routes their vendors have already shut down: Cerebras `gemma-4-31b` and `llama3.1-8b`, Fireworks `glm-5p2`, Google `gemini-3-pro-image-preview`, `gemini-2.0-flash` and `gemini-2.0-flash-lite`, and Groq `compound-beta` (Groq Compound becomes inactive).
+
+### Patch Changes
+
+- ff3097d: Realtime voice sessions started from an agent run now resolve their vendor key against the run's API keys, and the Computer Use engine gains a key-resolver seam (not yet wired in MJ).
+
+  `ExecuteAgentParams.apiKeys` already reaches every prompt's legacy key tier, and (as of #4611) is offered to every action as `RunActionParams.RuntimeAPIKeyResolver`. Realtime resolved against the environment alone, so a run carrying a customer's key still opened its voice session on the platform's.
+  - **`@memberjunction/ai`** — `AIAPIKeyResolver` (driver class in, key out) and `MakeAIAPIKeyResolver(apiKeys?)`, which applies `GetAIAPIKey`'s order: the list's key for that driver class, else the platform's. Passing nothing yields the platform lookup. For prompts that order is only the legacy tier (`AIPromptRunner` tries MJ Credentials first), and realtime does not consult MJ Credentials. `RealtimeAPIKeyResolver` becomes an alias of `AIAPIKeyResolver`. `@memberjunction/actions-base` keeps its own identical `RuntimeAPIKeyResolver`, and the prompt runner still takes the key list.
+  - **`@memberjunction/ai-agents`** — `BaseAgent.resolveRealtimeModel` (the server-run realtime session) resolves against `params.apiKeys`. `PrepareClientSessionInput.APIKeys` carries them into `RealtimeClientSessionService`, and `BaseAgent.StartBridgeRealtimeSession` fills it. There the order is run key, then the service's overridable `getAPIKeyForDriver` seam (by default the environment key), on all three model-selection branches, with vendor selection and the mint sharing that one chain. `CreateBridgeRealtimeSession` (the LiveKit / telephony factory) passes no `apiKeys`, so sessions it opens stay on platform keys, and the browser-initiated session mutation never sets them. `GetRealtimeModelVoices` takes an optional resolver as a seam; its only caller, the voice-picker query, has no run context and passes none.
+  - **`@memberjunction/computer-use`** — `RunComputerUseParams.APIKeyResolver`: an optional resolver that the engine's direct-LLM funnel (used when the controller and judge models are pinned) asks first, falling back to the platform key. Nothing in MJ sets it yet. `ComputerUseAction` does not forward it, and `MJComputerUseEngine`'s default path runs stored prompts through `AIPromptRunner`, which does not consult it. So browser-agent runs started from MJ are unchanged.
+
+  **Vendor selection is affected, deliberately.** Realtime picks the first vendor whose key resolves, so a run that brings a key for a vendor the deployment holds no platform key for now reaches that vendor. That is a routing change, not only a billing one.
+
+  No behaviour change for a session with no runtime keys, including one on a service subclass that overrides `getAPIKeyForDriver`.
+
+- f3c6161: Conversation routing acts on calibrated probabilities (plan Task 2.4). `ApplyPlattCalibration` and `PlattCalibration` in `@memberjunction/ai` map a decision model's raw probability to a calibrated one. Routing calibrates the thread Likelihood only for the exact model each fit was made on (`ROUTING_CONTINUES_CALIBRATION`: Jev at `typesafe/jev-1.13-20260917`, and LLM Decision when GPT-OSS-120B answered, fitted by the Phase 2 Decision Eval), and treats any other model's answer as unsure. `FindDecisionCalibration` in `@memberjunction/ai-core-plus` looks a calibration up by the decision model and the model behind it, for any consumer that calibrates. The `RunDecision` mutation and `GraphQLAIClient.RunDecision` return that model as `resolvedModel` / `ResolvedModel`. Routing waits 350 ms instead of 250 ms, which covers about 95% of Jev's answers in-process. The Decision Eval records production's routing verdict with the model that answered and the policy it was reached under, and its scorecard scores that verdict end to end, per run.
+- 5148534: A rerank answered by `LLMReranker` now carries its chat model's cost: the chat prompt's run is a child of the rerank's run, and its cost is recorded as the rerank run's `DescendantCost` and `TotalCost`. `RerankResponse` gains an optional `Usage`, which a reranker driver sets when it knows its call's tokens and cost.
+- ce1a5c3: Add `BaseEmbeddings.RequiresAPIKey` (default `true`), mirroring `VectorDBBase.RequiresAPIKey`. `LocalEmbedding` and `OllamaEmbedding` return `false`, so credential checks such as `AIEmbeddingRunner`'s accept them with no API key configured.
+- Updated dependencies [4d647e6]
+  - @memberjunction/global@6.2.0-edge.2
+
+## 6.2.0-edge.1
+
+### Minor Changes
+
+- a50948e: AI model & vendor metadata refresh (weekly research run, 2026-09-28). The busiest launch week of the quarter: four frontier models shipped inside 36 hours.
+  - Adds **Claude Opus 5.5** (`claude-opus-5-5`, released 2026-09-22) on Anthropic, Amazon Bedrock and OpenRouter, with cost rows at $4/$20 per 1M and a $0.20 cache read. Anthropic's new recommended default: 20% below the $5/$25 Opus tier, 1M context, 128K output, default effort `medium`. The 0.05x cache-read multiplier is new to this file — Anthropic now publishes three different ratios. No Bedrock cost row: sources conflict between $4/$20 parity and $2.20/$11.
+  - Adds **Grok 4.7** (`grok-4.7`, released 2026-09-21) on x.ai and OpenRouter at $2/$6 per 1M with $0.50 cache read — unchanged from Grok 4.6. Built on a new, larger base model: AA Coding Agent Index 56 vs 47, Terminal-Bench 4.0 33% vs 18%, hallucination rate 29% vs 34%. Ends a five-week run of slipped release dates. `MaxOutputTokens` is deliberately held at 128,000: xAI publishes no cap and the 450,000 figure on third-party cards is unofficial.
+  - Adds **GPT-6 Sol** (`gpt-6-sol`) and **GPT-6 Luna** (`gpt-6-luna`), both released 2026-09-22, on OpenAI, Azure, Amazon Bedrock and OpenRouter. Sol at $2/$10 and Luna at $0.10/$0.50 — each exactly half its GPT-5.6 predecessor. Sol's benchmarks are mixed rather than uniformly better (it regresses against GPT-5.6 Sol on DeepSWE and OSWorld 2.0), which its PowerRank of 25 reflects. Neither carries an Azure cost row; Microsoft's rate card for the tier could not be confirmed.
+  - Adds the **Xiaomi** vendor plus **MiMo V2.6 Pro** and **MiMo V2.6 Flash** (released 2026-09-22, MIT-licensed, omnimodal), reached through OpenRouter at $0.435/$0.87 and $0.14/$0.28 per 1M. Model Developer attribution only — no Xiaomi driver class exists, so no first-party route is wired.
+  - Records the **GLM-5.3-FlashX** OpenRouter rate at $0.37/$1.25 with a $0.09 cache read, closing the follow-up the 2026-09-21 run left open, and replaces the now-false comment on its Z.AI row.
+  - Adds **GLM-5.3-Flash** on three more hosts: a Fireworks.ai cost row ($0.15/$0.50, $0.03 cache) for the route that previously had none, with its context corrected to 1,048,576; and two new inference vendors, **DeepInfra** ($0.075/$0.25, a 50% promo off its $0.15/$0.50 list rate) and **SiliconFlow** ($0.15/$0.50, $0.03 cache). Each vendor gets its own OpenAI-compatible driver (`DeepInfraLLM` in `@memberjunction/ai-deepinfra`, `SiliconFlowLLM` in `@memberjunction/ai-siliconflow`). Each driver also sends the output cap as `max_tokens`, the only cap parameter those two providers document.
+
+  No cost row was expired and no vendor route was deprecated — every price movement this week arrived as a new model rather than a re-rate. Anthropic's relabelling of Opus 5 and the 4.x tier as "legacy (still available)" is explicitly **not** treated as a deprecation. `gpt-6-luna-pro` is deliberately not a separate record: it is `gpt-6-luna` with `reasoning.mode=pro`, the same request-parameter-vs-model-id problem as Claude fast mode.
+
+- e1dd673: Add the `Decision` AI model type, for models that answer typed questions (Likelihood, Choice, Score) with probabilities instead of text, and a `Decision` section in the model configuration bag. The section declares a decision model's limits (questions per call, options per Choice, levels per Score, state size), so a request that exceeds them can be refused before the call. No behaviour changes until a decision runner reads it.
+- 1d43161: Move the Loop agent's volatile runtime state out of the system prompt so provider prompt caches survive across iterations. Until now the Loop agent system prompt rendered the current date/time, Scratchpad State and Payload at its tail, and because those blocks change every iteration the provider's prefix cache broke before it reached the conversation history; measured on Sage the cached share of input was 37% and the entire history was re-read on every step. The template no longer renders those blocks. Instead `BaseAgent.preparePromptParams` builds the same content into a `<mj-runtime-state>` fragment appended as the final `user` message of each request, and the system prompt carries a static pointer telling the model where to find it. At send time the fragment tag literal is escaped in every history message so no tool result or user text can pose as framework state. This is framework behaviour, not a per-agent setting: there is no placement parameter. The fragment is emitted only when the system prompt template carries the `<mj-runtime-state>` pointer. A template that still embeds the state blocks (a database whose template has not yet synced, or the Flow template) gets no fragment, so the transition cannot produce duplicated state; a template with neither (the Harness system prompt, or a custom prompt run without the Loop system prompt) gets none either, so no agent receives an unexplained block. Only a failed template lookup fails open. `specializationPlacement` (`auto`, `systemPrompt`, `trailingMessage`) relocates the agent's own child prompt into the fragment when it contains volatile placeholders, so a per-iteration date in a child prompt cannot silently reintroduce the cache break. `AIPromptRunner` exposes `RenderChildPromptTemplates` publicly for the relocation path, and `AgentChatMessageMetadata` gains a `volatileState` flag so provider adapters can recognise the fragment.
+
+  Two boundaries keep the fragment where it belongs. `prepareSubAgentMessages` drops `volatileState` messages before any message mode slices the parent history, so a sub-agent never sees the parent's payload, scratchpad or specialization and its `MaxMessages` window is spent on real turns. Under append-only retention, context recovery now frees retained fragments first — oldest first, all but the newest — before it touches tool results, and `TrimLastUserMessage` skips them, so a long run cannot overflow on state the next request re-sends anyway; the fragment carries `turnAdded` for the lifecycle. All placeholder names, tag literals and headings live in one `constants.ts`, and the unsync guard's markers are overridable through the protected `volatileTemplateMarkers` getter. The fragment is carried across iterations in a provider-aware way. Providers with block-level or sliding prefix caches (Anthropic, Gemini, Cerebras) get replace-in-place: only the latest fragment is attached, keeping the history compact. OpenAI and xAI (Grok) automatic caches reuse a prior request only when its entire prompt is a byte prefix of the new one, so for OpenAI and xAI prior fragments are retained and the new one appended, making each request an exact prefix extension of the last. The mode is chosen once per run by the new Loop agent prompt param `trailingStateMode` (`auto`, `appendOnly`, `replace`). Which providers need which is metadata, not code: `auto` reads the new `PrefixPromptCache` boolean from the model catalog's `ModelConfiguration` cascade through `BaseAgent.resolvePrefixPromptCache` and `AIEngine.GetEffectiveModelConfiguration`, for the model of the runtime override or of the first iteration's selection, then freezes that answer so a mid-run failover cannot flip the layout; `true` means append-only, anything else replace-in-place. The cascade gains a vendor layer for this: a migration adds a `Configuration` bag to `AIVendor` (JSONType `IAIVendorConfiguration`, a general-purpose vendor bag whose `ModelDefaults` key is a model-configuration bag), and the engine now resolves Model Types < Models < Vendors' `Configuration.ModelDefaults` < Model Vendors: the vendor default is the host-wide default for every model it serves and beats the model's own bag, merged per key, with the model-vendor row as the tie-breaker. `metadata/ai-vendors` sets `PrefixPromptCache: true` under `Configuration.ModelDefaults` on the OpenAI and x.ai vendor rows; every model they serve inherits it, and a model-vendor row can override it for one model on a host that diverges. `@memberjunction/ai` gains `AIVendorConfiguration` and `ParseVendorConfiguration` alongside. There is no vendor-name or driver-class matching. Turn 1, before any selection is known, uses replace-in-place; if turn 2 resolves to append-only, turn 1's fragment is spliced back at the turn-1 boundary, which reproduces the bytes an append-only turn 1 would have sent, so nothing is lost by deferring. The explicit values exist for a serving path whose catalog rows carry no strategy yet. `@memberjunction/ai` gains the framework-generic half of that: the `LLMConfigurationSettings.PrefixPromptCache` field and `IsPrefixPromptCache` in `modelConfiguration.ts`, and on `BaseLLM` the protected `isVolatileStateMessage` (the `volatileState` metadata flag), `trailingVolatileStateIndex` and `splitTrailingVolatileState` seam, with `VolatileStateMessageMetadata` and `TrailingVolatileStateSplit` as the shared shapes. The Anthropic adapter (`@memberjunction/ai-anthropic`) overrides `isVolatileStateMessage` to keep its tag-literal fallback and uses the split to recognise a trailing fragment, whether it is the last message or is followed by an assistant prefill, placing its ephemeral cache breakpoint on the last real history message instead and inserting an `OK` assistant turn when needed to preserve role alternation, so the stable history caches and only the fragment (and any prefill) is re-processed. Measured live on Sage on iterations 3 and later: Claude Sonnet 4.6, Opus 5, and Opus 5.5 from 0% to 78–90% cached, Grok 4.7 from 21% to 91%, GPT 5.6 from 0% to 78%, Gemini 2.5/3.8 Flash from 30–37% to 66–75%, Cerebras GPT-OSS-120B from 65% to 96%; prompt cost per million tokens fell 37–80% depending on provider.
+
+  Action execution gains a run-scoped circuit breaker in `BaseAgent.ExecuteSingleAction`, prompted by a bug this work exposed: `executeActionsStep` reported an action whose `ActionResult.Success` was `false` as successful, so agents retried unconfigured tools indefinitely. The step result now carries the action's real outcome, and the circuit breaker's three rules, checked fatal → identical-arguments → budget, bound retries. A fatal configuration error (API key missing or invalid, "not configured", credentials missing, "authentication failed") disables the action for the rest of the run; HTTP 401/403, "unauthorized" and "forbidden" are deliberately not fatal because they are usually per-resource or transient, and neither is a failure the model can fix itself: a message that names a parameter, or a call whose own arguments carried a credential (password, API key, token), falls through to the attempt budget instead. The identical-arguments rule: two failures with identical arguments (`IDENTICAL_FAILURE_THRESHOLD`) block further calls with those arguments, while different arguments still dispatch; argument identity is `normalizeActionParams`, keys sorted at every depth, in three protected layers a subclass can override. The attempt budget: five consecutive failures across any arguments (`ACTION_FAILURE_BUDGET`) disable the action for the run. A success resets both counters. Blocked calls return a `CircuitBreakerActionResult` in 0ms that names the rule that fired, and a `user`-role guidance message (`[CRITICAL/ACTION_UNAVAILABLE]`, `[CRITICAL/REPEATED_IDENTICAL_CALL]`, `[CRITICAL/ATTEMPTS_EXHAUSTED]` or `[WARNING/ACTION_FAILURE]`) is appended to the history so the model pivots instead of looping; the budget rule is reported ahead of the identical-arguments rule, since once the budget is spent no change of arguments can help. Calls made by the pipeline executor and by ForEach / While iterations bypass the breaker via a new optional `ExecuteSingleActionOptions.skipCircuitBreaker`, since those loops already account for failures per element, expect elements to be independent, and have no model in the loop to act on the guidance. Flow agents are exempt the same way through `BaseAgentType.UsesActionCircuitBreaker` (default true, false on `FlowAgentType`): their action nodes are chosen by the graph, whose failure paths may legitimately re-run a node with the same inputs, and no model reads a directive there, so the main loop passes the exemption and suppresses the directive for such steps. Metadata: the Loop agent type's `PromptParamsSchema` gains `specializationPlacement` and `trailingStateMode` and loses `volatileStatePlacement`; the system prompt template drops its volatile tail.
+
+### Patch Changes
+
+- 15a4333: Add the abstract `BaseDecision` model type and its supporting types (`DecisionParams`, `DecisionResult`, `DecisionQuestion`, `DecisionAnswer`). This primitive enables typed decisions (Likelihood, Choice, Score) with a probability per answer, with no drivers yet. The base class validates both the request and the driver's answers; calibration is left to the caller.
+- 5da3ad2: Replace six regular expressions that CodeQL flagged as polynomial (`js/polynomial-redos`) with linear scans that match exactly the same text. Crafted provider error messages or prompt text could make the old expressions take quadratic time.
+  - `ErrorAnalyzer` (`@memberjunction/ai`): the "missing field/property" checks and the JSON extraction from an error message. A third check, `/\w+\s+is\s+required/`, is removed: it only ran when the message didn't contain "required", so it could never match.
+  - `AIPromptRunner` (`@memberjunction/ai-prompts`): trimming spaces and tabs from each stop sequence (still keeping leading and trailing newlines), and reading the MIME type from an artifact-manifest line.
+
+  No behavior change. Each replacement is tested against the expression it replaces on a generated corpus, and against the repeated-input shapes CodeQL reported.
+
+- c261eb8: Deprecates `BaseLLM.ClassifyText`, `BaseLLM.SummarizeText`, and their associated parameter and result types (`ClassifyParams`, `ClassifyTag`, `ClassifyResult`, `SummarizeParams`, `SummarizeResult`). The only caller is the already-deprecated AI Actions path, and running AI Prompts via `AIPromptRunner` (`@memberjunction/ai-prompts`) is the supported route. Zero runtime behavior changes are introduced; removal comes in the next major version.
+- 80905a1: Rename public class members and exported functions to PascalCase, per MJ's naming convention,
+  **without breaking a single consumer**.
+
+  Every renamed symbol keeps its old name beside the new one as a `@deprecated` stub that forwards to
+  it — a delegating method or function, a getter/setter pair for a property, and for Angular a
+  readable accessor pair for an `@Input` and a second `@Output` sharing the same `EventEmitter`, so a
+  template still binding the old name keeps receiving events. Old names still compile, still resolve,
+  and still behave identically; the deprecation tag rides through to the published `.d.ts`, so editors
+  point callers at the replacement. Where a package re-exports through an explicit `export { … }`
+  list, the new name is added alongside the old, so the correct name is actually on the public surface
+  rather than merely declared.
+
+  The rename is deliberately refused wherever a mechanical stub would not be equivalent, because
+  several of those shapes change a type contract while still compiling in the package that declares
+  them:
+  - an **optional** property or parameter property — TypeScript has no optional accessor, so a stub
+    would promote `foo?` to a required member and break every object literal that omits it;
+  - a class that is a **data shape** (no methods, or `@ObjectType`/`@InputType`) — object literals are
+    assigned to it, and an accessor stub changes what they must supply;
+  - a property whose **subclass redeclares it**, since TypeScript forbids a property overriding an
+    accessor (TS2610);
+  - a name whose PascalCase form is **already bound** in that file or class;
+  - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
+    overload sets and abstract members.
+
+  **One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+  backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+  the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+  `EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+  `copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+  field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+  fields silently. Same-version deployments, which is the supported configuration, see no change.
+
+  Each package was verified against its own pre-change baseline rather than against zero, because
+  several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
+  with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
+  `@Input` alias passed `tsc` while breaking six template reads.
+
+- Updated dependencies [80905a1]
+  - @memberjunction/global@6.2.0-edge.1
+
+## 6.2.0-edge.0
+
+### Minor Changes
+
+- 38c4a81: AI model & vendor metadata refresh (weekly research run, 2026-09-14).
+  - Adds **Sakana AI** as a vendor and its two orchestration models, **Fugu Max** (`sakana/fugu-max`, $2/$6 per 1M) and **Fugu Ultra v2** (`sakana/fugu-ultra-v2`, $5/$30 per 1M short-context), both routed through OpenRouter.
+  - Corrects **GPT 5.6** (Sol) pricing: the $5/$30 cost row is expired at 2026-08-21 and replaced by OpenAI's current $4/$20 rate (cached input $0.40), which OpenAI guarantees only through 2026-11-21.
+  - Adds the missing **DeepSeek V4.1 Flash** OpenRouter cost row ($0.15/$0.60 off-peak, $0.003 cache read).
+  - Corrects the **GLM 5.3** OpenRouter context window (200,000 → 1,310,720) and refreshes its description, which still claimed no rate card had been published.
+
+- e51296c: AI model & vendor metadata refresh (weekly research run, 2026-09-21).
+  - Adds **GLM-5.3-FlashX** (`glm-5.3-flashx`, `z-ai/glm-5.3-flashx`), Z.AI's 200 tokens/s serving variant of GLM-5.3-Flash released 2026-09-18, with a Z.AI cost row at $0.37/$1.25 per 1M and $0.075 cache read. Same weights and PowerRank as GLM-5.3-Flash; only CostRank moves. No OpenRouter cost row yet — the gateway rate could not be confirmed independently.
+  - Marks the **Claude Opus 5 Fast** Anthropic route `Deprecated`: Anthropic retired the dedicated `claude-opus-5-fast` model id on 2026-09-01 in favour of `speed: "fast"` on `claude-opus-5`. The id still serves, so the cost row stays `Active` and the model stays `IsActive`. The description now records the replacement invocation.
+  - Adds a **Grok 4.6** route on **Microsoft Foundry (Azure)** at `Status: "Preview"` (public preview from 2026-08-26), with a cost row at $2/$6 per 1M and $0.50 cache read. Foundry caps the context window at 200K, so no long-context tier applies on this route.
+
+  No cost row was expired and no vendor was added. DeepSeek V4 Pro is deliberately untouched: its announced 2026-09-14 retirement was reversed within 45 hours and the model still serves at unchanged prices.
+
+- b87e4ac: feat(ai): Gemini 3.8 Live multimodal realtime streaming, video tracks, asynchronous reasoning, and per-model legality
+
+  This release adds comprehensive support for Google's Gemini 3.8 Live multimodal realtime models (`gemini-3.8-live` and `gemini-3.8-live-extended-thinking`), including a first-class media plane for video/audio tracks, non-blocking tool execution, thought summaries, session continuity, and complete catalog metadata.
+
+  In `@memberjunction/server`, the default configuration for `realtime.enabled` is flipped from `false` to `true`, enabling the `/realtime/sdp-exchange` WebRTC broker endpoint on all MemberJunction API servers by default (configurable via `MJ_REALTIME_ENABLED`).
+
+  ### Phase Summary:
+  - **Phase A (Contracts & Media Plane)**: Introduced directional media tracks (`RealtimeTrackDescriptor`, `RealtimeTrackDirection`), open modality vocabulary via `RealtimeModalityRegistry`, track negotiation in `BaseRealtimeClient`, and channel track sourcing/sinking (`GetSourcedTracks`/`GetSunkTracks`).
+  - **Phase B (Audio Retrofit & SDK Convergence)**: Upgraded and converged `@google/genai` to `^2.8.0` across dependents.
+  - **Phase C (Gemini Live Config Legality)**: Added per-model legality enforcement in `GeminiRealtime`: stripped `enable_affective_dialog`, preserved `proactive_audio: true` while rejecting `false`, enforced `thinkingConfig` rules (omitted on 3.8-live, validated levels low/medium/high and rejected `minimal` on Extended Thinking), explicit turn coverage, local refusal of `BLOCKING` tools on Extended Thinking, default `NON_BLOCKING` state on all declarations, and config bag sanitization.
+  - **Phase D (Async Tool Execution & Idle Contract)**: Implemented per-model idle detection honoring `IdleSignal` (`generationComplete` for 3.8-live, `interactionStatus` for Extended Thinking); decoupled tool call arrival from response activity so generation is not falsely interrupted; drained `queuedSends` only on true idle or turn complete; integrated `RealtimeToolBatchBarrier` for parallel/out-of-order tool calls; and added function scheduling resolution (`__mj_scheduling` / `scheduling` with `INTERRUPT`/`INTERRUPTED` support).
+  - **Phase E (Extended Thinking & Narration)**: Routed model thought parts (`IsThought: true`) to `ThoughtNarration$` and created immutable narration delegation cards (`Kind: 'narration'`), keeping scratch thoughts distinct from spoken responses and user-cancelable actions.
+  - **Phase F (Video Tracks & Session Continuity)**: Implemented video frame capture (`getDisplayMedia`/`getUserMedia` in `src/media/frameCapture.ts`), throttled inbound video frame transmission via `ChannelInboundVideoBridge` (whiteboard and remote browser channels), and resilient session continuity across the vendor session cap via `sessionResumptionUpdate` / `goAway`.
+  - **Phase G (Metadata & Release)**: Added declarative catalog metadata and multi-channel pricing for `Gemini 3.8 Live` and `Gemini 3.8 Live Extended Thinking` in `metadata/ai-models/.ai-models.json`.
+
+  ### Reviewer Punch List Resolutions:
+  - **Items 16–18 (Scheduling)**: Supported `__mj_scheduling` alongside `scheduling`, sanitized payload keys, accepted both `INTERRUPT` and `INTERRUPTED`, and added diagnostic warnings on unknown values.
+  - **Item 19 (Non-blocking getter)**: Extracted and centralized `isNonBlocking` getter on `GeminiRealtimeClient`.
+  - **Item 20 (Generation Complete)**: Ensured `handleGenerationComplete` updates `responseActive` without prematurely draining queued sends.
+  - **Items 21–23 (Thought Narration)**: Cleanly separated thought summaries from spoken narrations and the ephemeral live note across `RealtimeSessionService` and `RealtimeSessionState`.
+  - **Item 24 (Activity Rail)**: Restricted open-run button rendering to agent runs (`card.Kind === 'agent' && !!card.RunID`).
+  - **Items 25–27 (Video Bridge & Throttle)**: Separated `sendFrameDirect`, resolved throttle contention between bridge and driver with jitter headroom, added graceful headless DOM detection, and guarded against unimplemented `SendVideoFrame`.
+  - **Item 28 (File organization)**: Moved `frameCapture.ts` from `audio/` to `media/` with clean import paths.
+  - **C5a–C5c (Config Sanitization & Tool Behavior)**: Stated explicit tool behavior on all declarations, warned on unknown values, and added `tooling`, `toolBehavior`, and `functionCallingBehavior` to `REALTIME_SHARED_CONFIG_KEYS`.
+
+### Patch Changes
+
+- b518dfa: fix(ai): a vendor spend cap now fails over instead of failing the prompt silently.
+  - `ErrorAnalyzer` classified Anthropic's "You have reached your specified API usage limits" (sent as HTTP 400 `invalid_request_error`) as `InvalidRequest`, which may not fail over — so every prompt whose top candidate was a capped vendor failed outright. It is now `NoCredit`, which fails over to the next vendor.
+  - `AIPromptRunner` returned a failed result that could not fail over through its success path with nothing logged. It still returns it as-is, but now logs the error type, message, prompt, model and vendor.
+
+- 575bfae: fix(ai-realtime): OpenAI Live planning model fallback, tool barrier synchronization, and remote video bridge
+  - **OpenAI Live Default Planning Model**: Exported `DEFAULT_OPENAI_LIVE_PLANNING_MODEL = 'gpt-5.6-terra'` and warned with `console.warn` whenever `Reasoning.Remote.Ref` is undefined instead of falling back to legacy `gpt-4o`.
+  - **Delegation Policy & Tool Framing**: Added `CompileBrowserDelegationPolicy` which omits the spoken holding phrase clause for browser-direct sessions. Guarded against appending delegation policy instructions when the session prompt already contains tool framing or interactive-surface execution rules.
+  - **SendText Barrier Guard**: Prevented premature `response.create` emissions during `SendText` when background tool batches are in-flight (`!this.toolBatchBarrier.IsEmpty`). The creation is safely deferred until the tool batch completes via `SendToolResult`.
+  - **Dedupe & Tool Barrier Lifetimes**: Maintained tool deduplication (`emittedToolCallIds`) throughout the lifetime of active tool batches, preventing duplicate execution from redelivered events when `response.completed` arrives before tool outputs. Cleared deduplication state upon batch completion and barrier timeout flushes.
+  - **Remote Browser Video Bridge**: Wired `ChannelInboundVideoBridge` with client-getter support and hooked `OnSessionStarted` into active channels after WebRTC track negotiation so screencast frames stream reliably to the live model.
+  - **Full-Duplex Barge-in Unblock**: Removed premature state gate in `GeminiRealtimeClient.sendMicChunk` so mic streaming and barge-in remain uninterrupted while the model is speaking or in extended thinking.
+  - **Track Descriptors**: Added `Required?: boolean` to `RealtimeTrackDescriptor` so optional and channel-sourced media tracks are cleanly negotiated without breaking the session.
+
+- e962151: refactor(ai-realtime): thread HasToolFraming boolean, document SendText barrier commentary queueing, and document tool batch dedupe lifetime rule
+  - Added `HasToolFraming?: boolean` to `RealtimeSessionParams` in `@memberjunction/ai` (Core), replacing prompt substring sniffing with an explicit caller-asserted parameter while retaining substring sniffing as a fallback.
+  - Set `HasToolFraming: true` in `RealtimeClientSessionService.buildSessionParams` for companion co-agent sessions.
+  - Added comprehensive unit tests in `@memberjunction/ai-openai` verifying that `HasToolFraming` explicitly controls standalone delegation policy compilation.
+  - Documented in `OpenAILiveClient.SendText` that user typed input is appended to commentary rather than dropped when the tool barrier is active, draining with the tool batch's `response.create`.
+  - Documented the shared lifetime rule for `emittedToolCallIds` and `toolBatchBarrier` across declaration and clear sites.
+  - Added `"engines": { "node": ">=24" }` to root `package.json` and `packages/AI/RealtimeClient/package.json`.
+  - Recorded Item 43 design note for `RequiresConsent` in `plans/realtime/gemini-3-8-live.md`.
+
+- fc3da91: fix(realtime): confirm whiteboard agent edits only when the tool succeeded, and source inbound-video capability from per-model profile data
+
+  Review follow-ups to #4512.
+  - **A failed whiteboard tool no longer reports success to the model.** `ApplyAgentTool` pushed a confirmation frame and a "visual confirmation of your action — do NOT narrate or announce your own change" note unconditionally, including when the tool returned `{ success: false, error }` (invalid JSON arguments, unknown tool, per-tool validation). The model received its failure result alongside an assertion that the edit had landed, plus an instruction not to mention it — so a failed edit disappeared from the user's view. It also pushed a frame identical to the previous one, since a failed tool mutates nothing.
+  - **Inbound-video capability and its frame-rate ceiling are now per-model data.** `GeminiLiveModelProfile` gains `MaxInboundVideoRate`, the mint carries both it and `SupportsInboundVideo` in the session config, and the browser driver reads them instead of inferring capability from the model id with `startsWith('gemini-3.8-live')`. That sniff and the profile table were two answers to one question, agreeing only because the model names happened to line up; a model that broke the naming pattern would have diverged silently. A future model that accepts a faster feed now declares it in the profile and every consumer follows.
+  - **The whiteboard channel is change-driven with no liveness heartbeat.** Its `WHITEBOARD_HEARTBEAT_MS` constant could never fire — the elapsed check lived inside the mutation path, which an idle board never enters — so it read as a liveness guarantee while providing none.
+  - `RealtimeTrack.Descriptor`'s doc now states that negotiation refinement covers `Rate` only, so no one reads `Encoding` or `UsageBasis` off a live track expecting the model's answer.
+  - @memberjunction/global@6.2.0-edge.0
+
 ## 6.1.0
 
 ### Minor Changes

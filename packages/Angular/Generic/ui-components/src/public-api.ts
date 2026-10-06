@@ -1,6 +1,8 @@
 // @memberjunction/ng-ui-components
 // Reusable standalone Angular UI components for MemberJunction
 
+export * from './lib/a11y/named-control.base';
+export * from './lib/a11y/unnamed-control-guard';
 export * from './lib/button/button.directive';
 export * from './lib/clickable/clickable.directive';
 export * from './lib/dialog/dialog.component';
@@ -20,6 +22,9 @@ export * from './lib/window/window.component';
 export * from './lib/slide-panel/slide-panel.component';
 export * from './lib/bottom-sheet/bottom-sheet.component';
 export * from './lib/combobox/combobox.component';
+export * from './lib/icon-picker/icon-picker.component';
+export * from './lib/icon-picker/font-awesome-icons';
+export * from './lib/icon-picker/icon-catalogue.service';
 export * from './lib/page-header/page-header.component';
 export * from './lib/page-layout/page-layout.component';
 export * from './lib/page-body/page-body.component';

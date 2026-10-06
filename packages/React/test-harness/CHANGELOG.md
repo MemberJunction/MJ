@@ -1,5 +1,184 @@
 # @memberjunction/react-test-harness
 
+## 6.2.0-edge.2
+
+### Patch Changes
+
+- 0da5fd4: fix(react-test-harness): bound what the browser boundary carries
+
+  Three places where the harness handed unbounded, client-shaped data across a boundary that charges for every node, guarded — where guarded at all — only after the allocation the guard existed to prevent.
+  - **Entity metadata is projected to what the page reads, not deep-cloned whole.** `exposeMJUtilities` cloned the full `EntityInfo` array with `JSON.parse(JSON.stringify(...))` and passed it to `page.evaluate`. Playwright does not JSON-encode an evaluate argument; it walks the graph building a tagged protocol representation, so cost scales with **node count** rather than byte size — and field objects dominate that count, one entity with 1,043 fields at ~77 own properties contributing ~80,000 property slots by itself. Against a client with 363 entities and 32,209 fields the injection blocked the event loop for ~18s and allocated ~2.6GB (a 2s sampling timer fired at +5.6s and +16.6s while heap passed 3.3GB), after which the caller's memory watchdog closed the harness, the in-flight evaluate failed as `Target page, context or browser has been closed`, and the run reported `renderCount: 0` — which callers read as a browser crash. `projectEntitiesForBrowser` keeps the field properties the in-page React runtime actually reads, derived from its bundle, plus a few cheap scalars component code plausibly touches; the ~54 omitted are server-side concerns (search predicates, generated form layout, schema auto-update). Entity-level properties are untouched and the input is never mutated. With the caller also narrowing to the entities a component declares, the injection went from 1,059ms to 321ms and total component-test time roughly halved.
+  - **The clone it replaces was redundant, and silently lossy on cycles.** Stripping functions is already what Playwright does by taking only own enumerable properties. `JSON.stringify`, meanwhile, throws on a circular graph, and the surrounding `catch` then yields an **empty** entity list with no indication anything was lost.
+  - **Console collection is bounded.** `consoleLogs` had no ceiling on message count or per-message size, so a component in a render or error loop could grow it without limit inside a process the harness shares with its host. Now capped at 5,000 messages and 32KB per message, with the overflow recorded once so a truncated run is never mistaken for a quiet one — a passing test measured ~1,800 messages and 0.7MB, so normal runs sit far below both. Warning de-duplication moves from `warnings.includes` (a linear scan per message, quadratic overall) to a `Set`; `warnings` remains an array for callers that index it.
+  - **HTML capture is sliced in the page.** The 25MB ceiling was enforced only after `page.content()` had materialised the entire document as a Node string, and beyond Node's ~536MB string limit the transfer throws before any check can run. The slice now happens in the page, so this side stays bounded by the cap regardless of document size; the true length still crosses, so an oversized render remains just as visible in the reported error.
+
+- Updated dependencies [f555162]
+- Updated dependencies [043f418]
+- Updated dependencies [e97d95c]
+- Updated dependencies [2552b1e]
+- Updated dependencies [8fd1c46]
+- Updated dependencies [21f9e15]
+- Updated dependencies [28fdf22]
+- Updated dependencies [4248fb3]
+- Updated dependencies [f3c6161]
+- Updated dependencies [01fafc6]
+- Updated dependencies [0adaf76]
+- Updated dependencies [513e608]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [26c0178]
+- Updated dependencies [594f2e0]
+- Updated dependencies [705ab4e]
+- Updated dependencies [96daca8]
+- Updated dependencies [aa912ca]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [5986939]
+- Updated dependencies [7408dbb]
+- Updated dependencies [4d647e6]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [7e57b48]
+- Updated dependencies [369e229]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [2854a2e]
+  - @memberjunction/ai-core-plus@6.2.0-edge.2
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/aiengine@6.2.0-edge.2
+  - @memberjunction/core-entities@6.2.0-edge.2
+  - @memberjunction/core-entities-server@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.2
+  - @memberjunction/interactive-component-types@6.2.0-edge.2
+  - @memberjunction/react-linter@6.2.0-edge.2
+  - @memberjunction/react-runtime@6.2.0-edge.2
+  - @memberjunction/sql-dialect@6.2.0-edge.2
+  - @memberjunction/sql-parser@6.2.0-edge.2
+
+## 6.2.0-edge.1
+
+### Patch Changes
+
+- 51e4d95: fix(react-test-harness): cap data-bridge rows and report what each call returned
+
+  A generated component could ask the harness data bridges for an unbounded result set and get it — `RunQueryParams.MaxRows` is documented as "if not provided, all rows will be returned", and nothing supplied a default. In production a component's query returned 205,802 rows and exhausted the host process heap. A bridge result is JSON-serialized in Node, shipped over CDP and rehydrated in Chromium, so one oversized answer becomes several resident copies.
+
+  `__mjRunView`, `__mjRunViews` and `__mjRunQuery` now clamp `MaxRows` to the new `ComponentExecutionOptions.dataCaps` (default 1000 each), clamping downward only so a component asking for 50 rows still gets 50. The provider applies `MaxRows` at the SQL level, so the surplus is never produced rather than fetched and discarded.
+
+  `ComponentExecutionResult.dataAccess` records every call — `kind`, `target`, `identity`, `rowsReturned`, `totalRowCount`, `capped`, applied and requested ceilings, duration, and any error. `RunViewResult` and `RunQueryResult` already carry `TotalRowCount`, so a capped call reports "1000 of 205802" without a second query; providers that omit it yield `capped: false` rather than a guess. A capped call also raises a `data-row-cap` warning, so a deliberately sparser render is not mistaken for a defect. These counts were already computed and logged under `debug` but never reached the caller — which left consumers unable to distinguish "no data displayed" from "the query returned nothing", where only the first is a code defect.
+
+  Call targets are now resolved the way `RunView`/`RunQuery` resolve them. A query name is not unique (name and category path identify a query together), so query targets are category-qualified and `QueryID` takes precedence, matching `RunQuery` ignoring `QueryName` when both are supplied. `RunView` follows its own documented order — `ViewEntity` → `ViewID` → `ViewName` → `EntityName` — where a saved-view call previously reported `unknown`. `DataAccessIdentity` exposes the parts separately using the same field names as `ComponentSpec.dataRequirements`, so callers can correlate declared against actual data access without parsing a display string.
+
+  Also lowers the HTML truncation backstop from 100MB to 25MB (it is a backstop behind the row caps now, and the old threshold was calibrated against Node's string limit rather than the heap), and deletes the unused 444KB `component-linter.ts.working` left behind when the linter moved to `@memberjunction/react-linter`.
+
+  Additive: `dataCaps` and `dataAccess` are both optional. The behavioural change for existing consumers is that a previously unbounded request is now bounded at 1000.
+
+- 80905a1: Rename public class members and exported functions to PascalCase, per MJ's naming convention,
+  **without breaking a single consumer**.
+
+  Every renamed symbol keeps its old name beside the new one as a `@deprecated` stub that forwards to
+  it — a delegating method or function, a getter/setter pair for a property, and for Angular a
+  readable accessor pair for an `@Input` and a second `@Output` sharing the same `EventEmitter`, so a
+  template still binding the old name keeps receiving events. Old names still compile, still resolve,
+  and still behave identically; the deprecation tag rides through to the published `.d.ts`, so editors
+  point callers at the replacement. Where a package re-exports through an explicit `export { … }`
+  list, the new name is added alongside the old, so the correct name is actually on the public surface
+  rather than merely declared.
+
+  The rename is deliberately refused wherever a mechanical stub would not be equivalent, because
+  several of those shapes change a type contract while still compiling in the package that declares
+  them:
+  - an **optional** property or parameter property — TypeScript has no optional accessor, so a stub
+    would promote `foo?` to a required member and break every object literal that omits it;
+  - a class that is a **data shape** (no methods, or `@ObjectType`/`@InputType`) — object literals are
+    assigned to it, and an accessor stub changes what they must supply;
+  - a property whose **subclass redeclares it**, since TypeScript forbids a property overriding an
+    accessor (TS2610);
+  - a name whose PascalCase form is **already bound** in that file or class;
+  - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
+    overload sets and abstract members.
+
+  **One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+  backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+  the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+  `EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+  `copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+  field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+  fields silently. Same-version deployments, which is the supported configuration, see no change.
+
+  Each package was verified against its own pre-change baseline rather than against zero, because
+  several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
+  with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
+  `@Input` alias passed `tsc` while breaking six template reads.
+
+- Updated dependencies [ddcd666]
+- Updated dependencies [a50948e]
+- Updated dependencies [0eeb89d]
+- Updated dependencies [a3539d2]
+- Updated dependencies [41274aa]
+- Updated dependencies [67f6c85]
+- Updated dependencies [eb3a8d3]
+- Updated dependencies [e1dd673]
+- Updated dependencies [9b8a84e]
+- Updated dependencies [307da67]
+- Updated dependencies [a7da50b]
+- Updated dependencies [1d43161]
+- Updated dependencies [7110019]
+- Updated dependencies [17cc774]
+- Updated dependencies [80905a1]
+- Updated dependencies [6b08ebf]
+  - @memberjunction/aiengine@6.2.0-edge.1
+  - @memberjunction/core-entities@6.2.0-edge.1
+  - @memberjunction/ai-core-plus@6.2.0-edge.1
+  - @memberjunction/core-entities-server@6.2.0-edge.1
+  - @memberjunction/core@6.2.0-edge.1
+  - @memberjunction/global@6.2.0-edge.1
+  - @memberjunction/interactive-component-types@6.2.0-edge.1
+  - @memberjunction/react-linter@6.2.0-edge.1
+  - @memberjunction/react-runtime@6.2.0-edge.1
+  - @memberjunction/sql-dialect@6.2.0-edge.1
+  - @memberjunction/sql-parser@6.2.0-edge.1
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.1
+
+## 6.2.0-edge.0
+
+### Patch Changes
+
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [37891d3]
+- Updated dependencies [6ad6434]
+- Updated dependencies [7be1684]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [d122a41]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [683f652]
+- Updated dependencies [a8be410]
+- Updated dependencies [f48dffc]
+- Updated dependencies [630bb88]
+- Updated dependencies [7658d68]
+- Updated dependencies [9160fd9]
+- Updated dependencies [44faf83]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [a17a228]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [104125c]
+- Updated dependencies [5513c2a]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [2c590b0]
+  - @memberjunction/aiengine@6.2.0-edge.0
+  - @memberjunction/core-entities@6.2.0-edge.0
+  - @memberjunction/ai-core-plus@6.2.0-edge.0
+  - @memberjunction/core@6.2.0-edge.0
+  - @memberjunction/react-runtime@6.2.0-edge.0
+  - @memberjunction/sql-parser@6.2.0-edge.0
+  - @memberjunction/core-entities-server@6.2.0-edge.0
+  - @memberjunction/react-linter@6.2.0-edge.0
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.0
+  - @memberjunction/interactive-component-types@6.2.0-edge.0
+  - @memberjunction/global@6.2.0-edge.0
+  - @memberjunction/sql-dialect@6.2.0-edge.0
+
 ## 6.1.0
 
 ### Patch Changes

@@ -56,7 +56,7 @@ export interface NamedRecord {
  * @param candidates - the records available on the Home screen
  * @returns the matched candidate, or null on a miss
  */
-export function resolveNamedRecord<T extends NamedRecord>(input: string, candidates: readonly T[]): T | null {
+export function ResolveNamedRecord<T extends NamedRecord>(input: string, candidates: readonly T[]): T | null {
     const needle = input.trim().toLowerCase();
     if (!needle) {
         return null;
@@ -69,13 +69,23 @@ export function resolveNamedRecord<T extends NamedRecord>(input: string, candida
     return contains ?? null;
 }
 
+/** @deprecated Use {@link ResolveNamedRecord}. */
+export function resolveNamedRecord<T extends NamedRecord>(input: string, candidates: readonly T[]): T | null {
+    return ResolveNamedRecord(input, candidates);
+}
+
 /**
  * Build a tolerant "not found" error listing a bounded sample of available names so
  * the agent can correct itself.
  */
-export function buildHomeNotFoundError(input: string, kind: string, candidates: readonly NamedRecord[]): string {
+export function BuildHomeNotFoundError(input: string, kind: string, candidates: readonly NamedRecord[]): string {
     const sample = candidates.slice(0, HOME_AGENT_CONTEXT_NAME_LIST_CAP).map(c => c.Name).join(', ');
     return `No ${kind} named "${input}". Available ${kind}s: ${sample || '(none)'}.`;
+}
+
+/** @deprecated Use {@link BuildHomeNotFoundError}. */
+export function buildHomeNotFoundError(input: string, kind: string, candidates: readonly NamedRecord[]): string {
+    return BuildHomeNotFoundError(input, kind, candidates);
 }
 
 /**
@@ -137,7 +147,7 @@ export interface HomeAgentContextInput {
  * @param input - the component's current state snapshot
  * @returns a flat key-value object suitable for `SetAgentContext`
  */
-export function buildHomeAgentContext(input: HomeAgentContextInput): Record<string, unknown> {
+export function BuildHomeAgentContext(input: HomeAgentContextInput): Record<string, unknown> {
     const context: Record<string, unknown> = {
         AppCount: input.AppCount,
         VisibleAppCount: input.VisibleAppCount,
@@ -192,4 +202,9 @@ export function buildHomeAgentContext(input: HomeAgentContextInput): Record<stri
     }
 
     return context;
+}
+
+/** @deprecated Use {@link BuildHomeAgentContext}. */
+export function buildHomeAgentContext(input: HomeAgentContextInput): Record<string, unknown> {
+    return BuildHomeAgentContext(input);
 }

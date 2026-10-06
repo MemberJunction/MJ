@@ -73,10 +73,10 @@ export abstract class BaseLintRule {
  * @deprecated Use BaseLintRule class with @RegisterClass decorator
  */
 export interface LintRule {
-  name: string;
-  appliesTo: 'all' | 'child' | 'root';
-  deprecated?: boolean;
-  test: (
+  name: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  appliesTo: 'all' | 'child' | 'root';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  deprecated?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  test: (  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     ast: t.File,
     componentName: string,
     componentSpec?: ComponentSpec,

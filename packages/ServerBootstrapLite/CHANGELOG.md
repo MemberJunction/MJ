@@ -1,5 +1,465 @@
 # @memberjunction/server-bootstrap-lite
 
+## 6.2.0-edge.2
+
+### Minor Changes
+
+- 4d647e6: Add Rubrics, a core way to score any record against a published set of weighted criteria.
+
+  What ships:
+  - Schema for rubrics, versions, criteria, scales, anchors, bands, evaluations, and score rows, plus layered consensus views. Published versions are frozen. Raw writes to a frozen row throw 51101–51110. A draft version delete is an `INSTEAD OF DELETE` trigger. `MJ: Test Rubrics` is deprecated in metadata.
+  - `RubricScoring` and `RubricVersionDiff` in `@memberjunction/rubrics-base`. The outcome ladder is Incomplete, NotApplicableFailure, GateFailed, Passed or BelowThreshold, then Scored. The publish base is the highest Published or Retired version.
+  - `@memberjunction/rubrics`: LLM, agent, deterministic, and human evaluators. Actions are Evaluate Record Against Rubric, Get Rubric, Get Rubric Subject, Get Rubric Consensus, Create Rubric Draft, and Submit Human Rubric. Create Rubric Draft and the architect import do not publish. The evaluation agent does not call Get Rubric Consensus.
+  - Presentational widgets in `@memberjunction/ng-rubrics`, Explorer forms, and a Rubrics application. The agent form has a Rubrics tab.
+  - Six guide-example rubrics stay Draft. Seven agent rubrics publish at 1.0.0 and bind to their agents. Marketing Agent is not bound. Shipped self-check links and the sampling job stay Disabled. A test that already has an `llm-judge` oracle keeps it.
+  - Testing: rubric resolution, a `rubric` oracle, judge calibration, per-criterion spread on `--flaky-check`, `mj rubric`, and `mj test promote-criteria`. `Test.RubricID` and `TestSuite.RubricID` select a rubric. `TestSuiteRun.Score` is stored.
+  - The deterministic integration bundle is IT98 at sequence 49.
+
+  `GeneratePluralName` keeps the head of a name verbatim and pluralizes only the tail, preserving that tail's case. A linear scan finds the tail, so `user_profile` and `userProfile` no longer produce the same view name, a leading character such as Ä stays on the head, and `Contact Person` pluralizes to `Contact People`. The base view for a criterion is `vwRubricCriteria`.
+
+### Patch Changes
+
+- 513e608: Add pipeline type picker, capability-aware output filtering and validation, Decision-specific constraint editors, and type badges for Feature Pipelines. What each pipeline type can produce is now one rule set, shared by the server, the builder and the save check. A Decision pipeline reads enum values and descriptions from its own entity's fields only; before, it read them from any entity with a field of the same name. An enum reads field metadata only when it sets FromFieldMetadata or lists no values, and only a type that needs listed values (Decision) requires them.
+
+  A Record Process now refuses at save an Infer pipeline its type cannot run, on both tiers and every save path, through the shared MJRecordProcessEntityExtended; the Record Process form also refuses while the builder reports errors. The builder loads and edits CaptureReasoning, and keeps Watermark. Its pickers now show the saved pipeline type, prompt, entity document, target and constraint, not the first option, and a placeholder when the saved value is not offered.
+
+- 2ceedb4: Register the record-cloning classes at startup: the server bootstraps depend on `@memberjunction/record-cloning` and load its `RecordClone.*` remote operations (and, through them, the `Clone` record-process work type). All three register the new `MJ: Record Clone Logs` and `MJ: Record Clone Log Items` entity classes.
+- Updated dependencies [7b4142e]
+- Updated dependencies [ca853fc]
+- Updated dependencies [f555162]
+- Updated dependencies [043f418]
+- Updated dependencies [e97d95c]
+- Updated dependencies [ff3097d]
+- Updated dependencies [79279f2]
+- Updated dependencies [3fbda62]
+- Updated dependencies [eaa9455]
+- Updated dependencies [ff00d60]
+- Updated dependencies [2552b1e]
+- Updated dependencies [4b680f9]
+- Updated dependencies [660ef45]
+- Updated dependencies [ed77dd7]
+- Updated dependencies [21f9e15]
+- Updated dependencies [28fdf22]
+- Updated dependencies [4248fb3]
+- Updated dependencies [72d8a40]
+- Updated dependencies [664baea]
+- Updated dependencies [672b4c6]
+- Updated dependencies [f3c6161]
+- Updated dependencies [0e5ad68]
+- Updated dependencies [35ffb95]
+- Updated dependencies [5148534]
+- Updated dependencies [50ba290]
+- Updated dependencies [ffb3c0f]
+- Updated dependencies [cf97480]
+- Updated dependencies [0adaf76]
+- Updated dependencies [5ee02db]
+- Updated dependencies [ce1a5c3]
+- Updated dependencies [513e608]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [1d38a22]
+- Updated dependencies [b03a928]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [0d61b53]
+- Updated dependencies [26c0178]
+- Updated dependencies [594f2e0]
+- Updated dependencies [861cbf0]
+- Updated dependencies [9096523]
+- Updated dependencies [705ab4e]
+- Updated dependencies [e51ce8a]
+- Updated dependencies [96daca8]
+- Updated dependencies [aa912ca]
+- Updated dependencies [f3fa01e]
+- Updated dependencies [3276daa]
+- Updated dependencies [d6fd68d]
+- Updated dependencies [d0cea53]
+- Updated dependencies [e9ab27b]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [e78341e]
+- Updated dependencies [7e57b48]
+- Updated dependencies [14e2a3a]
+- Updated dependencies [5986939]
+- Updated dependencies [200e634]
+- Updated dependencies [7408dbb]
+- Updated dependencies [4d647e6]
+- Updated dependencies [7bcba8c]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [808c8c8]
+- Updated dependencies [bb33c77]
+- Updated dependencies [7e57b48]
+- Updated dependencies [369e229]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [2854a2e]
+- Updated dependencies [74b3e69]
+  - @memberjunction/actions-bizapps-accounting@6.2.0-edge.2
+  - @memberjunction/ai-agents@6.2.0-edge.2
+  - @memberjunction/ai-core-plus@6.2.0-edge.2
+  - @memberjunction/ai-agent-manager@6.2.0-edge.2
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/ai-prompts@6.2.0-edge.2
+  - @memberjunction/ai-openai@6.2.0-edge.2
+  - @memberjunction/ai-elevenlabs@6.2.0-edge.2
+  - @memberjunction/ai-groq@6.2.0-edge.2
+  - @memberjunction/ai-heygen@6.2.0-edge.2
+  - @memberjunction/ai-vector-dupe@6.2.0-edge.2
+  - @memberjunction/content-autotagging@6.2.0-edge.2
+  - @memberjunction/search-engine@6.2.0-edge.2
+  - @memberjunction/core-actions@6.2.0-edge.2
+  - @memberjunction/core-entities@6.2.0-edge.2
+  - @memberjunction/ai-reranker@6.2.0-edge.2
+  - @memberjunction/ai-cohere@6.2.0-edge.2
+  - @memberjunction/testing-engine@6.2.0-edge.2
+  - @memberjunction/feature-pipelines@6.2.0-edge.2
+  - @memberjunction/record-set-processor@6.2.0-edge.2
+  - @memberjunction/ai-local-embeddings@6.2.0-edge.2
+  - @memberjunction/ai-ollama@6.2.0-edge.2
+  - @memberjunction/core-entities-server@6.2.0-edge.2
+  - @memberjunction/task-graph@6.2.0-edge.2
+  - @memberjunction/ai-openrouter@6.2.0-edge.2
+  - @memberjunction/generic-database-provider@6.2.0-edge.2
+  - @memberjunction/record-cloning@6.2.0-edge.2
+  - @memberjunction/actions@6.2.0-edge.2
+  - @memberjunction/ai-agent-harness@6.2.0-edge.2
+  - @memberjunction/rubrics@6.2.0-edge.2
+  - @memberjunction/rubrics-base@6.2.0-edge.2
+  - @memberjunction/scheduling-engine@6.2.0-edge.2
+  - @memberjunction/ai-engine-base@6.2.0-edge.2
+  - @memberjunction/ai-form-builder@6.2.0-edge.2
+  - @memberjunction/predictive-studio@6.2.0-edge.2
+  - @memberjunction/templates@6.2.0-edge.2
+  - @memberjunction/tag-engine-base@6.2.0-edge.2
+  - @memberjunction/ai-recommendations-rex@6.2.0-edge.2
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.2
+  - @memberjunction/ai-vectors-pinecone@6.2.0-edge.2
+  - @memberjunction/ai-vectors-qdrant@6.2.0-edge.2
+  - @memberjunction/ai-vectors-sqlserver@6.2.0-edge.2
+  - @memberjunction/ai-vectors-pgvector@6.2.0-edge.2
+  - @memberjunction/actions-apollo@6.2.0-edge.2
+  - @memberjunction/actions-base@6.2.0-edge.2
+  - @memberjunction/actions-bizapps-crm@6.2.0-edge.2
+  - @memberjunction/actions-bizapps-formbuilders@6.2.0-edge.2
+  - @memberjunction/actions-bizapps-lms@6.2.0-edge.2
+  - @memberjunction/actions-bizapps-social@6.2.0-edge.2
+  - @memberjunction/communication-types@6.2.0-edge.2
+  - @memberjunction/doc-utils@6.2.0-edge.2
+  - @memberjunction/encryption@6.2.0-edge.2
+  - @memberjunction/data-context-server@6.2.0-edge.2
+  - @memberjunction/queue@6.2.0-edge.2
+  - @memberjunction/storage@6.2.0-edge.2
+  - @memberjunction/react-linter@6.2.0-edge.2
+  - @memberjunction/record-comparison@6.2.0-edge.2
+  - @memberjunction/scheduling-actions@6.2.0-edge.2
+  - @memberjunction/scheduling-engine-base@6.2.0-edge.2
+  - @memberjunction/geo-core@6.2.0-edge.2
+  - @memberjunction/ai-anthropic@6.2.0-edge.2
+  - @memberjunction/ai-assemblyai@6.2.0-edge.2
+  - @memberjunction/ai-azure@6.2.0-edge.2
+  - @memberjunction/ai-bedrock@6.2.0-edge.2
+  - @memberjunction/ai-betty@6.2.0-edge.2
+  - @memberjunction/ai-betty-bot@6.2.0-edge.2
+  - @memberjunction/ai-blackforestlabs@6.2.0-edge.2
+  - @memberjunction/ai-cerebras@6.2.0-edge.2
+  - @memberjunction/ai-deepinfra@6.2.0-edge.2
+  - @memberjunction/ai-fireworks@6.2.0-edge.2
+  - @memberjunction/ai-gemini@6.2.0-edge.2
+  - @memberjunction/ai-inception@6.2.0-edge.2
+  - @memberjunction/ai-inworld@6.2.0-edge.2
+  - @memberjunction/ai-lmstudio@6.2.0-edge.2
+  - @memberjunction/ai-llamacpp@6.2.0-edge.2
+  - @memberjunction/ai-minimax@6.2.0-edge.2
+  - @memberjunction/ai-mistral@6.2.0-edge.2
+  - @memberjunction/ai-siliconflow@6.2.0-edge.2
+  - @memberjunction/ai-vertex@6.2.0-edge.2
+  - @memberjunction/ai-zhipu@6.2.0-edge.2
+  - @memberjunction/ai-xai@6.2.0-edge.2
+  - @memberjunction/ai-provider-bundle@6.2.0-edge.2
+
+## 6.2.0-edge.1
+
+### Patch Changes
+
+- 48f77ea: Add `@memberjunction/ai-betty` — a `BaseLLM` provider for **Betty**, the MJ-native
+  organization-scoped assistant, registered as `BettyLLM`.
+
+  This sits **alongside** `@memberjunction/ai-betty-bot` rather than replacing it. The two target
+  different services with different wire protocols: `BettyBotLLM` exchanges its key for a JWT at
+  `POST /settings` and posts `{ input }` to `POST /response`; `BettyLLM` uses the API key directly as
+  a bearer and posts `{ message, conversationId }` to `POST /messages`.
+
+  **No breaking change.** `@memberjunction/ai-betty-bot` is untouched, so no existing deployment has
+  to move and nobody needs to be contacted or given a deadline. Both can run in one instance;
+  migrating a deployment is repointing one `AIModelVendor.DriverClass` from `BettyBotLLM` to
+  `BettyLLM`, and rolling back is repointing it back.
+
+  A separate driver class rather than a configuration mode on the existing one, because
+  `GetAIAPIKey()` is keyed by driver class — one class serving both protocols would read a single
+  `AI_VENDOR_API_KEY__BETTYBOTLLM` for two unrelated services, and a misconfiguration would silently
+  send a customer's key to the wrong host.
+
+  Configuration: `BETTY_API_BASE_URL` (required, no default — Betty is deployed per customer, so a
+  default risks answering from the wrong tenant) and `AI_VENDOR_API_KEY__BETTYLLM`.
+
+  Notes:
+  - Citations keep the legacy response shape (`choices[1]` formatted, `choices[2]` raw JSON with
+    `finish_reason: 'references_json'`), so anything already parsing `BettyBotLLM` output survives a
+    `DriverClass` repoint.
+  - Multi-turn is handled correctly. The legacy provider uses `messages.find(m => m.role === user)`,
+    which returns the _first_ match and silently discards follow-ups; this provider sends the latest
+    user turn and passes the earlier ones as advisory, non-authorizing `context.text`.
+  - Streaming is not implemented yet (`SupportsStreaming` is `false`). The API does support SSE via
+    `Accept: text/event-stream`, so this is a follow-up rather than a dead end.
+
+- Updated dependencies [ddcd666]
+- Updated dependencies [a50948e]
+- Updated dependencies [0eeb89d]
+- Updated dependencies [48f77ea]
+- Updated dependencies [a3539d2]
+- Updated dependencies [41274aa]
+- Updated dependencies [5da3ad2]
+- Updated dependencies [67f6c85]
+- Updated dependencies [eb3a8d3]
+- Updated dependencies [e1dd673]
+- Updated dependencies [520bd09]
+- Updated dependencies [520bd09]
+- Updated dependencies [307da67]
+- Updated dependencies [7110019]
+- Updated dependencies [9d4a28a]
+- Updated dependencies [a7da50b]
+- Updated dependencies [1d43161]
+- Updated dependencies [7110019]
+- Updated dependencies [f2a4171]
+- Updated dependencies [e482249]
+- Updated dependencies [37e2f6b]
+- Updated dependencies [17cc774]
+- Updated dependencies [80905a1]
+- Updated dependencies [6b08ebf]
+- Updated dependencies [351ba9f]
+- Updated dependencies [c4993f3]
+  - @memberjunction/ai-elevenlabs@6.2.0-edge.1
+  - @memberjunction/core-entities@6.2.0-edge.1
+  - @memberjunction/ai-deepinfra@6.2.0-edge.1
+  - @memberjunction/ai-siliconflow@6.2.0-edge.1
+  - @memberjunction/ai-provider-bundle@6.2.0-edge.1
+  - @memberjunction/ai-agent-harness@6.2.0-edge.1
+  - @memberjunction/ai-agents@6.2.0-edge.1
+  - @memberjunction/ai-core-plus@6.2.0-edge.1
+  - @memberjunction/ai-prompts@6.2.0-edge.1
+  - @memberjunction/core-entities-server@6.2.0-edge.1
+  - @memberjunction/ai-betty@6.2.0-edge.1
+  - @memberjunction/core@6.2.0-edge.1
+  - @memberjunction/actions-base@6.2.0-edge.1
+  - @memberjunction/actions@6.2.0-edge.1
+  - @memberjunction/task-graph@6.2.0-edge.1
+  - @memberjunction/storage@6.2.0-edge.1
+  - @memberjunction/ai-anthropic@6.2.0-edge.1
+  - @memberjunction/actions-apollo@6.2.0-edge.1
+  - @memberjunction/actions-bizapps-accounting@6.2.0-edge.1
+  - @memberjunction/actions-bizapps-formbuilders@6.2.0-edge.1
+  - @memberjunction/ai-agent-manager@6.2.0-edge.1
+  - @memberjunction/ai-blackforestlabs@6.2.0-edge.1
+  - @memberjunction/ai-cerebras@6.2.0-edge.1
+  - @memberjunction/ai-cohere@6.2.0-edge.1
+  - @memberjunction/ai-groq@6.2.0-edge.1
+  - @memberjunction/ai-lmstudio@6.2.0-edge.1
+  - @memberjunction/ai-local-embeddings@6.2.0-edge.1
+  - @memberjunction/ai-ollama@6.2.0-edge.1
+  - @memberjunction/ai-reranker@6.2.0-edge.1
+  - @memberjunction/ai-vectors-pinecone@6.2.0-edge.1
+  - @memberjunction/communication-types@6.2.0-edge.1
+  - @memberjunction/content-autotagging@6.2.0-edge.1
+  - @memberjunction/core-actions@6.2.0-edge.1
+  - @memberjunction/generic-database-provider@6.2.0-edge.1
+  - @memberjunction/predictive-studio@6.2.0-edge.1
+  - @memberjunction/react-linter@6.2.0-edge.1
+  - @memberjunction/record-set-processor@6.2.0-edge.1
+  - @memberjunction/search-engine@6.2.0-edge.1
+  - @memberjunction/tag-engine-base@6.2.0-edge.1
+  - @memberjunction/templates@6.2.0-edge.1
+  - @memberjunction/testing-engine@6.2.0-edge.1
+  - @memberjunction/ai-form-builder@6.2.0-edge.1
+  - @memberjunction/ai-vector-dupe@6.2.0-edge.1
+  - @memberjunction/queue@6.2.0-edge.1
+  - @memberjunction/ai-engine-base@6.2.0-edge.1
+  - @memberjunction/ai-assemblyai@6.2.0-edge.1
+  - @memberjunction/ai-azure@6.2.0-edge.1
+  - @memberjunction/ai-bedrock@6.2.0-edge.1
+  - @memberjunction/ai-betty-bot@6.2.0-edge.1
+  - @memberjunction/ai-fireworks@6.2.0-edge.1
+  - @memberjunction/ai-gemini@6.2.0-edge.1
+  - @memberjunction/ai-heygen@6.2.0-edge.1
+  - @memberjunction/ai-inception@6.2.0-edge.1
+  - @memberjunction/ai-inworld@6.2.0-edge.1
+  - @memberjunction/ai-llamacpp@6.2.0-edge.1
+  - @memberjunction/ai-minimax@6.2.0-edge.1
+  - @memberjunction/ai-mistral@6.2.0-edge.1
+  - @memberjunction/ai-openai@6.2.0-edge.1
+  - @memberjunction/ai-openrouter@6.2.0-edge.1
+  - @memberjunction/ai-recommendations-rex@6.2.0-edge.1
+  - @memberjunction/ai-vertex@6.2.0-edge.1
+  - @memberjunction/ai-zhipu@6.2.0-edge.1
+  - @memberjunction/ai-xai@6.2.0-edge.1
+  - @memberjunction/actions-bizapps-crm@6.2.0-edge.1
+  - @memberjunction/actions-bizapps-lms@6.2.0-edge.1
+  - @memberjunction/actions-bizapps-social@6.2.0-edge.1
+  - @memberjunction/doc-utils@6.2.0-edge.1
+  - @memberjunction/encryption@6.2.0-edge.1
+  - @memberjunction/record-comparison@6.2.0-edge.1
+  - @memberjunction/scheduling-actions@6.2.0-edge.1
+  - @memberjunction/scheduling-engine-base@6.2.0-edge.1
+  - @memberjunction/scheduling-engine@6.2.0-edge.1
+  - @memberjunction/geo-core@6.2.0-edge.1
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.1
+  - @memberjunction/ai-vectors-qdrant@6.2.0-edge.1
+  - @memberjunction/ai-vectors-sqlserver@6.2.0-edge.1
+  - @memberjunction/ai-vectors-pgvector@6.2.0-edge.1
+  - @memberjunction/data-context-server@6.2.0-edge.1
+
+## 6.2.0-edge.0
+
+### Minor Changes
+
+- b87e4ac: feat(ai): Gemini 3.8 Live multimodal realtime streaming, video tracks, asynchronous reasoning, and per-model legality
+
+  This release adds comprehensive support for Google's Gemini 3.8 Live multimodal realtime models (`gemini-3.8-live` and `gemini-3.8-live-extended-thinking`), including a first-class media plane for video/audio tracks, non-blocking tool execution, thought summaries, session continuity, and complete catalog metadata.
+
+  In `@memberjunction/server`, the default configuration for `realtime.enabled` is flipped from `false` to `true`, enabling the `/realtime/sdp-exchange` WebRTC broker endpoint on all MemberJunction API servers by default (configurable via `MJ_REALTIME_ENABLED`).
+
+  ### Phase Summary:
+  - **Phase A (Contracts & Media Plane)**: Introduced directional media tracks (`RealtimeTrackDescriptor`, `RealtimeTrackDirection`), open modality vocabulary via `RealtimeModalityRegistry`, track negotiation in `BaseRealtimeClient`, and channel track sourcing/sinking (`GetSourcedTracks`/`GetSunkTracks`).
+  - **Phase B (Audio Retrofit & SDK Convergence)**: Upgraded and converged `@google/genai` to `^2.8.0` across dependents.
+  - **Phase C (Gemini Live Config Legality)**: Added per-model legality enforcement in `GeminiRealtime`: stripped `enable_affective_dialog`, preserved `proactive_audio: true` while rejecting `false`, enforced `thinkingConfig` rules (omitted on 3.8-live, validated levels low/medium/high and rejected `minimal` on Extended Thinking), explicit turn coverage, local refusal of `BLOCKING` tools on Extended Thinking, default `NON_BLOCKING` state on all declarations, and config bag sanitization.
+  - **Phase D (Async Tool Execution & Idle Contract)**: Implemented per-model idle detection honoring `IdleSignal` (`generationComplete` for 3.8-live, `interactionStatus` for Extended Thinking); decoupled tool call arrival from response activity so generation is not falsely interrupted; drained `queuedSends` only on true idle or turn complete; integrated `RealtimeToolBatchBarrier` for parallel/out-of-order tool calls; and added function scheduling resolution (`__mj_scheduling` / `scheduling` with `INTERRUPT`/`INTERRUPTED` support).
+  - **Phase E (Extended Thinking & Narration)**: Routed model thought parts (`IsThought: true`) to `ThoughtNarration$` and created immutable narration delegation cards (`Kind: 'narration'`), keeping scratch thoughts distinct from spoken responses and user-cancelable actions.
+  - **Phase F (Video Tracks & Session Continuity)**: Implemented video frame capture (`getDisplayMedia`/`getUserMedia` in `src/media/frameCapture.ts`), throttled inbound video frame transmission via `ChannelInboundVideoBridge` (whiteboard and remote browser channels), and resilient session continuity across the vendor session cap via `sessionResumptionUpdate` / `goAway`.
+  - **Phase G (Metadata & Release)**: Added declarative catalog metadata and multi-channel pricing for `Gemini 3.8 Live` and `Gemini 3.8 Live Extended Thinking` in `metadata/ai-models/.ai-models.json`.
+
+  ### Reviewer Punch List Resolutions:
+  - **Items 16–18 (Scheduling)**: Supported `__mj_scheduling` alongside `scheduling`, sanitized payload keys, accepted both `INTERRUPT` and `INTERRUPTED`, and added diagnostic warnings on unknown values.
+  - **Item 19 (Non-blocking getter)**: Extracted and centralized `isNonBlocking` getter on `GeminiRealtimeClient`.
+  - **Item 20 (Generation Complete)**: Ensured `handleGenerationComplete` updates `responseActive` without prematurely draining queued sends.
+  - **Items 21–23 (Thought Narration)**: Cleanly separated thought summaries from spoken narrations and the ephemeral live note across `RealtimeSessionService` and `RealtimeSessionState`.
+  - **Item 24 (Activity Rail)**: Restricted open-run button rendering to agent runs (`card.Kind === 'agent' && !!card.RunID`).
+  - **Items 25–27 (Video Bridge & Throttle)**: Separated `sendFrameDirect`, resolved throttle contention between bridge and driver with jitter headroom, added graceful headless DOM detection, and guarded against unimplemented `SendVideoFrame`.
+  - **Item 28 (File organization)**: Moved `frameCapture.ts` from `audio/` to `media/` with clean import paths.
+  - **C5a–C5c (Config Sanitization & Tool Behavior)**: Stated explicit tool behavior on all declarations, warned on unknown values, and added `tooling`, `toolBehavior`, and `functionCallingBehavior` to `REALTIME_SHARED_CONFIG_KEYS`.
+
+### Patch Changes
+
+- Updated dependencies [abf8778]
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [b518dfa]
+- Updated dependencies [37891d3]
+- Updated dependencies [666c4e6]
+- Updated dependencies [7be1684]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [d122a41]
+- Updated dependencies [42d701e]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [683f652]
+- Updated dependencies [e3db74f]
+- Updated dependencies [a8be410]
+- Updated dependencies [b87e4ac]
+- Updated dependencies [d665a6e]
+- Updated dependencies [6fd16d2]
+- Updated dependencies [f48dffc]
+- Updated dependencies [630bb88]
+- Updated dependencies [44faf83]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [575bfae]
+- Updated dependencies [a17a228]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [2cd8411]
+- Updated dependencies [104125c]
+- Updated dependencies [5513c2a]
+- Updated dependencies [7fe994a]
+- Updated dependencies [8d1a373]
+- Updated dependencies [b2a9ba1]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [3d633ed]
+- Updated dependencies [e7a0efe]
+- Updated dependencies [e962151]
+- Updated dependencies [2c590b0]
+- Updated dependencies [666c4e6]
+- Updated dependencies [fc3da91]
+  - @memberjunction/ai-agents@6.2.0-edge.0
+  - @memberjunction/core-actions@6.2.0-edge.0
+  - @memberjunction/actions-base@6.2.0-edge.0
+  - @memberjunction/core-entities@6.2.0-edge.0
+  - @memberjunction/ai-prompts@6.2.0-edge.0
+  - @memberjunction/ai-core-plus@6.2.0-edge.0
+  - @memberjunction/core@6.2.0-edge.0
+  - @memberjunction/generic-database-provider@6.2.0-edge.0
+  - @memberjunction/testing-engine@6.2.0-edge.0
+  - @memberjunction/ai-vector-dupe@6.2.0-edge.0
+  - @memberjunction/content-autotagging@6.2.0-edge.0
+  - @memberjunction/record-set-processor@6.2.0-edge.0
+  - @memberjunction/ai-gemini@6.2.0-edge.0
+  - @memberjunction/ai-openai@6.2.0-edge.0
+  - @memberjunction/predictive-studio@6.2.0-edge.0
+  - @memberjunction/actions@6.2.0-edge.0
+  - @memberjunction/ai-engine-base@6.2.0-edge.0
+  - @memberjunction/search-engine@6.2.0-edge.0
+  - @memberjunction/task-graph@6.2.0-edge.0
+  - @memberjunction/ai-agent-harness@6.2.0-edge.0
+  - @memberjunction/ai-agent-manager@6.2.0-edge.0
+  - @memberjunction/ai-form-builder@6.2.0-edge.0
+  - @memberjunction/scheduling-engine@6.2.0-edge.0
+  - @memberjunction/actions-apollo@6.2.0-edge.0
+  - @memberjunction/actions-bizapps-accounting@6.2.0-edge.0
+  - @memberjunction/actions-bizapps-crm@6.2.0-edge.0
+  - @memberjunction/actions-bizapps-formbuilders@6.2.0-edge.0
+  - @memberjunction/actions-bizapps-lms@6.2.0-edge.0
+  - @memberjunction/actions-bizapps-social@6.2.0-edge.0
+  - @memberjunction/encryption@6.2.0-edge.0
+  - @memberjunction/core-entities-server@6.2.0-edge.0
+  - @memberjunction/scheduling-actions@6.2.0-edge.0
+  - @memberjunction/ai-anthropic@6.2.0-edge.0
+  - @memberjunction/ai-assemblyai@6.2.0-edge.0
+  - @memberjunction/ai-azure@6.2.0-edge.0
+  - @memberjunction/ai-bedrock@6.2.0-edge.0
+  - @memberjunction/ai-betty-bot@6.2.0-edge.0
+  - @memberjunction/ai-blackforestlabs@6.2.0-edge.0
+  - @memberjunction/ai-cerebras@6.2.0-edge.0
+  - @memberjunction/ai-cohere@6.2.0-edge.0
+  - @memberjunction/ai-elevenlabs@6.2.0-edge.0
+  - @memberjunction/ai-fireworks@6.2.0-edge.0
+  - @memberjunction/ai-groq@6.2.0-edge.0
+  - @memberjunction/ai-heygen@6.2.0-edge.0
+  - @memberjunction/ai-inception@6.2.0-edge.0
+  - @memberjunction/ai-inworld@6.2.0-edge.0
+  - @memberjunction/ai-lmstudio@6.2.0-edge.0
+  - @memberjunction/ai-llamacpp@6.2.0-edge.0
+  - @memberjunction/ai-local-embeddings@6.2.0-edge.0
+  - @memberjunction/ai-minimax@6.2.0-edge.0
+  - @memberjunction/ai-mistral@6.2.0-edge.0
+  - @memberjunction/ai-ollama@6.2.0-edge.0
+  - @memberjunction/ai-openrouter@6.2.0-edge.0
+  - @memberjunction/ai-recommendations-rex@6.2.0-edge.0
+  - @memberjunction/ai-vertex@6.2.0-edge.0
+  - @memberjunction/ai-zhipu@6.2.0-edge.0
+  - @memberjunction/ai-xai@6.2.0-edge.0
+  - @memberjunction/ai-reranker@6.2.0-edge.0
+  - @memberjunction/queue@6.2.0-edge.0
+  - @memberjunction/templates@6.2.0-edge.0
+  - @memberjunction/ai-vectors-pinecone@6.2.0-edge.0
+  - @memberjunction/tag-engine-base@6.2.0-edge.0
+  - @memberjunction/communication-types@6.2.0-edge.0
+  - @memberjunction/doc-utils@6.2.0-edge.0
+  - @memberjunction/storage@6.2.0-edge.0
+  - @memberjunction/react-linter@6.2.0-edge.0
+  - @memberjunction/record-comparison@6.2.0-edge.0
+  - @memberjunction/scheduling-engine-base@6.2.0-edge.0
+  - @memberjunction/geo-core@6.2.0-edge.0
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.0
+  - @memberjunction/ai-vectors-qdrant@6.2.0-edge.0
+  - @memberjunction/ai-vectors-sqlserver@6.2.0-edge.0
+  - @memberjunction/ai-vectors-pgvector@6.2.0-edge.0
+  - @memberjunction/data-context-server@6.2.0-edge.0
+  - @memberjunction/ai-provider-bundle@6.2.0-edge.0
+
 ## 6.1.0
 
 ### Minor Changes

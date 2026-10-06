@@ -1,6 +1,6 @@
 import { AfterViewInit, ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy } from '@angular/core';
 import { BaseDashboard, SharedService } from '@memberjunction/ng-shared';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { CompositeKey } from '@memberjunction/core';
 import { ResourceData, WorkQueueSubscriptionStatsRow } from '@memberjunction/core-entities';
 import { TabConfig } from '@memberjunction/ng-ui-components';
@@ -9,10 +9,10 @@ import { Subject } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
 import { WorkQueueOperatorService } from './services/work-queue-operator.service';
 import {
-    buildWorkQueueAgentContext,
-    isValidPartitionCondition,
-    isValidWorkQueueTab,
-    resolveSubscription,
+    BuildWorkQueueAgentContext,
+    IsValidPartitionCondition,
+    IsValidWorkQueueTab,
+    ResolveSubscription,
     WORK_QUEUE_PARTITION_CONDITIONS,
     WORK_QUEUE_TAB_LABELS,
     WORK_QUEUE_TABS,
@@ -175,7 +175,7 @@ export class WorkQueueDashboardComponent extends BaseDashboard implements AfterV
     }
 
     public OnTabChange(tabId: string): void {
-        if (!isValidWorkQueueTab(tabId) || tabId === this.ActiveTab) return;
+        if (!IsValidWorkQueueTab(tabId) || tabId === this.ActiveTab) return;
         this.ActiveTab = tabId;
         setTimeout(() => SharedService.Instance.InvokeManualResize(), 100);
         this.UpdateQueryParams({ section: tabId });
@@ -213,8 +213,7 @@ export class WorkQueueDashboardComponent extends BaseDashboard implements AfterV
     }
 
     public OnOpenRecord(request: WorkQueueRecordOpenRequest): void {
-        // first-pk-ok: MJ core work-queue entities are single-column ID keyed
-        this.navigationService.OpenEntityRecord(request.EntityName, CompositeKey.FromID(request.ID));
+        this.navigationService.OpenEntityRecord(request.EntityName, CompositeKey.FromID(request.ID)); // first-pk-ok: the request names an MJ core work-queue entity, all single-column ID keyed
     }
 
     public OnDeadLettersLoaded(event: { Count: number; Selected: number }): void {
@@ -323,12 +322,12 @@ export class WorkQueueDashboardComponent extends BaseDashboard implements AfterV
 
     private applyQueryParams(params: Record<string, string>): void {
         const section = params['section'];
-        if (isValidWorkQueueTab(section)) this.ActiveTab = section;
+        if (IsValidWorkQueueTab(section)) this.ActiveTab = section;
         if ('subscription' in params) this.SelectedSubscription = params['subscription'] || null;
         const condition = params['condition'];
         if (!condition) {
             if ('condition' in params) this.PartitionCondition = null;
-        } else if (isValidPartitionCondition(condition)) {
+        } else if (IsValidPartitionCondition(condition)) {
             this.PartitionCondition = condition;
         }
         this.cdr.markForCheck();
@@ -339,9 +338,9 @@ export class WorkQueueDashboardComponent extends BaseDashboard implements AfterV
         if (!state) return;
         // Deep-link params win over remembered state; only fill what the URL did not set.
         const params = this.GetQueryParams();
-        if (!params['section'] && isValidWorkQueueTab(state.activeTab)) this.ActiveTab = state.activeTab;
+        if (!params['section'] && IsValidWorkQueueTab(state.activeTab)) this.ActiveTab = state.activeTab;
         if (!('subscription' in params) && state.subscription !== undefined) this.SelectedSubscription = state.subscription;
-        if (!('condition' in params) && (state.condition === null || isValidPartitionCondition(state.condition))) this.PartitionCondition = state.condition ?? null;
+        if (!('condition' in params) && (state.condition === null || IsValidPartitionCondition(state.condition))) this.PartitionCondition = state.condition ?? null;
     }
 
     private emitStateChange(): void {
@@ -367,7 +366,7 @@ export class WorkQueueDashboardComponent extends BaseDashboard implements AfterV
     }
 
     private publishAgentContext(): void {
-        this.navigationService.SetAgentContext(this, buildWorkQueueAgentContext({
+        this.navigationService.SetAgentContext(this, BuildWorkQueueAgentContext({
             ActiveTab: this.ActiveTab,
             Subscriptions: this.subscriptionSnapshots,
             StatsFailures: this.StatsFailures,
@@ -437,7 +436,7 @@ export class WorkQueueDashboardComponent extends BaseDashboard implements AfterV
                     if (params['subscription'] === undefined) return { Success: true, Stats: this.subscriptionSnapshots };
                     const resolved = this.resolveSubscriptionParam(params['subscription']);
                     if (!resolved.ok) return resolved.result;
-                    return { Success: true, Stats: this.subscriptionSnapshots.filter((s) => s.ID === resolved.value.ID) };
+                    return { Success: true, Stats: this.subscriptionSnapshots.filter((s) => UUIDsEqual(s.ID, resolved.value.ID)) };
                 },
             },
         ];
@@ -471,7 +470,7 @@ export class WorkQueueDashboardComponent extends BaseDashboard implements AfterV
     private resolveSubscriptionParam(raw: unknown): { ok: true; value: WorkQueueSubscriptionOption } | { ok: false; result: AgentToolResult } {
         const query = validateStringParam(raw, 'subscription');
         if (!query.ok) return query;
-        const resolution = resolveSubscription(this.SubscriptionOptions, query.value);
+        const resolution = ResolveSubscription(this.SubscriptionOptions, query.value);
         switch (resolution.Kind) {
             case 'Match':
                 return { ok: true, value: resolution.Item };

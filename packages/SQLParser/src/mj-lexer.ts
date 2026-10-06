@@ -203,7 +203,7 @@ export class MJLexer {
      * Parses a filter chain like: "varName | filter1 | filter2('arg')"
      * into a variable name and filter array.
      */
-    static parseFilterChain(content: string): { variable: string; filters: MJFilter[] } {
+    static ParseFilterChain(content: string): { variable: string; filters: MJFilter[] } {
         const parts = MJLexer.splitPipes(content);
         const variable = parts[0].trim();
         const filters: MJFilter[] = [];
@@ -215,6 +215,11 @@ export class MJLexer {
         }
 
         return { variable, filters };
+    }
+
+    /** @deprecated Use {@link ParseFilterChain}. */
+    static parseFilterChain(content: string): { variable: string; filters: MJFilter[] } {
+        return this.ParseFilterChain(content);
     }
 
     /**
@@ -364,7 +369,8 @@ export class MJLexer {
             // Determine if it's a literal (quoted) or pass-through (variable)
             const isLiteral = (value.startsWith("'") && value.endsWith("'")) ||
                               (value.startsWith('"') && value.endsWith('"'));
-            const cleanValue = isLiteral ? value.slice(1, -1) : value;
+            // Inside a quoted value, a doubled quote stands for one, as in SQL
+            const cleanValue = isLiteral ? value.slice(1, -1).split(value[0] + value[0]).join(value[0]) : value;
 
             params.push({
                 key,

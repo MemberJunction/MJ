@@ -63,6 +63,17 @@
   display: block;
 }
 
+/* A streamed reply is not a status line. While the bubble shows streamed reply text the item
+   adds `streaming` (IsStreaming, set by the list's in-place refresh): the cap above would box
+   the growing reply into a 150px scroller of its own, and the status weight would re-wrap every
+   line when the settled message drops it on completion, so the reply is set at its settled weight
+   from the first frame. */
+.message-item.in-progress.streaming .message-text {
+  max-height: none;
+  overflow-y: visible;
+  font-weight: inherit;
+}
+
 
 /* Pulse effect for avatar */
 .message-item.in-progress .avatar-circle {
@@ -403,6 +414,24 @@
 .time-pill.active {
   background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
   color: var(--mj-brand-primary);
+}
+
+/* Liveness states (MJ #4222) — the run may no longer be progressing, so the pill stops
+   presenting the elapsed time as healthy progress. These follow .in-progress/.active in the
+   stylesheet so they win on equal specificity. */
+.time-pill.checking {
+  background: var(--mj-status-warning-bg);
+  color: var(--mj-status-warning-text);
+}
+
+.time-pill.stalled {
+  background: var(--mj-status-error-bg);
+  color: var(--mj-status-error-text);
+}
+
+.time-pill .liveness-label {
+  font-weight: 400;
+  opacity: 0.85;
 }
 
 /* Failed state - red */

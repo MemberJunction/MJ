@@ -2,6 +2,7 @@ import { Component, Input } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { renderComponentFixture } from '@memberjunction/ng-test-utils';
 import { MJSwitchComponent } from './switch.component';
 
 /**
@@ -197,5 +198,48 @@ describe('MJSwitchComponent — Disabled with no Angular Forms binding (DOM)', (
     fixture.componentInstance.Toggle();
     fixture.detectChanges();
     expect(fixture.componentInstance.Value, 'a disabled switch must not toggle').toBe(false);
+  });
+});
+
+describe('MJSwitchComponent — accessible name (#4116)', () => {
+  const render = (inputs: Record<string, unknown> = {}) =>
+    renderComponentFixture(MJSwitchComponent, { inputs });
+  const button = (f: ComponentFixture<MJSwitchComponent>) =>
+    f.nativeElement.querySelector('button.mj-switch') as HTMLButtonElement;
+
+  it('names the switch with AriaLabel', () => {
+    expect(button(render({ AriaLabel: 'Email notifications' })).getAttribute('aria-label')).toBe('Email notifications');
+  });
+
+  it('names the switch from a visible label via AriaLabelledBy', () => {
+    expect(button(render({ AriaLabelledBy: 'notify-label' })).getAttribute('aria-labelledby')).toBe('notify-label');
+  });
+
+  it('exposes InputId on the button, which IS a valid <label for> target', () => {
+    // <button> is a labelable element, so a label[for] pointing here both names the switch and,
+    // on click, focuses and toggles it.
+    const f = render({ InputId: 'notify-switch' });
+    expect(button(f).getAttribute('id')).toBe('notify-switch');
+    expect('labels' in button(f), 'a labelable element exposes a labels collection').toBe(true);
+  });
+
+  it('passes AriaDescribedBy through for hint and error text', () => {
+    expect(button(render({ AriaDescribedBy: 'notify-hint' })).getAttribute('aria-describedby')).toBe('notify-hint');
+  });
+
+  it('renders NO empty name attributes when nothing is configured — absent beats empty', () => {
+    const b = button(render());
+    expect(b.hasAttribute('aria-label')).toBe(false);
+    expect(b.hasAttribute('aria-labelledby')).toBe(false);
+    expect(b.hasAttribute('id')).toBe(false);
+    expect(b.hasAttribute('aria-describedby')).toBe(false);
+  });
+
+  it('overrides the On/Off text, which names the switch after its own STATE', () => {
+    // role=switch takes its name from its contents when nothing else names it, so an unnamed
+    // toggle labelled "Off" announces "Off, switch, off" — its state twice and its purpose never.
+    const f = render({ AriaLabel: 'Email notifications', OnLabel: 'On', OffLabel: 'Off' });
+    expect(button(f).textContent?.trim()).toBe('Off');
+    expect(button(f).getAttribute('aria-label')).toBe('Email notifications');
   });
 });

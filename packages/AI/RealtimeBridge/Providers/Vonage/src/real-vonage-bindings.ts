@@ -41,7 +41,37 @@
  * @see `/plans/realtime/bridges-and-widget/telephony-vendor-bindings.md` §1c, §T2, §4, §5.
  */
 
+import { randomUUID } from 'node:crypto';
+import { GenerateMediaToken } from '@memberjunction/ai-bridge-base';
 import { IVonageClientBindings } from './vonage-call-sdk';
+
+/** Query parameter carrying the per-call media token on the media-websocket URI. */
+export const VONAGE_MEDIA_TOKEN_PARAM = 'mj_token';
+
+/** Query parameter carrying the OUTBOUND correlation id (the call UUID is unknown until `createCall` resolves). */
+export const VONAGE_MEDIA_CORRELATION_PARAM = 'mj_cid';
+
+/** Query parameter carrying the call UUID on an INBOUND media-websocket URI. */
+export const VONAGE_MEDIA_CALL_UUID_PARAM = 'call_uuid';
+
+/**
+ * Appends query parameters to a media-websocket URL, preserving any query it already carries. Pure —
+ * the inbound answer webhook and the outbound `createCall` NCCO both use it so the call identity + token
+ * ride the same URI shape.
+ *
+ * @param mediaUrl The configured `wss://…/telephony/vonage/media` URL.
+ * @param params Query params to append (name → value); values are URL-encoded.
+ * @returns The URL with the params appended.
+ */
+export function BuildVonageMediaUrl(mediaUrl: string, params: Record<string, string>): string {
+    const query = Object.entries(params)
+        .map(([name, value]) => `${encodeURIComponent(name)}=${encodeURIComponent(value)}`)
+        .join('&');
+    if (!query) {
+        return mediaUrl;
+    }
+    return `${mediaUrl}${mediaUrl.includes('?') ? '&' : '?'}${query}`;
+}
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Pure helpers — NCCO builders + WebSocket media-frame transcode. No network, no SDK.
@@ -83,7 +113,7 @@ export interface NccoEndpoint {
  * @param headers Optional metadata headers Vonage forwards on the websocket handshake.
  * @returns The NCCO document (a JSON array of actions) to return to Vonage.
  */
-export function buildConnectNcco(
+export function BuildConnectNcco(
     mediaWssUrl: string,
     contentType = 'audio/l16;rate=8000',
     headers?: Record<string, unknown>,
@@ -95,6 +125,15 @@ export function buildConnectNcco(
     return [{ action: 'connect', endpoint: [endpoint] }];
 }
 
+/** @deprecated Use {@link BuildConnectNcco}. */
+export function buildConnectNcco(
+    mediaWssUrl: string,
+    contentType = 'audio/l16;rate=8000',
+    headers?: Record<string, unknown>,
+): NccoAction[] {
+    return BuildConnectNcco(mediaWssUrl, contentType, headers);
+}
+
 /**
  * Builds the NCCO `connect` action used to **transfer** a live call to another number — the document
  * supplied to the Voice API `PUT /v1/calls/:uuid` transfer (`{ action: 'transfer', destination: { type:
@@ -103,8 +142,23 @@ export function buildConnectNcco(
  * @param toNumber The transfer destination (E.164).
  * @returns A one-action NCCO connecting the call to a `phone` endpoint.
  */
-export function buildTransferNccoAction(toNumber: string): NccoAction[] {
+export function BuildTransferNccoAction(toNumber: string): NccoAction[] {
     return [{ action: 'connect', endpoint: [{ type: 'phone', number: toNumber } as unknown as NccoEndpoint] }];
+}
+
+/**
+ * Builds a one-action NCCO that speaks `message` and ends — used with a Voice API transfer to say goodbye and
+ * hang up (the call ends when the NCCO has no further action).
+ *
+ * @param message The text to speak.
+ */
+export function BuildTalkNcco(message: string): NccoAction[] {
+    return [{ action: 'talk', text: message }];
+}
+
+/** @deprecated Use {@link BuildTransferNccoAction}. */
+export function buildTransferNccoAction(toNumber: string): NccoAction[] {
+    return BuildTransferNccoAction(toNumber);
 }
 
 /**
@@ -132,7 +186,7 @@ export interface VonageControlEvent {
  * @param text The UTF-8 text-frame payload Vonage sent.
  * @returns The parsed control event, or `null` when the frame is not a recognizable JSON event.
  */
-export function parseVonageControlEvent(text: string): VonageControlEvent | null {
+export function ParseVonageControlEvent(text: string): VonageControlEvent | null {
     try {
         const parsed: unknown = JSON.parse(text);
         if (parsed && typeof parsed === 'object' && typeof (parsed as { event?: unknown }).event === 'string') {
@@ -142,6 +196,11 @@ export function parseVonageControlEvent(text: string): VonageControlEvent | null
     } catch {
         return null;
     }
+}
+
+/** @deprecated Use {@link ParseVonageControlEvent}. */
+export function parseVonageControlEvent(text: string): VonageControlEvent | null {
+    return ParseVonageControlEvent(text);
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -160,6 +219,11 @@ export interface VonageCreateCallParams {
     Ncco: NccoAction[];
     /** Optional event-webhook URL for lifecycle events. Maps to Vonage's `event_url`. */
     EventUrl?: string;
+    /**
+     * Answering-machine detection behaviour. `'hangup'` ends the call when a machine answers; `'continue'`
+     * keeps it up and only reports the machine event. Maps to Vonage's `machine_detection`. Omit to disable.
+     */
+    MachineDetection?: 'hangup' | 'continue';
 }
 
 /** The REST transfer payload {@link IVonageVoiceLike.TransferCall} accepts. */
@@ -200,6 +264,16 @@ export interface IVonageMediaPump {
     OnEvent(callUuid: string, handler: (event: VonageControlEvent) => void): void;
     /** Discards the call's queued outbound audio (sends Vonage's `{"action":"clear"}` text command). */
     Clear(callUuid: string): void;
+    /**
+     * **Optional.** Registers the media token for an OUTBOUND call before `createCall` is issued, keyed by a
+     * correlation id (the call UUID is not known until Vonage responds, yet the media socket may connect
+     * first). A pump that does not authenticate sockets may omit the three outbound-correlation hooks.
+     */
+    ExpectOutboundCall?(correlationId: string, token: string): void;
+    /** **Optional.** Maps the correlation id to the real call UUID once `createCall` has resolved. */
+    BindOutboundCall?(correlationId: string, callUuid: string): void;
+    /** **Optional.** Drops an expectation whose `createCall` failed (nothing will ever connect). */
+    AbandonOutboundCall?(correlationId: string): void;
 }
 
 /** Options {@link RealVonageBindings} needs at construction — the injected client surfaces + the media URL. */
@@ -214,6 +288,8 @@ export interface RealVonageBindingsOptions {
     EventUrl?: string;
     /** Optional wire content-type for the websocket leg (defaults to `audio/l16;rate=8000`). */
     ContentType?: string;
+    /** Answering-machine detection for outbound calls (`'hangup'` | `'continue'`); omit to disable. */
+    MachineDetection?: 'hangup' | 'continue';
 }
 
 /**
@@ -233,6 +309,7 @@ export class RealVonageBindings implements IVonageClientBindings {
     private readonly mediaWssUrl: string;
     private readonly eventUrl?: string;
     private readonly contentType?: string;
+    private readonly machineDetection?: 'hangup' | 'continue';
 
     constructor(options: RealVonageBindingsOptions) {
         this.voice = options.Voice;
@@ -240,17 +317,40 @@ export class RealVonageBindings implements IVonageClientBindings {
         this.mediaWssUrl = options.MediaWssUrl;
         this.eventUrl = options.EventUrl;
         this.contentType = options.ContentType;
+        this.machineDetection = options.MachineDetection;
     }
 
-    /** @inheritdoc */
+    /**
+     * @inheritdoc
+     *
+     * The call UUID is unknown until Vonage responds, but the media websocket may connect BEFORE the response
+     * is processed — so the outbound NCCO carries a correlation id (`mj_cid`) plus a per-call token
+     * (`mj_token`), both registered with the media pump up front. Once `createCall` resolves, the pump is told
+     * which UUID the correlation id belongs to; if it fails, the expectation is dropped.
+     */
     public async createCall(toNumber: string, fromNumber: string, args?: Record<string, unknown>): Promise<string> {
         const eventUrl = readEventUrl(args) ?? this.eventUrl;
-        return this.voice.CreateCall({
-            To: toNumber,
-            From: fromNumber,
-            Ncco: buildConnectNcco(this.mediaWssUrl, this.contentType),
-            ...(eventUrl ? { EventUrl: eventUrl } : {}),
+        const correlationId = randomUUID();
+        const token = GenerateMediaToken();
+        const mediaUrl = BuildVonageMediaUrl(this.mediaWssUrl, {
+            [VONAGE_MEDIA_CORRELATION_PARAM]: correlationId,
+            [VONAGE_MEDIA_TOKEN_PARAM]: token,
         });
+        this.mediaPump.ExpectOutboundCall?.(correlationId, token);
+        try {
+            const callUuid = await this.voice.CreateCall({
+                To: toNumber,
+                From: fromNumber,
+                Ncco: BuildConnectNcco(mediaUrl, this.contentType),
+                ...(eventUrl ? { EventUrl: eventUrl } : {}),
+                ...(this.machineDetection ? { MachineDetection: this.machineDetection } : {}),
+            });
+            this.mediaPump.BindOutboundCall?.(correlationId, callUuid);
+            return callUuid;
+        } catch (err) {
+            this.mediaPump.AbandonOutboundCall?.(correlationId);
+            throw err;
+        }
     }
 
     /** @inheritdoc */
@@ -293,7 +393,7 @@ export class RealVonageBindings implements IVonageClientBindings {
 
     /** @inheritdoc */
     public async transferCall(callUuid: string, toNumber: string): Promise<void> {
-        await this.voice.TransferCall(callUuid, { Ncco: buildTransferNccoAction(toNumber) });
+        await this.voice.TransferCall(callUuid, { Ncco: BuildTransferNccoAction(toNumber) });
     }
 
     /** @inheritdoc */
@@ -303,6 +403,11 @@ export class RealVonageBindings implements IVonageClientBindings {
                 cb();
             }
         });
+    }
+
+    /** @inheritdoc — a `talk` NCCO is the whole replacement script, so the call ends when it finishes speaking. */
+    public async sayAndHangup(callUuid: string, message: string): Promise<void> {
+        await this.voice.TransferCall(callUuid, { Ncco: BuildTalkNcco(message) });
     }
 
     /** @inheritdoc — barge-in: tell Vonage to discard its queued outbound audio so the agent stops mid-utterance. */

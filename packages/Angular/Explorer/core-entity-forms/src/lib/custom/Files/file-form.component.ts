@@ -74,7 +74,7 @@ export class MJFileFormComponentExtended extends MJFileFormComponent implements 
 
   public override async ngOnInit(): Promise<void> {
     await super.ngOnInit();
-    this.RestoreUserPreferences();
+    this.restoreUserPreferences();
     if (this.record?.ID) {
       void this.LoadMediaPreview();
     }
@@ -93,7 +93,7 @@ export class MJFileFormComponentExtended extends MJFileFormComponent implements 
     super.ngOnDestroy();
   }
 
-  private RestoreUserPreferences(): void {
+  private restoreUserPreferences(): void {
     const saved = UserInfoEngine.Instance.GetSetting(MJFileFormComponentExtended.PREF_SHOW_DETAILS);
     if (saved !== undefined && saved !== null) {
       try {

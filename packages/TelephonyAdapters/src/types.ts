@@ -1,10 +1,48 @@
 import { UserInfo, DatabaseProviderBase } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/generic-database-provider';
+import type { OutboundPolicySettings, TransferTargetSettings } from './telephony/outboundCallPolicy.js';
+import type { SipTrunkCarrierSettings } from './telephony/sipTrunkCarrier.js';
+
+/**
+ * Settings that apply to every carrier. They are configured once under `telephony` and merged into each
+ * carrier's extension settings by the host (a carrier block may override them).
+ */
+export interface TelephonySharedSettings {
+    /**
+     * Email of the user INBOUND calls run as. Required for inbound calls: if unset, unknown, inactive, or the
+     * system user, the call is rejected (there is deliberately no fallback to a privileged user). Point it at a
+     * dedicated least-privilege account.
+     */
+    inboundRunAsUserEmail?: string;
+    /** Maximum length of one phone call in seconds (default 1800). The session is stopped at the cap. */
+    maxCallSeconds?: number;
+    /**
+     * Most phone calls (every carrier together, both directions) the server will carry at once (default 25).
+     * Keep this at or below the realtime model plan's concurrent-session limit: past the cap an inbound caller
+     * hears a polite "all agents are busy" and an outbound call is refused, instead of every call degrading.
+     */
+    maxConcurrentCalls?: number;
+    /** Outbound destination policy and per-user rate limit applied to every `Place*Call` mutation. */
+    outbound?: OutboundPolicySettings;
+    /**
+     * The places the agent may transfer a live call to, by name. Empty or absent means the agent cannot transfer at
+     * all, even on a carrier that supports it: the agent never names a free-form number.
+     */
+    transferTargets?: TransferTargetSettings[];
+    /**
+     * Estimated carrier cost rate per minute in reporting currency (e.g. 0.015 for 1.5 cents/min).
+     * Used to compute Interaction.CostEstimate at call end. Defaults to 0.015 if unset.
+     */
+    costPerMinute?: number;
+}
+
+/** What to do when answering-machine detection says a machine (or fax) answered an outbound call. */
+export type OnMachineAction = 'hangup' | 'continue';
 
 /**
  * Twilio Programmable Voice + Media Streams telephony binding configuration.
  */
-export interface TwilioTelephonyConfig {
+export interface TwilioTelephonyConfig extends TelephonySharedSettings {
     /** Twilio Account SID (`AC…`). */
     accountSid: string;
     /** Account auth token — REST auth (when no API key pair) AND the HMAC key for X-Twilio-Signature verification. */
@@ -15,16 +53,26 @@ export interface TwilioTelephonyConfig {
     apiKeySecret?: string;
     /** The publicly reachable `wss://…/telephony/twilio/media` URL Twilio's <Connect><Stream> connects to. */
     streamPublicUrl: string;
-    /** Optional shared secret gating the public webhook/WSS endpoints. */
+    /**
+     * Reserved; currently unused. The media websocket is authenticated by a per-call token minted by MJ (see
+     * `mediaSocketAuth.ts`), and webhooks by `X-Twilio-Signature`.
+     */
     webhookSigningSecret?: string;
-    /** Optional status-callback URL Twilio posts call lifecycle events to. */
+    /**
+     * URL Twilio posts outbound-call lifecycle events to. Defaults to `<public URL>/telephony/twilio/status`
+     * (the route that ends the session when a call is busy / unanswered / failed / completed).
+     */
     statusCallbackUrl?: string;
+    /** URL Twilio posts the async answering-machine verdict to. Defaults to `<public URL>/telephony/twilio/amd`. */
+    amdStatusCallbackUrl?: string;
+    /** What to do when a machine or fax answers an outbound call (default `'hangup'`). */
+    onMachine?: OnMachineAction;
 }
 
 /**
  * Vonage Voice + WebSocket-media telephony binding configuration.
  */
-export interface VonageTelephonyConfig {
+export interface VonageTelephonyConfig extends TelephonySharedSettings {
     /** Vonage Application ID (UUID) — the JWT-auth identity for the Voice API. */
     applicationId?: string;
     /** The application's RSA private key (PEM) used to sign Voice-API JWTs. */
@@ -37,14 +85,19 @@ export interface VonageTelephonyConfig {
     mediaPublicUrl: string;
     /** Vonage account signature secret — HMAC key for signed-request `sig` AND HS256 webhook-JWT verification. */
     signatureSecret?: string;
-    /** Optional event-webhook URL Vonage posts call lifecycle events to. */
+    /**
+     * Event-webhook URL Vonage posts call lifecycle events to. Defaults to `<public URL>/telephony/vonage/event`
+     * (the route that ends the session when a call is busy / unanswered / failed / completed).
+     */
     eventUrl?: string;
+    /** What to do when a machine answers an outbound call — Vonage's `machine_detection` (default `'hangup'`). */
+    onMachine?: OnMachineAction;
 }
 
 /**
  * RingCentral SIP softphone telephony binding configuration.
  */
-export interface RingCentralTelephonyConfig {
+export interface RingCentralTelephonyConfig extends TelephonySharedSettings {
     /** SIP domain (e.g. `sip.ringcentral.com`). */
     sipDomain: string;
     /** SIP outbound proxy (`host:port`, e.g. `sip10.ringcentral.com:5096`). */
@@ -59,6 +112,38 @@ export interface RingCentralTelephonyConfig {
     codec?: 'OPUS/16000' | 'OPUS/48000/2' | 'PCMU/8000';
     /** Skip TLS cert validation (sandbox/test only — never in production). */
     ignoreTlsCertErrors?: boolean;
+}
+
+/**
+ * LiveKit SIP binding: phone calls carried by a SIP trunk, landing in a LiveKit room. The carrier is whoever the trunk
+ * belongs to (Twilio Elastic SIP Trunking, Telnyx, …); MJ routes the call and runs the agent in the room.
+ *
+ * LiveKit credentials come from here or, when omitted, from `LIVEKIT_URL` / `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET`
+ * (the same ones the Meet room uses).
+ */
+export interface LiveKitSipSettings extends TelephonySharedSettings {
+    /** LiveKit server URL (`wss://…`). Defaults to `LIVEKIT_URL`. */
+    serverUrl?: string;
+    /** LiveKit API key. Defaults to `LIVEKIT_API_KEY`. */
+    apiKey?: string;
+    /** LiveKit API secret. Defaults to `LIVEKIT_API_SECRET`. */
+    apiSecret?: string;
+    /** Inbound calls land in a room whose name starts with this (default `call-`). Rooms that do not are not phone calls. */
+    roomPrefix?: string;
+    /** The numbers (E.164) this deployment answers. Each routes to the agent identity registered for that number. */
+    numbers?: string[];
+    /** The LiveKit inbound trunk id, when it was created by hand. Checked at startup; created for you when `autoProvision` is set. */
+    inboundTrunkId?: string;
+    /** The LiveKit OUTBOUND trunk used to dial out (an outbound call, a fallback leg, a transfer to a number). Dialing out is off without it. */
+    outboundTrunkId?: string;
+    /** The caller ID presented on a call dialed out through the outbound trunk. Defaults to the trunk's own number. */
+    outboundFromNumber?: string;
+    /** Create the inbound trunk and dispatch rule at startup when they do not exist (idempotent). Default false. */
+    autoProvision?: boolean;
+    /** Source addresses the inbound trunk accepts calls from (the carrier's SIP signalling addresses). Used when provisioning. */
+    allowedAddresses?: string[];
+    /** The carrier behind the trunk, for configuration checks only. */
+    carrier?: SipTrunkCarrierSettings;
 }
 
 /**
@@ -84,11 +169,12 @@ export interface TeamsMeetingsConfig {
 /**
  * Full telephony section configuration shape.
  */
-export interface TelephonyConfig {
+export interface TelephonyConfig extends TelephonySharedSettings {
     enabled: boolean;
     twilio?: TwilioTelephonyConfig;
     vonage?: VonageTelephonyConfig;
     ringcentral?: RingCentralTelephonyConfig;
+    livekitSip?: LiveKitSipSettings;
     teams?: TeamsMeetingsConfig;
 }
 
@@ -125,7 +211,7 @@ export interface TelephonyResolverContext {
 /**
  * Resolves a UserInfo object from the resolver context userPayload.
  */
-export function getUserFromPayload(userPayload?: UserPayload): UserInfo | undefined {
+export function GetUserFromPayload(userPayload?: UserPayload): UserInfo | undefined {
     if (!userPayload) {
         return undefined;
     }
@@ -138,13 +224,23 @@ export function getUserFromPayload(userPayload?: UserPayload): UserInfo | undefi
     return UserCache.Users.find((u) => u.Email.toLowerCase().trim() === userPayload.email.toLowerCase().trim());
 }
 
+/** @deprecated Use {@link GetUserFromPayload}. */
+export function getUserFromPayload(userPayload?: UserPayload): UserInfo | undefined {
+    return GetUserFromPayload(userPayload);
+}
+
 /**
  * Resolves the primary Read-Write database provider from the resolver context.
  */
-export function getReadWriteProvider(providers?: ProviderInfo[]): DatabaseProviderBase | null {
+export function GetReadWriteProvider(providers?: ProviderInfo[]): DatabaseProviderBase | null {
     if (!providers || providers.length === 0) {
         return null;
     }
     const rw = providers.find((p) => p.type === 'Read-Write');
     return rw ? rw.provider : null;
+}
+
+/** @deprecated Use {@link GetReadWriteProvider}. */
+export function getReadWriteProvider(providers?: ProviderInfo[]): DatabaseProviderBase | null {
+    return GetReadWriteProvider(providers);
 }

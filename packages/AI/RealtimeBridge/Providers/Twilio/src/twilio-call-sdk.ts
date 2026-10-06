@@ -58,21 +58,21 @@ export interface ITwilioClientBindings {
      * @param args Provider-specific options (status-callback URL, stream URL, recording flags, …).
      * @returns The created Call SID.
      */
-    createCall(toNumber: string, fromNumber: string, args?: Record<string, unknown>): Promise<string>;
+    createCall(toNumber: string, fromNumber: string, args?: Record<string, unknown>): Promise<string>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Accepts the Media-Streams websocket for an inbound call already delivered by the voice webhook.
      *
      * @param callSid The inbound Call SID from the webhook.
      */
-    acceptInbound(callSid: string): Promise<void>;
+    acceptInbound(callSid: string): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Ends the call (REST `calls(sid).update({ status: 'completed' })`).
      *
      * @param callSid The Call SID to complete.
      */
-    completeCall(callSid: string): Promise<void>;
+    completeCall(callSid: string): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Pushes one outbound audio payload onto the call's Media-Streams websocket (the agent's voice).
@@ -80,7 +80,7 @@ export interface ITwilioClientBindings {
      * @param callSid The Call SID whose stream to write to.
      * @param pcm The audio bytes (the adapter encodes to the Media-Streams μ-law/PCM `media` frame).
      */
-    pushStreamAudio(callSid: string, pcm: ArrayBuffer): void;
+    pushStreamAudio(callSid: string, pcm: ArrayBuffer): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Registers the inbound Media-Streams audio callback for the call (what the agent hears).
@@ -88,7 +88,7 @@ export interface ITwilioClientBindings {
      * @param callSid The Call SID whose inbound stream to subscribe to.
      * @param cb Invoked with each inbound PCM audio frame.
      */
-    onStreamAudio(callSid: string, cb: (pcm: ArrayBuffer) => void): void;
+    onStreamAudio(callSid: string, cb: (pcm: ArrayBuffer) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Sends DTMF digits on the call (REST `calls(sid).update` with `<Play digits>` / `<Dial sendDigits>`).
@@ -96,7 +96,7 @@ export interface ITwilioClientBindings {
      * @param callSid The Call SID.
      * @param digits The DTMF digit string.
      */
-    playDigits(callSid: string, digits: string): Promise<void>;
+    playDigits(callSid: string, digits: string): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Registers the inbound DTMF callback (`<Gather>` webhook results or Media-Streams `dtmf` events).
@@ -104,7 +104,7 @@ export interface ITwilioClientBindings {
      * @param callSid The Call SID.
      * @param cb Invoked with each received DTMF digit string.
      */
-    onDigits(callSid: string, cb: (digits: string) => void): void;
+    onDigits(callSid: string, cb: (digits: string) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Transfers the live call (REST `calls(sid).update({ twiml: '<Dial>...' })`).
@@ -112,7 +112,7 @@ export interface ITwilioClientBindings {
      * @param callSid The Call SID to redirect.
      * @param toNumber The transfer destination.
      */
-    redirectCall(callSid: string, toNumber: string): Promise<void>;
+    redirectCall(callSid: string, toNumber: string): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Registers the call-ended callback (status-callback `completed`/`failed`/`canceled` or stream `stop`).
@@ -120,14 +120,24 @@ export interface ITwilioClientBindings {
      * @param callSid The Call SID.
      * @param cb Invoked when the call ends.
      */
-    onCallStatus(callSid: string, cb: () => void): void;
+    onCallStatus(callSid: string, cb: () => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Flushes buffered outbound audio on Twilio's side (Media Streams 'clear' event).
      *
      * @param callSid The Call SID whose playback buffer to clear.
      */
-    flushOutbound(callSid: string): void;
+    flushOutbound(callSid: string): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+
+    /**
+     * **Optional.** Speaks `message` to the caller and then hangs up, in one carrier-side step (REST
+     * `calls(sid).update({ twiml: '<Say>…</Say><Hangup/>' })`). The call is ending anyway, so replacing its TwiML
+     * (which ends the media stream) is what we want here. When absent the SDK just completes the call.
+     *
+     * @param callSid The Call SID.
+     * @param message The text to speak.
+     */
+    sayAndHangup?(callSid: string, message: string): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /** The default bindings used when none are supplied — every operation throws the bind-me error. */
@@ -244,6 +254,20 @@ export class TwilioCallSdk implements ITelephonyCallSdk {
     public flushOutbound(): void {
         if (this.activeCallSid) {
             this.bindings.flushOutbound(this.activeCallSid);
+        }
+    }
+
+    /** @inheritdoc — after a transfer / goodbye Twilio owns the call; just forget it locally, never hang it up. */
+    public async detach(_callId: string): Promise<void> {
+        this.activeCallSid = null;
+    }
+
+    /** @inheritdoc — speaks the message and hangs up at Twilio; completes the call when the bindings cannot speak. */
+    public async playMessageAndHangup(callId: string, message: string): Promise<void> {
+        if (this.bindings.sayAndHangup) {
+            await this.bindings.sayAndHangup(callId, message);
+        } else {
+            await this.bindings.completeCall(callId);
         }
     }
 

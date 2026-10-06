@@ -1,5 +1,86 @@
 # @memberjunction/ai-agent-client
 
+## 6.2.0-edge.2
+
+### Patch Changes
+
+- Updated dependencies [e97d95c]
+- Updated dependencies [660ef45]
+- Updated dependencies [21f9e15]
+- Updated dependencies [4248fb3]
+- Updated dependencies [f3c6161]
+- Updated dependencies [0adaf76]
+- Updated dependencies [5ee02db]
+- Updated dependencies [ea4080e]
+- Updated dependencies [7e57b48]
+- Updated dependencies [705ab4e]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [5986939]
+- Updated dependencies [4d647e6]
+- Updated dependencies [369e229]
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+
+## 6.2.0-edge.1
+
+### Patch Changes
+
+- eb3a8d3: feat(conversations): host rules for chats with several people
+
+  `mj-conversation-chat-area` gains opt-in inputs, one reworked event, a hook and a slot, so a host can run a chat between several people without forking the chat area. Every default keeps today's behavior.
+
+  **Inputs — `ng-conversations`.** Set on `mj-conversation-chat-area` (and on `mj-message-input` directly):
+  - `AgentReplyMode` — `'Always'` (default) answers every message; `'MentionOnly'` answers only a message that tags an agent and posts any other message with no turn at all: no reply row, no placeholder, no turn events.
+  - `AllowedAgentIDs` — the agents that may answer. Narrows the composer's `@` list, every route (tagged agent, continuity, pinned and host default agents, the conversation manager), the manager's delegation — including each agent step of a workflow it plans — and the pin and voice pickers. Null allows every agent; an empty list allows none.
+  - `MentionPeople` — the people the `@` list offers (today it offers only the current user). Each composer keeps its own list: two composers on one page never see each other's.
+  - `AgentHistoryFrom` — the first moment of the conversation an agent turn may read (see below).
+  - `AgentTurnHandler` — an async hook that runs the turn on the host's server instead of MJ's path, once per turn, before any reply row exists. The chat area shows the rows it reports.
+  - `AutoNameConversation` — turns MJ's auto-naming of a new conversation off (text and voice).
+
+  **Behavior change: `BeforeAgentTurn`.** It now fires once per turn on every route, before any row exists, and carries the resolved `AgentId`, `AgentName`, `Route` and `UserMessageId`. A listener can cancel the turn or send it to another allowed agent with `RedirectAgentId`. Canceling now leaves nothing behind. Previously the event fired only on the conversation manager's route, after that route's placeholder row was saved, and a cancel left the row behind, marked "Turn canceled before agent invocation". `AfterAgentTurn` now fires on every route too.
+
+  **Slot.** `composerExtra` renders host UI directly above the composer, wherever the chat area shows one, with an `IMJChatComposerExtraContext`.
+
+  **History floor — `server`, `core-entities`, `ai-core-plus`, `ai-agents`, clients.** `RunAIAgentFromConversationDetail` takes a new nullable `agentHistoryFrom` argument (ISO-8601). The server loads the agent's history from that moment and uses no summary of earlier messages; an unreadable value fails the request. The run carries it as `ExecuteAgentParams.ConversationHistoryFrom`, so the conversation-history tools, the conversation's artifacts, cross-turn compaction (skipped) and the carried-forward tool results of the previous turn (not carried) hold it too. `ConversationEngine.LoadWindowRowsFresh` and `AssembleContextWindow` accept the floor, and `ConversationEngine.HistoryFromFilter` writes it. The GraphQL client names the argument only when a floor is set, so a client that sets none keeps working against an older MJAPI.
+
+  **Runtime — `conversations-runtime`.** `MentionAutocomplete.GetSuggestions` takes an optional per-call `MentionSuggestionScope`; `ConversationAgentRunner.processMessage` takes `AllowedAgentIDs` (narrows the manager's `ALL_AVAILABLE_AGENTS`) and `AgentHistoryFrom`.
+
+- Updated dependencies [a3539d2]
+- Updated dependencies [41274aa]
+- Updated dependencies [eb3a8d3]
+- Updated dependencies [a7da50b]
+- Updated dependencies [17cc774]
+- Updated dependencies [80905a1]
+  - @memberjunction/core@6.2.0-edge.1
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.1
+  - @memberjunction/global@6.2.0-edge.1
+
+## 6.2.0-edge.0
+
+### Patch Changes
+
+- Updated dependencies [7be1684]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [683f652]
+- Updated dependencies [5df9486]
+- Updated dependencies [f48dffc]
+- Updated dependencies [630bb88]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [a17a228]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [104125c]
+- Updated dependencies [5513c2a]
+- Updated dependencies [8d1a373]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [af57e8d]
+- Updated dependencies [2c590b0]
+  - @memberjunction/core@6.2.0-edge.0
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.0
+  - @memberjunction/global@6.2.0-edge.0
+
 ## 6.1.0
 
 ### Patch Changes

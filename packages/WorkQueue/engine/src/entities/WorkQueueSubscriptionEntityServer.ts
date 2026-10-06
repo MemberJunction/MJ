@@ -27,7 +27,7 @@ export class MJWorkQueueSubscriptionEntityServer extends MJWorkQueueSubscription
         const view = await new RunView(this.RunViewProviderToUse).RunView<{ ID: string }>({
             EntityName: WorkQueueEntityNames.Deliveries,
             ExtraFilter: `SubscriptionID = '${this.ID}'`,
-            Fields: ['ID'],
+            Fields: ['ID'], // pk-filter-ok: MJ: Work Queue Deliveries is a core entity with a single ID key
             MaxRows: 1,
             ResultType: 'simple',
         }, this.ContextCurrentUser);

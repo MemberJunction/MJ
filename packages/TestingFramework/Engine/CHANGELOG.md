@@ -1,5 +1,300 @@
 # @memberjunction/testing-engine
 
+## 6.2.0-edge.2
+
+### Minor Changes
+
+- 28fdf22: Add a `Decision Eval` test type that measures typed decisions against labels inside MJ's test harness, with a suite generator and a scorecard for agreement, repeatability and calibration. The conversation-routing decision's builders (and `IsAgentAllowed`) move from `@memberjunction/ng-conversations` to `@memberjunction/ai-core-plus`, so the chat and the harness build the decision with the same code; import them from there.
+- 4d647e6: Add Rubrics, a core way to score any record against a published set of weighted criteria.
+
+  What ships:
+  - Schema for rubrics, versions, criteria, scales, anchors, bands, evaluations, and score rows, plus layered consensus views. Published versions are frozen. Raw writes to a frozen row throw 51101–51110. A draft version delete is an `INSTEAD OF DELETE` trigger. `MJ: Test Rubrics` is deprecated in metadata.
+  - `RubricScoring` and `RubricVersionDiff` in `@memberjunction/rubrics-base`. The outcome ladder is Incomplete, NotApplicableFailure, GateFailed, Passed or BelowThreshold, then Scored. The publish base is the highest Published or Retired version.
+  - `@memberjunction/rubrics`: LLM, agent, deterministic, and human evaluators. Actions are Evaluate Record Against Rubric, Get Rubric, Get Rubric Subject, Get Rubric Consensus, Create Rubric Draft, and Submit Human Rubric. Create Rubric Draft and the architect import do not publish. The evaluation agent does not call Get Rubric Consensus.
+  - Presentational widgets in `@memberjunction/ng-rubrics`, Explorer forms, and a Rubrics application. The agent form has a Rubrics tab.
+  - Six guide-example rubrics stay Draft. Seven agent rubrics publish at 1.0.0 and bind to their agents. Marketing Agent is not bound. Shipped self-check links and the sampling job stay Disabled. A test that already has an `llm-judge` oracle keeps it.
+  - Testing: rubric resolution, a `rubric` oracle, judge calibration, per-criterion spread on `--flaky-check`, `mj rubric`, and `mj test promote-criteria`. `Test.RubricID` and `TestSuite.RubricID` select a rubric. `TestSuiteRun.Score` is stored.
+  - The deterministic integration bundle is IT98 at sequence 49.
+
+  `GeneratePluralName` keeps the head of a name verbatim and pluralizes only the tail, preserving that tail's case. A linear scan finds the tail, so `user_profile` and `userProfile` no longer produce the same view name, a leading character such as Ä stays on the head, and `Contact Person` pluralizes to `Contact People`. The base view for a criterion is `vwRubricCriteria`.
+
+### Patch Changes
+
+- 72d8a40: Add the `decision-judge` oracle, which scores a test's criteria as Likelihood questions to a typed decision model in one call, and reports each criterion's probability, a weighted score and a configurable pass threshold. It reads the same criteria and trace as the `llm-judge` oracle, so the two can run side by side. Like the `llm-judge`, it reports its call's cost as `llmCost` in the result details; neither judge's cost is added to the test run's `CostUSD`.
+
+  Both judges now read criteria through one parser. The `llm-judge` accepts weighted criteria (`{ "criterion": "...", "weight": 2 }`) and sends their text, and it fails with a clear message, without calling the model, when a criterion is malformed.
+
+  Both judges now bound each model call with the oracle config's `timeoutMS`, two minutes by default, so a hung judge call fails the oracle instead of hanging the test. Before this the `llm-judge` call had no timeout.
+
+- f3c6161: Conversation routing acts on calibrated probabilities (plan Task 2.4). `ApplyPlattCalibration` and `PlattCalibration` in `@memberjunction/ai` map a decision model's raw probability to a calibrated one. Routing calibrates the thread Likelihood only for the exact model each fit was made on (`ROUTING_CONTINUES_CALIBRATION`: Jev at `typesafe/jev-1.13-20260917`, and LLM Decision when GPT-OSS-120B answered, fitted by the Phase 2 Decision Eval), and treats any other model's answer as unsure. `FindDecisionCalibration` in `@memberjunction/ai-core-plus` looks a calibration up by the decision model and the model behind it, for any consumer that calibrates. The `RunDecision` mutation and `GraphQLAIClient.RunDecision` return that model as `resolvedModel` / `ResolvedModel`. Routing waits 350 ms instead of 250 ms, which covers about 95% of Jev's answers in-process. The Decision Eval records production's routing verdict with the model that answered and the policy it was reached under, and its scorecard scores that verdict end to end, per run.
+- 50ba290: Sage's agent-discovery decision now judges its answers calibrated per decision model, at a threshold set from the agent-discovery Decision Eval: `DECISION_DISCOVERY_MIN_CONFIDENCE` is 0.85, and `DECISION_DISCOVERY_CALIBRATION` holds the fitted Platt parameters for Jev and LLM Decision. Each calibration applies only to the exact model it was fitted on, through `FindDecisionCalibration` (`@memberjunction/ai-core-plus`): Jev at its pinned `typesafe/jev-1.13-20260917`, and LLM Decision only when its GPT-OSS-120B chat model answered. An answer from a model with no calibration is treated as unsure, and discovery warns once per such model. The Decision Eval records whether production would inject through the same calibrated path.
+- ffb3c0f: The Decision Eval harness can now measure Sage's agent-discovery decision (`agent-discovery`), beside a `semantic-search` baseline of what `Find Candidate Agents` ranked first, with a labelled-corpus generator and discovery metrics in the scorecard. `@memberjunction/ai-agents` now exports the discovery helpers, including `BuildDecisionDiscoveryOptionSet`, which `BaseAgent` and the harness both use to build the options. The discovery eval times the whole discovery, options and semantic search included, as production's 1,500 ms timeout does, and counts an answer that arrives later as not injected.
+- Updated dependencies [ca853fc]
+- Updated dependencies [f555162]
+- Updated dependencies [043f418]
+- Updated dependencies [e97d95c]
+- Updated dependencies [ff3097d]
+- Updated dependencies [79279f2]
+- Updated dependencies [3fbda62]
+- Updated dependencies [eaa9455]
+- Updated dependencies [ff00d60]
+- Updated dependencies [2552b1e]
+- Updated dependencies [660ef45]
+- Updated dependencies [8fd1c46]
+- Updated dependencies [21f9e15]
+- Updated dependencies [28fdf22]
+- Updated dependencies [4248fb3]
+- Updated dependencies [672b4c6]
+- Updated dependencies [f3c6161]
+- Updated dependencies [0e5ad68]
+- Updated dependencies [01fafc6]
+- Updated dependencies [35ffb95]
+- Updated dependencies [5148534]
+- Updated dependencies [50ba290]
+- Updated dependencies [ffb3c0f]
+- Updated dependencies [0adaf76]
+- Updated dependencies [ce1a5c3]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [b03a928]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [0d61b53]
+- Updated dependencies [26c0178]
+- Updated dependencies [594f2e0]
+- Updated dependencies [861cbf0]
+- Updated dependencies [705ab4e]
+- Updated dependencies [e51ce8a]
+- Updated dependencies [96daca8]
+- Updated dependencies [aa912ca]
+- Updated dependencies [f3fa01e]
+- Updated dependencies [3276daa]
+- Updated dependencies [d0cea53]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [14e2a3a]
+- Updated dependencies [5986939]
+- Updated dependencies [200e634]
+- Updated dependencies [4d647e6]
+- Updated dependencies [7bcba8c]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [bb33c77]
+- Updated dependencies [369e229]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [2854a2e]
+  - @memberjunction/ai-agents@6.2.0-edge.2
+  - @memberjunction/ai-core-plus@6.2.0-edge.2
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/ai@6.2.0-edge.2
+  - @memberjunction/ai-prompts@6.2.0-edge.2
+  - @memberjunction/aiengine@6.2.0-edge.2
+  - @memberjunction/core-entities@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+  - @memberjunction/rubrics@6.2.0-edge.2
+  - @memberjunction/rubrics-base@6.2.0-edge.2
+  - @memberjunction/testing-engine-base@6.2.0-edge.2
+
+## 6.2.0-edge.1
+
+### Patch Changes
+
+- 80905a1: Rename public class members and exported functions to PascalCase, per MJ's naming convention,
+  **without breaking a single consumer**.
+
+  Every renamed symbol keeps its old name beside the new one as a `@deprecated` stub that forwards to
+  it — a delegating method or function, a getter/setter pair for a property, and for Angular a
+  readable accessor pair for an `@Input` and a second `@Output` sharing the same `EventEmitter`, so a
+  template still binding the old name keeps receiving events. Old names still compile, still resolve,
+  and still behave identically; the deprecation tag rides through to the published `.d.ts`, so editors
+  point callers at the replacement. Where a package re-exports through an explicit `export { … }`
+  list, the new name is added alongside the old, so the correct name is actually on the public surface
+  rather than merely declared.
+
+  The rename is deliberately refused wherever a mechanical stub would not be equivalent, because
+  several of those shapes change a type contract while still compiling in the package that declares
+  them:
+  - an **optional** property or parameter property — TypeScript has no optional accessor, so a stub
+    would promote `foo?` to a required member and break every object literal that omits it;
+  - a class that is a **data shape** (no methods, or `@ObjectType`/`@InputType`) — object literals are
+    assigned to it, and an accessor stub changes what they must supply;
+  - a property whose **subclass redeclares it**, since TypeScript forbids a property overriding an
+    accessor (TS2610);
+  - a name whose PascalCase form is **already bound** in that file or class;
+  - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
+    overload sets and abstract members.
+
+  **One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+  backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+  the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+  `EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+  `copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+  field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+  fields silently. Same-version deployments, which is the supported configuration, see no change.
+
+  Each package was verified against its own pre-change baseline rather than against zero, because
+  several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
+  with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
+  `@Input` alias passed `tsc` while breaking six template reads.
+
+- Updated dependencies [ddcd666]
+- Updated dependencies [a50948e]
+- Updated dependencies [0eeb89d]
+- Updated dependencies [15a4333]
+- Updated dependencies [a3539d2]
+- Updated dependencies [41274aa]
+- Updated dependencies [5da3ad2]
+- Updated dependencies [67f6c85]
+- Updated dependencies [eb3a8d3]
+- Updated dependencies [e1dd673]
+- Updated dependencies [9b8a84e]
+- Updated dependencies [c261eb8]
+- Updated dependencies [307da67]
+- Updated dependencies [7110019]
+- Updated dependencies [a7da50b]
+- Updated dependencies [1d43161]
+- Updated dependencies [7110019]
+- Updated dependencies [f2a4171]
+- Updated dependencies [e482249]
+- Updated dependencies [37e2f6b]
+- Updated dependencies [17cc774]
+- Updated dependencies [80905a1]
+- Updated dependencies [6b08ebf]
+- Updated dependencies [c4993f3]
+  - @memberjunction/aiengine@6.2.0-edge.1
+  - @memberjunction/ai@6.2.0-edge.1
+  - @memberjunction/core-entities@6.2.0-edge.1
+  - @memberjunction/ai-agents@6.2.0-edge.1
+  - @memberjunction/ai-core-plus@6.2.0-edge.1
+  - @memberjunction/ai-prompts@6.2.0-edge.1
+  - @memberjunction/core@6.2.0-edge.1
+  - @memberjunction/global@6.2.0-edge.1
+  - @memberjunction/testing-engine-base@6.2.0-edge.1
+
+## 6.2.0-edge.0
+
+### Minor Changes
+
+- d122a41: DOM-grounded selection and replay scripts for Computer Use tests.
+
+  A Computer Use test currently pays full vision-model price on every run, re-deriving
+  the same sequence of clicks against a build that changed nothing it touches. This makes
+  the first passing run _compile_ a replay script that later runs _execute_ through the
+  same browser adapter — no screenshots, no model calls — with the model returning only
+  when replay stops working, which is exactly when a fresh derivation is worth paying for.
+
+  **DOM selection.** Element grounding hands the model an indexed list of the page's
+  interactive elements (role, accessible name, selector) so it acts by index instead of by
+  coordinate; a recorded target is then the element the model actually chose rather than
+  where its bounding box happened to be. `resolveActionLocator` narrows an ambiguous
+  selector to a single locator before acting — preferring visible matches, then the
+  smallest by area, which for a `:has-text()` ancestor chain is the element the model
+  meant. A multi-match is a guaranteed strict-mode throw today (and worse than a lost
+  click: the page does not change, so the loop detector ends the run as `LoopDetected`), so
+  disambiguating cannot regress any action that currently works.
+
+  **Replay.** Each step carries a multi-signal locator (selector primary; role + name as
+  the heal fallback), a fail-fast precondition, and a postcondition that confirms the step
+  advanced the page the way the recording did. Scripts are keyed by build hash, app
+  version, and goal hash: an exact build match replays with no healing expected, any
+  mismatch replays with healing, and a changed goal falls back to the model. Variable
+  _values_ are never stored — recording tokenizes them to `%name%` and replay substitutes
+  fresh values — so a script holds no credentials and stays valid when the values change.
+  A replayed run is scored by deterministic goal postconditions distilled from the passing
+  run, not by a model verdict, which is what keeps the tier free.
+
+  **Storage.** Scripts live in the test row, at `Configuration.ReplayScript` on
+  `MJ: Tests`. That column already exists, so there is **no migration** — this registers
+  JSONType metadata on it (`ITestConfiguration`, alongside the ~20 JSONType columns already
+  registered this way) and CodeGen emits a typed `ConfigurationObject` accessor. Reads are
+  free because the TestingEngine already caches the entity. `ITestConfiguration` declares
+  only framework-level properties over an index signature, so each driver's own
+  configuration passes through untouched and a future framework option is an interface edit
+  rather than a migration. The script shape necessarily exists twice — once as
+  `ComputerUseTrace`, once as the JSONType, because CodeGen emits the definition into
+  `core-entities`, which sits below the engine package. `__tests__/script-store.test-d.ts`
+  holds the two field-for-field with vitest `expectTypeOf`, checked by tsc through
+  `typecheck` in `vitest.config.ts` — the same idiom as the related-record-collection type
+  tests in `core-entities`. The assertions were confirmed to fail on injected drift rather
+  than assumed to work, since that precedent's own typecheck program was once empty and
+  every assertion passing for free.
+
+  **Fallback and review.** A diverged replay falls back to the model within the same
+  attempt. The re-derived script does not take effect on its own: it lands in
+  `PendingReplayScript` and replay keeps using the promoted `ReplayScript` until someone
+  runs `mj test scripts`, sees what changed, and promotes it — so a UI change can never
+  rewrite the suite unnoticed. The listing separates routine selector churn from a moved
+  target, verb, or URL. A test's first script skips the gate, having no baseline to be
+  diffed against. Until a pending script is promoted, the affected tests fall back on
+  every run: they stay green and pay full model price, which is the cost of not letting
+  the suite rewrite itself. The fallback restarts clean rather than inheriting
+  the failed replay's memo, and a replay is never re-recorded (that would launder healed
+  selectors into storage without re-deriving them). A test can refuse the pathway with
+  `Configuration.AllowLLMFallback: false`, which makes a divergence the result instead —
+  the right setting wherever a silent re-derivation would paper over the regression the
+  test exists to catch. Defaults to `true`.
+
+  Also adds `tier` and `ReplayTelemetry` (healed/diverged counts) to the testing-framework
+  result types, so drift is visible per attempt and survives a green fallback. Design doc:
+  `plans/regression-testing/dom-selection-and-replay-design.md`.
+
+  **MetadataSync — JSON sub-property externalization.** `pull.externalizeFields` accepted
+  entity fields only, so it could move a whole column into a side file but not a single
+  property inside a JSON column. An entry may now be a dotted path (`Configuration.ReplayScript`),
+  which externalizes that leaf and leaves an `@file:` reference in its place; push already
+  resolves nested references, so there is no push-side change. A property the record does not
+  carry is skipped entirely, and a whole-field config wins over its dotted paths. Pull's
+  existing-file discovery moved to `lib/existing-record-files.ts`.
+
+  **MJExplorer — a readiness beacon for automation.** The shell publishes `data-mj-ready="true"`
+  on `<html>` when the active route's resource has finished loading, so a browser-driven suite
+  can poll a fact instead of comparing screenshot hashes. The attribute is inert — nothing in
+  the product reads it and no styling keys off it — and it is published from the `loading`
+  accessor so all ~22 assignment sites stay correct.
+
+  **Prompt model change.** The Computer Use controller and judge prompts in core `metadata/prompts`
+  move from `Gemini 3.1 Flash-Lite` to `Gemini 3.6 Flash` and gain `Temperature`/`Seed` for
+  determinism. This applies to every instance that syncs `metadata/`, not only the regression suite.
+
+### Patch Changes
+
+- Updated dependencies [abf8778]
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [b518dfa]
+- Updated dependencies [37891d3]
+- Updated dependencies [6ad6434]
+- Updated dependencies [7be1684]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [d122a41]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [683f652]
+- Updated dependencies [e3db74f]
+- Updated dependencies [a8be410]
+- Updated dependencies [b87e4ac]
+- Updated dependencies [d665a6e]
+- Updated dependencies [f48dffc]
+- Updated dependencies [630bb88]
+- Updated dependencies [7658d68]
+- Updated dependencies [44faf83]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [575bfae]
+- Updated dependencies [a17a228]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [104125c]
+- Updated dependencies [5513c2a]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [e962151]
+- Updated dependencies [2c590b0]
+- Updated dependencies [fc3da91]
+  - @memberjunction/ai-agents@6.2.0-edge.0
+  - @memberjunction/ai@6.2.0-edge.0
+  - @memberjunction/aiengine@6.2.0-edge.0
+  - @memberjunction/core-entities@6.2.0-edge.0
+  - @memberjunction/ai-prompts@6.2.0-edge.0
+  - @memberjunction/ai-core-plus@6.2.0-edge.0
+  - @memberjunction/core@6.2.0-edge.0
+  - @memberjunction/testing-engine-base@6.2.0-edge.0
+  - @memberjunction/global@6.2.0-edge.0
+
 ## 6.1.0
 
 ### Minor Changes

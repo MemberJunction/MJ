@@ -7,6 +7,7 @@ import { SharedDashboardWidgetsModule } from './shared/shared-dashboard-widgets.
 import { ActionsDashboardsModule } from './actions-dashboards.module';
 import { TestingDashboardsModule } from './testing-dashboards.module';
 import { SchedulingDashboardsModule } from './scheduling-dashboards.module';
+import { RubricsDashboardsModule } from './rubrics-dashboards.module';
 import { CommunicationDashboardsModule } from './communication-dashboards.module';
 import { CredentialsDashboardsModule } from './credentials-dashboards.module';
 import { DataExplorerDashboardsModule } from './data-explorer-dashboards.module';
@@ -48,6 +49,7 @@ import { NgTreesModule } from '@memberjunction/ng-trees';
     ActionsDashboardsModule,
     TestingDashboardsModule,
     SchedulingDashboardsModule,
+    RubricsDashboardsModule,
     CommunicationDashboardsModule,
     CredentialsDashboardsModule,
     DataExplorerDashboardsModule,
@@ -79,6 +81,7 @@ import { NgTreesModule } from '@memberjunction/ng-trees';
     ActionsDashboardsModule,
     TestingDashboardsModule,
     SchedulingDashboardsModule,
+    RubricsDashboardsModule,
     CommunicationDashboardsModule,
     CredentialsDashboardsModule,
     DataExplorerDashboardsModule,

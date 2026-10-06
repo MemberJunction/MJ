@@ -25,6 +25,8 @@ import { ConcurrentChecks } from '../checks/concurrent.checks';
 import { AgentRunnerChecks } from '../checks/agent-runner.checks';
 import { RemoteOpAiAuthoringChecks } from '../checks/remote-op-ai-authoring.checks';
 import { ConversationCompactionChecks } from '../checks/conversation-compaction.checks';
+import { TrailingRuntimeStateChecks } from '../checks/trailing-runtime-state.checks';
+import { AgentDecisionsSwitchChecks } from '../checks/agent-decisions-switch.checks';
 import { ListsChecks } from '../checks/lists.checks';
 import { OpenAppTeardownChecks } from '../checks/open-app-teardown.checks';
 import { UserRoutinesChecks } from '../checks/user-routines.checks';
@@ -47,10 +49,14 @@ import { AppBehavioralChecks } from '../checks/app-behavioral.checks';
 import { ContentVectorizationChecks } from '../checks/content-vectorization.checks';
 import { MaterializedReadChecks } from '../checks/materialized-read.checks';
 import { MaterializedEntityReadChecks } from '../checks/materialized-entity-read.checks';
+import { FormContributionsChecks } from '../checks/form-contributions.checks';
 import { ScopedAnonElevationChecks } from '../checks/scoped-anon-elevation.checks';
 import { EntityGraphChecks } from '../checks/entity-graph.checks';
 import { EntityEmbeddedChecks } from '../checks/entity-embedded.checks';
 import { EntityGraphClientChecks } from '../checks/entity-graph-client.checks';
+import { JSONTypeLiveSyncChecks, JSONTypeLiveSyncClientChecks } from '../checks/jsontype-live-sync.checks';
+import { RecordCloningChecks } from '../checks/record-cloning.checks';
+import { BinaryFieldsChecks } from '../checks/binary-fields.checks';
 import { TaskGraphOrchestrationChecks } from '../checks/task-graph-orchestration.checks';
 import { EntityActionChecks } from '../checks/entity-actions.checks';
 import { FlsEnforcementChecks } from '../checks/fls-enforcement.checks';
@@ -130,8 +136,10 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['lists', ListsChecks, 3],
         ['open-app-teardown', OpenAppTeardownChecks, 2],
         ['user-routines', UserRoutinesChecks, 16],
-        ['work-queue-runtime', WorkQueueRuntimeChecks, 19], // WR1-WR19 host, RunOnce, partitions, cancel, operators, sweeper, REST (IT95)
+        ['work-queue-runtime', WorkQueueRuntimeChecks, 19], // WR1-WR19 host, RunOnce, partitions, cancel, operators, sweeper, REST (IT105)
         ['conversation-compaction', ConversationCompactionChecks, 18], // CC1-CC18
+        ['trailing-runtime-state', TrailingRuntimeStateChecks, 6], // TRS1-TRS6
+        ['agent-decisions-switch', AgentDecisionsSwitchChecks, 9], // DS1-DS9 the decisionsEnabled master switch, scripted chat and decision drivers (IT97)
         ['agent-loop-live', AgentLoopLiveChecks, 7],
         ['shipped-agents-live', ShippedAgentsLiveChecks, 4],
         ['agent-carry-forward', AgentCarryForwardChecks, 6],
@@ -147,13 +155,16 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['view-security', ViewSecurityChecks, 4], // two-identity V14/V15/V16 + RV17 (IT64)
         ['ai-providers', AiProvidersChecks, 3], // AI7/AI13/AI15 model-resolution seams (IT65)
         ['app-behavioral', AppBehavioralChecks, 3], // S4/S6/S8 Application behaviors (IT66)
-        ['content-vectorization', ContentVectorizationChecks, 8], // CV1-CV8 content vectorization pipeline (IT67)
+        ['content-vectorization', ContentVectorizationChecks, 10], // CV1-CV10 content vectorization pipeline (IT67)
         ['materialized-read', MaterializedReadChecks, 3], // MR1-MR2 served-from-snapshot proof + MR3 delete-path FK cleanup (IT79)
         ['materialized-entity-read', MaterializedEntityReadChecks, 2], // EMR1-EMR2 entity base-view RunView redirect (IT78)
-        ['scoped-anon-elevation', ScopedAnonElevationChecks, 5], // SA1-SA5 scoped-anonymous elevation permission contract (IT68)
+        ['form-contributions', FormContributionsChecks, 17], // FC1-FC17 metadata form contributions: schema, actions, clamp, kill switch, scoping, section claims, component guard (IT104)
+        ['scoped-anon-elevation', ScopedAnonElevationChecks, 6], // SA1-SA6 scoped-anonymous elevation permission contract (IT68)
         ['entity-graph', EntityGraphChecks, 11], // EG1-EG8 related-record collection graph saves (IT72)
         ['entity-embedded', EntityEmbeddedChecks, 6], // EE1-EE6 owner-held embedded records
         ['entity-graph-client', EntityGraphClientChecks, 9], // EGC1-EGC9 graph saves over the GraphQL wire (IT73)
+        ['jsontype-live-sync', JSONTypeLiveSyncChecks, 9], // JL1-JL9 live JSONType accessor round trip, server tier (IT95)
+        ['jsontype-live-sync-client', JSONTypeLiveSyncClientChecks, 9], // JL1-JL9 same, GraphQL wire (IT100)
         ['task-graph-orchestration', TaskGraphOrchestrationChecks, 18], // TG1-TG18 submission, validation and trigger bindings (IT71)
         // TX1-TX27, the dispatcher actually running graphs (IT74). TX8-TX11 landed with Round 1
         // (#3745), TX12-TX17 with Round 2, TX18-TX26 with Round 3, and TX27 with the two-instance exercise. TX14 arrived in a substituted
@@ -162,10 +173,12 @@ describe('migrated bundles (coverage-loss guard)', () => {
         // move of this count has been deliberate, which is what the guard is for.
         ['task-graph-execution', TaskGraphExecutionChecks, 27],
         ['entity-actions', EntityActionChecks, 8], // EA1-EA8 the entity-action substrate end to end (IT75)
-        ['fls-enforcement', FlsEnforcementChecks, 23], // FLS1-FLS23 field-level security against a live DB (IT90); FLS22/FLS23 cover the Record Changes payload projection, FLS21 measures metadata-refresh cost
+        ['fls-enforcement', FlsEnforcementChecks, 24], // FLS1-FLS24 field-level security against a live DB (IT90); FLS22/FLS23 cover the Record Changes payload projection, FLS24 record names, FLS21 measures metadata-refresh cost
         ['fls-lifecycle', FlsLifecycleChecks, 9], // LC1-LC9 FLS lifecycle + system-user guards, mutation tier (IT91)
         ['fls-enforcement-client', FlsClientChecks, 6], // FC1-FC6 FLS over the wire via per-user API keys (IT92)
-        ['metadata-sync-push', MetadataSyncPushChecks, 8], // MSP1-MSP8 sync push atomicity, incl. server-derived child rows, mutation tier (IT94)
+        ['metadata-sync-push', MetadataSyncPushChecks, 10], // MSP1-MSP10 sync push atomicity, in-transaction metadata reload, and one row-level security filter, mutation tier (IT94)
+        ['record-cloning', RecordCloningChecks, 13], // RC1-RC9 plan §13.2 + RC10-RC13 real-database dry runs, client transport (IT96)
+        ['binary-fields', BinaryFieldsChecks, 6], // BF1-BF6 binary fields end to end + binary vector columns, client transport (IT101)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
@@ -213,13 +226,14 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     // not fail the build. When you add/remove a check DELIBERATELY, update the count here;
     // the failure message prints a paste-ready copy of the actual registry state.
     const EXPECTED_BUNDLE_COUNTS: Record<string, number> = {
-        'actions-pipeline': 5,
+        'actions-pipeline': 6,
         'agent-artifact-tools': 9,
         'agent-carry-forward': 6,
         'agent-compaction-e2e': 3,
+        'agent-decisions-switch': 9,
         'agent-external-harness': 7,
         'agent-loop-live': 7,
-        'agent-loop-standin': 6,
+        'agent-loop-standin': 11,
         'prompt-eval-harness': 7,
         'agent-memory-guards': 5,
         'agent-note-cache-types': 3,
@@ -230,7 +244,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'agent-skills-live': 5,
         'agent-wire-callback': 2,
         'aggregates-cache': 3,
-        'ai-cost': 7,
+        'ai-cost': 10,
         'ai-embeddings': 5,
         'ai-permissions': 6,
         'ai-providers': 3,
@@ -239,6 +253,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'app-behavioral': 3,
         'app-wiring': 10,
         'auth-validation': 7,
+        'binary-fields': 6,
         'cache-gauntlet': 8,
         'cache-immutability': 15,
         'class-resolution': 5,
@@ -246,33 +261,38 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'codegen-determinism': 6,
         'communication': 5,
         'concurrent': 2,
-        'content-vectorization': 8,
+        'content-vectorization': 10,
         'conversation-compaction': 18,
+        'trailing-runtime-state': 6,
         'dataset-cache': 3,
         'entity-actions': 8,
         'entity-embedded': 6,
         'entity-graph': 11,
         'entity-graph-client': 9,
+        'jsontype-live-sync': 9,
+        'jsontype-live-sync-client': 9,
         'entity-server-invariants': 9,
         'entity-writes': 9,
         'field-rules-bulk-update': 3,
-        'fls-enforcement': 23,
+        'fls-enforcement': 24,
         'fls-enforcement-client': 6,
         'fls-lifecycle': 9,
+        'form-contributions': 17,
         'layered-base-views': 6,
         'lists': 3,
         'materialized-entity-read': 2,
         'materialized-read': 3,
         'metadata-consistency': 7,
         'metadata-sync': 9,
-        'metadata-sync-push': 8,
+        'metadata-sync-push': 10,
         'nested-transactions': 11,
         'open-app-teardown': 2,
-        'permission-engine': 14,
+        'permission-engine': 15,
         'predictive-studio': 5,
         'prompt-runner': 1,
         'queue': 7,
-        'realtime-deterministic': 9,
+        'realtime-deterministic': 12,
+        'record-cloning': 13,
         'record-process': 12,
         'record-process-facade': 2,
         'remote-op-ai-authoring': 3,
@@ -284,13 +304,16 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'runquery-catalog': 6,
         'runquery-features': 16,
         'runquery-params': 10,
+        'runquery-rendering': 13,
+        'runquery-rendering-client': 10,
         'runview-features': 6,
         'role-elevation': 6,
+        'rubrics': 15,
         'runview-matrix': 19,
         'scheduled-jobs': 2,
         'scheduling-concurrency': 3,
         'scope-enforcement': 5,
-        'scoped-anon-elevation': 5,
+        'scoped-anon-elevation': 6,
         'search': 7,
         'server-cache': 32,
         'shipped-agents-live': 4,
@@ -331,7 +354,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(95);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(105);
     });
 });
 
@@ -372,6 +395,8 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'actions-pipeline.AP2',
         'app-behavioral.AB1',
         'app-behavioral.AB2',
+        'binary-fields.BF4',
+        'binary-fields.BF6',
         'cache-gauntlet.CG1',
         'cache-gauntlet.CG2',
         'cache-gauntlet.CG3',
@@ -383,6 +408,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'cache-immutability.F12',
         'client-cache.C10',
         'content-vectorization.CV1',
+        'content-vectorization.CV10',
         'content-vectorization.CV2',
         'content-vectorization.CV3',
         'content-vectorization.CV4',
@@ -390,6 +416,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'content-vectorization.CV6',
         'content-vectorization.CV7',
         'content-vectorization.CV8',
+        'content-vectorization.CV9',
         'entity-actions.EA1',
         'entity-actions.EA2',
         'entity-actions.EA3',
@@ -439,7 +466,26 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'fls-lifecycle.LC7',
         'fls-lifecycle.LC8',
         'fls-lifecycle.LC9',
+        'jsontype-live-sync-client.JL1',
+        'jsontype-live-sync-client.JL2',
+        'jsontype-live-sync-client.JL3',
+        'jsontype-live-sync-client.JL4',
+        'jsontype-live-sync-client.JL5',
+        'jsontype-live-sync-client.JL6',
+        'jsontype-live-sync-client.JL7',
+        'jsontype-live-sync-client.JL8',
+        'jsontype-live-sync-client.JL9',
+        'jsontype-live-sync.JL1',
+        'jsontype-live-sync.JL2',
+        'jsontype-live-sync.JL3',
+        'jsontype-live-sync.JL4',
+        'jsontype-live-sync.JL5',
+        'jsontype-live-sync.JL6',
+        'jsontype-live-sync.JL7',
+        'jsontype-live-sync.JL8',
+        'jsontype-live-sync.JL9',
         'metadata-sync-push.MSP1',
+        'metadata-sync-push.MSP10',
         'metadata-sync-push.MSP2',
         'metadata-sync-push.MSP3',
         'metadata-sync-push.MSP4',
@@ -447,6 +493,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'metadata-sync-push.MSP6',
         'metadata-sync-push.MSP7',
         'metadata-sync-push.MSP8',
+        'metadata-sync-push.MSP9',
         'nested-transactions.NT1',
         'nested-transactions.NT10',
         'nested-transactions.NT2',
@@ -461,7 +508,21 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'permission-engine.PE11',
         'permission-engine.PE12',
         'permission-engine.PE13',
+        'record-cloning.RC1',
+        'record-cloning.RC2',
+        'record-cloning.RC4',
+        'record-cloning.RC5',
+        'record-cloning.RC6',
+        'record-cloning.RC7',
+        'record-cloning.RC8',
+        'record-cloning.RC9',
         'role-elevation.RE6',
+        'rubrics.R13',
+        'rubrics.R14',
+        'rubrics.R7',
+        'rubrics.R8',
+        'rubrics.R9',
+        'rubrics.W1',
         'server-cache.S17',
         'server-cache.S23',
         'server-cache.S24',

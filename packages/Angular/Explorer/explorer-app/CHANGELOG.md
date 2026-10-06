@@ -1,5 +1,241 @@
 # @memberjunction/ng-explorer-app
 
+## 6.2.0-edge.2
+
+### Patch Changes
+
+- Updated dependencies [f555162]
+- Updated dependencies [043f418]
+- Updated dependencies [e97d95c]
+- Updated dependencies [2552b1e]
+- Updated dependencies [5114c10]
+- Updated dependencies [21f9e15]
+- Updated dependencies [75d4e8c]
+- Updated dependencies [a3d6182]
+- Updated dependencies [28fdf22]
+- Updated dependencies [4248fb3]
+- Updated dependencies [f3c6161]
+- Updated dependencies [0adaf76]
+- Updated dependencies [513e608]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [ea4080e]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [26c0178]
+- Updated dependencies [594f2e0]
+- Updated dependencies [705ab4e]
+- Updated dependencies [96daca8]
+- Updated dependencies [aa912ca]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [5986939]
+- Updated dependencies [4d647e6]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [369e229]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [2854a2e]
+- Updated dependencies [8766e99]
+  - @memberjunction/ai-core-plus@6.2.0-edge.2
+  - @memberjunction/ng-conversations@6.2.0-edge.2
+  - @memberjunction/ng-explorer-core@6.2.0-edge.2
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/core-entities@6.2.0-edge.2
+  - @memberjunction/ng-bootstrap@6.2.0-edge.2
+  - @memberjunction/ng-workspace-initializer@6.2.0-edge.2
+  - @memberjunction/ng-shared@6.2.0-edge.2
+  - @memberjunction/ai-agent-client@6.2.0-edge.2
+  - @memberjunction/ng-auth-services@6.2.0-edge.2
+  - @memberjunction/ng-base-application@6.2.0-edge.2
+  - @memberjunction/ng-base-types@6.2.0-edge.2
+  - @memberjunction/ng-feedback@6.2.0-edge.2
+  - @memberjunction/ng-notifications@6.2.0-edge.2
+  - @memberjunction/ng-agent-client@6.2.0-edge.2
+  - @memberjunction/ng-explorer-service-worker@6.2.0-edge.2
+
+## 6.2.0-edge.1
+
+### Patch Changes
+
+- 80905a1: Rename public class members and exported functions to PascalCase, per MJ's naming convention,
+  **without breaking a single consumer**.
+
+  Every renamed symbol keeps its old name beside the new one as a `@deprecated` stub that forwards to
+  it — a delegating method or function, a getter/setter pair for a property, and for Angular a
+  readable accessor pair for an `@Input` and a second `@Output` sharing the same `EventEmitter`, so a
+  template still binding the old name keeps receiving events. Old names still compile, still resolve,
+  and still behave identically; the deprecation tag rides through to the published `.d.ts`, so editors
+  point callers at the replacement. Where a package re-exports through an explicit `export { … }`
+  list, the new name is added alongside the old, so the correct name is actually on the public surface
+  rather than merely declared.
+
+  The rename is deliberately refused wherever a mechanical stub would not be equivalent, because
+  several of those shapes change a type contract while still compiling in the package that declares
+  them:
+  - an **optional** property or parameter property — TypeScript has no optional accessor, so a stub
+    would promote `foo?` to a required member and break every object literal that omits it;
+  - a class that is a **data shape** (no methods, or `@ObjectType`/`@InputType`) — object literals are
+    assigned to it, and an accessor stub changes what they must supply;
+  - a property whose **subclass redeclares it**, since TypeScript forbids a property overriding an
+    accessor (TS2610);
+  - a name whose PascalCase form is **already bound** in that file or class;
+  - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
+    overload sets and abstract members.
+
+  **One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+  backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+  the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+  `EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+  `copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+  field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+  fields silently. Same-version deployments, which is the supported configuration, see no change.
+
+  Each package was verified against its own pre-change baseline rather than against zero, because
+  several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
+  with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
+  `@Input` alias passed `tsc` while breaking six template reads.
+
+- Updated dependencies [a50948e]
+- Updated dependencies [0eeb89d]
+- Updated dependencies [a3539d2]
+- Updated dependencies [41274aa]
+- Updated dependencies [67f6c85]
+- Updated dependencies [eb3a8d3]
+- Updated dependencies [e1dd673]
+- Updated dependencies [307da67]
+- Updated dependencies [f78fd63]
+- Updated dependencies [6aa41c7]
+- Updated dependencies [67f6c85]
+- Updated dependencies [a7da50b]
+- Updated dependencies [1d43161]
+- Updated dependencies [7110019]
+- Updated dependencies [17cc774]
+- Updated dependencies [80905a1]
+- Updated dependencies [8a26af6]
+- Updated dependencies [6b08ebf]
+- Updated dependencies [9845c00]
+- Updated dependencies [e2fa695]
+  - @memberjunction/core-entities@6.2.0-edge.1
+  - @memberjunction/ai-core-plus@6.2.0-edge.1
+  - @memberjunction/core@6.2.0-edge.1
+  - @memberjunction/ng-conversations@6.2.0-edge.1
+  - @memberjunction/ai-agent-client@6.2.0-edge.1
+  - @memberjunction/ng-explorer-core@6.2.0-edge.1
+  - @memberjunction/ng-auth-services@6.2.0-edge.1
+  - @memberjunction/ng-base-application@6.2.0-edge.1
+  - @memberjunction/ng-bootstrap@6.2.0-edge.1
+  - @memberjunction/ng-explorer-service-worker@6.2.0-edge.1
+  - @memberjunction/ng-feedback@6.2.0-edge.1
+  - @memberjunction/ng-notifications@6.2.0-edge.1
+  - @memberjunction/ng-shared@6.2.0-edge.1
+  - @memberjunction/ng-workspace-initializer@6.2.0-edge.1
+  - @memberjunction/ng-base-types@6.2.0-edge.1
+  - @memberjunction/ng-agent-client@6.2.0-edge.1
+
+## 6.2.0-edge.0
+
+### Patch Changes
+
+- e225ece: Login screen: a composable Explorer surface — theme it, rearrange it, extend it.
+
+  The sign-in page was the one Explorer surface a deployment could not adapt without forking the
+  component or writing CSS against its internal class names. It is now customized the same three
+  ways the rest of MJ is, each additive and each defaulting to today's rendering:
+  - **Tokens** — a `--mj-login-*` group covers the whole surface: `--mj-login-banner-bg` (the story
+    panel's background; the stock gradient is its default, so a theme can retarget just the
+    `--mj-login-grad-*` stops or replace the value outright), banner text and logo, the
+    editorial split, the panel surface, the picker width, and both card surfaces. Only the gradient
+    stops carry dark-mode values — everything else either references a semantic token that swaps on
+    its own or is theme-constant by design. Documented in THEMING.md.
+  - **Layout** — `LoginLayout`: `'split'` (stock), `'split-reverse'` (mirrored; DOM order unchanged,
+    so the story stays first for a screen reader), `'centered'` (one column: story on a full-bleed
+    banner background, sign-in options in a card on top). A layout moves regions; it never drops one.
+  - **Content** — `LoginHeading`, `LoginShowPoweredBy`, `LoginBannerAlignment`, `LoginBannerTitle`,
+    `LoginBannerSubtitle`, `LoginBannerLogoLabel`, and `LoginCards`: a `MJLoginCard[]` of tiles
+    (icon, title, text, optional sanitized link) each naming its region, so content a deployment
+    wants to add is configuration rather than markup.
+  - **Slots** — the `mjLoginSlot` directive (the shape of `mjChatSlot` in `ng-conversations`) projects
+    templates into `bannerContent` (replaces the brand block), `bannerFooter`, `panelHeader` and
+    `panelFooter`. Replace-vs-augment is stated per slot; a footer slot takes over from that region's
+    cards. `<mj-login-picker>` is deliberately not replaceable — a host surrounds sign-in, not owns it.
+
+  Also fixes a latent clipping bug this made easy to hit: the app shell sets
+  `html, body { overflow: hidden }`, so login content taller than the viewport was unreachable — which
+  already affected a tenant with many identity providers on a short screen. Both columns now scroll
+  their own content and centre with auto margins rather than `justify-content: center`, which would
+  strand the overflow above the scroll origin.
+
+  Review follow-ups: the card's focus ring took `border-radius: inherit`, which resolves to `0` on a
+  pseudo-element (the property is not inherited, and `inherit` takes from the originating anchor
+  rather than the positioned card), so it drew square around a rounded tile; the login screen gains
+  the repo's first `@media (forced-colors: active)` block, since Windows High Contrast substitutes
+  the card fill, border token and hover tint away and this is the one surface a user meets before
+  any other; and landscape phones are handled, where the width-only breakpoints left the sign-in
+  controls off the bottom of the screen.
+
+  The stacked layout's banner is now sized by its height rule rather than by a flex grow ratio. It
+  carried `flex: var(--mj-login-banner-flex, 1.05)`, whose shorthand sets flex-basis to `0%`, so
+  every `height` in the stacked breakpoints was dead — invisible until the sign-in column gained
+  `overflow-y: auto`, which dropped its automatic minimum size to zero and handed the layout to the
+  ratio. So THIS DOES CHANGE the stacked banner for an app that binds nothing: 183px to 92px at
+  844x390 and 277px to 196px at 820x560, in both cases returning the sign-in options to the screen.
+  Portrait is deliberately unchanged at 422px.
+
+  Two tokens are added alongside `--mj-login-panel-text` — `--mj-login-panel-text-secondary` and
+  `--mj-login-panel-text-muted` — so a themed panel carries the picker's whole text ramp instead of
+  only its body colour. Both default to the semantic tokens.
+
+  Apart from the stacked banner above, no behaviour or visual change for an app that binds nothing,
+  projects nothing and themes nothing.
+
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [37891d3]
+- Updated dependencies [6ad6434]
+- Updated dependencies [7be1684]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [d122a41]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [683f652]
+- Updated dependencies [a8be410]
+- Updated dependencies [b87e4ac]
+- Updated dependencies [d665a6e]
+- Updated dependencies [90eea38]
+- Updated dependencies [e225ece]
+- Updated dependencies [c157749]
+- Updated dependencies [f48dffc]
+- Updated dependencies [630bb88]
+- Updated dependencies [7658d68]
+- Updated dependencies [44faf83]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [575bfae]
+- Updated dependencies [a17a228]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [3977917]
+- Updated dependencies [d61b425]
+- Updated dependencies [104125c]
+- Updated dependencies [5513c2a]
+- Updated dependencies [f0db019]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [2c590b0]
+- Updated dependencies [fc3da91]
+  - @memberjunction/core-entities@6.2.0-edge.0
+  - @memberjunction/ai-core-plus@6.2.0-edge.0
+  - @memberjunction/ng-conversations@6.2.0-edge.0
+  - @memberjunction/core@6.2.0-edge.0
+  - @memberjunction/ng-explorer-core@6.2.0-edge.0
+  - @memberjunction/ng-auth-services@6.2.0-edge.0
+  - @memberjunction/ng-shared@6.2.0-edge.0
+  - @memberjunction/ng-bootstrap@6.2.0-edge.0
+  - @memberjunction/ng-base-application@6.2.0-edge.0
+  - @memberjunction/ng-workspace-initializer@6.2.0-edge.0
+  - @memberjunction/ng-base-types@6.2.0-edge.0
+  - @memberjunction/ng-notifications@6.2.0-edge.0
+  - @memberjunction/ai-agent-client@6.2.0-edge.0
+  - @memberjunction/ng-feedback@6.2.0-edge.0
+  - @memberjunction/ng-agent-client@6.2.0-edge.0
+  - @memberjunction/ng-explorer-service-worker@6.2.0-edge.0
+
 ## 6.1.0
 
 ### Minor Changes

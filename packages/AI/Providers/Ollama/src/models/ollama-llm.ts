@@ -45,8 +45,13 @@ export class OllamaLLM extends BaseLLM {
     /**
      * Read only getter method to get the Ollama client instance
      */
-    public get client(): Ollama {
+    public get Client(): Ollama {
         return this.OllamaClient;
+    }
+
+    /** @deprecated Use {@link Client}. */
+    public get client(): Ollama {
+        return this.Client;
     }
     
     /**
@@ -646,7 +651,7 @@ export class OllamaLLM extends BaseLLM {
      * Generate endpoint implementation for Ollama (alternative to chat)
      * This can be useful for simple completion tasks
      */
-    public async generate(params: {
+    public async Generate(params: {
         model: string;
         prompt: string;
         temperature?: number;
@@ -672,36 +677,62 @@ export class OllamaLLM extends BaseLLM {
 
         // Handle TypeScript overload by explicitly typing based on stream value
         if (params.stream) {
-            return await this.client.generate({ ...generateRequest, stream: true } as GenerateRequest & { stream: true });
+            return await this.Client.generate({ ...generateRequest, stream: true } as GenerateRequest & { stream: true });
         } else {
-            return await this.client.generate({ ...generateRequest, stream: false } as GenerateRequest & { stream: false });
+            return await this.Client.generate({ ...generateRequest, stream: false } as GenerateRequest & { stream: false });
         }
+    }
+
+    /** @deprecated Use {@link Generate}. */
+    public async generate(params: {
+        model: string;
+        prompt: string;
+        temperature?: number;
+        maxOutputTokens?: number;
+        stream?: boolean;
+    }): Promise<any> {
+        return this.Generate(params);
     }
 
     /**
      * List available models in Ollama
      */
+    public async ListModels(): Promise<any> {
+        return await this.Client.list();
+    }
+
+    /** @deprecated Use {@link ListModels}. */
     public async listModels(): Promise<any> {
-        return await this.client.list();
+        return this.ListModels();
     }
 
     /**
      * Pull a model from Ollama registry
      */
+    public async PullModel(modelName: string): Promise<void> {
+        await this.Client.pull({ model: modelName, stream: false });
+    }
+
+    /** @deprecated Use {@link PullModel}. */
     public async pullModel(modelName: string): Promise<void> {
-        await this.client.pull({ model: modelName, stream: false });
+        return this.PullModel(modelName);
     }
 
     /**
      * Check if a model is available locally
      */
-    public async isModelAvailable(modelName: string): Promise<boolean> {
+    public async IsModelAvailable(modelName: string): Promise<boolean> {
         try {
-            const models = await this.listModels();
+            const models = await this.ListModels();
             return models.models.some((m: any) => m.name === modelName || m.name.startsWith(modelName + ':'));
         } catch {
             return false;
         }
+    }
+
+    /** @deprecated Use {@link IsModelAvailable}. */
+    public async isModelAvailable(modelName: string): Promise<boolean> {
+        return this.IsModelAvailable(modelName);
     }
 
     public async SummarizeText(_params: SummarizeParams): Promise<SummarizeResult> {

@@ -46,7 +46,7 @@ import { CreateShareNotification, ShareNotificationInput } from './shareNotifica
  * }
  * ```
  */
-export function checkShareManagePermission(
+export function CheckShareManagePermission(
     user: UserInfo,
     grantorUserId: string | null | undefined,
     additional?: (userId: string) => boolean
@@ -54,6 +54,15 @@ export function checkShareManagePermission(
     if (grantorUserId && UUIDsEqual(grantorUserId, user.ID)) return true;
     if (additional && additional(user.ID)) return true;
     return false;
+}
+
+/** @deprecated Use {@link CheckShareManagePermission}. */
+export function checkShareManagePermission(
+    user: UserInfo,
+    grantorUserId: string | null | undefined,
+    additional?: (userId: string) => boolean
+): boolean {
+    return CheckShareManagePermission(user, grantorUserId, additional);
 }
 
 /**
@@ -78,7 +87,7 @@ export function checkShareManagePermission(
  *  - fire-and-forget via `void CreateShareNotification(...)` — notification
  *    failures never fail the save.
  */
-export async function dispatchShareNotificationAfterSave(
+export async function DispatchShareNotificationAfterSave(
     entity: BaseEntity,
     isNewShare: boolean,
     grantorUserId: string | null | undefined,
@@ -99,17 +108,32 @@ export async function dispatchShareNotificationAfterSave(
     }
 }
 
+/** @deprecated Use {@link DispatchShareNotificationAfterSave}. */
+export async function dispatchShareNotificationAfterSave(
+    entity: BaseEntity,
+    isNewShare: boolean,
+    grantorUserId: string | null | undefined,
+    payloadBuilder: (provider: IMetadataProvider, grantorId: string) => Promise<ShareNotificationInput | null> | ShareNotificationInput | null
+): Promise<void> {
+    return DispatchShareNotificationAfterSave(entity, isNewShare, grantorUserId, payloadBuilder);
+}
+
 /**
  * Turn `{ view: this.CanRead, edit: this.CanEdit, … }` into `"view, edit"`.
  * Truthy verbs are emitted in declaration order. Replaces the hand-rolled
  * `actionsSummary()` method each sharing entity used to carry.
  */
-export function buildActionsSummary(flags: Record<string, boolean | null | undefined>): string {
+export function BuildActionsSummary(flags: Record<string, boolean | null | undefined>): string {
     const parts: string[] = [];
     for (const [label, enabled] of Object.entries(flags)) {
         if (enabled) parts.push(label);
     }
     return parts.join(', ');
+}
+
+/** @deprecated Use {@link BuildActionsSummary}. */
+export function buildActionsSummary(flags: Record<string, boolean | null | undefined>): string {
+    return BuildActionsSummary(flags);
 }
 
 /**
@@ -139,7 +163,7 @@ export function buildActionsSummary(flags: Record<string, boolean | null | undef
  *  - provider is not the Database provider (client-side save, already trusted)
  *  - `entity.ContextCurrentUser` is missing (defer to downstream auth layers)
  */
-export function assertCallerMayCreateShare(
+export function AssertCallerMayCreateShare(
     entity: BaseEntity,
     isNewShare: boolean,
     authorized: () => boolean | Promise<boolean>,
@@ -156,6 +180,16 @@ export function assertCallerMayCreateShare(
         return result.then((ok) => ok || failSave(entity, user, reason));
     }
     return result || failSave(entity, user, reason);
+}
+
+/** @deprecated Use {@link AssertCallerMayCreateShare}. */
+export function assertCallerMayCreateShare(
+    entity: BaseEntity,
+    isNewShare: boolean,
+    authorized: () => boolean | Promise<boolean>,
+    reason: string = 'Only the resource owner or someone with Share permission can create this share.'
+): Promise<boolean> | boolean {
+    return AssertCallerMayCreateShare(entity, isNewShare, authorized, reason);
 }
 
 /**

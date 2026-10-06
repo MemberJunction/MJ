@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/work-queue-azure",
   "type": "module",
-  "version": "6.1.0",
+  "version": "6.2.0-edge.2",
   "description": "MemberJunction: Azure Service Bus transport and Azure Functions adapter for the durable work queue. No MemberJunction runtime dependencies.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -34,7 +34,7 @@
   "dependencies": {
     "@azure/identity": "^4.13.3",
     "@azure/service-bus": "^7.9.5",
-    "@memberjunction/work-queue-core": "6.1.0",
+    "@memberjunction/work-queue-core": "6.2.0-edge.2",
     "long": "^5.2.0"
   },
   "devDependencies": {

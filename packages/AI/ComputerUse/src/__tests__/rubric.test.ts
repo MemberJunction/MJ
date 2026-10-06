@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { evaluateRubric, CriterionVerdict } from '../judge/rubric.js';
+import { EvaluateRubric, CriterionVerdict } from '../judge/rubric.js';
 
 function c(criterion: string, met: boolean): CriterionVerdict {
     return { criterion, met, evidence: '' };
@@ -7,31 +7,31 @@ function c(criterion: string, met: boolean): CriterionVerdict {
 
 describe('evaluateRubric', () => {
     it('is Done only when every criterion is met', () => {
-        const r = evaluateRubric([c('a', true), c('b', true), c('c', true)]);
+        const r = EvaluateRubric([c('a', true), c('b', true), c('c', true)]);
         expect(r.done).toBe(true);
-        expect(r.coverage).toBe(1);
-        expect(r.metCount).toBe(3);
-        expect(r.unmet).toEqual([]);
+        expect(r.Coverage).toBe(1);
+        expect(r.MetCount).toBe(3);
+        expect(r.Unmet).toEqual([]);
     });
 
     it('is not Done when any criterion is unmet, and reports coverage + unmet list', () => {
-        const r = evaluateRubric([c('a', true), c('b', false), c('c', true)]);
+        const r = EvaluateRubric([c('a', true), c('b', false), c('c', true)]);
         expect(r.done).toBe(false);
-        expect(r.coverage).toBeCloseTo(2 / 3);
-        expect(r.metCount).toBe(2);
-        expect(r.unmet).toEqual(['b']);
+        expect(r.Coverage).toBeCloseTo(2 / 3);
+        expect(r.MetCount).toBe(2);
+        expect(r.Unmet).toEqual(['b']);
     });
 
     it('coverage is 0 when nothing is met', () => {
-        const r = evaluateRubric([c('a', false), c('b', false)]);
+        const r = EvaluateRubric([c('a', false), c('b', false)]);
         expect(r.done).toBe(false);
-        expect(r.coverage).toBe(0);
+        expect(r.Coverage).toBe(0);
     });
 
     it('signals an empty rubric distinctly (caller falls back to scalar verdict)', () => {
-        const r = evaluateRubric([]);
-        expect(r.total).toBe(0);
+        const r = EvaluateRubric([]);
+        expect(r.Total).toBe(0);
         expect(r.done).toBe(false);
-        expect(r.coverage).toBe(0);
+        expect(r.Coverage).toBe(0);
     });
 });

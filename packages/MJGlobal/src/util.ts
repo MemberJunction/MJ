@@ -748,7 +748,7 @@ export interface EntityNamingOptions {
  * @param s - The database identifier to convert
  * @param options - Optional naming configuration. When omitted, ALL CAPS normalization and compound splitting are enabled by default.
  */
-export function createDisplayName(s: string, options?: EntityNamingOptions): string {
+export function CreateDisplayName(s: string, options?: EntityNamingOptions): string {
     const normalizeAllCaps = options?.normalizeAllCaps ?? true;
     const splitCompoundWords = options?.splitCompoundWords ?? true;
 
@@ -767,7 +767,12 @@ export function createDisplayName(s: string, options?: EntityNamingOptions): str
         // Entire string is ALL CAPS with no delimiters
         s = normalizeAllCapsWord(s, splitCompoundWords, options?.additionalDomainWords);
     }
-    return convertCamelCaseToHaveSpaces(s);
+    return ConvertCamelCaseToHaveSpaces(s);
+}
+
+/** @deprecated Use {@link CreateDisplayName}. */
+export function createDisplayName(s: string, options?: EntityNamingOptions): string {
+  return CreateDisplayName(s, options);
 }
 
 /**
@@ -1085,7 +1090,7 @@ const __builtInDictionaryWords = [
 * "DatabaseVersion" -> "Database Version"
 * "AIAgentLearningCycle" -> "AI Agent Learning Cycle"
 */
-export function convertCamelCaseToHaveSpaces(s: string): string {
+export function ConvertCamelCaseToHaveSpaces(s: string): string {
     let result = '';
     for (let i = 0; i < s.length; ++i) {
        if (
@@ -1099,6 +1104,11 @@ export function convertCamelCaseToHaveSpaces(s: string): string {
        result += s[i];
     }
     return result;
+}
+
+/** @deprecated Use {@link ConvertCamelCaseToHaveSpaces}. */
+export function convertCamelCaseToHaveSpaces(s: string): string {
+  return ConvertCamelCaseToHaveSpaces(s);
 }
 
 
@@ -1115,12 +1125,17 @@ export function convertCamelCaseToHaveSpaces(s: string): string {
  * stripWhitespace(""); // ""
  * ```
  */
-export function stripWhitespace(s: string): string {
+export function StripWhitespace(s: string): string {
     if (!s) {
         // Return the original string if it is null, undefined, or empty
         return s;
     }
     return s.replace(/\s+/g, ''); // Use \s+ for efficiency in case of consecutive whitespace
+}
+
+/** @deprecated Use {@link StripWhitespace}. */
+export function stripWhitespace(s: string): string {
+  return StripWhitespace(s);
 }
 
 
@@ -1204,8 +1219,13 @@ const __irregularPlurals: Record<string, string> = {
  * getIrregularPlural('dog'); // returns null
  * ```
  */
-export function getIrregularPlural(singularName: string): string | null {
+export function GetIrregularPlural(singularName: string): string | null {
     return __irregularPlurals[singularName.toLowerCase()] || null;
+}
+
+/** @deprecated Use {@link GetIrregularPlural}. */
+export function getIrregularPlural(singularName: string): string | null {
+  return GetIrregularPlural(singularName);
 }
 
 /**
@@ -1246,39 +1266,108 @@ function getSingularForm(word: string): string | null {
 
 
 /**
- * Converts a singular word to its plural form, handling common pluralization rules 
- * and irregular plurals.
- * 
- * @param singularName - The singular form of the word to pluralize.
- * @returns The plural form of the word.
- * 
+ * Converts a singular name to its plural form. The head of the name is kept
+ * verbatim, including the separator that ends it, and only the tail is pluralized.
+ * The tail keeps its own case. A linear scan finds the tail: the last space,
+ * underscore, or hyphen, or else the last Unicode capital that starts a word.
+ * A regex over ASCII letters is not used, because it drops a leading character
+ * such as Ä and it erases the underscore that distinguishes user_profile from
+ * userProfile.
+ *
+ * @param singularName - The singular form of the name to pluralize.
+ * @returns The plural form of the name.
+ *
  * @example
  * ```typescript
- * generatePluralName('child'); // returns 'children'
- * generatePluralName('box'); // returns 'boxes'
- * generatePluralName('party'); // returns 'parties'
- * generatePluralName('dog'); // returns 'dogs'
+ * GeneratePluralName('child'); // returns 'children'
+ * GeneratePluralName('box'); // returns 'boxes'
+ * GeneratePluralName('party'); // returns 'parties'
+ * GeneratePluralName('dog'); // returns 'dogs'
+ * GeneratePluralName('Contact Person'); // returns 'Contact People'
+ * GeneratePluralName('user_profile', { capitalizeFirstLetterOnly: true }); // returns 'user_Profiles'
  * ```
  */
-export function generatePluralName(singularName: string, options? : { capitalizeFirstLetterOnly?: boolean, capitalizeEntireWord?: boolean }): string {
+export function GeneratePluralName(singularName: string, options? : { capitalizeFirstLetterOnly?: boolean, capitalizeEntireWord?: boolean }): string {
+    const name = singularName.trim();
+    if (name.length === 0) return name;
+    const { head, tail } = splitPluralTail(name);
+    if (tail.length === 0) {
+        return options?.capitalizeEntireWord ? name.toUpperCase() : name;
+    }
+    // capitalizeEntireWord applies to the whole name, not only the tail.
+    const tailOptions = options?.capitalizeEntireWord
+        ? { ...options, capitalizeEntireWord: false }
+        : options;
+    const joined = head + pluralizeOneWord(tail, tailOptions);
+    return options?.capitalizeEntireWord ? joined.toUpperCase() : joined;
+}
+
+function isUnicodeLetter(ch: string): boolean {
+    return ch.toLowerCase() !== ch.toUpperCase();
+}
+
+function isUnicodeUpper(ch: string): boolean {
+    return isUnicodeLetter(ch) && ch === ch.toUpperCase();
+}
+
+function isUnicodeLower(ch: string): boolean {
+    return isUnicodeLetter(ch) && ch === ch.toLowerCase();
+}
+
+/**
+ * Head is everything through the last separator, kept verbatim. With no
+ * separator, the tail starts at the last capital that begins a new word
+ * (a capital after a lowercase letter, or a capital whose next letter is
+ * lowercase, so an acronym stays on the head).
+ */
+function splitPluralTail(name: string): { head: string; tail: string } {
+    for (let i = name.length - 1; i >= 0; i--) {
+        const ch = name[i];
+        if (ch === ' ' || ch === '_' || ch === '-' || ch === '\t') {
+            return { head: name.slice(0, i + 1), tail: name.slice(i + 1) };
+        }
+    }
+    let tailStart = 0;
+    for (let i = 1; i < name.length; i++) {
+        const current = name[i];
+        if (!isUnicodeUpper(current)) continue;
+        const next = i + 1 < name.length ? name[i + 1] : '';
+        if (isUnicodeLower(name[i - 1]) || isUnicodeLower(next)) tailStart = i;
+    }
+    if (tailStart > 0) return { head: name.slice(0, tailStart), tail: name.slice(tailStart) };
+    return { head: '', tail: name };
+}
+
+function matchTailCase(source: string, pluralLower: string): string {
+    const letters = [...source].filter(isUnicodeLetter);
+    if (letters.length > 0 && letters.every(isUnicodeUpper)) return pluralLower.toUpperCase();
+    const first = source.charAt(0);
+    if (first && isUnicodeUpper(first)) {
+        return pluralLower.charAt(0).toUpperCase() + pluralLower.slice(1);
+    }
+    return pluralLower;
+}
+
+function pluralizeOneWord(singularName: string, options? : { capitalizeFirstLetterOnly?: boolean, capitalizeEntireWord?: boolean }): string {
     // Check if it's already plural
     const detectedSingular = getSingularForm(singularName);
     if (!detectedSingular) {
         // if we did NOT find a singular, assume it is already plural
-        return adjustCasing(singularName, options); 
+        return AdjustCasing(singularName, options); 
     }
     else if (detectedSingular.trim().toLowerCase() !== singularName.trim().toLowerCase()) {
         // here we did detect a singular form. Check to see if it is DIFFERENT from
         // the provided value. Because we're supposed to be provided a singular to this
         // function if we are given a plural - like Customers - we want to just throw it back
         // but if we were passed a true singular, then we keep on going
-        return adjustCasing(singularName, options);
+        return AdjustCasing(singularName, options);
     }
 
-    // Check for irregular plurals
-    const irregularPlural = getIrregularPlural(singularName);
+    // The irregular map stores lowercase values. Restore the tail's case so
+    // "Person" becomes "People" and "PERSON" becomes "PEOPLE".
+    const irregularPlural = GetIrregularPlural(singularName);
     if (irregularPlural) {
-        return adjustCasing(irregularPlural, options);
+        return AdjustCasing(matchTailCase(singularName, irregularPlural), options);
     }
 
     // Handle common pluralization rules
@@ -1286,20 +1375,25 @@ export function generatePluralName(singularName: string, options? : { capitalize
         const secondLastChar = singularName[singularName.length - 2].toLowerCase();
         if ('aeiou'.includes(secondLastChar)) {
             // Ends with a vowel + y, just add 's'
-            return adjustCasing(singularName + 's', options);
+            return AdjustCasing(singularName + 's', options);
         } else {
             // Ends with a consonant + y, replace 'y' with 'ies'
-            return adjustCasing(singularName.slice(0, -1) + 'ies', options);
+            return AdjustCasing(singularName.slice(0, -1) + 'ies', options);
         }
     }
 
     if (/(s|ch|sh|x|z)$/.test(singularName)) {
         // Ends with 's', 'ch', 'sh', 'x', or 'z', add 'es'
-        return adjustCasing(singularName + 'es', options);
+        return AdjustCasing(singularName + 'es', options);
     }
 
     // Default case: Add 's' to the singular name
-    return adjustCasing(singularName + 's', options);
+    return AdjustCasing(singularName + 's', options);
+}
+
+/** @deprecated Use {@link GeneratePluralName}. */
+export function generatePluralName(singularName: string, options? : { capitalizeFirstLetterOnly?: boolean, capitalizeEntireWord?: boolean }): string {
+  return GeneratePluralName(singularName, options);
 }
 
 /**
@@ -1310,7 +1404,7 @@ export function generatePluralName(singularName: string, options? : { capitalize
  * @param options 
  * @returns 
  */
-export function adjustCasing(word: string, options?: { 
+export function AdjustCasing(word: string, options?: { 
     capitalizeFirstLetterOnly?: boolean, 
     capitalizeEntireWord?: boolean
     forceRestOfWordLowerCase?: boolean }): string {
@@ -1338,6 +1432,14 @@ export function adjustCasing(word: string, options?: {
     }
 }
 
+/** @deprecated Use {@link AdjustCasing}. */
+export function adjustCasing(word: string, options?: { 
+    capitalizeFirstLetterOnly?: boolean, 
+    capitalizeEntireWord?: boolean
+    forceRestOfWordLowerCase?: boolean }): string {
+  return AdjustCasing(word, options);
+}
+
 
 
 /**
@@ -1356,7 +1458,7 @@ export function adjustCasing(word: string, options?: {
  * stripTrailingChars(".txt", ".txt", true);         // ".txt" (exact match, not stripped)
  * ```
  */
-export function stripTrailingChars(s: string, charsToStrip: string, skipIfExactMatch: boolean): string {
+export function StripTrailingChars(s: string, charsToStrip: string, skipIfExactMatch: boolean): string {
     if (!s || !charsToStrip) {
         // Return the original string if either input is empty
         return s;
@@ -1371,6 +1473,11 @@ export function stripTrailingChars(s: string, charsToStrip: string, skipIfExactM
     }
 
     return s;
+}
+
+/** @deprecated Use {@link StripTrailingChars}. */
+export function stripTrailingChars(s: string, charsToStrip: string, skipIfExactMatch: boolean): string {
+  return StripTrailingChars(s, charsToStrip, skipIfExactMatch);
 }
 
 
@@ -1389,7 +1496,7 @@ export function stripTrailingChars(s: string, charsToStrip: string, skipIfExactM
  * replaceAllSpaces("");                 // ""
  * ```
  */
-export function replaceAllSpaces(s: string): string {
+export function ReplaceAllSpaces(s: string): string {
     if (!s) {
         // Handle null, undefined, or empty string cases
         return s;
@@ -1397,11 +1504,16 @@ export function replaceAllSpaces(s: string): string {
 
     if (s.includes(' ')) {
         // Recursive case: Replace a single space and call the function again
-        return replaceAllSpaces(s.replace(' ', ''));
+        return ReplaceAllSpaces(s.replace(' ', ''));
     }
 
     // Base case: No spaces left to replace
     return s;
+}
+
+/** @deprecated Use {@link ReplaceAllSpaces}. */
+export function replaceAllSpaces(s: string): string {
+  return ReplaceAllSpaces(s);
 }
  
 
@@ -1409,8 +1521,13 @@ export function replaceAllSpaces(s: string): string {
  * Generates a version 4 UUID (Universally Unique Identifier) using the uuid library.
  * @returns the generated UUID as a string.
  */
-export function uuidv4(): string {
+export function Uuidv4(): string {
     return v4();
+}
+
+/** @deprecated Use {@link Uuidv4}. */
+export function uuidv4(): string {
+  return Uuidv4();
 }
 
 
@@ -1424,7 +1541,7 @@ export function uuidv4(): string {
  * @param str2 
  * @returns An array of strings representing the differences found between the two input strings. If array is empty, it means no differences were found.
  */
-export function compareStringsByLine(str1: string, str2: string, logToConsole: boolean = true): string[] {
+export function CompareStringsByLine(str1: string, str2: string, logToConsole: boolean = true): string[] {
     const lines1 = str1.split('\n');
     const lines2 = str2.split('\n');
     const maxLines = Math.max(lines1.length, lines2.length);
@@ -1468,6 +1585,11 @@ export function compareStringsByLine(str1: string, str2: string, logToConsole: b
         }
     }
     return returnArray;
+}
+
+/** @deprecated Use {@link CompareStringsByLine}. */
+export function compareStringsByLine(str1: string, str2: string, logToConsole: boolean = true): string[] {
+  return CompareStringsByLine(str1, str2, logToConsole);
 }
 
 
@@ -1723,7 +1845,7 @@ const WEAK_MARKDOWN_PATTERNS: readonly RegExp[] = [
  * @param maxScanLength - Leading characters to inspect. Defaults to {@link DEFAULT_RICH_TEXT_SCAN_LENGTH} (500).
  * @returns `'markdown'`, `'html'`, or `'plain'`.
  */
-export function detectRichTextFormat(
+export function DetectRichTextFormat(
     value: string | null | undefined,
     maxScanLength: number = DEFAULT_RICH_TEXT_SCAN_LENGTH
 ): RichTextFormat {
@@ -1740,6 +1862,14 @@ export function detectRichTextFormat(
     if (countHtmlTags(sample) >= 2) return 'html';
 
     return 'plain';
+}
+
+/** @deprecated Use {@link DetectRichTextFormat}. */
+export function detectRichTextFormat(
+    value: string | null | undefined,
+    maxScanLength: number = DEFAULT_RICH_TEXT_SCAN_LENGTH
+): RichTextFormat {
+  return DetectRichTextFormat(value, maxScanLength);
 }
 
 /** True when the sample shows a strong Markdown signal, or two or more weak signals. */
@@ -1955,8 +2085,13 @@ export function ToEpochMs(value: Date | string | number | null | undefined): num
  * users expect locale collation there. `localeCompare` without a locale argument follows the
  * process ICU default and is not reproducible across machines.
  */
-export function ordinalCompare(a: string | null | undefined, b: string | null | undefined): number {
+export function OrdinalCompare(a: string | null | undefined, b: string | null | undefined): number {
     const sa = a ?? '';
     const sb = b ?? '';
     return sa < sb ? -1 : sa > sb ? 1 : 0;
+}
+
+/** @deprecated Use {@link OrdinalCompare}. */
+export function ordinalCompare(a: string | null | undefined, b: string | null | undefined): number {
+  return OrdinalCompare(a, b);
 }

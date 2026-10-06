@@ -1,14 +1,14 @@
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 
 export interface ArtifactVersionRef {
-  artifactId: string;
-  versionNumber: number;
+  artifactId: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  versionNumber: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
   /**
    * When that version row was created. Used ONLY to order candidates against each other, never
    * compared against the client clock — the values come from one database, so their relative
    * order is meaningful even though the absolute offset from the browser's clock is not.
    */
-  versionCreatedAt?: Date | null;
+  versionCreatedAt?: Date | null;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
 /**
@@ -18,21 +18,21 @@ export interface ArtifactVersionRef {
  */
 export interface ArtifactPanelBaseline {
   /** artifactId → highest version, from {@link snapshotArtifactVersions}. */
-  versions: Map<string, number>;
+  Versions: Map<string, number>;
   /** The conversation on screen when the snapshot was taken. */
-  conversationId: string | null;
+  conversationId: string | null;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
   /** The conversation whose artifacts the map was actually holding, or null if none had loaded. */
-  mapConversationId: string | null;
+  MapConversationId: string | null;
   /** Paging-merge counter at snapshot time. */
-  mapGeneration: number;
+  MapGeneration: number;
   /** User-selection counter at snapshot time. */
-  selectionEpoch: number;
+  SelectionEpoch: number;
 }
 
 export type ArtifactPanelAction =
-  | { kind: 'none' }
-  | { kind: 'open'; artifactId: string; versionNumber: number }
-  | { kind: 'refresh'; artifactId: string; versionNumber: number };
+  | { kind: 'none' }  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  | { kind: 'open'; artifactId: string; versionNumber: number }  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  | { kind: 'refresh'; artifactId: string; versionNumber: number };  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 
 /** The highest version seen for one artifact, and when it landed. */
 interface LatestVersion {
@@ -52,13 +52,18 @@ interface LatestVersion {
  * Keys are NORMALIZED UUIDs, so lookups are case-insensitive by construction (SQL Server returns
  * upper case, PostgreSQL lower) at O(1) rather than by scanning every key for a `UUIDsEqual` hit.
  */
-export function snapshotArtifactVersions(refs: Iterable<ArtifactVersionRef>): Map<string, number> {
+export function SnapshotArtifactVersions(refs: Iterable<ArtifactVersionRef>): Map<string, number> {
   const latest = new Map<string, number>();
   for (const ref of refs) {
     const key = NormalizeUUID(ref.artifactId);
     latest.set(key, Math.max(latest.get(key) ?? 0, ref.versionNumber));
   }
   return latest;
+}
+
+/** @deprecated Use {@link SnapshotArtifactVersions}. */
+export function snapshotArtifactVersions(refs: Iterable<ArtifactVersionRef>): Map<string, number> {
+  return SnapshotArtifactVersions(refs);
 }
 
 /** Same reduction as {@link snapshotArtifactVersions}, keeping the timestamp for ordering. */
@@ -125,7 +130,7 @@ function bestCandidate(entries: Array<[string, LatestVersion]>): LatestVersion {
  * @param input.userChangedSelection - Defaults to false. True when the user picked or closed an
  *   artifact while the turn was in flight; the panel is then left where they put it.
  */
-export function decideArtifactPanelAction(input: {
+export function DecideArtifactPanelAction(input: {
   panelOpen: boolean;
   selectedArtifactId: string | null;
   before: Map<string, number>;
@@ -180,4 +185,16 @@ export function decideArtifactPanelAction(input: {
 
   const latest = bestCandidate(bumped);
   return { kind: 'open', artifactId: latest.artifactId, versionNumber: latest.versionNumber };
+}
+
+/** @deprecated Use {@link DecideArtifactPanelAction}. */
+export function decideArtifactPanelAction(input: {
+  panelOpen: boolean;
+  selectedArtifactId: string | null;
+  before: Map<string, number>;
+  after: ArtifactVersionRef[];
+  baselineComparable?: boolean;
+  userChangedSelection?: boolean;
+}): ArtifactPanelAction {
+  return DecideArtifactPanelAction(input);
 }

@@ -85,12 +85,23 @@ export interface RedisProviderConfig {
     defaultTTLSeconds?: number;
 
     /**
-     * Maximum number of connection retry attempts before giving up.
-     * Each retry uses exponential backoff (doubling delay up to 30 seconds).
+     * Caps reconnection attempts. Past the cap ioredis stops reconnecting for the life of the
+     * client, leaving the process cache-blind until it restarts.
      *
-     * @default 10
+     * Omit it on a long-running process. Set it only for a short-lived script that should fail
+     * rather than wait out an outage.
+     *
+     * @default undefined — retry indefinitely, with each wait capped by {@link maxRetryDelayMs}
      */
     maxRetries?: number;
+
+    /**
+     * Ceiling on the wait between reconnection attempts, in milliseconds. The backoff doubles from
+     * 200ms up to this value and then holds there, so a long outage costs one attempt per ceiling.
+     *
+     * @default 30000
+     */
+    maxRetryDelayMs?: number;
 
     /**
      * Whether to log connection events (connect, disconnect, error) via
@@ -120,6 +131,15 @@ export interface RedisProviderConfig {
  * @internal
  */
 const DEFAULT_CATEGORY = 'default';
+
+/**
+ * The categories a reconnect-flush clears.
+ *
+ * Mirrors `CacheCategory` from `@memberjunction/core` as literals rather than importing it, so the
+ * provider takes no value dependency on that module and a category added there cannot change
+ * recovery behaviour here without an edit to this list.
+ */
+const RECONCILED_CATEGORIES: readonly string[] = ['RunViewCache', 'RunQueryCache', 'DatasetCache', 'Metadata', 'default'];
 
 /**
  * Redis-backed implementation of the MemberJunction {@link ILocalStorageProvider} interface.
@@ -174,11 +194,54 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
      */
     public readonly SharesReferences = false;
 
+    /**
+     * `true` — that is the whole point of this provider: every server in the fleet reads what any
+     * other wrote. See {@link ILocalStorageProvider.SupportsCrossProcessPersistence}.
+     */
+    public readonly SupportsCrossProcessPersistence = true;
+
     private _client: Redis;
     private _keyPrefix: string;
     private _defaultTTLSeconds: number | undefined;
     private _enableLogging: boolean;
     private _connected: boolean = false;
+
+    /** Ceiling on the reconnect delay. See {@link RedisProviderConfig.maxRetryDelayMs}. */
+    private _maxRetryDelayMs: number;
+
+    /**
+     * Whether this client has ever been connected. Distinguishes a startup that has not reached
+     * Redis yet, where queueing a command is useful, from a connection that was lost, where
+     * {@link shouldFailFast} applies.
+     */
+    private _hasEverConnected: boolean = false;
+
+    /**
+     * The highest shared epoch this process has seen, from its own mutations and from events
+     * received. {@link reconcileAfterReconnect} compares it against the value in Redis to decide
+     * whether anything was invalidated during a connection gap.
+     */
+    private _lastSeenEpoch: number = 0;
+
+    /**
+     * Whether this process mutated shared state while disconnected, meaning other servers never
+     * received those invalidations. Set so {@link reconcileAfterReconnect} can bump the epoch on
+     * recovery and make them flush.
+     */
+    private _mutatedWhileDisconnected: boolean = false;
+
+    /** Guards against two overlapping reconciliations (client and subscriber both recover). */
+    private _reconciling: boolean = false;
+
+    /**
+     * Whether the loss of this connection has already been reported to consumers. Reports the loss
+     * once per outage — `close` fires on every failed reconnection attempt — and tells the `ready`
+     * handler that a recovery, rather than a first connection, is what it is seeing.
+     */
+    private _connectionLostEmitted: boolean = false;
+
+    /** As {@link _hasEverConnected}, for the subscriber connection. */
+    private _subscriberHasEverConnected: boolean = false;
 
     // Pub/sub fields
     private _enablePubSub: boolean;
@@ -186,6 +249,10 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
     private _pubSubChannel: string;
     private _eventEmitter: EventEmitter = new EventEmitter();
     private _subscriberConnected: boolean = false;
+    /** Fully-qualified channel name -> handlers registered via {@link SubscribeToChannel}. */
+    private _channelHandlers: Map<string, Set<(message: string) => void>> = new Map();
+    /** Fully-qualified channel name -> the subscribe still in flight, shared by concurrent callers. */
+    private _pendingChannelSubscribes: Map<string, Promise<Set<(message: string) => void>>> = new Map();
     private _config: RedisProviderConfig;
 
     /**
@@ -225,10 +292,11 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
         this._keyPrefix = config.keyPrefix ?? 'mj';
         this._defaultTTLSeconds = config.defaultTTLSeconds;
         this._enableLogging = config.enableLogging ?? true;
+        this._maxRetryDelayMs = config.maxRetryDelayMs ?? 30000;
         this._enablePubSub = config.enablePubSub ?? false;
         this._pubSubChannel = `${this._keyPrefix}:__pubsub__`;
 
-        const maxRetries = config.maxRetries ?? 10;
+        const maxRetries = config.maxRetries; // undefined = retry forever, with a capped delay
 
         if (config.url) {
             this._client = new Redis(config.url, {
@@ -260,17 +328,25 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
      * @returns Delay in milliseconds, or `null` to stop retrying
      * @internal
      */
-    private retryStrategy(times: number, maxRetries: number): number | null {
-        if (times > maxRetries) {
-            if (this._enableLogging) {
-                LogError(`Redis: max retries (${maxRetries}) exceeded, giving up`);
-            }
+    private retryStrategy(times: number, maxRetries: number | undefined): number | null {
+        // Returning null stops ioredis reconnecting for the life of the client, recoverable only by
+        // restarting the process, so only an explicit maxRetries gets that.
+        if (maxRetries !== undefined && times > maxRetries) {
+            // Error channel: status output is suppressed in production, and this is the one message
+            // that must reach a deployed log.
+            LogError(
+                `Redis: max retries (${maxRetries}) exceeded after ${times} attempts — giving up permanently. ` +
+                `This process is now cache-blind until it restarts. Omit maxRetries to retry forever with a capped delay.`
+            );
+            this.noteConnectionLost('retries exhausted');
             return null;
         }
-        // Exponential backoff: 200ms, 400ms, 800ms, ... capped at 30s
-        const delay = Math.min(times * 200, 30000);
+
+        // 200, 400, 800, 1600 … then held at maxRetryDelayMs.
+        const delay = Math.min(200 * Math.pow(2, times - 1), this._maxRetryDelayMs);
         if (this._enableLogging) {
-            LogStatus(`Redis: reconnecting in ${delay}ms (attempt ${times}/${maxRetries})`);
+            const ceiling = maxRetries === undefined ? 'no limit' : `${maxRetries}`;
+            LogStatus(`Redis: reconnecting in ${delay}ms (attempt ${times}, limit ${ceiling})`);
         }
         return delay;
     }
@@ -280,27 +356,58 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
      * lifecycle events (connect, ready, close, error, reconnecting).
      * @internal
      */
+    private handleClientConnect(): void {
+        this._connected = true;
+        if (this._enableLogging) {
+            LogStatus('Redis: connected');
+        }
+    }
+
+    /**
+     * On `ready` the client can serve commands again. A recovery is identified by
+     * {@link _connectionLostEmitted} rather than by inspecting `_connected`: ioredis emits `connect`
+     * before `ready`, so by this point `_connected` has already been set back to true and cannot
+     * distinguish a reconnect from a first connection.
+     *
+     * @internal
+     */
+    private handleClientReady(): void {
+        this._connected = true;
+        this._hasEverConnected = true;
+        if (this._enableLogging) {
+            LogStatus('Redis: ready to accept commands');
+        }
+        if (this._connectionLostEmitted) {
+            this._connectionLostEmitted = false;
+            this.emitConnectionRestored();
+        }
+    }
+
+    /**
+     * `close` fires once per failed reconnection attempt, not only on the first drop, so the loss is
+     * announced through {@link noteConnectionLost} and reported once per outage.
+     *
+     * @internal
+     */
+    private handleClientClose(): void {
+        this._connected = false;
+        if (this._enableLogging) {
+            LogStatus('Redis: connection closed');
+        }
+        if (this._hasEverConnected) {
+            this.noteConnectionLost('connection closed');
+        }
+    }
+
+    /**
+     * Registers event handlers on the ioredis client for logging connection
+     * lifecycle events (connect, ready, close, error, reconnecting).
+     * @internal
+     */
     private setupEventHandlers(): void {
-        this._client.on('connect', () => {
-            this._connected = true;
-            if (this._enableLogging) {
-                LogStatus('Redis: connected');
-            }
-        });
-
-        this._client.on('ready', () => {
-            this._connected = true;
-            if (this._enableLogging) {
-                LogStatus('Redis: ready to accept commands');
-            }
-        });
-
-        this._client.on('close', () => {
-            this._connected = false;
-            if (this._enableLogging) {
-                LogStatus('Redis: connection closed');
-            }
-        });
+        this._client.on('connect', () => this.handleClientConnect());
+        this._client.on('ready', () => this.handleClientReady());
+        this._client.on('close', () => this.handleClientClose());
 
         this._client.on('error', (err: Error) => {
             if (this._enableLogging) {
@@ -313,6 +420,151 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
                 LogStatus('Redis: reconnecting...');
             }
         });
+    }
+
+    /**
+     * Whether a command should fail immediately instead of being handed to ioredis.
+     *
+     * True once a connection has been established and then lost. The clients set
+     * `maxRetriesPerRequest: null` and leave ioredis's offline queue enabled, so a command issued
+     * while disconnected is queued and its promise never settles — over a long outage that is
+     * unbounded memory and indefinitely hanging awaits. Callers instead get a miss from a read and
+     * a no-op from a write, both of which are correct and only slower.
+     *
+     * False before the first connection, so a brief queue can still warm the cache at startup.
+     * Nothing is stale at that point because nothing is cached.
+     *
+     * @internal
+     */
+    private get shouldFailFast(): boolean {
+        return this._hasEverConnected && !this._connected;
+    }
+
+    /**
+     * Records the highest epoch this process has observed, from either direction — a mutation it
+     * published, or an event it received. Monotonic: a late-arriving lower value is ignored.
+     * @internal
+     */
+    private noteEpochSeen(epoch: number | undefined): void {
+        if (typeof epoch === 'number' && epoch > this._lastSeenEpoch) {
+            this._lastSeenEpoch = epoch;
+        }
+    }
+
+    /**
+     * Records that shared state changed while this process could not tell anyone.
+     *
+     * Reconciliation has to be symmetric. The obvious direction is what this process MISSED, and the
+     * epoch comparison covers that. This is the other direction: writes this process made that its
+     * siblings never heard, which leave *them* confidently stale. On recovery the epoch is bumped so
+     * they flush too.
+     * @internal
+     */
+    private noteMutationWhileDisconnected(): void {
+        this._mutatedWhileDisconnected = true;
+    }
+
+    /**
+     * Decides whether this process's caches are still trustworthy after a reconnect, and flushes
+     * them if not.
+     *
+     * ioredis resubscribes on its own, but pub/sub has no replay: invalidations published while this
+     * process was disconnected are gone, so the cache may hold entries other servers have already
+     * invalidated. One read of the shared epoch counter settles it:
+     *
+     * - unchanged — nothing was invalidated anywhere during the gap, so the cache is kept
+     * - advanced — something changed and this process cannot know what, so everything is dropped
+     * - this process mutated while disconnected — the epoch is bumped so siblings flush too, and
+     *   the cache is dropped here as well
+     *
+     * An epoch that cannot be read is treated as advanced: without evidence of correctness, flush.
+     *
+     * @internal
+     */
+    private async reconcileAfterReconnect(): Promise<void> {
+        if (!this._enablePubSub || this._reconciling) {
+            return; // no cross-server invalidation to reconcile, or already in progress
+        }
+        this._reconciling = true;
+        try {
+            const dirty = this._mutatedWhileDisconnected;
+            this._mutatedWhileDisconnected = false;
+
+            let current: number;
+            if (dirty) {
+                // Make siblings flush: our writes never reached them.
+                current = await this._client.incr(this.buildEpochKey());
+            } else {
+                const raw = await this._client.get(this.buildEpochKey());
+                current = raw === null ? 0 : Number(raw);
+                if (!Number.isFinite(current)) {
+                    throw new Error(`epoch key held a non-numeric value: ${JSON.stringify(raw)}`);
+                }
+            }
+
+            // Any DIFFERENCE means flush, not only an advance. A lower value is not "no change": the
+            // counter is gone — cleared, evicted under maxmemory, or a different instance — and what
+            // happened before that is unknowable. Inequality also bounds the damage a peer can do by
+            // publishing an absurd epoch, since a later real value differs from it and flushes.
+            const suspect = dirty || current !== this._lastSeenEpoch;
+            if (!suspect) {
+                if (this._enableLogging) {
+                    // Status, not the error channel: this is the routine outcome and says nothing
+                    // happened. Only the decisions that DROP a cache are worth an operator's log.
+                    LogStatus(
+                        `[Redis] reconciled after reconnect: epoch unchanged at ${current} — nothing was ` +
+                        `invalidated while this process was away, so the local cache is kept`
+                    );
+                }
+                return;
+            }
+
+            LogError(
+                `[Redis] reconciled after reconnect: epoch ${this._lastSeenEpoch} → ${current}` +
+                `${dirty ? ' (this process also mutated while disconnected, so siblings were told to flush)' : ''}` +
+                ` — dropping local cache`
+            );
+            this._lastSeenEpoch = current;
+            this.requestLocalFlush();
+        } catch (err) {
+            // Could not establish correctness; flush rather than trust.
+            LogError(`[Redis] reconciliation could not read the epoch (${(err as Error).message}) — flushing local cache to be safe`);
+            this.requestLocalFlush();
+        } finally {
+            this._reconciling = false;
+        }
+    }
+
+    /**
+     * Tells local consumers to drop everything they hold.
+     *
+     * Expressed as a `category_cleared` event per shared category rather than a new event type,
+     * because that action already means "assume nothing in this category is valid" and
+     * `LocalCacheManager.DispatchCacheChange` already fans it out to EVERY registered callback. A
+     * bespoke event would need every consumer taught about it; this one is understood today.
+     *
+     * `SourceServerId` is this process deliberately — the flush is local, and a sibling receiving it
+     * would filter it out as self-originated anyway since it is never published.
+     * @internal
+     */
+    private requestLocalFlush(): void {
+        for (const category of RECONCILED_CATEGORIES) {
+            const event: CacheChangedEvent = {
+                CacheKey: category,
+                Category: category,
+                Action: 'category_cleared',
+                Timestamp: Date.now(),
+                SourceServerId: MJGlobal.Instance.ProcessUUID,
+                Epoch: this._lastSeenEpoch,
+            };
+            this.safeEmit('cacheChanged', event);
+        }
+        this.safeEmit('reconciliationRequired');
+    }
+
+    /** The Redis key holding the fleet-wide invalidation counter. @internal */
+    private buildEpochKey(): string {
+        return `${this._keyPrefix}:__epoch__`;
     }
 
     /**
@@ -363,6 +615,9 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
      * ```
      */
     public async GetItem<T = unknown>(key: string, category?: string): Promise<T | null> {
+        if (this.shouldFailFast) {
+            return null; // a miss: the caller refetches from the source of truth
+        }
         try {
             const redisKey = this.buildKey(key, category ?? DEFAULT_CATEGORY);
             const raw = await this._client.get(redisKey);
@@ -400,6 +655,12 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
     public async GetItems<T = unknown>(keys: string[], category?: string): Promise<Map<string, T | null>> {
         const out = new Map<string, T | null>();
         if (keys.length === 0) return out;
+
+        if (this.shouldFailFast) {
+            // Every key a miss — same answer MGET would give for absent keys.
+            for (const k of keys) out.set(k, null);
+            return out;
+        }
 
         try {
             const cat = category ?? DEFAULT_CATEGORY;
@@ -469,6 +730,10 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
      * ```
      */
     public async SetItem<T>(key: string, value: T, category?: string, ttlSeconds?: number): Promise<void> {
+        if (this.shouldFailFast) {
+            this.noteMutationWhileDisconnected();
+            return;
+        }
         try {
             const cat = category ?? DEFAULT_CATEGORY;
             const redisKey = this.buildKey(key, cat);
@@ -523,6 +788,10 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
      * ```
      */
     public async Remove(key: string, category?: string): Promise<void> {
+        if (this.shouldFailFast) {
+            this.noteMutationWhileDisconnected();
+            return;
+        }
         try {
             const cat = category ?? DEFAULT_CATEGORY;
             const redisKey = this.buildKey(key, cat);
@@ -557,6 +826,10 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
      * ```
      */
     public async ClearCategory(category: string): Promise<void> {
+        if (this.shouldFailFast) {
+            this.noteMutationWhileDisconnected();
+            return;
+        }
         try {
             const cat = category || DEFAULT_CATEGORY;
             const categorySetKey = this.buildCategorySetKey(cat);
@@ -607,6 +880,9 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
      * ```
      */
     public async GetCategoryKeys(category: string): Promise<string[]> {
+        if (this.shouldFailFast) {
+            return []; // unknown rather than wrong: the caller treats it as nothing cached
+        }
         try {
             const cat = category || DEFAULT_CATEGORY;
             const categorySetKey = this.buildCategorySetKey(cat);
@@ -679,6 +955,7 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
 
         // Remove all event listeners
         this._eventEmitter.removeAllListeners();
+        this._channelHandlers.clear();
 
         try {
             await this._client.quit();
@@ -715,6 +992,9 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
      * ```
      */
     public async Exists(key: string, category?: string): Promise<boolean> {
+        if (this.shouldFailFast) {
+            return false; // nothing is reachable, so nothing is cached as far as the caller is concerned
+        }
         try {
             const redisKey = this.buildKey(key, category ?? DEFAULT_CATEGORY);
             const result = await this._client.exists(redisKey);
@@ -744,6 +1024,9 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
      * ```
      */
     public async GetTTL(key: string, category?: string): Promise<number | null> {
+        if (this.shouldFailFast) {
+            return null; // unknown, which is what the catch below reports for an unreachable server
+        }
         try {
             const redisKey = this.buildKey(key, category ?? DEFAULT_CATEGORY);
             return await this._client.ttl(redisKey);
@@ -827,10 +1110,11 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
         }
 
         this._subscriber.on('message', (channel: string, message: string) => {
-            if (channel !== this._pubSubChannel) {
+            if (channel === this._pubSubChannel) {
+                this.handlePubSubMessage(message);
                 return;
             }
-            this.handlePubSubMessage(message);
+            this.dispatchChannelMessage(channel, message);
         });
     }
 
@@ -839,7 +1123,7 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
      * @internal
      */
     private createSubscriberClient(): Redis {
-        const maxRetries = this._config.maxRetries ?? 10;
+        const maxRetries = this._config.maxRetries; // undefined = retry forever, with a capped delay
 
         if (this._config.url) {
             return new Redis(this._config.url, {
@@ -867,14 +1151,25 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
         if (!this._subscriber) return;
 
         this._subscriber.on('connect', () => {
+            const wasDown = this._subscriberHasEverConnected && !this._subscriberConnected;
             this._subscriberConnected = true;
+            this._subscriberHasEverConnected = true;
             if (this._enableLogging) {
                 LogStatus('Redis pub/sub subscriber: connected');
+            }
+            // Reconciliation hangs off the subscriber because that is the connection which misses
+            // invalidations. ioredis resubscribes, but cannot replay what it missed.
+            if (wasDown) {
+                void this.reconcileAfterReconnect();
             }
         });
 
         this._subscriber.on('close', () => {
+            const wasUp = this._subscriberConnected;
             this._subscriberConnected = false;
+            if (wasUp) {
+                LogError('[Redis] pub/sub subscriber disconnected — invalidations from other servers are not arriving');
+            }
         });
 
         this._subscriber.on('error', (err: Error) => {
@@ -892,6 +1187,10 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
     private handlePubSubMessage(message: string): void {
         try {
             const event: CacheChangedEvent = JSON.parse(message);
+
+            // Before the self-filter below: any event reaching this subscriber shows how far the
+            // shared counter has advanced, regardless of who published it.
+            this.noteEpochSeen(event.Epoch);
 
             // Skip events from this server instance
             if (event.SourceServerId === MJGlobal.Instance.ProcessUUID) {
@@ -941,17 +1240,136 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
             Data: data,
         };
 
-        // Publish fire-and-forget — don't await, don't block the caller
-        const payload = JSON.stringify(event);
-        this._client.publish(this._pubSubChannel, payload).then(() => {
+        // Bump the shared epoch, then publish carrying its new value. The counter lives here
+        // because every mutation already routes through this method. INCR has to precede PUBLISH so
+        // the payload can carry the result, which costs a second round trip — off the caller's path,
+        // since this method is fire-and-forget.
+        this._client.incr(this.buildEpochKey()).then((epoch) => {
+            this.noteEpochSeen(epoch);
+            event.Epoch = epoch;
+            return this._client.publish(this._pubSubChannel, JSON.stringify(event));
+        }).then(() => {
             if (this._enableLogging) {
                 LogStatus(`Redis pub/sub: published ${action} event for key "${cacheKey}" on channel "${this._pubSubChannel}"`);
             }
         }).catch((err) => {
+            // Nobody heard this change, so record it for reconcileAfterReconnect to bump the epoch
+            // on recovery and make the other servers flush.
+            this.noteMutationWhileDisconnected();
             if (this._enableLogging) {
                 LogError(`Redis pub/sub publish failed: ${(err as Error).message}`);
             }
         });
+    }
+
+    /**
+     * Publishes an arbitrary message on a named channel. Fire-and-forget: the promise is not
+     * awaited and a failure is logged rather than raised, so a caller on a hot path is never
+     * blocked or broken by the message bus.
+     *
+     * The channel is namespaced with the provider's key prefix, so several applications can share
+     * one Redis without hearing each other.
+     *
+     * @param channel Logical channel name (unprefixed).
+     * @param payload Message body. Serialize before calling — this layer is shape-agnostic.
+     */
+    public PublishMessage(channel: string, payload: string): void {
+        if (!this._enablePubSub) {
+            return;
+        }
+        const fullChannel = this.qualifyChannel(channel);
+        this._client.publish(fullChannel, payload).catch((err) => {
+            if (this._enableLogging) {
+                LogError(`Redis pub/sub publish failed on "${fullChannel}": ${(err as Error).message}`);
+            }
+        });
+    }
+
+    /**
+     * Registers a handler for messages on a named channel, starting the subscriber if needed.
+     *
+     * No echo suppression happens here — this layer does not know the payload shape. A publisher
+     * that needs it must stamp its own origin on the message and check it in the handler.
+     *
+     * @returns A function that removes this handler.
+     */
+    public async SubscribeToChannel(channel: string, handler: (message: string) => void): Promise<() => void> {
+        if (!this._enablePubSub) {
+            return () => undefined;
+        }
+
+        await this.StartListening();
+        const fullChannel = this.qualifyChannel(channel);
+
+        const handlers = await this.channelHandlersFor(fullChannel);
+        handlers.add(handler);
+
+        return () => {
+            handlers.delete(handler);
+        };
+    }
+
+    /**
+     * The handler set for a channel, subscribing first when no caller has yet.
+     *
+     * Callers that arrive while a subscribe is in flight wait on that same subscribe. Each one
+     * starting its own would publish its own handler set, and the last to finish would replace
+     * the others' sets, so their handlers would never receive a message.
+     */
+    private channelHandlersFor(fullChannel: string): Promise<Set<(message: string) => void>> {
+        const existing = this._channelHandlers.get(fullChannel);
+        if (existing) {
+            return Promise.resolve(existing);
+        }
+        const pending = this._pendingChannelSubscribes.get(fullChannel);
+        if (pending) {
+            return pending;
+        }
+        const subscribing = this.subscribeChannel(fullChannel).finally(() => {
+            this._pendingChannelSubscribes.delete(fullChannel);
+        });
+        this._pendingChannelSubscribes.set(fullChannel, subscribing);
+        return subscribing;
+    }
+
+    /**
+     * Subscribes to a channel and publishes its handler set.
+     *
+     * The set is registered only once the subscribe has succeeded. A map entry published ahead of
+     * the await would survive a rejection, and every later caller reads that entry as proof the
+     * channel is subscribed — registering handlers against a channel Redis is not listening on,
+     * with nothing surfaced.
+     */
+    private async subscribeChannel(fullChannel: string): Promise<Set<(message: string) => void>> {
+        await this._subscriber?.subscribe(fullChannel);
+        const handlers = new Set<(message: string) => void>();
+        this._channelHandlers.set(fullChannel, handlers);
+        if (this._enableLogging) {
+            LogStatus(`Redis pub/sub: subscribed to channel "${fullChannel}"`);
+        }
+        return handlers;
+    }
+
+    /** Routes an inbound message to the handlers registered for its channel. @internal */
+    private dispatchChannelMessage(channel: string, message: string): void {
+        const handlers = this._channelHandlers.get(channel);
+        if (!handlers) {
+            return;
+        }
+        for (const handler of handlers) {
+            try {
+                handler(message);
+            } catch (err) {
+                if (this._enableLogging) {
+                    LogError(`Redis pub/sub handler for "${channel}" threw: ${(err as Error).message}`);
+                }
+            }
+        }
+    }
+
+    /** Namespaces a channel with the provider's key prefix. @internal */
+    private qualifyChannel(channel: string): string {
+        return `${this._keyPrefix}:${channel}`;
     }
 
     /**
@@ -989,5 +1407,139 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
      */
     public get IsSubscriberConnected(): boolean {
         return this._subscriberConnected;
+    }
+
+    /**
+     * Registers a callback for the loss of the Redis connection.
+     *
+     * Fires on a transition only — not on the first connect, and not again while a reconnect is
+     * being retried. {@link IsConnected} reports the current state but not that it changed, so a
+     * consumer wanting to degrade or report health needs this rather than a poll.
+     *
+     * Use this in preference to reading the log: status-level logging is suppressed when
+     * `GetProductionStatus()` is true, so a deployed process says nothing when its cache client
+     * dies.
+     *
+     * @param callback - Invoked with a short human-readable reason for the loss
+     * @returns A function that removes this registration
+     *
+     * @example
+     * ```typescript
+     * const stop = provider.OnConnectionLost(reason => health.markCacheDown(reason));
+     * provider.OnConnectionRestored(() => health.markCacheUp());
+     * ```
+     */
+    public OnConnectionLost(callback: (reason: string) => void): () => void {
+        this._eventEmitter.on('connectionLost', callback);
+        return () => {
+            this._eventEmitter.off('connectionLost', callback);
+        };
+    }
+
+    /**
+     * Registers a callback for the Redis connection being restored after a loss. Not fired for the
+     * first connection.
+     *
+     * Cache correctness after the gap is handled by the provider itself; see
+     * {@link OnReconciliationRequired} for the signal that local state had to be dropped.
+     *
+     * @param callback - Invoked when the connection comes back
+     * @returns A function that removes this registration
+     */
+    public OnConnectionRestored(callback: () => void): () => void {
+        this._eventEmitter.on('connectionRestored', callback);
+        return () => {
+            this._eventEmitter.off('connectionRestored', callback);
+        };
+    }
+
+    /**
+     * Registers a callback for the provider having concluded, after a connection gap, that local
+     * cache state must be dropped.
+     *
+     * The standard categories are flushed by the provider itself via {@link OnCacheChanged}. Use
+     * this for state those categories do not describe — an in-process engine, a derived index, a
+     * memoized permission set — which would otherwise survive a reconnect while stale.
+     *
+     * Does not fire when nothing was invalidated anywhere during the gap.
+     *
+     * @param callback - Invoked when a flush is required
+     * @returns A function that removes this registration
+     */
+    public OnReconciliationRequired(callback: () => void): () => void {
+        this._eventEmitter.on('reconciliationRequired', callback);
+        return () => {
+            this._eventEmitter.off('reconciliationRequired', callback);
+        };
+    }
+
+    /**
+     * The highest fleet-wide epoch this process has observed. Exposed for diagnostics and for tests
+     * that need to assert what reconciliation decided; consumers should not need it.
+     */
+    public get LastSeenEpoch(): number {
+        return this._lastSeenEpoch;
+    }
+
+    /**
+     * Reports a lost connection once per outage.
+     *
+     * Both routes into this are repeatable: `close` fires on every failed reconnection attempt, and an
+     * exhausted retry ceiling arrives separately after one. Consumers get a single notification, and
+     * the next `ready` clears the latch so the following outage reports again.
+     *
+     * @internal
+     */
+    private noteConnectionLost(reason: string): void {
+        if (this._connectionLostEmitted) {
+            return;
+        }
+        this._connectionLostEmitted = true;
+        this.emitConnectionLost(reason);
+    }
+
+    /**
+     * Raises the public lost-connection event and logs it.
+     *
+     * Uses the error channel, and is not gated behind `enableLogging`: status-level output is
+     * suppressed in production and that flag is routinely turned off, either of which would leave a
+     * dead cache client silent.
+     *
+     * @internal
+     */
+    private emitConnectionLost(reason: string): void {
+        LogError(`[Redis] connection lost (${reason}) — cache reads will miss and writes will no-op until it returns`);
+        this.safeEmit('connectionLost', reason);
+    }
+
+    /**
+     * Raises the public restored-connection event and logs it, on the error channel for the same
+     * reason as the loss — otherwise the logs show an outage that never ends.
+     *
+     * @internal
+     */
+    private emitConnectionRestored(): void {
+        LogError('[Redis] connection restored');
+        this.safeEmit('connectionRestored');
+    }
+
+    /**
+     * Emits to consumer callbacks, containing each listener's errors so that neither the connection
+     * handling that triggered the event nor the other listeners are affected.
+     *
+     * Invokes listeners individually rather than through `EventEmitter.emit`, which calls them
+     * synchronously in turn: one throwing there would stop every listener after it from running at
+     * all.
+     *
+     * @internal
+     */
+    private safeEmit(event: string, ...args: unknown[]): void {
+        for (const listener of this._eventEmitter.rawListeners(event)) {
+            try {
+                (listener as (...listenerArgs: unknown[]) => void)(...args);
+            } catch (err) {
+                LogError(`[Redis] a ${event} listener threw: ${(err as Error).message}`);
+            }
+        }
     }
 }

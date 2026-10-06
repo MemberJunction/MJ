@@ -1,5 +1,163 @@
 # Change Log - @memberjunction/ng-resource-permissions
 
+## 6.2.0-edge.2
+
+### Patch Changes
+
+- Updated dependencies [e97d95c]
+- Updated dependencies [2552b1e]
+- Updated dependencies [21f9e15]
+- Updated dependencies [4248fb3]
+- Updated dependencies [0adaf76]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [705ab4e]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [5986939]
+- Updated dependencies [4d647e6]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [369e229]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [2854a2e]
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/core-entities@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+  - @memberjunction/ng-ui-components@6.2.0-edge.2
+  - @memberjunction/ng-base-types@6.2.0-edge.2
+  - @memberjunction/ng-container-directives@6.2.0-edge.2
+  - @memberjunction/ng-notifications@6.2.0-edge.2
+  - @memberjunction/ng-shared-generic@6.2.0-edge.2
+  - @memberjunction/ng-generic-dialog@6.2.0-edge.2
+
+## 6.2.0-edge.1
+
+### Patch Changes
+
+- a3539d2: Business-user vocabulary: surface the user's own domain nouns instead of platform jargon on the default data-browsing surfaces.
+  - `EntityInfo.DisplayNamePlural` (`@memberjunction/core`): a business-friendly plural of the entity's display name ("Contacts", "Companies", "Addresses"), derived from `DisplayNameOrName` via the existing `GeneratePluralName` helper, so a per-deployment `DisplayName` override ("Member") flows through as "Members". It keeps the name's leading capital, so irregular plurals read "People" and "Children" rather than "people". Display-only; never a lookup key. Unit-tested.
+  - Entity viewer, grid, and cards empty states now say "No Contacts to display" instead of "No records found" / "No data to display", falling back to the generic copy when no entity is in scope.
+  - Data Explorer: the word "entity" is translated out of the default data-browsing app (both search placeholders, the sidebar's "Record Types" heading, loading text, counts, filter pill, empty states, recent section). Bindings, CSS classes, and agent-tool contracts are untouched.
+  - Sharing Center: section headings show friendly labels ("Dashboards", "Artifacts", "Rules") via a display-only label map. The underlying `DomainName` stays as-is because it is the lookup key that drives Revoke, audit mapping, and icon selection. Unmapped custom domains have a trailing " Permissions" stripped. Sections are sorted by the label the user reads.
+  - User Routines: softened the editor loading text.
+
+  Ported from #3043 (the runtime, no-migration half). The stored `Entity.DisplayNamePlural` column, its CodeGen completion, and the non-English plural seam are tracked separately.
+
+- 67f6c85: feat: the conversation sidebar gains multi-select (keyboard, mouse and touch), bulk actions, sorting, a search clear button, and multi-resource sharing
+
+  **Selecting.** Ctrl/Cmd-click toggles one conversation, and Shift-click selects the range from the last row picked. A range follows the order the list renders and never reaches rows hidden inside a collapsed folder or section. A Ctrl-click that starts a selection takes the open conversation along, and a Shift-click with nothing picked yet ranges from it. Selecting needs no keyboard: a checkbox appears in a row's left padding when the pointer is over the row, and on every row while a selection exists. On touch, a long-press on a row selects it, after which a tap adds or removes a row. A selected row shows a ticked checkbox and an accent tint; the open conversation keeps its solid fill. Escape, a click on empty space, or deselecting the last row ends selection mode. The ⋯ menu's "Select Conversations" entry is gone.
+
+  **The selection only holds rows on screen.** Select All picks the visible rows. A search edit, a collapse or a grouping change drops the selected rows it hides, and a conversation that leaves the list leaves the selection.
+
+  **The selection bar.** While a selection exists, the search row becomes a bar with the count, Pin or Unpin, Move to folder, Share, Delete and a clear button. The sort buttons stay in place, so the list does not jump.
+
+  **One right-click menu.** It replaces the per-row ⋯ menu's contents and the old bottom selection bar. On a selected row it acts on the whole selection ("3 selected", Pin, Unpin, Move to folder ▸, Share, Delete 3). On any other row it acts on that row alone and leaves the selection untouched. On a folder it offers New Subfolder, Rename and Delete, so the hover icons on folder rows are gone. On empty space it offers New Conversation, New Folder and Select All. The ⋯ button opens the same menu and is always shown on touch screens. The menu stays inside the window, opening upward or moving left near an edge.
+
+  **Who can do what.** Share needs ownership or an Owner grant, the same rule the chat header uses. Move and Pin need ownership or an Edit/Owner grant. Each action is disabled when none of its targets qualify. A row you hold only View access to cannot be dragged into a folder. The conversations an action leaves out are named, with the reason. Folder and pin are still stored on the conversation itself, so a person with Edit access changes them for the owner too; per-user folder and pin is tracked in #4742.
+
+  **Bulk actions and dragging.** Move and Pin keep the selection so a second action can follow. Delete removes only the deleted rows from the selection, so deleting a row outside the selection leaves it alone. Bulk actions report any conversations they could not change. Grabbing a selected row drags the whole selection onto a folder, onto Ungrouped, or onto the conversations inside a folder; grabbing an unselected row drags that row alone. Conversations already in the destination are skipped rather than re-saved.
+
+  **Sorting and search.** A Date / Name button pair sorts the Pinned section, every folder and the Ungrouped list together; clicking the active button flips the direction. The choice is saved with the folder collapse state and group-by mode. The search box gains a clear button, and Escape inside it clears the query.
+
+  **Sharing several resources — `ng-resource-permissions`.** `mj-resource-share-dialog` gains a `Contexts` input for sharing several resources at once. It merges everyone's access across them, labels a person whose access covers only some ("2 of 3") or differs in level ("Mixed"), and applies add, level change and removal across the whole set. `Context` is unchanged, so dashboards and the chat header are not affected. `ResourceLabel` sets the noun in the title, and `Notice` shows a caller-supplied line (the sidebar uses it to report conversations left out). The dialog leaves every resource's owner out of "Add people", and a retry after a partly failed save picks up where it stopped.
+
+  **Engine — `core-entities`.** `ConversationEngine` gains `CanShareConversation` and `CanEditConversation`, the rules above, shared by the chat header and the sidebar. It also gains `MoveMultipleConversationsToProject` and `PinMultipleConversations`. They refuse a View-only conversation without saving it, save one conversation at a time so a single rejection cannot fail the batch, roll a failed conversation's fields back in memory, and emit the updated list once per batch.
+
+- 80905a1: Rename public class members and exported functions to PascalCase, per MJ's naming convention,
+  **without breaking a single consumer**.
+
+  Every renamed symbol keeps its old name beside the new one as a `@deprecated` stub that forwards to
+  it — a delegating method or function, a getter/setter pair for a property, and for Angular a
+  readable accessor pair for an `@Input` and a second `@Output` sharing the same `EventEmitter`, so a
+  template still binding the old name keeps receiving events. Old names still compile, still resolve,
+  and still behave identically; the deprecation tag rides through to the published `.d.ts`, so editors
+  point callers at the replacement. Where a package re-exports through an explicit `export { … }`
+  list, the new name is added alongside the old, so the correct name is actually on the public surface
+  rather than merely declared.
+
+  The rename is deliberately refused wherever a mechanical stub would not be equivalent, because
+  several of those shapes change a type contract while still compiling in the package that declares
+  them:
+  - an **optional** property or parameter property — TypeScript has no optional accessor, so a stub
+    would promote `foo?` to a required member and break every object literal that omits it;
+  - a class that is a **data shape** (no methods, or `@ObjectType`/`@InputType`) — object literals are
+    assigned to it, and an accessor stub changes what they must supply;
+  - a property whose **subclass redeclares it**, since TypeScript forbids a property overriding an
+    accessor (TS2610);
+  - a name whose PascalCase form is **already bound** in that file or class;
+  - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
+    overload sets and abstract members.
+
+  **One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+  backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+  the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+  `EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+  `copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+  field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+  fields silently. Same-version deployments, which is the supported configuration, see no change.
+
+  Each package was verified against its own pre-change baseline rather than against zero, because
+  several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
+  with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
+  `@Input` alias passed `tsc` while breaking six template reads.
+
+- Updated dependencies [a50948e]
+- Updated dependencies [0eeb89d]
+- Updated dependencies [a3539d2]
+- Updated dependencies [41274aa]
+- Updated dependencies [67f6c85]
+- Updated dependencies [eb3a8d3]
+- Updated dependencies [e1dd673]
+- Updated dependencies [307da67]
+- Updated dependencies [a7da50b]
+- Updated dependencies [17cc774]
+- Updated dependencies [80905a1]
+- Updated dependencies [6b08ebf]
+- Updated dependencies [920bef8]
+  - @memberjunction/core-entities@6.2.0-edge.1
+  - @memberjunction/core@6.2.0-edge.1
+  - @memberjunction/global@6.2.0-edge.1
+  - @memberjunction/ng-container-directives@6.2.0-edge.1
+  - @memberjunction/ng-notifications@6.2.0-edge.1
+  - @memberjunction/ng-shared-generic@6.2.0-edge.1
+  - @memberjunction/ng-ui-components@6.2.0-edge.1
+  - @memberjunction/ng-base-types@6.2.0-edge.1
+  - @memberjunction/ng-generic-dialog@6.2.0-edge.1
+
+## 6.2.0-edge.0
+
+### Patch Changes
+
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [7be1684]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [d122a41]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [683f652]
+- Updated dependencies [a8be410]
+- Updated dependencies [e225ece]
+- Updated dependencies [f48dffc]
+- Updated dependencies [630bb88]
+- Updated dependencies [44faf83]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [a17a228]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [104125c]
+- Updated dependencies [5513c2a]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [2c590b0]
+  - @memberjunction/core-entities@6.2.0-edge.0
+  - @memberjunction/core@6.2.0-edge.0
+  - @memberjunction/ng-shared-generic@6.2.0-edge.0
+  - @memberjunction/ng-base-types@6.2.0-edge.0
+  - @memberjunction/ng-notifications@6.2.0-edge.0
+  - @memberjunction/ng-container-directives@6.2.0-edge.0
+  - @memberjunction/ng-generic-dialog@6.2.0-edge.0
+  - @memberjunction/ng-ui-components@6.2.0-edge.0
+  - @memberjunction/global@6.2.0-edge.0
+
 ## 6.1.0
 
 ### Patch Changes

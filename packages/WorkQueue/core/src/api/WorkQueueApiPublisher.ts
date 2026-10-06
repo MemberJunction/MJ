@@ -34,6 +34,16 @@ const FALLBACK_CODES: ReadonlyMap<number, string> = new Map<number, string>([
 ]);
 
 /** IWorkPublisher for producers outside MJ: calls the MJ work-queue REST publish endpoint (spec 03 §9). */
+
+/** Drops every trailing '/' without a regex (a `/\/+$/` pattern on caller input is polynomial-time). */
+function TrimTrailingSlashes(url: string): string {
+    let end = url.length;
+    while (end > 0 && url[end - 1] === '/') {
+        end -= 1;
+    }
+    return url.slice(0, end);
+}
+
 export class WorkQueueApiPublisher implements IWorkPublisher {
     private readonly baseUrl: string;
     private readonly fetchImpl: typeof fetch;
@@ -44,7 +54,7 @@ export class WorkQueueApiPublisher implements IWorkPublisher {
     private readonly sleep: (ms: number) => Promise<void>;
 
     constructor(private readonly options: WorkQueueApiPublisherOptions) {
-        this.baseUrl = options.BaseUrl.replace(/\/+$/, '');
+        this.baseUrl = TrimTrailingSlashes(options.BaseUrl);
         this.fetchImpl = options.Fetch ?? ((input, init) => fetch(input, init));
         this.maxRetries = options.MaxRetries ?? 3;
         this.timeoutMs = options.TimeoutMs ?? 10_000;

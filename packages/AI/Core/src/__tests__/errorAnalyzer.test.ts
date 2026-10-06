@@ -28,6 +28,71 @@ describe('ErrorAnalyzer', () => {
             expect(info.canFailover).toBe(true);
         });
 
+        it("should detect Google's invalid-key 400 as authentication, which stops failover", () => {
+            // The shape @google/genai surfaces: the vendor's JSON error body as the message, HTTP 400.
+            const error = {
+                status: 400,
+                message: JSON.stringify({
+                    error: {
+                        code: 400,
+                        message: 'API key not valid. Please pass a valid API key.',
+                        status: 'INVALID_ARGUMENT',
+                        details: [{ '@type': 'type.googleapis.com/google.rpc.ErrorInfo', reason: 'API_KEY_INVALID' }]
+                    }
+                })
+            };
+            const info = ErrorAnalyzer.analyzeError(error, 'Google');
+
+            expect(info.errorType).toBe('Authentication');
+            expect(info.severity).toBe('Fatal');
+        });
+
+        it("should detect Google's expired-key 400 as authentication, which stops failover", () => {
+            // Same shape as the invalid key, but reason API_KEY_EXPIRED. It read as InvalidRequest before.
+            const error = {
+                status: 400,
+                message: JSON.stringify({
+                    error: {
+                        code: 400,
+                        message: 'API key expired. Please renew the API key.',
+                        status: 'INVALID_ARGUMENT',
+                        details: [{ '@type': 'type.googleapis.com/google.rpc.ErrorInfo', reason: 'API_KEY_EXPIRED' }]
+                    }
+                })
+            };
+            const info = ErrorAnalyzer.analyzeError(error, 'Google');
+
+            expect(info.errorType).toBe('Authentication');
+            expect(info.severity).toBe('Fatal');
+        });
+
+        it("does not read Google's FAILED_PRECONDITION 400 (unsupported user location) as authentication", () => {
+            const error = {
+                status: 400,
+                message: JSON.stringify({
+                    error: {
+                        code: 400,
+                        message: 'User location is not supported for the API use.',
+                        status: 'FAILED_PRECONDITION'
+                    }
+                })
+            };
+            const info = ErrorAnalyzer.analyzeError(error, 'Google');
+
+            expect(info.errorType).not.toBe('Authentication');
+        });
+
+        it('keeps the classification a failed result already carries — a rejected streaming ChatResult', () => {
+            // BaseLLM rejects a failed stream with its ChatResult; analyzed afresh that is 'Unknown'/'Transient'.
+            const driverInfo = { error: { name: 'ApiError', status: 400 }, errorType: 'Authentication', severity: 'Fatal', canFailover: true };
+            const rejected = { success: false, errorMessage: 'API key not valid. Please pass a valid API key.', errorInfo: driverInfo };
+
+            const info = ErrorAnalyzer.analyzeError(rejected, 'AIPromptRunner');
+
+            expect(info.errorType).toBe('Authentication');
+            expect(info.severity).toBe('Fatal');
+        });
+
         it('should detect context length exceeded', () => {
             const error = { message: 'context_length_exceeded: maximum context length is 128k' };
             const info = ErrorAnalyzer.analyzeError(error);
@@ -44,6 +109,29 @@ describe('ErrorAnalyzer', () => {
             expect(info.errorType).toBe('NoCredit');
             expect(info.severity).toBe('Retriable');
             expect(info.canFailover).toBe(true);
+        });
+
+        // Anthropic reports an account spend cap as a 400 invalid_request_error. Read by status
+        // alone it looked like a malformed request (no failover), so every prompt whose top
+        // candidate was a capped vendor failed outright instead of moving to the next vendor.
+        // Found by IT56/IT57 in the 6.2.0-edge.0 release gate.
+        it('treats a vendor spend cap reported as HTTP 400 as NoCredit, so failover runs', () => {
+            const error = {
+                status: 400,
+                message: '400 {"type":"error","error":{"type":"invalid_request_error","message":"You have reached your specified API usage limits. You will regain access on 2026-10-01 at 00:00 UTC."}}',
+            };
+            const info = ErrorAnalyzer.analyzeError(error, 'Anthropic');
+
+            expect(info.errorType).toBe('NoCredit');
+            expect(info.canFailover).toBe(true);
+        });
+
+        it('still treats a genuinely malformed 400 as InvalidRequest (no failover)', () => {
+            const error = { status: 400, message: 'Malformed JSON in request body' };
+            const info = ErrorAnalyzer.analyzeError(error, 'Anthropic');
+
+            expect(info.errorType).toBe('InvalidRequest');
+            expect(info.canFailover).toBe(false);
         });
 
         it('should detect service unavailable', () => {

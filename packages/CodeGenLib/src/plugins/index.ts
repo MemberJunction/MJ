@@ -33,11 +33,20 @@ Use --skipdb to regenerate code from existing metadata only; --skipfiles to run
 database-side operations only. --force-advanced-gen re-runs the LLM-driven
 advanced generation for ALL entities (bypasses changed-entity scoping).`;
 
-  static examples = [
+  static Examples = [
     { command: '<%= config.bin %> <%= command.id %>', description: 'Run the full code generation pipeline' },
     { command: '<%= config.bin %> <%= command.id %> --skipdb', description: 'Regenerate code files without touching the database' },
     { command: '<%= config.bin %> <%= command.id %> --format=json', description: 'Emit a machine-readable result for an agent' },
   ];
+
+  /** @deprecated Use {@link Examples}. */
+  static get examples() {
+    return this.Examples;
+  }
+  /** @deprecated Use {@link Examples}. */
+  static set examples(value) {
+    this.Examples = value;
+  }
 
   static flags = {
     skipdb: Flags.boolean({

@@ -1,6 +1,6 @@
 /**
  * @fileoverview Control-flow tools for the implicit protocol (spec §2.2, §4): one tool per
- * sub-agent, `payload_change_request`, `ask_user`. Built beside the Action tools so the reverse map
+ * sub-agent, `payload_change_request`, `ask_user`, `complete_task`. Built beside the Action tools so the reverse map
  * resolves every call the model can make.
  *
  * The agent declares these without knowing which model will answer. The prompt runner keeps them
@@ -10,13 +10,14 @@
  */
 import type { ChatTool } from '@memberjunction/ai';
 import type { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
-import { sanitizeToolName, MAX_TOOL_DESCRIPTION_LENGTH, type ActionToolBinding, type ActionToolSet } from './action-tool-builder';
+import { SanitizeToolName, MAX_TOOL_DESCRIPTION_LENGTH, type ActionToolBinding, type ActionToolSet } from './action-tool-builder';
 
 export const PAYLOAD_CHANGE_TOOL = 'payload_change_request';
 export const ASK_USER_TOOL = 'ask_user';
+export const COMPLETE_TASK_TOOL = 'complete_task';
 export const SUB_AGENT_TOOL_PREFIX = 'delegate_to_';
 /** The fixed control tools. Sub-agent tools are recognised by {@link SUB_AGENT_TOOL_PREFIX}. */
-export const NATIVE_CONTROL_TOOL_NAMES: readonly string[] = [PAYLOAD_CHANGE_TOOL, ASK_USER_TOOL];
+export const NATIVE_CONTROL_TOOL_NAMES: readonly string[] = [PAYLOAD_CHANGE_TOOL, ASK_USER_TOOL, COMPLETE_TASK_TOOL];
 /** Providers cap tool names at 64 characters. */
 const MAX_TOOL_NAME_LENGTH = 64;
 
@@ -25,7 +26,8 @@ export type NativeToolBinding =
     | ActionToolBinding
     | { kind: 'subAgent'; toolName: string; agent: MJAIAgentEntityExtended; tool: ChatTool }
     | { kind: 'payloadChange'; toolName: string; tool: ChatTool }
-    | { kind: 'askUser'; toolName: string; tool: ChatTool };
+    | { kind: 'askUser'; toolName: string; tool: ChatTool }
+    | { kind: 'complete'; toolName: string; tool: ChatTool };
 
 export interface NativeToolSet {
     tools: ChatTool[];
@@ -38,7 +40,7 @@ export interface NativeToolSet {
 const clip = (text: string, max: number): string => (text.length <= max ? text : `${text.slice(0, max - 1)}…`);
 
 /** `payload_change_request` — a state write that continues the loop (spec §3). */
-export function buildPayloadChangeTool(): ChatTool {
+export function BuildPayloadChangeTool(): ChatTool {
     const section = (what: string) => ({ type: 'object' as const, description: what });
     return {
         name: PAYLOAD_CHANGE_TOOL,
@@ -62,8 +64,13 @@ export function buildPayloadChangeTool(): ChatTool {
     };
 }
 
+/** @deprecated Use {@link BuildPayloadChangeTool}. */
+export function buildPayloadChangeTool(): ChatTool {
+    return BuildPayloadChangeTool();
+}
+
 /** `ask_user` — the one explicit control tool: the run pauses as `Chat` / `AwaitingFeedback` (spec §1). */
-export function buildAskUserTool(): ChatTool {
+export function BuildAskUserTool(): ChatTool {
     return {
         name: ASK_USER_TOOL,
         description: clip(
@@ -95,9 +102,50 @@ export function buildAskUserTool(): ChatTool {
     };
 }
 
+/** @deprecated Use {@link BuildAskUserTool}. */
+export function buildAskUserTool(): ChatTool {
+    return BuildAskUserTool();
+}
+
+/**
+ * `complete_task` — the terminal tool: apply the final payload write and finish, in ONE turn.
+ *
+ * Without it, implicit control flow finishes in two turns — `payload_change_request`, then a
+ * plain-text reply — where the envelope finishes in one (`taskComplete` + `payloadChangeRequest`).
+ * That costs an iteration on every run, and on the last permitted iteration there is no second
+ * turn at all. Agent frameworks that need a structured result end on a designated tool for the
+ * same reason (OpenAI Agents SDK `StopAtTools`, SWE-agent's `submit`). Plain text still ends the
+ * turn, for agents whose answer is prose.
+ */
+export function BuildCompleteTaskTool(): ChatTool {
+    return {
+        name: COMPLETE_TASK_TOOL,
+        description: clip(
+            'Finish the task. Call this when your work is done and verified: put any final writes to the shared payload ' +
+            'in payloadChangeRequest and your answer for the user or calling agent in message. The change is applied ' +
+            'and the run ends — unless the result fails validation, in which case you receive the reason and continue. ' +
+            'Must be the only call on its turn.', MAX_TOOL_DESCRIPTION_LENGTH),
+        inputSchema: {
+            type: 'object',
+            properties: {
+                message: { type: 'string', description: 'Your final answer or a brief summary of what you did.' },
+                // A JSON string, not an object: complete_task is the call the framework forces on the
+                // final turn, and a forced call is schema-constrained, so an object whose sections
+                // declare no properties can only decode as `{}`. The loop decodes the string.
+                payloadChangeRequest: {
+                    type: 'string',
+                    description: 'Optional. Final payload changes as a JSON object string, applied before the task completes: '
+                        + '{"newElements"?: {...}, "updateElements"?: {...}, "replaceElements"?: {...}, "removeElements"?: {...}} — same shape as payload_change_request.'
+                }
+            },
+            required: ['message']
+        }
+    };
+}
+
 /** One tool per sub-agent: `delegate_to_<sanitized name>`, described by the agent's own description. */
-export function buildSubAgentTool(agent: MJAIAgentEntityExtended): ChatTool {
-    const name = `${SUB_AGENT_TOOL_PREFIX}${sanitizeToolName(agent.Name)}`.slice(0, MAX_TOOL_NAME_LENGTH);
+export function BuildSubAgentTool(agent: MJAIAgentEntityExtended): ChatTool {
+    const name = `${SUB_AGENT_TOOL_PREFIX}${SanitizeToolName(agent.Name)}`.slice(0, MAX_TOOL_NAME_LENGTH);
     return {
         name,
         description: clip(`Delegate to the ${agent.Name} sub-agent. ${agent.Description ?? ''}`.trim(), MAX_TOOL_DESCRIPTION_LENGTH),
@@ -112,11 +160,16 @@ export function buildSubAgentTool(agent: MJAIAgentEntityExtended): ChatTool {
     };
 }
 
+/** @deprecated Use {@link BuildSubAgentTool}. */
+export function buildSubAgentTool(agent: MJAIAgentEntityExtended): ChatTool {
+    return BuildSubAgentTool(agent);
+}
+
 /**
  * Actions, then sub-agents, then the fixed control tools — one reverse map for all of them.
  * Collisions and reserved-name clashes are hard errors, exactly as Action/Action collisions are.
  */
-export function buildNativeToolSet(actionSet: ActionToolSet, subAgents: readonly MJAIAgentEntityExtended[]): NativeToolSet {
+export function BuildNativeToolSet(actionSet: ActionToolSet, subAgents: readonly MJAIAgentEntityExtended[]): NativeToolSet {
     const byToolName = new Map<string, NativeToolBinding>(actionSet.byToolName);
     const tools: ChatTool[] = [...actionSet.tools];
     const controlToolNames: string[] = [];
@@ -127,7 +180,7 @@ export function buildNativeToolSet(actionSet: ActionToolSet, subAgents: readonly
         }
     }
     for (const agent of subAgents) {
-        const tool = buildSubAgentTool(agent);
+        const tool = BuildSubAgentTool(agent);
         const existing = byToolName.get(tool.name);
         if (existing) {
             const other = existing.kind === 'action' ? `Action '${existing.action.Name}'`
@@ -138,11 +191,18 @@ export function buildNativeToolSet(actionSet: ActionToolSet, subAgents: readonly
         tools.push(tool);
         controlToolNames.push(tool.name);
     }
-    const payload = buildPayloadChangeTool();
-    const ask = buildAskUserTool();
+    const payload = BuildPayloadChangeTool();
+    const ask = BuildAskUserTool();
+    const complete = BuildCompleteTaskTool();
     byToolName.set(payload.name, { kind: 'payloadChange', toolName: payload.name, tool: payload });
     byToolName.set(ask.name, { kind: 'askUser', toolName: ask.name, tool: ask });
-    tools.push(payload, ask);
-    controlToolNames.push(payload.name, ask.name);
+    byToolName.set(complete.name, { kind: 'complete', toolName: complete.name, tool: complete });
+    tools.push(payload, ask, complete);
+    controlToolNames.push(payload.name, ask.name, complete.name);
     return { tools, byToolName, controlToolNames };
+}
+
+/** @deprecated Use {@link BuildNativeToolSet}. */
+export function buildNativeToolSet(actionSet: ActionToolSet, subAgents: readonly MJAIAgentEntityExtended[]): NativeToolSet {
+    return BuildNativeToolSet(actionSet, subAgents);
 }

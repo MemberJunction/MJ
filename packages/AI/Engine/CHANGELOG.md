@@ -1,5 +1,250 @@
 # Change Log - @memberjunction/aiengine
 
+## 6.2.0-edge.2
+
+### Minor Changes
+
+- 2552b1e: AI model & vendor metadata refresh (off-cycle research run for v6.2.0-edge.2, 2026-10-02).
+  - Adds **Claude Sonnet 5.5** (`claude-sonnet-5-5`, released 2026-09-28) on Anthropic, Amazon Bedrock and OpenRouter at $2/$10 per 1M, cache read $0.20.
+  - Adds **GPT-6.1 Sol** (`gpt-6.1-sol`, released 2026-09-29) on OpenAI, Azure, Amazon Bedrock and OpenRouter at $2/$10 per 1M, cache read $0.10. No Azure cost row: Microsoft has not published the rate.
+  - Adds the missing cost rows for Claude Opus 5.5 on Bedrock ($4/$20) and GPT-6 Sol ($2/$10) and GPT-6 Luna ($0.10/$0.50) on Azure, and a GLM 5.3 OpenRouter row ($1.40/$4.40). GLM 5.3's OpenRouter output cap becomes 131,072.
+  - Re-rates Groq GPT-OSS-120B ($0.15/$0.60) and GPT-OSS-20B ($0.075/$0.30), Cerebras GPT-OSS-120B ($0.35/$0.75) and Z.AI GLM 5.1 ($1.40/$4.40), expiring the superseded rows.
+  - Retires seven routes their vendors have already shut down: Cerebras `gemma-4-31b` and `llama3.1-8b`, Fireworks `glm-5p2`, Google `gemini-3-pro-image-preview`, `gemini-2.0-flash` and `gemini-2.0-flash-lite`, and Groq `compound-beta` (Groq Compound becomes inactive).
+
+- 8fd1c46: Moves the seven CodeGen AI prompts to current models, and makes AI model catalog ranks consistent within each model's version lineage. Metadata only, plus a new CI guard. (#4912)
+  - **CodeGen prompts** (Check Constraint Parser, Entity Description Generation, Entity Name Generation, Transitive Join Intelligence, Virtual Entity Field Decoration, Form Layout Generation, Smart Field Identification):
+    - Gemini 3.5 Flash → **Gemini 3.8 Flash**, on the same Google and Vertex AI routes.
+    - Gemini 3.1 Flash-Lite → **Gemini 3.5 Flash-Lite** (Form Layout Generation, Smart Field Identification). Google now comes before Vertex AI, matching Flash.
+    - GPT 5.5 Instant → **GPT-6 Luna** on OpenAI. GPT 5.5 Instant only ever called `gpt-5.5`.
+    - Claude Haiku 4.5 and GPT-OSS-120B are unchanged; they are still the newest in their families. The failover order is unchanged.
+  - **Review regenerated output.** CodeGen commits its AI output into each app: `Validate*()` methods parsed from CHECK constraints, entity and field descriptions, display names and form layouts. Apps that regenerate after upgrading may see different AI-written output and should review it before committing.
+  - **Catalog PowerRank fixes.** Within a lineage, a newer model no longer ranks below the model it replaces, and ranks above it where it is the more capable one (rank-based selection does not break ties):
+    - The GPT-5 generation (GPT 5, 5-mini, 5-nano) was ranked above its successors and now ranks 10, 9 and 8.
+    - GPT 5.5 → 15, GPT 5.5 Instant → 15 (the same `gpt-5.5` API model), GPT 5.5 Pro → 16, GPT 5.6 → 16, o3-mini → 9, o4-mini → 10, Claude Sonnet 5 → 21, MiniMax-M3 → 21 (ties M2.7, which it complements rather than replaces), Grok 4.3 → 23, Qwen3.8-Flash → 16.
+    - Prompts and agents that choose models by rank can pick a different model as a result.
+  - **`PriorVersionID` lineage.** Two links that pointed across tiers are corrected (Gemini 3.1 Flash-Lite, Qwen3.8-Flash). Three variants with no earlier version in the catalog are cleared (GLM-5.3-Flash, GLM 5V Turbo, Mercury Edit 2). Missing links are added for the GPT 5, GPT mini/nano, o-series mini and Gemini Flash lines.
+  - **New guard:** `.github/scripts/check-ai-model-ranks.mjs` (`pnpm run check:ai-model-ranks`, run in the Source guards CI job) fails when a model ranks below the prior version it names, or names a prior version that doesn't exist.
+
+- 01fafc6: Removes four duplicate `MJ: AI Model Costs` entries from `metadata/ai-models/.ai-models.json`. Llama 4 Maverick, Llama 4 Scout (Groq), Claude 4 Sonnet and Claude 4 Opus (Anthropic) each listed the same cost record twice, identical field for field and with the same primary key, so both copies pointed at one database row. No database row changes; the file just stops tripping duplicate-ID checks.
+
+### Patch Changes
+
+- 2854a2e: Address vector indexes by their provider-side name (`ExternalID`), not the MJ display `Name`. Entity vectorization, duplicate detection and the entity-vectors resolver passed `Name`, so any index whose label differs from its provider name (e.g. "More Cheese Content (Pinecone)" vs `morecheese-content`) returned 404 on every upsert/query.
+
+  `AIEngineBase` now owns the single `MJ: Vector Indexes` cache (`VectorIndexes`, `GetVectorIndexByID`) and the one rule for the provider name (`GetProviderIndexName`: ExternalID, falling back to `Name`), proxied on `AIEngine`. `KnowledgeHubMetadataEngine` no longer caches Vector Indexes; its `VectorIndexes` / `GetVectorIndexByID` proxy the AIEngineBase cache. Every caller, including `MJVectorIndexEntityServer`'s delete path, now resolves the provider name through `GetProviderIndexName`.
+
+- Updated dependencies [f555162]
+- Updated dependencies [043f418]
+- Updated dependencies [e97d95c]
+- Updated dependencies [ff3097d]
+- Updated dependencies [79279f2]
+- Updated dependencies [2552b1e]
+- Updated dependencies [21f9e15]
+- Updated dependencies [28fdf22]
+- Updated dependencies [4248fb3]
+- Updated dependencies [f3c6161]
+- Updated dependencies [5148534]
+- Updated dependencies [0adaf76]
+- Updated dependencies [ce1a5c3]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [26c0178]
+- Updated dependencies [594f2e0]
+- Updated dependencies [705ab4e]
+- Updated dependencies [96daca8]
+- Updated dependencies [aa912ca]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [5986939]
+- Updated dependencies [4d647e6]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [bb33c77]
+- Updated dependencies [369e229]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [2854a2e]
+  - @memberjunction/ai-core-plus@6.2.0-edge.2
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/ai@6.2.0-edge.2
+  - @memberjunction/core-entities@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+  - @memberjunction/ai-engine-base@6.2.0-edge.2
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.2
+  - @memberjunction/actions-base@6.2.0-edge.2
+  - @memberjunction/storage@6.2.0-edge.2
+
+## 6.2.0-edge.1
+
+### Minor Changes
+
+- ddcd666: Adds ElevenLabs **Eleven v4** and **Eleven v4 Turbo** to the AI model catalog. Metadata only, no code change.
+  - New TTS models **Eleven v4** (`eleven_v4`) and **Eleven v4 Turbo** (`eleven_v4_turbo`), each with Eleven Labs as model developer and as inference provider through the existing `ElevenLabsAudioGenerator` driver. The driver hands `model_id` to the ElevenLabs API unchanged and the SDK types it as a plain string, so text-to-speech needs nothing else.
+  - No cost rows yet. ElevenLabs bills speech per character, and the catalog's price units (per token, minute, hour, image) have no per-character unit; the launch pricing also could not be confirmed against ElevenLabs' own pricing page.
+  - Not covered: the `ElevenLabsRealtime` (ElevenAgents) driver never sets a TTS model on its managed agent, so this change does not put v4 into realtime conversations. That needs a driver change.
+
+- a50948e: AI model & vendor metadata refresh (weekly research run, 2026-09-28). The busiest launch week of the quarter: four frontier models shipped inside 36 hours.
+  - Adds **Claude Opus 5.5** (`claude-opus-5-5`, released 2026-09-22) on Anthropic, Amazon Bedrock and OpenRouter, with cost rows at $4/$20 per 1M and a $0.20 cache read. Anthropic's new recommended default: 20% below the $5/$25 Opus tier, 1M context, 128K output, default effort `medium`. The 0.05x cache-read multiplier is new to this file — Anthropic now publishes three different ratios. No Bedrock cost row: sources conflict between $4/$20 parity and $2.20/$11.
+  - Adds **Grok 4.7** (`grok-4.7`, released 2026-09-21) on x.ai and OpenRouter at $2/$6 per 1M with $0.50 cache read — unchanged from Grok 4.6. Built on a new, larger base model: AA Coding Agent Index 56 vs 47, Terminal-Bench 4.0 33% vs 18%, hallucination rate 29% vs 34%. Ends a five-week run of slipped release dates. `MaxOutputTokens` is deliberately held at 128,000: xAI publishes no cap and the 450,000 figure on third-party cards is unofficial.
+  - Adds **GPT-6 Sol** (`gpt-6-sol`) and **GPT-6 Luna** (`gpt-6-luna`), both released 2026-09-22, on OpenAI, Azure, Amazon Bedrock and OpenRouter. Sol at $2/$10 and Luna at $0.10/$0.50 — each exactly half its GPT-5.6 predecessor. Sol's benchmarks are mixed rather than uniformly better (it regresses against GPT-5.6 Sol on DeepSWE and OSWorld 2.0), which its PowerRank of 25 reflects. Neither carries an Azure cost row; Microsoft's rate card for the tier could not be confirmed.
+  - Adds the **Xiaomi** vendor plus **MiMo V2.6 Pro** and **MiMo V2.6 Flash** (released 2026-09-22, MIT-licensed, omnimodal), reached through OpenRouter at $0.435/$0.87 and $0.14/$0.28 per 1M. Model Developer attribution only — no Xiaomi driver class exists, so no first-party route is wired.
+  - Records the **GLM-5.3-FlashX** OpenRouter rate at $0.37/$1.25 with a $0.09 cache read, closing the follow-up the 2026-09-21 run left open, and replaces the now-false comment on its Z.AI row.
+  - Adds **GLM-5.3-Flash** on three more hosts: a Fireworks.ai cost row ($0.15/$0.50, $0.03 cache) for the route that previously had none, with its context corrected to 1,048,576; and two new inference vendors, **DeepInfra** ($0.075/$0.25, a 50% promo off its $0.15/$0.50 list rate) and **SiliconFlow** ($0.15/$0.50, $0.03 cache). Each vendor gets its own OpenAI-compatible driver (`DeepInfraLLM` in `@memberjunction/ai-deepinfra`, `SiliconFlowLLM` in `@memberjunction/ai-siliconflow`). Each driver also sends the output cap as `max_tokens`, the only cap parameter those two providers document.
+
+  No cost row was expired and no vendor route was deprecated — every price movement this week arrived as a new model rather than a re-rate. Anthropic's relabelling of Opus 5 and the 4.x tier as "legacy (still available)" is explicitly **not** treated as a deprecation. `gpt-6-luna-pro` is deliberately not a separate record: it is `gpt-6-luna` with `reasoning.mode=pro`, the same request-parameter-vs-model-id problem as Claude fast mode.
+
+- 9b8a84e: One speech-to-text model type instead of two.
+
+  `MJ: AI Model Types` had two rows for the same concept:
+  - `STT`, seeded by the v5 baseline, with **0 models** on a clean database;
+  - `Speech to Text`, added through `metadata/ai-model-types`, used by **every** shipped speech-to-text model.
+
+  The duplicate was harmless while a prompt's `AIModelTypeID` is advisory. It becomes a live bug once a model type is a hard floor (the typed-decision plan, #4660, Phase 0 Task 0.1): a floor matches one row and silently filters out every model filed under the other.
+
+  `Speech to Text` survives, because it is the row the shipped models already reference. Nothing in code looks up either row by name.
+  - **Migration** `V202609231300__v6.2.x__Repoint_STT_Model_Type_To_Speech_To_Text.sql` repoints any `AIModel` / `AIPrompt` row still referencing `STT`, so rows a customer created against it survive the delete. It runs only when both rows exist, and is idempotent and re-runnable.
+  - **Metadata**: `STT` gets a `deleteRecord` entry in `metadata/ai-model-types/.ai-model-types.json`. The delete ships declaratively, through the release-time metadata sync, like every other metadata change.
+
+### Patch Changes
+
+- Updated dependencies [a50948e]
+- Updated dependencies [0eeb89d]
+- Updated dependencies [15a4333]
+- Updated dependencies [a3539d2]
+- Updated dependencies [41274aa]
+- Updated dependencies [5da3ad2]
+- Updated dependencies [67f6c85]
+- Updated dependencies [eb3a8d3]
+- Updated dependencies [e1dd673]
+- Updated dependencies [c261eb8]
+- Updated dependencies [520bd09]
+- Updated dependencies [307da67]
+- Updated dependencies [9d4a28a]
+- Updated dependencies [a7da50b]
+- Updated dependencies [1d43161]
+- Updated dependencies [7110019]
+- Updated dependencies [17cc774]
+- Updated dependencies [80905a1]
+- Updated dependencies [6b08ebf]
+  - @memberjunction/ai@6.2.0-edge.1
+  - @memberjunction/core-entities@6.2.0-edge.1
+  - @memberjunction/ai-core-plus@6.2.0-edge.1
+  - @memberjunction/core@6.2.0-edge.1
+  - @memberjunction/actions-base@6.2.0-edge.1
+  - @memberjunction/storage@6.2.0-edge.1
+  - @memberjunction/global@6.2.0-edge.1
+  - @memberjunction/ai-engine-base@6.2.0-edge.1
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.1
+
+## 6.2.0-edge.0
+
+### Minor Changes
+
+- 38c4a81: AI model & vendor metadata refresh (weekly research run, 2026-09-14).
+  - Adds **Sakana AI** as a vendor and its two orchestration models, **Fugu Max** (`sakana/fugu-max`, $2/$6 per 1M) and **Fugu Ultra v2** (`sakana/fugu-ultra-v2`, $5/$30 per 1M short-context), both routed through OpenRouter.
+  - Corrects **GPT 5.6** (Sol) pricing: the $5/$30 cost row is expired at 2026-08-21 and replaced by OpenAI's current $4/$20 rate (cached input $0.40), which OpenAI guarantees only through 2026-11-21.
+  - Adds the missing **DeepSeek V4.1 Flash** OpenRouter cost row ($0.15/$0.60 off-peak, $0.003 cache read).
+  - Corrects the **GLM 5.3** OpenRouter context window (200,000 → 1,310,720) and refreshes its description, which still claimed no rate card had been published.
+
+- e51296c: AI model & vendor metadata refresh (weekly research run, 2026-09-21).
+  - Adds **GLM-5.3-FlashX** (`glm-5.3-flashx`, `z-ai/glm-5.3-flashx`), Z.AI's 200 tokens/s serving variant of GLM-5.3-Flash released 2026-09-18, with a Z.AI cost row at $0.37/$1.25 per 1M and $0.075 cache read. Same weights and PowerRank as GLM-5.3-Flash; only CostRank moves. No OpenRouter cost row yet — the gateway rate could not be confirmed independently.
+  - Marks the **Claude Opus 5 Fast** Anthropic route `Deprecated`: Anthropic retired the dedicated `claude-opus-5-fast` model id on 2026-09-01 in favour of `speed: "fast"` on `claude-opus-5`. The id still serves, so the cost row stays `Active` and the model stays `IsActive`. The description now records the replacement invocation.
+  - Adds a **Grok 4.6** route on **Microsoft Foundry (Azure)** at `Status: "Preview"` (public preview from 2026-08-26), with a cost row at $2/$6 per 1M and $0.50 cache read. Foundry caps the context window at 200K, so no long-context tier applies on this route.
+
+  No cost row was expired and no vendor was added. DeepSeek V4 Pro is deliberately untouched: its announced 2026-09-14 retirement was reversed within 45 hours and the model still serves at unchanged prices.
+
+- 7658d68: Mobile app v6: make realtime voice actually resolve on a device, route hosted applications' generic nav items, and scope the new agent-session grants with row-level security.
+
+  **Why `minor`.** The branch adds metadata — two `MJ: Row Level Security Filters` rows and the `UI` role's `MJ: AI Agent Sessions` / `MJ: AI Agent Session Channels` permissions — which becomes a consolidated metadata-sync migration at release.
+
+  **Realtime voice could not have worked on a device.** The React Native WebRTC drivers registered against `OpenAILiveClient` / `OpenAIRealtimeClient`, but `ClassFactory` matches on the registered base class's _name_ and the session runtime resolves against `BaseRealtimeClient` — so the RN drivers were filed in a bucket lookup never reads, the browser driver won, and `new RTCPeerConnection()` threw under Hermes. They now register against `BaseRealtimeClient` under the same provider keys the browser drivers use, `registerGlobals()` from `react-native-webrtc` runs at module load, and a unit test asserts on the resolved _class_ rather than merely that something resolves.
+
+  Two related corrections: the RN drivers now override `createAudioSink()` rather than `attachRemoteAudio()` — the latter is where the base driver installs `pc.ontrack`, so overriding it silently removed the remote stream, its subscribers and the output audio meter — and `'xai'` is no longer advertised as supported. Grok Voice speaks the OpenAI protocol but over a websocket with a client-owned PCM plane, so it would have hit the `AudioContext` crash the provider filter exists to prevent.
+
+  **Session lifecycle.** `RealtimeSessionRuntime` gains three fixes that apply to every host, Explorer included: a start abandoned mid-flight (the user leaves while the mint is in progress) now releases the microphone, the provider connection and the server-side session instead of leaking all three; concurrent teardowns coalesce onto one run instead of racing into two `Disconnect()` calls and two `CloseAgentSession` mutations; and a host that declines the resolved provider now unwinds through the shared teardown, so channel plugins are disposed rather than left published with live tool handlers. `IRealtimeMediaHost` gains an optional `ReleaseMicrophone()` — iOS is put into a record-and-play audio category for a call, and nothing was putting it back. `LastStartError` lets a host tell a denied microphone apart from a provider failure.
+
+  **Agent runs reported failure as success.** `ConversationAgentRunner.processMessage` returns `null` only when no agent resolves; every other failure — a quota rejection, an agent that threw, a transport error — comes back as a well-formed result carrying `success: false`. The mobile send path tested only for `null`, so those turns reported success and left a permanently spinning bubble with no error anywhere in the UI.
+
+  **Attachments were uploaded after the agent had already answered.** Photograph an invoice, ask for the totals, and the agent replied "I don't see an attachment" while the file appeared a second later. `SendMessage` now takes an `onUserMessageSaved` hook that runs in the window between the user's row existing and the run starting.
+
+  **Hosted applications.** Nav items are parsed into a shape derived from the generated `MJApplicationEntity_IDefaultNavItem` rather than a hand-copy, which restores `RecordID` — the field identifying which record a non-`Custom` item opens. Generic resource types now resolve through the same registry as `Custom` ones, keyed by the type name, and this build ships a `Dashboards` surface backed by the same `DashboardView` the Explorer route mounts. Retired applications and deactivated nav items are filtered the way MJ Explorer filters them, and the launcher's ordering now matches `compareUserApplications`.
+
+  **Storage seam corrections.** `MJStorageBlobStore` restores the compensating `DeleteObject` when the `MJ: Files` row fails to save (otherwise a successful upload with a failed row leaves permanently orphaned bytes) and configures `FileStorageEngine` before reading its accounts, so a cold process does not silently fall back to environment-only credentials. `ConversationAttachmentService.DeleteAttachment` now honours the store's return value instead of deleting the row regardless — the anti-orphan guarantee three doc comments promised. The browser store implements `GetDownloadUrl` through `CreateMediaAccessToken`, which is what makes Explorer's new storage-backed attachments readable rather than write-only, and `saveAttachments` accepts the agent whose `InlineStorageThresholdBytes` the decision should honour.
+
+  **Security.** The `UI` role's new read/update permissions on agent sessions and session channels are scoped by two new RLS filters (`UI: Own Agent Sessions`, `UI: Own Agent Session Channels`), matching the pattern the Widget Guest rows already use. Unscoped, any signed-in user could read and modify another user's sessions.
+
+  The sample application no longer sets `DefaultForNewUser` — a worked example should not install itself into every deployment's new users — and its screen now handles transport failures rather than showing "Loading…" forever on a dead network.
+
+### Patch Changes
+
+- 37891d3: Move the conversation-attachment blob seam (`IAttachmentBlobStore`, `AttachmentBlobUploadInput`,
+  `AttachmentBlobUploadResult`, `AttachmentBlobStoreUnavailableError`) from `@memberjunction/aiengine`
+  to `@memberjunction/ai-core-plus`, next to the placement policy in `ConversationUtility`. `aiengine`
+  re-exports it, so existing consumers are unaffected.
+
+  `ng-conversations` implements this seam for the browser and imported the types with `import type`,
+  on the reasoning that an erased import costs nothing. It costs nothing at _runtime_ — but the
+  class-registration manifest generator walks **package.json**, not imports, so the declared
+  dependency was a live edge regardless. When `aiengine` gained a `@memberjunction/storage`
+  dependency, that edge carried seven storage-driver classes into the browser manifest and broke the
+  MJExplorer bundle on `node:net` / `node:stream` / `node-fetch`.
+
+  The rule this encodes: a browser-reachable package must not _declare_ a server-only dependency,
+  even for a type. `ng-conversations` no longer declares `aiengine` at all.
+
+- 6ad6434: Put conversation-attachment blob access behind a seam, so the attachment service stops being server-only — and fix the inline-everything bug that duplication had already caused.
+
+  `ConversationAttachmentService` is 859 lines of attachment _policy_: limit validation, the inline-vs-MJStorage threshold, modality resolution, thumbnails, content URLs for AI consumption. None of it is platform-specific. But it imported `@memberjunction/storage` for four members, and that package depends on `@aws-sdk/client-s3`, `@azure/storage-blob`, `dropbox` and more — so one import made the whole package unusable from any browser or React Native client. It was that package's **only** server-only dependency.
+
+  The predictable result was three implementations of one policy: this service, a 494-line copy in `@memberjunction/ng-conversations`, and a third in the mobile app. And they had already drifted — **the Angular copy stored every attachment inline**, never consulting `ConversationUtility.ShouldStoreInline`, so a 5 MB image went into a database column instead of MJStorage, contradicting the `MJ: Conversation Detail Attachments` contract that `InlineData` is for small attachments and `FileID` for large ones.
+
+  **The seam.** `IAttachmentBlobStore` — `Upload` / `Download` / `GetDownloadUrl` / `Delete`. Three deliberate choices:
+  - **base64 at the boundary, never `Buffer`.** `Buffer` is a Node global; its presence in a shared signature is precisely what pinned this to one runtime. (The realtime runtime extraction learned the same lesson when `Blob` had leaked into session orchestration.)
+  - **Optional by contract.** A host binding nothing gets inline attachments and a distinct, recognizable "storage not available on this host" — so a caller can tell a _deployment shape_ from an _incident_. That is the normal case for an end user, who typically cannot write to MJStorage at all.
+  - **Bindings live outside the service.** `MJStorageBlobStore` (MJServer, wrapping `FileStorageEngine`) and `GraphQLAttachmentBlobStore` (ng-conversations, wrapping the existing `GraphQLFileStorageClient`). Neither is imported by the service.
+
+  **What changed behaviourally:** Explorer now honours the storage threshold — large attachments go to MJStorage through MJAPI instead of silently inline. Everything else is a same-shape substitution.
+
+  `DownloadFileContent` returns `string` (base64) rather than `Buffer | null`; its one caller, `RunAIAgentResolver`, is updated. Behaviour is otherwise unchanged: the MJStorage bodies moved verbatim, and the account-vs-provider credential resolution — which previously existed in only one of the three near-identical driver-resolution blocks — is now shared by all of them.
+
+  Verified: full monorepo build 306/306 + 278/278; ng-conversations 1,324 tests green; aiengine 130 tests green (including new seam coverage); mobile 195 green.
+
+  **Scope of the portability win, stated exactly.** This takes `@memberjunction/storage` — and with it the AWS, Azure and Dropbox SDKs — out of the attachment service's dependency graph, and it puts the inline-vs-storage decision behind one shared `ConversationUtility.ShouldStoreInline` call on every surface. It does **not** make `@memberjunction/aiengine` importable from a browser at runtime: the package's entry point also exports `AIEngine`, which imports Node's `crypto` at module scope for an embedding-cache key, and Explorer's bundler cannot resolve that. So the Angular host takes the _type_ from this package (`import type`, erased at compile time) and the _policy_ from `@memberjunction/ai-core-plus`, holding its own `GraphQLAttachmentBlobStore` rather than reaching through `GetAttachmentService()`. Removing that one `crypto` import — or splitting the package's entry points — is the remaining step, and it belongs to `aiengine`'s owners.
+
+- Updated dependencies [abf8778]
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [b518dfa]
+- Updated dependencies [37891d3]
+- Updated dependencies [7be1684]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [d122a41]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [683f652]
+- Updated dependencies [a8be410]
+- Updated dependencies [b87e4ac]
+- Updated dependencies [f48dffc]
+- Updated dependencies [630bb88]
+- Updated dependencies [44faf83]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [575bfae]
+- Updated dependencies [a17a228]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [104125c]
+- Updated dependencies [5513c2a]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [e962151]
+- Updated dependencies [2c590b0]
+- Updated dependencies [fc3da91]
+  - @memberjunction/actions-base@6.2.0-edge.0
+  - @memberjunction/ai@6.2.0-edge.0
+  - @memberjunction/core-entities@6.2.0-edge.0
+  - @memberjunction/ai-core-plus@6.2.0-edge.0
+  - @memberjunction/core@6.2.0-edge.0
+  - @memberjunction/ai-engine-base@6.2.0-edge.0
+  - @memberjunction/storage@6.2.0-edge.0
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.0
+  - @memberjunction/global@6.2.0-edge.0
+
 ## 6.1.0
 
 ### Minor Changes

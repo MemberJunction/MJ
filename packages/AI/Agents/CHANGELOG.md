@@ -1,5 +1,451 @@
 # @memberjunction/ai-agents
 
+## 6.2.0-edge.2
+
+### Minor Changes
+
+- ca853fc: Agents can now narrow the actions, sub-agents and skills their prompt describes: set `maxActionsInPrompt` or `maxSubAgentsInPrompt` to a positive number and, once per run, one decision call keeps the items most useful for the opening request, plus any with `MinExecutionsPerRun` and the Find Candidate tools. Each narrowed list starts with a line saying how many items it hides and how to reach them: hidden sub-agents and skills are named, and hidden actions are found with Find Candidate Actions, so actions are narrowed only when the agent has that action. It is off by default, only hides entries (anything permitted can still be called, and the counts stay whole), and shows the full catalog if the decision fails. Narrowing is prose-only: with native tool calling, every action and sub-agent is still declared as a tool. The two params' descriptions in the Loop agent type's `PromptParamsSchema` (metadata) now describe this, replacing the old "0 to hide, or the first N" meaning, which was never implemented.
+- 672b4c6: Adds a `DecisionReranker` and a `Decision Reranker` model: it scores each candidate note with one typed-decision Likelihood question, and an agent opts in by pointing its `RerankerConfiguration.rerankerModelId` at the model. Examples can now be reranked too, with the same reranker, when an agent's reranker configuration sets `rerankExamples` to true; it is off by default. The examples rerank records a `Rerank Examples` step on the agent run, linked to its prompt run, as the notes rerank records `Rerank Notes`.
+
+  A rerank's prompt runs (the decision runs, or `LLMReranker`'s chat run) are children of the rerank's run, whose cost and token rollups include them, and the rerank's run step joins the agent run's steps, so the agent run's cost and token totals and its `MaxCostPerRun` / `MaxTokensPerRun` guardrails count the rerank.
+
+  A `DecisionReranker` rerank has a time budget, 15 seconds unless `RerankerConfiguration.decisionTimeoutMS` sets another: when it runs out the decision calls are aborted and the rerank fails, so the agent falls back as `fallbackOnError` says. When no decision model declares `MaxQuestionsPerCall`, each decision call carries at most 20 documents, or `RerankerConfiguration.decisionMaxDocumentsPerCall`, and a larger rerank is split across parallel calls.
+
+  When no candidate reaches `minRelevanceThreshold`, the agent keeps the vector search results instead of injecting nothing. For a `DecisionReranker`, whose probabilities are not calibrated, 0.1 is the recommended threshold.
+
+  `RerankerService.GetReranker` builds a `DecisionReranker` without a prompt ID, as its docs say: it asks the decision prompt its model-vendor `APIName` names, or `Default Decision`.
+
+- 0e5ad68: Agents: one master switch for decision-model use, the Loop prompt param `decisionsEnabled`, `false` by default. Unless it is `true`, an agent never asks a decision model on its own, whatever its other settings say. Inline `decisions` get no docs and no response field (even with `includeResponseTypeDefinition.decisions: true` set explicitly), and any request the model sends anyway is skipped. `finishIf` is treated as `finishIfMode: 'off'`. Decision discovery, the payload change check, catalog narrowing (which then describes the whole catalog) and the Memory Manager's note gate do not run. With `decisionsEnabled: true`, each of those works as before and keeps its own setting, each still off by default.
+
+  Set it in an agent's `AgentTypePromptParams`, or for one run in `data.__agentTypePromptParams`. `decisionsEnabled` is declared in the Loop agent type's `PromptParamsSchema` with a default of `false`, and each of the settings it governs now says it needs it. Explicit uses do not read it: a Flow or task-graph Decision step, the Run Decision action, and the other direct callers of `AgentDecisionService` and `AIDecisionRunner`.
+
+  Integration tests: a new deterministic bundle, `agent-decisions-switch` (IT97, nine checks), runs real agents with the switch off, on in an agent's params, and flipped for one run, on scripted chat replies and a stand-in decision driver, so no model is called. It covers the five loop uses, the Memory Manager's note gate, and a Flow agent's Decision step, which the switch leaves alone.
+
+  Prompt params: the alignment of `includeResponseTypeDefinition` now works on a copy, so it no longer writes into a run's `data.__agentTypePromptParams`. Sub-agents inherit that object, so before this a parent with the switch off could turn a sub-agent's `decisions` and `finishIf` fields off.
+
+  Test doubles: `RegisterTestLLM` and the decision stand-in now register above every existing registration for a name, so a registration made after an earlier restore still wins over the real driver that restore put back.
+
+- 26c0178: Flow agents gain a Decision step: one typed decision call whose outgoing paths route on its answers through the `decisions` condition root (`decisions.<key>.<question>`), both when the flow is dispatched as a task graph and when it runs in-run. An answer that fell below its question's `minConfidence`, or was never given, holds every condition that reads it, so a flow never guesses a branch; a failed decision call is a failed step, whose recovery path is taken whatever its rank. A state that is missing or empty, `{}` included, fails the step the same way in both modes, before any model is asked. A flow with a Decision step is validated the same way in both modes before its first step. Saving a task graph as a workflow now keeps its Decision nodes as Decision steps. Saving a workflow through Agent Manager now resolves the actions and prompts its steps name, so a saved Action step keeps its action and a Decision step keeps its prompt, and an action it cannot resolve is reported.
+- 96daca8: Loop agents can ask typed decision questions (Likelihood, Choice, Score) through a new `decisions` field in their response. A fast decision model answers them inline on the same turn, at no LLM-turn cost, and the answers arrive on the next turn, as artifact tool results do. A request can target literal text, a payload path, or each item of a payload array. **Opt-in per agent:** set `includeDecisionsDocs: true` in the agent's `AgentTypePromptParams` (the default is `false`). That adds the decisions docs to its loop system prompt and the `decisions` field to its response type. Setting `includeResponseTypeDefinition.decisions: true` on its own adds the field without the docs. A `decisions` field from an agent that has neither is skipped. **Data flow:** each request sends its state (literal text, or the payload values it names) to the `Default Decision` prompt's model: Jev, via OpenRouter, first, and LLM Decision on failover. Set `decisionPromptName` to route them to a different prompt.
+
+  Each decision call is linked to its Decision step, so it counts toward the run's cost and token totals and their `MaxCostPerRun` / `MaxTokensPerRun` limits. At most 8 requests run per turn (`decisionsMaxRequests`), a malformed request fails on its own without losing the turn, and decisions sent with a step that ends the run (a passing `finishIf`, a sub-agent's `terminateAfter`, or client tools with `taskComplete`) are skipped rather than paid for and never read.
+
+- aa912ca: Loop agents can attach conditional completion gates (`finishIf`) to `Actions` steps and to a single `Sub-Agent` (not parallel `subAgents`). When the step completes successfully, a dedicated fast decision model evaluates the specified Likelihood questions against the step outputs. If all criteria meet or exceed the threshold (default 0.90), the agent completes immediately with the specified message, saving an entire turn of LLM latency and cost. The gate is skipped when an action returns `AIDirectives`, so the agent still reads them.
+
+  **Off by default: gates are opt-in per agent**, through the new `finishIfMode` prompt param in the agent's `AgentTypePromptParams`:
+  - `off` (the default): the model is not taught `finishIf`, and a gate it writes anyway is never evaluated.
+  - `shadow`: the model writes gates, and each one is evaluated and recorded as a `Finish check` step, but it never ends the run. Use it to measure an agent's gates on real traffic, at the cost of one decision call per gate.
+  - `on`: a passing gate ends the run with the model's pre-written message.
+
+  A replay of recorded action rounds found that a gate at the 0.90 threshold would have ended 22% of the rounds where the agent went on to act, so turn an agent `on` only after its shadow results look right. In `on` mode a gate can only end a run early, and only when every action succeeded and every answer clears the threshold; every gate is logged as a `Finish check` step. **Data flow** (in `shadow` and `on`): each gate sends the step's results (action outputs, or the sub-agent's result) to the `Default Decision` prompt's model: Jev, via OpenRouter, first, and LLM Decision on failover.
+
+- f3fa01e: finishIf: a `finishIfMode` that is set but is not `off`, `shadow` or `on` (for example `"On"` or `"true"`) still turns the agent's gates off, but it now logs a warning naming the agent and the value it got. The warning is logged once per agent and value, not on every turn. A run request can set the value, so the warning shows at most its first 100 characters (and its length), and at most 1,000 agent and value pairs are remembered as reported, the least recently seen dropped first. Shadow mode after a sub-agent is now covered by a test.
+
+  Loop-agent decisions: decision requests held back until their step had run are now logged as skipped when the run is cancelled, or when an error is thrown out of the step loop, as well as when the step ends the run. Each held request is logged exactly once, and the log line says how the run ended. Nothing new is sent; this only makes the log complete.
+
+  Loop-agent decisions: one turn's decision requests now make at most `decisionsMaxCallsPerTurn` decision calls in total (default 100), counting every `forEachItemIn` item. Before, only the number of requests was capped (8), so one turn could send up to 800 calls before the run's cost guardrails, checked between steps, could stop them. The budget is handed out in request order before any call is made. A `forEachItemIn` request it cuts short asks its first items and reports the rest in `skippedCount`, and a request it leaves no calls for is not run and gets a failed result saying why, as a request over the request cap does. With a budget of 0, decision calls are off for the agent, and that result says so rather than inviting the agent to ask again next turn. `decisionsMaxCallsPerTurn` is declared in the Loop agent type's `PromptParamsSchema`.
+
+  Loop-agent decisions ship opt-in (`includeDecisionsDocs: true`, default `false`). Measured on the Prompt Eval corpus (68 cases, four models, 1,632 runs), the docs added about 1,200 prompt tokens to every turn, changed no decision, and no model wrote a `decisions` request. `includeDecisionsDocs` is declared in the Loop agent type's `PromptParamsSchema` with a default of `false`.
+
+- d0cea53: Loop agents can opt in to a payload change check with the `payloadFeedbackCheck` prompt param (off by default, and declared in the Loop agent type's params schema): when the payload analyzer flags one of the agent's own changes, one typed decision call asks whether each change was intended, and the changes judged unintended are listed on the agent's next turn so it can confirm them or put them back. Nothing is reverted automatically. A step that ends the run is not checked, the call is bounded at 30 seconds, and when it fails or times out every change is accepted. The call's prompt run is linked to its `Payload change check` step, so the run's cost and token totals count it.
+
+  `PayloadFeedbackManager.QueryAgent` (and the deprecated `queryAgent`) now asks typed decisions instead of the `Payload Change Feedback Query` prompt, whose metadata is removed. **Its second parameter changed type**: it was a `Record<string, unknown>` conversation context that it never read, and is now a `PayloadFeedbackContext` (the agent's reasoning and message for the step, the reasoning for the change, the agent ID and a cancellation signal). A caller that passed a conversation record should pass those fields instead. The constructor takes an optional `AgentDecisionService`, and `LastDecisionResult` exposes the last call's result so a caller can link its prompt run.
+
+- 4d647e6: Add Rubrics, a core way to score any record against a published set of weighted criteria.
+
+  What ships:
+  - Schema for rubrics, versions, criteria, scales, anchors, bands, evaluations, and score rows, plus layered consensus views. Published versions are frozen. Raw writes to a frozen row throw 51101–51110. A draft version delete is an `INSTEAD OF DELETE` trigger. `MJ: Test Rubrics` is deprecated in metadata.
+  - `RubricScoring` and `RubricVersionDiff` in `@memberjunction/rubrics-base`. The outcome ladder is Incomplete, NotApplicableFailure, GateFailed, Passed or BelowThreshold, then Scored. The publish base is the highest Published or Retired version.
+  - `@memberjunction/rubrics`: LLM, agent, deterministic, and human evaluators. Actions are Evaluate Record Against Rubric, Get Rubric, Get Rubric Subject, Get Rubric Consensus, Create Rubric Draft, and Submit Human Rubric. Create Rubric Draft and the architect import do not publish. The evaluation agent does not call Get Rubric Consensus.
+  - Presentational widgets in `@memberjunction/ng-rubrics`, Explorer forms, and a Rubrics application. The agent form has a Rubrics tab.
+  - Six guide-example rubrics stay Draft. Seven agent rubrics publish at 1.0.0 and bind to their agents. Marketing Agent is not bound. Shipped self-check links and the sampling job stay Disabled. A test that already has an `llm-judge` oracle keeps it.
+  - Testing: rubric resolution, a `rubric` oracle, judge calibration, per-criterion spread on `--flaky-check`, `mj rubric`, and `mj test promote-criteria`. `Test.RubricID` and `TestSuite.RubricID` select a rubric. `TestSuiteRun.Score` is stored.
+  - The deterministic integration bundle is IT98 at sequence 49.
+
+  `GeneratePluralName` keeps the head of a name verbatim and pluralizes only the tail, preserving that tail's case. A linear scan finds the tail, so `user_profile` and `userProfile` no longer produce the same view name, a leading character such as Ä stays on the head, and `Contact Person` pluralizes to `Contact People`. The base view for a criterion is `vwRubricCriteria`.
+
+- bb33c77: Loop agents can now suggest the agent to delegate to before their first prompt: with the new `decisionDiscovery` prompt param on (off by default), one decision over the agents the user may run and the host allows adds a `<suggested_agent>` message when it is confident, and Sage's prompt delegates to that agent directly instead of calling Find Candidate Agents first. It asks only about a conversation's opening request, and only when at least three agents are left to choose from. The agent run-permission filter the Find Candidate Agents actions use now lives on `AIAgentPermissionHelper` (`FilterRunnableAgents`, `IsDirectlyDiscoverable`), so both offer the same agents.
+
+### Patch Changes
+
+- ff3097d: Realtime voice sessions started from an agent run now resolve their vendor key against the run's API keys, and the Computer Use engine gains a key-resolver seam (not yet wired in MJ).
+
+  `ExecuteAgentParams.apiKeys` already reaches every prompt's legacy key tier, and (as of #4611) is offered to every action as `RunActionParams.RuntimeAPIKeyResolver`. Realtime resolved against the environment alone, so a run carrying a customer's key still opened its voice session on the platform's.
+  - **`@memberjunction/ai`** — `AIAPIKeyResolver` (driver class in, key out) and `MakeAIAPIKeyResolver(apiKeys?)`, which applies `GetAIAPIKey`'s order: the list's key for that driver class, else the platform's. Passing nothing yields the platform lookup. For prompts that order is only the legacy tier (`AIPromptRunner` tries MJ Credentials first), and realtime does not consult MJ Credentials. `RealtimeAPIKeyResolver` becomes an alias of `AIAPIKeyResolver`. `@memberjunction/actions-base` keeps its own identical `RuntimeAPIKeyResolver`, and the prompt runner still takes the key list.
+  - **`@memberjunction/ai-agents`** — `BaseAgent.resolveRealtimeModel` (the server-run realtime session) resolves against `params.apiKeys`. `PrepareClientSessionInput.APIKeys` carries them into `RealtimeClientSessionService`, and `BaseAgent.StartBridgeRealtimeSession` fills it. There the order is run key, then the service's overridable `getAPIKeyForDriver` seam (by default the environment key), on all three model-selection branches, with vendor selection and the mint sharing that one chain. `CreateBridgeRealtimeSession` (the LiveKit / telephony factory) passes no `apiKeys`, so sessions it opens stay on platform keys, and the browser-initiated session mutation never sets them. `GetRealtimeModelVoices` takes an optional resolver as a seam; its only caller, the voice-picker query, has no run context and passes none.
+  - **`@memberjunction/computer-use`** — `RunComputerUseParams.APIKeyResolver`: an optional resolver that the engine's direct-LLM funnel (used when the controller and judge models are pinned) asks first, falling back to the platform key. Nothing in MJ sets it yet. `ComputerUseAction` does not forward it, and `MJComputerUseEngine`'s default path runs stored prompts through `AIPromptRunner`, which does not consult it. So browser-agent runs started from MJ are unchanged.
+
+  **Vendor selection is affected, deliberately.** Realtime picks the first vendor whose key resolves, so a run that brings a key for a vendor the deployment holds no platform key for now reaches that vendor. That is a routing change, not only a billing one.
+
+  No behaviour change for a session with no runtime keys, including one on a service subclass that overrides `getAPIKeyForDriver`.
+
+- 50ba290: Sage's agent-discovery decision now judges its answers calibrated per decision model, at a threshold set from the agent-discovery Decision Eval: `DECISION_DISCOVERY_MIN_CONFIDENCE` is 0.85, and `DECISION_DISCOVERY_CALIBRATION` holds the fitted Platt parameters for Jev and LLM Decision. Each calibration applies only to the exact model it was fitted on, through `FindDecisionCalibration` (`@memberjunction/ai-core-plus`): Jev at its pinned `typesafe/jev-1.13-20260917`, and LLM Decision only when its GPT-OSS-120B chat model answered. An answer from a model with no calibration is treated as unsure, and discovery warns once per such model. The Decision Eval records whether production would inject through the same calibrated path.
+- ffb3c0f: The Decision Eval harness can now measure Sage's agent-discovery decision (`agent-discovery`), beside a `semantic-search` baseline of what `Find Candidate Agents` ranked first, with a labelled-corpus generator and discovery metrics in the scorecard. `@memberjunction/ai-agents` now exports the discovery helpers, including `BuildDecisionDiscoveryOptionSet`, which `BaseAgent` and the harness both use to build the options. The discovery eval times the whole discovery, options and semantic search included, as production's 1,500 ms timeout does, and counts an answer that arrives later as not injected.
+- b03a928: feat(ai-agents): export the finishIf gate's pure parts, so an eval can apply exactly production's rule
+
+  The finishIf gate's state formatting, question building, verdict and validation now live in one pure module, `finish-if-state.ts`, and `BaseAgent` and `LoopAgentType` call it. Nothing the gate does changes; a test pinned the formatter's output before the move.
+  - `FormatActionForFinishIf`, `FormatSubAgentForFinishIf` and `CapFinishIfState` build the state the decision model reads, with `FINISH_IF_STATE_MAX` (16,000) and `FINISH_IF_STATE_EXCERPT` (2,000).
+  - `BuildFinishIfQuestions` maps the questions onto `q1`, `q2`, … Likelihood questions.
+  - `JudgeFinishIf` is the pass/fail rule: every question needs a Likelihood answer that reaches the threshold, so a missing answer, an answer of another kind or a non-numeric probability fails it. With no question at all it fails closed (production never asks an empty set: `IsValidFinishIf` requires one).
+  - `IsValidFinishIf` is the loop agent type's check: one to three non-empty questions and a non-empty message.
+
+  The finishIf replay eval (`integration-test-suite/rigs/finishif-replay.ts`) uses them to replay the gate on recorded runs.
+
+- b44c7cf: Realtime voice sessions from magic-link (anonymous) users now save their hidden tool-execution and artifact-anchor conversation turns. These were refused because they were written as the system user, who does not own the conversation. A refused conversation-detail write now reports why, instead of logging "unknown error" (#4791). Agent runs started from a conversation now include that reason when saving their conversation messages fails.
+- 0d61b53: Fix vectorization into a colocated vector database (SQL Server 2025 `VECTOR`, pgvector colocated) when the syncer is built without a provider (#4910).
+
+  `VectorBase.Provider` fell back to the `Metadata` wrapper instead of a real `IMetadataProvider`. The wrapper fails `IsColocatedVectorHost`, so `TryWireColocatedHost` never wired a host and every upsert failed with "requires a host connection". The fallback is now `Metadata.Provider`, and the `as unknown as` casts are gone.
+
+  The callers that build an `EntityVectorSyncer` now pass the provider they already hold: `VectorizeEntityResolver` (the request's provider), `KnowledgeAgent` (the tool call's provider, also for `DuplicateRecordDetector`), the `Vectorize Entity` and `Autotag and Vectorize Content` actions (`params.Provider`), and `KnowledgePipeline`, which gains an optional constructor provider.
+
+- 3276daa: The Memory Manager can gate extracted notes on a typed decision instead of the extraction prompt's self-reported confidence (`EnableDecisionGate`, or `enableDecisionGate` in `params.data`; off by default). Each candidate note is asked as its own Likelihood, calibrated per model, and kept at a calibrated 0.6. Only Jev is calibrated: measured on 337 labelled notes, it kept 6.2% of conversation-only notes at 96.1% precision, where a proxy self-report scorer kept 40.0% at 85.3%. The proxy scores notes in a separate call, with a different rubric from the `Extract Notes` template and none of its skip rules, so production's own filter probably keeps fewer of those notes. A batch answered by an uncalibrated model, or a failed call, falls back to the self-reported rule. Only a caller that passes `data` can turn the gate on today, such as the Execute Agent action or the MCP server's agent tool. The scheduled Memory Manager job passes no `data`, so it can't opt in yet.
+  - The decision's run step joins the agent run's steps and carries the decision's prompt run, so the run's cost and token totals count the gate.
+  - Each note is judged against the conversation it came from: one decision per conversation, with that conversation's excerpt formatted as the measurement's corpus was (`FormatMemoryNoteExcerpt`, `GroupMemoryNotesByConversation`). A note that names none of several conversations keeps the self-reported rule.
+  - A note the calibrated model gave no usable answer for keeps the self-reported rule, as a failed call's batch does. Corrective notes mined from failed runs are not gated, since the gate was measured on conversation notes only. The gate's calls take the run's cancellation signal.
+
+- 200e634: Round 16 memory-leak audit fixes: bound three previously-unbounded caches and fix a dead process-kill escalation.
+  - `RealtimeClientSessionService`'s `sessionWireActionMaps`/`targetWireActionMaps`/`sessionDirectConfigs` and `bridge-room-transcript-sink.ts`'s `roomToConversation`/`writeChains` were plain `Map`s on process-lifetime objects with no session/room-ended hook to evict on — every realtime voice session or meeting room ever handled left a permanent entry. Converted to `MJLruCache` (bounded, TTL'd), mirroring the same file's existing `promptRunWriteChains` pattern.
+  - `EntityActionEngineServer.RunEntityAction()` constructed a fresh `EntityActionInvocationBase` on every single dispatch instead of reusing one per invocation type, silently discarding the Script invocation type's own `_scriptCache` before a second lookup could ever hit it. Added an instance cache keyed by `InvocationType.Name`.
+  - `ChildProcessExecutor`'s `Kill()` sent only `SIGTERM` with no `SIGKILL` follow-up, on the hot path of every AI-agent CLI turn. Added a `SIGTERM`→5s grace→`SIGKILL` escalation.
+  - While testing that escalation, found `WorkerPool.Shutdown()`'s own `SIGTERM`→`SIGKILL` escalation — believed correct since this audit's Round 10 — was dead code: `ChildProcess.killed` is set `true` synchronously once `kill()` sends a signal, not once the process exits, so the old `if (!worker.process.killed)` guard never actually fired `SIGKILL`. Fixed to key off the process's `exit` event instead.
+
+  No behavior changes on any success path; all four packages' full test suites pass with new coverage for each fix.
+
+- Updated dependencies [f555162]
+- Updated dependencies [043f418]
+- Updated dependencies [e97d95c]
+- Updated dependencies [ff3097d]
+- Updated dependencies [79279f2]
+- Updated dependencies [3fbda62]
+- Updated dependencies [eaa9455]
+- Updated dependencies [ff00d60]
+- Updated dependencies [2552b1e]
+- Updated dependencies [4b680f9]
+- Updated dependencies [660ef45]
+- Updated dependencies [8fd1c46]
+- Updated dependencies [ed77dd7]
+- Updated dependencies [21f9e15]
+- Updated dependencies [28fdf22]
+- Updated dependencies [4248fb3]
+- Updated dependencies [672b4c6]
+- Updated dependencies [f3c6161]
+- Updated dependencies [01fafc6]
+- Updated dependencies [35ffb95]
+- Updated dependencies [5148534]
+- Updated dependencies [cf97480]
+- Updated dependencies [0adaf76]
+- Updated dependencies [5ee02db]
+- Updated dependencies [ce1a5c3]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [26c0178]
+- Updated dependencies [594f2e0]
+- Updated dependencies [861cbf0]
+- Updated dependencies [705ab4e]
+- Updated dependencies [e51ce8a]
+- Updated dependencies [96daca8]
+- Updated dependencies [aa912ca]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [14e2a3a]
+- Updated dependencies [5986939]
+- Updated dependencies [200e634]
+- Updated dependencies [4d647e6]
+- Updated dependencies [7bcba8c]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [bb33c77]
+- Updated dependencies [369e229]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [fb267da]
+- Updated dependencies [2854a2e]
+- Updated dependencies [74b3e69]
+  - @memberjunction/ai-core-plus@6.2.0-edge.2
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/ai@6.2.0-edge.2
+  - @memberjunction/ai-prompts@6.2.0-edge.2
+  - @memberjunction/ai-vector-dupe@6.2.0-edge.2
+  - @memberjunction/ai-vector-sync@6.2.0-edge.2
+  - @memberjunction/search-engine@6.2.0-edge.2
+  - @memberjunction/aiengine@6.2.0-edge.2
+  - @memberjunction/core-entities@6.2.0-edge.2
+  - @memberjunction/ai-reranker@6.2.0-edge.2
+  - @memberjunction/actions@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+  - @memberjunction/rubrics@6.2.0-edge.2
+  - @memberjunction/ai-engine-base@6.2.0-edge.2
+  - @memberjunction/templates@6.2.0-edge.2
+  - @memberjunction/actions-base@6.2.0-edge.2
+  - @memberjunction/storage@6.2.0-edge.2
+  - @memberjunction/context-crush@6.2.0-edge.2
+
+## 6.2.0-edge.1
+
+### Minor Changes
+
+- 0eeb89d: **AI usage analytics: a trustworthy cost basis, and the dimensions to slice it by (#4396)**
+
+  Cost reporting was wrong in both directions and could not be sliced by the dimensions anyone
+  actually asks about. This settles the basis, gives runs the keys they were missing, and rebuilds
+  the reporting layer on top.
+  - **Cost doctrine.** `guides/AI_USAGE_AND_COST_ANALYTICS_GUIDE.md` states the rules every consumer
+    now follows: the additive basis is own cost at the prompt-run grain, `Cost IS NULL` means
+    unpriced and is never coalesced to zero, rollups are derived from the hierarchy at query time and
+    never summed from stored inclusive columns, and coverage ships beside every cost figure.
+  - **Attribution.** `AIPromptRun` gains `UserID`, written when the run is created. The agent run a
+    prompt run belongs to is not stored on it: the agent layer owns that link as
+    `AIAgentRunStep.TargetLogID`, now indexed, and the fact view resolves it at query time. Cost
+    precision is aligned on `decimal(19,8)` across both run tables, and six analytics indexes are
+    added. Sub-agent runs now inherit `CompanyID`.
+  - **Parallel execution accounting.** The consolidated parent is created before its arms run, so the
+    arms persist as `ParallelChild` rows with their own cost and the parent carries none — previously
+    the losing arms were never recorded at all.
+  - **Semantic layer.** `vwAIUsageFacts` gives one row per prompt run over the base tables, with
+    time buckets, every dimension, and the flags that carry semantics no column expresses
+    (`IsPriced`, `IsParallelParent`, `IsUnmeasured`, `SourceKind`).
+  - **Aggregates.** Eight saved queries in the `AI` category, every cost figure grouped by currency
+    and carried with its priced/unpriced counts. They run live; materializing the hourly and daily
+    grains is a follow-up.
+  - **Honest dashboards.** The seven analytics surfaces read the aggregates instead of pulling
+    unbounded raw rows, unpriced cost renders as an em dash rather than `$0.00`, and coverage is
+    shown beside every total.
+  - **`mj-query-pivot`.** A generic pivot over any saved Query in `@memberjunction/ng-query-viewer`;
+    the AI Usage Explorer is a thin configuration of it. `ColumnLabels` titles columns, and
+    `HiddenColumns` lets a host group by an ID it does not display (so two records that share a name
+    stay apart while only the name shows).
+
+- 1d43161: Move the Loop agent's volatile runtime state out of the system prompt so provider prompt caches survive across iterations. Until now the Loop agent system prompt rendered the current date/time, Scratchpad State and Payload at its tail, and because those blocks change every iteration the provider's prefix cache broke before it reached the conversation history; measured on Sage the cached share of input was 37% and the entire history was re-read on every step. The template no longer renders those blocks. Instead `BaseAgent.preparePromptParams` builds the same content into a `<mj-runtime-state>` fragment appended as the final `user` message of each request, and the system prompt carries a static pointer telling the model where to find it. At send time the fragment tag literal is escaped in every history message so no tool result or user text can pose as framework state. This is framework behaviour, not a per-agent setting: there is no placement parameter. The fragment is emitted only when the system prompt template carries the `<mj-runtime-state>` pointer. A template that still embeds the state blocks (a database whose template has not yet synced, or the Flow template) gets no fragment, so the transition cannot produce duplicated state; a template with neither (the Harness system prompt, or a custom prompt run without the Loop system prompt) gets none either, so no agent receives an unexplained block. Only a failed template lookup fails open. `specializationPlacement` (`auto`, `systemPrompt`, `trailingMessage`) relocates the agent's own child prompt into the fragment when it contains volatile placeholders, so a per-iteration date in a child prompt cannot silently reintroduce the cache break. `AIPromptRunner` exposes `RenderChildPromptTemplates` publicly for the relocation path, and `AgentChatMessageMetadata` gains a `volatileState` flag so provider adapters can recognise the fragment.
+
+  Two boundaries keep the fragment where it belongs. `prepareSubAgentMessages` drops `volatileState` messages before any message mode slices the parent history, so a sub-agent never sees the parent's payload, scratchpad or specialization and its `MaxMessages` window is spent on real turns. Under append-only retention, context recovery now frees retained fragments first — oldest first, all but the newest — before it touches tool results, and `TrimLastUserMessage` skips them, so a long run cannot overflow on state the next request re-sends anyway; the fragment carries `turnAdded` for the lifecycle. All placeholder names, tag literals and headings live in one `constants.ts`, and the unsync guard's markers are overridable through the protected `volatileTemplateMarkers` getter. The fragment is carried across iterations in a provider-aware way. Providers with block-level or sliding prefix caches (Anthropic, Gemini, Cerebras) get replace-in-place: only the latest fragment is attached, keeping the history compact. OpenAI and xAI (Grok) automatic caches reuse a prior request only when its entire prompt is a byte prefix of the new one, so for OpenAI and xAI prior fragments are retained and the new one appended, making each request an exact prefix extension of the last. The mode is chosen once per run by the new Loop agent prompt param `trailingStateMode` (`auto`, `appendOnly`, `replace`). Which providers need which is metadata, not code: `auto` reads the new `PrefixPromptCache` boolean from the model catalog's `ModelConfiguration` cascade through `BaseAgent.resolvePrefixPromptCache` and `AIEngine.GetEffectiveModelConfiguration`, for the model of the runtime override or of the first iteration's selection, then freezes that answer so a mid-run failover cannot flip the layout; `true` means append-only, anything else replace-in-place. The cascade gains a vendor layer for this: a migration adds a `Configuration` bag to `AIVendor` (JSONType `IAIVendorConfiguration`, a general-purpose vendor bag whose `ModelDefaults` key is a model-configuration bag), and the engine now resolves Model Types < Models < Vendors' `Configuration.ModelDefaults` < Model Vendors: the vendor default is the host-wide default for every model it serves and beats the model's own bag, merged per key, with the model-vendor row as the tie-breaker. `metadata/ai-vendors` sets `PrefixPromptCache: true` under `Configuration.ModelDefaults` on the OpenAI and x.ai vendor rows; every model they serve inherits it, and a model-vendor row can override it for one model on a host that diverges. `@memberjunction/ai` gains `AIVendorConfiguration` and `ParseVendorConfiguration` alongside. There is no vendor-name or driver-class matching. Turn 1, before any selection is known, uses replace-in-place; if turn 2 resolves to append-only, turn 1's fragment is spliced back at the turn-1 boundary, which reproduces the bytes an append-only turn 1 would have sent, so nothing is lost by deferring. The explicit values exist for a serving path whose catalog rows carry no strategy yet. `@memberjunction/ai` gains the framework-generic half of that: the `LLMConfigurationSettings.PrefixPromptCache` field and `IsPrefixPromptCache` in `modelConfiguration.ts`, and on `BaseLLM` the protected `isVolatileStateMessage` (the `volatileState` metadata flag), `trailingVolatileStateIndex` and `splitTrailingVolatileState` seam, with `VolatileStateMessageMetadata` and `TrailingVolatileStateSplit` as the shared shapes. The Anthropic adapter (`@memberjunction/ai-anthropic`) overrides `isVolatileStateMessage` to keep its tag-literal fallback and uses the split to recognise a trailing fragment, whether it is the last message or is followed by an assistant prefill, placing its ephemeral cache breakpoint on the last real history message instead and inserting an `OK` assistant turn when needed to preserve role alternation, so the stable history caches and only the fragment (and any prefill) is re-processed. Measured live on Sage on iterations 3 and later: Claude Sonnet 4.6, Opus 5, and Opus 5.5 from 0% to 78–90% cached, Grok 4.7 from 21% to 91%, GPT 5.6 from 0% to 78%, Gemini 2.5/3.8 Flash from 30–37% to 66–75%, Cerebras GPT-OSS-120B from 65% to 96%; prompt cost per million tokens fell 37–80% depending on provider.
+
+  Action execution gains a run-scoped circuit breaker in `BaseAgent.ExecuteSingleAction`, prompted by a bug this work exposed: `executeActionsStep` reported an action whose `ActionResult.Success` was `false` as successful, so agents retried unconfigured tools indefinitely. The step result now carries the action's real outcome, and the circuit breaker's three rules, checked fatal → identical-arguments → budget, bound retries. A fatal configuration error (API key missing or invalid, "not configured", credentials missing, "authentication failed") disables the action for the rest of the run; HTTP 401/403, "unauthorized" and "forbidden" are deliberately not fatal because they are usually per-resource or transient, and neither is a failure the model can fix itself: a message that names a parameter, or a call whose own arguments carried a credential (password, API key, token), falls through to the attempt budget instead. The identical-arguments rule: two failures with identical arguments (`IDENTICAL_FAILURE_THRESHOLD`) block further calls with those arguments, while different arguments still dispatch; argument identity is `normalizeActionParams`, keys sorted at every depth, in three protected layers a subclass can override. The attempt budget: five consecutive failures across any arguments (`ACTION_FAILURE_BUDGET`) disable the action for the run. A success resets both counters. Blocked calls return a `CircuitBreakerActionResult` in 0ms that names the rule that fired, and a `user`-role guidance message (`[CRITICAL/ACTION_UNAVAILABLE]`, `[CRITICAL/REPEATED_IDENTICAL_CALL]`, `[CRITICAL/ATTEMPTS_EXHAUSTED]` or `[WARNING/ACTION_FAILURE]`) is appended to the history so the model pivots instead of looping; the budget rule is reported ahead of the identical-arguments rule, since once the budget is spent no change of arguments can help. Calls made by the pipeline executor and by ForEach / While iterations bypass the breaker via a new optional `ExecuteSingleActionOptions.skipCircuitBreaker`, since those loops already account for failures per element, expect elements to be independent, and have no model in the loop to act on the guidance. Flow agents are exempt the same way through `BaseAgentType.UsesActionCircuitBreaker` (default true, false on `FlowAgentType`): their action nodes are chosen by the graph, whose failure paths may legitimately re-run a node with the same inputs, and no model reads a directive there, so the main loop passes the exemption and suppresses the directive for such steps. Metadata: the Loop agent type's `PromptParamsSchema` gains `specializationPlacement` and `trailingStateMode` and loses `volatileStatePlacement`; the system prompt template drops its volatile tail.
+
+### Patch Changes
+
+- eb3a8d3: feat(conversations): host rules for chats with several people
+
+  `mj-conversation-chat-area` gains opt-in inputs, one reworked event, a hook and a slot, so a host can run a chat between several people without forking the chat area. Every default keeps today's behavior.
+
+  **Inputs — `ng-conversations`.** Set on `mj-conversation-chat-area` (and on `mj-message-input` directly):
+  - `AgentReplyMode` — `'Always'` (default) answers every message; `'MentionOnly'` answers only a message that tags an agent and posts any other message with no turn at all: no reply row, no placeholder, no turn events.
+  - `AllowedAgentIDs` — the agents that may answer. Narrows the composer's `@` list, every route (tagged agent, continuity, pinned and host default agents, the conversation manager), the manager's delegation — including each agent step of a workflow it plans — and the pin and voice pickers. Null allows every agent; an empty list allows none.
+  - `MentionPeople` — the people the `@` list offers (today it offers only the current user). Each composer keeps its own list: two composers on one page never see each other's.
+  - `AgentHistoryFrom` — the first moment of the conversation an agent turn may read (see below).
+  - `AgentTurnHandler` — an async hook that runs the turn on the host's server instead of MJ's path, once per turn, before any reply row exists. The chat area shows the rows it reports.
+  - `AutoNameConversation` — turns MJ's auto-naming of a new conversation off (text and voice).
+
+  **Behavior change: `BeforeAgentTurn`.** It now fires once per turn on every route, before any row exists, and carries the resolved `AgentId`, `AgentName`, `Route` and `UserMessageId`. A listener can cancel the turn or send it to another allowed agent with `RedirectAgentId`. Canceling now leaves nothing behind. Previously the event fired only on the conversation manager's route, after that route's placeholder row was saved, and a cancel left the row behind, marked "Turn canceled before agent invocation". `AfterAgentTurn` now fires on every route too.
+
+  **Slot.** `composerExtra` renders host UI directly above the composer, wherever the chat area shows one, with an `IMJChatComposerExtraContext`.
+
+  **History floor — `server`, `core-entities`, `ai-core-plus`, `ai-agents`, clients.** `RunAIAgentFromConversationDetail` takes a new nullable `agentHistoryFrom` argument (ISO-8601). The server loads the agent's history from that moment and uses no summary of earlier messages; an unreadable value fails the request. The run carries it as `ExecuteAgentParams.ConversationHistoryFrom`, so the conversation-history tools, the conversation's artifacts, cross-turn compaction (skipped) and the carried-forward tool results of the previous turn (not carried) hold it too. `ConversationEngine.LoadWindowRowsFresh` and `AssembleContextWindow` accept the floor, and `ConversationEngine.HistoryFromFilter` writes it. The GraphQL client names the argument only when a floor is set, so a client that sets none keeps working against an older MJAPI.
+
+  **Runtime — `conversations-runtime`.** `MentionAutocomplete.GetSuggestions` takes an optional per-call `MentionSuggestionScope`; `ConversationAgentRunner.processMessage` takes `AllowedAgentIDs` (narrows the manager's `ALL_AVAILABLE_AGENTS`) and `AgentHistoryFrom`.
+
+- 80905a1: Rename public class members and exported functions to PascalCase, per MJ's naming convention,
+  **without breaking a single consumer**.
+
+  Every renamed symbol keeps its old name beside the new one as a `@deprecated` stub that forwards to
+  it — a delegating method or function, a getter/setter pair for a property, and for Angular a
+  readable accessor pair for an `@Input` and a second `@Output` sharing the same `EventEmitter`, so a
+  template still binding the old name keeps receiving events. Old names still compile, still resolve,
+  and still behave identically; the deprecation tag rides through to the published `.d.ts`, so editors
+  point callers at the replacement. Where a package re-exports through an explicit `export { … }`
+  list, the new name is added alongside the old, so the correct name is actually on the public surface
+  rather than merely declared.
+
+  The rename is deliberately refused wherever a mechanical stub would not be equivalent, because
+  several of those shapes change a type contract while still compiling in the package that declares
+  them:
+  - an **optional** property or parameter property — TypeScript has no optional accessor, so a stub
+    would promote `foo?` to a required member and break every object literal that omits it;
+  - a class that is a **data shape** (no methods, or `@ObjectType`/`@InputType`) — object literals are
+    assigned to it, and an accessor stub changes what they must supply;
+  - a property whose **subclass redeclares it**, since TypeScript forbids a property overriding an
+    accessor (TS2610);
+  - a name whose PascalCase form is **already bound** in that file or class;
+  - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
+    overload sets and abstract members.
+
+  **One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+  backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+  the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+  `EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+  `copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+  field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+  fields silently. Same-version deployments, which is the supported configuration, see no change.
+
+  Each package was verified against its own pre-change baseline rather than against zero, because
+  several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
+  with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
+  `@Input` alias passed `tsc` while breaking six template reads.
+
+- c4993f3: A `While` loop whose condition cannot be evaluated now fails instead of silently succeeding.
+
+  `executeWhileIterations` treated "the evaluator could not evaluate the condition" exactly like "the condition is false". It broke out of the loop, discarded the evaluator's error, and `completeWhileLoop` finalized the step as a success, reporting "after 0 iteration(s)". A malformed or disallowed condition — an assignment, a parse error, a property read on `undefined` — produced a green, zero-iteration loop with the cause recorded nowhere.
+  - An unevaluable condition is now recorded as a loop error carrying the evaluator's message, so the loop step finalizes with `success: false`.
+  - If the condition fails before the first iteration, the loop returns a `Failed` step with that message instead of completing.
+  - If it fails mid-loop, the earlier results are kept, and the loop-results message the model sees lists the condition error under `Errors`.
+  - A Loop agent's model is now shown the error whenever a loop fails before its first iteration: a `While` condition that cannot be evaluated, an invalid `While` or `ForEach` configuration, or a `ForEach` collection that is not an array. It arrives as the usual loop-results message, with the error under `Errors`. A Loop agent answers a `Failed` step by prompting again, and nothing on that path showed the model the step's error, so it got another turn with nothing new to go on.
+  - Loop step error messages (`While` and `ForEach`) now render each error's text. Joining the raw error objects had written `[object Object]` into the step's `ErrorMessage`.
+
+  **What you will notice:** a Flow agent whose `While` condition cannot be evaluated, and which has no outgoing path from that step, now ends `Failed` where it used to end `Success`. A Loop agent whose model writes such a condition sees the evaluator's error on its next turn.
+
+  A loop whose condition evaluates normally behaves exactly as before, including the message returned to the model.
+
+  From the typed-decision plan (#4660), Phase 0 Task 0.8.
+
+- Updated dependencies [ddcd666]
+- Updated dependencies [a50948e]
+- Updated dependencies [0eeb89d]
+- Updated dependencies [15a4333]
+- Updated dependencies [a3539d2]
+- Updated dependencies [41274aa]
+- Updated dependencies [5da3ad2]
+- Updated dependencies [67f6c85]
+- Updated dependencies [eb3a8d3]
+- Updated dependencies [e1dd673]
+- Updated dependencies [9b8a84e]
+- Updated dependencies [c261eb8]
+- Updated dependencies [520bd09]
+- Updated dependencies [520bd09]
+- Updated dependencies [307da67]
+- Updated dependencies [7110019]
+- Updated dependencies [9d4a28a]
+- Updated dependencies [a7da50b]
+- Updated dependencies [1d43161]
+- Updated dependencies [7110019]
+- Updated dependencies [f2a4171]
+- Updated dependencies [e482249]
+- Updated dependencies [37e2f6b]
+- Updated dependencies [17cc774]
+- Updated dependencies [80905a1]
+- Updated dependencies [6b08ebf]
+  - @memberjunction/aiengine@6.2.0-edge.1
+  - @memberjunction/ai@6.2.0-edge.1
+  - @memberjunction/core-entities@6.2.0-edge.1
+  - @memberjunction/ai-core-plus@6.2.0-edge.1
+  - @memberjunction/ai-prompts@6.2.0-edge.1
+  - @memberjunction/core@6.2.0-edge.1
+  - @memberjunction/actions-base@6.2.0-edge.1
+  - @memberjunction/actions@6.2.0-edge.1
+  - @memberjunction/storage@6.2.0-edge.1
+  - @memberjunction/ai-reranker@6.2.0-edge.1
+  - @memberjunction/ai-vector-sync@6.2.0-edge.1
+  - @memberjunction/global@6.2.0-edge.1
+  - @memberjunction/search-engine@6.2.0-edge.1
+  - @memberjunction/templates@6.2.0-edge.1
+  - @memberjunction/ai-vector-dupe@6.2.0-edge.1
+  - @memberjunction/ai-engine-base@6.2.0-edge.1
+  - @memberjunction/context-crush@6.2.0-edge.1
+
+## 6.2.0-edge.0
+
+### Minor Changes
+
+- b87e4ac: feat(ai): Gemini 3.8 Live multimodal realtime streaming, video tracks, asynchronous reasoning, and per-model legality
+
+  This release adds comprehensive support for Google's Gemini 3.8 Live multimodal realtime models (`gemini-3.8-live` and `gemini-3.8-live-extended-thinking`), including a first-class media plane for video/audio tracks, non-blocking tool execution, thought summaries, session continuity, and complete catalog metadata.
+
+  In `@memberjunction/server`, the default configuration for `realtime.enabled` is flipped from `false` to `true`, enabling the `/realtime/sdp-exchange` WebRTC broker endpoint on all MemberJunction API servers by default (configurable via `MJ_REALTIME_ENABLED`).
+
+  ### Phase Summary:
+  - **Phase A (Contracts & Media Plane)**: Introduced directional media tracks (`RealtimeTrackDescriptor`, `RealtimeTrackDirection`), open modality vocabulary via `RealtimeModalityRegistry`, track negotiation in `BaseRealtimeClient`, and channel track sourcing/sinking (`GetSourcedTracks`/`GetSunkTracks`).
+  - **Phase B (Audio Retrofit & SDK Convergence)**: Upgraded and converged `@google/genai` to `^2.8.0` across dependents.
+  - **Phase C (Gemini Live Config Legality)**: Added per-model legality enforcement in `GeminiRealtime`: stripped `enable_affective_dialog`, preserved `proactive_audio: true` while rejecting `false`, enforced `thinkingConfig` rules (omitted on 3.8-live, validated levels low/medium/high and rejected `minimal` on Extended Thinking), explicit turn coverage, local refusal of `BLOCKING` tools on Extended Thinking, default `NON_BLOCKING` state on all declarations, and config bag sanitization.
+  - **Phase D (Async Tool Execution & Idle Contract)**: Implemented per-model idle detection honoring `IdleSignal` (`generationComplete` for 3.8-live, `interactionStatus` for Extended Thinking); decoupled tool call arrival from response activity so generation is not falsely interrupted; drained `queuedSends` only on true idle or turn complete; integrated `RealtimeToolBatchBarrier` for parallel/out-of-order tool calls; and added function scheduling resolution (`__mj_scheduling` / `scheduling` with `INTERRUPT`/`INTERRUPTED` support).
+  - **Phase E (Extended Thinking & Narration)**: Routed model thought parts (`IsThought: true`) to `ThoughtNarration$` and created immutable narration delegation cards (`Kind: 'narration'`), keeping scratch thoughts distinct from spoken responses and user-cancelable actions.
+  - **Phase F (Video Tracks & Session Continuity)**: Implemented video frame capture (`getDisplayMedia`/`getUserMedia` in `src/media/frameCapture.ts`), throttled inbound video frame transmission via `ChannelInboundVideoBridge` (whiteboard and remote browser channels), and resilient session continuity across the vendor session cap via `sessionResumptionUpdate` / `goAway`.
+  - **Phase G (Metadata & Release)**: Added declarative catalog metadata and multi-channel pricing for `Gemini 3.8 Live` and `Gemini 3.8 Live Extended Thinking` in `metadata/ai-models/.ai-models.json`.
+
+  ### Reviewer Punch List Resolutions:
+  - **Items 16–18 (Scheduling)**: Supported `__mj_scheduling` alongside `scheduling`, sanitized payload keys, accepted both `INTERRUPT` and `INTERRUPTED`, and added diagnostic warnings on unknown values.
+  - **Item 19 (Non-blocking getter)**: Extracted and centralized `isNonBlocking` getter on `GeminiRealtimeClient`.
+  - **Item 20 (Generation Complete)**: Ensured `handleGenerationComplete` updates `responseActive` without prematurely draining queued sends.
+  - **Items 21–23 (Thought Narration)**: Cleanly separated thought summaries from spoken narrations and the ephemeral live note across `RealtimeSessionService` and `RealtimeSessionState`.
+  - **Item 24 (Activity Rail)**: Restricted open-run button rendering to agent runs (`card.Kind === 'agent' && !!card.RunID`).
+  - **Items 25–27 (Video Bridge & Throttle)**: Separated `sendFrameDirect`, resolved throttle contention between bridge and driver with jitter headroom, added graceful headless DOM detection, and guarded against unimplemented `SendVideoFrame`.
+  - **Item 28 (File organization)**: Moved `frameCapture.ts` from `audio/` to `media/` with clean import paths.
+  - **C5a–C5c (Config Sanitization & Tool Behavior)**: Stated explicit tool behavior on all declarations, warned on unknown values, and added `tooling`, `toolBehavior`, and `functionCallingBehavior` to `REALTIME_SHARED_CONFIG_KEYS`.
+
+### Patch Changes
+
+- abf8778: Actions inside an agent run now receive the run's runtime API keys, so a run on a customer's key generates its images on that key too.
+
+  `ExecuteAgentParams.apiKeys` already reaches every prompt (`AIPromptRunner` → `GetAIAPIKey(driverClass, apiKeys)`), but `BaseAgent` never handed it to actions, and `Generate Image` called `GetAIAPIKey(driverClass)` with no second argument — so a run whose prompts used a customer's OpenAI key still generated images on the platform's.
+  - `BaseAgent.ExecuteSingleAction` hands each action a SCOPED RESOLVER on the new `RunActionParams.RuntimeAPIKeyResolver` (a `RuntimeAPIKeyResolver` from `@memberjunction/actions-base`) when the run has runtime keys — one driver class in, one key out. Per dispatch, not on `Context`: the context is one object shared by every action in the run and copied into sub-agent runs, so the resolver is bound to the action it was handed to even under parallel dispatch. The key list itself is never handed to an action, so none can enumerate the run's credentials; a new `actionMayUseRuntimeAPIKey(action, driverClass, params)` hook (default: allow) lets an agent refuse a class to an action, a refusal being the platform key, not an error. Every resolution is logged by action and driver class (never the key). Absent when the run has no keys, so no action has to special-case it.
+  - `Generate Image` asks the resolver for its own driver class and falls back to `GetAIAPIKey(driverClass)` — per driver class, exactly as prompts do. Also fixes the vendor-name fallback, which found a key and then passed the empty one to the generator.
+  - `@memberjunction/actions-base`: `RunActionParams.RuntimeAPIKeyResolver` + the `RuntimeAPIKeyResolver` type; `RunActionParams.Context` documents the well-known keys BaseAgent stamps.
+
+  No behaviour change for a run with no runtime keys.
+
+- e3db74f: Flow agents can be sub-agents and return their result again (#4555). A Flow agent run with a `parentRun`, or with `agentTypeParams.executionMode: 'inRun'`, now walks its steps in-process and returns the final payload, including `startAtStep`. A top-level run with no option set is still dispatched to the task-graph dispatcher. Each run records which mode it used as a `Decision` step.
+- d665a6e: feat(ai): Gemini Live direct tools support, prompt framing alignment, and change-driven remote browser screencast deduplication
+  - Declared `SupportsDynamicToolSet = true` on `GeminiRealtime` and its session capabilities so target agent direct action tools are projected into Gemini Live sessions.
+  - Fixed `hasDirectTools` calculation in `RealtimeClientSessionService` to consider `input.ExtraTools` (whiteboard, browser, media, context tools), ensuring interactive surface tools prevent the negative "do not attempt to do the work yourself" prompt guidance.
+  - Implemented change-driven screencast frame deduplication in `RemoteBrowserChannel` with a 15-second heartbeat, preserving ~15k tokens/min on static pages while maintaining instant visual push on user interactions.
+  - Reworded `ResolveGeminiThinkingLevel` fallback warning and added `CompileBrowserDelegationPolicy` doc clarification per PR review feedback.
+  - Added Node < 23 `CloseEvent` compatibility polyfills in `ai-realtime-client` test suites.
+
+- e962151: refactor(ai-realtime): thread HasToolFraming boolean, document SendText barrier commentary queueing, and document tool batch dedupe lifetime rule
+  - Added `HasToolFraming?: boolean` to `RealtimeSessionParams` in `@memberjunction/ai` (Core), replacing prompt substring sniffing with an explicit caller-asserted parameter while retaining substring sniffing as a fallback.
+  - Set `HasToolFraming: true` in `RealtimeClientSessionService.buildSessionParams` for companion co-agent sessions.
+  - Added comprehensive unit tests in `@memberjunction/ai-openai` verifying that `HasToolFraming` explicitly controls standalone delegation policy compilation.
+  - Documented in `OpenAILiveClient.SendText` that user typed input is appended to commentary rather than dropped when the tool barrier is active, draining with the tool batch's `response.create`.
+  - Documented the shared lifetime rule for `emittedToolCallIds` and `toolBatchBarrier` across declaration and clear sites.
+  - Added `"engines": { "node": ">=24" }` to root `package.json` and `packages/AI/RealtimeClient/package.json`.
+  - Recorded Item 43 design note for `RequiresConsent` in `plans/realtime/gemini-3-8-live.md`.
+
+- Updated dependencies [abf8778]
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [b518dfa]
+- Updated dependencies [37891d3]
+- Updated dependencies [6ad6434]
+- Updated dependencies [7be1684]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [d122a41]
+- Updated dependencies [42d701e]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [683f652]
+- Updated dependencies [a8be410]
+- Updated dependencies [b87e4ac]
+- Updated dependencies [f48dffc]
+- Updated dependencies [630bb88]
+- Updated dependencies [7658d68]
+- Updated dependencies [44faf83]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [575bfae]
+- Updated dependencies [a17a228]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [104125c]
+- Updated dependencies [5513c2a]
+- Updated dependencies [7fe994a]
+- Updated dependencies [8d1a373]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [3d633ed]
+- Updated dependencies [e962151]
+- Updated dependencies [2c590b0]
+- Updated dependencies [6ab86a7]
+- Updated dependencies [fc3da91]
+  - @memberjunction/actions-base@6.2.0-edge.0
+  - @memberjunction/ai@6.2.0-edge.0
+  - @memberjunction/aiengine@6.2.0-edge.0
+  - @memberjunction/core-entities@6.2.0-edge.0
+  - @memberjunction/ai-prompts@6.2.0-edge.0
+  - @memberjunction/ai-core-plus@6.2.0-edge.0
+  - @memberjunction/core@6.2.0-edge.0
+  - @memberjunction/ai-vector-sync@6.2.0-edge.0
+  - @memberjunction/ai-vector-dupe@6.2.0-edge.0
+  - @memberjunction/actions@6.2.0-edge.0
+  - @memberjunction/ai-engine-base@6.2.0-edge.0
+  - @memberjunction/search-engine@6.2.0-edge.0
+  - @memberjunction/ai-reranker@6.2.0-edge.0
+  - @memberjunction/templates@6.2.0-edge.0
+  - @memberjunction/storage@6.2.0-edge.0
+  - @memberjunction/context-crush@6.2.0-edge.0
+  - @memberjunction/global@6.2.0-edge.0
+
 ## 6.1.0
 
 ### Minor Changes

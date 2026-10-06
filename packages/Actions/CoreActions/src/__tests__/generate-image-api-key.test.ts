@@ -24,7 +24,7 @@ vi.mock('@memberjunction/ai', async () => {
 });
 
 import type { RuntimeAPIKeyResolver } from '@memberjunction/actions-base';
-import { ResolveImageGenerationAPIKey } from '../custom/ai/generate-image.action';
+import { BuildImageGenerationAPIKeys, ResolveImageGenerationAPIKey } from '../custom/ai/generate-image.action';
 
 /** A run resolver over a fixed key list — runtime key first, else the platform's, else undefined. */
 function runResolver(keys: Array<{ driverClass: string; apiKey: string }>): RuntimeAPIKeyResolver {
@@ -66,5 +66,51 @@ describe('Generate Image — runtime API keys', () => {
     it('throws, naming both lookups, only when neither the run nor the platform has a key', () => {
         expect(() => ResolveImageGenerationAPIKey('UnknownDriver', 'UnknownVendor', undefined))
             .toThrow('No API key found for UnknownDriver or vendor UnknownVendor');
+    });
+});
+
+describe('Generate Image — keys for every driver class a run may reach', () => {
+    it('gives each driver class one key, from the first source that resolves, and leaves out a class with none', () => {
+        const keys = BuildImageGenerationAPIKeys([
+            { DriverClass: 'SharedImageDriver', VendorName: 'UnkeyedVendor' }, // no key: the next source for this class is tried
+            { DriverClass: 'SharedImageDriver', VendorName: 'OpenAI' },
+            { DriverClass: 'OpenAIImageGenerator', VendorName: 'OpenAI' },
+            { DriverClass: 'OpenAIImageGenerator', VendorName: 'SomeOtherVendor' }, // the class already has a key
+            { DriverClass: 'UnkeyedDriver', VendorName: 'UnkeyedVendor' },
+        ]);
+
+        expect(keys).toEqual([
+            { driverClass: 'SharedImageDriver', apiKey: 'platform-openai-by-vendor' },
+            { driverClass: 'OpenAIImageGenerator', apiKey: 'platform-openai' },
+        ]);
+    });
+
+    it("carries the run's key for each class it keys, and the platform's for the rest", () => {
+        const keys = BuildImageGenerationAPIKeys(
+            [{ DriverClass: 'OpenAIImageGenerator', VendorName: 'OpenAI' }, { DriverClass: 'FLUXImageGenerator', VendorName: 'Black Forest Labs' }],
+            runResolver([{ driverClass: 'FLUXImageGenerator', apiKey: 'sk-customer-bfl' }])
+        );
+
+        expect(keys).toEqual([
+            { driverClass: 'OpenAIImageGenerator', apiKey: 'platform-openai' },
+            { driverClass: 'FLUXImageGenerator', apiKey: 'sk-customer-bfl' },
+        ]);
+    });
+
+    it("under RuntimeOnly carries only the run's own keys — never the platform's, by driver class or vendor name", () => {
+        // A RuntimeOnly resolver answers from the run's keys alone (BaseAgent passes the scope to GetAIAPIKey).
+        const runOnly: RuntimeAPIKeyResolver = (driverClass) => driverClass === 'FLUXImageGenerator' ? 'sk-customer-bfl' : undefined;
+        const keys = BuildImageGenerationAPIKeys(
+            [{ DriverClass: 'OpenAIImageGenerator', VendorName: 'OpenAI' }, { DriverClass: 'FLUXImageGenerator', VendorName: 'Black Forest Labs' }],
+            runOnly,
+            'RuntimeOnly'
+        );
+
+        expect(keys).toEqual([{ driverClass: 'FLUXImageGenerator', apiKey: 'sk-customer-bfl' }]);
+    });
+
+    it('under RuntimeOnly with no resolver (a run with no keys) carries nothing', () => {
+        const keys = BuildImageGenerationAPIKeys([{ DriverClass: 'OpenAIImageGenerator', VendorName: 'OpenAI' }], undefined, 'RuntimeOnly');
+        expect(keys).toEqual([]);
     });
 });

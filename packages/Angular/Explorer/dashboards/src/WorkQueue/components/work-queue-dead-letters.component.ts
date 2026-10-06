@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, In
 import type { IMetadataProvider } from '@memberjunction/core';
 import type { WorkQueueDeadLetterRow } from '@memberjunction/core-entities';
 import { WorkQueueOperatorService } from '../services/work-queue-operator.service';
-import { formatAge } from '../work-queue-agent-context';
+import { FormatAge } from '../work-queue-agent-context';
 import type { WorkQueueSubscriptionOption } from '../work-queue-types';
 
 /** One per-item outcome of a bulk replay or discard, shown until the next action. */
@@ -115,7 +115,7 @@ export class WorkQueueDeadLettersComponent implements OnChanges {
     }
 
     public Age(seconds: number | null | undefined): string {
-        return formatAge(seconds);
+        return FormatAge(seconds);
     }
 
     public PrettyPayload(item: WorkQueueDeadLetterRow): string {

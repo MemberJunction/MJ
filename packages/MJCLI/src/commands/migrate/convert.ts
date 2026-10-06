@@ -59,7 +59,7 @@ type ConvertedShape = Pick<MigrationConversionResult, 'status' | 'pgSQL' | 'unha
  *   `.needs-hand` and reported as a gap yet must NOT halt — otherwise every subsequent migration is
  *   blocked from baking at the baseline. Keying off `status`/`unhandled` would wrongly halt it.
  */
-export function decideConvertWrite(
+export function DecideConvertWrite(
   // Strongly typed via ConvertedShape — `status` is MigrationConversionResult['status'] and `mode`
   // is BakedMigrationResult['mode'], NOT `string`. Widening either to `string` would let an invalid
   // state compile and bypass the write/halt policy below (issue #3252 code review — Standards 2).
@@ -72,6 +72,17 @@ export function decideConvertWrite(
   return { isGap, writeAsNeedsHand, haltBake: bakeCodegen && isNoBakeGate };
 }
 
+/** @deprecated Use {@link DecideConvertWrite}. */
+export function decideConvertWrite(
+  // Strongly typed via ConvertedShape — `status` is MigrationConversionResult['status'] and `mode`
+  // is BakedMigrationResult['mode'], NOT `string`. Widening either to `string` would let an invalid
+  // state compile and bypass the write/halt policy below (issue #3252 code review — Standards 2).
+  result: Pick<ConvertedShape, 'status' | 'unhandled' | 'mode'>,
+  bakeCodegen: boolean,
+): { isGap: boolean; writeAsNeedsHand: boolean; haltBake: boolean } {
+  return DecideConvertWrite(result, bakeCodegen);
+}
+
 /**
  * Build the `.needs-hand` file body for a conversion FAILURE (issue #3252 review P2 / Phase 4e).
  * Pure — no I/O — so the "never emit a bare stub over a useful artifact" policy is unit-testable.
@@ -82,7 +93,7 @@ export function decideConvertWrite(
  * blank/whitespace `preservedBody` falls back to the plain hand-author stub with no misleading
  * "preserved DDL below" banner over nothing.
  */
-export function buildConversionFailureArtifact(sourceFile: string, message: string, preservedBody: string): string {
+export function BuildConversionFailureArtifact(sourceFile: string, message: string, preservedBody: string): string {
   const preserved = preservedBody.trim();
   if (!preserved) {
     return `-- CONVERSION FAILED for ${sourceFile}\n-- ${message}\n-- Hand-author the PostgreSQL form, then rename to .pg.sql.\n`;
@@ -92,6 +103,11 @@ export function buildConversionFailureArtifact(sourceFile: string, message: stri
     `-- The transpiled DDL below is PRESERVED for hand-finishing; complete it, then rename to .pg.sql.\n\n` +
     `${preserved}\n`
   );
+}
+
+/** @deprecated Use {@link BuildConversionFailureArtifact}. */
+export function buildConversionFailureArtifact(sourceFile: string, message: string, preservedBody: string): string {
+  return BuildConversionFailureArtifact(sourceFile, message, preservedBody);
 }
 
 /**
@@ -107,7 +123,7 @@ export function buildConversionFailureArtifact(sourceFile: string, message: stri
  * Errors always fail. Gaps fail too, unless the caller explicitly accepts them with --allow-gaps
  * (which until now had effect only on the --split path).
  */
-export function decideLegacyConvertExit(args: {
+export function DecideLegacyConvertExit(args: {
   errorCount: number;
   gapCount: number;
   gapFileCount: number;
@@ -126,6 +142,16 @@ export function decideLegacyConvertExit(args: {
       'accept them for now.'
     : '';
   return { fail: true, message: `Conversion completed with ${reasons.join(' and ')}.${advice}` };
+}
+
+/** @deprecated Use {@link DecideLegacyConvertExit}. */
+export function decideLegacyConvertExit(args: {
+  errorCount: number;
+  gapCount: number;
+  gapFileCount: number;
+  allowGaps: boolean;
+}): { fail: true; message: string } | { fail: false; message: null } {
+  return DecideLegacyConvertExit(args);
 }
 
 /**
@@ -354,7 +380,7 @@ export default class MigrateConvert extends Command {
     // written: gating before the fixup would leave every output un-deduped, and a re-run skips
     // them (they now have a .pg.sql counterpart), so the fixup would never get another chance.
     // Errors gate here as they always did; gaps now gate too unless --allow-gaps (issue #3857).
-    const exit = decideLegacyConvertExit({
+    const exit = DecideLegacyConvertExit({
       errorCount,
       gapCount: totalStats.Gaps,
       gapFileCount: gapFiles.length,
@@ -447,7 +473,7 @@ export default class MigrateConvert extends Command {
         // review P2): preserve it under a failure banner so a human can finish it, instead of
         // discarding the useful artifact for a bare stub. Other failures have no body → plain stub.
         const preserved = err instanceof BakeApplyError ? err.transpiledBody : '';
-        const failBody = buildConversionFailureArtifact(m.SourceFile, msg, preserved);
+        const failBody = BuildConversionFailureArtifact(m.SourceFile, msg, preserved);
         // Same "never clobber on re-run" guard as the normal write path — a human may have
         // started hand-authoring the file from a prior failed run; don't overwrite their work.
         if (!flags['dry-run'] && !fs.existsSync(failPath)) {
@@ -465,7 +491,7 @@ export default class MigrateConvert extends Command {
         break;
       }
 
-      const decision = decideConvertWrite(result, bakeCodegen);
+      const decision = DecideConvertWrite(result, bakeCodegen);
       // A needs-hand / gap-no-bake migration is NEVER written as a discoverable .pg.sql — that
       // would mark it converted forever and let Skyway apply an incomplete file. The .needs-hand
       // artifact carries the transpiled DDL + gap comments for a human (or LLM pass) to finish.
@@ -615,6 +641,12 @@ export default class MigrateConvert extends Command {
       this.error('--bake-codegen requires DB_PLATFORM=postgresql with PG_* connection env (the working DB CodeGen objects are captured from).');
     }
     initializeConfig(process.cwd());
+    // The bake's artifact is the migration it writes, and CodeGen's own CodeGen_Run log is never
+    // opened here. With SQLOutput enabled (the default), CodeGen's no-artifact guard therefore
+    // refuses every metadata statement the capture executes, including the layered base-view
+    // setup, and the error is logged rather than thrown, so the bake reports success with
+    // views missing from both the working DB and the captured output.
+    if (configInfo.SQLOutput) configInfo.SQLOutput.enabled = false;
 
     let ds: DataSourceResult;
     try {
@@ -682,8 +714,15 @@ export default class MigrateConvert extends Command {
           directory: os.tmpdir(), // inert — writeFiles is false
           onlyPermissions: false,
           writeFiles: false,
-          skipExecution: false, // execute → keep the working DB current for later migrations
+          skipExecution: false,
         });
+        // generateSingleEntitySQLToSeparateFiles only GENERATES — it never executes, whatever
+        // skipExecution says. Apply the captured objects here so the working DB stays current:
+        // a later migration in the same run selects from these views and calls these routines,
+        // and without this its bake runs against a database that has none of them.
+        if (r.sql?.trim()) {
+          await ds.connection.query(r.sql);
+        }
         return { sql: r.sql ?? '', permissionsSQL: r.permissionsSQL ?? '' };
       },
       // The full CodeGen entity set — mirrors sql_codegen.ts's baseline filter

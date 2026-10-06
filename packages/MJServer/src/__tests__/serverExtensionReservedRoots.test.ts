@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 import {
     CORE_CONSTANT_RESERVED_SERVER_EXTENSION_ROOTS,
     CORE_STATIC_RESERVED_SERVER_EXTENSION_ROOTS,
-    coreReservedServerExtensionRoots,
+    CoreReservedServerExtensionRoots,
 } from '../serverExtensionReservedRoots.js';
 import { validateServerExtensionRootPath } from '@memberjunction/server-extensions-core';
 
@@ -58,12 +58,12 @@ describe('coreReservedServerExtensionRoots', () => {
 
     it('structurally guarantees every pre-auth app.use / app.get / app.post mount in index.ts is reserved', () => {
         const indexSrc = readFileSync(join(SRC, 'index.ts'), 'utf8');
-        const authMiddlewareIndex = indexSrc.indexOf('app.use(createUnifiedAuthMiddleware');
+        const authMiddlewareIndex = indexSrc.indexOf('app.use(CreateUnifiedAuthMiddleware');
         expect(authMiddlewareIndex).toBeGreaterThan(0);
         const preAuthSrc = indexSrc.substring(0, authMiddlewareIndex);
 
         const mountRegex = /app\.(?:use|get|post)\s*\(\s*([^,\s)]+)/g;
-        const reservedRoots = coreReservedServerExtensionRoots('/');
+        const reservedRoots = CoreReservedServerExtensionRoots('/');
 
         // Explicit allowlist of known non-path middleware mounts (e.g. app.use(mw), app.use(cors()), app.use(compression(...)))
         const knownNonPathTokens = [
@@ -71,7 +71,7 @@ describe('coreReservedServerExtensionRoots', () => {
             'express.',
             'compression',
             'cookieParser',
-            'createUnifiedAuthMiddleware',
+            'CreateUnifiedAuthMiddleware',
             'mw',
         ];
         const isKnownNonPath = (t: string): boolean =>
@@ -120,7 +120,7 @@ describe('coreReservedServerExtensionRoots', () => {
     });
 
     it('includes graphqlRootPath and every core mount', () => {
-        const roots = coreReservedServerExtensionRoots('/api');
+        const roots = CoreReservedServerExtensionRoots('/api');
         expect(roots).toEqual(
             expect.arrayContaining([
                 '/api',
@@ -139,7 +139,7 @@ describe('coreReservedServerExtensionRoots', () => {
     });
 
     it('closes the F-M2 bypasses: cased /auth and sibling /healthcheck', () => {
-        const extra = coreReservedServerExtensionRoots('/');
+        const extra = CoreReservedServerExtensionRoots('/');
         expect(validateServerExtensionRootPath('/Auth', extra)).toMatch(/reserved prefix/);
         expect(validateServerExtensionRootPath('/healthcheck', extra)).toMatch(/reserved prefix/);
         expect(validateServerExtensionRootPath('/Healthcheck', extra)).toMatch(/reserved prefix/);
@@ -156,7 +156,7 @@ describe('coreReservedServerExtensionRoots', () => {
     });
 
     it('reserves a non-default graphqlRootPath and its nested paths', () => {
-        const extra = coreReservedServerExtensionRoots('/api');
+        const extra = CoreReservedServerExtensionRoots('/api');
         expect(validateServerExtensionRootPath('/api', extra)).toMatch(/reserved prefix/);
         expect(validateServerExtensionRootPath('/api/graphql', extra)).toMatch(/reserved prefix/);
         expect(validateServerExtensionRootPath('/apiv2', extra)).toBeNull();

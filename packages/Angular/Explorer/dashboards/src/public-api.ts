@@ -54,7 +54,9 @@ export {
   AnalyticsErrorAnalysisComponent,
   LoadAnalyticsErrorAnalysis,
   AnalyticsUsagePatternsComponent,
-  LoadAnalyticsUsagePatterns
+  LoadAnalyticsUsagePatterns,
+  UsageExplorerComponent,
+  LoadUsageExplorer
 } from './AI/index';
 
 // Knowledge Hub components
@@ -174,6 +176,10 @@ export { ApplicationRolesResourceComponent, LoadApplicationRolesResource } from 
 // Realtime Recordings — review & replay recorded realtime sessions (audio + transcript)
 export { RealtimeRecordingsDashboardComponent, LoadRealtimeRecordingsDashboard } from './RealtimeRecordings/realtime-recordings-dashboard.component';
 
+// Telephony & Interaction Operations
+export { TelephonyOperationsDashboardComponent } from './TelephonyOperations/telephony-operations-dashboard.component';
+export * from './TelephonyOperations/telephony-operations-agent-context';
+
 // Permissions admin — three independent resource tabs (Phase 2a/b/c — unified permissions)
 export {
     PermissionsUserAccessResourceComponent,
@@ -216,6 +222,7 @@ export * from './ai-dashboards.module';
 export * from './actions-dashboards.module';
 export * from './testing-dashboards.module';
 export * from './scheduling-dashboards.module';
+export * from './rubrics-dashboards.module';
 export * from './communication-dashboards.module';
 export * from './credentials-dashboards.module';
 export * from './data-explorer-dashboards.module';

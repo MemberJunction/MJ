@@ -5,8 +5,9 @@
  */
 
 import { Resolver, Mutation, Arg, Ctx, ObjectType, Field } from 'type-graphql';
-import { LogError, IMetadataProvider } from '@memberjunction/core';
-import { TelephonyResolverContext, getUserFromPayload, getReadWriteProvider } from '../types.js';
+import { LogError } from '@memberjunction/core';
+import { TelephonyResolverContext, GetUserFromPayload, GetReadWriteProvider } from '../types.js';
+import { OutboundCallRefusedError } from '../telephony/outboundCallPolicy.js';
 import { GetVonageTelephonyService } from '../telephony/vonage-runtime.js';
 
 /** Result of an outbound place-call attempt. */
@@ -36,7 +37,7 @@ export class VonageTelephonyResolver {
     ): Promise<PlaceVonageCallResult> {
         const failure = (msg: string): PlaceVonageCallResult => ({ Success: false, ErrorMessage: msg, CallId: '' });
         try {
-            const user = getUserFromPayload(context.userPayload);
+            const user = GetUserFromPayload(context.userPayload);
             if (!user) {
                 return failure('Unable to determine current user.');
             }
@@ -44,7 +45,7 @@ export class VonageTelephonyResolver {
             if (!service) {
                 return failure('Vonage telephony is not configured on this server.');
             }
-            const provider = getReadWriteProvider(context.providers);
+            const provider = GetReadWriteProvider(context.providers);
             if (!provider) {
                 return failure('Database provider is not available.');
             }
@@ -52,7 +53,9 @@ export class VonageTelephonyResolver {
             return { Success: true, CallId: callId };
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
-            LogError(`PlaceVonageCall failed: ${msg}`);
+            if (!(error instanceof OutboundCallRefusedError)) {
+                LogError(`PlaceVonageCall failed: ${msg}`); // a refusal was already logged (masked) by the outbound gate
+            }
             return failure(msg);
         }
     }
