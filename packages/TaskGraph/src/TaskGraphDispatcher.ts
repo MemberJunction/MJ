@@ -209,6 +209,11 @@ type TaskBodyOutcome = {
 type GraphContext = {
     Depth: number;
     SubmittingAgentRunID: string | null;
+    /**
+     * The submitting invocation's `data` / `context` — an input mapping's roots of the same names,
+     * as in the in-run walker (R3-3). Empty when the graph was submitted without one.
+     */
+    Invocation: { data?: unknown; context?: unknown };
 };
 
 /**
@@ -1722,20 +1727,27 @@ export class TaskGraphDispatcher implements IShutdownable {
      * — recurses without bound while the cap it should be hitting compares against a permanent zero.
      */
     private async graphContext(provider: IMetadataProvider, task: MJTaskEntity): Promise<GraphContext> {
-        if (!task.ParentID) return { Depth: 0, SubmittingAgentRunID: null };
+        const none: GraphContext = { Depth: 0, SubmittingAgentRunID: null, Invocation: {} };
+        if (!task.ParentID) return none;
         try {
             const parent = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
-            if (!(await parent.Load(task.ParentID))) return { Depth: 0, SubmittingAgentRunID: null };
+            if (!(await parent.Load(task.ParentID))) {
+                LogError(`[TaskGraphDispatcher] Task ${task.ID}: parent ${task.ParentID} could not be loaded; running at depth 0 with no invocation data/context.`);
+                return none;
+            }
+            const meta = ParseTaskGraphParentMetadata(parent.InputPayload);
             return {
-                Depth: ParseTaskGraphParentMetadata(parent.InputPayload).reinvokeDepth + 1,
-                // The graph's own row carries the run that submitted it. One load answers both
-                // questions, which is why they are resolved together rather than in two passes.
+                Depth: meta.reinvokeDepth + 1,
+                // The graph's own row carries the run that submitted it and the invocation it was
+                // submitted with. One load answers all three, which is why they are resolved together.
                 SubmittingAgentRunID: parent.AgentRunID,
+                Invocation: { data: meta.invocation?.data, context: meta.invocation?.context },
             };
-        } catch {
+        } catch (e) {
             // An unreadable parent must not stop the work; depth zero is the safe reading, and the
-            // submit-time cap still guards the next hop.
-            return { Depth: 0, SubmittingAgentRunID: null };
+            // submit-time cap still guards the next hop. Logged, because it also blanks `data.*`.
+            LogError(`[TaskGraphDispatcher] Task ${task.ID}: reading parent ${task.ParentID} failed; running at depth 0 with no invocation data/context: ${e instanceof Error ? e.message : String(e)}`);
+            return none;
         }
     }
 
@@ -3286,7 +3298,11 @@ export class TaskGraphDispatcher implements IShutdownable {
             return { ...await this.runLoopTask(task, provider, payload, dependencyOutputs), PayloadAtStart: payload };
         }
 
-        const { params, errors } = BuildMappedInput(config?.inputMapping, { payload });
+        // `data.*` / `context.*` resolve against the invocation that submitted the graph, exactly as
+        // the in-run walker resolves them and as branch conditions already see them (R3-3). Without
+        // it a mapping like `RecordID: data.ID` reached the action as the literal "data.ID".
+        const invocation = config?.inputMapping ? (await this.graphContext(provider, task)).Invocation : {};
+        const { params, errors } = BuildMappedInput(config?.inputMapping, { payload, ...invocation });
         for (const e of errors) LogError(`[TaskGraphDispatcher] Task ${task.ID}: ${e}`);
         // `payload`, NOT `inputPayload` — the MERGED value computed above, which includes what every
         // dependency produced.
@@ -3427,7 +3443,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             // Bindings go INTO the payload rather than beside it, so an authored mapping reaches the
             // current item the same way it reaches anything else: `payload.<itemVariable>`.
             const iterationPayload = { ...livePayload, ...Bindings };
-            const resolved = ResolveMappedInput(bodyMapping, { payload: iterationPayload }) as Record<string, unknown>;
+            const resolved = ResolveMappedInput(bodyMapping, { payload: iterationPayload, ...graphContext.Invocation }) as Record<string, unknown>;
 
             /**
              * Folds an iteration's output into the running payload the next pass will see, and
@@ -3830,7 +3846,11 @@ export class TaskGraphDispatcher implements IShutdownable {
         try {
             const parent = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
             if (await parent.Load(parentTaskID)) return ParseTaskGraphParentMetadata(parent.InputPayload);
-        } catch { /* fall through to the safe defaults */ }
+            LogError(`[TaskGraphDispatcher] Parent task ${parentTaskID} could not be loaded; using default graph metadata (no invocation data/context).`);
+        } catch (e) {
+            // Safe defaults still apply — but say so: a missing invocation turns every `data.*` mapping literal.
+            LogError(`[TaskGraphDispatcher] Reading parent task ${parentTaskID} failed; using default graph metadata: ${e instanceof Error ? e.message : String(e)}`);
+        }
         return ParseTaskGraphParentMetadata(null);
     }
 

@@ -35,9 +35,19 @@ export class TaskGraphActionRunner implements TaskActionRunner {
                 Filters: [],
             });
 
+            const output = this.buildOutput(result.Params);
+            const unstorable = this.findUnstorableOutput(output);
+            if (unstorable) {
+                const message =
+                    `Action "${action.Name}" returned output param "${unstorable.Name}", which cannot be stored ` +
+                    `as the step's result: ${unstorable.Reason}. Output params of a durable step must be plain data.`;
+                LogError(`[TaskGraphActionRunner] Task ${params.TaskID}: ${message}`);
+                return { Success: false, ErrorMessage: message, ActionLogID: result.LogEntry?.ID };
+            }
+
             return {
                 Success: result.Success,
-                Output: this.buildOutput(result.Params),
+                Output: output,
                 ErrorMessage: result.Success ? undefined : result.Message,
                 // The engine already wrote the log; this is the only place its id is in hand. Without
                 // carrying it out, a workflow's action step has no path back to its own execution
@@ -49,6 +59,24 @@ export class TaskGraphActionRunner implements TaskActionRunner {
             LogError(`[TaskGraphActionRunner] Task ${params.TaskID} failed: ${message}`);
             return { Success: false, ErrorMessage: message };
         }
+    }
+
+    /**
+     * The first output param that cannot be written to the Task row as JSON, or null.
+     *
+     * Checked here because this is the last place that knows the action's and the param's NAMES: the
+     * dispatcher serializes the whole Output later and, for a live object (an entity, an observable),
+     * fails with a bare "Converting circular structure to JSON" that names neither.
+     */
+    private findUnstorableOutput(output: Record<string, unknown>): { Name: string; Reason: string } | null {
+        for (const [Name, value] of Object.entries(output)) {
+            try {
+                JSON.stringify(value);
+            } catch (e) {
+                return { Name, Reason: e instanceof Error ? e.message.split('\n')[0] : String(e) };
+            }
+        }
+        return null;
     }
 
     /**
