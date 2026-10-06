@@ -1408,6 +1408,10 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
        * condition. An activation cannot legitimately be in this clock's future, so nothing real is
        * excluded.
        */
+      // `Number.isFinite` is belt-and-braces, not load-bearing: an unparseable `lastAccessedAt` gives
+      // NaN, and `NaN > navigatedAt` is already false, so the guard declines to yield either way. It
+      // stays because it says what the comparison relies on, but removing it changes no behaviour and
+      // breaks no test — do not read it as the thing that handles NaN.
       if (Number.isFinite(activatedAt) && activatedAt > navigatedAt && activatedAt <= Date.now()) {
         return;
       }
