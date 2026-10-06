@@ -484,12 +484,33 @@ describe('ComponentWriteRefusal', () => {
             expect(componentAllowed(componentWrite({ References: [{ Scope: 'Global ' as FormScope, UserID: null }] }))).toBe(false);
         });
 
-        it("refuses a change to any column of another user's component", () => {
+        it("refuses a change to any column of another user's component, saying the grant would allow it", () => {
             for (const field of ['Description', 'VersionSequence', 'Version']) {
-                expect(ComponentWriteRefusal(componentWrite({ ChangedFields: [field], References: [othersRow] })))
-                    .toMatch(/only a component of your own/);
+                const refusal = ComponentWriteRefusal(componentWrite({ ChangedFields: [field], References: [othersRow] }));
+                expect(refusal).toMatch(/only a component of your own/);
+                expect(refusal).toMatch(/With that authorization you could make this change/);
+                expect(refusal).not.toMatch(/does not change that/);
                 expect(ComponentWriteRefusal(componentWrite({ ChangedFields: [field], References: [] })))
                     .toMatch(/No form or panel uses this one, you did not create it/);
+            }
+        });
+
+        it("says the grant does not help when a holder would be refused too, by another user's personal row", () => {
+            for (const write of [
+                componentWrite({ ChangedFields: ['Specification'], References: [othersRow] }),
+                componentWrite({ Operation: 'delete', ChangedFields: [], References: [globalRow, othersRow] }),
+            ]) {
+                const refusal = ComponentWriteRefusal(write);
+                expect(refusal).toMatch(/does not change that/);
+                expect(refusal).not.toMatch(/you could make this change/);
+            }
+        });
+
+        it('names the grant once when a Role or Global row uses the component', () => {
+            for (const shared of [roleRow, globalRow]) {
+                const refusal = ComponentWriteRefusal(componentWrite({ References: [ownRow, shared] })) ?? '';
+                expect(refusal.match(/Manage Form Defaults/g) ?? []).toHaveLength(1);
+                expect(refusal).toMatch(/With that authorization you could make this change/);
             }
         });
 

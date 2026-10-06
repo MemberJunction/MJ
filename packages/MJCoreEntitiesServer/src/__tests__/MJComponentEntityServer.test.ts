@@ -284,7 +284,8 @@ describe('MJComponentEntityServer — form component guard', () => {
             use('COMP-1', 'Global', null, OVERRIDES);
             const e = make(ALICE, { Status: 'Deprecated' });
             expect(await e.Save()).toBe(false);
-            expect(e.Recorded?.Message).toMatch(/Manage Form Defaults/);
+            expect(e.Recorded?.Message.match(/Manage Form Defaults/g) ?? []).toHaveLength(1);
+            expect(e.Recorded?.Message).toMatch(/With that authorization you could make this change/);
         });
 
         /** Changes to columns the holder rule does not guard. */
@@ -300,7 +301,12 @@ describe('MJComponentEntityServer — form component guard', () => {
                 expect(await e.Save()).toBe(false);
                 expect(e.SuperSaveCalled).toBe(false);
                 expect(e.Recorded?.Message).toMatch(/only a component of your own/);
+                expect(e.Recorded?.Message).toMatch(/With that authorization you could make this change/);
+                expect(e.Recorded?.Message).not.toMatch(/does not change that/);
             }
+            const guarded = make(ALICE, { Specification: '{"v":2}' });
+            expect(await guarded.Save()).toBe(false);
+            expect(guarded.Recorded?.Message).toMatch(/does not change that/);
             db.uses = [];
             createdBy('COMP-1', BOB);
             for (const change of UNGUARDED_CHANGES) {

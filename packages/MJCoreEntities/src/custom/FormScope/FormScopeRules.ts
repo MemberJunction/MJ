@@ -93,7 +93,8 @@ function readsAsPersonal(scope: string | null): boolean {
 /**
  * The `MJ: Components` columns that change what a form or panel using the component draws, or
  * which component a lookup by name finds. An update by a holder of the grant is checked only when
- * it changes one of them; an update by anyone else is always checked.
+ * it changes one of them; an update by any other caller is always checked. A write with no caller
+ * (a trusted server context) is not checked.
  */
 export const GUARDED_COMPONENT_FIELDS = ['Specification', 'Status', 'Name', 'Type', 'Namespace'] as const satisfies
     ReadonlyArray<keyof MJComponentEntityType>;
@@ -140,6 +141,8 @@ const OWN_COMPONENT_RULE =
 
 const FOREIGN_COMPONENT_REFUSAL_LEAD =
     `${OWN_COMPONENT_RULE} This one is used by a form or panel that is not your own.`;
+
+const GRANT_WOULD_ALLOW = 'With that authorization you could make this change.';
 
 const UNREFERENCED_COMPONENT_REFUSAL =
     `${OWN_COMPONENT_RULE} No form or panel uses this one, you did not create it, and other forms ` +
@@ -199,17 +202,22 @@ export function IsCallersOwnComponent(component: OwnedComponentCheck, callerID: 
  * user's personal row refuses, and the caller's own personal row passes. A component no row uses
  * may be changed.
  *
- * Personal rows are checked first, so when the grant would not help, the refusal says so.
+ * A refusal for a caller without the grant says whether the grant would help. It says the grant
+ * would allow the write when a holder making the same write would pass. It says the grant does
+ * not change the answer only when a holder would be refused too: the write is one a holder is
+ * checked for, and another user's personal row uses the component.
  */
 export function ComponentWriteRefusal(write: ComponentWrite): string | null {
     if (!ComponentWriteIsGuarded(write)) return null;
-    if (!write.CallerHoldsGrant && write.References.length === 0) {
-        return write.CreatedByCaller ? null : UNREFERENCED_COMPONENT_REFUSAL;
+    const callerID = write.CallerID ?? '';
+    if (write.CallerHoldsGrant) {
+        const refusal = referenceRefusal(write.References, callerID, true);
+        return refusal ? `${COMPONENT_REFUSAL_LEAD} ${refusal}` : null;
     }
-    const refusal = referenceRefusal(write.References, write.CallerID ?? '', write.CallerHoldsGrant);
-    if (!refusal) return null;
-    const lead = write.CallerHoldsGrant ? COMPONENT_REFUSAL_LEAD : FOREIGN_COMPONENT_REFUSAL_LEAD;
-    return `${lead} ${refusal}`;
+    if (IsCallersOwnComponent(write, callerID)) return null;
+    if (write.References.length === 0) return UNREFERENCED_COMPONENT_REFUSAL;
+    const holderWouldBeRefused = ComponentWriteRefusal({ ...write, CallerHoldsGrant: true }) !== null;
+    return `${FOREIGN_COMPONENT_REFUSAL_LEAD} ${holderWouldBeRefused ? OWNERSHIP_REFUSAL : GRANT_WOULD_ALLOW}`;
 }
 
 /** A form or panel row pointed at a component: what the row rule needs to see. */
