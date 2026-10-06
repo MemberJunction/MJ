@@ -359,7 +359,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(106);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(107);
     });
 });
 
