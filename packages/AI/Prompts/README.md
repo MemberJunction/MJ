@@ -196,6 +196,14 @@ Hierarchical credential resolution for API keys:
 5. `AIPromptParams.apiKeys[]` (legacy runtime keys)
 6. `AI_VENDOR_API_KEY__<DRIVER>` environment variables (legacy)
 
+**Credential scope.** `AIPromptParams.CredentialScope` (`'Any' | 'RuntimeOnly'`, default `'Any'`)
+decides which of these tiers a run may use. Under `'RuntimeOnly'` only 1 and 5 count — the caller's
+own `credentialId` and `apiKeys`. Credential bindings, the vendor default and environment keys are
+skipped, a candidate the run has no key for is unavailable, so failover stays on the caller's
+vendors, and a run the keys do not cover fails with *"… The credential scope is RuntimeOnly …"*
+instead of running on the platform's account. Prompts the runner starts on a caller's behalf (JSON
+repair, the result-selector judge) run under the caller's scope.
+
 ### Failover
 
 When a model fails due to rate limiting, authentication errors, or other transient issues, the runner can automatically retry with alternate models from the selection candidates.

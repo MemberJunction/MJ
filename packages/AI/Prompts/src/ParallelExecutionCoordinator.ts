@@ -15,7 +15,7 @@ import {
   IParallelExecutionCoordinator,
 } from './ParallelExecution';
 import { AIEngine } from '@memberjunction/aiengine';
-import { AIPromptParams } from '@memberjunction/ai-core-plus';
+import { AIPromptParams, type AIPromptExecutionScope } from '@memberjunction/ai-core-plus';
 import { AIPromptRunner } from './AIPromptRunner';
 
 /**
@@ -256,6 +256,7 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
     config: ResultSelectionConfig,
     parentPromptRunId?: string,
     cancellationToken?: AbortSignal,
+    executionScope?: AIPromptExecutionScope,
   ): Promise<ExecutionTaskResult | null> {
     if (results.length === 0) {
       return null;
@@ -275,7 +276,7 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
         return this.selectRandomResult(results);
 
       case 'PromptSelector':
-        return await this.selectResultWithPrompt(results, config.selectorPromptId!, parentPromptRunId, cancellationToken);
+        return await this.selectResultWithPrompt(results, config.selectorPromptId!, parentPromptRunId, cancellationToken, executionScope);
 
       case 'Consensus':
         return this.selectConsensusResult(results);
@@ -737,6 +738,7 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
     selectorPromptId: string,
     parentPromptRunId?: string,
     _cancellationToken?: AbortSignal,
+    executionScope?: AIPromptExecutionScope,
   ): Promise<ExecutionTaskResult> {
     try {
       // AIPromptRunner is statically imported (this class extends it); the prior dynamic import was
@@ -782,7 +784,9 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
       const judgeRunner = new AIPromptRunner();
       const judgeStartTime = Date.now();
 
+      // The judge runs under the parallel prompt's scope, so it spends the credentials the candidates did.
       const judgeResult = await judgeRunner.ExecutePrompt({
+        ...executionScope,
         prompt: judgePrompt,
         data: judgeData,
         conversationMessages,
