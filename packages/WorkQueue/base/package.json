@@ -1,15 +1,23 @@
 {
   "name": "@memberjunction/work-queue-base",
   "type": "module",
-  "version": "6.1.0",
+  "version": "6.2.0-edge.2",
   "description": "MemberJunction: durable work queue — browser-safe metadata tier (topology cache, bindings, validation)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
-    ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
-    "./testing": { "types": "./dist/testing/index.d.ts", "default": "./dist/testing/index.js" }
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./testing": {
+      "types": "./dist/testing/index.d.ts",
+      "default": "./dist/testing/index.js"
+    }
   },
-  "files": ["/dist"],
+  "files": [
+    "/dist"
+  ],
   "scripts": {
     "build": "tsc && tsc-alias -f",
     "watch": "tsc --watch",
@@ -19,10 +27,10 @@
   "author": "MemberJunction.com",
   "license": "BUSL-1.1",
   "dependencies": {
-    "@memberjunction/core": "6.1.0",
-    "@memberjunction/core-entities": "6.1.0",
-    "@memberjunction/global": "6.1.0",
-    "@memberjunction/work-queue-core": "6.1.0"
+    "@memberjunction/core": "6.2.0-edge.2",
+    "@memberjunction/core-entities": "6.2.0-edge.2",
+    "@memberjunction/global": "6.2.0-edge.2",
+    "@memberjunction/work-queue-core": "6.2.0-edge.2"
   },
   "devDependencies": {
     "@types/node": "24.10.11",

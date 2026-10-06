@@ -13,7 +13,7 @@ graph TD
     style AIE fill:#2d8659,stroke:#1a5c3a,color:#fff
 
     subgraph "Server Capabilities"
-        LLM["LLM Execution<br/>ChatCompletion, Classify, Summarize"]
+        LLM["LLM Execution<br/>ChatCompletion"]
         style LLM fill:#7c5295,stroke:#563a6b,color:#fff
 
         EMB["Embedding Services<br/>Agent & Action Embeddings"]
@@ -85,20 +85,9 @@ const result = await AIEngine.Instance.ChatCompletion({
     model: 'gpt-4',
     messages: [{ role: 'user', content: 'Explain quantum computing' }]
 });
-
-// Summarize text
-const summary = await AIEngine.Instance.SummarizeText({
-    model: 'gpt-4',
-    text: longDocument
-});
-
-// Classify text
-const classification = await AIEngine.Instance.ClassifyText({
-    model: 'gpt-4',
-    text: inputText,
-    categories: ['positive', 'negative', 'neutral']
-});
 ```
+
+Classification and summarization run as AI Prompts through `AIPromptRunner` (`@memberjunction/ai-prompts`).
 
 #### Semantic Search
 
@@ -156,7 +145,8 @@ const exampleMatches: ExampleMatchResult[] = await AIEngine.Instance.FindSimilar
 
 `AIEngine` exposes `FindSimilarAgentNotes` over the in-process `_noteVectorService`. Since v5.30.x the vector store is kept strictly in sync with the persisted note state:
 
-- **Invariant.** `_noteVectorService` contains an entry for an `AIAgentNote` if and only if its persisted `Status='Active'` AND its `EmbeddingVector` is non-null.
+- **Invariant.** `_noteVectorService` contains an entry for an `AIAgentNote` if and only if its persisted `Status='Active'` AND it has a stored vector (`EmbeddingVectorBinary` or `EmbeddingVector`).
+- **Loading.** Notes and examples are hydrated with `ReadStoredVector(EmbeddingVectorBinary, EmbeddingVector)` from `@memberjunction/ai-vectors-memory` — the binary float32 column when valid, the JSON column as fallback. See the [Binary Fields Guide](../../../guides/BINARY_FIELDS_GUIDE.md).
 - **Write-side enforcement.** `MJAIAgentNoteEntityServer.Save()` and `.Delete()` (in [`@memberjunction/core-entities-server`](../../MJCoreEntitiesServer/README.md)) update the in-process vector store inline with each note write — adding entries when a note becomes Active with a non-null embedding, removing them when Status flips away from Active or when the note is deleted.
 - **What this fixes.** Before this change, revoking a note (e.g. during MemoryManagerAgent consolidation, or when a contradiction was resolved) would leave a stale entry in `_noteVectorService` until MJAPI was restarted. Subsequent calls to `FindSimilarAgentNotes` would surface revoked notes back to retrieval. The invariant now holds without a restart.
 

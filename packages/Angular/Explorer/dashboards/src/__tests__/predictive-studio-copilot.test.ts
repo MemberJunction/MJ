@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   PS_CAPABILITY_CARDS,
-  buildImprovePrompt,
+  BuildImprovePrompt,
 } from '../PredictiveStudio/predictive-studio-copilot.view-models';
 
 describe('capability cards', () => {
@@ -17,7 +17,7 @@ describe('capability cards', () => {
 
 describe('buildImprovePrompt', () => {
   it('names the prediction, its grade, and why it is held, and asks for improvements', () => {
-    const p = buildImprovePrompt({ name: 'Renewal Risk', trustGrade: 'Poor', reason: 'not enough training history' });
+    const p = BuildImprovePrompt({ Name: 'Renewal Risk', TrustGrade: 'Poor', Reason: 'not enough training history' });
     expect(p).toContain('"Renewal Risk"');
     expect(p).toContain('current trust: Poor');
     expect(p).toContain('not enough training history.');
@@ -25,13 +25,13 @@ describe('buildImprovePrompt', () => {
   });
 
   it('degrades gracefully when grade/reason are missing', () => {
-    const p = buildImprovePrompt({ name: 'Lapse Score' });
+    const p = BuildImprovePrompt({ Name: 'Lapse Score' });
     expect(p).toContain('"Lapse Score"');
     expect(p).not.toContain('current trust');
     expect(p).not.toContain('held back because');
   });
 
   it('falls back to a generic subject when the name is blank', () => {
-    expect(buildImprovePrompt({ name: '' })).toContain('"this prediction"');
+    expect(BuildImprovePrompt({ Name: '' })).toContain('"this prediction"');
   });
 });

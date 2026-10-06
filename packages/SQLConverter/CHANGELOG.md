@@ -1,5 +1,72 @@
 # @memberjunction/sql-converter
 
+## 6.2.0-edge.2
+
+### Patch Changes
+
+- d4e30c3: PostgreSQL migration conversion fixes found while converting the v6.2.0-edge.2 migrations.
+  - sql-converter: BIT literals in `INSERT INTO t (...) SELECT ...` (CodeGen's EntityPermission grants) and in `COALESCE(<boolean column>, 0|1) = 0|1` (CodeGen's search-flag hygiene) are rewritten to TRUE/FALSE.
+  - cli: `migrate convert --bake-codegen` and `migrate rebake` disable SQLOutput while baking, so CodeGen's no-artifact guard no longer silently refuses the capture's metadata SQL; forward baking now applies the captured CodeGen to the working database (the generator never executed it), so later migrations bake against the objects earlier ones created.
+  - codegen-lib: a layered entity's base-view GRANTs are guarded once, not twice (the nested `DO $if_view_exists$` did not parse on PostgreSQL); the PostgreSQL view-regeneration fallback now restores dependents of dependents and their functions after DROP ... CASCADE.
+  - @memberjunction/sql-dialect@6.2.0-edge.2
+  - @memberjunction/sqlglot-ts@6.2.0-edge.2
+
+## 6.2.0-edge.1
+
+### Patch Changes
+
+- 80905a1: Rename public class members and exported functions to PascalCase, per MJ's naming convention,
+  **without breaking a single consumer**.
+
+  Every renamed symbol keeps its old name beside the new one as a `@deprecated` stub that forwards to
+  it — a delegating method or function, a getter/setter pair for a property, and for Angular a
+  readable accessor pair for an `@Input` and a second `@Output` sharing the same `EventEmitter`, so a
+  template still binding the old name keeps receiving events. Old names still compile, still resolve,
+  and still behave identically; the deprecation tag rides through to the published `.d.ts`, so editors
+  point callers at the replacement. Where a package re-exports through an explicit `export { … }`
+  list, the new name is added alongside the old, so the correct name is actually on the public surface
+  rather than merely declared.
+
+  The rename is deliberately refused wherever a mechanical stub would not be equivalent, because
+  several of those shapes change a type contract while still compiling in the package that declares
+  them:
+  - an **optional** property or parameter property — TypeScript has no optional accessor, so a stub
+    would promote `foo?` to a required member and break every object literal that omits it;
+  - a class that is a **data shape** (no methods, or `@ObjectType`/`@InputType`) — object literals are
+    assigned to it, and an accessor stub changes what they must supply;
+  - a property whose **subclass redeclares it**, since TypeScript forbids a property overriding an
+    accessor (TS2610);
+  - a name whose PascalCase form is **already bound** in that file or class;
+  - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
+    overload sets and abstract members.
+
+  **One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+  backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+  the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+  `EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+  `copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+  field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+  fields silently. Same-version deployments, which is the supported configuration, see no change.
+
+  Each package was verified against its own pre-change baseline rather than against zero, because
+  several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
+  with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
+  `@Input` alias passed `tsc` while breaking six template reads.
+
+- Updated dependencies [80905a1]
+  - @memberjunction/sql-dialect@6.2.0-edge.1
+  - @memberjunction/sqlglot-ts@6.2.0-edge.1
+
+## 6.2.0-edge.0
+
+### Patch Changes
+
+- e9dbf77: fix(sql-converter): convert mj-sync's create-or-update blocks to PL/pgSQL.
+
+  Since the 6.2 cycle `mj sync push` writes a record it may already hold as `IF NOT EXISTS (SELECT 1 FROM t WHERE [ID] = @v) BEGIN EXEC spCreate… END ELSE BEGIN EXEC spUpdate… END`. `ExecBlockRule` handled one EXEC per block, so it split the update into its own block and folded the guard into the preceding SET value, leaving raw T-SQL in the output — the 6.2.0-edge.0 Metadata_Sync counterparts did not apply on PostgreSQL. The rule now emits `IF NOT EXISTS (…) THEN PERFORM create ELSE PERFORM update END IF`, with each call keeping the typed-vs-JSONB shape check. A block that looks like an upsert but does not parse exactly still falls back to a visible `SKIPPED` comment.
+  - @memberjunction/sql-dialect@6.2.0-edge.0
+  - @memberjunction/sqlglot-ts@6.2.0-edge.0
+
 ## 6.1.0
 
 ### Minor Changes

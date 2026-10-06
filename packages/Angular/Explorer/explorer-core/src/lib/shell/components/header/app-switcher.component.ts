@@ -62,20 +62,65 @@ interface RecentAppEntry {
 })
 export class AppSwitcherComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   private destroy$ = new Subject<void>();
-  @Input() activeApp: BaseApplication | null = null;
-  @Input() isViewingSystemTab = false;
+  @Input() ActiveApp: BaseApplication | null = null;
+
+  /** @deprecated Use {@link ActiveApp}. */
+  @Input() set activeApp(value: BaseApplication | null) {
+    this.ActiveApp = value;
+  }
+  /** @deprecated Use {@link ActiveApp}. */
+  get activeApp(): BaseApplication | null {
+    return this.ActiveApp;
+  }
+  @Input() IsViewingSystemTab = false;
+
+  /** @deprecated Use {@link IsViewingSystemTab}. */
+  @Input() set isViewingSystemTab(value: AppSwitcherComponent['IsViewingSystemTab']) {
+    this.IsViewingSystemTab = value;
+  }
+  /** @deprecated Use {@link IsViewingSystemTab}. */
+  get isViewingSystemTab(): AppSwitcherComponent['IsViewingSystemTab'] {
+    return this.IsViewingSystemTab;
+  }
   /** ID of the app currently being loaded (shows loading indicator) */
-  @Input() loadingAppId: string | null = null;
+  @Input() LoadingAppId: string | null = null;
+
+  /** @deprecated Use {@link LoadingAppId}. */
+  @Input() set loadingAppId(value: string | null) {
+    this.LoadingAppId = value;
+  }
+  /** @deprecated Use {@link LoadingAppId}. */
+  get loadingAppId(): string | null {
+    return this.LoadingAppId;
+  }
   /** Presentation style (from Shell.AppSwitcher.Style instance config) */
   @Input() SwitcherStyle: AppSwitcherStyle = 'auto';
-  @Output() appSelected = new EventEmitter<string>();
+  @Output() AppSelected = new EventEmitter<string>();
+
+  /**
+   * @deprecated Use {@link AppSelected}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (appSelected) keeps working. Must stay AFTER AppSelected: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() appSelected = this.AppSelected;
 
   @ViewChild('filterInput') private filterInputRef?: ElementRef<HTMLInputElement>;
   @ViewChild('trigger') private triggerRef?: ElementRef<HTMLElement>;
   @ViewChild('panel') private panelRef?: ElementRef<HTMLDialogElement>;
   @ViewChild(UserAppConfigContentComponent) private configContent?: UserAppConfigContentComponent;
 
-  showDropdown = false;
+  ShowDropdown = false;
+
+  /** @deprecated Use {@link ShowDropdown}. */
+  get showDropdown() {
+    return this.ShowDropdown;
+  }
+  /** @deprecated Use {@link ShowDropdown}. */
+  set showDropdown(value) {
+    this.ShowDropdown = value;
+  }
   /** When true, the launcher body shows the app-configuration view instead of the card grid */
   public ConfigMode = false;
   /** Pending action awaiting the inline unsaved-changes discard bar ('exit' = back to grid, 'close' = close launcher) */
@@ -120,7 +165,7 @@ export class AppSwitcherComponent extends BaseAngularComponent implements OnInit
     // the same stream the app list uses so the presentation can't go stale.
     // Optional-chained: lightweight test stubs may not provide the observable.
     this.appManager.Applications?.pipe(takeUntil(this.destroy$)).subscribe(() => {
-      if (this.showDropdown) {
+      if (this.ShowDropdown) {
         this.RefreshPresentation();
       }
     });
@@ -180,7 +225,7 @@ export class AppSwitcherComponent extends BaseAngularComponent implements OnInit
    * Check if the app switcher should show loading state
    */
   get isLoading(): boolean {
-    return this.loadingAppId !== null;
+    return this.LoadingAppId !== null;
   }
 
   /**
@@ -188,13 +233,13 @@ export class AppSwitcherComponent extends BaseAngularComponent implements OnInit
    * app context (system tabs, nothing active yet).
    */
   get TriggerLabel(): string {
-    return this.activeApp && !this.isViewingSystemTab ? this.activeApp.Name : 'Apps';
+    return this.ActiveApp && !this.IsViewingSystemTab ? this.ActiveApp.Name : 'Apps';
   }
 
   /** Accessible name for the trigger — names the control AND the current app */
   get TriggerAriaLabel(): string {
-    return this.activeApp && !this.isViewingSystemTab
-      ? `Switch application — current: ${this.activeApp.Name}`
+    return this.ActiveApp && !this.IsViewingSystemTab
+      ? `Switch application — current: ${this.ActiveApp.Name}`
       : 'Switch application';
   }
 
@@ -202,8 +247,13 @@ export class AppSwitcherComponent extends BaseAngularComponent implements OnInit
    * Get applications that should appear in the app switcher
    * (NavigationStyle = 'App Switcher' or 'Both')
    */
-  get apps(): BaseApplication[] {
+  get Apps(): BaseApplication[] {
     return this.appManager.GetAppSwitcherApps();
+  }
+
+  /** @deprecated Use {@link Apps}. */
+  get apps(): BaseApplication[] {
+    return this.Apps;
   }
 
   /** Recently-used apps (persisted per user), newest first, capped for display.
@@ -212,7 +262,7 @@ export class AppSwitcherComponent extends BaseAngularComponent implements OnInit
     if (this.CompactMode) {
       return [];
     }
-    const byId = new Map(this.apps.map(a => [NormalizeUUID(a.ID), a]));
+    const byId = new Map(this.Apps.map(a => [NormalizeUUID(a.ID), a]));
     const result: BaseApplication[] = [];
     for (const entry of this.recentEntries) {
       const app = byId.get(NormalizeUUID(entry.id));
@@ -229,8 +279,8 @@ export class AppSwitcherComponent extends BaseAngularComponent implements OnInit
   /** All switcher apps in the user's chosen sort (custom Sequence order or A–Z) */
   private get sortedApps(): BaseApplication[] {
     return this.SortMode === 'alpha'
-      ? [...this.apps].sort((a, b) => a.Name.localeCompare(b.Name))
-      : this.apps;
+      ? [...this.Apps].sort((a, b) => a.Name.localeCompare(b.Name))
+      : this.Apps;
   }
 
   /** The complete "All apps" section, in the user's chosen sort. Apps shown in
@@ -254,7 +304,7 @@ export class AppSwitcherComponent extends BaseAngularComponent implements OnInit
   /** Distinct app count for the screen-reader status (VisibleApps can contain
    *  the same app twice when it's in both Recent and All apps) */
   get AnnouncedAppCount(): number {
-    return this.IsFiltering ? this.VisibleApps.length : this.applyFilter(this.apps).length;
+    return this.IsFiltering ? this.VisibleApps.length : this.applyFilter(this.Apps).length;
   }
 
   /** True when a filter is active (sections collapse into one result list) */
@@ -264,7 +314,7 @@ export class AppSwitcherComponent extends BaseAngularComponent implements OnInit
 
   /** Compact mode hides the filter under a handful of apps — it's noise there */
   get ShowFilter(): boolean {
-    return !this.CompactMode || this.apps.length >= COMPACT_FILTER_THRESHOLD;
+    return !this.CompactMode || this.Apps.length >= COMPACT_FILTER_THRESHOLD;
   }
 
   private applyFilter(apps: BaseApplication[]): BaseApplication[] {
@@ -283,7 +333,7 @@ export class AppSwitcherComponent extends BaseAngularComponent implements OnInit
 
   /** Trigger handler: open the launcher panel, or close it if already open */
   ToggleLauncher(): void {
-    if (this.showDropdown) {
+    if (this.ShowDropdown) {
       this.closeLauncher();
     } else {
       this.openLauncher();
@@ -318,7 +368,7 @@ export class AppSwitcherComponent extends BaseAngularComponent implements OnInit
     if (this.CompactMode) {
       this.computeCompactAnchor();
     }
-    this.showDropdown = true;
+    this.ShowDropdown = true;
     // The dialog element renders under @if next frame: put it in the top
     // layer via showModal() (jsdom fallback: plain open attribute), then
     // focus the filter (or the first card when compact mode hides it).
@@ -347,7 +397,7 @@ export class AppSwitcherComponent extends BaseAngularComponent implements OnInit
     if (this.SwitcherStyle === 'launcher') {
       return false;
     }
-    return this.apps.length < COMPACT_AUTO_THRESHOLD;
+    return this.Apps.length < COMPACT_AUTO_THRESHOLD;
   }
 
   /** Anchor the compact panel under the trigger, clamped to the viewport */
@@ -367,7 +417,7 @@ export class AppSwitcherComponent extends BaseAngularComponent implements OnInit
     if (dialog?.open && typeof dialog.close === 'function') {
       dialog.close(); // Browser restores focus to the trigger automatically
     }
-    this.showDropdown = false;
+    this.ShowDropdown = false;
     this.FilterText = '';
     this.ConfigMode = false;
     this.PendingDiscard = null;
@@ -437,9 +487,9 @@ export class AppSwitcherComponent extends BaseAngularComponent implements OnInit
         // the footer advertises "↵ open"); unfiltered it needs an unambiguous
         // single app.
         if (this.IsFiltering && visible.length > 0) {
-          this.selectApp(visible[0]);
+          this.SelectApp(visible[0]);
         } else if (visible.length === 1) {
-          this.selectApp(visible[0]);
+          this.SelectApp(visible[0]);
         }
         break;
       case 'Escape':
@@ -526,22 +576,27 @@ export class AppSwitcherComponent extends BaseAngularComponent implements OnInit
    * Select an application.
    * When viewing a system tab, always emit to allow returning to the app.
    */
-  selectApp(app: BaseApplication): void {
+  SelectApp(app: BaseApplication): void {
     this.recordRecent(app);
     this.closeLauncher(false); // Focus moves into the app, not back to the trigger
-    if (!UUIDsEqual(app.ID, this.activeApp?.ID) || this.isViewingSystemTab) {
-      this.appSelected.emit(app.ID);
+    if (!UUIDsEqual(app.ID, this.ActiveApp?.ID) || this.IsViewingSystemTab) {
+      this.AppSelected.emit(app.ID);
     }
+  }
+
+  /** @deprecated Use {@link SelectApp}. */
+  selectApp(app: BaseApplication): void {
+    return this.SelectApp(app);
   }
 
   /** Case-insensitive UUID check whether an app is the currently active app. */
   IsActiveApp(app: BaseApplication): boolean {
-    return UUIDsEqual(app.ID, this.activeApp?.ID);
+    return UUIDsEqual(app.ID, this.ActiveApp?.ID);
   }
 
   /** Case-insensitive UUID check whether an app is the one currently loading. */
   IsLoadingApp(app: BaseApplication): boolean {
-    return UUIDsEqual(app.ID, this.loadingAppId);
+    return UUIDsEqual(app.ID, this.LoadingAppId);
   }
 
   // ---- Recents persistence (MJ: User Settings via UserInfoEngine) ----

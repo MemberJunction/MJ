@@ -13,9 +13,9 @@ interface DirectReportRow {
 }
 
 @RegisterClassEx(BaseFormPanel, {
-    key: 'form-panel:Employees:overview',
+    key: 'form-panel:MJ: Employees:overview',
     metadata: {
-        entity: 'Employees',
+        entity: 'MJ: Employees',
         slot: 'before-fields',
         sortKey: 10,
     },
@@ -31,10 +31,14 @@ interface DirectReportRow {
             <div class="mj-overview-card">
                 <div class="mj-card-header">
                     <div class="mj-card-title"><i class="fa-solid fa-sitemap" style="color: var(--mj-brand-primary, #38bdf8);"></i> Direct Reports</div>
-                    <span class="mj-card-badge">{{ Reports.length }} Team Members</span>
+                    @if (!LoadError) {
+                        <span class="mj-card-badge">{{ Reports.length }} Team Members</span>
+                    }
                 </div>
                 <div class="mj-card-body">
-                    @if (Reports.length === 0) {
+                    @if (LoadError) {
+                        <span class="mj-load-error">{{ LoadError }}</span>
+                    } @else if (Reports.length === 0) {
                         <span style="font-size: 12px; color: var(--mj-text-muted);">No direct reports assigned.</span>
                     } @else {
                         @for (rep of Reports; track rep.ID) {
@@ -123,6 +127,7 @@ interface DirectReportRow {
         }
         .mj-metric-label { color: var(--mj-text-secondary, #94a3b8); }
         .mj-metric-val { font-weight: 600; color: var(--mj-text-primary, #f8fafc); font-family: monospace; }
+        .mj-load-error { font-size: 12px; color: var(--mj-status-error); }
         .mj-pill { font-size: 10.5px; font-weight: 700; padding: 2px 6px; border-radius: 4px; }
         .mj-pill-green { background: rgba(16, 185, 129, 0.15); color: #10b981; }
     `]
@@ -130,32 +135,42 @@ interface DirectReportRow {
 export class EmployeeOverviewPanel extends BaseFormPanel<MJEmployeeEntity> implements OnInit {
     private cdr = inject(ChangeDetectorRef);
     public Reports: DirectReportRow[] = [];
+    /** Set when the query fails, so the card shows the failure instead of an empty list. */
+    public LoadError: string | null = null;
 
     public get Employee(): MJEmployeeEntity | null {
         return this.Record;
     }
 
     public ngOnInit(): void {
-        this.LoadDirectReports();
+        this.loadDirectReports();
     }
 
-    private async LoadDirectReports(): Promise<void> {
+    private async loadDirectReports(): Promise<void> {
         if (!this.Record?.ID) return;
         try {
             const rv = new RunView();
             const res = await rv.RunView<DirectReportRow>({
-                EntityName: 'Employees',
+                EntityName: 'MJ: Employees',
                 ExtraFilter: `SupervisorID = '${this.Record.ID}'`,
                 Fields: ['ID', 'FirstName', 'LastName', 'Title'],
                 MaxRows: 20,
                 ResultType: 'simple'
             });
-            if (res.Success && res.Results) {
-                this.Reports = res.Results;
-                this.cdr.markForCheck();
+            if (res.Success) {
+                this.Reports = res.Results ?? [];
+            } else {
+                this.showLoadError(res.ErrorMessage);
             }
         } catch (e) {
             console.error('Failed to load direct reports:', e);
+            this.showLoadError(e instanceof Error ? e.message : undefined);
         }
+        this.cdr.markForCheck();
+    }
+
+    /** Shows a short "could not load" line, with the underlying message when there is one. */
+    private showLoadError(detail: string | undefined): void {
+        this.LoadError = detail ? `Could not load direct reports: ${detail}` : 'Could not load direct reports.';
     }
 }

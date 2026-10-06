@@ -9,16 +9,16 @@ import { GetReadWriteProvider } from '../util.js';
 @ObjectType()
 export class TemplateRunResult {
     @Field()
-    success: boolean;
+    success: boolean;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    output?: string;
+    output?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    error?: string;
+    error?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    executionTimeMs?: number;
+    executionTimeMs?: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 /**

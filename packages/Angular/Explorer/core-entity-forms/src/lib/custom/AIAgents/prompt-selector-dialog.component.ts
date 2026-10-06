@@ -8,24 +8,24 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export interface PromptSelectorConfig {
   /** Title for the dialog */
-  title: string;
+  Title: string;
   /** Whether to show the "Create New" option */
-  showCreateNew?: boolean;
+  ShowCreateNew?: boolean;
   /** Filter criteria for prompts */
-  extraFilter?: string;
+  ExtraFilter?: string;
   /** Allow multiple selection */
-  multiSelect?: boolean;
+  MultiSelect?: boolean;
   /** Pre-selected prompt IDs */
-  selectedPromptIds?: string[];
+  SelectedPromptIds?: string[];
   /** Already linked prompt IDs (will be grayed out and not selectable) */
-  linkedPromptIds?: string[];
+  LinkedPromptIds?: string[];
 }
 
 export interface PromptSelectorResult {
   /** Selected prompts */
-  selectedPrompts: MJAIPromptEntityExtended[];
+  SelectedPrompts: MJAIPromptEntityExtended[];
   /** Whether user chose to create new */
-  createNew?: boolean;
+  createNew?: boolean;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
 /**
@@ -43,24 +43,96 @@ export interface PromptSelectorResult {
 export class PromptSelectorDialogComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   
   // Input configuration
-  config: PromptSelectorConfig = { title: 'Select Prompts' };
+  config: PromptSelectorConfig = { Title: 'Select Prompts' };
   
   // State management
   private destroy$ = new Subject<void>();
-  public result = new Subject<PromptSelectorResult | null>();
+  public Result = new Subject<PromptSelectorResult | null>();
+
+  /** @deprecated Use {@link Result}. */
+  public get result() {
+    return this.Result;
+  }
+  /** @deprecated Use {@link Result}. */
+  public set result(value) {
+    this.Result = value;
+  }
   
   // Data and UI state
-  isLoading$ = new BehaviorSubject<boolean>(false);
-  prompts$ = new BehaviorSubject<MJAIPromptEntityExtended[]>([]);
-  filteredPrompts$ = new BehaviorSubject<MJAIPromptEntityExtended[]>([]);
+  IsLoading$ = new BehaviorSubject<boolean>(false);
+
+  /** @deprecated Use {@link IsLoading$}. */
+  get isLoading$() {
+    return this.IsLoading$;
+  }
+  /** @deprecated Use {@link IsLoading$}. */
+  set isLoading$(value) {
+    this.IsLoading$ = value;
+  }
+  Prompts$ = new BehaviorSubject<MJAIPromptEntityExtended[]>([]);
+
+  /** @deprecated Use {@link Prompts$}. */
+  get prompts$() {
+    return this.Prompts$;
+  }
+  /** @deprecated Use {@link Prompts$}. */
+  set prompts$(value) {
+    this.Prompts$ = value;
+  }
+  FilteredPrompts$ = new BehaviorSubject<MJAIPromptEntityExtended[]>([]);
+
+  /** @deprecated Use {@link FilteredPrompts$}. */
+  get filteredPrompts$() {
+    return this.FilteredPrompts$;
+  }
+  /** @deprecated Use {@link FilteredPrompts$}. */
+  set filteredPrompts$(value) {
+    this.FilteredPrompts$ = value;
+  }
   
   // Search and selection
-  searchControl = new FormControl('');
-  selectedPrompts: Set<string> = new Set();
-  linkedPrompts: Set<string> = new Set();
+  SearchControl = new FormControl('');
+
+  /** @deprecated Use {@link SearchControl}. */
+  get searchControl() {
+    return this.SearchControl;
+  }
+  /** @deprecated Use {@link SearchControl}. */
+  set searchControl(value) {
+    this.SearchControl = value;
+  }
+  SelectedPrompts: Set<string> = new Set();
+
+  /** @deprecated Use {@link SelectedPrompts}. */
+  get selectedPrompts(): Set<string> {
+    return this.SelectedPrompts;
+  }
+  /** @deprecated Use {@link SelectedPrompts}. */
+  set selectedPrompts(value: Set<string>) {
+    this.SelectedPrompts = value;
+  }
+  LinkedPrompts: Set<string> = new Set();
+
+  /** @deprecated Use {@link LinkedPrompts}. */
+  get linkedPrompts(): Set<string> {
+    return this.LinkedPrompts;
+  }
+  /** @deprecated Use {@link LinkedPrompts}. */
+  set linkedPrompts(value: Set<string>) {
+    this.LinkedPrompts = value;
+  }
   
   // View mode
-  viewMode: 'grid' | 'list' = 'list';
+  ViewMode: 'grid' | 'list' = 'list';
+
+  /** @deprecated Use {@link ViewMode}. */
+  get viewMode(): 'grid' | 'list' {
+    return this.ViewMode;
+  }
+  /** @deprecated Use {@link ViewMode}. */
+  set viewMode(value: 'grid' | 'list') {
+    this.ViewMode = value;
+  }
 
   @Output() DialogClose = new EventEmitter<void>();
 
@@ -74,13 +146,13 @@ export class PromptSelectorDialogComponent extends BaseAngularComponent implemen
     this.loadPrompts();
     
     // Initialize selected prompts if provided
-    if (this.config.selectedPromptIds) {
-      this.selectedPrompts = new Set(this.config.selectedPromptIds);
+    if (this.config.SelectedPromptIds) {
+      this.SelectedPrompts = new Set(this.config.SelectedPromptIds);
     }
     
     // Initialize linked prompts if provided
-    if (this.config.linkedPromptIds) {
-      this.linkedPrompts = new Set(this.config.linkedPromptIds);
+    if (this.config.LinkedPromptIds) {
+      this.LinkedPrompts = new Set(this.config.LinkedPromptIds);
     }
   }
 
@@ -90,7 +162,7 @@ export class PromptSelectorDialogComponent extends BaseAngularComponent implemen
   }
 
   private setupSearch() {
-    this.searchControl.valueChanges
+    this.SearchControl.valueChanges
       .pipe(
         debounceTime(300),
         distinctUntilChanged(),
@@ -102,15 +174,15 @@ export class PromptSelectorDialogComponent extends BaseAngularComponent implemen
   }
 
   private async loadPrompts() {
-    this.isLoading$.next(true);
+    this.IsLoading$.next(true);
     
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       
       // Build filter - default to active prompts
       let filter = "Status = 'Active'";
-      if (this.config.extraFilter) {
-        filter += ` AND ${this.config.extraFilter}`;
+      if (this.config.ExtraFilter) {
+        filter += ` AND ${this.config.ExtraFilter}`;
       }
       
       const result = await rv.RunView<MJAIPromptEntityExtended>({
@@ -123,8 +195,8 @@ export class PromptSelectorDialogComponent extends BaseAngularComponent implemen
 
       if (result.Success) {
         const prompts = result.Results || [];
-        this.prompts$.next(prompts);
-        this.filteredPrompts$.next(prompts);
+        this.Prompts$.next(prompts);
+        this.FilteredPrompts$.next(prompts);
       } else {
         throw new Error(result.ErrorMessage || 'Failed to load prompts');
       }
@@ -135,18 +207,18 @@ export class PromptSelectorDialogComponent extends BaseAngularComponent implemen
         'error',
         3000
       );
-      this.prompts$.next([]);
-      this.filteredPrompts$.next([]);
+      this.Prompts$.next([]);
+      this.FilteredPrompts$.next([]);
     } finally {
-      this.isLoading$.next(false);
+      this.IsLoading$.next(false);
     }
   }
 
   private filterPrompts(searchTerm: string) {
-    const allPrompts = this.prompts$.value;
+    const allPrompts = this.Prompts$.value;
     
     if (!searchTerm.trim()) {
-      this.filteredPrompts$.next(allPrompts);
+      this.FilteredPrompts$.next(allPrompts);
       return;
     }
 
@@ -155,14 +227,14 @@ export class PromptSelectorDialogComponent extends BaseAngularComponent implemen
       prompt.Description?.toLowerCase().includes(searchTerm.toLowerCase())
     );
     
-    this.filteredPrompts$.next(filtered);
+    this.FilteredPrompts$.next(filtered);
   }
 
   // === Selection Management ===
 
-  togglePromptSelection(prompt: MJAIPromptEntityExtended) {
+  TogglePromptSelection(prompt: MJAIPromptEntityExtended) {
     // Prevent selection of already linked prompts
-    if (this.isPromptLinked(prompt)) {
+    if (this.IsPromptLinked(prompt)) {
       MJNotificationService.Instance.CreateSimpleNotification(
         `"${prompt.Name}" is already linked to this agent`,
         'info',
@@ -171,39 +243,64 @@ export class PromptSelectorDialogComponent extends BaseAngularComponent implemen
       return;
     }
     
-    if (this.config.multiSelect) {
-      if (this.selectedPrompts.has(prompt.ID)) {
-        this.selectedPrompts.delete(prompt.ID);
+    if (this.config.MultiSelect) {
+      if (this.SelectedPrompts.has(prompt.ID)) {
+        this.SelectedPrompts.delete(prompt.ID);
       } else {
-        this.selectedPrompts.add(prompt.ID);
+        this.SelectedPrompts.add(prompt.ID);
       }
     } else {
       // Single select - replace current selection
-      this.selectedPrompts.clear();
-      this.selectedPrompts.add(prompt.ID);
+      this.SelectedPrompts.clear();
+      this.SelectedPrompts.add(prompt.ID);
     }
   }
 
+  /** @deprecated Use {@link TogglePromptSelection}. */
+  togglePromptSelection(prompt: MJAIPromptEntityExtended) {
+    return this.TogglePromptSelection(prompt);
+  }
+
+  IsPromptSelected(prompt: MJAIPromptEntityExtended): boolean {
+    return this.SelectedPrompts.has(prompt.ID);
+  }
+
+  /** @deprecated Use {@link IsPromptSelected}. */
   isPromptSelected(prompt: MJAIPromptEntityExtended): boolean {
-    return this.selectedPrompts.has(prompt.ID);
+    return this.IsPromptSelected(prompt);
   }
 
+  IsPromptLinked(prompt: MJAIPromptEntityExtended): boolean {
+    return this.LinkedPrompts.has(prompt.ID);
+  }
+
+  /** @deprecated Use {@link IsPromptLinked}. */
   isPromptLinked(prompt: MJAIPromptEntityExtended): boolean {
-    return this.linkedPrompts.has(prompt.ID);
+    return this.IsPromptLinked(prompt);
   }
 
+  GetSelectedPromptObjects(): MJAIPromptEntityExtended[] {
+    const allPrompts = this.Prompts$.value;
+    return allPrompts.filter(prompt => this.SelectedPrompts.has(prompt.ID));
+  }
+
+  /** @deprecated Use {@link GetSelectedPromptObjects}. */
   getSelectedPromptObjects(): MJAIPromptEntityExtended[] {
-    const allPrompts = this.prompts$.value;
-    return allPrompts.filter(prompt => this.selectedPrompts.has(prompt.ID));
+    return this.GetSelectedPromptObjects();
   }
 
   // === UI Helpers ===
 
-  toggleViewMode() {
-    this.viewMode = this.viewMode === 'grid' ? 'list' : 'grid';
+  ToggleViewMode() {
+    this.ViewMode = this.ViewMode === 'grid' ? 'list' : 'grid';
   }
 
-  getPromptStatusColor(prompt: MJAIPromptEntityExtended): string {
+  /** @deprecated Use {@link ToggleViewMode}. */
+  toggleViewMode() {
+    return this.ToggleViewMode();
+  }
+
+  GetPromptStatusColor(prompt: MJAIPromptEntityExtended): string {
     switch (prompt.Status) {
       case 'Active': return 'var(--mj-status-success)';
       case 'Pending': return 'var(--mj-status-warning)';
@@ -212,14 +309,24 @@ export class PromptSelectorDialogComponent extends BaseAngularComponent implemen
     }
   }
 
-  getPromptStatusText(prompt: MJAIPromptEntityExtended): string {
+  /** @deprecated Use {@link GetPromptStatusColor}. */
+  getPromptStatusColor(prompt: MJAIPromptEntityExtended): string {
+    return this.GetPromptStatusColor(prompt);
+  }
+
+  GetPromptStatusText(prompt: MJAIPromptEntityExtended): string {
     return prompt.Status || 'Unknown';
+  }
+
+  /** @deprecated Use {@link GetPromptStatusText}. */
+  getPromptStatusText(prompt: MJAIPromptEntityExtended): string {
+    return this.GetPromptStatusText(prompt);
   }
 
   // === Dialog Actions ===
 
-  selectPrompts() {
-    const selectedPromptObjects = this.getSelectedPromptObjects();
+  SelectPrompts() {
+    const selectedPromptObjects = this.GetSelectedPromptObjects();
     
     if (selectedPromptObjects.length === 0) {
       MJNotificationService.Instance.CreateSimpleNotification(
@@ -231,25 +338,35 @@ export class PromptSelectorDialogComponent extends BaseAngularComponent implemen
     }
 
     const result: PromptSelectorResult = {
-      selectedPrompts: selectedPromptObjects
+      SelectedPrompts: selectedPromptObjects
     };
 
-    this.result.next(result);
+    this.Result.next(result);
     this.DialogClose.emit();
   }
 
-  createNew() {
+  /** @deprecated Use {@link SelectPrompts}. */
+  selectPrompts() {
+    return this.SelectPrompts();
+  }
+
+  CreateNew() {
     const result: PromptSelectorResult = {
-      selectedPrompts: [],
+      SelectedPrompts: [],
       createNew: true
     };
 
-    this.result.next(result);
+    this.Result.next(result);
     this.DialogClose.emit();
   }
 
+  /** @deprecated Use {@link CreateNew}. */
+  createNew() {
+    return this.CreateNew();
+  }
+
   cancel() {
-    this.result.next(null);
+    this.Result.next(null);
     this.DialogClose.emit();
   }
 }

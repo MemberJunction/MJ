@@ -1,29 +1,29 @@
 import { describe, it, expect } from 'vitest';
-import { partitionRecords, partitionRollupHash, diffPartitions, partitionKeyForIdentity } from '../HashDiff.js';
+import { PartitionRecords, PartitionRollupHash, DiffPartitions, PartitionKeyForIdentity } from '../HashDiff.js';
 
 describe('partitionKeyForIdentity', () => {
     it('is deterministic — same identity always maps to the same partition', () => {
-        expect(partitionKeyForIdentity('ext-123')).toBe(partitionKeyForIdentity('ext-123'));
-        expect(partitionKeyForIdentity('ext-123', 64)).toBe(partitionKeyForIdentity('ext-123', 64));
+        expect(PartitionKeyForIdentity('ext-123')).toBe(PartitionKeyForIdentity('ext-123'));
+        expect(PartitionKeyForIdentity('ext-123', 64)).toBe(PartitionKeyForIdentity('ext-123', 64));
     });
     it('stays within [0, partitionCount)', () => {
         for (let i = 0; i < 500; i++) {
-            const p = Number(partitionKeyForIdentity(`id-${i}`, 16));
+            const p = Number(PartitionKeyForIdentity(`id-${i}`, 16));
             expect(p).toBeGreaterThanOrEqual(0);
             expect(p).toBeLessThan(16);
         }
     });
     it('distributes across buckets (not all in one)', () => {
         const seen = new Set<string>();
-        for (let i = 0; i < 1000; i++) seen.add(partitionKeyForIdentity(`id-${i}`, 256));
+        for (let i = 0; i < 1000; i++) seen.add(PartitionKeyForIdentity(`id-${i}`, 256));
         expect(seen.size).toBeGreaterThan(100); // ~256 expected; assert it's clearly spread
     });
     it('defaults to 256 buckets', () => {
-        for (let i = 0; i < 200; i++) expect(Number(partitionKeyForIdentity(`id-${i}`))).toBeLessThan(256);
+        for (let i = 0; i < 200; i++) expect(Number(PartitionKeyForIdentity(`id-${i}`))).toBeLessThan(256);
     });
     it('partition is stable under content change (keyed by identity, not content)', () => {
         // The same ExternalID lands in the same bucket regardless of any other attribute.
-        expect(partitionKeyForIdentity('contact-9')).toBe(partitionKeyForIdentity('contact-9'));
+        expect(PartitionKeyForIdentity('contact-9')).toBe(PartitionKeyForIdentity('contact-9'));
     });
 
     it('fullSync semantics: diffing against an EMPTY snapshot re-applies EVERY partition (all added)', () => {
@@ -31,7 +31,7 @@ describe('partitionKeyForIdentity', () => {
         // every partition becomes "added" → applied. This is the repair path: fullSync redoes everything,
         // never skipping a partition whose MJ row drifted out-of-band from the snapshot.
         const newRollups = new Map([['0', 'a'], ['1', 'b'], ['2', 'c']]);
-        const diff = diffPartitions(newRollups, new Map());
+        const diff = DiffPartitions(newRollups, new Map());
         expect(diff.added.sort()).toEqual(['0', '1', '2']);
         expect(diff.changed).toEqual([]);
         expect(diff.removed).toEqual([]);
@@ -52,14 +52,14 @@ describe('partitionRecords', () => {
             { id: '2', partition: 'B', name: 'b', score: 2 },
             { id: '3', partition: 'A', name: 'c', score: 3 },
         ];
-        const buckets = partitionRecords(recs, keyOf, partitionOf);
+        const buckets = PartitionRecords(recs, keyOf, partitionOf);
         expect([...buckets.keys()].sort()).toEqual(['A', 'B']);
         expect(buckets.get('A')!.map(r => r.id)).toEqual(['1', '3']);
         expect(buckets.get('B')!.map(r => r.id)).toEqual(['2']);
     });
 
     it('returns an empty map for empty input', () => {
-        const buckets = partitionRecords<Rec>([], keyOf, partitionOf);
+        const buckets = PartitionRecords<Rec>([], keyOf, partitionOf);
         expect(buckets.size).toBe(0);
     });
 });
@@ -67,7 +67,7 @@ describe('partitionRecords', () => {
 describe('partitionRollupHash', () => {
     it('produces a 64-char hex SHA-256 string', () => {
         const recs: Rec[] = [{ id: '1', partition: 'A', name: 'a', score: 1 }];
-        expect(partitionRollupHash(recs, fieldsOf)).toMatch(/^[0-9a-f]{64}$/);
+        expect(PartitionRollupHash(recs, fieldsOf)).toMatch(/^[0-9a-f]{64}$/);
     });
 
     it('is the SAME for the same records in a different order (order-independent)', () => {
@@ -77,7 +77,7 @@ describe('partitionRollupHash', () => {
             { id: '3', partition: 'A', name: 'c', score: 3 },
         ];
         const reversed = [...forward].reverse();
-        expect(partitionRollupHash(reversed, fieldsOf)).toBe(partitionRollupHash(forward, fieldsOf));
+        expect(PartitionRollupHash(reversed, fieldsOf)).toBe(PartitionRollupHash(forward, fieldsOf));
     });
 
     it('changes when exactly one record in the partition changes', () => {
@@ -89,20 +89,20 @@ describe('partitionRollupHash', () => {
             { id: '1', partition: 'A', name: 'a', score: 1 },
             { id: '2', partition: 'A', name: 'b', score: 99 }, // score changed
         ];
-        expect(partitionRollupHash(after, fieldsOf)).not.toBe(partitionRollupHash(before, fieldsOf));
+        expect(PartitionRollupHash(after, fieldsOf)).not.toBe(PartitionRollupHash(before, fieldsOf));
     });
 
     it('rolls an empty partition up to a stable empty-string SHA-256 sentinel', () => {
-        const emptyHash = partitionRollupHash<Rec>([], fieldsOf);
+        const emptyHash = PartitionRollupHash<Rec>([], fieldsOf);
         // SHA-256 of the empty string.
         expect(emptyHash).toBe('e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855');
-        expect(partitionRollupHash<Rec>([], fieldsOf)).toBe(emptyHash);
+        expect(PartitionRollupHash<Rec>([], fieldsOf)).toBe(emptyHash);
     });
 
     it('distinguishes partitions with different record sets', () => {
         const a: Rec[] = [{ id: '1', partition: 'A', name: 'a', score: 1 }];
         const b: Rec[] = [{ id: '2', partition: 'B', name: 'b', score: 2 }];
-        expect(partitionRollupHash(a, fieldsOf)).not.toBe(partitionRollupHash(b, fieldsOf));
+        expect(PartitionRollupHash(a, fieldsOf)).not.toBe(PartitionRollupHash(b, fieldsOf));
     });
 });
 
@@ -118,7 +118,7 @@ describe('diffPartitions', () => {
             ['B', 'hashB-DIFFERENT'],
             ['C', 'hashC'],
         ]);
-        const diff = diffPartitions(local, remote);
+        const diff = DiffPartitions(local, remote);
         expect(diff.changed).toEqual(['B']);
         expect(diff.added).toEqual([]);
         expect(diff.removed).toEqual([]);
@@ -133,7 +133,7 @@ describe('diffPartitions', () => {
             ['A', 'hashA'],
             ['GONE', 'hashGone'],
         ]);
-        const diff = diffPartitions(local, remote);
+        const diff = DiffPartitions(local, remote);
         expect(diff.changed).toEqual([]);
         expect(diff.added).toEqual(['NEW']);
         expect(diff.removed).toEqual(['GONE']);
@@ -152,21 +152,21 @@ describe('diffPartitions', () => {
             ['rm-2', 'r2'],
             ['rm-1', 'r1'],
         ]);
-        const diff = diffPartitions(local, remote);
+        const diff = DiffPartitions(local, remote);
         expect(diff.changed).toEqual(['shared-diff']);
         expect(diff.added).toEqual(['add-1', 'add-2']);
         expect(diff.removed).toEqual(['rm-1', 'rm-2']);
     });
 
     it('returns all-empty arrays for two empty maps', () => {
-        const diff = diffPartitions(new Map(), new Map());
+        const diff = DiffPartitions(new Map(), new Map());
         expect(diff).toEqual({ changed: [], added: [], removed: [] });
     });
 
     it('treats an empty local map as all-remote-removed and vice versa', () => {
         const remote = new Map([['A', 'h']]);
-        expect(diffPartitions(new Map(), remote)).toEqual({ changed: [], added: [], removed: ['A'] });
-        expect(diffPartitions(remote, new Map())).toEqual({ changed: [], added: ['A'], removed: [] });
+        expect(DiffPartitions(new Map(), remote)).toEqual({ changed: [], added: [], removed: ['A'] });
+        expect(DiffPartitions(remote, new Map())).toEqual({ changed: [], added: ['A'], removed: [] });
     });
 });
 
@@ -184,12 +184,12 @@ describe('HashDiff end-to-end', () => {
         ];
         const rollup = (recs: Rec[]): Map<string, string> => {
             const out = new Map<string, string>();
-            for (const [part, bucket] of partitionRecords(recs, keyOf, partitionOf)) {
-                out.set(part, partitionRollupHash(bucket, fieldsOf));
+            for (const [part, bucket] of PartitionRecords(recs, keyOf, partitionOf)) {
+                out.set(part, PartitionRollupHash(bucket, fieldsOf));
             }
             return out;
         };
-        const diff = diffPartitions(rollup(reordered), rollup(original));
+        const diff = DiffPartitions(rollup(reordered), rollup(original));
         expect(diff).toEqual({ changed: [], added: [], removed: [] });
     });
 
@@ -204,12 +204,12 @@ describe('HashDiff end-to-end', () => {
         ];
         const rollup = (recs: Rec[]): Map<string, string> => {
             const out = new Map<string, string>();
-            for (const [part, bucket] of partitionRecords(recs, keyOf, partitionOf)) {
-                out.set(part, partitionRollupHash(bucket, fieldsOf));
+            for (const [part, bucket] of PartitionRecords(recs, keyOf, partitionOf)) {
+                out.set(part, PartitionRollupHash(bucket, fieldsOf));
             }
             return out;
         };
-        const diff = diffPartitions(rollup(updated), rollup(original));
+        const diff = DiffPartitions(rollup(updated), rollup(original));
         expect(diff.changed).toEqual(['B']);
         expect(diff.added).toEqual([]);
         expect(diff.removed).toEqual([]);

@@ -32,7 +32,7 @@ export class ExecutionPlanner {
    * @param configurationId - Optional configuration ID for environment-specific behavior
    * @returns ExecutionTask[] - Array of execution tasks to be processed
    */
-  public createExecutionPlan(
+  public CreateExecutionPlan(
     prompt: MJAIPromptEntityExtended,
     promptModels: MJAIPromptModelEntity[],
     allModels: MJAIModelEntityExtended[],
@@ -108,6 +108,20 @@ export class ExecutionPlanner {
           templateMessageRole,
         );
     }
+  }
+
+  /** @deprecated Use {@link CreateExecutionPlan}. */
+  public createExecutionPlan(
+    prompt: MJAIPromptEntityExtended,
+    promptModels: MJAIPromptModelEntity[],
+    allModels: MJAIModelEntityExtended[],
+    renderedPrompt: string,
+    contextUser?: UserInfo,
+    configurationId?: string,
+    conversationMessages?: ChatMessage[],
+    templateMessageRole: TemplateMessageRole = 'system',
+  ): ExecutionTask[] {
+    return this.CreateExecutionPlan(prompt, promptModels, allModels, renderedPrompt, contextUser, configurationId, conversationMessages, templateMessageRole);
   }
 
   /**

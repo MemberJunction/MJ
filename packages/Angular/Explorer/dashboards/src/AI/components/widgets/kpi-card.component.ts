@@ -1,17 +1,17 @@
 import { Component, Input, OnInit } from '@angular/core';
 
 export interface KPICardData {
-  title: string;
-  value: string | number;
-  subtitle?: string;
-  icon: string;
-  color: 'primary' | 'success' | 'warning' | 'danger' | 'info';
-  trend?: {
+  title: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  value: string | number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  subtitle?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  icon: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  color: 'primary' | 'success' | 'warning' | 'danger' | 'info';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  trend?: {  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     direction: 'up' | 'down' | 'stable';
     percentage: number;
     period: string;
   };
-  loading?: boolean;
+  loading?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 @Component({
@@ -192,10 +192,19 @@ export interface KPICardData {
   `]
 })
 export class KPICardComponent implements OnInit {
-  @Input() data!: KPICardData;
+  @Input() Data!: KPICardData;
+
+  /** @deprecated Use {@link Data}. */
+  @Input() set data(value: KPICardData) {
+    this.Data = value;
+  }
+  /** @deprecated Use {@link Data}. */
+  get data(): KPICardData {
+    return this.Data;
+  }
 
   ngOnInit() {
-    if (!this.data) {
+    if (!this.Data) {
       throw new Error('KPICardComponent requires data input');
     }
   }
@@ -215,10 +224,10 @@ export class KPICardComponent implements OnInit {
     return value;
   }
 
-  getTrendIcon(): string {
-    if (!this.data.trend) return '';
+  GetTrendIcon(): string {
+    if (!this.Data.trend) return '';
     
-    switch (this.data.trend.direction) {
+    switch (this.Data.trend.direction) {
       case 'up':
         return 'fa-solid fa-arrow-up';
       case 'down':
@@ -230,10 +239,15 @@ export class KPICardComponent implements OnInit {
     }
   }
 
-  getTrendColor(): string {
-    if (!this.data.trend) return 'var(--mj-text-disabled)';
+  /** @deprecated Use {@link GetTrendIcon}. */
+  getTrendIcon(): string {
+    return this.GetTrendIcon();
+  }
 
-    switch (this.data.trend.direction) {
+  GetTrendColor(): string {
+    if (!this.Data.trend) return 'var(--mj-text-disabled)';
+
+    switch (this.Data.trend.direction) {
       case 'up':
         return 'var(--mj-status-success)';
       case 'down':
@@ -243,5 +257,10 @@ export class KPICardComponent implements OnInit {
       default:
         return 'var(--mj-text-disabled)';
     }
+  }
+
+  /** @deprecated Use {@link GetTrendColor}. */
+  getTrendColor(): string {
+    return this.GetTrendColor();
   }
 }

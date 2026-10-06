@@ -2,9 +2,10 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ChangeDetectorRef, Component, ElementRef } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { capture } from '@memberjunction/ng-test-utils';
-import { BaseEntity, BaseEntityResult, EntityInfo, LogError } from '@memberjunction/core';
+import { BaseEntity, BaseEntityResult, EntityInfo, LogError, ValidationResult } from '@memberjunction/core';
 import { ValidationErrorInfo, ValidationErrorType } from '@memberjunction/global';
 import { BaseFormComponent } from './base-form-component';
+import type { BaseFormPanel } from './panel-slot/base-form-panel';
 
 // Only LogError is doubled; every other export (BaseEntity, EntityInfo, …) stays real.
 vi.mock('@memberjunction/core', async (importOriginal) => {
@@ -270,6 +271,35 @@ describe('BaseFormComponent publishes a refused save to the fields', () => {
       expect(LogError).toHaveBeenCalledTimes(1);
       expect(vi.mocked(LogError).mock.calls[0][0]).toContain('no record');
       expect(vi.mocked(LogError).mock.calls[0][0]).not.toContain('Record not found');
+    });
+  });
+
+  /**
+   * A mounted panel can refuse the save, and its validator may be async. Its last-known state
+   * says valid, so only the awaited answer can refuse.
+   */
+  describe('a mounted panel whose async Validate fails', () => {
+    it('refuses the save, never calls Save(), and publishes the panel error to the fields', async () => {
+      const failing = new ValidationResult();
+      failing.Success = false;
+      failing.Errors = [new ValidationErrorInfo('skip:ltv', 'Amount required', null)];
+      const panel = {
+        Validate: async () => failing,
+        LastKnownValidation: () => {
+          const valid = new ValidationResult();
+          valid.Success = true;
+          return valid;
+        },
+      } as unknown as BaseFormPanel;
+      const record = makeRecord();
+      const form = makeForm(record);
+      form.RegisterFormPanel(panel);
+
+      const ok = await form.SaveRecord(false);
+
+      expect(ok).toBe(false);
+      expect(record.saveCalls).toBe(0);
+      expect(form.formContext.validationErrors?.map((e) => e.Message)).toContain('Amount required');
     });
   });
 

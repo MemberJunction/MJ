@@ -13,6 +13,8 @@ import {
 import { CommonModule } from '@angular/common';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { RoleInfo } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
+import { UserCanManageFormDefaults } from '@memberjunction/core-entities';
 
 /**
  * Scope of an EntityFormOverride row. Mirrors the DB CHECK constraint
@@ -101,6 +103,15 @@ export interface FormOverrideDialogResult {
 
             <div class="field">
                 <label>Scope</label>
+                @if (!CanPublish) {
+                    <!-- Choosing who else sees a form is a grant, not a default. Without it the
+                         audience is shown, not offered, so there is no control that would fail. -->
+                    <p class="scope-readonly">{{ ScopeLabel }}</p>
+                    <small class="muted">
+                        Showing a form to a role or to everyone needs the Manage Form Defaults
+                        authorization.
+                    </small>
+                } @else {
                 <div class="scope-options">
                     <label class="radio">
                         <input type="radio" name="scope" [checked]="Scope === 'User'" (change)="OnScopeChange('User')" />
@@ -123,6 +134,7 @@ export interface FormOverrideDialogResult {
                         Everyone (Global)
                     </label>
                 </div>
+                }
             </div>
 
             <div class="field-row">
@@ -181,6 +193,7 @@ export interface FormOverrideDialogResult {
         .status-options { display: flex; gap: 16px; padding-top: 6px; }
         .radio { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
         .role-picker { margin-left: 24px; }
+        .scope-readonly { margin: 0; font-size: 13px; }
         .error { color: var(--mj-status-error-text, #b91c1c); background: var(--mj-status-error-bg, #fee2e2); padding: 8px 12px; border-radius: 4px; font-size: 13px; margin-top: 8px; }
         .btn { padding: 8px 16px; border: 1px solid var(--mj-border-default, #e0e0e0); border-radius: 4px; background: var(--mj-bg-surface, #fff); color: var(--mj-text-primary, #111); font-size: 14px; cursor: pointer; }
         .btn-primary { background: var(--mj-brand-primary, #5B4FE9); color: #fff; border-color: var(--mj-brand-primary, #5B4FE9); font-weight: 500; }
@@ -221,8 +234,26 @@ export class FormOverrideDialogComponent extends BaseAngularComponent implements
      */
     @Input() EditMode = false;
 
-    @Output() confirmed = new EventEmitter<FormOverrideDialogResult>();
-    @Output() dismissed = new EventEmitter<void>();
+    @Output() Confirmed = new EventEmitter<FormOverrideDialogResult>();
+
+    /**
+     * @deprecated Use {@link Confirmed}.
+     *
+     * The same emitter under the old binding name, so a template still binding
+     * (confirmed) keeps working. Must stay AFTER Confirmed: class fields
+     * initialise in order, and the other way round this captures undefined.
+     */
+    @Output() confirmed = this.Confirmed;
+    @Output() Dismissed = new EventEmitter<void>();
+
+    /**
+     * @deprecated Use {@link Dismissed}.
+     *
+     * The same emitter under the old binding name, so a template still binding
+     * (dismissed) keeps working. Must stay AFTER Dismissed: class fields
+     * initialise in order, and the other way round this captures undefined.
+     */
+    @Output() dismissed = this.Dismissed;
 
     public Name = '';
     public Description: string | null = null;
@@ -231,16 +262,53 @@ export class FormOverrideDialogComponent extends BaseAngularComponent implements
     public RoleID: string | null = null;
     public Priority = 0;
     public Status: OverrideStatus = 'Pending';
-    public validationError: string | null = null;
+    public ValidationError: string | null = null;
 
-    public availableRoles: RoleInfo[] = [];
+    /** @deprecated Use {@link ValidationError}. */
+    public get validationError(): string | null {
+        return this.ValidationError;
+    }
+    /** @deprecated Use {@link ValidationError}. */
+    public set validationError(value: string | null) {
+        this.ValidationError = value;
+    }
+
+    public AvailableRoles: RoleInfo[] = [];
+
+    /** @deprecated Use {@link AvailableRoles}. */
+    public get availableRoles(): RoleInfo[] {
+        return this.AvailableRoles;
+    }
+    /** @deprecated Use {@link AvailableRoles}. */
+    public set availableRoles(value: RoleInfo[]) {
+        this.AvailableRoles = value;
+    }
+
+    /**
+     * Whether this user may show a form to a role or to everyone. Read once each time the dialog
+     * opens.
+     *
+     * Decides only what the dialog offers. The server-side entity subclass enforces the same rule
+     * on the save, so a dialog that offered it anyway would still have the write refused.
+     */
+    public CanPublish = false;
+
+    /** The current audience in words, for a user who cannot change it. */
+    public get ScopeLabel(): string {
+        if (this.Scope === 'Global') return 'Everyone';
+        if (this.Scope === 'Role') {
+            const role = this.availableRoles.find((r) => UUIDsEqual(r.ID, this.RoleID))?.Name;
+            return role ? `${role} role` : 'A role';
+        }
+        return 'Me only';
+    }
 
     private readonly cd = inject(ChangeDetectorRef);
 
     ngOnInit(): void {
         // Load roles eagerly — small list, used only when Scope='Role'.
         const provider = this.ProviderToUse;
-        this.availableRoles = provider?.Roles ?? [];
+        this.AvailableRoles = provider?.Roles ?? [];
     }
 
     /**
@@ -262,20 +330,20 @@ export class FormOverrideDialogComponent extends BaseAngularComponent implements
     /**
      * Sync editable state from `@Input()`s. Called on first open AND on
      * every subsequent Visible: false → true transition so the dialog
-     * doesn't show stale data from a previous invocation.
+     * doesn't show stale data from a previous invocation. An Initial* input
+     * left unset gives its default: Pending, Me only with no role, priority 0.
      */
     private resetFromInputs(): void {
         this.Name = (this.InitialName?.trim() || this.ComponentName || '').trim();
         this.Description = this.InitialDescription?.trim() || null;
         this.Notes = this.InitialNotes?.trim() || null;
-        this.validationError = null;
-        // Default Status to Pending — matches the new "create as draft,
-        // activate later" workflow. Edit-mode callers will override via
-        // InitialStatus.
-        if (this.InitialStatus) this.Status = this.InitialStatus;
-        if (this.InitialScope) this.Scope = this.InitialScope;
-        if (this.InitialRoleID !== undefined) this.RoleID = this.InitialRoleID;
-        if (this.InitialPriority !== undefined) this.Priority = this.InitialPriority;
+        this.ValidationError = null;
+        this.Status = this.InitialStatus ?? 'Pending';
+        this.Scope = this.InitialScope ?? 'User';
+        this.RoleID = this.Scope === 'Role' ? (this.InitialRoleID ?? null) : null;
+        this.Priority = this.InitialPriority ?? 0;
+        const provider = this.ProviderToUse;
+        this.CanPublish = UserCanManageFormDefaults(provider?.CurrentUser, provider);
         this.cd.markForCheck();
     }
 
@@ -312,19 +380,19 @@ export class FormOverrideDialogComponent extends BaseAngularComponent implements
 
     public OnConfirmClick(): void {
         if (!this.Name?.trim()) {
-            this.validationError = 'Name is required.';
+            this.ValidationError = 'Name is required.';
             return;
         }
         if (!this.EntityName) {
-            this.validationError = 'No entity selected. Pick one in the Field Binding inspector before activating.';
+            this.ValidationError = 'No entity selected. Pick one in the Field Binding inspector before activating.';
             return;
         }
         if (this.Scope === 'Role' && !this.RoleID) {
-            this.validationError = 'Pick a role when Scope = Role.';
+            this.ValidationError = 'Pick a role when Scope = Role.';
             return;
         }
-        this.validationError = null;
-        this.confirmed.emit({
+        this.ValidationError = null;
+        this.Confirmed.emit({
             Name: this.Name.trim(),
             Description: this.Description,
             Notes: this.Notes,
@@ -337,6 +405,6 @@ export class FormOverrideDialogComponent extends BaseAngularComponent implements
     }
 
     public OnCancelClick(): void {
-        this.dismissed.emit();
+        this.Dismissed.emit();
     }
 }

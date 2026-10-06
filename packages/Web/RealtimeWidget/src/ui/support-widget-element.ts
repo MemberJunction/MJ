@@ -572,8 +572,13 @@ export class SupportWidgetElement extends HTMLElement {
 }
 
 /** Registers the custom element once (idempotent). */
-export function defineSupportWidgetElement(): void {
+export function DefineSupportWidgetElement(): void {
     if (typeof customElements !== 'undefined' && !customElements.get(WIDGET_TAG_NAME)) {
         customElements.define(WIDGET_TAG_NAME, SupportWidgetElement);
     }
+}
+
+/** @deprecated Use {@link DefineSupportWidgetElement}. */
+export function defineSupportWidgetElement(): void {
+    return DefineSupportWidgetElement();
 }

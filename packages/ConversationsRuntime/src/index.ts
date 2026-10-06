@@ -15,7 +15,7 @@ export { ConversationsRuntime } from './ConversationsRuntime';
 export { MentionParser, type Mention, type MentionParseResult } from './mentions/MentionParser';
 export { MentionAutocomplete } from './mentions/MentionAutocomplete';
 export { IntersectAcceptedSkills } from './mentions/SkillNarrowing';
-export type { MentionSuggestion, MentionSuggestionPreset } from './mentions/MentionSuggestion';
+export type { MentionPerson, MentionSuggestion, MentionSuggestionPreset, MentionSuggestionScope } from './mentions/MentionSuggestion';
 export {
     BuildConversationTimeline,
     CollectRealtimeSessionIDs,
@@ -23,7 +23,11 @@ export {
     IsVisibleRealtimeTurn,
     MapRealtimeSessionMeta,
     REALTIME_SESSION_META_FIELDS,
+    SessionCardDurationLabel,
     SessionCardIsSameDayRange,
+    SessionCardMessageCountLabel,
+    SessionCardSpeakerLabel,
+    SessionCardStartedAt,
     SessionCardStatusChip,
     SessionCardTitle,
     type ConversationTimelineItem,
@@ -56,6 +60,15 @@ export {
     type MessageProgressCallback,
     type StreamingConnectionStatus,
 } from './streaming/ConversationStreaming';
+export {
+    ConversationLiveness,
+    RECONCILE_THROTTLE_MS,
+    type ReconciliationReason,
+} from './streaming/ConversationLiveness';
+export {
+    ConversationTail,
+    type ConversationTailResult,
+} from './streaming/ConversationTail';
 export {
     ConversationAgentRunner,
     type ProcessMessageInput,

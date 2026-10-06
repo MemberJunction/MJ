@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/work-queue-core",
   "type": "module",
-  "version": "6.1.0",
+  "version": "6.2.0-edge.2",
   "description": "MemberJunction: durable work queue contracts, consumer runtime, in-memory transport and conformance kit. No MemberJunction runtime dependencies.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

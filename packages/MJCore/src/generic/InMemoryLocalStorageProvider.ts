@@ -25,6 +25,12 @@ export class InMemoryLocalStorageProvider implements ILocalStorageProvider {
     public readonly SharesReferences = true;
 
     /**
+     * `false` — a `Map` on the heap. Nothing written here survives the process, so there is never
+     * a second reader; see {@link ILocalStorageProvider.SupportsCrossProcessPersistence}.
+     */
+    public readonly SupportsCrossProcessPersistence = false;
+
+    /**
      * Gets or creates a category map
      */
     private getCategoryMap(category: string): Map<string, unknown> {

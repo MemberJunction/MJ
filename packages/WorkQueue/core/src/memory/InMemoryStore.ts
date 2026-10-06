@@ -74,6 +74,12 @@ const ONE_HOUR_MS = 3_600_000;
  * State and rules of the in-memory transport (spec 03 §7). Everything about a partition — single flight,
  * head-of-line, blocking — is derived from the delivery rows. Not thread-safe; single process only.
  */
+
+/** Case-insensitive ID equality; IDs come from the injected generator, and core carries no dependency on @memberjunction/global's UUIDsEqual. */
+function SameDeliveryId(a: string | undefined, b: string): boolean {
+    return a !== undefined && a.toLowerCase() === b.toLowerCase();
+}
+
 export class InMemoryStore {
     /** Keyed by lower-cased MessageID alone: a MessageID is globally unique, not per topic (F10). */
     private readonly messages = new Map<string, StoredMessage>();
@@ -384,7 +390,7 @@ export class InMemoryStore {
         if (policy.PartitionMode === 'Exclusive') {
             return true;
         }
-        return this.headOf(policy.SubscriptionName, key)?.ID === delivery.ID;
+        return SameDeliveryId(this.headOf(policy.SubscriptionName, key)?.ID, delivery.ID);
     }
 
     private lease(policy: SubscriptionPolicy, delivery: StoredDelivery, now: number): ReceivedDelivery {

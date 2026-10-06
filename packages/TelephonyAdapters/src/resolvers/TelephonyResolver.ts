@@ -5,8 +5,9 @@
  */
 
 import { Resolver, Mutation, Arg, Ctx, ObjectType, Field } from 'type-graphql';
-import { LogError, IMetadataProvider } from '@memberjunction/core';
-import { TelephonyResolverContext, getUserFromPayload, getReadWriteProvider } from '../types.js';
+import { LogError } from '@memberjunction/core';
+import { TelephonyResolverContext, GetUserFromPayload, GetReadWriteProvider } from '../types.js';
+import { OutboundCallRefusedError } from '../telephony/outboundCallPolicy.js';
 import { GetTwilioTelephonyService } from '../telephony/telephony-runtime.js';
 
 /** Result of an outbound place-call attempt. */
@@ -36,7 +37,7 @@ export class TelephonyResolver {
     ): Promise<PlaceCallResult> {
         const failure = (msg: string): PlaceCallResult => ({ Success: false, ErrorMessage: msg, CallSid: '' });
         try {
-            const user = getUserFromPayload(context.userPayload);
+            const user = GetUserFromPayload(context.userPayload);
             if (!user) {
                 return failure('Unable to determine current user.');
             }
@@ -44,7 +45,7 @@ export class TelephonyResolver {
             if (!service) {
                 return failure('Twilio telephony is not configured on this server.');
             }
-            const provider = getReadWriteProvider(context.providers);
+            const provider = GetReadWriteProvider(context.providers);
             if (!provider) {
                 return failure('Database provider is not available.');
             }
@@ -52,7 +53,9 @@ export class TelephonyResolver {
             return { Success: true, CallSid: callSid };
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
-            LogError(`PlaceTwilioCall failed: ${msg}`);
+            if (!(error instanceof OutboundCallRefusedError)) {
+                LogError(`PlaceTwilioCall failed: ${msg}`); // a refusal was already logged (masked) by the outbound gate
+            }
             return failure(msg);
         }
     }

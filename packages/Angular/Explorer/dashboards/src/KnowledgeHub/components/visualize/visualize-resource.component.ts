@@ -25,14 +25,14 @@ import { TagCloudScope } from '@memberjunction/tag-engine-base';
 import { TagCloudComponent, TagCloudSelection } from './tag-cloud/tag-cloud.component';
 import { DrilldownRecord, DrilldownOpenRequest } from './record-drilldown/record-drilldown.component';
 import {
-    buildVisualizeAgentContext,
-    resolveDrilldownRecord,
-    capVisualizeList,
+    BuildVisualizeAgentContext,
+    ResolveDrilldownRecord,
+    CapVisualizeList,
     VISUALIZATION_MODES,
     VisualizationModeId,
     DrilldownRecordSummary,
 } from './visualize-agent-context';
-import { validateEnumParam, validateStringParam } from '../../../shared/agent-tool-validation';
+import { ValidateEnumParam, ValidateStringParam } from '../../../shared/agent-tool-validation';
 
 /** Visualization modes hosted by this surface. */
 export type VisualizationMode = 'clusters' | 'tagcloud';
@@ -51,7 +51,16 @@ interface ModeOption {
     styleUrls: ['./visualize-resource.component.css'],
 })
 export class VisualizeResourceComponent extends BaseResourceComponent implements AfterViewInit, OnDestroy {
-    @ViewChild('tagCloud') tagCloud?: TagCloudComponent;
+    @ViewChild('tagCloud') TagCloud?: TagCloudComponent;
+
+    /** @deprecated Use {@link TagCloud}. */
+    get tagCloud(): TagCloudComponent | undefined {
+        return this.TagCloud;
+    }
+    /** @deprecated Use {@link TagCloud}. */
+    set tagCloud(value: TagCloudComponent | undefined) {
+        this.TagCloud = value;
+    }
 
     private cdr = inject(ChangeDetectorRef);
     protected override navigationService = inject(NavigationService);
@@ -298,7 +307,7 @@ export class VisualizeResourceComponent extends BaseResourceComponent implements
      * it's showing, and the records it currently lists by id+title).
      */
     private emitAgentContext(): void {
-        this.navigationService.SetAgentContext(this, buildVisualizeAgentContext({
+        this.navigationService.SetAgentContext(this, BuildVisualizeAgentContext({
             ActiveMode: this.ActiveMode,
             AvailableModes: [...VISUALIZATION_MODES],
             DrilldownVisible: this.DrilldownVisible,
@@ -343,7 +352,7 @@ export class VisualizeResourceComponent extends BaseResourceComponent implements
                     required: ['mode'],
                 },
                 Handler: async (params: Record<string, unknown>) => {
-                    const check = validateEnumParam(params['mode'], VISUALIZATION_MODES, 'mode');
+                    const check = ValidateEnumParam(params['mode'], VISUALIZATION_MODES, 'mode');
                     if (!check.ok) {
                         return check.result;
                     }
@@ -360,7 +369,7 @@ export class VisualizeResourceComponent extends BaseResourceComponent implements
                     required: ['reference'],
                 },
                 Handler: async (params: Record<string, unknown>) => {
-                    const check = validateStringParam(params['reference'], 'reference');
+                    const check = ValidateStringParam(params['reference'], 'reference');
                     if (!check.ok) {
                         return check.result;
                     }
@@ -368,9 +377,9 @@ export class VisualizeResourceComponent extends BaseResourceComponent implements
                         return { Success: false, ErrorMessage: 'The drilldown panel is empty — select a tag or cluster point first.' };
                     }
                     const candidates = this.DrilldownRecords.map(r => ({ RecordID: r.RecordID, Title: r.Title }));
-                    const match = resolveDrilldownRecord(check.value, candidates);
+                    const match = ResolveDrilldownRecord(check.value, candidates);
                     if (!match) {
-                        const titles = capVisualizeList(candidates.map(c => c.Title));
+                        const titles = CapVisualizeList(candidates.map(c => c.Title));
                         return { Success: false, ErrorMessage: `No drilldown record matches "${check.value}". Listed records include: ${titles.join(', ')}.` };
                     }
                     const full = this.DrilldownRecords.find(r => r.RecordID === match.RecordID);
@@ -399,7 +408,7 @@ export class VisualizeResourceComponent extends BaseResourceComponent implements
                         Data: {
                             DrilldownVisible: this.DrilldownVisible,
                             DrilldownTitle: this.DrilldownTitle || null,
-                            Records: capVisualizeList(this.buildDrilldownSummaries()),
+                            Records: CapVisualizeList(this.buildDrilldownSummaries()),
                             TotalCount: this.DrilldownRecords.length,
                         },
                     };

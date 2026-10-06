@@ -7,7 +7,16 @@ export const SNS_MAX_NAME_LENGTH = 256;
 
 /** Lowercase; every character outside [a-z0-9_-] becomes '-'; runs of '-' collapse; leading/trailing '-' trimmed. */
 export function ToResourceSlug(name: string): string {
-    return name.toLowerCase().replace(/[^a-z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '');
+    const collapsed = name.toLowerCase().replace(/[^a-z0-9_-]/g, '-').replace(/-+/g, '-');
+    let start = 0;
+    let end = collapsed.length;
+    while (start < end && collapsed[start] === '-') {
+        start += 1;
+    }
+    while (end > start && collapsed[end - 1] === '-') {
+        end -= 1;
+    }
+    return collapsed.slice(start, end);
 }
 
 /**

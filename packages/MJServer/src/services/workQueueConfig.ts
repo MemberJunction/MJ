@@ -5,7 +5,7 @@
  */
 import { z } from 'zod';
 
-export const workQueueSubscriptionEntrySchema = z.object({
+export const WorkQueueSubscriptionEntrySchema = z.object({
   /** A subscription name, or '*' for every MJWorker subscription. */
   name: z.string().min(1),
   /** Deliveries this instance processes concurrently for the subscription. */
@@ -16,11 +16,11 @@ export const workQueueSubscriptionEntrySchema = z.object({
  * Durable work-queue host. When enabled, this process runs its share of MJWorker subscriptions. Every claim is atomic
  * against shared state, so any number of instances may enable it against one database.
  */
-export const workQueueSchema = z
+export const WorkQueueSchema = z
   .object({
     enabled: z.boolean().optional().default(false),
     systemUserEmail: z.string().optional().default('system@memberjunction.org'),
-    subscriptions: z.array(workQueueSubscriptionEntrySchema).optional().default([{ name: '*', concurrency: 4 }]),
+    subscriptions: z.array(WorkQueueSubscriptionEntrySchema).optional().default([{ name: '*', concurrency: 4 }]),
     idlePollMinMs: z.number().int().positive().optional().default(250),
     idlePollMaxMs: z.number().int().positive().optional().default(5000),
     shutdownDrainMs: z.number().int().nonnegative().optional().default(8000),
@@ -33,7 +33,7 @@ export const workQueueSchema = z
     path: ['idlePollMaxMs'],
   });
 
-export type WorkQueueConfig = z.infer<typeof workQueueSchema>;
+export type WorkQueueConfig = z.infer<typeof WorkQueueSchema>;
 
 /**
  * The merge base for mj.config.cjs. Like scheduledJobs and integrationSyncWorker, the EFFECTIVE default system user

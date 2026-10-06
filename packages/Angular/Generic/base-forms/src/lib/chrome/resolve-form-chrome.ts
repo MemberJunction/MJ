@@ -15,10 +15,11 @@ import {
     type RelatedFormRoleResolution,
 } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
-import { RelatedEntitySectionKey } from '../panel-slot/form-contribution';
+import { CreateRelatedEntitySectionKeyResolver } from '../panel-slot/form-contribution';
 import { BaseFormPolicy, type FormChromeContext } from './base-form-policy';
 import {
     DETAILS_SECTION_KEY,
+    DETAILS_SECTION_TITLE,
     MORE_SECTION_KEY,
     HumanizeEntityTitle,
     IsAlwaysMoreSection,
@@ -78,6 +79,12 @@ export interface ResolveFormChromeInput {
      * appear for grids the template already owns (or chose not to show).
      */
     IncludeUnbakedRelated?: boolean;
+    /**
+     * Sections known to be empty whose metadata says to hide them or move them
+     * to More (`whenEmpty`). Applied AFTER the layout is chosen, so counts
+     * arriving never flip accordion ↔ left-nav. Omit / empty = no change.
+     */
+    EmptySectionBehavior?: ReadonlyMap<string, 'hide' | 'more'>;
 }
 
 export interface ResolveFormChromeResult {
@@ -179,12 +186,43 @@ export function ResolveFormChrome(input: ResolveFormChromeInput): ResolveFormChr
         const decorated = policy.DecorateChrome(defaultSpec, ctx);
         const spec = TakeDecoratedChrome(defaultSpec, decorated ?? defaultSpec);
         ApplyUserChromeMembership(spec, input.Membership, visiblePanels);
+        ApplyEmptySectionBehavior(spec, input.EmptySectionBehavior, visiblePanels);
         ApplyFormChromeRuleTitles(spec, input.Entity, input.ChromeRules ?? []);
         return { Spec: spec, RelatedRoles: resolution, PolicyUsed: true };
     }
 
+    ApplyEmptySectionBehavior(defaultSpec, input.EmptySectionBehavior, visiblePanels);
     ApplyFormChromeRuleTitles(defaultSpec, input.Entity, input.ChromeRules ?? []);
     return { Spec: defaultSpec, RelatedRoles: resolution, PolicyUsed: false };
+}
+
+/**
+ * Empty-section chrome (`whenEmpty`). `'hide'` removes the section from every
+ * group and from More. `'more'` moves a first-class group into More — only when
+ * EVERY section in that group is empty-`'more'`, so a merged Bill-To / Ship-To
+ * group with rows in one half stays put. Layout is left unchanged. Runs after
+ * user membership so a hidden-when-empty section never reappears through a
+ * persisted rail order, and after the policy decorate so it cannot be undone.
+ */
+export function ApplyEmptySectionBehavior(
+    spec: FormChromeSpec,
+    behavior: ReadonlyMap<string, 'hide' | 'more'> | null | undefined,
+    panels: readonly FormChromePanelSnapshot[] = [],
+): FormChromeSpec {
+    if (!behavior || behavior.size === 0) return spec;
+    const hide = new Set([...behavior].filter(([, b]) => b === 'hide').map(([key]) => key));
+    const more = new Set(spec.MoreSectionKeys.filter((key) => !hide.has(key)));
+    for (const group of spec.Groups) {
+        if (group.IsMore) continue;
+        group.SectionKeys = group.SectionKeys.filter((key) => !hide.has(key));
+        const keys = group.SectionKeys;
+        if (keys.length > 0 && keys.every((key) => behavior.get(key) === 'more')) {
+            for (const key of keys) more.add(key);
+        }
+    }
+    spec.Groups = spec.Groups.filter((g) => g.IsMore || g.SectionKeys.length > 0);
+    spec.MoreSectionKeys = spec.MoreSectionKeys.filter((key) => !hide.has(key));
+    return RebuildChromeSpecMembership(spec, [...more], panels);
 }
 
 /**
@@ -214,10 +252,11 @@ export function ApplyFormChromeRuleTitles(
 
     const displayInForm = entity.RelatedEntities.filter((rel) => rel.DisplayInForm);
     const keysByRelatedId = new Map<string, string[]>();
+    const sectionKeyOf = CreateRelatedEntitySectionKeyResolver(displayInForm);
     for (const rel of displayInForm) {
         const id = (rel.RelatedEntityID ?? '').trim().toLowerCase();
         if (!id) continue;
-        const key = RelatedEntitySectionKey(rel, displayInForm);
+        const key = sectionKeyOf(rel);
         const list = keysByRelatedId.get(id) ?? [];
         list.push(key);
         keysByRelatedId.set(id, list);
@@ -243,7 +282,8 @@ export function ApplyFormChromeRuleTitles(
         if (group.IsMore) continue;
         const override = group.SectionKeys
             .map((key) => titleByKey.get(key))
-            .find((value): value is string => !!value);
+            .find((value): value is string => !!value)
+            ?? titleByKey.get(group.Key);
         if (override) group.Title = override;
     }
 }
@@ -363,7 +403,7 @@ export function BuildDefaultChromeSpec(
         const firstField = panels.find((p) => p.SectionKey === fieldKeys[0]);
         groups.push({
             Key: DETAILS_SECTION_KEY,
-            Title: 'Details',
+            Title: DETAILS_SECTION_TITLE,
             Icon: firstField?.Icon?.trim() || 'fa-solid fa-id-card',
             SectionKeys: fieldKeys,
             IsMore: false,
@@ -462,7 +502,7 @@ export function StabilizeFirstClassGroupOrder(
     if (!previous || previous.Groups.length === 0) return next;
     const details = next.Groups.filter((g) => g.Key === DETAILS_SECTION_KEY);
     const more = next.Groups.filter((g) => g.IsMore);
-    const leads = next.Groups.filter((g) => !!g.IsLead);
+    const leads = next.Groups.filter((g) => !g.IsMore && !!g.IsLead && g.Key !== DETAILS_SECTION_KEY);
     const related = next.Groups.filter((g) => !g.IsMore && !g.IsLead && g.Key !== DETAILS_SECTION_KEY);
     if (leads.length === 0 && related.length === 0) return next;
 
@@ -638,10 +678,11 @@ export function RebuildChromeSpecMembership(
 /** Prefer EntityRelationship.DisplayName on single-key related groups. */
 function applyRelatedDisplayNames(spec: FormChromeSpec, entity: EntityInfo): void {
     const displayInForm = entity.RelatedEntities.filter((rel) => rel.DisplayInForm);
+    const sectionKeyOf = CreateRelatedEntitySectionKeyResolver(displayInForm);
     for (const rel of displayInForm) {
         const name = rel.DisplayName?.trim();
         if (!name) continue;
-        const sectionKey = RelatedEntitySectionKey(rel, displayInForm);
+        const sectionKey = sectionKeyOf(rel);
         const group = spec.Groups.find((g) => !g.IsMore && g.SectionKeys.length === 1 && g.SectionKeys[0] === sectionKey);
         if (group) group.Title = name;
     }
@@ -670,10 +711,11 @@ function mapRelatedRoles(
     const displayInForm = entity.RelatedEntities.filter((rel) => rel.DisplayInForm);
     const byId = new Map(assignments.map((a) => [a.RelationshipID.toLowerCase(), a]));
     const roles = new Map<string, FormRole>();
+    const sectionKeyOf = CreateRelatedEntitySectionKeyResolver(displayInForm);
     for (const rel of displayInForm) {
         const assignment = byId.get((rel.ID ?? '').toLowerCase());
         if (!assignment) continue;
-        const sectionKey = RelatedEntitySectionKey(rel, displayInForm);
+        const sectionKey = sectionKeyOf(rel);
         roles.set(sectionKey, assignment.Role);
     }
     return roles;
@@ -723,10 +765,11 @@ function sortFirstClassRelatedGroups(
     const explicitPrimary = new Set<string>();
     const contrib = new Set(contributionSectionKeys);
     const leadSet = new Set(leadKeys);
+    const sectionKeyOf = CreateRelatedEntitySectionKeyResolver(displayInForm);
     for (const rel of displayInForm) {
         const assignment = byId.get((rel.ID ?? '').toLowerCase());
         if (!assignment) continue;
-        const key = RelatedEntitySectionKey(rel, displayInForm);
+        const key = sectionKeyOf(rel);
         const current = scoreByKey.get(key);
         scoreByKey.set(key, current == null ? assignment.Score : Math.max(current, assignment.Score));
         if (assignment.Reason === 'explicit-primary') explicitPrimary.add(key);
@@ -768,10 +811,11 @@ function mergeRelatedSortKeys(
     contributionSortKeyByKey: ReadonlyMap<string, number>,
 ): Map<string, number> {
     const merged = new Map(contributionSortKeyByKey);
+    const sectionKeyOf = CreateRelatedEntitySectionKeyResolver(displayInForm);
     for (const rel of displayInForm) {
         const sort = ReadRelationshipSortKey(rel.Configuration);
         if (sort == null) continue;
-        const key = RelatedEntitySectionKey(rel, displayInForm);
+        const key = sectionKeyOf(rel);
         const current = merged.get(key);
         merged.set(key, current == null ? sort : Math.max(current, sort));
     }
@@ -795,16 +839,18 @@ function noneInclusionSectionKeys(
     const noneIds = new Set(
         assignments.filter((a) => a.Inclusion === 'None').map((a) => a.RelationshipID.toLowerCase()),
     );
+    const sectionKeyOf = CreateRelatedEntitySectionKeyResolver(displayInForm);
     return displayInForm
         .filter((rel) => noneIds.has((rel.ID ?? '').toLowerCase()))
-        .map((rel) => RelatedEntitySectionKey(rel, displayInForm));
+        .map((rel) => sectionKeyOf(rel));
 }
 
 function displayInFormFalseSectionKeys(entity: EntityInfo): string[] {
     const all = entity.RelatedEntities ?? [];
+    const sectionKeyOf = CreateRelatedEntitySectionKeyResolver(all);
     return all
         .filter((rel) => !rel.DisplayInForm)
-        .map((rel) => RelatedEntitySectionKey(rel, all));
+        .map((rel) => sectionKeyOf(rel));
 }
 
 /**
@@ -815,8 +861,9 @@ function mergeRelatedGroupsByEntity(spec: FormChromeSpec, entity: EntityInfo): v
     const displayInForm = entity.RelatedEntities.filter((rel) => rel.DisplayInForm);
     const entityIdByKey = new Map<string, string>();
     const titleByEntityId = new Map<string, string>();
+    const sectionKeyOf = CreateRelatedEntitySectionKeyResolver(displayInForm);
     for (const rel of displayInForm) {
-        const key = RelatedEntitySectionKey(rel, displayInForm);
+        const key = sectionKeyOf(rel);
         const id = (rel.RelatedEntityID ?? '').toLowerCase();
         if (!id) continue;
         entityIdByKey.set(key, id);
@@ -884,8 +931,9 @@ function addMissingRelatedGroups(
         ...hiddenSectionKeys,
     ]);
 
+    const sectionKeyOf = CreateRelatedEntitySectionKeyResolver(displayInForm);
     for (const rel of displayInForm) {
-        const sectionKey = RelatedEntitySectionKey(rel, displayInForm);
+        const sectionKey = sectionKeyOf(rel);
         if (known.has(sectionKey) || hiddenSectionKeys.has(sectionKey)) continue;
         const role = relatedRoles.get(sectionKey);
         if (role === 'Detail') {

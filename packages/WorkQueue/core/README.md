@@ -4,7 +4,7 @@ Transport-neutral contracts and runtime for the MemberJunction durable work queu
 runtime dependencies** — Lambda and other external consumers import only this package (plus a transport
 package such as `@memberjunction/work-queue-aws`).
 
-Design and contract: `plans/work-queue-1/02-implementation-overview.md` and `03-interfaces-and-tables.md`.
+Design and contract: `02-implementation-overview.md` and `03-interfaces-and-tables.md` under `plans/work-queue-1/` on the `spec/work-queue` branch; the handler author's rules are in `guides/WORK_QUEUE_CONSUMER_GUIDE.md`.
 
 ## What is in the box
 
@@ -41,7 +41,7 @@ export class UnsubscribeHandler implements WorkHandler<UnsubscribePayload> {
 ### Handler rules
 
 The queue guarantees durable delivery, one valid lease holder while your handler runs, and fencing. Everything
-else is yours — see `plans/work-queue-1/10-consumer-guide.md`. Four rules cover most handlers:
+else is yours — see `guides/WORK_QUEUE_CONSUMER_GUIDE.md`. Four rules cover most handlers:
 
 1. **Long awaits need no heartbeat code.** Keep `HeartbeatMode: 'Auto'` (the default) and set
    `MaxProcessingSeconds` to the longest a healthy run should take: the runtime renews the lease while your

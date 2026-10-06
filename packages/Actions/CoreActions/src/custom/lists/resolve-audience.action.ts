@@ -5,10 +5,10 @@ import { AudienceResolver } from '@memberjunction/lists';
 import type { AudienceSource } from '@memberjunction/lists-base';
 
 import {
-  addOutputParam,
-  getJsonParam,
-  getStringParam,
-  missingParam,
+  AddOutputParam,
+  GetJsonParam,
+  GetStringParam,
+  MissingParam,
 } from './_action-helpers';
 
 /**
@@ -24,13 +24,13 @@ import {
 @RegisterClass(BaseAction, 'Resolve Audience')
 export class ResolveAudienceAction extends BaseAction {
   protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
-    const source = getJsonParam<AudienceSource>(params, 'Source');
+    const source = GetJsonParam<AudienceSource>(params, 'Source');
     if (!source) {
       // Surface a clear contract hint — `getJsonParam` swallows parse
       // errors, so the caller might be supplying a non-JSON string by
       // mistake. Distinguish missing vs unparseable for grep-ability.
-      const raw = getStringParam(params, 'Source');
-      if (raw == null || raw.length === 0) return missingParam('Source');
+      const raw = GetStringParam(params, 'Source');
+      if (raw == null || raw.length === 0) return MissingParam('Source');
       return {
         Success: false,
         ResultCode: 'INVALID_PARAMETER',
@@ -41,9 +41,9 @@ export class ResolveAudienceAction extends BaseAction {
     const resolver = new AudienceResolver(params.ContextUser, params.Provider);
     try {
       const resolved = await resolver.Resolve(source);
-      addOutputParam(params, 'EntityName', resolved.EntityName);
-      addOutputParam(params, 'RecordCount', resolved.RecordIds.length);
-      addOutputParam(params, 'RecordIDs', resolved.RecordIds);
+      AddOutputParam(params, 'EntityName', resolved.EntityName);
+      AddOutputParam(params, 'RecordCount', resolved.RecordIds.length);
+      AddOutputParam(params, 'RecordIDs', resolved.RecordIds);
       return {
         Success: true,
         ResultCode: 'SUCCESS',

@@ -466,6 +466,19 @@ export const AIPromptSchema = z.object({
 });
 ```
 
+### JSONType Accessors and Opt-In JSON Validation
+
+For a field with `EntityField.JSONType`, CodeGen emits a typed `<Field>Object` accessor that delegates to
+`BaseEntity.GetJSONFieldObject` / `SetJSONFieldObject` (a live view: in-place edits persist on `Save()`).
+A `@mjValidate` (or `@mjValidate warn`) JSDoc tag on the root interface in `JSONTypeDefinition` opts the type
+in to: exported structural Zod schema consts (`src/Misc/json-type-zod.ts`, TypeScript AST to Zod, used by the generated `Validate()`; the entity's column entry in `<Entity>Schema` stays `z.any()` because the column value is JSON text; unsupported constructs degrade to a permissive sub-schema plus a warning), JSON-Schema-style tags (`@minimum`, `@maxLength`,
+`@pattern`, `@format`, `@minItems`, ...), `@CHECK ts:(...)` rules compiled as written, and `@CHECK (SQL)` rules
+translated by the `CodeGen: JSON Check Parser` prompt (`AdvancedGeneration.ParseJSONCheck`), compile-checked, executed against the model's own `TestCases` (`RunJSONRuleTestCases`),
+and cached in `__mj.GeneratedCode` under the `CodeGen: JSON Validators` category keyed by JSONType name, path
+and normalized text (`src/Database/json-check-validators.ts`). The generated `Validate()` calls
+`ValidateJSONField` per opted-in field. Untagged JSONTypes generate exactly what they did before, apart from the
+accessor delegation. Full reference: [JSONType Guide](../../guides/JSONTYPE_GUIDE.md).
+
 ### SQL Views & Hierarchy Traversal Engine
 
 For tables with self-referential foreign keys configured as hierarchies (`EntityField.Configuration` setting `{ "Hierarchy": { "IsHierarchy": true } }`) and single-column primary keys, CodeGen automatically generates a 4-routine Table-Valued Function (TVF) suite and projects enriched hierarchy columns into base views via `OUTER APPLY` (T-SQL) or `LEFT JOIN LATERAL` (PostgreSQL):
@@ -1242,7 +1255,7 @@ Virtual entities are defined in `database-metadata-config.json` under the `Virtu
 
 - **`ViewName`**: The SQL view name (must already exist in the database)
 - **`EntityName`**: The MemberJunction entity name (appears in metadata, UI, APIs)
-- **`SchemaName`**: Database schema (typically `__mj` for core entities)
+- **`SchemaName`**: Database schema that holds the view (defaults to `dbo`)
 - **`Description`**: Entity description for metadata and documentation
 - **`PrimaryKey`**: Array of column names forming the primary key (supports composite keys)
 - **`ForeignKeys`**: Optional array of foreign key relationships to other entities (if omitted, LLM decoration discovers them)
@@ -1252,19 +1265,21 @@ Virtual entities are defined in `database-metadata-config.json` under the `Virtu
 CodeGen processes virtual entities through several specialized steps:
 
 #### 1. `processVirtualEntityConfig()` - Entity Creation
-Reads the `VirtualEntities` configuration and calls `spCreateVirtualEntity` for each entry:
+Reads the `VirtualEntities` configuration and, for each entry whose view exists and has no entity yet, writes two logged statements:
 
-```typescript
-// CodeGen calls this stored procedure for each virtual entity
-EXEC spCreateVirtualEntity
-    @Name = 'Sales Summary',
-    @SchemaName = '__mj',
-    @BaseView = 'vwSalesSummary',
-    @Description = 'Aggregated sales data...',
-    @PrimaryKeyColumnName = 'SummaryID'
+```sql
+-- Entity row with a CodeGen-generated ID (read-only flags, Description kept)
+INSERT INTO [__mj].[Entity] ([ID], [Name], [Description], [BaseTable], [BaseView], [SchemaName], [VirtualEntity], ...)
+VALUES (CAST('<new id>' AS uniqueidentifier), 'Sales Summary', 'Aggregated sales data...', 'vwSalesSummary', 'vwSalesSummary', 'dbo', 1, ...)
+
+-- First PrimaryKey column, typed later by the field sync
+INSERT INTO [__mj].[EntityField] ([ID], [EntityID], [Sequence], [Name], [IsPrimaryKey], [IsUnique], [Type], ...)
+VALUES (..., (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM ...), 'SummaryID', 1, 1, 'int', ...)
 ```
 
-This creates the `Entity` metadata record with `VirtualEntity = 1`.
+Both statements go to the CodeGen_Run capture, so a migration replays them with the same entity ID. The entity is then added to its schema's application, gets the default permissions, and joins the new-entity list so its class, GraphQL type and form are generated in the same run.
+
+If another entity already uses the `EntityName` (compared without case, like `UQ_Entity_Name`), the entry is skipped with an error before anything is written, so the capture never holds an INSERT that fails. A name derived from `ViewName` gets a `__<schema>` suffix instead, like a table-backed entity.
 
 #### 2. `manageVirtualEntities()` - Field Synchronization
 Scans `sys.columns` on the virtual entity's view and creates `EntityField` metadata for each column:
@@ -1289,20 +1304,20 @@ WHERE
     object_id = OBJECT_ID('__mj.vwSalesSummary')
 ```
 
-#### 3. `applySoftPKFKConfig()` - Explicit Relationship Overrides
-Applies the `primaryKeyColumnName` and `foreignKeyDefinitions` from the config:
+#### 3. `applyVirtualEntitySoftKeys()` - Explicit Keys
+Applies every `PrimaryKey` column and every `ForeignKeys` entry from the config. It runs on every CodeGen run, right after the field sync, so a column added to the view and named as a key in the same change gets its key in one run. A configured column that is not in the view is skipped with a warning. On a composite key, `IsUnique` is cleared on the key columns:
 
-```typescript
-// Sets the primary key field
-UPDATE EntityField
-SET IsPrimaryKey = 1
-WHERE EntityID = @VirtualEntityID
-  AND Name = 'SummaryID'
+```sql
+-- Each PrimaryKey column (composite keys supported)
+UPDATE EntityField SET IsPrimaryKey = 1, IsSoftPrimaryKey = 1
+WHERE EntityID = @VirtualEntityID AND Name = 'SummaryID'
 
-// Creates foreign key relationships
-INSERT INTO EntityRelationship (...)
-SELECT ... FROM foreignKeyDefinitions
+-- Each ForeignKeys entry
+UPDATE EntityField SET RelatedEntityID = @RegionEntityID, RelatedEntityFieldName = 'ID', IsSoftForeignKey = 1
+WHERE EntityID = @VirtualEntityID AND Name = 'RegionID'
 ```
+
+When a key changed, `EntityRelationship` rows are then built from these soft foreign keys in the same run.
 
 **Why explicit FK definitions?** Views don't have database-level foreign keys, so CodeGen can't detect relationships automatically. The config provides this metadata.
 

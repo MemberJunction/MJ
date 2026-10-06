@@ -40,7 +40,7 @@ import {
 } from './base-realtime-bridge';
 import { BridgeMediaFrame, BridgeMediaTrackKind, BridgeParticipantInfo } from './media-tracks';
 import { IBridgeMeetingControlsEventSource } from './channel-plane';
-import { resamplePcm16Buffer } from './audio/index';
+import { IsValidDtmfDigits, StreamingResampler } from './audio/index';
 
 /**
  * Whether a telephony bridge **places** the call (outbound) or **answers** an incoming one (inbound).
@@ -75,6 +75,13 @@ export const FROM_NUMBER_CONFIG_KEY = 'FromNumber';
  * webhook delivered). Required to answer an inbound call; ignored for outbound.
  */
 export const INBOUND_CALL_ID_CONFIG_KEY = 'InboundCallId';
+
+/**
+ * The well-known {@link RealtimeBridgeContext.Configuration} key carrying the CALLER's number on an inbound
+ * call. For inbound the bridge `Address` is the agent's own DID (the number the call was reached on), so the
+ * caller's number travels here and becomes the remote party on the roster.
+ */
+export const CALLER_NUMBER_CONFIG_KEY = 'CallerNumber';
 
 /**
  * The **default** carrier media rate: G.711 μ-law at 8 kHz, the PSTN rate Twilio/Vonage carry. Realtime
@@ -132,7 +139,7 @@ export interface ITelephonyCallSdk {
      * @param args Provider-specific dial parameters (resolved credential refs, region, recording flags, …).
      * @returns The platform-native call identifier (e.g. Twilio Call SID) for the placed call.
      */
-    dial(toNumber: string, fromNumber: string, args?: Record<string, unknown>): Promise<string>;
+    dial(toNumber: string, fromNumber: string, args?: Record<string, unknown>): Promise<string>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Answers an **inbound** call that has routed to the agent's number.
@@ -140,7 +147,7 @@ export interface ITelephonyCallSdk {
      * @param callId The platform-native identifier of the inbound call to answer (from the inbound webhook).
      * @returns A promise resolving once the call is answered and the media path is live.
      */
-    answer(callId: string): Promise<void>;
+    answer(callId: string): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Hangs up the call and releases all platform resources.
@@ -148,7 +155,7 @@ export interface ITelephonyCallSdk {
      * @param callId The platform-native identifier of the call to end.
      * @returns A promise resolving once the call has been torn down.
      */
-    hangup(callId: string): Promise<void>;
+    hangup(callId: string): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Sends one raw PCM audio frame as the agent's outbound voice into the call (the provider's media-
@@ -156,7 +163,7 @@ export interface ITelephonyCallSdk {
      *
      * @param pcm The PCM audio bytes to send.
      */
-    sendAudioFrame(pcm: ArrayBuffer): void;
+    sendAudioFrame(pcm: ArrayBuffer): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Registers a callback for inbound raw audio frames from the call — what the agent hears. There is a
@@ -165,7 +172,7 @@ export interface ITelephonyCallSdk {
      *
      * @param cb Invoked with each inbound PCM audio frame.
      */
-    onAudioFrame(cb: (pcm: ArrayBuffer) => void): void;
+    onAudioFrame(cb: (pcm: ArrayBuffer) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Sends DTMF touch-tones on the call (the agent dialing into an IVR, entering a code, …).
@@ -173,14 +180,14 @@ export interface ITelephonyCallSdk {
      * @param digits The DTMF digit string to send (e.g. `'1234#'`).
      * @returns A promise resolving once the tones have been sent.
      */
-    sendDtmf(digits: string): Promise<void>;
+    sendDtmf(digits: string): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Registers a callback for inbound DTMF tones the remote party presses. "Latest handler wins."
      *
      * @param cb Invoked with each received DTMF digit string.
      */
-    onDtmf(cb: (digits: string) => void): void;
+    onDtmf(cb: (digits: string) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Transfers the call to another party (a number or platform endpoint).
@@ -189,7 +196,7 @@ export interface ITelephonyCallSdk {
      * @param toNumber The transfer destination (a phone number or platform endpoint identifier).
      * @returns A promise resolving once the transfer has been initiated.
      */
-    transfer(callId: string, toNumber: string): Promise<void>;
+    transfer(callId: string, toNumber: string): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Registers a callback fired when the call ends — the remote party hangs up, the carrier drops it, or
@@ -197,7 +204,7 @@ export interface ITelephonyCallSdk {
      *
      * @param cb Invoked when the call has ended.
      */
-    onCallEnded(cb: () => void): void;
+    onCallEnded(cb: () => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Discards any outbound audio the provider has QUEUED but not yet played — the agent's not-yet-heard
@@ -207,7 +214,30 @@ export interface ITelephonyCallSdk {
      * **Optional**: a provider whose media path plays in near-real-time with no client-side queue has
      * nothing to flush and omits it (the base treats an absent method as a no-op).
      */
-    flushOutbound?(): void;
+    flushOutbound?(): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+
+    /**
+     * Releases MJ's local resources for the call WITHOUT ending it at the carrier. Used after a transfer or a
+     * carrier-side goodbye, when the carrier (not MJ) now owns the rest of the call and a hang-up would cut off
+     * the transferred party or the announcement.
+     *
+     * **Optional**: when absent the base simply does not hang up a handed-off call.
+     *
+     * @param callId The platform-native identifier of the call being detached from.
+     */
+    detach?(callId: string): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+
+    /**
+     * Plays a short spoken message on the call at the carrier and then ends it — the "we are having technical
+     * difficulties" goodbye used when the model session is lost and the call cannot continue.
+     *
+     * **Optional**: a carrier with no server-side text-to-speech omits it and the base falls back to a plain
+     * hang-up.
+     *
+     * @param callId The platform-native identifier of the call.
+     * @param message The text to speak before hanging up.
+     */
+    playMessageAndHangup?(callId: string, message: string): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -278,6 +308,19 @@ export abstract class BaseTelephonyBridge extends BaseRealtimeBridge {
      * driver overrides it per-call via {@link CARRIER_SAMPLE_RATE_CONFIG_KEY}.
      */
     protected carrierSampleRate: number = TELEPHONY_SAMPLE_RATE;
+
+    /** Carrier → model resampler (one per call; carries filter state and phase across 20 ms frames). */
+    private inboundResampler: StreamingResampler | null = null;
+
+    /** Model → carrier resampler (one per call; carries filter state and phase across frames). */
+    private outboundResampler: StreamingResampler | null = null;
+
+    /**
+     * Set once the carrier owns the rest of the call — after a transfer or a carrier-side goodbye. From then
+     * on {@link Disconnect} must NOT hang the call up: that would drop the transferred party or cut the
+     * announcement. The stream ending afterwards is the expected, normal way the bridge session finishes.
+     */
+    private handedOff = false;
 
     /** The inbound-media handler registered via {@link OnMedia}; inbound audio is forwarded to it. */
     private mediaHandler?: (frame: BridgeMediaFrame) => void;
@@ -358,6 +401,9 @@ export abstract class BaseTelephonyBridge extends BaseRealtimeBridge {
         // The carrier's media rate — 8 kHz G.711 (Twilio/Vonage) by default, or a wideband SIP rate (e.g.
         // 16 kHz for the RingCentral softphone's OPUS/16000) when the driver/service sets it.
         this.carrierSampleRate = this.readNumberConfig(config, CARRIER_SAMPLE_RATE_CONFIG_KEY) ?? TELEPHONY_SAMPLE_RATE;
+        this.inboundResampler = this.carrierSampleRate === this.modelInputRate ? null : new StreamingResampler(this.carrierSampleRate, this.modelInputRate);
+        this.outboundResampler = this.modelOutputRate === this.carrierSampleRate ? null : new StreamingResampler(this.modelOutputRate, this.carrierSampleRate);
+        this.handedOff = false;
 
         this.sdk = this.sdkFactory(ctx.Configuration);
         this.wireInboundAudio(this.sdk);
@@ -382,18 +428,30 @@ export abstract class BaseTelephonyBridge extends BaseRealtimeBridge {
     public async Disconnect(_reason: BridgeDisconnectReason): Promise<void> {
         const sdk = this.sdk;
         const callId = this.callId;
+        const handedOff = this.handedOff;
         this.sdk = null;
         this.callId = null;
+        this.inboundResampler = null;
+        this.outboundResampler = null;
         this.mediaHandler = undefined;
         this.participantHandler = undefined;
         this.dtmfHandler = undefined;
         this.callEndedHandler = undefined;
         if (sdk && callId) {
-            try {
+            await this.releaseCall(sdk, callId, handedOff);
+        }
+    }
+
+    /** Ends the call at the carrier, or — when the carrier owns it now — only releases MJ's side. */
+    private async releaseCall(sdk: ITelephonyCallSdk, callId: string, handedOff: boolean): Promise<void> {
+        try {
+            if (!handedOff) {
                 await sdk.hangup(callId);
-            } catch (err) {
-                LogError(`[${this.constructor.name}] hangup() failed: ${err instanceof Error ? err.message : String(err)}`);
+            } else if (sdk.detach) {
+                await sdk.detach(callId);
             }
+        } catch (err) {
+            LogError(`[${this.constructor.name}] ${handedOff ? 'detach' : 'hangup'}() failed: ${err instanceof Error ? err.message : String(err)}`);
         }
     }
 
@@ -414,7 +472,8 @@ export abstract class BaseTelephonyBridge extends BaseRealtimeBridge {
             if (pcm) {
                 // Resample the model's output (e.g. 24 kHz) DOWN to the carrier rate before the SDK sends it;
                 // otherwise the caller hears it at the wrong rate (24 kHz emitted as 8 kHz is ~3× slow + "deep").
-                const out = this.modelOutputRate === this.carrierSampleRate ? pcm : resamplePcm16Buffer(pcm, this.modelOutputRate, this.carrierSampleRate);
+                // (Stateful + low-passed: per-frame resampling steps at frame edges and aliases 24 kHz → 8 kHz.)
+                const out = this.outboundResampler ? this.outboundResampler.ProcessBuffer(pcm) : pcm;
                 this.sdk.sendAudioFrame(out);
             }
         }
@@ -477,6 +536,9 @@ export abstract class BaseTelephonyBridge extends BaseRealtimeBridge {
      */
     public override async SendDTMF(digits: string): Promise<void> {
         this.RequireFeature('DTMF');
+        if (!IsValidDtmfDigits(digits)) {
+            throw new Error('DTMF digits must be 1-32 characters from 0-9, * and #.');
+        }
         if (!this.sdk) {
             return;
         }
@@ -506,6 +568,46 @@ export abstract class BaseTelephonyBridge extends BaseRealtimeBridge {
             return;
         }
         await this.sdk.transfer(this.callId, target);
+        // The carrier now owns the call (it is bridging the caller to the target). Ending the bridge session
+        // afterwards — which the carrier's stream-stop triggers — must not hang that call up.
+        this.handedOff = true;
+    }
+
+    /**
+     * Speaks `message` to the caller at the carrier and ends the call — the clean way out when the model
+     * session is lost mid-call. Falls back to a plain hang-up when the SDK cannot speak server-side. Like a
+     * transfer, a successful announcement hands the rest of the call to the carrier, so the later
+     * {@link Disconnect} does not cut the message off.
+     *
+     * @param message The text to speak before hanging up.
+     */
+    public async AnnounceAndEndCall(message: string): Promise<void> {
+        const sdk = this.sdk;
+        const callId = this.callId;
+        if (!sdk || !callId) {
+            return;
+        }
+        if (!sdk.playMessageAndHangup) {
+            await sdk.hangup(callId);
+            return;
+        }
+        await sdk.playMessageAndHangup(callId, message);
+        this.handedOff = true;
+    }
+
+    /** Whether the carrier owns the rest of the call (after a transfer or a carrier-side goodbye). */
+    public get IsHandedOff(): boolean {
+        return this.handedOff;
+    }
+
+    /** The remote party's number (inbound: the caller; outbound: the dialled number). Empty until connected. */
+    public get RemoteNumber(): string {
+        return this.remoteNumber;
+    }
+
+    /** The agent's own number for this call (outbound caller-id; inbound the DID it was reached on). */
+    public get AgentNumber(): string {
+        return this.fromNumber;
     }
 
     // ── Channel plane — telephony contributes none ───────────────────────────────────
@@ -568,7 +670,7 @@ export abstract class BaseTelephonyBridge extends BaseRealtimeBridge {
             );
         }
         // For inbound, the agent's own number is the Address it was reached on; the caller is the remote.
-        this.remoteNumber = this.readStringConfig(config, 'CallerNumber') ?? '';
+        this.remoteNumber = this.readStringConfig(config, CALLER_NUMBER_CONFIG_KEY) ?? '';
         if (!this.fromNumber) {
             this.fromNumber = ctx.Address;
         }
@@ -581,7 +683,7 @@ export abstract class BaseTelephonyBridge extends BaseRealtimeBridge {
         sdk.onAudioFrame((pcm: ArrayBuffer) => {
             // The SDK hands us carrier-rate PCM16 (8 kHz μ-law-decoded, or 16 kHz from a wideband SIP leg).
             // Resample UP to the model's input rate (e.g. 24 kHz) so it hears the caller at the right pitch/speed.
-            const inbound = this.modelInputRate === this.carrierSampleRate ? pcm : resamplePcm16Buffer(pcm, this.carrierSampleRate, this.modelInputRate);
+            const inbound = this.inboundResampler ? this.inboundResampler.ProcessBuffer(pcm) : pcm;
             this.mediaHandler?.({
                 Track: 'audio-in',
                 Bytes: inbound,

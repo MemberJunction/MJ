@@ -6,7 +6,7 @@ and the `WorkQueue.*` Remote Operations. Browser-safe metadata (`WorkQueueEngine
 topology validation) lives in `@memberjunction/work-queue-base`; transport-neutral contracts and the consumer
 runtime live in `@memberjunction/work-queue-core`.
 
-Design and contract: `plans/work-queue-1/02-implementation-overview.md` and `03-interfaces-and-tables.md`.
+Design and contract: `02-implementation-overview.md` and `03-interfaces-and-tables.md` under `plans/work-queue-1/` on the `spec/work-queue` branch; the handler author's rules are in `guides/WORK_QUEUE_CONSUMER_GUIDE.md`.
 
 ## What is in the box
 
@@ -24,7 +24,7 @@ Design and contract: `plans/work-queue-1/02-implementation-overview.md` and `03-
 ## Data layer
 
 Every queue statement is a static stored procedure named `spWorkQueue*` (32 of them, in
-`migrations/v6/V202609241637__v6.2.x__Work_Queue_Guarded_Write_Sprocs.sql`). Runtime roles hold **EXECUTE on the
+`migrations/v6/V202610061701__v6.2.x__Work_Queue_Guarded_Write_Sprocs.sql`). Runtime roles hold **EXECUTE on the
 procedures only** — no direct DML on the queue tables — so the claim, settle, cancel and sweep rules cannot be
 bypassed by a caller with a connection string. The TypeScript builders render `EXEC` on SQL Server and
 `SELECT * FROM schema."proc"(...)` on PostgreSQL; the PostgreSQL functions are produced by the SQLConverter at release
@@ -51,7 +51,7 @@ MJ_WORKQUEUE_LIVE_DB=1 pnpm test
 
 It reads the repository `.env`, uses the seeded `Database` transport (`D1ED3F08-7008-4DA8-BA2B-7CD6A820AEB5`),
 names everything it creates so it can be recognised, and deletes it afterwards. The integration bundle
-`work-queue-runtime` (IT95) runs the same cases plus the host, operators, sweeper and REST endpoint under
+`work-queue-runtime` (IT105) runs the same cases plus the host, operators, sweeper and REST endpoint under
 `pnpm run test:integration`.
 
 ## Running subscriptions inside MJ
@@ -132,7 +132,7 @@ Rules: handlers must be idempotent; use `this.Provider` / `this.ContextUser` (th
 call; honor `context.Signal` and stop when it aborts; any other thrown error retries with backoff. With the default
 `HeartbeatMode = 'Auto'` the runtime renews the lease itself, every `min(LeaseSeconds / 3, 30 s)`. The full guidance
 — idempotency keys, long-running work, abort reasons, publishing in order, filters — is in the consumer guide,
-`plans/work-queue-1/10-consumer-guide.md`.
+`guides/WORK_QUEUE_CONSUMER_GUIDE.md`.
 
 A handler class must be **loaded** in the process that runs it: MJ resolves `HandlerKey` through the ClassFactory,
 so the package that declares the handler has to appear in the host's class manifest (`mj codegen manifest`) or be

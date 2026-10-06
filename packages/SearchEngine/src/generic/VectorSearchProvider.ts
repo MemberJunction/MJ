@@ -10,11 +10,12 @@
  */
 
 import { EntityInfo, LogError, LogStatus, Metadata, RunView, UserInfo, CompositeKey } from '@memberjunction/core';
-import { MJVectorIndexEntity, MJVectorDatabaseEntity, MJContentSourceEntity, KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
+import { MJVectorIndexEntity, MJVectorDatabaseEntity, MJContentSourceEntity, MJEntityDocumentEntity, KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
-import { BaseEmbeddings, GetAIAPIKey } from '@memberjunction/ai';
-import { VectorDBBase, BaseResponse } from '@memberjunction/ai-vectordb';
-import { MJGlobal, RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { GetAIAPIKey } from '@memberjunction/ai';
+import { AIEmbeddingRunner } from '@memberjunction/ai-prompts';
+import { VectorDBBase, BaseResponse, QueryByVectorValues } from '@memberjunction/ai-vectordb';
+import { MJGlobal, NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseSearchProvider } from './ISearchProvider';
 import { SearchSource, SearchFilters, SearchResultItem, SearchResultType, ScopeConstraints, ScopeExternalIndexConstraint } from './search.types';
 import { CheckScopeJsonFilter, ScopeFilterCheck } from './ScopeFilterGuard';
@@ -29,14 +30,35 @@ interface EmbeddingCacheEntry {
     timestamp: number;
 }
 
+/** A match as a vector database's `QueryIndex` returns it. */
+interface VectorMatch {
+    id: string;
+    score?: number;
+    metadata?: Record<string, unknown>;
+}
+
+/**
+ * A query's filters before they are merged into one native metadata filter. A provider keyed by
+ * Entity Document ignores the native filter, so it works from these parts instead.
+ */
+interface UnmergedFilters {
+    /** The caller's search filters. */
+    Search: SearchFilters | undefined;
+    /** Whether the scope sets a MetadataFilter on this index. */
+    ScopeHasMetadataFilter: boolean;
+}
+
 @RegisterClass(BaseSearchProvider, 'VectorSearchProvider')
 export class VectorSearchProvider extends BaseSearchProvider {
     public readonly SourceType: SearchSource = 'vector';
 
     private available = false;
 
-    /** LRU cache for query embeddings. Key = `${modelDriverClass}::${query}`, Value = embedding vector */
-    private static EmbeddingCache = new Map<string, EmbeddingCacheEntry>();
+    /**
+     * LRU cache for query embeddings. Key = `${modelID}::${dimensions}::${query}` (see
+     * {@link queryEmbeddingCacheKey}), Value = embedding vector.
+     */
+    private static embeddingCache = new Map<string, EmbeddingCacheEntry>();
     private static readonly CACHE_MAX_SIZE = 200;
     private static readonly CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -111,10 +133,9 @@ export class VectorSearchProvider extends BaseSearchProvider {
             }
 
             const indexesByModel = this.groupIndexesByModel(activeIndexes);
-            const baseFilter = this.buildMetadataFilter(filters);
 
             // For each model group: embed + query all indexes in parallel, optionally merging
-            // the scope's per-index MetadataFilter into the baseFilter.
+            // the scope's per-index MetadataFilter into the filter built from `filters`.
             const modelGroupPromises = Array.from(indexesByModel.entries()).map(
                 ([embeddingModelID, indexes]) =>
                     this.embedAndQueryGroup(
@@ -122,7 +143,7 @@ export class VectorSearchProvider extends BaseSearchProvider {
                         embeddingModelID,
                         indexes,
                         topK,
-                        baseFilter,
+                        filters,
                         scopedVectorRows,
                         contextUser
                     )
@@ -143,26 +164,35 @@ export class VectorSearchProvider extends BaseSearchProvider {
 
     /** Retrieve a cached embedding if present and not expired, promoting it for LRU */
     private getCachedEmbedding(key: string): number[] | null {
-        const entry = VectorSearchProvider.EmbeddingCache.get(key);
+        const entry = VectorSearchProvider.embeddingCache.get(key);
         if (entry && (Date.now() - entry.timestamp) < VectorSearchProvider.CACHE_TTL_MS) {
             // Promote to most-recently-used by re-inserting
-            VectorSearchProvider.EmbeddingCache.delete(key);
-            VectorSearchProvider.EmbeddingCache.set(key, entry);
+            VectorSearchProvider.embeddingCache.delete(key);
+            VectorSearchProvider.embeddingCache.set(key, entry);
             return entry.vector;
         }
         // Expired or not found — clean up stale entry if present
-        if (entry) VectorSearchProvider.EmbeddingCache.delete(key);
+        if (entry) VectorSearchProvider.embeddingCache.delete(key);
         return null;
+    }
+
+    /**
+     * Cache key for a query embedding. It names the model and the dimension, not the driver: two
+     * models on one driver (two local Xenova models, or two OpenAI embedding models) produce vectors
+     * that are not interchangeable, and neither are one model's vectors at two dimensions.
+     */
+    private queryEmbeddingCacheKey(modelID: string, dimensions: number | undefined, query: string): string {
+        return `${NormalizeUUID(modelID)}::${dimensions ?? 'native'}::${query}`;
     }
 
     /** Store an embedding in the cache, evicting the oldest entry if at capacity */
     private setCachedEmbedding(key: string, vector: number[]): void {
         // Evict least-recently-used (first key in insertion order) if at capacity
-        if (VectorSearchProvider.EmbeddingCache.size >= VectorSearchProvider.CACHE_MAX_SIZE) {
-            const oldestKey = VectorSearchProvider.EmbeddingCache.keys().next().value;
-            if (oldestKey !== undefined) VectorSearchProvider.EmbeddingCache.delete(oldestKey);
+        if (VectorSearchProvider.embeddingCache.size >= VectorSearchProvider.CACHE_MAX_SIZE) {
+            const oldestKey = VectorSearchProvider.embeddingCache.keys().next().value;
+            if (oldestKey !== undefined) VectorSearchProvider.embeddingCache.delete(oldestKey);
         }
-        VectorSearchProvider.EmbeddingCache.set(key, { vector, timestamp: Date.now() });
+        VectorSearchProvider.embeddingCache.set(key, { vector, timestamp: Date.now() });
     }
 
     // ────────────────────────────────────────────────────────────────
@@ -192,50 +222,43 @@ export class VectorSearchProvider extends BaseSearchProvider {
         embeddingModelID: string,
         indexes: MJVectorIndexEntity[],
         topK: number,
-        filter: object | undefined,
+        filters: SearchFilters | undefined,
         scopedRows: ScopeExternalIndexConstraint[] | undefined,
         contextUser: UserInfo
     ): Promise<SearchResultItem[]> {
         try {
+            const baseFilter = this.buildMetadataFilter(filters);
             const model = AIEngine.Instance.Models.find(m => UUIDsEqual(m.ID, embeddingModelID));
             if (!model) {
                 LogError(`VectorSearchProvider: Embedding model ${embeddingModelID} not found`);
                 return [];
             }
 
-            const apiKey = GetAIAPIKey(model.DriverClass);
             // All indexes in this model group share the same embedding model; they should also
             // share the same dimension config. Take the first non-null Dimensions value —
             // undefined means "use the model's native default".
             const dimensions = indexes.find(idx => idx.Dimensions != null)?.Dimensions ?? undefined;
             // Check embedding cache before calling the model
-            const cacheKey = `${model.DriverClass}::${query}`;
+            const cacheKey = this.queryEmbeddingCacheKey(model.ID, dimensions, query);
             let queryVector = this.getCachedEmbedding(cacheKey);
 
             if (queryVector) {
                 LogStatus(`VectorSearchProvider: Embedding cache hit for model ${model.Name}`);
             } else {
-                const embeddingInstance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(
-                    BaseEmbeddings, model.DriverClass, apiKey
-                );
-                if (!embeddingInstance) {
-                    LogError(`VectorSearchProvider: Failed to create embedding for ${model.DriverClass}`);
+                const embeddingRunner = new AIEmbeddingRunner();
+                const embedResult = await embeddingRunner.RunEmbedding({
+                    Texts: [query],
+                    ModelID: model.ID,
+                    Dimensions: dimensions,
+                    ContextUser: contextUser,
+                    Description: `Vector search query embedding for model ${model.Name}`,
+                });
+                if (!embedResult?.Success || !embedResult?.Vectors || !embedResult.Vectors[0]?.length) {
+                    LogError(`VectorSearchProvider: Failed to embed with ${model.Name}: ${embedResult?.ErrorMessage ?? 'No vector returned'}`);
                     return [];
                 }
 
-                // Some embedding drivers (e.g. LocalEmbedding via Xenova/transformers)
-                // require the model identifier to load the correct pipeline.
-                // Prefer APIName (the canonical identifier the driver expects)
-                // and fall back to Name when APIName isn't set or is empty.
-                // `||` (not `??`) so an empty-string `APIName` also falls back.
-                const modelName = model.APIName || model.Name;
-                const embedResult = await embeddingInstance.EmbedText({ text: query, model: modelName, dimensions });
-                if (!embedResult?.vector?.length) {
-                    LogError(`VectorSearchProvider: Failed to embed with ${model.Name}`);
-                    return [];
-                }
-
-                queryVector = embedResult.vector;
+                queryVector = embedResult.Vectors[0];
                 this.setCachedEmbedding(cacheKey, queryVector);
             }
 
@@ -244,7 +267,7 @@ export class VectorSearchProvider extends BaseSearchProvider {
                 const perIndexRow = scopedRows?.find(
                     r => r.VectorIndexID && UUIDsEqual(r.VectorIndexID, vectorIndex.ID)
                 );
-                const merge = this.mergeMetadataFilters(filter, perIndexRow?.MetadataFilter);
+                const merge = this.mergeMetadataFilters(baseFilter, perIndexRow?.MetadataFilter);
                 if (merge.Status === 'unusable') {
                     // FAIL CLOSED. A filter was authored for this index but cannot be applied,
                     // so querying would silently drop the scope's restriction — including the
@@ -256,8 +279,12 @@ export class VectorSearchProvider extends BaseSearchProvider {
                     return Promise.resolve([] as SearchResultItem[]);
                 }
                 const mergedFilter = merge.Status === 'usable' ? merge.Value : undefined;
+                const unmerged: UnmergedFilters = {
+                    Search: filters,
+                    ScopeHasMetadataFilter: CheckScopeJsonFilter(perIndexRow?.MetadataFilter).Status === 'usable',
+                };
                 const providerConfig = perIndexRow?.ExternalIndexConfig as Record<string, unknown> | undefined;
-                return this.queryOneIndex(vectorIndex, queryVector!, query, topK, mergedFilter, providerConfig, contextUser)
+                return this.queryOneIndex(vectorIndex, queryVector!, query, topK, mergedFilter, providerConfig, contextUser, unmerged)
                     .catch(error => {
                         LogError(`VectorSearchProvider: Error querying index "${vectorIndex.Name}": ${error}`);
                         return [] as SearchResultItem[];
@@ -284,6 +311,8 @@ export class VectorSearchProvider extends BaseSearchProvider {
      * @param providerConfig - Optional opaque config blob passed through to the vector DB
      *   driver. Each driver reads the keys it understands (e.g. Pinecone reads `namespace`).
      *   Sourced from the scope's rendered `ExternalIndexConfig`. Ignored by the colocated path.
+     * @param unmerged - The parts `filter` was merged from. Used only when the provider is keyed by
+     *   Entity Document, since such a provider ignores `filter`.
      */
     private async queryOneIndex(
         vectorIndex: MJVectorIndexEntity,
@@ -292,7 +321,8 @@ export class VectorSearchProvider extends BaseSearchProvider {
         topK: number,
         filter: object | undefined,
         providerConfig: Record<string, unknown> | undefined,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        unmerged: UnmergedFilters
     ): Promise<SearchResultItem[]> {
         const rv = new RunView();
         const dbResult = await rv.RunView<MJVectorDatabaseEntity>({
@@ -323,7 +353,7 @@ export class VectorSearchProvider extends BaseSearchProvider {
         vectorDBInstance.TryWireColocatedHost(this.Provider);
         if (vectorDBInstance.SupportsColocatedQuery) {
             const colocated = await vectorDBInstance.ColocatedQuery({
-                indexName: vectorIndex.ExternalID?.trim() || vectorIndex.Name, // provider-side index name; Name is the MJ label
+                indexName: AIEngine.Instance.GetProviderIndexName(vectorIndex),
                 vector: queryVector,
                 keyword: queryText,
                 topK,
@@ -338,29 +368,128 @@ export class VectorSearchProvider extends BaseSearchProvider {
             return this.convertMatches(colocated.matches, vectorIndex.Name, fallbackEntity, entityByContentSourceID);
         }
 
-        // contextUser is passed as the 2nd arg per VectorDBBase.QueryIndex's
-        // contract. Remote drivers (Pinecone/Qdrant) ignore it and authenticate
-        // via their own API key; in-process drivers (e.g. SimpleVectorDatabase)
-        // use it to honor server-side row-level security when loading vectors
-        // via RunView.
-        const response: BaseResponse = await vectorDBInstance.QueryIndex({
-            id: vectorIndex.ExternalID?.trim() || vectorIndex.Name,
-            vector: queryVector,
-            topK,
-            includeMetadata: true,
-            filter,
-            providerConfig,
-        }, contextUser);
-
-        if (!response.success || !response.data?.matches) {
+        const options: QueryByVectorValues = { vector: queryVector, topK, includeMetadata: true, filter, providerConfig };
+        const matches = vectorDBInstance.QueryKeyIsEntityDocumentID
+            ? await this.queryEntityDocumentPools(vectorDBInstance, vectorIndex, options, unmerged, contextUser)
+            : await this.queryIndexByName(vectorDBInstance, vectorIndex, options, contextUser);
+        if (matches.length === 0) {
             return [];
         }
 
         const [fallbackEntity, entityByContentSourceID] = await Promise.all([
-            this.getFallbackEntityName(response.data.matches, vectorIndex, contextUser),
-            this.resolveContentSourceEntities(response.data.matches, contextUser),
+            this.getFallbackEntityName(matches, vectorIndex, contextUser),
+            this.resolveContentSourceEntities(matches, contextUser),
         ]);
-        return this.convertMatches(response.data.matches, vectorIndex.Name, fallbackEntity, entityByContentSourceID);
+        return this.convertMatches(matches, vectorIndex.Name, fallbackEntity, entityByContentSourceID);
+    }
+
+    /**
+     * Query an index keyed by its provider-side name: `ExternalID`, else the MJ `Name`.
+     *
+     * contextUser is passed as the 2nd arg per VectorDBBase.QueryIndex's contract. Remote drivers
+     * (Pinecone/Qdrant) ignore it and authenticate via their own API key; in-process drivers use it
+     * to honor server-side row-level security when loading vectors via RunView.
+     */
+    private async queryIndexByName(
+        vectorDB: VectorDBBase,
+        vectorIndex: MJVectorIndexEntity,
+        options: QueryByVectorValues,
+        contextUser: UserInfo
+    ): Promise<VectorMatch[]> {
+        const response: BaseResponse = await vectorDB.QueryIndex({ ...options, id: AIEngine.Instance.GetProviderIndexName(vectorIndex) }, contextUser);
+        return this.matchesOf(response);
+    }
+
+    /**
+     * Query an index whose provider keys vectors by **Entity Document** rather than by index name
+     * ({@link VectorDBBase.QueryKeyIsEntityDocumentID} — the in-process Simple Vector Service is one).
+     *
+     * Each Active Entity Document that points at the index is its own pool, and one index usually
+     * serves several: the shipped default SVS index holds all six standard Search documents. So every
+     * pool is queried and the best `topK` across them is kept. These providers return only a
+     * `RecordID`, so each match is stamped with its document's entity — the index alone cannot name
+     * it once it spans more than one entity, and an unattributed match is dropped by the permission
+     * filter.
+     *
+     * The same providers ignore `options.filter`, and nothing downstream re-applies it. Each pool is
+     * one entity, so `EntityNames` is applied exactly by querying only the pools it names. Any other
+     * filter cannot be applied, so the index is skipped rather than returning what the filter excludes.
+     */
+    private async queryEntityDocumentPools(
+        vectorDB: VectorDBBase,
+        vectorIndex: MJVectorIndexEntity,
+        options: QueryByVectorValues,
+        unmerged: UnmergedFilters,
+        contextUser: UserInfo
+    ): Promise<VectorMatch[]> {
+        const cannotApply = this.filtersEntityDocumentPoolsCannotApply(unmerged);
+        if (cannotApply.length > 0) {
+            // FAIL CLOSED, as for a scope MetadataFilter that cannot be applied (see embedAndQueryGroup).
+            LogError(
+                `VectorSearchProvider: skipping index "${vectorIndex.Name}" because it cannot apply ${cannotApply.join(' or ')}. ` +
+                `Its vector database keys vectors by Entity Document and returns matches with only a RecordID, so querying it would return results those filters exclude.`
+            );
+            return [];
+        }
+        const documents = this.documentsInEntities(await this.entityDocumentsForIndex(vectorIndex, contextUser), unmerged.Search?.EntityNames);
+        const perDocument = await Promise.all(documents.map(async doc => {
+            const response: BaseResponse = await vectorDB.QueryIndex({ ...options, id: doc.ID }, contextUser);
+            return this.matchesOf(response).map(match => this.withDocumentEntity(match, doc.Entity));
+        }));
+        return perDocument.flat()
+            .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+            .slice(0, options.topK);
+    }
+
+    /**
+     * The Active Entity Documents that point at a vector index, read from the knowledge-hub metadata
+     * cache rather than a per-query RunView (`Config()` is a no-op once loaded).
+     *
+     * Throws when there are none. Falling back to the index name would only move the failure into the
+     * driver, which then tries to parse a name as a uniqueidentifier (#4911).
+     */
+    private async entityDocumentsForIndex(vectorIndex: MJVectorIndexEntity, contextUser: UserInfo): Promise<MJEntityDocumentEntity[]> {
+        const engine = KnowledgeHubMetadataEngine.Instance;
+        await engine.Config(false, contextUser, this.Provider);
+        const documents = engine.GetActiveEntityDocuments().filter(d => UUIDsEqual(d.VectorIndexID, vectorIndex.ID));
+        if (documents.length === 0) {
+            const hint = engine.IsPermissionConstrained
+                ? ' The knowledge-hub metadata cache is permission-constrained, so they may be hidden from this user.'
+                : '';
+            throw new Error(
+                `Vector index "${vectorIndex.Name}" is keyed by Entity Document, but no Active Entity Document points at it.${hint}`
+            );
+        }
+        return documents;
+    }
+
+    /**
+     * The filters an index keyed by Entity Document cannot apply, named for the log. `EntityNames` is
+     * not one of them: it narrows the pools instead.
+     */
+    private filtersEntityDocumentPoolsCannotApply(unmerged: UnmergedFilters): string[] {
+        const names: string[] = [];
+        if (unmerged.ScopeHasMetadataFilter) names.push(`the scope's MetadataFilter`);
+        if (unmerged.Search?.Tags?.length) names.push('Tags');
+        if (unmerged.Search?.SourceTypes?.length) names.push('SourceTypes');
+        return names;
+    }
+
+    /** The documents whose entity is in `entityNames`, compared case-insensitively as the other lanes do; all of them when none are named. */
+    private documentsInEntities(documents: MJEntityDocumentEntity[], entityNames: string[] | undefined): MJEntityDocumentEntity[] {
+        if (!entityNames?.length) return documents;
+        const allowed = new Set(entityNames.map(n => n.toLowerCase()));
+        return documents.filter(d => allowed.has(d.Entity.toLowerCase()));
+    }
+
+    /** A match's own `Entity` metadata wins; otherwise it takes the entity its Entity Document vectorizes. */
+    private withDocumentEntity(match: VectorMatch, entityName: string): VectorMatch {
+        return match.metadata?.['Entity'] ? match : { ...match, metadata: { ...match.metadata, Entity: entityName } };
+    }
+
+    /** The matches of a successful `QueryIndex` response, or none. */
+    private matchesOf(response: BaseResponse): VectorMatch[] {
+        return response.success && response.data?.matches ? response.data.matches : [];
     }
 
     /**
@@ -508,7 +637,7 @@ export class VectorSearchProvider extends BaseSearchProvider {
      * Entities a content source is allowed to declare its vectors to be: the content-item entities
      * themselves, or anything that IS-A one of them.
      */
-    private static readonly AttributionRoots: readonly string[] = ['MJ: Content Items', 'MJ: Content Item Chunks'];
+    private static readonly attributionRoots: readonly string[] = ['MJ: Content Items', 'MJ: Content Item Chunks'];
 
     /**
      * Validate a declared attribution before it is trusted, and return the entity's CANONICAL name.
@@ -542,7 +671,7 @@ export class VectorSearchProvider extends BaseSearchProvider {
             LogError(
                 `VectorSearchProvider: content source ${contentSourceID} declares vector entity ` +
                 `"${entity.Name}", which is not a content-item entity — ignoring it. A source may only ` +
-                `declare ${VectorSearchProvider.AttributionRoots.join(' / ')} or a subtype of one.`
+                `declare ${VectorSearchProvider.attributionRoots.join(' / ')} or a subtype of one.`
             );
             return null;
         }
@@ -560,7 +689,7 @@ export class VectorSearchProvider extends BaseSearchProvider {
      * refused. Fail-closed, but wrong, and invisible until someone runs multi-provider.
      */
     private isContentItemEntity(entity: EntityInfo): boolean {
-        const roots = VectorSearchProvider.AttributionRoots;
+        const roots = VectorSearchProvider.attributionRoots;
         const provider = this.Provider;
         const visited = new Set<string>();
         let current: EntityInfo | undefined = entity;
@@ -683,7 +812,7 @@ export class VectorSearchProvider extends BaseSearchProvider {
     }
 
     /** How many vector ids to name in the unattributed-match warning. */
-    private static readonly UnattributedSampleSize = 3;
+    private static readonly unattributedSampleSize = 3;
 
     /**
      * Report matches that no attribution step could name, because they are about to disappear.
@@ -701,7 +830,7 @@ export class VectorSearchProvider extends BaseSearchProvider {
         if (vectorIDs.length === 0) {
             return;
         }
-        const sample = vectorIDs.slice(0, VectorSearchProvider.UnattributedSampleSize).join(', ');
+        const sample = vectorIDs.slice(0, VectorSearchProvider.unattributedSampleSize).join(', ');
         LogError(
             `VectorSearchProvider: ${vectorIDs.length} match(es) from index "${indexName}" carry no ` +
             `resolvable entity and will be dropped by the permission filter rather than returned. Give ` +

@@ -5,7 +5,7 @@ import * as d3Scale from 'd3-scale';
 import * as d3Shape from 'd3-shape';
 import { SVGActionResult, ViewBox, Branding } from './shared/svg-types';
 import { SVGUtils } from './shared/svg-utils';
-import { getPalette, generateCSS, getFontSpec, getColorForIndex } from './shared/svg-theming';
+import { GetPalette, GenerateCSS, GetFontSpec, GetColorForIndex } from './shared/svg-theming';
 
 /**
  * Chart data point interface
@@ -227,10 +227,10 @@ export class CreateSVGChartAction extends BaseAction {
         if (title) {
             SVGUtils.addA11y(svg, { title, ariaRole: 'img' });
         }
-        SVGUtils.addStyles(svg, generateCSS(branding));
+        SVGUtils.addStyles(svg, GenerateCSS(branding));
 
-        const palette = getPalette(branding.palette);
-        const font = getFontSpec(branding.font);
+        const palette = GetPalette(branding.palette);
+        const font = GetFontSpec(branding.font);
 
         // Extract labels and values
         const labels = data.map(d => d.label || String(d.x || ''));
@@ -273,7 +273,7 @@ export class CreateSVGChartAction extends BaseAction {
             rect.setAttribute('y', String(y));
             rect.setAttribute('width', String(barWidth));
             rect.setAttribute('height', String(barHeight));
-            rect.setAttribute('fill', getColorForIndex(i, branding.palette));
+            rect.setAttribute('fill', GetColorForIndex(i, branding.palette));
             rect.setAttribute('stroke', 'none');
             rect.setAttribute('rx', '2');
 
@@ -325,10 +325,10 @@ export class CreateSVGChartAction extends BaseAction {
         if (title) {
             SVGUtils.addA11y(svg, { title, ariaRole: 'img' });
         }
-        SVGUtils.addStyles(svg, generateCSS(branding));
+        SVGUtils.addStyles(svg, GenerateCSS(branding));
 
-        const palette = getPalette(branding.palette);
-        const font = getFontSpec(branding.font);
+        const palette = GetPalette(branding.palette);
+        const font = GetFontSpec(branding.font);
 
         // Extract x and y values
         const xValues = data.map(d => typeof d.x === 'number' ? d.x : parseFloat(String(d.x || 0)));
@@ -364,7 +364,7 @@ export class CreateSVGChartAction extends BaseAction {
         const linePath = doc.createElementNS(ns, 'path');
         linePath.setAttribute('d', lineGenerator(data) || '');
         linePath.setAttribute('fill', 'none');
-        linePath.setAttribute('stroke', getColorForIndex(0, branding.palette));
+        linePath.setAttribute('stroke', GetColorForIndex(0, branding.palette));
         linePath.setAttribute('stroke-width', '3');
         linePath.setAttribute('stroke-linecap', 'round');
         linePath.setAttribute('stroke-linejoin', 'round');
@@ -379,7 +379,7 @@ export class CreateSVGChartAction extends BaseAction {
             circle.setAttribute('cx', String(xScale(xVal)));
             circle.setAttribute('cy', String(yScale(yVal)));
             circle.setAttribute('r', '5');
-            circle.setAttribute('fill', getColorForIndex(0, branding.palette));
+            circle.setAttribute('fill', GetColorForIndex(0, branding.palette));
             circle.setAttribute('stroke', '#fff');
             circle.setAttribute('stroke-width', '2');
             chartGroup.appendChild(circle);
@@ -419,10 +419,10 @@ export class CreateSVGChartAction extends BaseAction {
         if (title) {
             SVGUtils.addA11y(svg, { title, ariaRole: 'img' });
         }
-        SVGUtils.addStyles(svg, generateCSS(branding));
+        SVGUtils.addStyles(svg, GenerateCSS(branding));
 
-        const palette = getPalette(branding.palette);
-        const font = getFontSpec(branding.font);
+        const palette = GetPalette(branding.palette);
+        const font = GetFontSpec(branding.font);
 
         // Extract x and y values
         const xValues = data.map(d => typeof d.x === 'number' ? d.x : parseFloat(String(d.x || 0)));
@@ -458,7 +458,7 @@ export class CreateSVGChartAction extends BaseAction {
         // Draw area
         const areaPath = doc.createElementNS(ns, 'path');
         areaPath.setAttribute('d', areaGenerator(data) || '');
-        const areaColor = getColorForIndex(0, branding.palette);
+        const areaColor = GetColorForIndex(0, branding.palette);
         areaPath.setAttribute('fill', areaColor);
         areaPath.setAttribute('fill-opacity', '0.3');
         areaPath.setAttribute('stroke', 'none');
@@ -507,9 +507,9 @@ export class CreateSVGChartAction extends BaseAction {
         if (title) {
             SVGUtils.addA11y(svg, { title, ariaRole: 'img' });
         }
-        SVGUtils.addStyles(svg, generateCSS(branding));
+        SVGUtils.addStyles(svg, GenerateCSS(branding));
 
-        const font = getFontSpec(branding.font);
+        const font = GetFontSpec(branding.font);
 
         // Calculate center and radius
         const centerX = vb.x + vb.contentWidth / 2;
@@ -542,7 +542,7 @@ export class CreateSVGChartAction extends BaseAction {
             // Draw slice
             const path = doc.createElementNS(ns, 'path');
             path.setAttribute('d', arcGenerator(arc) || '');
-            path.setAttribute('fill', getColorForIndex(i, branding.palette));
+            path.setAttribute('fill', GetColorForIndex(i, branding.palette));
             path.setAttribute('stroke', '#fff');
             path.setAttribute('stroke-width', '2');
             chartGroup.appendChild(path);
@@ -600,10 +600,10 @@ export class CreateSVGChartAction extends BaseAction {
         if (title) {
             SVGUtils.addA11y(svg, { title, ariaRole: 'img' });
         }
-        SVGUtils.addStyles(svg, generateCSS(branding));
+        SVGUtils.addStyles(svg, GenerateCSS(branding));
 
-        const palette = getPalette(branding.palette);
-        const font = getFontSpec(branding.font);
+        const palette = GetPalette(branding.palette);
+        const font = GetFontSpec(branding.font);
 
         // Extract x and y values
         const xValues = data.map(d => typeof d.x === 'number' ? d.x : parseFloat(String(d.x || 0)));
@@ -639,9 +639,9 @@ export class CreateSVGChartAction extends BaseAction {
             circle.setAttribute('cx', String(xScale(xVal)));
             circle.setAttribute('cy', String(yScale(yVal)));
             circle.setAttribute('r', '6');
-            circle.setAttribute('fill', getColorForIndex(i, branding.palette));
+            circle.setAttribute('fill', GetColorForIndex(i, branding.palette));
             circle.setAttribute('fill-opacity', '0.7');
-            circle.setAttribute('stroke', getColorForIndex(i, branding.palette));
+            circle.setAttribute('stroke', GetColorForIndex(i, branding.palette));
             circle.setAttribute('stroke-width', '2');
             chartGroup.appendChild(circle);
         });
@@ -667,7 +667,7 @@ export class CreateSVGChartAction extends BaseAction {
         xScale: any,
         yScale: d3Scale.ScaleLinear<number, number>,
         vb: ReturnType<typeof SVGUtils.calculateViewBox>,
-        palette: ReturnType<typeof getPalette>,
+        palette: ReturnType<typeof GetPalette>,
         direction: 'horizontal' | 'vertical' | 'both'
     ): void {
         const ns = container.namespaceURI!;
@@ -718,7 +718,7 @@ export class CreateSVGChartAction extends BaseAction {
         svg: SVGElement,
         xScale: d3Scale.ScaleBand<string>,
         vb: ReturnType<typeof SVGUtils.calculateViewBox>,
-        palette: ReturnType<typeof getPalette>,
+        palette: ReturnType<typeof GetPalette>,
         font: Required<import('./shared/svg-types').FontSpec>,
         label: string
     ): void {
@@ -774,7 +774,7 @@ export class CreateSVGChartAction extends BaseAction {
         svg: SVGElement,
         xScale: d3Scale.ScaleLinear<number, number>,
         vb: ReturnType<typeof SVGUtils.calculateViewBox>,
-        palette: ReturnType<typeof getPalette>,
+        palette: ReturnType<typeof GetPalette>,
         font: Required<import('./shared/svg-types').FontSpec>,
         label: string
     ): void {
@@ -843,7 +843,7 @@ export class CreateSVGChartAction extends BaseAction {
         svg: SVGElement,
         yScale: d3Scale.ScaleLinear<number, number>,
         vb: ReturnType<typeof SVGUtils.calculateViewBox>,
-        palette: ReturnType<typeof getPalette>,
+        palette: ReturnType<typeof GetPalette>,
         font: Required<import('./shared/svg-types').FontSpec>,
         label: string
     ): void {
@@ -953,7 +953,7 @@ export class CreateSVGChartAction extends BaseAction {
             const rect = doc.createElementNS(ns, 'rect');
             rect.setAttribute('width', '15');
             rect.setAttribute('height', '15');
-            rect.setAttribute('fill', getColorForIndex(i, branding.palette));
+            rect.setAttribute('fill', GetColorForIndex(i, branding.palette));
             g.appendChild(rect);
 
             // Label

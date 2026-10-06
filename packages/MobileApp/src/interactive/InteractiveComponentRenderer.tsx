@@ -177,9 +177,9 @@ async function compileSpec(
             return { status: 'failed', reason: `This component needs ${missing.join(', ')}.` };
         }
 
-        const result = await runtime.manager.loadHierarchy(spec, {
+        const result = await runtime.Manager.loadHierarchy(spec, {
             defaultNamespace: 'Global',
-            defaultVersion: spec.version || runtime.generateComponentHierarchyHash(spec),
+            defaultVersion: spec.version || runtime.GenerateComponentHierarchyHash(spec),
             returnType: 'both',
         });
 
@@ -213,11 +213,11 @@ async function compileSpec(
             // React components by `loadHierarchy`. The compiler's generated child bindings read it
             // off `props.components`, so a component whose children are missing from this prop
             // renders `undefined` where its children should be.
-            ...runtime.buildComponentProps(
+            ...runtime.BuildComponentProps(
                 {},
                 savedUserSettings,
                 WrapUtilitiesWithCapture(
-                    runtime.createRuntimeUtilities().buildUtilities(false, Metadata.Provider),
+                    runtime.CreateRuntimeUtilities().buildUtilities(false, Metadata.Provider),
                     captured,
                 ),
                 buildCallbacks(notify),
@@ -231,7 +231,7 @@ async function compileSpec(
             onSaveUserSettings: BuildSaveUserSettings(spec, user, savedUserSettings),
         };
 
-        const Boundary = runtime.createErrorBoundary(ShimReact, {
+        const Boundary = runtime.CreateErrorBoundary(ShimReact, {
             // The fallback is resolved when it renders, not when the boundary is built — by which
             // point the component has usually finished fetching, so the captured rows are there.
             fallback: <ComponentErrorFallback Captured={captured} />,
@@ -317,7 +317,7 @@ function buildCallbacks(notify: (message: string, style: string) => void): Param
 }
 
 /** Alias to derive the exact `buildComponentProps` callbacks parameter type. */
-type InteractiveRuntimeBuildProps = Awaited<ReturnType<typeof GetInteractiveRuntime>>['buildComponentProps'];
+type InteractiveRuntimeBuildProps = Awaited<ReturnType<typeof GetInteractiveRuntime>>['BuildComponentProps'];
 
 /**
  * What a failed component shows: its data when it got that far, an explanation when it did not.

@@ -22,29 +22,29 @@ export class WorkQueueEngineBase extends BaseEngine<WorkQueueEngineBase> {
         return super.getInstance<WorkQueueEngineBase>();
     }
 
-    private _Transports: MJWorkQueueTransportEntity[] = [];
-    private _Topics: MJWorkQueueTopicEntity[] = [];
-    private _Subscriptions: MJWorkQueueSubscriptionEntity[] = [];
+    private _transports: MJWorkQueueTransportEntity[] = [];
+    private _topics: MJWorkQueueTopicEntity[] = [];
+    private _subscriptions: MJWorkQueueSubscriptionEntity[] = [];
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
         const configs: Partial<BaseEnginePropertyConfig>[] = [
-            { Type: 'entity', EntityName: WorkQueueEntityNames.Transports, PropertyName: '_Transports', CacheLocal: true },
-            { Type: 'entity', EntityName: WorkQueueEntityNames.Topics, PropertyName: '_Topics', CacheLocal: true },
-            { Type: 'entity', EntityName: WorkQueueEntityNames.Subscriptions, PropertyName: '_Subscriptions', CacheLocal: true },
+            { Type: 'entity', EntityName: WorkQueueEntityNames.Transports, PropertyName: '_transports', CacheLocal: true },
+            { Type: 'entity', EntityName: WorkQueueEntityNames.Topics, PropertyName: '_topics', CacheLocal: true },
+            { Type: 'entity', EntityName: WorkQueueEntityNames.Subscriptions, PropertyName: '_subscriptions', CacheLocal: true },
         ];
         await this.Load(configs, provider, forceRefresh, contextUser);
     }
 
     public get Transports(): MJWorkQueueTransportEntity[] {
-        return this.GetConfigData<MJWorkQueueTransportEntity>('_Transports');
+        return this.GetConfigData<MJWorkQueueTransportEntity>('_transports');
     }
 
     public get Topics(): MJWorkQueueTopicEntity[] {
-        return this.GetConfigData<MJWorkQueueTopicEntity>('_Topics');
+        return this.GetConfigData<MJWorkQueueTopicEntity>('_topics');
     }
 
     public get Subscriptions(): MJWorkQueueSubscriptionEntity[] {
-        return this.GetConfigData<MJWorkQueueSubscriptionEntity>('_Subscriptions');
+        return this.GetConfigData<MJWorkQueueSubscriptionEntity>('_subscriptions');
     }
 
     /** The row view the pure topology helpers work over. */

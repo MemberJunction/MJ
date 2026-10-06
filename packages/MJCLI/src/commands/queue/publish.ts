@@ -27,11 +27,11 @@ export function ParsePayload(json: string): WorkJson {
 }
 
 export interface PublishFlags {
-  payload: WorkJson;
-  partitionKey?: string;
-  dedupKey?: string;
-  attributes: Record<string, string>;
-  count: number;
+  Payload: WorkJson;
+  PartitionKey?: string;
+  DedupKey?: string;
+  Attributes: Record<string, string>;
+  Count: number;
 }
 
 /**
@@ -40,16 +40,16 @@ export interface PublishFlags {
  * would (correctly) report every later copy as a Duplicate.
  */
 export function BuildPublishRequests(flags: PublishFlags): PublishRequest[] {
-  return Array.from({ length: flags.count }, (_, index) => {
-    const request: PublishRequest = { Payload: flags.payload, Attributes: { ...flags.attributes } };
-    if (flags.count > 1) {
+  return Array.from({ length: flags.Count }, (_, index) => {
+    const request: PublishRequest = { Payload: flags.Payload, Attributes: { ...flags.Attributes } };
+    if (flags.Count > 1) {
       request.Attributes = { ...request.Attributes, sequence: String(index + 1) };
     }
-    if (flags.partitionKey !== undefined) {
-      request.PartitionKey = flags.partitionKey;
+    if (flags.PartitionKey !== undefined) {
+      request.PartitionKey = flags.PartitionKey;
     }
-    if (flags.dedupKey !== undefined && index === 0) {
-      request.DeduplicationKey = flags.dedupKey;
+    if (flags.DedupKey !== undefined && index === 0) {
+      request.DeduplicationKey = flags.DedupKey;
     }
     return request;
   });
@@ -84,8 +84,8 @@ export default class QueuePublish extends Command {
   async run(): Promise<void> {
     const { flags } = await this.parse(QueuePublish);
     const requests = BuildPublishRequests({
-      payload: ParsePayload(flags.payload), partitionKey: flags['partition-key'], dedupKey: flags['dedup-key'],
-      attributes: ParseAttributes(flags.attribute), count: flags.count,
+      Payload: ParsePayload(flags.payload), PartitionKey: flags['partition-key'], DedupKey: flags['dedup-key'],
+      Attributes: ParseAttributes(flags.attribute), Count: flags.count,
     });
     const session = await OpenWorkQueueSession();
     let failure: string | null = null;

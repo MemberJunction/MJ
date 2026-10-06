@@ -22,7 +22,7 @@ import { Colors, Radius, Spacing, Type } from '@/theme/tokens';
  * is pending.
  */
 export function OfflineQueueBadge() {
-    const { count, syncing, SyncNow } = useOfflineQueue();
+    const { Count: count, Syncing: syncing, SyncNow } = useOfflineQueue();
 
     if (count === 0) return null;
 

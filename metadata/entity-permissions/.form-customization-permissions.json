@@ -1,0 +1,44 @@
+[
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Entity Form Contributions",
+      "RoleID": "@lookup:MJ: Roles.Name=UI",
+      "Type": "Allow",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": true
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: Entity Form Contributions&RoleID=@lookup:MJ: Roles.Name=UI&Type=Allow"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Entity Form Overrides",
+      "RoleID": "@lookup:MJ: Roles.Name=UI",
+      "Type": "Allow",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": true
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: Entity Form Overrides&RoleID=@lookup:MJ: Roles.Name=UI&Type=Allow"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Components",
+      "RoleID": "@lookup:MJ: Roles.Name=UI",
+      "Type": "Allow",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: Components&RoleID=@lookup:MJ: Roles.Name=UI&Type=Allow"
+    }
+  }
+]

@@ -1,5 +1,257 @@
 # Change Log - @memberjunction/graphql-dataprovider
 
+## 6.2.0-edge.2
+
+### Minor Changes
+
+- 369e229: Developer can create and update MJ: Row Level Security Filters. Sync push reloads metadata inside its transaction. An IS-A parent's delete returns, a new record does not load a missing child row, the GraphQL provider does not send a second delete, and a parent built by its child stays linked. The chat area accepts ReadOnly. A dialog manages its focus, names itself when it has no title, and leaves Tab inside a modal or an open dropdown or calendar above it. Tab that a dropdown or calendar hands back at the first or last stop wraps inside the dialog, and a dialog that does not trap focus does not let the dialog under it take the page's Tab. A host publishes an in-progress agent turn's live status through AgentRunStatusPublisher, including the completion when a background run fails before it has a run. A reply that finishes before the chat shows it completes without loading the conversation again.
+
+### Patch Changes
+
+- 660ef45: Add a `RunDecision` GraphQL mutation and `GraphQLAIClient.RunDecision`, so browser code can run a typed decision in one round trip, under the same authorization as `RunAIPrompt`: the API-key `prompt:execute` scope is checked against the ID of the prompt that runs. The mutation refuses scope-limited sessions, and bounds the state and question sizes and the model-call timeout on the server. The `Run Decision` action's question validation moves unchanged to `ParseDecisionQuestions` in `@memberjunction/ai-prompts`, which the action and the mutation now share.
+- 21f9e15: Add `ConnectGraphQLClient` for embeds that need an authenticated client without the full metadata boot (#4887). `SetupGraphQLClient` now rejects when no metadata loaded, carrying the metadata download's failure as the cause (a user with no roles still gets the no-roles screen in Explorer and Bootstrap apps); the metadata refresh-check throttle is armed only by a successful check, and a failed metadata download no longer locks out an immediate retry; a cold boot no longer re-fetches the current user. Switching credentials on the provider (for example an anonymous connection upgraded to a login) rebuilds its GraphQL client so requests carry the new identity.
+- f3c6161: Conversation routing acts on calibrated probabilities (plan Task 2.4). `ApplyPlattCalibration` and `PlattCalibration` in `@memberjunction/ai` map a decision model's raw probability to a calibrated one. Routing calibrates the thread Likelihood only for the exact model each fit was made on (`ROUTING_CONTINUES_CALIBRATION`: Jev at `typesafe/jev-1.13-20260917`, and LLM Decision when GPT-OSS-120B answered, fitted by the Phase 2 Decision Eval), and treats any other model's answer as unsure. `FindDecisionCalibration` in `@memberjunction/ai-core-plus` looks a calibration up by the decision model and the model behind it, for any consumer that calibrates. The `RunDecision` mutation and `GraphQLAIClient.RunDecision` return that model as `resolvedModel` / `ResolvedModel`. Routing waits 350 ms instead of 250 ms, which covers about 95% of Jev's answers in-process. The Decision Eval records production's routing verdict with the model that answered and the policy it was reached under, and its scorecard scores that verdict end to end, per run.
+- 5ee02db: Record forms now flag likely duplicates while a person enters a new record, for entities whose entity document has LLM reasoning enabled and uses the `Decision` or `DecisionThenPrompt` reasoning mode. The check only flags: it never blocks a save or merges, and it shows nothing if it misses its time budget. The server bounds each check with its own budget and stops it there, a form keeps at most one check in flight, and an API key needs both the `view:run` and `prompt:execute` scopes to run one. A user who cannot read the entity is never checked.
+- ea4080e: fix: an agent completion reaches the conversation even when the WebSocket dies without closing (MJ#4222)
+
+  On an unstable connection, sending a message to an agent left the message spinning forever: status updates stopped, the elapsed timer counted up with no ceiling, and no error appeared. The agent ran fine and its answer persisted; only a refresh revealed it.
+
+  The cause was not a missing timeout but a single point of failure. Five recovery mechanisms — graphql-ws `retryAttempts`, `GraphQLDataProvider._socketStateSubject`, Explorer's `ServerConnectivityService`, `ConversationStreaming.scheduleReconnection()` and `FireAndForgetHelper.onStreamEnd` — were all triggered by the socket `closed` event, and the failure mode is precisely "the socket never closes". They failed together. graphql-ws re-arms its keepalive only on pong receipt, so a half-open socket gets one ping and then permanent silence; its own JSDoc says nothing happens automatically if the server never responds.
+
+  **Transport.** `getOrCreateWSClient()` now arms a pong watchdog on each ping it sends and calls `client.terminate()` if no pong returns, producing a real `4499` close that the existing retry apparatus can act on. Each client owns its own pong timer, and a close from a client that has already been replaced is ignored, so one socket can never terminate or disarm its replacement. `connectionAckWaitTimeout` is set, and `keepAlive` drops to 10s, making detection ~14s in practice instead of never. MJServer passes its `useServer` keepAlive explicitly rather than relying on an invisible library default.
+
+  **Recovery triggers.** New `ConversationLiveness` (L0, no Angular) aggregates socket reconnect, stream re-subscribe, tab-visible and browser-online into one coalesced reconciliation request, throttled leading-edge at 500ms. `ng-conversations` adds a root-provided DOM bridge and `ReconcileNow()`, which refreshes agent runs **before** comparing status — without that the comparison reads the stale in-memory map the outage froze and silently no-ops. The reconciliation path runs over HTTP, so it repairs a message while the socket is still dead.
+
+  **Durable read model.** New `TailConversationEvents` query over existing `AIAgentRunStep` rows — no table, no migration. The cursor never rewinds, events are capped at 200, authorization is delegated to `RunView` as the calling user through the request's read-only provider, and not-found and not-authorized are indistinguishable. Only the columns an event carries are read, never the step's input, output or payload columns. A run `Paused` on a still-running workflow reports `IsInFlight: true`, and a failed call does too, because it knows nothing about the run. `FinalPayload` falls back to the conversation detail's message because `AIAgentRun.Result` is agent-dependent and null on many successful runs; callers must decide terminality from `IsInFlight`/`DetailStatus`, never from its presence. `GraphQLConversationClient` and `ConversationTail` hold a per-message cursor that advances only on a successful read. When the tail call fails, for example a new client against an older server, the client completes a message from its run list as it did before.
+
+  **Cross-instance delivery.** Push-status updates now carry `SourceServerId` and fan out over Redis through a generic `PublishMessage`/`SubscribeToChannel` pair on `RedisLocalStorageProvider`, closing the case where the mutation lands on one replica and the browser's socket on another. Inbound messages are type-checked, then republish onto the local topic and still pass the identity filter, so a replica never decides who sees what. Streaming deltas are deliberately not replicated. Measured: 5 push frames delivered cross-replica with Redis, 0 without — and the message still completed without it, so fan-out is a latency optimization rather than a requirement.
+
+  **Deployment order.** A client deployed before the server gets a failed tail call on every reconcile and falls back to the run list, which cannot see the conversation detail's own status. The liveness pulse (`DEFAULT_PULSE_INTERVAL_MS`, 5 min → 60 s in MJServer) and the client's idle window (`DEFAULT_IDLE_TIMEOUT_MS`, 12 min → 3 min in GraphQLDataProvider) are a matched pair in separate packages. Ship the server first or with the client: a client on the 3-minute window against a server still pulsing every 5 minutes times out on every pulse gap. `DEFAULT_MAX_STALL_RECONCILES` stays at 6, so the give-up horizon moves from roughly 72 minutes to roughly 18.
+
+  **Honest UI.** The message time pill degrades `live → checking → stalled`, with thresholds anchored to the agent watchdog's own 30s heartbeat and 5-minute stale threshold rather than invented values. Silence is measured from the last push frame the browser received for the run or the message, including the server's 60s liveness pulse, and from the run's database timestamps when the run was re-read. Progress frames carry the server's in-memory run, whose timestamps do not move until the run ends, so they cannot be the only signal. A row with no MJ agent run, such as one written by a host's own turn handler, stays live while frames that name it arrive. The database timestamp is bounded by how long the component has been watching, so browser-versus-database clock skew cannot invent a stall. While HTTP works, a dead socket alone does not degrade the pill: each reconcile re-reads the run and its fresh heartbeat. The connectivity banner reports the socket. The pill's one-second timer stops whenever nothing is in flight.
+
+  A quiet pill's request for a re-check goes through the same 500ms coalescing trigger as the transport signals, and only one reconcile pass runs at a time. A request that arrives during a pass shares it and schedules one follow-up, so no request is lost and no message is completed twice.
+
+  Also fixes three defects found by manual testing that unit tests missed, each an instance of the same pattern as the original bug — a mechanism wired to a signal the failure mode suppresses: liveness was computed only in `ngDoCheck`, which `detectChanges()` does not re-invoke; `agentRunMap` was absent from `message-list`'s `ngOnChanges`, so a refreshed heartbeat never reached the rendered bubble; and the reconnection backoff reset on every re-subscribe, which succeeds against a dead socket, pinning the delay at its base value and leaving the escalation inert. The backoff escalates to a 60s ceiling and retries for the life of the page; it has no attempt cap, because no host calls `initialize()` outside `ngOnInit`, so a stream that stopped retrying would stay stopped until a reload. Up to 20% is taken off each delay at random so tabs do not retry in lockstep, and the backoff clears when the socket reports `connected`, which follows the server's acknowledgement, so a quiet healthy stream does not start its next outage at the ceiling.
+
+  Two further defects this surfaced, both fixed here. Explorer's connectivity warning cleared on an HTTP 200 from `/healthcheck`, before the socket was back — reachable over HTTP and able to carry frames are different properties, and a half-open socket satisfies the first while dropping every push. The warning now clears when the socket itself reports `connected`, and a `degraded` flag makes that sticky so the transient `unknown` emitted by the service's own `ForceSocketReconnect()` cannot read as recovery. The one exception is a screen with no active subscription: no socket exists there, so no `connected` can arrive, and an HTTP 200 clears the warning. A subscription opened later against a socket that is still down raises it again.
+
+  And a new `OrphanedConversationDetailReconciler` closes conversation details left `In-Progress` by a run that is already over. `AgentRunner` closes the detail as a run's final step, so a process that dies mid-run never reaches it; the agent-run watchdog repairs the run but nothing repaired the detail, which is the row the chat renders from. It runs at boot and every five minutes, asks only for details that have a finished run so stuck rows cannot fill its 200-row window, waits a grace period so it cannot race a normal completion, skips a detail that something else closed after it was listed, and writes as the conversation's OWNER — `MJConversationDetailEntityExtended.Save()` refuses a non-owner without a resource grant, so a maintenance pass running as the system user is silently rejected, returning false with no `LatestResult` to read. Verified against five real orphaned details aged 42 to 246 minutes: all five closed, none left.
+
+- 7e57b48: Fix the `GetRecordDependencies` GraphQL contract (P1.2). The old client passed raw rows through, so `dep.PrimaryKey` was always undefined.
+  - In `@memberjunction/server`, `RecordDependencyResult` gains `PrimaryKey`, matching `RecordDependency` in `@memberjunction/core`, plus nullable `IsSoftLink` and `EntityIDFieldName`. `CompositeKey` stays as a deprecated alias carrying the same key, so older clients keep working; it will be removed in a later release.
+  - In `@memberjunction/graphql-dataprovider`, `GetRecordDependencies` selects `PrimaryKey`, `IsSoftLink` and `EntityIDFieldName` and rehydrates real `CompositeKey` instances.
+  - Wire change: a client from this release needs a server from this release (an older server has no `PrimaryKey` field).
+- Updated dependencies [f555162]
+- Updated dependencies [043f418]
+- Updated dependencies [e97d95c]
+- Updated dependencies [ff3097d]
+- Updated dependencies [79279f2]
+- Updated dependencies [2552b1e]
+- Updated dependencies [21f9e15]
+- Updated dependencies [28fdf22]
+- Updated dependencies [4248fb3]
+- Updated dependencies [f3c6161]
+- Updated dependencies [5148534]
+- Updated dependencies [0adaf76]
+- Updated dependencies [ce1a5c3]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [26c0178]
+- Updated dependencies [594f2e0]
+- Updated dependencies [705ab4e]
+- Updated dependencies [96daca8]
+- Updated dependencies [aa912ca]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [5986939]
+- Updated dependencies [4d647e6]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [369e229]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [2854a2e]
+  - @memberjunction/ai-core-plus@6.2.0-edge.2
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/ai@6.2.0-edge.2
+  - @memberjunction/core-entities@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+  - @memberjunction/actions-base@6.2.0-edge.2
+  - @memberjunction/interactive-component-types@6.2.0-edge.2
+  - @memberjunction/lists-base@6.2.0-edge.2
+
+## 6.2.0-edge.1
+
+### Patch Changes
+
+- eb3a8d3: feat(conversations): host rules for chats with several people
+
+  `mj-conversation-chat-area` gains opt-in inputs, one reworked event, a hook and a slot, so a host can run a chat between several people without forking the chat area. Every default keeps today's behavior.
+
+  **Inputs — `ng-conversations`.** Set on `mj-conversation-chat-area` (and on `mj-message-input` directly):
+  - `AgentReplyMode` — `'Always'` (default) answers every message; `'MentionOnly'` answers only a message that tags an agent and posts any other message with no turn at all: no reply row, no placeholder, no turn events.
+  - `AllowedAgentIDs` — the agents that may answer. Narrows the composer's `@` list, every route (tagged agent, continuity, pinned and host default agents, the conversation manager), the manager's delegation — including each agent step of a workflow it plans — and the pin and voice pickers. Null allows every agent; an empty list allows none.
+  - `MentionPeople` — the people the `@` list offers (today it offers only the current user). Each composer keeps its own list: two composers on one page never see each other's.
+  - `AgentHistoryFrom` — the first moment of the conversation an agent turn may read (see below).
+  - `AgentTurnHandler` — an async hook that runs the turn on the host's server instead of MJ's path, once per turn, before any reply row exists. The chat area shows the rows it reports.
+  - `AutoNameConversation` — turns MJ's auto-naming of a new conversation off (text and voice).
+
+  **Behavior change: `BeforeAgentTurn`.** It now fires once per turn on every route, before any row exists, and carries the resolved `AgentId`, `AgentName`, `Route` and `UserMessageId`. A listener can cancel the turn or send it to another allowed agent with `RedirectAgentId`. Canceling now leaves nothing behind. Previously the event fired only on the conversation manager's route, after that route's placeholder row was saved, and a cancel left the row behind, marked "Turn canceled before agent invocation". `AfterAgentTurn` now fires on every route too.
+
+  **Slot.** `composerExtra` renders host UI directly above the composer, wherever the chat area shows one, with an `IMJChatComposerExtraContext`.
+
+  **History floor — `server`, `core-entities`, `ai-core-plus`, `ai-agents`, clients.** `RunAIAgentFromConversationDetail` takes a new nullable `agentHistoryFrom` argument (ISO-8601). The server loads the agent's history from that moment and uses no summary of earlier messages; an unreadable value fails the request. The run carries it as `ExecuteAgentParams.ConversationHistoryFrom`, so the conversation-history tools, the conversation's artifacts, cross-turn compaction (skipped) and the carried-forward tool results of the previous turn (not carried) hold it too. `ConversationEngine.LoadWindowRowsFresh` and `AssembleContextWindow` accept the floor, and `ConversationEngine.HistoryFromFilter` writes it. The GraphQL client names the argument only when a floor is set, so a client that sets none keeps working against an older MJAPI.
+
+  **Runtime — `conversations-runtime`.** `MentionAutocomplete.GetSuggestions` takes an optional per-call `MentionSuggestionScope`; `ConversationAgentRunner.processMessage` takes `AllowedAgentIDs` (narrows the manager's `ALL_AVAILABLE_AGENTS`) and `AgentHistoryFrom`.
+
+- 80905a1: Rename public class members and exported functions to PascalCase, per MJ's naming convention,
+  **without breaking a single consumer**.
+
+  Every renamed symbol keeps its old name beside the new one as a `@deprecated` stub that forwards to
+  it — a delegating method or function, a getter/setter pair for a property, and for Angular a
+  readable accessor pair for an `@Input` and a second `@Output` sharing the same `EventEmitter`, so a
+  template still binding the old name keeps receiving events. Old names still compile, still resolve,
+  and still behave identically; the deprecation tag rides through to the published `.d.ts`, so editors
+  point callers at the replacement. Where a package re-exports through an explicit `export { … }`
+  list, the new name is added alongside the old, so the correct name is actually on the public surface
+  rather than merely declared.
+
+  The rename is deliberately refused wherever a mechanical stub would not be equivalent, because
+  several of those shapes change a type contract while still compiling in the package that declares
+  them:
+  - an **optional** property or parameter property — TypeScript has no optional accessor, so a stub
+    would promote `foo?` to a required member and break every object literal that omits it;
+  - a class that is a **data shape** (no methods, or `@ObjectType`/`@InputType`) — object literals are
+    assigned to it, and an accessor stub changes what they must supply;
+  - a property whose **subclass redeclares it**, since TypeScript forbids a property overriding an
+    accessor (TS2610);
+  - a name whose PascalCase form is **already bound** in that file or class;
+  - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
+    overload sets and abstract members.
+
+  **One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+  backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+  the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+  `EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+  `copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+  field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+  fields silently. Same-version deployments, which is the supported configuration, see no change.
+
+  Each package was verified against its own pre-change baseline rather than against zero, because
+  several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
+  with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
+  `@Input` alias passed `tsc` while breaking six template reads.
+
+- Updated dependencies [a50948e]
+- Updated dependencies [0eeb89d]
+- Updated dependencies [a3539d2]
+- Updated dependencies [41274aa]
+- Updated dependencies [67f6c85]
+- Updated dependencies [eb3a8d3]
+- Updated dependencies [e1dd673]
+- Updated dependencies [520bd09]
+- Updated dependencies [307da67]
+- Updated dependencies [a7da50b]
+- Updated dependencies [1d43161]
+- Updated dependencies [7110019]
+- Updated dependencies [17cc774]
+- Updated dependencies [80905a1]
+- Updated dependencies [6b08ebf]
+  - @memberjunction/core-entities@6.2.0-edge.1
+  - @memberjunction/ai-core-plus@6.2.0-edge.1
+  - @memberjunction/core@6.2.0-edge.1
+  - @memberjunction/actions-base@6.2.0-edge.1
+  - @memberjunction/global@6.2.0-edge.1
+  - @memberjunction/interactive-component-types@6.2.0-edge.1
+  - @memberjunction/lists-base@6.2.0-edge.1
+
+## 6.2.0-edge.0
+
+### Patch Changes
+
+- 5df9486: IS-A promotion — an EXISTING parent record gaining a subtype ("this Animal is now also a Dog") —
+  now works over GraphQL. It already worked against a direct database provider, which is what made it
+  expensive to find: every server-side reproduction passed while the browser silently inserted a
+  **second copy of the parent row** (surfacing as a unique-constraint violation on an unrelated column,
+  with a different GUID on every retry).
+
+  Two independent defects, both required:
+  - **Client** (`GraphQLDataProvider.Save`): the create-side field filter admitted a primary key only
+    when the entity was already saved, and an IS-A child's key is ReadOnly (the shared key is the
+    relationship), so on a promotion the key never left the browser. The parent's own save is
+    short-circuited (`IsParentEntitySave`) on the premise that the leaf mutation carries the whole
+    chain — so nothing told the server which parent row this was about. The create input now carries
+    the shared key for a promotion — an unsaved IS-A child whose parent is already saved. A
+    whole-chain create (new parent + new child) still sends no key, so the server keeps minting the
+    root identity and pays no parent lookup on that path.
+  - **Server** (`ResolverBase.CreateRecord`): `NewRecord()` reset the whole chain to "new", so even
+    with the key present the parent saved as a CREATE. When a child create carries a complete key,
+    the resolver now binds the new child to the existing parent row with `AttachToParent` (#3825):
+    the parent saves as an UPDATE and only the child is INSERTed. A key that matches no row is the
+    ordinary whole-chain create and proceeds on the caller's key; non-IS-A entities are untouched.
+
+- 8d1a373: Resolve record display names in search preview and display entity friendly names instead of full schema names.
+  - **Search Record Display Name Resolution**:
+    - In `SearchEngine.ts`, enable enrichment for preview searches on top results so record display names are resolved before preview autocomplete items render.
+    - In `SearchEnricher.ts`, resolve missing record names or sentinel titles (`${EntityName} Record`, `${EntityDisplayName} Record`) via `providerToUse.GetEntityRecordNames()`, setting both `RecordName` and `Title` to the live record name.
+    - Pass `SearchEngine.ProviderToUse` to `SearchEnricher` to ensure multi-provider alignment.
+  - **Entity Display Names**:
+    - Add `EntityDisplayName` to search results across `@memberjunction/search-engine`, `@memberjunction/server`, `@memberjunction/graphql-dataprovider`, and `@memberjunction/ng-search`.
+    - In `search-suggest.component.html` and `search-results.component.html`, display `EntityDisplayName || EntityName` for both preview results and result cards/detail views.
+    - In `SearchService.buildEntityNameFilter`, use entity display names for filter labels and icons while preserving `EntityName` for filtering.
+
+- af57e8d: A transaction group whose rows are refused server-side no longer reports success.
+
+  Fixes [#4309](https://github.com/MemberJunction/MJ/issues/4309).
+
+  `BaseEntity.Save()` and `Delete()` report a logical refusal by **returning `false`** — they do not throw — and a refused row is never enrolled in the group, because `TransactionGroup.AddTransaction(...)` is reached only from inside `ProviderToUse.Save()`/`Delete()`. `ExecuteTransactionGroup` discarded that boolean, which produced two wrong outcomes:
+  - **Every row refused** — the server's group arrived at `Submit()` empty, took its legitimate "nothing to do" branch and returned `true`, and the resolver reported `Success: true` while serialising each entity's never-persisted **in-memory** state into `ResultsJSON`. The client's per-item test (`resultObject !== null`) could not tell that apart from a real row, so `Submit()` returned `true` to the caller.
+  - **Only some rows refused** — the survivors committed and the caller still saw unqualified success, with the refused rows silently gone.
+
+  Nothing was ever written that should not have been: the guards did their job, and this was a false success report rather than a security bypass. But an administrator performing a bulk operation the server refused in full was told the opposite of what happened, and every server-side `Validate()` guard inherited the behaviour.
+
+  **`@memberjunction/server`** — `ExecuteTransactionGroup` now captures what `Save()`/`Delete()` return and, when any row was refused, logs which ones and returns `PrepareReturnValue(false, …)` **before** `tg.Submit()`. Nothing has been written at that point (enrolment is deferral), so a partially-refused group fails whole rather than committing the survivors.
+
+  The predicate is the **return value**, not whether the group ended up empty: a row that is not dirty also fails to enrol and correctly returns `true`, and an empty group legitimately means "nothing to do" for a caller that enrolled nothing (pinned by `transaction-groups.TG1`). That is also why the fix belongs in the resolver rather than `TransactionGroupBase.Submit()` — the resolver is the only layer that still knows _which_ row was refused and why.
+
+  **`@memberjunction/graphql-dataprovider`** — `GraphQLTransactionGroup.HandleSubmit` now copies the server's own failure result for each item onto that item's entity, so `BaseEntity.LatestResult` carries the reason a UI needs instead of the generic "Transaction group failed". It only ever _upgrades_ the message: every item of a failed group reports `Success: false` (the provider registers an entity's result before enrolling the row and only flips it in the transaction callback), so a result with no message or errors is left alone.
+
+  **`@memberjunction/server`** — a second fix on the same path: `ExecuteTransactionGroup` called the **async** `entity.GetDataObject()` without `await` when assembling a `Delete` item's result, so `PrepareReturnValue` serialised a `Promise` and **every** `Delete` in a transaction group returned `ResultsJSON: ["{}"]` — successful ones included. Neither `tsc` nor a floating-promise lint could see it, because the array is typed `any[]` and pushing a promise is not a floating promise. The empty payload also reached `GraphQLDataProvider`'s own `Delete` transaction callback, which validates a commit with `pk.Value !== results[pk.FieldName]`; against `{}` every key mismatched, so a delete that **did** commit reported `Transaction failed to commit` on its entity. Deletes now report the row they removed.
+
+  **`@memberjunction/ng-explorer-settings`** — the reason now reaches the operator, which is what #4309's _"Verify by"_ asks for: _"step 5 must now show an error naming the refused user(s) and the rule."_ Both Explorer surfaces that submit `MJ: User Roles` transaction groups — bulk **Assign Role** and the single-user dialog — took the `!await tg.Submit()` branch and threw a hardcoded "all changes have been rolled back", never reading the `LatestResult` the provider had just populated. They now keep their enrolled rows and read the server's reason back off them, so the screen names the refused user and the rule it broke. A shared `serverRefusalReasons` helper holds the one piece of knowledge both need, including which messages are the provider's own placeholders rather than a reason worth showing.
+
+  **`@memberjunction/integration-test-suite`** — `transaction-groups.TG6`'s third assertion could never fail. It searched the joined `ErrorMessages` for the substring `name` to prove the refusal reason had travelled, but each entry is a whole serialized `BaseEntityResult`, which always carries `OriginalValues: [{FieldName, …}]` — and `"FieldName"` lowercases to `"fieldname"`, which contains `"name"`. Strip every reason from the payload and the check still passed. It now extracts only the reason-bearing fields (`Message`, `Error`, `Errors[].Message`) and asserts both that a reason exists at all and that it names the offending column.
+
+  No public interface changed. One existing test expectation did change, deliberately: `TransactionGroupResolver.refusals.test.ts`'s fake declared `GetDataObject()` **synchronous**, diverging from the real `Promise<any>` signature — which is exactly why the suite could not see the missing `await`. The fake now matches production.
+
+- Updated dependencies [abf8778]
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [37891d3]
+- Updated dependencies [7be1684]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [d122a41]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [683f652]
+- Updated dependencies [a8be410]
+- Updated dependencies [f48dffc]
+- Updated dependencies [630bb88]
+- Updated dependencies [44faf83]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [a17a228]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [104125c]
+- Updated dependencies [5513c2a]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [2c590b0]
+  - @memberjunction/actions-base@6.2.0-edge.0
+  - @memberjunction/core-entities@6.2.0-edge.0
+  - @memberjunction/ai-core-plus@6.2.0-edge.0
+  - @memberjunction/core@6.2.0-edge.0
+  - @memberjunction/interactive-component-types@6.2.0-edge.0
+  - @memberjunction/lists-base@6.2.0-edge.0
+  - @memberjunction/global@6.2.0-edge.0
+
 ## 6.1.0
 
 ### Minor Changes

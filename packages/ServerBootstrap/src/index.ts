@@ -15,6 +15,7 @@
  */
 
 import { serve, MJServerOptions } from '@memberjunction/server';
+import { LoadVectorMemoryServer } from '@memberjunction/ai-vectors-memory-server';
 import {
   MJ_SERVER_EXTENSIONS_EXPORT,
   describeServerExtensionMount,
@@ -239,10 +240,14 @@ function collectServerExtensions(loaded: LoadedDynamicPackage, configFilePath?: 
  * }).catch(console.error);
  * ```
  */
-export async function createMJServer(options: MJServerConfig = {}): Promise<void> {
+export async function CreateMJServer(options: MJServerConfig = {}): Promise<void> {
   // No banner here: serve()'s StartupLogger shows a transient "Bootstrapping…"
   // indicator while booting and prints the 🚀 summary block once ready, so the
   // rocket appears only after launch.
+
+  // Server-side vector acceleration (worker pool + optional native backend) for every
+  // in-memory vector index in this process; registered before any engine builds one.
+  LoadVectorMemoryServer();
 
   // Configuration has already been loaded and merged by MJServer's config.ts at module init time
   // We just need to load the raw user config to access codeGeneration.packages setting
@@ -308,6 +313,11 @@ export async function createMJServer(options: MJServerConfig = {}): Promise<void
   if (options.afterStart) {
     await Promise.resolve(options.afterStart());
   }
+}
+
+/** @deprecated Use {@link CreateMJServer}. */
+export async function createMJServer(options: MJServerConfig = {}): Promise<void> {
+  return CreateMJServer(options);
 }
 
 // Re-export types from @memberjunction/server for convenience

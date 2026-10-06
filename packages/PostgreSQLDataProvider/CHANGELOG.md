@@ -1,5 +1,135 @@
 # @memberjunction/postgresql-dataprovider
 
+## 6.2.0-edge.2
+
+### Minor Changes
+
+- 7e57b48: Support `CloneContext` across the MemberJunction stack (§10.2, §10.3, §15):
+  - Add `Clone` to `RecordChange.Source` CHECK constraint and add nullable `ChangeContext` nvarchar(max) column.
+  - Declare `IRecordChangeCloneContext` and `IRecordChangeContext` JSONType interfaces with `@lookup` metadata.
+  - In `@memberjunction/core`: Add `CloneContext` interface, `RecordChangeSource = 'Clone'`, and `CloneContext` methods on `BaseEntity`; add structured `ChangeContext` serialization on `DatabaseProviderBase.BuildRecordChangePayload`.
+  - In database providers (`GenericDatabaseProvider`, `SQLServerDataProvider`, `PostgreSQLDataProvider`): propagate and persist `Source='Clone'` and `ChangeContext` across saves, deletes, and IS-A child/sibling updates. `ChangeContext` is written only when a change carries one, so tracked writes keep working on a PostgreSQL database that doesn't have the column yet.
+  - Clone context is set only on the server, by the record-cloning engine. It is deliberately not part of the GraphQL mutation inputs: a client-supplied context would let any caller stamp fabricated clone lineage into Record Changes.
+  - In `@memberjunction/server`: an update now applies only the client's field values, not the `OldValues___` / `RestoreContext___` blobs or fields the user may not read.
+  - In `@memberjunction/server`: on an entity that doesn't track record changes, an update loaded the client's old values as sent, so date old values (epoch milliseconds on the wire) became Invalid Dates and unchanged date fields read as edited. They are now typed like the field, as the OldValues comparison already did.
+  - In `@memberjunction/server`: an update to an `MJ: Record Changes` row always loads the stored row first, so its Comments-only rule compares against the real values rather than client-supplied old values.
+
+### Patch Changes
+
+- Updated dependencies [e97d95c]
+- Updated dependencies [21f9e15]
+- Updated dependencies [4248fb3]
+- Updated dependencies [0adaf76]
+- Updated dependencies [705ab4e]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [5986939]
+- Updated dependencies [4d647e6]
+- Updated dependencies [369e229]
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/generic-database-provider@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+  - @memberjunction/ai-vectordb@6.2.0-edge.2
+  - @memberjunction/query-processor@6.2.0-edge.2
+  - @memberjunction/sql-dialect@6.2.0-edge.2
+
+## 6.2.0-edge.1
+
+### Patch Changes
+
+- 80905a1: Rename public class members and exported functions to PascalCase, per MJ's naming convention,
+  **without breaking a single consumer**.
+
+  Every renamed symbol keeps its old name beside the new one as a `@deprecated` stub that forwards to
+  it — a delegating method or function, a getter/setter pair for a property, and for Angular a
+  readable accessor pair for an `@Input` and a second `@Output` sharing the same `EventEmitter`, so a
+  template still binding the old name keeps receiving events. Old names still compile, still resolve,
+  and still behave identically; the deprecation tag rides through to the published `.d.ts`, so editors
+  point callers at the replacement. Where a package re-exports through an explicit `export { … }`
+  list, the new name is added alongside the old, so the correct name is actually on the public surface
+  rather than merely declared.
+
+  The rename is deliberately refused wherever a mechanical stub would not be equivalent, because
+  several of those shapes change a type contract while still compiling in the package that declares
+  them:
+  - an **optional** property or parameter property — TypeScript has no optional accessor, so a stub
+    would promote `foo?` to a required member and break every object literal that omits it;
+  - a class that is a **data shape** (no methods, or `@ObjectType`/`@InputType`) — object literals are
+    assigned to it, and an accessor stub changes what they must supply;
+  - a property whose **subclass redeclares it**, since TypeScript forbids a property overriding an
+    accessor (TS2610);
+  - a name whose PascalCase form is **already bound** in that file or class;
+  - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
+    overload sets and abstract members.
+
+  **One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+  backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+  the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+  `EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+  `copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+  field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+  fields silently. Same-version deployments, which is the supported configuration, see no change.
+
+  Each package was verified against its own pre-change baseline rather than against zero, because
+  several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
+  with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
+  `@Input` alias passed `tsc` while breaking six template reads.
+
+- Updated dependencies [a3539d2]
+- Updated dependencies [41274aa]
+- Updated dependencies [a7da50b]
+- Updated dependencies [17cc774]
+- Updated dependencies [80905a1]
+- Updated dependencies [351ba9f]
+  - @memberjunction/core@6.2.0-edge.1
+  - @memberjunction/generic-database-provider@6.2.0-edge.1
+  - @memberjunction/global@6.2.0-edge.1
+  - @memberjunction/query-processor@6.2.0-edge.1
+  - @memberjunction/sql-dialect@6.2.0-edge.1
+  - @memberjunction/ai-vectordb@6.2.0-edge.1
+
+## 6.2.0-edge.0
+
+### Patch Changes
+
+- 7be1684: fix: commit and rollback run inside the SQL Server provider's serial SQL queue, and the metadata dataset is read on the pool regardless of the ambient transaction
+
+  `SQLServerDataProvider` drained its instance SQL queue and then committed, leaving a microtask window in which a query enqueued after the drain could still race the handle — `ENOTBEGUN` for a caller that fired without awaiting, and `EINVALIDSTATE` / `ECLOSE` when the framework's own debounced metadata refresh was the concurrent caller. Commit, rollback, and the rollback that abandons a handle after a failed commit are now items in the same strictly serial queue, so ordering is the queue's: everything enqueued before them has finished, everything after runs after. A query bound to a handle the provider owns is rejected with a message naming the cause — instead of reaching mssql as `ENOTBEGUN` on a finished handle — whenever that handle has committed, rolled back, or been doomed by a failed commit by the time the query reaches the front, including a query a caller issues on a handle it kept after the commit completed. A query on an explicit handle a caller passed in is never subject to that check. The provider no longer depends on `uuid`. Closes MJ#4454.
+
+  `ExecuteSQLOptions` and `ExecuteSQLBatchOptions` gain `ignoreAmbientTransaction`, honored by both providers: the statement runs on the pool even while an ambient transaction is open. `GetDatasetByName` and `GetDatasetStatusByName` set it for `MJ_Metadata` only — that dataset is loaded by a timer-driven refresh that is not part of any caller's unit of work — while every other dataset keeps joining the ambient transaction so a caller that writes and then loads inside one transaction still sees its own rows. Closes MJ#4514.
+
+- 8a5d2c0: `mj sync push` is all-or-nothing again (#4550).
+  - **Atomic by default.** Every create, update and delete runs in one database transaction, one JSON-root graph at a time. A failure anywhere rolls back everything the push wrote and restores the metadata files. This also removes the push deadlocking against itself when an entity view reads other rows during the insert read-back (#4550).
+  - **Isolated transactions are opt-in, per entity.** `push.isolatedTransactions: true` in an entity's `.mj-sync.json` (or at the root as a default) keeps the 6.1.0 behavior for that directory: its graphs run in parallel on independent provider instances (`--parallel-batch-size`, default 10), and each create and update commits as it is saved. For an entity that manages its own transaction scopes and wants the parallelism. The CLI flags `--isolated-transactions` and `--no-isolated-transactions` override every file, in either direction, so one run can be forced without editing metadata. A push that mixes the two is all-or-nothing for its shared directories and best effort for its isolated ones, and says which is which.
+  - **Every record error stops the push**, including a record that fails without throwing (`status: 'error'`) and a deferred record that fails in Phase 2.5. The push transaction is never left open.
+  - **Messages are true.** "rolled back successfully" is printed only when nothing was committed. A failed non-atomic push lists the files and records that stayed in the database and keeps those files as written. The deletion banner matches the mode. A rejected COMMIT says so, and on PostgreSQL explains that deferred foreign keys are checked at commit. Deferred-record failures appear in the JSON `errors[]`.
+  - **Incremental state** is saved only after the push commits.
+  - The interactive "commit the successful changes?" prompt is removed: a failed push has already rolled back.
+  - A failed push still reports: the JSON result keeps its `data` block with the counts reached, the SQL log path, and how many records stayed committed.
+  - A file whose write was deferred (it contains deletions) is written after a failed push when its records were committed, so their primary keys are not lost and the next push does not duplicate them.
+  - A write is reported as committed the moment its save settles, so a graph rolling back leftover depth afterwards cannot hide a row that is in the database.
+
+- Updated dependencies [7be1684]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [683f652]
+- Updated dependencies [f48dffc]
+- Updated dependencies [630bb88]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [a17a228]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [104125c]
+- Updated dependencies [5513c2a]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [3d633ed]
+- Updated dependencies [2c590b0]
+  - @memberjunction/core@6.2.0-edge.0
+  - @memberjunction/generic-database-provider@6.2.0-edge.0
+  - @memberjunction/query-processor@6.2.0-edge.0
+  - @memberjunction/ai-vectordb@6.2.0-edge.0
+  - @memberjunction/global@6.2.0-edge.0
+  - @memberjunction/sql-dialect@6.2.0-edge.0
+
 ## 6.1.0
 
 ### Minor Changes

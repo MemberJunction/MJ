@@ -11,7 +11,7 @@
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import fs from 'fs';
-import { RemoteOperationGeneratorBase, DEFAULT_REMOTE_OP_LIBRARY_ITEMS, resolveRemoteOperationSchema } from '../Misc/remote_operations_codegen';
+import { RemoteOperationGeneratorBase, DEFAULT_REMOTE_OP_LIBRARY_ITEMS, ResolveRemoteOperationSchema } from '../Misc/remote_operations_codegen';
 import type { MJRemoteOperationEntity } from '@memberjunction/core-entities';
 
 vi.mock('@memberjunction/core-entities', () => ({ MJRemoteOperationEntity: class {} }));
@@ -243,7 +243,7 @@ describe('RemoteOperationGeneratorBase', () => {
 
         it('returns explicit SchemaName if present on the entity', () => {
             const op = Object.assign(makeOp({ OperationKey: 'Orders.PreviewPrice' }), { SchemaName: 'custom_orders' });
-            expect(resolveRemoteOperationSchema(op, entities, schemas, '__mj')).toBe('custom_orders');
+            expect(ResolveRemoteOperationSchema(op, entities, schemas, '__mj')).toBe('custom_orders');
         });
 
         it('prioritizes entity match over fuzzy schema name match', () => {
@@ -253,38 +253,38 @@ describe('RemoteOperationGeneratorBase', () => {
             ];
             const testSchemas = ['__mj', '__mj_bizappsrecordprocess'];
             const op = makeOp({ OperationKey: 'RecordProcess.RunNow' });
-            expect(resolveRemoteOperationSchema(op, entitiesWithCore, testSchemas, '__mj')).toBe('__mj');
+            expect(ResolveRemoteOperationSchema(op, entitiesWithCore, testSchemas, '__mj')).toBe('__mj');
         });
 
         it('resolves schema matching OpenApp namespace (e.g. Orders -> __mj_BizAppsOrders)', () => {
             const op = makeOp({ OperationKey: 'Orders.PreviewPrice' });
-            expect(resolveRemoteOperationSchema(op, entities, schemas, '__mj')).toBe('__mj_BizAppsOrders');
+            expect(ResolveRemoteOperationSchema(op, entities, schemas, '__mj')).toBe('__mj_BizAppsOrders');
         });
 
         it('resolves schema matching OpenApp namespace for Sales -> __mj_BizAppsSales', () => {
             const op = makeOp({ OperationKey: 'Sales.CloseDeal' });
-            expect(resolveRemoteOperationSchema(op, entities, schemas, '__mj')).toBe('__mj_BizAppsSales');
+            expect(ResolveRemoteOperationSchema(op, entities, schemas, '__mj')).toBe('__mj_BizAppsSales');
         });
 
         it('resolves schema via entity BaseTable match (e.g. RecordProcess -> __mj)', () => {
             const op = makeOp({ OperationKey: 'RecordProcess.RunNow' });
-            expect(resolveRemoteOperationSchema(op, entities, schemas, '__mj')).toBe('__mj');
+            expect(ResolveRemoteOperationSchema(op, entities, schemas, '__mj')).toBe('__mj');
         });
 
         it('resolves schema via entity Name match (e.g. AISkill -> __mj)', () => {
             const op = makeOp({ OperationKey: 'AISkill.ExportMarkdown' });
-            expect(resolveRemoteOperationSchema(op, entities, schemas, '__mj')).toBe('__mj');
+            expect(ResolveRemoteOperationSchema(op, entities, schemas, '__mj')).toBe('__mj');
         });
 
         it('core ops without a same-named entity reach core via fallback', () => {
             const op = makeOp({ OperationKey: 'PredictiveStudio.TrainModel' });
-            expect(resolveRemoteOperationSchema(op, entities, schemas, '__mj')).toBe('__mj');
+            expect(ResolveRemoteOperationSchema(op, entities, schemas, '__mj')).toBe('__mj');
         });
 
         it('non-core op with resolvable schema does not fall back to core', () => {
             const op = makeOp({ OperationKey: 'Orders.RefundPayment' });
-            expect(resolveRemoteOperationSchema(op, entities, schemas, '__mj')).not.toBe('__mj');
-            expect(resolveRemoteOperationSchema(op, entities, schemas, '__mj')).toBe('__mj_BizAppsOrders');
+            expect(ResolveRemoteOperationSchema(op, entities, schemas, '__mj')).not.toBe('__mj');
+            expect(ResolveRemoteOperationSchema(op, entities, schemas, '__mj')).toBe('__mj_BizAppsOrders');
         });
 
         it('generator method delegates to resolveRemoteOperationSchema', () => {

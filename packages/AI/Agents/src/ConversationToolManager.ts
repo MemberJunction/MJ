@@ -153,11 +153,20 @@ export class ConversationToolManager {
     private conversationId: string | null = null;
     private contextUser: UserInfo | null = null;
     private summaryHost: ConversationToolSummaryHost | null = null;
+    /** The run's history floor: rows written before it are never paged in. Null reads everything. */
+    private historyFrom: Date | null = null;
 
-    /** Arms the manager for a run. Pass null conversationId to disable (programmatic runs). */
-    public Initialize(conversationId: string | null, contextUser: UserInfo): void {
+    /**
+     * Arms the manager for a run. Pass null conversationId to disable (programmatic runs).
+     *
+     * @param historyFrom The run's history floor (`ExecuteAgentParams.ConversationHistoryFrom`).
+     *   When set, every tool sees only the rows written at or after it — the same window the
+     *   run's messages were loaded from — so a tool can't page back past it.
+     */
+    public Initialize(conversationId: string | null, contextUser: UserInfo, historyFrom: Date | null = null): void {
         this.conversationId = conversationId;
         this.contextUser = contextUser;
+        this.historyFrom = historyFrom;
     }
 
     /** Wires the recursive-sub-call seam (BaseAgent owns prompt execution). */
@@ -170,6 +179,7 @@ export class ConversationToolManager {
         this.conversationId = null;
         this.contextUser = null;
         this.summaryHost = null;
+        this.historyFrom = null;
     }
 
     /** True when the run has a conversation to page against. */
@@ -198,6 +208,9 @@ export class ConversationToolManager {
         return [
             '## Conversation History Tools',
             'Older parts of this conversation may have been replaced by a summary. The FULL history remains stored, addressable by the `[seq N]` sequence numbers the summary references. Page exact messages back in with `conversationToolCalls` in your response — results arrive as a conversation message on your next turn. Prefer paging in exact messages over trusting the summary for precise wording, identifiers, numbers, or decisions.',
+            ...(this.historyFrom
+                ? ['', 'This run may read the conversation only from a set point onward: the tools return only messages from that point, and earlier sequence numbers are not available.']
+                : []),
             '',
             '| tool | input | returns |',
             '|---|---|---|',
@@ -288,13 +301,24 @@ export class ConversationToolManager {
         return lines.join('\n');
     }
 
-    /** Full conversation history, ordered by Sequence, from the engine cache. */
+    /** The conversation history the run may read (all of it, or from its floor), ordered by Sequence, from the engine cache. */
     private async loadOrderedDetails(): Promise<MJConversationDetailEntity[]> {
         if (!this.conversationId || !this.contextUser) {
             throw new Error('Conversation tools are unavailable: no conversation is associated with this run');
         }
         const cache = await ConversationEngine.Instance.LoadConversationDetails(this.conversationId, this.contextUser);
-        return [...cache.Details].sort((a, b) => a.Sequence - b.Sequence);
+        const floor = this.historyFrom;
+        const visible = floor ? cache.Details.filter(d => ConversationToolManager.isAtOrAfter(d.__mj_CreatedAt, floor)) : cache.Details;
+        return [...visible].sort((a, b) => a.Sequence - b.Sequence);
+    }
+
+    /**
+     * True when a row was written at or after the floor. A row whose timestamp is missing or
+     * unreadable can't be shown to be after it, so it is treated as before it.
+     */
+    private static isAtOrAfter(createdAt: Date | null | undefined, floor: Date): boolean {
+        const time = createdAt ? new Date(createdAt).getTime() : Number.NaN;
+        return !Number.isNaN(time) && time >= floor.getTime();
     }
 
     private getMessageBySequence(details: MJConversationDetailEntity[], input: ConversationToolCall['input']): ConversationToolMessage {
@@ -303,7 +327,7 @@ export class ConversationToolManager {
         }
         const detail = details.find(d => d.Sequence === input.sequence);
         if (!detail) {
-            throw new Error(`No message found at sequence ${input.sequence} (valid range: 1..${details.length > 0 ? details[details.length - 1].Sequence : 0})`);
+            throw new Error(`No message found at sequence ${input.sequence} (valid range: ${this.historyFrom && details.length > 0 ? details[0].Sequence : 1}..${details.length > 0 ? details[details.length - 1].Sequence : 0})`);
         }
         return this.toToolMessage(detail);
     }

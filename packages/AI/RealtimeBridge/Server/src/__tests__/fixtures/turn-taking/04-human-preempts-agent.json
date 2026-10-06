@@ -1,0 +1,31 @@
+{
+  "Name": "human-preempts-agent",
+  "Description": "A person cuts in while Sage is mid-answer. Sage loses the floor at once; Demo Loop and Scout both try to fill the silence and are denied while the person talks and through the hold window after. Sage answers again only once the person has finished.",
+  "Agents": [
+    { "Id": "sage", "Names": ["Sage"] },
+    { "Id": "demo", "Names": ["Demo Loop"] },
+    { "Id": "scout", "Names": ["Scout"] }
+  ],
+  "Events": [
+    { "Type": "HumanSpeech", "AtMs": 0, "DurationMs": 1500, "Text": "Sage, tell us about the incident.",
+      "ExpectDecisions": { "sage": "Speak", "demo": "Silent", "scout": "Silent" } },
+    { "Type": "AgentSpeech", "AtMs": 2500, "Agent": "sage", "DurationMs": 10000, "Text": "The incident began at two in the morning when the primary database lost its replica and failed over." },
+    { "Type": "HumanSpeech", "AtMs": 6000, "DurationMs": 2500, "Text": "Hang on, quick correction.",
+      "ExpectDecisions": { "sage": "Silent", "demo": "Silent", "scout": "Silent" } },
+    { "Type": "AgentSpeech", "AtMs": 7000, "Agent": "demo", "DurationMs": 4000, "Text": "Let me add something while we wait for that" },
+    { "Type": "AgentSpeech", "AtMs": 8800, "Agent": "scout", "DurationMs": 3000, "Text": "Can I jump in here for a second" },
+    { "Type": "AgentSpeech", "AtMs": 10000, "Agent": "sage", "DurationMs": 5000, "Text": "Understood, here is the corrected timeline." }
+  ],
+  "Expect": {
+    "Speeches": [
+      { "Agent": "sage", "Kind": "Turn", "Granted": true, "Reason": "FloorFree" },
+      { "Agent": "demo", "Kind": "Turn", "Granted": false, "Reason": "HumanSpeaking" },
+      { "Agent": "scout", "Kind": "Turn", "Granted": false, "Reason": "HumanSpeaking" },
+      { "Agent": "sage", "Kind": "Turn", "Granted": true, "Reason": "FloorFree" }
+    ],
+    "Preempted": ["sage"],
+    "BackchannelCount": 0,
+    "LoopCapReached": false,
+    "FinalFloorHolder": null
+  }
+}

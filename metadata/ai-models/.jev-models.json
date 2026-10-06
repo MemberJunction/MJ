@@ -1,0 +1,78 @@
+[
+  {
+    "fields": {
+      "Name": "Jev",
+      "Description": "TypeSafe's typed-decision model. It answers Likelihood, Choice (up to 255 options) and Score (2 to 10 levels) questions about a state of up to 32,000 tokens with probabilities, in one call, typically in 70 to 500 ms. It writes no text. Its raw probabilities rank well but are not calibrated to MJ's data, so set thresholds on calibrated values. Reached through OpenRouter's Decisions API, pinned to a dated version.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Decision",
+      "PowerRank": 60,
+      "IsActive": true,
+      "SpeedRank": 0,
+      "CostRank": 0,
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "Decision": {
+          "MaxChoiceOptions": 255,
+          "MaxScoreLevels": 10,
+          "MaxStateTokens": 32000
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "OpenRouterDecision",
+            "APIName": "typesafe/jev-1.13-20260917",
+            "MaxInputTokens": 32000,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "DAFCB05B-119D-4B7B-9FC8-57F882B0AC82"
+          },
+          "sync": {
+            "lastModified": "2026-09-28T23:29:29.762Z",
+            "checksum": "0a4c84c65bc19b10aa8142998bb5c14da111368d04edfe8667fa00e8207efc0d"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "StartedAt": "2026-09-28T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.042,
+            "OutputPricePerUnit": 0,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Jev through OpenRouter's Decisions API, September 2026: $0.042 per million input tokens; output is free."
+          },
+          "primaryKey": {
+            "ID": "4AA05021-8E36-46D0-9E8E-707A4003C36B"
+          },
+          "sync": {
+            "lastModified": "2026-09-28T23:29:29.815Z",
+            "checksum": "40b75c27189e64eec3580fb88af37662ceb5d0720723dc76b6effc80e2a4239a"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "A0C16370-E9D0-497E-B615-08CC07BC9EF7"
+    },
+    "sync": {
+      "lastModified": "2026-09-28T23:29:29.740Z",
+      "checksum": "e7f1b0533fae8c788291a67a21086708099fd12405f1ca390ed7dde20186e76d"
+    }
+  }
+]

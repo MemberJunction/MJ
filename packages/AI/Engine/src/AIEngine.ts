@@ -17,7 +17,7 @@ import { MJAIActionEntity, MJActionEntity,
          MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity, MJScopedPromptPartEntity, MJScopedPromptConfigEntity,
          MJAIModelActionEntity, MJAIPromptModelEntity, MJAIPromptTypeEntity,
          MJAIResultCacheEntity, MJAIVendorTypeDefinitionEntity, MJArtifactTypeEntity,
-         MJEntityAIActionEntity, MJVectorDatabaseEntity, MJAIAgentPromptEntity,
+         MJEntityAIActionEntity, MJVectorDatabaseEntity, MJVectorIndexEntity, MJAIAgentPromptEntity,
          MJAIAgentTypeEntity, MJAIVendorEntity, MJAIModelVendorEntity, MJAIModelTypeEntity,
          MJAIModelCostEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity,
          MJAIConfigurationEntity, MJAIConfigurationParamEntity, MJAIAgentStepEntity,
@@ -29,7 +29,7 @@ import { MJAIActionEntity, MJActionEntity,
          MJAISkillEntity, MJAISkillActionEntity, MJAISkillSubAgentEntity, MJAIAgentSkillEntity, MJAISkillPermissionEntity,
          MJAIPersonaEntity, MJAIPersonaVendorEntity, MJAIModelPersonaEntity, MJAIAgentPersonaEntity } from "@memberjunction/core-entities";
 import { AIEngineBase, ResolvedModelPersona, ResolvedAgentPersona, EffectiveAgentPersona, EffectiveAgentPermissions } from "@memberjunction/ai-engine-base";
-import { SimpleVectorService } from "@memberjunction/ai-vectors-memory";
+import { ReadStoredVector, SimpleVectorService, VectorInputEntry } from "@memberjunction/ai-vectors-memory";
 import { NoteEmbeddingMetadata, NoteMatchResult } from "./types/NoteMatchResult";
 import { ExampleEmbeddingMetadata, ExampleMatchResult } from "./types/ExampleMatchResult";
 import { ActionEngineBase } from "@memberjunction/actions-base";
@@ -40,19 +40,19 @@ import { MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIPromptEntityExten
  * @deprecated AI Actions are deprecated. Use AIPromptRunner with the new AI Prompt system instead.
  */
 export class AIActionParams {
-    actionId: string
-    modelId: string
-    modelName?: string
-    systemPrompt?: string
-    userPrompt?: string
+    actionId: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    modelId: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    modelName?: string  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+    systemPrompt?: string  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+    userPrompt?: string  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 }
 
 /**
  * @deprecated Entity AI Actions are deprecated. Use AIPromptRunner with the new AI Prompt system instead.
  */
 export class EntityAIActionParams extends AIActionParams {
-    entityAIActionId: string
-    entityRecord: BaseEntity
+    entityAIActionId: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    entityRecord: BaseEntity  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 }
 
 /**
@@ -147,7 +147,7 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     private _agentBaseCatalogCache: Map<string, object> = new Map();
     private _agentCatalogListenerSetUp: boolean = false;
     /** Entities whose change must coarse-invalidate the agent base-catalog cache (lowercased). */
-    private static readonly AgentCatalogInvalidatingEntities: ReadonlySet<string> = new Set([
+    private static readonly agentCatalogInvalidatingEntities: ReadonlySet<string> = new Set([
         'ai agents',
         'mj: ai agent actions',
         'mj: ai agent relationships',
@@ -189,7 +189,7 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
                     const e = event.args as BaseEntityEvent;
                     if (e?.type === 'save' || e?.type === 'delete' || e?.type === 'remote-invalidate') {
                         const name = e.baseEntity?.EntityInfo?.Name?.toLowerCase().trim();
-                        if (name && AIEngine.AgentCatalogInvalidatingEntities.has(name)) {
+                        if (name && AIEngine.agentCatalogInvalidatingEntities.has(name)) {
                             this.ClearAgentBaseCatalogCache();
                         }
                     }
@@ -307,6 +307,9 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     public get ArtifactTypes(): MJArtifactTypeEntity[] { return this.Base.ArtifactTypes; }
     public get LanguageModels(): MJAIModelEntityExtended[] { return this.Base.LanguageModels; }
     public get VectorDatabases(): MJVectorDatabaseEntity[] { return this.Base.VectorDatabases; }
+    public get VectorIndexes(): MJVectorIndexEntity[] { return this.Base.VectorIndexes; }
+    public GetVectorIndexByID(id: string): MJVectorIndexEntity | undefined { return this.Base.GetVectorIndexByID(id); }
+    public GetProviderIndexName(vectorIndex: MJVectorIndexEntity): string { return this.Base.GetProviderIndexName(vectorIndex); }
     public get ModelCosts(): MJAIModelCostEntity[] { return this.Base.ModelCosts; }
     public get ModelPriceTypes(): MJAIModelPriceTypeEntity[] { return this.Base.ModelPriceTypes; }
     public get ModelPriceUnitTypes(): MJAIModelPriceUnitTypeEntity[] { return this.Base.ModelPriceUnitTypes; }
@@ -705,21 +708,19 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
 
     /**
      * Refresh the vector service with the latest persisted vectors that are stored in the Agent Notes
-     * table. This does **not** calculate embeddings, that is done by the AI Agent Note sub-class upon save 
-     * as needed. This method simply uses the stored vectors and parses them from their JSON serialized format into
-     * vectors that are used by the vector service.
+     * table. This does **not** calculate embeddings, that is done by the AI Agent Note sub-class upon save
+     * as needed. This method simply reads the stored vectors — the binary `EmbeddingVectorBinary` column when
+     * it holds a valid vector, else the JSON `EmbeddingVector` column (see `ReadStoredVector`) — and loads them
+     * into the vector service. Notes with neither are skipped.
      */
     public async RefreshNoteEmbeddings(contextUser?: UserInfo): Promise<void> {
         try {
-            const notes = this.AgentNotes.filter(n => IsInjectableNoteStatus(n.Status) && n.EmbeddingVector);
+            const notes = this.AgentNotes.filter(n => IsInjectableNoteStatus(n.Status));
+            const entries = this.toVectorEntries(notes, note => note.EmbeddingVectorBinary, note => note.EmbeddingVector,
+                note => this.packageNoteMetadata(note));
 
-            const entries = notes.map(note => ({
-                key: note.ID,
-                vector: JSON.parse(note.EmbeddingVector!),
-                metadata: this.packageNoteMetadata(note)
-            }));
-
-            this._noteVectorService = new SimpleVectorService();
+            // float32: embeddings are float32 at the source, and it halves the pool's memory
+            this._noteVectorService = new SimpleVectorService({ Precision: 'float32' });
             this._noteVectorService.LoadVectors(entries);
         } catch (error) {
             LogError(`AIEngine: Failed to load note embeddings: ${error instanceof Error ? error.message : String(error)}`);
@@ -748,7 +749,9 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
      */
     public AddOrUpdateSingleNoteEmbedding(note: MJAIAgentNoteEntity) {
         if (this._noteVectorService) {
-            this._noteVectorService.AddOrUpdateVector(note.ID, JSON.parse(note.EmbeddingVector),  this.packageNoteMetadata(note));
+            const vector = ReadStoredVector(note.EmbeddingVectorBinary, note.EmbeddingVector);
+            if (vector) this._noteVectorService.AddOrUpdateVector(note.ID, vector, this.packageNoteMetadata(note));
+            else this._noteVectorService.RemoveVector(note.ID); // no usable vector — never keep a stale one
         }
         else {
             throw new Error('note vector service not initialized, error state')
@@ -790,7 +793,9 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
      */
     public AddOrUpdateSingleExampleEmbedding(example: MJAIAgentExampleEntity) {
         if (this._exampleVectorService) {
-            this._exampleVectorService.AddOrUpdateVector(example.ID, JSON.parse(example.EmbeddingVector), this.packageExampleMetadata(example));
+            const vector = ReadStoredVector(example.EmbeddingVectorBinary, example.EmbeddingVector);
+            if (vector) this._exampleVectorService.AddOrUpdateVector(example.ID, vector, this.packageExampleMetadata(example));
+            else this._exampleVectorService.RemoveVector(example.ID); // no usable vector — never keep a stale one
         }
         else {
             throw new Error('example vector service not initialized, error state')
@@ -810,27 +815,46 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
 
     /**
      * Refresh the vector service with the latest persisted vectors that are stored in the Agent Examples
-     * table. This does **not** calculate embeddings, that is done by the AI Agent Example sub-class upon save 
-     * as needed. This method simply uses the stored vectors and parses them from their JSON serialized format into
-     * vectors that are used by the vector service.
+     * table. This does **not** calculate embeddings, that is done by the AI Agent Example sub-class upon save
+     * as needed. This method simply reads the stored vectors — binary `EmbeddingVectorBinary` first, JSON
+     * `EmbeddingVector` as the fallback (see `ReadStoredVector`) — and loads them into the vector service.
      */
     public async RefreshExampleEmbeddings(contextUser?: UserInfo): Promise<void> {
         try {
-            const examples = this.AgentExamples.filter(e => e.Status === 'Active' && e.EmbeddingVector);
+            const examples = this.AgentExamples.filter(e => e.Status === 'Active');
+            const entries = this.toVectorEntries(examples, example => example.EmbeddingVectorBinary, example => example.EmbeddingVector,
+                example => this.packageExampleMetadata(example));
 
-            const entries = examples.map(example => ({
-                key: example.ID,
-                vector: JSON.parse(example.EmbeddingVector!),
-                metadata: this.packageExampleMetadata(example)
-            }));
-
-            this._exampleVectorService = new SimpleVectorService();
+            this._exampleVectorService = new SimpleVectorService({ Precision: 'float32' });
             this._exampleVectorService.LoadVectors(entries);
         } catch (error) {
             LogError(`AIEngine: Failed to load example embeddings: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
  
+    /**
+     * Turns records that persist an embedding into vector-service entries, reading each record's vector with
+     * {@link ReadStoredVector} (binary column first, JSON column as the fallback). Records with no usable
+     * vector are skipped, so one corrupt or not-yet-embedded row never fails the whole load.
+     * @param records - The records to index
+     * @param binaryOf - Reads a record's binary (base64 float32) vector column
+     * @param jsonOf - Reads a record's JSON vector column
+     * @param metadataOf - Builds the metadata stored alongside the vector
+     */
+    protected toVectorEntries<TRecord extends { ID: string }, TMetadata>(
+        records: TRecord[],
+        binaryOf: (record: TRecord) => string | null,
+        jsonOf: (record: TRecord) => string | null,
+        metadataOf: (record: TRecord) => TMetadata,
+    ): Array<VectorInputEntry<TMetadata>> {
+        const entries: Array<VectorInputEntry<TMetadata>> = [];
+        for (const record of records) {
+            const vector = ReadStoredVector(binaryOf(record), jsonOf(record));
+            if (vector) entries.push({ key: record.ID, vector, metadata: metadataOf(record) });
+        }
+        return entries;
+    }
+
     // ========================================================================
     // LLM Utility Methods
     // ========================================================================
@@ -1069,6 +1093,7 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
                 model: model.APIName
             };
 
+            // BaseEmbeddings used directly: AIEngine sits below @memberjunction/ai-prompts in the dependency hierarchy.
             const embedding = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(
                 BaseEmbeddings,
                 model.DriverClass,
@@ -1131,6 +1156,7 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
             return this.EmbedText(model, content, apiKey);
         }
 
+        // BaseEmbeddings used directly: AIEngine sits below @memberjunction/ai-prompts in the dependency hierarchy.
         const embedding = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(
             BaseEmbeddings,
             model.DriverClass,
@@ -1181,7 +1207,8 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
 
         const composedFilter = this.composeNoteFilters(agentId, userId, companyId, additionalFilter);
 
-        const results = this._noteVectorService.FindNearest(
+        // Async: on a server the scan runs off the event loop (worker pool / native backend)
+        const results = await this._noteVectorService.FindNearestAsync(
             queryEmbedding.result.vector,
             topK,
             minSimilarity,
@@ -1294,7 +1321,7 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
 
         const composedFilter = this.composeExampleFilters(agentId, userId, companyId, additionalFilter);
 
-        const results = this._exampleVectorService.FindNearest(
+        const results = await this._exampleVectorService.FindNearestAsync(
             queryEmbedding.result.vector,
             topK,
             minSimilarity,

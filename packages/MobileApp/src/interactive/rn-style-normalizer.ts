@@ -142,3 +142,8 @@ export function NormalizeWebStyle(style: Record<string, unknown>): Record<string
     }
     return normalized;
 }
+
+/** @deprecated Use {@link NormalizeWebStyle}. */
+export function normalizeWebStyle(style: Record<string, unknown>): Record<string, unknown> {
+    return NormalizeWebStyle(style);
+}

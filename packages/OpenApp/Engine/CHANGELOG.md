@@ -1,5 +1,130 @@
 # @memberjunction/open-app-engine
 
+## 6.2.0-edge.2
+
+### Patch Changes
+
+- 125f40a: Open App schemas on SQL Server are now created owned by the MJ core schema's owner (usually `dbo`), so ownership chaining lets app views read core tables without per-table grants (MJ#4756). When the installer is not permitted to assign that owner, install still succeeds with a plain `CREATE SCHEMA` and a `Schema` warning names the consequence and the remedy. Upgrades, and installs that reuse an existing schema, now check before changing anything that the login has `CONTROL` on the app schema, which its migrations need to record their history and grant on their objects. If it doesn't, they stop with an error naming the owner, the login and the remedy. PostgreSQL is unchanged. The Open App README documents the retrofit for existing installs, including that `ALTER AUTHORIZATION` drops the schema's grants (objects, columns, types and XML schema collections included).
+- Updated dependencies [e97d95c]
+- Updated dependencies [2552b1e]
+- Updated dependencies [21f9e15]
+- Updated dependencies [4248fb3]
+- Updated dependencies [0adaf76]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [705ab4e]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [5986939]
+- Updated dependencies [4d647e6]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [369e229]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [2854a2e]
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/core-entities@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+  - @memberjunction/sql-dialect@6.2.0-edge.2
+
+## 6.2.0-edge.1
+
+### Patch Changes
+
+- 80905a1: Rename public class members and exported functions to PascalCase, per MJ's naming convention,
+  **without breaking a single consumer**.
+
+  Every renamed symbol keeps its old name beside the new one as a `@deprecated` stub that forwards to
+  it — a delegating method or function, a getter/setter pair for a property, and for Angular a
+  readable accessor pair for an `@Input` and a second `@Output` sharing the same `EventEmitter`, so a
+  template still binding the old name keeps receiving events. Old names still compile, still resolve,
+  and still behave identically; the deprecation tag rides through to the published `.d.ts`, so editors
+  point callers at the replacement. Where a package re-exports through an explicit `export { … }`
+  list, the new name is added alongside the old, so the correct name is actually on the public surface
+  rather than merely declared.
+
+  The rename is deliberately refused wherever a mechanical stub would not be equivalent, because
+  several of those shapes change a type contract while still compiling in the package that declares
+  them:
+  - an **optional** property or parameter property — TypeScript has no optional accessor, so a stub
+    would promote `foo?` to a required member and break every object literal that omits it;
+  - a class that is a **data shape** (no methods, or `@ObjectType`/`@InputType`) — object literals are
+    assigned to it, and an accessor stub changes what they must supply;
+  - a property whose **subclass redeclares it**, since TypeScript forbids a property overriding an
+    accessor (TS2610);
+  - a name whose PascalCase form is **already bound** in that file or class;
+  - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
+    overload sets and abstract members.
+
+  **One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+  backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+  the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+  `EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+  `copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+  field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+  fields silently. Same-version deployments, which is the supported configuration, see no change.
+
+  Each package was verified against its own pre-change baseline rather than against zero, because
+  several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
+  with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
+  `@Input` alias passed `tsc` while breaking six template reads.
+
+- Updated dependencies [a50948e]
+- Updated dependencies [0eeb89d]
+- Updated dependencies [a3539d2]
+- Updated dependencies [41274aa]
+- Updated dependencies [67f6c85]
+- Updated dependencies [eb3a8d3]
+- Updated dependencies [e1dd673]
+- Updated dependencies [307da67]
+- Updated dependencies [a7da50b]
+- Updated dependencies [17cc774]
+- Updated dependencies [80905a1]
+- Updated dependencies [6b08ebf]
+  - @memberjunction/core-entities@6.2.0-edge.1
+  - @memberjunction/core@6.2.0-edge.1
+  - @memberjunction/global@6.2.0-edge.1
+  - @memberjunction/sql-dialect@6.2.0-edge.1
+
+## 6.2.0-edge.0
+
+### Patch Changes
+
+- 8f23b23: Fix `mj app install` rejecting every first-party BizApp schema (#3302). The installer blocked any schema name starting with `__`, but MJ's own app convention is `__mj_<AppName>` — so installing `bizapps-common`, `-forms`, `-tasks`, `-caliber` or `-ats` required the hidden `--dangerously-ignore-dbl-underscore-schema-rule` flag. `__mj_<AppName>` is now the documented app namespace and installs with no flag; `__mj_UDT` joins the reserved set (MJ core owns it as the user-defined-table sandbox); reserved-name matching is now case-insensitive; and the schema name is validated before an app can adopt an already-existing schema, which previously bypassed the guard entirely.
+
+  Opening `__mj_` made every first-party schema name reachable on the default install path, which put weight on the reserved set that it could not previously carry. The set now covers every schema the **database platform** owns, on both dialects: PostgreSQL's `public` and the whole `pg_` prefix (which also covers the per-session `pg_temp_N` / `pg_toast_temp_N` schemas an enumerated list cannot), and SQL Server's nine fixed database-role schemas (`db_owner`, `db_accessadmin`, `db_securityadmin`, `db_ddladmin`, `db_backupoperator`, `db_datareader`, `db_datawriter`, `db_denydatareader`, `db_denydatawriter`). Each of these exists in a stock database, which is exactly what made them dangerous: an app declaring one was never _creating_ a schema, it was **adopting** one on the default path with no flag — and `mj app remove` would then drop it. Verified against SQL Server 2022: all nine accept tables and all nine `DROP SCHEMA` cleanly. The reserved-name error now names the real owner ("reserved by the database platform" vs "by MemberJunction") rather than claiming MJ owns `dbo`.
+
+  `mj app upgrade` now validates the schema name too. Validation previously lived only on the install path, so a v2 manifest could rename its schema to `public` or `db_owner` and the upgrade would run that version's migrations straight into it.
+
+  Installing an app that adopts a schema another installed app already owns now emits a warning. Sharing remains supported and the install still succeeds, but the operator is told that `mj app remove` will from then on skip the schema and metadata cleanup for **both** apps, to avoid destroying the co-tenant's data.
+
+  **Behaviour change for existing installs.** An app installed under a name that is reserved only as of this release — `public` on PostgreSQL, or a casing like `PUBLIC` / `Dbo` / `__mj_udt` that case-insensitive matching now catches — can no longer have its schema dropped, with or without any flag. `mj app remove` refuses, and the app lands in status `Error` while staying installed; reinstalling fails on the same name. This is deliberate (these are schemas MJ must never drop), and `mj app remove <app> --keep-data` is the way out: it unregisters the app and leaves the schema in place. An app installed under a different `__`-prefixed name outside the `__mj_<AppName>` namespace is not stuck the same way: re-running `mj app remove <app> --dangerously-ignore-dbl-underscore-schema-rule` — the same override its install needed — drops the schema.
+
+  Deferred, tracked separately: an optional `coreSchemaName` on `ValidateSchemaNameOptions` so a non-default `MJCoreSchema` is reserved too (#4559), factoring the duplicated rollback drop-result block into a shared helper so the install-rollback path gains the same classified remedy text as remove (#4560), and a shared mock for the three orchestrator suites' identical `vi.mock` spread (#4561).
+
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [7be1684]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [d122a41]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [683f652]
+- Updated dependencies [a8be410]
+- Updated dependencies [f48dffc]
+- Updated dependencies [630bb88]
+- Updated dependencies [44faf83]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [a17a228]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [104125c]
+- Updated dependencies [5513c2a]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [2c590b0]
+  - @memberjunction/core-entities@6.2.0-edge.0
+  - @memberjunction/core@6.2.0-edge.0
+  - @memberjunction/global@6.2.0-edge.0
+  - @memberjunction/sql-dialect@6.2.0-edge.0
+
 ## 6.1.0
 
 ### Minor Changes
