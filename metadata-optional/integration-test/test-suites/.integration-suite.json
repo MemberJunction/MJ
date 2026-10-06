@@ -1135,6 +1135,28 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT99 - JSONType Live Sync",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "08315A24-260C-4D22-BC99-7621B41181C8"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT100 - JSONType Live Sync (client transport)",
+            "Sequence": 71,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C71E99EA-27E1-4AC8-A156-34C47256365E"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT94 - MetadataSync Push Atomicity",
             "Sequence": 49,
             "Status": "Active"
@@ -1176,6 +1198,17 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT102 - RunQuery Rendering Matrix",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "5A52D768-D266-479F-9722-9D90500FC7F5"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT95 - Trailing Runtime State",
             "Sequence": 48,
             "Status": "Active"
@@ -1206,7 +1239,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT99 - Form Contributions",
+            "TestID": "@lookup:MJ: Tests.Name=IT104 - Form Contributions",
             "Sequence": 48,
             "Status": "Active"
           },
@@ -1253,6 +1286,17 @@
           },
           "primaryKey": {
             "ID": "D0A93B02-FD0F-4B47-89D0-914DC49D13B6"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT103 - RunQuery Rendering over GraphQL",
+            "Sequence": 72,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "F010EDA8-2094-41BA-8E25-0D5EFB0C13FE"
           }
         }
       ]

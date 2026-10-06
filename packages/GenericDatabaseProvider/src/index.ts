@@ -34,6 +34,7 @@ export { QueryCompositionEngine, CompositionCTEInfo, CompositionResult } from '.
 export { CountOnlyBatchCoalescer, IsCoalescibleCountBatch } from './countOnlyBatch.js';
 export type { CountOnlyRow, CountSQLExecutor } from './countOnlyBatch.js';
 export { QueryPagingEngine, PagingWrappedSQL } from './queryPagingEngine.js';
+export type { RowCapOutcome, RowCapMethod, RowCapResult } from './queryPagingEngine.js';
 export { RenderPipeline, RenderContext, RenderResult, RenderTrace, CompositionDiagnostic } from './renderPipeline.js';
 export { SymbolTable } from './symbolTable.js';
 // Re-export from @memberjunction/sql-parser for backward compatibility
