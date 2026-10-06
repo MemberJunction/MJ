@@ -736,6 +736,32 @@ describe('UserCache', () => {
             expect(stub.Queries.length).toBeGreaterThan(0);
         });
 
+        it('keeps its schedule through a later Refresh that passes no interval', async () => {
+            // Refresh(provider) is also called from paths that know nothing about scheduling — the
+            // authentication miss path, the roles/users sync. Taking "no interval" as "turn it off"
+            // ended the reload for good the first time either ran, even where an entity declares
+            // out-of-band writes and the reload is the only thing that finds them.
+            const stub = makeProviderStub({ users: [{ ID: 'id1', Name: 'Alice' }], roles: [], entities: DECLARES_RAW_SQL });
+            await UserCache.Instance.Refresh(stub.Provider, 20_000);
+            await UserCache.Instance.Refresh(stub.Provider); // e.g. an auth miss
+            stub.Queries.length = 0;
+
+            await vi.advanceTimersByTimeAsync(20_000 + 100);
+
+            expect(stub.Queries.length).toBeGreaterThan(0);
+        });
+
+        it('turns its schedule off when a later Refresh passes 0', async () => {
+            const stub = makeProviderStub({ users: [{ ID: 'id1', Name: 'Alice' }], roles: [], entities: DECLARES_RAW_SQL });
+            await UserCache.Instance.Refresh(stub.Provider, 20_000);
+            await UserCache.Instance.Refresh(stub.Provider, 0);
+            stub.Queries.length = 0;
+
+            await vi.advanceTimersByTimeAsync(20_000 * 3 + 100);
+
+            expect(stub.Queries).toHaveLength(0);
+        });
+
         it('keeps ticking while nothing is declared, so a later declaration takes effect', async () => {
             // The timer must not switch itself off: an operator can mark the entity at any time, and
             // the next tick should start honouring it without a restart.
@@ -791,11 +817,13 @@ describe('UserCache', () => {
             expect(stub.Queries).toHaveLength(2);
         });
 
-        it('does not touch the database when both entities still trust their cache', async () => {
-            // The default for every MJ entity. Every mutation then flows through BaseEntity.Save(),
-            // which this cache already hears — so a poll can only cost a query that, on Azure SQL
-            // serverless, is enough to prevent auto-pause. The row count below has drifted and is
-            // deliberately NOT discovered.
+        it('does not touch the database when both entities trust their cache and no peer shares it', async () => {
+            // The default for every MJ entity, in a single process with a private cache. Every
+            // mutation then flows through BaseEntity.Save(), which this cache already hears, and
+            // there is no peer whose notice could be lost — so a poll could only cost a query that,
+            // on Azure SQL serverless, is enough to prevent auto-pause. The row count below has
+            // drifted and is deliberately NOT discovered. This is the control for the two
+            // shared-cache tests below: the store being shared is the only difference.
             const stub = makeProviderStub({
                 users: [{ ID: 'id1', Name: 'Alice' }], roles: [],
                 entities: [
@@ -828,6 +856,49 @@ describe('UserCache', () => {
 
         it('does nothing when this process never had a provider', async () => {
             expect(await UserCache.Instance.RefreshIfChangedInDatabase()).toBe(false);
+        });
+
+        /**
+         * Stock entities (both trusted) on a cache shared with peers. A peer's change reaches this
+         * process only as a pub/sub notice, which is delivered at most once and not replayed after a
+         * reconnect. These tests drop that notice and require the probe to find the change anyway.
+         *
+         * The asymmetry they guard: a lost notice is harmless for a GRANT, because a new user or role
+         * is a cache miss and FindUser re-reads on a miss. A REVOCATION is a cache hit that still
+         * carries the old state, and nothing else re-reads it.
+         */
+        const TRUSTED = [
+            { Name: 'MJ: Users', SchemaName: '__mj', BaseView: 'vwUsers', TrustServerCacheCompletely: true },
+            { Name: 'MJ: User Roles', SchemaName: '__mj', BaseView: 'vwUserRoles', TrustServerCacheCompletely: true },
+        ];
+
+        it("finds a peer's deactivation whose notice was lost, when peers share this cache", async () => {
+            const users = [{ ID: 'id1', Name: 'Alice', IsActive: true }];
+            const stub = makeProviderStub({ users, roles: [], entities: TRUSTED, sharedStore: true });
+            await UserCache.Instance.Refresh(stub.Provider);
+            expect(UserCache.Instance.Users.find(u => u.ID === 'id1')?.IsActive).toBe(true);
+
+            // Server A deactivates Alice. Its notice to this server is lost: nothing is delivered.
+            users[0].IsActive = false;
+            stub.Stamp.updatedAt = '2026-09-18T00:00:00.000Z';
+
+            expect(await UserCache.Instance.RefreshIfChangedInDatabase()).toBe(true);
+            expect(UserCache.Instance.Users.find(u => u.ID === 'id1')?.IsActive).toBe(false);
+        });
+
+        it("finds a peer's role revocation whose notice was lost, when peers share this cache", async () => {
+            const roles = [{ UserID: 'id1', RoleID: 'r-admin', RoleName: 'Admin' }];
+            const stub = makeProviderStub({ users: [{ ID: 'id1', Name: 'Alice' }], roles, entities: TRUSTED, sharedStore: true });
+            await UserCache.Instance.Refresh(stub.Provider);
+            stub.Queries.length = 0;
+
+            // Server A deletes Alice's role row. A delete moves no __mj_UpdatedAt, so it is the
+            // row count that has to give it away.
+            roles.length = 0;
+            stub.Stamp.roles = 0;
+
+            expect(await UserCache.Instance.RefreshIfChangedInDatabase()).toBe(true);
+            expect(stub.Queries).toHaveLength(2); // users and roles reloaded
         });
     });
 

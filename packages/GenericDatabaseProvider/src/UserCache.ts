@@ -94,6 +94,12 @@ export class UserCache extends BaseSingleton<UserCache> {
     private _stalenessTimer: ReturnType<typeof setInterval> | null = null;
     /** The periodic full reload. See {@link scheduleAutoRefresh}. */
     private _autoRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+    /**
+     * The reload interval the host configured, kept so that a later `Refresh(provider)` without one
+     * — the authentication miss path, the roles/users sync — re-arms the same schedule instead of
+     * silently ending it.
+     */
+    private _autoRefreshIntervalMs: number | undefined = undefined;
     /** In-flight reload, so a burst of events costs one database read. */
     private _refreshInFlight: Promise<void> | null = null;
     /** What the database reported at the last reload; the staleness check compares against it. */
@@ -156,7 +162,10 @@ export class UserCache extends BaseSingleton<UserCache> {
      *                   the SQL is built with the provider's own quoting and core-schema name.
      * @param autoRefreshIntervalMS - optional; when set, the whole cache is also reloaded on this
      *                   interval. The subscriptions make that unnecessary for most hosts;
-     *                   {@link StartStalenessChecks} is the cheaper periodic safety net.
+     *                   {@link StartStalenessChecks} is the cheaper periodic safety net. **Omit it to
+     *                   keep whatever schedule an earlier call set** — `Refresh` is also called from
+     *                   paths that know nothing about scheduling, and those must not end it. Pass `0`
+     *                   to turn the schedule off.
      */
     public async Refresh(provider: DatabaseProviderBase, autoRefreshIntervalMS?: number): Promise<void> {
       this._provider = provider;
@@ -168,7 +177,10 @@ export class UserCache extends BaseSingleton<UserCache> {
           this._recentMisses.clear();
           this._lastStamp = await this.readDatabaseStamp(provider);
 
-          this.scheduleAutoRefresh(provider, autoRefreshIntervalMS);
+          if (autoRefreshIntervalMS !== undefined) {
+            this._autoRefreshIntervalMs = autoRefreshIntervalMS;
+          }
+          this.scheduleAutoRefresh(provider, this._autoRefreshIntervalMs);
         }
       }
       catch (err) {
@@ -564,7 +576,7 @@ export class UserCache extends BaseSingleton<UserCache> {
       try {
         await storage.SetItem(USER_CACHE_STAMP_KEY, new Date().toISOString(), CacheCategory.Default);
       } catch (e) {
-        LogWarning(`UserCache could not notify other servers that users changed (${e instanceof Error ? e.message : String(e)}); they will see the change at the next staleness check`, 'Cache');
+        LogWarning(`UserCache could not notify other servers that users changed (${e instanceof Error ? e.message : String(e)}); they will see it at their next staleness check (cacheSettings.userCacheCheckIntervalSeconds) — or not until a restart if that check is disabled`, 'Cache');
       }
     }
 
@@ -575,13 +587,31 @@ export class UserCache extends BaseSingleton<UserCache> {
     /**
      * Compares the database with what this cache was built from — two counts and the newest
      * `__mj_UpdatedAt` — and reloads only when they differ. Two small aggregate queries, so it is
-     * cheap enough to run on an interval; it exists for writers that reach neither of the event
-     * paths (raw SQL, another application, a restore).
+     * cheap enough to run on an interval. A deleted role row changes a count; a deactivation, or any
+     * other edit, moves `__mj_UpdatedAt`.
+     *
+     * It runs in two situations, and is skipped otherwise:
+     *
+     * - **`MJ: Users` or `MJ: User Roles` declares `TrustServerCacheCompletely = false`** — rows can
+     *   change without an event (raw SQL, another application, a restore), and this is the only thing
+     *   that can find them.
+     * - **This process shares its cache with other processes.** Then a change made on a peer reaches
+     *   this one only as a pub/sub notice, and pub/sub delivers at most once with no replay after a
+     *   reconnect. A lost notice is harmless for a GRANT — a new user or role is a cache miss, and a
+     *   miss falls back to an authoritative read in {@link FindUser}. It is not harmless for a
+     *   REVOCATION: a removed role or a deactivated user is a cache HIT that still carries the old
+     *   state, and nothing re-reads it. Without this check a dropped notice would leave a revoked user
+     *   authorised on that peer until the next user write or a restart. Revocation is a security
+     *   control, so the cost — one cheap query per process per interval — is paid wherever peers
+     *   exist.
+     *
+     * A single process with a private cache has no peer whose notice it can miss, so it issues no
+     * query — which keeps a serverless database free to pause.
      *
      * @returns true when the cache was reloaded.
      */
     public async RefreshIfChangedInDatabase(): Promise<boolean> {
-      if (!this._provider || !this.usersMayChangeWithoutAnEvent()) {
+      if (!this._provider || !this.stalenessCheckWarranted()) {
         return false;
       }
       try {
@@ -653,6 +683,20 @@ export class UserCache extends BaseSingleton<UserCache> {
      * even a user inserted by raw SQL can authenticate without this poll — it is the backstop for
      * out-of-band writes, and now runs only where those are declared.
      */
+    /**
+     * Whether {@link RefreshIfChangedInDatabase} should query: rows can change without an event, or
+     * peers share this cache and one of their notices could have been lost. See that method for why
+     * the second case cannot be left to the event path.
+     */
+    private stalenessCheckWarranted(): boolean {
+      return this.usersMayChangeWithoutAnEvent() || this.peersShareThisCache();
+    }
+
+    /** Whether other processes read and write the same cache store as this one. */
+    private peersShareThisCache(): boolean {
+      return this._provider?.LocalStorageProvider?.SharedAcrossProcesses === true;
+    }
+
     private usersMayChangeWithoutAnEvent(): boolean {
       const provider = this._provider;
       if (!provider) {
