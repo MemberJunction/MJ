@@ -33,7 +33,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (440 classes)
+// @memberjunction/core-entities (441 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -257,6 +257,7 @@ import {
     MJEntityFieldEntityExtended,
     MJEntityFieldPermissionEntity,
     MJEntityFieldValueEntity,
+    MJEntityFormContributionEntity,
     MJEntityFormOverrideEntity,
     MJEntityOrganicKeyEntity,
     MJEntityOrganicKeyRelatedEntityEntity,
@@ -1067,6 +1068,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJEntityFieldEntityExtended,
     MJEntityFieldPermissionEntity,
     MJEntityFieldValueEntity,
+    MJEntityFormContributionEntity,
     MJEntityFormOverrideEntity,
     MJEntityOrganicKeyEntity,
     MJEntityOrganicKeyRelatedEntityEntity,
@@ -1234,11 +1236,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJTagScopeEntity,
     MJTagSuggestionEntity,
     MJTagSynonymEntity,
-    MJTaggedItemEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJTaggedItemEntity,
     MJTaskDependencyEntity,
     MJTaskEntity,
     MJTaskTypeEntity,
@@ -1438,11 +1440,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     APIKeysResourceComponent,
     ActionExecutionMonitoringComponent,
     ActionExplorerComponent,
-    ActionsOverviewComponent,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    ActionsOverviewComponent,
     ActivityComponent,
     AdminDataSchemaComponent,
     AdminDevToolsResourceComponent,
@@ -1572,7 +1574,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 715;
+export const CLASS_REGISTRATIONS_COUNT = 716;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

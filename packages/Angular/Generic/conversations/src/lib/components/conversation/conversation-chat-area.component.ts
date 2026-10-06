@@ -27,6 +27,7 @@ import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { MessageInputComponent } from '../message/message-input.component';
 import { ArtifactViewerPanelComponent, NavigationRequest, AnalyzeArtifactService, InteractiveFormApplyService } from '@memberjunction/ng-artifacts';
 import type { ComponentSpec } from '@memberjunction/interactive-component-types';
+import type { FormAgentContext } from '@memberjunction/ng-base-forms';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ComposerDraftStore } from '../../services/composer-draft-store';
 import { ConversationEmptyStateComponent } from './conversation-empty-state.component';
@@ -2568,16 +2569,23 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   super();}
 
   /**
-   * Apply a form-role artifact's spec as an EntityFormOverride for the
-   * current user. The service handles the Create-vs-Modify decision (based
-   * on whether an Active override already exists), confirms via dialog,
-   * and surfaces success/failure via notification.
+   * Apply a form-role artifact's spec for the current user — an EntityFormOverride for a
+   * whole form, a form contribution for a panel. The service picks the path, handles the
+   * Create-vs-Modify decision, confirms via dialog, and notifies.
+   *
+   * The agent context names the record form the user has open (`AdditionalContext.Form`,
+   * published by the record tab). The service reads that form's full composition from the
+   * `FormCompositionRegistry`, to check a panel's placement against the live form and detect
+   * an installed contribution holding the same key. With no open form it asks the server for
+   * the composition instead.
    */
   async OnApplyFormRequested(event: { spec: unknown; entityName: string }): Promise<void> {
+    const additional = (this.AppContext?.['AdditionalContext'] ?? null) as { Form?: FormAgentContext } | null;
     await this.interactiveFormApplyService.ConfirmAndApply(
       event.spec as ComponentSpec,
       event.entityName,
       this.ProviderToUse,
+      additional?.Form ?? null,
     );
   }
 
