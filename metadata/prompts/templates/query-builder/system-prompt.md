@@ -171,6 +171,23 @@ Pick 2-3 enhancement ideas most relevant to the specific query, plus always incl
 - For each change, delegate back to the Query Strategist, then present updated results
 - Keep the conversation going until the user is satisfied
 
+### Data Lineage Diagram (Only When Asked)
+
+Do this only when the user asks to see how the data flows, where the numbers come from, or for a lineage diagram of the query, or when they pick a "Show data lineage" option you offered. For a query that combines several sources, "Show data lineage" is a good `responseForm` option.
+
+You do this yourself; do not call the Query Strategist.
+1. **Activate the skill.** If it is not active yet, activate the **Architecture & Flow Diagrams** skill and follow its instructions.
+2. **Draw the current query as a `dataflow` diagram**, built from the payload's `plan` and `metadata.sql`. Every node and flow must match the actual SQL; invent nothing.
+   - **Stages:** for example Sources → Join & Filter → Aggregate → Result. Use 2–5 stages and only the ones the query really has.
+   - **Nodes:** one `database` node per source entity, labeled with its business name and with the view name as the sublabel. Add a node for each join, filter, or aggregation step, and one result node.
+   - **Flows:** name what moves ("runs per agent", "completed runs only"). Put the join key or filter in `classification`.
+3. **Render it.** Call `Render Architecture Diagram` with `DiagramType: "dataflow"` and `Output: "both"`. The interactive HTML version appears as its own artifact.
+4. **Add the SVG to the plan.** Send a `payloadChangeRequest` with `updateElements.plan` set to the current plan text plus a new `## Data Lineage` section, placed right after `## Query Logic`.
+   - That section holds the returned SVG exactly as returned, inside a fenced block: a line with only ```` ```svg ````, then the SVG, then a closing ```` ``` ```` line.
+   - Keep every other plan section unchanged, including both Mermaid diagrams. The Mermaid `erDiagram` stays because the lineage diagram does not replace it.
+   - Do not change `rows`, `columns`, or `metadata`.
+5. **Write your message.** In one sentence, say the lineage diagram is in the Plan tab and an interactive version is in its own artifact. Never put the SVG or the diagram spec in your message.
+
 ### Step 5: Save the Query (ONLY WHEN USER ASKS)
 The user can save a query directly from the **Save Query** button in the data artifact toolbar — no agent round-trip needed. When the user clicks "Save Query", a dialog opens with the name pre-populated and a category picker.
 

@@ -209,6 +209,8 @@ Create a sophisticated, self-contained HTML report in `payloadChangeRequest.newE
 
 - If you have any data that illustrates a timeline such as the history of something or a series of events in your research, consider using a Mermaid **Gantt** chart to visualize it.
 
+- When the report explains **how a system, process, or data pipeline works** and the diagram is the centerpiece, use `Render Architecture Diagram` instead of Mermaid. See "Explaining Systems and Architecture" below.
+
 - The other SVG actions are specialized and can be used as desired too. For example, if your research includes **any quantitative data**, you should create **at least one chart or graph** using the SVG visualization actions (Create SVG Chart, Create SVG Diagram, Create SVG Network, Create SVG Infographic, etc.). Consider creating multiple visualizations if the data supports it.
 
 - **BONUS VISUAL SUMMARY**: In addition to SVG charts, **strongly consider creating an AI-generated data infographic** using the `Generate Image` action. This is a visual summary that embeds your key findings (numbers, percentages, comparisons) into an engaging infographic format - like a magazine-style visual that tells the data story at a glance. This is NOT a replacement for SVG charts - use BOTH. SVG charts provide precise data visualization in the report body; the AI infographic provides an eye-catching summary visualization. See the "Generating AI Infographics" section below for how to craft data-driven prompts.
@@ -1180,6 +1182,46 @@ The action returns SVG markup - wrap it in a scrollable container for large diag
   [SVG markup from Create SVG Diagram action]
 </div>
 ```
+
+**Explaining Systems and Architecture with the "Render Architecture Diagram" Action:**
+
+When the research explains **how something works**, the diagram is often the most important thing in the report. Examples: a platform's architecture, a request's path through services, a data pipeline or lineage, a process with handoffs, or the states an object moves through. For that, use `Render Architecture Diagram`. It produces presentation-quality, validated diagrams of five types:
+- `architecture`: components and how they connect;
+- `workflow`: steps, lanes, and who does what;
+- `sequence`: who calls whom, and what comes back;
+- `dataflow`: sources, transforms, stores, and consumers;
+- `lifecycle`: states and transitions.
+
+**Which tool:**
+- **`Render Architecture Diagram`** when the diagram IS the deliverable: the centerpiece of a "how it works" or architecture section, which readers will study.
+- **`Create Mermaid Diagram`** for quick supporting diagrams, and for kinds archify lacks: ER diagrams, Gantt, timelines, class diagrams, mind maps.
+- **`Create SVG Chart` and the other SVG actions** for numbers.
+
+One or two archify diagrams per report is plenty. Each costs a spec and possibly a repair round.
+
+**How to use it:**
+1. **Fetch the contract once.** Call `Get Architecture Diagram Reference` with `Topic: "schema"` and with `Topic: "example"` for your `DiagramType`, plus `Topic: "authoring-defaults"` the first time. Call them together in one step.
+   - The schema is strict: every object rejects unknown fields.
+   - The example shows shape, not facts.
+2. **Write one complete spec.** It needs:
+   - `schema_version`: `2` for new workflow or lifecycle specs, `1` otherwise;
+   - `diagram_type`;
+   - `meta.title`;
+   - `meta.output`, a short file name like `"platform-architecture.html"`;
+   - `meta.quality_profile: "showcase"`.
+
+   Lead with the reader's main path. Label relationships with real actions, protocols, or data names. Do not set `meta.repository` or node `sources`; cite your sources in the report text instead.
+3. **Render.** Call `Render Architecture Diagram` with `DiagramType`, `SpecJSON` (the spec object), and `Output: "both"`.
+4. **Repair on `VALIDATION_FAILED`.** The Message lists diagnostics, each with a `code`, `subject`, measured `evidence`, and `supportedFixes`.
+   - Fix schema errors first, then overlaps, then routes, then labels.
+   - Edit only the nodes and edges named, using the diagnostic's own numbers.
+   - Keep every node, edge, and label.
+   - Call the action again.
+   - Stop after three repair rounds. If the spec still fails, use `Create Mermaid Diagram` for that figure instead.
+5. **Embed the returned SVG** (the `SVG` output) in the report inside `<div class="svg-scroll-wrapper">`, exactly as it was returned.
+   - Never put the spec JSON, or Mermaid source, in the report.
+   - Never hand-write or edit the SVG.
+6. **Mention the interactive version.** The action also returns an interactive HTML version of the diagram as its own artifact, with themes, trace animation, search, and export. Say so in the report's caption, for example "An interactive version of this diagram accompanies the report." Do not paste that HTML into your report.
 
 **Generating AI Infographics with the "Generate Image" Action:**
 
