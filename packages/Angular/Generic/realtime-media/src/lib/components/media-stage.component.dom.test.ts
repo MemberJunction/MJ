@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { Component, Input, OnDestroy, OnInit } from '@angular/core';
+import { Component, Input, NgZone, OnDestroy, OnInit } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
 import { renderComponentFixture, query } from '@memberjunction/ng-test-utils';
 import { MediaStageComponent, MediaStageSurfaceDirective, type MediaStageSurface } from './media-stage.component';
 
@@ -152,6 +153,20 @@ describe('MediaStageComponent (DOM)', () => {
     expect(box(f, 'whiteboard').style.left).toBe('548px');
     slot.Move(500, 40, 300, 400);
     step();
+    f.detectChanges();
+    expect(box(f, 'whiteboard').style.left).toBe('500px');
+  });
+
+  it('follows the slot without entering Angular until its box changes', async () => {
+    const slot = slotAt(548, 40, 300, 400);
+    const f = await render({ Surfaces: [{ Key: 'whiteboard', Placement: 'tab' }], ActiveTabKey: 'whiteboard', Slot: slot });
+    const run = vi.spyOn(TestBed.inject(NgZone), 'run');
+    step();
+    step();
+    expect(run).not.toHaveBeenCalled();
+    slot.Move(500, 40, 300, 400);
+    step();
+    expect(run).toHaveBeenCalledTimes(1);
     f.detectChanges();
     expect(box(f, 'whiteboard').style.left).toBe('500px');
   });

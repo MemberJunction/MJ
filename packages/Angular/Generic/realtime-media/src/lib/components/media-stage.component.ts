@@ -130,7 +130,7 @@ export class MediaStageComponent implements AfterViewInit, OnDestroy {
   public ngAfterViewInit(): void {
     this.viewReady = true;
     if (typeof ResizeObserver !== 'undefined') {
-      this.resizeObserver = new ResizeObserver(() => this.zone.run(() => this.measure()));
+      this.resizeObserver = new ResizeObserver(() => this.measure());
       this.resizeObserver.observe(this.host.nativeElement);
       this.observe(this.tabSlot);
     }
@@ -167,7 +167,7 @@ export class MediaStageComponent implements AfterViewInit, OnDestroy {
     this.zone.runOutsideAngular(() => {
       const follow = (): void => {
         this.settleFrame = null;
-        this.zone.run(() => this.measure());
+        this.measure();
         if (performance.now() < this.settleUntil) {
           this.settleFrame = requestAnimationFrame(follow);
         }
@@ -176,14 +176,19 @@ export class MediaStageComponent implements AfterViewInit, OnDestroy {
     });
   }
 
-  /** Reads the slot's box relative to the stage; a slot with no size (hidden) counts as no slot. */
+  /**
+   * Reads the slot's box relative to the stage; a slot with no size (hidden) counts as no slot. Runs outside Angular
+   * while following the slot, and enters it only when the box changed.
+   */
   private measure(): void {
     const next = this.readSlotRect();
     if (sameRect(next, this.slotRect)) {
       return;
     }
-    this.slotRect = next;
-    this.cdr.markForCheck();
+    this.zone.run(() => {
+      this.slotRect = next;
+      this.cdr.markForCheck();
+    });
   }
 
   private readSlotRect(): StageRect | null {
