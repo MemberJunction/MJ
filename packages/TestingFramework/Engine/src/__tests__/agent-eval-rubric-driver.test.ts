@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { AgentEvalDriver, type AgentEvalConfig } from '../drivers/AgentEvalDriver.js';
+import { AgentEvalDriver, type AgentEvalConfig, type AgentRubricResolution } from '../drivers/AgentEvalDriver.js';
 import type { DriverExecutionContext, SuiteFixtureContext } from '../types.js';
 
 class SuiteProbe extends AgentEvalDriver {
@@ -29,7 +29,7 @@ class SuiteProbe extends AgentEvalDriver {
         return [];
     }
 
-    protected override async LoadAgentEvaluationRubric(): Promise<string | undefined> {
+    protected override async LoadAgentEvaluationRubric(): Promise<AgentRubricResolution | undefined> {
         return undefined;
     }
 
@@ -101,7 +101,7 @@ describe('agent eval rubric driver', () => {
                 return { suites: [] };
             }
 
-            protected override async LoadAgentEvaluationRubric(): Promise<string | undefined> {
+            protected override async LoadAgentEvaluationRubric(): Promise<AgentRubricResolution | undefined> {
                 return undefined;
             }
 
@@ -181,5 +181,43 @@ describe('agent eval rubric driver', () => {
         expect(driver).not.toContain('RunView.Provider as unknown');
         expect(calibration).not.toMatch(/new RunView\(\)/);
         expect(calibration).not.toContain('as never');
+    });
+
+    it('passes the agent evaluator config to the implicit rubric oracle', async () => {
+        class AgentRubricProbe extends AgentEvalDriver {
+            public async resolve(config: AgentEvalConfig, context: DriverExecutionContext) {
+                return this.WithResolvedRubric(config, context);
+            }
+            protected override async LoadSuites(): Promise<{ suiteId?: string; suites: [] }> {
+                return { suites: [] };
+            }
+            protected override async LoadAgentEvaluationRubric(): Promise<AgentRubricResolution | undefined> {
+                return {
+                    rubricId: 'agent-rubric',
+                    evaluatorConfig: { EvaluatorType: 'AIPrompt', PromptName: 'Rubric Judge - Sage' },
+                };
+            }
+            protected override async LookupLatestPublished(): Promise<{ id: string; label: string } | undefined> {
+                return { id: 'version-1', label: '1.0.0' };
+            }
+        }
+        const driver = new AgentRubricProbe();
+        const context = {
+            test: { ID: 'test' },
+            testRun: { ID: 'run', TestSuiteRunID: 'suite-run' },
+            options: {},
+            contextUser: {},
+            oracleRegistry: new Map(),
+        } as unknown as DriverExecutionContext;
+        const resolved = await driver.resolve({ agentId: 'agent', oracles: [] }, context);
+        expect(resolved.oracles).toEqual([{
+            type: 'rubric',
+            config: {
+                rubricId: 'agent-rubric',
+                rubricVersionId: 'version-1',
+                versionLabel: '1.0.0',
+                evaluator: { EvaluatorType: 'AIPrompt', PromptName: 'Rubric Judge - Sage' },
+            },
+        }]);
     });
 });

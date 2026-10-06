@@ -1,5 +1,46 @@
 # Change Log - @memberjunction/ai
 
+## 6.2.0-edge.2
+
+### Minor Changes
+
+- 79279f2: Text-to-speech, speech-to-text and video now have runners, like chat, embeddings and images.
+  - **`AITextToSpeechRunner`** (`TTS` models), **`AISpeechToTextRunner`** (`Speech to Text` models) and **`AIVideoRunner`** (`Video` models) select a model from a carrier prompt's bindings, or a pinned `ModelID`, resolve its credential, fail over, and record every call as an AI Prompt Run. The run row never holds audio or video. Text-to-speech records the characters sent in the `Characters` measure unless the driver reports its own quantity; speech-to-text records the audio's seconds when the provider reports them; video records seconds only when a driver reports them, which HeyGen's does not. They share their lifecycle through a new `BaseMediaRunner`.
+  - New metadata: the `Default Text To Speech`, `Default Speech To Text` and `Default Video Generation` prompts, which the runners use when no prompt is named.
+  - **`BaseAudioGenerator` is split** into `BaseTextToSpeech` and `BaseSpeechToText`. `BaseAudioGenerator` is deprecated but keeps working: it implements both, and every driver still extends it and stays registered against it under the same key. `OpenAIAudioGenerator` also registers against both new classes, `ElevenLabsAudioGenerator` against `BaseTextToSpeech`, and `GroqAudioGenerator` against `BaseSpeechToText`. The split-and-join transcription loop is also exported as `TranscribeAudioWithSplitting`.
+  - `VideoResult` gains an optional `usage`, for a driver that reports the video's length.
+  - `SpeechResult` and `VideoResult` gain an optional `errorInfo`. The OpenAI, ElevenLabs, Groq and HeyGen audio and video drivers now fill it from the error their SDK threw, keeping its HTTP status, so a caller can tell a rejected request from an outage. The runners fail over on it: a 400 or 422 no longer fails over to every other candidate.
+  - The media runners take `TimeoutMS` and `CancellationToken`, which bound each driver call as `timeoutMS` and `cancellationToken` bound a chat call.
+  - `BaseModelRunner` gains `ResolveUsageToRecord` and `ApplyUsageToRunRecord`, which the image runner now uses too, so every non-chat runner records units the same way.
+
+  Nothing called the audio or video drivers before, so no existing caller changes behavior.
+
+- 2552b1e: AI model & vendor metadata refresh (off-cycle research run for v6.2.0-edge.2, 2026-10-02).
+  - Adds **Claude Sonnet 5.5** (`claude-sonnet-5-5`, released 2026-09-28) on Anthropic, Amazon Bedrock and OpenRouter at $2/$10 per 1M, cache read $0.20.
+  - Adds **GPT-6.1 Sol** (`gpt-6.1-sol`, released 2026-09-29) on OpenAI, Azure, Amazon Bedrock and OpenRouter at $2/$10 per 1M, cache read $0.10. No Azure cost row: Microsoft has not published the rate.
+  - Adds the missing cost rows for Claude Opus 5.5 on Bedrock ($4/$20) and GPT-6 Sol ($2/$10) and GPT-6 Luna ($0.10/$0.50) on Azure, and a GLM 5.3 OpenRouter row ($1.40/$4.40). GLM 5.3's OpenRouter output cap becomes 131,072.
+  - Re-rates Groq GPT-OSS-120B ($0.15/$0.60) and GPT-OSS-20B ($0.075/$0.30), Cerebras GPT-OSS-120B ($0.35/$0.75) and Z.AI GLM 5.1 ($1.40/$4.40), expiring the superseded rows.
+  - Retires seven routes their vendors have already shut down: Cerebras `gemma-4-31b` and `llama3.1-8b`, Fireworks `glm-5p2`, Google `gemini-3-pro-image-preview`, `gemini-2.0-flash` and `gemini-2.0-flash-lite`, and Groq `compound-beta` (Groq Compound becomes inactive).
+
+### Patch Changes
+
+- ff3097d: Realtime voice sessions started from an agent run now resolve their vendor key against the run's API keys, and the Computer Use engine gains a key-resolver seam (not yet wired in MJ).
+
+  `ExecuteAgentParams.apiKeys` already reaches every prompt's legacy key tier, and (as of #4611) is offered to every action as `RunActionParams.RuntimeAPIKeyResolver`. Realtime resolved against the environment alone, so a run carrying a customer's key still opened its voice session on the platform's.
+  - **`@memberjunction/ai`** — `AIAPIKeyResolver` (driver class in, key out) and `MakeAIAPIKeyResolver(apiKeys?)`, which applies `GetAIAPIKey`'s order: the list's key for that driver class, else the platform's. Passing nothing yields the platform lookup. For prompts that order is only the legacy tier (`AIPromptRunner` tries MJ Credentials first), and realtime does not consult MJ Credentials. `RealtimeAPIKeyResolver` becomes an alias of `AIAPIKeyResolver`. `@memberjunction/actions-base` keeps its own identical `RuntimeAPIKeyResolver`, and the prompt runner still takes the key list.
+  - **`@memberjunction/ai-agents`** — `BaseAgent.resolveRealtimeModel` (the server-run realtime session) resolves against `params.apiKeys`. `PrepareClientSessionInput.APIKeys` carries them into `RealtimeClientSessionService`, and `BaseAgent.StartBridgeRealtimeSession` fills it. There the order is run key, then the service's overridable `getAPIKeyForDriver` seam (by default the environment key), on all three model-selection branches, with vendor selection and the mint sharing that one chain. `CreateBridgeRealtimeSession` (the LiveKit / telephony factory) passes no `apiKeys`, so sessions it opens stay on platform keys, and the browser-initiated session mutation never sets them. `GetRealtimeModelVoices` takes an optional resolver as a seam; its only caller, the voice-picker query, has no run context and passes none.
+  - **`@memberjunction/computer-use`** — `RunComputerUseParams.APIKeyResolver`: an optional resolver that the engine's direct-LLM funnel (used when the controller and judge models are pinned) asks first, falling back to the platform key. Nothing in MJ sets it yet. `ComputerUseAction` does not forward it, and `MJComputerUseEngine`'s default path runs stored prompts through `AIPromptRunner`, which does not consult it. So browser-agent runs started from MJ are unchanged.
+
+  **Vendor selection is affected, deliberately.** Realtime picks the first vendor whose key resolves, so a run that brings a key for a vendor the deployment holds no platform key for now reaches that vendor. That is a routing change, not only a billing one.
+
+  No behaviour change for a session with no runtime keys, including one on a service subclass that overrides `getAPIKeyForDriver`.
+
+- f3c6161: Conversation routing acts on calibrated probabilities (plan Task 2.4). `ApplyPlattCalibration` and `PlattCalibration` in `@memberjunction/ai` map a decision model's raw probability to a calibrated one. Routing calibrates the thread Likelihood only for the exact model each fit was made on (`ROUTING_CONTINUES_CALIBRATION`: Jev at `typesafe/jev-1.13-20260917`, and LLM Decision when GPT-OSS-120B answered, fitted by the Phase 2 Decision Eval), and treats any other model's answer as unsure. `FindDecisionCalibration` in `@memberjunction/ai-core-plus` looks a calibration up by the decision model and the model behind it, for any consumer that calibrates. The `RunDecision` mutation and `GraphQLAIClient.RunDecision` return that model as `resolvedModel` / `ResolvedModel`. Routing waits 350 ms instead of 250 ms, which covers about 95% of Jev's answers in-process. The Decision Eval records production's routing verdict with the model that answered and the policy it was reached under, and its scorecard scores that verdict end to end, per run.
+- 5148534: A rerank answered by `LLMReranker` now carries its chat model's cost: the chat prompt's run is a child of the rerank's run, and its cost is recorded as the rerank run's `DescendantCost` and `TotalCost`. `RerankResponse` gains an optional `Usage`, which a reranker driver sets when it knows its call's tokens and cost.
+- ce1a5c3: Add `BaseEmbeddings.RequiresAPIKey` (default `true`), mirroring `VectorDBBase.RequiresAPIKey`. `LocalEmbedding` and `OllamaEmbedding` return `false`, so credential checks such as `AIEmbeddingRunner`'s accept them with no API key configured.
+- Updated dependencies [4d647e6]
+  - @memberjunction/global@6.2.0-edge.2
+
 ## 6.2.0-edge.1
 
 ### Minor Changes

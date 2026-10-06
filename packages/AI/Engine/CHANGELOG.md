@@ -1,5 +1,77 @@
 # Change Log - @memberjunction/aiengine
 
+## 6.2.0-edge.2
+
+### Minor Changes
+
+- 2552b1e: AI model & vendor metadata refresh (off-cycle research run for v6.2.0-edge.2, 2026-10-02).
+  - Adds **Claude Sonnet 5.5** (`claude-sonnet-5-5`, released 2026-09-28) on Anthropic, Amazon Bedrock and OpenRouter at $2/$10 per 1M, cache read $0.20.
+  - Adds **GPT-6.1 Sol** (`gpt-6.1-sol`, released 2026-09-29) on OpenAI, Azure, Amazon Bedrock and OpenRouter at $2/$10 per 1M, cache read $0.10. No Azure cost row: Microsoft has not published the rate.
+  - Adds the missing cost rows for Claude Opus 5.5 on Bedrock ($4/$20) and GPT-6 Sol ($2/$10) and GPT-6 Luna ($0.10/$0.50) on Azure, and a GLM 5.3 OpenRouter row ($1.40/$4.40). GLM 5.3's OpenRouter output cap becomes 131,072.
+  - Re-rates Groq GPT-OSS-120B ($0.15/$0.60) and GPT-OSS-20B ($0.075/$0.30), Cerebras GPT-OSS-120B ($0.35/$0.75) and Z.AI GLM 5.1 ($1.40/$4.40), expiring the superseded rows.
+  - Retires seven routes their vendors have already shut down: Cerebras `gemma-4-31b` and `llama3.1-8b`, Fireworks `glm-5p2`, Google `gemini-3-pro-image-preview`, `gemini-2.0-flash` and `gemini-2.0-flash-lite`, and Groq `compound-beta` (Groq Compound becomes inactive).
+
+- 8fd1c46: Moves the seven CodeGen AI prompts to current models, and makes AI model catalog ranks consistent within each model's version lineage. Metadata only, plus a new CI guard. (#4912)
+  - **CodeGen prompts** (Check Constraint Parser, Entity Description Generation, Entity Name Generation, Transitive Join Intelligence, Virtual Entity Field Decoration, Form Layout Generation, Smart Field Identification):
+    - Gemini 3.5 Flash → **Gemini 3.8 Flash**, on the same Google and Vertex AI routes.
+    - Gemini 3.1 Flash-Lite → **Gemini 3.5 Flash-Lite** (Form Layout Generation, Smart Field Identification). Google now comes before Vertex AI, matching Flash.
+    - GPT 5.5 Instant → **GPT-6 Luna** on OpenAI. GPT 5.5 Instant only ever called `gpt-5.5`.
+    - Claude Haiku 4.5 and GPT-OSS-120B are unchanged; they are still the newest in their families. The failover order is unchanged.
+  - **Review regenerated output.** CodeGen commits its AI output into each app: `Validate*()` methods parsed from CHECK constraints, entity and field descriptions, display names and form layouts. Apps that regenerate after upgrading may see different AI-written output and should review it before committing.
+  - **Catalog PowerRank fixes.** Within a lineage, a newer model no longer ranks below the model it replaces, and ranks above it where it is the more capable one (rank-based selection does not break ties):
+    - The GPT-5 generation (GPT 5, 5-mini, 5-nano) was ranked above its successors and now ranks 10, 9 and 8.
+    - GPT 5.5 → 15, GPT 5.5 Instant → 15 (the same `gpt-5.5` API model), GPT 5.5 Pro → 16, GPT 5.6 → 16, o3-mini → 9, o4-mini → 10, Claude Sonnet 5 → 21, MiniMax-M3 → 21 (ties M2.7, which it complements rather than replaces), Grok 4.3 → 23, Qwen3.8-Flash → 16.
+    - Prompts and agents that choose models by rank can pick a different model as a result.
+  - **`PriorVersionID` lineage.** Two links that pointed across tiers are corrected (Gemini 3.1 Flash-Lite, Qwen3.8-Flash). Three variants with no earlier version in the catalog are cleared (GLM-5.3-Flash, GLM 5V Turbo, Mercury Edit 2). Missing links are added for the GPT 5, GPT mini/nano, o-series mini and Gemini Flash lines.
+  - **New guard:** `.github/scripts/check-ai-model-ranks.mjs` (`pnpm run check:ai-model-ranks`, run in the Source guards CI job) fails when a model ranks below the prior version it names, or names a prior version that doesn't exist.
+
+- 01fafc6: Removes four duplicate `MJ: AI Model Costs` entries from `metadata/ai-models/.ai-models.json`. Llama 4 Maverick, Llama 4 Scout (Groq), Claude 4 Sonnet and Claude 4 Opus (Anthropic) each listed the same cost record twice, identical field for field and with the same primary key, so both copies pointed at one database row. No database row changes; the file just stops tripping duplicate-ID checks.
+
+### Patch Changes
+
+- 2854a2e: Address vector indexes by their provider-side name (`ExternalID`), not the MJ display `Name`. Entity vectorization, duplicate detection and the entity-vectors resolver passed `Name`, so any index whose label differs from its provider name (e.g. "More Cheese Content (Pinecone)" vs `morecheese-content`) returned 404 on every upsert/query.
+
+  `AIEngineBase` now owns the single `MJ: Vector Indexes` cache (`VectorIndexes`, `GetVectorIndexByID`) and the one rule for the provider name (`GetProviderIndexName`: ExternalID, falling back to `Name`), proxied on `AIEngine`. `KnowledgeHubMetadataEngine` no longer caches Vector Indexes; its `VectorIndexes` / `GetVectorIndexByID` proxy the AIEngineBase cache. Every caller, including `MJVectorIndexEntityServer`'s delete path, now resolves the provider name through `GetProviderIndexName`.
+
+- Updated dependencies [f555162]
+- Updated dependencies [043f418]
+- Updated dependencies [e97d95c]
+- Updated dependencies [ff3097d]
+- Updated dependencies [79279f2]
+- Updated dependencies [2552b1e]
+- Updated dependencies [21f9e15]
+- Updated dependencies [28fdf22]
+- Updated dependencies [4248fb3]
+- Updated dependencies [f3c6161]
+- Updated dependencies [5148534]
+- Updated dependencies [0adaf76]
+- Updated dependencies [ce1a5c3]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [26c0178]
+- Updated dependencies [594f2e0]
+- Updated dependencies [705ab4e]
+- Updated dependencies [96daca8]
+- Updated dependencies [aa912ca]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [5986939]
+- Updated dependencies [4d647e6]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [bb33c77]
+- Updated dependencies [369e229]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [2854a2e]
+  - @memberjunction/ai-core-plus@6.2.0-edge.2
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/ai@6.2.0-edge.2
+  - @memberjunction/core-entities@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+  - @memberjunction/ai-engine-base@6.2.0-edge.2
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.2
+  - @memberjunction/actions-base@6.2.0-edge.2
+  - @memberjunction/storage@6.2.0-edge.2
+
 ## 6.2.0-edge.1
 
 ### Minor Changes

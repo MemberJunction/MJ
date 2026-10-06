@@ -333,6 +333,14 @@ export interface RealtimeSessionCapabilities {
     CanReconfigureDelegationMode?: boolean;
 
     /**
+     * Whether the model is **full-duplex**: it keeps listening while it speaks, can emit short
+     * backchannel acknowledgements, and judges for itself whether speech was directed at it. A bridge uses
+     * this to prefer the model's own addressing judgement over a name-pattern match and to treat the room's
+     * floor coordinator as a safety net rather than the primary gate. Absent/`false` = turn-based.
+     */
+    FullDuplex?: boolean;
+
+    /**
      * Whether the provider emits a discrete user-interruption signal when user barge-in occurs.
      */
     EmitsUserInterruptionSignal?: boolean;

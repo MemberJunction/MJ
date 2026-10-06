@@ -9,7 +9,7 @@ import { BaseEntity, BaseEntityEvent, IEntityDataProvider, IMetadataProvider, IR
          EntityInfo, EntityFieldInfo, EntityFieldTSType, TenantContext,
          RunViewParams, ProviderBase, ProviderType, UserInfo, UserRoleInfo, RecordChange,
          ILocalStorageProvider, EntitySaveOptions, EntityMergeOptions, LogError, LogStatus,
-         TransactionGroupBase, TransactionItem, DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput,
+         TransactionGroupBase, TransactionItem, DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameCache,
          EntityRecordNameResult, RecordDependency, RecordMergeRequest, RecordMergeResult,
          RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse, CompositeKey, EntityDeleteOptions,
          RunQueryParams, RunQueryEnrichment, BaseEntityResult, QueryExecutionSpec,
@@ -620,7 +620,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     protected async InternalRunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
         // This is the internal implementation - pre/post processing is handled by ProviderBase.RunQuery()
         if (params.SQL) {
-            return this.RunAdhocQuery(params.SQL, params.MaxRows, undefined, params.StartRow);
+            return this.RunAdhocQuery(params.SQL, params.MaxRows, params.TimeoutSeconds, params.StartRow);
         }
         else if (params.QueryID) {
             return this.RunQueryByID(params.QueryID, params.CategoryID, params.CategoryPath, contextUser, params.Parameters, params.MaxRows, params.StartRow, params.Enrichment, params.DataSource);
@@ -2762,6 +2762,41 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                                                          );
         if (data && data.SetRecordFavoriteStatus !== null)
             return data.SetRecordFavoriteStatus.Success;
+    }
+
+    /**
+     * Record names this connection has seen, for synchronous display code. Safe to keep here
+     * because every request on a connection is answered as the same user.
+     */
+    private readonly _recordNames = new EntityRecordNameCache();
+
+    public override async GetCachedRecordName(entityName: string, compositeKey: CompositeKey, loadIfNeeded?: boolean): Promise<string | undefined> {
+        const cached = this._recordNames.Get(entityName, compositeKey);
+        if (!cached && loadIfNeeded) {
+            return this.GetEntityRecordName(entityName, compositeKey);
+        }
+        return cached;
+    }
+
+    public override HasCachedRecordName(entityName: string, compositeKey: CompositeKey): boolean {
+        return this._recordNames.Has(entityName, compositeKey);
+    }
+
+    public override GetCachedRecordNameOnlyIfCached(entityName: string, compositeKey: CompositeKey): string | undefined {
+        return this._recordNames.Get(entityName, compositeKey);
+    }
+
+    public override SetCachedRecordName(entityName: string, compositeKey: CompositeKey, recordName: string): void {
+        this._recordNames.Set(entityName, compositeKey, recordName);
+    }
+
+    public override async GetEntityRecordName(entityName: string, compositeKey: CompositeKey, contextUser?: UserInfo, forceRefresh: boolean = false): Promise<string> {
+        return this._recordNames.GetOrFetch(entityName, compositeKey, forceRefresh,
+            () => this.InternalGetEntityRecordName(entityName, compositeKey));
+    }
+
+    public override async GetEntityRecordNames(info: EntityRecordNameInput[], contextUser?: UserInfo, forceRefresh: boolean = false): Promise<EntityRecordNameResult[]> {
+        return this._recordNames.GetOrFetchMany(info, forceRefresh, (uncached) => this.InternalGetEntityRecordNames(uncached));
     }
 
     protected async InternalGetEntityRecordName(entityName: string, primaryKey: CompositeKey): Promise<string> {

@@ -928,6 +928,9 @@ class GeminiRealtimeSession implements IRealtimeSession {
         }
         return {
             CanReconfigureTurnMode: false,
+            // Proactive audio is permanently on for the 3.8 line: the model listens while speaking and decides
+            // for itself when to speak. A meeting-mode session (auto activity detection off) is turn-based.
+            FullDuplex: this.profile.ProactiveAudioAlwaysOn && !this.meetingMode,
             SupportsDynamicToolSet: GeminiRealtime.SupportsDynamicToolSet,
             SupportedInboundTracks: inbound,
             SupportedOutboundTracks: [{ Modality: 'audio', Direction: 'outbound' }],
