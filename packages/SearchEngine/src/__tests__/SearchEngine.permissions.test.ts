@@ -322,6 +322,54 @@ describe('SearchEngine.filterByPermissions (safety net)', () => {
             expect(params.Fields).toEqual(['OrderID', 'LineNo']);
         });
 
+        it('reads a prefixed `PK|value` record id as its key value, and keeps it when readable', async () => {
+            // Behaviour change (a fix of over-strict dropping): before, `ID IN ('ID|k1')` never matched, so a
+            // result written with the prefixed encoding (`CompositeKey.ToRecordID()`) was dropped as unauthorized.
+            mockEntityByName.mockReturnValue(readableNoRowFilter());
+            mockRunViewFn.mockResolvedValue({ Success: true, Results: [{ ID: 'k1' }] });
+
+            const out = await engine.TestFilterByPermissions(
+                [makeResult('ID|k1', 'Customers', 'entity-record', 'vector')], user
+            );
+
+            expect(out.map(r => r.RecordID)).toEqual(['ID|k1']);
+            const params = mockRunViewFn.mock.calls[0][0] as { ExtraFilter: string; MaxRows: number };
+            expect(params.ExtraFilter).toBe("ID IN ('k1')");
+            expect(params.MaxRows).toBe(1); // one id, at most one row — UserViewMaxRows cannot truncate it
+        });
+
+        it('keeps a composite segment that names a non-key field out of the SQL, and drops its result', async () => {
+            mockEntityByName.mockReturnValue(makeEntity({
+                Name: 'Order Lines', CanRead: true, Exempt: false, RlsClause: '', PrimaryKeyNames: ['OrderID', 'LineNo'],
+            }) as unknown as EntityInfo);
+            mockRunViewFn.mockResolvedValue({ Success: true, Results: [{ OrderID: 'o1', LineNo: 3 }] });
+
+            const out = await engine.TestFilterByPermissions(
+                [
+                    makeResult('OrderID|o1||LineNo|3', 'Order Lines', 'entity-record', 'vector'),
+                    makeResult('OrderID|o1||LineNo|3||1=1 OR Region|x', 'Order Lines', 'entity-record', 'vector'),
+                ],
+                user
+            );
+
+            expect(out.map(r => r.RecordID)).toEqual(['OrderID|o1||LineNo|3']);
+            const params = mockRunViewFn.mock.calls[0][0] as { ExtraFilter: string };
+            expect(params.ExtraFilter).toBe("(OrderID='o1' AND LineNo='3')");
+        });
+
+        it('issues no RunView when no composite segment names the key', async () => {
+            mockEntityByName.mockReturnValue(makeEntity({
+                Name: 'Order Lines', CanRead: true, Exempt: false, RlsClause: '', PrimaryKeyNames: ['OrderID', 'LineNo'],
+            }) as unknown as EntityInfo);
+
+            const out = await engine.TestFilterByPermissions(
+                [makeResult('OrderID|o1||Bogus|1', 'Order Lines', 'entity-record', 'vector')], user
+            );
+
+            expect(out).toHaveLength(0);
+            expect(mockRunViewFn).not.toHaveBeenCalled();
+        });
+
         it('matches a composite-key result regardless of segment field-name casing or UUID casing', async () => {
             mockEntityByName.mockReturnValue(makeEntity({
                 Name: 'Order Lines', CanRead: true, Exempt: false, RlsClause: '', PrimaryKeyNames: ['OrderID', 'LineNo'],

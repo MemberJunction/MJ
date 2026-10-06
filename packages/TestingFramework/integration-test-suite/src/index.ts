@@ -90,6 +90,7 @@ export * from './checks/rubrics.checks';
 export * from './checks/realtime-deterministic.checks';
 export * from './checks/scoped-anon-elevation.checks';
 export * from './checks/search.checks';
+export * from './checks/search-origin-gate.checks';
 export * from './checks/storage.checks';
 export * from './checks/queue.checks';
 export * from './checks/work-queue-runtime.checks';
