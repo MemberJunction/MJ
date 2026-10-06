@@ -17,8 +17,8 @@ This skill costs more than Mermaid: a spec of a few kilobytes, plus a repair rou
   - `example`: a complete, valid spec for the type.
   - `authoring-defaults`, `authoring-contract`, `layout-repair`: the detailed authoring and repair references.
   - `brand-marks`: the product-logo catalog.
-- **Render Architecture Diagram**: `DiagramType`, `SpecJSON`, optional `Output` (`svg`, `html` or `both`; default `both`).
-  - Result codes are `SUCCESS`, `VALIDATION_FAILED`, `INVALID_INPUT` and `RENDER_FAILED`.
+- **Render Architecture Diagram**: `DiagramType`, `SpecJSON`, optional `Output` (`svg`, `html` or `both`; default `both`), and optional `BrowserCheck` (`true` also loads the page in a headless browser and fails if the diagram does not lay out).
+  - Result codes are `SUCCESS`, `VALIDATION_FAILED`, `INVALID_INPUT`, `RENDER_FAILED`, `TIMEOUT` and `BROWSER_CHECK_FAILED`.
   - On success the `SVG` output parameter holds the inline SVG, and the interactive HTML comes back as a file output.
 
 ## Step 1: Choose the Type
@@ -175,7 +175,9 @@ The router draws the lines, but it cannot move your boxes. Placement decides whe
    - **Compare runs by `code` and `subject`**, not by how many problems remain.
    - **Then call `Render Architecture Diagram` again** with the complete corrected spec.
 4. **`INVALID_INPUT`**: a parameter is wrong, for example an unknown `DiagramType` or `SpecJSON` that is not valid JSON. Fix the call itself.
-5. **`RENDER_FAILED`**: retry once at most. Then fall back.
+5. **`RENDER_FAILED`**: archify failed for a reason it could not classify. Don't retry the same spec; fall back.
+6. **`TIMEOUT`**: the render took over 30 seconds. Simplify the diagram or split it into several, then call again.
+7. **`BROWSER_CHECK_FAILED`** (only when you passed `BrowserCheck`): the Message lists what did not lay out. Treat it like a layout diagnostic: fix that part and call again.
 
 **Stop within your limits.** Plan for at most three repair rounds, and stay well inside your iteration and action limits. If the spec still fails after a bounded repair:
 - keep your best candidate;
