@@ -9305,6 +9305,9 @@ importers:
       '@memberjunction/global':
         specifier: 6.2.0-edge.2
         version: link:../../../MJGlobal
+      '@memberjunction/graphql-dataprovider':
+        specifier: 6.2.0-edge.2
+        version: link:../../../GraphQLDataProvider
       rxjs:
         specifier: ^7.8.2
         version: 7.8.2
