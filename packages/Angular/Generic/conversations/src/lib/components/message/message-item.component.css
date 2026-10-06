@@ -74,6 +74,17 @@
   display: block;
 }
 
+/* A streamed reply is not a status line. While the bubble shows streamed reply text the item
+   adds `streaming` (IsStreaming, set by the list's in-place refresh): the cap above would box
+   the growing reply into a 150px scroller of its own, and the status weight would re-wrap every
+   line when the settled message drops it on completion, so the reply is set at its settled weight
+   from the first frame. */
+.message-item.in-progress.streaming .message-text {
+  max-height: none;
+  overflow-y: visible;
+  font-weight: inherit;
+}
+
 
 /* Pulse effect for avatar */
 .message-item.in-progress .avatar-circle {

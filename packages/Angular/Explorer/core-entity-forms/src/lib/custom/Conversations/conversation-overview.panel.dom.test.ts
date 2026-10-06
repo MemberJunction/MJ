@@ -14,8 +14,9 @@ import { ConversationOverviewPanel } from './conversation-overview.panel';
 /**
  * DOM coverage for <mj-conversation-overview-panel>: the turn counts read the conversation's
  * current branch path (`ConversationEngine.ScopeFilter` with `count_only`), the "across N branches"
- * line shows when the conversation has branch rows (on any path, the trunk included), and an
- * unreadable scope shows zero counts.
+ * line shows when the conversation has branch rows (on any path, the trunk included), the recent
+ * turns are colored by role, and any failed read (scope or detail batch) shows a "could not load"
+ * line on both cards with no counts and no turn badge.
  */
 
 const USER = { ID: 'user-1' };
@@ -39,6 +40,10 @@ function filterText(params: RunViewParams): string {
 
 /** Branch rows the `MJ: Conversation Branches` count reports. */
 let branchRowCount = 0;
+/** Rows the recent-turns entry returns. */
+let recentRows: Array<Record<string, unknown>> = RECENT;
+/** When set, every `MJ: Conversation Details` entry fails with this message. */
+let detailFailure: string | null = null;
 
 /** Answers each batch entry: the branch count, count_only detail entries by role, the list entry with RECENT. */
 function answer(params: RunViewParams): RunViewResult {
@@ -46,8 +51,11 @@ function answer(params: RunViewParams): RunViewResult {
   if (params.EntityName === 'MJ: Conversation Branches') {
     return { ...base, Results: [], TotalRowCount: branchRowCount };
   }
+  if (detailFailure !== null) {
+    return { ...base, Success: false, Results: [], ErrorMessage: detailFailure };
+  }
   if (params.ResultType !== 'count_only') {
-    return { ...base, Results: RECENT, RowCount: RECENT.length, TotalRowCount: RECENT.length };
+    return { ...base, Results: recentRows, RowCount: recentRows.length, TotalRowCount: recentRows.length };
   }
   const filter = filterText(params);
   const total = filter.endsWith("[Role]='User'") ? 4 : filter.endsWith("[Role]='AI'") ? 5 : 11;
@@ -70,6 +78,11 @@ async function render(): Promise<ComponentFixture<ConversationOverviewPanel>> {
   return fixture;
 }
 
+const errorLines = (f: ComponentFixture<ConversationOverviewPanel>) => queryAll(f, '.mj-load-error').map((e) => e.textContent?.trim() ?? '');
+const turnBadges = (f: ComponentFixture<ConversationOverviewPanel>) =>
+  queryAll(f, '.mj-card-badge').map((b) => b.textContent?.trim() ?? '').filter((t) => /^\d/.test(t));
+const pageText = (f: ComponentFixture<ConversationOverviewPanel>) => (f.nativeElement as HTMLElement).textContent ?? '';
+
 /** The value cell of the metric row whose label is `label`. */
 function metric(fixture: ComponentFixture<ConversationOverviewPanel>, label: string): string {
   const row = queryAll(fixture, '.mj-metric-row').find((r) => r.querySelector('.mj-metric-label')?.textContent?.trim() === label);
@@ -79,6 +92,8 @@ function metric(fixture: ComponentFixture<ConversationOverviewPanel>, label: str
 describe('ConversationOverviewPanel (DOM)', () => {
   beforeEach(() => {
     branchRowCount = 0;
+    recentRows = RECENT;
+    detailFailure = null;
     runViews = vi.fn(async (params: RunViewParams[]) => params.map(answer));
     vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({ RunViews: runViews } as unknown as RunView);
   });
@@ -150,7 +165,7 @@ describe('ConversationOverviewPanel (DOM)', () => {
     expect(query(fixture, '.mj-branch-note')).toBeNull();
   });
 
-  it('shows zero counts and logs when the scope cannot be read', async () => {
+  it('shows the error line on both cards, no counts and no turn badge when the scope cannot be read', async () => {
     vi.spyOn(ConversationEngine, 'LoadCurrentScope').mockRejectedValue(new Error('Conversation conv-1 not found'));
     branchRowCount = 2;
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -158,10 +173,78 @@ describe('ConversationOverviewPanel (DOM)', () => {
     const fixture = await render();
 
     expect(runViews).not.toHaveBeenCalled();
-    expect(metric(fixture, 'User Prompts')).toBe('0');
-    expect(metric(fixture, 'Agent Responses')).toBe('0');
-    expect(metric(fixture, 'Total Messages')).toBe('0');
+    expect(errorLines(fixture)).toEqual(Array(2).fill('Could not load messages: Conversation conv-1 not found'));
+    expect(metric(fixture, 'Total Messages')).toBe('');
+    expect(turnBadges(fixture)).toEqual([]);
     expect(query(fixture, '.mj-branch-note')).toBeNull();
     expect(consoleError).toHaveBeenCalledWith(expect.stringContaining('conv-1'));
+  });
+
+  it('renders the recent turns and the turn badge when the reads succeed', async () => {
+    vi.spyOn(ConversationEngine, 'LoadCurrentScope').mockResolvedValue(BRANCH_SCOPE);
+
+    const fixture = await render();
+
+    expect(pageText(fixture)).toContain('hello');
+    expect(turnBadges(fixture)).toEqual(['11 Turns']);
+    expect(errorLines(fixture)).toEqual([]);
+  });
+
+  it('renders the empty text when the path has no messages', async () => {
+    vi.spyOn(ConversationEngine, 'LoadCurrentScope').mockResolvedValue(BRANCH_SCOPE);
+    recentRows = [];
+
+    const fixture = await render();
+
+    expect(pageText(fixture)).toContain('No messages in this conversation yet.');
+    expect(errorLines(fixture)).toEqual([]);
+  });
+
+  it('shows the error line and no turn badge when a detail read returns Success: false', async () => {
+    vi.spyOn(ConversationEngine, 'LoadCurrentScope').mockResolvedValue(BRANCH_SCOPE);
+    detailFailure = 'Permission denied';
+
+    const fixture = await render();
+
+    expect(errorLines(fixture)).toEqual(Array(2).fill('Could not load messages: Permission denied'));
+    expect(pageText(fixture)).not.toContain('No messages in this conversation yet.');
+    expect(turnBadges(fixture)).toEqual([]);
+  });
+
+  it('shows a plain error line when the failed read has no message', async () => {
+    vi.spyOn(ConversationEngine, 'LoadCurrentScope').mockResolvedValue(BRANCH_SCOPE);
+    detailFailure = '';
+
+    const fixture = await render();
+
+    expect(errorLines(fixture)).toEqual(Array(2).fill('Could not load messages.'));
+  });
+
+  it('shows the error line when the batch throws', async () => {
+    vi.spyOn(ConversationEngine, 'LoadCurrentScope').mockResolvedValue(BRANCH_SCOPE);
+    runViews.mockRejectedValueOnce(new Error('Entity Example not found in metadata'));
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const fixture = await render();
+
+    expect(errorLines(fixture)).toEqual(Array(2).fill('Could not load messages: Entity Example not found in metadata'));
+    expect(turnBadges(fixture)).toEqual([]);
+  });
+
+  it('colors User turns blue and AI turns green, and gives an Error turn no pill color', async () => {
+    vi.spyOn(ConversationEngine, 'LoadCurrentScope').mockResolvedValue(BRANCH_SCOPE);
+    recentRows = [...RECENT, { ID: 'd3', Role: 'Error', Message: 'Model timed out', CreatedAt: '2026-10-05T00:00:02Z' }];
+
+    const fixture = await render();
+
+    const pills = queryAll(fixture, '.mj-pill');
+    const pill = (role: string) => pills.find((p) => p.textContent?.trim() === role);
+    expect(pill('User')?.classList.contains('mj-pill-blue')).toBe(true);
+    expect(pill('User')?.classList.contains('mj-pill-green')).toBe(false);
+    expect(pill('AI')?.classList.contains('mj-pill-green')).toBe(true);
+    expect(pill('AI')?.classList.contains('mj-pill-blue')).toBe(false);
+    expect(pill('Error')).toBeDefined();
+    expect(pill('Error')?.classList.contains('mj-pill-green')).toBe(false);
+    expect(pill('Error')?.classList.contains('mj-pill-blue')).toBe(false);
   });
 });

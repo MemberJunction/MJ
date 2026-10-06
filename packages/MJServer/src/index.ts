@@ -31,6 +31,8 @@ import { WebSocketServer } from 'ws';
 import { RealtimeProxyServer } from './realtimeProxy/RealtimeProxyServer.js';
 import buildApolloServer from './apolloServer/index.js';
 import { configInfo, configFilePath, dbDatabase, dbHost, dbPort, dbUsername, graphqlPort, graphqlRootPath, mj_core_schema, websiteRunFromPackage, RESTApiOptions } from './config.js';
+import { TranslateBracketsToPG } from './postgresqlCompat.js';
+import { BuildPostgreSQLConnectionConfig, DescribeReadOnlyLoginOverreach, PostgreSQLReadOnlyPool, ResolvePostgreSQLEndpoint, ResolvePostgreSQLReadOnlyCredentials, ToPGPoolConfig } from './postgresqlPoolSettings.js';
 import { default as jwt } from 'jsonwebtoken';
 import { contextFunction, CreateUnifiedAuthMiddleware, getUserPayload } from './context.js';
 import { UserPayload } from './types.js';
@@ -80,6 +82,7 @@ import { RegisterRSUProgressBridge } from './integration/RSUProgressBridge.js';
 import { ClientToolRequestManager, AgentRunWatchdog } from '@memberjunction/ai-agents';
 import { SessionJanitor } from './agentSessions/index.js';
 import { StartTaskGraphDispatcher } from './services/StartTaskGraphDispatcher.js';
+import { MJServerWorkQueueProviderSource, StartWorkQueueHost } from './services/WorkQueueHostService.js';
 import { GetAttachmentService } from '@memberjunction/aiengine';
 import { MJStorageBlobStore } from './services/MJStorageBlobStore.js';
 import { CACHE_INVALIDATION_TOPIC, MayBroadcastRecordData, ConfigureRecordDataBroadcast } from './generic/CacheInvalidationResolver.js';
@@ -452,31 +455,41 @@ const setupComplete$ = new ReplaySubject(1);
     startupLog.BeginPhase('Connecting to database');
     startupLog.LogIf('verbose', 'Database type: PostgreSQL');
     const pg = await import('pg');
-    const { PostgreSQLDataProvider, PostgreSQLProviderConfigData } = await import('@memberjunction/postgresql-dataprovider');
+    const { PostgreSQLDataProvider, PostgreSQLProviderConfigData, MJPostgresTypes } = await import('@memberjunction/postgresql-dataprovider');
 
-    const pgHost = process.env.PG_HOST || process.env.DB_HOST || 'localhost';
-    const pgPort = parseInt(process.env.PG_PORT || process.env.DB_PORT || '5432', 10);
-    const pgUser = process.env.PG_USERNAME || process.env.DB_USERNAME || 'postgres';
-    const pgPass = process.env.PG_PASSWORD || process.env.DB_PASSWORD || '';
-    const pgDatabase = process.env.PG_DATABASE || process.env.DB_DATABASE || '';
-
-    const pgPool = new pg.default.Pool({
-      host: pgHost,
-      port: pgPort,
-      user: pgUser,
-      password: pgPass,
-      database: pgDatabase,
-      max: configInfo.databaseSettings.connectionPool?.max ?? 50,
-      min: configInfo.databaseSettings.connectionPool?.min ?? 5,
-      idleTimeoutMillis: configInfo.databaseSettings.connectionPool?.idleTimeoutMillis ?? 30000,
-      connectionTimeoutMillis: configInfo.databaseSettings.connectionPool?.acquireTimeoutMillis ?? 30000,
-    });
+    const pgEndpoint = ResolvePostgreSQLEndpoint();
+    const { Host: pgHost, Port: pgPort, User: pgUser, Database: pgDatabase } = pgEndpoint;
+    // Every API pool carries the statement and idle-in-transaction timeouts from connection #1.
+    const pgConnectionConfig = BuildPostgreSQLConnectionConfig(pgEndpoint, configInfo.databaseSettings, 'api');
+    const pgPool = new pg.default.Pool(ToPGPoolConfig(pgConnectionConfig));
 
     // Verify connection
     const testClient = await pgPool.connect();
     await testClient.query('SELECT 1');
     testClient.release();
     startupLog.LogIf('verbose', `PostgreSQL pool connected to ${pgHost}:${pgPort}/${pgDatabase}`);
+
+    // A read-only pool opened with the read-only login, as SQL Server has. Read-only per-request
+    // providers (TestQuerySQL and other caller-supplied SQL) share it instead of the primary pool.
+    const pgReadOnlyCredentials = ResolvePostgreSQLReadOnlyCredentials(configInfo);
+    if (pgReadOnlyCredentials) {
+      // A pool a provider runs on must carry the provider's type parsers, so BIGINT and NUMERIC
+      // come back as numbers here as they do on the provider's own pool.
+      const readOnlyPgPool = new pg.default.Pool({
+        ...ToPGPoolConfig(BuildPostgreSQLConnectionConfig({ ...pgEndpoint, ...pgReadOnlyCredentials }, configInfo.databaseSettings, 'read-only')),
+        types: MJPostgresTypes,
+      });
+      const readOnlyTestClient = await readOnlyPgPool.connect();
+      try {
+        for (const warning of await DescribeReadOnlyLoginOverreach(readOnlyTestClient, mj_core_schema)) {
+          LogStatus(`WARNING: ${warning}`);
+        }
+      } finally {
+        readOnlyTestClient.release();
+      }
+      PostgreSQLReadOnlyPool.Instance.Pool = readOnlyPgPool;
+      startupLog.LogIf('verbose', 'Read-only PostgreSQL pool has been initialized.');
+    }
 
     // Create a DataSourceInfo with a MSSQL-compatible wrapper around pg.Pool
     // This allows existing code (types, util, context) to work without changes
@@ -491,15 +504,6 @@ const setupComplete$ = new ReplaySubject(1);
     }));
 
     // Set up the PostgreSQL provider
-    const pgConnectionConfig = {
-      Host: pgHost,
-      Port: pgPort,
-      Database: pgDatabase,
-      User: pgUser,
-      Password: pgPass,
-      MaxConnections: configInfo.databaseSettings.connectionPool?.max ?? 50,
-      MinConnections: configInfo.databaseSettings.connectionPool?.min ?? 5,
-    };
     const pgConfigData = new PostgreSQLProviderConfigData(
       pgConnectionConfig,
       mj_core_schema,
@@ -533,7 +537,7 @@ const setupComplete$ = new ReplaySubject(1);
       if (poolAny._pgPool) {
         const thePgPool = poolAny._pgPool as import('pg').Pool;
         // Translate SQL Server bracket syntax to PostgreSQL double-quote syntax
-        const pgQuery = translateBracketsToPG(query);
+        const pgQuery = TranslateBracketsToPG(query);
         const result = await thePgPool.query(pgQuery);
         return result.rows;
       }
@@ -552,21 +556,21 @@ const setupComplete$ = new ReplaySubject(1);
     const pgCodegenPass = process.env.CODEGEN_DB_PASSWORD;
     if (pgCodegenUser && pgCodegenPass) {
       try {
-        const codegenPgPool = new pg.default.Pool({
-          host: pgHost,
-          port: pgPort,
-          user: pgCodegenUser,
-          password: pgCodegenPass,
-          database: pgDatabase,
-          max: 10,
-        });
+        // CodeGen and DDL work runs long statements across every entity, so this pool gets the
+        // long CodeGen timeout rather than the API one, as the SQL Server CodeGen pool does.
+        const codegenPgConnectionConfig = BuildPostgreSQLConnectionConfig(
+          { ...pgEndpoint, User: pgCodegenUser, Password: pgCodegenPass },
+          configInfo.databaseSettings,
+          'codegen',
+        );
+        const codegenPgPool = new pg.default.Pool(ToPGPoolConfig(codegenPgConnectionConfig));
         const codegenTestClient = await codegenPgPool.connect();
         await codegenTestClient.query('SELECT 1');
         codegenTestClient.release();
 
         const { RuntimeSchemaManager } = await import('@memberjunction/schema-engine');
         const codegenPgConfigData = new PostgreSQLProviderConfigData(
-          { Host: pgHost, Port: pgPort, Database: pgDatabase, User: pgCodegenUser, Password: pgCodegenPass },
+          codegenPgConnectionConfig,
           mj_core_schema,
           cacheRefreshInterval / 1000, // ms → seconds
         );
@@ -1792,6 +1796,18 @@ const setupComplete$ = new ReplaySubject(1);
       .catch(err => console.warn(`[TaskGraphDispatcher] Startup failed: ${err}`));
   }
 
+  // Start the durable work-queue host where enabled. It plans which subscriptions this instance runs,
+  // re-plans on a timer, and self-registers with ShutdownRegistry, so gracefulShutdown's awaited
+  // ShutdownAll() drains it (up to 2 × shutdownDrainMs) before the HTTP server closes.
+  // Not awaited: a slow engine load must not delay readiness, and a failure never stops the API.
+  const workQueueProvider = Metadata.Provider; // global-provider-ok: server startup — the work-queue host runs on the server's own provider
+  if (configInfo.workQueue?.enabled && workQueueProvider instanceof DatabaseProviderBase) {
+    const workQueuePool = dataSources[0]?.dataSource;
+    const providerSource = new MJServerWorkQueueProviderSource(workQueuePool instanceof sql.ConnectionPool ? workQueuePool : null, workQueueProvider);
+    StartWorkQueueHost(configInfo.workQueue, workQueueProvider, providerSource)
+      .catch(error => console.error('❌ Failed to start the work queue host:', error));
+  }
+
 
   // Set up graceful shutdown handlers
   const gracefulShutdown = async (signal: string) => {
@@ -2275,11 +2291,3 @@ function createMSSQLCompatPool(pgPool: import('pg').Pool): sql.ConnectionPool {
   return wrapper as unknown as sql.ConnectionPool;
 }
 
-/**
- * Translates SQL Server bracket-quoted identifiers to PostgreSQL double-quoted identifiers.
- * Converts [schema].[table] to "schema"."table" and handles common T-SQL patterns.
- */
-function translateBracketsToPG(sql: string): string {
-  // Replace [identifier] with "identifier"
-  return sql.replace(/\[([^\]]+)\]/g, '"$1"');
-}

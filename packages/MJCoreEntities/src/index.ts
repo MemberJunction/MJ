@@ -50,6 +50,11 @@ export * from './engines/IdentityClaimEngine';
 
 export * from './custom/PermissionProviders';
 export * from './custom/Permissions';
+export * from './custom/FormScope/FormScopeRules';
+export * from './custom/FormScope/FormContributionRow';
+export * from './custom/FormScope/FormContributionClaims';
+export * from './custom/FormScope/FormContributionLifecycle';
+export * from './custom/FormScope/FormPanelHides';
 export * from './custom/operations/EvaluateAuthorizationChecks';
 export { AuthorizationCheckServerOperation, LoadAuthorizationCheckOperation } from './custom/operations/AuthorizationCheckOperation';
 

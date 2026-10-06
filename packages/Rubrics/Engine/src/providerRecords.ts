@@ -1,4 +1,4 @@
-import { AIPromptParams, ChildPromptParam } from '@memberjunction/ai-core-plus';
+import { AIPromptParams, ChildPromptParam, PickPromptExecutionScope, type AIPromptExecutionScope } from '@memberjunction/ai-core-plus';
 import { AIDecisionParams, AIDecisionRunner, AIPromptRunner } from '@memberjunction/ai-prompts';
 import type { EvaluationAgentRunner } from './AgentRubricEvaluator.js';
 import type { RubricDecisionOutput, RubricDecisionService, RubricPromptRef, RubricPromptRequest, RubricPromptService } from './evaluatorServices.js';
@@ -390,10 +390,10 @@ async function LoadPrompt(provider: unknown, user: unknown, ref: RubricPromptRef
  * - **RenderCriteria** renders the criterion prompt once per criterion, with no model call.
  * - **Preview** returns the composed system prompt Run would send, with no model call.
  */
-export function ProviderPromptService(provider: unknown, user: unknown): RubricPromptService {
+export function ProviderPromptService(provider: unknown, user: unknown, executionScope?: AIPromptExecutionScope): RubricPromptService {
     return {
         async Run(input) {
-            const params = await EvaluatorPromptParams(provider, user, input);
+            const params = await EvaluatorPromptParams(provider, user, input, executionScope);
             params.templateMessageRole = 'system';
             params.conversationMessages = [{ role: 'user', content: input.Subject }];
             if (input.ModelID) params.override = { modelId: input.ModelID };
@@ -421,12 +421,15 @@ export function ProviderPromptService(provider: unknown, user: unknown): RubricP
 }
 
 /** The evaluator prompt, its data, and the judge as its one child prompt, ready to render or run. */
-async function EvaluatorPromptParams(provider: unknown, user: unknown, input: Pick<RubricPromptRequest, 'Prompt' | 'Judge' | 'Data'>): Promise<AIPromptParams> {
+async function EvaluatorPromptParams(provider: unknown, user: unknown, input: Pick<RubricPromptRequest, 'Prompt' | 'Judge' | 'Data'>, executionScope?: AIPromptExecutionScope): Promise<AIPromptParams> {
     const [parent, judge] = await Promise.all([
         LoadPrompt(provider, user, input.Prompt),
         input.Judge ? LoadPrompt(provider, user, input.Judge) : Promise.resolve(null),
     ]);
     const params = TemplateParams(parent, user, input.Data);
+    // The evaluator runs the model; the judge child only contributes its rendered template.
+    if (executionScope) Object.assign(params, PickPromptExecutionScope(executionScope));
+    params.contextUser = user as AIPromptParams['contextUser'];
     if (judge) params.childPrompts = [new ChildPromptParam(TemplateParams(judge, user, input.Data), RUBRIC_JUDGE_PLACEHOLDER)];
     return params;
 }
@@ -450,11 +453,12 @@ function RenderedOrThrow(rendered: Record<string, string>, placeholder: string, 
  * Asks typed Score questions with AIDecisionRunner, on the Decision-type models the prompt binds
  * (Default Decision binds Jev and LLM Decision). ModelID pins the model. Returns the prompt run it wrote.
  */
-export function ProviderDecisionService(provider: unknown, user: unknown): RubricDecisionService {
+export function ProviderDecisionService(provider: unknown, user: unknown, executionScope?: AIPromptExecutionScope): RubricDecisionService {
     return {
         async Decide(input) {
             const prompt = await LoadPrompt(provider, user, input.Prompt);
             const params = new AIDecisionParams();
+            if (executionScope) Object.assign(params, PickPromptExecutionScope(executionScope));
             params.prompt = prompt as AIDecisionParams['prompt'];
             params.State = input.State;
             params.Questions = input.Questions;
@@ -472,7 +476,7 @@ export function ProviderDecisionService(provider: unknown, user: unknown): Rubri
     };
 }
 
-type AgentRunnerFactory = (provider: unknown, user: unknown) => EvaluationAgentRunner;
+type AgentRunnerFactory = (provider: unknown, user: unknown, executionScope?: AIPromptExecutionScope) => EvaluationAgentRunner;
 
 let agentRunnerFactory: AgentRunnerFactory | undefined;
 
@@ -481,13 +485,19 @@ export function RegisterRubricAgentRunner(factory: AgentRunnerFactory): void {
     agentRunnerFactory = factory;
 }
 
-/** A RubricEngine whose catalog, evaluations, prompts, decisions, and agent runs use the caller's provider. */
-export function ProviderRubricEngine(provider: unknown, user: unknown): RubricEngine {
+/**
+ * A RubricEngine whose catalog, evaluations, prompts, decisions, and agent runs use the caller's provider.
+ *
+ * @param executionScope The evaluating run's configuration, runtime API keys and credential scope.
+ *   An agent's self-check passes its own, so judging a customer's run spends the customer's keys —
+ *   and under `'RuntimeOnly'` never the platform's. Omitted, the judge resolves keys as any prompt does.
+ */
+export function ProviderRubricEngine(provider: unknown, user: unknown, executionScope?: AIPromptExecutionScope): RubricEngine {
     const data = provider as RubricProvider;
     return new RubricEngine(ProviderEvaluationStore(data, user), ProviderRecords(data, user), {
-        Prompts: ProviderPromptService(data, user),
-        Decisions: ProviderDecisionService(data, user),
-        Agent: agentRunnerFactory?.(data, user),
+        Prompts: ProviderPromptService(data, user, executionScope),
+        Decisions: ProviderDecisionService(data, user, executionScope),
+        Agent: agentRunnerFactory?.(data, user, executionScope),
     });
 }
 

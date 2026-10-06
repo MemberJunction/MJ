@@ -3,11 +3,11 @@ import { CommonModule } from '@angular/common';
 import { IMetadataProvider, LogError, Metadata, RunView } from '@memberjunction/core';
 import { EscapeSQLString, RegisterClassEx } from '@memberjunction/global';
 import { BaseFormPanel } from '@memberjunction/ng-base-forms';
-import { ConversationEngine, ConversationScope, MJConversationEntity } from '@memberjunction/core-entities';
+import { ConversationEngine, ConversationScope, MJConversationDetailEntity, MJConversationEntity } from '@memberjunction/core-entities';
 
 interface ConversationDetailRow {
     ID: string;
-    Role: string;
+    Role: MJConversationDetailEntity['Role'];
     Message: string;
     CreatedAt: string;
 }
@@ -16,9 +16,9 @@ interface ConversationDetailRow {
 const RECENT_MESSAGE_COUNT = 4;
 
 @RegisterClassEx(BaseFormPanel, {
-    key: 'form-panel:Conversations:overview',
+    key: 'form-panel:MJ: Conversations:overview',
     metadata: {
-        entity: 'Conversations',
+        entity: 'MJ: Conversations',
         slot: 'before-fields',
         sortKey: 10,
     },
@@ -34,24 +34,30 @@ const RECENT_MESSAGE_COUNT = 4;
             <div class="mj-overview-card">
                 <div class="mj-card-header">
                     <div class="mj-card-title"><i class="fa-solid fa-comments" style="color: var(--mj-brand-primary, #38bdf8);"></i> Turn Summary</div>
-                    <span class="mj-card-badge">{{ TotalMessageCount }} Turns</span>
+                    @if (!LoadError) {
+                        <span class="mj-card-badge">{{ TotalMessageCount }} Turns</span>
+                    }
                 </div>
                 <div class="mj-card-body">
-                    <div class="mj-metric-row">
-                        <span class="mj-metric-label">Total Messages</span>
-                        <span class="mj-metric-val">{{ TotalMessageCount }}</span>
-                    </div>
-                    @if (BranchCount > 0) {
-                        <div class="mj-branch-note">across {{ BranchCount }} {{ BranchCount === 1 ? 'branch' : 'branches' }}</div>
+                    @if (LoadError) {
+                        <span class="mj-load-error">{{ LoadError }}</span>
+                    } @else {
+                        <div class="mj-metric-row">
+                            <span class="mj-metric-label">Total Messages</span>
+                            <span class="mj-metric-val">{{ TotalMessageCount }}</span>
+                        </div>
+                        @if (BranchCount > 0) {
+                            <div class="mj-branch-note">across {{ BranchCount }} {{ BranchCount === 1 ? 'branch' : 'branches' }}</div>
+                        }
+                        <div class="mj-metric-row">
+                            <span class="mj-metric-label">User Prompts</span>
+                            <span class="mj-metric-val">{{ UserMessageCount }}</span>
+                        </div>
+                        <div class="mj-metric-row">
+                            <span class="mj-metric-label">Agent Responses</span>
+                            <span class="mj-metric-val">{{ AgentMessageCount }}</span>
+                        </div>
                     }
-                    <div class="mj-metric-row">
-                        <span class="mj-metric-label">User Prompts</span>
-                        <span class="mj-metric-val">{{ UserMessageCount }}</span>
-                    </div>
-                    <div class="mj-metric-row">
-                        <span class="mj-metric-label">Agent Responses</span>
-                        <span class="mj-metric-val">{{ AgentMessageCount }}</span>
-                    </div>
                 </div>
             </div>
 
@@ -62,7 +68,9 @@ const RECENT_MESSAGE_COUNT = 4;
                     <span class="mj-card-badge">History</span>
                 </div>
                 <div class="mj-card-body">
-                    @if (Messages.length === 0) {
+                    @if (LoadError) {
+                        <span class="mj-load-error">{{ LoadError }}</span>
+                    } @else if (Messages.length === 0) {
                         <span style="font-size: 12px; color: var(--mj-text-muted);">No messages in this conversation yet.</span>
                     } @else {
                         @for (msg of RecentMessages; track msg.ID) {
@@ -70,7 +78,7 @@ const RECENT_MESSAGE_COUNT = 4;
                                 <span class="mj-metric-label" style="text-overflow: ellipsis; overflow: hidden; white-space: nowrap; max-width: 200px;">
                                     <strong>{{ msg.Role }}:</strong> {{ msg.Message }}
                                 </span>
-                                <span class="mj-pill" [class.mj-pill-blue]="msg.Role === 'user'" [class.mj-pill-green]="msg.Role !== 'user'">
+                                <span class="mj-pill" [class.mj-pill-blue]="IsUserTurn(msg)" [class.mj-pill-green]="IsAgentTurn(msg)">
                                     {{ msg.Role }}
                                 </span>
                             </div>
@@ -134,6 +142,7 @@ const RECENT_MESSAGE_COUNT = 4;
         .mj-metric-label { color: var(--mj-text-secondary, #94a3b8); }
         .mj-branch-note { font-size: 11px; color: var(--mj-text-muted); margin-top: -6px; }
         .mj-metric-val { font-weight: 600; color: var(--mj-text-primary, #f8fafc); font-family: monospace; }
+        .mj-load-error { font-size: 12px; color: var(--mj-status-error); }
         .mj-pill { font-size: 10.5px; font-weight: 700; padding: 2px 6px; border-radius: 4px; }
         .mj-pill-green { background: rgba(16, 185, 129, 0.15); color: #10b981; }
         .mj-pill-blue { background: rgba(56, 189, 248, 0.15); color: #38bdf8; }
@@ -151,9 +160,21 @@ export class ConversationOverviewPanel extends BaseFormPanel<MJConversationEntit
     public AgentMessageCount = 0;
     /** Branch rows of the conversation, whichever path is current. */
     public BranchCount = 0;
+    /** Set when a read fails, so the cards show the failure instead of zero messages. */
+    public LoadError: string | null = null;
 
     public ngOnInit(): void {
         this.loadConversationMessages();
+    }
+
+    /** A turn the user sent. `Role` is stored as 'User', 'AI' or 'Error'. */
+    protected IsUserTurn(detail: ConversationDetailRow): boolean {
+        return detail.Role === 'User';
+    }
+
+    /** A turn an agent sent. An 'Error' turn is neither a user turn nor an agent turn. */
+    protected IsAgentTurn(detail: ConversationDetailRow): boolean {
+        return detail.Role === 'AI';
     }
 
     public get RecentMessages(): ConversationDetailRow[] {
@@ -167,8 +188,8 @@ export class ConversationOverviewPanel extends BaseFormPanel<MJConversationEntit
 
     /**
      * Loads the counts and newest messages on the conversation's current branch path, and the
-     * conversation's branch count, in one batch. When the branch scope cannot be read, the counts
-     * stay at zero.
+     * conversation's branch count, in one batch. When the branch scope or a detail read fails, the
+     * cards show the failure.
      */
     private async loadConversationMessages(): Promise<void> {
         if (!this.Record?.ID) return;
@@ -177,7 +198,10 @@ export class ConversationOverviewPanel extends BaseFormPanel<MJConversationEntit
         try {
             scope = await ConversationEngine.LoadCurrentScope(this.Record.ID, provider.CurrentUser, provider);
         } catch (e) {
-            LogError(`Conversation overview: could not read the branch scope of conversation ${this.Record.ID}: ${e instanceof Error ? e.message : String(e)}`);
+            const message = e instanceof Error ? e.message : String(e);
+            LogError(`Conversation overview: could not read the branch scope of conversation ${this.Record.ID}: ${message}`);
+            this.showLoadError(message);
+            this.cdr.markForCheck();
             return;
         }
         try {
@@ -212,14 +236,27 @@ export class ConversationOverviewPanel extends BaseFormPanel<MJConversationEntit
                     ResultType: 'count_only',
                 },
             ], provider.CurrentUser);
-            this.TotalMessageCount = total?.Success ? total.TotalRowCount : 0;
-            this.UserMessageCount = user?.Success ? user.TotalRowCount : 0;
-            this.AgentMessageCount = agent?.Success ? agent.TotalRowCount : 0;
-            this.Messages = recent?.Success ? recent.Results : [];
+            const detailReads = [total, user, agent, recent];
+            const failed = detailReads.findIndex(r => !r?.Success);
+            if (failed >= 0) {
+                this.showLoadError(detailReads[failed]?.ErrorMessage);
+            } else {
+                this.TotalMessageCount = total?.TotalRowCount ?? 0;
+                this.UserMessageCount = user?.TotalRowCount ?? 0;
+                this.AgentMessageCount = agent?.TotalRowCount ?? 0;
+                this.Messages = recent?.Results ?? [];
+            }
             this.BranchCount = branches?.Success ? branches.TotalRowCount : 0;
-            this.cdr.markForCheck();
         } catch (e) {
-            LogError(`Conversation overview: could not load the details of conversation ${this.Record.ID}: ${e instanceof Error ? e.message : String(e)}`);
+            const message = e instanceof Error ? e.message : String(e);
+            LogError(`Conversation overview: could not load the details of conversation ${this.Record.ID}: ${message}`);
+            this.showLoadError(message);
         }
+        this.cdr.markForCheck();
+    }
+
+    /** Shows a short "could not load" line, with the underlying message when there is one. */
+    private showLoadError(detail: string | undefined): void {
+        this.LoadError = detail ? `Could not load messages: ${detail}` : 'Could not load messages.';
     }
 }

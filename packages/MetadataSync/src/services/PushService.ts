@@ -1777,20 +1777,6 @@ export class PushService {
       }
     }
     
-    if (options.dryRun) {
-      // Still add to batch context so child records at later dependency levels
-      // can resolve @parent references. Without this, dry-run fails on any
-      // metadata with parent-child nesting (e.g. Actions → Action Params).
-      const batchContextEntry = { key: lookupKey, entity };
-      if (exists) {
-        callbacks?.onLog?.(`[DRY RUN] Would update ${entityName} record`);
-        return { status: 'updated', batchContextEntry };
-      } else {
-        callbacks?.onLog?.(`[DRY RUN] Would create ${entityName} record`);
-        return { status: 'created', batchContextEntry };
-      }
-    }
-    
     // If updating an existing record that's dirty, capture what changed for the
     // end-of-run recap. The inline diff is verbose-only now: the recap is the default
     // surface, and emitting the diff mid-spinner previously garbled the spinner line.
@@ -1844,6 +1830,22 @@ export class PushService {
         warnings: localWarnings.length > 0 ? localWarnings : undefined,
         status: 'unchanged',
       };
+    }
+
+    // A dry run stops here, after the same change detection a real push uses, so an
+    // in-sync record reports unchanged above rather than "would update" (#4529).
+    if (options.dryRun) {
+      // Still add to batch context so child records at later dependency levels
+      // can resolve @parent references. Without this, dry-run fails on any
+      // metadata with parent-child nesting (e.g. Actions → Action Params).
+      const batchContextEntry = { key: lookupKey, entity };
+      if (exists) {
+        callbacks?.onLog?.(`[DRY RUN] Would update ${entityName} record`);
+        return { status: 'updated', batchContextEntry };
+      } else {
+        callbacks?.onLog?.(`[DRY RUN] Would create ${entityName} record`);
+        return { status: 'created', batchContextEntry };
+      }
     }
     
     // Save the record with detailed error logging
@@ -2907,21 +2909,19 @@ export class PushService {
   }
 
   /**
-   * Builds the payload used for calculating record checksums, including composition axes (§5, §6)
+   * Builds the payload used for calculating record checksums, including composition axes (§5, §6).
+   * Shares its shape with pull via {@link SyncEngine.BuildRecordChecksumPayload}.
    */
   private buildRecordChecksumPayload(
     record: RecordData,
     fieldsOverride?: Record<string, unknown>
   ): Record<string, unknown> {
-    const fields = fieldsOverride ?? record.fields;
-    if (!record.collections && !record.embeds && !record.extension) {
-      return fields as Record<string, unknown>;
-    }
-    const payload: Record<string, unknown> = { fields };
-    if (record.collections) payload.collections = record.collections;
-    if (record.embeds) payload.embeds = record.embeds;
-    if (record.extension) payload.extension = record.extension;
-    return payload;
+    return SyncEngine.BuildRecordChecksumPayload(
+      fieldsOverride ?? record.fields,
+      record.collections,
+      record.embeds,
+      record.extension
+    );
   }
 
   /**

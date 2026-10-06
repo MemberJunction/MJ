@@ -928,6 +928,40 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
    * (not just scroll to it) use this instead of a `[data-message-id]` query, which fails for
    * exactly the cases listed — see {@link scrollToTimelineEntry}.
    */
+  /**
+   * Refreshes one rendered message in place: the streaming path's alternative to replacing the
+   * whole `messages` array, which rebuilds the timeline and re-measures the mounted range on
+   * every delta. Marks the item as streaming so its stylesheet can lift the status-line cap.
+   *
+   * @returns false only when the message has no rendered entry at all, so the caller can fall
+   * back to the full path for that one update. A spacer or a session card standing in for the
+   * message is a no-op: the entity holds the text and a remount renders it.
+   */
+  public RefreshRenderedMessage(message: MJConversationDetailEntity): boolean {
+    const existing = this._renderedMessages.get(this.getMessageKey(message));
+    if (!existing) {
+      return false;
+    }
+    switch (existing.kind) {
+      case 'embedded':
+        existing.ref.context.$implicit = message;
+        existing.ref.context.message = message;
+        if (!existing.ref.destroyed) {
+          existing.ref.detectChanges();
+        }
+        return true;
+      case 'component':
+        existing.ref.instance.message = message;
+        existing.ref.instance.IsStreaming = true;
+        if (!this.isViewDestroyed(existing.ref.changeDetectorRef)) {
+          existing.ref.changeDetectorRef.detectChanges();
+        }
+        return true;
+      default:
+        return true;
+    }
+  }
+
   public FindTimelineElement(messageId: string): HTMLElement | null {
     const detail = this.messages?.find(m => UUIDsEqual(m.ID, messageId));
     if (!detail) {
@@ -1836,6 +1870,11 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     const previousMessage = instance.message;
 
     instance.message = message;
+    // Streaming ends with the message. It is deliberately NOT cleared on an in-progress full
+    // render (an artifact landing mid-stream): that would snap the status cap back on for a frame.
+    if (message.Status !== 'In-Progress') {
+      instance.IsStreaming = false;
+    }
     instance.allMessages = messages;
     instance.isProcessing = this.IsProcessing;
     instance.userAvatarMap = this.UserAvatarMap;

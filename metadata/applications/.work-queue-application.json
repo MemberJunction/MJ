@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "Name": "Work Queue",
+    "Description": "Operate the durable work queue: topology overview with live stats, dead letters with replay and discard, blocked partition keys, and binding validation. Topics, subscriptions and transports open as standard entity forms.",
+    "Icon": "fa-solid fa-layer-group",
+    "DefaultForNewUser": false,
+    "Color": "#0e7490",
+    "DefaultSequence": 1300,
+    "DefaultNavItems": [
+      {
+        "Label": "Operations",
+        "Icon": "fa-solid fa-layer-group",
+        "ResourceType": "Custom",
+        "DriverClass": "WorkQueueDashboard",
+        "isDefault": true
+      }
+    ]
+  },
+  "relatedEntities": {
+    "MJ: Application Entities": [
+      {
+        "fields": {
+          "ApplicationID": "@parent:ID",
+          "EntityID": "@lookup:MJ: Entities.Name=MJ: Work Queue Topics",
+          "Sequence": 1,
+          "DefaultForNewUser": true
+        },
+        "primaryKey": {
+          "ID": "E97BB8CC-98DF-4E52-9AEC-B39DCE664C8F"
+        }
+      },
+      {
+        "fields": {
+          "ApplicationID": "@parent:ID",
+          "EntityID": "@lookup:MJ: Entities.Name=MJ: Work Queue Subscriptions",
+          "Sequence": 2,
+          "DefaultForNewUser": true
+        },
+        "primaryKey": {
+          "ID": "B2AAB0F1-EDC8-492E-9FB0-C0BFEFB2D36A"
+        }
+      },
+      {
+        "fields": {
+          "ApplicationID": "@parent:ID",
+          "EntityID": "@lookup:MJ: Entities.Name=MJ: Work Queue Transports",
+          "Sequence": 3,
+          "DefaultForNewUser": true
+        },
+        "primaryKey": {
+          "ID": "E2223683-AE6C-4E02-BBB6-22C2C9F21D74"
+        }
+      },
+      {
+        "fields": {
+          "ApplicationID": "@parent:ID",
+          "EntityID": "@lookup:MJ: Entities.Name=MJ: Work Queue Deliveries",
+          "Sequence": 4,
+          "DefaultForNewUser": false
+        },
+        "primaryKey": {
+          "ID": "E20613EE-2EEB-4A97-BB30-0514123C9575"
+        }
+      },
+      {
+        "fields": {
+          "ApplicationID": "@parent:ID",
+          "EntityID": "@lookup:MJ: Entities.Name=MJ: Work Queue Messages",
+          "Sequence": 5,
+          "DefaultForNewUser": false
+        },
+        "primaryKey": {
+          "ID": "B41B1444-CE6D-4A57-9E0D-C858DEBFCD02"
+        }
+      }
+    ]
+  },
+  "primaryKey": {
+    "ID": "85157260-1D41-4B23-88A3-D2816531388C"
+  }
+}
