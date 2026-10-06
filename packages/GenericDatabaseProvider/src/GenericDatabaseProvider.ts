@@ -76,7 +76,7 @@ import {
     QueryInfo,
 } from '@memberjunction/core';
 
-import { MJGlobal, NormalizeUUID, SQLExpressionValidator, UUIDsEqual } from '@memberjunction/global';
+import { BytesToBase64, IsByteArray, MJGlobal, NormalizeUUID, SQLExpressionValidator, UUIDsEqual } from '@memberjunction/global';
 import { QueryPagingEngine } from './queryPagingEngine.js';
 // QueryParameterProcessor is now called internally by RenderPipeline
 import { createHash } from 'node:crypto';
@@ -107,6 +107,7 @@ import { QueueManager } from '@memberjunction/queue';
 import { BuildEntityActionDispatchKey, EntityActionDispatchGuard, EntityActionEngineServer } from '@memberjunction/actions';
 import { ActionResult, BuildEntityChangeContext } from '@memberjunction/actions-base';
 import { TransactionFrameTracker } from './TransactionFrameTracker';
+import { CountOnlyBatchCoalescer, CountOnlyRow, IsCoalescibleCountBatch } from './countOnlyBatch';
 import { EncryptionEngine } from '@memberjunction/encryption';
 import { GeoCodeSyncService, GeocodeResult } from '@memberjunction/geo-core';
 
@@ -826,6 +827,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     ): Promise<Record<string, unknown>[]> {
         if (!rows || rows.length === 0) return rows;
 
+        // Step 0: binary columns → base64. Drivers return varbinary/bytea as byte arrays (Node
+        // Buffers); BaseEntity, the caches and every transport hold binary values as base64
+        // strings, so the conversion happens once, here, for every row a provider returns.
+        // Applies to external entities too — their drivers return Buffers just the same.
+        this.ConvertBinaryFieldsToBase64(rows, entityInfo.BinaryFields);
+
         // Step 1: Platform-specific datetime adjustment (virtual hook).
         // SKIP for external entities: AdjustDatetimeFields applies THIS provider's platform correction
         // (e.g. SQL Server appends 'Z' to compensate for how tedious marshals datetimes from the LOCAL
@@ -868,6 +875,62 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
             return processedRow;
         }));
+    }
+
+    /**
+     * Public entry point to {@link PostProcessRows} for code that runs SQL outside the provider's
+     * own read paths but returns entity rows — the transaction groups. Every row a provider hands
+     * back must pass through here, so binary columns become base64, datetimes are adjusted and
+     * encrypted fields are decrypted no matter which path saved the record.
+     *
+     * @param rows - Raw rows for `entityInfo`.
+     * @param entityInfo - The entity the rows belong to.
+     * @param contextUser - The user the rows are processed for (decryption runs as this user).
+     * @returns The processed rows.
+     */
+    public async ProcessEntityRows(rows: Record<string, unknown>[], entityInfo: EntityInfo, contextUser?: UserInfo): Promise<Record<string, unknown>[]> {
+        if (!rows || rows.length === 0) return rows;
+        return this.PostProcessRows(rows, entityInfo, contextUser as UserInfo);
+    }
+
+    /**
+     * Converts the byte-array values of an entity's binary fields to base64 strings, in place.
+     *
+     * Database drivers return `varbinary` / `binary` / `image` (SQL Server) and `bytea`
+     * (PostgreSQL) columns as `Uint8Array`s (Node `Buffer`s). MemberJunction's representation of
+     * a binary value above the provider is a base64 string, so it is JSON-safe for dirty tracking,
+     * Record Changes, the RunView caches and every transport. Values that are already strings,
+     * null or absent are left untouched, which makes the conversion idempotent.
+     *
+     * @param rows - Rows as returned by the driver; mutated in place.
+     * @param binaryFields - The entity's binary fields (`EntityInfo.BinaryFields`).
+     */
+    protected ConvertBinaryFieldsToBase64(rows: Record<string, unknown>[], binaryFields: EntityFieldInfo[]): void {
+        if (binaryFields.length === 0) return;
+        for (const row of rows) {
+            for (const field of binaryFields) {
+                const value = row[field.Name];
+                if (IsByteArray(value)) row[field.Name] = BytesToBase64(value);
+            }
+        }
+    }
+
+    /**
+     * Converts every byte-array value in a set of rows to a base64 string, in place. For results
+     * with no entity metadata, such as RunQuery and ad-hoc SQL, where binary columns can only be
+     * recognised by value. See {@link ConvertBinaryFieldsToBase64}.
+     *
+     * @param rows - Rows as returned by the driver; mutated in place.
+     */
+    protected ConvertByteArrayValuesToBase64(rows: Record<string, unknown>[] | null | undefined): void {
+        if (!rows) return;
+        for (const row of rows) {
+            if (!row || typeof row !== 'object') continue;
+            for (const key of Object.keys(row)) {
+                const value = row[key];
+                if (IsByteArray(value)) row[key] = BytesToBase64(value);
+            }
+        }
     }
 
     /**************************************************************************/
@@ -1790,6 +1853,20 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * aggregates, parallel query execution, post-processing, and audit logging.
      */
     protected override async InternalRunView<T = unknown>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>> {
+        return this.RunViewCore<T>(params, contextUser);
+    }
+
+    /**
+     * The body of {@link InternalRunView}. `countExecutor`, when supplied, replaces the
+     * direct execution of a `count_only` view's COUNT query — {@link InternalRunViews} uses
+     * it to coalesce an all-`count_only` batch into one statement (see countOnlyBatch.ts).
+     * Everything before that step — permissions, RLS, filter screening — is unchanged.
+     */
+    protected async RunViewCore<T = unknown>(
+        params: RunViewParams,
+        contextUser?: UserInfo,
+        countExecutor?: (countSQL: string) => Promise<CountOnlyRow[]>,
+    ): Promise<RunViewResult<T>> {
         if (params?.Aggregates?.length) {
             LogStatus(`[GenericDatabaseProvider] InternalRunView received aggregates: entityName=${params.EntityName}, viewID=${params.ViewID}, viewName=${params.ViewName}, aggregateCount=${params.Aggregates.length}`);
         }
@@ -2122,7 +2199,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const maxRowsUsed = params.MaxRows || entityInfo.UserViewMaxRows;
             const willNeedCount = countSQL && (usingPagination || params.ResultType === 'count_only');
             if (willNeedCount) {
-                queries.push(this.ExecuteSQL(countSQL!, undefined, undefined, contextUser));
+                queries.push(countExecutor && params.ResultType === 'count_only'
+                    ? countExecutor(countSQL!)
+                    : this.ExecuteSQL(countSQL!, undefined, undefined, contextUser));
                 queryKeys.push('count');
             }
 
@@ -2225,8 +2304,31 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     protected override async InternalRunViews<T = unknown>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
+        if (IsCoalescibleCountBatch(params)) {
+            return this.RunCoalescedCountBatch<T>(params, contextUser);
+        }
         const promises = params.map((p) => this.InternalRunView<T>(p, contextUser));
         return Promise.all(promises);
+    }
+
+    /**
+     * All-`count_only` batch: every view runs the normal per-view path (so every
+     * security gate applies per view), but their COUNT queries are executed as ONE
+     * `UNION ALL` statement — one database round trip for, e.g., every related-section
+     * badge on a form. A view that fails keeps its own `Success:false` result; a connection
+     * failure is thrown, as on the per-view path.
+     */
+    protected async RunCoalescedCountBatch<T = unknown>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
+        const batch = new CountOnlyBatchCoalescer(
+            params.length,
+            (sql) => this.ExecuteSQL<Record<string, unknown>>(sql, undefined, undefined, contextUser),
+            (name) => this.QuoteIdentifier(name),
+            (error) => this.isConnectionError(error),
+        );
+        return Promise.all(params.map((p, index) =>
+            this.RunViewCore<T>(p, contextUser, (countSQL) => batch.Execute(index, countSQL))
+                .finally(() => batch.MarkSettled(index)),
+        ));
     }
 
     /**************************************************************************/
@@ -2299,6 +2401,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 if (!entityInfo) throw new Error(`Entity ${params.EntityName} not found in metadata`);
             }
 
+            // Binary columns are omitted from every implicit field list (saved-view columns and
+            // the no-Fields wildcard) unless requested; an explicit params.Fields entry is honoured.
+            const includeBinary = params.IncludeBinaryFields === true;
             const flsUser = contextUser ?? this.CurrentUser;
             const denied: Set<string> = params.ResultType !== 'entity_object' && flsUser && entityInfo.EnableFieldLevelSecurity
                 ? entityInfo.GetDeniedReadFields(flsUser)
@@ -2319,6 +2424,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     if (!c.hidden) {
                         if (c.EntityField) {
                             if (denied.has(c.EntityField.Name.trim().toLowerCase())) return; // silent narrowing
+                            if (!includeBinary && c.EntityField.IsBinaryFieldType) return; // binary only on request
                             fieldList.push(c.EntityField);
                         } else {
                             LogError(`View Field ${c.Name} doesn't match an Entity Field in entity ${entityInfo!.Name}.`);
@@ -2328,12 +2434,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 for (const ef of entityInfo.PrimaryKeys) {
                     if (!fieldList.find((f) => f.Name?.trim().toLowerCase() === ef.Name?.toLowerCase())) fieldList.push(ef);
                 }
-            } else if (denied.size > 0) {
-                // No explicit fields and no saved view would emit `SELECT *` — for a restricted
-                // user that pulls denied columns out of the database, so emit the explicit
-                // allowed-column list instead (PKs are unrestrictable and always included).
+            } else if (denied.size > 0 || (entityInfo.HasBinaryFields && !includeBinary)) {
+                // No explicit fields and no saved view would emit `SELECT *`. For a restricted
+                // user that pulls denied columns out of the database, and for an entity with
+                // binary columns it pulls large values nobody asked for — so emit the explicit
+                // column list instead (PKs are unrestrictable and always included).
                 for (const ef of entityInfo.Fields) {
-                    if (!denied.has(ef.Name.trim().toLowerCase())) fieldList.push(ef);
+                    if (denied.has(ef.Name.trim().toLowerCase())) continue;
+                    if (!includeBinary && ef.IsBinaryFieldType && !ef.IsPrimaryKey) continue;
+                    fieldList.push(ef);
                 }
             }
         } catch (e) {
@@ -2730,7 +2839,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     // ALL fields, for every user: server slots are full-width and shared, and
                     // field security narrows per request at read time via
                     // ApplyFieldSecurityProjection rather than at fetch time.
-                    p.Fields = this.ComputeRunViewFetchFields(widenEntity);
+                    this.ResolveIncludeBinaryFields(p, widenEntity);
+                    p.Fields = this.ComputeRunViewFetchFields(widenEntity, p);
                     if (requested) {
                         callerFieldsByIndex.set(i, ProviderBase.UnionFieldsWithPrimaryKeys(requested, widenEntity));
                     }
@@ -4142,6 +4252,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                         ]);
                         matExecutionTime = Date.now() - start;
                         rows = dataResult ?? [];
+                        this.ConvertByteArrayValuesToBase64(rows);
                         matTotalRowCount = countResult?.[0]?.TotalRowCount != null ? Number(countResult[0].TotalRowCount) : rows.length;
                     } else {
                         const timing = await this.executeQueryWithTiming(materializedSQL, contextUser, matPlan.parameters);
@@ -4229,6 +4340,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 if (!dataResult) throw new Error('Error executing paged query SQL');
 
                 paginatedResult = dataResult;
+                this.ConvertByteArrayValuesToBase64(paginatedResult);
                 totalRowCount = countResult?.[0]?.TotalRowCount != null
                     ? Number(countResult[0].TotalRowCount)
                     : paginatedResult.length;
@@ -4728,6 +4840,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         if (!result) {
             throw new Error('Error executing query SQL');
         }
+        // Query results carry no entity metadata, so binary columns are found by value.
+        this.ConvertByteArrayValuesToBase64(result);
 
         return { result, executionTime };
     }
@@ -5439,6 +5553,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             }
 
             let itemData = batchResults[i] || [];
+            // Binary columns become base64 whether or not the entity post-processing below runs —
+            // at boot there is no context user, and a raw Buffer must never reach the metadata
+            // cache or the wire (it serializes as {"type":"Buffer","data":[...]}).
+            this.ConvertByteArrayValuesToBase64(itemData);
 
             // Post-process rows for encryption/datetime
             if (itemData.length > 0) {
@@ -5682,9 +5800,21 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     /**
      * Validates columns for a dataset item and returns the column list string.
      * Returns null if columns are invalid.
+     *
+     * An item that names no columns selects every column EXCEPT binary ones, matching RunView's
+     * default (binary columns are large and rarely wanted; see guides/BINARY_FIELDS_GUIDE.md). A
+     * binary column can still be named explicitly. When the entity's metadata is not loaded yet —
+     * the first `MJ_Metadata` read at boot — the item falls back to `*`, and the rows' byte arrays
+     * are converted to base64 by the caller.
      */
     protected getColumnsForDatasetItem(item: Record<string, unknown>, datasetName: string): string | null {
         const specifiedColumns = item['Columns'] ? String(item['Columns']).split(',').map(col => col.trim()) : [];
+        if (specifiedColumns.length === 0) {
+            const entity = this.EntityByID(item['EntityID'] as string);
+            if (entity?.HasBinaryFields) {
+                return entity.Fields.filter(f => !f.IsBinaryFieldType).map(f => this.QuoteIdentifier(f.Name)).join(',');
+            }
+        }
         if (specifiedColumns.length > 0) {
             const entity = this.EntityByID(item['EntityID'] as string);
             if (!entity && this.Entities.length > 0) {

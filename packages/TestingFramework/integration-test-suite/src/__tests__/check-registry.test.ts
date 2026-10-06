@@ -48,12 +48,14 @@ import { AppBehavioralChecks } from '../checks/app-behavioral.checks';
 import { ContentVectorizationChecks } from '../checks/content-vectorization.checks';
 import { MaterializedReadChecks } from '../checks/materialized-read.checks';
 import { MaterializedEntityReadChecks } from '../checks/materialized-entity-read.checks';
+import { FormContributionsChecks } from '../checks/form-contributions.checks';
 import { ScopedAnonElevationChecks } from '../checks/scoped-anon-elevation.checks';
 import { EntityGraphChecks } from '../checks/entity-graph.checks';
 import { EntityEmbeddedChecks } from '../checks/entity-embedded.checks';
 import { EntityGraphClientChecks } from '../checks/entity-graph-client.checks';
 import { JSONTypeLiveSyncChecks, JSONTypeLiveSyncClientChecks } from '../checks/jsontype-live-sync.checks';
 import { RecordCloningChecks } from '../checks/record-cloning.checks';
+import { BinaryFieldsChecks } from '../checks/binary-fields.checks';
 import { TaskGraphOrchestrationChecks } from '../checks/task-graph-orchestration.checks';
 import { EntityActionChecks } from '../checks/entity-actions.checks';
 import { FlsEnforcementChecks } from '../checks/fls-enforcement.checks';
@@ -154,6 +156,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['content-vectorization', ContentVectorizationChecks, 10], // CV1-CV10 content vectorization pipeline (IT67)
         ['materialized-read', MaterializedReadChecks, 3], // MR1-MR2 served-from-snapshot proof + MR3 delete-path FK cleanup (IT79)
         ['materialized-entity-read', MaterializedEntityReadChecks, 2], // EMR1-EMR2 entity base-view RunView redirect (IT78)
+        ['form-contributions', FormContributionsChecks, 17], // FC1-FC17 metadata form contributions: schema, actions, clamp, kill switch, scoping, section claims, component guard (IT104)
         ['scoped-anon-elevation', ScopedAnonElevationChecks, 6], // SA1-SA6 scoped-anonymous elevation permission contract (IT68)
         ['entity-graph', EntityGraphChecks, 11], // EG1-EG8 related-record collection graph saves (IT72)
         ['entity-embedded', EntityEmbeddedChecks, 6], // EE1-EE6 owner-held embedded records
@@ -173,6 +176,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['fls-enforcement-client', FlsClientChecks, 6], // FC1-FC6 FLS over the wire via per-user API keys (IT92)
         ['metadata-sync-push', MetadataSyncPushChecks, 10], // MSP1-MSP10 sync push atomicity, in-transaction metadata reload, and one row-level security filter, mutation tier (IT94)
         ['record-cloning', RecordCloningChecks, 13], // RC1-RC9 plan §13.2 + RC10-RC13 real-database dry runs, client transport (IT96)
+        ['binary-fields', BinaryFieldsChecks, 6], // BF1-BF6 binary fields end to end + binary vector columns, client transport (IT101)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
@@ -247,6 +251,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'app-behavioral': 3,
         'app-wiring': 10,
         'auth-validation': 7,
+        'binary-fields': 6,
         'cache-gauntlet': 8,
         'cache-immutability': 15,
         'class-resolution': 5,
@@ -270,6 +275,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'fls-enforcement': 24,
         'fls-enforcement-client': 6,
         'fls-lifecycle': 9,
+        'form-contributions': 17,
         'layered-base-views': 6,
         'lists': 3,
         'materialized-entity-read': 2,
@@ -345,7 +351,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(102);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(104);
     });
 });
 
@@ -386,6 +392,8 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'actions-pipeline.AP2',
         'app-behavioral.AB1',
         'app-behavioral.AB2',
+        'binary-fields.BF4',
+        'binary-fields.BF6',
         'cache-gauntlet.CG1',
         'cache-gauntlet.CG2',
         'cache-gauntlet.CG3',
