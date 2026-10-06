@@ -1546,6 +1546,13 @@ export class BaseAgent {
     private _openingRequest: string = '';
 
     /**
+     * The run's {@link AIPromptExecutionScope}, recorded when the run starts, for decision calls made
+     * from helpers that are not handed the run's params (discovery, catalog narrowing).
+     * @private
+     */
+    private _runExecutionScope: AIPromptExecutionScope | undefined;
+
+    /**
      * Whether the run answers its conversation's opening request ({@link IsOpeningTurn}), read from
      * the messages it started with. Decision discovery asks about no other turn.
      * @private
@@ -2184,6 +2191,7 @@ export class BaseAgent {
             this._messageLifecycleCallback = params.onMessageLifecycle;
             this._catalogNarrowing = undefined;
             this._openingRequest = OpeningRequestText(params.conversationMessages);
+            this._runExecutionScope = this.runPromptExecutionScope(params);
             this._isOpeningTurn = IsOpeningTurn(params.conversationMessages);
 
             // Resolve storage account for file artifacts
@@ -4161,6 +4169,7 @@ export class BaseAgent {
                 AgentID: agent.ID,
                 PromptName: promptName,
                 CancellationToken: signal,
+                ExecutionScope: this._runExecutionScope,
             });
             return { ...DecisionDiscoveryFromResult(result, options, DECISION_DISCOVERY_MIN_CONFIDENCE), ...sizes };
         } catch (error) {
@@ -6443,7 +6452,7 @@ export class BaseAgent {
         };
         try {
             const outcome = await ExecuteSelfCheck({
-                engine: ProviderRubricEngine(provider, params.contextUser),
+                engine: ProviderRubricEngine(provider, params.contextUser, this.runPromptExecutionScope(params)),
                 link,
                 runId: agentRun.ID,
                 agentKind: this.AgentTypeInstance?.constructor?.name === 'LoopAgentType' ? 'loop' : 'flow',
@@ -8709,6 +8718,7 @@ The context is now within limits. Please retry your request with the recovered c
             AgentID: params.agent?.ID ?? this._agentRun?.AgentID,
             PromptName: promptName,
             CancellationToken: params.cancellationToken,
+            ExecutionScope: this.runPromptExecutionScope(params),
         });
     }
 
@@ -9361,6 +9371,7 @@ The context is now within limits. Please retry your request with the recovered c
                 AgentID: agent.ID,
                 PromptName: promptName,
                 CancellationToken: controller.signal,
+                ExecutionScope: this._runExecutionScope,
             });
             const result = await Promise.race([ask, stopped]);
             if (result === stoppedResult) {
@@ -9993,7 +10004,8 @@ The context is now within limits. Please retry your request with the recovered c
             ContextUser: params.contextUser,
             AgentID: params.agent?.ID,
             PromptName: settings.PromptName,
-            CancellationToken: params.cancellationToken
+            CancellationToken: params.cancellationToken,
+            ExecutionScope: this.runPromptExecutionScope(params)
         });
         this.attachDecisionPromptRun(step, result);
         if (!result.success) {
@@ -10175,7 +10187,8 @@ The context is now within limits. Please retry your request with the recovered c
             ChangeReasoning: nextStep.payloadChangeRequest?.reasoning,
             Message: response.Message,
             AgentID: params.agent?.ID ?? this._agentRun?.AgentID,
-            CancellationToken: params.cancellationToken
+            CancellationToken: params.cancellationToken,
+            ExecutionScope: this.runPromptExecutionScope(params)
         };
     }
 
@@ -10222,10 +10235,12 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
-     * The {@link AIPromptExecutionScope} of a prompt this run starts outside the agent's own turn —
-     * summarizing a range, compacting a message, compacting the conversation. Each built its params
-     * with only `contextUser`, so it ran on the platform's keys and default configuration inside a
-     * run on a customer's keys, and under a `'RuntimeOnly'` scope would have bypassed it.
+     * The {@link AIPromptExecutionScope} of model work this run starts outside the agent's own turn —
+     * summarizing a range, compacting a message or the conversation, decision calls (FinishIf,
+     * discovery, catalog narrowing, decision requests, the payload change check) and self-check
+     * rubrics. Each built its params with only `contextUser`, so it ran on the platform's keys and
+     * default configuration inside a run on a customer's keys, and under a `'RuntimeOnly'` scope
+     * would have bypassed it.
      */
     private runPromptExecutionScope(params: ExecuteAgentParams): AIPromptExecutionScope {
         return {
