@@ -261,8 +261,11 @@ function stopTracks(stream: MediaStream): void {
     stream.getTracks().forEach((track) => track.stop());
 }
 
-/** The browser's `displaySurface` setting, as a {@link CapturedDisplaySurface}. */
-function surfaceOf(track: MediaStreamTrack): CapturedDisplaySurface {
+/**
+ * The kind of surface a captured track shows, from the browser's `displaySurface` setting. It reads any display
+ * track, including one captured elsewhere, such as a LiveKit screen share.
+ */
+export function CapturedSurfaceOf(track: MediaStreamTrack): CapturedDisplaySurface {
     switch (track.getSettings().displaySurface) {
         case 'monitor':
             return 'screen';
@@ -290,7 +293,7 @@ class ActiveDisplayCapture implements DisplayCapture {
     }
 
     public get Surface(): CapturedDisplaySurface {
-        return surfaceOf(this.Track);
+        return CapturedSurfaceOf(this.Track);
     }
 
     public get Label(): string {

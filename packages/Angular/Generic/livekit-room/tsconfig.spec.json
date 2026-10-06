@@ -27,6 +27,7 @@
     "src/lib/components/livekit-participants-panel.component.ts",
     "src/lib/components/livekit-prejoin.component.ts",
     "src/lib/components/livekit-whiteboard-surface.component.ts",
+    "src/lib/livekit-room-tile.directive.ts",
     "src/lib/livekit-room.component.ts",
     "src/lib/livekit-room.component.dom.test.ts"
   ],

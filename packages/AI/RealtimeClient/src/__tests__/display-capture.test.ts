@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { GetDisplayCaptureSupport, RequestDisplayCapture, type DisplayCapture, type DisplayCaptureResult } from '../media/displayCapture';
+import { CapturedSurfaceOf, GetDisplayCaptureSupport, RequestDisplayCapture, type DisplayCapture, type DisplayCaptureResult } from '../media/displayCapture';
 import { InstallFakeDom, type FakeDom } from './helpers/fake-dom';
 import { InstallCaptureTargets, InstallFakeDisplayMedia, PickerError, type FakeDisplayMedia } from './helpers/fake-display';
 
@@ -79,6 +79,17 @@ describe('display capture', () => {
             expect(capture.Surface).toBe('tab');
             media.Track.DisplaySurface = undefined;
             expect(capture.Surface).toBe('unknown');
+        });
+
+        it('reads the kind of surface from any captured track', async () => {
+            const track = startedCapture(await RequestDisplayCapture()).Track;
+            expect(CapturedSurfaceOf(track)).toBe('screen');
+            media.Track.DisplaySurface = 'window';
+            expect(CapturedSurfaceOf(track)).toBe('window');
+            media.Track.DisplaySurface = 'browser';
+            expect(CapturedSurfaceOf(track)).toBe('tab');
+            media.Track.DisplaySurface = undefined;
+            expect(CapturedSurfaceOf(track)).toBe('unknown');
         });
     });
 

@@ -49,15 +49,7 @@
             >
               <div class="lk-room__split-pane" [style.flexBasis.%]="SplitRatio * 100">
                 @if (ScreenShareParticipant) {
-                  <mj-media-tile
-                    [MeterSettings]="MeterSettings"
-                    [Participant]="MediaParticipantFor(ScreenShareParticipant)"
-                    [ShowActiveSpeakerRing]="false"
-                    [ShowMeter]="false"
-                    [ShowConnectionQuality]="ShowConnectionQuality"
-                    [ShowName]="ShowNameBadges"
-                    [AvatarUrl]="avatarFor(ScreenShareParticipant)"
-                  ></mj-media-tile>
+                  <ng-container [ngTemplateOutlet]="participantTile" [ngTemplateOutletContext]="{ $implicit: ScreenShareParticipant, Place: 'split-share' }"></ng-container>
                 } @else {
                   <mj-empty-state class="lk-room__empty" Size="compact"
                     Icon="fa-solid fa-display"
@@ -67,54 +59,21 @@
               <div class="lk-room__splitter" (pointerdown)="onSplitDragStart($event)" title="Drag to resize"><span></span></div>
               <div class="lk-room__split-pane">
                 @if (SplitSpeakerParticipant) {
-                  <mj-media-tile
-                    [MeterSettings]="MeterSettings"
-                    [Participant]="MediaParticipantFor(SplitSpeakerParticipant)"
-                    [ShowActiveSpeakerRing]="ShowActiveSpeakerHighlight"
-                    [ShowMeter]="ShowAudioMeters"
-                    [ShowConnectionQuality]="ShowConnectionQuality"
-                    [ShowName]="ShowNameBadges"
-                    [Pinnable]="EnablePinning"
-                    [IsPinned]="PinnedIdentity === SplitSpeakerParticipant.Identity"
-                    [AvatarUrl]="avatarFor(SplitSpeakerParticipant)"
-                    (TogglePin)="onTogglePin(SplitSpeakerParticipant.Identity)"
-                  ></mj-media-tile>
+                  <ng-container [ngTemplateOutlet]="participantTile" [ngTemplateOutletContext]="{ $implicit: SplitSpeakerParticipant, Place: 'split-speaker' }"></ng-container>
                 }
               </div>
             </div>
           } @else if (Layout === "spotlight") {
             @if (SpotlightParticipant) {
               <div class="lk-room__spotlight">
-                <mj-media-tile
-                  [MeterSettings]="MeterSettings"
-                  [Participant]="MediaParticipantFor(SpotlightParticipant)"
-                  [ShowActiveSpeakerRing]="ShowActiveSpeakerHighlight"
-                  [ShowMeter]="ShowAudioMeters"
-                  [ShowConnectionQuality]="ShowConnectionQuality"
-                  [ShowName]="ShowNameBadges"
-                  [Pinnable]="EnablePinning"
-                  [IsPinned]="PinnedIdentity === SpotlightParticipant.Identity"
-                  [AvatarUrl]="avatarFor(SpotlightParticipant)"
-                  (TogglePin)="onTogglePin(SpotlightParticipant.Identity)"
-                ></mj-media-tile>
+                <ng-container [ngTemplateOutlet]="participantTile" [ngTemplateOutletContext]="{ $implicit: SpotlightParticipant, Place: 'spotlight' }"></ng-container>
               </div>
             }
             @if (FilmstripParticipants.length > 0) {
               <div class="lk-room__filmstrip">
                 @for (p of FilmstripParticipants; track p.Identity) {
                   <div class="lk-room__filmstrip-tile">
-                    <mj-media-tile
-                      [MeterSettings]="MeterSettings"
-                      [Participant]="MediaParticipantFor(p)"
-                      [ShowActiveSpeakerRing]="ShowActiveSpeakerHighlight"
-                      [ShowMeter]="ShowAudioMeters"
-                      [ShowConnectionQuality]="ShowConnectionQuality"
-                      [ShowName]="ShowNameBadges"
-                      [Pinnable]="EnablePinning"
-                      [IsPinned]="PinnedIdentity === p.Identity"
-                      [AvatarUrl]="avatarFor(p)"
-                      (TogglePin)="onTogglePin(p.Identity)"
-                    ></mj-media-tile>
+                    <ng-container [ngTemplateOutlet]="participantTile" [ngTemplateOutletContext]="{ $implicit: p, Place: 'filmstrip' }"></ng-container>
                   </div>
                 }
               </div>
@@ -123,18 +82,7 @@
             <div class="lk-room__grid" [attr.data-count]="DisplayParticipants.length">
               @for (p of DisplayParticipants; track p.Identity) {
                 <div class="lk-room__grid-tile">
-                  <mj-media-tile
-                    [MeterSettings]="MeterSettings"
-                    [Participant]="MediaParticipantFor(p)"
-                    [ShowActiveSpeakerRing]="ShowActiveSpeakerHighlight"
-                    [ShowMeter]="ShowAudioMeters"
-                    [ShowConnectionQuality]="ShowConnectionQuality"
-                    [ShowName]="ShowNameBadges"
-                    [Pinnable]="EnablePinning"
-                    [IsPinned]="PinnedIdentity === p.Identity"
-                    [AvatarUrl]="avatarFor(p)"
-                    (TogglePin)="onTogglePin(p.Identity)"
-                  ></mj-media-tile>
+                  <ng-container [ngTemplateOutlet]="participantTile" [ngTemplateOutletContext]="{ $implicit: p, Place: 'grid' }"></ng-container>
                 </div>
               } @empty {
                 <mj-empty-state class="lk-room__empty" Size="compact"
@@ -143,6 +91,13 @@
               }
             </div>
           }
+        }
+
+        @if (ShowSelfViewChip) {
+          <div class="lk-room__self-hidden">
+            <span>Self-view hidden</span>
+            <button type="button" mjButton Variant="flat" Size="sm" (click)="OnShowSelfView()">Show</button>
+          </div>
         }
 
         @if (ShowOverlay) {
@@ -240,3 +195,42 @@
     }
   </div>
 }
+
+<!-- Every layout shows a participant through this one template. The user's own tile is their share preview while
+     they share, else their self-view (mirrored, with Hide where hiding takes it off the stage); anyone else's is a
+     plain tile. The screen-share pane shows no ring, meter or pin. -->
+<ng-template mjLiveKitRoomTile #participantTile let-p let-place="Place">
+  @if (p.IsLocal && p.IsScreenSharing && LocalScreenSource) {
+    <mj-share-preview
+      [Source]="LocalScreenSource"
+      [Surface]="State.LocalMedia.ScreenShareSurface ?? 'unknown'"
+      (StopRequested)="OnStopShare()"
+      (ChangeRequested)="OnChangeShare()"
+    ></mj-share-preview>
+  } @else if (p.IsLocal) {
+    <mj-self-view
+      [Participant]="MediaParticipantFor(p)"
+      [ShowHide]="place === 'grid' || place === 'filmstrip'"
+      [ShowActiveSpeakerRing]="place !== 'split-share' && ShowActiveSpeakerHighlight"
+      [ShowMeter]="place !== 'split-share' && ShowAudioMeters"
+      [ShowConnectionQuality]="ShowConnectionQuality"
+      [ShowName]="ShowNameBadges"
+      [AvatarUrl]="avatarFor(p)"
+      [MeterSettings]="MeterSettings"
+      (HideRequested)="OnHideSelfView()"
+    ></mj-self-view>
+  } @else {
+    <mj-media-tile
+      [MeterSettings]="MeterSettings"
+      [Participant]="MediaParticipantFor(p)"
+      [ShowActiveSpeakerRing]="place !== 'split-share' && ShowActiveSpeakerHighlight"
+      [ShowMeter]="place !== 'split-share' && ShowAudioMeters"
+      [ShowConnectionQuality]="ShowConnectionQuality"
+      [ShowName]="ShowNameBadges"
+      [Pinnable]="place !== 'split-share' && EnablePinning"
+      [IsPinned]="PinnedIdentity === p.Identity"
+      [AvatarUrl]="avatarFor(p)"
+      (TogglePin)="onTogglePin(p.Identity)"
+    ></mj-media-tile>
+  }
+</ng-template>

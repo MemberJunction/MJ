@@ -242,3 +242,21 @@
   color: var(--mj-text-inverse, #fff);
   background: var(--mj-brand-primary, #0076b6);
 }
+
+/* Where a hidden self-view comes back from: the top-left corner, where the user's own tile was (first in the grid). */
+.lk-room__self-hidden {
+  position: absolute;
+  left: 24px;
+  top: 24px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 4px 4px 12px;
+  font-size: 0.8rem;
+  color: var(--mj-text-secondary);
+  background: var(--mj-bg-surface-elevated);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-full);
+  box-shadow: var(--mj-shadow-md);
+}

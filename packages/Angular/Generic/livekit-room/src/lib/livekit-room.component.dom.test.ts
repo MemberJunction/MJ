@@ -39,6 +39,7 @@ describe('LiveKitRoomComponent (DOM, fake controller)', () => {
     const handlers = new Map<string, (arg: LiveKitRoomState) => void>();
     const toggleMicrophone = vi.fn();
     const setScreenShareEnabled = vi.fn(() => Promise.resolve());
+    const changeScreenShare = vi.fn(() => Promise.resolve());
     const fake = {
       get State() {
         return state;
@@ -53,6 +54,7 @@ describe('LiveKitRoomComponent (DOM, fake controller)', () => {
       ToggleCamera: vi.fn(),
       ToggleScreenShare: vi.fn(),
       SetScreenShareEnabled: setScreenShareEnabled,
+      ChangeScreenShare: changeScreenShare,
       Connect: vi.fn(() => Promise.resolve()),
       Disconnect: vi.fn(() => Promise.resolve()),
       Dispose: vi.fn(),
@@ -68,12 +70,40 @@ describe('LiveKitRoomComponent (DOM, fake controller)', () => {
       controller: fake as unknown as LiveKitRoomController,
       toggleMicrophone,
       setScreenShareEnabled,
+      changeScreenShare,
       /** Mutate State and fire the controller's `stateChanged` event, as the real controller would. */
       emitState(next: LiveKitRoomState): void {
         state = next;
         handlers.get('stateChanged')?.(next);
       },
     };
+  };
+
+  /** A LiveKit track reduced to what the tile calls: attaching and detaching an element. */
+  const fakeTrack = () => ({ attach: (element: HTMLVideoElement) => element, detach: (element: HTMLVideoElement) => element });
+
+  /** A participant view; its camera and screen share are publications with fake tracks, as LiveKit reports them. */
+  const view = (identity: string, over: { Local?: boolean; Camera?: boolean; Sharing?: boolean } = {}): LiveKitParticipantView => {
+    const publications: Record<string, { track: ReturnType<typeof fakeTrack>; isMuted: boolean }> = {};
+    if (over.Camera) {
+      publications['camera'] = { track: fakeTrack(), isMuted: false };
+    }
+    if (over.Sharing) {
+      publications['screen_share'] = { track: fakeTrack(), isMuted: false };
+    }
+    return {
+      Identity: identity,
+      DisplayName: identity,
+      IsLocal: over.Local ?? false,
+      Role: 'participant',
+      IsSpeaking: false,
+      AudioLevel: 0,
+      HasAudio: true,
+      HasVideo: over.Camera ?? false,
+      IsScreenSharing: over.Sharing ?? false,
+      ConnectionQuality: 'good',
+      Raw: { audioLevel: 0, getTrackPublication: (source: string) => publications[source] },
+    } as unknown as LiveKitParticipantView;
   };
 
   const render = (fakeController: LiveKitRoomController, inputs: Record<string, unknown> = {}) =>
@@ -120,6 +150,14 @@ describe('LiveKitRoomComponent (DOM, fake controller)', () => {
     expect(queryAll(f, 'mj-livekit-participant-audio')).toHaveLength(3);
   });
 
+  it("keeps the split layout's screen pane plain: no pin there, while the speaker pane has one", () => {
+    const fc = makeFakeController(makeState({ Status: 'connected', Remote: [view('sharer', { Sharing: true }), view('talker')] }));
+    const f = render(fc.controller, { Layout: 'split', ShowAudioMeters: false, EnablePinning: true });
+    const [sharePane, speakerPane] = queryAll(f, '.lk-room__split-pane');
+    expect(sharePane.querySelector('mj-media-tile .tile__pin')).toBeNull();
+    expect(speakerPane.querySelector('mj-media-tile .tile__pin')).not.toBeNull();
+  });
+
   it('renders the room name from controller State in the header', () => {
     const fc = makeFakeController(makeState({ Status: 'connected', RoomName: 'Standup' }));
     const f = render(fc.controller);
@@ -145,6 +183,77 @@ describe('LiveKitRoomComponent (DOM, fake controller)', () => {
     tab?.click();
     f.detectChanges();
     expect(fc.setScreenShareEnabled).toHaveBeenCalledWith(true, 'tab');
+  });
+
+  describe("the user's own tile", () => {
+    const sharing = { MicrophoneEnabled: true, CameraEnabled: true, ScreenShareEnabled: true, ScreenShareSurface: 'window' as const };
+
+    it('is a mirrored self-view, while everyone else gets a plain tile', () => {
+      const fc = makeFakeController(makeState({ Status: 'connected', Local: view('me', { Local: true, Camera: true }), Remote: [view('ada')] }));
+      const f = render(fc.controller);
+      expect(queryAll(f, '.lk-room__grid-tile > mj-self-view')).toHaveLength(1);
+      expect(query(f, 'mj-self-view .tile__video')?.classList.contains('tile__video--mirrored')).toBe(true);
+      expect(queryAll(f, '.lk-room__grid-tile > mj-media-tile')).toHaveLength(1);
+    });
+
+    it('hides from its Hide button, and comes back from the chip', () => {
+      const fc = makeFakeController(makeState({ Status: 'connected', Local: view('me', { Local: true, Camera: true }), Remote: [view('ada')] }));
+      const f = render(fc.controller);
+      (query(f, 'mj-self-view button.self__hide') as HTMLButtonElement).click();
+      f.detectChanges();
+      expect(query(f, 'mj-self-view')).toBeNull();
+      expect(text(f, '.lk-room__self-hidden')).toContain('Self-view hidden');
+
+      (query(f, '.lk-room__self-hidden button') as HTMLButtonElement).click();
+      f.detectChanges();
+      expect(query(f, 'mj-self-view')).not.toBeNull();
+      expect(query(f, '.lk-room__self-hidden')).toBeNull();
+    });
+
+    it('shows neither the self-view nor the chip when the host turns the self-view off', () => {
+      const fc = makeFakeController(makeState({ Status: 'connected', Local: view('me', { Local: true, Camera: true }), Remote: [view('ada')] }));
+      const f = render(fc.controller, { ShowSelfView: false });
+      expect(query(f, 'mj-self-view')).toBeNull();
+      expect(query(f, '.lk-room__self-hidden')).toBeNull();
+    });
+
+    it('drops the chip when the host turns the self-view off after the user hid it', () => {
+      const fc = makeFakeController(makeState({ Status: 'connected', Local: view('me', { Local: true, Camera: true }), Remote: [view('ada')] }));
+      const f = render(fc.controller);
+      (query(f, 'mj-self-view button.self__hide') as HTMLButtonElement).click();
+      f.detectChanges();
+      f.componentRef.setInput('ShowSelfView', false);
+      f.detectChanges();
+      expect(query(f, '.lk-room__self-hidden')).toBeNull();
+    });
+
+    it('offers Hide only where hiding takes it off the stage', () => {
+      // Alone in spotlight layout, the user is the spotlight whatever the self-view setting.
+      const fc = makeFakeController(makeState({ Status: 'connected', Local: view('me', { Local: true, Camera: true }) }));
+      const f = render(fc.controller, { Layout: 'spotlight' });
+      expect(query(f, '.lk-room__spotlight mj-self-view')).not.toBeNull();
+      expect(query(f, 'mj-self-view button.self__hide')).toBeNull();
+    });
+
+    it('is the share preview while the user shares, labelled, with Stop sharing and Change', () => {
+      const fc = makeFakeController(makeState({ Status: 'connected', Local: view('me', { Local: true, Camera: true, Sharing: true }), Remote: [view('ada')], LocalMedia: sharing }));
+      const f = render(fc.controller);
+      expect(query(f, 'mj-self-view')).toBeNull();
+      expect(text(f, 'mj-share-preview .share__label')).toContain('Sharing a window');
+      const [stop, change] = queryAll(f, 'mj-share-preview .share__actions button') as HTMLButtonElement[];
+      stop.click();
+      change.click();
+      expect(fc.setScreenShareEnabled).toHaveBeenCalledWith(false);
+      expect(fc.changeScreenShare).toHaveBeenCalledOnce();
+    });
+
+    it("fills the split layout's screen pane while the user shares", () => {
+      const fc = makeFakeController(makeState({ Status: 'connected', Local: view('me', { Local: true, Sharing: true }), Remote: [view('ada')], LocalMedia: sharing }));
+      const f = render(fc.controller, { Layout: 'split', ShowAudioMeters: false });
+      const [sharePane, speakerPane] = queryAll(f, '.lk-room__split-pane');
+      expect(sharePane.querySelector('mj-share-preview')).not.toBeNull();
+      expect(speakerPane.querySelector('mj-media-tile')).not.toBeNull();
+    });
   });
 
   it('re-renders when the controller emits a stateChanged event (connecting → connected)', () => {

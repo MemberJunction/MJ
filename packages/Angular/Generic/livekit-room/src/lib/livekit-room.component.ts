@@ -36,13 +36,22 @@ import {
   ToMediaDevice,
   ToMediaParticipant,
 } from '@memberjunction/livekit-room-core';
+import { NgTemplateOutlet } from '@angular/common';
 import {
   MediaAgentStateComponent,
   MediaConnectionOverlayComponent,
   MediaDeviceMenuComponent,
   MediaTileComponent,
+  SelfViewComponent,
+  SharePreviewComponent,
 } from '@memberjunction/ng-realtime-media';
-import type { DisplayCaptureSurface, MediaDevice, MediaDeviceSelection, MediaParticipant } from '@memberjunction/ai-realtime-client/media';
+import type {
+  DisplayCaptureSurface,
+  MediaDevice,
+  MediaDeviceSelection,
+  MediaParticipant,
+  MediaVideoSource,
+} from '@memberjunction/ai-realtime-client/media';
 import { LiveKitControlBarComponent } from './components/livekit-control-bar.component';
 import { LiveKitChatPanelComponent } from './components/livekit-chat-panel.component';
 import { LiveKitParticipantsPanelComponent } from './components/livekit-participants-panel.component';
@@ -50,7 +59,8 @@ import { LiveKitParticipantAudioComponent } from './components/livekit-participa
 import { LiveKitPreJoinComponent, type LiveKitPreJoinChoices } from './components/livekit-prejoin.component';
 import type { LiveKitAgentVisualState } from './components/livekit-agent-state.component';
 import { LiveKitWhiteboardSurfaceComponent } from './components/livekit-whiteboard-surface.component';
-import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
+import { LiveKitRoomTileDirective } from './livekit-room-tile.directive';
 import {
   DeriveAgentState,
   IsAgentVisualState,
@@ -121,7 +131,12 @@ export interface LiveKitLayoutOption {
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    NgTemplateOutlet,
     MediaTileComponent,
+    SelfViewComponent,
+    SharePreviewComponent,
+    LiveKitRoomTileDirective,
+    MJButtonDirective,
     MediaAgentStateComponent,
     MediaConnectionOverlayComponent,
     MediaDeviceMenuComponent,
@@ -305,6 +320,8 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
   public UnreadChatCount = 0;
   /** Which side panel is currently open. */
   public SidePanel: LiveKitSidePanel = 'none';
+  /** The user hid their self-view (Hide on their tile) for this session. The camera stays on. */
+  public SelfViewHidden = false;
   /** Whether the device menu popover is open. */
   public DeviceMenuOpen = false;
   /** Whether the layout switcher popover is open. */
@@ -476,6 +493,22 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
   /** Starts screen sharing with the kind of surface the user picked from the Share menu offered first. */
   public OnScreenShareRequested(surface: DisplayCaptureSurface): void {
     void this.controller.SetScreenShareEnabled(true, surface);
+  }
+  /** Stops the user's screen share, from its preview. */
+  public OnStopShare(): void {
+    void this.controller.SetScreenShareEnabled(false);
+  }
+  /** Shares something else, from the preview's Change: the browser's picker opens again. */
+  public OnChangeShare(): void {
+    void this.controller.ChangeScreenShare();
+  }
+  /** Hides the user's self-view for this session; the camera stays on. */
+  public OnHideSelfView(): void {
+    this.SelfViewHidden = true;
+  }
+  /** Shows the user's self-view again, from the "Self-view hidden" chip. */
+  public OnShowSelfView(): void {
+    this.SelfViewHidden = false;
   }
   /** Toggles the chat panel and clears the unread count when opening. */
   public OnToggleChat(): void {
@@ -677,9 +710,20 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
 
   // ── Layout helpers (template-bound) ─────────────────────────────────────────────
 
-  /** The participants to render on the stage (local optionally included). */
+  /** The participants to render on the stage (local included unless the host or the user turned the self-view off). */
   public get DisplayParticipants(): LiveKitParticipantView[] {
-    return SelectDisplayParticipants(this.State, this.ShowSelfView);
+    return SelectDisplayParticipants(this.State, this.ShowSelfView && !this.SelfViewHidden);
+  }
+
+  /** Whether the "Self-view hidden" chip shows: the host allows a self-view and the user hid theirs. */
+  public get ShowSelfViewChip(): boolean {
+    return this.ShowSelfView && this.SelfViewHidden && this.State.Local !== undefined;
+  }
+
+  /** The user's own screen share as a video source, while they share. */
+  public get LocalScreenSource(): MediaVideoSource | null {
+    const local = this.State.Local;
+    return local ? (this.MediaParticipantFor(local).Video.screen ?? null) : null;
   }
 
   /** All participants (local + remote) for the roster panel. */

@@ -2,6 +2,12 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ConnectionQuality, ConnectionState, DisconnectReason, RoomEvent, Track, type ScreenShareCaptureOptions } from 'livekit-client';
 import { LiveKitRoomController } from '../livekit-room-controller';
 
+/** A publication reduced to what the controller reads: whether it is muted, and a screen share's track settings. */
+interface FakePublication {
+  isMuted: boolean;
+  track?: { mediaStreamTrack: { getSettings(): MediaTrackSettings } };
+}
+
 /**
  * A structural fake of the subset of livekit-client `Participant` the controller uses. Cast to the real
  * type via `as unknown as Participant` at the injection boundary.
@@ -15,7 +21,9 @@ class FakeParticipant {
   public isMicrophoneEnabled = false;
   public isCameraEnabled = false;
   public isScreenShareEnabled = false;
-  private readonly pubs = new Map<Track.Source, { isMuted: boolean }>();
+  /** What a screen share started now reports as its `displaySurface`. */
+  public screenSurface: string | undefined = 'window';
+  private readonly pubs = new Map<Track.Source, FakePublication>();
 
   constructor(
     public identity: string,
@@ -26,7 +34,7 @@ class FakeParticipant {
     this.metadata = metadata;
   }
 
-  public getTrackPublication(source: Track.Source): { isMuted: boolean } | undefined {
+  public getTrackPublication(source: Track.Source): FakePublication | undefined {
     return this.pubs.get(source);
   }
   public async setName(name: string): Promise<void> {
@@ -51,7 +59,9 @@ class FakeParticipant {
 
   private setPub(source: Track.Source, enabled: boolean): void {
     if (enabled) {
-      this.pubs.set(source, { isMuted: false });
+      const displaySurface = this.screenSurface;
+      const track = source === Track.Source.ScreenShare ? { mediaStreamTrack: { getSettings: () => (displaySurface ? { displaySurface } : {}) } } : undefined;
+      this.pubs.set(source, { isMuted: false, track });
     } else {
       this.pubs.delete(source);
     }
@@ -158,6 +168,27 @@ describe('LiveKitRoomController', () => {
 
     it('toggles a screen share with no preference', async () => {
       await controller.ToggleScreenShare();
+      expect(room.localParticipant.screenShareOptions).toEqual([undefined]);
+      expect(controller.State.LocalMedia.ScreenShareEnabled).toBe(true);
+    });
+
+    it('reports what is shared while sharing, and nothing after', async () => {
+      room.localParticipant.screenSurface = 'browser';
+      await controller.SetScreenShareEnabled(true);
+      expect(controller.State.LocalMedia.ScreenShareSurface).toBe('tab');
+      await controller.SetScreenShareEnabled(false);
+      expect(controller.State.LocalMedia.ScreenShareSurface).toBeUndefined();
+    });
+
+    it('changes a running share by stopping it and asking again, with the picked kind first', async () => {
+      await controller.SetScreenShareEnabled(true);
+      await controller.ChangeScreenShare('tab');
+      expect(room.localParticipant.screenShareOptions).toEqual([undefined, undefined, { video: { displaySurface: 'browser' } }]);
+      expect(controller.State.LocalMedia.ScreenShareEnabled).toBe(true);
+    });
+
+    it('starts a share when asked to change one that is not running', async () => {
+      await controller.ChangeScreenShare();
       expect(room.localParticipant.screenShareOptions).toEqual([undefined]);
       expect(controller.State.LocalMedia.ScreenShareEnabled).toBe(true);
     });

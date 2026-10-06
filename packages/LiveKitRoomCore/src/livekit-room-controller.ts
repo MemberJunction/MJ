@@ -29,7 +29,7 @@ import {
   type ScreenShareCaptureOptions,
 } from 'livekit-client';
 import { BehaviorSubject, Observable } from 'rxjs';
-import type { DisplayCaptureSurface } from '@memberjunction/ai-realtime-client/media';
+import { CapturedSurfaceOf, type DisplayCaptureSurface } from '@memberjunction/ai-realtime-client/media';
 import { LiveKitRoomEventBus } from './events';
 import { ApplyBackgroundEffect, ApplyNoiseFilter } from './livekit-effects';
 import { ToScreenShareCaptureOptions } from './media-adapters';
@@ -282,6 +282,18 @@ export class LiveKitRoomController {
     const next = !this.stateSubject.value.LocalMedia.ScreenShareEnabled;
     await this.SetScreenShareEnabled(next);
     return next;
+  }
+
+  /**
+   * Shares something else: stops the current share, then asks the browser's picker again, offering
+   * `preferredSurface` first. Others see the share end and start again; a user who cancels the picker is left not
+   * sharing. With no share running, it just starts one.
+   */
+  public async ChangeScreenShare(preferredSurface?: DisplayCaptureSurface): Promise<void> {
+    if (this.stateSubject.value.LocalMedia.ScreenShareEnabled) {
+      await this.SetScreenShareEnabled(false);
+    }
+    await this.SetScreenShareEnabled(true, preferredSurface);
   }
 
   // ── Data channel ────────────────────────────────────────────────────────────────
@@ -608,13 +620,15 @@ export class LiveKitRoomController {
     return pub != null && !pub.isMuted;
   }
 
-  /** Reads the local-media toggle state from the room's local participant. */
+  /** Reads the local-media toggle state from the room's local participant, with what is shared while sharing. */
   private readLocalMedia(room: Room): LiveKitLocalMediaState {
     const lp = room.localParticipant;
+    const screen = lp?.getTrackPublication(Track.Source.ScreenShare)?.track?.mediaStreamTrack;
     return {
       MicrophoneEnabled: lp ? lp.isMicrophoneEnabled : false,
       CameraEnabled: lp ? lp.isCameraEnabled : false,
       ScreenShareEnabled: lp ? lp.isScreenShareEnabled : false,
+      ...(screen ? { ScreenShareSurface: CapturedSurfaceOf(screen) } : {}),
     };
   }
 

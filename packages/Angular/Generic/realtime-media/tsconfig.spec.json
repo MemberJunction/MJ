@@ -18,7 +18,11 @@
     "src/lib/components/media-stage.component.ts",
     "src/lib/components/media-stage.component.dom.test.ts",
     "src/lib/components/media-controls.component.ts",
-    "src/lib/components/media-controls.component.dom.test.ts"
+    "src/lib/components/media-controls.component.dom.test.ts",
+    "src/lib/components/self-view.component.ts",
+    "src/lib/components/self-view.component.dom.test.ts",
+    "src/lib/components/share-preview.component.ts",
+    "src/lib/components/share-preview.component.dom.test.ts"
   ],
   "exclude": ["node_modules", "dist"]
 }

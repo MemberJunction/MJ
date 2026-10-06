@@ -9,8 +9,9 @@ import {
   Output,
   ViewChild,
 } from '@angular/core';
-import { AttachVideoSource, type MediaParticipant, type MediaVideoSource } from '@memberjunction/ai-realtime-client/media';
+import type { MediaParticipant, MediaVideoSource } from '@memberjunction/ai-realtime-client/media';
 import { MediaAudioMeterComponent, type MediaAudioMeterSettings } from './audio-meter.component';
+import { MediaVideoBinding } from '../media-video-binding';
 
 /**
  * `mj-media-tile`: one participant. Their video (the preferred one, else a shared screen, the camera, the avatar),
@@ -27,7 +28,15 @@ import { MediaAudioMeterComponent, type MediaAudioMeterSettings } from './audio-
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="tile" [class.tile--speaking]="ShowActiveSpeakerRing && Participant?.IsSpeaking" [class.tile--agent]="Participant?.Role === 'agent'">
-      <video #video class="tile__video" [class.tile__video--hidden]="!HasVideo" autoplay playsinline [muted]="true"></video>
+      <video
+        #video
+        class="tile__video"
+        [class.tile__video--hidden]="!HasVideo"
+        [class.tile__video--mirrored]="IsMirrored"
+        autoplay
+        playsinline
+        [muted]="true"
+      ></video>
 
       @if (!HasVideo) {
         <div class="tile__placeholder">
@@ -89,7 +98,7 @@ export class MediaTileComponent implements AfterViewInit, OnDestroy {
 
   private participant: MediaParticipant | null = null;
   private viewReady = false;
-  private attached: { Source: MediaVideoSource; Detach: () => void } | null = null;
+  private readonly video = new MediaVideoBinding();
 
 
   /** Show the active-speaker ring. */
@@ -108,6 +117,8 @@ export class MediaTileComponent implements AfterViewInit, OnDestroy {
   @Input() public IsPinned = false;
   /** The meter's smoothing settings. */
   @Input() public MeterSettings: MediaAudioMeterSettings = {};
+  /** Mirror the camera, as a self-view does. A shared screen or an avatar is never mirrored. */
+  @Input() public Mirror = false;
 
   /** Emits when the user clicks the pin button. */
   @Output() public TogglePin = new EventEmitter<void>();
@@ -138,6 +149,12 @@ export class MediaTileComponent implements AfterViewInit, OnDestroy {
     return this.chooseVideo() !== null;
   }
 
+  /** Whether the video shown is mirrored: {@link Mirror} is on and the camera is what shows. */
+  public get IsMirrored(): boolean {
+    const camera = this.Participant?.Video.camera;
+    return this.Mirror && camera !== undefined && this.chooseVideo() === camera;
+  }
+
   /** Whether the participant is sharing a screen. */
   public get IsSharingScreen(): boolean {
     return this.Participant?.Video.screen !== undefined;
@@ -154,19 +171,12 @@ export class MediaTileComponent implements AfterViewInit, OnDestroy {
   }
 
   public ngOnDestroy(): void {
-    this.attached?.Detach();
-    this.attached = null;
+    this.video.Release();
   }
 
   /** Attaches the chosen video when it differs from the attached one. */
   private syncVideo(): void {
-    const element = this.videoRef?.nativeElement;
-    const source = element ? this.chooseVideo() : null;
-    if (this.attached?.Source === source) {
-      return;
-    }
-    this.attached?.Detach();
-    this.attached = source && element ? { Source: source, Detach: AttachVideoSource(source, element) } : null;
+    this.video.Bind(this.chooseVideo(), this.videoRef?.nativeElement);
   }
 
   /** The preferred video, else a shared screen, the camera, the avatar. */

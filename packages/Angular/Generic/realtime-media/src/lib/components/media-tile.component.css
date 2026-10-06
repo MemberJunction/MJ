@@ -44,6 +44,10 @@
   display: none;
 }
 
+.tile__video--mirrored {
+  transform: scaleX(-1);
+}
+
 .tile__placeholder {
   position: absolute;
   inset: 0;

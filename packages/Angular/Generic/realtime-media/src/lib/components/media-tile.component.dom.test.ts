@@ -124,6 +124,20 @@ describe('MediaTileComponent (DOM)', () => {
       expect(screen2.Attached).toHaveLength(0);
     });
 
+    it('mirrors the camera only when asked, and never a shared screen', () => {
+      const mirrored = (f: ReturnType<typeof render>) => query(f, '.tile__video')?.classList.contains('tile__video--mirrored');
+      const camera = elementSource();
+      const f = render(participant({ Video: { camera } }), { Mirror: true });
+      expect(mirrored(f)).toBe(true);
+      f.componentRef.setInput('Participant', participant({ Video: { camera, screen: elementSource() } }));
+      f.detectChanges();
+      expect(mirrored(f)).toBe(false);
+      f.componentRef.setInput('Participant', participant({ Video: { camera } }));
+      f.componentRef.setInput('Mirror', false);
+      f.detectChanges();
+      expect(mirrored(f)).toBe(false);
+    });
+
     it('keeps the attached video when a new participant object carries the same source', () => {
       const camera = elementSource();
       const f = render(participant({ Video: { camera } }));

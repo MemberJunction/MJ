@@ -11,6 +11,7 @@
  */
 
 import type { Participant, RoomOptions, Track } from 'livekit-client';
+import type { CapturedDisplaySurface } from '@memberjunction/ai-realtime-client/media';
 
 /**
  * The connection lifecycle of a LiveKit room as the core normalizes it. Maps the livekit-client
@@ -112,6 +113,8 @@ export interface LiveKitLocalMediaState {
   CameraEnabled: boolean;
   /** Whether the local participant is sharing their screen. */
   ScreenShareEnabled: boolean;
+  /** What the local participant is sharing (an entire screen, a window or a tab), while they share. */
+  ScreenShareSurface?: CapturedDisplaySurface;
 }
 
 /** A media input/output device the user can pick (microphone, camera, speaker). */
