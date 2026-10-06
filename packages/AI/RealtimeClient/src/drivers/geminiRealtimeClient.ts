@@ -30,8 +30,9 @@ import { Base64ToArrayBuffer } from '../audio/pcmUtils';
 import { IRealtimePcmPlayback, RealtimePcmPlayback } from '../audio/pcmPlayback';
 import { RealtimeAudioMeter } from '../audio/audioMeter';
 import { CreatePcmMicCapture, IPcmMicCapture } from '../audio/micCapture';
-import { CreateStreamFrameCapture, IFrameCapture } from '../media/frameCapture';
-import { MinVideoFrameSpacingMs } from '../media/videoPacing';
+import { FrameSampler } from '../media/frameSampler';
+import { DEFAULT_INBOUND_VIDEO_RATE, MinVideoFrameSpacingMs } from '../media/videoPacing';
+import { VideoSourceArbiter } from '../media/videoSourceArbiter';
 import type { RealtimeUsageModalityDetail } from '@memberjunction/ai';
 
 // ── Audio constants (Gemini Live wire formats) ─────────────────────────────────
@@ -56,6 +57,9 @@ const GEMINI_OUTPUT_SAMPLE_RATE = 24000;
 const LEGACY_VIDEO_MODEL_PREFIX = 'gemini-3.8-live';
 /** The frame-rate ceiling this client hardcoded before `MaxInboundVideoRate` was minted. */
 const LEGACY_VIDEO_MODEL_RATE = 1;
+
+/** The arbiter source id of the camera stream passed to `Connect`. */
+const CONNECT_CAMERA_SOURCE_ID = 'connect-camera';
 
 // ── Structural transport seams (typed subsets — fakes in tests, SDK in prod) ──
 
@@ -205,7 +209,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     private micStream: MediaStream | null = null;
     private cameraStream: MediaStream | null = null;
     private micCapture: IGeminiMicCapture | null = null;
-    private cameraCapture: IFrameCapture | null = null;
+    private cameraSampler: FrameSampler | null = null;
     private playback: IGeminiAudioPlayback | null = null;
     private firstVideoSendTimestamp = 0;
     private lastVideoSendTimestamp = 0;
@@ -373,10 +377,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
 
         // Start camera capture if inbound video is established and cameraStream provided
         if (this.cameraStream && this.IsTrackEstablished('video', 'inbound')) {
-            this.cameraCapture = CreateStreamFrameCapture(this.cameraStream, {
-                Rate: 1,
-                OnFrame: (frame) => this.SendVideoFrame(frame.data, frame.mimeType),
-            });
+            this.cameraSampler = this.startConnectCamera(this.cameraStream);
         }
 
         // Audio-activity capability (base obligation #9): agent side taps the playout
@@ -385,6 +386,32 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.attachOutputAudioMeter(this.playback?.CreateMeter?.() ?? null);
         this.attachInputAudioMeter(RealtimeAudioMeter.ForMicStream(micStream));
         this.setState('listening');
+    }
+
+    /**
+     * Samples the camera passed to {@link Connect} at the rate the video track negotiated and feeds it to
+     * the session's {@link VideoSourceArbiter} as a `'camera'` source. The arbiter stays the only writer of
+     * inbound video, and it tells the model when it switches to the camera.
+     */
+    private startConnectCamera(stream: MediaStream): FrameSampler {
+        const arbiter = VideoSourceArbiter.ForSink(this);
+        arbiter.RegisterSource({ SourceID: CONNECT_CAMERA_SOURCE_ID, Label: 'Camera', Kind: 'camera' });
+        const sampler = new FrameSampler(stream, {
+            Rate: this.InboundVideoRate ?? DEFAULT_INBOUND_VIDEO_RATE,
+            OnFrame: (frame) => arbiter.PushFrame(CONNECT_CAMERA_SOURCE_ID, frame.Data, frame.MimeType),
+        });
+        sampler.Start();
+        return sampler;
+    }
+
+    /** Stops sampling the `Connect` camera and removes it from the arbiter. Does not stop its tracks. */
+    private stopConnectCamera(): void {
+        if (!this.cameraSampler) {
+            return;
+        }
+        this.cameraSampler.Stop();
+        this.cameraSampler = null;
+        VideoSourceArbiter.ForSink(this).UnregisterSource(CONNECT_CAMERA_SOURCE_ID);
     }
 
     /**
@@ -398,8 +425,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.toolBatchBarrier.Clear();
         this.micStream?.getTracks().forEach((track) => track.stop());
         this.micStream = null;
-        this.cameraCapture?.Stop();
-        this.cameraCapture = null;
+        this.stopConnectCamera();
         this.cameraStream?.getTracks().forEach((track) => track.stop());
         this.cameraStream = null;
         this.micCapture?.Stop();
