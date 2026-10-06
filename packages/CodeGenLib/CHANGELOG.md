@@ -1,5 +1,49 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 6.1.5
+
+### Patch Changes
+
+- f79063b: GraphQL CodeGen marks a nullable `__mj_` column nullable on the output type (#4603). `isNonNullableServerField` declared every `__mj_` column non-nullable, including the geocoding pair `__mj_Latitude` / `__mj_Longitude`, which are NULL until a record is geocoded. A single-record load of such an entity then failed with "Cannot return null for non-nullable field", and a save reported failure after its write had committed. A field is now non-nullable only when field-level security cannot strip it and the database column is NOT NULL. Primary keys and `__mj_CreatedAt` / `__mj_UpdatedAt` are unchanged. Hosts and apps pick this up by re-running `mj codegen` and rebuilding.
+- Updated dependencies [3910bd5]
+- Updated dependencies [8ee1709]
+- Updated dependencies [8ee1709]
+- Updated dependencies [13d92ac]
+- Updated dependencies [ad65a01]
+- Updated dependencies [c3d7e50]
+- Updated dependencies [1d3f2cb]
+- Updated dependencies [0885fb6]
+- Updated dependencies [5cccaf2]
+- Updated dependencies [ec5f382]
+  - @memberjunction/core@6.1.5
+  - @memberjunction/actions-base@6.1.5
+  - @memberjunction/actions@6.1.5
+  - @memberjunction/core-entities@6.1.5
+  - @memberjunction/ai-prompts@6.1.5
+  - @memberjunction/ai@6.1.5
+  - @memberjunction/sql-dialect@6.1.5
+  - @memberjunction/generic-database-provider@6.1.5
+  - @memberjunction/sql-parser@6.1.5
+  - @memberjunction/core-entities-server@6.1.5
+  - @memberjunction/postgresql-dataprovider@6.1.5
+  - @memberjunction/sqlserver-dataprovider@6.1.5
+  - @memberjunction/query-processor@6.1.5
+  - @memberjunction/server-bootstrap-lite@6.1.5
+  - @memberjunction/ai-core-plus@6.1.5
+  - @memberjunction/aiengine@6.1.5
+  - @memberjunction/external-data-sources@6.1.5
+  - @memberjunction/external-data-source-databricks@6.1.5
+  - @memberjunction/external-data-source-mongodb@6.1.5
+  - @memberjunction/external-data-source-mysql@6.1.5
+  - @memberjunction/external-data-source-oracle@6.1.5
+  - @memberjunction/external-data-source-postgres@6.1.5
+  - @memberjunction/external-data-source-sqlserver@6.1.5
+  - @memberjunction/external-data-source-snowflake@6.1.5
+  - @memberjunction/ai-provider-bundle@6.1.5
+  - @memberjunction/cli-core@6.1.5
+  - @memberjunction/config@6.1.5
+  - @memberjunction/global@6.1.5
+
 ## 6.1.4
 
 ### Patch Changes

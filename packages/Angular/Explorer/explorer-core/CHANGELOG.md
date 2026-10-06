@@ -1,5 +1,86 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 6.1.5
+
+### Patch Changes
+
+- 3370dc7: ArtifactsModule no longer preloads React, ReactDOM and Babel from unpkg when it is constructed, so apps that only import a realtime overlay (e.g. a public voice widget) make no third-party CDN requests at bootstrap. MJ Explorer keeps the warm cache by calling AngularAdapterService.preload() after login. Other hosts that render interactive component artifacts and want a warm cache can call `inject(AngularAdapterService).preload()` (from `@memberjunction/ng-react`) after authentication; otherwise the runtime loads on first use.
+- 7baaf30: fix: a date-only (SQL `date`) column reads as its stored day in the query viewer, the record change history and restore preview, and the timeline, and exports as `YYYY-MM-DD`
+
+  These paths still formatted a calendar day, which arrives as UTC midnight, in the reader's local zone, so a stored 2026-10-01 read as Sep 30 west of Greenwich: as "Sep 30, 2026" in a query viewer cell and row detail, as "Sep 30, 2026, 7:00 PM" in the change history, and in a "September 30" timeline segment. The query viewer now branches on `IsDateOnlySQLType` and formats with `FormatDateOnly`, and the row detail no longer adds an "hours ago" suffix to a day. The change history and the restore preview share one formatter, so a date-only field shows its day with no time, and the restore preview's live value for a date field is no longer blank. The timeline carries a date-only event as local midnight of its stored day, so its segments and labels land on that day. The export engine gains a `dateonly` column type: CSV and JSON write ISO 8601 `YYYY-MM-DD`, and Excel writes a date cell on the stored day. The entity grid and the query viewer mark SQL `date` columns with it, and the query viewer's export columns now set `dataType` (they set an ignored `type` key before).
+
+  The entity viewer's Timeline view now reads its date field the same way: its rows are plain objects with no entity metadata, so the renderer hands the timeline group the entity (`TimelineGroup.EntityInfo`, used when a record carries none) and drops the time from the card date for a date-only field. The restore preview decides whether a field changed by value, not by its display string, so a timestamp that moved by under a minute is no longer reported unchanged and a snapshot day matches the same live day. The fallback export for Cards, Map and Timeline (the view workspace and Explorer's view resource) types its columns as the grid does, through a shared `ExportColumnTypeForSQLType`, so a date-only field exports as its day there too. The export engine writes a `dateonly` value whose leading `YYYY-MM-DD` is not a real day (`2026-13-45`, `2026-02-30`) as its original text instead of "Invalid Date" or a rolled-over day. The mobile app's entity explorer shows a date-only field in card subtitles and the record detail as its stored day. Closes MJ#4966.
+
+- 1d3f2cb: Fix two ways interactive components fail to open entity records.
+  - **sql-dialect** — PostgreSQL `tsvector` and `tsquery` are now string types. They were missing
+    from the list, so CodeGen typed the `__mj_fts_vector` column that full-text search adds as a
+    GraphQL `Int`. Once the trigger fills it, the value is text, and every load of that entity's
+    records fails with `Int cannot represent non-integer value`. Re-run CodeGen to regenerate the
+    affected entities.
+  - **ng-explorer-core** — the standalone artifact tab (`ArtifactResource`) now handles the viewer
+    panel's `openEntityRecord` and `navigationRequest` events, as the conversation view already does.
+    Before, a component's `OpenEntityRecord` call in a shared artifact tab did nothing, with no
+    console output.
+
+- Updated dependencies [3370dc7]
+- Updated dependencies [3910bd5]
+- Updated dependencies [7baaf30]
+- Updated dependencies [8ee1709]
+- Updated dependencies [13d92ac]
+- Updated dependencies [ad65a01]
+- Updated dependencies [c3d7e50]
+- Updated dependencies [ec5f382]
+  - @memberjunction/ng-artifacts@6.1.5
+  - @memberjunction/core@6.1.5
+  - @memberjunction/ng-entity-viewer@6.1.5
+  - @memberjunction/ng-base-forms@6.1.5
+  - @memberjunction/export-engine@6.1.5
+  - @memberjunction/ng-query-viewer@6.1.5
+  - @memberjunction/ng-record-changes@6.1.5
+  - @memberjunction/ng-dashboards@6.1.5
+  - @memberjunction/core-entities@6.1.5
+  - @memberjunction/graphql-dataprovider@6.1.5
+  - @memberjunction/ng-conversations@6.1.5
+  - @memberjunction/ng-dashboard-viewer@6.1.5
+  - @memberjunction/ai-engine-base@6.1.5
+  - @memberjunction/ai-core-plus@6.1.5
+  - @memberjunction/ng-auth-services@6.1.5
+  - @memberjunction/ng-base-application@6.1.5
+  - @memberjunction/ng-entity-form-dialog@6.1.5
+  - @memberjunction/ng-entity-permissions@6.1.5
+  - @memberjunction/ng-explorer-settings@6.1.5
+  - @memberjunction/ng-list-detail-grid@6.1.5
+  - @memberjunction/ng-shared@6.1.5
+  - @memberjunction/ng-ai-test-harness@6.1.5
+  - @memberjunction/ng-base-types@6.1.5
+  - @memberjunction/ng-composer@6.1.5
+  - @memberjunction/ng-container-directives@6.1.5
+  - @memberjunction/ng-feedback@6.1.5
+  - @memberjunction/ng-file-storage@6.1.5
+  - @memberjunction/ng-list-management@6.1.5
+  - @memberjunction/ng-mj-livekit-room@6.1.5
+  - @memberjunction/ng-notifications@6.1.5
+  - @memberjunction/ng-react@6.1.5
+  - @memberjunction/ng-record-selector@6.1.5
+  - @memberjunction/ng-record-tags@6.1.5
+  - @memberjunction/ng-resource-permissions@6.1.5
+  - @memberjunction/ng-search@6.1.5
+  - @memberjunction/ng-shared-generic@6.1.5
+  - @memberjunction/ng-user-avatar@6.1.5
+  - @memberjunction/communication-types@6.1.5
+  - @memberjunction/entity-communications-client@6.1.5
+  - @memberjunction/interactive-component-types@6.1.5
+  - @memberjunction/templates-base-types@6.1.5
+  - @memberjunction/ng-export-service@6.1.5
+  - @memberjunction/ng-generic-dialog@6.1.5
+  - @memberjunction/ng-markdown@6.1.5
+  - @memberjunction/ng-ui-components@6.1.5
+  - @memberjunction/ng-word-cloud@6.1.5
+  - @memberjunction/ng-pagination@6.1.5
+  - @memberjunction/lists-base@6.1.5
+  - @memberjunction/global@6.1.5
+  - @memberjunction/theme-engine@6.1.5
+
 ## 6.1.4
 
 ### Patch Changes

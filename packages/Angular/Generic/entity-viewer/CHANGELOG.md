@@ -1,5 +1,45 @@
 # @memberjunction/ng-entity-viewer
 
+## 6.1.5
+
+### Patch Changes
+
+- 3910bd5: fix: a date-only column renders as its stored calendar day in grids, cards, the record detail panel, aggregates, the aggregate panel, the view-config preview, the IS-A related card and the FK dropdown, not the previous day
+
+  A SQL `date` column arrives as UTC midnight, and every display path except the form field (fixed in #4177) formatted it in the reader's local zone, so a stored 2026-11-20 read as Nov 19 for everyone west of Greenwich and 2026-01-01 read as the previous year. The form and the list disagreed on the same row. `@memberjunction/core` now exports `IsDateOnlySQLType` and `FormatDateOnly`, its own `FormatValue` uses them for `date` types, and the grid, cards, detail panel, entity card and view-config preview branch on the field's declared SQL type. A `datetime` or `datetimeoffset` column is an instant and keeps local rendering with its time. `ng-entity-viewer` also exports `AggregateFieldName` and `AggregateField`, which read the column out of a single-field aggregate such as `MIN(IntakeDate)`, and the aggregate panel gains an optional `Entity` input: with it bound, a date aggregate renders as its day instead of the raw ISO string the wire carries, while a `COUNT` over a date column still renders as the count. A timestamp aggregate that arrives as that ISO string now renders in local time in grid cards rather than as the wire text. In `ng-base-forms`, the IS-A related card and the FK dropdown cells branch on the column's SQL type the same way. Closes MJ#4210.
+
+- 7baaf30: fix: a date-only (SQL `date`) column reads as its stored day in the query viewer, the record change history and restore preview, and the timeline, and exports as `YYYY-MM-DD`
+
+  These paths still formatted a calendar day, which arrives as UTC midnight, in the reader's local zone, so a stored 2026-10-01 read as Sep 30 west of Greenwich: as "Sep 30, 2026" in a query viewer cell and row detail, as "Sep 30, 2026, 7:00 PM" in the change history, and in a "September 30" timeline segment. The query viewer now branches on `IsDateOnlySQLType` and formats with `FormatDateOnly`, and the row detail no longer adds an "hours ago" suffix to a day. The change history and the restore preview share one formatter, so a date-only field shows its day with no time, and the restore preview's live value for a date field is no longer blank. The timeline carries a date-only event as local midnight of its stored day, so its segments and labels land on that day. The export engine gains a `dateonly` column type: CSV and JSON write ISO 8601 `YYYY-MM-DD`, and Excel writes a date cell on the stored day. The entity grid and the query viewer mark SQL `date` columns with it, and the query viewer's export columns now set `dataType` (they set an ignored `type` key before).
+
+  The entity viewer's Timeline view now reads its date field the same way: its rows are plain objects with no entity metadata, so the renderer hands the timeline group the entity (`TimelineGroup.EntityInfo`, used when a record carries none) and drops the time from the card date for a date-only field. The restore preview decides whether a field changed by value, not by its display string, so a timestamp that moved by under a minute is no longer reported unchanged and a snapshot day matches the same live day. The fallback export for Cards, Map and Timeline (the view workspace and Explorer's view resource) types its columns as the grid does, through a shared `ExportColumnTypeForSQLType`, so a date-only field exports as its day there too. The export engine writes a `dateonly` value whose leading `YYYY-MM-DD` is not a real day (`2026-13-45`, `2026-02-30`) as its original text instead of "Invalid Date" or a rolled-over day. The mobile app's entity explorer shows a date-only field in card subtitles and the record detail as its stored day. Closes MJ#4966.
+
+- Updated dependencies [3910bd5]
+- Updated dependencies [7baaf30]
+- Updated dependencies [8ee1709]
+- Updated dependencies [13d92ac]
+- Updated dependencies [ad65a01]
+- Updated dependencies [c3d7e50]
+- Updated dependencies [ec5f382]
+  - @memberjunction/core@6.1.5
+  - @memberjunction/export-engine@6.1.5
+  - @memberjunction/ng-record-changes@6.1.5
+  - @memberjunction/ng-timeline@6.1.5
+  - @memberjunction/actions-base@6.1.5
+  - @memberjunction/core-entities@6.1.5
+  - @memberjunction/ng-base-types@6.1.5
+  - @memberjunction/ng-entity-action-ux@6.1.5
+  - @memberjunction/ng-filter-builder@6.1.5
+  - @memberjunction/ng-list-management@6.1.5
+  - @memberjunction/ng-map-view@6.1.5
+  - @memberjunction/ng-notifications@6.1.5
+  - @memberjunction/ng-shared-generic@6.1.5
+  - @memberjunction/communication-types@6.1.5
+  - @memberjunction/ng-export-service@6.1.5
+  - @memberjunction/ng-ui-components@6.1.5
+  - @memberjunction/ng-pagination@6.1.5
+  - @memberjunction/global@6.1.5
+
 ## 6.1.4
 
 ### Patch Changes

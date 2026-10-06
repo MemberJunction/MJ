@@ -1,5 +1,24 @@
 # Change Log - @memberjunction/actions-apollo
 
+## 6.1.5
+
+### Patch Changes
+
+- Updated dependencies [3910bd5]
+- Updated dependencies [8ee1709]
+- Updated dependencies [8ee1709]
+- Updated dependencies [13d92ac]
+- Updated dependencies [ad65a01]
+- Updated dependencies [c3d7e50]
+- Updated dependencies [ec5f382]
+  - @memberjunction/core@6.1.5
+  - @memberjunction/actions-base@6.1.5
+  - @memberjunction/actions@6.1.5
+  - @memberjunction/core-entities@6.1.5
+  - @memberjunction/credentials@6.1.5
+  - @memberjunction/global@6.1.5
+  - @memberjunction/network-utils@6.1.5
+
 ## 6.1.4
 
 ### Patch Changes

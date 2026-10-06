@@ -1,5 +1,14 @@
 # @memberjunction/sql-converter
 
+## 6.1.5
+
+### Patch Changes
+
+- Updated dependencies [1d3f2cb]
+- Updated dependencies [ec5f382]
+  - @memberjunction/sql-dialect@6.1.5
+  - @memberjunction/sqlglot-ts@6.1.5
+
 ## 6.1.4
 
 ### Patch Changes

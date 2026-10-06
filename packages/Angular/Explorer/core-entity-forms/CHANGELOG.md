@@ -1,5 +1,56 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 6.1.5
+
+### Patch Changes
+
+- Updated dependencies [3910bd5]
+- Updated dependencies [7baaf30]
+- Updated dependencies [8ee1709]
+- Updated dependencies [13d92ac]
+- Updated dependencies [ad65a01]
+- Updated dependencies [c3d7e50]
+- Updated dependencies [ec5f382]
+  - @memberjunction/core@6.1.5
+  - @memberjunction/ng-entity-viewer@6.1.5
+  - @memberjunction/ng-base-forms@6.1.5
+  - @memberjunction/ng-timeline@6.1.5
+  - @memberjunction/actions-base@6.1.5
+  - @memberjunction/core-entities@6.1.5
+  - @memberjunction/graphql-dataprovider@6.1.5
+  - @memberjunction/ai@6.1.5
+  - @memberjunction/ai-engine-base@6.1.5
+  - @memberjunction/ai-core-plus@6.1.5
+  - @memberjunction/ng-base-application@6.1.5
+  - @memberjunction/ng-link-directives@6.1.5
+  - @memberjunction/ng-shared@6.1.5
+  - @memberjunction/ng-testing@6.1.5
+  - @memberjunction/ng-action-gallery@6.1.5
+  - @memberjunction/ng-actions@6.1.5
+  - @memberjunction/ng-agents@6.1.5
+  - @memberjunction/ng-ai-test-harness@6.1.5
+  - @memberjunction/ng-base-types@6.1.5
+  - @memberjunction/ng-code-editor@6.1.5
+  - @memberjunction/ng-deep-diff@6.1.5
+  - @memberjunction/ng-entity-relationship-diagram@6.1.5
+  - @memberjunction/ng-flow-editor@6.1.5
+  - @memberjunction/ng-hierarchy-tree@6.1.5
+  - @memberjunction/ng-join-grid@6.1.5
+  - @memberjunction/ng-list-management@6.1.5
+  - @memberjunction/ng-notifications@6.1.5
+  - @memberjunction/ng-record-process-studio@6.1.5
+  - @memberjunction/ng-resource-permissions@6.1.5
+  - @memberjunction/ng-search@6.1.5
+  - @memberjunction/ng-shared-generic@6.1.5
+  - @memberjunction/ng-task-graph-editor@6.1.5
+  - @memberjunction/ng-trees@6.1.5
+  - @memberjunction/ng-versions@6.1.5
+  - @memberjunction/templates-base-types@6.1.5
+  - @memberjunction/ng-tabstrip@6.1.5
+  - @memberjunction/ng-markdown@6.1.5
+  - @memberjunction/ng-ui-components@6.1.5
+  - @memberjunction/global@6.1.5
+
 ## 6.1.4
 
 ### Patch Changes
