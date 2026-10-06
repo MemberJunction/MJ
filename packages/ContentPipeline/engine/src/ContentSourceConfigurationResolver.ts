@@ -52,6 +52,12 @@ export interface ResolvedSourceConfiguration {
     Parameters: Readonly<Record<string, string>>;
     /** The whole parsed `Configuration`, for framework-level settings. */
     Configuration: Readonly<Record<string, unknown>>;
+    /**
+     * `ContentSourceType.DriverClass` — the registered class that knows how to walk this kind of
+     * source. This column already exists and is already seeded, so a source whose type is set needs
+     * no further configuration to be discoverable.
+     */
+    DriverClass: string | null;
     /** What the type declares its sources must provide. */
     DeclaredFields: readonly SourceTypeField[];
     /** Anything that does not meet the type's declaration. Empty when the source is valid. */
@@ -119,6 +125,9 @@ export class ContentSourceConfigurationResolver {
             throw new Error(`Content Source '${contentSourceID}' not found`);
         }
         const sourceConfig = this.parse(source.Configuration, `Content Source '${contentSourceID}'`);
+        const sourceType = source.ContentSourceTypeID
+            ? (engine.ContentSourceTypes.find((t) => t.ID === source.ContentSourceTypeID) ?? null)
+            : null;
         const typeConfig = this.loadTypeConfiguration(source, engine);
 
         const declared = Array.isArray(typeConfig.RequiredFields)
@@ -134,6 +143,7 @@ export class ContentSourceConfigurationResolver {
             Settings: settings,
             Parameters: this.flatten(settings),
             Configuration: sourceConfig,
+            DriverClass: sourceType?.DriverClass ?? null,
             DeclaredFields: declared,
             Problems: problems,
             IsValid: problems.length === 0,

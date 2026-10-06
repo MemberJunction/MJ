@@ -69,7 +69,7 @@ export class DiscoverStage extends BasePipelineStage {
             throw new FatalStageError(`Content Source '${contentSourceID}' is not configured correctly: ${detail}`);
         }
 
-        const driver = this.resolveDriver(resolved.Settings, context);
+        const driver = this.resolveDriver(resolved.Settings, context, resolved.DriverClass);
         if (context.Signal.aborted) {
             // Already cancelled before the walk started: do not open the source at all.
             return Outcome.Retry('cancelled before discovery started');
@@ -146,6 +146,11 @@ export class DiscoverStage extends BasePipelineStage {
     private toWorkingRecord(item: DiscoveredItem, driverKey: string): WorkingRecord {
         const child = new WorkingRecord(new WorkingRecordIdentity('Content Item', item.URL));
         const setBy = `${DISCOVER_STAGE}.${driverKey}`;
+        if (item.Checksum) {
+            // Not a well-known field: nothing competes for it on confidence. It is the committer's
+            // change signal, so it travels as a column the producing stage sets directly.
+            child.SetExtension('Pipeline', 'columns', { Checksum: item.Checksum });
+        }
         for (const field of item.Fields ?? []) {
             child.Propose(field.Field, field.Value, field.Confidence, setBy);
         }
@@ -160,13 +165,24 @@ export class DiscoverStage extends BasePipelineStage {
         return child;
     }
 
-    /** The source's Discover driver, from its type-specific settings. */
-    private resolveDriver(settings: Readonly<Record<string, unknown>>, context: StageContext): BaseDiscoverDriver {
-        const configured = settings.DiscoverDriverKey ?? context.Configuration.DiscoverDriverKey;
+    /**
+     * The source's Discover driver.
+     *
+     * `ContentSourceType.DriverClass` is the normal answer and needs no configuration — the column
+     * exists and is seeded for every shipped source type, so a source with a type is discoverable as
+     * it stands. `DiscoverDriverKey` stays as an override for a source that wants a different walk
+     * than its type's default, and for a Record Process pinning one for a single run.
+     */
+    private resolveDriver(
+        settings: Readonly<Record<string, unknown>>,
+        context: StageContext,
+        driverClass: string | null,
+    ): BaseDiscoverDriver {
+        const configured = settings.DiscoverDriverKey ?? context.Configuration.DiscoverDriverKey ?? driverClass;
         if (typeof configured !== 'string' || configured.length === 0) {
             throw new FatalStageError(
-                'No Discover driver is configured for this source. Set DiscoverDriverKey in the ' +
-                    "source's type-specific configuration, or in the Record Process's Options.",
+                "No Discover driver for this source. Set its Content Source Type's DriverClass, or " +
+                    "DiscoverDriverKey in the source's type-specific configuration or the Record Process's Options.",
             );
         }
         const driver = BaseDiscoverDriver.Resolve(configured);

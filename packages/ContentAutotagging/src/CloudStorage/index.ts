@@ -6,3 +6,4 @@ export * from './providers/AutotagCloudStorage'
  * AutotagAzureBlob is retained for backward compatibility but will be removed in a future version.
  */
 export * from './providers/AutotagAzureBlob'
+export * from './generic/CloudStorageDiscoverDriver'

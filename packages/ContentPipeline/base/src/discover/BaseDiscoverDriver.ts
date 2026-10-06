@@ -32,6 +32,16 @@ export interface DiscoveredItem {
      * existing record.
      */
     URL: string;
+    /**
+     * A cheap fingerprint of the item's content, if the source can supply one without fetching it —
+     * an ETag, a content hash, a size-and-modified-time pair.
+     *
+     * This is the pipeline's change signal: an item whose checksum matches what is stored is a
+     * genuine no-op, and one whose checksum moved resets the field confidence so every later stage
+     * reconsiders it. A driver that cannot produce one cheaply should leave it unset rather than
+     * fetch the content to compute it — Extract will supply one from the text it reads.
+     */
+    Checksum?: string;
     /** Whatever well-known fields the driver could determine directly — a declared file type, a title, a date. */
     Fields?: DiscoveredField[];
     /**

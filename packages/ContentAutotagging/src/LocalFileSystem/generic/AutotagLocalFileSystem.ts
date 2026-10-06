@@ -6,6 +6,7 @@ import { IMetadataProvider, UserInfo, Metadata, RunView } from "@memberjunction/
 import { MJContentSourceEntity, MJContentItemEntity } from "@memberjunction/core-entities";
 import { OpenAI } from "openai";
 import path from 'path';
+import { LocalFileSystemDiscoverDriver } from './LocalFileSystemDiscoverDriver';
 import dotenv from 'dotenv';
 dotenv.config({ quiet: true })
 
@@ -121,30 +122,31 @@ export class AutotagLocalFileSystem extends AutotagBase {
      */
     public async SetNewAndModifiedContentItems(contentSourceParams: ContentSourceParams, lastRunDate: Date, contextUser: UserInfo): Promise<MJContentItemEntity[]> {
         const contentItems: MJContentItemEntity[] = []
-        let contentSourcePath = contentSourceParams.URL
-        const filesAndDirs = fs.readdirSync(contentSourcePath)
 
-        for (const file of filesAndDirs) {
-            const filePath = path.join(contentSourcePath, file)
-            const stats = fs.statSync(filePath)
-            if (stats.isDirectory()) {
-                contentSourceParams.URL = filePath
-                await this.SetNewAndModifiedContentItems(contentSourceParams, lastRunDate, contextUser)
+        // The walk itself lives in LocalFileSystemDiscoverDriver, so this and the content pipeline's
+        // Discover stage agree on what is in a directory. What stays here is what is specific to
+        // autotagging: deciding added-vs-modified against the last run date, and saving the row.
+        const driver = new LocalFileSystemDiscoverDriver();
+        for await (const item of driver.Discover({
+            ContentSourceID: contentSourceParams.contentSourceID,
+            URL: contentSourceParams.URL,
+            Parameters: {},
+            Configuration: {},
+            ContextUser: contextUser,
+            Provider: this.ProviderToUse,
+            Signal: new AbortController().signal,
+            ReportProgress: () => {},
+        })) {
+            const created = item.Extensions?.CreatedAt as Date | undefined;
+            const modified = item.Extensions?.ModifiedAt as Date | undefined;
+            // Each file is its own content item, so the params carry that file's path rather than
+            // the directory's — the previous code mutated the shared URL as it descended.
+            const params: ContentSourceParams = { ...contentSourceParams, URL: item.URL };
+            if (created && new Date(created.toUTCString()) > lastRunDate) {
+                contentItems.push(await this.SetAddedContentItem(item.URL, params));
             }
-
-            else if (stats.isFile()) {
-                const modifiedDate = new Date(stats.mtime.toUTCString())
-                const changedDate = new Date(stats.ctime.toUTCString())
-                if (changedDate > lastRunDate) {
-                    // The file has been added, create a new record for this file
-                    const contentItem = await this.SetAddedContentItem(filePath, contentSourceParams);
-                    contentItems.push(contentItem); // Content item was added, add to list
-                }
-                else if (modifiedDate > lastRunDate) {
-                    // The file's contents has been, update the record for this file 
-                    const contentItem = await this.SetModifiedContentItem(filePath, contentSourceParams);
-                    contentItems.push(contentItem);
-                }
+            else if (modified && new Date(modified.toUTCString()) > lastRunDate) {
+                contentItems.push(await this.SetModifiedContentItem(item.URL, params));
             }
         }
         return contentItems;

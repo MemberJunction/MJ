@@ -10298,6 +10298,9 @@ importers:
       '@memberjunction/aiengine':
         specifier: 6.2.0-edge.2
         version: link:../AI/Engine
+      '@memberjunction/content-pipeline-base':
+        specifier: 6.2.0-edge.2
+        version: link:../ContentPipeline/base
       '@memberjunction/core':
         specifier: 6.2.0-edge.2
         version: link:../MJCore
