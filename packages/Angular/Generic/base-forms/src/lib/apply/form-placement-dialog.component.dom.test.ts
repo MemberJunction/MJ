@@ -814,6 +814,18 @@ describe('MjFormPlacementDialogComponent (DOM) — moving a panel off its field 
             `${WARNING} (Seat Limit). The form also shows its own inputs for them, and edits made to them in the panel are not saved.`);
     });
 
+    it('does not say the form shows the fields when the panel now replaces the section drawing them', async () => {
+        const f = renderSeeded({ slot: 'after-fields', presentation: 'panel', title: 'Seats', replacesFieldNames: ['SeatLimit'] });
+        await pickReplaceMode(f, 'section');
+        const holding = Array.from((f.nativeElement as HTMLElement).querySelectorAll<HTMLInputElement>('input[name="mj-section-pick"]'))[1];
+        holding.click();
+        f.detectChanges();
+        expect(f.componentInstance.IsSectionChosen('scheduleCapacity')).toBe(true);
+        expect(summary(f)).toContain(
+            `${WARNING} (Seat Limit). It no longer stands in for them, so edits made to them in the panel are not saved.`);
+        expect(summary(f)).not.toContain('The form also shows its own inputs');
+    });
+
     it('says nothing for a panel that never stood in for a field', async () => {
         const f = renderSeeded({ slot: 'after-fields', presentation: 'panel', title: 'Seats' });
         await pickReplaceMode(f, 'section');

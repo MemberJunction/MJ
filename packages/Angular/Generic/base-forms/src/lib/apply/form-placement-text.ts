@@ -12,6 +12,7 @@ import {
     ChosenSectionKeys,
     FORM_PLACEMENT_SLOTS,
     HasDetailsTab,
+    ReplacedPreviewKeys,
     SectionHoldingField,
     ShowsRail,
     SlotIsOnForm,
@@ -221,11 +222,21 @@ function fieldLabel(context: FormPlacementContext, fieldName: string): string {
     return SectionHoldingField(context, fieldName)?.Fields?.find((f) => f.Name === fieldName)?.Label || fieldName;
 }
 
+/** Whether the answers hide the section drawing any of these fields, so the form shows no input for it. */
+function hidesAnyFieldSection(state: FormPlacementState, context: FormPlacementContext, fieldNames: readonly string[]): boolean {
+    const hidden = ReplacedPreviewKeys(state, context);
+    return fieldNames.some((name) => {
+        const section = SectionHoldingField(context, name);
+        return section != null && hidden.has(section.Key);
+    });
+}
+
 /**
  * The sentences that follow the summary when an answer will not land the way it reads.
  *
  * A panel moved off a field claim keeps its `configuration.fields`, so it still draws those
- * fields, while the host saves a panel's edits only to fields it claims.
+ * fields, while the host saves a panel's edits only to fields it claims. The form shows its
+ * own inputs for them unless the new answer hides the section that draws them.
  */
 function summaryCaveats(
     state: FormPlacementState,
@@ -240,7 +251,9 @@ function summaryCaveats(
     if (state.ReplaceMode !== 'field' && fieldsStoodInFor.length > 0) {
         const labels = fieldsStoodInFor.map((name) => fieldLabel(context, name)).join(', ');
         caveats += ` This panel keeps drawing the fields it was set to stand in for (${labels}).`
-            + ' The form also shows its own inputs for them, and edits made to them in the panel are not saved.';
+            + (hidesAnyFieldSection(state, context, fieldsStoodInFor)
+                ? ' It no longer stands in for them, so edits made to them in the panel are not saved.'
+                : ' The form also shows its own inputs for them, and edits made to them in the panel are not saved.');
     }
     if (state.ReplaceMode !== 'field' && !inSection && context.SlotsVerified && !SlotIsOnForm(context, state.Slot)) {
         caveats += ` This form does not emit ${state.Slot}, so the panel renders at the bottom instead.`;
