@@ -1,5 +1,37 @@
 # @memberjunction/version-history
 
+## 6.2.0-edge.2
+
+### Minor Changes
+
+- 7e57b48: Extract `@memberjunction/record-graph` from Version History and Metadata Sync to provide generalized record dependency graph traversal, topological sorting, relationship collection resolution, and link encoding across MemberJunction.
+
+  The walker finds IS-A subtype rows on UUID keys (it passed the record-id string where the bare key value is expected), matches soft links stored as the bare key value, and builds its queries from the provider it was given. `WalkOptions.OnLoadFailure` reports an edge whose rows couldn't be loaded, which the walk otherwise only logs.
+
+### Patch Changes
+
+- Updated dependencies [e97d95c]
+- Updated dependencies [2552b1e]
+- Updated dependencies [21f9e15]
+- Updated dependencies [4248fb3]
+- Updated dependencies [0adaf76]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [705ab4e]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [5986939]
+- Updated dependencies [4d647e6]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [369e229]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [2854a2e]
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/core-entities@6.2.0-edge.2
+  - @memberjunction/record-graph@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+
 ## 6.2.0-edge.1
 
 ### Patch Changes
