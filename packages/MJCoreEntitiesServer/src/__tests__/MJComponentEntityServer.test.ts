@@ -13,6 +13,7 @@
  * components and the form and panel rows that use them.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { PlatformSQL } from '@memberjunction/core';
 
 vi.mock('@memberjunction/global', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/global')>();
@@ -47,9 +48,14 @@ interface StoredUse {
 /** One view the guard ran, with the user it ran as. */
 interface ViewCall {
     EntityName: string;
-    ExtraFilter: string;
+    ExtraFilter: string | PlatformSQL;
     Fields: string[];
     ContextUser: unknown;
+}
+
+/** The filter SQL Server runs: the `sqlserver` variant when there is one, else the default. */
+function sqlServerFilter(filter: string | PlatformSQL): string {
+    return typeof filter === 'string' ? filter : filter.sqlserver ?? filter.default;
 }
 
 const { db } = vi.hoisted(() => ({
@@ -78,7 +84,7 @@ function answer(entityName: string, filter: string): Array<Record<string, unknow
     if (entityName === 'MJ: Components') {
         const byID = /^ID='([^']*)'$/.exec(filter);
         if (byID) return db.components.filter((c) => c.ID === byID[1]).map((c) => ({ ...c }));
-        const byName = /^LOWER\(LTRIM\(RTRIM\(Name\)\)\)=LOWER\('((?:[^']|'')*)'\)(?: AND ID<>'([^']*)')?$/.exec(filter);
+        const byName = /^LOWER\(LTRIM\(RTRIM\(Name\)\)\)=LOWER\(N?'((?:[^']|'')*)'\)(?: AND ID<>'([^']*)')?$/.exec(filter);
         if (byName) {
             const name = byName[1].replace(/''/g, "'").trim().toLowerCase();
             return db.components
@@ -97,14 +103,14 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/core')>();
     class StubRunView {
         public async RunViews(
-            params: Array<{ EntityName: string; ExtraFilter: string; Fields: string[] }>,
+            params: Array<{ EntityName: string; ExtraFilter: string | PlatformSQL; Fields: string[] }>,
             contextUser?: unknown,
         ): Promise<Array<{ Success: boolean; Results: Array<Record<string, unknown>>; ErrorMessage?: string }>> {
             if (db.throws) throw new Error('connection lost');
             db.calls.push(params.map((p) => ({ EntityName: p.EntityName, ExtraFilter: p.ExtraFilter, Fields: p.Fields, ContextUser: contextUser })));
             return params.map((p) => db.failing.has(p.EntityName)
                 ? { Success: false, Results: [], ErrorMessage: `cannot read ${p.EntityName}` }
-                : { Success: true, Results: answer(p.EntityName, p.ExtraFilter) });
+                : { Success: true, Results: answer(p.EntityName, sqlServerFilter(p.ExtraFilter)) });
         }
     }
     return { ...actual, RunView: StubRunView, LogError: vi.fn() };
@@ -370,7 +376,10 @@ describe('MJComponentEntityServer — form component guard', () => {
             expect(batch.map((c) => c.EntityName)).toEqual([CONTRIBUTIONS, OVERRIDES, 'MJ: Components', 'MJ: Components', 'MJ: Record Changes']);
             expect(batch[0]).toMatchObject({ ExtraFilter: "ComponentID='COMP-''1'", ContextUser: ALICE });
             expect(batch[2].Fields).toEqual(['Specification', 'Status', 'Name', 'Type', 'Namespace']);
-            expect(batch[3].ExtraFilter).toBe("LOWER(LTRIM(RTRIM(Name)))=LOWER('PersonLtvStrip') AND ID<>'COMP-''1'");
+            expect(batch[3].ExtraFilter).toEqual({
+                default: "LOWER(LTRIM(RTRIM(Name)))=LOWER('PersonLtvStrip') AND ID<>'COMP-''1'",
+                sqlserver: "LOWER(LTRIM(RTRIM(Name)))=LOWER(N'PersonLtvStrip') AND ID<>'COMP-''1'",
+            });
             expect(batch[4].ExtraFilter).toBe(
                 `EntityID='ENT-COMPONENTS' AND Source='Internal' AND Type='Create' AND UserID='${ALICE.ID}' AND RecordID IN ('ID|COMP-''1')`);
         });
@@ -428,7 +437,19 @@ describe('MJComponentEntityServer — form component guard', () => {
             const e = make(ALICE, { IsSaved: false, ID: 'NEW', Name: 'foo' });
             expect(await e.Save()).toBe(false);
             expect(e.Recorded?.Message).toMatch(/already has this name/);
-            expect(db.calls[0][0].ExtraFilter).toBe("LOWER(LTRIM(RTRIM(Name)))=LOWER('foo')");
+            expect(db.calls[0][0].ExtraFilter).toEqual({
+                default: "LOWER(LTRIM(RTRIM(Name)))=LOWER('foo')",
+                sqlserver: "LOWER(LTRIM(RTRIM(Name)))=LOWER(N'foo')",
+            });
+        });
+
+        it('names a non-Latin-1 component with a Unicode literal on SQL Server', async () => {
+            const e = make(ALICE, { IsSaved: false, ID: 'NEW', Name: 'Łódź Panel' });
+            expect(await e.Save()).toBe(true);
+            expect(sqlServerFilter(db.calls[0][0].ExtraFilter)).toBe("LOWER(LTRIM(RTRIM(Name)))=LOWER(N'Łódź Panel')");
+            db.components.push({ ID: 'BOBS', Name: 'łódź panel', Namespace: null, Specification: '{}', Status: null, Type: null });
+            use('BOBS', 'User', BOB.ID);
+            expect(await make(ALICE, { IsSaved: false, ID: 'NEW', Name: 'Łódź Panel' }).Save()).toBe(false);
         });
 
         it('allows a create with no same-named component', async () => {

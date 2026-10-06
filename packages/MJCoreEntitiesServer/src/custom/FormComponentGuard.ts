@@ -238,13 +238,18 @@ function storedComponentView(componentID: string): RunViewParams {
  * case-sensitive database cannot hide a match. It is matched in any namespace, because a lookup
  * may be made without one. The new name is trimmed of all whitespace, as the lookup trims it; SQL
  * `LTRIM`/`RTRIM` remove only spaces from the stored name, so a stored name padded with a tab or a
- * line break is not matched.
+ * line break is not matched. On SQL Server the name is a Unicode literal (`N'...'`), so a name with
+ * characters outside the database's code page is compared as stored.
  */
 function sameNameView(name: unknown, excludeID: string | null): RunViewParams {
-    const nameFilter = `LOWER(LTRIM(RTRIM(Name)))=LOWER('${EscapeSQLString(String(name ?? '').trim())}')`;
+    const literal = EscapeSQLString(String(name ?? '').trim());
+    const exclude = excludeID ? ` AND ID<>'${EscapeSQLString(excludeID)}'` : '';
     return {
         EntityName: 'MJ: Components',
-        ExtraFilter: excludeID ? `${nameFilter} AND ID<>'${EscapeSQLString(excludeID)}'` : nameFilter,
+        ExtraFilter: {
+            default: `LOWER(LTRIM(RTRIM(Name)))=LOWER('${literal}')${exclude}`,
+            sqlserver: `LOWER(LTRIM(RTRIM(Name)))=LOWER(N'${literal}')${exclude}`,
+        },
         Fields: ['ID'],
         ResultType: 'simple',
         BypassCache: true,
