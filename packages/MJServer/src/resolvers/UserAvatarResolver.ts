@@ -31,6 +31,9 @@ import { GetSystemUser } from '../auth/index.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { ValidateAvatarInput } from './avatarInputValidation.js';
 
+/** What the browser sees when the save fails. The server's detail goes to the log only. */
+const SAVE_FAILED_MESSAGE = 'Could not save your avatar. Please try again or contact your administrator.';
+
 @ObjectType()
 export class UpdateMyAvatarResult {
   @Field()
@@ -66,9 +69,8 @@ export class UserAvatarResolver extends ResolverBase {
     try {
       return await this.saveAvatar(ctx, caller, input.ImageURL, input.IconClass);
     } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      LogError(`UpdateMyAvatar: failed for user ${caller.ID}: ${message}`);
-      return { Success: false, ErrorMessage: `Could not save your avatar: ${message}` };
+      LogError(`UpdateMyAvatar: failed for user ${caller.ID}: ${e instanceof Error ? e.message : String(e)}`);
+      return { Success: false, ErrorMessage: SAVE_FAILED_MESSAGE };
     }
   }
 
@@ -83,6 +85,7 @@ export class UserAvatarResolver extends ResolverBase {
     const provider = GetReadWriteProvider(ctx.providers);
     const user = await provider.GetEntityObject<MJUserEntity>('MJ: Users', systemUser);
     if (!(await user.Load(caller.ID))) {
+      LogError(`UpdateMyAvatar: could not load the MJ: Users row for user ${caller.ID}`);
       return { Success: false, ErrorMessage: 'Could not load your user record.' };
     }
 
@@ -93,7 +96,7 @@ export class UserAvatarResolver extends ResolverBase {
     if (!(await user.Save())) {
       const detail = user.LatestResult?.CompleteMessage ?? 'unknown error';
       LogError(`UpdateMyAvatar: save failed for user ${caller.ID}: ${detail}`);
-      return { Success: false, ErrorMessage: `Could not save your avatar: ${detail}` };
+      return { Success: false, ErrorMessage: SAVE_FAILED_MESSAGE };
     }
     return { Success: true };
   }

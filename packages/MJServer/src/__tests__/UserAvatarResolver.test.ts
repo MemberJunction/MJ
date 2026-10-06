@@ -207,15 +207,18 @@ describe('UserAvatarResolver.UpdateMyAvatar', () => {
       const result = await resolver.UpdateMyAvatar(ctxFor(CALLER), PNG, null);
       expect(result).toEqual({ Success: false, ErrorMessage: 'Could not load your user record.' });
       expect(state.entity?.SavedSnapshot).toBeUndefined();
+      expect(logError).toHaveBeenCalledWith(expect.stringContaining(CALLER.ID));
     });
 
-    it("returns the save's CompleteMessage when Save() returns false", async () => {
+    it("logs the save's CompleteMessage but returns only a generic message when Save() returns false", async () => {
       state.configure = (e) => {
         e.SaveResult = false;
       };
       const result = await resolver.UpdateMyAvatar(ctxFor(CALLER), PNG, null);
       expect(result.Success).toBe(false);
-      expect(result.ErrorMessage).toContain('spUpdateUser failed: boom');
+      expect(result.ErrorMessage).toContain('Could not save your avatar');
+      expect(result.ErrorMessage).not.toContain('spUpdateUser');
+      expect(logError).toHaveBeenCalledWith(expect.stringContaining('spUpdateUser failed: boom'));
       expect(logError).toHaveBeenCalledWith(expect.stringContaining(CALLER.ID));
     });
 
@@ -225,14 +228,17 @@ describe('UserAvatarResolver.UpdateMyAvatar', () => {
       };
       const result = await resolver.UpdateMyAvatar(ctxFor(CALLER), PNG, null);
       expect(result.Success).toBe(false);
-      expect(result.ErrorMessage).toContain('connection reset');
+      expect(result.ErrorMessage).toContain('Could not save your avatar');
+      expect(result.ErrorMessage).not.toContain('connection reset');
+      expect(logError).toHaveBeenCalledWith(expect.stringContaining('connection reset'));
     });
 
     it('returns a failure when the system user cannot be resolved', async () => {
       state.systemUserThrows = true;
       const result = await resolver.UpdateMyAvatar(ctxFor(CALLER), PNG, null);
       expect(result.Success).toBe(false);
-      expect(result.ErrorMessage).toContain('System user not found');
+      expect(result.ErrorMessage).not.toContain('System user');
+      expect(logError).toHaveBeenCalledWith(expect.stringContaining('System user not found'));
       expect(state.entity).toBeUndefined();
     });
   });
