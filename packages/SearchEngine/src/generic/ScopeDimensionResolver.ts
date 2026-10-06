@@ -348,26 +348,7 @@ export class ScopeDimensionResolver {
         ({ Value: value, Provenance: provenance } =
             this.applyDefaultValue(dim, restricts, value, provenance, diagnostics));
 
-        if (dim.required && value === undefined) {
-            throw new ScopeDimensionError(
-                `Required dimension "${dim.name}" could not be resolved for scope "${input.Scope.Name}".`
-            );
-        }
-        if (dim.required && dim.inheritanceMode !== 'cascading' && this.isEmptyValue(value)) {
-            // Resolved, but to NOTHING: an expansion query with no rows, or an empty caller set. A
-            // required dimension exists to be the bound, so "nothing reachable" is a refusal, never a
-            // search. It must not be left to the template: under the `{% if x | length %}` idiom an
-            // empty set removes the clause, and without an `{% else %}` the lane runs unbounded — the
-            // same inversion `meetAgainstSet` refuses when a narrowing meets to nothing. (A bare
-            // `{% if x %}` keeps the clause, since `[]` is truthy, and renders `IN ('')`.)
-            //
-            // Cascading is the one declared case where empty is meaningful: untagged content applies
-            // to everyone, so a reader who reaches no tagged value still has something to see.
-            throw new ScopeDimensionError(
-                `Required dimension "${dim.name}" resolved to no value for scope "${input.Scope.Name}": ` +
-                `nothing is reachable for this user, so there is nothing to search.`
-            );
-        }
+        this.assertRequiredResolved(dim, value, provenance, input.Scope.Name);
 
         if (value !== undefined && dim.narrowingOf) {
             const bound = alreadyResolved[dim.narrowingOf];
@@ -387,10 +368,59 @@ export class ScopeDimensionResolver {
     }
 
     /**
-     * A value that resolved to nothing: an empty set, or a blank string. `undefined` is "not resolved"
-     * and is reported separately, so it is not "empty" here.
+     * Refuses a required dimension that did not resolve, or resolved to nothing. A required dimension
+     * exists to be the bound, so "nothing reachable" is a refusal, never a search: it must not be left
+     * to the template, where the `{% if x | length %}` idiom removes an empty clause and, without an
+     * `{% else %}`, leaves the lane unbounded — the same inversion `meetAgainstSet` refuses when a
+     * narrowing meets to nothing. (A bare `{% if x %}` keeps the clause, since `[]` is truthy, and
+     * renders `IN ('')`.)
+     *
+     * The one exemption is an **explicitly declared** `inheritanceMode: 'cascading'` (the raw field, not
+     * the effective mode a non-restricting dimension defaults to): there, empty is a meaningful value —
+     * untagged content applies to everyone, so a reader who reaches no tagged value still has something
+     * to see. A cascading template must therefore carry an `{% else %}<column> IS NULL` branch, or an
+     * empty set widens the lane to every tagged row; the guide's "Inheritance modes" section says so.
+     */
+    private assertRequiredResolved(
+        dim: ScopeSecondaryDimension,
+        value: SecondaryScopeValue | undefined,
+        provenance: DimensionProvenance,
+        scopeName: string
+    ): void {
+        if (!dim.required) return;
+        if (value === undefined) {
+            throw new ScopeDimensionError(`Required dimension "${dim.name}" could not be resolved for scope "${scopeName}".`);
+        }
+        if (dim.inheritanceMode === 'cascading' || !this.isEmptyValue(value)) return;
+        throw new ScopeDimensionError(
+            `Required dimension "${dim.name}" resolved to no value for scope "${scopeName}": ${this.emptyReason(provenance)}`
+        );
+    }
+
+    /**
+     * Why an empty required value is refused, by where the value came from. The agent reads this text as
+     * the action's `SEARCH_FAILED` message, so a caller that sent an empty argument is told to fix its
+     * call, and only a value the server derived says the user has no reach.
+     */
+    private emptyReason(provenance: DimensionProvenance): string {
+        switch (provenance) {
+            case 'CallerSupplied':
+                return 'the caller supplied an empty value, and a required dimension must name something to search.';
+            case 'Default':
+                return 'its declared defaultValue is empty.';
+            default:
+                return 'nothing is reachable for this user, so there is nothing to search.';
+        }
+    }
+
+    /**
+     * A value that resolved to nothing: `null`, an empty set, or a blank string. `undefined` is "not
+     * resolved" and is reported separately, so it is not "empty" here. `null` counts because a
+     * CallerSupplied freetext dimension passes it through grammar validation, and `Resolve` then leaves
+     * the key out of the context, which drops the template clause exactly as an empty set would.
      */
     private isEmptyValue(value: SecondaryScopeValue | undefined): boolean {
+        if ((value as unknown) === null) return true;
         if (Array.isArray(value)) return value.length === 0;
         if (typeof value === 'string') return value.trim().length === 0;
         return false;
