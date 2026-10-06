@@ -157,6 +157,9 @@
     "@memberjunction/testing-engine": "6.2.0-edge.2",
     "@memberjunction/testing-integration": "6.2.0-edge.2",
     "@memberjunction/web-search-engine": "6.2.0-edge.2",
+    "@memberjunction/work-queue-engine": "6.2.0-edge.2",
+    "@memberjunction/work-queue-samples": "6.2.0-edge.2",
+    "@memberjunction/work-queue-server": "6.2.0-edge.2",
     "cosmiconfig": "^9.0.0"
   },
   "devDependencies": {
