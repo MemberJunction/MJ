@@ -129,7 +129,7 @@ describe('OpenAILiveRealtime Driver & Session', () => {
 
         // Send 3 bytes (odd) -> sends 2 bytes, buffers 1 byte
         const oddChunk1 = new Uint8Array([1, 2, 3]).buffer;
-        session.SendInput(oddChunk1);
+        session.SendInput({ Data: oddChunk1, Kind: 'audio' });
         expect(mockSocket.sentFrames.length).toBe(1);
         const frame1 = JSON.parse(mockSocket.sentFrames[0]);
         expect(frame1.type).toBe('session.input_audio.append');
@@ -139,7 +139,7 @@ describe('OpenAILiveRealtime Driver & Session', () => {
 
         // Send 3 bytes again -> merges buffered byte (1) + 3 bytes = 4 bytes (even) -> sends all 4 bytes
         const oddChunk2 = new Uint8Array([4, 5, 6]).buffer;
-        session.SendInput(oddChunk2);
+        session.SendInput({ Data: oddChunk2, Kind: 'audio' });
         expect(mockSocket.sentFrames.length).toBe(2);
         const frame2 = JSON.parse(mockSocket.sentFrames[1]);
         const decoded2 = Buffer.from(frame2.audio, 'base64');
@@ -538,7 +538,7 @@ describe('OpenAILiveRealtime Driver & Session', () => {
 
         // Send an odd number of bytes (e.g. 3 bytes of G.711 μ-law audio)
         const g711Chunk = new Uint8Array([0x55, 0xaa, 0x7f]).buffer;
-        session.SendInput(g711Chunk);
+        session.SendInput({ Data: g711Chunk, Kind: 'audio' });
 
         expect(socket.sentFrames.length).toBe(1);
         const appendFrame = JSON.parse(socket.sentFrames[0]);

@@ -14,7 +14,7 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
 });
 
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
-import type { IRealtimeSession, RealtimeTranscript } from '@memberjunction/ai';
+import type { IRealtimeSession, RealtimeInputFrame, RealtimeTranscript } from '@memberjunction/ai';
 import type {
     MJAIBridgeProviderEntity,
     MJAIBridgeProviderEntity_IBridgeProviderFeatures,
@@ -38,12 +38,14 @@ import { LoopbackBridge, LOOPBACK_BRIDGE_DRIVER_CLASS } from '../loopback-bridge
  */
 class MockRealtimeSession implements IRealtimeSession {
     public readonly Heard: ArrayBuffer[] = [];
+    public readonly HeardFrames: RealtimeInputFrame[] = [];
     public readonly SpokenUpdates: string[] = [];
     private outputHandler?: (chunk: ArrayBuffer) => void;
     private transcriptHandler?: (t: RealtimeTranscript) => void;
 
-    public SendInput(chunk: ArrayBuffer): void {
-        this.Heard.push(chunk);
+    public SendInput(frame: RealtimeInputFrame): void {
+        this.HeardFrames.push(frame);
+        this.Heard.push(frame.Data);
     }
     public async RegisterTools(): Promise<void> {
         /* no-op for tests */
@@ -251,6 +253,24 @@ describe('AIBridgeEngine — transport seam round-trip (LoopbackBridge + mock se
         // "AQID" is base64 for bytes [1,2,3].
         loopback.EmitInbound({ Track: 'audio-in', Base64: 'AQID' });
         expect(new Uint8Array(session.Heard[0])).toEqual(new Uint8Array([1, 2, 3]));
+
+        await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
+    });
+
+    it('tags inbound media by track and passes its type and capture time to the session', async () => {
+        const session = new MockRealtimeSession();
+        const { provider } = makeProvider(() => makeBridgeRow());
+        const active = await engine().StartBridgeSession(baseParams(session, provider));
+        const loopback = active.Bridge as LoopbackBridge;
+
+        loopback.EmitInbound({ Track: 'audio-in', Bytes: bytes(1, 2) });
+        loopback.EmitInbound({ Track: 'video-in', Bytes: bytes(0xff, 0xd8), MimeType: 'image/jpeg', TimestampMs: 1234 });
+
+        expect(session.HeardFrames.map((f) => ({ Kind: f.Kind, MimeType: f.MimeType, TimestampMs: f.TimestampMs }))).toEqual([
+            { Kind: 'audio', MimeType: undefined, TimestampMs: undefined },
+            { Kind: 'video', MimeType: 'image/jpeg', TimestampMs: 1234 },
+        ]);
+        expect(new Uint8Array(session.HeardFrames[1].Data)).toEqual(new Uint8Array([0xff, 0xd8]));
 
         await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
     });

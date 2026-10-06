@@ -71,6 +71,13 @@ export interface BridgeMediaFrame {
      * consumer may stamp arrival time.
      */
     TimestampMs?: number;
+
+    /**
+     * The payload's format, for example `'image/jpeg'` for a `video-in` frame. Audio frames may
+     * omit it (they are in the session's declared input format); a video frame without one cannot
+     * be sent to a model that needs an image type, and the realtime driver drops it.
+     */
+    MimeType?: string;
 }
 
 /**

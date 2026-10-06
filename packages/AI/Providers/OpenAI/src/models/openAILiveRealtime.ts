@@ -19,6 +19,7 @@ import {
     RealtimeProxyRegistry,
     REALTIME_SDP_EXCHANGE_PATH,
     RealtimeToolBatchBarrier,
+    type RealtimeInputFrame,
 } from '@memberjunction/ai';
 import { MapUsageModalityDetail } from './openAIRealtime.js';
 
@@ -699,10 +700,11 @@ export class OpenAILiveSession implements IRealtimeSession {
 
     // ─── IRealtimeSession Implementation ──────────────────────────────────────────
 
-    public SendInput(chunk: ArrayBuffer, kind?: 'audio' | 'video'): void {
-        if (kind === 'video') {
+    public SendInput(frame: RealtimeInputFrame): void {
+        if (frame.Kind === 'video') {
             return; // Audio-only driver ignores video frames
         }
+        const chunk = frame.Data;
         if (this._closed) {
             return;
         }

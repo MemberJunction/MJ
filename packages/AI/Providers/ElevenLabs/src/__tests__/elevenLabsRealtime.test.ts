@@ -1116,7 +1116,7 @@ describe('ElevenLabsRealtime server-bridged session (StartSession)', () => {
 
         it('streams client audio as bare-key user_audio_chunk frames', () => {
             const bytes = new Uint8Array([9, 8, 7]);
-            session.SendInput(bytes.buffer);
+            session.SendInput({ Data: bytes.buffer, Kind: 'audio' });
             expect(driver.Socket.SentFrames().at(-1)).toEqual({
                 user_audio_chunk: Buffer.from(bytes).toString('base64'),
             });

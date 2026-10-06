@@ -16,6 +16,7 @@ import {
     type JSONValue,
     type RealtimeTurnDetectionSettings,
     type RealtimeVoiceOption,
+    type RealtimeInputFrame,
 } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 
@@ -1110,8 +1111,8 @@ export class ElevenLabsRealtimeSession implements IRealtimeSession {
     }
 
     /** @inheritdoc — streams one PCM16 mic frame as a base64 `user_audio_chunk`. */
-    public SendInput(chunk: ArrayBuffer): void {
-        this.sendFrame({ user_audio_chunk: Buffer.from(new Uint8Array(chunk)).toString('base64') });
+    public SendInput(frame: RealtimeInputFrame): void {
+        this.sendFrame({ user_audio_chunk: Buffer.from(new Uint8Array(frame.Data)).toString('base64') });
     }
 
     /**

@@ -95,7 +95,7 @@ describe('GeminiRealtime server-bridged session resumption', () => {
             expect(driver.Connections[1].Args.Model).toBe('gemini-3.8-live');
             expect(driver.Connections[0].Fake.Closed).toBe(true);
 
-            session.SendInput(new ArrayBuffer(4));
+            session.SendInput({ Data: new ArrayBuffer(4), Kind: 'audio' });
             expect(driver.Connections[1].Fake.RealtimeInputs).toHaveLength(1);
             expect(driver.Connections[0].Fake.RealtimeInputs).toHaveLength(0);
             expect(errors).toEqual([]);
@@ -157,14 +157,14 @@ describe('GeminiRealtime server-bridged session resumption', () => {
         it('opens a new activity window on the new connection for the first audio after a resume', async () => {
             await start({ Config: { disableAutoResponse: true } });
             const first = driver.Connections.length - 1;
-            session.SendInput(new ArrayBuffer(4));
+            session.SendInput({ Data: new ArrayBuffer(4), Kind: 'audio' });
             expect(driver.Connections[first].Fake.RealtimeInputs[0].activityStart).toEqual({});
 
             driver.EmitOn(first, RESUMABLE('h1'));
             driver.EmitOn(first, GO_AWAY('60s'));
             await vi.advanceTimersByTimeAsync(0);
 
-            session.SendInput(new ArrayBuffer(4));
+            session.SendInput({ Data: new ArrayBuffer(4), Kind: 'audio' });
             const resumed = driver.Connections[first + 1].Fake.RealtimeInputs;
             expect(resumed[0].activityStart).toEqual({});
             expect(resumed[1].audio).toBeDefined();

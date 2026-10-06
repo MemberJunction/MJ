@@ -374,7 +374,7 @@ describe('InworldRealtime', () => {
             const session = await startReadySession(driver);
             driver.Fake.Reset();
             const bytes = new Uint8Array([1, 2, 3, 4]);
-            session.SendInput(bytes.buffer);
+            session.SendInput({ Data: bytes.buffer, Kind: 'audio' });
             const append = driver.Fake.Find('input_audio.append') as { audio?: string };
             expect(append).toBeDefined();
             expect(append.audio).toBe(Buffer.from(bytes).toString('base64'));
@@ -479,7 +479,7 @@ describe('InworldRealtime', () => {
         it('SendInput throws after the socket was released (Close)', async () => {
             const session = await startReadySession(driver);
             await session.Close();
-            expect(() => session.SendInput(new Uint8Array([1]).buffer)).toThrow(/not open/);
+            expect(() => session.SendInput({ Data: new Uint8Array([1]).buffer, Kind: 'audio' })).toThrow(/not open/);
         });
     });
 

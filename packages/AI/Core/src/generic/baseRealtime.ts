@@ -174,7 +174,7 @@ export abstract class BaseRealtimeModel extends BaseModel {
      *
      * Defaults to `false` (audio-only — today's realtime models). Video-capable drivers (a native
      * multimodal realtime model, or an avatar provider) override this to `true`. The session's media
-     * plane is media-tagged ({@link IRealtimeSession.SendInput} takes a {@link RealtimeMediaKind};
+     * plane is media-tagged ({@link IRealtimeSession.SendInput} takes a {@link RealtimeInputFrame} with a {@link RealtimeMediaKind};
      * {@link IRealtimeSession.OnVideoOutput} delivers video-out), so a video session reuses the entire
      * realtime contract — only the media frames gain a `video` kind. Resolution prefers a video-capable
      * model when an agent requests video, and degrades to audio-only otherwise.
@@ -260,6 +260,24 @@ export interface RealtimeVoiceOption {
  * carry this tag so audio and video can be disambiguated on the same session.
  */
 export type RealtimeMediaKind = 'audio' | 'video';
+
+/**
+ * One frame of media a host streams into a realtime session through {@link IRealtimeSession.SendInput}.
+ */
+export interface RealtimeInputFrame {
+    /** The frame's bytes: raw audio samples, or one encoded video frame (for example a JPEG image). */
+    Data: ArrayBuffer;
+    /** The media plane the frame belongs to. */
+    Kind: RealtimeMediaKind;
+    /**
+     * The frame's format, for example `'audio/pcm;rate=16000'` or `'image/jpeg'`. When absent, an
+     * audio frame is in the session's declared input format ({@link IRealtimeSession.AudioFormat}); a
+     * video frame with no type cannot be sent by a driver that needs one, and is dropped.
+     */
+    MimeType?: string;
+    /** Epoch-millisecond capture time, when the host knows it. */
+    TimestampMs?: number;
+}
 
 /**
  * The server-minted configuration a browser needs to open a **client-direct** realtime session.
@@ -483,16 +501,15 @@ export interface IRealtimeSession {
     /**
      * Sends a client media frame to the model.
      *
-     * Fire-and-forget: frames are streamed straight to the provider with no JSON intermediation. The
-     * optional `kind` tags the media plane — `'audio'` (default, back-compatible: existing callers and
-     * audio-only drivers need not pass or read it) or `'video'` for a camera frame to a video-capable
-     * model (one that {@link BaseRealtimeModel.SupportsVideo}). Audio-only drivers ignore `'video'`
-     * frames.
+     * Fire-and-forget: frames are streamed straight to the provider with no JSON intermediation.
+     * {@link RealtimeInputFrame.Kind} tags the media plane: `'audio'`, or `'video'` for a camera or
+     * screen frame to a video-capable model (one that {@link BaseRealtimeModel.SupportsVideo}).
+     * {@link RealtimeInputFrame.MimeType} says what format the frame is in. A driver drops a frame
+     * it cannot send rather than sending it as something else.
      *
-     * @param chunk A raw media frame as an `ArrayBuffer`.
-     * @param kind The media plane the frame belongs to. Defaults to `'audio'`.
+     * @param frame The media frame, with its kind and (when known) its format.
      */
-    SendInput(chunk: ArrayBuffer, kind?: RealtimeMediaKind): void;
+    SendInput(frame: RealtimeInputFrame): void;
 
     /**
      * Registers the set of tools the model may call, translating them into the provider's

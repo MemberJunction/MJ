@@ -334,7 +334,7 @@ describe('OpenAIRealtime', () => {
         it('SendInput appends base64 audio', async () => {
             const session = await driver.StartSession({ Model: 'gpt-realtime', SystemPrompt: 'sys' });
             const bytes = new Uint8Array([1, 2, 3, 4]);
-            session.SendInput(bytes.buffer);
+            session.SendInput({ Data: bytes.buffer, Kind: 'audio' });
             const append = driver.Fake.Sent.find((e) => e.type === 'input_audio_buffer.append');
             expect(append).toBeDefined();
             if (append?.type === 'input_audio_buffer.append') {

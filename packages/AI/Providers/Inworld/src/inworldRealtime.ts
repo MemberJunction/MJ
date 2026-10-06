@@ -33,6 +33,7 @@ import {
     type RealtimeSessionError,
     type JSONObject,
     type JSONValue,
+    type RealtimeInputFrame,
 } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 
@@ -387,8 +388,8 @@ export class InworldRealtimeSession implements IRealtimeSession {
     // ── IRealtimeSession outbound ──
 
     /** @inheritdoc — streams one client media frame as a base64 input audio-append frame. */
-    public SendInput(chunk: ArrayBuffer): void {
-        this.sendFrame(this.buildAudioAppendFrame(chunk));
+    public SendInput(frame: RealtimeInputFrame): void {
+        this.sendFrame(this.buildAudioAppendFrame(frame.Data));
     }
 
     /**

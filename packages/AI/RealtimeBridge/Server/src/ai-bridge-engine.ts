@@ -1014,7 +1014,12 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
                     this.diagInbound.add(active.SessionBridgeID);
                     LogStatusEx({ message: `[AIBridgeEngine][diag] FIRST inbound media frame reached the agent (bridge ${active.SessionBridgeID}, track=${frame.Track}). The agent is HEARING you.`, verboseOnly: true });
                 }
-                RealtimeSession.SendInput(chunk, frame.Track === 'video-in' ? 'video' : 'audio');
+                RealtimeSession.SendInput({
+                    Data: chunk,
+                    Kind: frame.Track === 'video-in' ? 'video' : 'audio',
+                    MimeType: frame.MimeType,
+                    TimestampMs: frame.TimestampMs,
+                });
             }
         });
 

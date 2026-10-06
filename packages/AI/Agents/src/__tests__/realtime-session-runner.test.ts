@@ -14,7 +14,8 @@ import {
     RealtimeToolCall,
     RealtimeUsage,
     RealtimeToolDefinition,
-    RealtimeSessionError
+    RealtimeSessionError,
+    RealtimeInputFrame
 } from '@memberjunction/ai';
 import {
     RealtimeSessionRunner,
@@ -24,6 +25,7 @@ import {
     ToolExecutionResult,
     INVOKE_TARGET_AGENT_TOOL_NAME
 } from '../realtime/realtime-session-runner';
+import { RealtimeRecordingController } from '../realtime/realtime-recording-capture';
 
 // ════════════════════════════════════════════════════════════════════
 // Mock realtime model + session
@@ -48,7 +50,10 @@ class MockRealtimeSession implements IRealtimeSession {
     private interruptionHandler: (() => void) | null = null;
     private errorHandler: ((error: RealtimeSessionError) => void) | null = null;
 
-    SendInput(_chunk: ArrayBuffer): void { /* no-op for tests */ }
+    /** Frames that reached the session (after any recording tap the runner wraps around SendInput). */
+    public SentInput: RealtimeInputFrame[] = [];
+
+    SendInput(frame: RealtimeInputFrame): void { this.SentInput.push(frame); }
 
     async RegisterTools(tools: RealtimeToolDefinition[]): Promise<void> {
         this.RegisterToolsCallCount++;
@@ -727,6 +732,26 @@ describe('RealtimeSessionRunner', () => {
             const result = await runner.Stop();
             expect(result.Success).toBe(false);
             expect(result.ErrorMessage).toContain('close failed');
+        });
+    });
+
+    describe('recording tap', () => {
+        it('records inbound audio only, and every frame still reaches the session', async () => {
+            const recording = new RealtimeRecordingController();
+            const appendInbound = vi.spyOn(recording, 'AppendInbound');
+            const h = buildHarness({ Recording: recording });
+            const runner = new RealtimeSessionRunner(h.deps);
+            await runner.Start();
+
+            const audio: RealtimeInputFrame = { Data: new ArrayBuffer(4), Kind: 'audio' };
+            const video: RealtimeInputFrame = { Data: new ArrayBuffer(8), Kind: 'video', MimeType: 'image/jpeg' };
+            h.session.SendInput(audio);
+            h.session.SendInput(video);
+
+            expect(appendInbound).toHaveBeenCalledTimes(1);
+            expect(appendInbound).toHaveBeenCalledWith(audio.Data);
+            expect(h.session.SentInput).toEqual([audio, video]);
+            await runner.Stop();
         });
     });
 

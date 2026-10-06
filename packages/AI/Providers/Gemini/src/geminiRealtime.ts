@@ -45,6 +45,7 @@ import {
     ParseDurationToMs,
     IsPcmAudioMimeType,
     RealtimeSessionResumption,
+    type RealtimeInputFrame,
     type RealtimeResumeAttempt,
 } from '@memberjunction/ai';
 import {
@@ -63,6 +64,9 @@ import { RegisterClass } from '@memberjunction/global';
  * raw `ArrayBuffer` and leaves resampling/playback to the consumer.
  */
 const GEMINI_INPUT_AUDIO_MIME_TYPE = 'audio/pcm;rate=16000';
+
+/** Image types Gemini Live accepts as video input frames. */
+const GEMINI_VIDEO_INPUT_MIME_TYPES: ReadonlySet<string> = new Set(['image/jpeg', 'image/png']);
 
 /** Meeting-mode watchdog: how long to wait for a turn after `activityEnd` before clearing a latched `responseActive` (shorter than the bridge's floor safety timer). */
 const GEMINI_MEETING_RESPONSE_WATCHDOG_MS = 5000;
@@ -95,6 +99,8 @@ export interface GeminiLiveSession {
      */
     sendRealtimeInput(params: {
         audio?: GeminiBlob;
+        /** One video frame: an encoded image (JPEG or PNG). */
+        video?: GeminiBlob;
         media?: GeminiBlob;
         text?: string;
         /** Manual activity markers — used in MEETING mode (automatic activity detection disabled). */
@@ -948,6 +954,9 @@ class GeminiRealtimeSession implements IRealtimeSession {
     /** MIME types of model output this session dropped, so each is reported once. */
     private droppedOutputTypes = new Set<string>();
 
+    /** Kinds and MIME types of input this session dropped, so each is reported once. */
+    private droppedInputTypes = new Set<string>();
+
     /**
      * Fingerprint of the tool set bound at connect time (set via {@link SetConnectTimeTools});
      * {@link RegisterTools} compares against it to no-op identical re-registrations.
@@ -1068,22 +1077,57 @@ class GeminiRealtimeSession implements IRealtimeSession {
         this.requireLive().sendClientContent({ turns, turnComplete: false });
     }
 
-    /** @inheritdoc */
-    public SendInput(chunk: ArrayBuffer): void {
+    /**
+     * @inheritdoc
+     *
+     * Audio goes out as `audio` in the frame's PCM format (16 kHz PCM when the frame names none).
+     * Video goes out as `video` when the frame is a JPEG or PNG image, the types Gemini Live accepts.
+     * Anything else is dropped and reported once per type, never sent as the wrong kind.
+     */
+    public SendInput(frame: RealtimeInputFrame): void {
+        if (frame.Kind === 'video') {
+            this.sendVideoInput(frame);
+            return;
+        }
+        this.sendAudioInput(frame);
+    }
+
+    private sendAudioInput(frame: RealtimeInputFrame): void {
+        const mimeType = frame.MimeType ?? GEMINI_INPUT_AUDIO_MIME_TYPE;
+        if (!IsPcmAudioMimeType(mimeType)) {
+            this.reportDroppedInput('audio', mimeType);
+            return;
+        }
         const live = this.requireLive();
         // Meeting mode: automatic activity detection is OFF, so audio is only processed inside an explicit
         // activity window. Open one lazily on the first audio after the last turn was committed — the window
         // stays open (accumulating what the agent hears) until RequestSpokenUpdate sends `activityEnd`.
+        // Only audio opens it: a video frame is not speech.
         if (this.meetingMode && !this.manualActivityOpen) {
             live.sendRealtimeInput({ activityStart: {} });
             this.manualActivityOpen = true;
             RealtimeDiagLog('[GeminiRealtime][diag] meeting: activityStart — opened input window on first audio (now accumulating room audio)');
         }
-        const audio: GeminiBlob = {
-            data: GeminiRealtimeSession.arrayBufferToBase64(chunk),
-            mimeType: GEMINI_INPUT_AUDIO_MIME_TYPE,
-        };
-        live.sendRealtimeInput({ audio });
+        live.sendRealtimeInput({ audio: { data: GeminiRealtimeSession.arrayBufferToBase64(frame.Data), mimeType } });
+    }
+
+    private sendVideoInput(frame: RealtimeInputFrame): void {
+        const mimeType = frame.MimeType?.trim().toLowerCase();
+        if (!mimeType || !GEMINI_VIDEO_INPUT_MIME_TYPES.has(mimeType)) {
+            this.reportDroppedInput('video', mimeType ?? '(no type)');
+            return;
+        }
+        this.requireLive().sendRealtimeInput({ video: { data: GeminiRealtimeSession.arrayBufferToBase64(frame.Data), mimeType } });
+    }
+
+    /** Reports each kind and type of dropped input once per session, not once per frame. */
+    private reportDroppedInput(kind: RealtimeInputFrame['Kind'], mimeType: string): void {
+        const key = `${kind}:${mimeType}`;
+        if (this.droppedInputTypes.has(key)) {
+            return;
+        }
+        this.droppedInputTypes.add(key);
+        console.warn(`[GeminiRealtime] Dropped ${kind} input of type ${mimeType}: Gemini Live takes PCM audio and JPEG or PNG video frames.`);
     }
 
     /**

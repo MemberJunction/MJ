@@ -8,6 +8,7 @@ import {
     RealtimeToolCall,
     RealtimeUsage,
     RealtimeSessionError,
+    RealtimeInputFrame,
     ClientRealtimeSessionConfig,
     REALTIME_SHARED_CONFIG_KEYS,
     ExtractToolSchedulingHint,
@@ -20,7 +21,7 @@ import { IsTranscriptContinuation } from '../generic/transcriptContinuation';
  */
 class MockRealtimeSession implements IRealtimeSession {
     public RegisteredTools: RealtimeToolDefinition[] = [];
-    public SentInput: ArrayBuffer[] = [];
+    public SentInput: RealtimeInputFrame[] = [];
     public Closed = false;
     public SentToolResults: { CallID: string; Output: string }[] = [];
     public SentContextNotes: string[] = [];
@@ -34,8 +35,8 @@ class MockRealtimeSession implements IRealtimeSession {
     public ErrorHandler?: (error: RealtimeSessionError) => void;
     public CloseHandler?: () => void;
 
-    public SendInput(chunk: ArrayBuffer): void {
-        this.SentInput.push(chunk);
+    public SendInput(frame: RealtimeInputFrame): void {
+        this.SentInput.push(frame);
     }
 
     public async RegisterTools(tools: RealtimeToolDefinition[]): Promise<void> {
@@ -207,7 +208,7 @@ describe('IRealtimeSession', () => {
 
     it('SendInput is callable and forwards media frames', () => {
         session = newSession();
-        const frame = new ArrayBuffer(8);
+        const frame: RealtimeInputFrame = { Data: new ArrayBuffer(8), Kind: 'video', MimeType: 'image/jpeg', TimestampMs: 40 };
         session.SendInput(frame);
         expect(session.SentInput).toHaveLength(1);
         expect(session.SentInput[0]).toBe(frame);

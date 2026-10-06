@@ -361,8 +361,8 @@ describe('GeminiRealtime', () => {
 
         it('opens an activity window lazily before the first audio, then commits the turn on RequestSpokenUpdate', async () => {
             const session = await driver.StartSession(makeParams({ Config: { disableAutoResponse: true } }));
-            session.SendInput(new Uint8Array([1, 2, 3]).buffer);
-            session.SendInput(new Uint8Array([4, 5, 6]).buffer);
+            session.SendInput({ Data: new Uint8Array([1, 2, 3]).buffer, Kind: 'audio' });
+            session.SendInput({ Data: new Uint8Array([4, 5, 6]).buffer, Kind: 'audio' });
 
             const inputs = driver.Fake.RealtimeInputs;
             // First send is the activityStart (opens the window), then the two audio chunks (no second start).
@@ -376,13 +376,13 @@ describe('GeminiRealtime', () => {
             expect(driver.Fake.RealtimeInputs.some((i) => i.activityEnd)).toBe(true);
 
             // Next audio re-opens a fresh window.
-            session.SendInput(new Uint8Array([7]).buffer);
+            session.SendInput({ Data: new Uint8Array([7]).buffer, Kind: 'audio' });
             expect(driver.Fake.RealtimeInputs.filter((i) => i.activityStart).length).toBe(2);
         });
 
         it('1:1 call: streams audio with no activity markers and RequestSpokenUpdate sends a text nudge', async () => {
             const session = await driver.StartSession(makeParams());
-            session.SendInput(new Uint8Array([1]).buffer);
+            session.SendInput({ Data: new Uint8Array([1]).buffer, Kind: 'audio' });
             session.RequestSpokenUpdate?.('go');
             const inputs = driver.Fake.RealtimeInputs;
             expect(inputs.some((i) => i.activityStart || i.activityEnd)).toBe(false);
@@ -519,7 +519,7 @@ describe('GeminiRealtime', () => {
 
         it('SendInput streams audio as a base64 PCM blob', () => {
             const bytes = new Uint8Array([9, 8, 7]);
-            session.SendInput(bytes.buffer);
+            session.SendInput({ Data: bytes.buffer, Kind: 'audio' });
 
             expect(driver.Fake.RealtimeInputs).toHaveLength(1);
             const sent = driver.Fake.RealtimeInputs[0].audio!;
@@ -690,7 +690,7 @@ describe('GeminiRealtime', () => {
 
         it('throws if SendInput is used after Close', async () => {
             await session.Close();
-            expect(() => session.SendInput(new Uint8Array([1]).buffer)).toThrow(/not open/);
+            expect(() => session.SendInput({ Data: new Uint8Array([1]).buffer, Kind: 'audio' })).toThrow(/not open/);
         });
     });
 });

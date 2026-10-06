@@ -17,6 +17,7 @@ import {
     JSONObject,
     RealtimeTurnDetectionMode,
     RealtimeTurnDetectionSettings,
+    type RealtimeInputFrame,
 } from '@memberjunction/ai';
 import { ClientRealtimeSessionConfig, ResolveResponseDoneUsage } from '@memberjunction/ai';
 import { OpenAI } from 'openai';
@@ -1007,10 +1008,10 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
     // ---- IRealtimeSession outbound ----
 
     /** @inheritdoc */
-    public SendInput(chunk: ArrayBuffer): void {
+    public SendInput(frame: RealtimeInputFrame): void {
         this.connection.send({
             type: 'input_audio_buffer.append',
-            audio: this.encodeBase64(chunk),
+            audio: this.encodeBase64(frame.Data),
         });
     }
 

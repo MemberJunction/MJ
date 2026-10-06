@@ -14,6 +14,7 @@ import {
     type JSONObject,
     type JSONValue,
     type RealtimeVoiceOption,
+    type RealtimeInputFrame,
 } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 
@@ -500,8 +501,8 @@ export class AssemblyAIRealtimeSession implements IRealtimeSession {
     }
 
     /** @inheritdoc — streams one PCM16 (24 kHz mono) frame as a base64 `input.audio` chunk. */
-    public SendInput(chunk: ArrayBuffer): void {
-        this.sendFrame({ type: 'input.audio', audio: Buffer.from(new Uint8Array(chunk)).toString('base64') });
+    public SendInput(frame: RealtimeInputFrame): void {
+        this.sendFrame({ type: 'input.audio', audio: Buffer.from(new Uint8Array(frame.Data)).toString('base64') });
     }
 
     /**

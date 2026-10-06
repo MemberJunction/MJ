@@ -445,7 +445,7 @@ describe('AssemblyAIRealtime server-bridged session (StartSession)', () => {
 
         it('streams client audio as base64 input.audio frames', () => {
             const bytes = new Uint8Array([9, 8, 7]);
-            session.SendInput(bytes.buffer);
+            session.SendInput({ Data: bytes.buffer, Kind: 'audio' });
             expect(driver.Socket.SentFrames().at(-1)).toEqual({
                 type: 'input.audio',
                 audio: Buffer.from(bytes).toString('base64'),
@@ -661,6 +661,6 @@ describe('AssemblyAIRealtime token mint (production seam)', () => {
 describe('AssemblyAIRealtimeSession guard rails', () => {
     it('throws on sends when no socket was ever attached', () => {
         const session = new AssemblyAIRealtimeSession({ system_prompt: 'p' });
-        expect(() => session.SendInput(new Uint8Array([1]).buffer)).toThrow('not open');
+        expect(() => session.SendInput({ Data: new Uint8Array([1]).buffer, Kind: 'audio' })).toThrow('not open');
     });
 });
