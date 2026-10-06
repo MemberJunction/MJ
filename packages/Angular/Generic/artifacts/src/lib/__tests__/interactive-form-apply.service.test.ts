@@ -870,6 +870,44 @@ describe('InteractiveFormApplyService — form-panel specs', () => {
         expect(hoisted.placementContext).toMatchObject({ FullCustomForm: true });
     });
 
+    /** A full custom form hides every panel, so the seed starts one there as a draft. */
+    describe('the seeded start', () => {
+        function fullCustomForm(): void {
+            hoisted.actionResponses.set('Get Form Composition For Entity', {
+                Success: true, Message: JSON.stringify({
+                    Sections: [], Related: [], Contributions: [], SlotsPresent: [], FullCustomForm: true,
+                }),
+            });
+        }
+
+        it('starts a full custom form\'s panel as a draft and a standard form\'s panel switched on', async () => {
+            hoisted.dialogResult = 'cancel';
+            const svc = new InteractiveFormApplyService();
+            await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), null);
+            const context = hoisted.placementContext as unknown as FormPlacementContext;
+            expect(seededState({ ...context, FullCustomForm: true }).ActivateNow).toBe(false);
+            expect(seededState({ ...context, FullCustomForm: false }).ActivateNow).toBe(true);
+        });
+
+        it('leaves the row a draft on a full custom form and says so', async () => {
+            fullCustomForm();
+            hoisted.applySeededAnswers = true;
+            const svc = new InteractiveFormApplyService();
+            await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), null);
+            expect(hoisted.actionCalls.map(c => c.id)).not.toContain('Activate Form Contribution Version');
+            expect(hoisted.notifications.at(-1)?.message).toMatch(/saved as a draft/);
+        });
+
+        it('switches the row on for a standard form and says where it is', async () => {
+            hoisted.applySeededAnswers = true;
+            const svc = new InteractiveFormApplyService();
+            await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), null);
+            expect(hoisted.actionCalls.map(c => c.id)).toContain('Activate Form Contribution Version');
+            expect(hoisted.notifications.at(-1)?.message)
+                .toBe('"Lifetime value" is now on your MJ_BizApps_Common: People form at before-fields.');
+        });
+    });
+
     it('reads a full custom form from the open form\'s form choice, not from its slots', async () => {
         const svc = new InteractiveFormApplyService();
         await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot({
