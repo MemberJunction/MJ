@@ -831,17 +831,6 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
   }
 
   /**
-   * Bubble Apply intent up to the host (Form Builder dashboard / Sage chat).
-   *
-   * Resolves the full ComponentSpec (with code) from multiple sources:
-   *   1. resolvedComponentSpec — live React bridge or cached copy (best for non-form artifacts)
-   *   2. Re-parse artifact version Content — the agent stores the full spec including code
-   *   3. DB fallback — fetch from MJ: Components by name
-   *
-   * Source #2 covers the common form-artifact case where the React component lives inside
-   * <mj-interactive-form> and resolvedComponentSpec falls back to the stripped local spec.
-   */
-  /**
    * Host props for a form-panel preview. There is no host form here, so permissions
    * read false and the panel renders as if opened read-only — the preview shows what
    * the panel looks like, not what it can do once installed. A related-grid panel still
@@ -863,6 +852,17 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
     });
   }
 
+  /**
+   * Bubble Apply intent up to the host (Form Builder dashboard / Sage chat).
+   *
+   * Resolves the full ComponentSpec (with code) from multiple sources:
+   *   1. resolvedComponentSpec — live React bridge or cached copy (best for non-form artifacts)
+   *   2. Re-parse artifact version Content — the agent stores the full spec including code
+   *   3. DB fallback — fetch from MJ: Components by name
+   *
+   * Source #2 covers the common form-artifact case where the React component lives inside
+   * <mj-interactive-form> and resolvedComponentSpec falls back to the stripped local spec.
+   */
   public async OnApplyClicked(): Promise<void> {
     if (!this.FormEntityInfo) return;
 
