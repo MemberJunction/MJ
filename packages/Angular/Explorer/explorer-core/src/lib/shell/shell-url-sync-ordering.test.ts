@@ -108,6 +108,39 @@ describe('syncWorkspaceWithUrl — a stale url must not override a newer activat
     });
 });
 
+/**
+ * A STAMP FROM THE FUTURE IS NOT EVIDENCE EITHER, and this one is not hypothetical.
+ *
+ * The workspace configuration carries `lastAccessedAt` into `MJ: Workspaces` and restores it unchanged
+ * on the next load, on any device, with nothing restamping the active tab. A tab stamped on a machine
+ * whose clock runs ahead therefore beats every later `navigatedAt`, and without the clamp the guard
+ * suppressed EVERY url sync until something called `SetActiveTab` locally — back, forward and the
+ * startup deep link all silently doing nothing until the user clicked a tab.
+ *
+ * Found in review on bizapps-sales' sibling work by stamping the active tab five minutes ahead.
+ */
+describe('an activation stamped in the future cannot block a sync', () => {
+    it('activates when the active tab claims a time this clock has not reached', async () => {
+        const h = harness(
+            [{ tabs: [NAV_TAB, { id: 'tab-record', lastAccessedAt: AT(Date.now() + 5 * 60_000) }], activeTabId: 'tab-record' }],
+            NAV_TAB,
+        );
+        await h.sync(Date.now());
+        expect(h.setActiveTab, 'a stamp this clock never issued must not win').toHaveBeenCalledWith('tab-nav');
+    });
+
+    /** The clamp must not cost the real case: an activation moments ago still yields. */
+    it('still yields to an activation that really did happen after the navigation', async () => {
+        const now = Date.now();
+        const h = harness(
+            [{ tabs: [NAV_TAB, { id: 'tab-record', lastAccessedAt: AT(now - 1_000) }], activeTabId: 'tab-record' }],
+            NAV_TAB,
+        );
+        await h.sync(now - 5_000);
+        expect(h.setActiveTab).not.toHaveBeenCalled();
+    });
+});
+
 describe('an unreadable activation time is not evidence, so the sync proceeds', () => {
     it('activates when the active tab carries no lastAccessedAt', async () => {
         const h = harness([{ tabs: [NAV_TAB, { id: 'tab-record' }], activeTabId: 'tab-record' }], NAV_TAB);
@@ -158,12 +191,20 @@ describe('the guard re-reads the configuration rather than trusting the one it e
 /**
  * THE STAMP IS TAKEN WHETHER OR NOT THE SHELL IS READY, which is the other half of the fix.
  *
- * `lastNavigationAt` is seeded at construction and updated on every `NavigationEnd`. That update sits
- * OUTSIDE the `if (this.Initialized)` guard on purpose. Move it inside and a navigation that lands
- * before the shell is ready leaves the stamp at its construction value — so the startup sync, which
- * takes `navigatedAt` from the default parameter, compares against a time older than ANY activation,
- * the guard yields, and the shell stops syncing the workspace to a deep-linked url. The tests above
- * all pass with that regression in place, because none of them drives the subscription.
+ * `lastNavigationAt` is seeded at construction and updated on every `NavigationEnd` THIS COMPONENT
+ * SEES. That update sits OUTSIDE the `if (this.Initialized)` guard on purpose: a navigation can land
+ * between the subscription being created and `Initialized` turning true, and moving the stamp inside
+ * would leave it at its previous value for that one — so a later sync would compare against a time
+ * older than the activation it is reacting to, yield, and stop syncing the workspace to the url.
+ *
+ * AN EARLIER VERSION OF THIS HEADER SAID "a navigation that lands before the shell is ready gets
+ * stamped", which review showed is not true of the FIRST one: on a deep link `ngOnInit` starts
+ * `InitializeShell` from the first `NavigationEnd`, and this subscriber is created inside that
+ * method, so it never sees it. The field's own comment records that; the claim is corrected here
+ * rather than deleted, because the placement below is still deliberate and still worth pinning.
+ *
+ * The tests above all pass with that placement regression in place, because none of them drives the
+ * subscription.
  *
  * ── WHY THIS READS THE SOURCE ───────────────────────────────────────────────────────────────────
  *

@@ -468,12 +468,23 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   private resolvedRecordOpenStyle: RecordOpenStyle = 'records';
 
   /**
-   * When the current url became current. Seeded at construction, which is page-load time for the
-   * initial url, and updated on every NavigationEnd.
+   * When the current url became current.
    *
    * It exists so a url sync can tell whether it is reacting to something OLDER than the active tab.
    * Without it the only available answer was Date.now(), which is newer than everything and so can
    * never lose -- the bug this was added for.
+   *
+   * SEEDED AT CONSTRUCTION, AND UPDATED ON EVERY NavigationEnd THIS COMPONENT SEES — which is not
+   * quite every NavigationEnd, and the difference is worth stating because an earlier version of this
+   * comment claimed otherwise. On a deep link `ngOnInit` starts `InitializeShell` FROM the first
+   * NavigationEnd, and the subscriber that maintains this field is created later, inside that method.
+   * So the first navigation is never stamped, and the startup sync at the end of `InitializeShell`
+   * compares against construction time instead.
+   *
+   * That is harmless where it has been looked at: by the time the startup sync runs, the tab the url
+   * matches is the active tab, so the guard is not reached. It is recorded rather than fixed because
+   * the construction seed and the first navigation are milliseconds apart, and because a reader who
+   * trusts the old wording would mis-reason about the startup path.
    */
   private lastNavigationAt = Date.now();
 
@@ -1335,8 +1346,17 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   }
 
   /**
-   * Sync workspace state with the current URL (for browser back/forward navigation).
-   * Finds and activates the tab that matches the URL.
+   * Sync workspace state with the current URL: find the tab that matches it and activate that tab.
+   *
+   * TWO CALLERS, not one. Browser back/forward reaches it through the NavigationEnd subscriber, which
+   * passes the time that navigation landed. The end of `InitializeShell` also calls it once, to settle
+   * a deep-linked url against the restored workspace, and passes nothing.
+   *
+   * @param url the url to match a tab against.
+   * @param navigatedAt when that url became current, as a `Date.now()` reading. It decides whether this
+   *   sync is older than the active tab's own activation; see the ordering guard below, which yields
+   *   when it is. Defaults to {@link lastNavigationAt}, which for the startup call is construction time
+   *   rather than the first navigation — that field's comment says why.
    */
   private async syncWorkspaceWithUrl(url: string, navigatedAt: number = this.lastNavigationAt): Promise<void> {
     const config = this.workspaceManager.GetConfiguration();
@@ -1369,7 +1389,22 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       const latest = this.workspaceManager.GetConfiguration();
       const activeTab = latest?.tabs.find(t => t.id === latest.activeTabId);
       const activatedAt = activeTab?.lastAccessedAt ? Date.parse(activeTab.lastAccessedAt) : 0;
-      if (Number.isFinite(activatedAt) && activatedAt > navigatedAt) {
+      /**
+       * A STAMP FROM THE FUTURE IS NOT EVIDENCE, because it did not come from this clock.
+       *
+       * The workspace configuration — `lastAccessedAt` included — is saved to `MJ: Workspaces` and
+       * restored unchanged on the next load, on any device, and nothing on restore restamps the active
+       * tab. So a tab stamped on a machine whose clock runs ahead keeps an `activatedAt` that beats
+       * every `navigatedAt` here, and the guard would then suppress EVERY url sync until something
+       * called `SetActiveTab` locally: back, forward and the startup deep link would all silently do
+       * nothing until the user clicked a tab.
+       *
+       * Measured in review with the active tab stamped five minutes ahead: no `SetActiveTab` at all,
+       * where `next` switched. Clamping to "not later than now" restores both cases and costs one
+       * condition. An activation cannot legitimately be in this clock's future, so nothing real is
+       * excluded.
+       */
+      if (Number.isFinite(activatedAt) && activatedAt > navigatedAt && activatedAt <= Date.now()) {
         return;
       }
       // Activate the matching tab
