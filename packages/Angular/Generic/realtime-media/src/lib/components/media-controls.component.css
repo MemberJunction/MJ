@@ -4,6 +4,21 @@
   gap: var(--mj-space-2-5);
 }
 
+/* One control: its button and, with labels on, its label beneath. */
+.control {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.control__label {
+  margin-top: var(--mj-space-1-5);
+  font-size: var(--mj-text-xs);
+  font-weight: 500;
+  color: var(--mj-text-muted);
+  text-align: center;
+}
+
 /* The Share button and its arrow read as one control. */
 .share {
   display: inline-flex;

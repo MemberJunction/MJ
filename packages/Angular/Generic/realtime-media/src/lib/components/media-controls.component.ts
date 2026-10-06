@@ -5,6 +5,7 @@ import {
   MJMenuDividerComponent,
   MJMenuItemComponent,
   MJMenuTriggerDirective,
+  type MjButtonSize,
 } from '@memberjunction/ng-ui-components';
 import type { DisplayCaptureSurface } from '@memberjunction/ai-realtime-client/media';
 
@@ -48,6 +49,9 @@ const SHARE_SURFACES: readonly ShareSurfaceOption[] = [
  * Share is a split button. Its main part asks the browser's picker with no preference, or stops sharing while the
  * user shares. Its arrow opens a menu that asks for an entire screen, a window or a browser tab first and, when the
  * host lists {@link SharePanels}, offers "This panel" with one of them. The arrow hides while the user shares.
+ *
+ * The buttons are circles of one {@link Size}. With {@link ShowLabels}, each carries a short label beneath it, for a
+ * call bar that names its controls.
  */
 @Component({
   selector: 'mj-media-controls',
@@ -56,58 +60,76 @@ const SHARE_SURFACES: readonly ShareSurfaceOption[] = [
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (ShowMicrophone) {
-      <button
-        type="button"
-        mjButton
-        Shape="circle"
-        [Variant]="MicrophoneOn ? 'secondary' : 'danger'"
-        [AriaLabel]="MicrophoneLabel"
-        [title]="MicrophoneLabel"
-        (click)="MicrophoneToggled.emit(!MicrophoneOn)"
-      >
-        <i class="fa-solid" [class.fa-microphone]="MicrophoneOn" [class.fa-microphone-slash]="!MicrophoneOn" aria-hidden="true"></i>
-      </button>
-    }
-    @if (ShowCamera) {
-      <button
-        type="button"
-        mjButton
-        Shape="circle"
-        [Variant]="CameraOn ? 'secondary' : 'danger'"
-        [AriaLabel]="CameraLabel"
-        [title]="CameraLabel"
-        (click)="CameraToggled.emit(!CameraOn)"
-      >
-        <i class="fa-solid" [class.fa-video]="CameraOn" [class.fa-video-slash]="!CameraOn" aria-hidden="true"></i>
-      </button>
-    }
-    @if (ShowShare) {
-      <span class="share">
+      <span class="control">
         <button
           type="button"
           mjButton
           Shape="circle"
-          class="share__main"
-          [Variant]="Sharing ? 'primary' : 'secondary'"
-          [AriaLabel]="ShareLabel"
-          [title]="ShareLabel"
-          (click)="OnShareClick()"
+          [Size]="Size"
+          [Variant]="MicrophoneOn ? 'secondary' : 'danger'"
+          [AriaLabel]="MicrophoneLabel"
+          [title]="MicrophoneLabel"
+          (click)="MicrophoneToggled.emit(!MicrophoneOn)"
         >
-          <i class="fa-solid fa-display" aria-hidden="true"></i>
+          <i class="fa-solid" [class.fa-microphone]="MicrophoneOn" [class.fa-microphone-slash]="!MicrophoneOn" aria-hidden="true"></i>
         </button>
-        @if (ShowShareMenu && !Sharing) {
+        @if (ShowLabels) {
+          <span class="control__label" aria-hidden="true">{{ MicrophoneOn ? 'Mute' : 'Unmute' }}</span>
+        }
+      </span>
+    }
+    @if (ShowCamera) {
+      <span class="control">
+        <button
+          type="button"
+          mjButton
+          Shape="circle"
+          [Size]="Size"
+          [Variant]="CameraOn ? 'secondary' : 'danger'"
+          [AriaLabel]="CameraLabel"
+          [title]="CameraLabel"
+          (click)="CameraToggled.emit(!CameraOn)"
+        >
+          <i class="fa-solid" [class.fa-video]="CameraOn" [class.fa-video-slash]="!CameraOn" aria-hidden="true"></i>
+        </button>
+        @if (ShowLabels) {
+          <span class="control__label" aria-hidden="true">{{ CameraOn ? 'Stop video' : 'Video' }}</span>
+        }
+      </span>
+    }
+    @if (ShowShare) {
+      <span class="control">
+        <span class="share">
           <button
             type="button"
             mjButton
             Shape="circle"
-            Size="sm"
-            class="share__more"
-            AriaLabel="Choose what to share"
-            title="Choose what to share"
-            [mjMenuTriggerFor]="shareMenu"
+            [Size]="Size"
+            class="share__main"
+            [Variant]="Sharing ? 'primary' : 'secondary'"
+            [AriaLabel]="ShareLabel"
+            [title]="ShareLabel"
+            (click)="OnShareClick()"
           >
-            <i class="fa-solid fa-chevron-up" aria-hidden="true"></i>
+            <i class="fa-solid fa-display" aria-hidden="true"></i>
           </button>
+          @if (ShowShareMenu && !Sharing) {
+            <button
+              type="button"
+              mjButton
+              Shape="circle"
+              Size="sm"
+              class="share__more"
+              AriaLabel="Choose what to share"
+              title="Choose what to share"
+              [mjMenuTriggerFor]="shareMenu"
+            >
+              <i class="fa-solid fa-chevron-up" aria-hidden="true"></i>
+            </button>
+          }
+        </span>
+        @if (ShowLabels) {
+          <span class="control__label" aria-hidden="true">{{ Sharing ? 'Stop sharing' : 'Share' }}</span>
         }
       </span>
     }
@@ -154,6 +176,10 @@ export class MediaControlsComponent {
   @Input() public ShowShareMenu = true;
   /** Panels of the page the user can share on their own, offered under "This panel". With none it is left out. */
   @Input() public SharePanels: readonly MediaSharePanel[] = [];
+  /** The circles' size: 32, 44 or 52 px. The Share arrow stays small. */
+  @Input() public Size: MjButtonSize = 'md';
+  /** Show a short label under each button ("Mute", "Video", "Share"), for a call bar that names its controls. */
+  @Input() public ShowLabels = false;
 
   /** The user asked to turn the microphone on (`true`) or off (`false`). */
   @Output() public MicrophoneToggled = new EventEmitter<boolean>();

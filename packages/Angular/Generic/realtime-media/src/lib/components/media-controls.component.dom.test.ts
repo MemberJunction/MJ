@@ -121,8 +121,34 @@ describe('MediaControlsComponent (DOM)', () => {
     expect(queryAll(f, 'button').map((b) => b.getAttribute('title'))).toEqual(['Unmute microphone', 'Turn on camera']);
   });
 
+  it('draws every circle at the size asked for, and keeps the Share arrow small', () => {
+    const f = render({ Size: 'lg' });
+    const sizes = queryAll(f, 'button').map((b) => [b.getAttribute('title'), b.classList.contains('mj-btn--lg'), b.classList.contains('mj-btn--sm')]);
+    expect(sizes).toEqual([
+      ['Unmute microphone', true, false],
+      ['Turn on camera', true, false],
+      ['Share screen', true, false],
+      ['Choose what to share', false, true],
+    ]);
+  });
+
+  it('labels each control beneath it when asked, by what it does', () => {
+    const f = render({ ShowLabels: true, MicrophoneOn: true, CameraOn: false, Sharing: false });
+    expect(queryAll(f, '.control__label').map((l) => l.textContent?.trim())).toEqual(['Mute', 'Video', 'Share']);
+    f.componentRef.setInput('MicrophoneOn', false);
+    f.componentRef.setInput('CameraOn', true);
+    f.componentRef.setInput('Sharing', true);
+    f.detectChanges();
+    expect(queryAll(f, '.control__label').map((l) => l.textContent?.trim())).toEqual(['Unmute', 'Stop video', 'Stop sharing']);
+    expect(queryAll(f, '.control__label').every((l) => l.getAttribute('aria-hidden') === 'true')).toBe(true);
+  });
+
+  it('shows no labels by default', () => {
+    expect(queryAll(render(), '.control__label')).toEqual([]);
+  });
+
   it('has no axe violations', async () => {
-    const f = render({ MicrophoneOn: true, CameraOn: true });
+    const f = render({ MicrophoneOn: true, CameraOn: true, ShowLabels: true });
     await ExpectNoAxeViolations(f);
   });
 });

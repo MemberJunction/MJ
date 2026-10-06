@@ -1,6 +1,8 @@
 import { Component, ElementRef, EventEmitter, HostListener, Input, Output, ViewChild, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { MJButtonDirective } from '@memberjunction/ng-ui-components';
+import { MediaControlsComponent } from '@memberjunction/ng-realtime-media';
 import { RealtimeSessionService } from '../../services/realtime-session.service';
 
 /**
@@ -14,10 +16,13 @@ import { RealtimeSessionService } from '../../services/realtime-session.service'
  *    Activity/Whiteboard panels on demand), the Type control, and End call. There's no visible
  *    composer yet — the Type control opens it, and so does simply starting to type (the overlay
  *    captures the first printable keystroke and seeds it via {@link AppendAndFocus}).
- *  - **Level 2+ (the dock)** — mute/captions shrink to compact minis and the in-call text
+ *  - **Level 2+ (the dock)** — mute/captions shrink to small circles and the in-call text
  *    input docks beside them (one bottom bar, per Redesign A's fused composer+controls).
  *    Submit calls {@link RealtimeSessionService.SendText}, which injects the text as a user
  *    turn into the SAME live voice call.
+ *
+ * The controls are the design system's: the microphone is `mj-media-controls` (the call controls the LiveKit room
+ * uses too) and every other control an `mjButton` circle, sized per shape (52, 44 or 32 px).
  *
  * Mute talks to the session service directly (pure local toggle); captions / Details /
  * End are emitted up so the overlay shell owns that state and lifecycle.
@@ -25,7 +30,7 @@ import { RealtimeSessionService } from '../../services/realtime-session.service'
 @Component({
   standalone: true,
   selector: 'mj-realtime-composer',
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, MJButtonDirective, MediaControlsComponent],
   templateUrl: './realtime-composer.component.html',
   styleUrl: './realtime-composer.component.css'
 })
@@ -83,6 +88,11 @@ export class RealtimeComposerComponent {
   @ViewChild('dockInput') private dockInput?: ElementRef<HTMLInputElement | HTMLTextAreaElement>;
 
   private realtime = inject(RealtimeSessionService);
+
+  /** The captions control's tooltip: what a click does. */
+  public get CaptionsTitle(): string {
+    return this.CaptionsOn ? 'Voice-first — back to the orb' : 'Show the conversation as text';
+  }
 
   /** True when there's non-whitespace text to send. */
   public get CanSend(): boolean {
