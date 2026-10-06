@@ -1,7 +1,7 @@
 // Reflect.metadata polyfill at import time.
 import 'reflect-metadata';
 import { describe, it, expect } from 'vitest';
-import { EntityFieldTSType, type EntityFieldInfo, type EntityInfo } from '@memberjunction/core';
+import { EntityFieldTSType, type EntityFieldInfo, type EntityInfo, type UserInfo } from '@memberjunction/core';
 import { ResolverBase } from '../generic/ResolverBase.js';
 
 /**
@@ -14,7 +14,9 @@ class Probe extends ResolverBase {
         return this.ClientOldValueToFieldValue(field as EntityFieldInfo, raw);
     }
     public MustLoad(entity: Partial<EntityInfo>, oldValues: boolean) {
-        return this.MustLoadTruthFromDatabase(entity as EntityInfo, { OldValues___: oldValues ? [{ Key: 'Comments', Value: null }] : undefined }, false, false);
+        // No row filter for this caller: the Update RLS term is covered in resolverBase.fls.test.ts.
+        const unfiltered = { ...entity, GetEffectiveRowFilterWhereClause: () => '' };
+        return this.MustLoadTruthFromDatabase(unfiltered as unknown as EntityInfo, { OldValues___: oldValues ? [{ Key: 'Comments', Value: null }] : undefined }, false, false, {} as UserInfo);
     }
 }
 const probe = new Probe();
