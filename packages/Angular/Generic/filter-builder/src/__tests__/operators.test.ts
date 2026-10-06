@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
-  getOperatorsForType,
-  getOperatorInfo,
-  operatorRequiresValue,
+  GetOperatorsForType,
+  GetOperatorInfo,
+  OperatorRequiresValue,
   STRING_OPERATORS,
   NUMBER_OPERATORS,
   BOOLEAN_OPERATORS,
@@ -65,35 +65,35 @@ describe('operator constants', () => {
   });
 });
 
-describe('getOperatorsForType', () => {
+describe('GetOperatorsForType', () => {
   it('should return STRING_OPERATORS for string type', () => {
-    expect(getOperatorsForType('string')).toBe(STRING_OPERATORS);
+    expect(GetOperatorsForType('string')).toBe(STRING_OPERATORS);
   });
 
   it('should return NUMBER_OPERATORS for number type', () => {
-    expect(getOperatorsForType('number')).toBe(NUMBER_OPERATORS);
+    expect(GetOperatorsForType('number')).toBe(NUMBER_OPERATORS);
   });
 
   it('should return BOOLEAN_OPERATORS for boolean type', () => {
-    expect(getOperatorsForType('boolean')).toBe(BOOLEAN_OPERATORS);
+    expect(GetOperatorsForType('boolean')).toBe(BOOLEAN_OPERATORS);
   });
 
   it('should return DATE_OPERATORS for date type', () => {
-    expect(getOperatorsForType('date')).toBe(DATE_OPERATORS);
+    expect(GetOperatorsForType('date')).toBe(DATE_OPERATORS);
   });
 
   it('should return LOOKUP_OPERATORS for lookup type', () => {
-    expect(getOperatorsForType('lookup')).toBe(LOOKUP_OPERATORS);
+    expect(GetOperatorsForType('lookup')).toBe(LOOKUP_OPERATORS);
   });
 
   it('should default to STRING_OPERATORS for unknown types', () => {
-    expect(getOperatorsForType('custom' as FilterFieldType)).toBe(STRING_OPERATORS);
+    expect(GetOperatorsForType('custom' as FilterFieldType)).toBe(STRING_OPERATORS);
   });
 });
 
-describe('getOperatorInfo', () => {
+describe('GetOperatorInfo', () => {
   it('should find operator info for a valid operator', () => {
-    const info = getOperatorInfo('contains', 'string');
+    const info = GetOperatorInfo('contains', 'string');
     expect(info).toBeDefined();
     expect(info!.value).toBe('contains');
     expect(info!.label).toBe('contains');
@@ -101,29 +101,29 @@ describe('getOperatorInfo', () => {
   });
 
   it('should return undefined for invalid operator/type combo', () => {
-    const info = getOperatorInfo('contains', 'boolean');
+    const info = GetOperatorInfo('contains', 'boolean');
     expect(info).toBeUndefined();
   });
 
   it('should find null-check operators', () => {
-    const info = getOperatorInfo('isnull', 'number');
+    const info = GetOperatorInfo('isnull', 'number');
     expect(info).toBeDefined();
     expect(info!.requiresValue).toBe(false);
   });
 });
 
-describe('operatorRequiresValue', () => {
+describe('OperatorRequiresValue', () => {
   it('should return true for value operators', () => {
-    expect(operatorRequiresValue('eq')).toBe(true);
-    expect(operatorRequiresValue('contains')).toBe(true);
-    expect(operatorRequiresValue('gt')).toBe(true);
-    expect(operatorRequiresValue('startswith')).toBe(true);
+    expect(OperatorRequiresValue('eq')).toBe(true);
+    expect(OperatorRequiresValue('contains')).toBe(true);
+    expect(OperatorRequiresValue('gt')).toBe(true);
+    expect(OperatorRequiresValue('startswith')).toBe(true);
   });
 
   it('should return false for null-check operators', () => {
-    expect(operatorRequiresValue('isnull')).toBe(false);
-    expect(operatorRequiresValue('isnotnull')).toBe(false);
-    expect(operatorRequiresValue('isempty')).toBe(false);
-    expect(operatorRequiresValue('isnotempty')).toBe(false);
+    expect(OperatorRequiresValue('isnull')).toBe(false);
+    expect(OperatorRequiresValue('isnotnull')).toBe(false);
+    expect(OperatorRequiresValue('isempty')).toBe(false);
+    expect(OperatorRequiresValue('isnotempty')).toBe(false);
   });
 });

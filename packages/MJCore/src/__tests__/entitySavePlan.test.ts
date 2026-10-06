@@ -11,9 +11,9 @@
  *      for every create, which is the single most likely way to break composite creates.
  *   3. **Stop at first failure** — the transaction is about to roll back, so continuing would pile
  *      up doomed work and let a later, more confusing error mask the real one.
- *   4. **`SelfOnly` routes the root to its own option set** — carrying `IsGraphNodeSave`, without
- *      which the root re-enters graph planning (infinite recursion) and deadlocks on its own
- *      in-flight save debounce.
+ *   4. **`SelfOnly` routes the root through `SaveSelfOnly`** — the private graph-node
+ *      entry on `BaseEntity`. Without that hop the root re-enters graph planning
+ *      (infinite recursion) and deadlocks on its own in-flight save debounce.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -53,6 +53,23 @@ describe('EntitySavePlan', () => {
         expect(plan.NodeCount).toBe(0);
         plan.AddSave(root, 'root', undefined, true);
         expect(plan.NodeCount).toBe(1);
+    });
+
+    it('InsertBeforeRoot places the peer ahead of the owner so the FK can be stamped after the peer has a PK', async () => {
+        const calls: Call[] = [];
+        const root = makeEntity('Deal', calls);
+        const order = makeEntity('Order', calls);
+        const stamped: string[] = [];
+        const plan = new EntitySavePlan(root);
+        plan.AddSave(root, 'Deal', undefined, true);
+        plan.AddSaveBeforeRoot(order, 'OrderID_Object');
+        plan.AddRootPrepare(() => stamped.push('stamp'));
+
+        const result = await ExecuteEntitySavePlan(plan);
+
+        expect(result.Success).toBe(true);
+        expect(calls.map(c => c.label)).toEqual(['Order', 'Deal']);
+        expect(stamped).toEqual(['stamp']);
     });
 
     it('executes nodes in the order they were added', async () => {
@@ -132,38 +149,53 @@ describe('EntitySavePlan', () => {
         expect(result.ErrorMessage).toContain('connection reset');
     });
 
-    it('routes the SelfOnly root node to RootSaveOptions and children to SaveOptions', async () => {
+    it('routes the SelfOnly root through SaveSelfOnly, children through Save', async () => {
         const calls: Call[] = [];
+        const selfOnly: Call[] = [];
         const root = makeEntity('Root', calls);
-        const rootOptions = { IsGraphNodeSave: true } as unknown as EntitySaveOptions;
-        const childOptions = { IsGraphNodeSave: false } as unknown as EntitySaveOptions;
+        const childOptions = { IgnoreDirtyState: true } as EntitySaveOptions;
 
         const plan = new EntitySavePlan(root)
             .AddSave(root, 'root', undefined, true)
             .AddSave(makeEntity('ChildA', calls), 'Lines[0]');
 
-        await ExecuteEntitySavePlan(plan, { SaveOptions: childOptions, RootSaveOptions: rootOptions });
+        await ExecuteEntitySavePlan(plan, {
+            SaveOptions: childOptions,
+            SaveSelfOnly: async (entity, options) => {
+                selfOnly.push({ label: entity.EntityInfo.Name, op: 'Save', options });
+                return true;
+            },
+        });
 
-        expect(calls[0].options).toBe(rootOptions);
-        expect(calls[1].options).toBe(childOptions);
+        expect(selfOnly).toHaveLength(1);
+        expect(selfOnly[0].label).toBe('Root');
+        expect(selfOnly[0].options).toBe(childOptions);
+        expect(calls.map(c => c.label)).toEqual(['ChildA']);
+        expect(calls[0].options).toBe(childOptions);
     });
 
-    it('routes the SelfOnly root delete node to RootDeleteOptions', async () => {
+    it('routes the SelfOnly root delete through DeleteSelfOnly', async () => {
         const calls: Call[] = [];
+        const selfOnly: Call[] = [];
         const root = makeEntity('Root', calls);
-        const rootOptions = { IsGraphNodeDelete: true } as unknown as EntityDeleteOptions;
-        const childOptions = {} as unknown as EntityDeleteOptions;
+        const childOptions = {} as EntityDeleteOptions;
 
         const plan = new EntitySavePlan(root);
         plan.AddDelete(makeEntity('ChildA', calls), 'Lines[0]');
         plan.Add({ Entity: root, Operation: 'Delete', Label: 'root', SelfOnly: true });
 
-        await ExecuteEntitySavePlan(plan, { DeleteOptions: childOptions, RootDeleteOptions: rootOptions });
+        await ExecuteEntitySavePlan(plan, {
+            DeleteOptions: childOptions,
+            DeleteSelfOnly: async (entity, options) => {
+                selfOnly.push({ label: entity.EntityInfo.Name, op: 'Delete', options });
+                return true;
+            },
+        });
 
-        // Children first on the delete path — they hold the FK to the row about to disappear.
-        expect(calls.map(c => c.label)).toEqual(['ChildA', 'Root']);
-        expect(calls[0].options).toBe(childOptions);
-        expect(calls[1].options).toBe(rootOptions);
+        expect(calls.map(c => c.label)).toEqual(['ChildA']);
+        expect(selfOnly).toHaveLength(1);
+        expect(selfOnly[0].label).toBe('Root');
+        expect(selfOnly[0].options).toBe(childOptions);
     });
 });
 

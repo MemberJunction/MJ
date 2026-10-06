@@ -228,4 +228,4 @@ npm run build
 
 ## License
 
-ISC
+Business Source License 1.1 — see [LICENSE](../../../../LICENSE) for details.

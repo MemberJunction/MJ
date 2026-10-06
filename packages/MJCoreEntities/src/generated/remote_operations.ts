@@ -46,6 +46,34 @@ export interface AISkillImportMarkdownOutput {
     warnings: string[];
 }
 
+/** Input for `Authorization.Check`. */
+export interface AuthorizationCheckInput {
+    /**
+     * Authorization names to evaluate (e.g. `Orders.Price.OverrideList`).
+     * Matching is case-insensitive. Empty array returns an empty Results list.
+     */
+    Names: string[];
+}
+
+/** One row of `Authorization.Check` output. */
+export interface AuthorizationCheckResultRow {
+    /** The name as requested. */
+    Name: string;
+    /** True when the user has this authorization or an ancestor grant. */
+    Allowed: boolean;
+    /** True when no `MJ: Authorizations` row matches this name. Fail-closed: Allowed is then false. */
+    Unknown: boolean;
+    /** True when Allowed because of an ancestor grant, not a direct role on this row. */
+    ViaAncestor: boolean;
+    /** The authorization Name that actually matched (leaf or ancestor). Null when not allowed. */
+    MatchedAuthorizationName: string | null;
+}
+
+/** Output of `Authorization.Check`. */
+export interface AuthorizationCheckOutput {
+    Results: AuthorizationCheckResultRow[];
+}
+
 /** The control action to apply to a running/paused experiment session. */
 export type PredictiveStudioExperimentSessionAction = 'pause' | 'resume' | 'cancel';
 
@@ -377,6 +405,319 @@ export interface PredictiveStudioTrainModelOutput {
     status: string;
 }
 
+/** A single primary-key field/value pair identifying a record. */
+export interface RecordCloneKeyValuePair {
+    /** Primary-key field name (e.g. "ID"). */
+    FieldName: string;
+    /** Primary-key value as a string. */
+    Value: string;
+}
+
+/** Record key expressed as composite key-value pairs. */
+export interface RecordCloneKey {
+    KeyValuePairs: RecordCloneKeyValuePair[];
+}
+
+/** Input for `RecordClone.Describe`. */
+export interface RecordCloneDescribeInput {
+    /** Registered entity name to inspect for cloning capabilities. */
+    EntityName: string;
+    /** Optional specific record key to inspect. */
+    Key?: RecordCloneKey;
+}
+
+/** Relationship clone policy and status. */
+export interface RecordCloneDescribeRelationship {
+    /** Relationship display name or target entity. */
+    Name: string;
+    /** Related entity name. */
+    RelatedEntity: string;
+    /** Default clone policy applied to this relationship. */
+    DefaultPolicy: 'Deep' | 'Reference' | 'Skip';
+    /** Whether policy changes are locked by configuration or database constraint. */
+    Locked: boolean;
+    /** Optional count of child records for the specified record. */
+    ChildCount?: number;
+}
+
+/** Output for `RecordClone.Describe`. */
+export interface RecordCloneDescribeOutput {
+    /** Whether the entity can be cloned. */
+    CanClone: boolean;
+    /** Optional explanation if cloning is disabled or blocked. */
+    Reason?: string;
+    /** Presets configured on the entity. */
+    Presets?: string[];
+    /** Granularity of user editing allowed. */
+    UserEditable?: 'none' | 'fields' | 'scope' | 'all';
+    /** Direct relationships and their clone policies. */
+    Relationships: RecordCloneDescribeRelationship[];
+    /** Authorization check result for the calling user. */
+    Authorization?: {
+        Name: string;
+        Granted: boolean;
+    };
+    /** Whether the calling user holds `Clone Records: Fire Hooks`, so the UI may offer the Fire Entity Actions toggle. */
+    CanFireHooks?: boolean;
+    /** Whether the calling user holds `Clone Records: Override Scope`, so the UI may offer scope overrides beyond the entity's configuration. */
+    CanOverrideScope?: boolean;
+}
+
+/** Options controlling clone execution. */
+export interface RecordCloneExecuteOptions {
+    /** Plan and validate only: returns the plan in `Plan` and writes nothing. */
+    DryRun?: boolean;
+    Preset?: string;
+    MaxDepth?: number;
+    MaxRecords?: number;
+    Subtypes?: 'include' | 'exclude';
+    Hierarchy?: 'subtree' | 'node';
+    SoftLinks?: 'skip' | 'include';
+    /** Whether Entity Actions run on the cloned rows. Default from the entity's `Hooks` (else 'fire'); changing it needs `Clone Records: Fire Hooks`. */
+    EntityActions?: 'suppress' | 'fire';
+    /** Whether Entity AI Actions run. Default from the entity's `Hooks` (else 'suppress'); changing it needs `Clone Records: Fire Hooks`. */
+    AIActions?: 'suppress' | 'fire';
+    Embeddings?: 'copy' | 'regenerate';
+    FieldOverrides?: Record<string, string | number | boolean | null>;
+    PromptedValues?: Record<string, string | number | boolean | null>;
+    /** Point foreign keys on the root at other records. Only fields listed in the entity's `Clone.UI.RetargetFields` apply. */
+    Retarget?: Array<{ EntityName: string; Field: string; Value: string }>;
+    NamingTemplate?: string;
+    NamingStrategy?: 'suffix' | 'increment' | 'prompt' | 'none';
+    Naming?: {
+        Template?: string;
+        Strategy?: 'suffix' | 'increment' | 'prompt' | 'none';
+    };
+    Reason?: string;
+}
+
+/** Per-edge policy override. */
+export interface RecordCloneEdgeOverride {
+    RelationshipID?: string;
+    Policy: 'Deep' | 'Reference' | 'Skip';
+}
+
+/** Input for `RecordClone.Execute`. */
+export interface RecordCloneExecuteInput {
+    EntityName?: string;
+    SourceRecordKey?: RecordCloneKey;
+    Roots?: Array<{ EntityName: string; Key: RecordCloneKey }>;
+    Options?: RecordCloneExecuteOptions;
+    EdgeOverrides?: RecordCloneEdgeOverride[];
+    ExpectedPlanHash?: string;
+}
+
+// RecordClonePlanDetails is declared in record-clone-plan.output.ts. CodeGen concatenates every
+// operation type file into one generated module, so no import is needed (or allowed) here.
+/** Record mapping result from clone execution. */
+export interface RecordCloneRecordMapping {
+    EntityName: string;
+    SourceKey: string;
+    TargetKey: string;
+    Depth?: number;
+}
+
+/** Record skipped during clone execution. */
+export interface RecordCloneSkippedRecord {
+    EntityName: string;
+    SourceKey: string;
+    Reason: string;
+}
+
+/** Warning or execution issue. */
+export interface RecordCloneExecuteWarning {
+    Code: string;
+    Severity: 'Info' | 'Warning' | 'Error';
+    NodeKey?: string;
+    Field?: string;
+    Message: string;
+}
+
+/** Output for `RecordClone.Execute`. */
+export interface RecordCloneExecuteOutput {
+    /** Whether the clone succeeded. */
+    Success: boolean;
+    /** Outcome code. */
+    ResultCode: 'SUCCESS' | 'PLAN_CHANGED' | 'BLOCKED' | 'FORBIDDEN' | 'EXECUTION_ERROR';
+    /** ID of the created MJ: Record Clone Logs header row, if written. */
+    CloneLogID: string | null;
+    /** Mappings for the root records. */
+    Roots: RecordCloneRecordMapping[];
+    /** Mappings for all successfully created records. */
+    Created: RecordCloneRecordMapping[];
+    /** Records that were skipped. */
+    Skipped: RecordCloneSkippedRecord[];
+    /** Aggregate counts. */
+    Counts: {
+        ByEntity: Record<string, { Create: number; Reference: number; Skip: number }>;
+        Create: number;
+        Total: number;
+    };
+    /** Warnings emitted during planning or execution. */
+    Warnings: RecordCloneExecuteWarning[];
+    /** Updated plan returned on PLAN_CHANGED or BLOCKED. */
+    Plan?: RecordClonePlanDetails;
+    /** Error message on failure. */
+    ErrorMessage?: string;
+}
+
+/** Input for `RecordClone.GetLineage`. */
+export interface RecordCloneGetLineageInput {
+    /** Registered entity name. */
+    EntityName: string;
+    /** Composite key of the record whose clone lineage is being queried. */
+    Key: RecordCloneKey;
+    /** Direction of traversal: ancestors ('up'), descendants ('down'), or both ('both'). Defaults to 'both'. */
+    Direction?: 'up' | 'down' | 'both';
+}
+
+/** Single item in a record's clone lineage. */
+export interface RecordCloneLineageItem {
+    /** Entity name of the record. */
+    EntityName: string;
+    /** Primary key of the record. */
+    RecordID: string;
+    /** Human-readable display name of the record. */
+    DisplayName?: string;
+    /** ID of the MJ: Record Clone Logs header row that produced this clone, if known. */
+    CloneLogID?: string;
+    /** ISO timestamp when the clone occurred, if known. */
+    ClonedAt?: string;
+    /** User ID or display name who initiated the clone, if known. */
+    ClonedBy?: string;
+}
+
+/** Output for `RecordClone.GetLineage`. */
+export interface RecordCloneGetLineageOutput {
+    /** Chain of ancestor records cloned from, ordered oldest to immediate parent. */
+    Ancestors: RecordCloneLineageItem[];
+    /** Direct descendant records cloned from this record. */
+    Clones: RecordCloneLineageItem[];
+    /** Total count of direct descendant clones. */
+    TotalClones: number;
+}
+
+/** Options controlling plan generation. */
+export interface RecordClonePlanOptions {
+    DryRun?: boolean;
+    Preset?: string;
+    MaxDepth?: number;
+    MaxRecords?: number;
+    Subtypes?: 'include' | 'exclude';
+    Hierarchy?: 'subtree' | 'node';
+    SoftLinks?: 'skip' | 'include';
+    /** Whether Entity Actions run on the cloned rows. Default from the entity's `Hooks` (else 'fire'); changing it needs `Clone Records: Fire Hooks`. */
+    EntityActions?: 'suppress' | 'fire';
+    /** Whether Entity AI Actions run. Default from the entity's `Hooks` (else 'suppress'); changing it needs `Clone Records: Fire Hooks`. */
+    AIActions?: 'suppress' | 'fire';
+    Embeddings?: 'copy' | 'regenerate';
+    FieldOverrides?: Record<string, string | number | boolean | null>;
+    PromptedValues?: Record<string, string | number | boolean | null>;
+    /** Point foreign keys on the root at other records. Only fields listed in the entity's `Clone.UI.RetargetFields` apply. */
+    Retarget?: Array<{ EntityName: string; Field: string; Value: string }>;
+    NamingTemplate?: string;
+    NamingStrategy?: 'suffix' | 'increment' | 'prompt' | 'none';
+    Naming?: {
+        Template?: string;
+        Strategy?: 'suffix' | 'increment' | 'prompt' | 'none';
+    };
+    Reason?: string;
+}
+
+/** Input for `RecordClone.Plan`. */
+export interface RecordClonePlanInput {
+    EntityName?: string;
+    SourceRecordKey?: RecordCloneKey;
+    Roots?: Array<{ EntityName: string; Key: RecordCloneKey }>;
+    Options?: RecordClonePlanOptions;
+    EdgeOverrides?: RecordCloneEdgeOverride[];
+    ExpectedPlanHash?: string;
+}
+
+/** A single field change in the planned record clone. */
+export interface RecordClonePlanFieldChange {
+    Field: string;
+    Kind: string;
+    OldValue: string | number | boolean | null;
+    NewValue: string | number | boolean | null;
+    Reason: string;
+}
+
+/** Warning or validation issue identified during planning. */
+export interface RecordClonePlanWarning {
+    Code: string;
+    Severity: 'Info' | 'Warning' | 'Error';
+    NodeKey?: string;
+    Field?: string;
+    Message: string;
+}
+
+/** Node in the planned record clone graph. */
+export interface RecordClonePlanNode {
+    Key: string;
+    EntityName: string;
+    SourceKey: string;
+    TargetKey: string | null;
+    Action: 'Create' | 'Reference' | 'Skip' | 'Blocked';
+    Reason: string;
+    Depth: number;
+    ParentKey: string | null;
+    DisplayName: string;
+    IsSubtypeRow?: boolean;
+    FieldChanges: RecordClonePlanFieldChange[];
+    Warnings: RecordClonePlanWarning[];
+    Route: string;
+}
+
+/** Relationship edge in the planned record clone graph. */
+export interface RecordClonePlanEdge {
+    FromKey: string;
+    ToKey: string;
+    Kind: string;
+    RelatedEntityName: string;
+    JoinField: string;
+    RelationshipID?: string;
+    CollectionName?: string;
+    IsSoftLink?: boolean;
+    Policy: 'Deep' | 'Reference' | 'Skip';
+    Locked: boolean;
+    PolicySource: string;
+}
+
+/** Execution options effectively applied to the plan. */
+export interface RecordClonePlanEffectiveOptions {
+    MaxDepth: number;
+    MaxRecords: number;
+    Subtypes: 'include' | 'exclude';
+    Hierarchy: 'subtree' | 'node';
+    SoftLinks: 'skip' | 'include';
+    EntityActions: 'suppress' | 'fire';
+    AIActions: 'suppress' | 'fire';
+    Embeddings: 'copy' | 'regenerate';
+}
+
+/** Complete clone plan returned by RecordClone.Plan. */
+export interface RecordClonePlanDetails {
+    PlanVersion: 1;
+    Hash: string;
+    Roots: string[];
+    Nodes: RecordClonePlanNode[];
+    Edges: RecordClonePlanEdge[];
+    Counts: {
+        ByEntity: Record<string, { Create: number; Reference: number; Skip: number }>;
+        Create: number;
+        Total: number;
+    };
+    Warnings: RecordClonePlanWarning[];
+    Blocked: boolean;
+    EffectiveOptions: RecordClonePlanEffectiveOptions;
+}
+
+/** Output for `RecordClone.Plan`. */
+export interface RecordClonePlanOutput {
+    Plan: RecordClonePlanDetails;
+}
+
 /** A single primary-key field/value pair identifying a record to compare. */
 export interface RecordComparisonKeyValuePair {
     /** Primary-key field name (e.g. "ID"). */
@@ -549,6 +890,29 @@ export interface TaskGraphControlOutput {
     errorMessage?: string;
 }
 
+/** Input for the step-scoped intervention verbs. */
+export interface TaskGraphTaskInterventionInput {
+    taskID: string;
+    /** ForceCompleteTask: the output downstream paths evaluate against. UpdateTaskInput: the new input. */
+    payload?: Record<string, unknown> | string | null;
+}
+
+/** Output of the task-graph debug control verbs — what happened and the debug state now in force. */
+export interface TaskGraphDebugControlOutput {
+    success: boolean;
+    /** The graph's debug state after the verb (pause/step/breakpoints/overrides). */
+    debug?: {
+        paused?: boolean;
+        pausedBy?: string | null;
+        pausedReason?: 'user' | 'breakpoint';
+        pausedAtTaskID?: string | null;
+        breakpoints?: string[];
+        step?: string;
+        edgeOverrides?: Record<string, 'true' | 'false'>;
+    };
+    errorMessage?: string;
+}
+
 /** Output of `TaskGraph.GetStatus`. */
 export interface TaskGraphStatusOutput {
     success: boolean;
@@ -567,10 +931,41 @@ export interface TaskGraphStatusOutput {
     errorMessage?: string;
 }
 
-/** Input for `TaskGraph.RetryTask`. */
+/** Input for TaskGraph.OverrideEdge. */
+export interface TaskGraphOverrideEdgeInput {
+    parentTaskID: string;
+    /** The MJ: Task Dependencies row being answered. */
+    edgeID: string;
+    /** 'false' = branch not taken, 'true' = gate open, omitted/null = remove the override. */
+    verdict?: 'true' | 'false' | null;
+}
+
+/** Input for TaskGraph.Pause and TaskGraph.Resume. */
+export interface TaskGraphPauseInput {
+    /** Parent task ID identifying the workflow run. */
+    parentTaskID: string;
+}
+
+/** Input for TaskGraph.RetryTask. */
 export interface TaskGraphRetryInput {
-    /** The failed task to retry. */
+    /** The failed task to return to Pending. */
     taskID: string;
+    /** Optional edited input for the re-run — the operator saw why it failed and corrected the brief. Applies to this run only. */
+    inputPayload?: Record<string, unknown> | string;
+}
+
+/** Input for TaskGraph.SetBreakpoints. */
+export interface TaskGraphSetBreakpointsInput {
+    parentTaskID: string;
+    /** The full breakpoint set — replaces what was there. Empty clears all breakpoints. */
+    taskIDs: string[];
+}
+
+/** Input for TaskGraph.Step. */
+export interface TaskGraphStepInput {
+    parentTaskID: string;
+    /** 'one' (default) releases the next eligible step, 'wave' the current frontier, a task ID exactly that step. */
+    target?: string;
 }
 
 /** Input for `TaskGraph.Submit`. */
@@ -584,7 +979,7 @@ export interface TaskGraphSubmitInput {
             tempId: string;
             name: string;
             description: string;
-            kind: 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External';
+            kind: 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External' | 'Decision';
             configuration:
                 | { agentName: string; message?: string; templateParameters?: Record<string, string> }
                 | { actionName: string; inputMapping?: string; outputMapping?: string }
@@ -592,7 +987,7 @@ export interface TaskGraphSubmitInput {
                 | { promptName: string; templateParameters?: Record<string, string> }
                 | { collectionPath: string; itemVariable?: string; maxIterations?: number; executionMode?: 'sequential' | 'parallel' }
                 | { condition: string; itemVariable?: string; maxIterations?: number }
-                | { domain: string; ref?: string };
+                | { domain: string; ref?: string } | { promptName?: string; state?: string; questions: Record<string, { kind: 'Likelihood'; instructions: string; minConfidence?: number } | { kind: 'Choice'; instructions: string; options: Array<{ value: string; description: string }>; minConfidence?: number } | { kind: 'Score'; instructions: string; levels: string[]; minConfidence?: number }> };
             dependsOn: Array<string | { tempId: string; condition?: string; dependencyType?: 'Prerequisite' | 'Corequisite' | 'Optional'; priority?: number; sequence?: number; exclusiveGroup?: string; pathPoints?: string }>;
             policy?: { timeoutSeconds?: number; retryCount?: number; onError?: 'fail' | 'continue' };
             /** Canvas geometry. Presentation only: the dispatcher ignores it, the validator never requires it. */
@@ -608,6 +1003,10 @@ export interface TaskGraphSubmitInput {
     environmentID: string;
     /** Conversation this graph answers, when submitted from a conversational channel. */
     conversationDetailID?: string;
+    /** Continuation hops that produced this graph. Counts toward the runaway-loop reinvoke cap exactly as in-process submissions do; omit for a fresh submission. */
+    reinvokeDepth?: number;
+    /** The invocation's runtime parameters, resolved by the flow dialect's `data.*` and `context.*` condition roots. Without it those documented conditions evaluate against nothing. */
+    invocation?: { data?: unknown; context?: unknown };
 }
 
 /** Output of `TaskGraph.Submit`. */
@@ -634,6 +1033,297 @@ export interface TemplateRunOutput {
     output: string;
     /** Wall-clock render time in milliseconds. */
     executionTimeMs?: number;
+}
+
+/**
+ * Input for `WebSearch.Query`.
+ *
+ * NO import statements — this definition is emitted verbatim into the generated
+ * remote_operations.ts and any import here would break that file.
+ */
+export interface WebSearchQueryInput {
+    /** The search query. Required, non-empty. */
+    query: string;
+    /** Desired result count. Clamped to the serving provider's cap. Default 10. */
+    maxResults?: number;
+    /**
+     * Pin the search to one provider, by Name (e.g. `Brave`) or DriverClass.
+     *
+     * When set there is NO failover: if that provider is missing, inactive, unavailable or
+     * incapable of what was asked, the call fails rather than quietly serving from another
+     * vendor. Omit it to let the administrator's priority order decide.
+     */
+    provider?: string;
+    /** Restrict results to these domains, where the serving provider supports it. */
+    includeDomains?: string[];
+    /** Exclude these domains, where the serving provider supports it. */
+    excludeDomains?: string[];
+    /** Relative recency window: `day`, `week`, `month` or `year`. */
+    freshness?: 'day' | 'week' | 'month' | 'year';
+    /** Two-letter country code for localisation, e.g. `US`, `GB`. */
+    country?: string;
+    /** Language code for results, e.g. `en`. */
+    language?: string;
+    /** Adult-content filter. Default `moderate`. */
+    safeSearch?: 'off' | 'moderate' | 'strict';
+    /**
+     * Ask for a synthesized answer alongside the hits.
+     *
+     * This restricts selection to providers that can produce one, so it changes which provider
+     * serves the request — not merely what comes back.
+     */
+    includeAnswer?: boolean;
+}
+
+/**
+ * Output of `WebSearch.Query`.
+ *
+ * NO import statements — emitted verbatim into the generated remote_operations.ts.
+ */
+export interface WebSearchQueryHit {
+    /** Page title as the provider reports it. */
+    title: string;
+    /** Absolute URL of the result. */
+    url: string;
+    /** Snippet or extracted page content. Length and style vary by provider. */
+    snippet: string;
+    /** Host as the provider displays it, e.g. `irs.gov`. */
+    displayUrl?: string;
+    /** Publication or last-modified date, ISO-8601, when the provider resolved one. */
+    publishedAt?: string;
+    /**
+     * The provider's own relevance score.
+     *
+     * Provider-relative and NOT comparable across providers — use it to order hits within one
+     * response, never to threshold or to compare two vendors.
+     */
+    score?: number;
+}
+
+/** One provider's turn, recorded whether it succeeded or not. */
+export interface WebSearchQueryAttempt {
+    providerName: string;
+    succeeded: boolean;
+    durationMs: number;
+    hitCount?: number;
+    /** `transient` (another provider may succeed) or `permanent` (the request itself is bad). */
+    failureKind?: string;
+    errorMessage?: string;
+}
+
+export interface WebSearchQueryOutput {
+    /** Normalised results. Legitimately empty for a narrow query — that is not a failure. */
+    hits: WebSearchQueryHit[];
+    /** Synthesized answer, only when `includeAnswer` was requested and the provider produced one. */
+    answer?: string;
+    /** Name of the provider that actually served this result. */
+    providerUsed: string;
+    /**
+     * Every provider tried, in order — including on success.
+     *
+     * If the primary rate-limits every call and the secondary quietly serves everything, nothing
+     * else makes that visible while the bill moves to a vendor nobody chose.
+     */
+    attempts: WebSearchQueryAttempt[];
+}
+
+/** Input for `WorkQueue.DiscardDelivery`. */
+export interface WorkQueueDiscardDeliveryInput {
+    subscriptionName: string;
+    /** A pending, dead-lettered or in-flight delivery. */
+    deliveryID: string;
+    /** Why the work is being dropped. Required; at most 1000 characters. */
+    reason: string;
+}
+
+/** Output of `WorkQueue.DiscardDelivery`. */
+export interface WorkQueueDiscardDeliveryOutput {
+    /** False when the transport cannot discard this kind of delivery (for example any SQS message). */
+    supported: boolean;
+    /** True when the delivery is now Discarded, or (for an in-flight delivery) its cancel was recorded. */
+    discarded: boolean;
+    /**
+     * True when the delivery was in flight: CancelRequestedAt is set, the running handler's next heartbeat (30 s at
+     * most) aborts it with reason 'Cancelled', and the row becomes Discarded when the handler acknowledges — or at
+     * lease expiry if its worker is gone (03 §7).
+     */
+    cancelRequested: boolean;
+}
+
+/** Input for `WorkQueue.GetBacklog`. */
+export interface WorkQueueGetBacklogInput {
+    subscriptionName: string;
+}
+
+/** Output of `WorkQueue.GetBacklog` — the autoscaler metric for one subscription. */
+export interface WorkQueueGetBacklogOutput {
+    /** False when the subscription's transport cannot report a backlog (AWS — scale Lambda from the queue's own metrics). */
+    supported: boolean;
+    /** Pending deliveries that a worker could claim right now (partition rules applied). */
+    claimable: number;
+    /** Deliveries currently leased by a worker. */
+    inFlight: number;
+    /** claimable + inFlight — the value a scheduler should scale on. */
+    total: number;
+    /** True when either count hit its cap of 1000: the real backlog is at least this large. */
+    capped: boolean;
+}
+
+/** Input for `WorkQueue.GetSubscriptionStats`. */
+export interface WorkQueueGetSubscriptionStatsInput {
+    /** One subscription by name (case-insensitive). Omit for every subscription. */
+    subscriptionName?: string;
+}
+
+/** One subscription's counts, read from its transport. */
+export interface WorkQueueSubscriptionStatsRow {
+    SubscriptionName: string;
+    Pending: number;
+    InFlight: number;
+    DeadLettered: number;
+    /** Null when the transport cannot count blocked keys. */
+    BlockedKeys: number | null;
+    /** Null when unknown (always null on AWS in Phase 1). */
+    OldestPendingAgeSeconds: number | null;
+    /** Null unless the transport keeps completed rows. */
+    CompletedLastHour: number | null;
+    /** ISO 8601 time the counts were read. */
+    AsOf: string;
+}
+
+/** A subscription whose stats could not be read. camelCase, as 03 §8 writes it. */
+export interface WorkQueueStatsFailureRow {
+    subscriptionName: string;
+    /** A sanitised message — never raw driver or SQL text. */
+    error: string;
+}
+
+/** Output of `WorkQueue.GetSubscriptionStats`. */
+export interface WorkQueueGetSubscriptionStatsOutput {
+    subscriptions: WorkQueueSubscriptionStatsRow[];
+    /** Populated only when no subscriptionName was given; a named subscription that fails fails the operation. */
+    failures: WorkQueueStatsFailureRow[];
+}
+
+/** Input for `WorkQueue.ListDeadLetters`. */
+export interface WorkQueueListDeadLettersInput {
+    /** The subscription to read (case-insensitive). */
+    subscriptionName: string;
+    /** The nextCursor of a previous page. Omit for the first page. */
+    cursor?: string;
+    /** 1–500; default 50. */
+    pageSize?: number;
+}
+
+/** Reference to data held outside the queue (claim-check). */
+export interface WorkQueuePayloadRefRow {
+    Uri: string;
+    ContentType?: string;
+    SizeBytes?: number;
+    Checksum?: string;
+}
+
+/** The dead-lettered message envelope. */
+export interface WorkQueueDeadLetterMessageRow {
+    MessageID: string;
+    Topic: string;
+    PartitionKey?: string;
+    Attributes: Record<string, string>;
+    /** The inline payload serialized as JSON, or null when the message carries none. */
+    PayloadJSON: string | null;
+    PayloadRef?: WorkQueuePayloadRefRow;
+    CorrelationID?: string;
+    /** ISO 8601 publish time. */
+    PublishedAt: string;
+}
+
+/** One dead-lettered delivery. */
+export interface WorkQueueDeadLetterRow {
+    /** Database: MJ: Work Queue Deliveries ID. AWS: the envelope MessageID. */
+    DeliveryID: string;
+    Message: WorkQueueDeadLetterMessageRow;
+    PartitionKey: string | null;
+    Attempts: number;
+    /** Handler reason, MaxAttemptsExceeded, LeaseExpired, HandlerNotRegistered, RedrivePolicy, InvalidEnvelope, … */
+    Reason: string;
+    LastError: string | null;
+    DeadLetteredAt: string | null;
+    /** True when this delivery is the dead-lettered head of an Ordered key (Database transport). */
+    BlocksKey: boolean;
+}
+
+/** Output of `WorkQueue.ListDeadLetters`. */
+export interface WorkQueueListDeadLettersOutput {
+    /** False when the subscription's transport cannot list dead letters; items is then empty. */
+    supported: boolean;
+    items: WorkQueueDeadLetterRow[];
+    nextCursor: string | null;
+}
+
+/** Input for `WorkQueue.ListPartitions`. */
+export interface WorkQueueListPartitionsInput {
+    /** The subscription to read (case-insensitive). */
+    subscriptionName: string;
+    /** Only keys in this condition. Omit for every non-idle key. */
+    condition?: 'Idle' | 'InFlight' | 'Blocked';
+    /** The nextCursor of a previous page. Omit for the first page. */
+    cursor?: string;
+    /** 1–500; default 50. */
+    pageSize?: number;
+}
+
+/** One partition key's derived condition. */
+export interface WorkQueuePartitionStateRow {
+    PartitionKey: string;
+    Condition: 'Idle' | 'InFlight' | 'Blocked';
+    /** The head delivery: in flight, or dead-lettered when Blocked. */
+    HeadDeliveryID: string | null;
+    /** Deliveries waiting behind the head. */
+    WaitingItems: number;
+}
+
+/** Output of `WorkQueue.ListPartitions`. */
+export interface WorkQueueListPartitionsOutput {
+    /** False when the subscription's transport cannot list partitions (AWS); items is then empty. */
+    supported: boolean;
+    items: WorkQueuePartitionStateRow[];
+    nextCursor: string | null;
+}
+
+/** Input for `WorkQueue.ReplayDeadLetter`. */
+export interface WorkQueueReplayDeadLetterInput {
+    subscriptionName: string;
+    /** A DeliveryID from WorkQueue.ListDeadLetters. */
+    deliveryID: string;
+    /** Optional operator note stored with the resolution; at most 1000 characters. */
+    note?: string;
+}
+
+/** Output of `WorkQueue.ReplayDeadLetter`. */
+export interface WorkQueueReplayDeadLetterOutput {
+    /** False when the subscription's transport cannot replay a single dead letter. */
+    supported: boolean;
+    /** False when the delivery does not exist or is not dead-lettered. */
+    replayed: boolean;
+}
+
+/** Input for `WorkQueue.ValidateBindings`. */
+export interface WorkQueueValidateBindingsInput {
+    /** Validate only this transport's bindings against its resources. Omit to validate the whole topology. */
+    transportName?: string;
+}
+
+/** One validation finding. */
+export interface WorkQueueBindingIssueRow {
+    Severity: 'Error' | 'Warning';
+    /** The topic, subscription or resource the finding is about. */
+    Subject: string;
+    Message: string;
+}
+
+/** Output of `WorkQueue.ValidateBindings`. */
+export interface WorkQueueValidateBindingsOutput {
+    issues: WorkQueueBindingIssueRow[];
 }
 
 /** Input for `Workflow.Draft`. */
@@ -663,7 +1353,7 @@ export interface WorkflowDraftOutput {
             tempId: string;
             name: string;
             description: string;
-            kind: 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External';
+            kind: 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External' | 'Decision';
             configuration:
                 | { agentName: string; message?: string; templateParameters?: Record<string, string> }
                 | { actionName: string; inputMapping?: string; outputMapping?: string }
@@ -671,7 +1361,7 @@ export interface WorkflowDraftOutput {
                 | { promptName: string; templateParameters?: Record<string, string> }
                 | { collectionPath: string; itemVariable?: string; maxIterations?: number; executionMode?: 'sequential' | 'parallel' }
                 | { condition: string; itemVariable?: string; maxIterations?: number }
-                | { domain: string; ref?: string };
+                | { domain: string; ref?: string } | { promptName?: string; state?: string; questions: Record<string, { kind: 'Likelihood'; instructions: string; minConfidence?: number } | { kind: 'Choice'; instructions: string; options: Array<{ value: string; description: string }>; minConfidence?: number } | { kind: 'Score'; instructions: string; levels: string[]; minConfidence?: number }> };
             dependsOn: Array<string | { tempId: string; condition?: string; dependencyType?: 'Prerequisite' | 'Corequisite' | 'Optional'; priority?: number; sequence?: number; exclusiveGroup?: string; pathPoints?: string }>;
             policy?: { timeoutSeconds?: number; retryCount?: number; onError?: 'fail' | 'continue' };
             /** Canvas geometry. Presentation only: the dispatcher ignores it, the validator never requires it. */
@@ -702,7 +1392,7 @@ export interface WorkflowSaveInput {
                 tempId: string;
                 name: string;
                 description: string;
-                kind: 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External';
+                kind: 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External' | 'Decision';
                 configuration:
                     | { agentName: string; message?: string; templateParameters?: Record<string, string> }
                     | { actionName: string; inputMapping?: string; outputMapping?: string }
@@ -710,7 +1400,7 @@ export interface WorkflowSaveInput {
                     | { promptName: string; templateParameters?: Record<string, string> }
                     | { collectionPath: string; itemVariable?: string; maxIterations?: number; executionMode?: 'sequential' | 'parallel' }
                     | { condition: string; itemVariable?: string; maxIterations?: number }
-                    | { domain: string; ref?: string };
+                    | { domain: string; ref?: string } | { promptName?: string; state?: string; questions: Record<string, { kind: 'Likelihood'; instructions: string; minConfidence?: number } | { kind: 'Choice'; instructions: string; options: Array<{ value: string; description: string }>; minConfidence?: number } | { kind: 'Score'; instructions: string; levels: string[]; minConfidence?: number }> };
                 dependsOn: Array<string | { tempId: string; condition?: string; dependencyType?: 'Prerequisite' | 'Corequisite' | 'Optional'; priority?: number; sequence?: number; exclusiveGroup?: string; pathPoints?: string }>;
                 policy?: { timeoutSeconds?: number; retryCount?: number; onError?: 'fail' | 'continue' };
                 /** Canvas geometry. Presentation only: the dispatcher ignores it, the validator never requires it. */
@@ -780,6 +1470,22 @@ export class AISkillImportMarkdownOperation extends BaseRemotableOperation<AISki
     public readonly OperationKey = "AISkill.ImportMarkdown";
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "aiskill:manage";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// Authorization.Check — Check Authorization
+// ============================================================
+/**
+ * Check Authorization
+ * Ask whether the calling user can execute one or more named MJ: Authorizations, including ancestor grants. Unknown names fail closed (Allowed=false, Unknown=true). When a row has UseAuditLog, a MJ: Audit Logs record is written. Implemented by AuthorizationCheckOperation in @memberjunction/core-entities.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Authorization.Check'. This generated base provides the typed contract only (client-safe).
+ */
+export class AuthorizationCheckOperation extends BaseRemotableOperation<AuthorizationCheckInput, AuthorizationCheckOutput> {
+    public readonly OperationKey = "Authorization.Check";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "authorization:check";
     public readonly RequiresSystemUser = false;
 }
 
@@ -896,6 +1602,70 @@ export class PredictiveStudioTrainModelOperation extends BaseRemotableOperation<
 }
 
 // ============================================================
+// RecordClone.Describe — Describe Record Clone
+// ============================================================
+/**
+ * Describe Record Clone
+ * Inspect an entity or specific record for clone capability, policies, relationship policies, and authorization. Implemented by RecordCloneDescribeServerOperation in @memberjunction/record-cloning.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'RecordClone.Describe'. This generated base provides the typed contract only (client-safe).
+ */
+export class RecordCloneDescribeOperation extends BaseRemotableOperation<RecordCloneDescribeInput, RecordCloneDescribeOutput> {
+    public readonly OperationKey = "RecordClone.Describe";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "recordclone:read";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// RecordClone.Execute — Execute Record Clone
+// ============================================================
+/**
+ * Execute Record Clone
+ * Execute an entity record clone plan within an entity transaction, staging entities and writing clone logs and links. Implemented by RecordCloneExecuteServerOperation in @memberjunction/record-cloning.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'RecordClone.Execute'. This generated base provides the typed contract only (client-safe).
+ */
+export class RecordCloneExecuteOperation extends BaseRemotableOperation<RecordCloneExecuteInput, RecordCloneExecuteOutput> {
+    public readonly OperationKey = "RecordClone.Execute";
+    public readonly ExecutionMode = 'LongRunning' as const;
+    public readonly RequiredScope = "recordclone:execute";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// RecordClone.GetLineage — Get Record Clone Lineage
+// ============================================================
+/**
+ * Get Record Clone Lineage
+ * Traverse record links and clone logs to return clone ancestors and descendants for a record. Implemented by RecordCloneGetLineageServerOperation in @memberjunction/record-cloning.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'RecordClone.GetLineage'. This generated base provides the typed contract only (client-safe).
+ */
+export class RecordCloneGetLineageOperation extends BaseRemotableOperation<RecordCloneGetLineageInput, RecordCloneGetLineageOutput> {
+    public readonly OperationKey = "RecordClone.GetLineage";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "recordclone:read";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// RecordClone.Plan — Plan Record Clone
+// ============================================================
+/**
+ * Plan Record Clone
+ * Plan a deterministic record clone graph traversal with pre-minted target keys and field transformations. Implemented by RecordClonePlanServerOperation in @memberjunction/record-cloning.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'RecordClone.Plan'. This generated base provides the typed contract only (client-safe).
+ */
+export class RecordClonePlanOperation extends BaseRemotableOperation<RecordClonePlanInput, RecordClonePlanOutput> {
+    public readonly OperationKey = "RecordClone.Plan";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "recordclone:read";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
 // RecordComparison.Compare — Compare Records
 // ============================================================
 /**
@@ -1007,6 +1777,22 @@ export class TaskGraphCancelOperation extends BaseRemotableOperation<TaskGraphCo
 }
 
 // ============================================================
+// TaskGraph.ForceCompleteTask — Force Complete Workflow Step
+// ============================================================
+/**
+ * Force Complete Workflow Step
+ * Mark a wedged or externally-resolved step Complete with an operator-supplied output; downstream paths evaluate against it exactly as they would a runner's. Refused for a step running under a live claim (cancel it or wait for the claim to lapse) and for human steps (those complete through CompleteTask with the assignee check). Implemented by TaskGraphForceCompleteTaskServerOperation in @memberjunction/task-graph.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'TaskGraph.ForceCompleteTask'. This generated base provides the typed contract only (client-safe).
+ */
+export class TaskGraphForceCompleteTaskOperation extends BaseRemotableOperation<TaskGraphTaskInterventionInput, TaskGraphDebugControlOutput> {
+    public readonly OperationKey = "TaskGraph.ForceCompleteTask";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "taskgraph:execute";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
 // TaskGraph.GetStatus — Get Task Graph Status
 // ============================================================
 /**
@@ -1023,6 +1809,54 @@ export class TaskGraphGetStatusOperation extends BaseRemotableOperation<TaskGrap
 }
 
 // ============================================================
+// TaskGraph.OverrideEdge — Override Workflow Path
+// ============================================================
+/**
+ * Override Workflow Path
+ * Answer one path's condition by operator decision — the escape hatch for a held graph (a condition that cannot be evaluated) or a broken guard. 'false' reads as branch-not-taken and cascades skips; 'true' opens the gate; omitting the verdict removes the override. Durable: survives restarts and is honored by every dispatcher instance. Implemented by TaskGraphOverrideEdgeServerOperation in @memberjunction/task-graph.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'TaskGraph.OverrideEdge'. This generated base provides the typed contract only (client-safe).
+ */
+export class TaskGraphOverrideEdgeOperation extends BaseRemotableOperation<TaskGraphOverrideEdgeInput, TaskGraphDebugControlOutput> {
+    public readonly OperationKey = "TaskGraph.OverrideEdge";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "taskgraph:execute";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// TaskGraph.Pause — Pause Workflow Run
+// ============================================================
+/**
+ * Pause Workflow Run
+ * Pause a running workflow: nothing new is claimed until it is resumed, while in-flight steps finish naturally and their completions land. Durable, declarative state the dispatcher's claim filter consults on its next pass — works across instances and restarts. Implemented by TaskGraphPauseServerOperation in @memberjunction/task-graph.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'TaskGraph.Pause'. This generated base provides the typed contract only (client-safe).
+ */
+export class TaskGraphPauseOperation extends BaseRemotableOperation<TaskGraphPauseInput, TaskGraphDebugControlOutput> {
+    public readonly OperationKey = "TaskGraph.Pause";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "taskgraph:execute";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// TaskGraph.Resume — Resume Workflow Run
+// ============================================================
+/**
+ * Resume Workflow Run
+ * Resume a paused workflow run; claiming continues normally. Breakpoints and edge overrides survive — only the pause clears. Implemented by TaskGraphResumeServerOperation in @memberjunction/task-graph.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'TaskGraph.Resume'. This generated base provides the typed contract only (client-safe).
+ */
+export class TaskGraphResumeOperation extends BaseRemotableOperation<TaskGraphPauseInput, TaskGraphDebugControlOutput> {
+    public readonly OperationKey = "TaskGraph.Resume";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "taskgraph:execute";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
 // TaskGraph.RetryTask — Retry Task
 // ============================================================
 /**
@@ -1033,6 +1867,54 @@ export class TaskGraphGetStatusOperation extends BaseRemotableOperation<TaskGrap
  */
 export class TaskGraphRetryTaskOperation extends BaseRemotableOperation<TaskGraphRetryInput, TaskGraphControlOutput> {
     public readonly OperationKey = "TaskGraph.RetryTask";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "taskgraph:execute";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// TaskGraph.SetBreakpoints — Set Workflow Breakpoints
+// ============================================================
+/**
+ * Set Workflow Breakpoints
+ * Replace a workflow run's breakpoint set. When an eligible step carries a breakpoint the dispatcher pauses the whole graph BEFORE claiming it and announces BreakpointHit — a breakpoint is an authored hold, implemented by the same claim-filter machinery that already holds unevaluable conditions. Empty array clears all breakpoints. Implemented by TaskGraphSetBreakpointsServerOperation in @memberjunction/task-graph.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'TaskGraph.SetBreakpoints'. This generated base provides the typed contract only (client-safe).
+ */
+export class TaskGraphSetBreakpointsOperation extends BaseRemotableOperation<TaskGraphSetBreakpointsInput, TaskGraphDebugControlOutput> {
+    public readonly OperationKey = "TaskGraph.SetBreakpoints";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "taskgraph:execute";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// TaskGraph.SkipTask — Skip Workflow Step
+// ============================================================
+/**
+ * Skip Workflow Step
+ * Declare a Pending step not-taken. Dependents proceed (Skipped satisfies a prerequisite) and any open human request for the step is withdrawn. Only a step that has not started can be skipped. Implemented by TaskGraphSkipTaskServerOperation in @memberjunction/task-graph.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'TaskGraph.SkipTask'. This generated base provides the typed contract only (client-safe).
+ */
+export class TaskGraphSkipTaskOperation extends BaseRemotableOperation<TaskGraphTaskInterventionInput, TaskGraphDebugControlOutput> {
+    public readonly OperationKey = "TaskGraph.SkipTask";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "taskgraph:execute";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// TaskGraph.Step — Step Workflow Run
+// ============================================================
+/**
+ * Step Workflow Run
+ * Arm a one-shot claim allowance on a paused workflow run: 'one' releases the next eligible step, 'wave' releases the current frontier, a task ID releases exactly that step. Consumed atomically so two dispatcher instances stepping the same graph release work exactly once. Implemented by TaskGraphStepServerOperation in @memberjunction/task-graph.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'TaskGraph.Step'. This generated base provides the typed contract only (client-safe).
+ */
+export class TaskGraphStepOperation extends BaseRemotableOperation<TaskGraphStepInput, TaskGraphDebugControlOutput> {
+    public readonly OperationKey = "TaskGraph.Step";
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "taskgraph:execute";
     public readonly RequiresSystemUser = false;
@@ -1055,6 +1937,22 @@ export class TaskGraphSubmitOperation extends BaseRemotableOperation<TaskGraphSu
 }
 
 // ============================================================
+// TaskGraph.UpdateTaskInput — Update Workflow Step Input
+// ============================================================
+/**
+ * Update Workflow Step Input
+ * Replace a Pending step's input — the edit-the-brief-before-stepping move at a breakpoint. Applies to this run only; the step must not have started. Implemented by TaskGraphUpdateTaskInputServerOperation in @memberjunction/task-graph.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'TaskGraph.UpdateTaskInput'. This generated base provides the typed contract only (client-safe).
+ */
+export class TaskGraphUpdateTaskInputOperation extends BaseRemotableOperation<TaskGraphTaskInterventionInput, TaskGraphDebugControlOutput> {
+    public readonly OperationKey = "TaskGraph.UpdateTaskInput";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "taskgraph:execute";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
 // Template.Run — Run Template
 // ============================================================
 /**
@@ -1067,6 +1965,134 @@ export class TemplateRunOperation extends BaseRemotableOperation<TemplateRunInpu
     public readonly OperationKey = "Template.Run";
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "template:execute";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// WebSearch.Query — Web Search
+// ============================================================
+/**
+ * Web Search
+ * Run a web search through the configured external provider set. The administrator's WebSearchProvider records decide which vendor serves the request and in what failover order; a caller may pin one explicitly, in which case the call fails rather than substituting another. Implemented by WebSearchQueryServerOperation in @memberjunction/web-search-engine.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'WebSearch.Query'. This generated base provides the typed contract only (client-safe).
+ */
+export class WebSearchQueryOperation extends BaseRemotableOperation<WebSearchQueryInput, WebSearchQueryOutput> {
+    public readonly OperationKey = "WebSearch.Query";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "websearch:execute";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// WorkQueue.DiscardDelivery — Discard Work Queue Delivery
+// ============================================================
+/**
+ * Discard Work Queue Delivery
+ * Resolves one delivery without processing it, with a required reason. A pending or dead-lettered delivery becomes Discarded immediately; discarding a dead-lettered Ordered head unblocks its key. An in-flight delivery is cancelled instead (cancelRequested = true): the running handler is told to stop within one heartbeat interval (30 s at most) and the delivery becomes Discarded as soon as the handler acknowledges, or at lease expiry if its worker is gone. Implemented by WorkQueueDiscardDeliveryServerOperation in @memberjunction/work-queue-engine.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'WorkQueue.DiscardDelivery'. This generated base provides the typed contract only (client-safe).
+ */
+export class WorkQueueDiscardDeliveryOperation extends BaseRemotableOperation<WorkQueueDiscardDeliveryInput, WorkQueueDiscardDeliveryOutput> {
+    public readonly OperationKey = "WorkQueue.DiscardDelivery";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "workqueue:operate";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// WorkQueue.GetBacklog — Get Work Queue Backlog
+// ============================================================
+/**
+ * Get Work Queue Backlog
+ * Returns the autoscaler metric for one subscription: claimable pending deliveries (partition rules applied) plus in-flight deliveries. Both counts matter — schedulers such as KEDA subtract running executions from the metric, so a pending-only count starves the queue. Each count is capped at 1000 (capped = true). Implemented by WorkQueueGetBacklogServerOperation in @memberjunction/work-queue-engine.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'WorkQueue.GetBacklog'. This generated base provides the typed contract only (client-safe).
+ */
+export class WorkQueueGetBacklogOperation extends BaseRemotableOperation<WorkQueueGetBacklogInput, WorkQueueGetBacklogOutput> {
+    public readonly OperationKey = "WorkQueue.GetBacklog";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "workqueue:read";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// WorkQueue.GetSubscriptionStats — Get Work Queue Subscription Stats
+// ============================================================
+/**
+ * Get Work Queue Subscription Stats
+ * Returns pending, in-flight and dead-lettered counts (plus blocked keys, oldest pending age and recent completions where the transport supports them) for one work-queue subscription or all of them. Implemented by WorkQueueGetSubscriptionStatsServerOperation in @memberjunction/work-queue-engine.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'WorkQueue.GetSubscriptionStats'. This generated base provides the typed contract only (client-safe).
+ */
+export class WorkQueueGetSubscriptionStatsOperation extends BaseRemotableOperation<WorkQueueGetSubscriptionStatsInput, WorkQueueGetSubscriptionStatsOutput> {
+    public readonly OperationKey = "WorkQueue.GetSubscriptionStats";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "workqueue:read";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// WorkQueue.ListDeadLetters — List Work Queue Dead Letters
+// ============================================================
+/**
+ * List Work Queue Dead Letters
+ * Pages through one subscription's dead-lettered deliveries with their message, attempts, reason, last error and whether each blocks its partition key. Implemented by WorkQueueListDeadLettersServerOperation in @memberjunction/work-queue-engine.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'WorkQueue.ListDeadLetters'. This generated base provides the typed contract only (client-safe).
+ */
+export class WorkQueueListDeadLettersOperation extends BaseRemotableOperation<WorkQueueListDeadLettersInput, WorkQueueListDeadLettersOutput> {
+    public readonly OperationKey = "WorkQueue.ListDeadLetters";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "workqueue:read";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// WorkQueue.ListPartitions — List Work Queue Partitions
+// ============================================================
+/**
+ * List Work Queue Partitions
+ * Pages through one subscription's partition keys that are in flight or blocked by a dead-lettered Ordered head, optionally filtered to one condition. Implemented by WorkQueueListPartitionsServerOperation in @memberjunction/work-queue-engine.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'WorkQueue.ListPartitions'. This generated base provides the typed contract only (client-safe).
+ */
+export class WorkQueueListPartitionsOperation extends BaseRemotableOperation<WorkQueueListPartitionsInput, WorkQueueListPartitionsOutput> {
+    public readonly OperationKey = "WorkQueue.ListPartitions";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "workqueue:read";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// WorkQueue.ReplayDeadLetter — Replay Work Queue Dead Letter
+// ============================================================
+/**
+ * Replay Work Queue Dead Letter
+ * Returns one dead-lettered delivery to Pending with its attempts reset; an Ordered head keeps its position, so its key resumes once the replay completes. Implemented by WorkQueueReplayDeadLetterServerOperation in @memberjunction/work-queue-engine.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'WorkQueue.ReplayDeadLetter'. This generated base provides the typed contract only (client-safe).
+ */
+export class WorkQueueReplayDeadLetterOperation extends BaseRemotableOperation<WorkQueueReplayDeadLetterInput, WorkQueueReplayDeadLetterOutput> {
+    public readonly OperationKey = "WorkQueue.ReplayDeadLetter";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "workqueue:operate";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// WorkQueue.ValidateBindings — Validate Work Queue Bindings
+// ============================================================
+/**
+ * Validate Work Queue Bindings
+ * Validates work-queue topology and cloud resource bindings: with no transport name, the whole topology; with one, every topic and subscription bound to that transport against the resources it names. Implemented by WorkQueueValidateBindingsServerOperation in @memberjunction/work-queue-engine.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'WorkQueue.ValidateBindings'. This generated base provides the typed contract only (client-safe).
+ */
+export class WorkQueueValidateBindingsOperation extends BaseRemotableOperation<WorkQueueValidateBindingsInput, WorkQueueValidateBindingsOutput> {
+    public readonly OperationKey = "WorkQueue.ValidateBindings";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "workqueue:read";
     public readonly RequiresSystemUser = false;
 }
 

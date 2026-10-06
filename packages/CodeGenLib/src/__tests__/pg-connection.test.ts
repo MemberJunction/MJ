@@ -39,13 +39,18 @@ const initializeMock = vi.fn(async (_config: unknown) => {
 const closeMock = vi.fn(async () => { /* no-op */ });
 
 vi.mock('@memberjunction/postgresql-dataprovider', () => ({
-    PGConnectionManager: vi.fn(() => ({
-        Initialize: initializeMock,
-        Close: closeMock,
-        get Pool() {
-            return fakePool;
-        },
-    })),
+    // A FUNCTION EXPRESSION, not an arrow. `PGConnection` calls `new PGConnectionManager()`, and an
+    // arrow function has no [[Construct]] slot — under Vitest 4 that surfaces as
+    // "TypeError: () => ({…}) is not a constructor" on every test in this file.
+    PGConnectionManager: vi.fn(function () {
+        return {
+            Initialize: initializeMock,
+            Close: closeMock,
+            get Pool() {
+                return fakePool;
+            },
+        };
+    }),
 }));
 
 vi.mock('@memberjunction/global', () => ({
@@ -75,7 +80,7 @@ vi.mock('cosmiconfig', () => ({
 // Import after mocks. We then mutate the shared `configInfo` to control
 // what `buildPgConfig()` sees in each test.
 import { configInfo } from '../Config/config';
-import { PGConnection, getPgConfig, ClosePGConnection } from '../Config/pg-connection';
+import { PGConnection, GetPgConfig, ClosePGConnection } from '../Config/pg-connection';
 
 describe('PGConnection — lazy + cached pool', () => {
     beforeEach(async () => {
@@ -101,11 +106,11 @@ describe('PGConnection — lazy + cached pool', () => {
     });
 
     it('builds the pool lazily on first call and caches it for subsequent calls', async () => {
-        expect(getPgConfig()).toBeUndefined();
+        expect(GetPgConfig()).toBeUndefined();
 
         const pool1 = await PGConnection();
         expect(initializeMock).toHaveBeenCalledTimes(1);
-        expect(getPgConfig()).toBeDefined();
+        expect(GetPgConfig()).toBeDefined();
 
         const pool2 = await PGConnection();
         expect(initializeMock).toHaveBeenCalledTimes(1);
@@ -202,11 +207,11 @@ describe('PGConnection — lazy + cached pool', () => {
 
     it('ClosePGConnection() resets the cache so the next PGConnection() rebuilds', async () => {
         await PGConnection();
-        expect(getPgConfig()).toBeDefined();
+        expect(GetPgConfig()).toBeDefined();
         expect(initializeMock).toHaveBeenCalledTimes(1);
 
         await ClosePGConnection();
-        expect(getPgConfig()).toBeUndefined();
+        expect(GetPgConfig()).toBeUndefined();
         expect(closeMock).toHaveBeenCalledTimes(1);
 
         await PGConnection();

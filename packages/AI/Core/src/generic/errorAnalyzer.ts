@@ -1,4 +1,5 @@
 import { AIErrorInfo, AIErrorType, ErrorSeverity } from './errorTypes.js';
+import { ContainsInOrderOnOneLine, FirstBraceSpanOnOneLine } from './linearTextScan.js';
 
 /**
  * Utility class for analyzing errors from various AI providers and mapping them to standardized error information.
@@ -37,7 +38,16 @@ export class ErrorAnalyzer {
      * console.log(`Can retry: ${errorInfo.severity !== 'Fatal'}`);
      * ```
      */
-    static analyzeError(error: any, providerName?: string): AIErrorInfo {
+    static AnalyzeError(error: any, providerName?: string): AIErrorInfo {
+        // A failed result that already carries its driver's classification keeps it. A streaming call
+        // rejects with its failed ChatResult (BaseLLM), not an Error; analyzed afresh, that object has
+        // no message and no status, so an invalid key classified 'Authentication'/'Fatal' by the driver
+        // came out 'Unknown'/'Transient' — failover kept going and agents retried a fatal error.
+        const carried = this.carriedErrorInfo(error);
+        if (carried) {
+            return carried;
+        }
+
         // Extract HTTP status code if available
         const httpStatusCode = this.extractHttpStatusCode(error);
         
@@ -89,7 +99,22 @@ export class ErrorAnalyzer {
             }
         };
     }
+
+    /** @deprecated Use {@link AnalyzeError}. */
+    static analyzeError(error: any, providerName?: string): AIErrorInfo {
+        return this.AnalyzeError(error, providerName);
+    }
     
+    /**
+     * The classification a failed result already carries on `errorInfo`, if it has a complete one.
+     */
+    private static carriedErrorInfo(error: { errorInfo?: Partial<AIErrorInfo> } | null | undefined): AIErrorInfo | undefined {
+        const info = error?.errorInfo;
+        return info && typeof info.errorType === 'string' && typeof info.severity === 'string' && typeof info.canFailover === 'boolean'
+            ? info as AIErrorInfo
+            : undefined;
+    }
+
     /**
      * Extracts HTTP status code from various error object structures.
      * Different provider SDKs store status codes in different locations.
@@ -145,6 +170,7 @@ export class ErrorAnalyzer {
             errorString.includes('payment') ||      // Payment required errors
             errorString.includes('insufficient funds') ||
             errorString.includes('quota exceeded') ||
+            errorString.includes('usage limits') || // Anthropic spend cap — sent as a 400 invalid_request_error, which the status fallback would misread as a malformed request
             errorString.includes('balance') ||      // Account balance issues
             errorString.includes('no funds')) {
             return 'NoCredit';
@@ -162,7 +188,16 @@ export class ErrorAnalyzer {
             errorString.includes('authentication failed') ||
             errorString.includes('invalid api key') ||
             errorString.includes('invalid key') ||
-            errorString.includes('api key is invalid')) {
+            errorString.includes('api key is invalid') ||
+            // Google: HTTP 400 "API key not valid. Please pass a valid API key." with reason
+            // API_KEY_INVALID. None of the phrases above match it, so it fell through to the
+            // permissive VendorValidationError and failed over to another vendor instead of failing.
+            errorString.includes('api key not valid') ||
+            errorString.includes('api_key_invalid') ||
+            // Google's expired key: HTTP 400 "API key expired. Please renew the API key." with reason
+            // API_KEY_EXPIRED. It read as InvalidRequest, which stops failover with the wrong reason.
+            errorString.includes('api key expired') ||
+            errorString.includes('api_key_expired')) {
             return 'Authentication';
         }
 
@@ -198,9 +233,11 @@ export class ErrorAnalyzer {
         if (errorString.includes('required') ||
             errorString.includes('validation') ||
             errorString.includes('schema') ||
-            /\w+\s+is\s+required/.test(errorString) ||        // Matches "X is required"
-            /missing.*(?:field|property)/.test(errorString) || // Matches "missing field/property X"
-            /(?:field|property).*missing/.test(errorString) || // Matches "field/property X missing"
+            // "X is required" is already covered by includes('required') above.
+            // Linear scans rather than /missing.*(?:field|property)/ and its reverse, which are polynomial
+            // on provider-controlled text (CodeQL js/polynomial-redos).
+            ContainsInOrderOnOneLine(errorString, ['missing'], ['field', 'property']) || // "missing field/property X"
+            ContainsInOrderOnOneLine(errorString, ['field', 'property'], ['missing']) || // "field/property X missing"
             /must\s+(?:be|have|contain)/.test(errorString)) {  // Matches "X must be/have/contain Y"
             return 'VendorValidationError';
         }
@@ -391,10 +428,11 @@ export class ErrorAnalyzer {
         const errorMessage = error?.message || error?.errorMessage || '';
         if (errorMessage.includes('{') && errorMessage.includes('}')) {
             try {
-                // Extract JSON from error message
-                const jsonMatch = errorMessage.match(/\{.*\}/);
-                if (jsonMatch) {
-                    const parsed = JSON.parse(jsonMatch[0]);
+                // Extract JSON from error message: a linear scan rather than /\{.*\}/, which is polynomial
+                // on provider-controlled text (CodeQL js/polynomial-redos).
+                const jsonSpan = FirstBraceSpanOnOneLine(errorMessage);
+                if (jsonSpan) {
+                    const parsed = JSON.parse(jsonSpan);
                     return parsed?.error?.code || parsed?.code || undefined;
                 }
             } catch (parseError) {

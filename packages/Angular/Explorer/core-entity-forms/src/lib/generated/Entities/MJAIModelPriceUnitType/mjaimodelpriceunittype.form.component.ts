@@ -17,6 +17,7 @@ export class MJAIModelPriceUnitTypeFormComponent extends BaseFormComponent {
         await super.ngOnInit();
         this.initSections([
             { sectionKey: 'unitDefinition', sectionName: 'Unit Definition', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJAIModelCosts', sectionName: 'AI Model Costs', isExpanded: false }
         ]);

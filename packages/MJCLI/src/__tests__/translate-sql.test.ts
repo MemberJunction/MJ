@@ -137,49 +137,49 @@ describe('RuleBasedTranslate', () => {
     describe('SQL Server → PostgreSQL', () => {
         it('should convert bracket identifiers to double-quote', () => {
             const result = RuleBasedTranslate("[Name] = 'Test'", 'sqlserver', 'postgresql');
-            expect(result.translatedSQL).toBe('"Name" = \'Test\'');
-            expect(result.appliedRules).toContain('bracket-to-doublequote');
-            expect(result.success).toBe(true);
+            expect(result.TranslatedSQL).toBe('"Name" = \'Test\'');
+            expect(result.AppliedRules).toContain('bracket-to-doublequote');
+            expect(result.Success).toBe(true);
         });
 
         it('should convert = 1 to = true', () => {
             const result = RuleBasedTranslate("[IsActive] = 1", 'sqlserver', 'postgresql');
-            expect(result.translatedSQL).toBe('"IsActive" = true');
-            expect(result.appliedRules).toContain('bit-1-to-true');
+            expect(result.TranslatedSQL).toBe('"IsActive" = true');
+            expect(result.AppliedRules).toContain('bit-1-to-true');
         });
 
         it('should convert = 0 to = false', () => {
             const result = RuleBasedTranslate("[IsAdmin] = 0", 'sqlserver', 'postgresql');
-            expect(result.translatedSQL).toBe('"IsAdmin" = false');
-            expect(result.appliedRules).toContain('bit-0-to-false');
+            expect(result.TranslatedSQL).toBe('"IsAdmin" = false');
+            expect(result.AppliedRules).toContain('bit-0-to-false');
         });
 
         it('should apply multiple rules', () => {
             const result = RuleBasedTranslate("[IsActive] = 1 AND [Deleted] = 0", 'sqlserver', 'postgresql');
-            expect(result.translatedSQL).toBe('"IsActive" = true AND "Deleted" = false');
-            expect(result.appliedRules).toContain('bracket-to-doublequote');
-            expect(result.appliedRules).toContain('bit-1-to-true');
-            expect(result.appliedRules).toContain('bit-0-to-false');
+            expect(result.TranslatedSQL).toBe('"IsActive" = true AND "Deleted" = false');
+            expect(result.AppliedRules).toContain('bracket-to-doublequote');
+            expect(result.AppliedRules).toContain('bit-1-to-true');
+            expect(result.AppliedRules).toContain('bit-0-to-false');
         });
     });
 
     describe('PostgreSQL → SQL Server', () => {
         it('should convert double-quote identifiers to brackets', () => {
             const result = RuleBasedTranslate('"Name" = \'Test\'', 'postgresql', 'sqlserver');
-            expect(result.translatedSQL).toBe("[Name] = 'Test'");
-            expect(result.appliedRules).toContain('doublequote-to-bracket');
+            expect(result.TranslatedSQL).toBe("[Name] = 'Test'");
+            expect(result.AppliedRules).toContain('doublequote-to-bracket');
         });
 
         it('should convert = true to = 1', () => {
             const result = RuleBasedTranslate('"IsActive" = true', 'postgresql', 'sqlserver');
-            expect(result.translatedSQL).toBe('[IsActive] = 1');
-            expect(result.appliedRules).toContain('true-to-bit-1');
+            expect(result.TranslatedSQL).toBe('[IsActive] = 1');
+            expect(result.AppliedRules).toContain('true-to-bit-1');
         });
 
         it('should convert = false to = 0', () => {
             const result = RuleBasedTranslate('"IsAdmin" = false', 'postgresql', 'sqlserver');
-            expect(result.translatedSQL).toBe('[IsAdmin] = 0');
-            expect(result.appliedRules).toContain('false-to-bit-0');
+            expect(result.TranslatedSQL).toBe('[IsAdmin] = 0');
+            expect(result.AppliedRules).toContain('false-to-bit-0');
         });
     });
 
@@ -187,9 +187,9 @@ describe('RuleBasedTranslate', () => {
         it('should return unchanged SQL when from === to', () => {
             const sql = "[Name] = 'Test'";
             const result = RuleBasedTranslate(sql, 'sqlserver', 'sqlserver');
-            expect(result.translatedSQL).toBe(sql);
-            expect(result.appliedRules).toHaveLength(0);
-            expect(result.success).toBe(true);
+            expect(result.TranslatedSQL).toBe(sql);
+            expect(result.AppliedRules).toHaveLength(0);
+            expect(result.Success).toBe(true);
         });
     });
 });
@@ -205,21 +205,21 @@ describe('GROUND_TRUTH_EXAMPLES', () => {
 
     it('should have all examples with sqlserver source', () => {
         for (const ex of GROUND_TRUTH_EXAMPLES) {
-            expect(ex.source.platform).toBe('sqlserver');
-            expect(ex.target.platform).toBe('postgresql');
+            expect(ex.Source.platform).toBe('sqlserver');
+            expect(ex.Target.platform).toBe('postgresql');
         }
     });
 
     it('should have non-empty SQL in all examples', () => {
         for (const ex of GROUND_TRUTH_EXAMPLES) {
-            expect(ex.source.sql.length).toBeGreaterThan(0);
-            expect(ex.target.sql.length).toBeGreaterThan(0);
+            expect(ex.Source.sql.length).toBeGreaterThan(0);
+            expect(ex.Target.sql.length).toBeGreaterThan(0);
         }
     });
 
     it('should have a category for each example', () => {
         for (const ex of GROUND_TRUTH_EXAMPLES) {
-            expect(ex.category.length).toBeGreaterThan(0);
+            expect(ex.Category.length).toBeGreaterThan(0);
         }
     });
 });
@@ -261,30 +261,30 @@ describe('BuildGroundTruthPromptSection', () => {
 describe('GenerateTranslationReport', () => {
     const sampleItems: TranslationReportItem[] = [
         {
-            source: 'Query: Simple',
-            originalSQL: 'SELECT * FROM Users',
-            classification: 'standard',
-            translatedSQL: null,
-            method: 'skipped',
-            markers: [],
+            Source: 'Query: Simple',
+            OriginalSQL: 'SELECT * FROM Users',
+            Classification: 'standard',
+            TranslatedSQL: null,
+            Method: 'skipped',
+            Markers: [],
         },
         {
-            source: 'Query: Filtered',
-            originalSQL: "[IsActive] = 1",
-            classification: 'rule-based',
-            translatedSQL: '"IsActive" = true',
-            method: 'rule-based',
-            markers: ['bracket-identifiers', 'boolean-literal'],
-            note: 'Rules: bracket-to-doublequote, bit-1-to-true',
+            Source: 'Query: Filtered',
+            OriginalSQL: "[IsActive] = 1",
+            Classification: 'rule-based',
+            TranslatedSQL: '"IsActive" = true',
+            Method: 'rule-based',
+            Markers: ['bracket-identifiers', 'boolean-literal'],
+            Note: 'Rules: bracket-to-doublequote, bit-1-to-true',
         },
         {
-            source: 'Query: Complex',
-            originalSQL: "SELECT TOP 10 [Name] FROM [Users]",
-            classification: 'llm-needed',
-            translatedSQL: null,
-            method: 'flagged',
-            markers: ['bracket-identifiers', 'TOP-N'],
-            note: 'Requires LLM translation',
+            Source: 'Query: Complex',
+            OriginalSQL: "SELECT TOP 10 [Name] FROM [Users]",
+            Classification: 'llm-needed',
+            TranslatedSQL: null,
+            Method: 'flagged',
+            Markers: ['bracket-identifiers', 'TOP-N'],
+            Note: 'Requires LLM translation',
         },
     ];
 

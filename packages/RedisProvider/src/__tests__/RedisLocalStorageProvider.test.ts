@@ -104,6 +104,15 @@ function createMockRedisInstance() {
             };
             return pipe;
         }),
+        // A real counter, not a stub: the provider INCRs the shared epoch before publishing, and
+        // tests assert on the value the event carries.
+        incr: vi.fn((key: string) => {
+            // Number(), not a cast: the store holds strings, so `'1' + 1` would concatenate and the
+            // mock would report 11, 111, … while the provider ignored it as a non-number.
+            const next = Number(store.get(key) ?? '0') + 1;
+            store.set(key, String(next));
+            return Promise.resolve(next);
+        }),
         publish: vi.fn().mockResolvedValue(1),
         subscribe: vi.fn().mockResolvedValue('OK'),
         unsubscribe: vi.fn().mockResolvedValue('OK'),
@@ -151,6 +160,16 @@ vi.mock('ioredis', () => {
 
 import { RedisLocalStorageProvider } from '../RedisLocalStorageProvider.js';
 import { LogError } from '@memberjunction/core';
+
+/**
+ * Lets the provider's fire-and-forget publish chain settle. `publishChange` INCRs before it
+ * publishes, so the publish lands a tick after the mutation's own promise resolves.
+ */
+async function flushPublishChain(): Promise<void> {
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+}
 
 describe('RedisLocalStorageProvider', () => {
     let provider: RedisLocalStorageProvider;
@@ -452,6 +471,7 @@ describe('RedisLocalStorageProvider', () => {
 
         it('should publish a "set" event when SetItem is called', async () => {
             await pubsubProvider.SetItem('myKey', 'myValue', 'testCat');
+            await flushPublishChain();
 
             const client = pubsubProvider.Client;
             expect(client.publish).toHaveBeenCalled();
@@ -474,6 +494,7 @@ describe('RedisLocalStorageProvider', () => {
             (pubsubProvider.Client.publish as ReturnType<typeof vi.fn>).mockClear();
 
             await pubsubProvider.Remove('myKey', 'testCat');
+            await flushPublishChain();
 
             const client = pubsubProvider.Client;
             expect(client.publish).toHaveBeenCalled();
@@ -697,6 +718,227 @@ describe('RedisLocalStorageProvider', () => {
                 expect.stringContaining('failed to parse message')
             );
             await pubsubProvider.Disconnect();
+        });
+    });
+
+    // ────────────────────────────────────────────────────────────────────────
+    // Generic named-channel pub/sub — the transport for cross-instance push-status
+    // fan-out (MJ #4222). Distinct from the cache channel above: the payload is opaque
+    // here, so this layer does no echo suppression and the publisher supplies its own.
+    // ────────────────────────────────────────────────────────────────────────
+    describe('Pub/Sub - named channels', () => {
+        it('publishes on a channel namespaced by the key prefix', async () => {
+            const p = new RedisLocalStorageProvider({
+                enablePubSub: true,
+                enableLogging: false,
+                keyPrefix: 'app1',
+            });
+
+            p.PublishMessage('push-status-updates', 'hello');
+
+            expect(p.Client.publish).toHaveBeenCalledWith('app1:push-status-updates', 'hello');
+            await p.Disconnect();
+        });
+
+        it('is a no-op when pub/sub is disabled', async () => {
+            const p = new RedisLocalStorageProvider({
+                enablePubSub: false,
+                enableLogging: false,
+            });
+
+            p.PublishMessage('push-status-updates', 'hello');
+
+            expect(p.Client.publish).not.toHaveBeenCalled();
+            await p.Disconnect();
+        });
+
+        it('delivers a message to the handler registered for its channel', async () => {
+            const p = new RedisLocalStorageProvider({
+                enablePubSub: true,
+                enableLogging: false,
+                keyPrefix: 'mj',
+            });
+            const handler = vi.fn();
+            await p.SubscribeToChannel('push-status-updates', handler);
+
+            (p as unknown as { dispatchChannelMessage: (c: string, m: string) => void })
+                .dispatchChannelMessage('mj:push-status-updates', 'payload');
+
+            expect(handler).toHaveBeenCalledWith('payload');
+            await p.Disconnect();
+        });
+
+        it('does not deliver a message meant for a different channel', async () => {
+            const p = new RedisLocalStorageProvider({
+                enablePubSub: true,
+                enableLogging: false,
+                keyPrefix: 'mj',
+            });
+            const handler = vi.fn();
+            await p.SubscribeToChannel('push-status-updates', handler);
+
+            (p as unknown as { dispatchChannelMessage: (c: string, m: string) => void })
+                .dispatchChannelMessage('mj:something-else', 'payload');
+
+            expect(handler).not.toHaveBeenCalled();
+            await p.Disconnect();
+        });
+
+        it('stops delivering after the returned unsubscribe is called', async () => {
+            const p = new RedisLocalStorageProvider({
+                enablePubSub: true,
+                enableLogging: false,
+                keyPrefix: 'mj',
+            });
+            const handler = vi.fn();
+            const unsubscribe = await p.SubscribeToChannel('push-status-updates', handler);
+
+            unsubscribe();
+            (p as unknown as { dispatchChannelMessage: (c: string, m: string) => void })
+                .dispatchChannelMessage('mj:push-status-updates', 'payload');
+
+            expect(handler).not.toHaveBeenCalled();
+            await p.Disconnect();
+        });
+
+        it('keeps delivering to the other handlers when one throws', async () => {
+            const p = new RedisLocalStorageProvider({
+                enablePubSub: true,
+                enableLogging: false,
+                keyPrefix: 'mj',
+            });
+            const good = vi.fn();
+            await p.SubscribeToChannel('push-status-updates', () => {
+                throw new Error('handler blew up');
+            });
+            await p.SubscribeToChannel('push-status-updates', good);
+
+            expect(() =>
+                (p as unknown as { dispatchChannelMessage: (c: string, m: string) => void })
+                    .dispatchChannelMessage('mj:push-status-updates', 'payload')
+            ).not.toThrow();
+            expect(good).toHaveBeenCalledWith('payload');
+            await p.Disconnect();
+        });
+
+        it('subscribes to the underlying channel only once for repeated handlers', async () => {
+            const p = new RedisLocalStorageProvider({
+                enablePubSub: true,
+                enableLogging: false,
+                keyPrefix: 'mj',
+            });
+            await p.SubscribeToChannel('push-status-updates', vi.fn());
+            await p.SubscribeToChannel('push-status-updates', vi.fn());
+
+            const subscriber = (p as unknown as { _subscriber: { subscribe: ReturnType<typeof vi.fn> } })._subscriber;
+            const namedCalls = subscriber.subscribe.mock.calls.filter(
+                (c: unknown[]) => c[0] === 'mj:push-status-updates'
+            );
+            expect(namedCalls).toHaveLength(1);
+            await p.Disconnect();
+        });
+
+        it('delivers to every handler when two subscribe to a new channel at once', async () => {
+            // Both callers find no entry and both wait on the Redis subscribe. If each then
+            // publishes its own handler set, the second replaces the first and the first handler
+            // never receives another message, with nothing surfaced.
+            const p = new RedisLocalStorageProvider({
+                enablePubSub: true,
+                enableLogging: false,
+                keyPrefix: 'mj',
+            });
+            await p.SubscribeToChannel('warm-up', vi.fn());
+            const first = vi.fn();
+            const second = vi.fn();
+
+            await Promise.all([
+                p.SubscribeToChannel('push-status-updates', first),
+                p.SubscribeToChannel('push-status-updates', second),
+            ]);
+            (p as unknown as { dispatchChannelMessage: (c: string, m: string) => void })
+                .dispatchChannelMessage('mj:push-status-updates', 'payload');
+
+            expect(first).toHaveBeenCalledWith('payload');
+            expect(second).toHaveBeenCalledWith('payload');
+            await p.Disconnect();
+        });
+
+        it('shares one underlying subscribe between concurrent first subscribers', async () => {
+            const p = new RedisLocalStorageProvider({
+                enablePubSub: true,
+                enableLogging: false,
+                keyPrefix: 'mj',
+            });
+            await p.SubscribeToChannel('warm-up', vi.fn());
+
+            await Promise.all([
+                p.SubscribeToChannel('push-status-updates', vi.fn()),
+                p.SubscribeToChannel('push-status-updates', vi.fn()),
+            ]);
+
+            const subscriber = (p as unknown as { _subscriber: { subscribe: ReturnType<typeof vi.fn> } })._subscriber;
+            const namedCalls = subscriber.subscribe.mock.calls.filter(
+                (c: unknown[]) => c[0] === 'mj:push-status-updates'
+            );
+            expect(namedCalls).toHaveLength(1);
+            await p.Disconnect();
+        });
+
+        it('does not leave a poisoned entry behind when the subscribe is rejected', async () => {
+            // The handler map is what later callers consult to decide whether the channel is
+            // already subscribed. An entry left behind by a failed subscribe makes every later
+            // caller skip the subscribe and register against a channel Redis is not listening on,
+            // with nothing surfaced.
+            const p = new RedisLocalStorageProvider({
+                enablePubSub: true,
+                enableLogging: false,
+                keyPrefix: 'mj',
+            });
+            await p.SubscribeToChannel('warm-up', vi.fn());
+            const subscriber = (p as unknown as { _subscriber: { subscribe: ReturnType<typeof vi.fn> } })._subscriber;
+            subscriber.subscribe.mockRejectedValueOnce(new Error('redis down'));
+
+            await expect(p.SubscribeToChannel('push-status-updates', vi.fn())).rejects.toThrow('redis down');
+
+            const handlers = (p as unknown as { _channelHandlers: Map<string, Set<unknown>> })._channelHandlers;
+            expect(handlers.has('mj:push-status-updates')).toBe(false);
+            await p.Disconnect();
+        });
+
+        it('re-subscribes after an earlier subscribe failed', async () => {
+            const p = new RedisLocalStorageProvider({
+                enablePubSub: true,
+                enableLogging: false,
+                keyPrefix: 'mj',
+            });
+            await p.SubscribeToChannel('warm-up', vi.fn());
+            const subscriber = (p as unknown as { _subscriber: { subscribe: ReturnType<typeof vi.fn> } })._subscriber;
+            subscriber.subscribe.mockRejectedValueOnce(new Error('redis down'));
+            await expect(p.SubscribeToChannel('push-status-updates', vi.fn())).rejects.toThrow('redis down');
+
+            const handler = vi.fn();
+            await p.SubscribeToChannel('push-status-updates', handler);
+
+            const namedCalls = subscriber.subscribe.mock.calls.filter(
+                (c: unknown[]) => c[0] === 'mj:push-status-updates'
+            );
+            expect(namedCalls).toHaveLength(2);
+            (p as unknown as { dispatchChannelMessage: (c: string, m: string) => void })
+                .dispatchChannelMessage('mj:push-status-updates', 'payload');
+            expect(handler).toHaveBeenCalledWith('payload');
+            await p.Disconnect();
+        });
+
+        it('returns an inert unsubscribe when pub/sub is disabled', async () => {
+            const p = new RedisLocalStorageProvider({
+                enablePubSub: false,
+                enableLogging: false,
+            });
+
+            const unsubscribe = await p.SubscribeToChannel('push-status-updates', vi.fn());
+
+            expect(() => unsubscribe()).not.toThrow();
+            await p.Disconnect();
         });
     });
 

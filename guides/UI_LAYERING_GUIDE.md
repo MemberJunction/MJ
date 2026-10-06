@@ -59,7 +59,9 @@ MJ app and every app built **on** MJ can follow it.
 ├─ L2  Composite widget                       ← assembles L1 into a working thing
 │      Framework-clean Angular. MAY read data — ONLY via ProviderToUse.
 │      Prefers entities and models as inputs; may take a key when loading IS its job.
-│      Emits intent (RecordOpenRequested, SaveRequested), never performs it.
+│      Emits intent (RecordOpenRequested, SaveRequested), never navigates.
+│      May write through ProviderToUse when owning the session *is* the job
+│      (see §5 — the task-graph debugger is the worked example).
 │      Package: <app>-ng-widgets    (NO ng-shared, NO @angular/router)
 │
 ├─ L1  Presentational widget                  ← props in, events out, that's all
@@ -206,6 +208,7 @@ breaks the moment it is embedded somewhere else.
 | **L0** | Whatever it is given. Pure functions and clients take a provider/connection as an argument. |
 | **L1** | **None.** If a presentational widget needs data, it needs an `@Input()`. |
 | **L2** | Allowed, but **only** through `BaseAngularComponent`: extend it, and use `this.ProviderToUse`, `RunView.FromMetadataProvider(this.ProviderToUse)`, `this.ProviderToUse.GetEntityObject(...)`. |
+| **L3** | Same provider discipline; additionally owns record loading for the surface. |
 
 **On composite inputs.** Prefer a model or an already-loaded entity — a composite whose input is a
 plain object is testable with an object literal. But a composite whose *job* is "show everything
@@ -213,7 +216,13 @@ about record X" may legitimately take a key and own the load; that is a design c
 violation. The useful pattern is to accept **both**: a key for hosts that only have one, and a
 pre-loaded record for hosts (like an entity form) that already have it, so those skip a round trip.
 What a composite may never do is *navigate* — that is the boundary, not data acquisition.
-| **L3** | Same provider discipline; additionally owns record loading for the surface. |
+
+**Session-owning composites may also write.** A composite whose *job* is "drive this session" —
+not "render this model" — may call `this.ProviderToUse.RouteOperation(...)` (or `Save`) so every
+host does not re-implement the same verbs. The L1 pieces it composes stay paint-only. The worked
+example is `<mj-task-graph-debugger>`: the run view is L1; the wrap reads the parent `MJ: Tasks`
+row and owns every `TaskGraph.*` Remote Operation. Hosts pass a parent task id and listen to
+events. That is still L2 — it never decides where the user goes next.
 
 ```typescript
 // ✅ L2 composite
@@ -452,6 +461,7 @@ fine; having neither is not.
 | [Conversations UX Stack Guide](CONVERSATIONS_UX_STACK_GUIDE.md) | L0–L3 | A pure-TS runtime under an Angular widget, with **adapter interfaces** for the host concerns (notifications, task tracking) the widget must not own. |
 | `packages/Angular/Generic/trees` | L1 | A clean `Before*`/`After*` event module (`events/tree-events.ts`) with tests. |
 | `packages/Angular/Generic/entity-viewer` | L2 | Data-reading widget done right — `ProviderToUse` throughout, grid events as cancelable pairs. |
+| `packages/Angular/Generic/task-graph-editor` | L1 + L2 | Run view is paint-only; `<mj-task-graph-debugger>` is the session-owning wrap (`RouteOperation` + frames) so Explorer Runs and the test harness stay zero-code. |
 | `packages/Angular/Explorer/shared` | L3 | `BaseResourceComponent`, `NavigationService`, the query-param round-trip. |
 
 ---
@@ -514,5 +524,6 @@ not have to be clean to start; it has to stop getting dirtier.
 - [Dashboard Best Practices](DASHBOARD_BEST_PRACTICES.md) — L3 resource components
 - [Building Apps on MJ](BUILDING_APPS_ON_MJ.md) — the wider app-authoring picture
 - [packages/Angular/CLAUDE.md](../packages/Angular/CLAUDE.md) — multi-provider `@Input() Provider`
+- [Workflow Debugger Guide](WORKFLOW_DEBUGGER_GUIDE.md) — session-owning L2 wrap (`mj-task-graph-debugger`)
 - [packages/Angular/Generic/CLAUDE.md](../packages/Angular/Generic/CLAUDE.md) — the no-Router rule
 - [packages/Angular/Explorer/CLAUDE.md](../packages/Angular/Explorer/CLAUDE.md) — `NotifyLoadComplete`, query params

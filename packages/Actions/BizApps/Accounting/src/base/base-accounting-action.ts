@@ -1,9 +1,39 @@
 import { BaseAction } from '@memberjunction/actions';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, IsValidUUID, MJGlobal, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { UserInfo } from '@memberjunction/core';
 import { MJCompanyIntegrationEntity, MJIntegrationEntity } from '@memberjunction/core-entities';
 import { IMetadataProvider, Metadata, RunView } from '@memberjunction/core';
+import {
+    ACCOUNTING_ERP_INTEGRATION_ALIASES,
+    CanonicalERPIntegrationName,
+    ERPIntegrationNameAliases,
+    ErpPluginKey
+} from '../constants';
+import { ResolvedAccountingIntegration } from '../types';
+
+/**
+ * Result codes a failed connection lookup reports. The dispatcher returns them as the action's
+ * `ResultCode`, so a caller can tell "not configured" from "ambiguous" from "wrong connection".
+ */
+export type AccountingIntegrationResultCode =
+    | 'NO_ACCOUNTING_INTEGRATION'
+    | 'AMBIGUOUS_ACCOUNTING_INTEGRATION'
+    | 'VALIDATION_ERROR'
+    | 'COMPANY_INTEGRATION_NOT_FOUND'
+    | 'COMPANY_INTEGRATION_WRONG_COMPANY'
+    | 'COMPANY_INTEGRATION_INACTIVE'
+    | 'NOT_ACCOUNTING_INTEGRATION';
+
+class AccountingIntegrationError extends Error {
+    constructor(message: string, readonly resultCode: AccountingIntegrationResultCode) {  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+        super(message);
+        this.name = 'AccountingIntegrationError';
+    }
+}
+
+/** The param a caller uses to name the exact connection a verb should run against. */
+const COMPANY_INTEGRATION_ID_PARAM = 'CompanyIntegrationID';
 
 /**
  * Base class for all accounting-related actions.
@@ -28,6 +58,22 @@ export abstract class BaseAccountingAction extends BaseAction {
     private _companyIntegration: MJCompanyIntegrationEntity | null = null;
 
     /**
+     * The request's metadata provider (`RunActionParams.Provider`), captured in {@link Run} so the
+     * connection and Credential lookups bind to it even in helpers that only receive the param
+     * array. `undefined` when the caller supplied none, and the lookups fall back to the global
+     * provider.
+     */
+    protected requestProvider: IMetadataProvider | undefined;
+
+    /**
+     * Captures the request's provider, then runs the action.
+     */
+    public override async Run(params: RunActionParams): Promise<ActionResultSimple> {
+        this.requestProvider = params.Provider;
+        return super.Run(params);
+    }
+
+    /**
      * Override of the required abstract method from BaseAction
      */
     protected abstract InternalRunAction(params: RunActionParams): Promise<ActionResultSimple>;
@@ -41,7 +87,23 @@ export abstract class BaseAccountingAction extends BaseAction {
     }
 
     /**
-     * Common accounting parameters that many actions will need
+     * A param's value as a trimmed, non-empty string, or `undefined` when it is absent or blank.
+     */
+    protected getOptionalStringParam(params: ActionParam[] | null | undefined, name: string): string | undefined {
+        const value: unknown = params?.find(p => p.Name === name)?.Value;
+        if (value === null || value === undefined) {
+            return undefined;
+        }
+        const text = String(value).trim();
+        return text.length > 0 ? text : undefined;
+    }
+
+    /**
+     * Common accounting parameters that many actions will need.
+     *
+     * `CompanyIntegrationID` names the exact `MJ: Company Integrations` row to run against. It is
+     * optional: without it the company's single active connection for the provider is used, and a
+     * company with more than one is refused rather than guessed at.
      */
     protected getCommonAccountingParams(): ActionParam[] {
         return [
@@ -59,36 +121,191 @@ export abstract class BaseAccountingAction extends BaseAction {
                 Name: 'AccountingPeriod',
                 Type: 'Input',
                 Value: null
+            },
+            {
+                Name: 'IntegrationName',
+                Type: 'Input',
+                Value: null
+            },
+            {
+                Name: COMPANY_INTEGRATION_ID_PARAM,
+                Type: 'Input',
+                Value: null
             }
         ];
     }
 
     /**
-     * Gets the company integration record for the specified company and accounting system
+     * Every Integration name this action's provider may be registered under (canonical first).
      */
-    protected async getCompanyIntegration(companyId: string, contextUser: UserInfo): Promise<MJCompanyIntegrationEntity> {
-        // Check cache first
-        if (this._companyIntegration && UUIDsEqual(this._companyIntegration.CompanyID, companyId)) {
-            return this._companyIntegration;
+    protected get integrationNameAliases(): readonly string[] {
+        return ERPIntegrationNameAliases(this.integrationName);
+    }
+
+    /**
+     * Gets the company's connection for this action's accounting provider.
+     *
+     * With `companyIntegrationId`, exactly that row is loaded; it must belong to `companyId`, be
+     * active, and be one of this provider's Integrations. Without it, the company's active
+     * connections for the provider (under any of its Integration names) are searched, and more
+     * than one match is an error that names them — the first match is never taken.
+     *
+     * @param companyId - The MJ Company the action runs for.
+     * @param contextUser - The user the lookup runs as.
+     * @param companyIntegrationId - Optional ID of the exact connection to use.
+     * @returns The connection.
+     * @throws Error when no connection, more than one connection, or an unusable connection is found.
+     */
+    protected async getCompanyIntegration(
+        companyId: string,
+        contextUser: UserInfo,
+        companyIntegrationId?: string
+    ): Promise<MJCompanyIntegrationEntity> {
+        if (!companyId) {
+            throw new Error('CompanyID is required to find the company integration');
         }
 
-        const rv = new RunView();
+        const cached = this._companyIntegration;
+        if (cached && UUIDsEqual(cached.CompanyID, companyId)
+            && (!companyIntegrationId || UUIDsEqual(cached.ID, companyIntegrationId))) {
+            return cached;
+        }
+
+        const record = companyIntegrationId
+            ? await this.loadCompanyIntegrationForCompany(companyIntegrationId, companyId, this.integrationNameAliases, contextUser)
+            : this.requireSingleCompanyIntegration(
+                await this.findActiveCompanyIntegrations(companyId, this.integrationNameAliases, contextUser),
+                companyId,
+                `No active ${this.integrationName} integration found for company ${companyId}. Please configure the integration first.`
+            );
+
+        this._companyIntegration = record;
+        return record;
+    }
+
+    /**
+     * The company's active connections whose Integration is one of `integrationNames`.
+     *
+     * Filters on the view's `Integration` column (the Integration's name). `Integration.Name` is
+     * not bindable on SQL Server.
+     */
+    protected async findActiveCompanyIntegrations(
+        companyId: string,
+        integrationNames: readonly string[],
+        contextUser: UserInfo
+    ): Promise<MJCompanyIntegrationEntity[]> {
+        if (integrationNames.length === 0) {
+            throw new AccountingIntegrationError('No Integration names to search for.', 'NO_ACCOUNTING_INTEGRATION');
+        }
+        const nameList = integrationNames
+            .map(name => `'${EscapeSQLString(name)}'`)
+            .join(', ');
+
+        const rv = this.requestProvider ? RunView.FromMetadataProvider(this.requestProvider) : new RunView();
         const result = await rv.RunView<MJCompanyIntegrationEntity>({
             EntityName: 'MJ: Company Integrations',
-            ExtraFilter: `CompanyID = '${companyId}' AND Integration.Name = '${this.integrationName}'`,
+            ExtraFilter: `CompanyID = '${EscapeSQLString(companyId)}' AND IsActive = 1 AND Integration IN (${nameList})`,
+            OrderBy: 'Integration, Name',
             ResultType: 'entity_object'
         }, contextUser);
 
         if (!result.Success) {
-            throw new Error(`Failed to retrieve company integration: ${result.ErrorMessage}`);
+            throw new AccountingIntegrationError(
+                `Failed to retrieve company integration: ${result.ErrorMessage}`,
+                'NO_ACCOUNTING_INTEGRATION'
+            );
+        }
+        return result.Results ?? [];
+    }
+
+    /**
+     * Returns the only record in `records`; throws when there are none or more than one.
+     *
+     * @param notFoundMessage - The message for the no-match error.
+     * @param selectorHint - What the caller can pass to pick one when several match.
+     */
+    protected requireSingleCompanyIntegration(
+        records: MJCompanyIntegrationEntity[],
+        companyId: string,
+        notFoundMessage: string,
+        selectorHint: string = COMPANY_INTEGRATION_ID_PARAM
+    ): MJCompanyIntegrationEntity {
+        if (records.length === 0) {
+            throw new AccountingIntegrationError(notFoundMessage, 'NO_ACCOUNTING_INTEGRATION');
+        }
+        if (records.length > 1) {
+            const candidates = records
+                .map(r => `'${r.Name}' (${r.Integration}, ID ${r.ID})`)
+                .join(', ');
+            throw new AccountingIntegrationError(
+                `Company ${companyId} has ${records.length} active accounting connections: ${candidates}. Pass ${selectorHint} to select one.`,
+                'AMBIGUOUS_ACCOUNTING_INTEGRATION'
+            );
+        }
+        return records[0];
+    }
+
+    /**
+     * Loads one connection by ID and checks that it can be used for `companyId`: it must exist,
+     * belong to that company, be active, and be one of `allowedIntegrationNames`.
+     *
+     * @throws AccountingIntegrationError with a result code naming what is wrong.
+     */
+    protected async loadCompanyIntegrationForCompany(
+        companyIntegrationId: string,
+        companyId: string,
+        allowedIntegrationNames: readonly string[],
+        contextUser: UserInfo
+    ): Promise<MJCompanyIntegrationEntity> {
+        if (!IsValidUUID(companyIntegrationId)) {
+            throw new AccountingIntegrationError(
+                `CompanyIntegrationID '${companyIntegrationId}' is not a valid ID.`,
+                'VALIDATION_ERROR'
+            );
         }
 
-        if (!result.Results || result.Results.length === 0) {
-            throw new Error(`No ${this.integrationName} integration found for company ${companyId}. Please configure the integration first.`);
+        const md = this.requestProvider ?? new Metadata();
+        const record = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations', contextUser);
+        let loaded: boolean;
+        try {
+            loaded = await record.Load(companyIntegrationId);
+        } catch (error: unknown) {
+            const msg = error instanceof Error ? error.message : String(error);
+            throw new AccountingIntegrationError(
+                `Failed to load CompanyIntegration ${companyIntegrationId}: ${msg}`,
+                'COMPANY_INTEGRATION_NOT_FOUND'
+            );
+        }
+        if (!loaded) {
+            throw new AccountingIntegrationError(
+                `CompanyIntegration ${companyIntegrationId} was not found.`,
+                'COMPANY_INTEGRATION_NOT_FOUND'
+            );
         }
 
-        this._companyIntegration = result.Results[0];
-        return this._companyIntegration;
+        if (!UUIDsEqual(record.CompanyID, companyId)) {
+            throw new AccountingIntegrationError(
+                `CompanyIntegration ${companyIntegrationId} does not belong to company ${companyId}.`,
+                'COMPANY_INTEGRATION_WRONG_COMPANY'
+            );
+        }
+
+        if (record.IsActive !== true) {
+            throw new AccountingIntegrationError(
+                `CompanyIntegration ${companyIntegrationId} ('${record.Name}') is not active.`,
+                'COMPANY_INTEGRATION_INACTIVE'
+            );
+        }
+
+        const integrationName = (record.Integration ?? '').trim().toLowerCase();
+        if (!allowedIntegrationNames.some(name => name.toLowerCase() === integrationName)) {
+            throw new AccountingIntegrationError(
+                `CompanyIntegration ${companyIntegrationId} is a '${record.Integration}' connection, not one of: ${allowedIntegrationNames.join(', ')}.`,
+                'NOT_ACCOUNTING_INTEGRATION'
+            );
+        }
+
+        return record;
     }
 
     /**
@@ -144,7 +361,7 @@ export abstract class BaseAccountingAction extends BaseAction {
         const rv = new RunView();
         const result = await rv.RunView<MJIntegrationEntity>({
             EntityName: 'MJ: Integrations',
-            ExtraFilter: `Name = '${this.integrationName}'`,
+            ExtraFilter: `Name = '${EscapeSQLString(this.integrationName)}'`,
             ResultType: 'entity_object'
         }, contextUser);
 
@@ -200,5 +417,153 @@ export abstract class BaseAccountingAction extends BaseAction {
             message += ` System error: ${systemError.message || systemError}`;
         }
         return message;
+    }
+
+    /**
+     * Load the company's accounting CompanyIntegration: its single active connection whose
+     * Integration is any known ERP name or alias (or, with `integrationName`, any name of that
+     * provider). Does not hard-filter to a single vendor.
+     *
+     * More than one match is refused (`AMBIGUOUS_ACCOUNTING_INTEGRATION`), even when
+     * `integrationName` narrows the search: a company with a production and a sandbox connection
+     * to the same ERP must say which one with `CompanyIntegrationID`.
+     */
+    protected async resolveCompanyAccountingIntegration(
+        companyId: string,
+        contextUser: UserInfo,
+        integrationName?: string
+    ): Promise<ResolvedAccountingIntegration> {
+        const names = integrationName
+            ? ERPIntegrationNameAliases(integrationName)
+            : ACCOUNTING_ERP_INTEGRATION_ALIASES;
+
+        const records = await this.findActiveCompanyIntegrations(companyId, names, contextUser);
+        const spansProviders = new Set(records.map(r => CanonicalERPIntegrationName(r.Integration) ?? r.Integration)).size > 1;
+        const record = this.requireSingleCompanyIntegration(
+            records,
+            companyId,
+            integrationName
+                ? `No active '${integrationName}' integration found for company ${companyId}.`
+                : `No accounting ERP integration found for company ${companyId}. Configure QuickBooks Online or Microsoft Dynamics 365 Business Central.`,
+            !integrationName && spansProviders
+                ? `IntegrationName or ${COMPANY_INTEGRATION_ID_PARAM}`
+                : COMPANY_INTEGRATION_ID_PARAM
+        );
+        return this.toResolvedAccountingIntegration(record);
+    }
+
+    /**
+     * Load the connection the caller named with `CompanyIntegrationID` and check that it is an
+     * active accounting connection of `companyId` (and of `integrationName`'s provider, when given).
+     */
+    protected async resolveExplicitAccountingIntegration(
+        companyIntegrationId: string,
+        companyId: string,
+        contextUser: UserInfo,
+        integrationName?: string
+    ): Promise<ResolvedAccountingIntegration> {
+        const allowedNames = integrationName
+            ? ERPIntegrationNameAliases(integrationName)
+            : ACCOUNTING_ERP_INTEGRATION_ALIASES;
+        const record = await this.loadCompanyIntegrationForCompany(companyIntegrationId, companyId, allowedNames, contextUser);
+        return this.toResolvedAccountingIntegration(record);
+    }
+
+    private toResolvedAccountingIntegration(record: MJCompanyIntegrationEntity): ResolvedAccountingIntegration {
+        const name = record.Integration;
+        if (!name) {
+            throw new AccountingIntegrationError(
+                `Company integration ${record.ID} has no Integration name; cannot dispatch an ERP plugin.`,
+                'NO_ACCOUNTING_INTEGRATION'
+            );
+        }
+
+        return {
+            Name: name,
+            CompanyIntegrationID: record.ID,
+            CompanyID: record.CompanyID,
+            IntegrationID: record.IntegrationID,
+        };
+    }
+
+    /**
+     * Resolve the company's ERP connection and invoke the plugin registered as
+     * `${verb}:${canonical provider name}`.
+     *
+     * The connection is the one named by the `CompanyIntegrationID` param when given, otherwise
+     * the company's single active accounting connection. Its ID is then written into the params
+     * (added when absent) so the plugin runs against that same connection instead of looking one
+     * up again. Plugin.Run → InternalRunAction with the caller's params.
+     */
+    protected async dispatchVerb(verb: string, params: RunActionParams): Promise<ActionResultSimple> {
+        const companyId = this.getParamValue(params.Params, 'CompanyID');
+        if (!companyId) {
+            return {
+                Success: false,
+                ResultCode: 'VALIDATION_ERROR',
+                Message: 'CompanyID is required',
+                Params: params.Params
+            };
+        }
+
+        if (!params.ContextUser) {
+            return {
+                Success: false,
+                ResultCode: 'ERROR',
+                Message: 'Context user is required',
+                Params: params.Params
+            };
+        }
+
+        const companyIntegrationId = this.getOptionalStringParam(params.Params, COMPANY_INTEGRATION_ID_PARAM);
+        const integrationName = this.getOptionalStringParam(params.Params, 'IntegrationName');
+
+        let integration: ResolvedAccountingIntegration;
+        try {
+            integration = companyIntegrationId
+                ? await this.resolveExplicitAccountingIntegration(companyIntegrationId, companyId, params.ContextUser, integrationName)
+                : await this.resolveCompanyAccountingIntegration(companyId, params.ContextUser, integrationName);
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+            const resultCode = error instanceof AccountingIntegrationError
+                ? error.resultCode
+                : 'NO_ACCOUNTING_INTEGRATION';
+            return {
+                Success: false,
+                ResultCode: resultCode,
+                Message: errorMessage,
+                Params: params.Params
+            };
+        }
+
+        const providerName = CanonicalERPIntegrationName(integration.Name) ?? integration.Name;
+        const pluginKey = ErpPluginKey(verb, providerName);
+        const resolved = MJGlobal.Instance.ClassFactory.TryCreateInstance<BaseAction>(BaseAction, pluginKey);
+        if (!resolved.Resolved || !resolved.Instance) {
+            return {
+                Success: false,
+                ResultCode: 'PROVIDER_NOT_REGISTERED',
+                Message: `No ERP plugin registered for ${pluginKey}`,
+                Params: params.Params
+            };
+        }
+
+        this.setCompanyIntegrationIDParam(params.Params, integration.CompanyIntegrationID);
+        return resolved.Instance.Run(params);
+    }
+
+    /**
+     * Writes the chosen connection's ID into the `CompanyIntegrationID` param: pushed when the
+     * param is absent, filled in when it is present but blank. A caller-supplied value is left as is.
+     */
+    private setCompanyIntegrationIDParam(params: ActionParam[], companyIntegrationId: string): void {
+        const existing = params.find(p => p.Name === COMPANY_INTEGRATION_ID_PARAM);
+        if (!existing) {
+            params.push({ Name: COMPANY_INTEGRATION_ID_PARAM, Type: 'Input', Value: companyIntegrationId });
+            return;
+        }
+        if (this.getOptionalStringParam([existing], COMPANY_INTEGRATION_ID_PARAM) === undefined) {
+            existing.Value = companyIntegrationId;
+        }
     }
 }

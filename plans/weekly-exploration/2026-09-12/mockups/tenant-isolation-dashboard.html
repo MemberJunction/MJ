@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tenant Isolation</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --mj-bg-page: #f8f9fa;
+    --mj-bg-surface: white;
+    --mj-bg-surface-card: #f5f7fa;
+    --mj-bg-surface-sunken: #f0f2f5;
+    --mj-text-primary: #334155;
+    --mj-text-secondary: #64748b;
+    --mj-text-muted: #94a3b8;
+    --mj-brand-primary: #264FAF;
+    --mj-brand-primary-soft: #eef2fb;
+    --mj-border-default: #e2e8f0;
+    --mj-border-subtle: #f1f5f9;
+    --mj-status-success: #16a34a;
+    --mj-status-success-bg: #f0fdf4;
+    --mj-status-warning: #ea580c;
+    --mj-status-warning-bg: #fff7ed;
+    --mj-status-error: #dc2626;
+    --mj-status-error-bg: #fef2f2;
+    --mj-status-info: #0284c7;
+    --mj-status-info-bg: #f0f9ff;
+    --sidebar-width: 230px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--mj-bg-page); color: var(--mj-text-primary); line-height: 1.5; display: flex; min-height: 100vh; font-size: 14px;
+  }
+  .sidebar { width: var(--sidebar-width); min-width: var(--sidebar-width); background: var(--mj-bg-surface); border-right: 1px solid var(--mj-border-default); position: fixed; top:0; left:0; bottom:0; overflow-y:auto; }
+  .brand { padding: 18px 16px; border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--mj-brand-primary); font-size: 15px; }
+  .nav-section { padding: 14px 16px 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--mj-text-muted); }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 16px; color: var(--mj-text-secondary); font-weight: 500; border-left: 3px solid transparent; }
+  .nav-item.active { color: var(--mj-brand-primary); border-left-color: var(--mj-brand-primary); background: color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-bg-surface)); font-weight: 600; }
+  .nav-item i { width: 16px; text-align: center; font-size: 13px; }
+
+  .main { margin-left: var(--sidebar-width); flex: 1; display: flex; flex-direction: column; }
+  .topbar { background: var(--mj-bg-surface); border-bottom: 1px solid var(--mj-border-default); padding: 16px 28px; display: flex; align-items: center; justify-content: space-between; }
+  .topbar h1 { font-size: 19px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+  .topbar h1 i { color: var(--mj-brand-primary); }
+  .topbar .sub { color: var(--mj-text-secondary); font-size: 12.5px; margin-top: 3px; }
+  .btn { border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); color: var(--mj-text-secondary); padding: 7px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; cursor: default; }
+  .btn-primary { background: var(--mj-brand-primary); border-color: var(--mj-brand-primary); color: white; }
+
+  .content { padding: 22px 28px 40px; }
+
+  .banner { background: var(--mj-status-success-bg); border: 1px solid color-mix(in srgb, var(--mj-status-success) 30%, transparent); border-radius: 10px; padding: 14px 18px; display: flex; align-items: center; gap: 12px; margin-bottom: 22px; }
+  .banner i { color: var(--mj-status-success); font-size: 18px; }
+  .banner .t { font-weight: 700; font-size: 13.5px; }
+  .banner .s { font-size: 12px; color: var(--mj-text-secondary); margin-top: 2px; }
+
+  .layer-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 22px; }
+  .layer-card { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; padding: 16px 18px; position: relative; }
+  .layer-card .icon { width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 15px; margin-bottom: 10px; }
+  .layer-card .name { font-weight: 700; font-size: 13.5px; margin-bottom: 3px; }
+  .layer-card .desc { font-size: 11.5px; color: var(--mj-text-secondary); margin-bottom: 10px; min-height: 32px; }
+  .status-pill { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 20px; display: inline-flex; align-items: center; gap: 5px; }
+  .status-pass { background: var(--mj-status-success-bg); color: var(--mj-status-success); }
+  .status-warn { background: var(--mj-status-warning-bg); color: var(--mj-status-warning); }
+  .status-fail { background: var(--mj-status-error-bg); color: var(--mj-status-error); }
+  .layer-icon-query { background: var(--mj-status-success-bg); color: var(--mj-status-success); }
+  .layer-icon-cache { background: var(--mj-status-warning-bg); color: var(--mj-status-warning); }
+  .layer-icon-vector { background: var(--mj-status-error-bg); color: var(--mj-status-error); }
+  .layer-icon-jobs { background: var(--mj-status-warning-bg); color: var(--mj-status-warning); }
+
+  .card { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; overflow: hidden; margin-bottom: 20px; }
+  .card-header { padding: 14px 18px; border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; justify-content: space-between; }
+  .card-header h2 { font-size: 14.5px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .card-header h2 i { color: var(--mj-brand-primary); }
+
+  .grid-2 { display: grid; grid-template-columns: 1.3fr 1fr; gap: 20px; align-items: start; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th { text-align: left; padding: 9px 18px; color: var(--mj-text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: .03em; border-bottom: 1px solid var(--mj-border-default); }
+  td { padding: 10px 18px; border-bottom: 1px solid var(--mj-border-subtle); }
+  tr:last-child td { border-bottom: none; }
+  .mono { font-family: ui-monospace, monospace; font-size: 12px; }
+
+  .test-log { padding: 4px 18px 14px; }
+  .log-line { display: flex; gap: 10px; padding: 7px 0; font-size: 12px; border-bottom: 1px dashed var(--mj-border-subtle); align-items: flex-start; }
+  .log-line:last-child { border-bottom: none; }
+  .log-line i { margin-top: 2px; width: 13px; text-align: center; }
+  .log-line.pass i { color: var(--mj-status-success); }
+  .log-line.fail i { color: var(--mj-status-error); }
+</style>
+</head>
+<body>
+  <div class="sidebar">
+    <div class="brand"><i class="fa-solid fa-cube"></i> MJ Explorer</div>
+    <div class="nav-section">Monitoring</div>
+    <div class="nav-item"><i class="fa-solid fa-diagram-project"></i> Trace Explorer</div>
+    <div class="nav-item active"><i class="fa-solid fa-shield-halved"></i> Tenant Isolation</div>
+    <div class="nav-item"><i class="fa-solid fa-chart-line"></i> Agent Trust Trend</div>
+    <div class="nav-section">Configuration</div>
+    <div class="nav-item"><i class="fa-solid fa-building"></i> Tenants &amp; Chapters</div>
+    <div class="nav-item"><i class="fa-solid fa-table-list"></i> Entities</div>
+    <div class="nav-item"><i class="fa-solid fa-lock"></i> Permissions</div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <h1><i class="fa-solid fa-shield-halved"></i> Tenant Isolation</h1>
+        <div class="sub">A verifiable guarantee across query, cache, vector, and scheduled-job layers</div>
+      </div>
+      <div style="display:flex; gap:10px;">
+        <button class="btn btn-primary"><i class="fa-solid fa-flask"></i> Run self-test now</button>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="banner" style="background: var(--mj-status-error-bg); border-color: color-mix(in srgb, var(--mj-status-error) 30%, transparent);">
+        <i class="fa-solid fa-triangle-exclamation" style="color:var(--mj-status-error);"></i>
+        <div>
+          <div class="t">2 of 4 layers failed the last self-test</div>
+          <div class="s">Query and Cache layers are enforcing tenant boundaries correctly. Vector and Scheduled Jobs are not — see below.</div>
+        </div>
+      </div>
+
+      <div class="layer-grid">
+        <div class="layer-card">
+          <div class="icon layer-icon-query"><i class="fa-solid fa-magnifying-glass"></i></div>
+          <div class="name">Query layer</div>
+          <div class="desc">RunView / Save hooks inject &amp; validate the tenant predicate</div>
+          <span class="status-pill status-pass"><i class="fa-solid fa-check"></i> Enforced</span>
+        </div>
+        <div class="layer-card">
+          <div class="icon layer-icon-cache"><i class="fa-solid fa-database"></i></div>
+          <div class="name">Server cache</div>
+          <div class="desc">Cache-key fingerprint now folds in TenantID</div>
+          <span class="status-pill status-pass"><i class="fa-solid fa-check"></i> Enforced</span>
+        </div>
+        <div class="layer-card">
+          <div class="icon layer-icon-vector"><i class="fa-solid fa-vector-square"></i></div>
+          <div class="name">Vector search</div>
+          <div class="desc">1 of 3 configured providers has no namespace field wired</div>
+          <span class="status-pill status-fail"><i class="fa-solid fa-xmark"></i> Gap found</span>
+        </div>
+        <div class="layer-card">
+          <div class="icon layer-icon-jobs"><i class="fa-solid fa-clock"></i></div>
+          <div class="name">Scheduled jobs</div>
+          <div class="desc">4 job definitions have no TenantID scoping set</div>
+          <span class="status-pill status-warn"><i class="fa-solid fa-exclamation"></i> Needs review</span>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header"><h2><i class="fa-solid fa-flask"></i> Self-test log — as tenant "chapter-boston"</h2><span style="font-size:11.5px;color:var(--mj-text-muted)">just now</span></div>
+          <div class="test-log">
+            <div class="log-line pass"><i class="fa-solid fa-check"></i> Query: attempted read of chapter-denver's Member #4471 via RunView — <strong>rejected</strong>, 0 rows returned</div>
+            <div class="log-line pass"><i class="fa-solid fa-check"></i> Cache: fingerprint for identical query shape differs by TenantID — <strong>no cross-tenant hit</strong></div>
+            <div class="log-line fail"><i class="fa-solid fa-xmark"></i> Vector: semantic search on "member-notes" index returned 2 rows belonging to chapter-denver — <strong>namespace not enforced</strong></div>
+            <div class="log-line fail"><i class="fa-solid fa-xmark"></i> Scheduled Jobs: "Nightly Engagement Recompute" (job #12) touched 340 rows across all 6 tenants — <strong>no TenantID scoping configured</strong></div>
+          </div>
+        </div>
+
+        <div>
+          <div class="card">
+            <div class="card-header"><h2><i class="fa-solid fa-sliders"></i> Tenant scoping config</h2></div>
+            <table>
+              <tr><th>Entity</th><th>Tenant column</th><th>Strategy</th></tr>
+              <tr><td>Members</td><td class="mono">ChapterID</td><td>Strict</td></tr>
+              <tr><td>Donations</td><td class="mono">ChapterID</td><td>Strict</td></tr>
+              <tr><td>Communications</td><td class="mono">OwningChapterID</td><td>Log only</td></tr>
+              <tr><td>Member Notes (vector)</td><td class="mono" style="color:var(--mj-status-error)">— unset —</td><td>—</td></tr>
+            </table>
+          </div>
+          <div class="card">
+            <div class="card-header"><h2><i class="fa-solid fa-clock"></i> Scheduled jobs needing review</h2></div>
+            <div style="padding:4px 18px 14px; font-size:12.5px;">
+              <div class="evidence-row" style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px dashed var(--mj-border-subtle);">
+                <span>Nightly Engagement Recompute</span><span class="mono" style="color:var(--mj-status-warning);">unscoped</span>
+              </div>
+              <div class="evidence-row" style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px dashed var(--mj-border-subtle);">
+                <span>Weekly Data Health Sweep</span><span class="mono" style="color:var(--mj-status-warning);">unscoped</span>
+              </div>
+              <div class="evidence-row" style="display:flex;justify-content:space-between;padding:8px 0;">
+                <span>Cross-chapter Rollup Report</span><span class="mono" style="color:var(--mj-text-muted);">intentionally cross-tenant</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

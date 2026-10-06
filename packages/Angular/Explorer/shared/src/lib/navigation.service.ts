@@ -1,8 +1,8 @@
 import { Injectable, OnDestroy } from '@angular/core';
 import { WorkspaceStateManager, NavItem, DynamicNavItem, TabRequest, ApplicationManager } from '@memberjunction/ng-base-application';
 import { NavigationOptions } from './navigation.interfaces';
-import { IsRecordTabsStyle, RECORDS_RESOURCE_TYPE, IsRecordsTabConfiguration, RecordSourceContext } from './record-open-style';
-import { CompositeKey } from '@memberjunction/core';
+import { IsRecordTabsStyle, RECORDS_RESOURCE_TYPE, IsRecordsTabConfiguration, RecordSourceContext, GetRecordSourceContext, TruncateRecordOriginChain } from './record-open-style';
+import { CompositeKey, Metadata, IsNewEntityRecordUrlId } from '@memberjunction/core';
 import { fromEvent, BehaviorSubject, Subject, Subscription, Observable } from 'rxjs';
 import type { AppContextSnapshot } from '@memberjunction/ai-core-plus';
 import { map, distinctUntilChanged } from 'rxjs/operators';
@@ -170,9 +170,14 @@ export class NavigationService implements OnDestroy {
    * Clears the cached Home app info.
    * Call this if apps are reloaded or user logs out.
    */
-  public clearHomeAppCache(): void {
+  public ClearHomeAppCache(): void {
     this._homeAppId = undefined;
     this._homeAppColor = null;
+  }
+
+  /** @deprecated Use {@link ClearHomeAppCache}. */
+  public clearHomeAppCache(): void {
+    return this.ClearHomeAppCache();
   }
 
   // ════════════════════════════════════════════
@@ -199,6 +204,19 @@ export class NavigationService implements OnDestroy {
    * surface, fixing the staleness where a previous app's tools lingered after navigation.
    */
   private readonly agentToolsByDetachedResource = new Map<BaseResourceComponent, NonNullable<AgentContextUpdate['AgentClientTools']>>();
+
+  /**
+   * Cached resource components the shell has detached and not reattached since. Weak, so a
+   * component the cache destroys without calling {@link ForgetResource} is not kept alive here.
+   */
+  private readonly detachedResources = new WeakSet<BaseResourceComponent>();
+
+  /**
+   * Emits each cached resource component as the shell reattaches it to a tab. A cached component
+   * keeps its instance and runs no init on reattach, so one that publishes agent context listens
+   * here to publish it again.
+   */
+  public readonly ResourceReattached$ = new Subject<BaseResourceComponent>();
 
   /**
    * Latest `AppContextSnapshot` published by the Explorer app shell.
@@ -272,16 +290,26 @@ export class NavigationService implements OnDestroy {
    * Re-publish a cached resource component's tools when its tab is re-focused. Cached components keep
    * their Angular instance but do NOT re-run `ngAfterViewInit`, so they never re-register on reattach
    * — the shell calls this so the just-reactivated surface's tools become the agent's active set
-   * again. Replays the set captured for this component at its last detach; no-op (lets a fresh
-   * component register itself) when none was captured (e.g. a component's very first attach).
+   * again. Replays the set captured for this component at its last detach; replays nothing (lets a
+   * fresh component register itself) when none was captured (e.g. a component's very first attach).
+   * Either way the component stops counting as detached and {@link ResourceReattached$} emits it.
    */
   public NotifyResourceReattached(caller: BaseResourceComponent): void {
+    this.detachedResources.delete(caller);
     const tools = this.agentToolsByDetachedResource.get(caller);
-    if (tools === undefined) {
-      return;
+    if (tools !== undefined) {
+      this.currentAgentTools = tools;
+      this.AgentContextUpdated$.next({ Caller: caller, AgentClientTools: tools });
     }
-    this.currentAgentTools = tools;
-    this.AgentContextUpdated$.next({ Caller: caller, AgentClientTools: tools });
+    this.ResourceReattached$.next(caller);
+  }
+
+  /**
+   * True between {@link NotifyResourceDetached} and {@link NotifyResourceReattached} for this
+   * component: its tab is not on screen, so it must not replace the agent context of the one that is.
+   */
+  public IsResourceDetached(caller: BaseResourceComponent): boolean {
+    return this.detachedResources.has(caller);
   }
 
   /**
@@ -290,19 +318,22 @@ export class NavigationService implements OnDestroy {
    * snapshot whatever tools are CURRENTLY active and key them by the detaching component, so
    * {@link NotifyResourceReattached} can replay them — robust to a wrapper component being the one
    * cached/reattached while an inner child actually registered the tools (e.g. Data Explorer).
+   * The component counts as detached ({@link IsResourceDetached}) until it is reattached.
    */
   public NotifyResourceDetached(caller: BaseResourceComponent): void {
+    this.detachedResources.add(caller);
     this.agentToolsByDetachedResource.set(caller, this.currentAgentTools);
     this.currentAgentTools = [];
     this.AgentContextUpdated$.next({ Caller: caller, AgentClientTools: [] });
   }
 
   /**
-   * Drop a destroyed component's captured tools (e.g. on LRU eviction), so the map doesn't retain
-   * references to dead component instances.
+   * Drop a destroyed component's captured tools and detached mark (e.g. on LRU eviction), so
+   * nothing here retains references to dead component instances.
    */
   public ForgetResource(caller: BaseResourceComponent): void {
     this.agentToolsByDetachedResource.delete(caller);
+    this.detachedResources.delete(caller);
   }
 
   ngOnDestroy(): void {
@@ -494,11 +525,24 @@ export class NavigationService implements OnDestroy {
       }
     }
 
-    let forceNew = tabsMode || this.shouldForceNewTab(options);
+    // Records style no longer forces a new tab unconditionally: a plain click
+    // consumes the records region's temporary tab (preview-tab behavior), and
+    // only shift — or an explicit forceNewTab, which is what finally makes
+    // single-record's "Open in New Tab" do something — adds a second tab.
+    // The region scoping below is what keeps a nav click from ever consuming
+    // a record, which is the protection the old unconditional force provided.
+    let forceNew = this.shouldForceNewTab(options);
+
+    const md = Metadata.Provider; // global-provider-ok: navigation service shell singleton resolves entity and cached record names using global metadata cache
+    const entityInfo = md?.EntityByName(entityName);
+    const friendlyEntityName = entityInfo?.DisplayName || entityInfo?.Name || entityName;
+    const compositeKey = typeof CompositeKey?.FromURLSegment === 'function' ? CompositeKey.FromURLSegment(entityInfo, recordId) : new CompositeKey();
+    const cachedRecordName = md ? md.GetCachedRecordNameOnlyIfCached(entityName, compositeKey) : undefined;
+    const initialTitle = cachedRecordName || friendlyEntityName;
 
     const request: TabRequest = {
       ApplicationId: appId,
-      Title: `${entityName} - ${recordId}`,
+      Title: initialTitle,
       Configuration: {
         resourceType: RECORDS_RESOURCE_TYPE,
         Entity: entityName,  // Must use 'Entity' (capital E) - expected by record-resource.component
@@ -507,10 +551,12 @@ export class NavigationService implements OnDestroy {
       },
       ResourceRecordId: recordId,
       IsPinned: options?.pinTab || false,
-      // Records style: opening a record must not pin the nav tab (see
-      // TabRequest.PreservePinState) — a pinned nav tab forces the main tab
-      // bar visible on every nav page.
-      PreservePinState: tabsMode
+      // Records style: this open belongs to the RECORDS temp-tab pool, so both
+      // consumption and the pin cascade stay inside the region and the nav
+      // tab's temp status is untouched (a pinned nav tab would force the main
+      // tab bar visible on every nav page). Classic style keeps the single
+      // 'main' pool.
+      TempScope: tabsMode ? 'records' : 'main'
     };
 
     // Handle transition from single-resource mode
@@ -521,6 +567,20 @@ export class NavigationService implements OnDestroy {
       tabId = this.workspaceManager.OpenTabForced(request, appColor);
     } else {
       tabId = this.workspaceManager.OpenTab(request, appColor);
+    }
+
+    // If the friendly record name was not already in the LRU cache, fire-and-forget
+    // an async lookup so the tab title upgrades smoothly once resolved without stalling tab open.
+    if (!cachedRecordName && typeof md?.GetEntityRecordName === 'function') {
+      md.GetEntityRecordName(entityName, compositeKey)
+        .then(resolvedName => {
+          if (resolvedName && typeof this.workspaceManager?.GetTab === 'function' && this.workspaceManager.GetTab(tabId)) {
+            this.workspaceManager.UpdateTabTitle?.(tabId, resolvedName);
+          }
+        })
+        .catch(() => {
+          // Non-fatal cache warm / tab retitle miss; initialTitle remains
+        });
     }
 
     if (tabsMode) {
@@ -577,6 +637,9 @@ export class NavigationService implements OnDestroy {
       sourceQueryParams: undefined,
       sourceRecordEntity: undefined,
       sourceRecordId: undefined,
+      // Clear the ancestor chain too — this is an explicit re-capture, and a
+      // surviving chain would hand the crumb an origin from a previous open.
+      sourceParentOrigin: undefined,
       ...this.resolveSourceContext(options)
     });
   }
@@ -601,6 +664,15 @@ export class NavigationService implements OnDestroy {
       if (src.sourceLabel) context['sourceLabel'] = src.sourceLabel;
       if (src.sourceQueryParams && Object.keys(src.sourceQueryParams).length > 0) {
         context['sourceQueryParams'] = src.sourceQueryParams;
+      }
+      if (src.sourceRecordEntity) context['sourceRecordEntity'] = src.sourceRecordEntity;
+      if (src.sourceRecordId) context['sourceRecordId'] = src.sourceRecordId;
+      // An explicit origin can carry an ancestor chain (ReturnToRecordSource
+      // replays one). Dropping it here would re-lose the entry point on the
+      // very navigation that exists to restore it.
+      const chained = TruncateRecordOriginChain(src.sourceParentOrigin);
+      if (chained) {
+        context['sourceParentOrigin'] = chained;
       }
       return context;
     }
@@ -635,9 +707,24 @@ export class NavigationService implements OnDestroy {
       const parentRecordId = activeTab.resourceRecordId || activeTab.configuration?.['recordId'];
       if (typeof parentEntity === 'string' && typeof parentRecordId === 'string' && parentRecordId) {
         context['sourceTabId'] = activeTab.id;
-        context['sourceLabel'] = activeTab.title;
+        const md = Metadata.Provider; // global-provider-ok: navigation service shell singleton resolves parent entity and cached record names using global metadata cache
+        const parentEntityInfo = md?.EntityByName(parentEntity);
+        const parentKey = typeof CompositeKey?.FromURLSegment === 'function' ? CompositeKey.FromURLSegment(parentEntityInfo, parentRecordId) : new CompositeKey();
+        const cachedParentName = md ? md.GetCachedRecordNameOnlyIfCached(parentEntity, parentKey) : undefined;
+        const fallbackParentLabel = parentEntityInfo?.DisplayName || parentEntityInfo?.Name || parentEntity;
+        const sourceLabel = cachedParentName || (activeTab.title && !activeTab.title.includes(parentRecordId) ? activeTab.title : fallbackParentLabel);
+        context['sourceLabel'] = sourceLabel;
         context['sourceRecordEntity'] = parentEntity;
         context['sourceRecordId'] = parentRecordId;
+        // Carry the parent's OWN origin forward. Preview-tab replacement
+        // consumes the parent's tab, so returning to it later re-opens rather
+        // than reactivates — and a re-open would recapture the CHILD as the
+        // origin. Keeping the chain is what lets the return restore the real
+        // entry point instead of pointing the two records at each other.
+        const parentOrigin = TruncateRecordOriginChain(GetRecordSourceContext(activeTab.configuration));
+        if (parentOrigin) {
+          context['sourceParentOrigin'] = parentOrigin;
+        }
       }
       return context;
     }
@@ -723,7 +810,14 @@ export class NavigationService implements OnDestroy {
       }
       const parentKey = new CompositeKey();
       parentKey.SimpleLoadFromURLSegment(origin.sourceRecordId);
-      this.OpenEntityRecord(origin.sourceRecordEntity, parentKey);
+      // RESTORE the parent's origin; do not let the re-open capture a fresh
+      // one. Standing on the child at this moment, a capture would make the
+      // child the parent's origin — the two records would point at each other
+      // and the real entry point would be unreachable. 'none' when we have no
+      // chain: a missing crumb beats a circular one.
+      this.OpenEntityRecord(origin.sourceRecordEntity, parentKey, {
+        recordSource: origin.sourceParentOrigin ?? 'none'
+      });
       return;
     }
     if (!origin.sourceAppId) {
@@ -993,11 +1087,18 @@ export class NavigationService implements OnDestroy {
     const appId = tabsMode && activeApp ? activeApp.ID : this.getDefaultApplicationId();
     const appColor = tabsMode && activeApp ? activeApp.GetColor() : this.getDefaultAppColor();
 
+    // A NEW record keeps forcing its own tab under the records style: it is
+    // unsaved work from the moment it opens, so it must never land on top of
+    // a record the user is reading.
     let forceNew = tabsMode || this.shouldForceNewTab(options);
+
+    const md = Metadata.Provider; // global-provider-ok: navigation service shell singleton resolves entity name for new record tab using global metadata cache
+    const entityInfo = md?.EntityByName(entityName);
+    const friendlyEntityName = entityInfo?.DisplayName || entityInfo?.Name || entityName;
 
     const request: TabRequest = {
       ApplicationId: appId,
-      Title: `New ${entityName}`,
+      Title: `New ${friendlyEntityName}`,
       Configuration: {
         resourceType: RECORDS_RESOURCE_TYPE,
         Entity: entityName,  // Must use 'Entity' (capital E) - expected by record-resource.component
@@ -1007,8 +1108,12 @@ export class NavigationService implements OnDestroy {
         ...this.resolveSourceContext(options)
       },
       ResourceRecordId: '',  // Empty for new records
-      IsPinned: options?.pinTab || false,
-      PreservePinState: tabsMode
+      // Pinned under the records style so the region's preview replacement can
+      // never consume it: an unsaved new record is exactly the tab that must
+      // not vanish when the user clicks the next row in a grid. (VS Code holds
+      // the same line — an untitled buffer is never a preview tab.)
+      IsPinned: options?.pinTab || tabsMode,
+      TempScope: tabsMode ? 'records' : 'main'
     };
 
     // Handle transition from single-resource mode
@@ -1231,6 +1336,18 @@ export class NavigationService implements OnDestroy {
    * Update the query params for the currently active tab.
    * This updates the tab's configuration and triggers a URL sync via the shell's
    * workspace configuration subscription.
+   *
+   * 🚨 NEVER CALL THIS FROM A RESOURCE COMPONENT OR DASHBOARD. "The active tab" is whatever the
+   * user is looking at right now, which is not necessarily the tab the caller lives in. A component
+   * whose async work completes while it sits in a BACKGROUND tab will rewrite — and destroy — the
+   * deep link of the tab the user is actually viewing. Components use
+   * {@link BaseResourceComponent.UpdateQueryParams}, which routes to {@link UpdateTabQueryParams}
+   * with their own tab id and refuses to write when they have none.
+   *
+   * This remains only for shell-level navigation code that is, by construction, acting on behalf of
+   * the user's current tab (nothing in this repo does today).
+   *
+   * @deprecated Prefer {@link UpdateTabQueryParams} with an explicit tab id.
    *
    * Use this instead of directly calling router.navigate() to ensure proper
    * URL management that respects app-scoped routes.

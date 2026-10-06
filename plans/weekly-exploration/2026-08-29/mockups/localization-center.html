@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Localization Center</title>
+<style>
+  :root {
+    --mj-bg-page: #f8f9fa;
+    --mj-bg-surface: white;
+    --mj-bg-surface-card: #f5f7fa;
+    --mj-bg-surface-sunken: #f0f2f5;
+    --mj-text-primary: #334155;
+    --mj-text-secondary: #64748b;
+    --mj-text-muted: #94a3b8;
+    --mj-brand-primary: #264FAF;
+    --mj-border-default: #e2e8f0;
+    --mj-border-subtle: #f1f5f9;
+    --mj-status-success: #16a34a;
+    --mj-status-success-bg: #f0fdf4;
+    --mj-status-warning: #ea580c;
+    --mj-status-warning-bg: #fff7ed;
+    --mj-status-error: #dc2626;
+    --mj-status-error-bg: #fef2f2;
+    --mj-status-info: #0284c7;
+    --mj-status-info-bg: #f0f9ff;
+    --sidebar-width: 230px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--mj-bg-page); color: var(--mj-text-primary); line-height: 1.5; display: flex; min-height: 100vh; font-size: 14px;
+  }
+  .sidebar { width: var(--sidebar-width); min-width: var(--sidebar-width); background: var(--mj-bg-surface); border-right: 1px solid var(--mj-border-default); position: fixed; top:0; left:0; bottom:0; overflow-y:auto; }
+  .brand { padding: 18px 16px; border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--mj-brand-primary); font-size: 15px; }
+  .nav-section { padding: 14px 16px 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--mj-text-muted); }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 16px; color: var(--mj-text-secondary); font-weight: 500; border-left: 3px solid transparent; }
+  .nav-item.active { color: var(--mj-brand-primary); border-left-color: var(--mj-brand-primary); background: color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-bg-surface)); font-weight: 600; }
+  .nav-item i { width: 16px; text-align: center; font-size: 13px; }
+
+  .main { margin-left: var(--sidebar-width); flex: 1; display: flex; flex-direction: column; }
+  .topbar { background: var(--mj-bg-surface); border-bottom: 1px solid var(--mj-border-default); padding: 16px 28px; display: flex; align-items: center; justify-content: space-between; }
+  .topbar h1 { font-size: 19px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+  .topbar h1 i { color: var(--mj-brand-primary); }
+  .topbar .sub { color: var(--mj-text-secondary); font-size: 12.5px; margin-top: 3px; }
+  .btn { border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); color: var(--mj-text-secondary); padding: 7px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; cursor: default; }
+  .btn-primary { background: var(--mj-brand-primary); border-color: var(--mj-brand-primary); color: white; }
+  .btn-sm { padding: 4px 10px; font-size: 12px; }
+
+  .content { padding: 22px 28px 40px; }
+
+  .lang-switcher { display: flex; align-items: center; gap: 8px; background: var(--mj-bg-surface-card); border: 1px solid var(--mj-border-default); border-radius: 8px; padding: 6px 12px; font-size: 12.5px; font-weight: 600; color: var(--mj-text-secondary); }
+
+  .matrix-card { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; overflow: hidden; margin-bottom: 20px; }
+  .card-header { padding: 14px 18px; border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; justify-content: space-between; }
+  .card-header h2 { font-size: 14.5px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .card-header h2 i { color: var(--mj-brand-primary); }
+
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--mj-text-muted); padding: 10px 18px; border-bottom: 1px solid var(--mj-border-default); background: var(--mj-bg-surface-card); }
+  th.center, td.center { text-align: center; }
+  td { padding: 11px 18px; border-bottom: 1px solid var(--mj-border-subtle); font-size: 13px; vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  .cov-pill { display: inline-flex; align-items: center; justify-content: center; min-width: 46px; padding: 3px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+  .cov-100 { background: var(--mj-status-success-bg); color: var(--mj-status-success); }
+  .cov-mid { background: var(--mj-status-warning-bg); color: var(--mj-status-warning); }
+  .cov-low { background: var(--mj-status-error-bg); color: var(--mj-status-error); }
+  .flag { font-size: 15px; margin-right: 6px; }
+
+  .grid-2 { display: grid; grid-template-columns: 1.1fr 1fr; gap: 20px; align-items: start; }
+
+  .queue-item { padding: 14px 18px; border-bottom: 1px solid var(--mj-border-subtle); }
+  .queue-item:last-child { border-bottom: none; }
+  .queue-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .ai-tag { display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; font-weight: 700; color: var(--mj-brand-primary); background: color-mix(in srgb, var(--mj-brand-primary) 8%, white); padding: 2px 8px; border-radius: 999px; }
+  .stale-tag { display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; font-weight: 700; color: var(--mj-status-warning); background: var(--mj-status-warning-bg); padding: 2px 8px; border-radius: 999px; }
+  .key { font-family: ui-monospace, monospace; font-size: 11px; color: var(--mj-text-muted); }
+  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 8px 0 10px; }
+  .compare .box { background: var(--mj-bg-surface-sunken); border-radius: 6px; padding: 8px 10px; font-size: 13px; }
+  .compare .lbl { font-size: 10px; text-transform: uppercase; color: var(--mj-text-muted); font-weight: 700; margin-bottom: 3px; }
+  .qa-actions { display: flex; gap: 8px; }
+
+  .form-preview { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; overflow: hidden; }
+  .fp-header { background: var(--mj-bg-surface-card); padding: 12px 18px; border-bottom: 1px solid var(--mj-border-default); display:flex; align-items:center; justify-content:space-between; }
+  .fp-body { padding: 20px 24px; }
+  .fp-field { margin-bottom: 16px; }
+  .fp-field label { display: block; font-size: 12.5px; font-weight: 700; margin-bottom: 5px; color: var(--mj-text-primary); }
+  .fp-field .hint { font-size: 11px; color: var(--mj-text-muted); margin-top: 3px; }
+  .fp-input { width: 100%; border: 1px solid var(--mj-border-default); border-radius: 6px; padding: 8px 10px; font-size: 13px; color: var(--mj-text-secondary); background: var(--mj-bg-surface-card); }
+  .fp-select { width: 100%; border: 1px solid var(--mj-border-default); border-radius: 6px; padding: 8px 10px; font-size: 13px; color: var(--mj-text-secondary); background: var(--mj-bg-surface-card); }
+
+  .footer-note { padding: 4px 28px 24px; color: var(--mj-text-muted); font-size: 11.5px; }
+</style>
+</head>
+<body>
+  <div class="sidebar">
+    <div class="brand"><i class="fa-solid fa-diagram-project"></i> MemberJunction</div>
+    <div class="nav-section">Admin</div>
+    <div class="nav-item"><i class="fa-solid fa-shield-halved"></i> Permissions</div>
+    <div class="nav-item"><i class="fa-solid fa-database"></i> Entity Admin</div>
+    <div class="nav-section">Dev Tools</div>
+    <div class="nav-item"><i class="fa-solid fa-universal-access"></i> Accessibility Audit</div>
+    <div class="nav-item"><i class="fa-solid fa-heart-pulse"></i> Data Health</div>
+    <div class="nav-item active"><i class="fa-solid fa-language"></i> Localization Center</div>
+    <div class="nav-section">Data</div>
+    <div class="nav-item"><i class="fa-solid fa-users"></i> Contacts</div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <h1><i class="fa-solid fa-language"></i> Localization Center</h1>
+        <div class="sub">Translation coverage &amp; review &middot; New: Localization-by-Default Framework Layer</div>
+      </div>
+      <div style="display:flex; gap:10px; align-items:center;">
+        <div class="lang-switcher"><i class="fa-solid fa-globe"></i> Preview as: Espa&ntilde;ol</div>
+        <button class="btn"><i class="fa-solid fa-plus"></i> Add Language</button>
+        <button class="btn btn-primary"><i class="fa-solid fa-wand-magic-sparkles"></i> Suggest Translations</button>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="matrix-card">
+        <div class="card-header"><h2><i class="fa-solid fa-table-cells"></i> Coverage Matrix</h2><span style="font-size:12px; color:var(--mj-text-muted);">6 entities &times; 4 languages</span></div>
+        <table>
+          <thead>
+            <tr>
+              <th>Entity</th>
+              <th class="center"><span class="flag">🇪🇸</span>Espa&ntilde;ol</th>
+              <th class="center"><span class="flag">🇫🇷</span>Fran&ccedil;ais</th>
+              <th class="center"><span class="flag">🇵🇭</span>Tagalog</th>
+              <th class="center"><span class="flag">🇻🇳</span>Ti&#7871;ng Vi&#7879;t</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><b>Contacts</b><span style="display:block;font-size:11px;color:var(--mj-text-muted);">18 fields</span></td>
+              <td class="center"><span class="cov-pill cov-100">100%</span></td>
+              <td class="center"><span class="cov-pill cov-mid">83%</span></td>
+              <td class="center"><span class="cov-pill cov-low">22%</span></td>
+              <td class="center"><span class="cov-pill cov-low">0%</span></td>
+            </tr>
+            <tr>
+              <td><b>Memberships</b><span style="display:block;font-size:11px;color:var(--mj-text-muted);">11 fields</span></td>
+              <td class="center"><span class="cov-pill cov-100">100%</span></td>
+              <td class="center"><span class="cov-pill cov-100">100%</span></td>
+              <td class="center"><span class="cov-pill cov-mid">64%</span></td>
+              <td class="center"><span class="cov-pill cov-low">9%</span></td>
+            </tr>
+            <tr>
+              <td><b>Events</b><span style="display:block;font-size:11px;color:var(--mj-text-muted);">14 fields</span></td>
+              <td class="center"><span class="cov-pill cov-mid">76%</span></td>
+              <td class="center"><span class="cov-pill cov-low">31%</span></td>
+              <td class="center"><span class="cov-pill cov-low">0%</span></td>
+              <td class="center"><span class="cov-pill cov-low">0%</span></td>
+            </tr>
+            <tr>
+              <td><b>Communication Templates</b><span style="display:block;font-size:11px;color:var(--mj-text-muted);">9 templates</span></td>
+              <td class="center"><span class="cov-pill cov-mid">89%</span></td>
+              <td class="center"><span class="cov-pill cov-mid">67%</span></td>
+              <td class="center"><span class="cov-pill cov-low">11%</span></td>
+              <td class="center"><span class="cov-pill cov-low">0%</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="grid-2">
+        <div class="matrix-card">
+          <div class="card-header"><h2><i class="fa-solid fa-inbox"></i> Review Queue</h2><span style="font-size:12px; color:var(--mj-text-muted);">14 pending</span></div>
+          <div>
+            <div class="queue-item">
+              <div class="queue-head">
+                <span class="ai-tag"><i class="fa-solid fa-wand-magic-sparkles"></i> AI Suggested</span>
+                <span class="key">EntityField: Contact.Employer</span>
+              </div>
+              <div class="compare">
+                <div class="box"><div class="lbl">Source (English)</div>Employer</div>
+                <div class="box"><div class="lbl">Suggested (Espa&ntilde;ol)</div>Empleador</div>
+              </div>
+              <div class="qa-actions">
+                <button class="btn btn-sm btn-primary"><i class="fa-solid fa-check"></i> Approve</button>
+                <button class="btn btn-sm"><i class="fa-solid fa-pen"></i> Edit</button>
+              </div>
+            </div>
+            <div class="queue-item">
+              <div class="queue-head">
+                <span class="stale-tag"><i class="fa-solid fa-clock-rotate-left"></i> Source Changed</span>
+                <span class="key">EntityField: Membership.Status</span>
+              </div>
+              <div class="compare">
+                <div class="box"><div class="lbl">New Source (English)</div>Membership Status</div>
+                <div class="box"><div class="lbl">Existing (Fran&ccedil;ais) &mdash; stale</div>Statut d'adh&eacute;sion</div>
+              </div>
+              <div class="qa-actions">
+                <button class="btn btn-sm btn-primary"><i class="fa-solid fa-wand-magic-sparkles"></i> Re-suggest</button>
+                <button class="btn btn-sm"><i class="fa-solid fa-pen"></i> Edit Manually</button>
+              </div>
+            </div>
+            <div class="queue-item">
+              <div class="queue-head">
+                <span class="ai-tag"><i class="fa-solid fa-wand-magic-sparkles"></i> AI Suggested</span>
+                <span class="key">CommunicationTemplate: renewal-reminder.subject</span>
+              </div>
+              <div class="compare">
+                <div class="box"><div class="lbl">Source (English)</div>Your membership renews soon</div>
+                <div class="box"><div class="lbl">Suggested (Tagalog)</div>Malapit nang mag-renew ang iyong membership</div>
+              </div>
+              <div class="qa-actions">
+                <button class="btn btn-sm btn-primary"><i class="fa-solid fa-check"></i> Approve</button>
+                <button class="btn btn-sm"><i class="fa-solid fa-pen"></i> Edit</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-preview">
+          <div class="fp-header">
+            <h2 style="font-size:14.5px; font-weight:700;"><i class="fa-solid fa-eye" style="color:var(--mj-brand-primary);"></i> Live Preview &mdash; Contact Form</h2>
+            <span class="cov-pill cov-100">ES</span>
+          </div>
+          <div class="fp-body">
+            <div class="fp-field">
+              <label>Nombre <span class="hint">(FirstName)</span></label>
+              <div class="fp-input">Marisol</div>
+            </div>
+            <div class="fp-field">
+              <label>Correo Electr&oacute;nico <span class="hint">(Email)</span></label>
+              <div class="fp-input">marisol@example.org</div>
+            </div>
+            <div class="fp-field">
+              <label>Empleador <span class="hint">(Employer &mdash; just approved above)</span></label>
+              <div class="fp-input">Fundaci&oacute;n Comunitaria</div>
+            </div>
+            <div class="fp-field">
+              <label>Estado de Membres&iacute;a <span class="hint">(Membership.Status)</span></label>
+              <div class="fp-select">Activo &#9662;</div>
+              <div class="hint" style="color:var(--mj-status-success);"><i class="fa-solid fa-code"></i> Same generated component &mdash; only <code>LocalizationEngine.Resolve()</code> changed, zero custom code per language.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="footer-note">Mockup for <code>plans/weekly-exploration/2026-08-29/idea-2-localization-by-default.md</code> &middot; illustrative data, not connected to a live system.</div>
+  </div>
+<script>
+const ICON_MAP = {
+  'fa-diagram-project':'◈','fa-shield-halved':'🛡','fa-database':'🗄','fa-universal-access':'♿',
+  'fa-heart-pulse':'♥','fa-vial':'⚗','fa-users':'👥','fa-building':'🏢','fa-sliders':'⚙',
+  'fa-play':'▶','fa-circle-info':'ℹ','fa-list-check':'☑','fa-circle-exclamation':'⛔',
+  'fa-triangle-exclamation':'⚠','fa-chart-bar':'📊','fa-id-card':'🪪','fa-language':'🌐',
+  'fa-globe':'🌐','fa-plus':'+','fa-wand-magic-sparkles':'✨','fa-table-cells':'▦','fa-inbox':'📥',
+  'fa-clock-rotate-left':'↺','fa-check':'✓','fa-pen':'✎','fa-eye':'👁','fa-code':'</>',
+  'fa-filter':'▼','fa-list-ul':'≡','fa-robot':'🤖','fa-user':'👤','fa-rotate-left':'↺',
+  'fa-ban':'⊘','fa-xmark':'✕','fa-circle-check':'✓'
+};
+document.querySelectorAll('i[class*="fa-"]').forEach(el => {
+  const cls = [...el.classList].find(c => ICON_MAP[c]);
+  el.textContent = cls ? ICON_MAP[cls] : '•';
+  el.style.fontStyle = 'normal';
+});
+
+</script>
+</body>
+</html>

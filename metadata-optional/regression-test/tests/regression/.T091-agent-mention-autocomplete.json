@@ -1,0 +1,57 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T091 - Agent Mention Autocomplete",
+    "Description": "Triggers the agent-mention composer plugin and mention-autocomplete overlay — a distinct interaction from plain text submit, exercising the '@' trigger path only.",
+    "InputDefinition": "{\n  \"goal\": \"Open the Chat application via the app switcher, wait for the workspace, and start a new conversation so the composer is focused. In the message composer, type an '@' character. Confirm a mention autocomplete popup appears listing selectable agents (names, possibly with icons). Optionally type a letter after '@' to see the list filter. Seeing the agent mention picker appear is success — you do NOT need to actually send a message. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 35,\n  \"judgeValidationCriteria\": [\n    \"Typing '@' in the composer opens a mention autocomplete dropdown/popup\",\n    \"The popup lists one or more agents to choose from (or a clear 'no matches' state after filtering)\",\n    \"The popup is anchored to the composer and dismisses when clicking away or pressing Escape\",\n    \"No error messages, blank screens, or crash pages\"\n  ]\n}",
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,chat",
+    "Priority": 0,
+    "EstimatedDurationSeconds": null,
+    "EstimatedCostUSD": null,
+    "RepeatCount": null,
+    "MaxExecutionTimeMS": null,
+    "Variables": null,
+    "Type": "Computer Use",
+    "SkipEmbeddings": false
+  },
+  "primaryKey": {
+    "ID": "08A19CE9-6193-44F6-B5F5-E8CE4FE8651D"
+  },
+  "sync": {
+    "lastModified": "2026-09-11T21:36:53.733Z",
+    "checksum": "bfb6563c80537128253dd22a24ab3c0203daaa5cd77792a2b93391adcea3b383"
+  }
+}

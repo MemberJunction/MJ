@@ -1,45 +1,57 @@
-/* ===========================
-   File Browser Shell Styles
-   Traditional dual-pane file manager layout
-   =========================== */
+/* ==========================================================================
+   File Browser Shell Component
+   Modern macOS Finder / Cloud Storage multi-panel layout
+   ========================================================================== */
+
+:host {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
 
 .file-browser {
   display: flex;
   flex-direction: column;
   height: 100%;
   width: 100%;
-  background-color: var(--mj-bg-surface-sunken);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-  border: 1px solid var(--mj-border-strong);
+  background-color: var(--mj-bg-surface);
+  border: none;
+  border-radius: 0;
+  overflow: hidden;
+  box-shadow: none;
 }
 
 /* Mobile Header */
 .mobile-header {
   display: none;
   align-items: center;
-  padding: 8px 12px;
+  gap: 12px;
+  padding: 10px 16px;
   background-color: var(--mj-bg-surface);
-  border-bottom: 1px solid var(--mj-border-strong);
+  border-bottom: 1px solid var(--mj-border-default);
 }
 
 .mobile-header .browser-title {
   margin: 0;
-  font-size: 16px;
+  font-size: 0.95rem;
   font-weight: 600;
   color: var(--mj-text-primary);
 }
 
 .sidebar-toggle {
-  margin-right: 12px;
-  background: none;
-  border: 1px solid var(--mj-border-strong);
-  padding: 6px 12px;
+  background: var(--mj-bg-surface-sunken);
+  border: 1px solid var(--mj-border-default);
+  color: var(--mj-text-secondary);
+  padding: 6px 10px;
   cursor: pointer;
-  border-radius: 3px;
+  border-radius: var(--mj-radius-sm, 6px);
+  font-size: 0.85rem;
+  transition: all 0.15s ease;
 }
 
 .sidebar-toggle:hover {
-  background-color: var(--mj-bg-surface-sunken);
+  background-color: color-mix(in srgb, var(--mj-text-primary) 6%, var(--mj-bg-surface));
+  color: var(--mj-text-primary);
 }
 
 /* Main Container - Two Panel Layout */
@@ -47,19 +59,21 @@
   display: flex;
   flex: 1;
   overflow: hidden;
-  gap: 0;
+  position: relative;
 }
 
-/* Left Sidebar */
+/* Left Sidebar: Accounts & Folders */
 .sidebar {
   display: flex;
   flex-direction: column;
-  background-color: var(--mj-bg-surface-card);
-  border-right: 1px solid var(--mj-border-strong);
-  width: 220px;
-  min-width: 220px;
+  background-color: var(--mj-bg-surface-sunken, color-mix(in srgb, var(--mj-text-primary) 2%, var(--mj-bg-surface)));
+  border-right: 1px solid var(--mj-border-default);
+  width: 250px;
+  min-width: 250px;
+  max-width: 250px;
   overflow: hidden;
-  transition: all 0.3s ease;
+  transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1), transform 0.25s ease, opacity 0.2s ease;
+  z-index: 10;
 }
 
 .sidebar.collapsed {
@@ -67,33 +81,37 @@
   min-width: 0;
   border-right: none;
   opacity: 0;
+  pointer-events: none;
 }
 
 /* Sidebar Sections */
 .sidebar-section {
   display: flex;
   flex-direction: column;
+  min-height: 180px;
+  max-height: 48%;
   border-bottom: 1px solid var(--mj-border-default);
 }
 
 .sidebar-section:last-child {
   flex: 1;
+  max-height: none;
   border-bottom: none;
 }
 
 .section-header {
-  padding: 8px 12px;
-  background-color: var(--mj-bg-surface-sunken);
-  border-bottom: 1px solid var(--mj-border-strong);
+  padding: 8px 14px;
+  background-color: transparent;
+  border-bottom: 1px solid var(--mj-border-default);
 }
 
 .section-header h3 {
   margin: 0;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--mj-text-secondary);
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--mj-text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.06em;
 }
 
 .section-content {
@@ -102,43 +120,44 @@
   overflow-x: hidden;
 }
 
-/* Right Main Panel */
+/* Right Main Panel: File Grid & Command Bar */
 .main-panel {
   flex: 1;
   background-color: var(--mj-bg-surface);
-  border-left: 1px solid var(--mj-border-strong);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  min-width: 0;
 }
 
 /* Custom Scrollbar Styling */
 .section-content::-webkit-scrollbar {
-  width: 8px;
+  width: 5px;
 }
 
 .section-content::-webkit-scrollbar-track {
-  background: var(--mj-bg-surface-sunken);
+  background: transparent;
 }
 
 .section-content::-webkit-scrollbar-thumb {
-  background: var(--mj-border-strong);
+  background: var(--mj-border-default);
   border-radius: 4px;
 }
 
 .section-content::-webkit-scrollbar-thumb:hover {
-  background: var(--mj-text-disabled);
+  background: var(--mj-text-muted);
 }
 
-/* ===========================
+/* ==========================================================================
    Responsive Design
-   =========================== */
+   ========================================================================== */
 
 /* Tablet (768px - 1024px) */
 @media screen and (max-width: 1024px) {
   .sidebar {
-    width: 200px;
-    min-width: 200px;
+    width: 220px;
+    min-width: 220px;
+    max-width: 220px;
   }
 }
 
@@ -152,48 +171,24 @@
     flex-direction: column;
   }
 
-  /* Sidebar becomes overlay on mobile */
   .sidebar {
     position: absolute;
     left: 0;
-    top: 45px; /* Height of mobile header */
+    top: 0;
     bottom: 0;
-    width: 280px;
-    min-width: 280px;
+    width: 270px;
+    min-width: 270px;
+    max-width: 270px;
     z-index: 1000;
-    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.15);
+    box-shadow: var(--mj-shadow-lg, 0 10px 25px rgba(0, 0, 0, 0.2));
+    background-color: var(--mj-bg-surface);
   }
 
   .sidebar.collapsed {
     transform: translateX(-100%);
   }
 
-  /* File grid takes full space on mobile */
   .main-panel {
     flex: 1;
-  }
-}
-
-/* Small Mobile (below 480px) */
-@media screen and (max-width: 480px) {
-  .mobile-header {
-    padding: 6px 10px;
-  }
-
-  .mobile-header .browser-title {
-    font-size: 14px;
-  }
-
-  .section-header {
-    padding: 6px 10px;
-  }
-
-  .section-header h3 {
-    font-size: 10px;
-  }
-
-  .sidebar {
-    width: 260px;
-    min-width: 260px;
   }
 }

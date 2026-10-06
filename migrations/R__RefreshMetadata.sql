@@ -1,7 +1,7 @@
 -- Adding the timestamp here ensures the checksum changes each time so this runs every time
 -- ${flyway:timestamp}
 
-/* SQL text to recompile all views */
+/* SQL text to recompile all views (dependency order: inner layered views before g.* wrappers) */
 EXEC [${flyway:defaultSchema}].spRecompileAllViews
 
 /* SQL text to update existing entities from schema */

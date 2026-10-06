@@ -106,9 +106,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Test Rubrics','TypeID')"
-                [NewRecordValues]="NewRecordValues('MJ: Test Rubrics')"
+                [NewRecordValues]="NewRecordValues('MJ: Test Rubrics','TypeID')"
                 [AllowLoad]="IsSectionExpanded('mJTestRubrics')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTestRubrics', $event.totalRowCount)"
                 >
@@ -131,9 +131,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tests','TypeID')"
-                [NewRecordValues]="NewRecordValues('MJ: Tests')"
+                [NewRecordValues]="NewRecordValues('MJ: Tests','TypeID')"
                 [AllowLoad]="IsSectionExpanded('mJTests')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTests', $event.totalRowCount)"
                 >

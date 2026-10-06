@@ -254,7 +254,7 @@ If a column stores structured JSON (like a `Settings` or `Configuration` column)
 4. **Push the metadata and re-run CodeGen**:
 
    ```bash
-   npx mj sync push --dir=metadata --include="entities"
+   pnpm mj sync push --dir=metadata --include="entities"
    mj codegen
    ```
 
@@ -274,9 +274,25 @@ If a column stores structured JSON (like a `Settings` or `Configuration` column)
 After this, the generated entity class will include a typed accessor like:
 ```typescript
 get SettingsObject(): IWidgetSettings | null {
-    return this.Settings ? JSON.parse(this.Settings) : null;
+    return this.GetJSONFieldObject<IWidgetSettings>('Settings');
+}
+set SettingsObject(value: IWidgetSettings | null) {
+    this.SetJSONFieldObject<IWidgetSettings>('Settings', value);
 }
 ```
+
+The accessor is a **live view** of the column: `rec.SettingsObject.Features.push(x)` or
+`rec.SettingsObject.MaxRetries = 5` dirties the field and `Save()` persists it (earlier versions
+parsed once and silently dropped in-place edits). Use `ToPlainJSON()` from `@memberjunction/core`
+before `structuredClone`/`postMessage` of such a value.
+
+**Optional validation.** Add a `@mjValidate` (or `@mjValidate warn`) JSDoc tag to the root interface
+in the `JSONTypeDefinition` file to have CodeGen emit a structural Zod schema and a generated
+`Validate()` check for the field; JSON-Schema-style tags (`@minimum`, `@pattern`, …) and
+`@CHECK ts:(…)` / `@CHECK (SQL)` rules refine it. SQL `@CHECK` rules are LLM-translated and cached in
+`__mj.GeneratedCode` (category `CodeGen: JSON Validators`) — run CodeGen with AI enabled once and
+commit the resulting migration output. Untagged types are unchanged. Full reference:
+[JSONType Guide](JSONTYPE_GUIDE.md).
 
 ---
 
@@ -286,7 +302,7 @@ If your new table is a lookup table (e.g., `WidgetCategory`), **do not seed it w
 
 1. Create `metadata/widget-categories/.mj-sync.json` with the entity configuration
 2. Create `metadata/widget-categories/.widget-categories.json` with the seed data
-3. Push: `npx mj sync push --dir=metadata --include="widget-categories"`
+3. Push: `pnpm mj sync push --dir=metadata --include="widget-categories"`
 
 See [metadata/CLAUDE.md](../metadata/CLAUDE.md) for the full metadata file format.
 
@@ -310,7 +326,26 @@ Before considering your migration complete:
 - [ ] Ran `mj codegen` and appended output to migration file
 - [ ] Deleted standalone `CodeGen_Run_*.sql` file after appending
 - [ ] Verified on a clean database: drop → `mj migrate --dir ./migrations` → success
+- [ ] Verified CodeGen idempotency: `node scripts/codegen-idempotency-check.mjs --stage warm-twice --no-ai` produces 0 diffs
 - [ ] Committed migration + all generated TypeScript/Angular files CodeGen updated
+
+---
+
+## CodeGen Idempotency and Churn Verification
+
+MemberJunction enforces strict CodeGen idempotency and minimal blast radius. When developing migrations or core engine features:
+
+1. **Verify No-Churn / Warm Runs**:
+   ```bash
+   node scripts/codegen-idempotency-check.mjs --stage warm-twice --no-ai
+   ```
+   A second CodeGen run against an unchanged schema must result in **0 modified files**, **0 surviving SQL capture files**, and report `fieldsNew = 0, fieldsChanged = 0, decisionRecordsWritten = 0`.
+
+2. **Verify Single-Column Blast Radius**:
+   ```bash
+   node scripts/codegen-idempotency-check.mjs --stage single-column --no-ai
+   ```
+   Adding a column to an entity must only touch that entity's files, leaving sibling fields, other entities, and `generated-forms.module.ts` unchanged.
 
 ---
 
@@ -343,5 +378,6 @@ For real-world examples of this pattern in the codebase:
 
 - [migrations/CLAUDE.md](../migrations/CLAUDE.md) — Migration content rules and checklist
 - [metadata/CLAUDE.md](../metadata/CLAUDE.md) — Metadata file authoring (`@lookup`, `@file`, JSONType)
+- [JSONType Guide](JSONTYPE_GUIDE.md) — live typed accessors and opt-in `@mjValidate` / `@CHECK` validation
 - [templates/claude-pack/core/06-codegen-contract.md](../templates/claude-pack/core/06-codegen-contract.md) — What CodeGen owns vs. what you own
 - [templates/claude-pack/core/07-migrations-basics.md](../templates/claude-pack/core/07-migrations-basics.md) — Migration formatting basics

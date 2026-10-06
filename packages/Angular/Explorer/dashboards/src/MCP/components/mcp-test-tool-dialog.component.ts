@@ -253,11 +253,11 @@ export class MCPTestToolDialogComponent implements OnInit, OnDestroy {
         // Apply pre-selected values
         if (this.SelectedServerID) {
             this.ServerID = this.SelectedServerID;
-            this.onServerChange();
+            this.OnServerChange();
         }
         if (this.SelectedConnectionID) {
             this.ConnectionID = this.SelectedConnectionID;
-            this.onConnectionChange();
+            this.OnConnectionChange();
         }
         if (this.SelectedToolID) {
             this.ToolID = this.SelectedToolID;
@@ -273,7 +273,7 @@ export class MCPTestToolDialogComponent implements OnInit, OnDestroy {
     // Selection Handlers
     // ========================================
 
-    onServerChange(): void {
+    OnServerChange(): void {
         this.NoConnectionsWarning = null;
 
         // Filter connections by selected server
@@ -318,13 +318,28 @@ export class MCPTestToolDialogComponent implements OnInit, OnDestroy {
         this.cdr.detectChanges();
     }
 
-    onConnectionChange(): void {
+    /** @deprecated Use {@link OnServerChange}. */
+    onServerChange(): void {
+      return this.OnServerChange();
+    }
+
+    OnConnectionChange(): void {
         // Connection changed - tools are filtered by server, not connection
         this.cdr.detectChanges();
     }
 
-    onToolChange(): void {
+    /** @deprecated Use {@link OnConnectionChange}. */
+    onConnectionChange(): void {
+      return this.OnConnectionChange();
+    }
+
+    OnToolChange(): void {
         this.cdr.detectChanges();
+    }
+
+    /** @deprecated Use {@link OnToolChange}. */
+    onToolChange(): void {
+      return this.OnToolChange();
     }
 
     // ========================================
@@ -334,7 +349,7 @@ export class MCPTestToolDialogComponent implements OnInit, OnDestroy {
     /**
      * Handle server dropdown filter change
      */
-    onServerFilterChange(filter: string): void {
+    OnServerFilterChange(filter: string): void {
         const filterLower = (filter || '').toLowerCase();
         this.DisplayServers = this.Servers.filter(s =>
             s.Name.toLowerCase().includes(filterLower) ||
@@ -342,10 +357,15 @@ export class MCPTestToolDialogComponent implements OnInit, OnDestroy {
         );
     }
 
+    /** @deprecated Use {@link OnServerFilterChange}. */
+    onServerFilterChange(filter: string): void {
+      return this.OnServerFilterChange(filter);
+    }
+
     /**
      * Handle connection dropdown filter change
      */
-    onConnectionFilterChange(filter: string): void {
+    OnConnectionFilterChange(filter: string): void {
         const filterLower = (filter || '').toLowerCase();
         this.DisplayConnections = this.FilteredConnections.filter(c =>
             c.Name.toLowerCase().includes(filterLower) ||
@@ -353,16 +373,26 @@ export class MCPTestToolDialogComponent implements OnInit, OnDestroy {
         );
     }
 
+    /** @deprecated Use {@link OnConnectionFilterChange}. */
+    onConnectionFilterChange(filter: string): void {
+      return this.OnConnectionFilterChange(filter);
+    }
+
     /**
      * Handle tool dropdown filter change
      */
-    onToolFilterChange(filter: string): void {
+    OnToolFilterChange(filter: string): void {
         const filterLower = (filter || '').toLowerCase();
         this.DisplayTools = this.FilteredTools.filter(t =>
             t.ToolName.toLowerCase().includes(filterLower) ||
             (t.ToolTitle?.toLowerCase().includes(filterLower) ?? false) ||
             (t.ToolDescription?.toLowerCase().includes(filterLower) ?? false)
         );
+    }
+
+    /** @deprecated Use {@link OnToolFilterChange}. */
+    onToolFilterChange(filter: string): void {
+      return this.OnToolFilterChange(filter);
     }
 
     /**
@@ -375,7 +405,7 @@ export class MCPTestToolDialogComponent implements OnInit, OnDestroy {
     /**
      * Proceed to configuration step
      */
-    async proceedToConfig(): Promise<void> {
+    async ProceedToConfig(): Promise<void> {
         if (!this.CanProceedToConfig) return;
 
         this.SelectedTool = this.Tools.find(t => UUIDsEqual(t.ID, this.ToolID)) || null;
@@ -389,6 +419,11 @@ export class MCPTestToolDialogComponent implements OnInit, OnDestroy {
 
         this.CurrentStep = 'configure';
         this.cdr.detectChanges();
+    }
+
+    /** @deprecated Use {@link ProceedToConfig}. */
+    async proceedToConfig(): Promise<void> {
+      return this.ProceedToConfig();
     }
 
     /**
@@ -520,7 +555,7 @@ export class MCPTestToolDialogComponent implements OnInit, OnDestroy {
     /**
      * Get input type for a parameter
      */
-    getInputType(config: ParameterConfig): string {
+    GetInputType(config: ParameterConfig): string {
         if (config.enumValues.length > 0) return 'select';
         if (config.format === 'date') return 'date';
         if (config.format === 'date-time') return 'datetime-local';
@@ -537,35 +572,55 @@ export class MCPTestToolDialogComponent implements OnInit, OnDestroy {
         }
     }
 
+    /** @deprecated Use {@link GetInputType}. */
+    getInputType(config: ParameterConfig): string {
+      return this.GetInputType(config);
+    }
+
     /**
      * Check if parameter should use textarea
      */
-    isTextarea(config: ParameterConfig): boolean {
+    IsTextarea(config: ParameterConfig): boolean {
         return config.type === 'array' || config.type === 'object' ||
                (config.description != null && config.description.length > 100);
+    }
+
+    /** @deprecated Use {@link IsTextarea}. */
+    isTextarea(config: ParameterConfig): boolean {
+      return this.IsTextarea(config);
     }
 
     /**
      * Handle parameter value change
      */
-    onParameterChange(name: string, value: unknown): void {
+    OnParameterChange(name: string, value: unknown): void {
         this.ParameterValues[name] = value;
+    }
+
+    /** @deprecated Use {@link OnParameterChange}. */
+    onParameterChange(name: string, value: unknown): void {
+      return this.OnParameterChange(name, value);
     }
 
     /**
      * Get parameter value as string for textarea display
      */
-    getTextareaValue(name: string): string {
+    GetTextareaValue(name: string): string {
         const value = this.ParameterValues[name];
         if (value === null || value === undefined) return '';
         if (typeof value === 'object') return JSON.stringify(value, null, 2);
         return String(value);
     }
 
+    /** @deprecated Use {@link GetTextareaValue}. */
+    getTextareaValue(name: string): string {
+      return this.GetTextareaValue(name);
+    }
+
     /**
      * Handle textarea change - parse JSON if needed
      */
-    onTextareaChange(name: string, value: string, config: ParameterConfig): void {
+    OnTextareaChange(name: string, value: string, config: ParameterConfig): void {
         if (config.type === 'array' || config.type === 'object') {
             try {
                 this.ParameterValues[name] = JSON.parse(value || (config.type === 'array' ? '[]' : '{}'));
@@ -576,6 +631,11 @@ export class MCPTestToolDialogComponent implements OnInit, OnDestroy {
         } else {
             this.ParameterValues[name] = value;
         }
+    }
+
+    /** @deprecated Use {@link OnTextareaChange}. */
+    onTextareaChange(name: string, value: string, config: ParameterConfig): void {
+      return this.OnTextareaChange(name, value, config);
     }
 
     // ========================================
@@ -600,7 +660,7 @@ export class MCPTestToolDialogComponent implements OnInit, OnDestroy {
     /**
      * Execute the tool
      */
-    async executeTool(): Promise<void> {
+    async ExecuteTool(): Promise<void> {
         if (!this.IsValid || !this.ConnectionID || !this.ToolID) return;
 
         this.IsExecuting = true;
@@ -648,6 +708,11 @@ export class MCPTestToolDialogComponent implements OnInit, OnDestroy {
         }
     }
 
+    /** @deprecated Use {@link ExecuteTool}. */
+    async executeTool(): Promise<void> {
+      return this.ExecuteTool();
+    }
+
     // ========================================
     // Results Helpers
     // ========================================
@@ -688,7 +753,7 @@ export class MCPTestToolDialogComponent implements OnInit, OnDestroy {
     /**
      * Copy result to clipboard
      */
-    async copyResult(): Promise<void> {
+    async CopyResult(): Promise<void> {
         if (!this.FormattedResult) return;
 
         try {
@@ -698,6 +763,11 @@ export class MCPTestToolDialogComponent implements OnInit, OnDestroy {
         }
     }
 
+    /** @deprecated Use {@link CopyResult}. */
+    async copyResult(): Promise<void> {
+      return this.CopyResult();
+    }
+
     // ========================================
     // Navigation
     // ========================================
@@ -705,7 +775,7 @@ export class MCPTestToolDialogComponent implements OnInit, OnDestroy {
     /**
      * Go back to previous step
      */
-    goBack(): void {
+    GoBack(): void {
         if (this.CurrentStep === 'results') {
             this.CurrentStep = 'configure';
         } else if (this.CurrentStep === 'configure') {
@@ -714,21 +784,36 @@ export class MCPTestToolDialogComponent implements OnInit, OnDestroy {
         this.cdr.detectChanges();
     }
 
+    /** @deprecated Use {@link GoBack}. */
+    goBack(): void {
+      return this.GoBack();
+    }
+
     /**
      * Run the tool again with same parameters
      */
-    async runAgain(): Promise<void> {
+    async RunAgain(): Promise<void> {
         this.CurrentStep = 'configure';
         this.ExecutionResult = null;
         this.ExecutionError = null;
         this.cdr.detectChanges();
     }
 
+    /** @deprecated Use {@link RunAgain}. */
+    async runAgain(): Promise<void> {
+      return this.RunAgain();
+    }
+
     /**
      * Close the dialog
      */
-    closeDialog(): void {
+    CloseDialog(): void {
         this.Close.emit();
+    }
+
+    /** @deprecated Use {@link CloseDialog}. */
+    closeDialog(): void {
+      return this.CloseDialog();
     }
 
     // ========================================
@@ -738,13 +823,18 @@ export class MCPTestToolDialogComponent implements OnInit, OnDestroy {
     /**
      * Start resize operation
      */
-    onResizeStart(event: MouseEvent): void {
+    OnResizeStart(event: MouseEvent): void {
         if (this.IsMobileMode) return; // No resize on mobile
 
         event.preventDefault();
         this.IsResizing = true;
         document.body.style.cursor = 'ew-resize';
         document.body.style.userSelect = 'none';
+    }
+
+    /** @deprecated Use {@link OnResizeStart}. */
+    onResizeStart(event: MouseEvent): void {
+      return this.OnResizeStart(event);
     }
 
     /**

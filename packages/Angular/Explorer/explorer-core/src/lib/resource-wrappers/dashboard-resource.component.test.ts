@@ -37,6 +37,7 @@ vi.mock('@memberjunction/ng-shared', () => ({
     ProviderToUse = { CurrentUser: { ID: 'user-1' } };
     NotifyLoadComplete = vi.fn();
     ResourceRecordSaved = vi.fn();
+    getTabId = vi.fn(() => 'host-tab-1');
   },
   NavigationService: class {},
   BaseDashboard: class {},
@@ -151,6 +152,69 @@ describe('DashboardResource config dashboard loading', () => {
 
     expect(notifyLoadComplete).toHaveBeenCalledTimes(1);
     expect(detectChanges).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * A code dashboard resolved through ClassFactory gets no ResourceData of its own, so its only
+ * possible tab identity is the one this host hands it. Without it the child has NO tab id — which
+ * used to mean every query-param write it made landed in whichever tab the user was looking at,
+ * silently destroying that tab's deep link from a background tab.
+ */
+describe('DashboardResource tab scoping of child dashboards', () => {
+  it('gives the ClassFactory-resolved dashboard this tab id, before awaiting user state', async () => {
+    const { DashboardResource } = await import('./dashboard-resource.component');
+
+    const dashboardInstance = {
+      Error: new MockEventEmitter<Error>(),
+      OpenEntityRecord: new MockEventEmitter(),
+      UserStateChanged: new MockEventEmitter(),
+      LoadCompleteEvent: null as (() => void) | null,
+      ParentTabId: null as string | null,
+      Config: null as unknown,
+      Refresh: vi.fn(),
+    };
+
+    const viewContainer = {
+      createComponent: vi.fn(() => ({
+        instance: dashboardInstance,
+        hostView: { rootNodes: [{ style: {} }] },
+      })),
+    };
+
+    const resource = new DashboardResource(
+      viewContainer as any,
+      { detectChanges: vi.fn(), markForCheck: vi.fn() } as any,
+    ) as any;
+
+    resource.containerElement = {
+      nativeElement: { innerHTML: 'old', appendChild: vi.fn() },
+    };
+    resource.navigationService = { OpenEntityRecord: vi.fn() };
+
+    // Hold the user-state load open: Angular can run the child's ngOnInit (which binds its
+    // query-param subscription) inside this window, so the tab id must already be set.
+    let releaseUserState!: () => void;
+    resource.loadDashboardUserState = vi.fn(
+      () => new Promise(resolve => {
+        releaseUserState = () => resolve({ UserState: null });
+      }),
+    );
+
+    const loadPromise = resource.loadCodeBasedDashboard({
+      ID: 'dash-1',
+      Name: 'Studio Dashboard',
+      DriverClass: 'StudioDashboard',
+    });
+
+    await Promise.resolve();
+
+    expect(dashboardInstance.ParentTabId).toBe('host-tab-1');
+
+    releaseUserState();
+    await loadPromise;
+
+    expect(dashboardInstance.ParentTabId).toBe('host-tab-1');
   });
 });
 

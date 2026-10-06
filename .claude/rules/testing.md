@@ -29,7 +29,7 @@ npm run test:coverage                      # with coverage
 - One test file per source file (e.g. `ClassFactory.test.ts` tests `ClassFactory.ts`)
 - Use descriptive test names that read as specifications
 - Import from `vitest`: `import { describe, it, expect, vi, beforeEach } from 'vitest'`
-- Use `@memberjunction/test-utils` for shared mocking utilities (singleton reset, mock entities, mock `RunView`)
+- Use `@memberjunction/unit-testing` (`packages/UnitTesting`) for shared mocking utilities (singleton reset, mock entities, mock `RunView`)
 - **No database connections in unit tests** — mock all external dependencies
 - Tests must be deterministic and fast (< 5s per file)
 
@@ -78,8 +78,8 @@ return value, or modifying behavior.
 
 ## CI/CD integration
 
-- **Every PR** must pass unit tests before merging (GitHub Actions gate)
-- **Every release** runs the full-stack regression suite via Docker Compose
+- **Every PR** must pass unit tests before merging (`.github/workflows/test.yml` gate; merges to `next` and a nightly cron re-run the full suite as a backstop)
+- **Every release** is validated by `.github/workflows/release-test.yml` (full unit suite as a publish gate, plus a nightly Playwright e2e lane when secrets are configured) — the Docker regression stack is a local tool, not CI
 - Tests are cached by Turborepo — unchanged packages skip test execution
 
 ## Related

@@ -226,6 +226,12 @@ Verified solid by the audit — several are themselves fixes for past incidents.
 - **Cost rollup**: assignment-never-accumulation (idempotent re-settlement, no double counting); refuses lower bounds and clears stale rollups rather than guessing.
 - **Reinvoke recursion bounds**: submit-time cap + delivery-time downgrade, depth threaded through loops and agent nodes.
 - **Deterministic edge selection**: priority desc then edge ID, identical in compiler sequence assignment and runtime resolution — walker and dispatcher cannot pick different winners.
+  > **Corrected in Round 2 (R2-5).** This was aspirational when written: the runtime sorted
+  > `priority desc || sequence asc` with **no final key**, so a genuine tie — and priority and
+  > sequence both default to 0 — resolved by database row order, which can differ between polls of
+  > the same graph. Determinism held only on the compiled-flow path, where the compiler assigns
+  > distinct sequences. `CompareEdgePrecedence` now ends in `id.localeCompare`, so the invariant is
+  > true of the code rather than of the intent.
 - **Frame security**: graph match + connection-identity match, fail-closed on missing identity.
 
 ---

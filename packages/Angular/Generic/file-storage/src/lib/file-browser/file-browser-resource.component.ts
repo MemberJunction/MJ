@@ -18,16 +18,9 @@ import { RegisterClass } from '@memberjunction/global';
   standalone: false,
   selector: 'mj-file-browser-resource',
   template: `
-    <mj-page-layout>
-      <mj-page-header
-        Title="File Browser"
-        Icon="fa-solid fa-folder-tree"
-        Subtitle="Browse and manage files across storage providers">
-      </mj-page-header>
-      <div class="file-browser-body">
-        <mj-file-browser></mj-file-browser>
-      </div>
-    </mj-page-layout>
+    <div class="file-browser-resource-container">
+      <mj-file-browser></mj-file-browser>
+    </div>
   `,
   styles: [`
     :host {
@@ -35,14 +28,14 @@ import { RegisterClass } from '@memberjunction/global';
       width: 100%;
       height: 100%;
     }
-    .file-browser-body {
-      flex: 1;
-      min-height: 0;
-      padding: 0 24px 24px;
+    .file-browser-resource-container {
+      width: 100%;
+      height: 100%;
       display: flex;
+      flex-direction: column;
     }
-    /* The inner mj-file-browser needs to fill the body container. */
-    .file-browser-body :is(mj-file-browser) {
+    /* The inner mj-file-browser needs to fill the container. */
+    .file-browser-resource-container :is(mj-file-browser) {
       flex: 1;
       min-height: 0;
       min-width: 0;

@@ -1,0 +1,338 @@
+[
+  {
+    "fields": {
+      "Name": "Read RSS Feed",
+      "Description": "Reads one or more RSS/Atom feeds and returns their articles, filtered by age and keywords. Every count that shaped the result is surfaced as an output param, so an empty answer is explainable without re-running.",
+      "DriverClass": "Read RSS Feed",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-rss",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Web"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FeedURLs",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "Description": "One or more feed URLs (http/https only). Required.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "618CAD01-CB18-4C4D-9E2A-F5F62A32EFAC"
+          },
+          "sync": {
+            "lastModified": "2026-09-01T16:57:34.992Z",
+            "checksum": "32ab3618fcd436a7387be0f6521efdb2773277bb6cae394410f9a369514f1e33"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxResults",
+            "DefaultValue": "20",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum articles to return across all feeds.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "F4B5E142-0BF2-4313-9AC7-695C4F0DC768"
+          },
+          "sync": {
+            "lastModified": "2026-09-01T16:57:35.012Z",
+            "checksum": "e72f25b11e3a58984cd67f05dd20d17a0c4419b162302b5961d9087fda5e9f8c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxAgeDays",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Drop articles older than this many days.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "C9B789CE-F8C1-4BA8-9F8C-5F734BD2D874"
+          },
+          "sync": {
+            "lastModified": "2026-09-01T16:57:35.032Z",
+            "checksum": "c24f17df9e275b19cc6b6a5e79070e0fdc0c4a62c98e005cb932beb15c8a9fd8"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Keywords",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "Description": "Only return articles matching these keywords.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "4A9FEA7A-0FA3-4CB7-A160-F0BCF66E20D0"
+          },
+          "sync": {
+            "lastModified": "2026-09-01T16:57:35.050Z",
+            "checksum": "7416803181eca450b6dfa9515865812a9b6f3bc03f03700126c3dd3c489a8cd6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeUndated",
+            "DefaultValue": "false",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Include articles with no publish date. Default false — an undated article cannot be age-filtered.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "72554D77-5650-4B2A-B09E-E7440B562CE6"
+          },
+          "sync": {
+            "lastModified": "2026-09-01T16:57:35.068Z",
+            "checksum": "e355333a369e8492632af1d56365527d26a4e0c8e726fe31b24ec2f5c4a6b569"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RequireAllFeeds",
+            "DefaultValue": "false",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Fail the action if ANY feed fails, rather than isolating the failure. Default false.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "D1D288F0-66F2-46C3-B81D-A81038805E72"
+          },
+          "sync": {
+            "lastModified": "2026-09-01T16:57:35.087Z",
+            "checksum": "e34530951ce2fb45049a338402677fc880fc5c9291184cf0cd57112167d94c32"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Articles",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "The selected articles.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "54F4F2CA-1621-45E9-A3E8-79755E88903B"
+          },
+          "sync": {
+            "lastModified": "2026-09-01T16:57:35.107Z",
+            "checksum": "d744055bbf3e62ed69eca8c8411e6c6b5ae70ccbdf4feddc63c8fe1f6756085c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ArticleCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of articles returned.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "61E17D74-1F0A-48A4-A6B4-579AC743F488"
+          },
+          "sync": {
+            "lastModified": "2026-09-01T16:57:35.123Z",
+            "checksum": "363a09328d9616a3452171a36a1472c57dbe49aae0c62bf84eae106d7e638933"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TotalFetched",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Articles fetched before filtering.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "9184D4ED-F67F-4D29-AB53-2ABDB118A694"
+          },
+          "sync": {
+            "lastModified": "2026-09-01T16:57:35.141Z",
+            "checksum": "0b89ba79f40280fd3b54643c5a82b4a48de629f664034e52c4e41f185dc50516"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FilteredOutTooOld",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Articles dropped by the MaxAgeDays filter.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "AEE41684-9005-4997-A6E4-C919E992CA27"
+          },
+          "sync": {
+            "lastModified": "2026-09-01T16:57:35.158Z",
+            "checksum": "826f99b6199cf57fff6b225752946637d2003761d7f7eaa7091236782ade80a7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "UndatedCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Articles carrying no publish date.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "715077B4-D78F-4552-8738-E53E862BB8DD"
+          },
+          "sync": {
+            "lastModified": "2026-09-01T16:57:35.186Z",
+            "checksum": "e4f7088850f1694deea9d80f79017815ef103560967570cb4b111689751ed80d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FailedFeedCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Feeds that could not be read.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "D67CD980-EA8C-4605-A368-564AB0F46677"
+          },
+          "sync": {
+            "lastModified": "2026-09-01T16:57:35.203Z",
+            "checksum": "cd3e1f0f5ff6661e3ade8a70cc41457a04238f6eef4b40c33277d54312caac40"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FeedStatuses",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Per-feed outcome, so one failing feed is attributable.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "C9D9B578-DDFB-4B1A-9C03-969E33E81A40"
+          },
+          "sync": {
+            "lastModified": "2026-09-01T16:57:35.220Z",
+            "checksum": "c0c898779128774832eded4ac336308c5d6c7b9d30c719722b9689b51bf0df32"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Feeds read and articles returned."
+          },
+          "primaryKey": {
+            "ID": "0B8FFC3B-8FD3-4157-A321-564E6AA5C760"
+          },
+          "sync": {
+            "lastModified": "2026-09-01T16:57:35.235Z",
+            "checksum": "62b173a4f3f24d69912a41ab409b16c0d4437dfde12050c0f368c1b16d79bbf9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_FEEDS",
+            "IsSuccess": false,
+            "Description": "FeedURLs is required but was not provided."
+          },
+          "primaryKey": {
+            "ID": "BBE5A3EA-6F57-4BB0-9C73-00FA2D2B512B"
+          },
+          "sync": {
+            "lastModified": "2026-09-01T16:57:35.246Z",
+            "checksum": "8d2183ae5f2e85af59d7ea3bea7d91db64ad5ac4e387ab26329833ba9bc21636"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_FEEDS",
+            "IsSuccess": false,
+            "Description": "FeedURLs could not be parsed into a list of URLs."
+          },
+          "primaryKey": {
+            "ID": "4F705DA2-AAD5-4248-92DF-EDD2404211C1"
+          },
+          "sync": {
+            "lastModified": "2026-09-01T16:57:35.258Z",
+            "checksum": "d3507b2a62babfac77bd621004e966c253a69b40837220102cad25feed35cc9b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_FEED_URL",
+            "IsSuccess": false,
+            "Description": "A supplied URL is not an http(s) URL."
+          },
+          "primaryKey": {
+            "ID": "580A1E45-DDC0-4C6A-903D-F50E6F631123"
+          },
+          "sync": {
+            "lastModified": "2026-09-01T16:57:35.269Z",
+            "checksum": "419690d5131b0a5895c145fc5fb78f5395d9fffbd05f7f8a2ea5e8c94df2c030"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "FEED_FETCH_FAILED",
+            "IsSuccess": false,
+            "Description": "A feed could not be read, and RequireAllFeeds was set."
+          },
+          "primaryKey": {
+            "ID": "0EF8F5F2-8D8F-4EF7-861F-59A50684A32C"
+          },
+          "sync": {
+            "lastModified": "2026-09-01T16:57:35.281Z",
+            "checksum": "a4703fd754db0461ec6c818a7b277aa662526be41e052412905d84f509a05893"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "518B3820-5345-4B55-804E-980581772AF7"
+    },
+    "sync": {
+      "lastModified": "2026-09-01T16:57:34.957Z",
+      "checksum": "72df9fea8015879c8b26b5b346c62d4a7294eedaad76a1ff46a96575be333f4d"
+    }
+  }
+]

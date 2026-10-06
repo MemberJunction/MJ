@@ -1,0 +1,315 @@
+---
+/**
+ * Inquiry form for the MemberJunction Certified Program.
+ *
+ * ⚠️ DELIBERATELY INERT. There is no backend: the docs site is a static Astro
+ * build on GitHub Pages, so there is nothing to POST to. The form carries no
+ * action, its submit handler is prevented, and the submit control is disabled
+ * with the reason stated on the page.
+ *
+ * That last part is not decoration. This collects firm names, work emails, and
+ * insurance attestations for a credential application — a form that LOOKS
+ * submittable but silently discards input would leave a firm believing it had
+ * applied when it had not. Every path here has to make the inert state obvious.
+ * Keep it that way until a real destination exists.
+ *
+ * Rendered inside <PreviewOnly>, so the public never sees it regardless.
+ *
+ * The fields mirror the program's published requirements — two Certified
+ * Engineers on staff, professional liability insurance, a client reference
+ * implementation — so the form doubles as a restatement of the criteria.
+ *
+ * Styling uses Starlight's global --sl-* tokens, NOT the --mjd-* set: those are
+ * defined only inside .mjd-landing (src/styles/custom.css) and resolve to
+ * nothing on a content page.
+ */
+---
+
+<form class="cert-form" novalidate aria-labelledby="cert-form-heading">
+  <div class="cert-form__head">
+    <h3 id="cert-form-heading" class="cert-form__title">Partner inquiry</h3>
+    <p class="cert-form__sub">
+      Applications are reviewed within 30&nbsp;days. Certification renews annually.
+    </p>
+  </div>
+
+  <fieldset class="cert-form__group">
+    <legend class="cert-form__legend">Your firm</legend>
+
+    <div class="cert-form__row">
+      <div class="cert-form__field">
+        <label class="cert-form__label" for="cert-firm">
+          Firm name <span class="cert-form__req" aria-hidden="true">required</span>
+        </label>
+        <input class="cert-form__input" id="cert-firm" name="firm" type="text"
+               autocomplete="organization" required aria-required="true" />
+      </div>
+
+      <div class="cert-form__field">
+        <label class="cert-form__label" for="cert-site">Website</label>
+        <input class="cert-form__input" id="cert-site" name="website" type="url"
+               inputmode="url" placeholder="https://" autocomplete="url" />
+      </div>
+    </div>
+
+    <div class="cert-form__row">
+      <div class="cert-form__field">
+        <label class="cert-form__label" for="cert-name">
+          Your name <span class="cert-form__req" aria-hidden="true">required</span>
+        </label>
+        <input class="cert-form__input" id="cert-name" name="name" type="text"
+               autocomplete="name" required aria-required="true" />
+      </div>
+
+      <div class="cert-form__field">
+        <label class="cert-form__label" for="cert-email">
+          Work email <span class="cert-form__req" aria-hidden="true">required</span>
+        </label>
+        <input class="cert-form__input" id="cert-email" name="email" type="email"
+               inputmode="email" autocomplete="email" required aria-required="true" />
+      </div>
+    </div>
+  </fieldset>
+
+  <fieldset class="cert-form__group">
+    <legend class="cert-form__legend">What you're applying for</legend>
+
+    <div class="cert-form__field">
+      <label class="cert-form__label" for="cert-credential">Credential</label>
+      <select class="cert-form__input" id="cert-credential" name="credential">
+        <option value="partner">MemberJunction Certified Partner</option>
+        <option value="charter">Charter Partner (launch pathway)</option>
+        <option value="engineer">MemberJunction Certified Engineer</option>
+        <option value="associate">MemberJunction Certified Associate</option>
+        <option value="unsure">Not sure yet — I have questions</option>
+      </select>
+    </div>
+
+    <div class="cert-form__field cert-form__field--narrow">
+      <label class="cert-form__label" for="cert-engineers">
+        Certified Engineers on staff
+      </label>
+      <input class="cert-form__input" id="cert-engineers" name="engineers" type="number"
+             min="0" step="1" value="0" aria-describedby="cert-engineers-note" />
+      <p class="cert-form__note" id="cert-engineers-note">
+        Partner status requires a minimum of two.
+      </p>
+    </div>
+
+    <div class="cert-form__field">
+      <label class="cert-form__label" for="cert-reference">
+        Client reference implementation
+      </label>
+      <textarea class="cert-form__input cert-form__input--area" id="cert-reference"
+                name="reference" rows="3"
+                placeholder="Which client, what you built, roughly when."></textarea>
+    </div>
+
+    <label class="cert-form__check" for="cert-insurance">
+      <input id="cert-insurance" name="insurance" type="checkbox" />
+      <span>Our firm carries professional liability insurance.</span>
+    </label>
+  </fieldset>
+
+  <fieldset class="cert-form__group">
+    <legend class="cert-form__legend">Anything else</legend>
+    <div class="cert-form__field">
+      <label class="cert-form__label cert-form__label--sr" for="cert-message">
+        Additional detail
+      </label>
+      <textarea class="cert-form__input cert-form__input--area" id="cert-message"
+                name="message" rows="4"
+                placeholder="Questions about eligibility, timing, or the Partner Agreement."></textarea>
+    </div>
+  </fieldset>
+
+  <div class="cert-form__foot">
+    <button class="cert-form__submit" type="submit" disabled
+            aria-disabled="true" aria-describedby="cert-form-inert">
+      Submit inquiry
+    </button>
+    <p class="cert-form__inert" id="cert-form-inert" role="status">
+      Not accepting submissions yet — this form has no destination wired up.
+      Email <a href="mailto:support@memberjunction.org">support@memberjunction.org</a> in the meantime.
+    </p>
+  </div>
+</form>
+
+<style>
+  .cert-form {
+    /* Left rule echoes Starlight's aside language: this is a bounded, procedural
+       block inside prose, not a page-width marketing panel. */
+    border: 1px solid var(--sl-color-hairline, #e2e8f0);
+    border-inline-start: 3px solid var(--sl-color-accent, #2750b0);
+    border-radius: 0.25rem;
+    padding: 1.5rem;
+    background: var(--sl-color-bg, transparent);
+  }
+
+  .cert-form__head { margin-block-end: 1.75rem; }
+
+  .cert-form__title {
+    margin: 0;
+    font-size: var(--sl-text-lg, 1.125rem);
+    line-height: 1.3;
+  }
+
+  .cert-form__sub {
+    margin: 0.35rem 0 0;
+    font-size: var(--sl-text-sm, 0.875rem);
+    color: var(--sl-color-gray-3, #6b7280);
+  }
+
+  .cert-form__group {
+    border: 0;
+    border-block-start: 1px solid var(--sl-color-hairline-light, #eef2f7);
+    margin: 0 0 1.5rem;
+    padding: 1.25rem 0 0;
+  }
+
+  .cert-form__legend {
+    padding: 0 0.5rem 0 0;
+    font-size: var(--sl-text-xs, 0.8125rem);
+    font-family: var(--sl-font-system-mono, ui-monospace, monospace);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--sl-color-gray-3, #6b7280);
+  }
+
+  /* Two-up above 34rem, stacked below. Container-agnostic: the docs content
+     column narrows on mobile and inside the split layout alike. */
+  .cert-form__row {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: 1fr;
+  }
+
+  @media (min-width: 34rem) {
+    .cert-form__row { grid-template-columns: 1fr 1fr; }
+  }
+
+  .cert-form__field { margin-block-end: 1rem; }
+
+  /* Constrain the CONTROL, not the field: putting max-width on the field also
+     squeezes its note, which wrapped "a minimum / of two" mid-phrase. */
+  .cert-form__field--narrow .cert-form__input { max-width: 8rem; }
+
+  .cert-form__label {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    margin-block-end: 0.35rem;
+    font-size: var(--sl-text-sm, 0.875rem);
+    font-weight: 600;
+  }
+
+  .cert-form__label--sr {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .cert-form__req {
+    font-family: var(--sl-font-system-mono, ui-monospace, monospace);
+    font-size: 0.6875rem;
+    font-weight: 400;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--sl-color-gray-3, #6b7280);
+  }
+
+  .cert-form__input {
+    inline-size: 100%;
+    padding: 0.5rem 0.65rem;
+    font: inherit;
+    font-size: var(--sl-text-sm, 0.875rem);
+    color: var(--sl-color-text, inherit);
+    /* gray-6, not gray-7: Starlight's grays are defined as distance from the
+       TEXT colour and invert per theme, so gray-6 is "nearly the background" in
+       both. gray-7 does not resolve here, and a hardcoded fallback would bake in
+       one theme's value — inputs rendered near-white on the dark theme. Fall
+       back to transparent so a missing token degrades to the page background
+       rather than to the wrong colour. */
+    background: var(--sl-color-gray-6, transparent);
+    border: 1px solid var(--sl-color-hairline, #e2e8f0);
+    border-radius: 0.25rem;
+    transition: border-color 120ms ease, box-shadow 120ms ease;
+  }
+
+  .cert-form__input--area { resize: vertical; min-block-size: 4rem; }
+
+  .cert-form__input:focus-visible {
+    outline: none;
+    border-color: var(--sl-color-accent, #2750b0);
+    box-shadow: 0 0 0 3px var(--sl-color-accent-low, #dbe6ff);
+  }
+
+  .cert-form__note {
+    margin: 0.35rem 0 0;
+    font-size: var(--sl-text-xs, 0.8125rem);
+    color: var(--sl-color-gray-3, #6b7280);
+  }
+
+  .cert-form__check {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    font-size: var(--sl-text-sm, 0.875rem);
+    cursor: pointer;
+  }
+
+  .cert-form__check input { margin-block-start: 0.2rem; flex: none; }
+
+  .cert-form__foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.85rem 1rem;
+    padding-block-start: 0.25rem;
+  }
+
+  .cert-form__submit {
+    padding: 0.55rem 1.1rem;
+    font: inherit;
+    font-size: var(--sl-text-sm, 0.875rem);
+    font-weight: 600;
+    color: var(--sl-color-white, #fff);
+    background: var(--sl-color-accent, #2750b0);
+    border: 1px solid transparent;
+    border-radius: 0.25rem;
+    cursor: pointer;
+  }
+
+  /* The disabled state is the honest state here, so it is styled to read as a
+     deliberate "not yet", not as a broken control. */
+  .cert-form__submit:disabled {
+    color: var(--sl-color-gray-3, #6b7280);
+    /* One step more contrast than the inputs (gray-6) so the control still
+       reads as a button rather than dissolving into the field surfaces. */
+    background: var(--sl-color-gray-5, transparent);
+    border-color: var(--sl-color-hairline, #e2e8f0);
+    cursor: not-allowed;
+  }
+
+  .cert-form__inert {
+    flex: 1 1 16rem;
+    margin: 0;
+    font-size: var(--sl-text-xs, 0.8125rem);
+    color: var(--sl-color-gray-3, #6b7280);
+  }
+</style>
+
+<script>
+  /*
+   * Belt and braces. The submit control is already disabled, but a form with no
+   * action still navigates on an Enter keypress in a text field, which would
+   * reload the page and silently discard whatever was typed. Stop it at the
+   * form level so no input path can imply a submission happened.
+   */
+  for (const form of document.querySelectorAll('form.cert-form')) {
+    form.addEventListener('submit', (event) => event.preventDefault());
+  }
+</script>

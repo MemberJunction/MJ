@@ -407,5 +407,18 @@ Per component it reports:
   the "how much it matters" signal, so heavily-used gaps rank to the top.
 
 Gaps are ranked by severity × usage. **Skipped/deferred components still count as gaps**, annotated with
-the reason (e.g. `media/WebRTC → e2e`) — an intentional skip is surfaced, not hidden. This is a
-**team-visibility backlog tool, not a CI gate** (gating is a Phase 4 conversation).
+the reason (e.g. `media/WebRTC → e2e`) — an intentional skip is surfaced, not hidden.
+
+**This is now also a CI gate.** `.github/workflows/test.yml` runs it as a coverage ratchet on every PR:
+
+```bash
+node scripts/dom-test-report.mjs packages/Angular/Generic --max-none=134    # Generic ratchet (matches .github/workflows/test.yml)
+node scripts/dom-test-report.mjs packages/Angular/Bootstrap --max-none=0    # Bootstrap ratchet
+```
+
+`--max-none=N` fails the build when more than N components have **no spec and no deferral
+annotation** — an absolute cap that only ratchets down (lower the number as gaps close; never raise
+it). Alongside it, `scripts/classify-explorer-components.mjs --min 85` gates Explorer in-scope DOM
+coverage at 85% (new Explorer components land as in-scope-uncovered and push the percentage down,
+so the gate forces either a spec or a reviewed deferral — see
+`plans/testing/phase-3-explorer-deferral-register.md`).

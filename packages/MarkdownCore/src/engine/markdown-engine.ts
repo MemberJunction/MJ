@@ -10,10 +10,10 @@ import {
   HeadingInfo,
   HighlightFunction
 } from '../types/markdown.types.js';
-import { createCollapsibleHeadingsExtension } from '../extensions/collapsible-headings.extension.js';
-import { createSvgRendererExtension } from '../extensions/svg-renderer.extension.js';
-import { createHtmlBlockRepairExtension } from '../extensions/html-block-repair.extension.js';
-import { escapeHtml } from '../helpers/escape.js';
+import { CreateCollapsibleHeadingsExtension } from '../extensions/collapsible-headings.extension.js';
+import { CreateSvgRendererExtension } from '../extensions/svg-renderer.extension.js';
+import { CreateHtmlBlockRepairExtension } from '../extensions/html-block-repair.extension.js';
+import { EscapeHtml } from '../helpers/escape.js';
 
 /**
  * Options that tune a single {@link MarkdownEngine.configureMarked} call.
@@ -50,7 +50,7 @@ export class MarkdownEngine {
 
   constructor() {
     this.marked = new Marked();
-    this.configureMarked(this.currentConfig);
+    this.ConfigureMarked(this.currentConfig);
   }
 
   /**
@@ -70,7 +70,7 @@ export class MarkdownEngine {
    * @param config Markdown configuration; merged over {@link DEFAULT_MARKDOWN_CONFIG}.
    * @param options Engine options, e.g. an injected {@link HighlightFunction}.
    */
-  public configureMarked(config: MarkdownConfig, options?: ConfigureMarkedOptions): void {
+  public ConfigureMarked(config: MarkdownConfig, options?: ConfigureMarkedOptions): void {
     this.currentConfig = { ...DEFAULT_MARKDOWN_CONFIG, ...config };
     if (options && 'highlightFn' in options) {
       this.highlightFn = options.highlightFn;
@@ -90,12 +90,12 @@ export class MarkdownEngine {
     // Repair HTML blocks split by a blank line (e.g. PRD mockups) so embedded
     // raw HTML renders instead of showing as an escaped code block. Always on -
     // precisely scoped to misparsed HTML, leaves prose and fenced code untouched.
-    extensions.push(createHtmlBlockRepairExtension());
+    extensions.push(CreateHtmlBlockRepairExtension());
 
     // SVG code block renderer - MUST be before syntax highlighting
     // so it can intercept svg blocks before the highlighter processes them.
     if (this.currentConfig.enableSvgRenderer) {
-      extensions.push(createSvgRendererExtension());
+      extensions.push(CreateSvgRendererExtension());
     }
 
     // Syntax highlighting via an injected highlight function (e.g. Prism on web).
@@ -133,7 +133,7 @@ export class MarkdownEngine {
     // Collapsible headings (custom extension, HTML output path)
     if (this.currentConfig.enableCollapsibleHeadings) {
       extensions.push(
-        createCollapsibleHeadingsExtension({
+        CreateCollapsibleHeadingsExtension({
           startLevel: this.currentConfig.collapsibleHeadingLevel,
           defaultExpanded: this.currentConfig.collapsibleDefaultExpanded,
           autoExpandLevels: this.currentConfig.autoExpandLevels
@@ -152,6 +152,11 @@ export class MarkdownEngine {
     }
   }
 
+  /** @deprecated Use {@link ConfigureMarked}. */
+  public configureMarked(config: MarkdownConfig, options?: ConfigureMarkedOptions): void {
+    return this.ConfigureMarked(config, options);
+  }
+
   /**
    * Parse markdown to an HTML string.
    *
@@ -163,11 +168,11 @@ export class MarkdownEngine {
    * @param config Optional config overrides for this parse operation
    * @returns The rendered HTML string
    */
-  public parseToHtml(markdown: string, config?: Partial<MarkdownConfig>): string {
+  public ParseToHtml(markdown: string, config?: Partial<MarkdownConfig>): string {
     if (!markdown) return '';
 
     if (config) {
-      this.configureMarked({ ...this.currentConfig, ...config });
+      this.ConfigureMarked({ ...this.currentConfig, ...config });
     }
 
     try {
@@ -188,8 +193,13 @@ export class MarkdownEngine {
       return html;
     } catch (error) {
       console.error('Markdown parsing error:', error);
-      return `<pre class="markdown-error">${escapeHtml(markdown)}</pre>`;
+      return `<pre class="markdown-error">${EscapeHtml(markdown)}</pre>`;
     }
+  }
+
+  /** @deprecated Use {@link ParseToHtml}. */
+  public parseToHtml(markdown: string, config?: Partial<MarkdownConfig>): string {
+    return this.ParseToHtml(markdown, config);
   }
 
   /**
@@ -204,9 +214,9 @@ export class MarkdownEngine {
    * @param config Optional config overrides for this parse operation
    * @returns The marked token list
    */
-  public parseToTokens(markdown: string, config?: Partial<MarkdownConfig>): TokensList {
+  public ParseToTokens(markdown: string, config?: Partial<MarkdownConfig>): TokensList {
     if (config) {
-      this.configureMarked({ ...this.currentConfig, ...config });
+      this.ConfigureMarked({ ...this.currentConfig, ...config });
     }
 
     if (!markdown) {
@@ -221,26 +231,46 @@ export class MarkdownEngine {
     return this.marked.lexer(processedMarkdown);
   }
 
+  /** @deprecated Use {@link ParseToTokens}. */
+  public parseToTokens(markdown: string, config?: Partial<MarkdownConfig>): TokensList {
+    return this.ParseToTokens(markdown, config);
+  }
+
   /**
    * Get the list of headings from the last HTML parse.
    * Useful for building a table of contents.
    */
-  public getHeadingList(): HeadingInfo[] {
+  public GetHeadingList(): HeadingInfo[] {
     return this.headingList;
+  }
+
+  /** @deprecated Use {@link GetHeadingList}. */
+  public getHeadingList(): HeadingInfo[] {
+    return this.GetHeadingList();
   }
 
   /**
    * Get the current resolved configuration.
    */
-  public getConfig(): ResolvedMarkdownConfig {
+  public GetConfig(): ResolvedMarkdownConfig {
     return { ...this.currentConfig };
+  }
+
+  /** @deprecated Use {@link GetConfig}. */
+  public getConfig(): ResolvedMarkdownConfig {
+    return this.GetConfig();
   }
 
   /**
    * Reset configuration to defaults (keeps any injected highlight function).
    */
+  public ResetConfig(): void {
+    this.ConfigureMarked(DEFAULT_MARKDOWN_CONFIG);
+  }
+
+  /** @deprecated Use {@link ResetConfig}. */
   public resetConfig(): void {
-    this.configureMarked(DEFAULT_MARKDOWN_CONFIG);
+    return this.ResetConfig();
   }
 
   /**
@@ -266,6 +296,7 @@ export class MarkdownEngine {
     const lines = markdown.split('\n');
     const result: string[] = [];
     let inHtmlBlock = false;
+    let preDepth = 0;
     const tagStack: string[] = [];
 
     for (const line of lines) {
@@ -289,6 +320,37 @@ export class MarkdownEngine {
         }
         result.push(line);
       } else {
+        // A blank line ends an HTML block in CommonMark, so the markup that
+        // follows is re-tokenized. Which token it becomes depends purely on its
+        // indentation: 4+ spaces makes an indented code block (rescued later by
+        // the html-block-repair extension), while 0-3 spaces makes a paragraph,
+        // rendered as `<p>…<br>…</p>`. Because this pass strips indentation, the
+        // paragraph case is the one that arises here — and `<p>` and `<br>` are
+        // on the HTML5 foreign-content breakout list, so inside an `<svg>` the
+        // browser leaves the SVG namespace and auto-closes the chart. Every
+        // shape after the blank line then becomes an unknown HTML element:
+        // `<text>` renders as bare document text and `<path>`/`<circle>`/`<rect>`
+        // render as nothing.
+        //
+        // Dropping the blank line keeps the block intact. Whitespace between
+        // tags is insignificant, so this cannot change the rendered result.
+        //
+        // Two guards keep it narrow:
+        //   - `tagStack.length > 0` — only while an element is genuinely open.
+        //     Without it, blank lines separating sibling top-level blocks would
+        //     be swallowed and unrelated blocks would merge into one.
+        //   - `preDepth === 0` — never inside `<pre>`, where a blank line is
+        //     meaningful content rather than insignificant whitespace.
+        if (trimmedLine === '' && tagStack.length > 0 && preDepth === 0) {
+          continue;
+        }
+
+        // Track <pre> separately from tagStack: it is not in htmlBlockTags (it
+        // never starts a block here) but its content must be left untouched.
+        const preOpens = (trimmedLine.match(/<pre\b/gi) || []).length;
+        const preCloses = (trimmedLine.match(/<\/pre>/gi) || []).length;
+        preDepth = Math.max(0, preDepth + preOpens - preCloses);
+
         // We're inside an HTML block - remove ALL leading whitespace
         // to prevent any nested content from being treated as code blocks.
         this.updateTagStack(trimmedLine, tagStack, htmlBlockTags);
@@ -298,6 +360,7 @@ export class MarkdownEngine {
         // Check if we've closed all HTML blocks
         if (tagStack.length === 0) {
           inHtmlBlock = false;
+          preDepth = 0;
         }
       }
     }

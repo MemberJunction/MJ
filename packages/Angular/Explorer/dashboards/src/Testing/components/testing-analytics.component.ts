@@ -8,6 +8,9 @@ import {
   TestRunSummary,
   VersionMetrics
 } from '../services/testing-instrumentation.service';
+import { CompositeKey, RunView } from '@memberjunction/core';
+import { SharedService } from '@memberjunction/ng-shared';
+import { CriterionFailureRates, CriterionIdentity, RubricScoreTrend } from '@memberjunction/ng-testing';
 
 // ---------------------------------------------------------------------------
 // Local interfaces
@@ -73,6 +76,26 @@ interface VersionRow {
 
     <ng-template #content>
     <div class="testing-analytics">
+      @if (RubricAnalyticsError) {
+        <p role="alert">{{ RubricAnalyticsError }}</p>
+      }
+      @if (RubricTrend.length || FailureRates.length) {
+        <div class="section-title">
+          <i class="fa-solid fa-scale-balanced"></i>
+          Rubric scores
+        </div>
+        @for (point of RubricTrend; track $index) {
+          <p>
+            {{ point.at }} — {{ point.score }}
+            @if (point.runId) {
+              <button type="button" mjButton variant="secondary" size="sm" (click)="OpenRun(point.runId)">Open run</button>
+            }
+          </p>
+        }
+        @for (rate of FailureRates; track rate.key) {
+          <p>CriterionKey <code>{{ rate.key }}</code> — {{ rate.rate }}</p>
+        }
+      }
 
       <!-- ===== 2. Trend Overview (2-column CSS charts) ===== -->
       <div class="section-title">
@@ -291,6 +314,8 @@ interface VersionRow {
       <div class="card version-card">
         @if (IsLoadingVersions) {
           <div class="empty-mini"><i class="fa-solid fa-spinner fa-spin"></i><span>Loading versions...</span></div>
+        } @else if (VersionMetricsError) {
+          <p role="alert">{{ VersionMetricsError }}</p>
         } @else if (VersionRows.length === 0) {
           <mj-empty-state Size="compact" Icon="fa-solid fa-code-branch" Title="No version data available" />
         } @else {
@@ -780,10 +805,28 @@ interface VersionRow {
 export class TestingAnalyticsComponent implements OnInit, OnDestroy {
 
   // ------- Inputs / Outputs -------
-  @Input() initialState: Record<string, unknown> | null = null;
+  @Input() InitialState: Record<string, unknown> | null = null;
+
+  /** @deprecated Use {@link InitialState}. */
+  @Input() set initialState(value: Record<string, unknown> | null) {
+    this.InitialState = value;
+  }
+  /** @deprecated Use {@link InitialState}. */
+  get initialState(): Record<string, unknown> | null {
+    return this.InitialState;
+  }
   /** When true, the inner bespoke .page-header is hidden — the parent shell owns the chrome. */
   @Input() HideToolbar = false;
-  @Output() stateChange = new EventEmitter<Record<string, unknown>>();
+  @Output() StateChange = new EventEmitter<Record<string, unknown>>();
+
+  /**
+   * @deprecated Use {@link StateChange}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (stateChange) keeps working. Must stay AFTER StateChange: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() stateChange = this.StateChange;
 
   // ------- Public state -------
   TimeRanges: TimeRangeOption[] = [
@@ -794,6 +837,10 @@ export class TestingAnalyticsComponent implements OnInit, OnDestroy {
   SelectedDays = 30;
   VersionRows: VersionRow[] = [];
   IsLoadingVersions = false;
+  RubricTrend: { at: string; score: number; runId: string }[] = [];
+  FailureRates: { key: string; rate: number; count: number }[] = [];
+  RubricAnalyticsError = '';
+  VersionMetricsError = '';
 
   // Cached breakdown name lists for the dashboard's agent context.
   private topFailingNames: string[] = [];
@@ -825,6 +872,66 @@ export class TestingAnalyticsComponent implements OnInit, OnDestroy {
     this.restoreState();
     this.setupObservables();
     this.loadVersionMetrics();
+    void this.LoadRubricAnalytics();
+  }
+
+  /** Submitted evaluation scores over time, and per-criterion failure rates. Suite-run scores are not rubric scores. */
+  async LoadRubricAnalytics(): Promise<void> {
+    try {
+      const provider = this.instrumentationService.Provider;
+      if (!provider) return;
+      const view = RunView.FromMetadataProvider(provider);
+      const evaluations = await view.RunView({
+        EntityName: 'MJ: Rubric Evaluations',
+        ExtraFilter: `Status = 'Submitted' AND NormalizedScore IS NOT NULL`,
+        OrderBy: 'SubmittedAt DESC',
+        ResultType: 'simple',
+        MaxRows: 500,
+      });
+      if (!evaluations.Success) throw new Error(evaluations.ErrorMessage || 'Could not load evaluations.');
+      this.RubricTrend = RubricScoreTrend(((evaluations.Results ?? []) as Record<string, unknown>[]).map(row => ({
+        at: row.SubmittedAt == null ? null : String(row.SubmittedAt),
+        score: row.NormalizedScore == null ? null : Number(row.NormalizedScore),
+        runId: row.SubjectRecordID == null ? null : String(row.SubjectRecordID),
+      })));
+      const scores = await view.RunView({
+        EntityName: 'MJ: Rubric Evaluation Scores',
+        ExtraFilter: `EvaluationStatus = 'Submitted' AND NormalizedScore IS NOT NULL`,
+        ResultType: 'simple',
+        MaxRows: 1000,
+      });
+      if (!scores.Success) throw new Error(scores.ErrorMessage || 'Could not load rubric scores.');
+      const versions = await view.RunView({
+        EntityName: 'MJ: Rubric Versions',
+        ResultType: 'simple',
+        MaxRows: 500,
+      });
+      if (!versions.Success) throw new Error(versions.ErrorMessage || 'Could not load rubric versions.');
+      const evaluationById = new Map(((evaluations.Results ?? []) as Record<string, unknown>[]).map(row => [String(row.ID), row]));
+      const thresholdByVersion = new Map(((versions.Results ?? []) as Record<string, unknown>[]).map(row => [String(row.ID), row.PassThreshold == null ? null : Number(row.PassThreshold)]));
+      this.FailureRates = CriterionFailureRates(((scores.Results ?? []) as Record<string, unknown>[]).map(row => {
+        const evaluation = evaluationById.get(String(row.EvaluationID ?? ''));
+        const versionId = evaluation ? String(evaluation.RubricVersionID ?? '') : '';
+        return {
+          key: CriterionIdentity(row).key,
+          normalizedScore: row.NormalizedScore == null ? null : Number(row.NormalizedScore),
+          gateFailed: row.GateFailed === true || row.GateFailed === 1,
+          passThreshold: thresholdByVersion.get(versionId) ?? null,
+        };
+      }).filter(row => row.key.length > 0));
+      this.RubricAnalyticsError = '';
+      this.cdr.markForCheck();
+    } catch (error) {
+      this.RubricTrend = [];
+      this.FailureRates = [];
+      this.RubricAnalyticsError = error instanceof Error ? error.message : 'Could not load rubric analytics.';
+      this.cdr.markForCheck();
+    }
+  }
+
+  OpenRun(runId: string): void {
+    if (!runId) return;
+    SharedService.Instance.OpenEntityRecord('MJ: Test Runs', CompositeKey.FromID(runId));
   }
 
   ngOnDestroy(): void {
@@ -906,8 +1013,13 @@ export class TestingAnalyticsComponent implements OnInit, OnDestroy {
   }
 
   /** trackBy for trend @for loops */
-  trackTrend(index: number, t: TestTrendData): number {
+  TrackTrend(index: number, t: TestTrendData): number {
     return index;
+  }
+
+  /** @deprecated Use {@link TrackTrend}. */
+  trackTrend(index: number, t: TestTrendData): number {
+    return this.TrackTrend(index, t);
   }
 
   // ===================================================================
@@ -915,9 +1027,9 @@ export class TestingAnalyticsComponent implements OnInit, OnDestroy {
   // ===================================================================
 
   private restoreState(): void {
-    if (this.initialState != null) {
-      if (typeof this.initialState['selectedDays'] === 'number') {
-        this.SelectedDays = this.initialState['selectedDays'] as number;
+    if (this.InitialState != null) {
+      if (typeof this.InitialState['selectedDays'] === 'number') {
+        this.SelectedDays = this.InitialState['selectedDays'] as number;
       }
     }
     // Apply initial date range
@@ -1019,8 +1131,10 @@ export class TestingAnalyticsComponent implements OnInit, OnDestroy {
     try {
       const metrics = await this.instrumentationService.getVersionMetrics();
       this.VersionRows = this.buildVersionRows(metrics);
-    } catch {
+      this.VersionMetricsError = '';
+    } catch (error) {
       this.VersionRows = [];
+      this.VersionMetricsError = error instanceof Error ? error.message : 'Could not load version metrics.';
     } finally {
       this.IsLoadingVersions = false;
       this.emitState();
@@ -1058,7 +1172,7 @@ export class TestingAnalyticsComponent implements OnInit, OnDestroy {
   }
 
   private emitState(): void {
-    this.stateChange.emit({
+    this.StateChange.emit({
       selectedDays: this.SelectedDays,
       // Breakdown name lists + version count for the dashboard's agent context.
       topFailingTests: this.topFailingNames,

@@ -185,9 +185,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: MCP Server Connection Tools','MCPServerToolID')"
-                [NewRecordValues]="NewRecordValues('MJ: MCP Server Connection Tools')"
+                [NewRecordValues]="NewRecordValues('MJ: MCP Server Connection Tools','MCPServerToolID')"
                 [AllowLoad]="IsSectionExpanded('mJMCPServerConnectionTools')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJMCPServerConnectionTools', $event.totalRowCount)"
                 >
@@ -210,9 +210,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: MCP Tool Favorites','MCPServerToolID')"
-                [NewRecordValues]="NewRecordValues('MJ: MCP Tool Favorites')"
+                [NewRecordValues]="NewRecordValues('MJ: MCP Tool Favorites','MCPServerToolID')"
                 [AllowLoad]="IsSectionExpanded('mJMCPToolFavorites')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJMCPToolFavorites', $event.totalRowCount)"
                 >
@@ -235,9 +235,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: MCP Tool Execution Logs','MCPServerToolID')"
-                [NewRecordValues]="NewRecordValues('MJ: MCP Tool Execution Logs')"
+                [NewRecordValues]="NewRecordValues('MJ: MCP Tool Execution Logs','MCPServerToolID')"
                 [AllowLoad]="IsSectionExpanded('mJMCPToolExecutionLogs')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJMCPToolExecutionLogs', $event.totalRowCount)"
                 >

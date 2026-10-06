@@ -7,6 +7,10 @@ import {
     ComputeParentRollup,
     IsGraphStalled,
     IsGraphSettled,
+    ComputeCertainlyRun,
+    ComputeDownstream,
+    ComputeUpstream,
+    type RoutedTaskGraphEdge,
     type TaskGraphNode,
     type TaskGraphEdge,
     type TaskGraphNodeStatus,
@@ -122,6 +126,21 @@ describe('ComputeEligibleTasks', () => {
         const nodes = [node('a', 'Failed'), node('b')];
         const edges = [edge('b', 'a', 'Optional')];
         expect(ids(ComputeEligibleTasks(nodes, edges))).toEqual(['b']);
+    });
+
+    it('runs an ALL-Optional node in the first wave, alongside its own dependencies', () => {
+        // The consequence the spec doc calls out and nothing asserted: `Optional` means "does not
+        // make the target wait", so a node reached ONLY by optional edges has no gating edges at
+        // all and is eligible immediately — at the same moment as the steps it nominally follows.
+        //
+        // Pinned because it reads like a bug when first seen, and because it is the exact behaviour
+        // an OR-join would change. An OR-join ("any one satisfied predecessor is enough") would
+        // make `join` wait for the first of a/b; today it waits for neither. If someone implements
+        // that later, this test is what tells them they changed a documented semantic rather than
+        // fixed an oversight.
+        const nodes = [node('a', 'Pending'), node('b', 'Pending'), node('join')];
+        const edges = [edge('join', 'a', 'Optional'), edge('join', 'b', 'Optional')];
+        expect(ids(ComputeEligibleTasks(nodes, edges)).sort()).toEqual(['a', 'b', 'join']);
     });
 
     it('treats an absent dependencyType as Prerequisite', () => {
@@ -273,5 +292,58 @@ describe('IsGraphSettled', () => {
 
     it('is not settled while a task is in flight', () => {
         expect(IsGraphSettled([node('a', 'In Progress')])).toBe(false);
+    });
+});
+
+describe('ComputeCertainlyRun', () => {
+    /** An edge that can be cut at run time — conditional, or one path of an exclusive fork. */
+    const cut = (taskId: string, dependsOnTaskId: string): RoutedTaskGraphEdge => ({ taskId, dependsOnTaskId, mayBeCut: true });
+    const certain = (ids: string[], edges: RoutedTaskGraphEdge[], of: string) => [...(ComputeCertainlyRun(ids, edges)?.get(of) ?? [])].sort();
+
+    it('makes every step of an unconditional chain certain for the steps after it', () => {
+        expect(certain(['a', 'b', 'c'], [edge('b', 'a'), edge('c', 'b')], 'c')).toEqual(['a', 'b', 'c']);
+    });
+
+    it('keeps a skippable branch out of what a join is certain of, and keeps what both branches share', () => {
+        // x forks to d or e; both lead to j. Whichever ran, x did; neither d nor e is certain.
+        const edges = [cut('d', 'x'), cut('e', 'x'), edge('j', 'd'), edge('j', 'e')];
+        expect(certain(['x', 'd', 'e', 'j'], edges, 'j')).toEqual(['j', 'x']);
+    });
+
+    it('makes a step certain for everything that can only run after it, even on a skippable branch', () => {
+        const edges = [cut('d', 'x'), edge('m', 'd')];
+        expect(certain(['x', 'd', 'm'], edges, 'm')).toEqual(['d', 'm', 'x']);
+    });
+
+    it('counts an AND-join\'s predecessors that cannot be skipped', () => {
+        // Two entries run in parallel and j waits for both, so both are certain for it.
+        expect(certain(['a', 'b', 'j'], [edge('j', 'a'), edge('j', 'b')], 'j')).toEqual(['a', 'b', 'j']);
+    });
+
+    it('treats a step whose every route in can be cut as skippable, and one route that cannot as enough', () => {
+        // c is reached by a conditional edge from a and an unconditional one from b: c cannot be skipped.
+        const edges = [cut('c', 'a'), edge('c', 'b'), edge('d', 'c'), edge('d', 'z')];
+        expect(certain(['a', 'b', 'c', 'z', 'd'], edges, 'd')).toEqual(['a', 'b', 'c', 'd', 'z']);
+    });
+
+    it('ignores edges that do not gate a start', () => {
+        expect(certain(['a', 'b'], [edge('b', 'a', 'Optional')], 'b')).toEqual(['b']);
+    });
+
+    it('returns null for a cyclic graph', () => {
+        expect(ComputeCertainlyRun(['a', 'b'], [edge('a', 'b'), edge('b', 'a')])).toBeNull();
+    });
+});
+
+describe('ComputeDownstream and ComputeUpstream', () => {
+    const edges = [edge('b', 'a'), edge('c', 'b'), edge('d', 'a', 'Optional')];
+
+    it('walks every edge type forward', () => {
+        expect([...ComputeDownstream('a', edges)].sort()).toEqual(['b', 'c', 'd']);
+    });
+
+    it('walks every edge type back', () => {
+        expect([...ComputeUpstream('c', edges)].sort()).toEqual(['a', 'b']);
+        expect([...ComputeUpstream('a', edges)]).toEqual([]);
     });
 });

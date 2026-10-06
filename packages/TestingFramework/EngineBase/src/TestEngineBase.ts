@@ -79,7 +79,8 @@ export class TestEngineBase extends BaseEngine<TestEngineBase> {
     }
 
     /**
-     * All loaded test rubrics
+     * Cached MJ: Test Rubrics rows.
+     * @deprecated MJ: Test Rubrics is not read during execution. Use MJ: Rubrics through Test.RubricID. The table is removed at the next major version.
      */
     public get TestRubrics(): MJTestRubricEntity[] {
         return this._testRubrics;
@@ -117,6 +118,7 @@ export class TestEngineBase extends BaseEngine<TestEngineBase> {
                 CacheLocal: true
             },
             {
+                // @deprecated Not read during execution. Removed at the next major version.
                 PropertyName: '_testRubrics',
                 EntityName: 'MJ: Test Rubrics',
                 CacheLocal: true
@@ -178,14 +180,16 @@ export class TestEngineBase extends BaseEngine<TestEngineBase> {
     }
 
     /**
-     * Get test rubric by ID
+     * Get a cached MJ: Test Rubrics row by ID.
+     * @deprecated Not read during execution. Removed at the next major version.
      */
     public GetTestRubricByID(id: string): MJTestRubricEntity | undefined {
         return this._testRubrics.find(r => UUIDsEqual(r.ID, id));
     }
 
     /**
-     * Get test rubric by name
+     * Get a cached MJ: Test Rubrics row by name.
+     * @deprecated Not read during execution. Removed at the next major version.
      */
     public GetTestRubricByName(name: string): MJTestRubricEntity | undefined {
         return this._testRubrics.find(r => r.Name === name);

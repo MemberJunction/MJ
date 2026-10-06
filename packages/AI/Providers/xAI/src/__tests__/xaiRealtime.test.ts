@@ -34,6 +34,10 @@ vi.mock('@memberjunction/ai', async () => {
     class BaseLLM extends BaseModel {}
     class BaseEmbeddings extends BaseModel {}
     class BaseAudioGenerator extends BaseModel {}
+    // The OpenAI audio driver also registers against the split TTS and STT bases, so its
+    // decorators read these at module evaluation.
+    class BaseTextToSpeech extends BaseModel {}
+    class BaseSpeechToText extends BaseModel {}
     class BaseImageGenerator extends BaseModel {}
     // Static-method error helper referenced by those modules' method bodies.
     class ErrorAnalyzer {
@@ -49,9 +53,11 @@ vi.mock('@memberjunction/ai', async () => {
     const { IsTranscriptContinuation } = await import('../../../../Core/src/generic/transcriptContinuation');
     // Same reasoning for ResolveResponseDoneUsage — PURE and dependency-free, and it encodes the
     // provider-specific rule for WHERE usage lives on a response.done frame (xAI puts it at the
-    // top level, OpenAI under response.usage). The real implementation is the thing under test.
+    // top level, OpenAI under response.usage). Stubbing it would let this test restate that rule
+    // and drift from reality, which is how the xAI top-level-usage bug survived here in the first
+    // place — so the real implementation is the thing under test.
     const { ResolveResponseDoneUsage } = await import('../../../../Core/src/generic/realtimeUsage');
-    return { BaseModel, BaseRealtimeModel, BaseLLM, BaseEmbeddings, BaseAudioGenerator, BaseImageGenerator, ErrorAnalyzer, RealtimeDiagLog, IsTranscriptContinuation, ResolveResponseDoneUsage };
+    return { BaseModel, BaseRealtimeModel, BaseLLM, BaseEmbeddings, BaseAudioGenerator, BaseTextToSpeech, BaseSpeechToText, BaseImageGenerator, ErrorAnalyzer, RealtimeDiagLog, IsTranscriptContinuation, ResolveResponseDoneUsage };
 });
 
 // Mock the SDK WebSocket so importing the driver never touches the network. The driver's
@@ -407,7 +413,11 @@ describe('xAIRealtime', () => {
             const respond = driver.Fake.Sent[0];
             expect(respond.type).toBe('response.create');
             if (respond.type === 'response.create') {
-                expect(respond.response?.instructions).toBe('Briefly say the report agent is drafting.');
+                // The session prompt rides AHEAD of the direction: `response.instructions` is a full
+                // override of the session prompt, so sending the direction alone would leave the model
+                // with no identity for exactly this one turn (#4591). The session was started with
+                // SystemPrompt 'sys', which xAIRealtimeSession inherits from OpenAIRealtimeSession.
+                expect(respond.response?.instructions).toBe('sys\n\nBriefly say the report agent is drafting.');
             }
         });
 
@@ -862,7 +872,8 @@ describe('xAIRealtime edge coverage (shared-driver surface)', () => {
 
     it('inherits live Reconfigure with the Grok transcription model', async () => {
         const session = (await driver.StartSession({ Model: 'grok-voice', SystemPrompt: 'sys' })) as xAIRealtimeSession;
-        expect(session.Capabilities).toEqual({ CanReconfigureTurnMode: true });
+        expect(session.Capabilities).toEqual({ CanReconfigureTurnMode: true, SupportsDynamicToolSet: true });
+        expect(xAIRealtime.SupportsDynamicToolSet).toBe(true);
         const before = driver.Fake.Sent.length;
         session.Reconfigure({ DisableAutoResponse: true });
         const frame = driver.Fake.Sent.slice(before)[0];

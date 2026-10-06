@@ -93,6 +93,88 @@ export interface AuthProviderConfig {
 }
 
 /**
+ * Flat key/value configuration handed to a BROWSER auth driver.
+ *
+ * Deliberately flat and primitive-valued: every value here is published in the
+ * unauthenticated pre-auth provider catalog, so the shape doubles as a reminder
+ * that nothing structured or sensitive belongs in it. Nested objects would make
+ * it easy to smuggle a credential blob into a "config" field.
+ */
+export type PublicAuthProviderClientConfig = Record<string, string | number | boolean | null>;
+
+/**
+ * The PUBLIC description of one authentication provider, as published by the
+ * server's unauthenticated catalog endpoint (`GET /auth/providers`) and consumed
+ * by the browser before any user is signed in.
+ *
+ * This type is the trust boundary made explicit. It contains ONLY fields that are
+ * safe for an anonymous caller to read — the same values a single-provider SPA
+ * already had compiled into its `environment.ts`. It intentionally has no `ID`,
+ * no `credentialID`, and no server-side configuration, so a provider row cannot
+ * leak secret material by being published.
+ *
+ * @see AuthProviderConfig for the richer SERVER-side config used to validate tokens.
+ */
+export interface PublicAuthProviderInfo {
+  /**
+   * Unique provider name — matches the name the server registered with
+   * `AuthProviderFactory`, and is what the browser persists when a user picks
+   * a provider from the login picker.
+   */
+  name: string;
+
+  /**
+   * ClassFactory resolution key. The browser resolves its `MJAuthBase` subclass
+   * from this key exactly as the server resolves its `BaseAuthProvider` subclass,
+   * so a driver ships as a server/browser pair under one name.
+   */
+  driverClass: string;
+
+  /**
+   * Label for the login button (rendered as "Continue with {displayName}").
+   * The server falls back to `name` when the row has no DisplayName.
+   */
+  displayName: string;
+
+  /** Font Awesome class or known brand-logo key for the button's icon chip. */
+  icon?: string;
+
+  /** Ascending sort order within the picker. */
+  sequence: number;
+
+  /** True when this provider is pre-highlighted, and used directly when it is the only one. */
+  isDefault: boolean;
+
+  /** Public OAuth client ID. */
+  clientId?: string;
+
+  /** Expected token issuer. */
+  issuer?: string;
+
+  /** Provider domain (e.g. an Auth0/Okta tenant domain). */
+  domain?: string;
+
+  /**
+   * OAuth scopes to request, already parsed. The server splits the row's delimited `Scopes`
+   * column once at the trust boundary, so every consumer — the browser drivers hand this
+   * straight to SDK config typed `string[]` — receives ready-to-use values instead of
+   * re-deriving the delimiter convention.
+   */
+  scopes?: string[];
+
+  /** Driver-specific browser settings (redirect URI, API hostname, region, ...). */
+  clientConfiguration?: PublicAuthProviderClientConfig;
+}
+
+/**
+ * Response body of the unauthenticated `GET /auth/providers` catalog endpoint.
+ */
+export interface PublicAuthProviderCatalog {
+  /** Active, client-visible providers, already sorted by `sequence` then `displayName`. */
+  providers: PublicAuthProviderInfo[];
+}
+
+/**
  * User information extracted from authentication tokens or user profiles
  */
 export interface AuthUserInfo {

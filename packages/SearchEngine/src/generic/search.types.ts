@@ -11,7 +11,7 @@
 /**
  * Source types that can contribute to search results.
  */
-export type SearchSource = 'vector' | 'fulltext' | 'entity' | 'storage';
+export type SearchSource = 'vector' | 'fulltext' | 'entity' | 'storage' | 'tag';
 
 /**
  * Discriminator for how a search result should be rendered in the UI.
@@ -40,6 +40,8 @@ export interface SearchScoreBreakdown {
     Entity?: number;
     /** Score from file storage search */
     Storage?: number;
+    /** Score from tag-weighted search */
+    Tag?: number;
     /**
      * Re-rank score from the optional re-ranker stage (post-RRF, pre-dedup).
      * When present, the top-level `Score` has been replaced by this value.
@@ -430,6 +432,8 @@ export interface SearchResultItem {
     ID: string;
     /** The entity this result came from */
     EntityName: string;
+    /** Human-readable display name for the entity (e.g., "People" instead of "MJ_BizApps_Common: People") */
+    EntityDisplayName?: string;
     /** The source record ID */
     RecordID: string;
     /** How the content was sourced: 'vector', 'fulltext', 'entity', or 'fused' */
@@ -495,7 +499,7 @@ export type SearchStreamEvent =
         /** Post-deduplication, post-permission, post-enrich result set — what Search() would have returned. */
         results: SearchResultItem[];
         /** Same shape as the synchronous SearchResult.SourceCounts. */
-        sourceCounts: { Vector: number; FullText: number; Entity: number; Storage: number };
+        sourceCounts: { Vector: number; FullText: number; Entity: number; Storage: number; Tag?: number };
         /** Total wall-clock duration of the stream. */
         elapsedMs: number;
     }
@@ -525,6 +529,7 @@ export interface SearchResult {
         FullText: number;
         Entity: number;
         Storage: number;
+        Tag?: number;
     };
     /** Metadata for all active search providers (for UI filter facets and labels) */
     Providers: SearchProviderInfo[];

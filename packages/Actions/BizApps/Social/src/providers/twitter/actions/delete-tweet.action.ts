@@ -1,5 +1,5 @@
 import { RegisterClass } from '@memberjunction/global';
-import { TwitterBaseAction } from '../twitter-base.action';
+import { Tweet, TwitterApiResponse, TwitterBaseAction } from '../twitter-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { LogStatus, LogError } from '@memberjunction/core';
 import { BaseAction } from '@memberjunction/actions';
@@ -45,25 +45,25 @@ export class TwitterDeleteTweetAction extends TwitterBaseAction {
             let tweetDetails: any = null;
             try {
                 LogStatus(`Retrieving tweet details for ID: ${tweetId}...`);
-                const response = await this.axiosInstance.get(`/tweets/${tweetId}`, {
-                    params: {
+                const response = await this.httpClient.Get<TwitterApiResponse<Tweet>>(`/tweets/${tweetId}`, {
+                    Query: {
                         'tweet.fields': 'id,text,created_at,author_id,public_metrics',
                         'expansions': 'author_id',
                         'user.fields': 'id,username'
                     }
                 });
 
-                if (response.data.data) {
+                if (response.Data.data) {
                     tweetDetails = {
-                        id: response.data.data.id,
-                        text: response.data.data.text,
-                        createdAt: response.data.data.created_at,
-                        metrics: response.data.data.public_metrics
+                        id: response.Data.data.id,
+                        text: response.Data.data.text,
+                        createdAt: response.Data.data.created_at,
+                        metrics: response.Data.data.public_metrics
                     };
 
                     // Verify ownership
                     const currentUser = await this.getCurrentUser();
-                    if (response.data.data.author_id !== currentUser.id) {
+                    if (response.Data.data.author_id !== currentUser.id) {
                         throw new Error('You can only delete your own tweets');
                     }
                 }

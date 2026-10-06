@@ -73,7 +73,7 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "Priority": 10
           },
@@ -81,14 +81,14 @@
             "ID": "A117EB14-411D-4590-A8DC-F9AF5C82DA5D"
           },
           "sync": {
-            "lastModified": "2026-05-29T19:48:59.103Z",
-            "checksum": "f73dcd14aeb277725c2bf0b147d266c30a90951d1f35572303cd1cf8aba4ca73"
+            "lastModified": "2026-10-02T21:42:11.363Z",
+            "checksum": "16ae6811aae94d52bed203c8c0d10a4f2d74035edf8bbe657cc0fb9c54a03df3"
           }
         },
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5.5 Instant",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-6 Luna",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
             "Priority": 1
           },
@@ -96,44 +96,44 @@
             "ID": "3BA8C588-3954-4180-86C5-666D886849F7"
           },
           "sync": {
-            "lastModified": "2026-05-29T19:48:59.126Z",
-            "checksum": "0fbff8e055836faf4ae3e96e5e5a26f1a2665442185baa35f76e4675c832ada6"
+            "lastModified": "2026-10-02T21:42:11.386Z",
+            "checksum": "678044bc528794ef1fbe0c708b488d8a5f0583e4ea828d9e33f0c7a66cd1757a"
           }
         },
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Flash-Lite",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash-Lite",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
-            "Priority": 11
+            "Priority": 12
           },
           "primaryKey": {
             "ID": "FCC0DEA0-E730-4200-96E7-23CEB6534CDA"
           },
           "sync": {
-            "lastModified": "2026-04-11T04:10:54.809Z",
-            "checksum": "3cbb3c7087d324e59daa930e998fc01a358b966b00a03e71afeeb333116e1743"
+            "lastModified": "2026-10-02T21:42:11.404Z",
+            "checksum": "674d32a80dfbcae15d1d6cbdd609318c7c6b1e48e905faf55617ec126b85662a"
           }
         },
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Flash-Lite",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash-Lite",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
-            "Priority": 12
+            "Priority": 11
           },
           "primaryKey": {
             "ID": "10585456-E4C7-46BD-8066-974D94D122AE"
           },
           "sync": {
-            "lastModified": "2026-04-11T04:10:54.823Z",
-            "checksum": "49a2b5a9b8c939050b947281568da42303aa6e836bf5bb619843c881494a9a26"
+            "lastModified": "2026-10-02T21:42:11.422Z",
+            "checksum": "a5d23ce117dfd0432d2ce0a2470ddb8e637f11630f0980a8386998db543e794c"
           }
         },
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
             "Priority": 9
           },
@@ -141,8 +141,8 @@
             "ID": "6DB79169-60C8-4D14-BC56-C398B63A23FB"
           },
           "sync": {
-            "lastModified": "2026-05-29T19:48:59.140Z",
-            "checksum": "1702dcefdc5af476fedab1959e4a7b8e999f71bdf19c2f51f14e2c8b165f96f2"
+            "lastModified": "2026-10-02T21:42:11.440Z",
+            "checksum": "13bc8b6a2097c32d1a3db8a9cdd44e04bd8e5e7cc4a8971fe6178a2f8aff5958"
           }
         }
       ]
@@ -151,8 +151,8 @@
       "ID": "910D617C-56CE-4698-A938-E2E982BB91FD"
     },
     "sync": {
-      "lastModified": "2026-05-29T19:48:59.070Z",
-      "checksum": "083cc27cf86f3bb5d66f4ff669f30f38ccb6bffe92cecefaa70be73d6e5009de"
+      "lastModified": "2026-09-09T11:30:09.206Z",
+      "checksum": "27a9d70be20652c4f3450d502f73d373290ee3c9a661cd578e4530f995252d94"
     }
   }
 ]

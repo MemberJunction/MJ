@@ -48,6 +48,8 @@ export interface VonageOutboundCallLike {
     ncco: NccoAction[];
     /** Optional lifecycle event-webhook URL. */
     event_url?: string[];
+    /** Answering-machine detection behaviour (`'hangup'` | `'continue'`). */
+    machine_detection?: 'hangup' | 'continue';
 }
 
 /** The created-call resource `createOutboundCall(...)` resolves to (we read only `uuid`). */
@@ -122,7 +124,7 @@ export interface VonageRestCredentials {
  * import is impossible here (optional peer SDK, may be uninstalled in non-telephony deployments);
  * the `optionalDependencies` entry keeps it in the dependency graph (CLAUDE rule 8, category 2).
  */
-export const defaultVonageRestModuleLoader: VonageRestModuleLoader = async (): Promise<VonageModuleConstructor> => {
+export const DefaultVonageRestModuleLoader: VonageRestModuleLoader = async (): Promise<VonageModuleConstructor> => {
     try {
         const mod: unknown = await import('@vonage/server-sdk');
         const ctor = unwrapVonageConstructor(mod);
@@ -138,6 +140,9 @@ export const defaultVonageRestModuleLoader: VonageRestModuleLoader = async (): P
         );
     }
 };
+
+/** @deprecated Use {@link DefaultVonageRestModuleLoader}. */
+export const defaultVonageRestModuleLoader: VonageRestModuleLoader = DefaultVonageRestModuleLoader;
 
 /** Unwraps the `Vonage` named export from CJS/ESM interop (`module.Vonage` or `module.default.Vonage`). */
 function unwrapVonageConstructor(mod: unknown): unknown {
@@ -175,7 +180,7 @@ export class RealVonageVoiceClient implements IVonageVoiceLike {
      * @param credentials Resolved Vonage credentials (application-id + private-key, or API key pair).
      * @param loadModule The `@vonage/server-sdk` module loader (defaults to the lazy dynamic import).
      */
-    constructor(credentials: VonageRestCredentials, loadModule: VonageRestModuleLoader = defaultVonageRestModuleLoader) {
+    constructor(credentials: VonageRestCredentials, loadModule: VonageRestModuleLoader = DefaultVonageRestModuleLoader) {
         this.credentials = credentials;
         this.loadModule = loadModule;
     }
@@ -188,6 +193,7 @@ export class RealVonageVoiceClient implements IVonageVoiceLike {
             from: { type: 'phone', number: params.From },
             ncco: params.Ncco,
             ...(params.EventUrl ? { event_url: [params.EventUrl] } : {}),
+            ...(params.MachineDetection ? { machine_detection: params.MachineDetection } : {}),
         });
         if (!created?.uuid) {
             throw new Error('Vonage createOutboundCall returned no call UUID.');

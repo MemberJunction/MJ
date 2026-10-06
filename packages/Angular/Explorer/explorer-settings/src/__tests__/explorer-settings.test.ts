@@ -1,21 +1,23 @@
+// Load the JIT compiler BEFORE any Angular library evaluates: npm-published Angular
+// packages ship partial declarations whose static initializers need the compiler facade.
+import '@angular/compiler';
+import { describe, it, expect } from 'vitest';
+import * as publicApi from '../public-api';
+import { ExplorerSettingsModule, SettingsComponent, SqlLoggingComponent } from '../public-api';
+
 /**
- * Tests for explorer-settings package:
- * - Module export verification
+ * Entry-point smoke test: importing the public entry must succeed (catches
+ * broken exports / import-graph breakage) and the load-bearing symbols the
+ * package exists to provide must be real constructors.
  */
-import { describe, it, expect, vi } from 'vitest';
+describe('@memberjunction/ng-explorer-settings', () => {
+  it('exposes a non-empty public export surface', () => {
+    expect(Object.keys(publicApi).length).toBeGreaterThan(0);
+  });
 
-vi.mock('@angular/core', () => ({
-  Component: () => (target: Function) => target,
-  NgModule: () => (target: Function) => target,
-  Injectable: () => (target: Function) => target,
-  Input: () => () => {},
-  Output: () => () => {},
-  EventEmitter: class { emit() {} },
-  ChangeDetectorRef: class {},
-}));
-
-describe('explorer-settings package', () => {
-  it('should be a valid module', () => {
-    expect(true).toBe(true);
+  it('exports its load-bearing classes as constructors', () => {
+    expect(ExplorerSettingsModule).toBeTypeOf('function');
+    expect(SettingsComponent).toBeTypeOf('function');
+    expect(SqlLoggingComponent).toBeTypeOf('function');
   });
 });

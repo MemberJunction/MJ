@@ -118,9 +118,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Types','DefaultStorageAccountID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Agent Types')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Types','DefaultStorageAccountID')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentTypes')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentTypes', $event.totalRowCount)"
                 >
@@ -143,9 +143,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Archive Configurations','StorageAccountID')"
-                [NewRecordValues]="NewRecordValues('MJ: Archive Configurations')"
+                [NewRecordValues]="NewRecordValues('MJ: Archive Configurations','StorageAccountID')"
                 [AllowLoad]="IsSectionExpanded('mJArchiveConfigurations')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJArchiveConfigurations', $event.totalRowCount)"
                 >
@@ -168,9 +168,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Search Scope Storage Accounts','FileStorageAccountID')"
-                [NewRecordValues]="NewRecordValues('MJ: Search Scope Storage Accounts')"
+                [NewRecordValues]="NewRecordValues('MJ: Search Scope Storage Accounts','FileStorageAccountID')"
                 [AllowLoad]="IsSectionExpanded('mJSearchScopeStorageAccounts')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJSearchScopeStorageAccounts', $event.totalRowCount)"
                 >
@@ -193,9 +193,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Categories','DefaultStorageAccountID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Agent Categories')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Categories','DefaultStorageAccountID')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentCategories')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentCategories', $event.totalRowCount)"
                 >
@@ -218,9 +218,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: File Storage Account Permissions','FileStorageAccountID')"
-                [NewRecordValues]="NewRecordValues('MJ: File Storage Account Permissions')"
+                [NewRecordValues]="NewRecordValues('MJ: File Storage Account Permissions','FileStorageAccountID')"
                 [AllowLoad]="IsSectionExpanded('mJFileStorageAccountPermissions')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJFileStorageAccountPermissions', $event.totalRowCount)"
                 >
@@ -243,9 +243,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agents','DefaultStorageAccountID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Agents')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agents','DefaultStorageAccountID')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgents')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgents', $event.totalRowCount)"
                 >

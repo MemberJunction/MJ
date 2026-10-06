@@ -14,8 +14,8 @@ import { ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-
 import { LogError, LogStatus } from '@memberjunction/core';
 import { BaseMessagingAdapter } from '../base/BaseMessagingAdapter.js';
 import { IncomingMessage, FormattedResponse, MessagingAdapterSettings, AgentResponseMetadata } from '../base/types.js';
-import { markdownToAdaptiveCard } from './teams-formatter.js';
-import { buildRichAdaptiveCard } from './teams-card-builder.js';
+import { MarkdownToAdaptiveCard } from './teams-formatter.js';
+import { BuildRichAdaptiveCard } from './teams-card-builder.js';
 
 /**
  * Microsoft Teams-specific adapter that implements all platform operations
@@ -39,6 +39,16 @@ import { buildRichAdaptiveCard } from './teams-card-builder.js';
 export class TeamsAdapter extends BaseMessagingAdapter {
     /** The bot's Microsoft App ID (also used as the bot's user ID). */
     private botID: string = '';
+
+    /**
+     * Teams delivers a channel message to a bot only when that bot is @mentioned, so replies
+     * never fan out across installed apps the way they do on Slack. The multi-bot thread gate is
+     * therefore unnecessary here — and would wrongly suppress replies, since a Teams thread reply
+     * that reaches this bot at all was already addressed to it.
+     */
+    protected override respondsToUnaddressedThreadReplies(): boolean {
+        return true;
+    }
 
     /**
      * Stored conversation references for proactive messaging.
@@ -83,6 +93,15 @@ export class TeamsAdapter extends BaseMessagingAdapter {
             ThreadID: activity.conversation?.id ?? null,
             IsDirectMessage: activity.conversation?.conversationType === 'personal',
             IsBotMention: this.hasBotMention(activity),
+            // Without this, Teams can only ever reach the DEFAULT agent: `resolveAgent` routes on
+            // MentionedAgentNames, and only the Slack adapter was populating it, so "@Sage hi" in
+            // Teams silently ran the default and logged nothing (the "agent not found" branch needs
+            // an extracted name to report). Worse, `resolveThreadAgent` falls back to matching the
+            // TEXT of thread history, so a later turn in the same conversation could route to the
+            // agent named in an earlier message that the first turn had ignored — the same message
+            // resolving two different ways depending on its position. The matcher strips bot
+            // `<at>` mentions itself, so the raw activity text is what it wants.
+            MentionedAgentNames: this.matchAgentMentions(activity.text ?? ''),
             Timestamp: activity.timestamp ? new Date(activity.timestamp) : new Date(),
             RawEvent: { activity, turnContext } as unknown as Record<string, unknown>
         };
@@ -238,12 +257,12 @@ export class TeamsAdapter extends BaseMessagingAdapter {
         metadata?: AgentResponseMetadata
     ): Promise<FormattedResponse> {
         const richPayload = result
-            ? buildRichAdaptiveCard(result, agent, responseText, {
+            ? BuildRichAdaptiveCard(result, agent, responseText, {
                 explorerBaseURL: this.settings.ExplorerBaseURL,
                 artifactId: metadata?.ArtifactId,
                 conversationId: metadata?.ConversationId,
             })
-            : markdownToAdaptiveCard(responseText);
+            : MarkdownToAdaptiveCard(responseText);
 
         return {
             PlainText: responseText,
@@ -348,6 +367,21 @@ export class TeamsAdapter extends BaseMessagingAdapter {
             const conversationRef = TurnContext.getConversationReference(activity);
             this.storeConversationRef(activity.conversation?.id ?? '', conversationRef);
 
+            // Route the answer back to the agent that ASKED, not the default. The form card
+            // stamps its owner into the submit payload as `mj_agent` (see
+            // buildResponseFormElements) because Teams has no thread history to recover it from.
+            // NOT matched out of the answer text: a form answer is arbitrary user input, and
+            // name-matching it would let a typed word re-route the reply mid-exchange.
+            // Validated against the known agents rather than trusted: the submit payload is
+            // client-controlled, and every other producer of MentionedAgentNames yields a name
+            // drawn from availableAgents. An unchecked value would reach the "no agent named X"
+            // reply, echoing arbitrary text into a shared channel under the bot's identity.
+            const claimedAgent = formValues['mj_agent'];
+            const formAgentName = typeof claimedAgent === 'string'
+                && this.availableAgents.some((a) => a.Name === claimedAgent)
+                ? claimedAgent
+                : null;
+
             const incomingMessage: IncomingMessage = {
                 MessageID: activityId,
                 Text: messageText,
@@ -358,6 +392,7 @@ export class TeamsAdapter extends BaseMessagingAdapter {
                 ThreadID: activity.conversation?.id ?? null,
                 IsDirectMessage: activity.conversation?.conversationType === 'personal',
                 IsBotMention: true,
+                MentionedAgentNames: formAgentName ? [formAgentName] : undefined,
                 Timestamp: activity.timestamp ? new Date(activity.timestamp) : new Date(),
                 RawEvent: { activity, turnContext } as unknown as Record<string, unknown>,
             };

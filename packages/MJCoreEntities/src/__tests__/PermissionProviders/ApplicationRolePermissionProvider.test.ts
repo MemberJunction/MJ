@@ -39,7 +39,7 @@ vi.mock('@memberjunction/core', async () => {
     const { buildPermissionProviderBase } = await import('./_mockPermissionProviderBase');
     class MockRunView { async RunView() { return { Success: true, Results: [] }; } }
     return {
-        PermissionProviderBase: buildPermissionProviderBase(MockRunView as any),
+        PermissionProviderBase: buildPermissionProviderBase(MockRunView),
         LogError: vi.fn(),
         LogStatus: vi.fn(),
         UserInfo: class {},

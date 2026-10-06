@@ -1,7 +1,7 @@
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormBuilderAction, FormResponse, FormAnswer } from '../../base/base-form-builder.action';
 import { UserInfo, LogError, LogStatus } from '@memberjunction/core';
-import axios, { AxiosInstance, AxiosError } from 'axios';
+import { HttpClient, HttpError, IsHttpError } from '@memberjunction/network-utils';
 import { BaseAction } from '@memberjunction/actions';
 
 /**
@@ -83,6 +83,16 @@ export interface SurveyMonkeySurveyDetails {
     collect_url?: string;
     analyze_url?: string;
     summary_url?: string;
+    /** Present on the `/details` endpoint, which returns the full page/question tree. */
+    pages?: Array<{
+        id: string;
+        title?: string;
+        description?: string;
+        questions?: Array<Record<string, unknown>>;
+    }>;
+    folder_id?: string;
+    category?: string;
+    quiz_options?: Record<string, unknown>;
 }
 
 export interface SurveyMonkeyCollector {
@@ -112,42 +122,36 @@ export abstract class SurveyMonkeyBaseAction extends BaseFormBuilderAction {
         return 'https://api.surveymonkey.com/v3';
     }
 
-    private axiosInstance: AxiosInstance | null = null;
+    private httpClientInstance: HttpClient | null = null;
     private currentAccessToken: string | null = null;
 
     /**
-     * Get axios instance with SurveyMonkey authentication
+     * Get the HTTP client configured with SurveyMonkey authentication
      */
-    protected getAxiosInstance(accessToken: string): AxiosInstance {
-        if (!this.axiosInstance || this.currentAccessToken !== accessToken) {
+    protected getHttpClient(accessToken: string): HttpClient {
+        if (!this.httpClientInstance || this.currentAccessToken !== accessToken) {
             this.currentAccessToken = accessToken;
-            this.axiosInstance = axios.create({
-                baseURL: this.apiBaseUrl,
-                timeout: 60000,
-                headers: {
+            this.httpClientInstance = new HttpClient({
+                BaseURL: this.apiBaseUrl,
+                Timeout: 60000,
+                Headers: {
                     'Accept': 'application/json',
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${accessToken}`
-                }
-            });
-
-            this.axiosInstance.interceptors.response.use(
-                (response) => {
-                    return response;
                 },
-                async (error: AxiosError) => {
-                    if (error.response?.status === 429) {
-                        const retryAfter = error.response.headers['retry-after'];
+                OnRetry: async (error) => {
+                    if (error.Status === 429) {
+                        const retryAfter = error.Headers['retry-after'];
                         const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : 60000;
                         LogStatus(`SurveyMonkey rate limit hit. Waiting ${waitTime}ms before retry...`);
                         await this.sleep(waitTime);
-                        return this.axiosInstance!.request(error.config!);
+                        return true;
                     }
-                    return Promise.reject(error);
+                    return false;
                 }
-            );
+            });
         }
-        return this.axiosInstance;
+        return this.httpClientInstance;
     }
 
     /**
@@ -182,12 +186,12 @@ export abstract class SurveyMonkeyBaseAction extends BaseFormBuilderAction {
             if (options?.sort_by) params.sort_by = options.sort_by;
             if (options?.status) params.status = options.status;
 
-            const response = await this.getAxiosInstance(accessToken).get(
+            const response = await this.getHttpClient(accessToken).Get<SurveyMonkeyResponsesResult>(
                 `/surveys/${surveyId}/responses/bulk`,
-                { params }
+                { Query: params }
             );
 
-            return response.data;
+            return response.Data;
         } catch (error) {
             LogError('Failed to get SurveyMonkey responses:', error);
             throw this.handleSurveyMonkeyError(error);
@@ -265,11 +269,11 @@ export abstract class SurveyMonkeyBaseAction extends BaseFormBuilderAction {
         accessToken: string
     ): Promise<SurveyMonkeyResponse> {
         try {
-            const response = await this.getAxiosInstance(accessToken).get(
+            const response = await this.getHttpClient(accessToken).Get<SurveyMonkeyResponse>(
                 `/surveys/${surveyId}/responses/${responseId}/details`
             );
 
-            return response.data;
+            return response.Data;
         } catch (error) {
             LogError('Failed to get single SurveyMonkey response:', error);
             throw this.handleSurveyMonkeyError(error);
@@ -284,11 +288,11 @@ export abstract class SurveyMonkeyBaseAction extends BaseFormBuilderAction {
         accessToken: string
     ): Promise<SurveyMonkeySurveyDetails> {
         try {
-            const response = await this.getAxiosInstance(accessToken).get(
+            const response = await this.getHttpClient(accessToken).Get<SurveyMonkeySurveyDetails>(
                 `/surveys/${surveyId}`
             );
 
-            return response.data;
+            return response.Data;
         } catch (error) {
             LogError('Failed to get SurveyMonkey survey details:', error);
             throw this.handleSurveyMonkeyError(error);
@@ -303,11 +307,11 @@ export abstract class SurveyMonkeyBaseAction extends BaseFormBuilderAction {
         accessToken: string
     ): Promise<any> {
         try {
-            const response = await this.getAxiosInstance(accessToken).get(
+            const response = await this.getHttpClient(accessToken).Get<any>(
                 `/surveys/${surveyId}/pages`
             );
 
-            return response.data;
+            return response.Data;
         } catch (error) {
             LogError('Failed to get SurveyMonkey pages:', error);
             throw this.handleSurveyMonkeyError(error);
@@ -322,11 +326,11 @@ export abstract class SurveyMonkeyBaseAction extends BaseFormBuilderAction {
         accessToken: string
     ): Promise<SurveyMonkeyCollector[]> {
         try {
-            const response = await this.getAxiosInstance(accessToken).get(
+            const response = await this.getHttpClient(accessToken).Get<{ data: SurveyMonkeyCollector[] }>(
                 `/surveys/${surveyId}/collectors`
             );
 
-            return response.data.data;
+            return response.Data.data;
         } catch (error) {
             LogError('Failed to get SurveyMonkey collectors:', error);
             throw this.handleSurveyMonkeyError(error);
@@ -347,12 +351,12 @@ export abstract class SurveyMonkeyBaseAction extends BaseFormBuilderAction {
         }
     ): Promise<SurveyMonkeyCollector> {
         try {
-            const response = await this.getAxiosInstance(accessToken).post(
+            const response = await this.getHttpClient(accessToken).Post<SurveyMonkeyCollector>(
                 `/surveys/${surveyId}/collectors`,
                 collectorData
             );
 
-            return response.data;
+            return response.Data;
         } catch (error) {
             LogError('Failed to create SurveyMonkey collector:', error);
             throw this.handleSurveyMonkeyError(error);
@@ -379,12 +383,12 @@ export abstract class SurveyMonkeyBaseAction extends BaseFormBuilderAction {
         }
     ): Promise<SurveyMonkeySurveyDetails> {
         try {
-            const response = await this.getAxiosInstance(accessToken).patch(
+            const response = await this.getHttpClient(accessToken).Patch<SurveyMonkeySurveyDetails>(
                 `/surveys/${surveyId}`,
                 updateData
             );
 
-            return response.data;
+            return response.Data;
         } catch (error) {
             LogError('Failed to update SurveyMonkey survey:', error);
             throw this.handleSurveyMonkeyError(error);
@@ -460,10 +464,10 @@ export abstract class SurveyMonkeyBaseAction extends BaseFormBuilderAction {
      * Handle SurveyMonkey-specific errors
      */
     protected handleSurveyMonkeyError(error: any): Error {
-        if (axios.isAxiosError(error)) {
-            const axiosError = error as AxiosError;
-            const status = axiosError.response?.status;
-            const data = axiosError.response?.data as any;
+        if (IsHttpError(error)) {
+            const httpError = error as HttpError;
+            const status = httpError.Status;
+            const data = httpError.Data as any;
 
             if (status === 401) {
                 return new Error('Invalid SurveyMonkey access token. Please check your authentication.');

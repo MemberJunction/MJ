@@ -1,7 +1,7 @@
 import { BaseSingleton } from '@memberjunction/global';
-import { BaseEntity, EntityFieldInfo, EntityInfo, Metadata, RunView, UserInfo, LogError } from '@memberjunction/core';
+import { BaseEntity, EntityFieldInfo, EntityInfo, IMetadataProvider, IRunViewProvider, Metadata, RunView, UserInfo, LogError } from '@memberjunction/core';
 import { MJRecordGeoCodeEntity, GeoDataEngine } from '@memberjunction/core-entities';
-import { GeoFieldMapping, GeocodeResult, GeocodeStatus, GeocodingSource, ExistingGeoCodeInfo } from './types';
+import { GeoFieldMapping, GeocodeResult, GeocodeStatus, GeocodingSource, ExistingGeoCodeInfo, IsSettledGeoCode, PERMANENT_SKIP_RETRY_COUNT } from './types';
 import { ComputeGeoSourceHash } from './hash';
 import { GeocodingProviderRegistry, GeocodeRequest, IGeocodingProvider, ProviderGeocodeResult } from './providers';
 
@@ -139,16 +139,44 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
             ? String(pkPairs[0].Value)
             : pkPairs.map(pk => String(pk.Value)).join('||');
 
+        // SETTLED AND UNCHANGED ⇒ NOTHING TO DO, and decide that BEFORE loading anything.
+        //
+        // In batch mode the map already holds everything this decision needs, so consulting it
+        // here costs no round trips at all. `FindExistingGeoCode`'s own comment claims it
+        // "check[s] staleness inline to avoid loading the full entity when the hash hasn't
+        // changed" — it never did; it loads unconditionally. This is that check, in the one place
+        // it can actually skip the load.
+        if (existingGeoCodesMap) {
+            const info = existingGeoCodesMap.get(
+                GeoCodeSyncService.BuildGeoCodeMapKey(recordId, mapping.LocationType)
+            );
+            if (info && info.SourceFieldHash === hash && IsSettledGeoCode(info.Status, info.RetryCount)) {
+                return null;
+            }
+        }
+
         const existing = await this.FindExistingGeoCode(
             entity.EntityInfo.ID,
             recordId,
             mapping.LocationType,
             contextUser,
-            existingGeoCodesMap
+            existingGeoCodesMap,
+            entity.ProviderToUse as unknown as IMetadataProvider
         );
 
-        if (existing && existing.SourceFieldHash === hash && existing.Status === 'success') {
-            return null; // No change, already geocoded successfully
+        // Settled means "no further attempt can change this while the address is the same" — which
+        // covers a successful geocode AND an address that provably has no location. The second case
+        // used to fall through to a full re-attempt: mark pending (a write), geocode (nothing to
+        // find), mark failed (another write) — per record, on every pass, forever, for an answer
+        // already on file. UpdateNotGeocodable's own comment describes the intended behaviour
+        // exactly: "Mark as not_geocodable so the retry job skips it. If the user later edits the
+        // address, the hash will change and SyncIfChanged will re-attempt." The hash check is the
+        // re-attempt condition; it just was not being honoured for that case.
+        //
+        // A plain `failed` still falls through, because that is a transient API error and retrying
+        // it is the point.
+        if (existing && existing.SourceFieldHash === hash && IsSettledGeoCode(existing.Status, existing.RetryCount)) {
+            return null;
         }
 
         // Upsert a pending row
@@ -156,7 +184,8 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
             entity.EntityInfo.ID,
             recordId,
             mapping.LocationType,
-            contextUser
+            contextUser,
+            entity.ProviderToUse as unknown as IMetadataProvider
         );
 
         if (!row) {
@@ -207,8 +236,15 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
         recordID: string,
         locationType: string,
         contextUser: UserInfo,
-        existingGeoCodesMap?: Map<string, ExistingGeoCodeInfo>
+        existingGeoCodesMap?: Map<string, ExistingGeoCodeInfo>,
+        entityProvider?: IMetadataProvider
     ): Promise<MJRecordGeoCodeEntity | null> {
+        // Prefer the owning entity's provider so RecordGeoCode writes join the
+        // same connection/TX as the save that triggered geocoding. When the
+        // caller did not pass one (scheduled job, tests), fall back to the
+        // process-wide Metadata facade — that path is single-provider.
+        const md = entityProvider ?? new Metadata(); // global-provider-ok: optional-provider helper; ?? is the documented fallback when the owning entity's provider was not passed in
+
         // Batch mode: O(1) map lookup + single PK load
         if (existingGeoCodesMap) {
             const key = `${recordID}|${locationType}`;
@@ -218,14 +254,15 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
             // We have a match — check staleness inline to avoid loading the full entity
             // when the hash hasn't changed. The caller (ProcessMapping) does this check too,
             // but we can short-circuit the entity load here for the common "no change" case.
-            const md = new Metadata();  // global-provider-ok: sync service — single-provider context
             const row = await md.GetEntityObject<MJRecordGeoCodeEntity>('MJ: Record Geo Codes', contextUser);
             const loaded = await row.Load(info.ID);
             return loaded ? row : null;
         }
 
         // Single-record mode: per-record RunView query (used by AfterSave hook)
-        const rv = new RunView();
+        const rv = entityProvider
+            ? new RunView(entityProvider as unknown as IRunViewProvider)
+            : new RunView();
         const result = await rv.RunView<MJRecordGeoCodeEntity>({
             EntityName: 'MJ: Record Geo Codes',
             ExtraFilter: `EntityID='${entityID}' AND RecordID='${recordID}' AND LocationType='${locationType}'`,
@@ -247,9 +284,13 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
         entityID: string,
         recordID: string,
         locationType: string,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        entityProvider?: IMetadataProvider
     ): Promise<MJRecordGeoCodeEntity | null> {
-        const md = new Metadata();  // global-provider-ok: sync service — single-provider context
+        // Prefer the owning entity's provider so the new RecordGeoCode row is
+        // saved on the same connection as the entity that triggered geocoding.
+        // Fall back to the process-wide Metadata facade when none was passed.
+        const md = entityProvider ?? new Metadata(); // global-provider-ok: optional-provider helper; ?? is the documented fallback when the owning entity's provider was not passed in
         const row = await md.GetEntityObject<MJRecordGeoCodeEntity>('MJ: Record Geo Codes', contextUser);
         row.NewRecord();
         row.EntityID = entityID;
@@ -262,7 +303,7 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
             // Likely a UNIQUE KEY violation from a concurrent batch — another thread
             // created the row between our FindExistingGeoCode check and this INSERT.
             // Fall back to loading the existing row.
-            const existing = await this.FindExistingGeoCode(entityID, recordID, locationType, contextUser);
+            const existing = await this.FindExistingGeoCode(entityID, recordID, locationType, contextUser, undefined, entityProvider);
             if (existing) return existing;
 
             LogError(`GeoCodeSyncService: Failed to create RecordGeoCode row: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`);
@@ -308,7 +349,9 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
     protected async UpdateNotGeocodable(row: MJRecordGeoCodeEntity, reason: string): Promise<void> {
         row.Status = 'failed';
         row.ErrorMessage = reason;
-        row.RetryCount = 9999; // Permanently skip retries — hash change will reset this
+        // Settled, not merely failed: no retry can find a location for an address that has none.
+        // A hash change (the user edited the address) resets this and re-opens the question.
+        row.RetryCount = PERMANENT_SKIP_RETRY_COUNT;
         row.GeocodedAt = new Date();
         const saved = await row.Save();
         if (!saved) {

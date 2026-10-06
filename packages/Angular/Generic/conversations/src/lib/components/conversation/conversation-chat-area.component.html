@@ -66,7 +66,7 @@
           </span>
         }
         @if (conversation?.ProjectID) {
-          <button class="project-tag" (click)="openProjectSelector()" title="Assign to project">
+          <button class="project-tag" (click)="openProjectSelector()" [attr.title]="EffectiveReadOnly ? 'Project' : 'Assign to project'">
             <i class="fas fa-folder"></i>
             <span>{{ conversation!.Project || 'Project' }}</span>
           </button>
@@ -79,10 +79,10 @@
         }
       </div>
       <div class="chat-actions chat-actions-buttons">
-        @if (allowPinning && pinnedMessages.length > 0) {
-          <button class="pin-chip" [class.active]="showPinsPanel" (click)="showPinsPanel = !showPinsPanel" title="View pinned messages">
+        @if (allowPinning && pinnedMessageCount > 0) {
+          <button class="pin-chip" [class.active]="showPinsPanel" (click)="TogglePinsPanel()" title="View pinned messages">
             <i class="fas fa-thumbtack"></i>
-            <span class="pin-chip-count">{{ pinnedMessages.length }}</span>
+            <span class="pin-chip-count">{{ pinnedMessageCount }}</span>
           </button>
         }
         @if (showArtifactIndicator && artifactCountDisplay > 0) {
@@ -97,7 +97,7 @@
             <span class="members-badge">{{ memberCount }}</span>
           </button>
         }
-        @if (!overlayMode && showAgentModePicker && ModePickerTargetAgentId) {
+        @if (!overlayMode && showAgentModePicker && ModePickerTargetAgentId && !EffectiveReadOnly) {
           <!-- Per-agent mode/quality picker (Draft / Standard / High).
                Targets the agent the next non-mention message will route
                to. Auto-hides when that agent has fewer than 2 configured
@@ -120,7 +120,8 @@
           <mj-conversation-agent-picker
             [Conversation]="conversation"
             [CurrentUser]="currentUser"
-            [Disabled]="isReadOnlyView">
+            [AllowedAgentIDs]="AllowedAgentIDs"
+            [Disabled]="EffectiveReadOnly">
           </mj-conversation-agent-picker>
         }
         @if (showExportButton) {
@@ -194,7 +195,12 @@
              renders with its own greeting, prompt chips, and message input.
              emptyStateConfig (when supplied) takes precedence over the legacy
              [emptyStateGreeting] string for backwards compatibility. -->
-        @if (slotTemplate('emptyState'); as t) {
+        @if (ReadOnly) {
+          <div class="read-only-banner" role="status">
+            <i class="fas fa-eye"></i>
+            <span>{{ ReadOnlyMessage || 'You have view-only access to this conversation.' }}</span>
+          </div>
+        } @else if (slotTemplate('emptyState'); as t) {
           <ng-container *ngTemplateOutlet="t; context: {
             $implicit: emptyStateConfig,
             greeting: emptyStateConfig?.greeting ?? emptyStateGreeting,
@@ -218,6 +224,9 @@
             [enableAgentMentions]="allowAgentMentions"
             [enableEntityMentions]="allowEntityMentions"
             [enableSkillCommands]="allowSkillCommands"
+            [AllowedAgentIDs]="AllowedAgentIDs"
+            [MentionPeople]="MentionPeople"
+            [ComposerExtraTemplate]="slotTemplate('composerExtra')"
             [maxAttachments]="maxAttachments"
             [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"
             [acceptedFileTypes]="acceptedFileTypes"
@@ -233,29 +242,49 @@
         <div class="chat-messages-wrapper">
           <div class="chat-messages-container"></div>
           <div class="chat-input-container">
-            <div class="message-input-container-wrapper">
-              <mj-message-input
-                #emptyStateInput
-                [emptyStateMode]="true"
-                [initialDraft]="GetInitialDraftFor(null)"
-                (initialDraftApplied)="OnComposerDraftApplied()"
-            (DraftStateChanged)="OnDraftStateChanged(null, $event)"
-            (ComposerBlurred)="OnComposerBlurred()"
-                [currentUser]="currentUser"
-                [disabled]="isProcessing"
-                [enableAttachments]="enableAttachments && allowAttachments"
-                [enableMentions]="allowMentions"
-                [enableAgentMentions]="allowAgentMentions"
-                [enableEntityMentions]="allowEntityMentions"
-                [enableSkillCommands]="allowSkillCommands"
-                [enablePlanMode]="allowPlanMode"
-                [enableRealtime]="allowRealtime"
-                [maxAttachments]="maxAttachments"
-                [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"
-                [acceptedFileTypes]="acceptedFileTypes"
-                (emptyStateSubmit)="onEmptyStateMessageSent($event)">
-              </mj-message-input>
-            </div>
+            @if (ReadOnly) {
+              <div class="read-only-banner" role="status">
+                <i class="fas fa-eye"></i>
+                <span>{{ ReadOnlyMessage || 'You have view-only access to this conversation.' }}</span>
+              </div>
+            } @else {
+              <!-- composerExtra slot — host UI directly above the composer (IMJChatComposerExtraContext). -->
+              @if (slotTemplate('composerExtra'); as t) {
+                <div class="chat-composer-extra">
+                  <ng-container *ngTemplateOutlet="t; context: {
+                    $implicit: conversation,
+                    ConversationId: conversationId,
+                    IsProcessing: isProcessing
+                  }"></ng-container>
+                </div>
+              }
+              <div class="message-input-container-wrapper">
+                <mj-message-input
+                  #emptyStateInput
+                  [emptyStateMode]="true"
+                  [initialDraft]="GetInitialDraftFor(null)"
+                  (initialDraftApplied)="OnComposerDraftApplied()"
+                  (DraftStateChanged)="OnDraftStateChanged(null, $event)"
+                  (ComposerBlurred)="OnComposerBlurred()"
+                  [currentUser]="currentUser"
+                  [disabled]="isProcessing"
+                  [ReadOnly]="EffectiveReadOnly"
+                  [enableAttachments]="enableAttachments && allowAttachments"
+                  [enableMentions]="allowMentions"
+                  [enableAgentMentions]="allowAgentMentions"
+                  [enableEntityMentions]="allowEntityMentions"
+                  [enableSkillCommands]="allowSkillCommands"
+                  [enablePlanMode]="allowPlanMode"
+                  [enableRealtime]="allowRealtime"
+                  [AllowedAgentIDs]="AllowedAgentIDs"
+                  [MentionPeople]="MentionPeople"
+                  [maxAttachments]="maxAttachments"
+                  [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"
+                  [acceptedFileTypes]="acceptedFileTypes"
+                  (emptyStateSubmit)="onEmptyStateMessageSent($event)">
+                </mj-message-input>
+              </div>
+            }
           </div>
         </div>
       } @else {
@@ -274,12 +303,18 @@
               [showAgentRunDetails]="showAgentRunDetails"
               [showReactions]="showReactions"
               [showMessageRating]="showMessageRating"
-              [allowPinning]="allowPinning"
-              [allowMessageEdit]="allowMessageEdit"
-              [allowMessageDelete]="allowMessageDelete"
+              [allowPinning]="allowPinning && !EffectiveReadOnly"
+              [allowMessageEdit]="allowMessageEdit && !EffectiveReadOnly"
+              [allowMessageDelete]="allowMessageDelete && !EffectiveReadOnly"
+              [ReadOnly]="EffectiveReadOnly"
               [assistantDisplayName]="assistantDisplayName"
               [assistantAvatarUrl]="assistantAvatarUrl"
               [messages]="messages"
+              [HasMoreAbove]="hasMoreMessagesAbove"
+              [IsLoadingOlder]="isLoadingOlderMessages"
+              [ScrollRoot]="messageScrollRoot"
+              (OlderRequested)="onOlderMessagesRequested()"
+              (DateJumpRequested)="onDateJumpRequested($event)"
               [conversation]="conversation"
               [currentUser]="currentUser"
               [isProcessing]="isProcessing"
@@ -303,6 +338,7 @@
               (suggestedResponseSelected)="onSuggestedResponseSelected($event)"
               (attachmentClicked)="onAttachmentClicked($event)"
               (diagnosticRequested)="onDiagnosticRequested($event)"
+              (LivenessCheckRequested)="OnLivenessCheckRequested($event)"
               (messagePinToggled)="onMessagePinToggled($event)"
               (beforeResponseFormSubmitted)="beforeResponseFormSubmitted.emit($event)"
               (afterResponseFormSubmitted)="afterResponseFormSubmitted.emit($event)">
@@ -324,11 +360,26 @@
               <div class="loading-peripheral-placeholder">
                 <mj-loading text="Loading conversation data..." size="medium"></mj-loading>
               </div>
+            } @else if (ReadOnly) {
+              <div class="read-only-banner" role="status">
+                <i class="fas fa-eye"></i>
+                <span>{{ ReadOnlyMessage || 'You have view-only access to this conversation.' }}</span>
+              </div>
             } @else {
               @if (isReadOnlyView) {
                 <div class="read-only-banner" role="status">
                   <i class="fas fa-eye"></i>
                   <span>You have view-only access to this conversation.</span>
+                </div>
+              }
+              <!-- composerExtra slot — host UI directly above the composer (IMJChatComposerExtraContext). -->
+              @if (slotTemplate('composerExtra'); as t) {
+                <div class="chat-composer-extra">
+                  <ng-container *ngTemplateOutlet="t; context: {
+                    $implicit: conversation,
+                    ConversationId: conversationId,
+                    IsProcessing: isProcessing
+                  }"></ng-container>
                 </div>
               }
               <!-- Input Component - Multiple instances cached, only one visible -->
@@ -352,8 +403,16 @@
                     [defaultAgentId]="defaultAgentId"
                     [conversationDefaultAgentId]="inputRef.conversationId === conversationId ? (conversation?.DefaultAgentID ?? null) : null"
                     [agentConfigurationPresetId]="inputRef.conversationId === conversationId ? ActiveAgentConfigurationPresetId : null"
+                    [AgentReplyMode]="AgentReplyMode"
+                    [AllowedAgentIDs]="AllowedAgentIDs"
+                    [MentionPeople]="MentionPeople"
+                    [AgentHistoryFrom]="AgentHistoryFrom"
+                    [AgentTurnHandler]="AgentTurnHandler"
+                    [AutoNameConversation]="AutoNameConversation"
+                    [EnableDecisionRouting]="EnableDecisionRouting"
                     [inProgressMessageIds]="inputRef.conversationId === conversationId ? inProgressMessageIds : emptyInProgressIds"
                     [disabled]="isProcessing || isReadOnlyView"
+                    [ReadOnly]="EffectiveReadOnly"
                     [enableAttachments]="enableAttachments && allowAttachments"
                     [enableMentions]="allowMentions"
                     [enableAgentMentions]="allowAgentMentions"
@@ -369,6 +428,7 @@
                     (initialMessageAutoSendStarted)="onInitialMessageAutoSendStarted($event)"
                     (initialMessageAutoSendFailed)="onInitialMessageAutoSendFailed($event)"
                     (messageSent)="onMessageSent($event)"
+                    (MessageStreamed)="OnMessageStreamed($event)"
                     (agentResponse)="onAgentResponse($event)"
                     (agentRunDetected)="onAgentRunDetected($event)"
                     (agentRunUpdate)="onAgentRunUpdate($event)"
@@ -433,6 +493,8 @@
     @if (allowPinning && showPinsPanel) {
       <mj-pinned-messages-panel
         [pinnedMessages]="pinnedMessages"
+        [isLoading]="isLoadingPins"
+        [AllowUnpin]="!EffectiveReadOnly"
         (closed)="showPinsPanel = false"
         (jumpRequested)="onJumpToMessage($event)"
         (unpinRequested)="onUnpinFromPanel($event)">

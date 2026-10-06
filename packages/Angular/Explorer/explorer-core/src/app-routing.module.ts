@@ -6,7 +6,8 @@ import {
   AppLockGuardService as AppLockGuard
 } from './public-api';
 import { OAuthCallbackComponent } from './lib/oauth/oauth-callback.component';
-import { LogError, Metadata, StartupManager, IMetadataProvider } from '@memberjunction/core';
+import { ClaimRedeemComponent } from './lib/identity-claims/claim-redeem.component';
+import { LogError, Metadata, StartupManager, IMetadataProvider, IsNewEntityRecordUrlId, NEW_RECORD_VALUES_QUERY_PARAM, CompositeKey } from '@memberjunction/core';
 import { SharedService, SYSTEM_APP_ID, RECORDS_RESOURCE_TYPE } from '@memberjunction/ng-shared';
 import { DetachedRouteHandle, RouteReuseStrategy } from '@angular/router';
 import { ApplicationManager, TabService } from '@memberjunction/ng-base-application';
@@ -14,43 +15,67 @@ import { MJGlobal, MJEventType } from '@memberjunction/global';
 import { firstValueFrom, filter, take } from 'rxjs';
 
 export class CustomReuseStrategy implements RouteReuseStrategy {
-  storedRoutes: { [key: string]: DetachedRouteHandleExt | null } = {};
+  StoredRoutes: { [key: string]: DetachedRouteHandleExt | null } = {};
+
+  /** @deprecated Use {@link StoredRoutes}. */
+  get storedRoutes(): { [key: string]: DetachedRouteHandleExt | null } {
+    return this.StoredRoutes;
+  }
+  /** @deprecated Use {@link StoredRoutes}. */
+  set storedRoutes(value: { [key: string]: DetachedRouteHandleExt | null }) {
+    this.StoredRoutes = value;
+  }
 
   // Determines if a route should be detached and stored
-  shouldDetach(route: ActivatedRouteSnapshot): boolean {
+  ShouldDetach(route: ActivatedRouteSnapshot): boolean {
     // removed reference to the skip stuff from here - we don't use the skip stuff anymore, using generic conversations/chat now
     return false;
   }
 
+  /** @deprecated Use {@link ShouldDetach}. */
+  shouldDetach(route: ActivatedRouteSnapshot): boolean {
+    return this.ShouldDetach(route);
+  }
+
   // Stores the detached route
-  store(route: ActivatedRouteSnapshot, handle: DetachedRouteHandleExt | null): void {
+  Store(route: ActivatedRouteSnapshot, handle: DetachedRouteHandleExt | null): void {
     if(!handle){
       return;
     }
 
     if (route.routeConfig && route.routeConfig.path) {
-      this.storedRoutes[route.routeConfig.path] = handle;
+      this.StoredRoutes[route.routeConfig.path] = handle;
       this.callHook(handle, 'ngOnDetach');
     }
   }
 
+  /** @deprecated Use {@link Store}. */
+  store(route: ActivatedRouteSnapshot, handle: DetachedRouteHandleExt | null): void {
+    return this.Store(route, handle);
+  }
+
   // Determines if a stored route should be reattached
-  shouldAttach(route: ActivatedRouteSnapshot): boolean {
+  ShouldAttach(route: ActivatedRouteSnapshot): boolean {
     // Reattach if we have a stored route for the incoming route
     if (route.routeConfig?.path) {
-      return !!route.routeConfig && !!this.storedRoutes[route.routeConfig.path];
+      return !!route.routeConfig && !!this.StoredRoutes[route.routeConfig.path];
     }
 
     else return false;
   }
 
+  /** @deprecated Use {@link ShouldAttach}. */
+  shouldAttach(route: ActivatedRouteSnapshot): boolean {
+    return this.ShouldAttach(route);
+  }
+
   // Retrieves the stored route; null means no stored route for this path
-  retrieve(route: ActivatedRouteSnapshot): DetachedRouteHandle | null {
-    if (!route.routeConfig || (route.routeConfig.path && !this.storedRoutes[route.routeConfig.path])) {
+  Retrieve(route: ActivatedRouteSnapshot): DetachedRouteHandle | null {
+    if (!route.routeConfig || (route.routeConfig.path && !this.StoredRoutes[route.routeConfig.path])) {
       return null;
     } 
     else if (route.routeConfig.path) {
-      const path = this.storedRoutes[route.routeConfig.path];
+      const path = this.StoredRoutes[route.routeConfig.path];
       if(path){
         this.callHook(path, 'ngOnAttach');
         return path;
@@ -60,17 +85,27 @@ export class CustomReuseStrategy implements RouteReuseStrategy {
     return null;
   }
 
+  /** @deprecated Use {@link Retrieve}. */
+  retrieve(route: ActivatedRouteSnapshot): DetachedRouteHandle | null {
+    return this.Retrieve(route);
+  }
+
   // Determines if the route should be reused.
   // Query params are intentionally excluded — the shell handles query param
   // sub-navigation via NotifyQueryParamsChanged. Including them here would
   // cause the ResourceResolver to re-run on back/forward query param changes,
   // racing with the shell's syncWorkspaceWithUrl.
-  shouldReuseRoute(future: ActivatedRouteSnapshot, curr: ActivatedRouteSnapshot): boolean {
+  ShouldReuseRoute(future: ActivatedRouteSnapshot, curr: ActivatedRouteSnapshot): boolean {
     return future.routeConfig === curr.routeConfig &&
-           this.objectContentsEqual(future.params, curr.params);
+           this.ObjectContentsEqual(future.params, curr.params);
   }
 
-  objectContentsEqual(obj1: any, obj2: any): boolean {
+  /** @deprecated Use {@link ShouldReuseRoute}. */
+  shouldReuseRoute(future: ActivatedRouteSnapshot, curr: ActivatedRouteSnapshot): boolean {
+    return this.ShouldReuseRoute(future, curr);
+  }
+
+  ObjectContentsEqual(obj1: any, obj2: any): boolean {
     if (obj1 === obj2) {
       return true; // exact same object
     }
@@ -92,7 +127,7 @@ export class CustomReuseStrategy implements RouteReuseStrategy {
         // check to see the type of the key, if it is an object, then we call this function recursively 
         // otherwise we do simple comparison
         if (typeof obj1[key] === 'object' && typeof obj2[key] === 'object') {
-          if (!this.objectContentsEqual(obj1[key], obj2[key])) {
+          if (!this.ObjectContentsEqual(obj1[key], obj2[key])) {
             return false; // any individual key not matching means the objects are different
           }
         }
@@ -105,6 +140,11 @@ export class CustomReuseStrategy implements RouteReuseStrategy {
     return true;
   }
 
+  /** @deprecated Use {@link ObjectContentsEqual}. */
+  objectContentsEqual(obj1: any, obj2: any): boolean {
+    return this.ObjectContentsEqual(obj1, obj2);
+  }
+
   private callHook(detachedTree: DetachedRouteHandleExt, hookName: 'ngOnDetach' | 'ngOnAttach'): void {
     if(!detachedTree || !hookName){
       return;
@@ -115,6 +155,14 @@ export class CustomReuseStrategy implements RouteReuseStrategy {
       componentRef.instance[hookName]();
     }
   }
+}
+
+function readNewRecordValuesQuery(queryParams: { [key: string]: string | string[] | undefined | null }): string | undefined {
+  const raw = queryParams[NEW_RECORD_VALUES_QUERY_PARAM] ?? queryParams['newRecordValues'];
+  if (raw == null) return undefined;
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  const trimmed = value?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : undefined;
 }
 
 @Injectable({
@@ -167,7 +215,7 @@ export class ResourceResolver implements Resolve<void> {
     await this.appManager.WhenReady();
   }
 
-  async resolve(route: ActivatedRouteSnapshot, state: RouterStateSnapshot): Promise<void> {
+  async Resolve(route: ActivatedRouteSnapshot, state: RouterStateSnapshot): Promise<void> {
     // Wait for login/metadata to be ready before processing
     if (this.loggedInPromise) {
       await this.loggedInPromise;
@@ -246,6 +294,8 @@ export class ResourceResolver implements Resolve<void> {
           // /app/:appName/record/:entityName/:recordId
           const entityName = decodeURIComponent(param1);
           const recordId = param2;
+          const isNew = IsNewEntityRecordUrlId(recordId);
+          const newRecordValues = readNewRecordValuesQuery(route.queryParams);
 
           const entityInfo = md.EntityByName(entityName);
           if (!entityInfo) {
@@ -253,17 +303,29 @@ export class ResourceResolver implements Resolve<void> {
             return;
           }
 
+          const friendlyName = entityInfo.DisplayName || entityInfo.Name;
+          let tabTitle: string;
+          if (isNew) {
+            tabTitle = `New ${friendlyName}`;
+          } else {
+            const pk = CompositeKey.FromURLSegment(entityInfo, recordId);
+            const cachedName = md.GetCachedRecordNameOnlyIfCached(entityName, pk);
+            tabTitle = cachedName || friendlyName;
+          }
+
           this.tabService.OpenTab({
             ApplicationId: app.ID,
-            Title: `${entityName} - ${recordId}`,
+            Title: tabTitle,
             Configuration: {
               resourceType: RECORDS_RESOURCE_TYPE,
               Entity: entityName,
-              recordId: recordId,
+              recordId: isNew ? '' : recordId,
+              isNew: isNew || undefined,
+              NewRecordValues: newRecordValues,
               appName: appName,
               appId: app.ID
             },
-            ResourceRecordId: recordId,
+            ResourceRecordId: isNew ? '' : recordId,
             IsPinned: false
           });
           return;
@@ -491,6 +553,8 @@ export class ResourceResolver implements Resolve<void> {
       // /resource/record/:entityName/:recordId
       const entityName = decodeURIComponent(route.params['entityName']);
       const recordId = route.params['recordId'];
+      const isNew = IsNewEntityRecordUrlId(recordId);
+      const newRecordValues = readNewRecordValuesQuery(route.queryParams);
 
       const entityInfo = md.EntityByName(entityName);
       if (!entityInfo) {
@@ -498,16 +562,28 @@ export class ResourceResolver implements Resolve<void> {
         return;
       }
 
+      const friendlyName = entityInfo.DisplayName || entityInfo.Name;
+      let tabTitle: string;
+      if (isNew) {
+        tabTitle = `New ${friendlyName}`;
+      } else {
+        const pk = CompositeKey.FromURLSegment(entityInfo, recordId);
+        const cachedName = md.GetCachedRecordNameOnlyIfCached(entityName, pk);
+        tabTitle = cachedName || friendlyName;
+      }
+
       // Queue tab request via TabService
       this.tabService.OpenTab({
         ApplicationId: SYSTEM_APP_ID,
-        Title: `${entityName} - ${recordId}`,
+        Title: tabTitle,
         Configuration: {
           resourceType: RECORDS_RESOURCE_TYPE,
           Entity: entityName,
-          recordId: recordId
+          recordId: isNew ? '' : recordId,
+          isNew: isNew || undefined,
+          NewRecordValues: newRecordValues
         },
-        ResourceRecordId: recordId,
+        ResourceRecordId: isNew ? '' : recordId,
         IsPinned: false
       });
       return;
@@ -636,6 +712,11 @@ export class ResourceResolver implements Resolve<void> {
 
     LogError(`Unable to parse resource route parameters from URL: ${state.url}`);
   }
+
+  /** @deprecated Use {@link Resolve}. */
+  async resolve(route: ActivatedRouteSnapshot, state: RouterStateSnapshot): Promise<void> {
+    return this.Resolve(route, state);
+  }
 }
 
 const routes: Routes = [
@@ -648,6 +729,16 @@ const routes: Routes = [
   {
     path: 'oauth/callback',
     component: OAuthCallbackComponent
+  },
+
+  // Identity-claim redemption landing page — the target of claim emails'
+  // /claims/redeem?id=..&token=.. links (IdentityClaimEngineServer.sendClaimEmail).
+  // Same posture as the OAuth callback: no AuthGuard (the component waits for session
+  // restoration itself and tells an unauthenticated visitor to sign in first), and a
+  // direct component rather than a lazy route for the same library-routing reason.
+  {
+    path: 'claims/redeem',
+    component: ClaimRedeemComponent
   },
 
   // App-scoped resource routes (new pattern)

@@ -219,7 +219,10 @@ export class SQLValidatorOracle implements IOracle {
                     ? `'${value.replace(/'/g, "''")}'`
                     : String(value);
 
-                result = result.replace(new RegExp(`@${paramName}`, 'g'), escapedValue);
+                // Function replacement: the value is already `'`-escaped for SQL, but a
+                // string replacement would still expand `$&`/`` $` ``/`$'`/`$$` inside it
+                // and splice the surrounding SQL into the literal. See issue #3171.
+                result = result.replace(new RegExp(`@${paramName}`, 'g'), () => escapedValue);
             }
         }
 

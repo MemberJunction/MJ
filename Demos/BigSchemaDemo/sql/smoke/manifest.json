@@ -1,0 +1,11 @@
+{
+  "profile": "smoke",
+  "schemas": 3,
+  "tables": 36,
+  "foreignKeysApprox": 51,
+  "domains": [
+    "bsd_crm",
+    "bsd_billing",
+    "bsd_inventory"
+  ]
+}

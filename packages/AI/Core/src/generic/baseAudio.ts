@@ -1,18 +1,69 @@
-import { BaseModel, BaseParams } from "./baseModel";
+import { BaseModel, BaseParams, ModelUsage } from "./baseModel";
 import { ChatResult } from "./chat.types";
+import type { AIErrorInfo } from "./errorTypes";
+import { TranscribeAudioWithSplitting } from "./baseSpeechToText";
+import type { BaseSpeechToText } from "./baseSpeechToText";
+import type { BaseTextToSpeech } from "./baseTextToSpeech";
 
 /**
- * Base class for all audio generation models. Each AI model will have a sub-class implementing the abstract methods in this base class. Not all 
- * sub-classes will support all methods. If a method is not supported an exception will be thrown, use the GetSupportedMethods method to determine
- * what methods are supported by a specific sub-class.
+ * One piece of a transcription: the text, plus the audio duration the provider reported for it.
+ *
+ * `durationSeconds` is the billable quantity for per-minute/per-hour transcription pricing. It is
+ * optional because not every provider or response format returns it, and an absent duration must
+ * stay absent rather than becoming a zero that prices as free.
  */
-export abstract class BaseAudioGenerator extends BaseModel {
+export type TranscriptionPiece = {
+    text: string;
+    durationSeconds?: number;
+};
+
+/**
+ * Base class for audio models that carries both text-to-speech and speech-to-text. Not all
+ * sub-classes support all methods: an unsupported method throws, and `GetSupportedMethods` names
+ * the ones a sub-class implements.
+ *
+ * It spans two model types (`TTS` and `Speech to Text`), so it has been split. It stays, and keeps
+ * working, for drivers and callers that already use it: it implements both halves, so any of its
+ * drivers can be used where either new base class is expected. The drivers MemberJunction ships
+ * still extend it and are also registered against the new class or classes they implement, under
+ * the same keys.
+ *
+ * @deprecated Use {@link BaseTextToSpeech} for text-to-speech and {@link BaseSpeechToText} for
+ * speech-to-text. An application that overrides a shipped audio driver must also register the
+ * override against the new class or classes that driver implements, under the same key, for example
+ * `@RegisterClass(BaseTextToSpeech, 'OpenAIAudioGenerator')`. The ClassFactory keeps registrations
+ * per base class, and the text-to-speech and speech-to-text runners resolve drivers through the new
+ * classes, so an override registered only against `BaseAudioGenerator` is not used by them.
+ */
+export abstract class BaseAudioGenerator extends BaseModel implements BaseTextToSpeech, BaseSpeechToText {
     public abstract CreateSpeech(params: TextToSpeechParams): Promise<SpeechResult>;
     public abstract SpeechToText(params: SpeechToTextParams): Promise<SpeechResult>;
     public abstract GetVoices(): Promise<VoiceInfo[]>;
     public abstract GetModels(): Promise<AudioModel[]>
     public abstract GetPronounciationDictionaries(): Promise<PronounciationDictionary[]>
     public abstract GetSupportedMethods(): Promise<string[]>
+
+    /**
+     * Transcribes audio that may exceed the provider's upload ceiling, splitting it first when it
+     * does. See {@link TranscribeAudioWithSplitting}, which this calls, for the behavior.
+     *
+     * @param audio The full audio to transcribe
+     * @param maxUploadBytes The provider's hard upload ceiling
+     * @param splitTargetBytes Target piece size, below the ceiling to leave room for multipart framing
+     * @param splitter Splitter to use for oversized audio; may be null, in which case oversized audio fails
+     * @param providerLabel Provider name, used in the size-limit error messages
+     * @param transcribeOne Transcribes a single piece already known to be within the ceiling
+     */
+    protected async TranscribeWithSplitting(
+        audio: Buffer,
+        maxUploadBytes: number,
+        splitTargetBytes: number,
+        splitter: AudioSplitter | null,
+        providerLabel: string,
+        transcribeOne: (piece: Buffer) => Promise<TranscriptionPiece>
+    ): Promise<TranscriptionPiece> {
+        return TranscribeAudioWithSplitting(audio, maxUploadBytes, splitTargetBytes, splitter, providerLabel, transcribeOne);
+    }
 }
 
 /**
@@ -22,17 +73,37 @@ export class SpeechResult {
     /**
      * True if the request was successful, false otherwise
      */
-    success: boolean;
+    success: boolean;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
     /**
      * If the request failed, this will contain the error message
      */
-    errorMessage?: string;
+    errorMessage?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
     /**
      * If the request was successful, this will contain the results. For CreateSpeech requests, an audio file in a base 64 encoded string and for
      * SpeechToText requests, the text that was transcribed.
      */
-    content: string;
-    data?: Buffer;
+    content: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    data?: Buffer;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+
+    /**
+     * Usage for the request, when the provider reported enough to build it.
+     *
+     * Audio models are billed by duration rather than by token, so this is normally a
+     * {@link ModelUsage.ForMedia} instance in `Seconds` — the quantity a per-minute or per-hour
+     * price unit type prices. Left undefined when the provider did not report a duration, so that
+     * cost calculation declines rather than billing the request as free.
+     */
+    usage?: ModelUsage;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+
+    /**
+     * How a failure is classified, when the request failed: `ErrorAnalyzer`'s reading of the error
+     * the provider's SDK threw, which keeps its HTTP status. A caller deciding whether to try another
+     * vendor reads this, as the failover loop reads `BaseResult.errorInfo`: a rate limit or an outage
+     * is worth another vendor, and a request the vendor rejected as invalid is not. The message alone
+     * cannot tell them apart. Undefined on success, and from a driver that reports only
+     * `errorMessage`.
+     */
+    errorInfo?: AIErrorInfo;  // case-violation-ok-legacy-back-compat: named as BaseResult.errorInfo, which the failover loop reads
 }
 
 export class SpeechToTextParams extends BaseParams {
@@ -42,7 +113,7 @@ export class SpeechToTextParams extends BaseParams {
      * Optional only in the sense that `audioData` may be supplied instead; exactly one of
      * the two is required.
      */
-    audioFile: string;
+    audioFile: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     /**
      * The raw audio bytes, as an alternative to the base 64 `audioFile`.
@@ -51,25 +122,25 @@ export class SpeechToTextParams extends BaseParams {
      * audio costs a third more memory than the bytes themselves, for a string the
      * implementation immediately decodes again.
      */
-    audioData?: Buffer;
+    audioData?: Buffer;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Original file name, e.g. `episode-104.mp3`. Some providers infer the container
      * format from the extension, so supplying it when known improves reliability.
      */
-    fileName?: string;
+    fileName?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * ISO 639-1 language code of the spoken audio. Supplying it typically improves both
      * accuracy and latency versus letting the model detect the language.
      */
-    language?: string;
+    language?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Optional text to steer style, spelling or vocabulary — e.g. proper nouns the model
      * would otherwise mis-transcribe. Should be in the same language as the audio.
      */
-    prompt?: string;
+    prompt?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 }
 
 /**
@@ -150,111 +221,111 @@ export class VoiceInfo {
     /**
      * The ID of the voice
      */
-    id: string
+    id: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     /**
      * The name of the voice
      */
-    name: string
+    name: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     /**
      * Detailed text description of the voice
      */
-    description?: string;
+    description?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Optional, array of labels for the voice
      */
-    labels?: object[];
+    labels?: object[];  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * User defined category for managing voices
      */
-    category?: string
+    category?: string  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
-    stability?: number
-    similarityBoost?: number;
-    style?: number;
-    useSpeakerBoost?: number;
+    stability?: number  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+    similarityBoost?: number;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+    style?: number;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+    useSpeakerBoost?: number;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * An optional array of samples audio for the voice
      */
-    samples?: VoiceSample[];
+    samples?: VoiceSample[];  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * The URL to a preview of the voice
      */
-    previewUrl?: string;
+    previewUrl?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 }
 
 /**
  * Information about an individual voice sample associated with a voice
  */
 export class VoiceSample {
-    id: string;
-    fileName: string;
-    mimeType: string;
-    sizeInBytes: number;
-    hash: string;
+    id: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    fileName: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    mimeType: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    sizeInBytes: number;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    hash: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 }
 
 export class AudioModel {
     /**
      * The ID of the model
      */
-    id: string
+    id: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     /**
      * The name of the model
      */
-    name: string
+    name: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     /**
      * Determines if the model supports text-to-speech
      */
-    supportsTextToSpeech: boolean
+    supportsTextToSpeech: boolean  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
     /**
      * Determines if the model supports voice conversion
      */
-    supportsVoiceConversion: boolean
+    supportsVoiceConversion: boolean  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
     /**
      * Determines if the model supports style adjustment
      */
-    supportsStyle: boolean
+    supportsStyle: boolean  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
     /**
      * Determines if the model supports speaker boost
      */
-    supportsSpeakerBoost: boolean
+    supportsSpeakerBoost: boolean  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
     /**
      * Determines if the model supports fine tuning
      */
-    supportsFineTuning: boolean
+    supportsFineTuning: boolean  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
     /**
      * Optional, array of supported languages for the model
      */
-    languages?: AudioLanguage[]
+    languages?: AudioLanguage[]  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 }
 
 export class AudioLanguage {
     /**
      * The ID of the language
      */
-    id: string
+    id: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
     /**
      * The name of the language
      */
-    name: string
+    name: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 }
 
 /**
  * Some models support using pronounciation dictionaries to provide audio generation cues for specific words and phrases
  */
 export class PronounciationDictionary {
-    id: string
-    name: string;
-    description?: string;
-    latestVersionId: string;
-    createdBy: string;
-    creationTimeStamp: number;
+    id: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    name: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    description?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+    latestVersionId: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    createdBy: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    creationTimeStamp: number;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 }

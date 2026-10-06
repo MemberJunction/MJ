@@ -3,7 +3,7 @@ import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MJButtonDirective, MJDialogComponent, MJDialogActionsComponent } from '@memberjunction/ng-ui-components';
-import { renderTemplate, query, queryAll, text, click } from '@memberjunction/ng-test-utils';
+import { renderTemplate, query, queryAll, text, click, ExpectNoAxeViolations } from '@memberjunction/ng-test-utils';
 import { GenericDialogComponent } from './dialog.component';
 
 // GenericDialogComponent is a module-declared (standalone:false) compound component
@@ -156,6 +156,15 @@ describe('GenericDialogComponent (DOM)', () => {
       await fixture.whenStable();
       expect(fixture.componentInstance.closedWith).toEqual([false]);
       expect(fixture.componentInstance.visible).toBe(false);
+    });
+  });
+
+  describe('accessibility', () => {
+    it('has no axe accessibility violations (jsdom-safe rule set)', async () => {
+      const fixture = await render(
+        `<mj-generic-dialog [DialogVisible]="true" DialogTitle="Confirm Action"><p>Body content</p></mj-generic-dialog>`,
+      );
+      await ExpectNoAxeViolations(fixture);
     });
   });
 });

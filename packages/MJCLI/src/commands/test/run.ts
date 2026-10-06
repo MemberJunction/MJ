@@ -1,4 +1,5 @@
 import { Command, Flags, Args } from '@oclif/core';
+import { TEST_FORMAT_FLAG, TEST_FORMAT_MAP, ResolveLegacyFormat } from '../../lib/format-compat.js';
 
 export default class TestRun extends Command {
   static description = 'Execute a single test by ID or name';
@@ -27,12 +28,7 @@ export default class TestRun extends Command {
       char: 'e',
       description: 'Environment context (dev, staging, prod)',
     }),
-    format: Flags.string({
-      char: 'f',
-      description: 'Output format',
-      options: ['console', 'json', 'markdown'],
-      default: 'console',
-    }),
+    format: TEST_FORMAT_FLAG,
     output: Flags.string({
       char: 'o',
       description: 'Output file path',
@@ -51,6 +47,9 @@ export default class TestRun extends Command {
         'Module specifier (package name or path) side-effect-imported before the run so its ' +
         'integration check bundles register on the IntegrationCheckRegistry. Durable form: ' +
         "mj.config.cjs `testing.checkModules` (this repo loads '@memberjunction/integration-test-suite' that way).",
+    }),
+    rubric: Flags.string({
+      description: 'Rubric override: name or id, optionally @version (1.2.0 or a version id)',
     }),
     'oracles-module': Flags.string({
       description:
@@ -72,10 +71,16 @@ export default class TestRun extends Command {
       await runCommand.execute(args.testId, {
         name: flags.name,
         environment: flags.environment,
-        format: flags.format as 'console' | 'json' | 'markdown',
+        format: ResolveLegacyFormat({
+          Format: flags.format,
+          Legacy: 'console' as const,
+          LegacyDefault: 'console' as const,
+          Map: TEST_FORMAT_MAP,
+        }),
         output: flags.output,
         dryRun: flags['dry-run'],
         verbose: flags.verbose,
+        rubric: flags.rubric,
         oraclesModule: flags['oracles-module'],
         checksModule: flags['checks-module'],
       });

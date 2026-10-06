@@ -85,9 +85,9 @@ export class MJUserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJUserNotificationPreferences', sectionName: 'User Notification Preferences', isExpanded: false },
             { sectionKey: 'mJUserSettings', sectionName: 'User Settings', isExpanded: false },
             { sectionKey: 'mJVersionLabelRestores', sectionName: 'Version Label Restores', isExpanded: false },
-            { sectionKey: 'mJAccessControlRules', sectionName: 'Access Control Rules', isExpanded: false },
             { sectionKey: 'mJAIAgentRequestsResponseByUserID', sectionName: 'AI Agent Requests', isExpanded: false },
             { sectionKey: 'mJAPIKeysUserID', sectionName: 'API Keys (User)', isExpanded: false },
+            { sectionKey: 'mJAccessControlRules', sectionName: 'Access Control Rules', isExpanded: false },
             { sectionKey: 'mJArchiveRuns', sectionName: 'Archive Runs', isExpanded: false },
             { sectionKey: 'mJArtifactPermissionsUserID', sectionName: 'Artifact Permissions (User ID)', isExpanded: false },
             { sectionKey: 'mJArtifacts', sectionName: 'Artifacts', isExpanded: false },
@@ -120,11 +120,24 @@ export class MJUserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAIAgentSessions', sectionName: 'AI Agent Sessions', isExpanded: false },
             { sectionKey: 'mJAIAgentSessionBridgeParticipants', sectionName: 'AI Agent Session Bridge Participants', isExpanded: false },
             { sectionKey: 'mJRemoteOperations', sectionName: 'Remote Operations', isExpanded: false },
+            { sectionKey: 'mJIdentityClaims', sectionName: 'Identity Claims', isExpanded: false },
             { sectionKey: 'mJProcessRuns', sectionName: 'Process Runs', isExpanded: false },
+            { sectionKey: 'mJAIPromptRuns', sectionName: 'AI Prompt Runs', isExpanded: false },
             { sectionKey: 'mJAISkillPermissions', sectionName: 'AI Skill Permissions', isExpanded: false },
+            { sectionKey: 'mJProjects', sectionName: 'Projects', isExpanded: false },
+            { sectionKey: 'mJRecordCloneLogs', sectionName: 'Record Clone Logs', isExpanded: false },
+            { sectionKey: 'mJWorkQueueDeliveries', sectionName: 'Work Queue Deliveries', isExpanded: false },
             { sectionKey: 'mJAISkills', sectionName: 'AI Skills', isExpanded: false },
+            { sectionKey: 'mJWorkQueueMessages', sectionName: 'Work Queue Messages', isExpanded: false },
+            { sectionKey: 'mJEntityFormContributions', sectionName: 'Entity Form Contributions', isExpanded: false },
+            { sectionKey: 'mJRubricVersions', sectionName: 'Rubric Versions', isExpanded: false },
             { sectionKey: 'mJUserRoutines', sectionName: 'User Routines', isExpanded: false },
-            { sectionKey: 'mJUserRoutineRecipients', sectionName: 'User Routine Recipients', isExpanded: false }
+            { sectionKey: 'mJRubricEvaluations', sectionName: 'Rubric Evaluations', isExpanded: false },
+            { sectionKey: 'mJUserRoutineRecipients', sectionName: 'User Routine Recipients', isExpanded: false },
+            { sectionKey: 'mJInteractionEvents', sectionName: 'Interaction Events', isExpanded: false },
+            { sectionKey: 'mJMeetingParticipants', sectionName: 'Meeting Participants', isExpanded: false },
+            { sectionKey: 'mJMeetings', sectionName: 'Meetings', isExpanded: false },
+            { sectionKey: 'mJInteractionOffers', sectionName: 'Interaction Offers', isExpanded: false }
         ]);
     }
 }

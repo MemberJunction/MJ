@@ -1,420 +1,93 @@
 # MemberJunction Testing Guidelines
 
-This document establishes testing standards for all MemberJunction packages.
+This is the **router document** for testing in the MJ monorepo: the current state, the gate, and
+where the detailed guidance lives. It deliberately does not duplicate the deep-dive docs — follow
+the links. *(Numbers last verified 2026-08-06.)*
 
-## Current Testing State
+## Current state
 
-As of December 2024, MemberJunction has **minimal automated testing**. The repository includes:
-- A few unit tests in MJServer (auth backward compatibility)
-- A test in AI/Agents (action changes)
-- React test harness with linter validation tests
-- MJCore metadata refresh tests
+- **~2,000 Vitest test files** (`src/__tests__/*.test.ts`, plus ~365 Angular `*.dom.test.ts`
+  specs) across **295 of 307 packages**.
+- **Vitest is the only unit-test framework.** Jest is deprecated and fully migrated away — the
+  lone remaining `jest.config.js` is in the `packages/React/test-harness/react-test-example`
+  sample app.
+- Two shared presets at the repo root: [`vitest.shared.ts`](vitest.shared.ts) (node tier) and
+  [`vitest.dom.shared.ts`](vitest.dom.shared.ts) (jsdom + TestBed DOM tier for Angular).
+- Shared mock infrastructure: **`@memberjunction/unit-testing`**
+  ([`packages/UnitTesting`](packages/UnitTesting)) — singleton reset, mock entities, mock
+  `RunView`, custom matchers; a new AI test harness is being added.
+- The historical strategy proposal that launched all of this is
+  [`UNIT_TESTING_STRATEGY.md`](UNIT_TESTING_STRATEGY.md) (kept for rationale; its "current
+  state" is superseded by this document).
 
-**Goal**: Expand test coverage across all packages using these standardized patterns.
+## The gate (Definition of Done)
 
-## Running Tests
+From the root [`CLAUDE.md`](CLAUDE.md): **a change is not done until both test tiers pass.**
 
-### Package-Level Testing
 ```bash
-# Navigate to any package
-cd packages/[package-name]
-
-# Run all tests in that package
-npm test
-
-# Watch mode (auto-rerun on file changes)
-npm run test:watch
-
-# Coverage report
-npm run test:coverage
+cd packages/PackageName && pnpm test     # 1) unit tests of every package you touched
+pnpm run test:integration                # 2) deterministic integration tier (headless)
 ```
 
-### Repository-Level Testing
+If tests fail because of your change, update them; if they fail for another reason, fix them.
+Never leave broken tests behind.
+
+## Running tests
+
 ```bash
-# From repository root
-# Run tests for specific package
-npx turbo test --filter=@memberjunction/[package-name]
-
-# Run all tests across all packages
-npx turbo test
+pnpm test                                # all packages from repo root (Turborepo, cached)
+cd packages/PackageName && pnpm test     # one package
+cd packages/PackageName && pnpm run test:watch
+pnpm run test:coverage                   # root vitest project list with V8 coverage
+pnpm run test:integration                # deterministic integration suite (real DB + GraphQL)
+pnpm run test:e2e                        # Playwright browser tier (needs running MJAPI + Explorer)
+npx turbo run test --filter=...[HEAD~1]  # only packages affected by your changes
 ```
 
-## Test Organization Standards
+## The tiers, and where each is documented
 
-### ✅ Recommended Pattern: `src/__tests__/` Directory
+| Tier | What / where | Doc |
+|---|---|---|
+| **Unit (node)** | `src/__tests__/*.test.ts`, Vitest, no DB, mock externals | [`.claude/rules/testing.md`](.claude/rules/testing.md) |
+| **Unit (Angular DOM)** | `*.dom.test.ts` **next to the component** (never in `__tests__/`), jsdom + TestBed via `vitest.dom.shared.ts` | [`guides/ANGULAR_TESTING_GUIDE.md`](guides/ANGULAR_TESTING_GUIDE.md) |
+| **Integration** | `mj test suite` bundles against a real SQL Server + GraphQL; deterministic tier is the PR gate | [`guides/INTEGRATION_TESTING_QUICKSTART.md`](guides/INTEGRATION_TESTING_QUICKSTART.md) |
+| **E2E (Playwright)** | `e2e/specs/*.spec.ts` against a running MJExplorer with a signed-in profile | [`e2e/README.md`](e2e/README.md) |
 
-**Benefits**:
-- Tests live close to source code
-- Easy to find related tests
-- TypeScript imports work naturally
-- Standard Jest convention
-- Works well with monorepo structure
+Adding tests to a package that has none? Use the scaffold — it emits the vitest config, test
+directory, a starter test, and the `package.json` scripts (add `--dom` for the Angular DOM preset):
 
-**Structure**:
-```
-packages/MJCore/
-├── src/
-│   ├── __tests__/           # ✅ All tests here
-│   │   ├── setup.ts         # Shared test setup
-│   │   ├── README.md        # Test documentation
-│   │   ├── providerBase.refresh.test.ts
-│   │   └── providerBase.concurrency.test.ts
-│   ├── generic/             # Source code
-│   │   ├── metadata.ts
-│   │   └── providerBase.ts
-│   └── views/
-├── jest.config.js           # Jest configuration
-└── package.json             # Test scripts
+```bash
+node scripts/scaffold-tests.mjs packages/YourPackage
 ```
 
-### Alternative Patterns (Not Recommended for MJ)
+## CI landscape
 
-#### ❌ Separate `test/` or `tests/` Root Directory
-```
-packages/MJCore/
-├── src/           # Source
-├── tests/         # Tests (separate)
-└── package.json
-```
-**Why avoid**:
-- Harder to locate related tests
-- Import paths become more complex
-- Less discoverable
+| Workflow | What it runs |
+|---|---|
+| [`test.yml`](.github/workflows/test.yml) (Unit Tests) | PR gate on `next`: affected-package unit tests, plus the DOM gates below, the class-registration manifest freshness gate, and the native-ESM import guard. Merges to `next` and a nightly cron run the **full suite** as a backstop (red backstops auto-file an issue). A separate **nightly coverage job** publishes a V8 coverage report (report-only, no thresholds yet). |
+| [`integration.yml`](.github/workflows/integration.yml) (Integration Tier) | The deterministic suite against a fresh SQL Server on every PR. Nightly cron re-runs it with the **mutation tier** armed plus the **cross-server invalidation rig**; a weekly Sunday cron runs the **live-model** lane. |
+| [`eds-integration.yml`](.github/workflows/eds-integration.yml) | External Data Source drivers against real PostgreSQL, MongoDB, SQL Server, MySQL, and Oracle containers. |
+| [`installer-platform-test.yml`](.github/workflows/installer-platform-test.yml) | MJInstaller tests across an ubuntu / macos / windows matrix. |
+| [`release-test.yml`](.github/workflows/release-test.yml) (Release Validation Suite) | The lane between "green on `next`" and an npm publish: the full unit suite as a callable publish gate, plus a nightly Playwright e2e lane (omnibar + chat-drafts) when the `E2E_PW_PROFILE_B64` secret is configured — it skips visibly otherwise. |
 
-#### ❌ Colocated `*.test.ts` Files
-```
-packages/MJCore/
-└── src/
-    ├── generic/
-    │   ├── metadata.ts
-    │   ├── metadata.test.ts      # ❌ Avoid
-    │   ├── providerBase.ts
-    │   └── providerBase.test.ts  # ❌ Avoid
-```
-**Why avoid**:
-- Pollutes source directories
-- Can complicate build configuration
-- Makes it harder to exclude tests from dist/
+### Quality gates (run locally before you push)
 
-## CI/CD Integration
-
-### Adding Test Task to Turbo
-
-**File**: `/turbo.json`
-
-```json
-{
-  "$schema": "https://turbo.build/schema.json",
-  "tasks": {
-    "build": {
-      "outputs": ["build/**", "dist/**"],
-      "cache": true,
-      "dependsOn": ["^build"],
-      "persistent": false
-    },
-    "test": {
-      "cache": true,
-      "dependsOn": ["build"],
-      "outputs": ["coverage/**"],
-      "inputs": ["src/**/*.ts", "src/**/*.test.ts", "jest.config.js"]
-    },
-    "start": {
-      "cache": false,
-      "persistent": true
-    },
-    "watch": {
-      "cache": false,
-      "persistent": true
-    }
-  }
-}
+```bash
+node scripts/check-dom-spec-placement.mjs        # *.dom.test.ts must NOT sit in __tests__/ (it would silently never run)
+node scripts/check-spec-antipatterns.mjs packages   # test-theater lint: vacuous asserts, skips, NO_ERRORS_SCHEMA, `any`
+node scripts/classify-explorer-components.mjs --min 85   # Explorer in-scope DOM coverage gate (--register regenerates plans/testing/phase-3-explorer-deferral-register.md)
+node scripts/dom-test-report.mjs packages/Angular/Generic --max-none=134   # per-component DOM coverage report + ratchet (Bootstrap gate: --max-none=0)
 ```
 
-### GitHub Actions Workflow
+All four run in `test.yml`, so CI catches what you skipped.
 
-**File**: `.github/workflows/test.yml` (create new)
+## Conventions (the short version — details in [`.claude/rules/testing.md`](.claude/rules/testing.md))
 
-```yaml
-name: Tests
-
-on:
-  push:
-    branches: [main, next, dev]
-  pull_request:
-    branches: [main, next, dev]
-
-jobs:
-  test:
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run tests
-        run: npx turbo test
-
-      - name: Upload coverage
-        uses: codecov/codecov-action@v3
-        if: always()
-        with:
-          files: ./packages/*/coverage/lcov.info
-          flags: unittests
-```
-
-### Individual Package Configuration
-
-**Example**: Any package with tests
-
-**File**: `packages/[package-name]/package.json`
-
-```json
-{
-  "scripts": {
-    "test": "jest",
-    "test:ci": "jest --ci --coverage --maxWorkers=2",
-    "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
-  }
-}
-```
-
-## Recommended Testing Strategy for MemberJunction
-
-### Phase 1: Core Infrastructure Tests
-Focus on foundational packages that other packages depend on:
-- **MJCore**: Metadata provider, entity loading, RunView functionality
-- **MJGlobal**: Utility functions, logging, error handling
-- **MJCommunication**: Email, messaging, notification services
-
-### Phase 2: Critical Path Unit Tests
-Test business logic and API layers:
-- **MJServer**: GraphQL resolvers, authentication, authorization
-- **Actions**: Action execution, parameter validation
-- **AI/Agents**: Agent lifecycle, prompt execution
-- **AI/Prompts**: Prompt rendering, variable substitution
-
-### Phase 3: Integration Tests
-Test interactions between components:
-- **MetadataSync**: End-to-end sync operations
-- **CodeGen**: Generated code validation
-- **Database**: Migration validation, stored procedure tests
-
-### Phase 4: E2E Tests (Future)
-Test complete user workflows:
-- **MJExplorer**: Critical user flows, form interactions
-- **React**: Component integration, data flow
-
-## Test Configuration Standards
-
-### Jest Configuration Template
-
-```javascript
-// packages/[PackageName]/jest.config.js
-module.exports = {
-  preset: 'ts-jest',
-  testEnvironment: 'node',
-  testMatch: [
-    '**/__tests__/**/*.test.ts',
-    '**/__tests__/**/*.spec.ts'
-  ],
-  testPathIgnorePatterns: [
-    '/node_modules/',
-    '/dist/',
-    '/build/'
-  ],
-  collectCoverageFrom: [
-    'src/**/*.ts',
-    '!src/**/*.d.ts',
-    '!src/__tests__/**',
-    '!src/generated/**'  // Exclude generated code
-  ],
-  coverageThresholds: {
-    global: {
-      branches: 50,
-      functions: 50,
-      lines: 50,
-      statements: 50
-    }
-  },
-  testTimeout: 30000  // For packages with DB operations
-};
-```
-
-### Package.json Scripts Template
-
-```json
-{
-  "scripts": {
-    "test": "jest",
-    "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage",
-    "test:ci": "jest --ci --coverage --maxWorkers=2"
-  },
-  "devDependencies": {
-    "@types/jest": "^29.5.12",
-    "jest": "^29.7.0",
-    "ts-jest": "^29.1.2"
-  }
-}
-```
-
-## Test Naming Conventions
-
-### File Naming
-- **Unit tests**: `[module-name].test.ts` (e.g., `providerBase.test.ts`)
-- **Integration tests**: `[feature-name].integration.test.ts`
-- **E2E tests**: `[flow-name].e2e.test.ts`
-
-### Test Suite Organization
-```typescript
-describe('ProviderBase', () => {
-  describe('Config()', () => {
-    test('loads metadata successfully', async () => {
-      // Arrange, Act, Assert
-    });
-
-    test('handles concurrent calls safely', async () => {
-      // ...
-    });
-  });
-
-  describe('Refresh()', () => {
-    test('updates metadata when refresh flag is set', async () => {
-      // ...
-    });
-  });
-});
-```
-
-## Coverage Goals
-
-### Initial Targets (Realistic for MJ)
-- **Core packages** (MJCore, MJServer): 60% coverage
-- **Business logic** (Actions, AI/Agents): 50% coverage
-- **Generated code** (CodeGen output): 0% (excluded)
-- **UI components** (Angular, React): 30% coverage
-
-### Long-term Goals (Aspirational)
-- **Core packages**: 80% coverage
-- **Business logic**: 70% coverage
-- **UI components**: 50% coverage
-
-## Mock and Test Utilities
-
-### Shared Test Utilities Location
-```
-packages/MJCore/src/__tests__/
-├── setup.ts              # Global test setup
-├── mocks/
-│   ├── TestMetadataProvider.ts
-│   ├── TestUserInfo.ts
-│   └── TestEntityInfo.ts
-└── fixtures/
-    ├── metadata-samples.ts
-    └── entity-samples.ts
-```
-
-### Reusable Mocks
-```typescript
-// packages/MJCore/src/__tests__/mocks/TestMetadataProvider.ts
-export class TestMetadataProvider extends ProviderBase {
-  // Minimal implementation for testing
-  protected async GetAllMetadata(): Promise<AllMetadata> {
-    // Return fixture data
-  }
-}
-```
-
-## When to Write Tests
-
-### Always Test
-- ✅ Bug fixes (regression prevention)
-- ✅ Core infrastructure changes (like metadata provider)
-- ✅ Complex business logic
-- ✅ Public API methods
-
-### Test When Practical
-- ⚠️ New features (at least happy path)
-- ⚠️ Refactoring (to prevent breakage)
-
-### Skip Testing (For Now)
-- ❌ Generated code (CodeGen output)
-- ❌ Simple getters/setters
-- ❌ UI layout components (until E2E infrastructure exists)
-
-## Future Enhancements
-
-### Database Testing
-- Consider using docker-compose for SQL Server test instances
-- Use transactions to isolate test data
-- Seed test database with known metadata
-
-### Performance Testing
-- Add benchmark tests for critical paths (RunView, metadata loading)
-- Track performance over time
-- Alert on regressions
-
-### Visual Regression Testing
-- For Angular/React components
-- Use tools like Playwright or Chromatic
-- Catch unintended UI changes
-
-## Questions and Answers
-
-### Q: Should tests be in `src/` or a separate directory?
-**A**: Use `src/__tests__/` for unit tests (current MJCore pattern). This is the Jest default and keeps tests close to code.
-
-### Q: How will CI/CD discover and run tests?
-**A**:
-1. Add `"test"` task to `turbo.json` (see above)
-2. Run `npx turbo test` from repo root
-3. Turbo will discover all packages with `"test"` script in package.json
-4. Tests run in parallel, respecting dependencies
-
-### Q: Do we need to update every package at once?
-**A**: No! Add tests incrementally:
-1. Start with MJCore (metadata fix)
-2. Add to new packages as they're developed
-3. Add to existing packages when bugs are fixed or features added
-
-### Q: What about TypeScript compilation?
-**A**: Jest with ts-jest handles this automatically:
-- No need to build before testing
-- Tests run directly from `.ts` files
-- Full TypeScript type checking during tests
-
-### Q: How do we handle database-dependent tests?
-**A**: Three strategies:
-1. **Mock the database** (fastest, for unit tests)
-2. **Use test database** (for integration tests)
-3. **Use in-memory SQLite** (if possible, for speed)
-
-MJCore tests use strategy #1 (TestMetadataProvider mock).
-
-## Summary
-
-**Current State**: Minimal testing, mostly manual validation
-
-**New Pattern** (this PR):
-- Tests in `src/__tests__/` directory
-- Jest + ts-jest configuration
-- npm scripts for test execution
-- Ready for CI/CD via Turbo
-
-**Next Steps**:
-1. ✅ Validate MJCore tests work
-2. Add `"test"` task to `turbo.json`
-3. Create GitHub Actions workflow (optional but recommended)
-4. Document test patterns in other packages as they're added
-5. Set coverage thresholds after baseline is established
-
-**Long-term Vision**: Comprehensive test coverage for core packages, enabling confident refactoring and preventing regressions.
+- Tests live in `src/__tests__/` with a `.test.ts` extension (node tier); Angular DOM specs are
+  the exception — `*.dom.test.ts` next to the component.
+- One test file per source file; descriptive names that read as specifications; `describe` per
+  class/method, `it` per behavior.
+- No database connections in unit tests — mock externals with `@memberjunction/unit-testing`.
+  Real-DB coverage belongs in the integration tier.
+- Deterministic and fast (< 5s per file).
+- Generated code (CodeGen output) is not unit-tested directly — it churns on every regen.

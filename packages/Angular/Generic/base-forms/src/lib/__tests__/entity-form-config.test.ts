@@ -16,6 +16,10 @@ import {
 import { DEFAULT_TOOLBAR_CONFIG } from '../types/toolbar-config';
 
 describe('EntityFormConfig presets', () => {
+  it('default toolbar config shows refresh in read mode', () => {
+    expect(DEFAULT_TOOLBAR_CONFIG.ShowRefreshButton).toBe(true);
+  });
+
   it('tab preset keeps the toolbar and related entities', () => {
     expect(TAB_FORM_CONFIG.Toolbar).toBeUndefined();
     expect(TAB_FORM_CONFIG.ShowRelatedEntities).toBe(true);
@@ -74,8 +78,15 @@ describe('ResolveFormToolbarConfig', () => {
     expect(merged.ShowDeleteButton).toBe(false);
     // untouched keys retain base values
     expect(merged.ShowEditButton).toBe(DEFAULT_TOOLBAR_CONFIG.ShowEditButton);
+    expect(merged.ShowRefreshButton).toBe(true);
     // base object not mutated
     expect(DEFAULT_TOOLBAR_CONFIG.ShowDeleteButton).toBe(true);
+  });
+
+  it('lets a surface hide the refresh button without dropping other actions', () => {
+    const merged = ResolveFormToolbarConfig(DEFAULT_TOOLBAR_CONFIG, { Toolbar: { ShowRefreshButton: false } });
+    expect(merged.ShowRefreshButton).toBe(false);
+    expect(merged.ShowEditButton).toBe(true);
   });
 });
 

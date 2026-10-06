@@ -106,10 +106,13 @@ graph LR
 | Oracle | Description |
 |--------|-------------|
 | `ExactMatchOracle` | Compares output against an expected string |
-| `LLMJudgeOracle` | Uses an LLM to evaluate output quality with rubrics |
+| `LLMJudgeOracle` | Scores the test's inline criteria with RubricScoring, through the same metadata prompts as the LLM rubric evaluator: the criteria render through *Rubric Criterion*, the judge named in `judgePrompt` (default *Rubric Evaluator - Default Judge*) fills *Rubric Evaluator*'s slot, and the input, expected and actual outputs travel as one delimited subject message. `model` pins the model and `timeoutMS` bounds the call. It does not read MJ: Test Rubrics |
 | `SchemaValidatorOracle` | Validates output against a JSON schema |
 | `SQLValidatorOracle` | Validates output by running SQL queries |
 | `TraceValidatorOracle` | Validates execution trace/steps of an agent run |
+| `RubricOracle` | Judges the test run with a rubric. The subject is the test run and the context is the test |
+
+A test run picks one rubric. The first source that names one wins: the run override, the `rubric` oracle's own config, `Test.RubricID`, `TestSuite.RubricID` walking up `ParentID`, then the agent's default Evaluation rubric. The published version is pinned when the suite run starts, so a publish during the run does not split the suite. An explicitly named version is used as given. When a rubric is resolved and the test did not configure a `rubric` oracle, the driver adds one. A test that already has an `llm-judge` oracle keeps that list, and the agent's Evaluation rubric is not added. The added rubric oracle always gates status. It contributes to the score when `scoringWeights` is absent or already names `rubric`.
 
 ### Variable Resolution
 
@@ -187,4 +190,4 @@ npm run test:coverage
 
 ## License
 
-ISC
+Business Source License 1.1 — see [LICENSE](../../../LICENSE) for details.

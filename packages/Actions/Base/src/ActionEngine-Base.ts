@@ -312,8 +312,39 @@ export class RunActionParams<TContext = any> {
     *
     * Note: Avoid including sensitive data like passwords unless absolutely necessary,
     * as context may be passed through multiple execution layers.
+    *
+    * Well-known keys stamped by BaseAgent when an action runs inside an agent run:
+    * - `AgentID` — the calling agent
+    * - `ActiveSkillIDs` — the skills active in the run (always present in a run; `[]` = none)
+    * - `__resolvedStorageAccountId` — the file storage account the run resolved
     */
    public Context?: TContext;
+
+   /**
+    * The run's {@link RuntimeAPIKeyResolver}, set by BaseAgent when — and only when — the agent run
+    * carries runtime API keys. Per dispatch, like {@link DeferExecution}: it is bound to THIS action,
+    * so the agent's policy and audit line name the right action even when actions run in parallel,
+    * and it is not on {@link Context} — which is the agent's own object, shared by every action in
+    * the run and copied into sub-agent runs. An action that calls an AI vendor directly asks it for
+    * ONE driver class and gets that key, or the platform key when the run has none for that class
+    * (the same fallback prompts get). The key list itself is never handed to an action: it cannot
+    * enumerate the run's credentials, only request the one it names, and the agent may refuse.
+    * Absent outside an agent run, when the action uses `GetAIAPIKey(driverClass)` as it always did.
+    */
+   public RuntimeAPIKeyResolver?: RuntimeAPIKeyResolver;
+
+   /**
+    * The agent run's credential scope, set by BaseAgent from `ExecuteAgentParams.CredentialScope`.
+    * Under `'RuntimeOnly'` an action that calls an AI vendor itself must take the
+    * {@link RuntimeAPIKeyResolver}'s answer as final — `undefined`, or no resolver at all, means the
+    * run has no key for that vendor, NOT "use `GetAIAPIKey`". Absent means `'Any'`.
+    *
+    * An action that runs its own prompt or agent must forward this onto that prompt's or agent's
+    * params (`CredentialScope`). It is not handed the run's keys, so under `'RuntimeOnly'` that
+    * prompt finds no usable model and fails — which is the point: otherwise it would resolve the
+    * platform's keys inside a run restricted to the caller's.
+    */
+   public CredentialScope?: RuntimeCredentialScope;
 
    /**
     * Optional AbortSignal that is aborted when the action exceeds its wall-clock
@@ -373,12 +404,12 @@ export class ActionEngineBase extends BaseEngine<ActionEngineBase> {
       return super.getInstance<ActionEngineBase>("ActionEngineBase");
    }
 
-    private _Actions: MJActionEntityExtended[];
-    private _ActionCategories: MJActionCategoryEntity[];
-    private _Filters: MJActionFilterEntity[];
-    private _Params: MJActionParamEntity[];
-    private _ActionResultCodes: MJActionResultCodeEntity[];
-    private _ActionLibraries: MJActionLibraryEntity[] = [];
+    private _Actions: MJActionEntityExtended[];  // case-violation-ok-legacy-back-compat: the name is also a string literal that resolves this member at runtime, so renaming it breaks the lookup
+    private _ActionCategories: MJActionCategoryEntity[];  // case-violation-ok-legacy-back-compat: the name is also a string literal that resolves this member at runtime, so renaming it breaks the lookup
+    private _Filters: MJActionFilterEntity[];  // case-violation-ok-legacy-back-compat: the name is also a string literal that resolves this member at runtime, so renaming it breaks the lookup
+    private _Params: MJActionParamEntity[];  // case-violation-ok-legacy-back-compat: the name is also a string literal that resolves this member at runtime, so renaming it breaks the lookup
+    private _ActionResultCodes: MJActionResultCodeEntity[];  // case-violation-ok-legacy-back-compat: the name is also a string literal that resolves this member at runtime, so renaming it breaks the lookup
+    private _ActionLibraries: MJActionLibraryEntity[] = [];  // case-violation-ok-legacy-back-compat: the name is also a string literal that resolves this member at runtime, so renaming it breaks the lookup
 
    /**
     * This method is called to configure the ActionEngine. It loads the metadata for the actions, filters, and result codes and caches them in the GlobalObjectStore. You must call this method before running any actions.
@@ -557,3 +588,23 @@ export class ActionEngineBase extends BaseEngine<ActionEngineBase> {
    }
 }
 
+/**
+ * Resolves the API key an action should use for ONE AI driver class, inside an agent run.
+ *
+ * BaseAgent sets one on {@link RunActionParams.RuntimeAPIKeyResolver} when — and only when — the run
+ * carries runtime API keys. It answers with the run's key for that driver class, else the platform
+ * key, else `undefined`; it is the run's prompt resolution (`GetAIAPIKey(driverClass, runKeys)`)
+ * behind a function, so an action gets the same key the prompts use without ever holding the list
+ * they come from. `undefined` also means "refused": the agent decides whether this action may use
+ * the run's key for that class, and a refusal leaves the action on the platform key exactly as if
+ * the run had none.
+ */
+export type RuntimeAPIKeyResolver = (driverClass: string) => string | undefined;
+
+/**
+ * Which credentials an agent run may spend: `'Any'` (the run's keys, then the platform's) or
+ * `'RuntimeOnly'` (the run's keys alone). The same union as `AICredentialScope` in
+ * `@memberjunction/ai`, declared here for the reason {@link RuntimeAPIKeyResolver} is: this package
+ * does not depend on that one.
+ */
+export type RuntimeCredentialScope = 'Any' | 'RuntimeOnly';

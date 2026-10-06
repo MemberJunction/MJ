@@ -1,9 +1,9 @@
 import { RegisterClass } from '@memberjunction/global';
-import { FacebookBaseAction, CreatePostData } from '../facebook-base.action';
+import { CreatePostData, FacebookBaseAction, FacebookPagedResponse, FacebookPost } from '../facebook-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { MediaFile, SocialMediaErrorCode } from '../../../base/base-social.action';
 import { LogStatus, LogError } from '@memberjunction/core';
-import axios from 'axios';
+import { HttpGet } from '@memberjunction/network-utils';
 import { BaseAction } from '@memberjunction/actions';
 
 /**
@@ -269,8 +269,8 @@ export class FacebookSchedulePostAction extends FacebookBaseAction {
             const fiveMinutesAfter = new Date(scheduledTime.getTime() + 5 * 60 * 1000);
 
             // Get scheduled posts in the time window
-            const response = await axios.get(`${this.apiBaseUrl}/${pageId}/scheduled_posts`, {
-                params: {
+            const response = await HttpGet<FacebookPagedResponse<FacebookPost>>(`${this.apiBaseUrl}/${pageId}/scheduled_posts`, {
+                Query: {
                     access_token: pageToken,
                     since: Math.floor(fiveMinutesBefore.getTime() / 1000),
                     until: Math.floor(fiveMinutesAfter.getTime() / 1000),
@@ -278,7 +278,7 @@ export class FacebookSchedulePostAction extends FacebookBaseAction {
                 }
             });
 
-            const scheduledPosts = response.data.data || [];
+            const scheduledPosts = response.Data.data || [];
             return scheduledPosts.length > 0;
         } catch (error) {
             LogError(`Failed to check scheduling conflicts: ${error}`);
@@ -293,14 +293,14 @@ export class FacebookSchedulePostAction extends FacebookBaseAction {
         try {
             const pageToken = await this.getPageAccessToken(pageId);
             
-            const response = await axios.get(`${this.apiBaseUrl}/${postId}`, {
-                params: {
+            const response = await HttpGet<FacebookPost>(`${this.apiBaseUrl}/${postId}`, {
+                Query: {
                     access_token: pageToken,
                     fields: 'id,message,scheduled_publish_time,is_published'
                 }
             });
 
-            return response.data;
+            return response.Data;
         } catch (error) {
             LogError(`Failed to get scheduled post details: ${error}`);
             return null;

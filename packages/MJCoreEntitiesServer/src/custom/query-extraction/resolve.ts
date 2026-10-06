@@ -5,12 +5,12 @@
  * Every function is stateless: context is passed in as parameters rather than via `this`.
  */
 
-import { EntityInfo, IMetadataProvider, TypeScriptTypeFromSQLType } from "@memberjunction/core";
+import { DatabasePlatform, EntityInfo, IMetadataProvider, TypeScriptTypeFromSQLType } from "@memberjunction/core";
 import { MJQueryEntityExtended, MJQueryFieldEntity, MJQueryDependencyEntity, QueryEngine } from "@memberjunction/core-entities";
 import { QueryCompositionEngine } from "@memberjunction/generic-database-provider";
 import { UUIDsEqual } from "@memberjunction/global";
 import { SQLParser } from "@memberjunction/sql-parser";
-import { SQLServerDialect } from "@memberjunction/sql-dialect";
+import { GetDialect } from "@memberjunction/sql-dialect";
 import type { MJParameterInfo, SQLSelectColumn, SQLTableReference } from "@memberjunction/sql-parser";
 
 import type {
@@ -70,11 +70,11 @@ export function ResolveCompositionReferences(
         const { parameterMapping, passthroughMappings } = BuildParameterMappings(token.Parameters);
 
         resolved.push({
-            depQuery,
-            referencePath: token.FullPath,
-            alias,
-            parameterMapping,
-            passthroughMappings,
+            DepQuery: depQuery,
+            ReferencePath: token.FullPath,
+            Alias: alias,
+            ParameterMapping: parameterMapping,
+            PassthroughMappings: passthroughMappings,
         });
     }
 
@@ -183,12 +183,12 @@ export function BuildPassthroughParams(
     const seenParamNames = new Set<string>();
 
     for (const ref of resolvedRefs) {
-        for (const mapping of ref.passthroughMappings) {
+        for (const mapping of ref.PassthroughMappings) {
             const nameLower = mapping.parentParamName.toLowerCase();
             if (seenParamNames.has(nameLower)) continue;
             seenParamNames.add(nameLower);
 
-            const depParam = ref.depQuery.QueryParameters.find(
+            const depParam = ref.DepQuery.QueryParameters.find(
                 p => p.Name.toLowerCase() === mapping.depParamName.toLowerCase()
             );
 
@@ -198,14 +198,14 @@ export function BuildPassthroughParams(
                 isRequired: depParam ? depParam.IsRequired : true,
                 defaultValue: depParam?.DefaultValue ?? null,
                 filters: [],
-                usageLocations: [ref.referencePath],
+                usageLocations: [ref.ReferencePath],
             });
 
             contextMap.set(nameLower, {
-                description: depParam?.Description ?? null,
-                sampleValue: depParam?.SampleValue ?? null,
-                depQueryName: ref.depQuery.Name,
-                depParamName: mapping.depParamName,
+                Description: depParam?.Description ?? null,
+                SampleValue: depParam?.SampleValue ?? null,
+                DepQueryName: ref.DepQuery.Name,
+                DepParamName: mapping.depParamName,
             });
         }
     }
@@ -526,16 +526,20 @@ export function ExpandWildcardFields(
 /**
  * Extracts entity metadata from the SQL to provide context for parameter type inference.
  * Uses SQLParser for robust SQL parsing with MJ template support.
+ *
+ * @param platform The platform the SQL is written for; selects the grammar used to read its
+ *   column references. Defaults to SQL Server.
  */
 export function ExtractEntityMetadataFromSQL(
     sql: string,
     tableRefs: SQLTableReference[],
-    md: IMetadataProvider
+    md: Pick<IMetadataProvider, 'Entities'>,
+    platform: DatabasePlatform = 'sqlserver'
 ): EntityMetadataEntry[] {
     const results: EntityMetadataEntry[] = [];
 
     try {
-        const columnRefs = SQLParser.ExtractColumnRefs(sql, new SQLServerDialect());
+        const columnRefs = SQLParser.ExtractColumnRefs(sql, GetDialect(platform));
 
         for (const tableRef of tableRefs) {
             const matchingEntity = findEntityByTableRef(md, tableRef);
@@ -546,9 +550,9 @@ export function ExtractEntityMetadataFromSQL(
                 if (relevantFields.length > 0) {
                     results.push({
                         name: matchingEntity.Name,
-                        schemaName: matchingEntity.SchemaName,
-                        baseView: matchingEntity.BaseView,
-                        fields: relevantFields,
+                        SchemaName: matchingEntity.SchemaName,
+                        BaseView: matchingEntity.BaseView,
+                        Fields: relevantFields,
                     });
                 }
             }
@@ -657,7 +661,7 @@ function resolveFieldFromSelectColumns(
     if (selectCol.TableQualifier) {
         const ref = aliasToRef.get(selectCol.TableQualifier.toLowerCase());
         if (ref) {
-            const match = ref.depQuery.QueryFields.find(
+            const match = ref.DepQuery.QueryFields.find(
                 f => f.Name.toLowerCase() === selectCol.SourceColumn.toLowerCase()
             );
             if (match) return match;
@@ -666,7 +670,7 @@ function resolveFieldFromSelectColumns(
 
     // No table qualifier — try all composition refs
     for (const ref of Array.from(aliasToRef.values())) {
-        const match = ref.depQuery.QueryFields.find(
+        const match = ref.DepQuery.QueryFields.find(
             f => f.Name.toLowerCase() === selectCol.SourceColumn.toLowerCase()
         );
         if (match) return match;
@@ -685,7 +689,7 @@ function buildDependencyFieldLookup(
     const lookup = new Map<string, MJQueryFieldEntity>();
 
     for (const ref of resolvedRefs) {
-        for (const field of ref.depQuery.QueryFields) {
+        for (const field of ref.DepQuery.QueryFields) {
             const nameLower = field.Name.toLowerCase();
             if (!lookup.has(nameLower)) {
                 lookup.set(nameLower, field);
@@ -962,7 +966,7 @@ function findEntityNameByID(md: IMetadataProvider, entityID: string): string | n
 /**
  * Finds an entity by matching a SQL table reference against BaseView/BaseTable + SchemaName.
  */
-function findEntityByTableRef(md: IMetadataProvider, tableRef: SQLTableReference): EntityInfo | undefined {
+function findEntityByTableRef(md: Pick<IMetadataProvider, 'Entities'>, tableRef: SQLTableReference): EntityInfo | undefined {
     return md.Entities.find(e =>
         (e.BaseView.toLowerCase() === tableRef.TableName.toLowerCase() ||
          e.BaseTable.toLowerCase() === tableRef.TableName.toLowerCase()) &&
@@ -989,8 +993,8 @@ function buildAliasToRefMap(
 ): Map<string, ResolvedCompositionReference> {
     const aliasToRef = new Map<string, ResolvedCompositionReference>();
     for (const ref of resolvedRefs) {
-        if (ref.alias) {
-            aliasToRef.set(ref.alias.toLowerCase(), ref);
+        if (ref.Alias) {
+            aliasToRef.set(ref.Alias.toLowerCase(), ref);
         }
     }
     return aliasToRef;

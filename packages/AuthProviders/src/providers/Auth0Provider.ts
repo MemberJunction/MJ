@@ -13,6 +13,28 @@ export class Auth0Provider extends BaseAuthProvider {
   }
 
   /**
+   * Configures Auth0 from AUTH0_DOMAIN + AUTH0_CLIENT_ID (AUTH0_CLIENT_SECRET optional).
+   *
+   * Mapping preserved byte-for-byte from the env block that previously lived in MJServer's
+   * config, so a deployment upgrading to the hook-based discovery sees no change.
+   */
+  static ConfigFromEnvironment(env: NodeJS.ProcessEnv): AuthProviderConfig | null {
+    if (!env.AUTH0_DOMAIN || !env.AUTH0_CLIENT_ID) {
+      return null;
+    }
+    return {
+      name: 'auth0',
+      type: 'auth0',
+      issuer: `https://${env.AUTH0_DOMAIN}/`,
+      audience: env.AUTH0_CLIENT_ID,
+      jwksUri: `https://${env.AUTH0_DOMAIN}/.well-known/jwks.json`,
+      clientId: env.AUTH0_CLIENT_ID,
+      clientSecret: env.AUTH0_CLIENT_SECRET,
+      domain: env.AUTH0_DOMAIN
+    };
+  }
+
+  /**
    * Extracts user information from Auth0 JWT payload
    */
   extractUserInfo(payload: JwtPayload): AuthUserInfo {

@@ -285,7 +285,7 @@ export class MongoExternalDataSourceDriver extends BaseExternalDataSourceDriver<
   // ---- helpers -------------------------------------------------------------
 
   /** Forbidden aggregation stages that would write/persist data (violating read-only access). */
-  private static readonly WriteStages = new Set(['$out', '$merge']);
+  private static readonly writeStages = new Set(['$out', '$merge']);
 
   /**
    * Throw if a write stage ($out / $merge) appears ANYWHERE in the pipeline — including nested
@@ -304,7 +304,7 @@ export class MongoExternalDataSourceDriver extends BaseExternalDataSourceDriver<
     }
     if (node && typeof node === 'object') {
       for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
-        if (MongoExternalDataSourceDriver.WriteStages.has(key)) {
+        if (MongoExternalDataSourceDriver.writeStages.has(key)) {
           throw new Error(`MongoDB native query contains a forbidden write stage '${key}'. External data sources are read-only.`);
         }
         this.assertNoWriteStageDeep(value);

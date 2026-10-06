@@ -140,6 +140,7 @@ LoadMessagingAdapters();
 | `ConnectionMode` | `'http' \| 'socket'` | `'http'` | Slack connection mode |
 | `MaxThreadMessages` | `number` | `50` | Max thread messages for conversation context |
 | `ShowTypingIndicator` | `boolean` | `true` | Show typing indicator while processing |
+| `DisableDelegation` | `boolean` | `false` | Turn off delegation detection; set it on a bot pinned to one agent |
 | `StreamingUpdateIntervalMs` | `number` | `1000` | Min interval between streaming updates (ms) |
 | `ExplorerBaseURL` | `string` | — | MJ Explorer URL for "View in Explorer" buttons |
 | `SlashCommands` | `Record<string, string>` | — | Slash command → agent name mapping (Slack only) |
@@ -196,7 +197,7 @@ See `SlackAdapter.ts` and `SlackMessagingExtension.ts` for a complete reference 
 ## Testing
 
 ```bash
-npm run test           # Run all 301 tests
+npm run test           # Run the package's unit tests
 npm run test:watch     # Watch mode
 npm run test:coverage  # With coverage report
 ```

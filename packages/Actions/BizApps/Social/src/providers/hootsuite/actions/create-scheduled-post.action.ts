@@ -1,5 +1,5 @@
 import { RegisterClass } from '@memberjunction/global';
-import { HootSuiteBaseAction } from '../hootsuite-base.action';
+import { HootSuiteBaseAction, HootSuitePost, HootSuiteResponse } from '../hootsuite-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { LogStatus, LogError } from '@memberjunction/core';
 import { MediaFile } from '../../../base/base-social.action';
@@ -80,8 +80,8 @@ export class HootSuiteCreateScheduledPostAction extends HootSuiteBaseAction {
 
             // Create the post
             LogStatus('Creating scheduled post...');
-            const response = await this.axiosInstance.post('/messages', postData);
-            const createdPost = response.data;
+            const response = await this.httpClient.Post<HootSuitePost>('/messages', postData);
+            const createdPost = response.Data;
 
             // Normalize the created post
             const normalizedPost = this.normalizePost(createdPost);

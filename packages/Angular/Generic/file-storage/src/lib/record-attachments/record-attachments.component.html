@@ -1,0 +1,479 @@
+<mj-slide-panel
+  [Mode]="'slide'"
+  [Title]="Title"
+  [Visible]="Visible"
+  [Resizable]="Resizable"
+  [MinWidthPx]="MinWidthPx"
+  [MaxWidthRatio]="MaxWidthRatio"
+  [WidthPx]="WidthPx"
+  (Closed)="ClosePanel()"
+  (WidthChanged)="OnWidthChanged($event)">
+
+  <div class="mj-record-attachments-wrapper">
+    
+    <!-- Top Meta Strip -->
+    <div class="mj-record-attachments-meta-strip">
+      <div class="mj-record-attachments-summary">
+        <span class="mj-record-attachments-badge">
+          {{ Attachments.length }} {{ Attachments.length === 1 ? 'attachment' : 'attachments' }}
+          @if (Attachments.length > 0) {
+            &bull; {{ TotalSizeFormatted }}
+          }
+        </span>
+      </div>
+
+      <div class="mj-record-attachments-top-actions">
+        <button type="button" class="mj-attach-btn mj-attach-btn-sm mj-attach-btn-flat" (click)="Refresh()" [disabled]="IsLoading" title="Refresh attachments">
+          <i class="fa-solid fa-rotate-right" [class.fa-spin]="IsLoading"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Provider Filter Pills & View Toggle -->
+    <div class="mj-record-attachments-controls-bar">
+      @if (ShowProviderFilter && ActiveProviders.length > 1) {
+        <div class="mj-provider-pills">
+          <button type="button" class="mj-provider-pill" [class.active]="SelectedProviderFilter === 'all'" (click)="SelectedProviderFilter = 'all'">
+            <span>All Providers</span>
+            <span class="mj-pill-count">({{ Attachments.length }})</span>
+          </button>
+          @for (provider of ActiveProviders; track provider.ID) {
+            <button type="button" class="mj-provider-pill" [class.active]="SelectedProviderFilter === provider.ID" (click)="SelectedProviderFilter = provider.ID">
+              <span>{{ provider.Name }}</span>
+              <span class="mj-pill-count">({{ GetProviderItemCount(provider.ID) }})</span>
+            </button>
+          }
+        </div>
+      }
+
+      <div class="mj-view-controls">
+        <button type="button" class="mj-view-toggle-btn" [class.active]="ViewMode === 'grid'" (click)="SetViewMode('grid')" title="Card Grid View">
+          <i class="fa-solid fa-grip"></i>
+        </button>
+        <button type="button" class="mj-view-toggle-btn" [class.active]="ViewMode === 'list'" (click)="SetViewMode('list')" title="Detailed List View">
+          <i class="fa-solid fa-list"></i>
+        </button>
+      </div>
+    </div>
+
+    <div class="mj-record-attachments-content">
+      
+      @if (!IsLoading && StorageAccounts.length === 0) {
+        <div class="mj-record-attachments-alert">
+          <mj-alert
+            Type="warning"
+            Title="No Active Storage Providers Configured"
+            Message="No active file storage providers or accounts were found. Configure a storage provider (such as Azure Blob Storage, AWS S3, or Box) in the Storage Subsystem settings to enable uploading files.">
+          </mj-alert>
+        </div>
+      }
+
+      <!-- Upload Progress Status Banner -->
+      @if (IsUploading) {
+        <div class="mj-upload-progress-banner">
+          <div class="mj-upload-progress-header">
+            <div class="mj-upload-progress-info">
+              <i class="fa-solid fa-cloud-arrow-up fa-bounce mj-upload-progress-icon"></i>
+              <span class="mj-upload-progress-text">{{ UploadStatusText }}</span>
+            </div>
+            <span class="mj-upload-progress-pct">{{ UploadProgressPercent }}%</span>
+          </div>
+          <div class="mj-upload-progress-track">
+            <div class="mj-upload-progress-bar" [style.width.%]="UploadProgressPercent"></div>
+          </div>
+        </div>
+      }
+
+      <!-- Drag & Drop Upload Zone -->
+      @if (EffectiveAllowUpload) {
+        <div class="mj-upload-dropzone" [class.disabled]="IsUploading" (dragover)="OnDragOver($event)" (drop)="OnDrop($event)" (click)="!IsUploading && fileInputRef.click()">
+          <i class="fa-solid fa-cloud-arrow-up mj-upload-dropzone-icon"></i>
+          <div class="mj-upload-dropzone-title">
+            Drop files to attach, or <span class="mj-upload-dropzone-link">Browse</span>
+          </div>
+          <div class="mj-upload-dropzone-subtitle">
+            Direct secure storage upload &bull; Max {{ Config?.MaxFileSizeBytes ? FormatSize(Config?.MaxFileSizeBytes) : '50 MB' }}
+          </div>
+
+          @if (StorageAccounts.length > 1) {
+            <div class="mj-upload-storage-row" (click)="$event.stopPropagation()">
+              <span>Target storage:</span>
+              <select class="mj-upload-storage-select" [(ngModel)]="SelectedStorageAccountID" [disabled]="IsUploading">
+                @for (sa of StorageAccounts; track sa.account.ID) {
+                  <option [value]="sa.account.ID">{{ sa.account.Name }} ({{ sa.provider.Name }})</option>
+                }
+              </select>
+            </div>
+          }
+          <input type="file" #fileInputRef multiple style="display: none;" (change)="OnFilesSelected($event)" />
+        </div>
+      }
+
+      <!-- Search Filter -->
+      @if (ShowSearch && Attachments.length > 0) {
+        <div class="mj-attachments-search-bar">
+          <i class="fa-solid fa-magnifying-glass"></i>
+          <input type="text" [(ngModel)]="SearchTerm" placeholder="Filter attachments by name, category, extension..." />
+          @if (SearchTerm) {
+            <button type="button" class="mj-clear-search-btn" (click)="SearchTerm = ''">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          }
+        </div>
+      }
+
+      <!-- Hidden Input for Replace Action -->
+      <input type="file" #replaceInputRef style="display: none;" (change)="OnReplaceFileSelected($event)" />
+
+      <!-- Attachments List / Grid -->
+      @if (IsLoading) {
+        <div class="mj-record-attachments-loading">
+          <mj-loading text="Loading attachments..."></mj-loading>
+        </div>
+      } @else if (FilteredAttachments.length === 0) {
+        <mj-empty-state
+          Icon="fa-solid fa-paperclip"
+          [Title]="SearchTerm ? 'No matching attachments' : 'No attachments yet'"
+          [Message]="SearchTerm ? 'Try adjusting your search query or provider filter.' : (StorageAccounts.length === 0 ? 'No active file storage accounts are configured. Uploads are disabled until a storage account is configured.' : (EffectiveAllowUpload ? 'Upload or drop files above to link attachments to this record.' : 'No attachments are linked to this record.'))">
+        </mj-empty-state>
+      } @else {
+        <div class="mj-attachments-container" [class.mj-attachments-grid-mode]="ViewMode === 'grid'">
+          @for (item of FilteredAttachments; track item.LinkID) {
+            <div class="mj-attachment-card" [class.mj-attachment-card--list]="ViewMode === 'list'">
+              <div class="mj-attachment-card-top" (click)="AllowPreview ? PreviewAttachment(item) : OpenAttachmentRecord(item)">
+                <div class="mj-attachment-thumb" [ngClass]="GetFileColorClass(item)" [title]="'Preview ' + item.Name">
+                  <i [class]="GetFileIcon(item)"></i>
+                </div>
+                <div class="mj-attachment-info">
+                  <div class="mj-attachment-name" [title]="item.Name">
+                    {{ item.Name }}
+                  </div>
+                  <div class="mj-attachment-meta">
+                    @if (item.FileSize) {
+                      <span>{{ FormatSize(item.FileSize) }}</span>
+                      <span>&bull;</span>
+                    }
+                    @if (item.CategoryName) {
+                      <span class="mj-attachment-cat-badge">{{ item.CategoryName }}</span>
+                      <span>&bull;</span>
+                    }
+                    <span>{{ item.ContentType || 'File' }}</span>
+                  </div>
+                  @if (item.ProviderName) {
+                    <div class="mj-attachment-provider-tag" [style.--provider-color]="GetProviderBrandColor(item)">
+                      <i [class]="GetProviderIcon(item)"></i>
+                      <span>{{ item.ProviderName }}</span>
+                    </div>
+                  }
+                  @if (item.Description) {
+                    <div class="mj-attachment-description" [title]="item.Description">
+                      {{ item.Description }}
+                    </div>
+                  }
+                </div>
+              </div>
+
+              <!-- Streamlined Action Toolbar (Preview + Download + Overflow Menu) -->
+              <div class="mj-attachment-actions" (click)="$event.stopPropagation()">
+                @if (AllowPreview) {
+                  <button type="button" class="mj-attachment-action-btn" (click)="PreviewAttachment(item)" title="Quick preview">
+                    <i class="fa-solid fa-eye"></i>
+                  </button>
+                }
+                @if (AllowDownload) {
+                  <button type="button" class="mj-attachment-action-btn" (click)="DownloadAttachment(item)" title="Download file">
+                    <i class="fa-solid fa-download"></i>
+                  </button>
+                }
+
+                <!-- Overflow Menu Trigger -->
+                <div class="mj-attachment-menu-container">
+                  <button
+                    type="button"
+                    class="mj-attachment-action-btn mj-attachment-action-btn--more"
+                    [class.mj-attachment-action-btn--active]="ActiveMenuLinkID === item.LinkID"
+                    (click)="ToggleItemMenu($event, item)"
+                    title="More actions"
+                    [attr.aria-expanded]="ActiveMenuLinkID === item.LinkID"
+                  >
+                    <i class="fa-solid fa-ellipsis-vertical"></i>
+                  </button>
+
+                  <!-- Dropdown Menu -->
+                  @if (ActiveMenuLinkID === item.LinkID) {
+                    <div class="mj-attachment-dropdown" (click)="$event.stopPropagation()">
+                      <button type="button" class="mj-attachment-dropdown-item" (click)="OpenAttachmentRecord(item); CloseItemMenu()">
+                        <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                        <span>Open in Workspace</span>
+                      </button>
+                      @if (AllowEditMetadata && UserCanUpdateFile) {
+                        <button type="button" class="mj-attachment-dropdown-item" (click)="OpenEditMetadata(item); CloseItemMenu()">
+                          <i class="fa-solid fa-pen"></i>
+                          <span>Edit Details</span>
+                        </button>
+                      }
+                      @if (AllowReplace && EffectiveAllowUpload) {
+                        <button type="button" class="mj-attachment-dropdown-item" (click)="RequestReplace(item); CloseItemMenu()">
+                          <i class="fa-solid fa-arrow-right-arrow-left"></i>
+                          <span>Replace File</span>
+                        </button>
+                      }
+                      @if (EffectiveAllowUnlink || EffectiveAllowDelete) {
+                        <div class="mj-attachment-dropdown-divider"></div>
+                      }
+                      @if (EffectiveAllowUnlink) {
+                        <button type="button" class="mj-attachment-dropdown-item mj-attachment-dropdown-item--warning" (click)="UnlinkAttachment(item); CloseItemMenu()">
+                          <i class="fa-solid fa-link-slash"></i>
+                          <span>Unlink from Record</span>
+                        </button>
+                      }
+                      @if (EffectiveAllowDelete) {
+                        <button type="button" class="mj-attachment-dropdown-item mj-attachment-dropdown-item--danger" (click)="DeleteAttachment(item, true); CloseItemMenu()">
+                          <i class="fa-regular fa-trash-can"></i>
+                          <span>Delete Completely</span>
+                        </button>
+                      }
+                    </div>
+                  }
+                </div>
+              </div>
+            </div>
+          }
+        </div>
+      }
+
+    </div>
+
+    <!-- ====================================================================
+         EDIT ATTACHMENT DETAILS SUB-PANEL (Slide-in inside slide-panel)
+         ==================================================================== -->
+    @if (EditMetadataModalOpen && EditMetadataItem) {
+      <div class="mj-record-attachments-subpanel">
+        <!-- Sub-Panel Top Navigation Bar -->
+        <div class="mj-subpanel-header">
+          <button type="button" class="mj-subpanel-back-btn" (click)="CloseEditMetadataModal()" title="Back to attachments">
+            <i class="fa-solid fa-arrow-left"></i>
+            <span>Back</span>
+          </button>
+          <div class="mj-subpanel-title">
+            <i class="fa-solid fa-pen-to-square"></i>
+            <span>Attachment Details</span>
+          </div>
+          <button type="button" class="mj-subpanel-close-btn" (click)="CloseEditMetadataModal()" title="Close details">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+
+        <!-- Sub-Panel Body -->
+        <div class="mj-subpanel-body">
+          <!-- File Info Summary Hero -->
+          <div class="mj-subpanel-hero">
+            <div class="mj-subpanel-icon" [ngClass]="GetFileColorClass(EditMetadataItem)">
+              <i [class]="GetFileIcon(EditMetadataItem)"></i>
+            </div>
+            <div class="mj-subpanel-hero-info">
+              <div class="mj-subpanel-hero-name" [title]="EditMetadataItem.Name">{{ EditMetadataItem.Name }}</div>
+              <div class="mj-subpanel-hero-meta">
+                <span>{{ FormatSize(EditMetadataItem.FileSize) }}</span>
+                <span class="mj-subpanel-dot">&bull;</span>
+                <span>{{ EditMetadataItem.ContentType || 'Document' }}</span>
+                @if (EditMetadataItem.ProviderName) {
+                  <span class="mj-subpanel-dot">&bull;</span>
+                  <span class="mj-subpanel-storage-tag">{{ EditMetadataItem.ProviderName }}</span>
+                }
+              </div>
+            </div>
+          </div>
+
+          <!-- Edit Form -->
+          <div class="mj-subpanel-form">
+            <div class="mj-form-group">
+              <label class="mj-form-label">File Name</label>
+              <input
+                type="text"
+                class="mj-form-input"
+                [(ngModel)]="EditMetadataName"
+                placeholder="e.g. document.pdf"
+                (keydown.enter)="EditMetadataName.trim() && !IsLoading && SaveEditMetadata()"
+              />
+              <div class="mj-form-hint">Changing the name updates the display title across all record views.</div>
+            </div>
+
+            <div class="mj-form-group">
+              <label class="mj-form-label">Description (Optional)</label>
+              <textarea
+                class="mj-form-textarea"
+                [(ngModel)]="EditMetadataDescription"
+                rows="4"
+                placeholder="Add notes, tags, or context about this attachment..."
+              ></textarea>
+            </div>
+
+            <!-- Metadata Properties Card -->
+            <div class="mj-subpanel-details-card">
+              <div class="mj-details-card-title">Storage Information</div>
+              <div class="mj-details-row">
+                <span class="mj-details-label">Storage Account:</span>
+                <span class="mj-details-value">{{ EditMetadataItem.ProviderName || 'Default Storage' }}</span>
+              </div>
+              <div class="mj-details-row">
+                <span class="mj-details-label">Attached On:</span>
+                <span class="mj-details-value">{{ EditMetadataItem.CreatedAt | date:'medium' }}</span>
+              </div>
+              <div class="mj-details-row">
+                <span class="mj-details-label">Status:</span>
+                <span class="mj-details-badge">{{ EditMetadataItem.Status || 'Active' }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sub-Panel Footer Actions -->
+        <div class="mj-subpanel-footer">
+          <button type="button" class="mj-attach-btn mj-attach-btn-sm mj-attach-btn-flat" (click)="CloseEditMetadataModal()">
+            Cancel
+          </button>
+          <div class="mj-subpanel-footer-right">
+            @if (AllowDownload) {
+              <button
+                type="button"
+                class="mj-attach-btn mj-attach-btn-sm mj-attach-btn-secondary"
+                (click)="DownloadAttachment(EditMetadataItem)"
+                title="Open in new tab"
+              >
+                <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                <span>Open</span>
+              </button>
+            }
+            <button
+              type="button"
+              class="mj-attach-btn mj-attach-btn-sm mj-attach-btn-primary"
+              (click)="SaveEditMetadata()"
+              [disabled]="!EditMetadataName.trim() || IsLoading"
+            >
+              <i class="fa-solid fa-check"></i>
+              <span>{{ IsLoading ? 'Saving...' : 'Save Changes' }}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    }
+
+  </div>
+
+</mj-slide-panel>
+
+<!-- ====================================================================
+     RICH MEDIA PREVIEW MODAL
+     ==================================================================== -->
+@if (PreviewModalOpen && ActivePreviewItem) {
+  <div class="mj-preview-modal-backdrop" (click)="ClosePreviewModal()">
+    <div class="mj-preview-dialog" (click)="$event.stopPropagation()">
+      
+      <div class="mj-preview-dialog-header">
+        <div class="mj-preview-dialog-title">
+          <i [class]="GetFileIcon(ActivePreviewItem)" [ngClass]="GetFileColorClass(ActivePreviewItem)"></i>
+          <span>{{ ActivePreviewItem.Name }}</span>
+        </div>
+        <button type="button" class="mj-preview-close-btn" (click)="ClosePreviewModal()">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="mj-preview-dialog-body">
+        @if (IsLoadingPreview || !IsMediaLoaded) {
+          <div class="mj-preview-loading-overlay">
+            <mj-loading [text]="'Loading ' + (ActivePreviewItem.Name || 'preview') + '...'"></mj-loading>
+          </div>
+        }
+
+        @switch (GetMediaType(ActivePreviewItem)) {
+          @case ('image') {
+            @if (ActivePreviewUrl) {
+              <div class="mj-preview-image-container" [class.mj-preview-content--hidden]="!IsMediaLoaded">
+                <img [src]="ActivePreviewUrl" [alt]="ActivePreviewItem.Name" (load)="OnPreviewMediaLoaded()" (error)="OnPreviewMediaLoaded()" />
+              </div>
+            } @else {
+              <div class="mj-preview-generic-box">
+                <i class="fa-solid fa-file-image mj-preview-generic-icon"></i>
+                <div class="mj-preview-generic-title">{{ ActivePreviewItem.Name }}</div>
+                <div class="mj-preview-generic-sub">Preview could not be loaded</div>
+              </div>
+            }
+          }
+          @case ('pdf') {
+            @if (ActivePreviewSafeUrl) {
+              <div class="mj-preview-frame-container" [class.mj-preview-content--hidden]="!IsMediaLoaded">
+                <iframe [src]="ActivePreviewSafeUrl" title="PDF Preview" (load)="OnPreviewMediaLoaded()"></iframe>
+              </div>
+            } @else {
+              <div class="mj-preview-generic-box">
+                <i class="fa-solid fa-file-pdf mj-preview-generic-icon"></i>
+                <div class="mj-preview-generic-title">{{ ActivePreviewItem.Name }}</div>
+                <div class="mj-preview-generic-sub">PDF preview could not be loaded</div>
+              </div>
+            }
+          }
+          @case ('video') {
+            @if (ActivePreviewUrl) {
+              <div class="mj-preview-media-container" [class.mj-preview-content--hidden]="!IsMediaLoaded">
+                <video controls autoplay [src]="ActivePreviewUrl" (loadeddata)="OnPreviewMediaLoaded()" (error)="OnPreviewMediaLoaded()"></video>
+              </div>
+            } @else {
+              <div class="mj-preview-generic-box">
+                <i class="fa-solid fa-file-video mj-preview-generic-icon"></i>
+                <div class="mj-preview-generic-title">{{ ActivePreviewItem.Name }}</div>
+                <div class="mj-preview-generic-sub">Video preview could not be loaded</div>
+              </div>
+            }
+          }
+          @case ('audio') {
+            @if (ActivePreviewUrl) {
+              <div class="mj-preview-media-container mj-preview-audio-box" [class.mj-preview-content--hidden]="!IsMediaLoaded">
+                <div class="mj-preview-audio-icon"><i class="fa-solid fa-headphones"></i></div>
+                <audio controls [src]="ActivePreviewUrl" (loadeddata)="OnPreviewMediaLoaded()" (error)="OnPreviewMediaLoaded()"></audio>
+              </div>
+            } @else {
+              <div class="mj-preview-generic-box">
+                <i class="fa-solid fa-file-audio mj-preview-generic-icon"></i>
+                <div class="mj-preview-generic-title">{{ ActivePreviewItem.Name }}</div>
+                <div class="mj-preview-generic-sub">Audio preview could not be loaded</div>
+              </div>
+            }
+          }
+          @case ('text') {
+            <div class="mj-preview-text-container">
+              <pre><code>{{ ActivePreviewTextContent || 'Loading content...' }}</code></pre>
+            </div>
+          }
+          @default {
+            <div class="mj-preview-generic-box">
+              <i [class]="GetFileIcon(ActivePreviewItem)" class="mj-preview-generic-icon"></i>
+              <div class="mj-preview-generic-title">{{ ActivePreviewItem.Name }}</div>
+              <div class="mj-preview-generic-sub">{{ ActivePreviewItem.ContentType || 'Document' }} &bull; {{ FormatSize(ActivePreviewItem.FileSize) }}</div>
+              <div class="mj-preview-generic-desc">{{ ActivePreviewItem.Description || 'Preview not available for this binary file format.' }}</div>
+            </div>
+          }
+        }
+      </div>
+
+      <div class="mj-preview-dialog-footer">
+        <div class="mj-preview-footer-meta">
+          @if (ActivePreviewItem.ProviderName) {
+            <span>Storage: <strong>{{ ActivePreviewItem.ProviderName }}</strong></span>
+          }
+        </div>
+        <div class="mj-preview-footer-actions">
+          <button type="button" class="mj-attach-btn mj-attach-btn-sm mj-attach-btn-flat" (click)="ClosePreviewModal()">Close</button>
+          @if (AllowDownload) {
+            <button type="button" class="mj-attach-btn mj-attach-btn-sm mj-attach-btn-primary" (click)="DownloadAttachment(ActivePreviewItem)">
+              <i class="fa-solid fa-download"></i>
+              <span>Download</span>
+            </button>
+          }
+        </div>
+      </div>
+
+    </div>
+  </div>
+}

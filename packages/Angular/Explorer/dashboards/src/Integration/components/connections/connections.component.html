@@ -650,8 +650,13 @@
                   <span class="detail-config-badge" [title]="'Conflict: ' + em.ConflictResolution">
                     <i class="fa-solid fa-arrows-rotate"></i>
                   </span>
+                  <!-- No click handler: the click bubbles to the row's (click). -->
                   <span class="map-edit-hint">
-                    <i class="fa-solid fa-chevron-right"></i>
+                    <button type="button" mjButton Variant="icon" Size="sm"
+                            [attr.data-entity-map-id]="em.ID"
+                            [AriaLabel]="'Open field mapping for ' + (em.ExternalObjectLabel ?? em.ExternalObjectName) + ' to ' + em.Entity">
+                      <i class="fa-solid fa-chevron-right"></i>
+                    </button>
                   </span>
                 </span>
               </div>

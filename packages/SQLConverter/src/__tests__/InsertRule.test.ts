@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { InsertRule } from '../rules/InsertRule.js';
-import { createConversionContext } from '../rules/types.js';
+import { CreateConversionContext } from '../rules/types.js';
 
 const rule = new InsertRule();
-const context = createConversionContext('tsql', 'postgres');
+const context = CreateConversionContext('tsql', 'postgres');
 
 function convert(sql: string): string {
   return rule.PostProcess!(sql, sql, context);
@@ -16,6 +16,33 @@ describe('InsertRule', () => {
       expect(rule.Priority).toBe(50);
       expect(rule.AppliesTo).toEqual(['INSERT', 'UPDATE', 'DELETE']);
       expect(rule.BypassSqlglot).toBe(true);
+    });
+  });
+
+
+  /**
+   * `$`-expansion in the schema substitution (issue #3171).
+   *
+   * The sibling `ViewRule` had this exact line converted to a replacement
+   * function by the #3171 sweep; `InsertRule` was missed, while the changeset
+   * lists `@memberjunction/sql-converter` as fixed. Both sides matter here: the
+   * `$1` back-reference is intentional and must survive, but `schema` is
+   * configured data whose `$` must not be expanded.
+   */
+  describe('schema substitution ($-expansion, #3171)', () => {
+    it('keeps the $1 back-reference working for a normal schema', () => {
+      const ctx = CreateConversionContext('tsql', 'postgres');
+      ctx.Schema = '__mj';
+      const out = rule.PostProcess!('INSERT INTO __mj.vwUsers VALUES (1)', '', ctx);
+      expect(out).toContain('__mj."vwUsers"');
+    });
+
+    it('does not expand a $-sequence in the configured schema name', () => {
+      const ctx = CreateConversionContext('tsql', 'postgres');
+      ctx.Schema = 'a$&b';
+      const out = rule.PostProcess!('INSERT INTO a$&b.vwUsers VALUES (1)', '', ctx);
+      // The schema must appear literally, never with the match spliced into it.
+      expect(out).toContain('a$&b."vwUsers"');
     });
   });
 

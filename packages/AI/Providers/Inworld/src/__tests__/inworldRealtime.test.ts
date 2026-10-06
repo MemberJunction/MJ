@@ -219,6 +219,23 @@ describe('InworldRealtime', () => {
             expect(update.session?.['model']).toBe('anthropic/claude-opus-4-1');
         });
 
+        it('resolves the model id from Config.Reasoning.Remote.Ref when present', async () => {
+            await startReadySession(driver, {
+                Model: 'inworld-realtime',
+                Config: {
+                    Reasoning: {
+                        Plane: 'remote',
+                        Remote: {
+                            Kind: 'model',
+                            Ref: 'anthropic/claude-sonnet-4-6',
+                        },
+                    },
+                },
+            });
+            const update = driver.Fake.Find('session.update') as { session?: Record<string, unknown> };
+            expect(update.session?.['model']).toBe('anthropic/claude-sonnet-4-6');
+        });
+
         it('falls back to the default model id when params.Model is empty', async () => {
             await startReadySession(driver, { Model: '' });
             const update = driver.Fake.Find('session.update') as { session?: Record<string, unknown> };

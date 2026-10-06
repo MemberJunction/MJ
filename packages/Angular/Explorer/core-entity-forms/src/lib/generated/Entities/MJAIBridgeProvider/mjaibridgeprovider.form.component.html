@@ -150,9 +150,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Session Bridges','ProviderID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Agent Session Bridges')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Session Bridges','ProviderID')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentSessionBridges')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentSessionBridges', $event.totalRowCount)"
                 >
@@ -175,9 +175,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Bridge Provider Channels','ProviderID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Bridge Provider Channels')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Bridge Provider Channels','ProviderID')"
                 [AllowLoad]="IsSectionExpanded('mJAIBridgeProviderChannels')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIBridgeProviderChannels', $event.totalRowCount)"
                 >
@@ -200,11 +200,36 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Bridge Agent Identities','ProviderID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Bridge Agent Identities')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Bridge Agent Identities','ProviderID')"
                 [AllowLoad]="IsSectionExpanded('mJAIBridgeAgentIdentities')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIBridgeAgentIdentities', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Phone Numbers Section -->
+    <mj-collapsible-panel
+        SectionKey="mJPhoneNumbers"
+        SectionName="Phone Numbers"
+        Icon="fa fa-phone"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJPhoneNumbers')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Phone Numbers','ProviderID')"
+                [NewRecordValues]="NewRecordValues('MJ: Phone Numbers','ProviderID')"
+                [AllowLoad]="IsSectionExpanded('mJPhoneNumbers')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJPhoneNumbers', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

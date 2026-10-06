@@ -31,8 +31,16 @@ function resolveFetchPollBudgetMs(): number {
     return Number.isFinite(raw) && raw > 0 ? raw : FETCH_POLL_DEFAULT_BUDGET_MS;
 }
 
-/** Fetches a single row by ID via the real RunView pipeline (BypassCache = true DB state), asserting one match. */
-async function fetchById(entity: string, id: string, user: UserInfo): Promise<Row> {
+/**
+ * Fetches a single row by ID via the real RunView pipeline (BypassCache = true DB state), asserting
+ * one match.
+ *
+ * `until` additionally gates on the row's CONTENT. Several of these rows are written by TWO queued
+ * saves — an 'started' INSERT then an 'ended'/'finalize' UPDATE — so waiting only for existence
+ * returns a half-written row whose finalize columns are still NULL. Pass a predicate to keep polling
+ * until the finalize leg has landed.
+ */
+async function fetchById(entity: string, id: string, user: UserInfo, until?: { Predicate: (row: Row) => boolean; Description: string }): Promise<Row> {
     // Bounded poll: the rows this verifies (Action Execution Logs, child AI Prompt Runs) are
     // written by the agent loop's FIRE-AND-FORGET save queue, which can land AFTER the run
     // handle returns — especially under the fast server-in-process transport. A single-shot read
@@ -42,11 +50,16 @@ async function fetchById(entity: string, id: string, user: UserInfo): Promise<Ro
     // budget when it isn't a multiple of the interval (e.g. 700ms → 1 attempt → 500ms) — report
     // the real bound, not the configured one.
     const budgetMs = attempts * FETCH_POLL_INTERVAL_MS;
+    let lastSeen: Row | null = null;
     for (let attempt = 0; attempt < attempts; attempt++) {
         const result = await new RunView().RunView({ EntityName: entity, ExtraFilter: `ID='${id}'`, ResultType: 'simple', BypassCache: true }, user);
         Assert(result.Success, `RunView('${entity}') failed: ${result.ErrorMessage}`);
         if (result.Results.length === 1) {
-            return result.Results[0] as Row;
+            const row = result.Results[0] as Row;
+            if (!until || until.Predicate(row)) {
+                return row;
+            }
+            lastSeen = row;
         }
         if (result.Results.length > 1) {
             Assert(false, `${entity} ${id}: expected 1 row, got ${result.Results.length}`);
@@ -56,7 +69,8 @@ async function fetchById(entity: string, id: string, user: UserInfo): Promise<Ro
     // NOT a claim of data loss: on a loaded box (MJAPI + runner + SQL Server co-hosted) the
     // fire-and-forget write commonly commits just after the window closes (verified in the v5.49.0
     // build: the rows landed, the poll simply closed first). State the bound and name the knob.
-    Assert(false, `${entity} ${id} not found within ${budgetMs}ms bounded poll — the fire-and-forget write may still be in flight on a loaded box; raise MJ_IT_FETCH_POLL_MS (and consider AGENT_LIVE_SETTLE_MS for the pre-poll settle)`);
+    const what = lastSeen ? `landed but did not ${until!.Description}` : 'not found';
+    Assert(false, `${entity} ${id} ${what} within ${budgetMs}ms bounded poll — the fire-and-forget write may still be in flight on a loaded box; raise MJ_IT_FETCH_POLL_MS (and consider AGENT_LIVE_SETTLE_MS for the pre-poll settle)`);
     throw new Error('unreachable');
 }
 
@@ -64,7 +78,7 @@ async function fetchById(entity: string, id: string, user: UserInfo): Promise<Ro
  * Verifies an `MJ: AI Prompt Runs` row finalized correctly: terminal Status, **CompletedAt set** (the
  * "stuck at Running" guard the save queue prevents), and on success a non-empty Result + recorded timing.
  */
-export async function verifyPromptRun(promptRunID: string, user: UserInfo): Promise<Row> {
+export async function VerifyPromptRun(promptRunID: string, user: UserInfo): Promise<Row> {
     const row = await fetchById('MJ: AI Prompt Runs', promptRunID, user);
     Assert(TERMINAL.has(String(row.Status)), `Prompt run ${promptRunID}: non-terminal Status '${row.Status}' (stuck at Running?)`);
     Assert(row.CompletedAt != null, `Prompt run ${promptRunID}: CompletedAt is null while Status='${row.Status}' (finalize save lost)`);
@@ -75,12 +89,29 @@ export async function verifyPromptRun(promptRunID: string, user: UserInfo): Prom
     return row;
 }
 
+/** @deprecated Use {@link VerifyPromptRun}. */
+export async function verifyPromptRun(promptRunID: string, user: UserInfo): Promise<Row> {
+    return VerifyPromptRun(promptRunID, user);
+}
+
 /** Verifies an `MJ: Action Execution Logs` row finalized: **EndedAt set** + a ResultCode recorded. */
-export async function verifyActionLog(logID: string, user: UserInfo): Promise<Row> {
-    const row = await fetchById('MJ: Action Execution Logs', logID, user);
+export async function VerifyActionLog(logID: string, user: UserInfo): Promise<Row> {
+    // The log is written by TWO queued saves: a 'started' INSERT (EndedAt NULL) then an 'ended'
+    // UPDATE. Polling on existence alone returns the started row and asserts on a write that is
+    // still in flight — so gate the poll on EndedAt, and let the assertion below speak only to a
+    // genuinely lost finalize.
+    const row = await fetchById('MJ: Action Execution Logs', logID, user, {
+        Predicate: r => r.EndedAt != null,
+        Description: 'finalize (EndedAt still null)',
+    });
     Assert(row.EndedAt != null, `Action log ${logID}: EndedAt is null (stuck 'Running' — the action-log finalize bug class)`);
     Assert(row.ResultCode != null && String(row.ResultCode).length > 0, `Action log ${logID}: no ResultCode recorded`);
     return row;
+}
+
+/** @deprecated Use {@link VerifyActionLog}. */
+export async function verifyActionLog(logID: string, user: UserInfo): Promise<Row> {
+    return VerifyActionLog(logID, user);
 }
 
 export interface AgentRunVerification {
@@ -97,7 +128,7 @@ export interface AgentRunVerification {
  * TargetLogID — Prompt steps → AI Prompt Runs, Actions/Tool steps → Action Execution Logs, Sub-Agent steps
  * → child AI Agent Runs (recursively). `expectSuccess` asserts the run reached 'Completed'.
  */
-export async function verifyAgentRun(agentRunID: string, user: UserInfo, expectSuccess = true, opts: { skipActionLogs?: boolean } = {}): Promise<AgentRunVerification> {
+export async function VerifyAgentRun(agentRunID: string, user: UserInfo, expectSuccess = true, opts: { skipActionLogs?: boolean } = {}): Promise<AgentRunVerification> {
     const run = await fetchById('MJ: AI Agent Runs', agentRunID, user);
     const status = String(run.Status);
     // The actual "stuck at Running" guard: a finalized run is anything except still-Running.
@@ -134,20 +165,25 @@ export async function verifyAgentRun(agentRunID: string, user: UserInfo, expectS
             continue;
         }
         if (step.StepType === 'Prompt') {
-            await verifyPromptRun(target, user);
+            await VerifyPromptRun(target, user);
             promptRunsVerified++;
         } else if (step.StepType === 'Actions' || step.StepType === 'Tool') {
             // Action Execution Logs are written by the fire-and-forget queue and can land
             // arbitrarily late relative to a run handle returning (esp. server-in-process).
             // Callers that only care about run/step terminality pass skipActionLogs.
             if (opts.skipActionLogs) { continue; }
-            await verifyActionLog(target, user);
+            await VerifyActionLog(target, user);
             actionLogsVerified++;
         } else if (step.StepType === 'Sub-Agent') {
-            await verifyAgentRun(target, user, false); // child success is the child's own concern
+            await VerifyAgentRun(target, user, false); // child success is the child's own concern
             subAgentRunsVerified++;
         }
     }
 
     return { run, stepCount: steps.length, promptRunsVerified, actionLogsVerified, subAgentRunsVerified };
+}
+
+/** @deprecated Use {@link VerifyAgentRun}. */
+export async function verifyAgentRun(agentRunID: string, user: UserInfo, expectSuccess = true, opts: { skipActionLogs?: boolean } = {}): Promise<AgentRunVerification> {
+    return VerifyAgentRun(agentRunID, user, expectSuccess, opts);
 }

@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MJ Explorer — Login Redesigns</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100..900;1,100..900&display=swap" />
+<link rel="stylesheet" href="base.css" />
+<style>
+  body { background: var(--mj-bg-page); }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: var(--mj-space-16) var(--mj-space-8) var(--mj-space-20); }
+  .masthead { display: flex; align-items: center; gap: var(--mj-space-4); margin-bottom: var(--mj-space-2); }
+  .masthead img { height: 30px; width: auto; }
+  [data-theme="dark"] .masthead img { filter: brightness(0) invert(1); }
+  .masthead .tag { font-size: var(--mj-text-xs); font-weight: var(--mj-font-bold); letter-spacing: var(--mj-tracking-wide); text-transform: uppercase; color: var(--mj-brand-primary);
+    background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent); padding: var(--mj-space-1) var(--mj-space-2-5); border-radius: var(--mj-radius-full); }
+  h1 { font-size: var(--mj-text-4xl); font-weight: var(--mj-font-bold); letter-spacing: -.4px; margin: var(--mj-space-4) 0 var(--mj-space-2); }
+  .sub { font-size: var(--mj-text-base); color: var(--mj-text-secondary); margin: 0 0 var(--mj-space-11); max-width: 62ch; line-height: var(--mj-leading-relaxed); }
+
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--mj-space-7); }
+  @media (max-width: 1000px) { .grid { grid-template-columns: 1fr; max-width: 520px; margin: 0 auto; } }
+
+  .card { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: var(--mj-radius-lg); overflow: hidden;
+    display: flex; flex-direction: column; transition: box-shadow var(--mj-transition-base), transform var(--mj-transition-base); }
+  .card:hover { box-shadow: var(--mj-shadow-2xl); transform: translateY(-3px); }
+
+  .preview { position: relative; aspect-ratio: 16 / 10; overflow: hidden; background: var(--mj-bg-surface-sunken); border-bottom: 1px solid var(--mj-border-default); }
+  .preview iframe { position: absolute; top: 0; left: 0; width: 1280px; height: 800px; border: 0; transform-origin: top left; pointer-events: none; }
+  .preview a.hit { position: absolute; inset: 0; z-index: 3; }
+  .badge { position: absolute; top: var(--mj-space-3); left: var(--mj-space-3); z-index: 4; width: 30px; height: 30px; border-radius: var(--mj-radius-md); display: grid; place-items: center;
+    background: var(--mj-brand-primary); color: var(--mj-brand-on-primary); font-weight: var(--mj-font-bold); font-size: var(--mj-text-base); box-shadow: var(--mj-shadow-md); }
+
+  .meta { padding: var(--mj-space-5) var(--mj-space-6) var(--mj-space-6); display: flex; flex-direction: column; gap: var(--mj-space-2); flex: 1; }
+  .meta h3 { font-size: var(--mj-text-lg); font-weight: var(--mj-font-bold); margin: 0; }
+  .meta p { font-size: var(--mj-text-sm); color: var(--mj-text-secondary); line-height: var(--mj-leading-normal); margin: 0; flex: 1; }
+  .open { margin-top: var(--mj-space-1); display: inline-flex; align-items: center; gap: var(--mj-space-2); font-size: var(--mj-text-sm); font-weight: var(--mj-font-bold); color: var(--mj-brand-primary); text-decoration: none; }
+  .open:hover { text-decoration: underline; }
+  .note { margin-top: var(--mj-space-12); font-size: var(--mj-text-sm); color: var(--mj-text-muted); line-height: var(--mj-leading-relaxed); text-align: center; }
+  .note code { font-family: ui-monospace, "SF Mono", Menlo, monospace; background: var(--mj-bg-surface-sunken); padding: 1px var(--mj-space-1); border-radius: var(--mj-radius-sm); }
+</style>
+</head>
+<body>
+  <div class="controls">
+    <button class="mj-btn" aria-pressed="false" aria-label="Switch to dark mode"
+      onclick="(function(b){const d=document.documentElement.dataset.theme==='dark';document.documentElement.dataset.theme=d?'light':'dark';b.setAttribute('aria-pressed',String(!d));})(this)">
+      <i style="font-family:sans-serif">◐</i> Theme
+    </button>
+  </div>
+
+  <div class="wrap">
+    <div class="masthead">
+      <img src="assets/MJ_logo.svg" alt="MemberJunction" />
+      <span class="tag">Login · concepts</span>
+    </div>
+    <h1>Login screen redesigns</h1>
+    <p class="sub">Three directions for the pluggable-auth login, all built on the MemberJunction token system (Montserrat, brand blue/navy, real logos). Same provider picker in every one — Microsoft set as the default. Click any preview to open it full-screen; each has a theme toggle and a 1-vs-2+ provider toggle.</p>
+
+    <div class="grid">
+      <div class="card">
+        <div class="preview">
+          <span class="badge">A</span>
+          <iframe src="Login A - Centered Focus.html" title="Login A preview" scrolling="no" tabindex="-1"></iframe>
+          <a class="hit" href="Login A - Centered Focus.html" aria-label="Open Login A — Centered Focus"></a>
+        </div>
+        <div class="meta">
+          <h3>A · Centered Focus</h3>
+          <p>A single calm card centered on a lightly tinted page with a faint brand-mark watermark. Symmetric and product-forward — the most conservative option.</p>
+          <a class="open" href="Login A - Centered Focus.html">Open full screen →</a>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="preview">
+          <span class="badge">B</span>
+          <iframe src="Login B - Immersive Brand.html" title="Login B preview" scrolling="no" tabindex="-1"></iframe>
+          <a class="hit" href="Login B - Immersive Brand.html" aria-label="Open Login B — Immersive Brand"></a>
+        </div>
+        <div class="meta">
+          <h3>B · Immersive Brand</h3>
+          <p>A full navy brand stage with an oversized mark, wordmark and tagline; the form sits on an elevated card. Premium and confident.</p>
+          <a class="open" href="Login B - Immersive Brand.html">Open full screen →</a>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="preview">
+          <span class="badge">C</span>
+          <iframe src="Login C - Editorial Split.html" title="Login C preview" scrolling="no" tabindex="-1"></iframe>
+          <a class="hit" href="Login C - Editorial Split.html" aria-label="Open Login C — Editorial Split"></a>
+        </div>
+        <div class="meta">
+          <h3>C · Editorial Split</h3>
+          <p>A refined take on today's two-pane layout — the animated waves become a solid navy story panel with a capability list, next to a quiet, generous form.</p>
+          <a class="open" href="Login C - Editorial Split.html">Open full screen →</a>
+        </div>
+      </div>
+    </div>
+
+    <p class="note">Every screen reuses the same shared components in <code>base.css</code> — swapping a direction only changes layout, not the provider rows, tokens, or logic.</p>
+  </div>
+
+  <script>
+    // Scale each preview iframe (1280×800 canvas) to fit its card width.
+    function fit() {
+      document.querySelectorAll('.preview').forEach(function (p) {
+        var f = p.querySelector('iframe');
+        var s = p.clientWidth / 1280;
+        f.style.transform = 'scale(' + s + ')';
+        f.style.height = (p.clientHeight / s) + 'px';
+      });
+    }
+    window.addEventListener('resize', fit);
+    window.addEventListener('load', fit);
+    fit();
+  </script>
+</body>
+</html>

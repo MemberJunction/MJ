@@ -1,0 +1,49 @@
+<div class="vars" role="tree" aria-label="Variables">
+  @if (Scopes.length === 0) {
+    <div class="vars-empty">Select a step to inspect its input and output.</div>
+  }
+  @for (scope of Scopes; track scope.Name) {
+    <div class="vars-scope">
+      <button type="button" class="vars-scope-head" (click)="Toggle(scope.Name)"
+              [attr.aria-expanded]="IsExpanded(scope.Name)">
+        <i class="fa-solid" [class.fa-chevron-down]="IsExpanded(scope.Name)"
+           [class.fa-chevron-right]="!IsExpanded(scope.Name)" aria-hidden="true"></i>
+        {{ scope.Name }}
+      </button>
+      @if (IsExpanded(scope.Name)) {
+        <ul class="vars-list">
+          @for (variable of scope.Variables; track variable.Name) {
+            <ng-container
+              *ngTemplateOutlet="row; context: { $implicit: variable, path: Path(scope.Name, variable.Name), depth: 0 }">
+            </ng-container>
+          }
+        </ul>
+      }
+    </div>
+  }
+</div>
+
+<ng-template #row let-variable let-path="path" let-depth="depth">
+  <li class="vars-row" [style.--vars-depth]="depth" role="treeitem"
+      [attr.aria-expanded]="HasChildren(variable) ? IsExpanded(path) : null">
+    <button type="button" class="vars-name" [disabled]="!HasChildren(variable)" (click)="Toggle(path)">
+      @if (HasChildren(variable)) {
+        <i class="fa-solid" [class.fa-chevron-down]="IsExpanded(path)"
+           [class.fa-chevron-right]="!IsExpanded(path)" aria-hidden="true"></i>
+      } @else {
+        <span class="vars-leaf" aria-hidden="true"></span>
+      }
+      <span>{{ variable.Name }}</span>
+    </button>
+    <span class="vars-preview" [attr.data-kind]="variable.Kind">{{ variable.Preview }}</span>
+  </li>
+  @if (HasChildren(variable) && IsExpanded(path)) {
+    <ul class="vars-list">
+      @for (child of variable.Children; track child.Name) {
+        <ng-container
+          *ngTemplateOutlet="row; context: { $implicit: child, path: Path('', child.Name, path), depth: depth + 1 }">
+        </ng-container>
+      }
+    </ul>
+  }
+</ng-template>

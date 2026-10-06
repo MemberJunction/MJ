@@ -147,6 +147,16 @@ export class RunViewParams {
      */
     EntityName?: string;
     /**
+     * optional - choose the live source-of-truth vs the materialized snapshot, for entities that have a
+     * base-view materialization (an `MJ: Materialized Results` row with `SourceType='EntityBaseView'`).
+     * Defaults to `'Live'`. When `'Materialized'`, the read is routed to the materialized wrapper view
+     * (`materialized_vw<Name>`) instead of the entity's live base view — RLS, paging, and field selection
+     * apply identically because it's the same entity/shape. Choosing the snapshot is an explicit caller
+     * decision (never silent). No effect on entities that have no base-view materialization (the wrapper
+     * view won't exist). The enum (vs. a bare boolean) leaves room for future modes without a breaking change.
+     */
+    DataSource?: 'Live' | 'Materialized';
+    /**
      * An optional SQL WHERE clause that you can add to the existing filters on a stored view. For dynamic views, you can either
      * run a view without a filter (if the entity definition allows it with AllowAllRowsAPI=1) or filter with any valid SQL WHERE clause.
      *
@@ -359,7 +369,7 @@ export class RunViewParams {
      *
      * @internal This property is for framework internal use only.
      */
-    _fromEngine?: boolean;
+    _fromEngine?: boolean;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * When set to true, the RunView will first check the LocalCacheManager for cached results.
@@ -385,6 +395,31 @@ export class RunViewParams {
      * @default false
      */
     BypassCache?: boolean;
+
+    /**
+     * When true, binary fields (SQL Server `binary` / `varbinary` / `image`, PostgreSQL `bytea`)
+     * are included in the results. Their values are base64 strings, the same representation a
+     * `BaseEntity` holds; convert with `Base64ToBytes` / `Base64ToFloat32Vector` from
+     * `@memberjunction/global`.
+     *
+     * Binary columns are left out by default on **every** provider, server-side database
+     * providers included: the provider emits an explicit column list instead of `SELECT *`, so the
+     * values are never read from the database, let alone sent over the wire. They are usually
+     * large and most lists, grids and lookups never need them. A `simple` row then has no key
+     * for the column, and an `entity_object` row marks the field `NotLoaded`, which a later
+     * `Save()` leaves out so the stored value is never wiped.
+     *
+     * To get them, set this flag, or name the binary field in {@link Fields} — the provider sets
+     * the flag for you in that case. A single-record `BaseEntity.Load()` always includes them. An
+     * engine that caches the entity opts in through its config's `IncludeBinaryFields`
+     * (`true`, or `'DatabaseProviderOnly'` to load them on the server but not in the browser).
+     *
+     * The flag is part of the result-cache fingerprint, so a request with it never shares a slot
+     * with one without. See `guides/BINARY_FIELDS_GUIDE.md`.
+     *
+     * @default false
+     */
+    IncludeBinaryFields?: boolean;
 
     /**
      * Optional TTL (time-to-live) in milliseconds for cached results when CacheLocal is true.
@@ -497,6 +532,13 @@ export class RunViewParams {
         if (a.ResultType !== b.ResultType) return false;
         if (a.CacheLocal !== b.CacheLocal) return false;
         if (a.CacheLocalTTL !== b.CacheLocalTTL) return false;
+        // Including binary fields changes the columns returned, so a toggle must trigger a reload.
+        // undefined and false mean the same thing and must not cause a spurious one.
+        if ((a.IncludeBinaryFields === true) !== (b.IncludeBinaryFields === true)) return false;
+        // A Live↔Materialized DataSource toggle changes the result set and MUST trigger a reload. Compared via
+        // IsMaterializedDataSource so undefined/'Live' are treated as equal (no spurious reload) while a switch to
+        // (or from) 'Materialized' is not — matching the read-routing decision everywhere else.
+        if (IsMaterializedDataSource(a.DataSource) !== IsMaterializedDataSource(b.DataSource)) return false;
 
         // Compare ViewEntity by reference (deep comparison would be expensive)
         if (a.ViewEntity !== b.ViewEntity) return false;
@@ -568,6 +610,22 @@ export class RunViewParams {
             && a.sqlserver === b.sqlserver
             && a.postgresql === b.postgresql;
     }
+}
+
+/**
+ * Canonical test for whether a `RunViewParams.DataSource` value requests the MATERIALIZED snapshot.
+ *
+ * `DataSource` is typed `'Live' | 'Materialized'` here, but it crosses a GraphQL `String` boundary
+ * (RunViewResolver declares it as an unconstrained `@Field(() => String)`), so a cross-version or non-MJ
+ * client can send `'materialized'`, `'MATERIALIZED'`, or `'Materialized '`. This trims + lowercases before
+ * comparing, so every such variant is recognized as materialized; anything else (including a typo) means a
+ * live read — the safe default. Use this at EVERY DataSource decision point (read routing in
+ * GetEffectiveBaseView, the cache-eligibility gate in runViewCacheEligible, and the cache fingerprint in
+ * LocalCacheManager) so a mis-cased request can never be routed to the snapshot by one site while being
+ * cached as Live by another (the silent-stale hazard that separate `=== 'Materialized'` checks allow).
+ */
+export function IsMaterializedDataSource(dataSource: string | null | undefined): boolean {
+    return typeof dataSource === 'string' && dataSource.trim().toLowerCase() === 'materialized';
 }
 
 /**

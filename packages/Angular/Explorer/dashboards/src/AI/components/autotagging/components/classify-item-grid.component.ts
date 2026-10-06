@@ -32,7 +32,7 @@ import {
     RowClickedEvent,
 } from 'ag-grid-community';
 import { ClassifyItemGridRow } from '../shared/classify.types';
-import { deriveDisplayName, formatDate } from '../shared/classify.format';
+import { DeriveDisplayName, FormatDate } from '../shared/classify.format';
 
 // Register AG Grid community modules once (idempotent across grids in the bundle).
 ModuleRegistry.registerModules([AllCommunityModule]);
@@ -256,12 +256,12 @@ export class ClassifyItemGridComponent extends BaseAngularComponent {
         const updatedAt = (r['__mj_UpdatedAt'] as Date | string | null) ?? null;
         return {
             ID: id,
-            DisplayName: deriveDisplayName({ Name: r['Name'] as string | null, Description: r['Description'] as string | null }),
+            DisplayName: DeriveDisplayName({ Name: r['Name'] as string | null, Description: r['Description'] as string | null }),
             SourceName: (r['ContentSource'] as string) ?? 'Unknown',
             TagCount: tagCounts.get(id) ?? 0,
             EmbeddingStatus: (r['EmbeddingStatus'] as string) ?? '',
             TaggingStatus: (r['TaggingStatus'] as string) ?? '',
-            UpdatedAt: updatedAt ? formatDate(updatedAt) : '—',
+            UpdatedAt: updatedAt ? FormatDate(updatedAt) : '—',
             UpdatedAtRaw: updatedAt ? new Date(updatedAt).getTime() : 0,
         };
     }

@@ -18,19 +18,33 @@ import {
     IMetadataProvider,
     RunQuerySQLFilterManager,
     RestoreContext,
+    CloneContext,
+    RecordChangeSource,
     RecordChangePayload,
+    EntityDeleteOptions,
 } from '@memberjunction/core';
 
 
 import { GenericDatabaseProvider, SaveCoercedValue, SaveCallBinding, SaveSQLFragment } from '@memberjunction/generic-database-provider';
 import type { IColocatedVectorHost } from '@memberjunction/ai-vectordb';
-import { PostgreSQLDialect } from '@memberjunction/sql-dialect';
+import { BytesToBase64, EscapeSQLString, IsByteArray, TryBase64ToBytes } from '@memberjunction/global';
+import { PostgreSQLDialect, AutoQuotePostgreSQLIdentifiers } from '@memberjunction/sql-dialect';
 import { PGConnectionManager } from './pgConnectionManager.js';
 import { PGQueryParameterProcessor } from './queryParameterProcessor.js';
 import { PostgreSQLProviderConfigData } from './types.js';
 import { PostgreSQLTransactionGroup } from './PostgreSQLTransactionGroup.js';
 
 const pgDialect = new PostgreSQLDialect();
+
+/**
+ * Escape every regex metacharacter in `literal` so it can be interpolated into a
+ * `RegExp` and match itself. PostgreSQL identifiers may legally contain `$`, `.`
+ * and parentheses; injecting one raw silently changes the pattern's meaning
+ * (a `$` becomes an end-anchor and the pattern then matches nothing).
+ */
+function escapeRegExp(literal: string): string {
+    return literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
 /**
  * Soft ceiling on PostgreSQL CRUD sproc parameter counts. PG's hard
@@ -60,19 +74,21 @@ export const POSTGRESQL_PROCEDURE_PARAM_LIMIT = 90;
  * - Boolean columns use true/false instead of 1/0
  * - Identifier quoting uses "double quotes" instead of [brackets]
  */
+/**
+ * The `ChangeContext` column and its `$n` placeholder for a Record Change insert, or nothing when
+ * there is no context. Only clones set it, so every other tracked write keeps working on a database
+ * whose RecordChange table doesn't have the column yet (the PostgreSQL migration ships at release).
+ */
+function changeContextSQL(changeContext: string | null | undefined, placeholder: number): { column: string; value: string; parameters: string[] } {
+    if (!changeContext) return { column: '', value: '', parameters: [] };
+    return { column: ', "ChangeContext"', value: `, $${placeholder}::text`, parameters: [changeContext] };
+}
+
 export class PostgreSQLDataProvider extends GenericDatabaseProvider implements IColocatedVectorHost {
     private _connectionManager: PGConnectionManager = new PGConnectionManager();
     private _configData: PostgreSQLProviderConfigData | null = null;
     private _schemaName: string = '__mj';
     private _transaction: pg.PoolClient | null = null;
-
-    // Nested-transaction tracking, mirrors SQLServerDataProvider's pattern.
-    // PG implements nesting via SAVEPOINT / RELEASE SAVEPOINT / ROLLBACK TO
-    // SAVEPOINT, so depth==1 maps to a real BEGIN/COMMIT/ROLLBACK and depth>1
-    // maps to a savepoint operation on the same client connection.
-    private _transactionDepth: number = 0;
-    private _savepointStack: string[] = [];
-    private _savepointCounter: number = 0;
 
     // ─── Platform Identity ───────────────────────────────────────────
 
@@ -135,7 +151,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
             .map(child => {
                 const schema = child.SchemaName || '__mj';
                 const sourceRef = pgDialect.QuoteSchema(schema, child.BaseView);
-                const pkRef = pgDialect.QuoteIdentifier(child.PrimaryKeys[0].Name);
+                const pkRef = pgDialect.QuoteIdentifier(child.FirstPrimaryKey.Name); // first-pk-ok: IS-A child shares its parent's single-column key by design
                 const nameLit = pgDialect.QuoteStringLiteral(child.Name);
                 return `SELECT ${nameLit} AS ${aliasName} FROM ${sourceRef} WHERE ${pkRef} = ${pkValueLit}`;
             });
@@ -150,7 +166,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
             const relatedEntityInfo = this.Entities.find(e => e.Name.trim().toLowerCase() === dep.RelatedEntityName?.trim().toLowerCase());
             if (!entityInfo || !relatedEntityInfo) continue;
 
-            const quotes = entityInfo.FirstPrimaryKey.NeedsQuotes ? "'" : '';
+            const quotes = entityInfo.FirstPrimaryKey.NeedsQuotes ? "'" : ''; // first-pk-ok: a foreign key targets a single column; quoting follows that FK target's type
             const pkParts: string[] = [];
             for (const pk of entityInfo.PrimaryKeys) {
                 pkParts.push("'" + pk.Name + "' || '|' || CAST(" + pgDialect.QuoteIdentifier(pk.Name) + " AS TEXT)");
@@ -162,7 +178,9 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
                 + "'" + dep.EntityName + '\' AS "EntityName", '
                 + "'" + dep.RelatedEntityName + '\' AS "RelatedEntityName", '
                 + primaryKeySelectString + ' AS "PrimaryKeyValue", '
-                + "'" + dep.FieldName + '\' AS "FieldName" '
+                + "'" + dep.FieldName + '\' AS "FieldName", '
+                + 'false AS "IsSoftLink", '
+                + 'NULL AS "EntityIDFieldName" '
                 + 'FROM ' + pgDialect.QuoteSchema(relatedEntityInfo.SchemaName, relatedEntityInfo.BaseView) + ' '
                 + 'WHERE ' + pgDialect.QuoteIdentifier(dep.FieldName) + ' = ' + quotes + compositeKey.GetValueByIndex(0) + quotes;
         }
@@ -170,9 +188,18 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
     }
 
     protected override BuildSoftLinkDependencySQL(entityName: string, compositeKey: CompositeKey): string {
+        // The entity we are finding dependents OF is `entityName` - the target. Every WHERE clause below
+        // filters on THAT entity's ID and THAT record's key; `entity` in the loop is the *holder* of the
+        // link, which is a different thing entirely.
+        const targetEntity = this.EntityByName(entityName);
+        if (!targetEntity) {
+            throw new Error(`Entity ${entityName} not found in metadata`);
+        }
+        // The canonical stored encoding of the target record's key - `ID|<guid>` (see CompositeKey.ToRecordID).
+        const targetRecordID = compositeKey.ToRecordID().replace(/'/g, "''");
+
         let sSQL = '';
         this.Entities.forEach(entity => {
-            const quotes = entity.FirstPrimaryKey.NeedsQuotes ? "'" : '';
             const pkParts: string[] = [];
             for (const pk of entity.PrimaryKeys) {
                 pkParts.push("'" + pk.Name + "' || '|' || CAST(" + pgDialect.QuoteIdentifier(pk.Name) + " AS TEXT)");
@@ -181,14 +208,19 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
 
             entity.Fields.filter(f => f.EntityIDFieldName && f.EntityIDFieldName.length > 0).forEach(f => {
                 if (sSQL.length > 0) sSQL += ' UNION ALL ';
+                // Both literals are always quoted regardless of any primary key type: the discriminator
+                // column is a uuid FK to __mj.Entity and the payload column is text. Deriving quoting from
+                // the holder's primary key type emitted unquoted literals for an integer-keyed holder.
                 sSQL += 'SELECT '
                     + "'" + entityName + '\' AS "EntityName", '
                     + "'" + entity.Name + '\' AS "RelatedEntityName", '
                     + primaryKeySelectString + ' AS "PrimaryKeyValue", '
-                    + "'" + f.Name + '\' AS "FieldName" '
+                    + "'" + f.Name + '\' AS "FieldName", '
+                    + 'true AS "IsSoftLink", '
+                    + "'" + f.EntityIDFieldName + '\' AS "EntityIDFieldName" '
                     + 'FROM ' + pgDialect.QuoteSchema(entity.SchemaName, entity.BaseView) + ' '
-                    + 'WHERE ' + pgDialect.QuoteIdentifier(f.EntityIDFieldName) + ' = ' + quotes + entity.ID + quotes
-                    + ' AND ' + pgDialect.QuoteIdentifier(f.Name) + ' = ' + quotes + compositeKey.GetValueByIndex(0) + quotes;
+                    + 'WHERE ' + pgDialect.QuoteIdentifier(f.EntityIDFieldName) + " = '" + targetEntity.ID + "'"
+                    + ' AND ' + pgDialect.QuoteIdentifier(f.Name) + " = '" + targetRecordID + "'";
             });
         });
         return sSQL;
@@ -232,6 +264,28 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
 
     get MJCoreSchemaName(): string {
         return this._schemaName;
+    }
+
+    /**
+     * Share this instance's pool + metadata; own transaction stack.
+     * Used by mj sync push parallelism (MJAPI per-request pattern).
+     */
+    public override async CreateIndependentInstance(): Promise<PostgreSQLDataProvider> {
+        const child = new PostgreSQLDataProvider();
+        const parent = this._configData;
+        if (!parent) {
+            throw new Error('PostgreSQLDataProvider.CreateIndependentInstance: provider is not configured');
+        }
+        const cfg = new PostgreSQLProviderConfigData(
+            parent.ConnectionConfig,
+            this.MJCoreSchemaName,
+            0,
+            parent.IncludeSchemas,
+            parent.ExcludeSchemas,
+            false,
+        );
+        await child.ConfigWithSharedPool(cfg, this.DatabaseConnection);
+        return child;
     }
 
     protected get Metadata(): IMetadataProvider {
@@ -289,6 +343,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
             this._configData = configData;
             this._schemaName = configData.MJCoreSchemaName || '__mj';
             this._connectionManager.InitializeWithExistingPool(existingPool, configData.ConnectionConfig);
+            RunQuerySQLFilterManager.Instance.SetPlatform('postgresql');
             return await super.Config(configData);
         } catch (err) {
             LogError(`PostgreSQLDataProvider.ConfigWithSharedPool failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -321,8 +376,27 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         // identifiers to lowercase and the actual columns/views are mixed-case.
         // Tokenizer-based quoting matches what PostgreSQLCodeGenProvider already
         // does for codegen-time SQL — runtime gets the same treatment.
-        const quotedQuery = this.autoQuoteIdentifiers(query);
+        const quotedQuery = this.AutoQuoteIdentifiers(query);
         try {
+            if (options?.connectionSource) {
+                const bypass = options.connectionSource as {
+                    query: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[] }>;
+                };
+                const bypassResult = await bypass.query(quotedQuery, processedParams);
+                return bypassResult.rows as T[];
+            }
+            const timeoutMs = this.effectiveTimeoutMs(options?.timeoutMs);
+            const readOnly = !!options?.readOnlyTransaction && !this._transaction;
+            const timed = timeoutMs !== undefined && (!this._transaction || !!options?.ignoreAmbientTransaction);
+            if (readOnly || timed) {
+                return await this.executeOnOwnConnection<T>(quotedQuery, processedParams, readOnly, timeoutMs);
+            }
+            if (options?.ignoreAmbientTransaction) {
+                // A read that does not join the ambient transaction: straight to the pool (#4514).
+                const poolResult = await this._connectionManager.Pool.query(quotedQuery, processedParams);
+                return poolResult.rows as T[];
+            }
+            this.AssertAmbientTransactionUsable();
             const source = this._transaction ?? this._connectionManager.Pool;
             const result = await source.query(quotedQuery, processedParams);
             return result.rows as T[];
@@ -330,6 +404,68 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
             const desc = options?.description ? ` [${options.description}]` : '';
             LogError(`PostgreSQLDataProvider.ExecuteSQL failed${desc}: ${err instanceof Error ? err.message : String(err)}`);
             throw err;
+        }
+    }
+
+    /**
+     * The statement limit for a call that asked for `requested` milliseconds: never longer than
+     * the pool's own `statement_timeout`, so a caller can shorten the limit but not lift it.
+     * `undefined` when the call asked for none.
+     */
+    private effectiveTimeoutMs(requested: number | undefined): number | undefined {
+        if (!requested || requested <= 0) return undefined;
+        const poolLimit = this._connectionManager.Config?.StatementTimeoutMs;
+        const ms = Math.floor(requested);
+        return poolLimit && poolLimit > 0 ? Math.min(ms, poolLimit) : ms;
+    }
+
+    /**
+     * Returns a connection used by {@link executeOnOwnConnection} to the pool after releasing any
+     * advisory lock the statement took: a session-level advisory lock survives the transaction's
+     * end, so it would otherwise stay on the pooled connection. A connection that cannot be cleaned
+     * is discarded instead.
+     */
+    private async releaseOwnConnection(client: pg.PoolClient): Promise<void> {
+        try {
+            await client.query('SELECT pg_advisory_unlock_all()');
+            client.release();
+        } catch (err) {
+            client.release(err instanceof Error ? err : new Error(String(err)));
+        }
+    }
+
+    /**
+     * Runs one statement on its own pooled connection inside a transaction of its own.
+     *
+     * - `readOnly`: `BEGIN READ ONLY … ROLLBACK`. Writes fail, and the rollback undoes any session
+     *   setting the statement made, so the connection goes back to the pool unchanged.
+     * - `timeoutMs`: `SET LOCAL statement_timeout` for this statement only; PostgreSQL cancels it
+     *   when the limit passes. Without `readOnly` the transaction commits, so writes still land.
+     *
+     * Advisory locks the statement took are released before the connection goes back to the pool.
+     */
+    private async executeOnOwnConnection<T>(
+        sql: string,
+        params: unknown[] | undefined,
+        readOnly: boolean,
+        timeoutMs: number | undefined,
+    ): Promise<Array<T>> {
+        const client = await this._connectionManager.AcquireClient();
+        try {
+            await client.query(readOnly ? 'BEGIN READ ONLY' : 'BEGIN');
+            try {
+                if (timeoutMs !== undefined) {
+                    await client.query(`SET LOCAL statement_timeout = ${timeoutMs}`);
+                }
+                const result = await client.query(sql, params);
+                await client.query(readOnly ? 'ROLLBACK' : 'COMMIT');
+                return result.rows as T[];
+            } catch (err) {
+                await client.query('ROLLBACK').catch(() => undefined);
+                throw err;
+            }
+        } finally {
+            await this.releaseOwnConnection(client);
         }
     }
 
@@ -354,6 +490,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
      * auto-quoting — the vector provider emits its own correctly-quoted SQL.
      */
     public async RunColocatedSQL<T = Record<string, unknown>>(sql: string, params?: ReadonlyArray<unknown>): Promise<T[]> {
+        this.AssertAmbientTransactionUsable();
         const source = this._transaction ?? this._connectionManager.Pool;
         const result = await source.query(sql, params ? [...params] : undefined);
         return result.rows as T[];
@@ -365,245 +502,86 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         return this._transaction !== null;
     }
 
-    /**
-     * Current transaction nesting depth.
-     * 0 = no active transaction; 1 = outermost real BEGIN; 2+ = nested via SAVEPOINTs.
-     */
-    public get TransactionDepth(): number {
-        return this._transactionDepth;
+    protected override get HasPhysicalTransaction(): boolean {
+        return this._transaction !== null;
     }
 
-    /**
-     * Mutex serializing Begin/Commit/Rollback. Prior implementations had no
-     * locking around `_savepointCounter`, `_savepointStack`, and
-     * `_transactionDepth` — under concurrent callers (e.g. `mj sync push`
-     * processing 178 records with parallel BaseEntity.Save() calls), three
-     * BeginTransaction invocations would each `++this._savepointCounter` and
-     * `push` to the stack between their respective SAVEPOINT awaits, then
-     * subsequent CommitTransaction/RollbackTransaction would read a stack-top
-     * that didn't match what PG actually had on its savepoint list. The
-     * symptom was `savepoint "mj_sp_X" does not exist` mid-push, after the
-     * SECOND duplicate ROLLBACK TO same savepoint.
-     *
-     * The mutex turns the entire begin/commit/rollback operation into a
-     * critical section. The underlying PG client serializes its own queries,
-     * so we only need to protect the JS-side state mutations and the
-     * matching SAVEPOINT/RELEASE/ROLLBACK TO commands as a single
-     * indivisible unit.
-     */
-    private _txMutex: Promise<void> = Promise.resolve();
+    protected override SavepointName(n: number): string {
+        return `mj_sp_${n}`;
+    }
 
-    private async _withTxLock<T>(fn: () => Promise<T>): Promise<T> {
-        const previous = this._txMutex;
-        let release!: () => void;
-        this._txMutex = new Promise<void>((resolve) => { release = resolve; });
-        try {
-            await previous;
-            return await fn();
-        } finally {
-            release();
+    protected override async BeginPhysicalTransaction(): Promise<void> {
+        if (this._transaction) {
+            throw new Error('Transaction state corrupted: BeginPhysicalTransaction with an existing handle');
         }
-    }
-
-    /**
-     * BeginTransaction with nested-transaction support via SAVEPOINTs.
-     *
-     * - First call: AcquireClient + BEGIN.
-     * - Subsequent calls (within the same provider instance): emit a uniquely-named
-     *   SAVEPOINT on the same client. PG savepoints are arbitrary-depth, so
-     *   nesting from frameworks like TransactionGroups composes correctly.
-     *
-     * Mirrors SQLServerDataProvider's depth/savepoint-stack model so that any
-     * caller treating the provider polymorphically gets identical semantics
-     * across both backends.
-     */
-    async BeginTransaction(): Promise<void> {
-        return this._withTxLock(async () => this._beginTransactionLocked());
-    }
-
-    private async _beginTransactionLocked(): Promise<void> {
-        // Stage state mutations so the catch block can fully revert. Without
-        // the mutex protecting concurrent callers, this catch path was the
-        // ONLY guard against state drift, but it couldn't help when the race
-        // happened during the `await SAVEPOINT` itself (other parallel
-        // BeginTransactions would push their savepoints onto the same stack
-        // and bump the same counter between this one's push and SAVEPOINT
-        // command). The mutex now ensures Begin/Commit/Rollback are
-        // serialized; this catch handles the much narrower case of the
-        // SAVEPOINT command itself failing (e.g. PG transaction in aborted
-        // state from a prior per-record error).
-        let savepointName: string | null = null;
-        let pushedSavepoint = false;
-        let bumpedCounter = false;
-        let depthIncreased = false;
-        let acquiredClient = false;
-
-        this._transactionDepth++;
-        depthIncreased = true;
-
+        // Acquire and BEGIN on a LOCAL client, publishing only once the transaction
+        // is genuinely open. A client published before BEGIN succeeds silently runs
+        // statements OUTSIDE the transaction.
+        const client = await this._connectionManager.AcquireClient();
         try {
-            if (this._transactionDepth === 1) {
-                // Acquire and BEGIN on a LOCAL client, publishing to the shared `_transaction`
-                // field only once the transaction is genuinely open. `_transaction` is what every
-                // subsequent query on this provider uses, so a client published before BEGIN
-                // succeeds is a client that silently runs statements OUTSIDE the transaction.
-                // The SQL Server counterpart of this ordering caused a permanently-poisoned
-                // provider during the 6.1 release; see SQLServerDataProvider.BeginTransaction.
-                const client = await this._connectionManager.AcquireClient();
-                try {
-                    await client.query('BEGIN');
-                } catch (e) {
-                    // Release the client we just took — otherwise a failed BEGIN leaks it out of
-                    // the pool for the process's lifetime.
-                    try { client.release(); } catch { /* swallow — surfacing the primary error */ }
-                    throw e;
-                }
-                this._transaction = client;
-                acquiredClient = true;
-            } else {
-                if (!this._transaction) {
-                    // Defensive: depth got out of sync with client state. Reset and surface.
-                    throw new Error(`PostgreSQLDataProvider transaction state corrupted: depth=${this._transactionDepth} but no active client. Reset and rethrowing.`);
-                }
-                savepointName = `mj_sp_${++this._savepointCounter}`;
-                bumpedCounter = true;
-                this._savepointStack.push(savepointName);
-                pushedSavepoint = true;
-                // PG savepoint identifiers are unquoted; we only ever generate
-                // ASCII-only names so quoting isn't required.
-                await this._transaction.query(`SAVEPOINT ${savepointName}`);
-            }
+            await client.query('BEGIN');
         } catch (e) {
-            // Full rollback of staged state — leaving any of these set on
-            // failure causes the savepoint stack and PG's actual savepoint
-            // state to drift, which surfaces later as "savepoint X does not
-            // exist" during rollback.
-            if (pushedSavepoint) this._savepointStack.pop();
-            if (bumpedCounter) this._savepointCounter--;
-            if (depthIncreased) this._transactionDepth--;
-            // If we got as far as publishing the client but a later staged step failed, unpublish
-            // and release it: a non-null `_transaction` at depth 0 is a client every later query
-            // would use believing a transaction is open.
-            if (acquiredClient && this._transactionDepth === 0 && this._transaction) {
-                const client = this._transaction;
-                this._transaction = null;
-                try { await client.query('ROLLBACK'); } catch { /* swallow — surfacing primary error */ }
-                try { client.release(); } catch { /* swallow — surfacing primary error */ }
-            }
+            try { client.release(); } catch { /* swallow — surfacing the primary error */ }
             throw e;
         }
+        this._transaction = client;
     }
 
-    /**
-     * CommitTransaction with savepoint-aware semantics.
-     *
-     * - Outermost (depth was 1): real COMMIT and release the client.
-     * - Nested (depth > 1): RELEASE SAVEPOINT, drop from stack, decrement depth.
-     *   Releasing a savepoint discards it but does NOT commit anything yet —
-     *   the work it represents is folded into the enclosing transaction and
-     *   only persists when that enclosing transaction commits.
-     */
-    async CommitTransaction(): Promise<void> {
-        return this._withTxLock(async () => this._commitTransactionLocked());
-    }
-
-    private async _commitTransactionLocked(): Promise<void> {
+    protected override async CommitPhysicalTransaction(): Promise<void> {
         if (!this._transaction) {
             throw new Error('No active transaction to commit.');
         }
-        if (this._transactionDepth === 0) {
-            // Defensive: client present but depth says no transaction. Surface explicitly.
-            throw new Error('PostgreSQLDataProvider transaction depth mismatch — no transaction to commit.');
-        }
-        try {
-            if (this._transactionDepth === 1) {
-                try {
-                    await this._transaction.query('COMMIT');
-                } finally {
-                    this._transaction.release();
-                    this._transaction = null;
-                    this._transactionDepth = 0;
-                    this._savepointStack = [];
-                    this._savepointCounter = 0;
-                }
-            } else {
-                const savepointName = this._savepointStack[this._savepointStack.length - 1];
-                if (!savepointName) {
-                    throw new Error(`PostgreSQLDataProvider savepoint stack mismatch — expected savepoint at depth ${this._transactionDepth}.`);
-                }
-                await this._transaction.query(`RELEASE SAVEPOINT ${savepointName}`);
-                this._savepointStack.pop();
-                this._transactionDepth--;
-            }
-        } catch (e) {
-            // If COMMIT itself failed at depth 1 the connection is in a bad state.
-            // Force a rollback + release so we don't leak the client back into the pool
-            // mid-transaction (would block subsequent queries on that client).
-            if (this._transactionDepth === 1 && this._transaction) {
-                try { await this._transaction.query('ROLLBACK'); } catch { /* swallow — surfacing primary error */ }
-                this._transaction.release();
-                this._transaction = null;
-                this._transactionDepth = 0;
-                this._savepointStack = [];
-                this._savepointCounter = 0;
-            }
-            throw e;
-        }
+        const client = this._transaction;
+        // On COMMIT failure leave the client published so AbandonPhysicalTransaction can ROLLBACK then release.
+        await client.query('COMMIT');
+        this._transaction = null;
+        client.release();
     }
 
-    /**
-     * RollbackTransaction with savepoint-aware semantics.
-     *
-     * - Outermost (depth was 1): real ROLLBACK and release the client.
-     * - Nested (depth > 1): ROLLBACK TO SAVEPOINT (which keeps the savepoint
-     *   itself active but discards work done after it), then RELEASE SAVEPOINT
-     *   to drop it. Combining the two matches what callers usually mean by
-     *   "undo this nested operation entirely".
-     */
-    async RollbackTransaction(): Promise<void> {
-        return this._withTxLock(async () => this._rollbackTransactionLocked());
-    }
-
-    private async _rollbackTransactionLocked(): Promise<void> {
+    protected override async RollbackPhysicalTransaction(): Promise<void> {
         if (!this._transaction) {
             throw new Error('No active transaction to rollback.');
         }
-        if (this._transactionDepth === 0) {
-            throw new Error('PostgreSQLDataProvider transaction depth mismatch — no transaction to rollback.');
-        }
         try {
-            if (this._transactionDepth === 1) {
-                try {
-                    await this._transaction.query('ROLLBACK');
-                } finally {
-                    this._transaction.release();
-                    this._transaction = null;
-                    this._transactionDepth = 0;
-                    this._savepointStack = [];
-                    this._savepointCounter = 0;
-                }
-            } else {
-                const savepointName = this._savepointStack[this._savepointStack.length - 1];
-                if (!savepointName) {
-                    throw new Error(`PostgreSQLDataProvider savepoint stack mismatch — expected savepoint at depth ${this._transactionDepth}.`);
-                }
-                await this._transaction.query(`ROLLBACK TO SAVEPOINT ${savepointName}`);
-                await this._transaction.query(`RELEASE SAVEPOINT ${savepointName}`);
-                this._savepointStack.pop();
-                this._transactionDepth--;
-            }
-        } catch (e) {
-            // If ROLLBACK failed at depth 1, the client state is unknown.
-            // Force-release to avoid leaking a poisoned client back to the pool.
-            if (this._transactionDepth === 1 && this._transaction) {
-                this._transaction.release();
-                this._transaction = null;
-                this._transactionDepth = 0;
-                this._savepointStack = [];
-                this._savepointCounter = 0;
-            }
-            throw e;
+            await this._transaction.query('ROLLBACK');
+        } finally {
+            this._transaction.release();
+            this._transaction = null;
         }
+    }
+
+    protected override async AbandonPhysicalTransaction(): Promise<void> {
+        if (!this._transaction) {
+            return;
+        }
+        const client = this._transaction;
+        this._transaction = null;
+        let rollbackErr: unknown;
+        try { await client.query('ROLLBACK'); } catch (e) { rollbackErr = e; }
+        try {
+            if (rollbackErr) {
+                client.release(rollbackErr as Error);
+            } else {
+                client.release();
+            }
+        } catch { /* swallow — surfacing the primary error */ }
+    }
+
+    protected override async OnBeginFailedAtDepthZero(): Promise<void> {
+        if (!this._transaction) {
+            return;
+        }
+        const client = this._transaction;
+        this._transaction = null;
+        let rollbackErr: unknown;
+        try { await client.query('ROLLBACK'); } catch (e) { rollbackErr = e; }
+        try {
+            if (rollbackErr) {
+                client.release(rollbackErr as Error);
+            } else {
+                client.release();
+            }
+        } catch { /* swallow — surfacing the primary error */ }
     }
 
     async CreateTransactionGroup(): Promise<TransactionGroupBase> {
@@ -628,7 +606,9 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
      */
     protected override buildPerFieldSearchPredicate(field: EntityFieldInfo, escapedTerm: string, rawSafeTerm: string): string {
         if (field.UserSearchParamFormatAPI && field.UserSearchParamFormatAPI.length > 0) {
-            return field.UserSearchParamFormatAPI.replace('{0}', rawSafeTerm);
+            // Function replacement: the term is end-user input, so `$&`/`` $` ``/`$'`/`$$`
+            // in it must be data, not splice directives. See issue #3171.
+            return field.UserSearchParamFormatAPI.replace('{0}', () => rawSafeTerm);
         }
         if (!this.isTextSearchableType(field)) return '';
         const pred = (field.UserSearchPredicateAPI ?? 'Contains').trim();
@@ -659,7 +639,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         const quoted = this.quoteIdentifiersInSQL(clause, entityInfo);
         // Translate SQL Server date/time functions AFTER identifier quoting so the
         // injected PG idioms (`AT TIME ZONE`, `INTERVAL`) are not re-quoted.
-        const dialectFns = this.translateTSQLDateFunctions(quoted);
+        const dialectFns = this.TranslateTSQLDateFunctions(quoted);
         return this.coerceBooleanLiteralsInSQL(dialectFns, entityInfo);
     }
 
@@ -680,7 +660,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
      * Public so it can be unit-tested directly (same convention as
      * `autoQuoteIdentifiers`).
      */
-    public translateTSQLDateFunctions(sql: string): string {
+    public TranslateTSQLDateFunctions(sql: string): string {
         if (!sql || sql.length === 0) return sql;
         let out = sql;
         // Zero-arg "now" variants first, so a DATEADD's inner expression is
@@ -690,6 +670,11 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         out = out.replace(/\bGETDATE\s*\(\s*\)/gi, 'CURRENT_TIMESTAMP');
         out = this.translateDateAdd(out);
         return out;
+    }
+
+    /** @deprecated Use {@link TranslateTSQLDateFunctions}. */
+    public translateTSQLDateFunctions(sql: string): string {
+        return this.TranslateTSQLDateFunctions(sql);
     }
 
     /**
@@ -880,11 +865,11 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         if (this.UseJsonArgShape(entity.EntityInfo, isUpdate ? 'update' : 'create')) {
             const payload: Record<string, unknown> = {};
             for (const [field, value] of fieldValues) {
-                const processed = PGQueryParameterProcessor.ProcessParameterValue(value);
-                if (this.isBinaryField(field) && processed !== null && processed !== undefined) {
-                    payload[field.Name] = this.encodeBinaryToBase64(processed);
+                if (this.isBinaryField(field) && value !== null && value !== undefined) {
+                    // The JSON-arg sprocs decode with decode(p_data->>'Field', 'base64').
+                    payload[field.Name] = BytesToBase64(this.toBinaryBytes(field, value));
                 } else {
-                    payload[field.Name] = processed;
+                    payload[field.Name] = PGQueryParameterProcessor.ProcessParameterValue(value);
                 }
             }
             // UPDATE: orchestrator skips PK fields (see GenericDatabaseProvider.GenerateSaveSQL),
@@ -906,7 +891,10 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         const placeholders: string[] = [];
         let paramIndex = 0;
         for (const [field, value] of fieldValues) {
-            values.push(PGQueryParameterProcessor.ProcessParameterValue(value));
+            // A binary field's value is a base64 string; bound as text to a bytea parameter, PG
+            // would store the ASCII of the base64 itself. Bind the decoded bytes instead.
+            const isBinaryValue = this.isBinaryField(field) && value !== null && value !== undefined;
+            values.push(isBinaryValue ? this.toBinaryBytes(field, value) : PGQueryParameterProcessor.ProcessParameterValue(value));
             // Param name via the canonical builder (ParameterRef → `p_<lowercased CodeName>`,
             // no inner separator) so it EXACTLY matches the CRUD function's declared signature,
             // which is emitted by PostgreSQLCodeGenProvider using the same ParameterRef. Using
@@ -976,13 +964,14 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         const baseValues = saveSQL.parameters ?? [];
         const recordIDExpr = this.buildRecordIDFromCTE(entity.EntityInfo, 'save_result');
         const s = baseValues.length + 1;
+        const cc = changeContextSQL(payload.changeContext, s + 9);
         const fullSQL = `WITH save_result AS (
     ${saveSQL.sql}
 ),
 record_change AS (
     INSERT INTO ${this._schemaName}."RecordChange"
-        ("EntityID", "RecordID", "UserID", "Type", "Source", "ChangesJSON", "ChangesDescription", "FullRecordJSON", "Status", "RestoredFromID", "RestoreReason")
-    SELECT $${s}::uuid, ${recordIDExpr}, $${s + 1}::uuid, $${s + 2}::varchar, $${s + 3}::varchar, $${s + 4}::text, $${s + 5}::text, $${s + 6}::text, 'Complete', $${s + 7}::uuid, $${s + 8}::text
+        ("EntityID", "RecordID", "UserID", "Type", "Source", "ChangesJSON", "ChangesDescription", "FullRecordJSON", "Status", "RestoredFromID", "RestoreReason"${cc.column})
+    SELECT $${s}::uuid, ${recordIDExpr}, $${s + 1}::uuid, $${s + 2}::varchar, $${s + 3}::varchar, $${s + 4}::text, $${s + 5}::text, $${s + 6}::text, 'Complete', $${s + 7}::uuid, $${s + 8}::text${cc.value}
     FROM save_result
     RETURNING "ID"
 )
@@ -998,6 +987,7 @@ SELECT * FROM save_result`;
             payload.fullRecordJSON,
             payload.restoredFromID,
             payload.restoreReason,
+            ...cc.parameters,
         ];
         return { sql: fullSQL, parameters };
     }
@@ -1006,7 +996,7 @@ SELECT * FROM save_result`;
      * Generates PostgreSQL function-call SQL for Delete.
      * Returns parameterized SQL with $1, $2, ... placeholders.
      */
-    protected override GenerateDeleteSQL(entity: BaseEntity, user: UserInfo): DeleteSQLResult {
+    protected override GenerateDeleteSQL(entity: BaseEntity, user: UserInfo, options?: EntityDeleteOptions): DeleteSQLResult {
         const entityInfo = entity.EntityInfo;
         const fnName = this.getCRUDFunctionName('delete', entityInfo);
         const pkFields = entityInfo.PrimaryKeys;
@@ -1018,7 +1008,7 @@ SELECT * FROM save_result`;
         // Delete function lives in the entity's own schema, mirroring codegen output.
         const simpleSQL = `SELECT * FROM ${pgDialect.QuoteSchema(entityInfo.SchemaName, fnName)}(${paramPlaceholders})`;
 
-        if (this.ShouldTrackRecordChanges(entityInfo)) {
+        if (this.ShouldTrackRecordChanges(entityInfo) && options?.SkipRecordChanges !== true) {
             const oldData = entity.GetAll(false);
             const recordID = this.buildRecordIDFromEntity(entity);
             // Delete: newData is null so the payload renders Source/lineage from
@@ -1035,6 +1025,7 @@ SELECT * FROM save_result`;
             );
             if (payload) {
                 const s = paramValues.length + 1;
+                const cc = changeContextSQL(payload.changeContext, s + 7);
                 paramValues.push(
                     payload.entityID,
                     payload.recordID,
@@ -1043,14 +1034,15 @@ SELECT * FROM save_result`;
                     payload.fullRecordJSON,
                     payload.restoredFromID,
                     payload.restoreReason,
+                    ...cc.parameters,
                 );
                 const fullSQL = `WITH delete_result AS (
     ${simpleSQL}
 ),
 record_change AS (
     INSERT INTO ${this._schemaName}."RecordChange"
-        ("EntityID", "RecordID", "UserID", "Type", "Source", "ChangesJSON", "ChangesDescription", "FullRecordJSON", "Status", "RestoredFromID", "RestoreReason")
-    SELECT $${s}::uuid, $${s+1}::varchar, $${s+2}::uuid, 'Delete', $${s+3}::varchar, '', 'Record Deleted', $${s+4}::text, 'Complete', $${s+5}::uuid, $${s+6}::text
+        ("EntityID", "RecordID", "UserID", "Type", "Source", "ChangesJSON", "ChangesDescription", "FullRecordJSON", "Status", "RestoredFromID", "RestoreReason"${cc.column})
+    SELECT $${s}::uuid, $${s+1}::varchar, $${s+2}::uuid, 'Delete', $${s+3}::varchar, '', 'Record Deleted', $${s+4}::text, 'Complete', $${s+5}::uuid, $${s+6}::text${cc.value}
     FROM delete_result
     WHERE EXISTS (SELECT 1 FROM delete_result)
     RETURNING "ID"
@@ -1102,7 +1094,7 @@ SELECT * FROM delete_result`;
         // Single PK: accept either the PK-named column (current codegen) or `_result_id`
         // (legacy baseline sproc). A null value in either means the sproc reported zero
         // rows affected — record was already gone.
-        const pk = entity.PrimaryKeys[0];
+        const pk = entity.FirstPrimaryKey; // first-pk-ok: the PrimaryKeys.length > 1 branch above already returned; this is the single-key path
         const pkValue = deletedRecord[pk.Name];
         const legacyValue = deletedRecord['_result_id'];
         if (pkValue === pk.Value || legacyValue === pk.Value) {
@@ -1224,8 +1216,16 @@ SELECT * FROM delete_result`;
             // Negative lookahead: don't quote words followed by ( — those are function calls
             // (e.g., LENGTH(...), LEFT(...)), not column references. Without this, a field
             // named "Length" causes LENGTH() to be quoted as "Length"() which PG can't resolve.
-            const re = new RegExp(`\\b${fieldName}\\b(?!\\s*\\()`, 'gi');
-            token = token.replace(re, pgDialect.QuoteIdentifier(fieldName));
+            // `fieldName` is escaped before interpolation: PostgreSQL identifiers may
+            // legally contain regex metacharacters (`$`, `(`, `.`), and injecting one
+            // raw built a pattern that either matched nothing — a `$` became an
+            // end-anchor, so `a$$b` was never quoted at all — or matched the wrong
+            // text. Discovered alongside issue #3171.
+            const re = new RegExp(`\\b${escapeRegExp(fieldName)}\\b(?!\\s*\\()`, 'gi');
+            // Function replacement, for the same reason on the other side: a quoted
+            // identifier containing `$` would be expanded by a string replacement.
+            const quoted = pgDialect.QuoteIdentifier(fieldName);
+            token = token.replace(re, () => quoted);
         }
         return token;
     }
@@ -1311,16 +1311,27 @@ SELECT * FROM delete_result`;
     /** Field-type predicate for BYTEA / varbinary / image columns. Used by JSON-arg payload. */
     private isBinaryField(field: EntityFieldInfo): boolean {
         const t = (field.Type || '').toLowerCase().trim();
-        return t === 'bytea' || t.startsWith('varbinary') || t.startsWith('image');
+        // Same set as EntityFieldInfo.IsBinaryFieldType — a type both reads and binds as binary or neither.
+        return t === 'bytea' || t.startsWith('varbinary') || t.startsWith('binary') || t.startsWith('image');
     }
 
-    private encodeBinaryToBase64(value: unknown): string {
-        if (value instanceof Uint8Array) return Buffer.from(value).toString('base64');
-        if (Buffer.isBuffer(value)) return value.toString('base64');
-        if (typeof value === 'string') return value; // already encoded
-        // Fallback — coerce via Buffer.from; throws on incompatible types,
-        // surfacing the encoding failure at save time rather than silent corruption.
-        return Buffer.from(value as ArrayBufferLike).toString('base64');
+    /**
+     * Converts a binary field's save value to bytes for a `bytea` parameter.
+     *
+     * A binary field's value in a `BaseEntity` is a base64 string; server code may also hand over
+     * a byte array (e.g. a Buffer). Anything else, including a string that is not valid base64,
+     * throws, so a corrupt value fails the save instead of being stored as garbage.
+     *
+     * @param field - The binary field being written; named in the error message.
+     * @param value - Base64 string or byte array (non-null).
+     * @returns The bytes, as a Node Buffer so the pg driver binds them as `bytea`.
+     */
+    private toBinaryBytes(field: EntityFieldInfo, value: unknown): Buffer {
+        const bytes = IsByteArray(value) ? value : TryBase64ToBytes(typeof value === 'string' ? value : null);
+        if (!bytes) {
+            throw new Error(`Field "${field.Name}" is binary (${field.Type}); its value must be a base64 string, but it is not valid base64`);
+        }
+        return Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     }
 
     // resolveFieldValue moved to CoerceSaveFieldValue (above).
@@ -1351,6 +1362,7 @@ SELECT * FROM delete_result`;
         type: 'Create' | 'Update' | 'Delete',
         user: UserInfo,
         restoreContext?: RestoreContext | null,
+        cloneContext?: CloneContext | null,
     ): { sql: string; parameters?: unknown[] } | null {
         const payload = this.BuildRecordChangePayload(
             newData,
@@ -1361,12 +1373,14 @@ SELECT * FROM delete_result`;
             user,
             restoreContext,
             "'",
+            cloneContext,
         );
         if (!payload) return null;
 
+        const cc = changeContextSQL(payload.changeContext, 11);
         const sql = `INSERT INTO ${this._schemaName}."RecordChange"
-            ("EntityID", "RecordID", "UserID", "Type", "Source", "ChangesJSON", "ChangesDescription", "FullRecordJSON", "Status", "RestoredFromID", "RestoreReason")
-            VALUES ($1::uuid, $2::varchar, $3::uuid, $4::varchar, $5::varchar, $6::text, $7::text, $8::text, 'Complete', $9::uuid, $10::text)
+            ("EntityID", "RecordID", "UserID", "Type", "Source", "ChangesJSON", "ChangesDescription", "FullRecordJSON", "Status", "RestoredFromID", "RestoreReason"${cc.column})
+            VALUES ($1::uuid, $2::varchar, $3::uuid, $4::varchar, $5::varchar, $6::text, $7::text, $8::text, 'Complete', $9::uuid, $10::text${cc.value})
             RETURNING "ID"`;
 
         const parameters: unknown[] = [
@@ -1380,6 +1394,7 @@ SELECT * FROM delete_result`;
             payload.fullRecordJSON,
             payload.restoredFromID,
             payload.restoreReason,
+            ...cc.parameters,
         ];
 
         return { sql, parameters };
@@ -1396,294 +1411,65 @@ SELECT * FROM delete_result`;
         safeChangesDesc: string,
         safePKValue: string,
         safeUserId: string,
+        source?: RecordChangeSource,
+        changeContext?: string | null,
     ): string {
         const schema = entityInfo.SchemaName || '__mj';
         const view = entityInfo.BaseView;
-        const pkName = entityInfo.PrimaryKeys[0]?.Name ?? 'ID';
+        const pkName = entityInfo.FirstPrimaryKey.Name; // first-pk-ok: IS-A sibling shares the parent's single-column key; safePKValue is that one value
         const safeEntityName = entityInfo.Name.replace(/'/g, "''");
 
         const recordID = entityInfo.PrimaryKeys
             .map(pk => `${pk.CodeName}|${safePKValue}`)
             .join('||');
 
+        const sourceVal = source ?? 'Internal';
+        // Named only when set, like the other sites: see changeContextSQL.
+        const changeContextColumn = changeContext ? ', "ChangeContext"' : '';
+        const changeContextValue = changeContext ? `,\n    '${EscapeSQLString(changeContext)}'::text` : '';
+
         return `
 INSERT INTO ${this._schemaName}."RecordChange"
-    ("EntityID", "RecordID", "UserID", "Type", "ChangesJSON", "ChangesDescription", "FullRecordJSON", "Status")
+    ("EntityID", "RecordID", "UserID", "Type", "Source", "ChangesJSON", "ChangesDescription", "FullRecordJSON", "Status"${changeContextColumn})
 SELECT
     '${entityInfo.ID}'::uuid,
     '${recordID}',
     '${safeUserId}'::uuid,
     'Update',
+    '${sourceVal}',
     '${safeChangesJSON}',
     '${safeChangesDesc}',
     row_to_json(r)::text,
-    'Complete'
+    'Complete'${changeContextValue}
 FROM ${pgDialect.QuoteSchema(schema, view)} r
 WHERE ${pgDialect.QuoteIdentifier(pkName)} = '${safePKValue}';`;
     }
 
     // ─── SQL Auto-Quoting (runtime PG identifier safety) ─────────────
-    //
-    // MJ has many hand-written SQL strings across resolvers, engines, and
-    // dashboard components that use unquoted PascalCase identifiers. On PG,
-    // unquoted identifiers fold to lowercase, which doesn't match the
-    // PascalCase columns/views that codegen creates. We auto-quote those
-    // identifiers at runtime so existing SQL works on both dialects.
-    //
-    // The tokenizer mirrors PostgreSQLCodeGenProvider.quoteSQLForExecution
-    // so codegen-time and runtime apply the same rules. If the codegen
-    // tokenizer changes, this should change too (or be refactored to share).
-
-    private static readonly _SQL_KEYWORDS = new Set([
-        // DML/DDL keywords
-        'SELECT', 'INSERT', 'INTO', 'UPDATE', 'DELETE', 'FROM', 'WHERE', 'AND', 'OR', 'NOT',
-        'JOIN', 'LEFT', 'RIGHT', 'INNER', 'OUTER', 'CROSS', 'FULL', 'ON', 'AS', 'SET',
-        'VALUES', 'NULL', 'LIKE', 'IN', 'EXISTS', 'BETWEEN', 'CASE', 'WHEN', 'THEN',
-        'ELSE', 'END', 'ORDER', 'BY', 'GROUP', 'HAVING', 'LIMIT', 'OFFSET', 'UNION',
-        'ALL', 'CREATE', 'ALTER', 'DROP', 'TABLE', 'INDEX', 'VIEW', 'EXEC', 'DECLARE',
-        'BEGIN', 'COMMIT', 'ROLLBACK', 'TRANSACTION', 'TRUE', 'FALSE', 'IS', 'ASC', 'DESC',
-        'DISTINCT', 'PRIMARY', 'KEY', 'FOREIGN', 'REFERENCES', 'CONSTRAINT', 'DEFAULT',
-        'IF', 'OBJECT', 'TOP', 'WITH', 'OVER', 'PARTITION', 'ROW_NUMBER', 'RANK',
-        'DENSE_RANK', 'LAG', 'LEAD', 'FIRST_VALUE', 'LAST_VALUE', 'ROWS', 'RANGE',
-        'PRECEDING', 'FOLLOWING', 'UNBOUNDED', 'CURRENT', 'ROW', 'FETCH', 'NEXT', 'ONLY',
-        'SCHEMA', 'CASCADE', 'RESTRICT', 'NO', 'ACTION', 'TRIGGER', 'FUNCTION', 'PROCEDURE',
-        'RETURNS', 'RETURN', 'RETURNING', 'EXECUTE', 'CALL', 'RAISE', 'NOTICE', 'EXCEPTION', 'PERFORM',
-        'GRANT', 'REVOKE', 'TO', 'USAGE', 'PRIVILEGES', 'OWNER',
-        'WINDOW', 'FILTER', 'EXCEPT', 'INTERSECT', 'COLLATE', 'TABLESAMPLE',
-        // DDL sub-keywords
-        'ADD', 'COLUMN', 'DO', 'RENAME', 'COMMENT', 'UNIQUE', 'CHECK',
-        'CONFLICT', 'NOTHING', 'EXCLUDED', 'ZONE', 'AT', 'FOR', 'EACH', 'OF',
-        'BEFORE', 'AFTER', 'INSTEAD', 'USING', 'ANY', 'SOME',
-        'ENABLE', 'DISABLE', 'GENERATED', 'ALWAYS', 'IDENTITY',
-        'SECURITY', 'DEFINER', 'INVOKER', 'FORCE', 'COPY',
-        'TEMPORARY', 'TEMP', 'RECURSIVE', 'MATERIALIZED', 'CONCURRENTLY',
-        // PL/pgSQL control flow
-        'NEW', 'OLD', 'FOUND', 'LOOP', 'WHILE', 'EXIT', 'CONTINUE',
-        'ELSIF', 'ELSEIF', 'STRICT',
-        // SQL Server types (still appear in raw SQL fragments at runtime)
-        'NVARCHAR', 'VARCHAR', 'UNIQUEIDENTIFIER', 'DATETIMEOFFSET', 'DATETIME', 'DATETIME2',
-        'BIGINT', 'SMALLINT', 'TINYINT', 'FLOAT', 'REAL', 'DECIMAL', 'NUMERIC', 'MONEY',
-        'BIT', 'INT', 'TEXT', 'NTEXT', 'IMAGE', 'BINARY', 'VARBINARY', 'CHAR', 'NCHAR',
-        'XML', 'GEOGRAPHY', 'GEOMETRY', 'HIERARCHYID', 'SQL_VARIANT', 'SYSNAME',
-        'NEWSEQUENTIALID', 'NEWID', 'GETUTCDATE', 'GETDATE', 'SYSDATETIMEOFFSET',
-        'OBJECT_ID', 'SCOPE_IDENTITY',
-        // Aggregate / scalar functions
-        'COUNT', 'MAX', 'MIN', 'SUM', 'AVG', 'ROUND', 'NULLIF', 'ABS', 'CEIL', 'CEILING', 'FLOOR',
-        'SIGN', 'MOD', 'POWER', 'SQRT', 'LOG', 'EXP', 'RANDOM',
-        'COALESCE', 'CAST', 'CONVERT', 'ISNULL',
-        'LEN', 'LENGTH', 'DATALENGTH', 'LOWER', 'UPPER', 'LTRIM', 'RTRIM', 'TRIM', 'REPLACE',
-        'SUBSTRING', 'CHARINDEX', 'PATINDEX', 'STUFF', 'CONCAT', 'FORMAT',
-        'POSITION', 'OVERLAY', 'EXTRACT', 'GREATEST', 'LEAST',
-        'DATEADD', 'DATEDIFF', 'DATEPART', 'YEAR', 'MONTH', 'DAY', 'HOUR', 'MINUTE',
-        'SECOND', 'NOW', 'CURRENT_TIMESTAMP',
-        // PostgreSQL specific
-        'BOOLEAN', 'SERIAL', 'BIGSERIAL', 'UUID', 'JSONB', 'JSON', 'ARRAY', 'TIMESTAMPTZ',
-        'TIMESTAMP', 'DATE', 'TIME', 'INTERVAL', 'CITEXT', 'INET', 'MACADDR',
-        // PG type names that show up in CAST(... AS T) and ::T expressions in
-        // hand-written SQL across the codebase. Without these in the keyword
-        // set the tokenizer emits "INTEGER" / "DOUBLE" / "BYTEA" as quoted
-        // identifiers and PG rejects them as unknown user-defined types.
-        'INTEGER', 'DOUBLE', 'PRECISION', 'BYTEA', 'OID', 'REGCLASS', 'REGPROC', 'NAME',
-        'GEN_RANDOM_UUID', 'TO_CHAR', 'TO_DATE', 'TO_TIMESTAMP', 'TO_NUMBER',
-        'STRING_AGG', 'ARRAY_AGG', 'UNNEST', 'LATERAL', 'ILIKE',
-        'LANGUAGE', 'PLPGSQL', 'VOLATILE', 'STABLE', 'IMMUTABLE', 'SETOF', 'RECORD',
-        'INOUT', 'OUT', 'VARIADIC', 'PARALLEL', 'SAFE', 'UNSAFE',
-        // information_schema column names
-        'TABLE_SCHEMA', 'TABLE_NAME', 'TABLE_CATALOG', 'COLUMN_NAME', 'DATA_TYPE',
-        'IS_NULLABLE', 'COLUMN_DEFAULT', 'CHARACTER_MAXIMUM_LENGTH', 'NUMERIC_PRECISION',
-        'NUMERIC_SCALE', 'ORDINAL_POSITION', 'COLUMN_COMMENT',
-        // MJ SQL constructs
-        'INFORMATION_SCHEMA', 'COLUMNS', 'TABLES', 'ROUTINES',
-    ]);
-
-    /**
-     * Keywords that are ONLY recognized when they appear in ALL-CAPS — matched
-     * case-sensitively, unlike `_SQL_KEYWORDS` (which is matched via
-     * `word.toUpperCase()`). These are reserved words that collide with very
-     * common PascalCase MJ column names, so they must NOT suppress quoting of
-     * the column form:
-     *   - `TYPE` — `ALTER COLUMN <c> TYPE <t>` / `CREATE TYPE`; but `Type` is a
-     *     column on RecordChange and many other entities.
-     *   - `DATA` — `ALTER COLUMN <c> SET DATA TYPE <t>`; but `Data` is a column
-     *     on several entities.
-     * Putting these in the case-insensitive set would fold `Type`/`Data` column
-     * refs to lowercase on PG ("column does not exist"). All-caps-only matching
-     * recognizes the DDL keyword form (dialects always emit keywords upper-case)
-     * while leaving the mixed-case column form quotable.
-     */
-    private static readonly _SQL_KEYWORDS_UPPERCASE_ONLY = new Set([
-        'TYPE', 'DATA',
-    ]);
 
     /**
      * Quotes mixed-case identifiers in a raw SQL string for PostgreSQL.
-     * Walks the string token by token, skipping string literals, dollar-quoted
-     * blocks, already-quoted identifiers, square-bracketed identifiers, and
-     * @-prefixed parameters. Any remaining word that starts with uppercase and
-     * isn't a known SQL keyword gets wrapped in double quotes so PG preserves
-     * the case when resolving it against the schema.
      *
-     * Idempotent — safe to call on already-quoted SQL (those identifiers are
-     * skipped by `skipDoubleQuotedIdentifier`).
+     * MJ has many hand-written SQL strings across resolvers, engines, and dashboard
+     * components that use unquoted PascalCase identifiers. On PG, unquoted identifiers
+     * fold to lowercase, which doesn't match the PascalCase columns/views that codegen
+     * creates. We auto-quote those identifiers at runtime so existing SQL works on both
+     * dialects.
+     *
+     * The tokenizer itself lives in `@memberjunction/sql-dialect` and is shared with
+     * `PostgreSQLCodeGenProvider.quoteSQLForExecution`, so codegen-time and runtime SQL
+     * are quoted by one implementation rather than two hand-synced copies. See
+     * {@link AutoQuotePostgreSQLIdentifiers} for the quoting rule and its rationale.
+     *
+     * Public so it can be unit-tested directly.
      */
+    public AutoQuoteIdentifiers(sql: string): string {
+        return AutoQuotePostgreSQLIdentifiers(sql);
+    }
+
+    /** @deprecated Use {@link AutoQuoteIdentifiers}. */
     public autoQuoteIdentifiers(sql: string): string {
-        const result: string[] = [];
-        let i = 0;
-        const len = sql.length;
-
-        while (i < len) {
-            const ch = sql[i];
-
-            if (ch === "'") {
-                i = this.skipSingleQuotedString(sql, i, len, result);
-                continue;
-            }
-            if (ch === '$') {
-                i = this.skipDollarQuotedBlock(sql, i, len, result);
-                continue;
-            }
-            if (ch === '"') {
-                i = this.skipDoubleQuotedIdentifier(sql, i, len, result);
-                continue;
-            }
-            if (ch === '[') {
-                i = this.skipBracketedIdentifier(sql, i, len, result);
-                continue;
-            }
-            if (ch === '@') {
-                i = this.skipAtParameter(sql, i, len, result);
-                continue;
-            }
-            if (/[a-zA-Z_]/.test(ch)) {
-                i = this.processWord(sql, i, len, result);
-                continue;
-            }
-
-            result.push(ch);
-            i++;
-        }
-
-        return result.join('');
-    }
-
-    /** Skips a single-quoted string literal, handling escaped quotes ('') */
-    private skipSingleQuotedString(sql: string, start: number, len: number, result: string[]): number {
-        let j = start + 1;
-        while (j < len) {
-            if (sql[j] === "'" && j + 1 < len && sql[j + 1] === "'") {
-                j += 2;
-            } else if (sql[j] === "'") {
-                j++;
-                break;
-            } else {
-                j++;
-            }
-        }
-        result.push(sql.substring(start, j));
-        return j;
-    }
-
-    /**
-     * Skips a dollar-quoted block ($$ ... $$ or $tag$ ... $tag$).
-     * Falls through to literal `$` for PG positional params ($1, $2, etc.):
-     * those start with `$` followed by a digit then a non-`$` character, so
-     * the tag-detection scan finds no closing `$` and we push the lone `$`.
-     */
-    private skipDollarQuotedBlock(sql: string, start: number, len: number, result: string[]): number {
-        let tagEnd = start + 1;
-        if (tagEnd < len && sql[tagEnd] === '$') {
-            // Simple $$ tag
-            tagEnd = start + 2;
-        } else {
-            // Look for $identifier$ pattern
-            while (tagEnd < len && /[a-zA-Z0-9_]/.test(sql[tagEnd])) tagEnd++;
-            if (tagEnd < len && sql[tagEnd] === '$') {
-                tagEnd++;
-            } else {
-                // Not a dollar-quote, just a $ character (e.g. PG positional param $1)
-                result.push(sql[start]);
-                return start + 1;
-            }
-        }
-        const tag = sql.substring(start, tagEnd);
-        const closePos = sql.indexOf(tag, tagEnd);
-        if (closePos !== -1) {
-            const blockEnd = closePos + tag.length;
-            result.push(sql.substring(start, blockEnd));
-            return blockEnd;
-        }
-        // No closing tag found, pass through rest of string
-        result.push(sql.substring(start));
-        return len;
-    }
-
-    /** Skips an already double-quoted identifier */
-    private skipDoubleQuotedIdentifier(sql: string, start: number, len: number, result: string[]): number {
-        let j = start + 1;
-        while (j < len && sql[j] !== '"') j++;
-        if (j < len) j++;
-        result.push(sql.substring(start, j));
-        return j;
-    }
-
-    /** Skips a square-bracketed identifier (SQL Server style; passed through verbatim) */
-    private skipBracketedIdentifier(sql: string, start: number, len: number, result: string[]): number {
-        let j = start + 1;
-        while (j < len && sql[j] !== ']') j++;
-        if (j < len) j++;
-        result.push(sql.substring(start, j));
-        return j;
-    }
-
-    /** Skips an @-prefixed parameter (e.g. @userId for legacy SQL Server-style params) */
-    private skipAtParameter(sql: string, start: number, len: number, result: string[]): number {
-        let j = start + 1;
-        while (j < len && /[a-zA-Z0-9_]/.test(sql[j])) j++;
-        result.push(sql.substring(start, j));
-        return j;
-    }
-
-    /**
-     * Processes a word token — quotes it if it's a mixed-case identifier likely
-     * to be a column or object reference.
-     *
-     * Quoting rules:
-     *  - PascalCase (starts with uppercase) → quote (e.g. `TestRun`, `UserID`)
-     *  - lowercase-first BUT preceded by `.` → quote (e.g. `vwAIAgentRuns`
-     *    in `__mj.vwAIAgentRuns`). MJ's view convention is `vwXxxYyy` —
-     *    we have to recognize them as identifiers even though they don't
-     *    start with uppercase. The `.` prefix tells us we're looking at a
-     *    column/object ref, not an alias.
-     *
-     * camelCase tokens NOT preceded by `.` are left bare so column aliases
-     * (`SELECT count(*) AS myCount`) keep their existing case-folded behavior.
-     * SQL keywords and MJ-internal `__mj_*` names are also passed through.
-     */
-    private processWord(sql: string, start: number, len: number, result: string[]): number {
-        let j = start + 1;
-        while (j < len && /[a-zA-Z0-9_]/.test(sql[j])) j++;
-        const word = sql.substring(start, j);
-
-        // All-caps-only keywords (TYPE/DATA) are matched case-sensitively so the
-        // DDL keyword form is recognized while the PascalCase column form stays quotable.
-        const isUpperCaseOnlyKeyword = word === word.toUpperCase()
-            && PostgreSQLDataProvider._SQL_KEYWORDS_UPPERCASE_ONLY.has(word);
-        const isKeyword = isUpperCaseOnlyKeyword
-            || PostgreSQLDataProvider._SQL_KEYWORDS.has(word.toUpperCase());
-        const isAllLower = word === word.toLowerCase();
-        const isMJInternal = word.startsWith('__mj_');
-        const startsUpper = /^[A-Z]/.test(word);
-        const precededByDot = start > 0 && sql[start - 1] === '.';
-
-        const isQuotableIdentifier = !isKeyword && !isAllLower && !isMJInternal
-            && (startsUpper || precededByDot);
-
-        if (isQuotableIdentifier) {
-            result.push(pgDialect.QuoteIdentifier(word));
-        } else {
-            result.push(word);
-        }
-        return j;
+        return this.AutoQuoteIdentifiers(sql);
     }
 
 }

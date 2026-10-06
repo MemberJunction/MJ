@@ -116,7 +116,7 @@ describe('Broken Component Fixtures', () => {
     const skipReason = shouldSkip(fixture);
 
     if (skipReason) {
-      it.skip(`${fixture.metadata.name} (${skipReason})`, () => {});
+      it.skip(`${fixture.metadata.name} (${skipReason})`, () => {}); // KNOWN LIMITATION: fixture-declared skipReason
     } else {
       it(`${fixture.metadata.name}`, async () => {
         const result = await lintFixture(fixture);
@@ -142,7 +142,7 @@ describe('Fixed Component Fixtures', () => {
     const skipReason = shouldSkip(fixture);
 
     if (skipReason) {
-      it.skip(`${fixture.metadata.name} (${skipReason})`, () => {});
+      it.skip(`${fixture.metadata.name} (${skipReason})`, () => {}); // KNOWN LIMITATION: fixture-declared skipReason
     } else {
       it(`${fixture.metadata.name}`, async () => {
         const result = await lintFixture(fixture);
@@ -171,7 +171,7 @@ describe('Valid Component Fixtures', () => {
     const skipReason = shouldSkip(fixture);
 
     if (skipReason) {
-      it.skip(`${fixture.metadata.name} (${skipReason})`, () => {});
+      it.skip(`${fixture.metadata.name} (${skipReason})`, () => {}); // KNOWN LIMITATION: fixture-declared skipReason
     } else {
       it(`${fixture.metadata.name}`, async () => {
         const result = await lintFixture(fixture);

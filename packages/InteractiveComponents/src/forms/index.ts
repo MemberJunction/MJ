@@ -23,11 +23,21 @@ export * from './form-method-names';
 export * from './curated-form-schema';
 export * from './default-form-scaffold';
 export * from './form-host-props-fixture';
+export * from './form-variant-preference';
 export * from './form-spec-info';
+export * from './form-contribution-spec';
+export * from './form-contribution-key';
+export * from './form-panel-host-props';
+export * from './form-panel-events';
 
 import type { ComponentSpec } from '../component-spec';
 
 /** True iff the spec commits to the form-role contract. */
-export function isFormRole(spec: Pick<ComponentSpec, 'componentRole'>): boolean {
+export function IsFormRole(spec: Pick<ComponentSpec, 'componentRole'>): boolean {
     return spec.componentRole === 'form';
+}
+
+/** @deprecated Use {@link IsFormRole}. */
+export function isFormRole(spec: Pick<ComponentSpec, 'componentRole'>): boolean {
+    return IsFormRole(spec);
 }

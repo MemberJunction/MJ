@@ -1,10 +1,10 @@
 
 
 // Google Gemini Import
-import { GoogleGenAI, Content, Part, Blob, FileData } from "@google/genai";
+import { GoogleGenAI, Content, Part, Blob, FileData, FunctionDeclaration, FunctionCallingConfigMode, ToolConfig, ToolListUnion } from "@google/genai";
 
 // MJ stuff
-import { BaseLLM, ChatMessage, ChatParams, ChatResult, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ChatMessageContent, ChatMessageContentBlock, ModelUsage, ErrorAnalyzer, FileCapabilities } from "@memberjunction/ai";
+import { BaseLLM, ChatMessage, ChatParams, ChatResult, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ChatMessageContent, ChatMessageContentBlock, ModelUsage, ErrorAnalyzer, FileCapabilities, ChatToolCall, CHAT_FINISH_REASON_TOOL_CALLS, CHAT_FINISH_REASON_MALFORMED_TOOL_CALL } from "@memberjunction/ai";
 import { RegisterClass, ToJSONSafe } from "@memberjunction/global";
 
 /**
@@ -40,6 +40,35 @@ function isGeminiCancellationError(error: unknown): boolean {
     const name = (error as { name?: string }).name;
     return name === 'AbortError' || name === 'TimeoutError';
 }
+
+/**
+ * Gemini 3 requires a `thoughtSignature` on every replayed `functionCall` part. Calls the model made
+ * carry their own (kept on `ChatToolCall.providerMetadata`); calls constructed outside the model —
+ * a corpus history, a conversation transferred from another provider — use this documented
+ * placeholder, which tells Gemini to skip signature validation for that part.
+ */
+const GEMINI_INJECTED_CALL_THOUGHT_SIGNATURE = 'skip_thought_signature_validator';
+
+/**
+ * Where a thought signature was minted: serving endpoint plus model. A signature only validates where
+ * it came from — after a failover from Google AI Studio to Vertex AI (or the reverse), or onto another
+ * Gemini model, replaying it is a hard 400 "Corrupted thought signature." Recorded beside the signature
+ * on capture, compared on replay, and a foreign signature is replaced with the placeholder.
+ */
+const THOUGHT_SIGNATURE_ORIGIN_KEY = 'thoughtSignatureOrigin';
+
+/**
+ * The user turn Gemini is given when a conversation would otherwise open with a model turn.
+ *
+ * Gemini requires `contents` to begin with a user turn, and enforces it hard for tool calls: a
+ * `functionCall` turn is valid only "immediately after a user turn or after a function response
+ * turn" (400 INVALID_ARGUMENT otherwise). An agent whose whole task lives in the system
+ * instruction — Skip's agents send no user message at all — reaches its tool-result turn with
+ * `[model(functionCall…), user(functionResponse…)]` and is rejected; the same agent on the envelope
+ * path was tolerated only because a leading model TEXT turn is. The text names where the task is,
+ * so the model reads it as the opening request rather than as noise.
+ */
+export const GEMINI_LEADING_USER_TURN_TEXT = 'Proceed with the task described in the system instructions.';
 
 @RegisterClass(BaseLLM, "GeminiLLM")
 export class GeminiLLM extends BaseLLM {
@@ -206,6 +235,14 @@ export class GeminiLLM extends BaseLLM {
         return true;
     }
 
+    /**
+     * Gemini natively supports tool calling (`functionDeclarations` / `functionCall` /
+     * `functionResponse` parts).
+     */
+    public override get SupportsTools(): boolean {
+        return true;
+    }
+
     protected geminiMessageSpacing(messages: Content[]): Content[] {
         // This method ensures messages alternate between user and model roles
         // by combining consecutive messages with the same role
@@ -234,6 +271,11 @@ export class GeminiLLM extends BaseLLM {
         if (currentMessage !== null) {
             result.push(currentMessage);
         }
+        // The conversation must open with a user turn — see GEMINI_LEADING_USER_TURN_TEXT for why a
+        // model turn here (an agent with no user message replaying its own tool calls) is rejected.
+        if (result.length > 0 && result[0].role === 'model') {
+            result.unshift({ role: 'user', parts: [{ text: GEMINI_LEADING_USER_TURN_TEXT }] });
+        }
 
         return result;
     }
@@ -258,7 +300,8 @@ export class GeminiLLM extends BaseLLM {
                 : '';
 
             // Convert all non-system messages and apply role alternation
-            const convertedMessages = noSystemMessages.map(m => GeminiLLM.MapMJMessageToGeminiHistoryEntry(m));
+            const signatureOrigin = this.thoughtSignatureOrigin(modelName);
+            const convertedMessages = noSystemMessages.map(m => GeminiLLM.MapMJMessageToGeminiHistoryEntry(m, signatureOrigin));
             const tempMessages = this.geminiMessageSpacing(convertedMessages);
 
             // Split: all but last message go in history, last message gets system instructions prepended
@@ -341,6 +384,7 @@ export class GeminiLLM extends BaseLLM {
             if (systemInstructionText) {
                 requestConfig.systemInstruction = systemInstructionText;
             }
+            this.applyToolParams(requestConfig, params);
             this.applyCancellationToken(requestConfig, params.cancellationToken);
 
             const chat = client.chats.create({
@@ -396,9 +440,12 @@ export class GeminiLLM extends BaseLLM {
 
             const rawContent = candidate.content?.parts?.find(part => part.text && !part.thought)?.text || '';
             const thinking = candidate.content?.parts?.find(part => part.thought)?.text || '';
+            const toolCalls = this.extractToolCalls(candidate.content?.parts, this.thoughtSignatureOrigin(modelName));
 
-            // Check if we got empty content despite no blocking
-            if (!rawContent && !thinking) {
+            // Check if we got empty content despite no blocking. A native tool call IS output, and a
+            // forced/clean tool-call turn legitimately carries no text at all — so tool calls
+            // satisfy this check just as text does.
+            if (!rawContent && !thinking && !toolCalls) {
                 const usage = result.usageMetadata;
                 throw new Error(
                     `No output received from model (finishReason: ${finishReason || 'none'}, ` +
@@ -458,9 +505,14 @@ export class GeminiLLM extends BaseLLM {
                         message: {
                             role: 'assistant',
                             content: content,
-                            thinking: thinkingContent || undefined
+                            thinking: thinkingContent || undefined,
+                            toolCalls: toolCalls
                         },
-                        finish_reason: finishReason || "completed",
+                        // Normalize the tool-call case and Gemini's "tried to call a tool but the call was
+                        // unreadable" case; every other reason keeps Gemini's own value.
+                        finish_reason: toolCalls ? CHAT_FINISH_REASON_TOOL_CALLS
+                            : finishReason === 'MALFORMED_FUNCTION_CALL' ? CHAT_FINISH_REASON_MALFORMED_TOOL_CALL
+                            : (finishReason || "completed"),
                         index: 0
                     }],
                     usage: geminiUsage
@@ -502,6 +554,104 @@ export class GeminiLLM extends BaseLLM {
      * `GenerateContentConfig.abortSignal` and forwards it to the underlying `fetch` call, so an
      * abort tears down the HTTP socket instead of merely abandoning the promise.
      */
+    /**
+     * Maps the neutral {@link ChatParams.tools} onto Gemini's `tools` / `toolConfig` request fields.
+     *
+     * Uses `parametersJsonSchema` rather than `parameters`: the neutral surface already speaks JSON
+     * Schema, and `parameters` is Gemini's older OpenAPI-subset shape (the two are mutually
+     * exclusive). Gemini spells "must call something" as `ANY` and has no per-request parallelism
+     * switch, so {@link ChatParams.parallelToolCalls} has no mapping here.
+     *
+     * @param requestConfig The request config being assembled (mutated in place)
+     * @param params The chat params for this request
+     */
+    private applyToolParams(requestConfig: Record<string, unknown>, params: ChatParams): void {
+        if (!params.tools || params.tools.length === 0) {
+            return;
+        }
+
+        const functionDeclarations: FunctionDeclaration[] = params.tools.map(tool => ({
+            name: tool.name,
+            description: tool.description,
+            parametersJsonSchema: tool.inputSchema
+        }));
+        const tools: ToolListUnion = [{ functionDeclarations }];
+        requestConfig.tools = tools;
+
+        if (params.toolChoice !== undefined) {
+            const toolConfig: ToolConfig = { functionCallingConfig: this.mapToolChoice(params.toolChoice) };
+            requestConfig.toolConfig = toolConfig;
+        }
+
+        if (params.parallelToolCalls !== undefined) {
+            console.warn('Gemini provider does not support the parallelToolCalls parameter, ignoring');
+        }
+    }
+
+    /**
+     * Translates a neutral tool choice into Gemini's `functionCallingConfig`.
+     *
+     * @param choice The neutral tool choice
+     * @returns Gemini's function-calling config
+     */
+    private mapToolChoice(choice: NonNullable<ChatParams['toolChoice']>): { mode: FunctionCallingConfigMode; allowedFunctionNames?: string[] } {
+        if (choice === 'none') {
+            return { mode: FunctionCallingConfigMode.NONE };
+        }
+        if (choice === 'required') {
+            return { mode: FunctionCallingConfigMode.ANY };
+        }
+        if (choice === 'auto') {
+            return { mode: FunctionCallingConfigMode.AUTO };
+        }
+        // Named tool: Gemini forces a call and restricts the candidate set to that one name.
+        return { mode: FunctionCallingConfigMode.ANY, allowedFunctionNames: [choice.name] };
+    }
+
+    /**
+     * The serving endpoint a thought signature from this driver is valid on. Vertex overrides it.
+     */
+    protected get ThoughtSignatureEndpoint(): string {
+        return 'gemini-api';
+    }
+
+    /** Endpoint plus model — the scope a thought signature validates in. */
+    protected thoughtSignatureOrigin(modelName: string): string {
+        return `${this.ThoughtSignatureEndpoint}:${modelName}`;
+    }
+
+    /**
+     * Pulls `functionCall` parts out of a Gemini candidate and normalizes them.
+     *
+     * Gemini does not always populate a call `id`, so one is synthesized from the tool name and the
+     * call's position in the turn. It must be stable, because it is what the matching
+     * `functionResponse` echoes back.
+     *
+     * @param parts The candidate's content parts
+     * @param signatureOrigin Where this response's thought signatures validate (see {@link thoughtSignatureOrigin})
+     * @returns The normalized calls, or undefined when the model called nothing
+     */
+    private extractToolCalls(parts: Part[] | undefined, signatureOrigin: string): ChatToolCall[] | undefined {
+        const calls: ChatToolCall[] = [];
+        for (const part of parts ?? []) {
+            const call = part.functionCall;
+            if (!call?.name) {
+                continue;
+            }
+            calls.push({
+                id: call.id || `${call.name}_${calls.length}`,
+                name: call.name,
+                arguments: call.args ?? {},
+                // Gemini 3 signs each function-call part; a replayed call without its signature is
+                // rejected (HTTP 400). Keep it so history round-trips.
+                ...(part.thoughtSignature
+                    ? { providerMetadata: { thoughtSignature: part.thoughtSignature, [THOUGHT_SIGNATURE_ORIGIN_KEY]: signatureOrigin } }
+                    : {})
+            });
+        }
+        return calls.length > 0 ? calls : undefined;
+    }
+
     private applyCancellationToken(requestConfig: Record<string, unknown>, token: AbortSignal | undefined): void {
         if (token) {
             requestConfig.abortSignal = token;
@@ -639,7 +789,8 @@ export class GeminiLLM extends BaseLLM {
             : '';
 
         // Convert all non-system messages and apply role alternation
-        const convertedMessages = noSystemMessages.map(m => GeminiLLM.MapMJMessageToGeminiHistoryEntry(m));
+        const signatureOrigin = this.thoughtSignatureOrigin(modelName);
+        const convertedMessages = noSystemMessages.map(m => GeminiLLM.MapMJMessageToGeminiHistoryEntry(m, signatureOrigin));
         const tempMessages = this.geminiMessageSpacing(convertedMessages);
 
         // Split: all but last message go in history, last message gets system instructions prepended
@@ -1090,6 +1241,19 @@ export class GeminiLLM extends BaseLLM {
             return { text: block.content };
         }
 
+        // Tool results ride as `functionResponse` parts. Gemini wants a JSON object, and reads the
+        // `output` / `error` keys by convention — so a failed call stays distinguishable from a
+        // successful one that merely returned error-looking text.
+        if (block.type === 'tool_result') {
+            return {
+                functionResponse: {
+                    id: block.toolCallId,
+                    name: block.toolName,
+                    response: block.isError ? { error: block.content } : { output: block.content }
+                }
+            };
+        }
+
         // Remote http(s) URL → Gemini fileData part (no inlining of remote bytes).
         if (/^https?:\/\//i.test(block.content)) {
             const fileData: FileData = {
@@ -1133,10 +1297,49 @@ export class GeminiLLM extends BaseLLM {
         return [{ text: content }];
     }
 
-    public static MapMJMessageToGeminiHistoryEntry(message: ChatMessage): Content {
+    /**
+     * The signature to replay on a call: its own when it was minted where this request is going,
+     * otherwise the documented placeholder. A signature with no recorded origin is replayed as-is.
+     */
+    private static signatureForReplay(call: NonNullable<ChatMessage['toolCalls']>[number], signatureOrigin: string | undefined): string {
+        const metadata = call.providerMetadata;
+        const signature = metadata?.thoughtSignature;
+        if (typeof signature !== 'string') {
+            return GEMINI_INJECTED_CALL_THOUGHT_SIGNATURE;
+        }
+        const origin = metadata?.[THOUGHT_SIGNATURE_ORIGIN_KEY];
+        const foreign = signatureOrigin !== undefined && typeof origin === 'string' && origin !== signatureOrigin;
+        return foreign ? GEMINI_INJECTED_CALL_THOUGHT_SIGNATURE : signature;
+    }
+
+    /**
+     * Maps one MJ message to a Gemini history entry.
+     *
+     * @param message The message to map
+     * @param signatureOrigin Where this request is going (endpoint + model). When given, a replayed
+     *   call's thought signature from anywhere else is swapped for the placeholder.
+     */
+    public static MapMJMessageToGeminiHistoryEntry(message: ChatMessage, signatureOrigin?: string): Content {
+        const parts = GeminiLLM.MapMJContentToGeminiParts(message.content);
+
+        // An assistant turn that called tools must replay those calls as `functionCall` parts so the
+        // `functionResponse` parts that follow have something to pair with.
+        if (message.toolCalls?.length) {
+            for (const call of message.toolCalls) {
+                // Replay the signature the model gave us when it is valid here; a call this process
+                // synthesized, or one signed by another endpoint or model, gets the placeholder.
+                const signature = GeminiLLM.signatureForReplay(call, signatureOrigin);
+                parts.push({ functionCall: { id: call.id, name: call.name, args: call.arguments ?? {} }, thoughtSignature: signature });
+            }
+        }
+
+        // Gemini rejects an empty part list, and a pure tool-call turn has no prose — drop the empty
+        // text part that content mapping produces once real parts are carrying the turn.
+        const meaningfulParts = parts.length > 1 ? parts.filter(p => p.text !== '') : parts;
+
         return {
             role: message.role === 'assistant' ? 'model' : 'user', // google calls all messages other than the replies from the model 'user' which would include the system prompt
-            parts: GeminiLLM.MapMJContentToGeminiParts(message.content)
+            parts: meaningfulParts.length > 0 ? meaningfulParts : [{ text: '' }]
         }
     }
 

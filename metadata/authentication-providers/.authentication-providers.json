@@ -1,0 +1,122 @@
+[
+  {
+    "fields": {
+      "Name": "Auth0",
+      "Description": "Auth0 by Okta. Validates RS256 access/ID tokens against the tenant's public JWKS. Set Domain to your tenant domain (e.g. your-tenant.us.auth0.com), ClientID to the SPA application's client ID, and Issuer to https://<Domain>/ (note the trailing slash).",
+      "DriverClass": "auth0",
+      "Status": "Inactive",
+      "IsDefault": false,
+      "ClientVisible": true,
+      "DisplayName": "Auth0",
+      "Icon": "fa-solid fa-shield-halved",
+      "Sequence": 10
+    },
+    "primaryKey": {
+      "ID": "FBB2C8CC-0293-4C21-BDA8-2959F5635B0A"
+    },
+    "sync": {
+      "lastModified": "2026-08-20T22:30:01.925Z",
+      "checksum": "5ea2b1a8128b85809d6813ae2ba42f94844f65bc542eb340fd4cd5526472b43b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Microsoft Entra ID",
+      "Description": "Microsoft Entra ID (formerly Azure AD) via MSAL. Set ClientID to the app registration's Application (client) ID and Issuer to https://login.microsoftonline.com/<tenantId>/v2.0. The browser driver reads CLIENT_ID / CLIENT_AUTHORITY rather than the prefixed convention, so it supplies its own catalog mapping: the MSAL authority is derived from Issuer by stripping the trailing /v2.0, or set an authority key in ClientConfiguration to override it.",
+      "DriverClass": "msal",
+      "Status": "Inactive",
+      "IsDefault": false,
+      "ClientVisible": true,
+      "DisplayName": "Microsoft",
+      "Icon": "fa-brands fa-microsoft",
+      "Sequence": 20
+    },
+    "primaryKey": {
+      "ID": "FAE0C529-64F0-4319-B2EF-920E5113F59F"
+    },
+    "sync": {
+      "lastModified": "2026-08-20T22:30:01.940Z",
+      "checksum": "f4e90be9ee9022b2d40e9e547d433386e47da4ea086dea470dff71ae3068b98a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Okta",
+      "Description": "Okta Identity Cloud. Set Domain to your Okta org (e.g. your-org.okta.com), Issuer to the authorization server issuer (commonly https://<Domain>/oauth2/default), and ClientID to the SPA application's client ID.",
+      "DriverClass": "okta",
+      "Status": "Inactive",
+      "IsDefault": false,
+      "ClientVisible": true,
+      "DisplayName": "Okta",
+      "Icon": "fa-solid fa-circle-half-stroke",
+      "Sequence": 30
+    },
+    "primaryKey": {
+      "ID": "2F1AFAEB-11EA-409F-B3AB-7A750C8AACF7"
+    },
+    "sync": {
+      "lastModified": "2026-08-20T22:30:01.957Z",
+      "checksum": "eb5dfc35fc833145209287ccb26c85a9745b3384744a8b612ef66f65eb47fffc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Amazon Cognito",
+      "Description": "Amazon Cognito user pools. Set Issuer to https://cognito-idp.<region>.amazonaws.com/<userPoolId> and ClientID to the app client ID. Put region and userPoolId in ClientConfiguration so the browser driver receives them.",
+      "DriverClass": "cognito",
+      "Status": "Inactive",
+      "IsDefault": false,
+      "ClientVisible": true,
+      "DisplayName": "Amazon Cognito",
+      "Icon": "fa-brands fa-aws",
+      "Sequence": 40
+    },
+    "primaryKey": {
+      "ID": "39DB99EF-B839-469B-814A-63C3710B7854"
+    },
+    "sync": {
+      "lastModified": "2026-08-20T22:30:01.979Z",
+      "checksum": "e85e1afcab73fb41a36452849211f1f89dceaa53182cd2c3bba823a03c2b3e7a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "WorkOS",
+      "Description": "WorkOS AuthKit (User Management). Issuer is https://api.workos.com/user_management/<clientId> and JWKSUri is https://api.workos.com/sso/jwks/<clientId>. IMPORTANT: AuthKit access tokens omit email by default and MJ resolves users by email, so a WorkOS JWT Template adding the email claim is required — see packages/AuthProviders/WORKOS.md.",
+      "DriverClass": "workos",
+      "Status": "Inactive",
+      "IsDefault": false,
+      "ClientVisible": true,
+      "DisplayName": "WorkOS",
+      "Icon": "fa-solid fa-building-lock",
+      "Sequence": 50
+    },
+    "primaryKey": {
+      "ID": "9A78FC7E-2FB6-4D65-B587-BAC3F58B09AF"
+    },
+    "sync": {
+      "lastModified": "2026-08-20T22:30:01.994Z",
+      "checksum": "2b6eb662bf246c76ca468f018f8af2caa476a53046fb1d42bb868104cd500c33"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Google Identity",
+      "Description": "Google Identity Platform. Server-side token validation only — MJ ships no browser driver for Google, so this provider verifies Google-issued tokens obtained elsewhere rather than offering an interactive login. ClientVisible is false for that reason; setting it true would render a login button with nothing behind it. Issuer is https://accounts.google.com.",
+      "DriverClass": "google",
+      "Status": "Inactive",
+      "IsDefault": false,
+      "ClientVisible": false,
+      "DisplayName": "Google",
+      "Icon": "fa-brands fa-google",
+      "Sequence": 60
+    },
+    "primaryKey": {
+      "ID": "393B97CA-DA8C-4906-91AE-9EFDB0DCDB99"
+    },
+    "sync": {
+      "lastModified": "2026-08-20T22:30:02.006Z",
+      "checksum": "254be7e4740227df91926ca4701f935c69ec8fe9101f6b70bb2a188c212e0467"
+    }
+  }
+]

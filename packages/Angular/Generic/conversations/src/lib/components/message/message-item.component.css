@@ -63,6 +63,17 @@
   display: block;
 }
 
+/* A streamed reply is not a status line. While the bubble shows streamed reply text the item
+   adds `streaming` (IsStreaming, set by the list's in-place refresh): the cap above would box
+   the growing reply into a 150px scroller of its own, and the status weight would re-wrap every
+   line when the settled message drops it on completion, so the reply is set at its settled weight
+   from the first frame. */
+.message-item.in-progress.streaming .message-text {
+  max-height: none;
+  overflow-y: visible;
+  font-weight: inherit;
+}
+
 
 /* Pulse effect for avatar */
 .message-item.in-progress .avatar-circle {
@@ -125,6 +136,22 @@
   color: var(--mj-text-inverse);
   border: 2px solid color-mix(in srgb, var(--mj-status-warning) 40%, transparent);
   box-shadow: var(--mj-shadow-md);
+}
+
+:host ::ng-deep .mention-badge.record {
+  background: var(--mj-color-info, #2563eb);
+  color: var(--mj-text-inverse, #fff);
+  border: 2px solid color-mix(in srgb, var(--mj-color-info, #2563eb) 40%, transparent);
+  box-shadow: var(--mj-shadow-md);
+  text-decoration: none;
+}
+
+/* Icon-only record citation: surrounding prose already named the row. */
+:host ::ng-deep .mention-badge.record.icon-only {
+  padding: 4px 7px;
+  gap: 0;
+  min-width: 1.65em;
+  justify-content: center;
 }
 
 /* Skills: standard green fallback (AISkill.Color overrides via inline style) + sharp-cornered
@@ -245,6 +272,14 @@
   height: 100%;
   object-fit: cover;
   border-radius: 50%;
+}
+
+/* Container for the standard mj-loading indicator while an artifact's rows load. Layout only —
+   the indicator owns its own animation, so there is no bespoke shimmer to keep re-themed. */
+.artifact-pending {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
 }
 
 /* System artifact styling - subtle visual distinction */
@@ -379,6 +414,24 @@
 .time-pill.active {
   background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
   color: var(--mj-brand-primary);
+}
+
+/* Liveness states (MJ #4222) — the run may no longer be progressing, so the pill stops
+   presenting the elapsed time as healthy progress. These follow .in-progress/.active in the
+   stylesheet so they win on equal specificity. */
+.time-pill.checking {
+  background: var(--mj-status-warning-bg);
+  color: var(--mj-status-warning-text);
+}
+
+.time-pill.stalled {
+  background: var(--mj-status-error-bg);
+  color: var(--mj-status-error-text);
+}
+
+.time-pill .liveness-label {
+  font-weight: 400;
+  opacity: 0.85;
 }
 
 /* Failed state - red */

@@ -5,6 +5,7 @@ import { MJCompanyIntegrationEntity } from '@memberjunction/core-entities';
 import { BaseAction } from '@memberjunction/actions';
 import { ActionParam } from '@memberjunction/actions-base';
 import { LWApiEnrollmentStatus, LWApiProgressData, LWApiUser, LearnWorldsUser, LearnWorldsPaginatedResponse } from './interfaces';
+import { DrainResponseBody } from '@memberjunction/network-utils';
 
 /**
  * Base class for all LearnWorlds LMS actions.
@@ -514,6 +515,10 @@ export abstract class LearnWorldsBaseAction extends BaseLMSAction {
         `429 rate limited on ${url} — retry ${attempt + 1}/${LearnWorldsBaseAction.MAX_RETRIES} after ${delay}ms`,
       );
       await this.waitForRetryDelay(delay);
+
+      // Discarding this 429 response in favor of a retry — drain its body so the connection
+      // isn't held open until GC finalizes an unconsumed stream.
+      await DrainResponseBody(response);
 
       await this.waitForRateLimitCapacity();
       this.recordRequest();

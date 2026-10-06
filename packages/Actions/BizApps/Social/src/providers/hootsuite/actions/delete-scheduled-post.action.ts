@@ -1,5 +1,5 @@
 import { RegisterClass } from '@memberjunction/global';
-import { HootSuiteBaseAction } from '../hootsuite-base.action';
+import { HootSuiteBaseAction, HootSuitePost, HootSuiteResponse } from '../hootsuite-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { LogStatus, LogError } from '@memberjunction/core';
 import { BaseAction } from '@memberjunction/actions';
@@ -45,10 +45,10 @@ export class HootSuiteDeleteScheduledPostAction extends HootSuiteBaseAction {
             let postDetails: any;
             
             try {
-                const response = await this.axiosInstance.get(`/messages/${postId}`);
-                postDetails = response.data;
+                const response = await this.httpClient.Get<HootSuiteResponse<HootSuitePost>>(`/messages/${postId}`);
+                postDetails = response.Data;
             } catch (error: any) {
-                if (error.response?.status === 404) {
+                if (error.Status === 404) {
                     return {
                         Success: false,
                         ResultCode: 'POST_NOT_FOUND',
@@ -83,15 +83,15 @@ export class HootSuiteDeleteScheduledPostAction extends HootSuiteBaseAction {
 
             // Delete the post
             LogStatus(`Deleting post ${postId}...`);
-            await this.axiosInstance.delete(`/messages/${postId}`);
+            await this.httpClient.Delete(`/messages/${postId}`);
 
             // Verify deletion by trying to fetch the post again
             let verificationFailed = false;
             try {
-                await this.axiosInstance.get(`/messages/${postId}`);
+                await this.httpClient.Get<HootSuiteResponse<HootSuitePost>>(`/messages/${postId}`);
                 verificationFailed = true;
             } catch (error: any) {
-                if (error.response?.status !== 404) {
+                if (error.Status !== 404) {
                     verificationFailed = true;
                 }
             }

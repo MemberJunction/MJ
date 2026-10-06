@@ -118,9 +118,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Communication Logs','CommunicationProviderMessageTypeID')"
-                [NewRecordValues]="NewRecordValues('MJ: Communication Logs')"
+                [NewRecordValues]="NewRecordValues('MJ: Communication Logs','CommunicationProviderMessageTypeID')"
                 [AllowLoad]="IsSectionExpanded('mJCommunicationLogs')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJCommunicationLogs', $event.totalRowCount)"
                 >

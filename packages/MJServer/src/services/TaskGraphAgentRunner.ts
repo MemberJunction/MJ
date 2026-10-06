@@ -16,6 +16,7 @@ import { AgentRunner } from '@memberjunction/ai-agents';
 import { ChatMessageRole } from '@memberjunction/ai';
 import { LogError } from '@memberjunction/core';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
+import type { AgentExecutionProgressCallback } from '@memberjunction/ai-core-plus';
 import type { TaskAgentRunner, TaskAgentRunParams, TaskAgentRunResult } from '@memberjunction/task-graph';
 
 export class TaskGraphAgentRunner implements TaskAgentRunner {
@@ -34,6 +35,10 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
                 // rather than starting the chain over. Without it MAX_REINVOKE_DEPTH never fires.
                 continuationDepth: params.ContinuationDepth ?? 0,
                 parentRun: await this.loadSubmittingRun(params),
+                // The bridge from the agent's own progress stream up to graph-level observers: the
+                // dispatcher turns these into rate-limited `NodeProgress` frames, which is how a
+                // running Agent step shows "what it is doing right now" on the workflow canvas.
+                onProgress: this.bridgeProgress(params),
             });
 
             const success = result?.success === true;
@@ -48,6 +53,24 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
             LogError(`[TaskGraphAgentRunner] Task ${params.TaskID} failed: ${message}`);
             return { Success: false, ErrorMessage: message };
         }
+    }
+
+    /**
+     * Adapts the agent framework's progress callback onto the dispatcher's plain sink.
+     *
+     * Undefined when nobody is listening, so the agent run pays nothing for observability it is not
+     * providing. Never throws — a progress announcement must not be able to fail the step.
+     */
+    private bridgeProgress(params: TaskAgentRunParams): AgentExecutionProgressCallback | undefined {
+        const sink = params.OnProgress;
+        if (!sink) return undefined;
+        return (progress) => {
+            try {
+                sink(progress.message, progress.percentage);
+            } catch {
+                // The dispatcher's sink already guards itself; this is belt over braces.
+            }
+        };
     }
 
     /**

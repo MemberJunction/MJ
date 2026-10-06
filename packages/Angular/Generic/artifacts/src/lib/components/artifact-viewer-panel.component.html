@@ -156,6 +156,26 @@
                 } @else if (displayHtml) {
                   <div class="html-content" [innerHTML]="displayHtml"></div>
                 }
+              } @else if (showFileFallback) {
+                <!-- No viewer plugin for this type: a file card with a real Download, plus the text for text-like content -->
+                <div class="file-fallback" data-testid="file-fallback">
+                  <div class="file-fallback-card">
+                    <i class="fas" [ngClass]="artifactIcon" aria-hidden="true"></i>
+                    <div class="file-fallback-meta">
+                      <div class="file-fallback-name">{{ fallbackFileName }}</div>
+                      <div class="file-fallback-sub">{{ artifactVersion?.MimeType || artifact.Type }}@if (fallbackSize) { · {{ fallbackSize }}}</div>
+                    </div>
+                    <button class="btn-icon btn-primary" type="button" (click)="downloadArtifactFile()" [disabled]="fallbackBusy" title="Download">
+                      <i class="fas fa-download"></i> {{ fallbackBusy ? 'Preparing…' : 'Download' }}
+                    </button>
+                  </div>
+                  @if (fallbackText !== null) {
+                    <pre class="plaintext-viewer file-fallback-text">{{ fallbackText }}</pre>
+                    @if (fallbackTextTruncated) {
+                      <div class="file-fallback-sub">Showing the first part only — download the file for all of it.</div>
+                    }
+                  }
+                </div>
               }
             </div>
           }

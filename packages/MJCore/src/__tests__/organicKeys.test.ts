@@ -292,6 +292,39 @@ describe('EntityInfo.BuildOrganicKeyViewParams', () => {
                 "REPLACE(REPLACE([PhoneNumber], '-', ''), ' ', '') = REPLACE(REPLACE('(555) 123-4567', '-', ''), ' ', '')"
             );
         });
+
+        /**
+         * A `$` in the matched data value used to be expanded by
+         * `String.prototype.replace` while substituting `{{FieldName}}` into the
+         * custom expression, splicing the expression's own text into the SQL
+         * literal. See issue #3171.
+         */
+        for (const value of ['a$$b', 'a$&b', 'a$`b', "a$'b", 'a$1b', 'a$b']) {
+            it(`should substitute a value containing ${JSON.stringify(value)} verbatim`, () => {
+                const record = createMockRecord({ Phone: value });
+                const organicKey = new EntityOrganicKeyInfo({
+                    MatchFieldNames: 'Phone',
+                    NormalizationStrategy: 'Custom',
+                    CustomNormalizationExpression: 'UPPER({{FieldName}})',
+                });
+                const relatedEntity = new EntityOrganicKeyRelatedEntityInfo({
+                    RelatedEntityFieldNames: 'PhoneNumber',
+                    RelatedEntity: 'Call Records',
+                });
+
+                const params = EntityInfo.BuildOrganicKeyViewParams(
+                    record as never,
+                    relatedEntity,
+                    organicKey,
+                );
+
+                // `'` is SQL-escaped by doubling; `$` must pass through untouched.
+                const escaped = value.replace(/'/g, "''");
+                expect(params.ExtraFilter).toBe(
+                    `UPPER([PhoneNumber]) = UPPER('${escaped}')`
+                );
+            });
+        }
     });
 
     describe('Additional parameters', () => {

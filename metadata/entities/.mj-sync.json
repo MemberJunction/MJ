@@ -2,6 +2,7 @@
   "entity": "MJ: Entities",
   "filePattern": "**/.*.json",
   "defaults": {},
+
   "pull": {
     "createNewFileIfNotFound": true,
     "newFileName": ".entities.json",

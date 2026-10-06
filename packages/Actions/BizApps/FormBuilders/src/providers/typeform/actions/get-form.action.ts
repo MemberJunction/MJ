@@ -1,5 +1,5 @@
 import { RegisterClass } from '@memberjunction/global';
-import { TypeformBaseAction } from '../typeform-base.action';
+import { TypeformBaseAction, TypeformForm } from '../typeform-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
 
@@ -55,8 +55,8 @@ export class GetTypeformAction extends TypeformBaseAction {
             // Securely retrieve API token using company integration
             const apiToken = await this.getSecureAPIToken(companyId, contextUser);
 
-            const response = await this.getAxiosInstance(apiToken).get(`/forms/${formId}`);
-            const form = response.data;
+            const response = await this.getHttpClient(apiToken).Get<TypeformForm>(`/forms/${formId}`);
+            const form = response.Data;
 
             const fieldCount = form.fields?.length || 0;
             const fieldTypes = form.fields?.map((f: any) => f.type) || [];

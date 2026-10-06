@@ -31,6 +31,8 @@ interface StubRow { [key: string]: unknown }
 function makeProvider(overrides?: {
     childEntities?: StubRow[];
     rootFields?: StubRow[];
+    /** Name the root entity answers to (default 'MJ: Content Items'); its FK field set is unchanged. */
+    rootName?: string;
 }): IMetadataProvider {
     const childEntity = {
         ID: 'ent-src-child',
@@ -44,9 +46,10 @@ function makeProvider(overrides?: {
         FirstPrimaryKey: { Name: 'ID' },
         ChildEntities: overrides?.childEntities ?? [childEntity],
     };
+    const rootName = overrides?.rootName ?? 'MJ: Content Items';
     const rootEntity = {
         ID: 'ent-item',
-        Name: 'MJ: Content Items',
+        Name: rootName,
         FirstPrimaryKey: { Name: 'ID' },
         Fields: overrides?.rootFields ?? [
             { Name: 'ID', RelatedEntityID: null },
@@ -56,7 +59,7 @@ function makeProvider(overrides?: {
         ChildEntities: [],
     };
     return {
-        EntityByName: (name: string) => (name === 'MJ: Content Items' ? rootEntity : undefined),
+        EntityByName: (name: string) => (name === rootName ? rootEntity : undefined),
         Entities: [rootEntity, sourceEntity, childEntity],
         RunView: mockRunView,
     } as unknown as IMetadataProvider;
@@ -65,8 +68,16 @@ function makeProvider(overrides?: {
 function makeItem(id: string, sourceId: string | null, extra?: StubRow): BaseEntity {
     return {
         ID: id,
-        FirstPrimaryKey: { Value: id },
+        PrimaryKey: { ToCompactURLSegment: () => id },
         GetAll: () => ({ ID: id, ContentSourceID: sourceId, ...extra }),
+    } as unknown as BaseEntity;
+}
+
+/** A root record of a composite-keyed entity: no `ID`, the key is (OrderID, LineNo). */
+function makeCompositeItem(orderId: string, lineNo: number, sourceId: string | null, extra?: StubRow): BaseEntity {
+    return {
+        PrimaryKey: { ToCompactURLSegment: () => `OrderID|${orderId}||LineNo|${lineNo}` },
+        GetAll: () => ({ OrderID: orderId, LineNo: lineNo, ContentSourceID: sourceId, ...extra }),
     } as unknown as BaseEntity;
 }
 
@@ -104,6 +115,18 @@ describe('FieldPathResolver', () => {
             const resolver = new FieldPathResolver(makeProvider(), contextUser, 'MJ: Content Items');
             const values = await resolver.ResolveForItems([makeItem('item-1', 'src-1')], 'OrganizationID');
             expect(values.get('item-1')).toBeUndefined();
+        });
+
+        it('keys composite-keyed root records by their whole key, so rows sharing a first column do not collide', async () => {
+            const resolver = new FieldPathResolver(makeProvider(), contextUser, 'Order Lines');
+            const items = [
+                makeCompositeItem('11055', 1, 'src-1', { OrganizationID: 'org-line-1' }),
+                makeCompositeItem('11055', 2, 'src-1', { OrganizationID: 'org-line-2' }),
+            ];
+            const values = await resolver.ResolveForItems(items, 'OrganizationID');
+            expect(values.size).toBe(2);
+            expect(values.get('orderid|11055||lineno|1')).toBe('org-line-1');
+            expect(values.get('orderid|11055||lineno|2')).toBe('org-line-2');
         });
     });
 
@@ -145,6 +168,20 @@ describe('FieldPathResolver', () => {
                 'ContentSourceID.OrganizationID'
             );
             expect(values.get('item-1')).toBe('child-org');
+        });
+
+        it('resolves a hop per composite-keyed root record — the FK target stays single-column, the root key does not', async () => {
+            stubRows({
+                'MJ: Content Sources': [{ ID: 'src-1', OrganizationID: 'org-a' }, { ID: 'src-2', OrganizationID: 'org-b' }],
+                'Client Content Sources': [],
+            });
+            const resolver = new FieldPathResolver(makeProvider({ rootName: 'Order Lines' }), contextUser, 'Order Lines');
+            const values = await resolver.ResolveForItems(
+                [makeCompositeItem('11055', 1, 'src-1'), makeCompositeItem('11055', 2, 'src-2')],
+                'ContentSourceID.OrganizationID'
+            );
+            expect(values.get('orderid|11055||lineno|1')).toBe('org-a');
+            expect(values.get('orderid|11055||lineno|2')).toBe('org-b');
         });
 
         it('resolves per item — different sources map to different namespaces', async () => {
@@ -234,6 +271,94 @@ describe('FieldPathResolver', () => {
             const resolver = new FieldPathResolver(makeProvider(), contextUser, 'MJ: Content Items');
             const values = await resolver.ResolveForItems([makeItem('item-1', 'src-1')], 'ContentSourceID.OrganizationID');
             expect(values.get('item-1')).toBe('org-queried');
+        });
+
+        // ── A KEY THE CACHE DOES NOT HOLD IS UNKNOWN, NOT ABSENT ───────────────────────────────
+        // A BaseEngine full-set cache is complete only as of its load; nothing tells it about a row
+        // another PROCESS inserted. Treating its filtered subset as the whole answer made every
+        // record created after the reader booted resolve to nothing — and because these values route
+        // a record to its tenant partition, a driver that requires one then fails closed, so the
+        // symptom is a silent refusal to write rather than a visibly missing field.
+        it('queries for a key the cache has never seen instead of reporting it absent', async () => {
+            // The engine cached the sources that existed when it loaded. 'src-new' was created after.
+            mockTryGetCachedRecords.mockImplementation((entityName: string) =>
+                entityName === 'MJ: Content Sources' ? [makeCachedRow('src-old', { OrganizationID: 'org-old' })] : null
+            );
+            stubRows({
+                'MJ: Content Sources': [{ ID: 'src-new', OrganizationID: 'org-new' }],
+                'Client Content Sources': [],
+            });
+
+            const resolver = new FieldPathResolver(makeProvider(), contextUser, 'MJ: Content Items');
+            const values = await resolver.ResolveForItems([makeItem('item-1', 'src-new')], 'ContentSourceID.OrganizationID');
+
+            expect(values.get('item-1')).toBe('org-new');
+            // And it asked only for the key it was missing, rather than reloading the whole set.
+            const baseCall = mockRunView.mock.calls.find(c => c[0].EntityName === 'MJ: Content Sources');
+            expect(baseCall).toBeDefined();
+            expect(baseCall![0].ExtraFilter).toContain('src-new');
+            expect(baseCall![0].ExtraFilter).not.toContain('src-old');
+        });
+
+        it('mixes cached and queried rows in one pass, querying only the uncached key', async () => {
+            mockTryGetCachedRecords.mockImplementation((entityName: string) =>
+                entityName === 'MJ: Content Sources' ? [makeCachedRow('src-1', { OrganizationID: 'org-cached' })] : null
+            );
+            stubRows({
+                'MJ: Content Sources': [{ ID: 'src-2', OrganizationID: 'org-queried' }],
+                'Client Content Sources': [],
+            });
+
+            const resolver = new FieldPathResolver(makeProvider(), contextUser, 'MJ: Content Items');
+            const values = await resolver.ResolveForItems(
+                [makeItem('item-1', 'src-1'), makeItem('item-2', 'src-2')],
+                'ContentSourceID.OrganizationID'
+            );
+
+            expect(values.get('item-1')).toBe('org-cached');
+            expect(values.get('item-2')).toBe('org-queried');
+            const baseCall = mockRunView.mock.calls.find(c => c[0].EntityName === 'MJ: Content Sources');
+            expect(baseCall![0].ExtraFilter).toContain('src-2');
+            expect(baseCall![0].ExtraFilter).not.toContain('src-1');
+        });
+
+        it('still serves the cached rows when the query for the missing keys fails', async () => {
+            // Partial beats nothing: the cached record resolves, and only the key the failed query
+            // would have answered stays unresolved.
+            mockTryGetCachedRecords.mockImplementation((entityName: string) =>
+                entityName === 'MJ: Content Sources' ? [makeCachedRow('src-1', { OrganizationID: 'org-cached' })] : null
+            );
+            stubRows({ 'MJ: Content Sources': 'FAIL', 'Client Content Sources': [] });
+
+            const resolver = new FieldPathResolver(makeProvider(), contextUser, 'MJ: Content Items');
+            const values = await resolver.ResolveForItems(
+                [makeItem('item-1', 'src-1'), makeItem('item-2', 'src-missing')],
+                'ContentSourceID.OrganizationID'
+            );
+
+            expect(values.get('item-1')).toBe('org-cached');
+            expect(values.get('item-2')).toBeUndefined();
+            expect(mockLogError).toHaveBeenCalled();
+        });
+
+        it('does not query at all when the cache covers every requested key', async () => {
+            // The fast path this cache exists for must survive the fix.
+            mockTryGetCachedRecords.mockImplementation((entityName: string) =>
+                entityName === 'MJ: Content Sources'
+                    ? [makeCachedRow('src-1', { OrganizationID: 'org-a' }), makeCachedRow('src-2', { OrganizationID: 'org-b' })]
+                    : null
+            );
+            stubRows({ 'Client Content Sources': [] });
+
+            const resolver = new FieldPathResolver(makeProvider(), contextUser, 'MJ: Content Items');
+            const values = await resolver.ResolveForItems(
+                [makeItem('item-1', 'src-1'), makeItem('item-2', 'src-2')],
+                'ContentSourceID.OrganizationID'
+            );
+
+            expect(values.get('item-1')).toBe('org-a');
+            expect(values.get('item-2')).toBe('org-b');
+            expect(mockRunView.mock.calls.some(c => c[0].EntityName === 'MJ: Content Sources')).toBe(false);
         });
     });
 

@@ -26,6 +26,18 @@ export interface Violation {
     Message: string;
     /** The package the file belongs to, when the check knows it. */
     Package?: string;
+    /**
+     * Severity for THIS finding, overriding the check's configured severity.
+     *
+     * Exists so one check can hard-fail the trees a repo has cleaned while still *reporting* the
+     * ones it has not. Without it, a rule with a long tail has only two settings — `error`, which
+     * no repo can adopt until the tail is gone, and `warn`, which does not stop the tail growing.
+     * A check that cleans up gradually needs both at once, per violation.
+     *
+     * Omit it and the finding takes the check's own severity, which is what every existing check
+     * does — so adding this field changed no result.
+     */
+    Severity?: Exclude<Severity, 'off'>;
 }
 
 /** Everything a check is given to do its work. */

@@ -1,5 +1,5 @@
 import { RegisterClass } from '@memberjunction/global';
-import { TypeformBaseAction } from '../typeform-base.action';
+import { TypeformBaseAction, TypeformForm } from '../typeform-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
 
@@ -70,8 +70,8 @@ export class UpdateTypeformAction extends TypeformBaseAction {
             let formData: any = {};
 
             if (mergeWithExisting) {
-                const existingResponse = await this.getAxiosInstance(apiToken).get(`/forms/${formId}`);
-                formData = existingResponse.data;
+                const existingResponse = await this.getHttpClient(apiToken).Get<TypeformForm>(`/forms/${formId}`);
+                formData = existingResponse.Data;
 
                 delete formData.id;
                 delete formData._links;
@@ -120,8 +120,8 @@ export class UpdateTypeformAction extends TypeformBaseAction {
                 formData.theme = { href: `https://api.typeform.com/themes/${themeId}` };
             }
 
-            const response = await this.getAxiosInstance(apiToken).put(`/forms/${formId}`, formData);
-            const updatedForm = response.data;
+            const response = await this.getHttpClient(apiToken).Put<TypeformForm>(`/forms/${formId}`, formData);
+            const updatedForm = response.Data;
 
             const formUrl = updatedForm._links?.display || `https://form.typeform.com/to/${updatedForm.id}`;
 

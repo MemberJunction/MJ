@@ -1,4 +1,8 @@
-export { GenericDatabaseProvider, ExecuteSQLBatchOptions } from './GenericDatabaseProvider.js';
+export { GenericDatabaseProvider, DoomedTransactionError, ExecuteSQLBatchOptions } from './GenericDatabaseProvider.js';
+// Side-effect import: registers DatabaseWellKnownUserSource with the class factory so any
+// process holding a database provider can resolve MJ's built-in accounts.
+export { DatabaseWellKnownUserSource } from './DatabaseWellKnownUserSource.js';
+export { SystemUserID } from './systemUser.js';
 export type {
     SaveCoercedValue,
     SaveCallBinding,
@@ -7,17 +11,30 @@ export type {
 } from './saveTypes.js';
 export {
     CRUDSprocType,
-    shouldIncludeFieldInParams,
-    needsClearCompanionBroadRule,
-    projectedParamCount,
-    useJsonArgShape,
+    ShouldIncludeFieldInParams, shouldIncludeFieldInParams,
+    NeedsClearCompanionBroadRule, needsClearCompanionBroadRule,
+    ProjectedParamCount, projectedParamCount,
+    UseJsonArgShape, useJsonArgShape,
 } from './crudSprocFieldRules.js';
-export { resolveDbPlatformFromEnv } from './dbPlatformEnv.js';
+export { ResolveDbPlatformFromEnv, resolveDbPlatformFromEnv } from './dbPlatformEnv.js';
 export { UserCache } from './UserCache.js';
+export {
+    SystemUserFieldAccessLossReason,
+    FindSystemUserFieldAccessViolations,
+    SystemUserFieldAccessViolation,
+    SystemUserHoldsRole,
+    SystemUserFieldAccessSweepOptions,
+} from './systemUserFieldAccess.js';
+// Side-effect import: registers the startup sweep that reports a system user which has lost
+// field-level access on an FLS-enabled entity.
+export { SystemUserFieldAccessCheck, LoadSystemUserFieldAccessCheck } from './SystemUserFieldAccessCheck.js';
 export { SqlLoggingOptions, SqlLoggingSession } from './types.js';
 export { SqlLoggingSessionImpl } from './SqlLogger.js';
 export { QueryCompositionEngine, CompositionCTEInfo, CompositionResult } from './queryCompositionEngine.js';
+export { CountOnlyBatchCoalescer, IsCoalescibleCountBatch } from './countOnlyBatch.js';
+export type { CountOnlyRow, CountSQLExecutor } from './countOnlyBatch.js';
 export { QueryPagingEngine, PagingWrappedSQL } from './queryPagingEngine.js';
+export type { RowCapOutcome, RowCapMethod, RowCapResult } from './queryPagingEngine.js';
 export { RenderPipeline, RenderContext, RenderResult, RenderTrace, CompositionDiagnostic } from './renderPipeline.js';
 export { SymbolTable } from './symbolTable.js';
 // Re-export from @memberjunction/sql-parser for backward compatibility

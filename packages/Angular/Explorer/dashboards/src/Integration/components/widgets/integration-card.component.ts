@@ -59,7 +59,8 @@ import { IntegrationSummary, ResolveIntegrationIcon } from '../../services/integ
                    [style.height.%]="SparkBarHeight(run.TotalRecords)"
                    [class.spark-success]="run.Status === 'Success'"
                    [class.spark-failed]="run.Status === 'Failed'"
-                   [class.spark-pending]="run.Status !== 'Success' && run.Status !== 'Failed'"
+                   [class.spark-cancelled]="run.Status === 'Cancelled'"
+                   [class.spark-pending]="run.Status !== 'Success' && run.Status !== 'Failed' && run.Status !== 'Cancelled'"
                    [title]="run.TotalRecords + ' records - ' + run.Status">
               </div>
             }
@@ -192,6 +193,8 @@ import { IntegrationSummary, ResolveIntegrationIcon } from '../../services/integ
     .spark-success { background: var(--mj-brand-primary); }
     .spark-failed { background: var(--mj-status-error); }
     .spark-pending { background: var(--mj-status-warning); }
+    /* Cancelled: neutral. Warning-coloured would read as "still working", error-coloured as a defect. */
+    .spark-cancelled { background: var(--mj-text-muted); }
 
     .card-footer {
       display: flex; justify-content: space-between;

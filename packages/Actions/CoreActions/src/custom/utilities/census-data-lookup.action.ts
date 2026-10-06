@@ -1,7 +1,29 @@
 import { ActionResultSimple, RunActionParams, ActionParam } from "@memberjunction/actions-base";
 import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
-import axios from "axios";
+import { HttpGet } from "@memberjunction/network-utils";
+
+/** The slice of the Census geocoder's `onelineaddress` response this action reads. */
+interface CensusGeocodeResponse {
+    result?: {
+        addressMatches?: Array<{
+            addressComponents: { state: string; county: string };
+            coordinates: { x: number; y: number };
+            geographies?: Record<string, Array<{ GEOID?: string }>>;
+        }>;
+    };
+}
+
+/** Response shape of the zippopotam.us ZIP lookup used as a geocoder fallback. */
+interface ZippopotamResponse {
+    'post code': string;
+    places: Array<{
+        'state abbreviation': string;
+        'place name': string;
+        latitude: string;
+        longitude: string;
+    }>;
+}
 
 /**
  * Action that retrieves US Census demographic and economic data for a given location.
@@ -247,10 +269,10 @@ export class CensusDataLookupAction extends BaseAction {
         try {
             // Use the Census Geocoding API to get location info for ZIP
             const geocodeUrl = `https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?address=${zip}&benchmark=Public_AR_Current&format=json`;
-            const geoResponse = await axios.get(geocodeUrl);
+            const geoResponse = await HttpGet<CensusGeocodeResponse>(geocodeUrl);
             
-            if (geoResponse.data.result?.addressMatches?.length > 0) {
-                const match = geoResponse.data.result.addressMatches[0];
+            if (geoResponse.Data.result?.addressMatches?.length > 0) {
+                const match = geoResponse.Data.result.addressMatches[0];
                 return {
                     name: zip,
                     type: 'ZIP Code',
@@ -267,18 +289,18 @@ export class CensusDataLookupAction extends BaseAction {
 
             // Fallback to ZIP code data API
             const zipUrl = `https://api.zippopotam.us/us/${zip}`;
-            const zipResponse = await axios.get(zipUrl);
+            const zipResponse = await HttpGet<ZippopotamResponse>(zipUrl);
             
-            if (zipResponse.data) {
+            if (zipResponse.Data) {
                 return {
-                    name: zipResponse.data['post code'],
+                    name: zipResponse.Data['post code'],
                     type: 'ZIP Code',
-                    state: zipResponse.data.places[0]['state abbreviation'],
-                    county: zipResponse.data.places[0]['place name'],
+                    state: zipResponse.Data.places[0]['state abbreviation'],
+                    county: zipResponse.Data.places[0]['place name'],
                     zip: zip,
                     coordinates: {
-                        latitude: parseFloat(zipResponse.data.places[0].latitude),
-                        longitude: parseFloat(zipResponse.data.places[0].longitude)
+                        latitude: parseFloat(zipResponse.Data.places[0].latitude),
+                        longitude: parseFloat(zipResponse.Data.places[0].longitude)
                     }
                 };
             }
@@ -292,10 +314,10 @@ export class CensusDataLookupAction extends BaseAction {
     private async getCityData(city: string, stateCode: string): Promise<any> {
         try {
             const geocodeUrl = `https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?address=${encodeURIComponent(city)},${stateCode}&benchmark=Public_AR_Current&format=json`;
-            const response = await axios.get(geocodeUrl);
-            
-            if (response.data.result?.addressMatches?.length > 0) {
-                const match = response.data.result.addressMatches[0];
+            const response = await HttpGet<CensusGeocodeResponse>(geocodeUrl);
+
+            if (response.Data.result?.addressMatches?.length) {
+                const match = response.Data.result.addressMatches[0];
                 return {
                     name: city,
                     type: 'City',

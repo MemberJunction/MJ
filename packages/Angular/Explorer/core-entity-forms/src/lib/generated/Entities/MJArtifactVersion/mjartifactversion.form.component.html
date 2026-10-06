@@ -219,9 +219,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Artifact Version Attributes','ArtifactVersionID')"
-                [NewRecordValues]="NewRecordValues('MJ: Artifact Version Attributes')"
+                [NewRecordValues]="NewRecordValues('MJ: Artifact Version Attributes','ArtifactVersionID')"
                 [AllowLoad]="IsSectionExpanded('mJArtifactVersionAttributes')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJArtifactVersionAttributes', $event.totalRowCount)"
                 >
@@ -244,9 +244,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Collection Artifacts','ArtifactVersionID')"
-                [NewRecordValues]="NewRecordValues('MJ: Collection Artifacts')"
+                [NewRecordValues]="NewRecordValues('MJ: Collection Artifacts','ArtifactVersionID')"
                 [AllowLoad]="IsSectionExpanded('mJCollectionArtifacts')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJCollectionArtifacts', $event.totalRowCount)"
                 >
@@ -269,9 +269,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Artifact Uses','ArtifactVersionID')"
-                [NewRecordValues]="NewRecordValues('MJ: Artifact Uses')"
+                [NewRecordValues]="NewRecordValues('MJ: Artifact Uses','ArtifactVersionID')"
                 [AllowLoad]="IsSectionExpanded('mJArtifactUses')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJArtifactUses', $event.totalRowCount)"
                 >
@@ -294,9 +294,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversation Detail Artifacts','ArtifactVersionID')"
-                [NewRecordValues]="NewRecordValues('MJ: Conversation Detail Artifacts')"
+                [NewRecordValues]="NewRecordValues('MJ: Conversation Detail Artifacts','ArtifactVersionID')"
                 [AllowLoad]="IsSectionExpanded('mJConversationDetailArtifacts')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJConversationDetailArtifacts', $event.totalRowCount)"
                 >
@@ -319,9 +319,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversation Detail Attachments','ArtifactVersionID')"
-                [NewRecordValues]="NewRecordValues('MJ: Conversation Detail Attachments')"
+                [NewRecordValues]="NewRecordValues('MJ: Conversation Detail Attachments','ArtifactVersionID')"
                 [AllowLoad]="IsSectionExpanded('mJConversationDetailAttachments')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJConversationDetailAttachments', $event.totalRowCount)"
                 >
@@ -344,9 +344,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Signature Request Documents','ArtifactVersionID')"
-                [NewRecordValues]="NewRecordValues('MJ: Signature Request Documents')"
+                [NewRecordValues]="NewRecordValues('MJ: Signature Request Documents','ArtifactVersionID')"
                 [AllowLoad]="IsSectionExpanded('mJSignatureRequestDocuments')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJSignatureRequestDocuments', $event.totalRowCount)"
                 >

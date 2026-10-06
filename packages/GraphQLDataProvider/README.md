@@ -63,6 +63,32 @@ const dataProvider = new GraphQLDataProvider();
 await dataProvider.Config(config);
 ```
 
+### Connect-only boot for embeds
+
+`setupGraphQLClient` performs the full boot: it connects, downloads the entire entity metadata graph, loads the current user and starts the registered startup engines. An anonymous embed (for example a widget that only needs to run a realtime voice session) needs none of that, and the metadata download dominates the cost. For that case use `ConnectGraphQLClient`, which connects and registers the provider globally (`Metadata.Provider` is set) and stops there.
+
+```typescript
+import { ConnectGraphQLClient, GraphQLProviderConfigData } from '@memberjunction/graphql-dataprovider';
+
+const config = new GraphQLProviderConfigData(token, 'https://api.example.com/graphql', 'wss://api.example.com/graphql', refreshToken);
+const provider = await ConnectGraphQLClient(config);
+```
+
+| | `ConnectGraphQLClient` | `setupGraphQLClient` |
+|---|---|---|
+| Client, session id, token, `ConfigData` | Yes | Yes |
+| `Metadata.Provider` set | Yes | Yes |
+| `ExecuteGQL`, subscriptions, the realtime runtime | Works | Works |
+| Entity metadata, `RunView`, `GetEntityObject`, engines, `CurrentUser` | Not available | Available |
+
+`ConnectGraphQLClient` raises no `LoggedIn` event, so nothing that waits for a login (engine pre-warming, for example) starts.
+
+Calling `ConnectGraphQLClient` on a provider that is already fully booted is a no-op that returns it; it never drops loaded metadata or recreates the client. Calling it again on a connected but unbooted provider replaces `ConfigData` and keeps the session id. If the URL, token or API keys differ from the ones the current client was built with, the client is rebuilt so requests carry the new identity; with the same credentials the existing client is reused. For routine token expiry, keep using `RefreshTokenFunction` / `OnAuthenticationError`.
+
+You can finish the boot later on the same instance by calling `setupGraphQLClient(config)`; it then performs the full metadata load, current-user fetch and startup engines. This is also how an anonymous connection becomes a signed-in one: pass the login's config, and the client is rebuilt with the new token before the metadata download. An already-open subscription socket keeps the identity it connected with until it reconnects.
+
+`setupGraphQLClient` now rejects when the boot loaded no entity metadata (before the current user is loaded or any startup engine runs), instead of resolving with an empty provider. If you only want a connection, call `ConnectGraphQLClient`.
+
 ### Working with Entities
 
 ```typescript
@@ -762,4 +788,4 @@ For the full architecture — differential updates, Redis cross-server sync, ses
 
 ## License
 
-ISC
+Business Source License 1.1 — see [LICENSE](../../LICENSE) for details.

@@ -2,7 +2,7 @@
  * Cleanup hook that runs after any command completes.
  *
  * Only `mj app *` commands open an mssql connection pool (through
- * `ensureProviderInitialized` in utils/open-app-context.ts). The pool keeps
+ * `EnsureProviderInitialized` in utils/open-app-context.ts). The pool keeps
  * sockets alive, which pins the Node event loop open and makes the CLI appear
  * to hang after the command finishes printing its output — so for those
  * commands we close it here.
@@ -28,8 +28,8 @@ const hook: Hook<'postrun'> = async function (options) {
     return;
   }
   try {
-    const { closeConnectionPool } = await import('../utils/open-app-context.js');
-    await closeConnectionPool();
+    const { CloseConnectionPool } = await import('../utils/open-app-context.js');
+    await CloseConnectionPool();
   } catch {
     /* best effort — pool may already be closed or never opened */
   }

@@ -193,7 +193,7 @@ The `CompanyIntegrationRecordMap` entity tracks the mapping between MJ record ID
 
 ## Roadmap
 
-The long-term vision is a broad ecosystem of open-source integration connectors covering every major AMS (Association Management System), CRM, marketing automation tool, accounting system, LMS, and SaaS product. Each new connector plugs into the same generation and execution infrastructure, instantly producing a full suite of discoverable actions.
+The long-term vision is a broad ecosystem of community-driven integration connectors covering every major AMS (Association Management System), CRM, marketing automation tool, accounting system, LMS, and SaaS product. Each new connector plugs into the same generation and execution infrastructure, instantly producing a full suite of discoverable actions.
 
 Combined with MJ's AI agent framework, this creates a platform where agents can read from and write to an arbitrarily large number of external systems through a uniform, metadata-driven interface -- without custom code for each integration point.
 
