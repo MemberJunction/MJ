@@ -87,8 +87,8 @@
             @if (tab.Data?.Plugin && PlacementOf(tab.Key) !== 'tab') {
               <!-- The user moved this channel's surface elsewhere: the tab says where, and brings it back. -->
               <div class="s-pane__away" role="status">
-                <i [class]="PlacementOf(tab.Key) === 'stage' ? 'fa-solid fa-expand' : 'fa-solid fa-eye-slash'" aria-hidden="true"></i>
-                <span>{{ tab.Title }} is {{ PlacementOf(tab.Key) === 'stage' ? 'on the stage' : 'hidden' }}.</span>
+                <i [class]="AwayIcon(tab.Key)" aria-hidden="true"></i>
+                <span>{{ tab.Title }} is {{ AwayText(tab.Key) }}.</span>
                 <button type="button" mjButton Variant="secondary" Size="sm"
                         (click)="MoveRequested.emit({ Key: tab.Key, Placement: 'tab' })">
                   Bring it here

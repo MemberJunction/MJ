@@ -3,19 +3,20 @@ import type { MediaStagePlacement, MediaStageSurface } from '@memberjunction/ng-
 import type { BaseRealtimeChannelClient } from '@memberjunction/realtime-runtime';
 import { RecordSurfaceMove } from './realtime-surface-placement-prefs';
 
-/** Where a channel's surface may go. Picture-in-picture joins with its drag and resize. */
-const ALLOWED_PLACEMENTS: readonly MediaStagePlacement[] = ['stage', 'tab', 'hidden'];
+/** Where a channel's surface may go. */
+const ALLOWED_PLACEMENTS: readonly MediaStagePlacement[] = ['stage', 'pip', 'tab', 'hidden'];
 
 /**
  * Which channel surfaces the call overlay's stage (`mj-media-stage`) holds, and where each one shows.
  *
- * **Placement.** Every surface starts on its tab. The user moves it to the stage (it fills the call), back to its tab,
- * or out of sight; the moves are kept in order, one per surface, and resolved by `ResolveSurfacePlacements`, so the
- * most recent move to the stage wins it and the surface it displaces returns to its tab. The host saves
- * {@link Moves} and loads them back ({@link LoadMoves}), so a layout carries over to later sessions.
+ * **Placement.** Every surface starts on its tab. The user moves it to the stage (it fills the call), into a
+ * picture-in-picture box, back to its tab, or out of sight; the moves are kept in order, one per surface, and resolved
+ * by `ResolveSurfacePlacements`, so the most recent move to the stage wins it, the surface it displaces returns to its
+ * tab, and picture-in-picture boxes stack newest first. The host saves {@link Moves} and loads them back
+ * ({@link LoadMoves}), so a layout carries over to later sessions.
  *
- * **Creation.** A channel's surface is created the first time it is seen (its tab shows it, or it is on the stage)
- * and kept until the channel leaves the session. Moving it, hiding the panel or switching tabs only changes where it
+ * **Creation.** A channel's surface is created the first time it is seen (its tab shows it, or it is on the stage or
+ * in a picture-in-picture box) and kept until the channel leaves the session. Moving it, hiding the panel or switching tabs only changes where it
  * shows, so a whiteboard keeps its view and a stream keeps playing.
  *
  * Pure state with no Angular: the overlay reports the session's channels, the channel tab the panel is showing and
@@ -29,6 +30,8 @@ export class RealtimeSurfaceStageModel {
   private moves: MediaPlacementMove[] = [];
   private activeTabKey: string | null = null;
   private placements: ReadonlyMap<string, MediaStagePlacement> = new Map();
+  /** Picture-in-picture surfaces, newest first. */
+  private pipOrder: readonly string[] = [];
   private surfaces: readonly MediaStageSurface[] = [];
 
   /** The stage's surfaces. The array is replaced only when a surface or a placement changes, so it binds cheaply. */
@@ -110,32 +113,38 @@ export class RealtimeSurfaceStageModel {
   }
 
   private update(): void {
-    const next = this.resolvePlacements();
-    if (!samePlacements(next, this.placements)) {
-      this.placements = next;
-    }
+    this.resolvePlacements();
     for (const [key, placement] of this.placements) {
-      if (placement === 'stage' || (placement === 'tab' && key === this.activeTabKey)) {
+      if (placement === 'stage' || placement === 'pip' || (placement === 'tab' && key === this.activeTabKey)) {
         this.seen.add(key);
       }
     }
-    const surfaces = [...this.plugins.keys()]
-      .filter((key) => this.seen.has(key))
-      .map((key): MediaStageSurface => ({ Key: key, Placement: this.placements.get(key) ?? 'tab' }));
+    const surfaces = [...this.plugins.keys()].filter((key) => this.seen.has(key)).map((key) => this.surfaceFor(key));
     if (!sameSurfaces(surfaces, this.surfaces)) {
       this.surfaces = surfaces;
     }
   }
 
-  private resolvePlacements(): Map<string, MediaStagePlacement> {
+  /** A stage surface for a channel: its placement, its name, and where it stacks when it is picture-in-picture. */
+  private surfaceFor(key: string): MediaStageSurface {
+    const placement = this.placements.get(key) ?? 'tab';
+    const surface: MediaStageSurface = { Key: key, Placement: placement, Label: this.plugins.get(key)?.TabTitle };
+    return placement === 'pip' ? { ...surface, PipIndex: this.pipOrder.indexOf(key) } : surface;
+  }
+
+  private resolvePlacements(): void {
     const resolved = ResolveSurfacePlacements([...this.plugins.values()].map(surfaceOf), this.moves);
     const placements = new Map<string, MediaStagePlacement>();
     if (resolved.Stage) {
       placements.set(resolved.Stage.Key, 'stage');
     }
+    resolved.Pips.forEach((surface) => placements.set(surface.Key, 'pip'));
     resolved.Tabs.forEach((surface) => placements.set(surface.Key, 'tab'));
     resolved.Hidden.forEach((surface) => placements.set(surface.Key, 'hidden'));
-    return placements;
+    if (!samePlacements(placements, this.placements)) {
+      this.placements = placements;
+    }
+    this.pipOrder = resolved.Pips.map((surface) => surface.Key);
   }
 }
 
@@ -149,5 +158,11 @@ function samePlacements(a: ReadonlyMap<string, MediaStagePlacement>, b: Readonly
 }
 
 function sameSurfaces(a: readonly MediaStageSurface[], b: readonly MediaStageSurface[]): boolean {
-  return a.length === b.length && a.every((surface, i) => surface.Key === b[i].Key && surface.Placement === b[i].Placement);
+  return (
+    a.length === b.length &&
+    a.every(
+      (surface, i) =>
+        surface.Key === b[i].Key && surface.Placement === b[i].Placement && surface.Label === b[i].Label && surface.PipIndex === b[i].PipIndex
+    )
+  );
 }

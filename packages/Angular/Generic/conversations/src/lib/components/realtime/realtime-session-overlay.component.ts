@@ -20,7 +20,10 @@ import { RealtimeComposerComponent } from './realtime-composer.component';
 import { RealtimeSurfaceTabsComponent, RealtimeChannelSlot } from './realtime-surface-tabs.component';
 import { RealtimeSurfaceStageModel } from './realtime-surface-stage.model';
 import { RealtimeSurfaceMoveMenuComponent, type RealtimeSurfaceMove } from './realtime-surface-move-menu.component';
-import { ParseSurfacePlacementPref, SerializeSurfacePlacementPref, SURFACE_PLACEMENT_PREF_KEY } from './realtime-surface-placement-prefs';
+import {
+  ParseSurfacePipPref, ParseSurfacePlacementPref, SerializeSurfacePipPref, SerializeSurfacePlacementPref,
+  SURFACE_PIP_PREF_KEY, SURFACE_PLACEMENT_PREF_KEY
+} from './realtime-surface-placement-prefs';
 import { RealtimeChannelPaneComponent } from './channels/realtime-channel-pane.component';
 import {
   ClampSurfacePanelWidth, DefaultSurfacePanelWidth, IsSurfacePanelDrag, ParseSurfacePanelPref,
@@ -38,7 +41,10 @@ import { RealtimeChannelTabRegistration, ShouldRemoveReviewWhiteboardTab } from 
 import { ShouldRegisterChannelTabUpFront } from './realtime-surface-tab-style';
 import { BaseRealtimeChannelClient } from '@memberjunction/realtime-runtime';
 import { RealtimeWhiteboardBoardComponent, WhiteboardState } from '@memberjunction/ng-whiteboard';
-import { MediaStageComponent, MediaStageSurfaceDirective } from '@memberjunction/ng-realtime-media';
+import {
+  MediaStageComponent, MediaStagePipActionsDirective, MediaStageSurfaceDirective,
+  type MediaPipRect, type MediaStagePipRectChange
+} from '@memberjunction/ng-realtime-media';
 
 /**
  * A request to open an entity record, emitted by the call overlay's gear-gated developer
@@ -137,6 +143,7 @@ export interface RealtimeStartLiveRequest {
     RealtimeSurfaceMoveMenuComponent,
     MediaStageComponent,
     MediaStageSurfaceDirective,
+    MediaStagePipActionsDirective,
     RealtimeWhiteboardBoardComponent,
     MJStorageMediaPlayerComponent
   ],
@@ -1485,11 +1492,22 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     this.moveSurface(move);
   }
 
-  /** The user put every surface back on its tab. */
+  /** The user put every surface back on its tab (and every picture-in-picture box back in its corner). */
   public OnResetLayout(): void {
     this.SurfaceStage.ResetLayout();
+    this.PipRects = new Map();
     this.savePlacementPref();
+    this.savePipPref();
     this.recomputeUi();
+  }
+
+  /** Where the user put each picture-in-picture box, by channel key, as fractions of the stage. */
+  public PipRects: ReadonlyMap<string, MediaPipRect> = new Map();
+
+  /** The user moved or resized a picture-in-picture box: keep it and save it. */
+  public OnPipRectChange(change: MediaStagePipRectChange): void {
+    this.PipRects = new Map(this.PipRects).set(change.Key, change.Rect);
+    this.savePipPref();
   }
 
   /** Moves a surface, saves the layout, and re-resolves the UI (a surface on the stage is the focus layout). */
@@ -1501,12 +1519,22 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     this.recomputeUi();
   }
 
-  /** Starts from the user's saved layout (no-op when the engine isn't configured). */
+  /** Starts from the user's saved layout and picture-in-picture boxes (no-op when the engine isn't configured). */
   private loadPlacementPref(): void {
     try {
       this.SurfaceStage.LoadMoves(ParseSurfacePlacementPref(UserInfoEngine.Instance.GetSetting(SURFACE_PLACEMENT_PREF_KEY)));
+      this.PipRects = ParseSurfacePipPref(UserInfoEngine.Instance.GetSetting(SURFACE_PIP_PREF_KEY));
     } catch {
       // UserInfoEngine not configured (plain-node tests / early bootstrap): every surface starts on its tab.
+    }
+  }
+
+  /** Saves the picture-in-picture boxes, debounced (no-op when the engine isn't configured). */
+  private savePipPref(): void {
+    try {
+      UserInfoEngine.Instance.SetSettingDebounced(SURFACE_PIP_PREF_KEY, SerializeSurfacePipPref(this.PipRects));
+    } catch {
+      // UserInfoEngine not configured: the boxes stay where they are for this overlay only.
     }
   }
 

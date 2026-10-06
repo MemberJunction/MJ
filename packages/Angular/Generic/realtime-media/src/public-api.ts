@@ -12,3 +12,4 @@ export * from './lib/components/media-device-menu.component';
 export * from './lib/components/audio-meter.component';
 export * from './lib/components/media-tile.component';
 export * from './lib/components/media-stage.component';
+export * from './lib/pip-geometry';

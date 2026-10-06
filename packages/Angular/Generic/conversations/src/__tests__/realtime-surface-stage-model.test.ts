@@ -134,7 +134,7 @@ describe('RealtimeSurfaceStageModel', () => {
       expect(model.Moves).toEqual([]);
     });
 
-    it('starts from a saved layout, ignoring placements a surface may not take', () => {
+    it('starts from a saved layout', () => {
       const model = new RealtimeSurfaceStageModel();
       model.LoadMoves([
         { SurfaceKey: 'Whiteboard', Placement: 'stage' },
@@ -142,8 +142,23 @@ describe('RealtimeSurfaceStageModel', () => {
       ]);
       model.Register(new TestChannel('Whiteboard'));
       model.Register(new TestChannel('Media'));
-      expect(placements(model)).toEqual({ Whiteboard: 'stage', Media: 'tab' });
-      expect(surfaces(model)).toEqual(['Whiteboard:stage']);
+      expect(placements(model)).toEqual({ Whiteboard: 'stage', Media: 'pip' });
+      expect(surfaces(model)).toEqual(['Whiteboard:stage', 'Media:pip']);
+    });
+
+    it('creates a picture-in-picture surface, stacks such surfaces newest first, and names each', () => {
+      const model = withChannels('Whiteboard', 'Media', 'Browser');
+      model.Move('Whiteboard', 'pip');
+      model.Move('Media', 'pip');
+      expect(model.Surfaces).toEqual([
+        { Key: 'Whiteboard', Placement: 'pip', Label: 'Whiteboard', PipIndex: 1 },
+        { Key: 'Media', Placement: 'pip', Label: 'Media', PipIndex: 0 },
+      ]);
+      model.Move('Whiteboard', 'pip');
+      expect(model.Surfaces.map((s) => s.PipIndex)).toEqual([1, 0]);
+      model.Move('Whiteboard', 'tab');
+      model.Move('Whiteboard', 'pip');
+      expect(model.Surfaces.map((s) => s.PipIndex)).toEqual([0, 1]);
     });
 
     it("keeps a channel's move when it leaves, so its surface returns to the same place", () => {

@@ -27,6 +27,20 @@ import { ParsedDelegationArtifact } from '@memberjunction/realtime-runtime';
  */
 const CHANNEL_ONBOARDING_SEEN_SETTING_KEY = 'mj.realtimeChannels.onboardingSeen.v1';
 
+/** How a channel's tab says where its surface went. */
+const AWAY_TEXT: Readonly<Record<MediaStagePlacement, string>> = {
+  stage: 'on the stage',
+  pip: 'in picture-in-picture',
+  tab: 'here',
+  hidden: 'hidden',
+};
+const AWAY_ICON: Readonly<Record<MediaStagePlacement, string>> = {
+  stage: 'fa-solid fa-expand',
+  pip: 'fa-regular fa-window-restore',
+  tab: 'fa-solid fa-table-columns',
+  hidden: 'fa-solid fa-eye-slash',
+};
+
 /** Where the active channel tab's surface shows: the tab's key and the element its pane keeps for the surface. */
 export interface RealtimeChannelSlot {
   Key: string;
@@ -239,6 +253,16 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy, AfterVie
   /** Where a channel's surface is placed. */
   public PlacementOf(key: string): MediaStagePlacement {
     return this.SurfacePlacements.get(key) ?? 'tab';
+  }
+
+  /** Where a moved channel's surface is, as its tab says it: "on the stage", "in picture-in-picture", "hidden". */
+  public AwayText(key: string): string {
+    return AWAY_TEXT[this.PlacementOf(key)];
+  }
+
+  /** The icon for where a moved channel's surface is. */
+  public AwayIcon(key: string): string {
+    return AWAY_ICON[this.PlacementOf(key)];
   }
 
   /** Toggle the panel between expanded and slim-collapsed. */

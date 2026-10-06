@@ -16,9 +16,10 @@ export interface RealtimeSurfaceMove {
 }
 
 /**
- * `mj-realtime-surface-move-menu`: the "Move to…" menu for one channel's surface: the stage, its tab, or out of
- * sight, plus "Reset layout". The call overlay shows it beside the active channel tab and in the floating call pill
- * while a surface is on the stage. The surface's current placement is listed but disabled.
+ * `mj-realtime-surface-move-menu`: the "Move to…" menu for one channel's surface: the stage, a picture-in-picture
+ * box, its tab, or out of sight, plus "Reset layout". The call overlay shows it beside the active channel tab, in the
+ * floating call pill while a surface is on the stage, and on each picture-in-picture box's bar. The surface's current
+ * placement is listed but disabled.
  */
 @Component({
   selector: 'mj-realtime-surface-move-menu',
@@ -32,6 +33,7 @@ export interface RealtimeSurfaceMove {
     <ng-template #moveMenu>
       <mj-menu [AriaLabel]="'Move ' + Title + ' to'">
         <mj-menu-item Icon="fa-solid fa-expand" [Disabled]="Placement === 'stage'" (Triggered)="Move('stage')">Stage</mj-menu-item>
+        <mj-menu-item Icon="fa-regular fa-window-restore" [Disabled]="Placement === 'pip'" (Triggered)="Move('pip')">Picture-in-picture</mj-menu-item>
         <mj-menu-item Icon="fa-solid fa-table-columns" [Disabled]="Placement === 'tab'" (Triggered)="Move('tab')">Tab</mj-menu-item>
         <mj-menu-item Icon="fa-solid fa-eye-slash" [Disabled]="Placement === 'hidden'" (Triggered)="Move('hidden')">Hide</mj-menu-item>
         <mj-menu-divider></mj-menu-divider>

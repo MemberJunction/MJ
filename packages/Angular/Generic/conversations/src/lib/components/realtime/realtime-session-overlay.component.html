@@ -163,12 +163,26 @@
     <mj-media-stage class="call-stage"
                     [Surfaces]="SurfaceStage.Surfaces"
                     [TabSlot]="StageSlot?.Element ?? null"
-                    [ActiveTabKey]="StageSlot?.Key ?? null">
+                    [ActiveTabKey]="StageSlot?.Key ?? null"
+                    [PipRects]="PipRects"
+                    (PipRectChange)="OnPipRectChange($event)">
       <ng-template mjMediaStageSurface let-key let-visible="Visible" let-placement="Placement">
         @if (SurfaceStage.PluginFor(key); as plugin) {
           <div class="stage-frame" role="region" [attr.aria-label]="plugin.TabTitle">
             <mj-realtime-channel-pane [Plugin]="plugin" [Visible]="visible" [Placement]="placement"></mj-realtime-channel-pane>
           </div>
+        }
+      </ng-template>
+      <!-- A picture-in-picture box's bar carries the same "Move to…" menu. -->
+      <ng-template mjMediaStagePipActions let-key>
+        @if (SurfaceStage.PluginFor(key); as plugin) {
+          <mj-realtime-surface-move-menu
+            [Key]="key"
+            [Title]="plugin.TabTitle"
+            Placement="pip"
+            (MoveRequested)="OnMoveRequested($event)"
+            (ResetLayoutRequested)="OnResetLayout()">
+          </mj-realtime-surface-move-menu>
         }
       </ng-template>
     </mj-media-stage>

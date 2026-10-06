@@ -20,9 +20,11 @@ const lifecycle: string[] = [];
 /** Errors Angular reports while it runs change detection on its own (autoDetect), which would otherwise only be logged. */
 const reported: unknown[] = [];
 
-/** The user's saved layout as the overlay reads it, and every layout it saves. */
+/** The user's saved layout and picture-in-picture boxes as the overlay reads them, and every value it saves. */
 let savedLayout: string | undefined;
 const savedLayouts: string[] = [];
+let savedPips: string | undefined;
+const savedPipLayouts: string[] = [];
 
 @Component({ selector: 'mj-test-board', standalone: true, template: '<div class="test-board">board</div>' })
 class TestBoardComponent implements OnInit, OnDestroy {
@@ -100,10 +102,16 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
     reported.length = 0;
     savedLayout = undefined;
     savedLayouts.length = 0;
-    vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockImplementation((key: string) => (key === 'mj.realtime.placement.v1' ? savedLayout : undefined));
+    savedPips = undefined;
+    savedPipLayouts.length = 0;
+    vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockImplementation((key: string) =>
+      key === 'mj.realtime.placement.v1' ? savedLayout : key === 'mj.realtime.pip.v1' ? savedPips : undefined
+    );
     vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation((key: string, value: string) => {
       if (key === 'mj.realtime.placement.v1') {
         savedLayouts.push(value);
+      } else if (key === 'mj.realtime.pip.v1') {
+        savedPipLayouts.push(value);
       }
     });
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
@@ -287,5 +295,51 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
     await pick(f, '.board-focus-pill mj-realtime-surface-move-menu', 'Reset layout');
     expect(f.componentInstance.ChannelFocusMode).toBe(false);
     expect(savedLayouts.at(-1)).toBe('[]');
+  });
+
+  describe('picture-in-picture', () => {
+    const place = (element: HTMLElement) => [element.style.left, element.style.top, element.style.width, element.style.height];
+
+    it("puts the board in a box from its tab's menu; the box's bar carries the same menu and its tab says where it went", async () => {
+      const { f, board } = await renderWithBoard();
+      await pick(f, '.s-tab-move', 'Picture-in-picture');
+      expect(surface(f).classList.contains('stage-surface--pip')).toBe(true);
+      expect(place(surface(f))).toEqual(['664px', '384px', '320px', '200px']);
+      expect(surface(f).querySelector('.stage-pip-title')?.textContent?.trim()).toBe('Whiteboard');
+      expect(surface(f).querySelector('.stage-pip-bar mj-realtime-surface-move-menu')).not.toBeNull();
+      expect(query(f, '.s-pane__away span')?.textContent?.trim()).toBe('Whiteboard is in picture-in-picture.');
+      expect(f.componentInstance.ChannelFocusMode).toBe(false);
+      expect(board.Placements).toEqual(['tab', 'pip']);
+      expect(lifecycle).toEqual(['bound', 'created']);
+    });
+
+    it('saves where the user drags a box', async () => {
+      savedLayout = '[{"SurfaceKey":"Whiteboard","Placement":"pip"}]';
+      const { f } = await renderWithBoard();
+      const bar = surface(f).querySelector('.stage-pip-bar') as HTMLElement;
+      bar.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, button: 0, clientX: 700, clientY: 400 }));
+      bar.dispatchEvent(new MouseEvent('pointermove', { bubbles: true, clientX: 300, clientY: 100 }));
+      bar.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, clientX: 300, clientY: 100 }));
+      await settle();
+      expect(savedPipLayouts.at(-1)).toBe('{"Whiteboard":{"X":0.264,"Y":0.14,"W":0.32,"H":0.3333333333333333}}');
+      expect(place(surface(f))).toEqual(['264px', '84px', '320px', '200px']);
+    });
+
+    it('starts each box where the user last put it', async () => {
+      savedLayout = '[{"SurfaceKey":"Whiteboard","Placement":"pip"}]';
+      savedPips = '{"Whiteboard":{"X":0.264,"Y":0.14,"W":0.32,"H":0.3333333333333333}}';
+      const { f } = await renderWithBoard();
+      expect(place(surface(f))).toEqual(['264px', '84px', '320px', '200px']);
+    });
+
+    it('Reset layout puts every box back in its corner', async () => {
+      savedLayout = '[{"SurfaceKey":"Whiteboard","Placement":"pip"}]';
+      savedPips = '{"Whiteboard":{"X":0.1,"Y":0.1,"W":0.3,"H":0.3}}';
+      const { f } = await renderWithBoard();
+      await pick(f, '.stage-pip-bar mj-realtime-surface-move-menu', 'Reset layout');
+      expect(savedPipLayouts.at(-1)).toBe('{}');
+      expect(savedLayouts.at(-1)).toBe('[]');
+      expect(surface(f).classList.contains('stage-surface--pip')).toBe(false);
+    });
   });
 });

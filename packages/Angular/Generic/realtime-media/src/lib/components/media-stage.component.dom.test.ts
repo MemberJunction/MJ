@@ -2,7 +2,14 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Component, Input, NgZone, OnDestroy, OnInit } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { renderComponentFixture, query } from '@memberjunction/ng-test-utils';
-import { MediaStageComponent, MediaStageSurfaceDirective, type MediaStageSurface } from './media-stage.component';
+import {
+  MediaStageComponent,
+  MediaStagePipActionsDirective,
+  MediaStageSurfaceDirective,
+  type MediaStagePipRectChange,
+  type MediaStageSurface,
+} from './media-stage.component';
+import type { MediaPipRect } from '../pip-geometry';
 
 /**
  * A surface's content: records each creation and destruction, so a test can tell a move from a re-creation, and the
@@ -38,11 +45,14 @@ class TestSurfaceComponent implements OnInit, OnDestroy {
 
 @Component({
   standalone: true,
-  imports: [MediaStageComponent, MediaStageSurfaceDirective, TestSurfaceComponent],
+  imports: [MediaStageComponent, MediaStageSurfaceDirective, MediaStagePipActionsDirective, TestSurfaceComponent],
   template: `
-    <mj-media-stage [Surfaces]="Surfaces" [TabSlot]="Slot" [ActiveTabKey]="ActiveTabKey">
+    <mj-media-stage [Surfaces]="Surfaces" [TabSlot]="Slot" [ActiveTabKey]="ActiveTabKey" [PipRects]="PipRects" (PipRectChange)="Changes.push($event)">
       <ng-template mjMediaStageSurface let-key let-visible="Visible" let-placement="Placement">
         <mj-test-surface [Key]="key" [Visible]="visible" [Placement]="placement"></mj-test-surface>
+      </ng-template>
+      <ng-template mjMediaStagePipActions let-key>
+        <button type="button" class="pip-action">{{ key }} actions</button>
       </ng-template>
     </mj-media-stage>
   `,
@@ -51,6 +61,8 @@ class StageHostComponent {
   @Input() public Surfaces: MediaStageSurface[] = [];
   @Input() public ActiveTabKey: string | null = null;
   @Input() public Slot: HTMLElement | null = null;
+  @Input() public PipRects: ReadonlyMap<string, MediaPipRect> = new Map();
+  public readonly Changes: MediaStagePipRectChange[] = [];
 }
 
 /** An element whose box the test sets and moves: jsdom lays nothing out. */
@@ -167,6 +179,8 @@ describe('MediaStageComponent (DOM)', () => {
     expect(TestSurfaceComponent.Placements.get('whiteboard')).toBe('tab');
     set(f, { Surfaces: [{ Key: 'whiteboard', Placement: 'stage' }] });
     expect(TestSurfaceComponent.Placements.get('whiteboard')).toBe('stage');
+    set(f, { Surfaces: [{ Key: 'whiteboard', Placement: 'pip' }] });
+    expect(TestSurfaceComponent.Placements.get('whiteboard')).toBe('pip');
     set(f, { Surfaces: [{ Key: 'whiteboard', Placement: 'hidden' }] });
     set(f, { Surfaces: [{ Key: 'whiteboard', Placement: 'tab' }] });
     expect(TestSurfaceComponent.Created).toEqual(['whiteboard']);
@@ -247,5 +261,94 @@ describe('MediaStageComponent (DOM)', () => {
     f.detectChanges();
     expect(Object.fromEntries(TestSurfaceComponent.Visibility)).toEqual({ whiteboard: true, browser: true });
     expect(TestSurfaceComponent.Created).toEqual(['whiteboard', 'browser']);
+  });
+
+  describe('picture-in-picture', () => {
+    const bar = (f: Awaited<ReturnType<typeof render>>, key: string) => box(f, key).querySelector('.stage-pip-bar') as HTMLElement;
+    const place = (element: HTMLElement) => [element.style.left, element.style.top, element.style.width, element.style.height];
+    const pointer = (target: Element, type: string, x: number, y: number) =>
+      target.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, button: 0, clientX: x, clientY: y }));
+    const key = (target: Element, name: string, shiftKey = false) =>
+      target.dispatchEvent(new KeyboardEvent('keydown', { key: name, shiftKey, bubbles: true, cancelable: true }));
+    const pips = (): MediaStageSurface[] => [
+      { Key: 'a', Placement: 'pip', Label: 'Alpha', PipIndex: 0 },
+      { Key: 'b', Placement: 'pip', PipIndex: 1 },
+    ];
+
+    it('stacks boxes upward from the bottom-right corner, newest in the corner, each on screen with its bar', async () => {
+      const f = await render({ Surfaces: pips() });
+      expect(place(box(f, 'a'))).toEqual(['664px', '584px', '320px', '200px']);
+      expect(place(box(f, 'b'))).toEqual(['664px', '376px', '320px', '200px']);
+      expect(bar(f, 'a').querySelector('.stage-pip-title')?.textContent?.trim()).toBe('Alpha');
+      expect(bar(f, 'b').querySelector('.stage-pip-title')?.textContent?.trim()).toBe('b');
+      expect(bar(f, 'a').querySelector('.pip-action')?.textContent?.trim()).toBe('a actions');
+      expect(Object.fromEntries(TestSurfaceComponent.Visibility)).toEqual({ a: true, b: true });
+    });
+
+    it('puts a box where the user put it, as fractions of the stage', async () => {
+      const f = await render({ Surfaces: pips(), PipRects: new Map([['a', { X: 0.1, Y: 0.1, W: 0.3, H: 0.25 }]]) });
+      expect(place(box(f, 'a'))).toEqual(['100px', '80px', '300px', '200px']);
+    });
+
+    it('drags a box by its bar, keeping it inside the stage, and reports where it ended', async () => {
+      const f = await render({ Surfaces: pips() });
+      pointer(bar(f, 'a'), 'pointerdown', 700, 600);
+      pointer(bar(f, 'a'), 'pointermove', 600, 550);
+      expect(place(box(f, 'a'))).toEqual(['564px', '534px', '320px', '200px']);
+      pointer(bar(f, 'a'), 'pointerup', 600, 550);
+      f.detectChanges();
+      expect(f.componentInstance.Changes).toEqual([{ Key: 'a', Rect: { X: 0.564, Y: 0.6675, W: 0.32, H: 0.25 } }]);
+      expect(place(box(f, 'a'))).toEqual(['564px', '534px', '320px', '200px']);
+      expect(box(f, 'a').classList.contains('stage-surface--top')).toBe(true);
+    });
+
+    it('resizes a box from its corner, up to the stage edge', async () => {
+      const f = await render({ Surfaces: pips() });
+      const corner = box(f, 'a').querySelector('.stage-pip-resize') as HTMLElement;
+      pointer(corner, 'pointerdown', 980, 780);
+      pointer(corner, 'pointermove', 1020, 810);
+      pointer(corner, 'pointerup', 1020, 810);
+      f.detectChanges();
+      expect(f.componentInstance.Changes).toEqual([{ Key: 'a', Rect: { X: 0.664, Y: 0.73, W: 0.336, H: 0.27 } }]);
+    });
+
+    it('reports nothing for a press that does not move the box', async () => {
+      const f = await render({ Surfaces: pips() });
+      pointer(bar(f, 'a'), 'pointerdown', 700, 600);
+      pointer(bar(f, 'a'), 'pointerup', 700, 600);
+      expect(f.componentInstance.Changes).toEqual([]);
+    });
+
+    it('does not drag from a button in the bar', async () => {
+      const f = await render({ Surfaces: pips() });
+      const action = bar(f, 'a').querySelector('.pip-action') as HTMLElement;
+      pointer(action, 'pointerdown', 700, 600);
+      pointer(bar(f, 'a'), 'pointermove', 600, 550);
+      pointer(bar(f, 'a'), 'pointerup', 600, 550);
+      expect(f.componentInstance.Changes).toEqual([]);
+      expect(place(box(f, 'a'))).toEqual(['664px', '584px', '320px', '200px']);
+    });
+
+    it('moves a focused bar with the arrow keys and resizes it with Shift, but leaves keys meant for its buttons alone', async () => {
+      const f = await render({ Surfaces: pips() });
+      key(bar(f, 'b'), 'ArrowLeft');
+      key(bar(f, 'b'), 'ArrowUp', true);
+      f.detectChanges();
+      expect(f.componentInstance.Changes.map((c) => c.Rect)).toEqual([
+        { X: 0.648, Y: 0.47, W: 0.32, H: 0.25 },
+        { X: 0.648, Y: 0.47, W: 0.32, H: 0.23 },
+      ]);
+      expect(box(f, 'b').classList.contains('stage-surface--top')).toBe(true);
+      key(bar(f, 'b').querySelector('.pip-action') as HTMLElement, 'ArrowDown');
+      expect(f.componentInstance.Changes).toHaveLength(2);
+    });
+
+    it('names each bar for assistive technology and points it at the shared hint', async () => {
+      const f = await render({ Surfaces: pips() });
+      const hint = query(f, '.stage-pip-hint') as HTMLElement;
+      expect(bar(f, 'a').getAttribute('aria-label')).toBe('Alpha, picture-in-picture');
+      expect(bar(f, 'a').getAttribute('aria-describedby')).toBe(hint.id);
+      expect(hint.textContent).toContain('Arrow keys move it');
+    });
   });
 });

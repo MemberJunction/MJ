@@ -221,7 +221,7 @@ describe('RealtimeSurfaceTabsComponent: moving surfaces (DOM)', () => {
     await settle(f);
     (query(f, 'mj-realtime-surface-move-menu button') as HTMLButtonElement).click();
     f.detectChanges();
-    (overlayQueryAll('mj-menu-item') as HTMLElement[])[2].click();
+    (overlayQueryAll('mj-menu-item') as HTMLElement[]).find((item) => item.textContent?.trim() === 'Hide')?.click();
     expect(moves).toEqual([{ Key: 'Whiteboard', Placement: 'hidden' }]);
   });
 

@@ -6,7 +6,7 @@ import { RealtimeSurfaceMoveMenuComponent, type RealtimeSurfaceMove } from './re
 describe('RealtimeSurfaceMoveMenuComponent (DOM)', () => {
   afterEach(() => clearOverlayContainers());
 
-  const render = (placement: 'stage' | 'tab' | 'hidden' = 'tab') =>
+  const render = (placement: 'stage' | 'pip' | 'tab' | 'hidden' = 'tab') =>
     renderComponentFixture(RealtimeSurfaceMoveMenuComponent, { inputs: { Key: 'Whiteboard', Title: 'Whiteboard', Placement: placement } });
 
   const open = (f: ReturnType<typeof render>) => {
@@ -24,21 +24,21 @@ describe('RealtimeSurfaceMoveMenuComponent (DOM)', () => {
 
   it('offers every placement but the current one, then Reset layout', () => {
     const items = open(render('tab'));
-    expect(items.map((item) => item.textContent?.trim())).toEqual(['Stage', 'Tab', 'Hide', 'Reset layout']);
-    expect(items.map((item) => item.getAttribute('aria-disabled'))).toEqual([null, 'true', null, null]);
+    expect(items.map((item) => item.textContent?.trim())).toEqual(['Stage', 'Picture-in-picture', 'Tab', 'Hide', 'Reset layout']);
+    expect(items.map((item) => item.getAttribute('aria-disabled'))).toEqual([null, null, 'true', null, null]);
   });
 
   it('asks for the chosen placement', () => {
     const f = render('stage');
     const moves: RealtimeSurfaceMove[] = capture(f.componentInstance.MoveRequested);
-    open(f)[2].click();
-    expect(moves).toEqual([{ Key: 'Whiteboard', Placement: 'hidden' }]);
+    open(f).find((item) => item.textContent?.trim() === 'Picture-in-picture')?.click();
+    expect(moves).toEqual([{ Key: 'Whiteboard', Placement: 'pip' }]);
   });
 
   it('asks to reset the layout', () => {
     const f = render();
     const resets = capture(f.componentInstance.ResetLayoutRequested);
-    open(f)[3].click();
+    open(f).find((item) => item.textContent?.trim() === 'Reset layout')?.click();
     expect(resets).toHaveLength(1);
   });
 });
