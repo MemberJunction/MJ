@@ -222,7 +222,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (440 classes)
+// @memberjunction/core-entities (441 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -301,6 +301,7 @@ import {
     MJAIResultCacheEntity,
     MJAISkillActionEntity,
     MJAISkillEntity,
+    MJAISkillFileEntity,
     MJAISkillPermissionEntity,
     MJAISkillSearchScopeEntity,
     MJAISkillSubAgentEntity,
@@ -1308,7 +1309,7 @@ import {
     TeamsMessagingExtension,
 } from '@memberjunction/messaging-adapters';
 
-// @memberjunction/scheduling-engine (10 classes)
+// @memberjunction/scheduling-engine (11 classes)
 import {
     ActionLogRetentionScheduledJobDriver,
     ActionScheduledJobDriver,
@@ -1319,6 +1320,7 @@ import {
     IntegrationSyncScheduledJobDriver,
     MaterializationRefreshScheduledJobDriver,
     RecordProcessScheduledJobDriver,
+    SkillUpdateCheckScheduledJobDriver,
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
@@ -1431,7 +1433,7 @@ import {
     WebSearchQueryServerOperation,
 } from '@memberjunction/web-search-engine';
 
-// @memberjunction/core-actions (153 classes)
+// @memberjunction/core-actions (154 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1541,6 +1543,7 @@ import {
     PreviewDocumentAction,
     QRCodeAction,
     ReadRSSFeedAction,
+    ReadSkillFileAction,
     RefreshListFromSourceAction,
     RemoveRecordsFromListAction,
     RenderArchitectureDiagramAction,
@@ -1749,6 +1752,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAIResultCacheEntity,
     MJAISkillActionEntity,
     MJAISkillEntity,
+    MJAISkillFileEntity,
     MJAISkillPermissionEntity,
     MJAISkillSearchScopeEntity,
     MJAISkillSubAgentEntity,
@@ -1808,11 +1812,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCommunicationRunEntity,
     MJCompanyEntity,
     MJCompanyIntegrationEntity,
-    MJCompanyIntegrationEntityMapEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJCompanyIntegrationEntityMapEntity,
     MJCompanyIntegrationFieldMapEntity,
     MJCompanyIntegrationRecordMapEntity,
     MJCompanyIntegrationRunAPILogEntity,
@@ -2012,11 +2016,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRecordCloneLogItemEntity,
     MJRecordGeoCodeEntity,
     MJRecordLinkEntity,
-    MJRecordMergeDeletionLogEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJRecordMergeDeletionLogEntity,
     MJRecordMergeLogEntity,
     MJRecordProcessCategoryEntity,
     MJRecordProcessEntity,
@@ -2216,11 +2220,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     UpdateTypeformAction,
     WatchNewJotFormSubmissionsAction,
     WatchNewSurveyMonkeyResponsesAction,
-    WatchNewTypeformResponsesAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    WatchNewTypeformResponsesAction,
     AttachTagsAction,
     CreateUserAction_actions_bizapps_lms,
     DetachTagsAction,
@@ -2420,11 +2424,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     MemoryManagerAgent,
     PDFToolLibrary,
     QueryBuilderAgent,
-    RealtimeAgentType,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    RealtimeAgentType,
     SearchResultSetToolLibrary,
     TextToolLibrary,
     WhiteboardChannelServer,
@@ -2503,6 +2507,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     IntegrationSyncScheduledJobDriver,
     MaterializationRefreshScheduledJobDriver,
     RecordProcessScheduledJobDriver,
+    SkillUpdateCheckScheduledJobDriver,
     UserRoutineDispatcherDriver,
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -2623,12 +2628,12 @@ const CLASS_REGISTRATIONS_4: any[] = [
     CreateUserAction_core_actions,
     Create_Conversation_Record_Action,
     DataMapperAction,
-    DelayAction,
-    DeleteDirectoryAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    DelayAction,
+    DeleteDirectoryAction,
     DeleteObjectAction,
     DeleteRecordAction,
     DirectoryExistsAction,
@@ -2697,6 +2702,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     PreviewDocumentAction,
     QRCodeAction,
     ReadRSSFeedAction,
+    ReadSkillFileAction,
     RefreshListFromSourceAction,
     RemoveRecordsFromListAction,
     RenderArchitectureDiagramAction,
@@ -2762,7 +2768,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1117;
+export const CLASS_REGISTRATIONS_COUNT = 1120;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

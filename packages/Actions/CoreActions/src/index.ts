@@ -117,6 +117,7 @@ export * from './custom/workflow/delay.action';
 export * from './custom/ai/execute-ai-prompt.action';
 export * from './custom/ai/run-decision.action';
 export * from './custom/ai/execute-agent.action';
+export * from './custom/ai/read-skill-file.action';
 export * from './custom/ai/create-runtime-action.action';
 export * from './custom/ai/test-runtime-action.action';
 export * from './custom/ai/summarize-content.action';

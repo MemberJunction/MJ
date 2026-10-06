@@ -19,6 +19,7 @@ A **Skill** (`MJ: AI Skills`) is a bundle of three things:
 | **Instructions** | `AISkill.Instructions` (NVARCHAR MAX) | Appended to the agent's context for the rest of the run |
 | **Actions** | `MJ: AI Skill Actions` (junction → `Action`) | Added to the agent's run — described to the model and executable — when the row's `ExposeToModel` is set (the default). With it off, the action stays bundled for SKILL.md export and tooling but is left out of the run entirely; application code invokes it through the Actions API (see §1.3) |
 | **Sub-agents** | `MJ: AI Skill Sub Agents` (junction → `AIAgent`) | Added to the agent's available sub-agents |
+| **Files** (optional) | `MJ: AI Skill Files` (`AISkillFile`: `Path` + `Content`) | NOT injected. The activation message lists the paths and the run gains the `Read Skill File` action, so the agent reads a file only when it needs it (§1.3b) |
 
 The point is **write-once, grant-to-many**: instead of copy-pasting the same instruction block + action set into every agent's system prompt, you author it once as a Skill and grant it to any agent that should have it. Skills are also **shareable** and **portable** (see §1.6, §1.7).
 
@@ -157,6 +158,24 @@ The runtime type twin is `AgentSkillInvocation` in `@memberjunction/ai-core-plus
 
 **UX**: the agent-run form renders this end to end — `Skill`/`Plan` step nodes get dedicated icons, any step with `Skills` shows per-skill chips (auto-activations get a warning accent — the agent expanded its own surface), and the step drill-in panel gains a **Skills tab** showing each invocation's activation type, provenance-of-authority grid, and reason.
 
+### 1.3b Multi-file skills — `Read Skill File`
+
+A skill may carry files besides its Instructions (an Anthropic skill's `references/`, schemas,
+examples), one `MJ: AI Skill Files` row per relative `Path`. Activation stays progressive: both
+activation paths (`executeSkillStep`, `activateRequestedSkills`) call the protected
+`enableSkillFiles(skills, params)`, which reads the activated skills' file **paths** (one
+`Fields`-narrowed RunView per activation, never per turn), and when any exist:
+
+- pushes a `specific`-scoped add of the **`Read Skill File`** action (`__ReadSkillFile`, CoreActions)
+  for the activating agent — same scope rules as the skill's own actions; and
+- appends a "Skill files" listing (skill name + paths) to the activation message.
+
+A skill without files changes nothing. The action takes `Skill` (name) and `Path` and returns the
+content. Like Scoped Search, **the run is the authority**: inside a run it reads only files of skills
+in `Context.ActiveSkillIDs`, so the model cannot read another skill's files by naming it. A miss
+returns `FILE_NOT_FOUND` with the skill's paths. Realtime agents do not get the listing (their skills
+are session-static, §1.4).
+
 ### 1.4 Realtime and proxy agents
 
 - **Realtime** agents don't run the Loop; a skill's instructions are appended at session build (session-static), not activated in-loop.
@@ -270,10 +289,38 @@ code-only — delete the last name and keep the key to put that action back into
 
 Two layers, in `@memberjunction/ai-agents`:
 
-- **`SkillMarkdownConverter`** — pure, dependency-free `Parse` / `Serialize`. Fully unit-tested in isolation. Hand-rolled parser (the frontmatter shape is small and fixed) rather than a YAML dependency.
+- **`SkillMarkdownConverter`** — pure `Parse` / `Serialize`, fully unit-tested in isolation. The frontmatter is real YAML (the `yaml` package), so an Anthropic-style SKILL.md parses as written. MJ models `name`, `description`, `category`, `actions`, `codeOnlyActions`, `subAgents`; every other key (`license`, `metadata`, `allowed-tools`, …) is kept verbatim in `frontmatter.extra`, stored on import in `AISkill.Frontmatter` (JSON), and written back on export, so a round trip loses nothing. `license` and `metadata.version` are also surfaced as `frontmatter.license` / `frontmatter.version`.
 - **`SkillImportExportService`** — orchestrates against the DB: `Config()`s the AI + Action engines (idempotent) for name↔ID resolution, creates/updates the `MJ: AI Skills` row, and resyncs the two junction sets. `AISkillAction.ExposeToModel` round-trips through the optional `codeOnlyActions` frontmatter list (names, a subset of `actions`): export writes it only when the skill has rows with the flag off, so older files are byte-identical; import applies it when present. A file without the key expresses no opinion, and the resync — which is delete-and-recreate — then carries each surviving row's flag across, so re-saving a skill's SKILL.md never turns a code-only action model-callable; only a genuinely new row takes the column default.
 
 Both are exposed as typed, provider-routed **Remote Operations** — `AISkill.ExportMarkdown` / `AISkill.ImportMarkdown` (see [REMOTE_OPERATIONS_GUIDE](REMOTE_OPERATIONS_GUIDE.md)) — so the browser calls `new AISkillExportMarkdownOperation().Execute(input, { provider })` with no bespoke resolver/GraphQL client.
+
+### 1.7a External skills — import from a URL or GitHub, and the update check
+
+`SkillImportExportService.ImportSkillFromSource(source, user, options?)` imports a skill from its
+upstream: any https URL serving a SKILL.md, or a GitHub folder —
+`https://github.com/<owner>/<repo>[/tree/<ref>/<path>]`, a `/blob/<ref>/<path>/SKILL.md` link, or a
+structured `SkillSource` (`ParseSkillSource` / `GitHubSkillSource` in `SkillSources.ts`). A ref with
+slashes goes in `options.ref`; no ref means `HEAD`. For GitHub it makes one tree-listing API call and
+downloads SKILL.md plus every other text file in the folder as `MJ: AI Skill Files` rows (binary files
+and files over 512 KB are skipped with a warning; at most 100 files). It records the source on the
+skill:
+
+| Column | Meaning |
+|---|---|
+| `SourceType` | `URL` / `GitHub`; NULL = authored or uploaded here |
+| `SourceURL` | the SKILL.md URL, or the GitHub folder link |
+| `SourceRef` | the git ref (GitHub only) — pin a tag or SHA for a reviewable supply chain |
+| `SourceVersion` | frontmatter `metadata.version` |
+| `SourceContentHash` | SHA-256 over SKILL.md + files, sorted by path |
+| `LastSyncedAt` | when the content was last imported |
+
+The **Skill Update Check** scheduled job (`SkillUpdateCheckScheduledJobDriver`, shipped Active daily at
+05:00 UTC) re-fetches every Active sourced skill. When the hash differs it sets the skill to
+**`Pending`** — the content is not overwritten, and a Pending skill is not activatable, so upstream
+instruction text never reaches an agent's prompt unreviewed. An admin accepts the change by
+re-importing from the source with `updateSkillId` (which makes the skill Active again), or keeps the
+current version by setting it back to Active. Only instruction-only skills are fully importable this
+way: the server never runs a skill's scripts.
 
 ---
 
@@ -354,6 +401,12 @@ Additive: `AISkill.ActivationScope` (`'Run'`/`'Conversation'`, default `'Run'`) 
 `ConversationSkill` table (`MJ: Conversation Skills`: ConversationID, SkillID, Status
 `Active`/`Ended`, ActivatedByRunID, EndedAt; UNIQUE per conversation+skill). See §1.6c.
 
+**v6.2.x** — Migration [`V202610061800__v6.2.x__AISkill_External_Sources_And_Files.sql`](../migrations/v6).
+Additive: `AISkill.SourceType` (`'URL'`/`'GitHub'`, NULL = no upstream), `SourceURL`, `SourceRef`,
+`SourceVersion`, `SourceContentHash`, `LastSyncedAt`, `Frontmatter` (JSON of unmodelled SKILL.md keys),
+and the `AISkillFile` table (`MJ: AI Skill Files`: SkillID, Path, Content; UNIQUE per skill+path). See
+§1.3b and §1.7a.
+
 ## 4. Where to look
 
 | Concern | File |
@@ -370,6 +423,8 @@ Additive: `AISkill.ActivationScope` (`'Run'`/`'Conversation'`, default `'Run'`) 
 | `/skill` composer UX | `packages/Angular/Generic/conversations/src/lib/services/mention-autocomplete.service.ts` (`getSuggestions(…, '/', targetAgentId)` → `skillsForTarget` → `skill-picker-narrowing.ts` `IntersectAcceptedSkills`; the host binds `TargetAgentId` on `mj-ai-composer` — `mj-message-input` binds `pickerTargetAgentId`: an `@agent` chip in the draft, else its resolved agent), `components/mention/mention-editor.component.ts`, `components/message/message-input.component.ts` |
 | `requestedSkillIDs` transport | `AgentsClient/src/generic/AgentClientTypes.ts` + `AgentClientSession.ts`, `GraphQLDataProvider/src/graphQLAIClient.ts`, `MJServer/src/resolvers/RunAIAgentResolver.ts`, `ConversationsRuntime/src/agent-runner/ConversationAgentRunner.ts` |
 | SKILL.md | `packages/AI/Agents/src/SkillMarkdownConverter.ts`, `SkillImportExportService.ts`, `operations/AISkillMarkdownOperations.ts` |
+| External sources + update check | `packages/AI/Agents/src/SkillSources.ts`, `SkillImportExportService.ImportSkillFromSource` / `CheckSkillForUpdate`, `packages/Scheduling/engine/src/drivers/SkillUpdateCheckScheduledJobDriver.ts`, `metadata/scheduled-job-types/.skill-update-check-type.json` |
+| Skill files | `packages/AI/Agents/src/skill-files.ts`, `base-agent.ts` (`enableSkillFiles`), `packages/Actions/CoreActions/src/custom/ai/read-skill-file.action.ts`, `metadata/actions/.read-skill-file.json` |
 | Plan-approval resume | `packages/AI/Agents/src/MJAIAgentRequestEntityServer.ts` |
 | Sharing / permission grid / import UI | `packages/Angular/Explorer/core-entity-forms/src/lib/panels/ai-skill-sharing/`, `packages/Angular/Generic/agents/src/lib/{services/skill-permissions.service,components/skill-permissions-*}` |
 | Governance metadata | `metadata/authorizations/` (`Can Share Skills`), `metadata/permission-domains/` (`AI Skill Permissions`) |

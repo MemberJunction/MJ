@@ -205,7 +205,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (440 classes)
+// @memberjunction/core-entities (441 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -284,6 +284,7 @@ import {
     MJAIResultCacheEntity,
     MJAISkillActionEntity,
     MJAISkillEntity,
+    MJAISkillFileEntity,
     MJAISkillPermissionEntity,
     MJAISkillSearchScopeEntity,
     MJAISkillSubAgentEntity,
@@ -1091,7 +1092,7 @@ import {
     WorkflowValidateServerOperation,
 } from '@memberjunction/task-graph';
 
-// @memberjunction/scheduling-engine (10 classes)
+// @memberjunction/scheduling-engine (11 classes)
 import {
     ActionLogRetentionScheduledJobDriver,
     ActionScheduledJobDriver,
@@ -1102,6 +1103,7 @@ import {
     IntegrationSyncScheduledJobDriver,
     MaterializationRefreshScheduledJobDriver,
     RecordProcessScheduledJobDriver,
+    SkillUpdateCheckScheduledJobDriver,
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
@@ -1166,7 +1168,7 @@ import {
     MJVectorIndexEntityServer,
 } from '@memberjunction/core-entities-server';
 
-// @memberjunction/core-actions (153 classes)
+// @memberjunction/core-actions (154 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1276,6 +1278,7 @@ import {
     PreviewDocumentAction,
     QRCodeAction,
     ReadRSSFeedAction,
+    ReadSkillFileAction,
     RefreshListFromSourceAction,
     RemoveRecordsFromListAction,
     RenderArchitectureDiagramAction,
@@ -1481,6 +1484,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAIResultCacheEntity,
     MJAISkillActionEntity,
     MJAISkillEntity,
+    MJAISkillFileEntity,
     MJAISkillPermissionEntity,
     MJAISkillSearchScopeEntity,
     MJAISkillSubAgentEntity,
@@ -1549,11 +1553,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCompanyIntegrationSyncWatermarkEntity,
     MJComponentDependencyEntity,
     MJComponentEntity,
-    MJComponentEntityExtended,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJComponentEntityExtended,
     MJComponentLibraryEntity,
     MJComponentLibraryLinkEntity,
     MJComponentRegistryEntity,
@@ -1753,11 +1757,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRemoteOperationEntity,
     MJResourceLinkEntity,
     MJResourcePermissionEntity,
-    MJResourcePermissionEntityExtended,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJResourcePermissionEntityExtended,
     MJResourceTypeEntity,
     MJRoleEntity,
     MJRowLevelSecurityFilterEntity,
@@ -1957,11 +1961,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     OnboardLearnerAction,
     SSOLoginAction,
     UpdateUserAction,
-    UpdateUserProgressAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    UpdateUserProgressAction,
     BufferCreatePostAction,
     BufferDeletePostAction,
     BufferGetAnalyticsAction,
@@ -2161,16 +2165,17 @@ const CLASS_REGISTRATIONS_3: any[] = [
     ActionLogRetentionScheduledJobDriver,
     ActionScheduledJobDriver,
     AgentRunSweepScheduledJobDriver,
-    AgentScheduledJobDriver,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    AgentScheduledJobDriver,
     EvaluateSampledAgentRunsDriver,
     IntegrationDiscoveryScheduledJobDriver,
     IntegrationSyncScheduledJobDriver,
     MaterializationRefreshScheduledJobDriver,
     RecordProcessScheduledJobDriver,
+    SkillUpdateCheckScheduledJobDriver,
     UserRoutineDispatcherDriver,
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -2337,6 +2342,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     PreviewDocumentAction,
     QRCodeAction,
     ReadRSSFeedAction,
+    ReadSkillFileAction,
     RefreshListFromSourceAction,
     RemoveRecordsFromListAction,
     RenderArchitectureDiagramAction,
@@ -2363,13 +2369,13 @@ const CLASS_REGISTRATIONS_4: any[] = [
     SlackWebhookAction,
     SummarizeContentAction,
     SyncMCPToolsAction,
-    TavilySearchAction,
-    TeamsWebhookAction,
-    TestMCPConnectionAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    TavilySearchAction,
+    TeamsWebhookAction,
+    TestMCPConnectionAction,
     TestRuntimeActionAction,
     TextAnalyzerAction,
     URLLinkValidatorAction,
@@ -2412,7 +2418,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1026;
+export const CLASS_REGISTRATIONS_COUNT = 1029;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
