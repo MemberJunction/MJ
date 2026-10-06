@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Component, Input, OnDestroy, OnInit, type Type } from '@angular/core';
 import type { RealtimeToolDefinition } from '@memberjunction/ai';
+import type { MediaPlacement } from '@memberjunction/ai-realtime-client/media';
 import { BaseRealtimeChannelClient } from '@memberjunction/realtime-runtime';
 import { renderComponentFixture } from '@memberjunction/ng-test-utils';
 import { RealtimeChannelPaneComponent } from './realtime-channel-pane.component';
@@ -41,6 +42,9 @@ class TestChannel extends BaseRealtimeChannelClient<TestSurfaceComponent> {
   public override OnSurfaceVisibilityChange(visible: boolean): void {
     lifecycle.push(`${visible ? 'shown' : 'hidden'} ${this.label}`);
   }
+  public override OnSurfacePlacementChange(placement: MediaPlacement): void {
+    lifecycle.push(`on ${placement} ${this.label}`);
+  }
 }
 
 /** A channel with no surface (server-only): the pane must never tell it about one. */
@@ -63,7 +67,7 @@ describe('RealtimeChannelPaneComponent (DOM)', () => {
 
   it("creates the plugin's surface and binds it before the surface initializes", () => {
     const f = render(new TestChannel('first'));
-    expect(lifecycle).toEqual(['bound first', 'shown first', 'created first']);
+    expect(lifecycle).toEqual(['bound first', 'shown first', 'on tab first', 'created first']);
     expect(f.nativeElement.parentElement?.querySelector('.surface')?.textContent).toBe('first');
   });
 
@@ -72,7 +76,7 @@ describe('RealtimeChannelPaneComponent (DOM)', () => {
     lifecycle.length = 0;
     f.componentRef.setInput('Plugin', new TestChannel('second'));
     f.detectChanges();
-    expect(lifecycle).toEqual(['unbound first', 'destroyed first', 'bound second', 'shown second', 'created second']);
+    expect(lifecycle).toEqual(['unbound first', 'destroyed first', 'bound second', 'shown second', 'on tab second', 'created second']);
   });
 
   it('keeps the surface when handed the same plugin again', () => {
@@ -94,7 +98,7 @@ describe('RealtimeChannelPaneComponent (DOM)', () => {
 
   it('tells the plugin its surface is out of sight from the start when it is created hidden', () => {
     render(new TestChannel('first'), false);
-    expect(lifecycle).toEqual(['bound first', 'hidden first', 'created first']);
+    expect(lifecycle).toEqual(['bound first', 'hidden first', 'on tab first', 'created first']);
   });
 
   it('tells the plugin each time its surface goes out of sight and comes back', () => {
@@ -112,6 +116,25 @@ describe('RealtimeChannelPaneComponent (DOM)', () => {
   it('never tells a channel without a surface about visibility', () => {
     const f = render(new ServerOnlyChannel('server'));
     f.componentRef.setInput('Visible', false);
+    f.detectChanges();
+    expect(lifecycle).toEqual([]);
+  });
+
+  it('tells the plugin where its surface is placed after binding, and of every move', () => {
+    const f = renderComponentFixture(RealtimeChannelPaneComponent, { inputs: { Plugin: new TestChannel('first'), Placement: 'stage' } });
+    f.detectChanges();
+    expect(lifecycle).toEqual(['bound first', 'shown first', 'on stage first', 'created first']);
+    lifecycle.length = 0;
+    f.componentRef.setInput('Placement', 'stage');
+    f.detectChanges();
+    f.componentRef.setInput('Placement', 'hidden');
+    f.detectChanges();
+    expect(lifecycle).toEqual(['on hidden first']);
+  });
+
+  it('never tells a channel without a surface about its placement', () => {
+    const f = render(new ServerOnlyChannel('server'));
+    f.componentRef.setInput('Placement', 'stage');
     f.detectChanges();
     expect(lifecycle).toEqual([]);
   });

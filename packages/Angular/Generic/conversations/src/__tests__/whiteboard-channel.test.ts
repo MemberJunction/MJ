@@ -43,6 +43,10 @@ class FakeWhiteboardHost {
     this.FocusMode = !this.FocusMode;
     this.FocusModeChange.emit(this.FocusMode);
   }
+
+  public SetOnStage(onStage: boolean): void {
+    this.FocusMode = onStage;
+  }
 }
 
 function asHost(fake: FakeWhiteboardHost): RealtimeWhiteboardHostComponent {
@@ -308,6 +312,20 @@ describe('RealtimeWhiteboardChannel — plugin contract', () => {
 
     channel.RequestFocusExit(); // not in focus → no double-toggle
     expect(log.Focus).toEqual([true, false]);
+  });
+
+  it("keeps the board's button true to where the host placed it, without asking to move", () => {
+    const fake = new FakeWhiteboardHost();
+    channel.BindSurface(asHost(fake));
+    channel.OnSurfacePlacementChange('stage');
+    expect(fake.FocusMode).toBe(true);
+    channel.OnSurfacePlacementChange('hidden');
+    expect(fake.FocusMode).toBe(false);
+    expect(log.Focus).toEqual([]);
+  });
+
+  it('ignores a placement with no board bound', () => {
+    expect(() => channel.OnSurfacePlacementChange('stage')).not.toThrow();
   });
 
   it('Dispose releases the surface, the state subscription and the context', () => {

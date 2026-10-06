@@ -222,6 +222,31 @@
   min-height: 0;
 }
 
+/* A channel whose surface the user moved elsewhere: where it is, and a way back. */
+.s-pane__away {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  color: var(--mj-text-muted);
+  font-size: var(--mj-text-sm);
+  text-align: center;
+}
+.s-pane__away > i {
+  font-size: 22px;
+  color: var(--tab-accent);
+  opacity: 0.7;
+}
+
+/* "Move to…" beside the active channel tab. */
+.s-tab-move {
+  align-self: center;
+  margin: 0 4px 0 -4px;
+}
+
 /* Empty strip (idle voice-first session): a gentle hint rather than a bare grid. */
 .surface__empty {
   flex: 1;

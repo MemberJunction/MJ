@@ -3,6 +3,8 @@ import {
   QueryList, ViewChild, ViewChildren, inject
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import type { MediaStagePlacement } from '@memberjunction/ng-realtime-media';
+import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { Subscription } from 'rxjs';
 import { UserInfo } from '@memberjunction/core';
 import { UserInfoEngine } from '@memberjunction/core-entities';
@@ -10,6 +12,7 @@ import { ArtifactsModule } from '@memberjunction/ng-artifacts';
 import { RealtimeSessionState } from './realtime-session-state';
 import { RealtimeActivityRailComponent } from './realtime-activity-rail.component';
 import { ChannelOnboardingPanelComponent } from './channels/channel-onboarding-panel.component';
+import { RealtimeSurfaceMoveMenuComponent, type RealtimeSurfaceMove } from './realtime-surface-move-menu.component';
 import { ChannelOnboardingDetails } from '@memberjunction/realtime-runtime';
 import {
   RealtimeSurfaceTabsModel, RealtimeSurfaceTab, RealtimeChannelTabRegistration
@@ -61,7 +64,8 @@ export interface RealtimeChannelSlot {
   standalone: true,
   selector: 'mj-realtime-surface-tabs',
   imports: [
-    CommonModule, ArtifactsModule, RealtimeActivityRailComponent, ChannelOnboardingPanelComponent
+    CommonModule, ArtifactsModule, RealtimeActivityRailComponent, ChannelOnboardingPanelComponent,
+    RealtimeSurfaceMoveMenuComponent, MJButtonDirective
   ],
   templateUrl: './realtime-surface-tabs.component.html',
   styleUrl: './realtime-surface-tabs.component.css'
@@ -142,6 +146,18 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy, AfterVie
    */
   @Output() ChannelSlotChange = new EventEmitter<RealtimeChannelSlot | null>();
 
+  /**
+   * Where each channel's surface is placed, by channel key (a channel not listed is on its tab). A channel whose
+   * surface is elsewhere shows where in its pane, with "Bring it here".
+   */
+  @Input() SurfacePlacements: ReadonlyMap<string, MediaStagePlacement> = new Map();
+
+  /** The user asked to move a channel's surface (from "Move to…" or "Bring it here"). */
+  @Output() MoveRequested = new EventEmitter<RealtimeSurfaceMove>();
+
+  /** The user asked to put every surface back on its tab. */
+  @Output() ResetLayoutRequested = new EventEmitter<void>();
+
   /** The panel's tab state (add / focus / dedupe / flash) — see the model for the rules. */
   public readonly Model = new RealtimeSurfaceTabsModel();
 
@@ -218,6 +234,11 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy, AfterVie
     const key = this.Model.ActiveKey;
     const slot = this.channelSlots?.find(s => s.nativeElement.dataset['channelKey'] === key);
     return slot ? { Key: key, Element: slot.nativeElement } : null;
+  }
+
+  /** Where a channel's surface is placed. */
+  public PlacementOf(key: string): MediaStagePlacement {
+    return this.SurfacePlacements.get(key) ?? 'tab';
   }
 
   /** Toggle the panel between expanded and slim-collapsed. */

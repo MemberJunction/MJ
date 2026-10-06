@@ -1,4 +1,5 @@
 import { Component, ComponentRef, Input, OnDestroy, OnInit, Type, ViewContainerRef, inject } from '@angular/core';
+import type { MediaPlacement } from '@memberjunction/ai-realtime-client/media';
 import { BaseRealtimeChannelClient } from '@memberjunction/realtime-runtime';
 
 /**
@@ -11,8 +12,9 @@ import { BaseRealtimeChannelClient } from '@memberjunction/realtime-runtime';
  *     {@link BaseRealtimeChannelClient.BindSurface} — synchronously, BEFORE the surface's
  *     first change detection, so inputs the plugin sets are visible in its `ngOnInit`;
  *  3. tells the plugin whether the surface is on screen
- *     ({@link BaseRealtimeChannelClient.OnSurfaceVisibilityChange}) right after binding and whenever
- *     {@link Visible} changes, so it can pause work nobody sees;
+ *     ({@link BaseRealtimeChannelClient.OnSurfaceVisibilityChange}) and where it is placed
+ *     ({@link BaseRealtimeChannelClient.OnSurfacePlacementChange}) right after binding and whenever
+ *     {@link Visible} or {@link Placement} changes;
  *  4. notifies {@link BaseRealtimeChannelClient.UnbindSurface} when the pane is destroyed
  *     (the channel left the session / the overlay was torn down) or handed another plugin,
  *     flipping the plugin back into its no-surface tool-execution mode.
@@ -37,6 +39,7 @@ export class RealtimeChannelPaneComponent implements OnInit, OnDestroy {
   private plugin!: BaseRealtimeChannelClient;
   private initialized = false;
   private visible = true;
+  private placement: MediaPlacement = 'tab';
 
   /**
    * The per-session channel plugin whose surface this pane hosts. Handing the pane another plugin (the same channel
@@ -74,6 +77,21 @@ export class RealtimeChannelPaneComponent implements OnInit, OnDestroy {
     return this.visible;
   }
 
+  /** Where the surface is placed. The plugin hears of every move while its surface is bound. */
+  @Input()
+  set Placement(value: MediaPlacement) {
+    if (value === this.placement) {
+      return;
+    }
+    this.placement = value;
+    if (this.surfaceRef) {
+      this.plugin.OnSurfacePlacementChange(value);
+    }
+  }
+  get Placement(): MediaPlacement {
+    return this.placement;
+  }
+
   ngOnInit(): void {
     this.initialized = true;
     this.createSurface();
@@ -98,6 +116,7 @@ export class RealtimeChannelPaneComponent implements OnInit, OnDestroy {
     // here are in place when the surface's ngOnInit runs.
     this.plugin.BindSurface(this.surfaceRef.instance);
     this.plugin.OnSurfaceVisibilityChange(this.visible);
+    this.plugin.OnSurfacePlacementChange(this.placement);
     this.surfaceRef.changeDetectorRef.markForCheck();
   }
 

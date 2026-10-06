@@ -1,9 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import type { RealtimeToolDefinition } from '@memberjunction/ai';
 import { BaseRealtimeChannelClient } from '@memberjunction/realtime-runtime';
-import { renderComponentFixture, query, click } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, queryAll, click, capture, overlayQueryAll, clearOverlayContainers } from '@memberjunction/ng-test-utils';
 import { RealtimeSurfaceTabsComponent, type RealtimeChannelSlot } from './realtime-surface-tabs.component';
+import type { RealtimeSurfaceMove } from './realtime-surface-move-menu.component';
 import { RealtimeSurfaceTabsModel } from './realtime-surface-tabs.model';
 import type { RealtimeSessionState } from './realtime-session-state';
 
@@ -179,5 +180,61 @@ describe('RealtimeSurfaceTabsComponent: ChannelSlotChange (DOM)', () => {
     await settle(f);
     expect(query(f, '.s-pane__slot')).toBeNull();
     expect(reported).toEqual([]);
+  });
+});
+
+/**
+ * DOM spec for moving a channel's surface from the panel: "Move to…" sits beside the active channel tab, and a channel
+ * whose surface is elsewhere says where in its pane and offers it back. Real template; only plugin channel tabs.
+ */
+describe('RealtimeSurfaceTabsComponent: moving surfaces (DOM)', () => {
+  afterEach(() => clearOverlayContainers());
+
+  const render = (placements: ReadonlyMap<string, 'stage' | 'tab' | 'hidden'> = new Map()) =>
+    renderComponentFixture(RealtimeSurfaceTabsComponent, { inputs: { State: {} as RealtimeSessionState, SurfacePlacements: placements } });
+
+  const settle = async (f: ReturnType<typeof render>): Promise<void> => {
+    await f.whenStable();
+    f.detectChanges();
+    await Promise.resolve();
+  };
+
+  const register = (f: ReturnType<typeof render>, name: string, focus = false) =>
+    f.componentInstance.RegisterChannelTab({ Key: name, Title: name, Icon: 'fa-solid fa-cube', Focus: focus, Plugin: new TestChannel(name) });
+
+  it('offers "Move to…" beside the active channel tab only', async () => {
+    const f = render();
+    register(f, 'Whiteboard', true);
+    register(f, 'Media');
+    await settle(f);
+    expect(queryAll(f, 'mj-realtime-surface-move-menu')).toHaveLength(1);
+    expect(query(f, '.s-tab--active + mj-realtime-surface-move-menu')).not.toBeNull();
+    f.componentInstance.Model.Focus('Media');
+    await settle(f);
+    expect(query(f, '.s-tab--active + mj-realtime-surface-move-menu button')?.getAttribute('aria-label')).toBe('Move Media');
+  });
+
+  it('passes on the move chosen in the menu', async () => {
+    const f = render();
+    const moves: RealtimeSurfaceMove[] = capture(f.componentInstance.MoveRequested);
+    register(f, 'Whiteboard', true);
+    await settle(f);
+    (query(f, 'mj-realtime-surface-move-menu button') as HTMLButtonElement).click();
+    f.detectChanges();
+    (overlayQueryAll('mj-menu-item') as HTMLElement[])[2].click();
+    expect(moves).toEqual([{ Key: 'Whiteboard', Placement: 'hidden' }]);
+  });
+
+  it('says where a moved surface is, keeps no slot for it, and brings it back', async () => {
+    const f = render(new Map([['Whiteboard', 'hidden']]));
+    const moves: RealtimeSurfaceMove[] = capture(f.componentInstance.MoveRequested);
+    const slots: Array<RealtimeChannelSlot | null> = capture(f.componentInstance.ChannelSlotChange);
+    register(f, 'Whiteboard', true);
+    await settle(f);
+    expect(query(f, '.s-pane__away span')?.textContent?.trim()).toBe('Whiteboard is hidden.');
+    expect(query(f, '.s-pane__slot')).toBeNull();
+    expect(slots).toEqual([]);
+    click(f, '.s-pane__away button');
+    expect(moves).toEqual([{ Key: 'Whiteboard', Placement: 'tab' }]);
   });
 });

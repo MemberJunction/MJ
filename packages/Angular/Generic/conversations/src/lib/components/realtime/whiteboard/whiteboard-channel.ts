@@ -3,7 +3,7 @@ import { Subscription } from 'rxjs';
 import { RegisterClass } from '@memberjunction/global';
 import { RealtimeToolDefinition } from '@memberjunction/ai';
 import { REALTIME_CHANNEL_CONTRACT_VERSION, type RealtimeChannelDescriptor } from '@memberjunction/ai-core-plus';
-import { ChannelInboundVideoBridge, IChannelFrameProvider } from '@memberjunction/ai-realtime-client';
+import { ChannelInboundVideoBridge, IChannelFrameProvider, type MediaPlacement } from '@memberjunction/ai-realtime-client';
 import { BaseRealtimeChannelClient, BuildToolBackedVerbs, ChannelOnboardingDetails } from '@memberjunction/realtime-runtime';
 import {
   ApplyWhiteboardAgentTool, BuildWhiteboardExportSvg, RealtimeWhiteboardHostComponent, WHITEBOARD_TOOL_DEFINITIONS,
@@ -137,9 +137,9 @@ interface InteractionThrottleEntry {
  *  - **Perception**: {@link BindSurface} subscribes the host's coalesced (750 ms)
  *    `SceneDelta` stream and pipes each delta into the live model's context as a
  *    `[whiteboard]` background note; the agent-undo toast click flows the same way.
- *  - **Surface**: {@link RealtimeWhiteboardHostComponent}, created dynamically by the
- *    overlay's channel tab; the host's Focus toggle rides `Context.SetFocusMode` so the
- *    shell can collapse/restore the main call column.
+ *  - **Surface**: {@link RealtimeWhiteboardHostComponent}, created on the overlay's stage; the
+ *    host's "Move to stage" button rides `Context.SetFocusMode`, and the board hears where the
+ *    overlay placed it ({@link OnSurfacePlacementChange}) so the button offers the way back.
  *  - **State of record**: every board mutation (user edits AND agent tool calls) requests
  *    a save of {@link WhiteboardState.ToJSON} under channel name `'Whiteboard'` — the
  *    host debounces and flushes at teardown.
@@ -462,6 +462,11 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
    */
   public override RestoreState(stateJson: string): boolean {
     return this.State.LoadFromJSON(stateJson);
+  }
+
+  /** Keeps the board's "Move to stage" / "Back to tab" button true to where the host placed it. */
+  public override OnSurfacePlacementChange(placement: MediaPlacement): void {
+    this.host?.SetOnStage(placement === 'stage');
   }
 
   /**

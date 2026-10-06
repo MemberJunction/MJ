@@ -16,12 +16,17 @@ import { MediaStageComponent, MediaStageSurfaceDirective, type MediaStageSurface
 class TestSurfaceComponent implements OnInit, OnDestroy {
   public static Created: string[] = [];
   public static Destroyed: string[] = [];
-  /** The latest visibility each surface was given, by key. */
+  /** The latest visibility and placement each surface was given, by key. */
   public static Visibility = new Map<string, boolean>();
+  public static Placements = new Map<string, string>();
   @Input() public Key = '';
   @Input()
   public set Visible(value: boolean) {
     TestSurfaceComponent.Visibility.set(this.Key, value);
+  }
+  @Input()
+  public set Placement(value: string) {
+    TestSurfaceComponent.Placements.set(this.Key, value);
   }
   public ngOnInit(): void {
     TestSurfaceComponent.Created.push(this.Key);
@@ -36,8 +41,8 @@ class TestSurfaceComponent implements OnInit, OnDestroy {
   imports: [MediaStageComponent, MediaStageSurfaceDirective, TestSurfaceComponent],
   template: `
     <mj-media-stage [Surfaces]="Surfaces" [TabSlot]="Slot" [ActiveTabKey]="ActiveTabKey">
-      <ng-template mjMediaStageSurface let-key let-visible="Visible">
-        <mj-test-surface [Key]="key" [Visible]="visible"></mj-test-surface>
+      <ng-template mjMediaStageSurface let-key let-visible="Visible" let-placement="Placement">
+        <mj-test-surface [Key]="key" [Visible]="visible" [Placement]="placement"></mj-test-surface>
       </ng-template>
     </mj-media-stage>
   `,
@@ -83,6 +88,7 @@ describe('MediaStageComponent (DOM)', () => {
     TestSurfaceComponent.Created = [];
     TestSurfaceComponent.Destroyed = [];
     TestSurfaceComponent.Visibility = new Map();
+    TestSurfaceComponent.Placements = new Map();
     stageBox = { left: 0, top: 0, width: 1000, height: 800 };
     resizeCallbacks = [];
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
@@ -156,9 +162,11 @@ describe('MediaStageComponent (DOM)', () => {
     expect(box(f, 'whiteboard').style.left).toBe('');
   });
 
-  it("keeps a surface's content as its placement changes", async () => {
+  it("keeps a surface's content as its placement changes, and tells it each placement", async () => {
     const f = await render({ Surfaces: [{ Key: 'whiteboard', Placement: 'tab' }], ActiveTabKey: 'whiteboard', Slot: slotAt(500, 40, 300, 400) });
+    expect(TestSurfaceComponent.Placements.get('whiteboard')).toBe('tab');
     set(f, { Surfaces: [{ Key: 'whiteboard', Placement: 'stage' }] });
+    expect(TestSurfaceComponent.Placements.get('whiteboard')).toBe('stage');
     set(f, { Surfaces: [{ Key: 'whiteboard', Placement: 'hidden' }] });
     set(f, { Surfaces: [{ Key: 'whiteboard', Placement: 'tab' }] });
     expect(TestSurfaceComponent.Created).toEqual(['whiteboard']);

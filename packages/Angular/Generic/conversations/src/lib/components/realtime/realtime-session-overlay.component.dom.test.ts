@@ -8,7 +8,9 @@ import {
   type RealtimeChannelFocusEvent,
   type RealtimeConnectionState,
 } from '@memberjunction/realtime-runtime';
-import { renderComponentFixture, query, click } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, click, overlayQueryAll, clearOverlayContainers } from '@memberjunction/ng-test-utils';
+import { UserInfoEngine } from '@memberjunction/core-entities';
+import type { MediaPlacement } from '@memberjunction/ai-realtime-client/media';
 import { RealtimeSessionOverlayComponent } from './realtime-session-overlay.component';
 import { RealtimeSessionService } from '../../services/realtime-session.service';
 
@@ -17,6 +19,10 @@ const lifecycle: string[] = [];
 
 /** Errors Angular reports while it runs change detection on its own (autoDetect), which would otherwise only be logged. */
 const reported: unknown[] = [];
+
+/** The user's saved layout as the overlay reads it, and every layout it saves. */
+let savedLayout: string | undefined;
+const savedLayouts: string[] = [];
 
 @Component({ selector: 'mj-test-board', standalone: true, template: '<div class="test-board">board</div>' })
 class TestBoardComponent implements OnInit, OnDestroy {
@@ -33,6 +39,8 @@ class TestWhiteboardChannel extends BaseRealtimeChannelClient<TestBoardComponent
   public FocusExits = 0;
   /** Every visibility the host reported for the surface, in order. */
   public readonly Visibility: boolean[] = [];
+  /** Every placement the host reported for the surface, in order. */
+  public readonly Placements: MediaPlacement[] = [];
   public get ChannelName(): string { return 'Whiteboard'; }
   public get ToolNamePrefix(): string { return 'Whiteboard_'; }
   public get TabTitle(): string { return 'Whiteboard'; }
@@ -44,6 +52,7 @@ class TestWhiteboardChannel extends BaseRealtimeChannelClient<TestBoardComponent
   public override UnbindSurface(): void { lifecycle.push('unbound'); }
   public override RequestFocusExit(): void { this.FocusExits++; }
   public override OnSurfaceVisibilityChange(visible: boolean): void { this.Visibility.push(visible); }
+  public override OnSurfacePlacementChange(placement: MediaPlacement): void { this.Placements.push(placement); }
 }
 
 /** The session the overlay reads: its channel set and focus requests are driven by the test. */
@@ -89,6 +98,14 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
   beforeEach(() => {
     lifecycle.length = 0;
     reported.length = 0;
+    savedLayout = undefined;
+    savedLayouts.length = 0;
+    vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockImplementation((key: string) => (key === 'mj.realtime.placement.v1' ? savedLayout : undefined));
+    vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation((key: string, value: string) => {
+      if (key === 'mj.realtime.placement.v1') {
+        savedLayouts.push(value);
+      }
+    });
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
       if (this.classList.contains('s-pane__slot')) {
         return new DOMRect(600, 48, 380, 500);
@@ -98,9 +115,19 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
   });
 
   afterEach(() => {
+    clearOverlayContainers();
     vi.restoreAllMocks();
     expect(reported).toEqual([]);
   });
+
+  /** Opens a "Move to…" menu from its button and picks an item by its label. */
+  const pick = async (f: Awaited<ReturnType<typeof renderWithBoard>>['f'], menuSelector: string, label: string): Promise<void> => {
+    (query(f, `${menuSelector} button`) as HTMLButtonElement).click();
+    await settle();
+    const item = (overlayQueryAll('mj-menu-item') as HTMLElement[]).find((i) => i.textContent?.trim() === label);
+    item?.click();
+    await settle();
+  };
 
   /** Lets the overlay's deferred work (tab registration, first-tab focus, slot report) land and render. */
   const settle = async (): Promise<void> => {
@@ -204,5 +231,61 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
     expect(new Set(lifecycle)).toEqual(new Set(['bound', 'created', 'unbound', 'destroyed']));
     expect(f.componentInstance.ChannelFocusMode).toBe(false);
     expect(query(f, '.call-overlay')?.classList.contains('board-focus')).toBe(false);
+  });
+
+  it('moves the board to the stage from the menu beside its tab and back from the pill, saving each layout', async () => {
+    const { f, board } = await renderWithBoard();
+    await pick(f, '.s-tab-move', 'Stage');
+    expect(surface(f).classList.contains('stage-surface--stage')).toBe(true);
+    expect(query(f, '.call-overlay')?.classList.contains('board-focus')).toBe(true);
+    expect(savedLayouts.at(-1)).toBe('[{"SurfaceKey":"Whiteboard","Placement":"stage"}]');
+
+    await pick(f, '.board-focus-pill mj-realtime-surface-move-menu', 'Tab');
+    expect(surface(f).classList.contains('stage-surface--stage')).toBe(false);
+    expect(query(f, '.call-overlay')?.classList.contains('board-focus')).toBe(false);
+    expect(isShown(f)).toBe(true);
+    expect(savedLayouts.at(-1)).toBe('[{"SurfaceKey":"Whiteboard","Placement":"tab"}]');
+    expect(board.Placements).toEqual(['tab', 'stage', 'tab']);
+    expect(lifecycle).toEqual(['bound', 'created']);
+  });
+
+  it("follows the channel's own requests: its surface goes to the stage and back to its tab", async () => {
+    const { f, board, focus$ } = await renderWithBoard();
+    focus$.next({ Channel: board, Focused: true });
+    await settle();
+    expect(f.componentInstance.ChannelFocusMode).toBe(true);
+    focus$.next({ Channel: board, Focused: false });
+    await settle();
+    expect(f.componentInstance.ChannelFocusMode).toBe(false);
+    expect(isShown(f)).toBe(true);
+    expect(savedLayouts.at(-1)).toBe('[{"SurfaceKey":"Whiteboard","Placement":"tab"}]');
+  });
+
+  it('hides the board, and its tab brings it back', async () => {
+    const { f, board } = await renderWithBoard();
+    await pick(f, '.s-tab-move', 'Hide');
+    expect(isShown(f)).toBe(false);
+    expect(query(f, '.s-pane__away span')?.textContent?.trim()).toBe('Whiteboard is hidden.');
+    click(f, '.s-pane__away button');
+    await settle();
+    expect(isShown(f)).toBe(true);
+    expect(board.Visibility).toEqual([true, false, true]);
+    expect(lifecycle).toEqual(['bound', 'created']);
+  });
+
+  it("starts from the user's saved layout", async () => {
+    savedLayout = '[{"SurfaceKey":"Whiteboard","Placement":"stage"}]';
+    const { f, board } = await renderWithBoard();
+    expect(surface(f).classList.contains('stage-surface--stage')).toBe(true);
+    expect(f.componentInstance.ChannelFocusMode).toBe(true);
+    expect(board.Placements).toEqual(['stage']);
+  });
+
+  it('resets the layout from the pill: the board goes back to its tab and the saved layout is cleared', async () => {
+    savedLayout = '[{"SurfaceKey":"Whiteboard","Placement":"stage"}]';
+    const { f } = await renderWithBoard();
+    await pick(f, '.board-focus-pill mj-realtime-surface-move-menu', 'Reset layout');
+    expect(f.componentInstance.ChannelFocusMode).toBe(false);
+    expect(savedLayouts.at(-1)).toBe('[]');
   });
 });

@@ -19,6 +19,8 @@ import { RealtimePerceptionChipComponent, RealtimePerceptionToggle } from './rea
 import { RealtimeComposerComponent } from './realtime-composer.component';
 import { RealtimeSurfaceTabsComponent, RealtimeChannelSlot } from './realtime-surface-tabs.component';
 import { RealtimeSurfaceStageModel } from './realtime-surface-stage.model';
+import { RealtimeSurfaceMoveMenuComponent, type RealtimeSurfaceMove } from './realtime-surface-move-menu.component';
+import { ParseSurfacePlacementPref, SerializeSurfacePlacementPref, SURFACE_PLACEMENT_PREF_KEY } from './realtime-surface-placement-prefs';
 import { RealtimeChannelPaneComponent } from './channels/realtime-channel-pane.component';
 import {
   ClampSurfacePanelWidth, DefaultSurfacePanelWidth, IsSurfacePanelDrag, ParseSurfacePanelPref,
@@ -91,10 +93,12 @@ export interface RealtimeStartLiveRequest {
  * lives on ONE STAGE (`mj-media-stage`) over the whole overlay: created the first time it is
  * seen, laid over its tab's pane while that tab is active, and kept until its channel leaves
  * (see {@link RealtimeSurfaceStageModel}). The PLUGIN wires its own inputs/outputs.
- * The only channel-generic affordance the shell owns is the FOCUS layout: any channel may
- * request it (via its context's `SetFocusMode` → {@link RealtimeSessionService.ChannelFocus$}),
- * which collapses the main call column (`.board-focus`), fills the stage with that channel's
- * surface and shows the floating call pill.
+ * The user moves a surface with "Move to…" (beside its tab, or in the call pill): to the STAGE,
+ * back to its tab, or out of sight. The moves are saved per user and carry over to later
+ * sessions. A surface on the stage is the FOCUS layout: the main call column collapses
+ * (`.board-focus`), the surface fills the overlay and the floating call pill appears. A channel
+ * may ask for it too (via its context's `SetFocusMode` → {@link RealtimeSessionService.ChannelFocus$}),
+ * which moves its surface to the stage or back.
  *
  * Owns the shared {@link RealtimeSessionState} — the SINGLE merge of the service's
  * caption/delegation/narration streams — and passes it to both thread and rail via
@@ -130,6 +134,7 @@ export interface RealtimeStartLiveRequest {
     RealtimeComposerComponent,
     RealtimeSurfaceTabsComponent,
     RealtimeChannelPaneComponent,
+    RealtimeSurfaceMoveMenuComponent,
     MediaStageComponent,
     MediaStageSurfaceDirective,
     RealtimeWhiteboardBoardComponent,
@@ -595,17 +600,22 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   // ── Channel FOCUS layout (channel-generic — any plugin may request it) ─────
 
   /**
-   * True while a channel surface is in FOCUS mode: the main call column collapses
+   * True while a channel's surface is on the stage (FOCUS mode): the main call column collapses
    * (`.board-focus` on the overlay) and a compact floating call pill (orb + state +
-   * mute / show-thread / end) rides over the surface.
+   * mute / show-thread / move / end) rides over the surface.
    */
-  public ChannelFocusMode = false;
+  public get ChannelFocusMode(): boolean {
+    return this.SurfaceStage.StageKey !== null;
+  }
 
   /** Mic-muted state reflected on the focus pill's mute button. */
   public FocusPillMuted = false;
 
-  /** The channel currently holding the focus layout (the pill's exit routes back to it). */
-  private focusChannel: BaseRealtimeChannelClient | null = null;
+  /** The channel whose surface is on the stage (the pill's exit routes back to it), or `null`. */
+  public get StagePlugin(): BaseRealtimeChannelClient | null {
+    const key = this.SurfaceStage.StageKey;
+    return key ? this.SurfaceStage.PluginFor(key) : null;
+  }
 
   // ── The stage: every channel surface, in one layer over the overlay ─────────
 
@@ -631,6 +641,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
 
   constructor() {
     super();
+    this.loadPlacementPref();
     this.loadPanelWidthPref();
     this.loadDisclosurePref();
     this.loadCaptionsPref();
@@ -1458,16 +1469,54 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   }
 
   /**
-   * The session's channel set changed: surfaces whose channel left are dropped, the channels in play get their tabs,
-   * and focus ends when its channel left (focus belongs to a live surface).
+   * The session's channel set changed: surfaces whose channel left are dropped (focus ends with a surface that leaves
+   * the stage this way, while the user's move stays saved) and the channels in play get their tabs.
    */
   private onActiveChannelsChanged(channels: BaseRealtimeChannelClient[]): void {
     this.SurfaceStage.KeepOnly(channels);
     this.registerChannelTabs(channels);
-    if (this.focusChannel && !channels.includes(this.focusChannel)) {
-      this.setChannelFocus(null);
-    }
     this.recomputeUi();
+  }
+
+  // ── Moving surfaces: "Move to…", saved per user ────────────────────────────
+
+  /** The user moved a channel's surface ("Move to…", "Bring it here"). */
+  public OnMoveRequested(move: RealtimeSurfaceMove): void {
+    this.moveSurface(move);
+  }
+
+  /** The user put every surface back on its tab. */
+  public OnResetLayout(): void {
+    this.SurfaceStage.ResetLayout();
+    this.savePlacementPref();
+    this.recomputeUi();
+  }
+
+  /** Moves a surface, saves the layout, and re-resolves the UI (a surface on the stage is the focus layout). */
+  private moveSurface(move: RealtimeSurfaceMove): void {
+    if (!this.SurfaceStage.Move(move.Key, move.Placement)) {
+      return;
+    }
+    this.savePlacementPref();
+    this.recomputeUi();
+  }
+
+  /** Starts from the user's saved layout (no-op when the engine isn't configured). */
+  private loadPlacementPref(): void {
+    try {
+      this.SurfaceStage.LoadMoves(ParseSurfacePlacementPref(UserInfoEngine.Instance.GetSetting(SURFACE_PLACEMENT_PREF_KEY)));
+    } catch {
+      // UserInfoEngine not configured (plain-node tests / early bootstrap): every surface starts on its tab.
+    }
+  }
+
+  /** Saves the layout, debounced (no-op when the engine isn't configured). */
+  private savePlacementPref(): void {
+    try {
+      UserInfoEngine.Instance.SetSettingDebounced(SURFACE_PLACEMENT_PREF_KEY, SerializeSurfacePlacementPref(this.SurfaceStage.Moves));
+    } catch {
+      // UserInfoEngine not configured: the layout lasts for this overlay only.
+    }
   }
 
   /** Registers (or upgrades) one channel plugin's surface tab on the panel, and its surface on the stage. */
@@ -1776,18 +1825,17 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
 
   // ── Focus layout + pill ────────────────────────────────────────────────────
 
-  /** A channel requested (or released) the focus layout via its host context. */
+  /**
+   * A channel asked for the focus layout via its host context (the whiteboard's "Move to stage"): its surface moves to
+   * the stage, or, when released, back to its tab.
+   */
   private onChannelFocus(channel: BaseRealtimeChannelClient, focused: boolean): void {
-    this.setChannelFocus(focused ? channel : null);
-  }
-
-  /** Fills the stage with `channel`'s surface (focus mode), or sends the focused surface back to its tab (`null`). */
-  private setChannelFocus(channel: BaseRealtimeChannelClient | null): void {
-    this.ChannelFocusMode = channel !== null;
-    this.focusChannel = channel;
-    this.SurfaceStage.SetFocus(channel?.ChannelName ?? null);
-    // channelFocus drives the resolver (hides panel + strip) — re-resolve (marks for check).
-    this.recomputeUi();
+    const key = channel.ChannelName;
+    if (focused) {
+      this.moveSurface({ Key: key, Placement: 'stage' });
+    } else if (this.SurfaceStage.StageKey === key) {
+      this.moveSurface({ Key: key, Placement: 'tab' });
+    }
   }
 
   /** Focus pill: toggle the mic mute (routes through the overlay's single mute path). */
@@ -1795,13 +1843,16 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     this.ToggleMute();
   }
 
-  /** Focus pill: leave focus mode (show the thread column again). */
+  /** Focus pill: leave focus mode: the surface on the stage goes back to its tab (show the thread column again). */
   public OnFocusPillExit(): void {
-    // Route through the focus-holding channel so ITS surface toggle stays in sync — it
-    // re-emits SetFocusMode(false) → onChannelFocus. Defensively leave focus here too
-    // (idempotent), covering channels that don't.
-    this.focusChannel?.RequestFocusExit();
-    this.setChannelFocus(null);
+    const key = this.SurfaceStage.StageKey;
+    // Route through the channel on the stage so ITS surface toggle stays in sync — it may
+    // re-emit SetFocusMode(false) → onChannelFocus. Move it here too (idempotent), covering
+    // channels that don't.
+    this.StagePlugin?.RequestFocusExit();
+    if (key) {
+      this.moveSurface({ Key: key, Placement: 'tab' });
+    }
   }
 
   /** Focus pill: end the call (mirrors the controls row's End button). */

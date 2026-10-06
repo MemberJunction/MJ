@@ -45,6 +45,17 @@
             <span class="s-tab__badge" aria-hidden="true">{{ State.Cards.length }}</span>
           }
         </button>
+        @if (tab.Kind === 'channel' && tab.Data?.Plugin && tab.Key === Model.ActiveKey) {
+          <!-- "Move to…" for the active channel's surface: beside its tab, since a tab is itself a button. -->
+          <mj-realtime-surface-move-menu
+            class="s-tab-move"
+            [Key]="tab.Key"
+            [Title]="tab.Title"
+            [Placement]="PlacementOf(tab.Key)"
+            (MoveRequested)="MoveRequested.emit($event)"
+            (ResetLayoutRequested)="ResetLayoutRequested.emit()">
+          </mj-realtime-surface-move-menu>
+        }
       }
       <div class="tabs-end">
         <button type="button"
@@ -73,7 +84,17 @@
             </mj-realtime-activity-rail>
           }
           @case ('channel') {
-            @if (tab.Data?.Plugin) {
+            @if (tab.Data?.Plugin && PlacementOf(tab.Key) !== 'tab') {
+              <!-- The user moved this channel's surface elsewhere: the tab says where, and brings it back. -->
+              <div class="s-pane__away" role="status">
+                <i [class]="PlacementOf(tab.Key) === 'stage' ? 'fa-solid fa-expand' : 'fa-solid fa-eye-slash'" aria-hidden="true"></i>
+                <span>{{ tab.Title }} is {{ PlacementOf(tab.Key) === 'stage' ? 'on the stage' : 'hidden' }}.</span>
+                <button type="button" mjButton Variant="secondary" Size="sm"
+                        (click)="MoveRequested.emit({ Key: tab.Key, Placement: 'tab' })">
+                  Bring it here
+                </button>
+              </div>
+            } @else if (tab.Data?.Plugin) {
               <!-- Registry-resolved channel: its surface lives on the overlay's stage, which lays it
                    over this slot while the tab is active (ChannelSlotChange reports the slot). -->
               <div #channelSlot class="s-pane__slot" [attr.data-channel-key]="tab.Key"></div>

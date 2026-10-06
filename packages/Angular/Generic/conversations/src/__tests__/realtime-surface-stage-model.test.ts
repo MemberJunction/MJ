@@ -17,90 +17,170 @@ class TestChannel extends BaseRealtimeChannelClient {
 }
 
 describe('RealtimeSurfaceStageModel', () => {
-  const placements = (model: RealtimeSurfaceStageModel) => model.Surfaces.map((s) => `${s.Key}:${s.Placement}`);
+  const surfaces = (model: RealtimeSurfaceStageModel) => model.Surfaces.map((s) => `${s.Key}:${s.Placement}`);
+  const placements = (model: RealtimeSurfaceStageModel) => Object.fromEntries(model.Placements);
 
-  it('creates no surface for a registered channel until it is seen', () => {
+  /** A model with the given channels registered. */
+  const withChannels = (...names: string[]) => {
     const model = new RealtimeSurfaceStageModel();
-    model.Register(new TestChannel('Whiteboard'));
-    expect(model.Surfaces).toEqual([]);
+    names.forEach((name) => model.Register(new TestChannel(name)));
+    return model;
+  };
+
+  describe('creation', () => {
+    it('creates no surface for a registered channel until it is seen', () => {
+      const model = withChannels('Whiteboard');
+      expect(model.Surfaces).toEqual([]);
+      expect(placements(model)).toEqual({ Whiteboard: 'tab' });
+    });
+
+    it('creates a surface when its tab is shown, and keeps it when the tab is no longer shown', () => {
+      const model = withChannels('Whiteboard');
+      model.SetActiveTab('Whiteboard');
+      expect(surfaces(model)).toEqual(['Whiteboard:tab']);
+      model.SetActiveTab(null);
+      expect(surfaces(model)).toEqual(['Whiteboard:tab']);
+    });
+
+    it('keeps registration order whatever order the surfaces were seen in', () => {
+      const model = withChannels('Whiteboard', 'Media');
+      model.SetActiveTab('Media');
+      model.SetActiveTab('Whiteboard');
+      expect(surfaces(model)).toEqual(['Whiteboard:tab', 'Media:tab']);
+    });
+
+    it('shows a tab that was active before its channel registered once it registers', () => {
+      const model = new RealtimeSurfaceStageModel();
+      model.SetActiveTab('Whiteboard');
+      expect(model.Surfaces).toEqual([]);
+      model.Register(new TestChannel('Whiteboard'));
+      expect(surfaces(model)).toEqual(['Whiteboard:tab']);
+    });
+
+    it('drops the surface of a channel that left the session, and does not bring it back unseen', () => {
+      const whiteboard = new TestChannel('Whiteboard');
+      const media = new TestChannel('Media');
+      const model = new RealtimeSurfaceStageModel();
+      model.Register(whiteboard);
+      model.Register(media);
+      model.SetActiveTab('Whiteboard');
+      model.SetActiveTab('Media');
+      model.SetActiveTab(null);
+      model.KeepOnly([media]);
+      expect(surfaces(model)).toEqual(['Media:tab']);
+      expect(model.PluginFor('Whiteboard')).toBeNull();
+      model.Register(whiteboard);
+      expect(surfaces(model)).toEqual(['Media:tab']);
+    });
+
+    it('follows a channel that comes back as a new plugin instance under the same key', () => {
+      const before = new TestChannel('Whiteboard');
+      const after = new TestChannel('Whiteboard');
+      const model = new RealtimeSurfaceStageModel();
+      model.Register(before);
+      model.SetActiveTab('Whiteboard');
+      model.KeepOnly([after]);
+      model.Register(after);
+      expect(model.PluginFor('Whiteboard')).toBe(after);
+      expect(surfaces(model)).toEqual(['Whiteboard:tab']);
+    });
   });
 
-  it('creates a surface when its tab is shown, and keeps it when the tab is no longer shown', () => {
-    const model = new RealtimeSurfaceStageModel();
-    model.Register(new TestChannel('Whiteboard'));
-    model.SetActiveTab('Whiteboard');
-    expect(placements(model)).toEqual(['Whiteboard:tab']);
-    model.SetActiveTab(null);
-    expect(placements(model)).toEqual(['Whiteboard:tab']);
+  describe('moves', () => {
+    it('puts a surface on the stage, creating it if needed, and back on its tab', () => {
+      const model = withChannels('Whiteboard', 'Media');
+      model.SetActiveTab('Media');
+      expect(model.Move('Whiteboard', 'stage')).toBe(true);
+      expect(surfaces(model)).toEqual(['Whiteboard:stage', 'Media:tab']);
+      expect(model.StageKey).toBe('Whiteboard');
+      expect(model.Move('Whiteboard', 'tab')).toBe(true);
+      expect(surfaces(model)).toEqual(['Whiteboard:tab', 'Media:tab']);
+      expect(model.StageKey).toBeNull();
+    });
+
+    it('gives the stage to the latest surface moved there, and sends the one it displaces back to its tab', () => {
+      const model = withChannels('Whiteboard', 'Media');
+      model.Move('Whiteboard', 'stage');
+      model.Move('Media', 'stage');
+      expect(placements(model)).toEqual({ Whiteboard: 'tab', Media: 'stage' });
+      expect(model.StageKey).toBe('Media');
+    });
+
+    it('hides a surface without creating it, and keeps a seen one alive while hidden', () => {
+      const model = withChannels('Whiteboard', 'Media');
+      model.Move('Media', 'hidden');
+      model.SetActiveTab('Whiteboard');
+      expect(surfaces(model)).toEqual(['Whiteboard:tab']);
+      model.Move('Whiteboard', 'hidden');
+      expect(surfaces(model)).toEqual(['Whiteboard:hidden']);
+      expect(placements(model)).toEqual({ Whiteboard: 'hidden', Media: 'hidden' });
+    });
+
+    it('keeps one move per surface, the latest last, for the host to save', () => {
+      const model = withChannels('Whiteboard', 'Media');
+      model.Move('Whiteboard', 'stage');
+      model.Move('Media', 'hidden');
+      model.Move('Whiteboard', 'hidden');
+      expect(model.Moves).toEqual([
+        { SurfaceKey: 'Media', Placement: 'hidden' },
+        { SurfaceKey: 'Whiteboard', Placement: 'hidden' },
+      ]);
+    });
+
+    it('refuses a move for a channel not in the session, or to where it already is', () => {
+      const model = withChannels('Whiteboard');
+      expect(model.Move('Media', 'stage')).toBe(false);
+      expect(model.Move('Whiteboard', 'tab')).toBe(false);
+      expect(model.Moves).toEqual([]);
+    });
+
+    it('starts from a saved layout, ignoring placements a surface may not take', () => {
+      const model = new RealtimeSurfaceStageModel();
+      model.LoadMoves([
+        { SurfaceKey: 'Whiteboard', Placement: 'stage' },
+        { SurfaceKey: 'Media', Placement: 'pip' },
+      ]);
+      model.Register(new TestChannel('Whiteboard'));
+      model.Register(new TestChannel('Media'));
+      expect(placements(model)).toEqual({ Whiteboard: 'stage', Media: 'tab' });
+      expect(surfaces(model)).toEqual(['Whiteboard:stage']);
+    });
+
+    it("keeps a channel's move when it leaves, so its surface returns to the same place", () => {
+      const whiteboard = new TestChannel('Whiteboard');
+      const model = new RealtimeSurfaceStageModel();
+      model.Register(whiteboard);
+      model.Move('Whiteboard', 'stage');
+      model.KeepOnly([]);
+      expect(model.StageKey).toBeNull();
+      model.Register(new TestChannel('Whiteboard'));
+      expect(model.StageKey).toBe('Whiteboard');
+    });
+
+    it('resets the layout: every surface returns to its tab', () => {
+      const model = withChannels('Whiteboard', 'Media');
+      model.Move('Whiteboard', 'stage');
+      model.Move('Media', 'hidden');
+      model.ResetLayout();
+      expect(placements(model)).toEqual({ Whiteboard: 'tab', Media: 'tab' });
+      expect(model.Moves).toEqual([]);
+    });
   });
 
-  it('puts the focused channel on the stage, creating it if needed, and back on its tab when focus ends', () => {
-    const model = new RealtimeSurfaceStageModel();
-    model.Register(new TestChannel('Whiteboard'));
-    model.Register(new TestChannel('Media'));
-    model.SetActiveTab('Media');
-    model.SetFocus('Whiteboard');
-    expect(placements(model)).toEqual(['Whiteboard:stage', 'Media:tab']);
-    model.SetFocus(null);
-    expect(placements(model)).toEqual(['Whiteboard:tab', 'Media:tab']);
-  });
-
-  it('keeps registration order whatever order the surfaces were seen in', () => {
-    const model = new RealtimeSurfaceStageModel();
-    model.Register(new TestChannel('Whiteboard'));
-    model.Register(new TestChannel('Media'));
-    model.SetActiveTab('Media');
-    model.SetActiveTab('Whiteboard');
-    expect(placements(model)).toEqual(['Whiteboard:tab', 'Media:tab']);
-  });
-
-  it('shows a tab that was active before its channel registered once it registers', () => {
-    const model = new RealtimeSurfaceStageModel();
-    model.SetActiveTab('Whiteboard');
-    expect(model.Surfaces).toEqual([]);
-    model.Register(new TestChannel('Whiteboard'));
-    expect(placements(model)).toEqual(['Whiteboard:tab']);
-  });
-
-  it('drops the surface of a channel that left the session, and does not bring it back unseen', () => {
-    const model = new RealtimeSurfaceStageModel();
+  it('replaces the surfaces array and the placements map only when something changes', () => {
     const whiteboard = new TestChannel('Whiteboard');
-    const media = new TestChannel('Media');
-    model.Register(whiteboard);
-    model.Register(media);
-    model.SetActiveTab('Whiteboard');
-    model.SetActiveTab('Media');
-    model.SetActiveTab(null);
-    model.KeepOnly([media]);
-    expect(placements(model)).toEqual(['Media:tab']);
-    expect(model.PluginFor('Whiteboard')).toBeNull();
-    model.Register(whiteboard);
-    expect(placements(model)).toEqual(['Media:tab']);
-  });
-
-  it('follows a channel that comes back as a new plugin instance under the same key', () => {
     const model = new RealtimeSurfaceStageModel();
-    const before = new TestChannel('Whiteboard');
-    const after = new TestChannel('Whiteboard');
-    model.Register(before);
-    model.SetActiveTab('Whiteboard');
-    model.KeepOnly([after]);
-    model.Register(after);
-    expect(model.PluginFor('Whiteboard')).toBe(after);
-    expect(placements(model)).toEqual(['Whiteboard:tab']);
-  });
-
-  it('replaces the surfaces array only when a surface or a placement changes', () => {
-    const model = new RealtimeSurfaceStageModel();
-    const whiteboard = new TestChannel('Whiteboard');
     model.Register(whiteboard);
     model.SetActiveTab('Whiteboard');
     const shown = model.Surfaces;
+    const placed = model.Placements;
     model.SetActiveTab(null);
     model.Register(whiteboard);
     model.KeepOnly([whiteboard]);
     expect(model.Surfaces).toBe(shown);
-    model.SetFocus('Whiteboard');
+    expect(model.Placements).toBe(placed);
+    model.Move('Whiteboard', 'stage');
     expect(model.Surfaces).not.toBe(shown);
+    expect(model.Placements).not.toBe(placed);
   });
 });

@@ -147,7 +147,10 @@
           (CollapsedChange)="OnPanelCollapsedChange($event)"
           (WideChanged)="OnPanelWideChanged($event)"
           (ActiveChannelChange)="OnActiveChannelChange($event)"
-          (ChannelSlotChange)="OnChannelSlotChange($event)">
+          (ChannelSlotChange)="OnChannelSlotChange($event)"
+          [SurfacePlacements]="SurfaceStage.Placements"
+          (MoveRequested)="OnMoveRequested($event)"
+          (ResetLayoutRequested)="OnResetLayout()">
         </mj-realtime-surface-tabs>
       </div>
     }
@@ -161,10 +164,10 @@
                     [Surfaces]="SurfaceStage.Surfaces"
                     [TabSlot]="StageSlot?.Element ?? null"
                     [ActiveTabKey]="StageSlot?.Key ?? null">
-      <ng-template mjMediaStageSurface let-key let-visible="Visible">
+      <ng-template mjMediaStageSurface let-key let-visible="Visible" let-placement="Placement">
         @if (SurfaceStage.PluginFor(key); as plugin) {
           <div class="stage-frame" role="region" [attr.aria-label]="plugin.TabTitle">
-            <mj-realtime-channel-pane [Plugin]="plugin" [Visible]="visible"></mj-realtime-channel-pane>
+            <mj-realtime-channel-pane [Plugin]="plugin" [Visible]="visible" [Placement]="placement"></mj-realtime-channel-pane>
           </div>
         }
       </ng-template>
@@ -193,6 +196,15 @@
                 title="Show thread" aria-label="Show the conversation thread">
           <i class="fa-solid fa-table-columns" aria-hidden="true"></i>
         </button>
+        @if (StagePlugin; as stagePlugin) {
+          <mj-realtime-surface-move-menu
+            [Key]="stagePlugin.ChannelName"
+            [Title]="stagePlugin.TabTitle"
+            Placement="stage"
+            (MoveRequested)="OnMoveRequested($event)"
+            (ResetLayoutRequested)="OnResetLayout()">
+          </mj-realtime-surface-move-menu>
+        }
         <button type="button" class="board-focus-pill__btn board-focus-pill__btn--end"
                 (click)="OnFocusPillEnd()"
                 title="End call" aria-label="End the call">

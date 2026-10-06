@@ -27,11 +27,16 @@ export interface MediaStageSurface {
   Placement: MediaStagePlacement;
 }
 
-/** What a surface template receives: its key, as `let-key`, and whether it is on screen, as `let-visible="Visible"`. */
+/**
+ * What a surface template receives: its key, as `let-key`; whether it is on screen, as `let-visible="Visible"`; and
+ * its placement, as `let-placement="Placement"`.
+ */
 export interface MediaStageSurfaceContext {
   $implicit: string;
   /** Whether the surface is on screen now: its placement shows it and the stage itself is on screen. */
   Visible: boolean;
+  /** Where the surface is placed. */
+  Placement: MediaStagePlacement;
 }
 
 /** Marks the host's template for a surface's content: `<ng-template mjMediaStageSurface let-key>`. */
@@ -89,7 +94,7 @@ const SETTLE_MS = 600;
         @if (SurfaceTemplate) {
           <ng-container
             [ngTemplateOutlet]="SurfaceTemplate.Template"
-            [ngTemplateOutletContext]="{ $implicit: surface.Key, Visible: IsShown(surface) }"
+            [ngTemplateOutletContext]="{ $implicit: surface.Key, Visible: IsShown(surface), Placement: surface.Placement }"
           ></ng-container>
         }
       </div>

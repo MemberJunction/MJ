@@ -4,7 +4,7 @@ import { IsPlainObject } from '@memberjunction/global';
 import {
   CHANNEL_INBOUND_VIDEO_TRACK, JSONObject, JSONValue, RealtimeToolDefinition, RealtimeTrackDescriptor, RealtimeTrackDirection
 } from '@memberjunction/ai';
-import { ChannelInboundVideoBridge, type BaseRealtimeClient, type IChannelFrameProvider } from '@memberjunction/ai-realtime-client';
+import { ChannelInboundVideoBridge, type BaseRealtimeClient, type IChannelFrameProvider, type MediaPlacement } from '@memberjunction/ai-realtime-client';
 import {
   CompareExposure,
   DescribeExposureLimit,
@@ -291,7 +291,8 @@ export interface ChannelOnboardingDetails {
  * {@link BindSurface}/{@link UnbindSurface} cycles (the Angular overlay creates the surface the
  * first time it is shown and keeps it until the channel leaves the session; another host may
  * recreate it), each telling the plugin when its surface goes in and out of sight
- * ({@link OnSurfaceVisibilityChange}) → {@link Dispose} at teardown.
+ * ({@link OnSurfaceVisibilityChange}) and where it is placed ({@link OnSurfacePlacementChange})
+ * → {@link Dispose} at teardown.
  * {@link ApplyAgentTool} MUST work with NO surface bound (apply to the state engine
  * directly; skip the UI garnish) — tool calls can arrive before the surface is first shown.
  *
@@ -461,6 +462,16 @@ export abstract class BaseRealtimeChannelClient<TSurface extends object = object
    */
   public OnSurfaceVisibilityChange(_visible: boolean): void {
     // default: nothing to pause
+  }
+
+  /**
+   * Called by the host when the bound surface moves: to the stage (it fills the call), to its tab, or out of sight
+   * because the user hid it. A channel can adapt its own chrome, such as a "Move to stage" button that has nothing to
+   * do once the surface is on the stage. Called right after {@link BindSurface} with the current placement, then on
+   * every move, and not after {@link UnbindSurface}. Default: no-op.
+   */
+  public OnSurfacePlacementChange(_placement: MediaPlacement): void {
+    // default: a surface looks the same wherever it is placed
   }
 
   /**
