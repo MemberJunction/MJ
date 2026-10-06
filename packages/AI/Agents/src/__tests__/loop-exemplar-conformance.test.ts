@@ -29,7 +29,7 @@ import { readdirSync, readFileSync, statSync } from 'fs';
 import { dirname, join, relative } from 'path';
 import { fileURLToPath } from 'url';
 import { LOOP_NEXT_STEP_TYPES } from '../agent-types/loop-agent-response-type';
-import { ASK_USER_TOOL, PAYLOAD_CHANGE_TOOL, SUB_AGENT_TOOL_PREFIX } from '../native-tools/control-tools';
+import { ASK_USER_TOOL, COMPLETE_TASK_TOOL, PAYLOAD_CHANGE_TOOL, SUB_AGENT_TOOL_PREFIX } from '../native-tools/control-tools';
 
 const __dirname_ = dirname(fileURLToPath(import.meta.url));
 // src/__tests__/ → repo root is 5 levels up (Agents → AI → packages → root).
@@ -247,6 +247,10 @@ describe('Loop system prompt — implicit-mode section matches the code', () => 
         expect(section).toContain(SUB_AGENT_TOOL_PREFIX);
     });
     it('tells the model plain text ends the turn', () => { expect(section).toMatch(/plain text/i); });
+    it('tells the model complete_task stores the result and finishes in one call', () => {
+        expect(section).toContain(`\`${COMPLETE_TASK_TOOL}\``);
+        expect(section).toMatch(/only call on its turn/i);
+    });
     it('tells the model not to ask when a sub-agent or Action can supply the answer (Plan B, Task 2)', () => {
         expect(section).toMatch(/never for work a sub-agent or an Action can do/i);
     });

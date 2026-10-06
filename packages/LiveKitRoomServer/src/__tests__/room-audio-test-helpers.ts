@@ -134,6 +134,8 @@ export class FakeRoomClient implements NativeRoomClient {
   public ConnectArgs: NativeConnectArgs | null = null;
   public Disconnects = 0;
   public ConnectError: Error | null = null;
+  /** When set, `publishAudio` throws it (a broken outbound sink). */
+  public PublishError: Error | null = null;
   private disconnectedCallback: (() => void) | null = null;
 
   public async connect(args: NativeConnectArgs) {
@@ -145,6 +147,7 @@ export class FakeRoomClient implements NativeRoomClient {
     this.Disconnects++;
   }
   public publishAudio(pcm: ArrayBuffer): void {
+    if (this.PublishError) throw this.PublishError;
     this.Published.push(pcm);
   }
   public flushOutbound(): void {}
