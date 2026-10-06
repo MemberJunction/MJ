@@ -9,7 +9,7 @@ import { InteractiveFormPanelComponent } from './interactive-form-panel.componen
 import type { FormContributionRegistration } from '../panel-slot/form-contribution';
 import type { BaseFormComponent } from '../base-form-component';
 import type { ComponentSpec } from '@memberjunction/interactive-component-types';
-import type { FormPanelHostProps } from '@memberjunction/interactive-component-types/forms';
+import { FormPanelEventNames, type FormPanelHostProps } from '@memberjunction/interactive-component-types/forms';
 
 /**
  * DOM coverage for <mj-interactive-form-panel> — the generic BaseFormPanel that renders a
@@ -234,5 +234,85 @@ describe('InteractiveFormPanelComponent (DOM) — validating', () => {
 
     expect(result.Success).toBe(false);
     expect(result.Errors[0]).toMatchObject({ Source: 'skip:person-ltv', Message: 'x' });
+  });
+});
+
+/**
+ * A React panel is runtime content, so a validator that throws does not block the save by itself.
+ * The failure shows in the panel instead, as does an error the React host reports.
+ */
+describe('InteractiveFormPanelComponent (DOM) — a failure inside the panel', () => {
+  const mounted = () => render(contribution(), { componentSpec: { name: 'X' }, HostProps: { record: {} } });
+  const handle = (invoke: () => unknown) => ({ hasMethod: () => true, invokeMethod: invoke }) as unknown as MJReactComponent;
+  const reported = (isValid: boolean, errors: string[]) =>
+    ({ type: FormPanelEventNames.ValidationChanged, payload: { isValid, errors } });
+
+  it('does not block when Validate rejects, and shows the failure naming the panel', async () => {
+    const f = mounted();
+    f.componentInstance.ReactComponent = handle(() => Promise.reject(new Error('boom')));
+
+    const result = await f.componentInstance.Validate();
+    f.detectChanges();
+
+    expect(result.Success).toBe(true);
+    expect(text(f, 'mj-alert')).toContain('Lifetime value');
+    expect(query(f, '.react-stub')).not.toBeNull();
+  });
+
+  it('treats a Validate that throws synchronously the same way', async () => {
+    const f = mounted();
+    f.componentInstance.ReactComponent = handle(() => { throw new Error('boom'); });
+
+    const result = await f.componentInstance.Validate();
+
+    expect(result.Success).toBe(true);
+    expect(f.componentInstance.RenderError).toContain('Lifetime value');
+  });
+
+  it('still blocks on a failure the panel reported before its Validate threw', async () => {
+    const f = mounted();
+    await f.componentInstance.OnReactComponentEvent(reported(false, ['Amount required']));
+    f.componentInstance.ReactComponent = handle(() => Promise.reject(new Error('boom')));
+
+    const result = await f.componentInstance.Validate();
+
+    expect(result.Success).toBe(false);
+    expect(result.Errors[0]).toMatchObject({ Source: 'skip:person-ltv', Message: 'Amount required' });
+  });
+
+  it('clears the failure when a later Validate answers', async () => {
+    const f = mounted();
+    f.componentInstance.ReactComponent = handle(() => Promise.reject(new Error('boom')));
+    await f.componentInstance.Validate();
+    f.detectChanges();
+    expect(query(f, 'mj-alert'), 'precondition').not.toBeNull();
+
+    f.componentInstance.ReactComponent = handle(() => ({ isValid: true, errors: [] }));
+    await f.componentInstance.Validate();
+    f.detectChanges();
+
+    expect(f.componentInstance.RenderError).toBeNull();
+    expect(query(f, 'mj-alert')).toBeNull();
+  });
+
+  it('shows an error the React host reports', () => {
+    const f = mounted();
+    const react = f.debugElement.query(By.directive(ReactStub)).componentInstance as ReactStub;
+
+    react.componentEvent.emit({ type: 'error', payload: { error: 'Render blew up', source: 'react' } });
+    f.detectChanges();
+
+    expect(text(f, 'mj-alert')).toContain('Render blew up');
+    expect(text(f, 'mj-alert')).toContain('Lifetime value');
+  });
+
+  it('answers LastKnownValidation from the last state the panel reported', async () => {
+    const f = render(contribution());
+    await f.componentInstance.OnReactComponentEvent(reported(false, ['Amount required']));
+
+    const result = f.componentInstance.LastKnownValidation();
+
+    expect(result.Success).toBe(false);
+    expect(result.Errors[0]).toMatchObject({ Source: 'skip:person-ltv', Message: 'Amount required' });
   });
 });

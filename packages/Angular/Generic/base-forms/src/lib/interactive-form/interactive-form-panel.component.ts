@@ -43,14 +43,17 @@ export class InteractiveFormPanelComponent extends BaseContributionPanel impleme
 
     /**
      * Load-time failure only: missing ComponentID, component not found, bad Specification
-     * JSON, wrong role. A panel that throws *during render* is a different case and is
-     * already contained — `<mj-react-component>` wraps every spec in the runtime's
-     * error boundary (`createErrorBoundary`, `mj-react-component.component.ts`), so the
-     * throw stays inside this panel's subtree and the rest of the form renders and saves
-     * normally. Bind the boundary's error output to `RenderError` so the failure is
-     * visible in the panel rather than silent, and log it once.
+     * JSON, wrong role. Shown in place of the React component.
      */
     public loadError: string | null = null;
+
+    /**
+     * A failure after the React component loaded, shown above it: an `error` event from
+     * `<mj-react-component>` (initialization, render timeout, or a throw its error boundary
+     * caught), or a `Validate` that threw. A throw during render stays inside this panel's
+     * subtree, so the rest of the form renders and saves normally. A later `Validate` that
+     * answers clears it.
+     */
     public RenderError: string | null = null;
 
     private lastValidation: FormPanelValidateResult | null = null;
@@ -136,6 +139,12 @@ export class InteractiveFormPanelComponent extends BaseContributionPanel impleme
                 this.lastValidation = { isValid: !!args?.isValid, errors: args?.errors ?? [] };
                 break;
             }
+            case 'error': {
+                // `<mj-react-component>` has already logged it.
+                const detail = (event.payload as { error?: unknown } | null | undefined)?.error;
+                this.setRenderError(`${this.Title} failed: ${detail ? String(detail) : 'unknown error'}`);
+                break;
+            }
         }
     }
 
@@ -150,7 +159,7 @@ export class InteractiveFormPanelComponent extends BaseContributionPanel impleme
     }
 
     /**
-     * Surface the panel's validity to the parent form's Save.
+     * Surface the panel's validity to the parent form's save.
      *
      * The React method may be `async` — any validator that checks something
      * server-side will be — and `invokeMethod` returns whatever the method
@@ -159,23 +168,44 @@ export class InteractiveFormPanelComponent extends BaseContributionPanel impleme
      * `ValidationChanged` payload, and the form saves an invalid record with no
      * error and no log. Resolving a non-Promise is a no-op, so one code path
      * covers both shapes.
+     *
+     * A validator that throws or rejects does not block the save by itself. It is logged and
+     * shown in the panel ({@link RenderError}), and the result falls back to the last
+     * `ValidationChanged` state, so a failure the panel reported before still blocks.
      */
     public override async Validate(): Promise<ValidationResult> {
-        const returned = this.invokeIfRegistered<FormPanelValidateResult | Promise<FormPanelValidateResult>>(
-            FormPanelMethodNames.Validate,
-        );
         let live: FormPanelValidateResult | undefined;
-        try {
-            live = await Promise.resolve(returned);
-        } catch (err) {
-            LogError(`InteractiveFormPanelComponent.Validate: panel validator threw: ${err instanceof Error ? err.message : String(err)}`);
-            live = undefined;
+        if (this.ReactComponent?.hasMethod?.(FormPanelMethodNames.Validate)) {
+            try {
+                const returned = this.ReactComponent.invokeMethod(FormPanelMethodNames.Validate) as
+                    FormPanelValidateResult | Promise<FormPanelValidateResult> | undefined;
+                live = await Promise.resolve(returned);
+                this.setRenderError(null);
+            } catch (err) {
+                LogError(`InteractiveFormPanelComponent.Validate: panel validator threw: ${err instanceof Error ? err.message : String(err)}`);
+                this.setRenderError(`${this.Title} could not check its values.`);
+            }
         }
         const state = live && typeof live === 'object' && 'isValid' in live ? live : this.lastValidation;
+        return this.toValidationResult(state);
+    }
+
+    /** The last state the panel reported through `ValidationChanged`; valid when it has reported none. */
+    public override LastKnownValidation(): ValidationResult {
+        return this.toValidationResult(this.lastValidation);
+    }
+
+    private toValidationResult(state: FormPanelValidateResult | null): ValidationResult {
         const result = new ValidationResult();
         result.Success = state ? state.isValid : true;
         result.Errors = (state?.errors ?? []).map((message) => new ValidationErrorInfo(this.SectionKey, message, null));
         return result;
+    }
+
+    private setRenderError(message: string | null): void {
+        if (this.RenderError === message) return;
+        this.RenderError = message;
+        this.cdr.markForCheck();
     }
 
     private isExpanded(): boolean {

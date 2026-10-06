@@ -27,6 +27,9 @@
   @if (loadError) {
     <mj-alert Variant="error">{{ loadError }}</mj-alert>
   } @else if (componentSpec && HostProps) {
+    @if (RenderError) {
+      <mj-alert Variant="error">{{ RenderError }}</mj-alert>
+    }
     <mj-react-component
       #reactComponent
       [component]="componentSpec"

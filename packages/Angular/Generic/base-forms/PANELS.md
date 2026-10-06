@@ -410,6 +410,10 @@ What a panel author should know:
   return a `ValidationResult` or a Promise of one. Synchronous callers read
   `LastKnownValidation()`, so a panel that validates asynchronously should override it to return
   its last result.
+- **A `Validate()` that throws.** A compiled panel whose `Validate()` throws or rejects blocks the
+  save, and the user sees an error toast. A React panel whose `Validate()` throws does not block
+  it: the host logs the failure and shows it in the panel. A failure that React panel reported
+  before through `ValidationChanged` still blocks the save.
 
 A generated panel may propose its placement in `formContribution` (slot, a section key, field names,
 a related entity, or a section to sit inside). The apply dialog starts from every claim the open
