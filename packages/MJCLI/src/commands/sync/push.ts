@@ -1,15 +1,18 @@
 /**
  * oclif entry for `mj sync push`. The logic lives in {@link SyncPushPlugin} in
- * `@memberjunction/metadata-sync/plugins` (open-question #2 "shim" approach); this
- * subclass only adds the shared-cache clear that must follow a database write (#4083), before the
- * plugin's Cleanup() ends the process.
+ * `@memberjunction/metadata-sync/plugins`; this subclass only adds the shared-cache clear that must
+ * follow a database write, before the plugin's Cleanup() ends the process. Running servers never
+ * hear about rows written here, so without the clear they keep serving the old ones.
  *
- * A push that succeeded always clears. A push that FAILED clears only when it left something
- * behind: since #4550 an atomic push (the default) rolls its writes back, and `PushAbortedError`
- * says so — `rolledBack`, plus the rows a non-atomic push committed anyway. Clearing after a clean
- * rollback would drop every server's cache for a run that changed nothing. When the outcome cannot
- * be read, the clear still runs: a needless reload is cheaper than a fleet serving rows that are
- * no longer in the database.
+ * The clear runs only when the push may have changed the database:
+ * - A successful push clears unless it reports that it wrote nothing: it was cancelled before
+ *   writing, or it created, updated and deleted no rows. Clearing after a no-op push would drop
+ *   every server's cache on every deploy for nothing.
+ * - A failed push clears only when it left something behind. An atomic push (the default) rolls its
+ *   writes back, and `PushAbortedError` says so: `rolledBack`, plus the rows a non-atomic push
+ *   committed anyway.
+ * - When the outcome cannot be read, the clear still runs: a needless reload is cheaper than a fleet
+ *   serving rows that are no longer in the database.
  */
 import { Flags } from '@oclif/core';
 import type { MJCLIResult, PluginUsage } from '@memberjunction/cli-core';
@@ -53,6 +56,9 @@ export default class SyncPush extends SyncPushPlugin {
     if (!result.success && !this.failedPushLeftWrites(result, undefined)) {
       return result; // rolled back cleanly: nothing in the database changed, so nothing is stale
     }
+    if (result.success && this.successfulPushWroteNothing(result)) {
+      return result; // cancelled, or a no-op: nothing in the database changed
+    }
     const report = await this.clearSharedCache(result.success ? 'mj sync push' : 'mj sync push (failed)');
     return AppendSharedCacheClear(result, report, this.Host);
   }
@@ -73,6 +79,22 @@ export default class SyncPush extends SyncPushPlugin {
       return true;
     }
     return !data.rolledBack || (data.committedOutsideTransaction ?? 0) > 0;
+  }
+
+  /**
+   * Whether a successful push positively reports that it wrote nothing: it was cancelled before
+   * writing, or it created, updated and deleted no rows. A result without those counts counts as
+   * "it may have written".
+   */
+  private successfulPushWroteNothing(result: MJCLIResult): boolean {
+    const data = result.data as { cancelled?: boolean; created?: number; updated?: number; deleted?: number } | undefined;
+    if (data?.cancelled === true) {
+      return true;
+    }
+    if (typeof data?.created !== 'number' || typeof data.updated !== 'number' || typeof data.deleted !== 'number') {
+      return false;
+    }
+    return data.created + data.updated + data.deleted === 0;
   }
 
   /** Clears the shared cache unless this was a dry run (which writes nothing). */

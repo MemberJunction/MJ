@@ -74,6 +74,26 @@ describe('shared cache clear in CLI commands', () => {
     expect(state.logged).toEqual([['cleared 3', 'info']]);
   });
 
+  it('sync push clears after a successful push that wrote rows', async () => {
+    state.result = { success: true, command: 'x', durationSeconds: 0, data: { created: 0, updated: 2, unchanged: 40, deleted: 0 } };
+    await run(SyncPush);
+    expect(clearAfterWrite).toHaveBeenCalledWith('mj sync push', undefined);
+  });
+
+  it('sync push does NOT clear after a successful push that wrote nothing', async () => {
+    // A no-op push runs in every deploy; clearing after it would drop every server's cache for nothing.
+    state.result = { success: true, command: 'x', durationSeconds: 0, data: { created: 0, updated: 0, unchanged: 40, deleted: 0, skipped: 3 } };
+    const out = await run(SyncPush);
+    expect(clearAfterWrite).not.toHaveBeenCalled();
+    expect(out.data?.sharedCacheClear).toBeUndefined();
+  });
+
+  it('sync push does NOT clear after a cancelled push', async () => {
+    state.result = { success: true, command: 'x', durationSeconds: 0, data: { cancelled: true }, warnings: ['Push cancelled due to validation errors.'] };
+    await run(SyncPush);
+    expect(clearAfterWrite).not.toHaveBeenCalled();
+  });
+
   it('sync push clears after a failed push that left rows behind', async () => {
     // Non-atomic mode: the push reports exactly what stayed committed (#4550).
     state.result = { success: false, command: 'x', durationSeconds: 0, data: { rolledBack: false, committedOutsideTransaction: 3 } };
