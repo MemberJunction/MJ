@@ -52,6 +52,7 @@
     "@memberjunction/ng-forms": "6.2.0-edge.1",
     "@memberjunction/ng-markdown": "6.2.0-edge.1",
     "@memberjunction/ng-media-player": "6.2.0-edge.1",
+    "@memberjunction/ng-realtime-media": "6.2.0-edge.1",
     "@memberjunction/ng-notifications": "6.2.0-edge.1",
     "@memberjunction/ng-react": "6.2.0-edge.1",
     "@memberjunction/ng-realtime-channels": "6.2.0-edge.1",

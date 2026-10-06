@@ -216,6 +216,11 @@
 .s-pane--active {
   display: flex;
 }
+/* Where a channel's surface shows: the overlay's stage lays the surface over this box. */
+.s-pane__slot {
+  flex: 1;
+  min-height: 0;
+}
 
 /* Empty strip (idle voice-first session): a gentle hint rather than a bare grid. */
 .surface__empty {

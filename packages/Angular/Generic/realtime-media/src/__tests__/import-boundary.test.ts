@@ -12,6 +12,7 @@ import { describe, expect, it } from 'vitest';
 const SRC = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 const ALLOWED_IMPORTS: ReadonlySet<string> = new Set([
+  '@angular/common',
   '@angular/core',
   '@angular/forms',
   '@memberjunction/ai-realtime-client/media',

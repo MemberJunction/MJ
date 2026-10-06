@@ -135,7 +135,7 @@
              (dblclick)="OnPanelResizeReset()"></div>
       }
 
-      <div class="call-panel" [style.width.px]="ChannelFocusMode ? null : PanelAreaSize">
+      <div class="call-panel" [style.width.px]="PanelAreaSize">
         <mj-realtime-surface-tabs
           [State]="State"
           [DevMode]="DevMode"
@@ -143,14 +143,31 @@
           [EnvironmentID]="EnvironmentID"
           [ShowActivityTab]="ShowActivityTab"
           [ExtraArtifacts]="ReviewArtifacts"
-          [Fill]="ChannelFocusMode"
           (OpenRunRequested)="OnOpenRunRequested($event)"
           (CollapsedChange)="OnPanelCollapsedChange($event)"
           (WideChanged)="OnPanelWideChanged($event)"
-          (ActiveChannelChange)="OnActiveChannelChange($event)">
+          (ActiveChannelChange)="OnActiveChannelChange($event)"
+          (ChannelSlotChange)="OnChannelSlotChange($event)">
         </mj-realtime-surface-tabs>
       </div>
     }
+
+    <!-- THE STAGE: every channel surface lives here, in one layer over the overlay. A surface
+         is created the first time it is seen, lies over its tab's slot while that tab is
+         active, fills the overlay while its channel holds focus, and otherwise waits out of
+         sight — so collapsing the panel, switching tabs or entering focus never reloads it. -->
+    <mj-media-stage class="call-stage"
+                    [Surfaces]="SurfaceStage.Surfaces"
+                    [TabSlot]="StageSlot?.Element ?? null"
+                    [ActiveTabKey]="StageSlot?.Key ?? null">
+      <ng-template mjMediaStageSurface let-key>
+        @if (SurfaceStage.PluginFor(key); as plugin) {
+          <div class="stage-frame" role="region" [attr.aria-label]="plugin.TabTitle">
+            <mj-realtime-channel-pane [Plugin]="plugin"></mj-realtime-channel-pane>
+          </div>
+        }
+      </ng-template>
+    </mj-media-stage>
 
     <!-- FOCUS floating call pill: the main column is hidden, so the live call's
          identity + state + mute / show-thread / end controls ride over the surface. -->

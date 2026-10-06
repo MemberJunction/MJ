@@ -1,0 +1,24 @@
+/* The stage covers its positioned parent; only the surfaces on it take pointer input. */
+:host {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* A surface's box. The host's content inside it sizes itself to the box. */
+.stage-surface {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  pointer-events: auto;
+}
+
+.stage-surface--stage {
+  inset: 0;
+}
+
+/* Out of sight but alive: the surface keeps its state until it shows again. */
+.stage-surface--hidden {
+  display: none;
+}

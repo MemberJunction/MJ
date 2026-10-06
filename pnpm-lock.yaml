@@ -6731,6 +6731,9 @@ importers:
       '@memberjunction/ng-realtime-channels':
         specifier: 6.2.0-edge.1
         version: link:../realtime-channels
+      '@memberjunction/ng-realtime-media':
+        specifier: 6.2.0-edge.1
+        version: link:../realtime-media
       '@memberjunction/ng-resource-permissions':
         specifier: 6.2.0-edge.1
         version: link:../resource-permissions

@@ -268,14 +268,26 @@
 }
 
 /* ---------- FOCUS-BOARD mode (whiteboard "Focus board" toggle) ----------
-   The main call column collapses away entirely and the surface panel (whiteboard tab)
-   fills the overlay; a compact floating call pill keeps the live call reachable. */
+   The main call column collapses away entirely and the focused channel's surface fills
+   the stage; a compact floating call pill keeps the live call reachable. */
 .call-overlay.board-focus .call-main {
   display: none;
 }
-.call-overlay.board-focus mj-realtime-surface-tabs {
+
+/* ---------- the stage (every channel surface, in one layer) ----------
+   mj-media-stage covers the overlay and places each surface itself. Above the panel it
+   lays surfaces over; below the onboarding card (5), the dock and chip (5) and the
+   focus pill (60). */
+.call-stage {
+  z-index: 1;
+}
+/* A surface's frame: fills the box the stage gives it. The surface component is created
+   beside the pane host inside it, and sizes itself to it (height: 100%). */
+.stage-frame {
   flex: 1;
-  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Floating call pill: orb + state + mute / show-thread / end (per the whiteboard mockup). */
@@ -427,8 +439,4 @@
   flex: 1;
   min-width: 0;
   min-height: 0;
-}
-/* Board-focus fill: the panel owns the whole overlay (the main column is hidden). */
-.call-overlay.board-focus .call-panel {
-  flex: 1;
 }

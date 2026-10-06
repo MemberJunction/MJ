@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TestBed } from '@angular/core/testing';
-import { renderComponentFixture } from '@memberjunction/ng-test-utils';
-import { RealtimeSurfaceTabsComponent } from './realtime-surface-tabs.component';
+import type { RealtimeToolDefinition } from '@memberjunction/ai';
+import { BaseRealtimeChannelClient } from '@memberjunction/realtime-runtime';
+import { renderComponentFixture, query, click } from '@memberjunction/ng-test-utils';
+import { RealtimeSurfaceTabsComponent, type RealtimeChannelSlot } from './realtime-surface-tabs.component';
 import { RealtimeSurfaceTabsModel } from './realtime-surface-tabs.model';
 import type { RealtimeSessionState } from './realtime-session-state';
 
@@ -86,5 +88,96 @@ describe('RealtimeSurfaceTabsComponent: ActiveChannelChange (DOM)', () => {
     f.componentInstance.Model.SetShowActivityTab(true);
     await settle(f);
     expect(seen).not.toHaveBeenCalled();
+  });
+});
+
+/** A channel plugin with a name and nothing else (no surface is created here: the overlay's stage creates it). */
+class TestChannel extends BaseRealtimeChannelClient {
+  public constructor(private readonly name: string) {
+    super();
+  }
+  public get ChannelName(): string { return this.name; }
+  public get ToolNamePrefix(): string { return `${this.name}_`; }
+  public get TabTitle(): string { return this.name; }
+  public get TabIcon(): string { return 'fa-solid fa-cube'; }
+  public GetToolDefinitions(): RealtimeToolDefinition[] { return []; }
+  public ApplyAgentTool(): string { return '{}'; }
+}
+
+/**
+ * DOM spec for the slot a plugin channel's pane keeps for its surface, which lives on the overlay's stage: the panel
+ * reports the active channel tab's slot (`ChannelSlotChange`) so the stage can lay the surface over it. Real template;
+ * only plugin channel tabs are registered, so the Activity rail and artifact viewers never render.
+ */
+describe('RealtimeSurfaceTabsComponent: ChannelSlotChange (DOM)', () => {
+  const render = () => renderComponentFixture(RealtimeSurfaceTabsComponent, { inputs: { State: {} as RealtimeSessionState } });
+
+  /** Lets the deferred tab registration land, renders, then lets the deferred slot report land. */
+  const settle = async (f: ReturnType<typeof render>): Promise<void> => {
+    await f.whenStable();
+    f.detectChanges();
+    await Promise.resolve();
+  };
+
+  const watch = (f: ReturnType<typeof render>): Array<RealtimeChannelSlot | null> => {
+    const reported: Array<RealtimeChannelSlot | null> = [];
+    f.componentInstance.ChannelSlotChange.subscribe((slot) => reported.push(slot));
+    return reported;
+  };
+
+  const register = (f: ReturnType<typeof render>, name: string, focus = false) =>
+    f.componentInstance.RegisterChannelTab({ Key: name, Title: name, Icon: 'fa-solid fa-cube', Focus: focus, Plugin: new TestChannel(name) });
+
+  it("reports the active channel tab's slot, inside its displayed pane, and null when another tab takes focus", async () => {
+    const f = render();
+    const reported = watch(f);
+    register(f, 'Whiteboard', true);
+    f.componentInstance.RegisterChannelTab({ Key: 'Recording', Title: 'Recording', Icon: 'fa-solid fa-play' });
+    await settle(f);
+    expect(reported.map((slot) => slot?.Key ?? null)).toEqual(['Whiteboard']);
+    const slot = reported[0];
+    expect(slot?.Element).toBe(query(f, '.s-pane__slot[data-channel-key="Whiteboard"]'));
+    expect(slot?.Element.closest('.s-pane')?.classList.contains('s-pane--active')).toBe(true);
+
+    f.componentInstance.Model.Focus('Recording');
+    await settle(f);
+    expect(reported.map((s) => s?.Key ?? null)).toEqual(['Whiteboard', null]);
+  });
+
+  it('follows focus from one channel to another, reporting each slot once', async () => {
+    const f = render();
+    const reported = watch(f);
+    register(f, 'Whiteboard', true);
+    register(f, 'Media');
+    await settle(f);
+    f.componentInstance.Model.Focus('Media');
+    await settle(f);
+    expect(reported.map((s) => s?.Key ?? null)).toEqual(['Whiteboard', 'Media']);
+    expect(reported[1]?.Element).toBe(query(f, '.s-pane__slot[data-channel-key="Media"]'));
+  });
+
+  it('reports null while the panel is collapsed, and a fresh slot when it expands again', async () => {
+    const f = render();
+    const reported = watch(f);
+    register(f, 'Whiteboard', true);
+    await settle(f);
+    const before = reported[0]?.Element;
+    click(f, '.surface__toggle');
+    await settle(f);
+    expect(reported[1]).toBeNull();
+    click(f, '.surface__toggle');
+    await settle(f);
+    expect(reported.map((s) => s?.Key ?? null)).toEqual(['Whiteboard', null, 'Whiteboard']);
+    expect(reported[2]?.Element).not.toBe(before);
+    expect(reported[2]?.Element.isConnected).toBe(true);
+  });
+
+  it('keeps no slot for a channel tab without a plugin', async () => {
+    const f = render();
+    const reported = watch(f);
+    f.componentInstance.RegisterChannelTab({ Key: 'Recording', Title: 'Recording', Icon: 'fa-solid fa-play', Focus: true });
+    await settle(f);
+    expect(query(f, '.s-pane__slot')).toBeNull();
+    expect(reported).toEqual([]);
   });
 });

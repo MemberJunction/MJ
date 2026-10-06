@@ -73,13 +73,12 @@
             </mj-realtime-activity-rail>
           }
           @case ('channel') {
-            @if (tab.Data?.Plugin; as plugin) {
-              <!-- Registry-resolved channel: the pane host creates the plugin's surface
-                   component dynamically and hands the instance back for binding -->
-              <mj-realtime-channel-pane [Plugin]="plugin"></mj-realtime-channel-pane>
-              <!-- First-run intro: overlaid over the active channel pane the first time this user
-                   opens it; the pane host renders display:none + a sibling surface, so the overlay
-                   sits here (inside the positioned .s-pane) rather than inside the pane host. -->
+            @if (tab.Data?.Plugin) {
+              <!-- Registry-resolved channel: its surface lives on the overlay's stage, which lays it
+                   over this slot while the tab is active (ChannelSlotChange reports the slot). -->
+              <div #channelSlot class="s-pane__slot" [attr.data-channel-key]="tab.Key"></div>
+              <!-- First-run intro: overlaid over the active channel's surface the first time this user
+                   opens it. It sits here, inside the positioned .s-pane, above the stage's surface. -->
               @if (tab.Key === Model.ActiveKey && OnboardingContent) {
                 <mj-channel-onboarding-panel
                   [Content]="OnboardingContent"

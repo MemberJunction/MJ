@@ -17,7 +17,9 @@ import { RealtimeSessionThreadComponent } from './realtime-session-thread.compon
 import { RealtimeChannelStripComponent } from './realtime-channel-strip.component';
 import { RealtimePerceptionChipComponent, RealtimePerceptionToggle } from './realtime-perception-chip.component';
 import { RealtimeComposerComponent } from './realtime-composer.component';
-import { RealtimeSurfaceTabsComponent } from './realtime-surface-tabs.component';
+import { RealtimeSurfaceTabsComponent, RealtimeChannelSlot } from './realtime-surface-tabs.component';
+import { RealtimeSurfaceStageModel } from './realtime-surface-stage.model';
+import { RealtimeChannelPaneComponent } from './channels/realtime-channel-pane.component';
 import {
   ClampSurfacePanelWidth, DefaultSurfacePanelWidth, IsSurfacePanelDrag, ParseSurfacePanelPref,
   SerializeSurfacePanelPref, SurfacePanelDragWidth,
@@ -34,6 +36,7 @@ import { RealtimeChannelTabRegistration, ShouldRemoveReviewWhiteboardTab } from 
 import { ShouldRegisterChannelTabUpFront } from './realtime-surface-tab-style';
 import { BaseRealtimeChannelClient } from '@memberjunction/realtime-runtime';
 import { RealtimeWhiteboardBoardComponent, WhiteboardState } from '@memberjunction/ng-whiteboard';
+import { MediaStageComponent, MediaStageSurfaceDirective } from '@memberjunction/ng-realtime-media';
 
 /**
  * A request to open an entity record, emitted by the call overlay's gear-gated developer
@@ -84,11 +87,14 @@ export interface RealtimeStartLiveRequest {
  *
  * INTERACTIVE CHANNELS ARE PLUGINS — this shell is channel-agnostic. It subscribes
  * {@link RealtimeSessionService.ActiveChannels$} and registers one surface tab per
- * {@link BaseRealtimeChannelClient} (key/title/icon from the plugin); the tab pane creates
- * the plugin's surface component dynamically and the PLUGIN wires its own inputs/outputs.
+ * {@link BaseRealtimeChannelClient} (key/title/icon from the plugin). Every plugin's surface
+ * lives on ONE STAGE (`mj-media-stage`) over the whole overlay: created the first time it is
+ * seen, laid over its tab's pane while that tab is active, and kept until its channel leaves
+ * (see {@link RealtimeSurfaceStageModel}). The PLUGIN wires its own inputs/outputs.
  * The only channel-generic affordance the shell owns is the FOCUS layout: any channel may
  * request it (via its context's `SetFocusMode` → {@link RealtimeSessionService.ChannelFocus$}),
- * which collapses the main call column (`.board-focus`) and shows the floating call pill.
+ * which collapses the main call column (`.board-focus`), fills the stage with that channel's
+ * surface and shows the floating call pill.
  *
  * Owns the shared {@link RealtimeSessionState} — the SINGLE merge of the service's
  * caption/delegation/narration streams — and passes it to both thread and rail via
@@ -123,6 +129,9 @@ export interface RealtimeStartLiveRequest {
     RealtimePerceptionChipComponent,
     RealtimeComposerComponent,
     RealtimeSurfaceTabsComponent,
+    RealtimeChannelPaneComponent,
+    MediaStageComponent,
+    MediaStageSurfaceDirective,
     RealtimeWhiteboardBoardComponent,
     MJStorageMediaPlayerComponent
   ],
@@ -529,7 +538,11 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   @ViewChild(RealtimeSurfaceTabsComponent)
   private set surfaceTabsRef(ref: RealtimeSurfaceTabsComponent | undefined) {
     this.surfaceTabs = ref;
-    if (ref) {
+    if (!ref) {
+      // The panel went away with its slots. StageSlot reads null while it is away, so the bindings don't change.
+      this.channelSlot = null;
+      this.SurfaceStage.SetActiveTab(null);
+    } else {
       // A (re)created panel starts with a FRESH tab model. Re-register the live channel set
       // here (gated to whiteboard + already-used channels) so hiding the panel (pure-audio
       // return, Details off) never loses the Whiteboard or an already-used channel's tab.
@@ -594,6 +607,26 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   /** The channel currently holding the focus layout (the pill's exit routes back to it). */
   private focusChannel: BaseRealtimeChannelClient | null = null;
 
+  // ── The stage: every channel surface, in one layer over the overlay ─────────
+
+  /** Which channel surfaces the stage holds and where each shows. */
+  public readonly SurfaceStage = new RealtimeSurfaceStageModel();
+
+  /** The active channel tab's slot, as the panel last reported it. */
+  private channelSlot: RealtimeChannelSlot | null = null;
+
+  /** The slot the stage lays the active channel tab's surface over: none while the panel is away. */
+  public get StageSlot(): RealtimeChannelSlot | null {
+    return this.ShowPanelArea ? this.channelSlot : null;
+  }
+
+  /** The panel's active channel slot moved, or went away. */
+  public OnChannelSlotChange(slot: RealtimeChannelSlot | null): void {
+    this.channelSlot = slot;
+    this.SurfaceStage.SetActiveTab(slot?.Key ?? null);
+    this.cdr.markForCheck();
+  }
+
   private subs: Subscription[] = [];
 
   constructor() {
@@ -608,7 +641,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
       // Disclosure ratchet moved — re-resolve the view-model (thread/composer/gear gates).
       this.Disclosure.Changed$.subscribe(() => this.recomputeUi()),
       // One surface tab per registry-resolved channel plugin (replays the current set).
-      this.realtime.ActiveChannels$.subscribe(channels => { this.registerChannelTabs(channels); this.recomputeUi(); }),
+      this.realtime.ActiveChannels$.subscribe(channels => this.onActiveChannelsChanged(channels)),
       // Any channel may request the focus layout through its host context.
       this.realtime.ChannelFocus$.subscribe(event => this.onChannelFocus(event.Channel, event.Focused)),
       // The agent ACTED on a channel — auto-reveal its surface tab on first activity.
@@ -1424,8 +1457,22 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     this.cdr.markForCheck();
   }
 
-  /** Registers (or upgrades) one channel plugin's surface tab on the panel. */
+  /**
+   * The session's channel set changed: surfaces whose channel left are dropped, the channels in play get their tabs,
+   * and focus ends when its channel left (focus belongs to a live surface).
+   */
+  private onActiveChannelsChanged(channels: BaseRealtimeChannelClient[]): void {
+    this.SurfaceStage.KeepOnly(channels);
+    this.registerChannelTabs(channels);
+    if (this.focusChannel && !channels.includes(this.focusChannel)) {
+      this.setChannelFocus(null);
+    }
+    this.recomputeUi();
+  }
+
+  /** Registers (or upgrades) one channel plugin's surface tab on the panel, and its surface on the stage. */
   private registerPluginChannelTab(plugin: BaseRealtimeChannelClient): void {
+    this.SurfaceStage.Register(plugin);
     this.RegisterChannelTab({
       Key: plugin.ChannelName,
       Title: plugin.TabTitle,
@@ -1731,8 +1778,14 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
 
   /** A channel requested (or released) the focus layout via its host context. */
   private onChannelFocus(channel: BaseRealtimeChannelClient, focused: boolean): void {
-    this.ChannelFocusMode = focused;
-    this.focusChannel = focused ? channel : null;
+    this.setChannelFocus(focused ? channel : null);
+  }
+
+  /** Fills the stage with `channel`'s surface (focus mode), or sends the focused surface back to its tab (`null`). */
+  private setChannelFocus(channel: BaseRealtimeChannelClient | null): void {
+    this.ChannelFocusMode = channel !== null;
+    this.focusChannel = channel;
+    this.SurfaceStage.SetFocus(channel?.ChannelName ?? null);
     // channelFocus drives the resolver (hides panel + strip) — re-resolve (marks for check).
     this.recomputeUi();
   }
@@ -1745,11 +1798,10 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   /** Focus pill: leave focus mode (show the thread column again). */
   public OnFocusPillExit(): void {
     // Route through the focus-holding channel so ITS surface toggle stays in sync — it
-    // re-emits SetFocusMode(false) → onChannelFocus. Defensively clear the layout flag
-    // too (idempotent), covering channels whose surface isn't instantiated.
+    // re-emits SetFocusMode(false) → onChannelFocus. Defensively leave focus here too
+    // (idempotent), covering channels that don't.
     this.focusChannel?.RequestFocusExit();
-    this.ChannelFocusMode = false;
-    this.focusChannel = null;
+    this.setChannelFocus(null);
   }
 
   /** Focus pill: end the call (mirrors the controls row's End button). */

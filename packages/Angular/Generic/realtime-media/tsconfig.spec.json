@@ -14,7 +14,9 @@
     "src/lib/components/audio-meter.component.ts",
     "src/lib/components/audio-meter.component.dom.test.ts",
     "src/lib/components/media-tile.component.ts",
-    "src/lib/components/media-tile.component.dom.test.ts"
+    "src/lib/components/media-tile.component.dom.test.ts",
+    "src/lib/components/media-stage.component.ts",
+    "src/lib/components/media-stage.component.dom.test.ts"
   ],
   "exclude": ["node_modules", "dist"]
 }

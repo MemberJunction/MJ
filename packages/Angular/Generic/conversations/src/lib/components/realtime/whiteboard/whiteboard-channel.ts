@@ -132,7 +132,7 @@ interface InteractionThrottleEntry {
  *    ({@link WHITEBOARD_TOOL_DEFINITIONS}); {@link ApplyAgentTool} prefers the BOUND host
  *    component (board mutation + violet pop-in / toast / presence-cursor garnish) and
  *    falls back to the pure {@link ApplyWhiteboardAgentTool} engine call when no surface
- *    is bound (e.g. the surface panel is collapsed) — the channel keeps working, just
+ *    is bound (e.g. the board has not been shown yet) — the channel keeps working, just
  *    without the garnish.
  *  - **Perception**: {@link BindSurface} subscribes the host's coalesced (750 ms)
  *    `SceneDelta` stream and pipes each delta into the live model's context as a
@@ -428,7 +428,7 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
   /**
    * Executes one `Whiteboard_*` tool call LOCALLY. Prefers the live bound host (board
    * mutation + UI garnish); falls back to the pure engine function when no surface is
-   * bound so the channel keeps working with the pane collapsed.
+   * bound so the channel keeps working before the board is first shown.
    */
   public ApplyAgentTool(toolName: string, argsJson: string): string {
     let result: string;

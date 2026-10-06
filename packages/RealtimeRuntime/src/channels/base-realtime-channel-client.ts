@@ -98,7 +98,7 @@ export interface RealtimeChannelContext {
 
   /**
    * Requests (or releases) the FOCUS layout for this channel's surface: the overlay
-   * collapses the main call column so the surface owns the screen, with a compact floating
+   * collapses the main call column and fills its stage with the surface, with a compact floating
    * call pill keeping mute / thread / end reachable. Any channel may request it; the host
    * tracks which channel holds focus and routes the pill's "exit" back to it via
    * {@link BaseRealtimeChannelClient.RequestFocusExit}.
@@ -288,10 +288,11 @@ export interface ChannelOnboardingDetails {
  *
  * ### Lifecycle — ONE INSTANCE PER SESSION (not a singleton)
  * `ClassFactory.CreateInstance` → {@link Initialize}(ctx) → zero or more
- * {@link BindSurface}/{@link UnbindSurface} cycles (the surface pane is created/destroyed
- * with the overlay's tab panel, e.g. collapse/expand) → {@link Dispose} at teardown.
+ * {@link BindSurface}/{@link UnbindSurface} cycles (the Angular overlay creates the surface the
+ * first time it is shown and keeps it until the channel leaves the session; another host may
+ * recreate it) → {@link Dispose} at teardown.
  * {@link ApplyAgentTool} MUST work with NO surface bound (apply to the state engine
- * directly; skip the UI garnish) — tool calls can arrive while the panel is collapsed.
+ * directly; skip the UI garnish) — tool calls can arrive before the surface is first shown.
  *
  * @typeParam TSurface The plugin's Angular surface component type. The host only ever
  *   sees the default (`object`) — the typed parameter exists so concrete plugins get a
@@ -360,8 +361,8 @@ export abstract class BaseRealtimeChannelClient<TSurface extends object = object
    * Executes ONE agent tool call locally (the ACTION direction) and returns the result
    * JSON string fed back to the model as the `tool_response`. Called for every tool whose
    * name starts with {@link ToolNamePrefix}. Must work both WITH a bound surface (apply +
-   * UI garnish) and WITHOUT one (apply to the state engine directly — the tab pane may not
-   * exist, e.g. the surface panel is collapsed). Should not throw: return a
+   * UI garnish) and WITHOUT one (apply to the state engine directly — the surface may not
+   * exist yet, e.g. it has not been shown). Should not throw: return a
    * `{ success: false, error }` payload so the model can narrate the failure (the host
    * additionally wraps anything thrown).
    *
@@ -434,15 +435,15 @@ export abstract class BaseRealtimeChannelClient<TSurface extends object = object
    * The plugin — which knows its own component type — sets inputs (state engine, agent
    * name, …) and subscribes outputs here, wiring perception/garnish flows back through
    * {@link Context}. May be called again with a NEW instance after an
-   * {@link UnbindSurface} (the pane is destroyed/recreated with the tab panel).
+   * {@link UnbindSurface} (the host recreated the surface).
    */
   public BindSurface(_instance: TSurface): void {
     // default: a channel with no surface has nothing to bind
   }
 
   /**
-   * Called by the host when the surface component is being destroyed (tab panel
-   * collapsed / overlay torn down). Drop the instance reference and unsubscribe any
+   * Called by the host when the surface component is being destroyed (the channel left
+   * the session / the overlay was torn down). Drop the instance reference and unsubscribe any
    * output subscriptions — after this, {@link ApplyAgentTool} runs in its no-surface
    * mode. Default: no-op.
    */

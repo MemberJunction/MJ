@@ -1,5 +1,6 @@
 import {
-  Component, EventEmitter, Input, Output, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, inject
+  AfterViewChecked, Component, ElementRef, EventEmitter, Input, Output, OnInit, OnDestroy, ChangeDetectorRef,
+  QueryList, ViewChild, ViewChildren, inject
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Subscription } from 'rxjs';
@@ -8,7 +9,6 @@ import { UserInfoEngine } from '@memberjunction/core-entities';
 import { ArtifactsModule } from '@memberjunction/ng-artifacts';
 import { RealtimeSessionState } from './realtime-session-state';
 import { RealtimeActivityRailComponent } from './realtime-activity-rail.component';
-import { RealtimeChannelPaneComponent } from './channels/realtime-channel-pane.component';
 import { ChannelOnboardingPanelComponent } from './channels/channel-onboarding-panel.component';
 import { ChannelOnboardingDetails } from '@memberjunction/realtime-runtime';
 import {
@@ -24,14 +24,21 @@ import { ParsedDelegationArtifact } from '@memberjunction/realtime-runtime';
  */
 const CHANNEL_ONBOARDING_SEEN_SETTING_KEY = 'mj.realtimeChannels.onboardingSeen.v1';
 
+/** Where the active channel tab's surface shows: the tab's key and the element its pane keeps for the surface. */
+export interface RealtimeChannelSlot {
+  Key: string;
+  Element: HTMLElement;
+}
+
 /**
  * The call overlay's TABBED SURFACE PANEL (the right panel) — decluttered redesign:
  *
  *  - **Channel tabs** (LEFT cluster) — one per channel that has come into play. The whiteboard
  *    tabs immediately at session start; every other channel tabs only once the agent first
- *    USES it. Each carries a distinct accent color + its plugin icon. The pane creates the
- *    plugin's surface component dynamically (via `mj-realtime-channel-pane`); a placeholder
- *    shows the "coming online…" state until a plugin/template is supplied.
+ *    USES it. Each carries a distinct accent color + its plugin icon. A plugin's surface lives
+ *    on the overlay's stage, which lays it over the pane's slot while the tab is active
+ *    ({@link ChannelSlotChange}); a placeholder shows the "coming online…" state until a
+ *    plugin/template is supplied.
  *  - **Activity** (RIGHT-aligned, pinned LAST) — gated: appears only once ≥1 agent run has
  *    occurred (or in review mode). Hosts {@link RealtimeActivityRailComponent}, which now also
  *    renders inline artifact previews and a split-pane artifact viewer. Styled distinctly from
@@ -41,8 +48,9 @@ const CHANNEL_ONBOARDING_SEEN_SETTING_KEY = 'mj.realtimeChannels.onboardingSeen.
  * Artifacts NO LONGER get their own tab — they live inside the Activity tab (cleaner than a
  * row of per-artifact tabs).
  *
- * Panes are kept ALIVE while hidden (CSS `display:none`) so switching tabs never reloads a
- * channel surface or resets the rail. The whole panel collapses to a slim strip via the chevron.
+ * Panes are kept ALIVE while hidden (CSS `display:none`) so switching tabs never resets the rail;
+ * channel surfaces are on the overlay's stage, so switching tabs or collapsing the panel never
+ * reloads them either. The whole panel collapses to a slim strip via the chevron.
  *
  * SIZING IS EXTERNAL: the overlay shell hosts this panel in a fixed-width flex item and owns
  * the width. This panel just fills it and REPORTS the layout signals the shell sizes from:
@@ -53,13 +61,12 @@ const CHANNEL_ONBOARDING_SEEN_SETTING_KEY = 'mj.realtimeChannels.onboardingSeen.
   standalone: true,
   selector: 'mj-realtime-surface-tabs',
   imports: [
-    CommonModule, ArtifactsModule, RealtimeActivityRailComponent, RealtimeChannelPaneComponent,
-    ChannelOnboardingPanelComponent
+    CommonModule, ArtifactsModule, RealtimeActivityRailComponent, ChannelOnboardingPanelComponent
   ],
   templateUrl: './realtime-surface-tabs.component.html',
   styleUrl: './realtime-surface-tabs.component.css'
 })
-export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
+export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy, AfterViewChecked {
   /** How long a just-revealed channel tab keeps its flash highlight. */
   private static readonly flashDurationMs = 1400;
 
@@ -70,9 +77,9 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
   @Input() DevMode = false;
 
   /**
-   * FILL presentation: the panel stretches to the overlay's full width (the board-focus
-   * layout, where the main call column is hidden and a channel surface owns the screen).
-   * Bound by the overlay shell; overrides the normal / wide width tiers.
+   * FILL presentation: the panel stretches to its host's full width with no left border,
+   * overriding the normal / wide width tiers. The overlay no longer binds it: in focus mode
+   * the focused channel's surface fills the overlay's stage instead.
    */
   @Input() Fill = false;
 
@@ -128,6 +135,13 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
    */
   @Output() ActiveChannelChange = new EventEmitter<string | null>();
 
+  /**
+   * The active channel tab's slot changed: the element its pane keeps for the channel's surface, or `null` while no
+   * channel tab is showing (another tab is active, or the panel is collapsed). The overlay's stage lays the surface
+   * over this element.
+   */
+  @Output() ChannelSlotChange = new EventEmitter<RealtimeChannelSlot | null>();
+
   /** The panel's tab state (add / focus / dedupe / flash) — see the model for the rules. */
   public readonly Model = new RealtimeSurfaceTabsModel();
 
@@ -136,6 +150,12 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
 
   /** The embedded Activity rail (owns the inline artifact previews + the split-pane viewer). */
   @ViewChild(RealtimeActivityRailComponent) private activityRail?: RealtimeActivityRailComponent;
+
+  /** The slots of the plugin channel panes, one per tab. */
+  @ViewChildren('channelSlot') private channelSlots?: QueryList<ElementRef<HTMLElement>>;
+
+  /** The slot last reported through {@link ChannelSlotChange}. */
+  private reportedSlot: RealtimeChannelSlot | null = null;
 
   private flashTimer: ReturnType<typeof setTimeout> | null = null;
   private subs: Subscription[] = [];
@@ -167,6 +187,10 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
     );
   }
 
+  ngAfterViewChecked(): void {
+    this.reportChannelSlot();
+  }
+
   ngOnDestroy(): void {
     for (const s of this.subs) {
       s.unsubscribe();
@@ -176,6 +200,24 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
       clearTimeout(this.flashTimer);
       this.flashTimer = null;
     }
+  }
+
+  /** Reports the active channel tab's slot when it differs from the one last reported. */
+  private reportChannelSlot(): void {
+    const slot = this.activeChannelSlot();
+    if (slot?.Key === this.reportedSlot?.Key && slot?.Element === this.reportedSlot?.Element) {
+      return;
+    }
+    this.reportedSlot = slot;
+    // The view was just checked and the overlay binds the slot, so it hears about it in a fresh turn.
+    queueMicrotask(() => this.ChannelSlotChange.emit(slot));
+  }
+
+  /** The active tab's slot: present while that tab is a plugin channel and the panel is expanded. */
+  private activeChannelSlot(): RealtimeChannelSlot | null {
+    const key = this.Model.ActiveKey;
+    const slot = this.channelSlots?.find(s => s.nativeElement.dataset['channelKey'] === key);
+    return slot ? { Key: key, Element: slot.nativeElement } : null;
   }
 
   /** Toggle the panel between expanded and slim-collapsed. */

@@ -132,7 +132,9 @@ export type RemoteBrowserSelectionFetcher = () => Promise<string>;
  * The surface is transport-agnostic — it never touches GraphQL directly. The channel plugin
  * wires the {@link Fetch} callback (closing over the session id + provider) in `BindSurface`
  * before the surface's first change detection, so the `ngOnInit` poll has it. Polling stops
- * in `ngOnDestroy` (pane collapsed / overlay torn down) so no traffic continues after unbind.
+ * in `ngOnDestroy` (the channel left the session / the overlay was torn down) so no traffic
+ * continues after unbind; it keeps running while the surface is out of sight (panel collapsed,
+ * another tab active).
  * View-only in v1 — there is no takeover input.
  *
  * ### Two render paths: pushed screencast (preferred) vs. snapshot poll (fallback)
