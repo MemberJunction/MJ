@@ -40,6 +40,7 @@ import {
   RealtimeClientUsage,
   VideoSourceArbiter,
   type DisplayCaptureOptions,
+  type MediaVideoSource,
   type VideoSourceState
 } from '@memberjunction/ai-realtime-client';
 import { DefaultRealtimeSessionLauncher, type IRealtimeSessionLauncher } from './session-launcher';
@@ -293,6 +294,11 @@ function microphoneStartError(reason: LocalMediaFailure, message: string): Error
   const error = new Error(message);
   error.name = MICROPHONE_ERROR_NAMES[reason];
   return error;
+}
+
+/** Whether a channel shows the agent's video: it sinks outbound video. */
+function sinksAgentVideo(channel: BaseRealtimeChannelClient): boolean {
+  return channel.GetSunkTracks().some((t) => t.Direction === 'outbound' && String(t.Modality).trim().toLowerCase() === 'video');
 }
 
 /** The microphone a session start opened, or why it could not. */
@@ -573,6 +579,15 @@ export class RealtimeSessionRuntime {
    * is offered outside a call.
    */
   public readonly CaptureOffers$: Observable<RealtimeCaptureOffers> = this._captureOffers$.asObservable();
+
+  private readonly _agentVideo$ = new BehaviorSubject<MediaVideoSource | null>(null);
+  /**
+   * The agent's video (an avatar) while the model sends it: a live stream, or a player that owns the `<video>` element.
+   * `null` until the video arrives, for a model that sends none, and outside a call. The driver hands it over once it is
+   * live, and a newer one replaces it. A host shows it with `AttachVideoSource`; a channel that sinks outbound video
+   * follows it through its context, and counts as used once it arrives, so the host shows that channel's surface.
+   */
+  public readonly AgentVideo$: Observable<MediaVideoSource | null> = this._agentVideo$.asObservable();
 
   /**
    * Channel requests to enter / leave the FOCUS layout (see
@@ -1414,6 +1429,7 @@ export class RealtimeSessionRuntime {
     // already have replaced them.
     if (this.client === client) {
       this.unwatchVideoSources();
+      this.clearAgentVideo();
       this.client = null;
     }
     // Close the server session only if teardown has NOT already done so. It nulls `agentSessionId`
@@ -2638,7 +2654,9 @@ export class RealtimeSessionRuntime {
       // The camera and screen share, for a channel that fronts one: their state, and the user's clicks on its surface.
       Captures$: this.Captures$,
       StartCapture: (kind: RealtimeCaptureKind) => (kind === 'camera' ? this.StartCamera() : this.StartScreenShare()),
-      StopCapture: (kind: RealtimeCaptureKind) => (kind === 'camera' ? this.StopCamera() : this.StopScreenShare())
+      StopCapture: (kind: RealtimeCaptureKind) => (kind === 'camera' ? this.StopCamera() : this.StopScreenShare()),
+      // The agent's video, for a channel that shows it.
+      AgentVideo$: this.AgentVideo$
     };
   }
 
@@ -2931,12 +2949,13 @@ export class RealtimeSessionRuntime {
 
   /**
    * Builds the client-direct session config the realtime client connects with.
-   * Aggregates tracks sourced by active channels into `requestedTracks` so the driver
-   * can negotiate them (e.g., establishing inbound video streaming for Whiteboard / RemoteBrowser).
+   * Aggregates the tracks active channels source and sink into `requestedTracks` so the driver
+   * can negotiate them (e.g., inbound video for Whiteboard / RemoteBrowser, outbound video for a
+   * channel that shows the agent's video). A track the model does not support resolves to `'unsupported'`.
    */
   public BuildClientConfig(session: StartRealtimeClientSessionResult): ClientRealtimeSessionConfig {
     const sessionConfig = this.parseSessionConfig(session.SessionConfigJson);
-    const channelTracks = this._activeChannels$.value.flatMap((c) => c.GetSourcedTracks());
+    const channelTracks = this._activeChannels$.value.flatMap((c) => [...c.GetSourcedTracks(), ...c.GetSunkTracks()]);
     if (channelTracks.length > 0) {
       // `requestedTracks` crosses a JSON boundary — the driver reads it back out of the session
       // config bag (`GeminiRealtimeClient.parseSessionConfig`). A `RealtimeTrackDescriptor` is NOT
@@ -3019,6 +3038,31 @@ export class RealtimeSessionRuntime {
     client.OnInterruption(() => {
       this.cancelPendingNarration();
     });
+    client.OnRemoteVideo((video: MediaVideoSource) => this.onAgentVideo(client, video));
+  }
+
+  /**
+   * The model's video arrived: publish it on {@link AgentVideo$}, and mark each channel that shows it (one that sinks
+   * outbound video) as used, so the host shows its surface. A client the session has already let go of is ignored, so a
+   * late frame cannot bring the video back after the call.
+   */
+  private onAgentVideo(client: BaseRealtimeClient, video: MediaVideoSource): void {
+    if (this.client !== client) {
+      return;
+    }
+    this._agentVideo$.next(video);
+    for (const channel of this._activeChannels$.value) {
+      if (sinksAgentVideo(channel)) {
+        this.noteChannelActivity(channel);
+      }
+    }
+  }
+
+  /** Clears {@link AgentVideo$} when the call's client goes. */
+  private clearAgentVideo(): void {
+    if (this._agentVideo$.value !== null) {
+      this._agentVideo$.next(null);
+    }
   }
 
   /** Maps a client state event onto the UI connection state. */
@@ -4070,6 +4114,7 @@ export class RealtimeSessionRuntime {
     if (this.client) {
       await this.client.Disconnect();
       this.unwatchVideoSources();
+      this.clearAgentVideo();
       this.client = null;
     }
 

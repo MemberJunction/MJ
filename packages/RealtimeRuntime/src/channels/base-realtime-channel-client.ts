@@ -4,7 +4,13 @@ import { IsPlainObject } from '@memberjunction/global';
 import {
   CHANNEL_INBOUND_VIDEO_TRACK, JSONObject, JSONValue, RealtimeToolDefinition, RealtimeTrackDescriptor, RealtimeTrackDirection
 } from '@memberjunction/ai';
-import { ChannelInboundVideoBridge, type BaseRealtimeClient, type IChannelFrameProvider, type MediaPlacement } from '@memberjunction/ai-realtime-client';
+import {
+  ChannelInboundVideoBridge,
+  type BaseRealtimeClient,
+  type IChannelFrameProvider,
+  type MediaPlacement,
+  type MediaVideoSource
+} from '@memberjunction/ai-realtime-client';
 import {
   CompareExposure,
   DescribeExposureLimit,
@@ -250,6 +256,12 @@ export interface RealtimeChannelContext {
 
   /** OPTIONAL — stops the camera or the screen share (the runtime's `StopCamera` / `StopScreenShare`). */
   StopCapture?(kind: RealtimeCaptureKind): void;
+
+  /**
+   * OPTIONAL — the agent's video while the model sends it, `null` otherwise (the runtime's `AgentVideo$`). A channel that
+   * shows the agent, one that sinks outbound video ({@link BaseRealtimeChannelClient.GetSunkTracks}), follows it here.
+   */
+  AgentVideo$?: Observable<MediaVideoSource | null>;
 }
 
 /**
@@ -645,6 +657,10 @@ export abstract class BaseRealtimeChannelClient<TSurface extends object = object
   /**
    * Media tracks this client channel can SINK — samples flowing from the model OUT.
    * Default `[]`.
+   *
+   * The session requests them when it connects, so the driver establishes the ones the model supports. A channel that
+   * sinks outbound video shows the agent's video: it follows {@link RealtimeChannelContext.AgentVideo$}, and counts as
+   * used once the video arrives, so the host shows its surface.
    */
   public GetSunkTracks(): readonly RealtimeTrackDescriptor[] {
     return [];
