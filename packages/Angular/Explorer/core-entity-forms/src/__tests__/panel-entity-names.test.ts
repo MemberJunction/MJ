@@ -8,6 +8,10 @@ import { describe, expect, it } from 'vitest';
  * An unknown name makes `RunView` throw `Entity ... not found in metadata` at runtime, so the
  * panel cannot load its data on any form it mounts on.
  *
+ * The same holds for the `entity` a panel registers against in `@RegisterClassEx` metadata:
+ * the slot host matches it exactly against the form's entity name, so an unknown name never
+ * mounts. The `'*'` wildcard (every entity's form) is allowed.
+ *
  * The registered names are read from the generated core entity classes
  * (`@RegisterClass(BaseEntity, 'MJ: ...')` in `MJCoreEntities/src/generated/entities/__mj.ts`).
  */
@@ -41,11 +45,27 @@ function entityNameLiterals(source: string): string[] {
     return patterns.flatMap((pattern) => [...source.matchAll(pattern)].map((m) => m[2]));
 }
 
+/** `entity: '...'` literals in registration metadata, without the `'*'` wildcard. */
+function registrationEntityLiterals(source: string): string[] {
+    return [...source.matchAll(/\bentity\s*:\s*(['"`])([^'"`$]+)\1/g)].map((m) => m[2]).filter((name) => name !== '*');
+}
+
+interface EntityNameUsage {
+    File: string;
+    Kind: 'query' | 'registration';
+    Name: string;
+}
+
 describe('entity names queried by compiled form panels', () => {
     const registered = registeredEntityNames();
-    const usages = panelFiles(libDir).flatMap((file) =>
-        entityNameLiterals(readFileSync(file, 'utf8')).map((name) => ({ file: relative(libDir, file), name })),
-    );
+    const usages: EntityNameUsage[] = panelFiles(libDir).flatMap((file) => {
+        const source = readFileSync(file, 'utf8');
+        const at = relative(libDir, file);
+        return [
+            ...entityNameLiterals(source).map((name): EntityNameUsage => ({ File: at, Kind: 'query', Name: name })),
+            ...registrationEntityLiterals(source).map((name): EntityNameUsage => ({ File: at, Kind: 'registration', Name: name })),
+        ];
+    });
 
     it('reads the generated entity names and the panel files', () => {
         expect(registered.size).toBeGreaterThan(300);
@@ -54,7 +74,7 @@ describe('entity names queried by compiled form panels', () => {
     });
 
     it('finds the overview panel queries', () => {
-        const files = new Set(usages.map((u) => u.file));
+        const files = new Set(usages.filter((u) => u.Kind === 'query').map((u) => u.File));
         for (const file of [
             'custom/Companies/company-overview.panel.ts',
             'custom/Employees/employee-overview.panel.ts',
@@ -67,13 +87,19 @@ describe('entity names queried by compiled form panels', () => {
         }
     });
 
+    it('finds the panel registrations', () => {
+        const registrations = usages.filter((u) => u.Kind === 'registration');
+        expect(registrations.length).toBeGreaterThanOrEqual(14);
+        expect(registrations).toContainEqual({ File: 'custom/Companies/company-overview.panel.ts', Kind: 'registration', Name: 'MJ: Companies' });
+    });
+
     it('uses only MJ:-prefixed names', () => {
-        const unprefixed = usages.filter((u) => !u.name.startsWith('MJ: '));
+        const unprefixed = usages.filter((u) => !u.Name.startsWith('MJ: '));
         expect(unprefixed).toEqual([]);
     });
 
     it('uses only names registered in the generated entity classes', () => {
-        const unknown = usages.filter((u) => !registered.has(u.name));
+        const unknown = usages.filter((u) => !registered.has(u.Name));
         expect(unknown).toEqual([]);
     });
 });
