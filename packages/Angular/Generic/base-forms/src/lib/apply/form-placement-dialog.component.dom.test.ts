@@ -1173,29 +1173,51 @@ describe('MjFormPlacementDialogComponent (DOM) — editing a saved row', () => {
             expect(mounted.dialog.State.Title).toBe('Who they are');
         });
 
-        it('stops saying a dropped claim could not be confirmed once the user picks that claim on the form it read', async () => {
-            /** What the apply service's seed does on a form it has not read: it drops the field claim. */
-            const dropFieldClaim = (dialog: MjFormPlacementDialogComponent): void => {
-                dialog.State = { ...PlacementStateFromContribution(fieldRow, dialog.Context, true), ReplaceMode: 'none', ReplaceFieldNames: [] };
-                dialog.DroppedProposalClaim = { Kind: 'field', FieldNames: ['Name'] };
-            };
-            const summary = () => (mounted.fixture.nativeElement as HTMLElement).querySelector('.mj-placement-summary')?.textContent ?? '';
-            const mounted = mount(DRAWER_CONTEXT, fieldRow, deferredProbe(), dropFieldClaim);
-            mounted.dialog.State = { ...mounted.dialog.State, Title: 'Who they are' };
-            await answer(mounted);
-            expect(summary(), 'the changed answer keeps the seed from running again').toContain('could not confirm');
+        /** What the apply service's seed does on a form it has not read: it drops the field claim. */
+        const dropFieldClaim = (dialog: MjFormPlacementDialogComponent): void => {
+            dialog.State = { ...PlacementStateFromContribution(fieldRow, dialog.Context, true), ReplaceMode: 'none', ReplaceFieldNames: [] };
+            dialog.DroppedProposalClaim = { Kind: 'field', FieldNames: ['Name'] };
+        };
+        const summaryOf = (mounted: ReturnType<typeof mount>) =>
+            (mounted.fixture.nativeElement as HTMLElement).querySelector('.mj-placement-summary')?.textContent ?? '';
 
-            const host = mounted.fixture.nativeElement as HTMLElement;
-            host.querySelector<HTMLInputElement>('input[name="mj-replace"][value="field"]')!.click();
+        /** Picks one of the "Does it replace anything?" answers, as the user does. */
+        async function pickReplaceMode(mounted: ReturnType<typeof mount>, mode: string): Promise<void> {
+            (mounted.fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>(`input[name="mj-replace"][value="${mode}"]`)!.click();
             mounted.fixture.detectChanges();
             await mounted.fixture.whenStable();
             mounted.fixture.detectChanges();
-            host.querySelector<HTMLInputElement>('.mj-placement-fieldpick-item input[type="checkbox"]')!.click();
-            mounted.fixture.detectChanges();
+        }
 
+        it('stops saying a dropped claim could not be confirmed once it reads the form, even after the user moves off that claim', async () => {
+            const mounted = mount(DRAWER_CONTEXT, fieldRow, deferredProbe(), dropFieldClaim);
+            mounted.dialog.State = { ...mounted.dialog.State, Title: 'Who they are' };
+            expect(summaryOf(mounted), 'before the form is read').toContain('could not confirm');
+
+            await answer(mounted);
+            expect(mounted.dialog.DroppedProposalClaim).toBeNull();
+            expect(summaryOf(mounted)).not.toContain('could not confirm');
+
+            await pickReplaceMode(mounted, 'field');
+            (mounted.fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>('.mj-placement-fieldpick-item input[type="checkbox"]')!.click();
+            mounted.fixture.detectChanges();
             expect(mounted.dialog.ChosenFields).toEqual(['Name']);
-            expect(summary()).toContain('standing in for the Name field');
-            expect(summary()).not.toContain('could not confirm');
+            expect(summaryOf(mounted)).toContain('standing in for the Name field');
+
+            await pickReplaceMode(mounted, 'none');
+            expect(mounted.dialog.State.ReplaceMode).toBe('none');
+            expect(summaryOf(mounted)).not.toContain('could not confirm');
+        });
+
+        it('keeps saying so when the form it reads draws no field groups', async () => {
+            const mounted = mount(DRAWER_CONTEXT, fieldRow, deferredProbe(), dropFieldClaim);
+            mounted.dialog.State = { ...mounted.dialog.State, Title: 'Who they are' };
+            mounted.probe.answer({ ...shape, Sections: [] });
+            await mounted.fixture.whenStable();
+            mounted.fixture.detectChanges();
+            expect(mounted.dialog.Context.SlotsVerified, 'the probe answered').toBe(true);
+            expect(mounted.dialog.DroppedProposalClaim).toEqual({ Kind: 'field', FieldNames: ['Name'] });
+            expect(summaryOf(mounted)).toContain('could not confirm');
         });
     });
 

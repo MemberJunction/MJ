@@ -159,7 +159,8 @@ export class MjFormPlacementDialogComponent extends BaseAngularComponent {
     /**
      * A proposal's claim the caller's seed dropped because this form could not confirm it, for
      * the summary to report while the answers do not make that claim. Null when the seed dropped
-     * none. The seed sets it, and resetting the answers clears it.
+     * none. The seed sets it; resetting the answers clears it, and so does reading the form's
+     * sections, before the seed runs again against them.
      */
     public DroppedProposalClaim: FormPlacementDroppedClaim | null = null;
 
@@ -474,6 +475,9 @@ export class MjFormPlacementDialogComponent extends BaseAngularComponent {
             if (!this._context.Rail.some((item) => item.Key === this.State.ReplaceRailKey)) {
                 this.State = { ...this.State, ReplaceRailKey: DefaultRailKeyFor(this._context) };
             }
+            // Once the form's own sections are read, a claim the seed dropped before the read is
+            // no longer reported; a reseed below reports one the read form does not offer.
+            if (shape.Sections.length > 0) this.DroppedProposalClaim = null;
             // The seed ran against a context with no sections or slots in it, so it runs again
             // against the form's own — unless the user has changed an answer since.
             if (reseed) this.applySeed();
