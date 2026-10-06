@@ -476,7 +476,8 @@ export class MjFormPlacementDialogComponent extends BaseAngularComponent {
                 this.State = { ...this.State, ReplaceRailKey: DefaultRailKeyFor(this._context) };
             }
             // Once the form's own sections are read, a claim the seed dropped before the read is
-            // no longer reported; a reseed below reports one the read form does not offer.
+            // no longer reported. A reseed below runs the caller's seed against the read form,
+            // which may set it again.
             if (shape.Sections.length > 0) this.DroppedProposalClaim = null;
             // The seed ran against a context with no sections or slots in it, so it runs again
             // against the form's own — unless the user has changed an answer since.
