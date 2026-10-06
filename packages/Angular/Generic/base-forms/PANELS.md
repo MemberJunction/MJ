@@ -417,9 +417,13 @@ What a panel author should know:
   `<mj-react-component>`, a later `Validate()` throw is logged and that error stays.
 
 A generated panel may propose its placement in `formContribution` (slot, a section key, field names,
-a related entity, or a section to sit inside). The apply dialog starts from every claim the open
-form can honour and from its default for the rest; the user confirms placement. A field claim writes
-the chosen field names into `configuration.fields`; `fields` is reserved for that use on a field panel.
+a related entity, or a section to sit inside). The apply dialog starts only from the proposed claims
+it offers on the open form, through the same checks as the user's own choices: field names only when
+the form was read and a section on it has fields, and section keys, a tab or a section to sit inside
+only when the dialog lists them. It starts from its default for the rest, and the user confirms
+placement. A claim the form cannot confirm is dropped, and the summary says so until the user picks
+that claim. A field claim writes the chosen field names into `configuration.fields`; `fields` is
+reserved for that use on a field panel.
 `configuration.fields` is written only when a panel is placed as a field claim, and a later placement
 change never removes it: a panel moved off its field claim keeps drawing the fields it was built for,
 and the host shows those fields again unless the new placement replaces the section or tab that
