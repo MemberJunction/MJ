@@ -620,7 +620,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     protected async InternalRunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
         // This is the internal implementation - pre/post processing is handled by ProviderBase.RunQuery()
         if (params.SQL) {
-            return this.RunAdhocQuery(params.SQL, params.MaxRows, undefined, params.StartRow);
+            return this.RunAdhocQuery(params.SQL, params.MaxRows, params.TimeoutSeconds, params.StartRow);
         }
         else if (params.QueryID) {
             return this.RunQueryByID(params.QueryID, params.CategoryID, params.CategoryPath, contextUser, params.Parameters, params.MaxRows, params.StartRow, params.Enrichment, params.DataSource);

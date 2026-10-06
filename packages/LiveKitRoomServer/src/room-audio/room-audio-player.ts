@@ -24,7 +24,7 @@ import { LiveKitTokenService, type MintedToken } from '../livekit-token-service'
 import { ResolveLiveKitNativeModuleSpecifier } from '../livekit-native-module';
 import { AssertAudioDurationWithinCap, DecodeAudio, type DecodedAudio } from './audio-decoder';
 import { GenerateComfortTone } from './comfort-tone';
-import { PcmFramePump, SystemPumpClock, type PumpClock } from './pcm-frame-pump';
+import { PcmFramePump, SystemPumpClock, type PumpClock, type PumpTicker } from './pcm-frame-pump';
 import { RoomAudioDecodeCache } from './room-audio-decode-cache';
 import {
   AssertHttpsAudioUrl,
@@ -35,6 +35,9 @@ import {
   type RoomAudioUrlFetcher,
 } from './room-audio-sources';
 import type { IRoomSpeechSynthesizer } from './room-speech-synthesizer';
+
+/** How often a finished playback checks whether its already-sent audio has played out, in ms. */
+const DRAIN_TICK_MS = 10;
 
 /** The rate the player publishes at (Hz). Music sounds noticeably duller at the 24 kHz the agent voice uses. */
 export const ROOM_AUDIO_SAMPLE_RATE = 48000;
@@ -64,6 +67,15 @@ export interface StartRoomAudioParams {
   Provider?: IMetadataProvider;
 }
 
+/**
+ * Why a playback ended, as reported by {@link RoomAudioHandle.Ended}:
+ * - `Completed`: non-looping audio played to its end (every frame went to the room).
+ * - `Stopped`: {@link RoomAudioHandle.Stop} was called (or {@link RoomAudioPlayer.StopAllInRoom}).
+ * - `Failed`: the bot's audio sink failed mid-playback, so the audio was cut short.
+ * - `Disconnected`: the server dropped the bot (room closed, participant removed) before the audio ended.
+ */
+export type RoomAudioEndReason = 'Completed' | 'Stopped' | 'Failed' | 'Disconnected';
+
 /** An announcement: text to speak through the speech synthesizer, or ready-made mono PCM16. */
 export type RoomAudioClip = { Text: string } | { Pcm: Int16Array; SampleRate: number };
 
@@ -75,6 +87,15 @@ export interface RoomAudioHandle {
   readonly RoomName: string;
   /** True while audio is being sent (false once paused or stopped). */
   readonly IsPlaying: boolean;
+  /** Why the playback ended, or `null` while it is still live. */
+  readonly EndReason: RoomAudioEndReason | null;
+  /**
+   * Resolves once the playback has ended and its bot has left the room, with the reason. Only `Completed` means the
+   * whole clip reached the room — use it to gate anything that must follow a full play, e.g. starting a recording
+   * only after a recording disclosure has been heard. A looping playback never completes on its own; it resolves
+   * `Stopped` when stopped. The first reason wins. Never rejects.
+   */
+  readonly Ended: Promise<RoomAudioEndReason>;
   /**
    * Plays a clip over the music, ducking the music while it plays. Resolves `true` once the clip has been sent in
    * full; `false` when it could not be played (no speech synthesizer installed, synthesis failed, or the playback
@@ -102,6 +123,10 @@ interface PlaybackOwner {
 class RoomAudioPlayback implements RoomAudioHandle {
   private pump: PcmFramePump | null = null;
   private stopPromise: Promise<void> | null = null;
+  private endReason: RoomAudioEndReason | null = null;
+  private drainTicker: PumpTicker | null = null;
+  private resolveEnded: (reason: RoomAudioEndReason) => void = () => undefined;
+  public readonly Ended: Promise<RoomAudioEndReason>;
 
   constructor(
     public readonly PlaybackID: string,
@@ -109,7 +134,15 @@ class RoomAudioPlayback implements RoomAudioHandle {
     private readonly client: NativeRoomClient,
     private readonly contextUser: UserInfo,
     private readonly owner: PlaybackOwner,
-  ) {}
+  ) {
+    this.Ended = new Promise<RoomAudioEndReason>((resolve) => {
+      this.resolveEnded = resolve;
+    });
+  }
+
+  public get EndReason(): RoomAudioEndReason | null {
+    return this.endReason;
+  }
 
   public get IsPlaying(): boolean {
     return this.stopPromise === null && this.pump !== null && this.pump.IsRunning && !this.pump.IsPaused;
@@ -151,12 +184,42 @@ class RoomAudioPlayback implements RoomAudioHandle {
   }
 
   public Stop(): Promise<void> {
+    return this.EndWith('Stopped');
+  }
+
+  /**
+   * Ends the playback for `reason` (the first reason recorded wins), stops the pump, disconnects the bot, and
+   * resolves {@link Ended} once the bot has left. Idempotent; never rejects.
+   */
+  public EndWith(reason: RoomAudioEndReason): Promise<void> {
+    this.endReason ??= reason;
     this.stopPromise ??= this.stopOnce();
     return this.stopPromise;
   }
 
+  /**
+   * The audio ran out: wait until the frames already sent ahead of real time have played, then end `Completed`, so
+   * the bot does not leave (dropping its queued tail) before the last of the clip is heard. A Stop or server
+   * disconnect during the wait wins instead.
+   */
+  public CompleteAfterDrain(clock: PumpClock): void {
+    const drainMs = this.pump?.QueuedAheadMs ?? 0;
+    if (drainMs <= 0 || this.IsStopped) {
+      void this.EndWith('Completed');
+      return;
+    }
+    const deadline = clock.Now() + drainMs;
+    this.drainTicker = clock.StartTicker(() => {
+      if (clock.Now() >= deadline) {
+        void this.EndWith('Completed');
+      }
+    }, DRAIN_TICK_MS);
+  }
+
   /** Stops the pump, then always disconnects the bot and leaves the registry, whatever failed before. */
   private async stopOnce(): Promise<void> {
+    this.drainTicker?.Cancel();
+    this.drainTicker = null;
     try {
       this.pump?.Stop();
     } catch (err) {
@@ -168,6 +231,7 @@ class RoomAudioPlayback implements RoomAudioHandle {
         LogError(`[RoomAudioPlayer] disconnecting playback ${this.PlaybackID} from room ${this.RoomName} failed: ${errorText(err)}`);
       } finally {
         this.owner.Deregister(this);
+        this.resolveEnded(this.endReason ?? 'Stopped');
       }
     }
   }
@@ -365,8 +429,12 @@ export class RoomAudioPlayer extends BaseSingleton<RoomAudioPlayer> {
       Clock: this.clock,
       Sink: (frame) => client.publishAudio(frame.buffer),
       OnEnded: (reason) => {
-        if (reason !== 'Stopped') {
-          void playback.Stop(); // the audio ran out (no loop) or the sink broke: leave the room
+        // 'Stopped' means the playback stopped the pump itself; otherwise the audio ran out (no loop) or the sink
+        // broke, and the bot leaves the room with that reason.
+        if (reason === 'Completed') {
+          playback.CompleteAfterDrain(this.clock);
+        } else if (reason === 'SinkError') {
+          void playback.EndWith('Failed');
         }
       },
     });
@@ -391,7 +459,7 @@ export class RoomAudioPlayer extends BaseSingleton<RoomAudioPlayer> {
   private handleServerDisconnect(playback: RoomAudioPlayback): void {
     if (!playback.IsStopped) {
       LogStatus(`[RoomAudioPlayer] playback ${playback.PlaybackID} was disconnected from room ${playback.RoomName}; stopping it`);
-      void playback.Stop();
+      void playback.EndWith('Disconnected');
     }
   }
 

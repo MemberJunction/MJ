@@ -158,7 +158,30 @@ keyed by source, not by user: only the first load checks the reading user's acce
 
 **Lifecycle.** A playback whose bot is disconnected by the server stops and deregisters itself, and a verified
 `room_finished` webhook (`LiveKitWebhookParser.Parse`) stops every playback in that room. A non-looping playback
-leaves the room when its audio ends.
+leaves the room when its audio ends — after the audio already sent ahead of real time (about 150 ms) has played
+out, so the tail is not cut off.
+
+**Knowing it finished.** Every handle has `Ended: Promise<RoomAudioEndReason>`, which resolves once the bot has
+left the room, and `EndReason` (`null` while live). Only `'Completed'` means the whole clip reached the room;
+`'Stopped'` (Stop / StopAllInRoom), `'Failed'` (the outbound sink broke) and `'Disconnected'` (the server dropped
+the bot) all mean it was cut short. The first reason wins. Use it to gate anything that must follow a full play:
+
+```typescript
+const disclosure = await RoomAudioPlayer.Instance.Start({
+  RoomName: callRoom,
+  Source: { Kind: 'File', FileID: disclosureFileID },
+  Loop: false,
+  DisplayName: 'Recording notice',
+  ContextUser: contextUser,
+});
+if ((await disclosure.Ended) === 'Completed') {
+  await startRecording();       // the caller has heard the whole notice
+} else {
+  // fail closed: do not record
+}
+```
+
+A looping playback never completes on its own; its `Ended` resolves `'Stopped'` when it is stopped.
 
 **Announcements and text-to-speech.** `Announce({ Pcm, SampleRate })` plays ready-made audio. `Announce({ Text })`
 goes through the `IRoomSpeechSynthesizer` port, and **none is installed by default** — a voice is vendor-specific,
