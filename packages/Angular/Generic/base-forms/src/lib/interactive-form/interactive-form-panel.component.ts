@@ -53,11 +53,12 @@ export class InteractiveFormPanelComponent extends BaseContributionPanel impleme
 
     /**
      * A failure after the React component loaded, shown above it: an `error` event from
-     * `<mj-react-component>` (initialization, render timeout, or a throw its error boundary
-     * caught), or a `Validate` that threw. A throw during render stays inside this panel's
-     * subtree, so the rest of the form renders and saves normally.
+     * `<mj-react-component>` (initialization, render timeout, a throw its error boundary
+     * caught, or an `error` event the panel raises), or a `Validate` that threw. A throw during
+     * render stays inside this panel's subtree, so the rest of the form renders and saves
+     * normally.
      *
-     * An `error` event stays until the panel loads its spec again, and a `Validate` that throws
+     * An `error` event stays until the panel is mounted again, and a `Validate` that throws
      * does not replace it. A `Validate` failure clears when a later `Validate` answers.
      */
     public RenderError: string | null = null;

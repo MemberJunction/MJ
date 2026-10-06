@@ -460,18 +460,19 @@ Form Version` set the prior version aside after that transaction; if Activate ca
 Builder, and needs the `Manage Form Defaults` authorization.
 
 A panel's component is an `MJ: Components` row. The stock `UI` role can create and update that
-entity (not delete), and a form can also load a component by name, so the server checks every
-change to what a component draws. Without `Manage Form Defaults`, the component must be the caller's
-own (`IsCallersOwnComponent`): used by at least one row and only by the caller's own personal rows,
-or used by no row and created by the caller, as its Internal `Create` record in `MJ: Record Changes`
-shows (a caller cannot create an Internal `Create` record change through the API).
-That applies to a delete or a change to its specification, status, name, namespace or type
-(`ComponentWriteRefusal`), to a row created or re-pointed at it (`FormRowComponentRefusal`), and to
-giving another component its name (`ComponentNameCollisionRefusal`). With the grant, every change
-is allowed except to a component another user's personal row uses, which is refused for everyone.
-The reads run as the caller in one batch, the changed columns come from the stored row, and a
-failed read refuses the write. Any user can therefore author their own panel through the actions
-and turn it on, off or to a draft in the drawer.
+entity (not delete), and a form can also load a component by name, so the server checks component
+writes. Without `Manage Form Defaults`, the component must be the caller's own
+(`IsCallersOwnComponent`): used by at least one row and only by the caller's own personal rows, or
+used by no row and created by the caller, as its Internal `Create` record in `MJ: Record Changes`
+shows (a caller cannot create an Internal `Create` record change through the API). That applies to
+any update or delete of the component, whatever columns it changes (`ComponentWriteRefusal`), to a
+row created or re-pointed at it (`FormRowComponentRefusal`), and to giving another component its
+name (`ComponentNameCollisionRefusal`). With the grant, only a delete or a change to a component's
+specification, status, name, namespace or type is checked, and it is refused only when another
+user's personal row uses the component; pointing a row at such a component is refused for
+everyone, and the name is not restricted. The reads run as the caller in one batch, the changed
+columns come from the stored row, and a failed read refuses the write. Any user can therefore
+author their own panel through the actions and turn it on, off or to a draft in the drawer.
 
 **Form context for agents.** Each record form publishes its composition snapshot (sections, related
 grids, contributions, rail, slots) to `FormCompositionRegistry` in `@memberjunction/ng-base-forms`;
@@ -511,10 +512,12 @@ feature existed. The switch has two settings, because the browser has no process
 In the browser the instance configuration can only turn the source off, never back on, and when
 Instance Config fails to load the source stays on. The seed row reaches a database through
 `mj sync push`. `Get Form Contributions For Entity` and `Get Form Composition For Entity` list no
-row when either setting is off (`MetadataContributionsEnabled: false` in their result); they read
-the instance configuration on every call. The write actions still write rows while the switch is
-off. The server variable does not reach the browser, so with only the Node setting off, Explorer
-still draws rows those two actions leave out.
+row when either setting is off (`MetadataContributionsEnabled: false` in their result). They read
+the instance configuration from the cached `InstanceConfigEngine`, which is refreshed after a save
+in the same process or by cross-server cache invalidation, so a change saved elsewhere counts once
+the cache has it. The write actions still write rows while the switch is off. The server variable
+does not reach the browser, so with only the Node setting off, Explorer still draws rows those two
+actions leave out.
 
 L3 `MJ: Form Chrome Rules` still suppresses any of them by `ContributionKey`.
 

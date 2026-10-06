@@ -413,7 +413,8 @@ What a panel author should know:
 - **A `Validate()` that throws.** A compiled panel whose `Validate()` throws or rejects blocks the
   save, and the user sees an error toast. A React panel whose `Validate()` throws does not block
   it: the host logs the failure and shows it in the panel. A failure that React panel reported
-  before through `ValidationChanged` still blocks the save.
+  before through `ValidationChanged` still blocks the save. While the panel shows an error from
+  `<mj-react-component>`, a later `Validate()` throw is logged and that error stays.
 
 A generated panel may propose its placement in `formContribution` (slot, a section key, field names,
 a related entity, or a section to sit inside). The apply dialog starts from every claim the open
@@ -443,7 +444,9 @@ has two settings:
 
 `Get Form Contributions For Entity` and `Get Form Composition For Entity` list no row when either
 setting is off, and say so with `MetadataContributionsEnabled: false`. They read the instance
-configuration on every call. The write actions still write rows while the switch is off. The
+configuration from the cached `InstanceConfigEngine`, which is refreshed after a save in the same
+process or by cross-server cache invalidation, so a change saved elsewhere counts once the cache has
+it. The write actions still write rows while the switch is off. The
 environment variable does not reach the browser, so with only the Node setting off, Explorer still
 draws rows that those two actions leave out.
 
@@ -487,10 +490,13 @@ tracks record changes, so the platform writes one with every component it create
 through the API. A component created by clone or restore carries a `Clone` or `Restore` record
 change instead, so it is not its creator's own until a row of theirs uses it.
 
-1. **Changing a component** (`ComponentWriteRefusal`, in `MJComponentEntityServer`): a delete, or a
-   change to its specification, status, name, namespace or type.
+1. **Changing a component** (`ComponentWriteRefusal`, in `MJComponentEntityServer`). Without
+   `Manage Form Defaults`, every update, whatever columns it changes, and every delete is checked.
+   With the grant, only a delete or a change to the component's specification, status, name,
+   namespace or type is checked. A refusal for a caller without the grant says whether the grant
+   would allow the change.
 
-   | The component | Without `Manage Form Defaults` | With it |
+   | The component | Without `Manage Form Defaults` (any update, or a delete) | With it (a delete, or a change to those five columns) |
    |---|---|---|
    | Used only by the caller's own personal rows | Allowed | Allowed |
    | Used by a `Role` or `Global` row | Refused | Allowed |
@@ -508,10 +514,10 @@ change instead, so it is not its creator's own until a row of theirs uses it.
    `ComponentMetadataEngineServer.FindComponent` compares them, in any namespace. A holder is not
    restricted.
 
-A create is otherwise not checked, nor is a change to any other column or a write with no caller
-(a trusted server context). The rows, the stored columns and the creator are read in one batch as
-the caller, and the changed columns come from the stored row, not from the values as loaded; when a
-read fails, the write is refused. The `Create` record change is written in the same batch as the
+A create is otherwise not checked, nor is a holder's change to any other column, nor a write with
+no caller (a trusted server context). The rows, the stored columns and the creator are read in one
+batch as the caller, and the changed columns come from the stored row, not from the values as
+loaded; when a read fails, the write is refused. The `Create` record change is written in the same batch as the
 component insert, so a row saved after it in the same transaction sees it. So any user can author
 their own panel through the actions (a new component, then their own row pointing at it, then
 changes to it) and turn it on, off or to a draft in the drawer.
