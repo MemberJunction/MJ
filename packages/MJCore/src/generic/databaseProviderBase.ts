@@ -1586,6 +1586,20 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      */
     public async Save(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions): Promise<{}> {
         const entityResult = new BaseEntityResult();
+        // Each suspend is matched by exactly one resume, whichever path (success, transaction
+        // callback, or catch) gets there first: providers count suspensions, so a stray resume
+        // would re-enable refresh while another save is still running.
+        let refreshSuspended = false;
+        const suspendRefresh = (): void => {
+            refreshSuspended = true;
+            this.OnSuspendRefresh();
+        };
+        const resumeRefresh = (): void => {
+            if (refreshSuspended) {
+                refreshSuspended = false;
+                this.OnResumeRefresh();
+            }
+        };
         try {
             entity.RegisterTransactionPreprocessing();
 
@@ -1709,7 +1723,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 if (entity.TransactionGroup && !bReplay) {
                     // ---- Transaction Group path ----
                     entity.RaiseReadyForTransaction();
-                    this.OnSuspendRefresh();
+                    suspendRefresh();
 
                     const extraData = this.GetTransactionExtraData(entity);
                     if (sqlDetails.simpleSQL) {
@@ -1725,7 +1739,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                             sqlDetails.parameters ?? null,
                             extraData,
                             (transactionResult: Record<string, unknown>, success: boolean) => {
-                                this.OnResumeRefresh();
+                                resumeRefresh();
                                 entityResult.EndedAt = new Date();
                                 if (success && transactionResult) {
                                     this.OnAfterSaveExecute(entity, user, options, saveContext);
@@ -1741,7 +1755,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                     return true;
                 } else {
                     // ---- Direct execution path ----
-                    this.OnSuspendRefresh();
+                    suspendRefresh();
 
                     let result: Record<string, unknown>[];
                     if (bReplay) {
@@ -1757,7 +1771,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                         result = await this.PostProcessRows(rawResult, entity.EntityInfo, user);
                     }
 
-                    this.OnResumeRefresh();
+                    resumeRefresh();
                     entityResult.EndedAt = new Date();
 
                     if (result && result.length > 0) {
@@ -1784,7 +1798,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 return entity.GetAll(); // nothing to save
             }
         } catch (e) {
-            this.OnResumeRefresh();
+            resumeRefresh();
             entityResult.EndedAt = new Date();
             entityResult.Message = (e as Error).message;
             LogError(e);
@@ -2607,4 +2621,20 @@ export interface ExecuteSQLOptions {
    * pool read sees committed data only (#4514).
    */
   ignoreAmbientTransaction?: boolean;
+  /**
+   * Run the statement inside a read-only transaction that is always rolled back, for SQL a
+   * caller supplied. Writes fail, and any session setting the statement changes (`SET`,
+   * `set_config`) is undone before the connection goes back to the pool, so it cannot reach a
+   * later request. Inside an ambient transaction the statement runs in that transaction as usual.
+   * PostgreSQL honours it; SQL Server, whose read queries cannot change session settings, ignores it.
+   */
+  readOnlyTransaction?: boolean;
+  /**
+   * The longest this statement may run, in milliseconds. When it is exceeded the database cancels
+   * the statement and the call rejects with a timeout error, so the work stops rather than only
+   * the wait. Omitted or 0 means the connection's usual limit applies. It can only shorten that
+   * limit, never lengthen it. Ignored inside an ambient transaction, whose statements follow the
+   * transaction's own limits.
+   */
+  timeoutMs?: number;
 }

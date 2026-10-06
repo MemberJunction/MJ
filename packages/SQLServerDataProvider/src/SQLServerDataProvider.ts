@@ -157,6 +157,43 @@ function buildRequest(
   return { request, processedQuery };
 }
 
+/** What one statement run by {@link executeSQLCore} resolves to. */
+type SQLCoreResult = Awaited<ReturnType<typeof executeSQLCore>>;
+
+/** A statement request that can be cancelled while it runs; an `mssql` Request has this shape. */
+export interface CancellableRequest<T> {
+  query(sqlText: string): Promise<T>;  // case-violation-ok-legacy-back-compat: mirrors the mssql driver's Request, which an mssql Request must satisfy as-is
+  cancel(): void;  // case-violation-ok-legacy-back-compat: mirrors the mssql driver's Request, which an mssql Request must satisfy as-is
+}
+
+/**
+ * Runs `sqlText` on `request` and, if it has not finished within `timeoutMs`, cancels it on the
+ * server and rejects with `Query timeout exceeded`. Cancelling, rather than only giving up
+ * waiting, frees the connection and stops the work.
+ */
+export async function QueryWithTimeout<T>(request: CancellableRequest<T>, sqlText: string, timeoutMs: number): Promise<T> {
+  const running = request.query(sqlText);
+  // The cancelled query rejects after the race has settled; that rejection is expected.
+  running.catch(() => undefined);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      running,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          // Settle first, so the caller sees the timeout rather than the driver's cancellation error.
+          reject(new Error('Query timeout exceeded'));
+          request.cancel();
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  }
+}
+
 /**
  * Core SQL execution function - handles the actual database query execution.
  * This is outside the class to allow both static and instance methods to use it
@@ -218,7 +255,7 @@ async function executeSQLCore(
 
     // Execute query and logging in parallel
     const [result] = await Promise.all([
-      request.query(processedQuery),
+      options?.timeoutMs ? QueryWithTimeout<SQLCoreResult>(request, processedQuery, options.timeoutMs) : request.query(processedQuery),
       logPromise
     ]);
 
@@ -357,7 +394,12 @@ export class SQLServerDataProvider
 
   // Removed _transactionRequest - creating new Request objects for each query to avoid concurrency issues
   private _fileSystemProvider: IFileSystemProvider;
-  private _bAllowRefresh: boolean = true;
+  /** Saves currently running SQL. Refresh is suspended while any is in flight (a count, since saves overlap). */
+  private _refreshSuspendCount: number = 0;
+  /** Refresh() calls waiting for `_refreshSuspendCount` to reach zero. */
+  private _refreshResumeWaiters: Array<() => void> = [];
+  /** Longest an explicit Refresh() waits for in-flight saves before giving up (returning false). */
+  private static readonly REFRESH_WAIT_TIMEOUT_MS = 30_000;
   private _recordDupeDetector: DuplicateRecordDetector;
   private _needsDatetimeOffsetAdjustment: boolean = false;
   private _datetimeOffsetTestComplete: boolean = false;
@@ -620,10 +662,34 @@ export class SQLServerDataProvider
    * picked up by the subsequent rescan instead of serving a stale column order until restart.
    */
   public override async Refresh(providerToUse?: IMetadataProvider): Promise<boolean> {
-    if (this.AllowRefresh && this._pool) {
+    // An explicit Refresh must really reload: base Refresh() is a silent no-op while a save is in
+    // flight, which left callers (CodeGen after a fire-and-forget prompt-run save) on stale metadata.
+    if (!(await this.waitForSavesToFinish())) {
+      LogError(`SQLServerDataProvider.Refresh: ${this._refreshSuspendCount} save(s) still in flight after ${SQLServerDataProvider.REFRESH_WAIT_TIMEOUT_MS}ms; metadata was NOT refreshed`);
+      return false;
+    }
+    if (this._pool) {
       SQLServerDataProvider.InvalidateViewColumnOrderCache(this._pool);
     }
     return super.Refresh(providerToUse);
+  }
+
+  /** Resolves true once no save is in flight, or false after REFRESH_WAIT_TIMEOUT_MS. */
+  private waitForSavesToFinish(): Promise<boolean> {
+    if (this._refreshSuspendCount === 0) {
+      return Promise.resolve(true);
+    }
+    return new Promise<boolean>((resolve) => {
+      const timer = setTimeout(() => {
+        this._refreshResumeWaiters = this._refreshResumeWaiters.filter((w) => w !== onResume);
+        resolve(false);
+      }, SQLServerDataProvider.REFRESH_WAIT_TIMEOUT_MS);
+      const onResume = (): void => {
+        clearTimeout(timer);
+        resolve(true);
+      };
+      this._refreshResumeWaiters.push(onResume);
+    });
   }
 
   /**
@@ -702,7 +768,7 @@ export class SQLServerDataProvider
    * @internal
    */
   protected get AllowRefresh(): boolean {
-    return this._bAllowRefresh;
+    return this._refreshSuspendCount === 0;
   }
 
   /**
@@ -1780,11 +1846,20 @@ export class SQLServerDataProvider
   }
 
   protected override OnSuspendRefresh(): void {
-    this._bAllowRefresh = false;
+    this._refreshSuspendCount++;
   }
 
   protected override OnResumeRefresh(): void {
-    this._bAllowRefresh = true;
+    if (this._refreshSuspendCount === 0) {
+      LogError('SQLServerDataProvider.OnResumeRefresh called with no matching OnSuspendRefresh; ignored');
+      return;
+    }
+    this._refreshSuspendCount--;
+    if (this._refreshSuspendCount === 0) {
+      const waiters = this._refreshResumeWaiters;
+      this._refreshResumeWaiters = [];
+      waiters.forEach((resume) => resume());
+    }
   }
 
   protected override GetTransactionExtraData(_entity: BaseEntity): Record<string, unknown> {
@@ -1992,6 +2067,8 @@ export class SQLServerDataProvider
       contextUser?: UserInfo;
       /** Run on the pool even while an ambient transaction is open (see ExecuteSQLOptions). */
       ignoreAmbientTransaction?: boolean;
+      /** Cancel the statement on the server after this many milliseconds (see ExecuteSQLOptions). */
+      timeoutMs?: number;
     }
   ): Promise<sql.IResult<any>> {
     // Handle the connectionSource parameter for backwards compatibility
@@ -2022,7 +2099,9 @@ export class SQLServerDataProvider
       ignoreLogging: loggingOptions.ignoreLogging,
       isMutation: loggingOptions.isMutation,
       simpleSQLFallback: loggingOptions.simpleSQLFallback,
-      contextUser: loggingOptions.contextUser
+      contextUser: loggingOptions.contextUser,
+      // A statement inside a transaction follows the transaction's limits (see ExecuteSQLOptions).
+      timeoutMs: transaction ? undefined : loggingOptions.timeoutMs
     } : undefined;
     
     // Delegate to instance method
@@ -2052,6 +2131,7 @@ export class SQLServerDataProvider
         simpleSQLFallback: options?.simpleSQLFallback,
         contextUser: contextUser,
         ignoreAmbientTransaction: options?.ignoreAmbientTransaction,
+        timeoutMs: options?.timeoutMs,
       });
       
       // Return recordset for consistency with TypeORM behavior
