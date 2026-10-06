@@ -1198,7 +1198,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT99 - RunQuery Rendering Matrix",
+            "TestID": "@lookup:MJ: Tests.Name=IT102 - RunQuery Rendering Matrix",
             "Sequence": 49,
             "Status": "Active"
           },
@@ -1234,6 +1234,21 @@
           "sync": {
             "lastModified": "2026-09-13T20:08:49.384Z",
             "checksum": "0182dec8e6529614d671437b2efb710c1111b0437ff228f4a7c41a9b7b25fc6d"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT104 - Form Contributions",
+            "Sequence": 48,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "BE0B5BAB-E7AB-4074-815D-EDE0151ADBEA"
+          },
+          "sync": {
+            "lastModified": "2026-09-17T20:05:32.183Z",
+            "checksum": "2e35f7ba0e03b46059e6aa28590909692b9e7f0d6b340ebd264a335c5e402c0c"
           }
         },
         {
@@ -1276,7 +1291,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT100 - RunQuery Rendering over GraphQL",
+            "TestID": "@lookup:MJ: Tests.Name=IT103 - RunQuery Rendering over GraphQL",
             "Sequence": 72,
             "Status": "Active"
           },

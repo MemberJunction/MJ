@@ -32,7 +32,7 @@ import { LoadingTheme, LoadingAnimationType, AnimationStep, getActiveTheme } fro
 import { AppAccessDialogComponent, AppAccessDialogConfig, AppAccessDialogResult } from './components/dialogs/app-access-dialog.component';
 import { TabContainerComponent } from './components/tabs/tab-container.component';
 import { BaseUserMenu, UserMenuElement, UserMenuItem, UserMenuContext, isUserMenuDivider, ApplicationInfoRef } from '../user-menu';
-import { MJUserEntity, InstanceConfigEngine, UserInfoEngine } from '@memberjunction/core-entities';
+import { MJUserEntity, InstanceConfigEngine, InteractiveFormsEngine, UserInfoEngine } from '@memberjunction/core-entities';
 import { CommandPaletteService } from '../command-palette/command-palette.service';
 import { FileOpenService } from '@memberjunction/ng-file-storage';
 import { FeedbackDialogService, FeedbackService } from '@memberjunction/ng-feedback';
@@ -836,6 +836,10 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     await InstanceConfigEngine.Instance.Config(false).catch(() => {
         LogStatus('InstanceConfigEngine initialization skipped (not critical)');
     });
+
+    // The browser has no process environment, so Instance Config is where an administrator turns
+    // metadata form contributions off. Applied here, before workspace initialization opens a form.
+    InteractiveFormsEngine.ApplyInstanceConfiguration(InstanceConfigEngine.Instance);
 
     // Resolve the record-open style EAGERLY, before workspace initialization.
     // The first workspace configuration emission fires synchronously inside
