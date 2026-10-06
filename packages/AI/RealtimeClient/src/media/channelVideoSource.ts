@@ -17,9 +17,8 @@
  * @author MemberJunction.com
  */
 
-import type { BaseRealtimeClient } from '../generic/baseRealtimeClient';
 import { NominalVideoFrameIntervalMs } from './videoPacing';
-import { VideoSourceArbiter, type VideoSourceKind } from './videoSourceArbiter';
+import { VideoSourceArbiter, type IVideoFrameSink, type VideoSourceKind } from './videoSourceArbiter';
 
 /**
  * Provider implemented by a channel or surface to produce visual frames.
@@ -81,15 +80,21 @@ export class ChannelInboundVideoBridge {
     /** Whether the owner switched this source off (exposure policy or the user). Survives re-registration. */
     private sourceEnabled = true;
 
+    /**
+     * @param clientOrGetter The session's client, or a getter for it (a reconnect replaces the client). Any
+     *   {@link IVideoFrameSink} works; a `BaseRealtimeClient` is one.
+     * @param provider Produces the frames.
+     * @param options Source identity, MIME type and the deprecated rate cap.
+     */
     constructor(
-        private readonly clientOrGetter: BaseRealtimeClient | (() => BaseRealtimeClient | null | undefined) | null | undefined,
+        private readonly clientOrGetter: IVideoFrameSink | (() => IVideoFrameSink | null | undefined) | null | undefined,
         private readonly provider: IChannelFrameProvider,
         private readonly options: ChannelInboundVideoBridgeOptions = {}
     ) {
         this.sourceId = options.SourceID ?? `channel-video-${++generatedSourceCounter}`;
     }
 
-    private get client(): BaseRealtimeClient | null | undefined {
+    private get client(): IVideoFrameSink | null | undefined {
         return typeof this.clientOrGetter === 'function' ? this.clientOrGetter() : this.clientOrGetter;
     }
 
@@ -174,7 +179,7 @@ export class ChannelInboundVideoBridge {
     }
 
     /** The poll interval: the negotiated rate, capped by the (deprecated) `Rate` option when one was given. */
-    private pollIntervalMs(client: BaseRealtimeClient): number {
+    private pollIntervalMs(client: IVideoFrameSink): number {
         const negotiated = client.InboundVideoRate;
         const requested = this.options.Rate;
         const rate =

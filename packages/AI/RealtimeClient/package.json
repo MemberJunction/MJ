@@ -5,6 +5,23 @@
   "description": "MemberJunction: Framework-agnostic browser client abstraction for provider-direct realtime (voice) sessions - BaseRealtimeClient + provider drivers",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./media": {
+      "types": "./dist/media/index.d.ts",
+      "default": "./dist/media/index.js"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "media": [
+        "dist/media/index.d.ts"
+      ]
+    }
+  },
   "files": [
     "/dist"
   ],
