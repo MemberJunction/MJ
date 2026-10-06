@@ -31,6 +31,8 @@ import { WebSocketServer } from 'ws';
 import { RealtimeProxyServer } from './realtimeProxy/RealtimeProxyServer.js';
 import buildApolloServer from './apolloServer/index.js';
 import { configInfo, configFilePath, dbDatabase, dbHost, dbPort, dbUsername, graphqlPort, graphqlRootPath, mj_core_schema, websiteRunFromPackage, RESTApiOptions } from './config.js';
+import { TranslateBracketsToPG } from './postgresqlCompat.js';
+import { BuildPostgreSQLConnectionConfig, DescribeReadOnlyLoginOverreach, PostgreSQLReadOnlyPool, ResolvePostgreSQLEndpoint, ResolvePostgreSQLReadOnlyCredentials, ToPGPoolConfig } from './postgresqlPoolSettings.js';
 import { default as jwt } from 'jsonwebtoken';
 import { contextFunction, CreateUnifiedAuthMiddleware, getUserPayload } from './context.js';
 import { UserPayload } from './types.js';
@@ -67,6 +69,13 @@ import {
   SetPushStatusPublishHook,
   ParseReplicatedStatusUpdate,
 } from './generic/PushStatusResolver.js';
+import {
+  HANDOFF_OFFER_FANOUT_CHANNEL,
+  HANDOFF_OFFER_TOPIC,
+  SetHandoffOfferPublishHook,
+  ParseReplicatedHandoffOfferUpdate,
+} from './resolvers/HumanHandoffResolver.js';
+import { RoomHandoffEngine } from '@memberjunction/livekit-room-server';
 import { IntegrationProgressEmitter } from '@memberjunction/integration-progress-artifacts';
 import { PublishIntegrationProgress } from './resolvers/IntegrationProgressResolver.js';
 import { RegisterRSUProgressBridge } from './integration/RSUProgressBridge.js';
@@ -243,6 +252,7 @@ export * from './resolvers/CurrentUserContextResolver.js';
 export * from './resolvers/RSUResolver.js';
 export * from './resolvers/AgentSessionResolver.js';
 export * from './resolvers/RealtimeClientSessionResolver.js';
+export * from './resolvers/MeetingResolver.js';
 export * from './resolvers/RemoteBrowserActionResolver.js';
 export * from './agentSessions/index.js';
 export { GetReadOnlyDataSource, GetReadWriteDataSource, GetReadWriteProvider, GetReadOnlyProvider } from './util.js';
@@ -296,7 +306,8 @@ function resolveServerVersion(): string | undefined {
     const pkgPath = fileURLToPath(new URL('../package.json', import.meta.url));
     const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8')) as { version?: string };
     return pkg.version;
-  } catch {
+  } catch (err) {
+    LogError('Failed to resolve server version from package.json', undefined, err);
     return undefined;
   }
 }
@@ -336,8 +347,9 @@ async function wirePushStatusFanOut(redisProvider: RedisLocalStorageProvider, st
           message: payload.message,
           SourceServerId: payload.SourceServerId,
         });
-      } catch {
+      } catch (err) {
         // A malformed message on a shared channel must not take down the subscriber.
+        LogError('Error processing push-status fan-out message', undefined, err);
       }
     });
 
@@ -355,6 +367,46 @@ async function wirePushStatusFanOut(redisProvider: RedisLocalStorageProvider, st
     console.warn(`Push-status fan-out unavailable: ${(err as Error).message}`);
   }
 }
+
+/**
+ * Replicate handoff-offer updates across server instances over Redis.
+ *
+ * Outbound: every locally-published offer change is forwarded on a shared Redis channel.
+ * Inbound: a message from another instance is republished onto THIS instance's local GraphQL
+ * topic (where the subscription filter scopes to the target user) and delivered to RoomHandoffEngine
+ * so the call-hosting instance can transition its local flow (e.g. wait for the user to join the room).
+ */
+async function wireHandoffOfferFanOut(redisProvider: RedisLocalStorageProvider, startupLog: StartupLogger): Promise<void> {
+  try {
+    await redisProvider.SubscribeToChannel(HANDOFF_OFFER_FANOUT_CHANNEL, (raw: string) => {
+      try {
+        const payload = ParseReplicatedHandoffOfferUpdate(raw, MJGlobal.Instance.ProcessUUID);
+        if (!payload) {
+          return;
+        }
+        PubSubManager.Instance.Publish(HANDOFF_OFFER_TOPIC, {
+          UserID: payload.UserID,
+          Kind: payload.Kind,
+          Offer: payload.Offer,
+        });
+        RoomHandoffEngine.Instance.OnRemoteOfferChange(payload);
+      } catch (err) {
+        // A malformed message on a shared channel must not take down the subscriber.
+        LogError('Error processing handoff-offer fan-out message', undefined, err);
+      }
+    });
+
+    SetHandoffOfferPublishHook((payload) => {
+      redisProvider.PublishMessage(HANDOFF_OFFER_FANOUT_CHANNEL, JSON.stringify(payload));
+    });
+
+    console.log('[MJAPI] Handoff-offer updates: cross-instance fan-out enabled via Redis');
+    startupLog.LogIf('verbose', 'Handoff-offer updates: cross-instance fan-out enabled via Redis');
+  } catch (err) {
+    console.warn(`Handoff-offer fan-out unavailable: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
 
 // Bind MJStorage as the conversation-attachment blob store. The attachment service itself no longer
 // imports `@memberjunction/storage` — that dependency made it unusable from any browser or React
@@ -402,31 +454,41 @@ const setupComplete$ = new ReplaySubject(1);
     startupLog.BeginPhase('Connecting to database');
     startupLog.LogIf('verbose', 'Database type: PostgreSQL');
     const pg = await import('pg');
-    const { PostgreSQLDataProvider, PostgreSQLProviderConfigData } = await import('@memberjunction/postgresql-dataprovider');
+    const { PostgreSQLDataProvider, PostgreSQLProviderConfigData, MJPostgresTypes } = await import('@memberjunction/postgresql-dataprovider');
 
-    const pgHost = process.env.PG_HOST || process.env.DB_HOST || 'localhost';
-    const pgPort = parseInt(process.env.PG_PORT || process.env.DB_PORT || '5432', 10);
-    const pgUser = process.env.PG_USERNAME || process.env.DB_USERNAME || 'postgres';
-    const pgPass = process.env.PG_PASSWORD || process.env.DB_PASSWORD || '';
-    const pgDatabase = process.env.PG_DATABASE || process.env.DB_DATABASE || '';
-
-    const pgPool = new pg.default.Pool({
-      host: pgHost,
-      port: pgPort,
-      user: pgUser,
-      password: pgPass,
-      database: pgDatabase,
-      max: configInfo.databaseSettings.connectionPool?.max ?? 50,
-      min: configInfo.databaseSettings.connectionPool?.min ?? 5,
-      idleTimeoutMillis: configInfo.databaseSettings.connectionPool?.idleTimeoutMillis ?? 30000,
-      connectionTimeoutMillis: configInfo.databaseSettings.connectionPool?.acquireTimeoutMillis ?? 30000,
-    });
+    const pgEndpoint = ResolvePostgreSQLEndpoint();
+    const { Host: pgHost, Port: pgPort, User: pgUser, Database: pgDatabase } = pgEndpoint;
+    // Every API pool carries the statement and idle-in-transaction timeouts from connection #1.
+    const pgConnectionConfig = BuildPostgreSQLConnectionConfig(pgEndpoint, configInfo.databaseSettings, 'api');
+    const pgPool = new pg.default.Pool(ToPGPoolConfig(pgConnectionConfig));
 
     // Verify connection
     const testClient = await pgPool.connect();
     await testClient.query('SELECT 1');
     testClient.release();
     startupLog.LogIf('verbose', `PostgreSQL pool connected to ${pgHost}:${pgPort}/${pgDatabase}`);
+
+    // A read-only pool opened with the read-only login, as SQL Server has. Read-only per-request
+    // providers (TestQuerySQL and other caller-supplied SQL) share it instead of the primary pool.
+    const pgReadOnlyCredentials = ResolvePostgreSQLReadOnlyCredentials(configInfo);
+    if (pgReadOnlyCredentials) {
+      // A pool a provider runs on must carry the provider's type parsers, so BIGINT and NUMERIC
+      // come back as numbers here as they do on the provider's own pool.
+      const readOnlyPgPool = new pg.default.Pool({
+        ...ToPGPoolConfig(BuildPostgreSQLConnectionConfig({ ...pgEndpoint, ...pgReadOnlyCredentials }, configInfo.databaseSettings, 'read-only')),
+        types: MJPostgresTypes,
+      });
+      const readOnlyTestClient = await readOnlyPgPool.connect();
+      try {
+        for (const warning of await DescribeReadOnlyLoginOverreach(readOnlyTestClient, mj_core_schema)) {
+          LogStatus(`WARNING: ${warning}`);
+        }
+      } finally {
+        readOnlyTestClient.release();
+      }
+      PostgreSQLReadOnlyPool.Instance.Pool = readOnlyPgPool;
+      startupLog.LogIf('verbose', 'Read-only PostgreSQL pool has been initialized.');
+    }
 
     // Create a DataSourceInfo with a MSSQL-compatible wrapper around pg.Pool
     // This allows existing code (types, util, context) to work without changes
@@ -441,15 +503,6 @@ const setupComplete$ = new ReplaySubject(1);
     }));
 
     // Set up the PostgreSQL provider
-    const pgConnectionConfig = {
-      Host: pgHost,
-      Port: pgPort,
-      Database: pgDatabase,
-      User: pgUser,
-      Password: pgPass,
-      MaxConnections: configInfo.databaseSettings.connectionPool?.max ?? 50,
-      MinConnections: configInfo.databaseSettings.connectionPool?.min ?? 5,
-    };
     const pgConfigData = new PostgreSQLProviderConfigData(
       pgConnectionConfig,
       mj_core_schema,
@@ -483,7 +536,7 @@ const setupComplete$ = new ReplaySubject(1);
       if (poolAny._pgPool) {
         const thePgPool = poolAny._pgPool as import('pg').Pool;
         // Translate SQL Server bracket syntax to PostgreSQL double-quote syntax
-        const pgQuery = translateBracketsToPG(query);
+        const pgQuery = TranslateBracketsToPG(query);
         const result = await thePgPool.query(pgQuery);
         return result.rows;
       }
@@ -502,21 +555,21 @@ const setupComplete$ = new ReplaySubject(1);
     const pgCodegenPass = process.env.CODEGEN_DB_PASSWORD;
     if (pgCodegenUser && pgCodegenPass) {
       try {
-        const codegenPgPool = new pg.default.Pool({
-          host: pgHost,
-          port: pgPort,
-          user: pgCodegenUser,
-          password: pgCodegenPass,
-          database: pgDatabase,
-          max: 10,
-        });
+        // CodeGen and DDL work runs long statements across every entity, so this pool gets the
+        // long CodeGen timeout rather than the API one, as the SQL Server CodeGen pool does.
+        const codegenPgConnectionConfig = BuildPostgreSQLConnectionConfig(
+          { ...pgEndpoint, User: pgCodegenUser, Password: pgCodegenPass },
+          configInfo.databaseSettings,
+          'codegen',
+        );
+        const codegenPgPool = new pg.default.Pool(ToPGPoolConfig(codegenPgConnectionConfig));
         const codegenTestClient = await codegenPgPool.connect();
         await codegenTestClient.query('SELECT 1');
         codegenTestClient.release();
 
         const { RuntimeSchemaManager } = await import('@memberjunction/schema-engine');
         const codegenPgConfigData = new PostgreSQLProviderConfigData(
-          { Host: pgHost, Port: pgPort, Database: pgDatabase, User: pgCodegenUser, Password: pgCodegenPass },
+          codegenPgConnectionConfig,
           mj_core_schema,
           cacheRefreshInterval / 1000, // ms → seconds
         );
@@ -792,6 +845,7 @@ const setupComplete$ = new ReplaySubject(1);
     // forever for an event that was delivered to nobody. Replicating progress and completion over
     // Redis closes that, and the durable tail query remains the backstop if Redis is down.
     await wirePushStatusFanOut(redisProvider, startupLog);
+    await wireHandoffOfferFanOut(redisProvider, startupLog);
 
     startupLog.LogIf('verbose', `Redis cache provider connected: ${process.env.REDIS_URL}`);
   }
@@ -1367,13 +1421,22 @@ const setupComplete$ = new ReplaySubject(1);
   // Backwards-compatibility shim: synthesize ServerExtensionConfig entries from legacy configInfo.telephony
   const telephonyExtensionConfigs: ServerExtensionConfig[] = [];
   if (configInfo.telephony?.enabled) {
+    // Settings every carrier shares (inbound run-as user, call cap, outbound policy). Each carrier's own block is
+    // spread AFTER them, so a carrier can override one explicitly.
+    const sharedTelephonySettings: Record<string, unknown> = {
+      inboundRunAsUserEmail: configInfo.telephony.inboundRunAsUserEmail,
+      maxCallSeconds: configInfo.telephony.maxCallSeconds,
+      maxConcurrentCalls: configInfo.telephony.maxConcurrentCalls,
+      transferTargets: configInfo.telephony.transferTargets,
+      outbound: configInfo.telephony.outbound,
+    };
     if (configInfo.telephony.twilio) {
       telephonyExtensionConfigs.push({
         Enabled: true,
         DriverClass: 'TwilioTelephonyExtension',
         RootPath: '/telephony/twilio',
         Phase: 'pre-auth',
-        Settings: configInfo.telephony.twilio as unknown as Record<string, unknown>,
+        Settings: { ...sharedTelephonySettings, ...configInfo.telephony.twilio },
       });
     }
     if (configInfo.telephony.vonage) {
@@ -1382,7 +1445,7 @@ const setupComplete$ = new ReplaySubject(1);
         DriverClass: 'VonageTelephonyExtension',
         RootPath: '/telephony/vonage',
         Phase: 'pre-auth',
-        Settings: configInfo.telephony.vonage as unknown as Record<string, unknown>,
+        Settings: { ...sharedTelephonySettings, ...configInfo.telephony.vonage },
       });
     }
     if (configInfo.telephony.ringcentral) {
@@ -1391,7 +1454,16 @@ const setupComplete$ = new ReplaySubject(1);
         DriverClass: 'RingCentralTelephonyExtension',
         RootPath: '/telephony/ringcentral',
         Phase: 'pre-auth',
-        Settings: configInfo.telephony.ringcentral as unknown as Record<string, unknown>,
+        Settings: { ...sharedTelephonySettings, ...configInfo.telephony.ringcentral },
+      });
+    }
+    if (configInfo.telephony.livekitSip) {
+      telephonyExtensionConfigs.push({
+        Enabled: true,
+        DriverClass: 'LiveKitSipExtension',
+        RootPath: '/telephony/livekit-sip',
+        Phase: 'pre-auth',
+        Settings: { ...sharedTelephonySettings, ...configInfo.telephony.livekitSip },
       });
     }
     if (configInfo.telephony.teams?.enabled) {
@@ -2206,11 +2278,3 @@ function createMSSQLCompatPool(pgPool: import('pg').Pool): sql.ConnectionPool {
   return wrapper as unknown as sql.ConnectionPool;
 }
 
-/**
- * Translates SQL Server bracket-quoted identifiers to PostgreSQL double-quoted identifiers.
- * Converts [schema].[table] to "schema"."table" and handles common T-SQL patterns.
- */
-function translateBracketsToPG(sql: string): string {
-  // Replace [identifier] with "identifier"
-  return sql.replace(/\[([^\]]+)\]/g, '"$1"');
-}

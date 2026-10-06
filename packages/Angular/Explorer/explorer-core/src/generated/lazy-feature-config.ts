@@ -47,7 +47,7 @@ const loadNgDashboardsComponentStudioDashboardsModule = {
   load: () => import('@memberjunction/ng-dashboards/component-studio-dashboards.module').then(() => {})
 };
 
-// --- @memberjunction/ng-dashboards → ./core-dashboards.module (36 entries) ---
+// --- @memberjunction/ng-dashboards → ./core-dashboards.module (38 entries) ---
 const loadNgDashboardsCoreDashboardsModule = {
   chunkId: '@memberjunction/ng-dashboards/core-dashboards.module',
   load: () => import('@memberjunction/ng-dashboards/core-dashboards.module').then(() => {})
@@ -208,6 +208,7 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
   'BaseResourceComponent::GraphQLConsoleInspector': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::GridWidthLabInspector': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::HomeDashboard': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::InteractionOperationsDashboard': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::LayoutInspector': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::LazyModuleStatusInspector': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::PermissionsAuditLogResource': loadNgDashboardsCoreDashboardsModule,
@@ -218,6 +219,7 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
   'BaseResourceComponent::SettingsExplorerInspector': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::SystemDiagnosticsResource': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::TabStripLabInspector': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::TelephonyOperationsDashboard': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::ThemeManagerResource': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::ThemeStudioResource': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::VersionHistoryDiffResource': loadNgDashboardsCoreDashboardsModule,
@@ -306,4 +308,4 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
 
 };
 
-export const LAZY_FEATURE_CONFIG_COUNT = 122;
+export const LAZY_FEATURE_CONFIG_COUNT = 124;

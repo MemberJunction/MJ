@@ -1,6 +1,6 @@
 import { RubricScoring, type RubricAnswer, type RubricScoreResult, type RubricVersionSnapshot } from '@memberjunction/rubrics-base';
-import { RegisterClass } from '@memberjunction/global';
 import type { RubricSubjectContent } from './content.js';
+import type { RubricEvaluatorContext, RubricEvaluatorRun, RubricEvaluatorType } from './evaluatorServices.js';
 
 export interface EvidenceRef {
     ref: string;
@@ -70,9 +70,29 @@ export class RubricEvaluator {
     }
 
 /**
- * ClassFactory root for rubric evaluators. Concrete evaluators register under
- * Deterministic, LLM, Agent, and Human.
+ * The ClassFactory root for rubric evaluators, and the contract a plugin implements.
+ *
+ * Register a subclass with `@RegisterClass(BaseRubricEvaluator, '<Name>')` and the engine can run it
+ * by that name, from a caller, an agent-rubric link's EvaluatorConfig, a test, the CLI, or the
+ * Evaluate Record Against Rubric action. The built-ins register as LLM, Decision, Agent,
+ * Deterministic, and Human.
+ *
+ * The class factory constructs evaluators with no arguments, so everything a run needs arrives
+ * in the {@link RubricEvaluatorContext}. Score the chosen answers with {@link RubricEvaluator.Evaluate},
+ * which calls RubricScoring. An evaluator never computes a score itself.
  */
 export abstract class BaseRubricEvaluator extends RubricEvaluator {
+    /** The registered name. Stored on the evaluation as EvaluatorName. */
     public abstract get EvaluatorName(): string;
+
+    /** Stored on the evaluation as EvaluatorType. A custom evaluator that is not an AI prompt or agent is External. */
+    public abstract get EvaluatorType(): RubricEvaluatorType;
+
+    /** False for an evaluator a person completes, such as Human. The engine does not run those. */
+    public get IsAutomated(): boolean {
+        return true;
+    }
+
+    /** Scores one subject. Throw to fail the evaluation; the message is stored on it. */
+    public abstract EvaluateRubric(context: RubricEvaluatorContext): Promise<RubricEvaluatorRun>;
 }
