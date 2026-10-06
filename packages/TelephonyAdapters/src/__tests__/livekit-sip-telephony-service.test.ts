@@ -370,3 +370,55 @@ describe('Initialize', () => {
         expect(vi.mocked(LogError).mock.calls.map((c) => String(c[0])).join('\n')).toContain('ECONNREFUSED');
     });
 });
+
+describe('custom inbound handler', () => {
+    it('delegates to injected inboundHandler when it handles the call', async () => {
+        const h = harness();
+        const customHandler = {
+            HandleInboundCall: vi.fn().mockResolvedValue({
+                Handled: true,
+                Outcome: { accepted: true },
+            }),
+        };
+        h.service.SetInboundHandler(customHandler);
+
+        const result = await h.service.HandleWebhookEvent(inboundEvent(), USER, dbProvider());
+        expect(result).toEqual({ accepted: true });
+        expect(customHandler.HandleInboundCall).toHaveBeenCalledWith(
+            expect.objectContaining({
+                DialedNumber: '+18005550100',
+                CallerNumber: '+14155550123',
+                RoomName: 'call-abc',
+            })
+        );
+        // Default agent identity lookup was bypassed
+        expect(h.starter.Start).not.toHaveBeenCalled();
+    });
+
+    it('falls back to default agent lookup when custom handler returns Handled: false', async () => {
+        const h = harness();
+        const customHandler = {
+            HandleInboundCall: vi.fn().mockResolvedValue({
+                Handled: false,
+            }),
+        };
+        h.service.SetInboundHandler(customHandler);
+
+        const result = await h.service.HandleWebhookEvent(inboundEvent(), USER, dbProvider());
+        expect(result.accepted).toBe(true);
+        expect(customHandler.HandleInboundCall).toHaveBeenCalled();
+        expect(h.starter.Start).toHaveBeenCalled();
+    });
+
+    it('exposes HangUpParticipant and HangUpRoom', async () => {
+        const h = harness();
+        h.sip.ListParticipants.mockResolvedValueOnce([{ Identity: 'p-1', IsSip: true }, { Identity: 'p-2', IsSip: false }]);
+        await h.service.HangUpParticipant('call-room', 'sip-part');
+        expect(h.sip.RemoveParticipant).toHaveBeenCalledWith('call-room', 'sip-part');
+
+        await h.service.HangUpRoom('call-room');
+        expect(h.sip.RemoveParticipant).toHaveBeenCalledWith('call-room', 'p-1');
+        expect(h.sip.RemoveParticipant).not.toHaveBeenCalledWith('call-room', 'p-2');
+    });
+});
+

@@ -445,4 +445,27 @@ describe('RoomHandoffEngine', () => {
       expect(state.left).toBe(true);
     });
   });
+
+  describe('RegisterObserver', () => {
+    it('notifies registered observers on handoff events and unregisters cleanly', async () => {
+      const { agent } = makeAgent();
+      const events: string[] = [];
+      const registration = engine.RegisterObserver({
+        OnHandoffEvent: (evt) => {
+          events.push(evt.EventType);
+        },
+      });
+
+      await engine.RequestHandoff(agent, userRequest());
+      expect(events).toContain('Offered');
+      expect(events).toContain('Escalated');
+
+      events.length = 0;
+      registration.Unregister();
+
+      const offer = (await engine.ListOffersForUser(PERSON))[0];
+      await engine.AcceptOffer(offer.OfferID, PERSON);
+      expect(events).toHaveLength(0);
+    });
+  });
 });
