@@ -510,3 +510,43 @@ describe('Prompt-run nesting depth (vwAIUsageFacts resolves self, parent, grandp
     expect(repairParams.CredentialScope).toBe('RuntimeOnly');
   });
 });
+
+describe('PromptSelector judge runs under the parallel prompt\'s execution scope', () => {
+  const testUser: UserInfo = { ID: 'u-scope-1', Name: 'Scope User', Email: 'scope@example.com' } as UserInfo;
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    loadCatalog(buildRealisticCatalog());
+    h.state.prompts = [makePrompt({ ID: 'judge-prompt-scope', Name: 'Judge Prompt', ParallelizationMode: 'None' })];
+  });
+
+  it("forwards the scope's apiKeys, configurationId and CredentialScope to the judge's ExecutePrompt", async () => {
+    // The judge used to run on contextUser alone, so inside a customer's RuntimeOnly run it spent the platform's keys.
+    const execute = vi.spyOn(AIPromptRunner.prototype, 'ExecutePrompt').mockResolvedValue(
+      { success: false, errorMessage: 'judge stubbed' } as Awaited<ReturnType<AIPromptRunner['ExecutePrompt']>>
+    );
+    const coordinator = new ParallelExecutionCoordinator();
+    const apiKeys = [{ driverClass: 'GeminiLLM', apiKey: 'customer-key' }];
+    const scope: AIPromptExecutionScope = { contextUser: testUser, configurationId: 'config-1', apiKeys, credentialId: 'credential-1', CredentialScope: 'RuntimeOnly' };
+    const arm = (taskId: string): ExecutionTaskResult => ({
+      task: { taskId, prompt: h.state.prompts[0] as never, model: h.state.models[0] as never, executionGroup: 0, priority: 1, renderedPrompt: taskId, contextUser: testUser },
+      success: true,
+      rawResult: `response ${taskId}`,
+      executionTimeMS: 1,
+      startTime: new Date(),
+      endTime: new Date(),
+    });
+    const config: ResultSelectionConfig = { method: 'PromptSelector', selectorPromptId: 'judge-prompt-scope' };
+
+    await coordinator.selectBestResult([arm('c1'), arm('c2')], config, 'parent-1', undefined, testUser, scope);
+
+    expect(execute).toHaveBeenCalledTimes(1);
+    const judgeParams = execute.mock.calls[0][0];
+    expect(judgeParams.prompt).toBe(h.state.prompts[0]);
+    expect(judgeParams.apiKeys).toBe(apiKeys);
+    expect(judgeParams.configurationId).toBe('config-1');
+    expect(judgeParams.credentialId).toBe('credential-1');
+    expect(judgeParams.CredentialScope).toBe('RuntimeOnly');
+    expect(judgeParams.contextUser).toBe(testUser);
+  });
+});
