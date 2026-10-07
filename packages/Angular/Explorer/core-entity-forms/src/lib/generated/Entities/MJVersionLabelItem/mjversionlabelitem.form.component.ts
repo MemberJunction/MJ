@@ -16,7 +16,6 @@ export class MJVersionLabelItemFormComponent extends BaseFormComponent {
         await super.ngOnInit();
         this.initSections([
             { sectionKey: 'versionMapping', sectionName: 'Version Mapping', isExpanded: true },
-            { sectionKey: 'displayNames', sectionName: 'Display Names', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }
