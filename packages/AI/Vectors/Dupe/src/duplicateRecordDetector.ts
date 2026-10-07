@@ -150,14 +150,6 @@ export class DuplicateRecordDetector extends VectorBase {
     /** The Pinecone/pgvector/Qdrant index name resolved from the entity document's VectorIndex */
     private indexName: string;
     /**
-     * The width of the vectors in that index (`MJ: Vector Indexes.Dimensions`), passed as
-     * `dimensions` to every `EmbedTexts` call. Entity vector sync embeds at this width when it
-     * fills the index, so the probe must match it: a 512-wide index probed with 1,536-wide vectors rejects every query,
-     * and the run completes with no matches. Undefined when the index sets no width; the model's
-     * default then applies on both paths.
-     */
-    private embeddingDimensions: number | undefined = undefined;
-    /**
      * The EntityDocumentID for this run. Passed as the vector query `id` for providers that key
      * by EntityDocumentID (the in-process SimpleVectorServiceProvider — see
      * {@link VectorDBBase.QueryKeyIsEntityDocumentID}) instead of the logical index name.
@@ -365,7 +357,7 @@ export class DuplicateRecordDetector extends VectorBase {
         const record = records.Results[0];
         const templateParser = EntityDocumentTemplateParser.CreateInstance();
         const templateTexts = await this.GenerateTemplateTexts(templateParser, entityDocument, [record], ContextUser);
-        const embedResult = await this.embedding.EmbedTexts({ texts: templateTexts, model: this.embeddingModelAPIName, dimensions: this.embeddingDimensions });
+        const embedResult = await this.embedding.EmbedTexts({ texts: templateTexts, model: this.embeddingModelAPIName });
 
         const topK = options.TopK ?? DEFAULT_TOP_K;
         const queryResults = await this.QueryDuplicatesForRecords(
@@ -462,7 +454,7 @@ export class DuplicateRecordDetector extends VectorBase {
             // Embed this sub-batch
             this.reportProgress(options, 'Embedding', totalRecords, processedSoFar, matchesSoFar, startTime);
             const subTemplateTexts = await this.GenerateTemplateTexts(templateParser, entityDocument, subRecords, contextUser);
-            const subEmbedResult = await this.embedding.EmbedTexts({ texts: subTemplateTexts, model: this.embeddingModelAPIName, dimensions: this.embeddingDimensions });
+            const subEmbedResult = await this.embedding.EmbedTexts({ texts: subTemplateTexts, model: this.embeddingModelAPIName });
 
             // Query vector DB for each record in the sub-batch with concurrency control
             this.reportProgress(options, 'Querying', totalRecords, processedSoFar, matchesSoFar, startTime);
@@ -650,7 +642,6 @@ export class DuplicateRecordDetector extends VectorBase {
             const vectorIndex = KnowledgeHubMetadataEngine.Instance.GetVectorIndexByID(entityDocument.VectorIndexID);
             if (vectorIndex) {
                 this.indexName = vectorIndex.Name;
-                this.embeddingDimensions = vectorIndex.Dimensions ?? undefined;
             }
         }
         if (!this.indexName) {
