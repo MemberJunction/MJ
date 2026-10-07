@@ -192,9 +192,9 @@ class TestResolver extends ResolverBase {
         return this.StripDeniedReadFieldsFromClientInput(entityInfo, userInfo, input, clientNewValues);
     }
 
-    /** The user defaults to HR, whose permission rows carry no row filter. */
-    public TestMustLoadTruth(entityInfo: EntityInfo, input: ClientInput, hasDeniedReadFields: boolean, hasNarrowedAuditPayload: boolean, user: UserInfo = buildUser([HR_ROLE_ID])): boolean {
-        return this.MustLoadTruthFromDatabase(entityInfo, input, hasDeniedReadFields, hasNarrowedAuditPayload, user);
+    /** The user defaults to HR, whose permission rows carry no row filter; pass null for a missing user. */
+    public TestMustLoadTruth(entityInfo: EntityInfo, input: ClientInput, hasDeniedReadFields: boolean, hasNarrowedAuditPayload: boolean, user: UserInfo | null = buildUser([HR_ROLE_ID])): boolean {
+        return this.MustLoadTruthFromDatabase(entityInfo, input, hasDeniedReadFields, hasNarrowedAuditPayload, user ?? undefined);
     }
 }
 
@@ -540,6 +540,11 @@ describe('ResolverBase.MustLoadTruthFromDatabase: Update row filters (#4919)', (
         expect(resolver.TestMustLoadTruth(entity, claimsNewStatusAsOld(), false, false, buildUser([HR_ROLE_ID]))).toBe(false);
         // A role without the filter exempts the user from it (roles are additive).
         expect(resolver.TestMustLoadTruth(entity, claimsNewStatusAsOld(), false, false, buildUser([INTERN_ROLE_ID, HR_ROLE_ID]))).toBe(false);
+    });
+
+    it('loads the stored row when the user is missing, instead of throwing or skipping the filter', () => {
+        const entity = entityWithInternFilter({ UpdateRLSFilterID: DRAFTS_ONLY });
+        expect(resolver.TestMustLoadTruth(entity, claimsNewStatusAsOld(), false, false, null)).toBe(true);
     });
 
     it('ignores a Read-only row filter: only the Update filter gates this save', () => {
