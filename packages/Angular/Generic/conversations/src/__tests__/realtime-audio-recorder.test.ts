@@ -210,6 +210,68 @@ describe('RealtimeAudioRecorder — with stubbed Web Audio', () => {
         await recorder.Stop();
     });
 
+    it('closes its AudioContext and wires no mic when Stop lands while the context is still resuming', async () => {
+        // Browsers usually create the context suspended; a call that ends inside that await used to
+        // leave the context open and connect the mic into a recorder that had already stopped.
+        const Base = g['AudioContext'] as new () => object;
+        let releaseResume: () => void = () => undefined;
+        class SuspendedAudioContext extends Base {
+            public state = 'suspended';
+            public Closed = false;
+            public resume(): Promise<void> {
+                return new Promise<void>((resolve) => { releaseResume = resolve; });
+            }
+            public close(): Promise<void> {
+                this.Closed = true;
+                return Promise.resolve();
+            }
+        }
+        const contexts: SuspendedAudioContext[] = [];
+        g['AudioContext'] = class extends SuspendedAudioContext {
+            constructor() {
+                super();
+                contexts.push(this);
+            }
+        };
+        const mic = fakeStream(1);
+        const recorder = new RealtimeAudioRecorder();
+        recorder.Start(mic, null);
+
+        await recorder.Stop();
+        releaseResume();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(contexts).toHaveLength(1);
+        expect(contexts[0].Closed).toBe(true);
+        expect(sourceCalls).not.toContain(mic);
+    });
+
+    it('wires no mic when Stop lands while the capture worklet is still loading', async () => {
+        const Base = g['AudioContext'] as new () => object;
+        let releaseModule: (() => void) | null = null;
+        g['AudioContext'] = class extends Base {
+            public audioWorklet = {
+                addModule: (): Promise<void> => new Promise<void>((resolve) => { releaseModule = resolve; }),
+            };
+        };
+        g['AudioWorkletNode'] = class {
+            public port = { onmessage: null };
+            public connect(): void {}
+            public disconnect(): void {}
+        };
+        const mic = fakeStream(1);
+        const recorder = new RealtimeAudioRecorder();
+        recorder.Start(mic, null);
+        // Precondition: setup has reached the worklet load and is parked inside it.
+        await vi.waitFor(() => expect(releaseModule).not.toBeNull());
+
+        await recorder.Stop();
+        releaseModule!();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(sourceCalls).not.toContain(mic);
+    });
+
     it('MimeType reverts to empty after Stop (recording flag cleared)', async () => {
         const recorder = new RealtimeAudioRecorder();
         recorder.Start(fakeStream(1), null);
@@ -288,6 +350,20 @@ describe('RealtimeAudioRecorder — with stubbed Web Audio', () => {
             recorder.Start(fakeStream(1), remote);
             await vi.waitFor(() => expect(sourceCalls).toContain(remote));
             recorder.AttachRemoteStream(remote); // the post-Connect PCM case: handler fires with the same stream
+
+            expect(sourceCalls.filter((s) => s === remote)).toHaveLength(1);
+            await recorder.Stop();
+        });
+
+        it('connects the same remote stream exactly once when AttachRemoteStream(remote) arrives before setup finishes (the runtime order)', async () => {
+            // RealtimeSessionRuntime.startRecording: Start(mic, remote), then OnRemoteMediaStream fires
+            // synchronously with the same stream while the async graph setup is still pending.
+            const remote = fakeStream(1);
+            const recorder = new RealtimeAudioRecorder();
+            recorder.Start(fakeStream(1), remote);
+            recorder.AttachRemoteStream(remote);
+            await vi.waitFor(() => expect(sourceCalls).toContain(remote));
+            await new Promise((resolve) => setTimeout(resolve, 0));
 
             expect(sourceCalls.filter((s) => s === remote)).toHaveLength(1);
             await recorder.Stop();

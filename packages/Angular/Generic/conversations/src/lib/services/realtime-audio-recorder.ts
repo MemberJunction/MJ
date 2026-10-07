@@ -79,6 +79,13 @@ export class RealtimeAudioRecorder {
     /** Sample rate of the capturing {@link AudioContext}; 0 before {@link Start}. Needed to wrap shards. */
     private sampleRate = 0;
 
+    /**
+     * Bumped by {@link cleanup}. The async setup snapshots it and, after each await, gives up if it moved:
+     * a {@link Stop} that lands mid-setup can only release what setup has already published, so setup
+     * must release the rest itself rather than build a live graph on a stopped recorder.
+     */
+    private setupGeneration = 0;
+
     /** True while a recorder is actively capturing. */
     public get IsRecording(): boolean {
         return this.recording;
@@ -214,12 +221,18 @@ export class RealtimeAudioRecorder {
 
     /** Wires up the Web Audio mix graph + PCM capture node (worklet preferred) and starts capture. */
     private async startMixedRecording(micStream: MediaStream, remoteStream: MediaStream | null): Promise<void> {
+        const generation = this.setupGeneration;
         const audioContext = new AudioContext();
         // CRITICAL: browsers create an AudioContext in the `suspended` state under the autoplay policy.
         // Without resuming it, the mix graph never processes audio and we capture only silence. Starting
         // a voice call is a user gesture, so resume() succeeds here.
         if (audioContext.state === 'suspended') {
             await audioContext.resume();
+        }
+        if (generation !== this.setupGeneration) {
+            // Stopped while resuming: the context was never published, so cleanup() could not close it.
+            void audioContext.close().catch(() => { /* already closed */ });
+            return;
         }
         const destination = audioContext.createMediaStreamDestination();
         // Publish the context + sample rate BEFORE wiring the remote so a concurrent AttachRemoteStream()
@@ -231,6 +244,9 @@ export class RealtimeAudioRecorder {
         // Build the PCM capture node: AudioWorklet preferred, ScriptProcessor fallback. Either way the
         // node both pulls audio from the mix AND drives the destination so the graph keeps processing.
         await this.createCaptureNode(audioContext, destination);
+        if (generation !== this.setupGeneration) {
+            return; // Stopped while the capture node loaded: cleanup() already closed the published context.
+        }
 
         this.connectStream(audioContext, micStream);
         // Connect the agent's stream if it was passed now, or if AttachRemoteStream() stashed one while
@@ -391,6 +407,7 @@ export class RealtimeAudioRecorder {
 
     /** Releases the audio graph + capture node and resets state. Idempotent. */
     private cleanup(): void {
+        this.setupGeneration++;
         this.recording = false;
         this.pcmFrames = [];
         this.totalSamples = 0;
