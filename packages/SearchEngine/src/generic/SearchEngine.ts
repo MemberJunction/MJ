@@ -33,7 +33,8 @@ import {
     MJAISkillEntity,
     ScopeBundle
 } from '@memberjunction/core-entities';
-import { BaseSingleton, EscapeSQLString, MJGlobal, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { BaseSingleton, EscapeSQLString, IsValidUUID, MJGlobal, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { StorageAccessEvaluator } from '@memberjunction/storage';
 import {
     SearchParams,
     SearchResult,
@@ -56,6 +57,7 @@ import { BaseSearchProvider, SearchProviderConfig } from './ISearchProvider';
 import { SearchFusion, LabeledResultList } from './SearchFusion';
 import { SearchEnricher } from './SearchEnricher';
 import { FullTextSearchProvider } from './FullTextSearchProvider';
+import { StorageSearchProvider } from './StorageSearchProvider';
 import { BaseReRanker } from './BaseReRanker';
 import { NoopReRanker, LoadNoopReRanker } from './NoopReRanker';
 import { RerankerBudgetGuard } from '../rerankers/RerankerBudgetGuard';
@@ -978,10 +980,9 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
      * (`searchInternal` validates it before doing any work).
      *
      * Two things the pass cannot do, both failing closed:
-     * - **Storage hits are refused under an audience.** `filterByPermissions` passes `storage-file`
-     *   results through: their permission model is the storage provider's, evaluated for the caller
-     *   when the lane ran, and it cannot be re-run here for another user. A hit nobody has re-checked
-     *   for the room is not shown to the room.
+     * - **Storage hits are refused under an audience.** Their permission model is the storage account's;
+     *   `filterByPermissions` re-checks a `storage-file` hit's account for the user it is given, but this pass
+     *   does not yet combine those per-reader answers for storage, so a storage hit is not shown to the room.
      * - **A reader with no roles (`UserRoles: []`) reads nothing.** Permissions and row filters are
      *   evaluated from `UserInfo.UserRoles`, so such a reader empties the result. A reader with no
      *   `UserRoles` array at all never gets here: validation refuses it.
@@ -2214,6 +2215,9 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
      * 5. Content items and chunks are kept only when the user may read the record they were
      *    derived from ({@link VerifyOriginRecords}).
      *
+     * `storage-file` results take their own path ({@link filterStorageResults}): they are re-checked against
+     * the storage-account permission model for this user, never passed through on the strength of their type.
+     *
      * @param stats optional per-call counters; `OriginGateRemoved` is incremented by step 5's removals
      */
     protected async filterByPermissions(
@@ -2223,15 +2227,15 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
     ): Promise<SearchResultItem[]> {
         if (results.length === 0) return results;
 
-        // Storage file results have their own permission model (FileStorageAccountPermission)
-        // which is already checked by StorageSearchProvider — pass them through here
+        // Storage file results have their own permission model (FileStorageAccountPermission) — re-checked
+        // here for this user rather than trusted from the provider (see filterStorageResults)
         const storageResults = results.filter(r => r.ResultType === 'storage-file');
         const entityResults = results.filter(r => r.ResultType !== 'storage-file');
 
         const byEntity = this.groupResultsByEntity(entityResults);
-        const permitted: SearchResultItem[] = [...storageResults];
+        const permitted: SearchResultItem[] = [];
 
-        const promises: Promise<void>[] = [];
+        const promises: Promise<void>[] = [this.filterStorageResults(storageResults, contextUser, permitted)];
         for (const [entityName, groupResults] of byEntity) {
             promises.push(
                 this.filterEntityResults(entityName, groupResults, contextUser, permitted, stats)
@@ -2247,6 +2251,75 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         permitted.sort((a, b) => (inputIndex.get(a) ?? 0) - (inputIndex.get(b) ?? 0));
 
         return permitted;
+    }
+
+    /**
+     * The storage half of {@link filterByPermissions}: re-check `storage-file` results for `contextUser` and push the
+     * ones that pass into `permitted`.
+     *
+     * `ResultType` is set by whichever provider produced a result, so being typed `storage-file` proves nothing. A
+     * storage hit is kept only when BOTH hold:
+     * - its `ProviderId` — stamped by this engine on every result, overwriting whatever the provider set — names a
+     *   configured entry whose provider is a {@link StorageSearchProvider}; and
+     * - the account it names (`RawMetadata.accountId`, as that provider writes it) is one `contextUser` may read now,
+     *   per `StorageAccessEvaluator` (per call; the account-without-rows rule lives there).
+     *
+     * Anything else — no or a foreign `ProviderId`, missing or unparseable metadata, an evaluator failure or throw —
+     * drops the result (fail closed). Order is restored by the caller.
+     */
+    private async filterStorageResults(
+        results: SearchResultItem[],
+        contextUser: UserInfo,
+        permitted: SearchResultItem[]
+    ): Promise<void> {
+        if (results.length === 0) return;
+        try {
+            const candidates = this.storageCandidates(results);
+            if (candidates.length === 0) return;
+            const readable = await StorageAccessEvaluator.Instance.AccessibleAccountIDs(
+                candidates.map(c => c.AccountID),
+                contextUser,
+                'Read',
+                this.ProviderToUse
+            );
+            for (const candidate of candidates) {
+                if (readable.has(NormalizeUUID(candidate.AccountID))) {
+                    permitted.push(candidate.Item);
+                }
+            }
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            LogError(`SearchEngine: Storage permission filtering failed — ${results.length} storage result(s) dropped: ${msg}`);
+        }
+    }
+
+    /**
+     * The storage results that came from a configured {@link StorageSearchProvider} entry and name a well-formed
+     * account, paired with that account. Everything else is left out, which drops it.
+     */
+    private storageCandidates(results: SearchResultItem[]): Array<{ Item: SearchResultItem; AccountID: string }> {
+        const storageProviderIDs = new Set(
+            this._providerEntries.filter(e => e.Provider instanceof StorageSearchProvider).map(e => NormalizeUUID(e.ID))
+        );
+        const candidates: Array<{ Item: SearchResultItem; AccountID: string }> = [];
+        for (const item of results) {
+            if (!item.ProviderId || !storageProviderIDs.has(NormalizeUUID(item.ProviderId))) continue;
+            const accountID = this.storageAccountIDOf(item);
+            if (accountID) candidates.push({ Item: item, AccountID: accountID });
+        }
+        return candidates;
+    }
+
+    /** The storage account a `storage-file` result names in `RawMetadata.accountId`, or null when absent or malformed. */
+    private storageAccountIDOf(item: SearchResultItem): string | null {
+        if (!item.RawMetadata) return null;
+        try {
+            const parsed: { accountId?: string | number | boolean | object | null } | null = JSON.parse(item.RawMetadata);
+            const accountId = parsed && typeof parsed === 'object' ? parsed.accountId : undefined;
+            return typeof accountId === 'string' && IsValidUUID(accountId) ? accountId : null;
+        } catch {
+            return null;
+        }
     }
 
     /**

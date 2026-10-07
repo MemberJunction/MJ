@@ -1,0 +1,5 @@
+---
+"@memberjunction/server": patch
+---
+
+The storage GraphQL routes now honour storage-account permissions. `ListStorageObjects`, `CreatePreAuthDownloadUrl` and `SearchAcrossAccounts` need Read on the account; `CreatePreAuthUploadUrl`, `UploadStorageFile`, `DeleteStorageObject`, `MoveStorageObject`, `CopyStorageObject` and `CreateDirectory` need Write; `CopyObjectBetweenAccounts` needs Read on the source and Write on the destination. The check runs before the account is loaded or any driver is called and refuses with "You do not have access to this storage account or it does not exist." — the same for an account that does not exist. `CreatePreAuthDownloadUrl` additionally refuses an object that backs an `MJ: Files` row the caller cannot read ("You do not have access to this file or it does not exist."). `SearchAcrossAccounts` reports refused (and unknown) accounts as failed with "Access denied" instead of searching them or throwing, drops hits that map to an `MJ: Files` row the caller cannot read, and recomputes its totals. A user who cannot be evaluated is denied.

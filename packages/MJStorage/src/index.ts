@@ -9,3 +9,4 @@ export * from './generic/FileStorageBase';
 export * from './util';
 export * from './config';
 export * from './FileStorageEngine';
+export * from './StorageAccessEvaluator';
