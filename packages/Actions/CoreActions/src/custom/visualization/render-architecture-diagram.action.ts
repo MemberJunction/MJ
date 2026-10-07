@@ -21,7 +21,7 @@ const MAX_SPEC_CHARS = 500_000;
  * A spec that fails comes back as `VALIDATION_FAILED` with archify's diagnostics (code, subject, evidence,
  * supported fixes) so a Loop agent can repair it and call again; the agent's iteration limits cap that loop.
  *
- * On success it returns a self-contained SVG (in the Message and the `SVG` output param) for embedding in
+ * On success it returns a self-contained SVG (in the `SVG` output param) for embedding in
  * reports and markdown, and the standalone interactive page as a file output with visibility `Always`, so
  * it surfaces as a normal artifact even from an agent whose own artifacts are `System Only`.
  */
@@ -55,13 +55,10 @@ export class RenderArchitectureDiagramAction extends BaseAction {
         if (input.Output !== 'svg') {
             params.Params.push({ Name: 'FileOutput', Type: 'Output', Value: this.htmlFile(rendered.Html, rendered.Title ?? input.DiagramType) });
         }
-        return {
-            Success: true,
-            ResultCode: 'SUCCESS',
-            Message: input.Output === 'html'
-                ? `Rendered the ${input.DiagramType} diagram as an interactive HTML page (returned as a file).`
-                : svg,
-        };
+        // The SVG goes out once, in its output param; repeating it in the Message doubled it in the prompt.
+        const delivered = [input.Output !== 'html' ? 'the SVG is in the SVG output parameter' : null,
+                           input.Output !== 'svg' ? 'the interactive page is attached as a file' : null].filter(Boolean).join('; ');
+        return { Success: true, ResultCode: 'SUCCESS', Message: `Rendered the ${input.DiagramType} diagram: ${delivered}.` };
     }
 
     private readInput(params: RunActionParams):
@@ -88,11 +85,13 @@ export class RenderArchitectureDiagramAction extends BaseAction {
         if (raw === null || raw === undefined || raw === '') {
             return 'SpecJSON is required: the archify JSON spec for the diagram.';
         }
+        // An object spec is measured too: the skill tells models to pass one, so a string-only cap missed most specs.
+        const size = typeof raw === 'string' ? raw.length : (JSON.stringify(raw) ?? '').length;
+        if (size > MAX_SPEC_CHARS) {
+            return `SpecJSON is ${size} characters; the limit is ${MAX_SPEC_CHARS}. Split the diagram.`;
+        }
         let value: unknown = raw;
         if (typeof raw === 'string') {
-            if (raw.length > MAX_SPEC_CHARS) {
-                return `SpecJSON is ${raw.length} characters; the limit is ${MAX_SPEC_CHARS}. Split the diagram.`;
-            }
             try {
                 value = JSON.parse(raw);
             } catch (error) {

@@ -70,6 +70,12 @@ const RENDER_TIMEOUT_MS = 30_000;
 /** Heap cap for a render worker. */
 const WORKER_HEAP_MB = 512;
 
+/**
+ * Most renders running at once; the rest wait. Each worker may use {@link WORKER_HEAP_MB}, and an agent
+ * runs a step's actions in parallel, so without a cap a fan-out could exhaust the API server's memory.
+ */
+const MAX_CONCURRENT_RENDERS = 2; // ponytail: fixed cap; make it configurable if a host renders many diagrams at once
+
 /** The package root: this file runs from `src/` under test and from `dist/` once built. */
 const PACKAGE_ROOT = new URL('../', import.meta.url);
 const VENDOR_ROOT = new URL('vendor/archify/', PACKAGE_ROOT);
@@ -107,6 +113,8 @@ type WorkerOutcome =
  */
 export class ArchitectureDiagramRenderer extends BaseSingleton<ArchitectureDiagramRenderer> {
     private template: string | null = null;
+    private running = 0;
+    private waiting: Array<() => void> = [];
 
     protected constructor() {
         super();
@@ -127,7 +135,13 @@ export class ArchitectureDiagramRenderer extends BaseSingleton<ArchitectureDiagr
         if (!ARCHITECTURE_DIAGRAM_TYPES.includes(diagramType)) {
             return { Success: false, ErrorCode: 'INVALID_INPUT', Message: `Unknown diagram type "${diagramType}". Use one of: ${ARCHITECTURE_DIAGRAM_TYPES.join(', ')}.` };
         }
-        const outcome = await this.runWorker(diagramType, spec);
+        await this.acquireSlot();
+        let outcome: WorkerOutcome;
+        try {
+            outcome = await this.runWorker(diagramType, spec);
+        } finally {
+            this.releaseSlot();
+        }
         if (outcome.ok === false) {
             return this.toFailure(outcome);
         }
@@ -139,6 +153,24 @@ export class ArchitectureDiagramRenderer extends BaseSingleton<ArchitectureDiagr
             Html: outcome.html,
             Title: typeof meta.title === 'string' ? meta.title : null,
         };
+    }
+
+    private async acquireSlot(): Promise<void> {
+        if (this.running < MAX_CONCURRENT_RENDERS) {
+            this.running++;
+            return;
+        }
+        // releaseSlot hands its slot straight to the oldest waiter, so running never passes the cap.
+        await new Promise<void>((resolve) => this.waiting.push(resolve));
+    }
+
+    private releaseSlot(): void {
+        const next = this.waiting.shift();
+        if (next) {
+            next();
+        } else {
+            this.running--;
+        }
     }
 
     private toFailure(outcome: Extract<WorkerOutcome, { ok: false }>): ArchitectureDiagramRenderResult {

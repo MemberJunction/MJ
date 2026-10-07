@@ -1246,6 +1246,21 @@ export class BaseAgent {
                 }
             }
 
+            // A file output (FileOutputRef) that carries its bytes inline. detectFileOutputs reads the ORIGINAL
+            // params, so the artifact still gets the bytes; the model only needs to know the file exists. Left
+            // in, a base64 document or page (hundreds of KB) would land verbatim in the next prompt.
+            const fileRef = ParseFileOutputRef(param.Value);
+            if (fileRef?.fileData && fileRef.fileData.length > BaseAgent.LARGE_BINARY_THRESHOLD) {
+                const { fileData: _inlineBytes, ...withoutBytes } = param.Value as Record<string, unknown>;
+                sanitizedParams.push({
+                    Name: param.Name,
+                    Type: param.Type,
+                    Value: { ...withoutBytes, note: 'File content omitted here; the file is delivered to the user as an artifact.' },
+                });
+                this.logStatus(`📦 Kept the inline bytes of file output '${fileRef.fileName}' out of the model's context`, true);
+                continue;
+            }
+
             // Fallback: Check for standalone Base64 strings in MediaOutput or other params
             if (typeof param.Value === 'string' && param.Value.length > BaseAgent.LARGE_BINARY_THRESHOLD) {
                 // Check if it looks like base64 (no spaces, alphanumeric with +/=)

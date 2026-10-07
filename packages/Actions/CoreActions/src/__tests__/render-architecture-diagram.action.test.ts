@@ -57,7 +57,8 @@ describe('RenderArchitectureDiagramAction', () => {
         const { result, outputs } = await run({ DiagramType: 'Architecture', SpecJSON: JSON.stringify(SPEC) });
 
         expect(renderMock).toHaveBeenCalledWith('architecture', SPEC);
-        expect(result).toMatchObject({ Success: true, ResultCode: 'SUCCESS', Message: RENDERED.Svg });
+        expect(result).toMatchObject({ Success: true, ResultCode: 'SUCCESS' });
+        expect(result.Message).not.toContain('<svg');
         expect(outputs.find((p) => p.Name === 'SVG')?.Value).toBe(RENDERED.Svg);
         const file = outputs.find((p) => p.Name === 'FileOutput')?.Value as Record<string, unknown>;
         expect(file).toMatchObject({ fileName: 'order-flow.html', mimeType: 'text/html', visibility: 'Always' });
@@ -81,7 +82,7 @@ describe('RenderArchitectureDiagramAction', () => {
         const { result, outputs } = await run({ DiagramType: 'architecture', SpecJSON: SPEC, Output: output });
 
         expect(outputs.map((p) => p.Name)).toEqual(names);
-        expect(result.Message === RENDERED.Svg).toBe(output === 'svg');
+        expect(result.Message).toContain(output === 'svg' ? 'SVG output parameter' : 'attached as a file');
     });
 
     it('hands archify diagnostics back verbatim so the agent can repair the spec', async () => {
@@ -102,6 +103,7 @@ describe('RenderArchitectureDiagramAction', () => {
         [{ DiagramType: 'architecture', SpecJSON: '[1,2]' }],
         [{ DiagramType: 'architecture', SpecJSON: SPEC, Output: 'png' }],
         [{ DiagramType: 'architecture', SpecJSON: `"${'x'.repeat(500_001)}"` }],
+        [{ DiagramType: 'architecture', SpecJSON: { meta: { title: 'x'.repeat(500_001) } } }],
     ])('rejects bad input %# without rendering', async (inputs) => {
         const { result } = await run(inputs);
 

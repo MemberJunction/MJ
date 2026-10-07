@@ -119,20 +119,12 @@ export class CreateMermaidDiagramAction extends BaseAction {
             }
 
             // Check for suspicious patterns (basic XSS prevention)
-            const suspiciousPatterns = [
-                /<script/i,
-                /javascript:/i,
-                /<[^>]*\bon\w+\s*=/i  // Event handlers inside a tag; plain labels like `online = true` pass
-            ];
-
-            for (const pattern of suspiciousPatterns) {
-                if (pattern.test(code)) {
-                    return {
-                        Success: false,
-                        Message: 'Invalid Mermaid code: contains suspicious content',
-                        ResultCode: 'INVALID_CODE'
-                    };
-                }
+            if (/<script/i.test(code) || /javascript:/i.test(code) || this.hasTagEventHandler(code)) {
+                return {
+                    Success: false,
+                    Message: 'Invalid Mermaid code: contains suspicious content',
+                    ResultCode: 'INVALID_CODE'
+                };
             }
 
             const rendered = await MermaidRenderer.Instance.Render(code, theme, config);
@@ -168,6 +160,17 @@ export class CreateMermaidDiagramAction extends BaseAction {
     /**
      * Helper to get parameter value by name (case-insensitive)
      */
+    /**
+     * Whether an HTML tag in the code carries an event handler (`<img onerror=...>`). Only text after a `<`
+     * that starts a tag name, up to its `>`, is checked, so labels like `online = true` and class-diagram
+     * arrows like `<|--` pass. Linear in the input: a regex such as /<[^>]*on\w+=/ backtracks quadratically
+     * on a run of `<` with no `>`, and this runs on the server's main thread.
+     */
+    private hasTagEventHandler(code: string): boolean {
+        return code.split('<').slice(1)
+            .some((segment) => /^\/?[a-z]/i.test(segment) && /\bon\w+\s*=/i.test(segment.split('>', 1)[0]));
+    }
+
     private getParamValue(params: RunActionParams, paramName: string): string | null {
         const param = params.Params.find(p =>
             p.Name.trim().toLowerCase() === paramName.toLowerCase()

@@ -101,6 +101,24 @@ describe('CreateMermaidDiagramAction', () => {
         expect(result.Message).toContain('details');
     });
 
+    it('accepts class-diagram arrows that precede an on...= word', async () => {
+        renderMock.mockResolvedValue({ Success: true, Svg: '<svg xmlns="http://www.w3.org/2000/svg"/>' });
+
+        const result = await run({ Code: 'classDiagram\nAnimal <|-- Duck\nDuck : onLand = false' });
+
+        expect(result.ResultCode).toBe('SUCCESS');
+    });
+
+    it('checks for tag event handlers in linear time', async () => {
+        renderMock.mockResolvedValue({ Success: true, Svg: '<svg xmlns="http://www.w3.org/2000/svg"/>' });
+        const started = Date.now();
+
+        await run({ Code: '<'.repeat(100_000) });
+
+        // The old /<[^>]*on\w+=/ took over 3 s on this input, blocking the server's event loop.
+        expect(Date.now() - started).toBeLessThan(500);
+    });
+
     it('tells the caller to fall back to Create SVG Diagram when no browser can render', async () => {
         renderMock.mockResolvedValue({ Success: false, ErrorCode: 'BROWSER_UNAVAILABLE', Message: 'details' });
 

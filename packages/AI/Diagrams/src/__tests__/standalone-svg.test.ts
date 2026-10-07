@@ -47,3 +47,22 @@ describe('MakeStandaloneSvg', () => {
         expect(out).toContain('<desc>D</desc><rect x="0" y="0" width="200" height="100" fill="#f4f5f7"/>');
     });
 });
+
+describe('MakeStandaloneSvg id namespacing', () => {
+    it('prefixes internal ids and every reference to them', () => {
+        const svg = '<svg viewBox="0 0 10 10" aria-labelledby="t d"><title id="t">T</title><desc id="d">D</desc>'
+            + '<defs><marker id="arrowhead"/><pattern id="grid"/></defs><rect fill="url(#grid)"/>'
+            + '<path marker-end="url(#arrowhead)"/><use href="#arrowhead"/><a href="https://x.test">x</a></svg>';
+
+        const out = MakeStandaloneSvg(svg, TEMPLATE, 'archify-ab');
+
+        expect(out).toContain('aria-labelledby="archify-ab-t archify-ab-d"');
+        expect(out).toContain('<title id="archify-ab-t">');
+        expect(out).toContain('<marker id="archify-ab-arrowhead"/>');
+        expect(out).toContain('fill="url(#archify-ab-grid)"');
+        expect(out).toContain('marker-end="url(#archify-ab-arrowhead)"');
+        expect(out).toContain('href="#archify-ab-arrowhead"');
+        expect(out).toContain('href="https://x.test"');
+        expect(out.startsWith('<svg id="archify-ab"')).toBe(true);
+    });
+});

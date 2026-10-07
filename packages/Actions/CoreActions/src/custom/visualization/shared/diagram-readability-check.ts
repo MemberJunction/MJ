@@ -7,7 +7,7 @@
  *
  * @module @memberjunction/actions-core/visualization
  */
-import { MermaidRenderer } from './mermaid-renderer';
+import { DIAGRAM_PAGE_CSP, MermaidRenderer } from './mermaid-renderer';
 
 export type DiagramReadabilityResult =
     | { Checked: true; Problems: string[] }
@@ -27,7 +27,9 @@ export async function CheckDiagramReadability(html: string): Promise<DiagramRead
     const errors: string[] = [];
     const run = await MermaidRenderer.Instance.WithIsolatedPage(async (page) => {
         page.on('pageerror', (error) => errors.push(error.message));
-        await page.setContent(html, { waitUntil: 'load' });
+        // The page carries model-authored labels; it gets the same no-network policy as Mermaid's pages.
+        const locked = html.replace(/<head([^>]*)>/i, (_m, attributes: string) => `<head${attributes}><meta http-equiv="Content-Security-Policy" content="${DIAGRAM_PAGE_CSP}">`);
+        await page.setContent(locked, { waitUntil: 'load' });
         return page.evaluate((): DiagramLayout => {
             const svg = document.querySelector('.diagram-container svg') ?? document.querySelector('svg');
             if (!svg) {
@@ -45,7 +47,10 @@ export async function CheckDiagramReadability(html: string): Promise<DiagramRead
         });
     });
     if (run.Success === false) {
-        return { Checked: false, Reason: run.Message };
+        // A page that never finished loading failed the check; only a missing browser means it couldn't run.
+        return run.ErrorCode === 'TIMEOUT'
+            ? { Checked: true, Problems: [`The page did not finish laying out the diagram: ${run.Message}`] }
+            : { Checked: false, Reason: run.Message };
     }
     return { Checked: true, Problems: [...describeLayout(run.Value), ...errors.map((e) => `Page script error: ${e}`)] };
 }

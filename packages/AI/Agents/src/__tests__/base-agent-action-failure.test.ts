@@ -1041,3 +1041,29 @@ describe('BaseAgent — Fix 2A: Action Failure Handling & Circuit Breaker', () =
         });
     });
 });
+
+describe('BaseAgent keeps inline file-output bytes out of the model context', () => {
+    type Intercept = { interceptLargeBinaryContent(params: ActionParam[]): ActionParam[] };
+    type ActionParam = { Name: string; Type: 'Input' | 'Output' | 'Both'; Value: unknown };
+
+    it('drops a large inline fileData from what the model sees, keeping the file identity', () => {
+        const agent = new BaseAgent();
+        const file = { fileName: 'flow.html', mimeType: 'text/html', sizeBytes: 600_000, fileData: 'A'.repeat(800_000), visibility: 'Always' };
+        const original: ActionParam = { Name: 'FileOutput', Type: 'Output', Value: file };
+
+        const [seen] = (agent as unknown as Intercept).interceptLargeBinaryContent([original]);
+
+        expect(seen.Value).toMatchObject({ fileName: 'flow.html', mimeType: 'text/html', sizeBytes: 600_000, visibility: 'Always' });
+        expect(seen.Value).not.toHaveProperty('fileData');
+        // The artifact path reads the original param, which must keep its bytes.
+        expect((original.Value as typeof file).fileData).toHaveLength(800_000);
+    });
+
+    it('leaves a small inline file and a stored-file reference untouched', () => {
+        const agent = new BaseAgent();
+        const small: ActionParam = { Name: 'FileOutput', Type: 'Output', Value: { fileName: 'a.txt', mimeType: 'text/plain', fileData: 'aGk=' } };
+        const stored: ActionParam = { Name: 'FileOutput', Type: 'Output', Value: { fileName: 'b.pdf', mimeType: 'application/pdf', fileId: 'F1' } };
+
+        expect((agent as unknown as Intercept).interceptLargeBinaryContent([small, stored])).toEqual([small, stored]);
+    });
+});

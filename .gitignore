@@ -245,6 +245,8 @@ migrations/v*/*__RSU_*.sql
 # .github/scripts/stage-package-licenses.mjs. The root LICENSE is the only
 # source of truth; committing 300 copies would let them drift from it.
 packages/**/LICENSE
+# Except a vendored third-party license, which must ship verbatim with the code it covers (MIT requires it).
+!packages/AI/Diagrams/vendor/archify/LICENSE
 
 # Terraform working directories and state (infrastructure/terraform/**)
 .terraform/

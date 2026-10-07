@@ -43,11 +43,29 @@ export function MakeStandaloneSvg(svg: string, templateHtml: string, svgId: stri
     }
     const style = scopedRules(rules, usedClasses(svg), svgId, variables);
     // Trimmed so the SVG starts with `<svg`: a markdown ```svg fence only renders when it does.
-    const withStyle = svg.trim().replace(/<svg\b([^>]*)>/, (_open, attributes: string) => {
+    const withStyle = namespaceIds(svg.trim(), svgId).replace(/<svg\b([^>]*)>/, (_open, attributes: string) => {
         const withoutId = attributes.replace(/\sid="[^"]*"/, '');
         return `<svg id="${svgId}"${withoutId}><style>${style}</style>`;
     });
     return withBackground(withStyle, variables.get('--bg') ?? '#ffffff');
+}
+
+/**
+ * Prefixes every id inside the SVG (arrow markers, the grid pattern, the title and description, node ids)
+ * and every reference to one, so two diagrams on one page share neither an arrowhead nor an accessible name.
+ */
+function namespaceIds(svg: string, prefix: string): string {
+    const ids = new Set(Array.from(svg.matchAll(/\sid="([^"]+)"/g), (m) => m[1]));
+    if (ids.size === 0) {
+        return svg;
+    }
+    const rename = (id: string) => (ids.has(id) ? `${prefix}-${id}` : id);
+    return svg
+        .replace(/(\sid=")([^"]+)"/g, (_m, lead: string, id: string) => `${lead}${rename(id)}"`)
+        .replace(/url\(#([^)]+)\)/g, (_m, id: string) => `url(#${rename(id)})`)
+        .replace(/(\s(?:xlink:)?href="#)([^"]+)"/g, (_m, lead: string, id: string) => `${lead}${rename(id)}"`)
+        .replace(/(\saria-(?:labelledby|describedby)=")([^"]+)"/g, (_m, lead: string, list: string) =>
+            `${lead}${list.split(/\s+/).map(rename).join(' ')}"`);
 }
 
 /**
