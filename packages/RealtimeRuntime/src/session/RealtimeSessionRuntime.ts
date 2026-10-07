@@ -2227,6 +2227,19 @@ export class RealtimeSessionRuntime {
   }
 
   /**
+   * Picks the video source the agent sees: what the "agent can see" control calls when more sources are on than the
+   * model takes. The pick beats every other rule (a camera or screen share the user started, the surface the user is
+   * looking at) until it is cleared, or its source is turned off or leaves. The pick shows on {@link VideoSources$}
+   * (`Picked`), and the model is told when what it sees changes.
+   *
+   * @param sourceId The source's id (from {@link VideoSources$}), or `null` to let the call decide again.
+   * @returns `false` with no live session, or for a source that is not there or is turned off.
+   */
+  public SelectVideoSource(sourceId: string | null): boolean {
+    return this.client ? VideoSourceArbiter.ForSink(this.client).SelectSource(sourceId) : false;
+  }
+
+  /**
    * The `on-demand` channels that are in the session but not open yet — what the agent can open
    * through `ContextTool`. A fresh array; empty before a session starts and after teardown.
    */

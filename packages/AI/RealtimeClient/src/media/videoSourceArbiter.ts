@@ -106,6 +106,11 @@ export interface VideoSourceState extends VideoSourceDescriptor {
     FramesSent: number;
     /** Epoch ms of the last forwarded frame; `undefined` before the first. */
     LastFrameAt?: number;
+    /**
+     * `true` while it is the user's pick ({@link VideoSourceArbiter.SelectSource}), which beats every other rule. Absent
+     * otherwise, and while nothing is picked the policy decides.
+     */
+    Picked?: boolean;
 }
 
 /**
@@ -364,6 +369,7 @@ export class VideoSourceArbiter {
                 Active: active.has(s.SourceID),
                 FramesSent: s.FramesSent,
                 LastFrameAt: s.LastFrameAt,
+                ...(this.userPick === s.SourceID ? { Picked: true } : {}),
             }));
     }
 

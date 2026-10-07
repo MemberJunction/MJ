@@ -380,6 +380,26 @@ describe('VideoSourceArbiter', () => {
             arbiter.SelectSource(null);
             expect(arbiter.GetActiveSourceIDs()).toEqual(['cam']);
         });
+
+        it('marks the picked source on its state, and no source once the pick is cleared, turned off or gone', () => {
+            arbiter.RegisterSource({ SourceID: 'wb', Label: 'Whiteboard' });
+            arbiter.RegisterSource({ SourceID: 'cam', Label: 'Camera', Kind: 'camera' });
+            const picked = () => arbiter.GetSources().filter((s) => s.Picked).map((s) => s.SourceID);
+            expect(picked()).toEqual([]);
+            arbiter.SelectSource('wb');
+            expect(picked()).toEqual(['wb']);
+            expect(arbiter.GetSources().find((s) => s.SourceID === 'wb')).toMatchObject({ Picked: true, Active: true });
+            expect(arbiter.GetSources().find((s) => s.SourceID === 'cam')).not.toHaveProperty('Picked');
+            arbiter.SelectSource(null);
+            expect(picked()).toEqual([]);
+            arbiter.SelectSource('wb');
+            arbiter.SetSourceEnabled('wb', false);
+            expect(picked()).toEqual([]);
+            arbiter.SetSourceEnabled('wb', true);
+            arbiter.SelectSource('wb');
+            arbiter.UnregisterSource('wb');
+            expect(picked()).toEqual([]);
+        });
     });
 
     describe('registration and observation', () => {

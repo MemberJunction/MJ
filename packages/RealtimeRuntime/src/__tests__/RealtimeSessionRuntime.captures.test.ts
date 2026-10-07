@@ -186,6 +186,24 @@ describe('RealtimeSessionRuntime camera and screen share', () => {
         await runtime.EndRealtimeSession();
     });
 
+    it('lets the user pick the source the agent sees, and lets the call decide again', async () => {
+        const { runtime, start, sources } = build([new CaptureChannel('Camera', 'camera'), new CaptureChannel('ScreenShare', 'screen')]);
+        expect(runtime.SelectVideoSource('capture:camera')).toBe(false);
+        await start();
+        await runtime.StartCamera();
+        await runtime.StartScreenShare();
+        const seen = () => sources().filter((s) => s.Active).map((s) => s.SourceID);
+        expect(seen()).toEqual(['capture:screen']);
+        expect(runtime.SelectVideoSource('capture:camera')).toBe(true);
+        expect(seen()).toEqual(['capture:camera']);
+        expect(sources().find((s) => s.SourceID === 'capture:camera')?.Picked).toBe(true);
+        expect(runtime.SelectVideoSource(null)).toBe(true);
+        expect(seen()).toEqual(['capture:screen']);
+        expect(sources().some((s) => s.Picked)).toBe(false);
+        expect(runtime.SelectVideoSource('ghost')).toBe(false);
+        await runtime.EndRealtimeSession();
+    });
+
     it('stops both when the session ends, before releasing the controller', async () => {
         const { host, runtime, captures, start, sources } = build([new CaptureChannel('Camera', 'camera'), new CaptureChannel('ScreenShare', 'screen')]);
         await start();
