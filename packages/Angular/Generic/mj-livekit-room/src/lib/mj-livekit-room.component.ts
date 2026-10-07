@@ -5,6 +5,8 @@ import { RunView } from '@memberjunction/core';
 import { GraphQLDataProvider, GraphQLLiveKitClient, RealtimeModelVoices, RealtimeVoiceOption } from '@memberjunction/graphql-dataprovider';
 import { LiveKitRoomComponent, type LiveKitRoomLayout } from '@memberjunction/ng-livekit-room';
 import { MJStorageMediaPlayerComponent } from '@memberjunction/ng-media-player';
+import { UserInfoEngine } from '@memberjunction/core-entities';
+import { MediaLayoutPrefs, type MediaPipRect, type MediaPlacementMove } from '@memberjunction/ai-realtime-client/media';
 import type {
   LiveKitDataMessage,
   LiveKitDisconnectedEvent,
@@ -13,6 +15,14 @@ import type {
   LiveKitRoomError,
   LiveKitRoomState,
 } from '@memberjunction/livekit-room-core';
+
+/**
+ * The `MJ: User Settings` keys under which the meeting room's layout is saved, per user and for every room: where the
+ * user moved participants' tiles, and where they put picture-in-picture boxes. The realtime call saves its own layout
+ * under `mj.realtime.*`.
+ */
+export const LIVEKIT_PLACEMENT_PREF_KEY = 'mj.livekit.placement.v1';
+export const LIVEKIT_PIP_PREF_KEY = 'mj.livekit.pip.v1';
 
 /** How the MJ binding obtains its room: start an agent in a room, or just join an existing room. */
 export type MJLiveKitConnectionMode = 'agent' | 'join';
@@ -106,6 +116,10 @@ export interface AgentInRoom {
         [E2EEWorker]="E2EEWorker"
         [AgentAvatarUrl]="AgentAvatarUrl"
         [CanEndForAll]="EnableEndForAll && !!resolvedRoomName"
+        [TileMoves]="TileMoves"
+        [PipRects]="PipRects"
+        (TileMovesChange)="OnTileMovesChange($event)"
+        (PipRectsChange)="OnPipRectsChange($event)"
         (Connected)="Connected.emit($event)"
         (Disconnected)="Disconnected.emit($event)"
         (EndForAll)="EndMeeting()"
@@ -751,7 +765,42 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
     this.ShowRecordingPanel = value;
   }
 
+  /** Where the user moved participants' tiles, as saved for them; given to the room, and saved again as they change. */
+  public TileMoves: readonly MediaPlacementMove[] = [];
+  /** Where the user put picture-in-picture boxes, by participant identity, as saved for them. */
+  public PipRects: ReadonlyMap<string, MediaPipRect> = new Map();
+
+  /** The user's meeting layout, saved per user under the room's keys in the provider's settings. */
+  private readonly layoutPrefs = new MediaLayoutPrefs(() => this.userInfoEngine(), {
+    Moves: LIVEKIT_PLACEMENT_PREF_KEY,
+    PipRects: LIVEKIT_PIP_PREF_KEY,
+  });
+
+  /** The user moved a tile or reset the layout: keep the room's moves and save them. */
+  public OnTileMovesChange(moves: readonly MediaPlacementMove[]): void {
+    this.TileMoves = moves;
+    this.layoutPrefs.SaveMoves(moves);
+  }
+
+  /** The user moved or resized a box, or reset the layout: keep the boxes and save them. */
+  public OnPipRectsChange(rects: ReadonlyMap<string, MediaPipRect>): void {
+    this.PipRects = rects;
+    this.layoutPrefs.SavePipRects(rects);
+  }
+
+  /**
+   * The settings engine for this component's provider. A host that never ran startup (lazy startup) can hand back an
+   * engine that has not loaded the user's settings; the loaded global one is used then.
+   */
+  private userInfoEngine(): UserInfoEngine {
+    const provider = this.ProviderToUse;
+    const engine = provider ? (UserInfoEngine.GetProviderInstance<UserInfoEngine>(provider, UserInfoEngine) as UserInfoEngine) : UserInfoEngine.Instance;
+    return engine.Loaded ? engine : UserInfoEngine.Instance;
+  }
+
   public ngOnInit(): void {
+    this.TileMoves = this.layoutPrefs.LoadMoves();
+    this.PipRects = this.layoutPrefs.LoadPipRects();
     if (this.AutoStart) {
       void this.Start();
     }

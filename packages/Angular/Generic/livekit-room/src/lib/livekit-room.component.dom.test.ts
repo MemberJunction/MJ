@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { ChangeDetectorRef } from '@angular/core';
+import { By } from '@angular/platform-browser';
+import { MediaStageComponent } from '@memberjunction/ng-realtime-media';
+import type { MediaPipRect, MediaPlacementMove } from '@memberjunction/ai-realtime-client/media';
 import { renderComponentFixture, query, queryAll, text, overlayQueryAll, clearOverlayContainers } from '@memberjunction/ng-test-utils';
 import type { LiveKitParticipantView, LiveKitRoomController, LiveKitRoomState } from '@memberjunction/livekit-room-core';
 import { LiveKitRoomComponent, LIVEKIT_ROOM_CONTROLLER_FACTORY } from './livekit-room.component';
@@ -645,6 +648,76 @@ describe('LiveKitRoomComponent (DOM, fake controller)', () => {
       openBarMenu(f, 'ada').find((item) => item.textContent?.trim() === 'Reset layout')?.click();
       f.detectChanges();
       expect(boxed(f)).toEqual([]);
+    });
+  });
+
+  describe('the layout, kept by the host', () => {
+    const twoAndAgent = () => room([person('ada'), person('bo'), person('sage', { Agent: true })]).controller;
+    const boxed = (f: ReturnType<typeof render>) => names(f, '.lk-room__pip-tile');
+    const stageOf = (f: ReturnType<typeof render>) => f.debugElement.query(By.directive(MediaStageComponent)).componentInstance as MediaStageComponent;
+    const RECT: MediaPipRect = { X: 0.1, Y: 0.2, W: 0.3, H: 0.25 };
+
+    it("starts from the host's moves: a pinned tile in the spotlight, a boxed one in its box", () => {
+      const moves: MediaPlacementMove[] = [
+        { SurfaceKey: 'participant:ada', Placement: 'stage' },
+        { SurfaceKey: 'participant:bo', Placement: 'pip' },
+      ];
+      const f = render(twoAndAgent(), { Layout: 'spotlight', TileMoves: moves });
+      expect(names(f, '.lk-room__spotlight')).toEqual(['ada']);
+      expect(boxed(f)).toEqual(['bo']);
+      expect(f.componentInstance.PinnedIdentity).toBe('ada');
+    });
+
+    it('leaves a tile among the others for a saved move to hide it, a place the room does not offer', () => {
+      const f = render(twoAndAgent(), { Layout: 'spotlight', TileMoves: [{ SurfaceKey: 'participant:ada', Placement: 'hidden' }] });
+      expect(names(f, '.lk-room__filmstrip-tile')).toEqual(['you', 'ada', 'bo']);
+    });
+
+    it("tells the host each move the user makes, and not the host's own changes", () => {
+      const f = render(twoAndAgent(), { Layout: 'spotlight' });
+      const told: (readonly MediaPlacementMove[])[] = [];
+      f.componentInstance.TileMovesChange.subscribe((moves: readonly MediaPlacementMove[]) => told.push(moves));
+      f.componentInstance.MoveTile('ada', 'pip');
+      f.componentInstance.MoveTile('bo', 'stage');
+      expect(told).toEqual([
+        [{ SurfaceKey: 'participant:ada', Placement: 'pip' }],
+        [
+          { SurfaceKey: 'participant:ada', Placement: 'pip' },
+          { SurfaceKey: 'participant:bo', Placement: 'stage' },
+        ],
+      ]);
+      f.componentRef.setInput('TileMoves', []);
+      f.componentInstance.PinnedIdentity = 'sage';
+      expect(told).toHaveLength(2);
+    });
+
+    it("gives the host's box positions to the stage, and keeps and tells a moved box", () => {
+      const f = render(twoAndAgent(), { Layout: 'spotlight', PipRects: new Map([['bo', RECT]]) });
+      expect(stageOf(f).PipRects.get('bo')).toEqual(RECT);
+      const told: ReadonlyMap<string, MediaPipRect>[] = [];
+      f.componentInstance.PipRectsChange.subscribe((rects: ReadonlyMap<string, MediaPipRect>) => told.push(rects));
+      const moved: MediaPipRect = { X: 0.5, Y: 0.5, W: 0.3, H: 0.25 };
+      stageOf(f).PipRectChange.emit({ Key: 'ada', Rect: moved });
+      expect([...told[0]]).toEqual([
+        ['bo', RECT],
+        ['ada', moved],
+      ]);
+      expect(f.componentInstance.PipRects.get('ada')).toEqual(moved);
+    });
+
+    it("clears the moves and the boxes' positions on Reset layout, and tells the host both", () => {
+      const f = render(twoAndAgent(), {
+        Layout: 'spotlight',
+        TileMoves: [{ SurfaceKey: 'participant:ada', Placement: 'pip' }],
+        PipRects: new Map([['ada', RECT]]),
+      });
+      const moves: (readonly MediaPlacementMove[])[] = [];
+      const rects: ReadonlyMap<string, MediaPipRect>[] = [];
+      f.componentInstance.TileMovesChange.subscribe((m: readonly MediaPlacementMove[]) => moves.push(m));
+      f.componentInstance.PipRectsChange.subscribe((r: ReadonlyMap<string, MediaPipRect>) => rects.push(r));
+      f.componentInstance.OnResetLayout();
+      expect(moves).toEqual([[]]);
+      expect(rects.map((r) => r.size)).toEqual([0]);
     });
   });
 

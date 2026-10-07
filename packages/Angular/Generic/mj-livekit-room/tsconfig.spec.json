@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["vitest/globals", "node"]
+  },
+  // Explicit file list: the DOM project AOT-compiles only the MJ binding and its spec; the generic room comes from its build.
+  "include": [
+    "src/lib/mj-livekit-room.component.ts",
+    "src/lib/mj-livekit-room.component.dom.test.ts"
+  ],
+  "exclude": ["node_modules", "dist"]
+}

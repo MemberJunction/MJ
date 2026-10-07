@@ -48,12 +48,14 @@ import {
   MediaTileComponent,
   SelfViewComponent,
   SharePreviewComponent,
+  type MediaStagePipRectChange,
   type MediaStageSurface,
 } from '@memberjunction/ng-realtime-media';
 import {
   LayoutMediaStage,
   ParticipantTileKey,
   ParticipantTileSurface,
+  RecordPipRect,
   RecordPlacementMove,
   SelectDisplayParticipants,
   SelectScreenSharer,
@@ -64,6 +66,7 @@ import {
   type MediaDevice,
   type MediaDeviceSelection,
   type MediaParticipant,
+  type MediaPipRect,
   type MediaPlacement,
   type MediaPlacementMove,
   type MediaStageLayout,
@@ -323,6 +326,32 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
   @Output() public ToggleRecording = new EventEmitter<void>();
   /** Fired when the user changes the layout via the layout switcher. */
   @Output() public LayoutChange = new EventEmitter<LiveKitRoomLayout>();
+  /**
+   * Fired when the user moves a participant's tile or resets the layout: the room's moves, oldest first, for the host
+   * to save and give back through {@link TileMoves}.
+   */
+  @Output() public TileMovesChange = new EventEmitter<readonly MediaPlacementMove[]>();
+  /**
+   * Fired when the user moves or resizes a picture-in-picture box, or resets the layout: every box, by participant
+   * identity, for the host to save and give back through {@link PipRects}.
+   */
+  @Output() public PipRectsChange = new EventEmitter<ReadonlyMap<string, MediaPipRect>>();
+
+  /**
+   * Where the user moved participants' tiles, as {@link TileMovesChange} gave them to the host: oldest first, one per
+   * tile. Setting it replaces the room's moves. A move to the spotlight counts only while pinning is on, and a move to
+   * `hidden`, a place the room does not offer, leaves the tile among the others.
+   */
+  @Input()
+  public set TileMoves(moves: readonly MediaPlacementMove[]) {
+    this.tileMoves = moves;
+  }
+  public get TileMoves(): readonly MediaPlacementMove[] {
+    return this.tileMoves;
+  }
+
+  /** Where the user put picture-in-picture boxes, by participant identity, as {@link PipRectsChange} gave them to the host. */
+  @Input() public PipRects: ReadonlyMap<string, MediaPipRect> = new Map();
 
   // ── View state (template-bound) ─────────────────────────────────────────────────
   /** The current normalized room state snapshot. */
@@ -636,18 +665,26 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
   }
 
   /**
-   * Moves a participant's tile: to the spotlight (`stage`), or back among the others (`tab`, the filmstrip or the grid).
-   * One participant holds the spotlight: a newer move there sends the last one back. The grid has no spotlight, so a
-   * move there switches the room to the Active speaker layout. Moving to the spotlight needs {@link EnablePinning}.
+   * Moves a participant's tile: to the spotlight (`stage`), back among the others (`tab`, the filmstrip or the grid), or
+   * into a picture-in-picture box (`pip`), and tells the host ({@link TileMovesChange}). One participant holds the
+   * spotlight: a newer move there sends the last one back. The grid has no spotlight, so a move there switches the room
+   * to the Active speaker layout. Moving to the spotlight needs {@link EnablePinning}.
    */
   public MoveTile(identity: string, placement: MediaPlacement): void {
     if (!TILE_PLACEMENTS.includes(placement) || (placement === 'stage' && !this.EnablePinning)) {
       return;
     }
     this.recordTileMove(identity, placement);
+    this.TileMovesChange.emit(this.tileMoves);
     if (placement === 'stage' && this.Layout === 'grid') {
       this.OnSelectLayout('spotlight');
     }
+  }
+
+  /** The user moved or resized a picture-in-picture box: keep it, and tell the host ({@link PipRectsChange}). */
+  public OnPipRectChange(change: MediaStagePipRectChange): void {
+    this.PipRects = RecordPipRect(this.PipRects, change.Key, change.Rect);
+    this.PipRectsChange.emit(this.PipRects);
   }
 
   /**
@@ -692,9 +729,15 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
     return this.Layout === 'grid' ? GALLERY_LABELS : FILMSTRIP_LABELS;
   }
 
-  /** "Reset layout": every tile goes back where the call places it, so the pin is cleared. */
+  /**
+   * "Reset layout": every tile goes back where the call places it, so the pin and the boxes are cleared, and every box's
+   * position is forgotten, as the realtime call's reset does. The host hears both.
+   */
   public OnResetLayout(): void {
     this.tileMoves = [];
+    this.PipRects = new Map();
+    this.TileMovesChange.emit(this.tileMoves);
+    this.PipRectsChange.emit(this.PipRects);
   }
 
   /**

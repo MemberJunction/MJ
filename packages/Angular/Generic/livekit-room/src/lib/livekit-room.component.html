@@ -95,7 +95,7 @@
 
         <!-- Participants moved into picture-in-picture boxes float over the stage, the whiteboard included, keyed by
              identity. Each box's bar carries the participant's "Move to…" menu. -->
-        <mj-media-stage class="lk-room__pips" [Surfaces]="PipSurfaces">
+        <mj-media-stage class="lk-room__pips" [Surfaces]="PipSurfaces" [PipRects]="PipRects" (PipRectChange)="OnPipRectChange($event)">
           <ng-template mjMediaStageSurface let-key>
             <div class="lk-room__pip-tile">
               <ng-container [ngTemplateOutlet]="participantTile" [ngTemplateOutletContext]="{ $implicit: PipParticipant(key), Place: 'pip' }"></ng-container>

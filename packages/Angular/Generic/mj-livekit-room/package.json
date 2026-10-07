@@ -10,7 +10,8 @@
   "scripts": {
     "test": "vitest run",
     "build": "ngc",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:types": "tsc --noEmit -p tsconfig.spec.json"
   },
   "keywords": [
     "MemberJunction",
@@ -24,6 +25,7 @@
   "devDependencies": {
     "@angular/compiler": "21.2.22",
     "@angular/compiler-cli": "21.2.22",
+    "@memberjunction/ng-test-utils": "6.2.0-edge.1",
     "vitest": "^4.0.18"
   },
   "peerDependencies": {
@@ -32,7 +34,9 @@
     "rxjs": "^7.8.2"
   },
   "dependencies": {
+    "@memberjunction/ai-realtime-client": "6.2.0-edge.1",
     "@memberjunction/core": "6.2.0-edge.1",
+    "@memberjunction/core-entities": "6.2.0-edge.1",
     "@memberjunction/global": "6.2.0-edge.1",
     "@memberjunction/graphql-dataprovider": "6.2.0-edge.1",
     "@memberjunction/livekit-room-core": "6.2.0-edge.1",
