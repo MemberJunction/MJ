@@ -32,7 +32,8 @@
  * @author MemberJunction.com
  */
 
-import { LogError, LogStatus } from '@memberjunction/core';
+import { LogError, LogStatus, LogStatusEx } from '@memberjunction/core';
+import { monitorEventLoopDelay, performance, type IntervalHistogram } from 'node:perf_hooks';
 import type {
     NativeRoomModule,
     NativeRoomClient,
@@ -42,6 +43,46 @@ import type {
     NativeRoomAudioFrame,
     NativeRoomParticipant,
 } from '@memberjunction/ai-bridge-livekit';
+
+/** Inbound inter-frame gap histogram per participant. */
+export interface InboundFrameGapHistogram {
+    /** Inter-frame gap < 10ms. */
+    lt10ms: number;
+    /** Inter-frame gap 10ms <= t < 20ms. */
+    b10_20ms: number;
+    /** Inter-frame gap 20ms <= t < 30ms. */
+    b20_30ms: number;
+    /** Inter-frame gap 30ms <= t < 50ms. */
+    b30_50ms: number;
+    /** Inter-frame gap 50ms <= t < 100ms. */
+    b50_100ms: number;
+    /** Inter-frame gap >= 100ms. */
+    gte100ms: number;
+    /** Total frames measured. */
+    totalFrames: number;
+    /** Timestamp of the last frame received in ms (`performance.now()`). */
+    lastFrameMs?: number;
+}
+
+/** Outbound audio telemetry stats. */
+export interface OutboundAudioTelemetry {
+    /** Total frames captured and sent to the audio source. */
+    captureCount: number;
+    /** Number of buffer underruns detected (when audio queue starved while actively speaking). */
+    underrunCount: number;
+    /** Last observed queuedDuration from AudioSource (in ms or seconds, depending on driver). */
+    lastQueuedDuration?: number;
+}
+
+/** Telemetry snapshot for the room client. */
+export interface RoomAudioTelemetrySnapshot {
+    /** Inbound inter-frame gap histogram per participant identity. */
+    inboundGaps: Record<string, InboundFrameGapHistogram>;
+    /** Outbound telemetry. */
+    outbound: OutboundAudioTelemetry;
+    /** Event-loop delay p99 in ms (if monitorEventLoopDelay is available and enabled). */
+    eventLoopDelayP99Ms?: number;
+}
 
 // ──────────────────────────────────────────────────────────────────────────────
 // The minimal `@livekit/rtc-node` surface this wrapper depends on — declared locally
@@ -86,6 +127,8 @@ export interface RtcAudioSource {
     captureFrame(frame: RtcAudioFrame): Promise<void>;
     /** Drops all audio still queued in the source (used to flush on barge-in / interruption). */
     clearQueue(): void;
+    /** Duration (in ms or s) of queued audio currently buffered in the source, if supported. */
+    queuedDuration?: number | (() => number);
 }
 
 /** The bot's published local audio track. */
@@ -293,6 +336,14 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
     private readonly outboundQueue: Int16Array[] = [];
     private draining = false;
 
+    private readonly inboundGaps = new Map<string, InboundFrameGapHistogram>();
+    private readonly outboundTelemetry: OutboundAudioTelemetry = {
+        captureCount: 0,
+        underrunCount: 0,
+    };
+    private elDelayMonitor: IntervalHistogram | null = null;
+    private lastCaptureFinishMs?: number;
+
     private audioHandler?: (frame: NativeRoomAudioFrame) => void;
     private participantConnectedHandler?: (p: NativeRoomParticipant) => void;
     private participantDisconnectedHandler?: (identity: string) => void;
@@ -316,6 +367,13 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
 
     /** Connects to the room, publishes the bot's audio track, and wires inbound audio + roster events. */
     public async connect(args: NativeConnectArgs): Promise<NativeConnectResult> {
+        try {
+            this.elDelayMonitor = monitorEventLoopDelay({ resolution: 20 });
+            this.elDelayMonitor.enable();
+        } catch {
+            // best-effort if unsupported in environment
+        }
+
         const rtc = await this.loadRtc();
         const room = new rtc.Room();
         this.wireRoomEvents(rtc, room);
@@ -342,6 +400,20 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
     /** Disconnects, closes inbound streams, and releases the room. Tolerant of teardown errors. */
     public async disconnect(): Promise<void> {
         const room = this.room;
+        if (this.elDelayMonitor) {
+            try {
+                const p99 = this.elDelayMonitor.percentile(99) / 1e6;
+                LogStatusEx({
+                    message: `[LiveKitRtcNodeRoomClient][telemetry] event loop delay p99=${p99.toFixed(2)}ms (room ${room?.name ?? 'unknown'})`,
+                    verboseOnly: true,
+                });
+                this.elDelayMonitor.disable();
+            } catch {
+                // ignore
+            }
+            this.elDelayMonitor = null;
+        }
+
         this.closeInboundStreams();
         this.outboundQueue.length = 0; // stop the drain loop (it bails when audioSource is null)
         this.room = null;
@@ -390,7 +462,34 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
                 }
                 const samples = this.outboundQueue.shift()!;
                 const frame = new rtc.AudioFrame(samples, this.outboundRate, this.channels, samples.length / this.channels);
+
+                // Track underrun: if last capture finished more than 2 frame durations ago while actively speaking
+                const frameDurationMs = (samples.length / (this.channels * this.outboundRate)) * 1000;
+                const now = performance.now();
+                if (this.lastCaptureFinishMs !== undefined && (now - this.lastCaptureFinishMs) > (frameDurationMs * 2)) {
+                    this.outboundTelemetry.underrunCount++;
+                }
+
                 await source.captureFrame(frame);
+                this.lastCaptureFinishMs = performance.now();
+                this.outboundTelemetry.captureCount++;
+
+                let qd: number | undefined;
+                if (typeof source.queuedDuration === 'function') {
+                    qd = (source.queuedDuration as () => number)();
+                } else if (typeof source.queuedDuration === 'number') {
+                    qd = source.queuedDuration;
+                }
+                if (qd !== undefined) {
+                    this.outboundTelemetry.lastQueuedDuration = qd;
+                }
+
+                if (this.outboundTelemetry.captureCount % 200 === 0) {
+                    LogStatusEx({
+                        message: `[LiveKitRtcNodeRoomClient][telemetry] outbound stats: captures=${this.outboundTelemetry.captureCount} underruns=${this.outboundTelemetry.underrunCount} queuedDuration=${qd ?? 'n/a'}`,
+                        verboseOnly: true,
+                    });
+                }
             }
         } catch (err: unknown) {
             LogError(`[LiveKitRtcNodeRoomClient] captureFrame failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -510,8 +609,35 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
 
     /** Async-iterates an inbound stream, mapping each frame to the diarized seam frame. Tolerant of errors. */
     private async pumpAudioStream(stream: RtcAudioStream, participant: RtcParticipant): Promise<void> {
+        let hist = this.inboundGaps.get(participant.identity);
+        if (!hist) {
+            hist = { lt10ms: 0, b10_20ms: 0, b20_30ms: 0, b30_50ms: 0, b50_100ms: 0, gte100ms: 0, totalFrames: 0 };
+            this.inboundGaps.set(participant.identity, hist);
+        }
         try {
             for await (const frame of stream) {
+                const now = performance.now();
+                if (hist.lastFrameMs !== undefined) {
+                    const gap = now - hist.lastFrameMs;
+                    hist.totalFrames++;
+                    if (gap < 10) hist.lt10ms++;
+                    else if (gap < 20) hist.b10_20ms++;
+                    else if (gap < 30) hist.b20_30ms++;
+                    else if (gap < 50) hist.b30_50ms++;
+                    else if (gap < 100) hist.b50_100ms++;
+                    else hist.gte100ms++;
+                }
+                hist.lastFrameMs = now;
+
+                if (hist.totalFrames > 0 && hist.totalFrames % 500 === 0) {
+                    LogStatusEx({
+                        message: `[LiveKitRtcNodeRoomClient][telemetry] inbound frame gap histogram for '${participant.identity}': ` +
+                            `total=${hist.totalFrames} <10ms=${hist.lt10ms} 10-20ms=${hist.b10_20ms} 20-30ms=${hist.b20_30ms} ` +
+                            `30-50ms=${hist.b30_50ms} 50-100ms=${hist.b50_100ms} >=100ms=${hist.gte100ms}`,
+                        verboseOnly: true,
+                    });
+                }
+
                 this.audioHandler?.({
                     data: Int16ToArrayBuffer(frame.data),
                     participantIdentity: participant.identity,
@@ -521,6 +647,27 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
         } catch (err) {
             LogError(`[LiveKitRtcNodeRoomClient] inbound audio stream for '${participant.identity}' ended with error: ${err instanceof Error ? err.message : String(err)}`);
         }
+    }
+
+    /** Returns a snapshot of room audio telemetry (inbound gaps, outbound underruns/captures, event-loop p99). */
+    public getTelemetry(): RoomAudioTelemetrySnapshot {
+        const inboundGaps: Record<string, InboundFrameGapHistogram> = {};
+        for (const [k, v] of this.inboundGaps.entries()) {
+            inboundGaps[k] = { ...v };
+        }
+        let eventLoopDelayP99Ms: number | undefined;
+        if (this.elDelayMonitor) {
+            try {
+                eventLoopDelayP99Ms = this.elDelayMonitor.percentile(99) / 1e6;
+            } catch {
+                // ignore
+            }
+        }
+        return {
+            inboundGaps,
+            outbound: { ...this.outboundTelemetry },
+            eventLoopDelayP99Ms,
+        };
     }
 
     /** Closes all inbound audio streams (best-effort). */

@@ -138,17 +138,32 @@ afterEach(async () => {
 });
 
 describe('AIBridgeEngine — full-duplex wiring', () => {
-    it('gives a full-duplex session a gate, a human-speech detector and the turn-taking tool handler', async () => {
-        const a = await seat('fd-a', 'Sage', new FakeSession(true), { TurnAddressing: 'Auto' });
-        expect(a.TurnGate).toBeDefined();
-        expect(a.HumanSpeech).toBeDefined();
-        expect(a.AddressingMode).toBe('ModelSide');
-        expect(a.ModelSideMatcher).toBeDefined();
-        expect(a.TurnTakingToolHandler?.Handles('yield_turn')).toBe(true);
-        expect(a.TurnTakingToolHandler?.Handles('i_am_addressed')).toBe(true);
-        expect(a.TurnTakingToolHandler?.Handles('send_dtmf')).toBe(false);
-        expect(TURN_TAKING_TOOL_DEFINITIONS.map(t => t.Name)).toEqual(['i_am_addressed', 'yield_turn']);
+    it('leaves a full-duplex session ungated by default (no gate, no detector, no turn tools)', async () => {
+        const a = await seat('fd-default', 'Sage', new FakeSession(true));
+        expect(a.TurnGate).toBeUndefined();
+        expect(a.HumanSpeech).toBeUndefined();
+        expect(a.TurnTakingToolHandler).toBeUndefined();
         await stopAll(a);
+    });
+
+    it('gives a full-duplex session a gate, a human-speech detector and the turn-taking tool handler in moderator mode', async () => {
+        const prev = process.env.MJ_REALTIME_MODERATOR_MODE;
+        process.env.MJ_REALTIME_MODERATOR_MODE = 'on';
+        try {
+            const a = await seat('fd-a', 'Sage', new FakeSession(true), { TurnAddressing: 'Auto' });
+            expect(a.TurnGate).toBeDefined();
+            expect(a.HumanSpeech).toBeDefined();
+            expect(a.AddressingMode).toBe('ModelSide');
+            expect(a.ModelSideMatcher).toBeDefined();
+            expect(a.TurnTakingToolHandler?.Handles('yield_turn')).toBe(true);
+            expect(a.TurnTakingToolHandler?.Handles('i_am_addressed')).toBe(true);
+            expect(a.TurnTakingToolHandler?.Handles('send_dtmf')).toBe(false);
+            expect(TURN_TAKING_TOOL_DEFINITIONS.map(t => t.Name)).toEqual(['i_am_addressed', 'yield_turn']);
+            await stopAll(a);
+        } finally {
+            if (prev !== undefined) process.env.MJ_REALTIME_MODERATOR_MODE = prev;
+            else delete process.env.MJ_REALTIME_MODERATOR_MODE;
+        }
     });
 
     it('leaves a turn-based session ungated, regex-addressed, and without turn tools', async () => {
@@ -179,11 +194,29 @@ describe('AIBridgeEngine — full-duplex wiring', () => {
     });
 
     it('lets the gate be switched off per session', async () => {
-        const a = await seat('fd-e', 'Sage', new FakeSession(true), { FullDuplexTurnGate: false });
-        expect(a.TurnGate).toBeUndefined();
-        await stopAll(a);
+        const prev = process.env.MJ_REALTIME_MODERATOR_MODE;
+        process.env.MJ_REALTIME_MODERATOR_MODE = 'on';
+        try {
+            const a = await seat('fd-e', 'Sage', new FakeSession(true), { FullDuplexTurnGate: false });
+            expect(a.TurnGate).toBeUndefined();
+            await stopAll(a);
+        } finally {
+            if (prev !== undefined) process.env.MJ_REALTIME_MODERATOR_MODE = prev;
+            else delete process.env.MJ_REALTIME_MODERATOR_MODE;
+        }
     });
 });
+
+describe('AIBridgeEngine — moderator mode (floor gate and turn-taking tools)', () => {
+    let prevEnv: string | undefined;
+    beforeEach(() => {
+        prevEnv = process.env.MJ_REALTIME_MODERATOR_MODE;
+        process.env.MJ_REALTIME_MODERATOR_MODE = 'on';
+    });
+    afterEach(() => {
+        if (prevEnv !== undefined) process.env.MJ_REALTIME_MODERATOR_MODE = prevEnv;
+        else delete process.env.MJ_REALTIME_MODERATOR_MODE;
+    });
 
 describe('AIBridgeEngine — the floor gate on outbound audio', () => {
     it('never gates a single-agent room', async () => {
@@ -473,3 +506,5 @@ describe('AIBridgeEngine — turn-taking observability and limits', () => {
         }
     });
 });
+});
+

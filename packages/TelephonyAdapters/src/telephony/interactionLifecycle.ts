@@ -79,6 +79,7 @@ export interface CloseInteractionParams {
     EndReason?: string | null;
     CostPerMinute?: number;
     Abandoned?: boolean;
+    Status?: MJInteractionEntity['Status'];
     ActorUserID?: string | null;
     ActorAgentID?: string | null;
     ContextUser: UserInfo;
@@ -330,7 +331,7 @@ export class InteractionLifecycleService extends BaseSingleton<InteractionLifecy
             entity.EndReason = params.EndReason ?? 'Ended';
 
             const isAbandoned = params.Abandoned || (!entity.AnsweredAt && (entity.Status === 'Queued' || params.EndReason === 'CallerHangup'));
-            entity.Status = isAbandoned ? 'Abandoned' : 'Ended';
+            entity.Status = params.Status ?? (isAbandoned ? 'Abandoned' : 'Ended');
 
             const startedTime = entity.StartedAt ? new Date(entity.StartedAt).getTime() : endedAt.getTime();
             const durationSeconds = Math.max(0, (endedAt.getTime() - startedTime) / 1000);
@@ -347,7 +348,7 @@ export class InteractionLifecycleService extends BaseSingleton<InteractionLifecy
 
             await this.RecordEvent({
                 InteractionID: params.InteractionID,
-                EventType: isAbandoned ? 'Abandoned' : 'Ended',
+                EventType: entity.Status === 'Abandoned' ? 'Abandoned' : 'Ended',
                 OccurredAt: endedAt,
                 ActorUserID: params.ActorUserID,
                 ActorAgentID: params.ActorAgentID,

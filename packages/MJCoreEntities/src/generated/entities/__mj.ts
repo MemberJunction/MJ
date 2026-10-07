@@ -983,7 +983,7 @@ export const MJAIAgentExampleSchema = z.object({
     EmbeddingVectorBinary: z.string().nullable().describe(`
         * * Field Name: EmbeddingVectorBinary
         * * Display Name: Embedding Vector Binary
-        * * SQL Data Type: varbinary(MAX)
+        * * SQL Data Type: varbinary
         * * Description: The example embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of EmbeddingVector. Written alongside EmbeddingVector; readers prefer it and fall back to EmbeddingVector when it is NULL.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
@@ -1524,7 +1524,7 @@ export const MJAIAgentNoteSchema = z.object({
     EmbeddingVectorBinary: z.string().nullable().describe(`
         * * Field Name: EmbeddingVectorBinary
         * * Display Name: Embedding Vector Binary
-        * * SQL Data Type: varbinary(MAX)
+        * * SQL Data Type: varbinary
         * * Description: The note embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of EmbeddingVector. Written alongside EmbeddingVector; readers prefer it and fall back to EmbeddingVector when it is NULL.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
@@ -7651,7 +7651,7 @@ export const MJAIResultCacheSchema = z.object({
     PromptEmbedding: z.string().nullable().describe(`
         * * Field Name: PromptEmbedding
         * * Display Name: Prompt Embedding
-        * * SQL Data Type: varbinary(MAX)
+        * * SQL Data Type: varbinary
         * * Description: Vector representation of the prompt for similarity matching.`),
     PromptRunID: z.string().nullable().describe(`
         * * Field Name: PromptRunID
@@ -13191,12 +13191,12 @@ export const MJComponentSchema = z.object({
     FunctionalRequirementsVectorBinary: z.string().nullable().describe(`
         * * Field Name: FunctionalRequirementsVectorBinary
         * * Display Name: Functional Requirements Vector Binary
-        * * SQL Data Type: varbinary(MAX)
+        * * SQL Data Type: varbinary
         * * Description: The functional-requirements embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of FunctionalRequirementsVector. Written alongside FunctionalRequirementsVector; readers prefer it and fall back to FunctionalRequirementsVector when it is NULL.`),
     TechnicalDesignVectorBinary: z.string().nullable().describe(`
         * * Field Name: TechnicalDesignVectorBinary
         * * Display Name: Technical Design Vector Binary
-        * * SQL Data Type: varbinary(MAX)
+        * * SQL Data Type: varbinary
         * * Description: The technical-design embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of TechnicalDesignVector. Written alongside TechnicalDesignVector; readers prefer it and fall back to TechnicalDesignVector when it is NULL.`),
     SourceRegistry: z.string().nullable().describe(`
         * * Field Name: SourceRegistry
@@ -20033,7 +20033,7 @@ export const MJEntityRecordDocumentSchema = z.object({
     VectorBinary: z.string().nullable().describe(`
         * * Field Name: VectorBinary
         * * Display Name: Vector Binary
-        * * SQL Data Type: varbinary(MAX)
+        * * SQL Data Type: varbinary
         * * Description: The embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of VectorJSON. Written alongside VectorJSON by vector sync; readers prefer it and fall back to VectorJSON when it is NULL.`),
     Entity: z.string().describe(`
         * * Field Name: Entity
@@ -27291,7 +27291,7 @@ export const MJQuerySchema = z.object({
     EmbeddingVectorBinary: z.string().nullable().describe(`
         * * Field Name: EmbeddingVectorBinary
         * * Display Name: Embedding Vector Binary
-        * * SQL Data Type: varbinary(MAX)
+        * * SQL Data Type: varbinary
         * * Description: The query embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of EmbeddingVector. Written alongside EmbeddingVector; readers prefer it and fall back to EmbeddingVector when it is NULL.`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
@@ -33691,7 +33691,7 @@ export const MJTagSchema = z.object({
     EmbeddingVectorBinary: z.string().nullable().describe(`
         * * Field Name: EmbeddingVectorBinary
         * * Display Name: Embedding Vector Binary
-        * * SQL Data Type: varbinary(MAX)
+        * * SQL Data Type: varbinary
         * * Description: The tag embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of EmbeddingVector. Written alongside EmbeddingVector; readers prefer it and fall back to EmbeddingVector when it is NULL.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
@@ -38707,19 +38707,25 @@ export class MJAIAgentChannelEntity extends BaseEntity<MJAIAgentChannelEntityTyp
         this.Set('UIConfig', value);
     }
 
+    private _UIConfigObject_cached: MJAIAgentChannelEntity_IChannelUIConfig | null | undefined = undefined;
+    private _UIConfigObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for UIConfig — a live view of the parsed JSON as MJAIAgentChannelEntity_IChannelUIConfig.
-    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
-    * underlying UIConfig field, so it becomes dirty and Save() persists them. If the raw value changes by
-    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
-    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
-    * ToPlainJSON() from @memberjunction/core.
+    * Typed accessor for UIConfig — returns parsed JSON as MJAIAgentChannelEntity_IChannelUIConfig.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get UIConfigObject(): MJAIAgentChannelEntity_IChannelUIConfig | null {
-        return this.GetJSONFieldObject<MJAIAgentChannelEntity_IChannelUIConfig>('UIConfig');
+        const raw = this.UIConfig;
+        if (raw !== this._UIConfigObject_lastRaw) {
+            this._UIConfigObject_cached = raw ? JSON.parse(raw) : null;
+            this._UIConfigObject_lastRaw = raw;
+        }
+        return this._UIConfigObject_cached!;
     }
     set UIConfigObject(value: MJAIAgentChannelEntity_IChannelUIConfig | null) {
-        this.SetJSONFieldObject<MJAIAgentChannelEntity_IChannelUIConfig>('UIConfig', value);
+        const raw = value ? JSON.stringify(value) : null;
+        this.UIConfig = raw;
+        this._UIConfigObject_cached = value;
+        this._UIConfigObject_lastRaw = raw;
     }
 }
 
@@ -40295,8 +40301,7 @@ export class MJAIAgentExampleEntity extends BaseEntity<MJAIAgentExampleEntityTyp
     /**
     * * Field Name: EmbeddingVectorBinary
     * * Display Name: Embedding Vector Binary
-    * * SQL Data Type: varbinary(MAX)
-    * * Binary Value: base64-encoded string. Decode with Base64ToBytes() — or Base64ToFloat32Vector() for an embedding — from @memberjunction/global.
+    * * SQL Data Type: varbinary
     * * Description: The example embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of EmbeddingVector. Written alongside EmbeddingVector; readers prefer it and fall back to EmbeddingVector when it is NULL.
     */
     get EmbeddingVectorBinary(): string | null {
@@ -40631,19 +40636,25 @@ export class MJAIAgentHarnessEntity extends BaseEntity<MJAIAgentHarnessEntityTyp
         this.Set('CapabilitySettings', value);
     }
 
+    private _CapabilitySettingsObject_cached: MJAIAgentHarnessEntity_IHarnessCapabilitySettings | null | undefined = undefined;
+    private _CapabilitySettingsObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for CapabilitySettings — a live view of the parsed JSON as MJAIAgentHarnessEntity_IHarnessCapabilitySettings.
-    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
-    * underlying CapabilitySettings field, so it becomes dirty and Save() persists them. If the raw value changes by
-    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
-    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
-    * ToPlainJSON() from @memberjunction/core.
+    * Typed accessor for CapabilitySettings — returns parsed JSON as MJAIAgentHarnessEntity_IHarnessCapabilitySettings.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get CapabilitySettingsObject(): MJAIAgentHarnessEntity_IHarnessCapabilitySettings | null {
-        return this.GetJSONFieldObject<MJAIAgentHarnessEntity_IHarnessCapabilitySettings>('CapabilitySettings');
+        const raw = this.CapabilitySettings;
+        if (raw !== this._CapabilitySettingsObject_lastRaw) {
+            this._CapabilitySettingsObject_cached = raw ? JSON.parse(raw) : null;
+            this._CapabilitySettingsObject_lastRaw = raw;
+        }
+        return this._CapabilitySettingsObject_cached!;
     }
     set CapabilitySettingsObject(value: MJAIAgentHarnessEntity_IHarnessCapabilitySettings | null) {
-        this.SetJSONFieldObject<MJAIAgentHarnessEntity_IHarnessCapabilitySettings>('CapabilitySettings', value);
+        const raw = value ? JSON.stringify(value) : null;
+        this.CapabilitySettings = raw;
+        this._CapabilitySettingsObject_cached = value;
+        this._CapabilitySettingsObject_lastRaw = raw;
     }
 
     /**
@@ -41624,19 +41635,25 @@ export class MJAIAgentNoteEntity extends BaseEntity<MJAIAgentNoteEntityType> {
         this.Set('SecondaryScopes', value);
     }
 
+    private _SecondaryScopesObject_cached: MJAIAgentNoteEntity_IAISecondaryScopes | null | undefined = undefined;
+    private _SecondaryScopesObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for SecondaryScopes — a live view of the parsed JSON as MJAIAgentNoteEntity_IAISecondaryScopes.
-    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
-    * underlying SecondaryScopes field, so it becomes dirty and Save() persists them. If the raw value changes by
-    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
-    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
-    * ToPlainJSON() from @memberjunction/core.
+    * Typed accessor for SecondaryScopes — returns parsed JSON as MJAIAgentNoteEntity_IAISecondaryScopes.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get SecondaryScopesObject(): MJAIAgentNoteEntity_IAISecondaryScopes | null {
-        return this.GetJSONFieldObject<MJAIAgentNoteEntity_IAISecondaryScopes>('SecondaryScopes');
+        const raw = this.SecondaryScopes;
+        if (raw !== this._SecondaryScopesObject_lastRaw) {
+            this._SecondaryScopesObject_cached = raw ? JSON.parse(raw) : null;
+            this._SecondaryScopesObject_lastRaw = raw;
+        }
+        return this._SecondaryScopesObject_cached!;
     }
     set SecondaryScopesObject(value: MJAIAgentNoteEntity_IAISecondaryScopes | null) {
-        this.SetJSONFieldObject<MJAIAgentNoteEntity_IAISecondaryScopes>('SecondaryScopes', value);
+        const raw = value ? JSON.stringify(value) : null;
+        this.SecondaryScopes = raw;
+        this._SecondaryScopesObject_cached = value;
+        this._SecondaryScopesObject_lastRaw = raw;
     }
 
     /**
@@ -41775,8 +41792,7 @@ export class MJAIAgentNoteEntity extends BaseEntity<MJAIAgentNoteEntityType> {
     /**
     * * Field Name: EmbeddingVectorBinary
     * * Display Name: Embedding Vector Binary
-    * * SQL Data Type: varbinary(MAX)
-    * * Binary Value: base64-encoded string. Decode with Base64ToBytes() — or Base64ToFloat32Vector() for an embedding — from @memberjunction/global.
+    * * SQL Data Type: varbinary
     * * Description: The note embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of EmbeddingVector. Written alongside EmbeddingVector; readers prefer it and fall back to EmbeddingVector when it is NULL.
     */
     get EmbeddingVectorBinary(): string | null {
@@ -42259,19 +42275,25 @@ export class MJAIAgentPersonaEntity extends BaseEntity<MJAIAgentPersonaEntityTyp
         this.Set('StyleOverride', value);
     }
 
+    private _StyleOverrideObject_cached: MJAIAgentPersonaEntity_IAIAgentPersonaStyleOverride | null | undefined = undefined;
+    private _StyleOverrideObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for StyleOverride — a live view of the parsed JSON as MJAIAgentPersonaEntity_IAIAgentPersonaStyleOverride.
-    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
-    * underlying StyleOverride field, so it becomes dirty and Save() persists them. If the raw value changes by
-    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
-    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
-    * ToPlainJSON() from @memberjunction/core.
+    * Typed accessor for StyleOverride — returns parsed JSON as MJAIAgentPersonaEntity_IAIAgentPersonaStyleOverride.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get StyleOverrideObject(): MJAIAgentPersonaEntity_IAIAgentPersonaStyleOverride | null {
-        return this.GetJSONFieldObject<MJAIAgentPersonaEntity_IAIAgentPersonaStyleOverride>('StyleOverride');
+        const raw = this.StyleOverride;
+        if (raw !== this._StyleOverrideObject_lastRaw) {
+            this._StyleOverrideObject_cached = raw ? JSON.parse(raw) : null;
+            this._StyleOverrideObject_lastRaw = raw;
+        }
+        return this._StyleOverrideObject_cached!;
     }
     set StyleOverrideObject(value: MJAIAgentPersonaEntity_IAIAgentPersonaStyleOverride | null) {
-        this.SetJSONFieldObject<MJAIAgentPersonaEntity_IAIAgentPersonaStyleOverride>('StyleOverride', value);
+        const raw = value ? JSON.stringify(value) : null;
+        this.StyleOverride = raw;
+        this._StyleOverrideObject_cached = value;
+        this._StyleOverrideObject_lastRaw = raw;
     }
 
     /**
@@ -43788,19 +43810,25 @@ export class MJAIAgentRubricEntity extends BaseEntity<MJAIAgentRubricEntityType>
         this.Set('EvaluatorConfig', value);
     }
 
+    private _EvaluatorConfigObject_cached: MJAIAgentRubricEntity_IRubricEvaluatorSelection | null | undefined = undefined;
+    private _EvaluatorConfigObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for EvaluatorConfig — a live view of the parsed JSON as MJAIAgentRubricEntity_IRubricEvaluatorSelection.
-    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
-    * underlying EvaluatorConfig field, so it becomes dirty and Save() persists them. If the raw value changes by
-    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
-    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
-    * ToPlainJSON() from @memberjunction/core.
+    * Typed accessor for EvaluatorConfig — returns parsed JSON as MJAIAgentRubricEntity_IRubricEvaluatorSelection.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get EvaluatorConfigObject(): MJAIAgentRubricEntity_IRubricEvaluatorSelection | null {
-        return this.GetJSONFieldObject<MJAIAgentRubricEntity_IRubricEvaluatorSelection>('EvaluatorConfig');
+        const raw = this.EvaluatorConfig;
+        if (raw !== this._EvaluatorConfigObject_lastRaw) {
+            this._EvaluatorConfigObject_cached = raw ? JSON.parse(raw) : null;
+            this._EvaluatorConfigObject_lastRaw = raw;
+        }
+        return this._EvaluatorConfigObject_cached!;
     }
     set EvaluatorConfigObject(value: MJAIAgentRubricEntity_IRubricEvaluatorSelection | null) {
-        this.SetJSONFieldObject<MJAIAgentRubricEntity_IRubricEvaluatorSelection>('EvaluatorConfig', value);
+        const raw = value ? JSON.stringify(value) : null;
+        this.EvaluatorConfig = raw;
+        this._EvaluatorConfigObject_cached = value;
+        this._EvaluatorConfigObject_lastRaw = raw;
     }
 
     /**
@@ -44664,19 +44692,25 @@ detailed information about what validation rules failed.
         this.Set('Skills', value);
     }
 
+    private _SkillsObject_cached: Array<MJAIAgentRunStepEntity_AgentSkillInvocation> | null | undefined = undefined;
+    private _SkillsObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for Skills — a live view of the parsed JSON as Array<MJAIAgentRunStepEntity_AgentSkillInvocation>.
-    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
-    * underlying Skills field, so it becomes dirty and Save() persists them. If the raw value changes by
-    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
-    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
-    * ToPlainJSON() from @memberjunction/core.
+    * Typed accessor for Skills — returns parsed JSON as Array<MJAIAgentRunStepEntity_AgentSkillInvocation>.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get SkillsObject(): Array<MJAIAgentRunStepEntity_AgentSkillInvocation> | null {
-        return this.GetJSONFieldObject<Array<MJAIAgentRunStepEntity_AgentSkillInvocation>>('Skills');
+        const raw = this.Skills;
+        if (raw !== this._SkillsObject_lastRaw) {
+            this._SkillsObject_cached = raw ? JSON.parse(raw) : null;
+            this._SkillsObject_lastRaw = raw;
+        }
+        return this._SkillsObject_cached!;
     }
     set SkillsObject(value: Array<MJAIAgentRunStepEntity_AgentSkillInvocation> | null) {
-        this.SetJSONFieldObject<Array<MJAIAgentRunStepEntity_AgentSkillInvocation>>('Skills', value);
+        const raw = value ? JSON.stringify(value) : null;
+        this.Skills = raw;
+        this._SkillsObject_cached = value;
+        this._SkillsObject_lastRaw = raw;
     }
 
     /**
@@ -45585,19 +45619,25 @@ each time the agent processes a prompt step.
         this.Set('SecondaryScopes', value);
     }
 
+    private _SecondaryScopesObject_cached: MJAIAgentRunEntity_IAISecondaryScopes | null | undefined = undefined;
+    private _SecondaryScopesObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for SecondaryScopes — a live view of the parsed JSON as MJAIAgentRunEntity_IAISecondaryScopes.
-    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
-    * underlying SecondaryScopes field, so it becomes dirty and Save() persists them. If the raw value changes by
-    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
-    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
-    * ToPlainJSON() from @memberjunction/core.
+    * Typed accessor for SecondaryScopes — returns parsed JSON as MJAIAgentRunEntity_IAISecondaryScopes.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get SecondaryScopesObject(): MJAIAgentRunEntity_IAISecondaryScopes | null {
-        return this.GetJSONFieldObject<MJAIAgentRunEntity_IAISecondaryScopes>('SecondaryScopes');
+        const raw = this.SecondaryScopes;
+        if (raw !== this._SecondaryScopesObject_lastRaw) {
+            this._SecondaryScopesObject_cached = raw ? JSON.parse(raw) : null;
+            this._SecondaryScopesObject_lastRaw = raw;
+        }
+        return this._SecondaryScopesObject_cached!;
     }
     set SecondaryScopesObject(value: MJAIAgentRunEntity_IAISecondaryScopes | null) {
-        this.SetJSONFieldObject<MJAIAgentRunEntity_IAISecondaryScopes>('SecondaryScopes', value);
+        const raw = value ? JSON.stringify(value) : null;
+        this.SecondaryScopes = raw;
+        this._SecondaryScopesObject_cached = value;
+        this._SecondaryScopesObject_lastRaw = raw;
     }
 
     /**
@@ -50818,19 +50858,25 @@ export class MJAIBridgeProviderEntity extends BaseEntity<MJAIBridgeProviderEntit
         this.Set('SupportedFeatures', value);
     }
 
+    private _SupportedFeaturesObject_cached: MJAIBridgeProviderEntity_IBridgeProviderFeatures | null | undefined = undefined;
+    private _SupportedFeaturesObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for SupportedFeatures — a live view of the parsed JSON as MJAIBridgeProviderEntity_IBridgeProviderFeatures.
-    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
-    * underlying SupportedFeatures field, so it becomes dirty and Save() persists them. If the raw value changes by
-    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
-    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
-    * ToPlainJSON() from @memberjunction/core.
+    * Typed accessor for SupportedFeatures — returns parsed JSON as MJAIBridgeProviderEntity_IBridgeProviderFeatures.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get SupportedFeaturesObject(): MJAIBridgeProviderEntity_IBridgeProviderFeatures | null {
-        return this.GetJSONFieldObject<MJAIBridgeProviderEntity_IBridgeProviderFeatures>('SupportedFeatures');
+        const raw = this.SupportedFeatures;
+        if (raw !== this._SupportedFeaturesObject_lastRaw) {
+            this._SupportedFeaturesObject_cached = raw ? JSON.parse(raw) : null;
+            this._SupportedFeaturesObject_lastRaw = raw;
+        }
+        return this._SupportedFeaturesObject_cached!;
     }
     set SupportedFeaturesObject(value: MJAIBridgeProviderEntity_IBridgeProviderFeatures | null) {
-        this.SetJSONFieldObject<MJAIBridgeProviderEntity_IBridgeProviderFeatures>('SupportedFeatures', value);
+        const raw = value ? JSON.stringify(value) : null;
+        this.SupportedFeatures = raw;
+        this._SupportedFeaturesObject_cached = value;
+        this._SupportedFeaturesObject_lastRaw = raw;
     }
 
     /**
@@ -53545,6 +53591,16 @@ export interface MJAIModelTypeEntity_RealtimeConfigurationSettings {
      * Reasoning plane settings — dual delegation configuration. Absent defaults to `'local'`.
      */
     Reasoning?: MJAIModelTypeEntity_RealtimeReasoningSettings | null;
+
+    /**
+     * Whether this realtime model natively supports full-duplex conversational audio
+     * (simultaneous speaking and listening with natural interruptions).
+     *
+     * When true, full-duplex models do not receive turn-taking tools or an energy-VAD floor gate,
+     * allowing the provider's native full-duplex model to handle natural turn transitions.
+     * Cascades AIModelType -> Vendor ModelDefaults -> AIModel -> AIModelVendor.
+     */
+    FullDuplex?: boolean | null;
 }
 
 /** Vision knobs. Reserved — no consumers yet. */
@@ -53809,19 +53865,25 @@ export class MJAIModelTypeEntity extends BaseEntity<MJAIModelTypeEntityType> {
         this.Set('ModelConfiguration', value);
     }
 
+    private _ModelConfigurationObject_cached: MJAIModelTypeEntity_IAIModelConfiguration | null | undefined = undefined;
+    private _ModelConfigurationObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for ModelConfiguration — a live view of the parsed JSON as MJAIModelTypeEntity_IAIModelConfiguration.
-    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
-    * underlying ModelConfiguration field, so it becomes dirty and Save() persists them. If the raw value changes by
-    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
-    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
-    * ToPlainJSON() from @memberjunction/core.
+    * Typed accessor for ModelConfiguration — returns parsed JSON as MJAIModelTypeEntity_IAIModelConfiguration.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get ModelConfigurationObject(): MJAIModelTypeEntity_IAIModelConfiguration | null {
-        return this.GetJSONFieldObject<MJAIModelTypeEntity_IAIModelConfiguration>('ModelConfiguration');
+        const raw = this.ModelConfiguration;
+        if (raw !== this._ModelConfigurationObject_lastRaw) {
+            this._ModelConfigurationObject_cached = raw ? JSON.parse(raw) : null;
+            this._ModelConfigurationObject_lastRaw = raw;
+        }
+        return this._ModelConfigurationObject_cached!;
     }
     set ModelConfigurationObject(value: MJAIModelTypeEntity_IAIModelConfiguration | null) {
-        this.SetJSONFieldObject<MJAIModelTypeEntity_IAIModelConfiguration>('ModelConfiguration', value);
+        const raw = value ? JSON.stringify(value) : null;
+        this.ModelConfiguration = raw;
+        this._ModelConfigurationObject_cached = value;
+        this._ModelConfigurationObject_lastRaw = raw;
     }
 
     /**
@@ -54027,6 +54089,16 @@ export interface MJAIModelVendorEntity_RealtimeConfigurationSettings {
      * Reasoning plane settings — dual delegation configuration. Absent defaults to `'local'`.
      */
     Reasoning?: MJAIModelVendorEntity_RealtimeReasoningSettings | null;
+
+    /**
+     * Whether this realtime model natively supports full-duplex conversational audio
+     * (simultaneous speaking and listening with natural interruptions).
+     *
+     * When true, full-duplex models do not receive turn-taking tools or an energy-VAD floor gate,
+     * allowing the provider's native full-duplex model to handle natural turn transitions.
+     * Cascades AIModelType -> Vendor ModelDefaults -> AIModel -> AIModelVendor.
+     */
+    FullDuplex?: boolean | null;
 }
 
 /** Vision knobs. Reserved — no consumers yet. */
@@ -54474,19 +54546,25 @@ export class MJAIModelVendorEntity extends BaseEntity<MJAIModelVendorEntityType>
         this.Set('ModelConfiguration', value);
     }
 
+    private _ModelConfigurationObject_cached: MJAIModelVendorEntity_IAIModelConfiguration | null | undefined = undefined;
+    private _ModelConfigurationObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for ModelConfiguration — a live view of the parsed JSON as MJAIModelVendorEntity_IAIModelConfiguration.
-    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
-    * underlying ModelConfiguration field, so it becomes dirty and Save() persists them. If the raw value changes by
-    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
-    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
-    * ToPlainJSON() from @memberjunction/core.
+    * Typed accessor for ModelConfiguration — returns parsed JSON as MJAIModelVendorEntity_IAIModelConfiguration.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get ModelConfigurationObject(): MJAIModelVendorEntity_IAIModelConfiguration | null {
-        return this.GetJSONFieldObject<MJAIModelVendorEntity_IAIModelConfiguration>('ModelConfiguration');
+        const raw = this.ModelConfiguration;
+        if (raw !== this._ModelConfigurationObject_lastRaw) {
+            this._ModelConfigurationObject_cached = raw ? JSON.parse(raw) : null;
+            this._ModelConfigurationObject_lastRaw = raw;
+        }
+        return this._ModelConfigurationObject_cached!;
     }
     set ModelConfigurationObject(value: MJAIModelVendorEntity_IAIModelConfiguration | null) {
-        this.SetJSONFieldObject<MJAIModelVendorEntity_IAIModelConfiguration>('ModelConfiguration', value);
+        const raw = value ? JSON.stringify(value) : null;
+        this.ModelConfiguration = raw;
+        this._ModelConfigurationObject_cached = value;
+        this._ModelConfigurationObject_lastRaw = raw;
     }
 
     /**
@@ -54701,6 +54779,16 @@ export interface MJAIModelEntity_RealtimeConfigurationSettings {
      * Reasoning plane settings — dual delegation configuration. Absent defaults to `'local'`.
      */
     Reasoning?: MJAIModelEntity_RealtimeReasoningSettings | null;
+
+    /**
+     * Whether this realtime model natively supports full-duplex conversational audio
+     * (simultaneous speaking and listening with natural interruptions).
+     *
+     * When true, full-duplex models do not receive turn-taking tools or an energy-VAD floor gate,
+     * allowing the provider's native full-duplex model to handle natural turn transitions.
+     * Cascades AIModelType -> Vendor ModelDefaults -> AIModel -> AIModelVendor.
+     */
+    FullDuplex?: boolean | null;
 }
 
 /** Vision knobs. Reserved — no consumers yet. */
@@ -55101,19 +55189,25 @@ export class MJAIModelEntity extends BaseEntity<MJAIModelEntityType> {
         this.Set('ModelConfiguration', value);
     }
 
+    private _ModelConfigurationObject_cached: MJAIModelEntity_IAIModelConfiguration | null | undefined = undefined;
+    private _ModelConfigurationObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for ModelConfiguration — a live view of the parsed JSON as MJAIModelEntity_IAIModelConfiguration.
-    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
-    * underlying ModelConfiguration field, so it becomes dirty and Save() persists them. If the raw value changes by
-    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
-    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
-    * ToPlainJSON() from @memberjunction/core.
+    * Typed accessor for ModelConfiguration — returns parsed JSON as MJAIModelEntity_IAIModelConfiguration.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get ModelConfigurationObject(): MJAIModelEntity_IAIModelConfiguration | null {
-        return this.GetJSONFieldObject<MJAIModelEntity_IAIModelConfiguration>('ModelConfiguration');
+        const raw = this.ModelConfiguration;
+        if (raw !== this._ModelConfigurationObject_lastRaw) {
+            this._ModelConfigurationObject_cached = raw ? JSON.parse(raw) : null;
+            this._ModelConfigurationObject_lastRaw = raw;
+        }
+        return this._ModelConfigurationObject_cached!;
     }
     set ModelConfigurationObject(value: MJAIModelEntity_IAIModelConfiguration | null) {
-        this.SetJSONFieldObject<MJAIModelEntity_IAIModelConfiguration>('ModelConfiguration', value);
+        const raw = value ? JSON.stringify(value) : null;
+        this.ModelConfiguration = raw;
+        this._ModelConfigurationObject_cached = value;
+        this._ModelConfigurationObject_lastRaw = raw;
     }
 
     /**
@@ -55375,19 +55469,25 @@ export class MJAIPersonaVendorEntity extends BaseEntity<MJAIPersonaVendorEntityT
         this.Set('VendorSettings', value);
     }
 
+    private _VendorSettingsObject_cached: MJAIPersonaVendorEntity_IAIPersonaVendorSettings | null | undefined = undefined;
+    private _VendorSettingsObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for VendorSettings — a live view of the parsed JSON as MJAIPersonaVendorEntity_IAIPersonaVendorSettings.
-    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
-    * underlying VendorSettings field, so it becomes dirty and Save() persists them. If the raw value changes by
-    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
-    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
-    * ToPlainJSON() from @memberjunction/core.
+    * Typed accessor for VendorSettings — returns parsed JSON as MJAIPersonaVendorEntity_IAIPersonaVendorSettings.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get VendorSettingsObject(): MJAIPersonaVendorEntity_IAIPersonaVendorSettings | null {
-        return this.GetJSONFieldObject<MJAIPersonaVendorEntity_IAIPersonaVendorSettings>('VendorSettings');
+        const raw = this.VendorSettings;
+        if (raw !== this._VendorSettingsObject_lastRaw) {
+            this._VendorSettingsObject_cached = raw ? JSON.parse(raw) : null;
+            this._VendorSettingsObject_lastRaw = raw;
+        }
+        return this._VendorSettingsObject_cached!;
     }
     set VendorSettingsObject(value: MJAIPersonaVendorEntity_IAIPersonaVendorSettings | null) {
-        this.SetJSONFieldObject<MJAIPersonaVendorEntity_IAIPersonaVendorSettings>('VendorSettings', value);
+        const raw = value ? JSON.stringify(value) : null;
+        this.VendorSettings = raw;
+        this._VendorSettingsObject_cached = value;
+        this._VendorSettingsObject_lastRaw = raw;
     }
 
     /**
@@ -55618,19 +55718,25 @@ export class MJAIPersonaEntity extends BaseEntity<MJAIPersonaEntityType> {
         this.Set('StyleDescriptors', value);
     }
 
+    private _StyleDescriptorsObject_cached: MJAIPersonaEntity_IAIPersonaStyleDescriptors | null | undefined = undefined;
+    private _StyleDescriptorsObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for StyleDescriptors — a live view of the parsed JSON as MJAIPersonaEntity_IAIPersonaStyleDescriptors.
-    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
-    * underlying StyleDescriptors field, so it becomes dirty and Save() persists them. If the raw value changes by
-    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
-    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
-    * ToPlainJSON() from @memberjunction/core.
+    * Typed accessor for StyleDescriptors — returns parsed JSON as MJAIPersonaEntity_IAIPersonaStyleDescriptors.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get StyleDescriptorsObject(): MJAIPersonaEntity_IAIPersonaStyleDescriptors | null {
-        return this.GetJSONFieldObject<MJAIPersonaEntity_IAIPersonaStyleDescriptors>('StyleDescriptors');
+        const raw = this.StyleDescriptors;
+        if (raw !== this._StyleDescriptorsObject_lastRaw) {
+            this._StyleDescriptorsObject_cached = raw ? JSON.parse(raw) : null;
+            this._StyleDescriptorsObject_lastRaw = raw;
+        }
+        return this._StyleDescriptorsObject_cached!;
     }
     set StyleDescriptorsObject(value: MJAIPersonaEntity_IAIPersonaStyleDescriptors | null) {
-        this.SetJSONFieldObject<MJAIPersonaEntity_IAIPersonaStyleDescriptors>('StyleDescriptors', value);
+        const raw = value ? JSON.stringify(value) : null;
+        this.StyleDescriptors = raw;
+        this._StyleDescriptorsObject_cached = value;
+        this._StyleDescriptorsObject_lastRaw = raw;
     }
 
     /**
@@ -56067,6 +56173,16 @@ export interface MJAIPromptModelEntity_RealtimeConfigurationSettings {
      * Reasoning plane settings — dual delegation configuration. Absent defaults to `'local'`.
      */
     Reasoning?: MJAIPromptModelEntity_RealtimeReasoningSettings | null;
+
+    /**
+     * Whether this realtime model natively supports full-duplex conversational audio
+     * (simultaneous speaking and listening with natural interruptions).
+     *
+     * When true, full-duplex models do not receive turn-taking tools or an energy-VAD floor gate,
+     * allowing the provider's native full-duplex model to handle natural turn transitions.
+     * Cascades AIModelType -> Vendor ModelDefaults -> AIModel -> AIModelVendor.
+     */
+    FullDuplex?: boolean | null;
 }
 
 /** Vision knobs. Reserved — no consumers yet. */
@@ -56523,19 +56639,25 @@ export class MJAIPromptModelEntity extends BaseEntity<MJAIPromptModelEntityType>
         this.Set('PromptConfiguration', value);
     }
 
+    private _PromptConfigurationObject_cached: MJAIPromptModelEntity_IAIPromptModelConfiguration | null | undefined = undefined;
+    private _PromptConfigurationObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for PromptConfiguration — a live view of the parsed JSON as MJAIPromptModelEntity_IAIPromptModelConfiguration.
-    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
-    * underlying PromptConfiguration field, so it becomes dirty and Save() persists them. If the raw value changes by
-    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
-    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
-    * ToPlainJSON() from @memberjunction/core.
+    * Typed accessor for PromptConfiguration — returns parsed JSON as MJAIPromptModelEntity_IAIPromptModelConfiguration.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get PromptConfigurationObject(): MJAIPromptModelEntity_IAIPromptModelConfiguration | null {
-        return this.GetJSONFieldObject<MJAIPromptModelEntity_IAIPromptModelConfiguration>('PromptConfiguration');
+        const raw = this.PromptConfiguration;
+        if (raw !== this._PromptConfigurationObject_lastRaw) {
+            this._PromptConfigurationObject_cached = raw ? JSON.parse(raw) : null;
+            this._PromptConfigurationObject_lastRaw = raw;
+        }
+        return this._PromptConfigurationObject_cached!;
     }
     set PromptConfigurationObject(value: MJAIPromptModelEntity_IAIPromptModelConfiguration | null) {
-        this.SetJSONFieldObject<MJAIPromptModelEntity_IAIPromptModelConfiguration>('PromptConfiguration', value);
+        const raw = value ? JSON.stringify(value) : null;
+        this.PromptConfiguration = raw;
+        this._PromptConfigurationObject_cached = value;
+        this._PromptConfigurationObject_lastRaw = raw;
     }
 
     /**
@@ -58687,6 +58809,16 @@ export interface MJAIPromptEntity_RealtimeConfigurationSettings {
      * Reasoning plane settings — dual delegation configuration. Absent defaults to `'local'`.
      */
     Reasoning?: MJAIPromptEntity_RealtimeReasoningSettings | null;
+
+    /**
+     * Whether this realtime model natively supports full-duplex conversational audio
+     * (simultaneous speaking and listening with natural interruptions).
+     *
+     * When true, full-duplex models do not receive turn-taking tools or an energy-VAD floor gate,
+     * allowing the provider's native full-duplex model to handle natural turn transitions.
+     * Cascades AIModelType -> Vendor ModelDefaults -> AIModel -> AIModelVendor.
+     */
+    FullDuplex?: boolean | null;
 }
 
 /** Vision knobs. Reserved — no consumers yet. */
@@ -59842,19 +59974,25 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
         this.Set('PromptConfiguration', value);
     }
 
+    private _PromptConfigurationObject_cached: MJAIPromptEntity_IAIPromptConfiguration | null | undefined = undefined;
+    private _PromptConfigurationObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for PromptConfiguration — a live view of the parsed JSON as MJAIPromptEntity_IAIPromptConfiguration.
-    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
-    * underlying PromptConfiguration field, so it becomes dirty and Save() persists them. If the raw value changes by
-    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
-    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
-    * ToPlainJSON() from @memberjunction/core.
+    * Typed accessor for PromptConfiguration — returns parsed JSON as MJAIPromptEntity_IAIPromptConfiguration.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get PromptConfigurationObject(): MJAIPromptEntity_IAIPromptConfiguration | null {
-        return this.GetJSONFieldObject<MJAIPromptEntity_IAIPromptConfiguration>('PromptConfiguration');
+        const raw = this.PromptConfiguration;
+        if (raw !== this._PromptConfigurationObject_lastRaw) {
+            this._PromptConfigurationObject_cached = raw ? JSON.parse(raw) : null;
+            this._PromptConfigurationObject_lastRaw = raw;
+        }
+        return this._PromptConfigurationObject_cached!;
     }
     set PromptConfigurationObject(value: MJAIPromptEntity_IAIPromptConfiguration | null) {
-        this.SetJSONFieldObject<MJAIPromptEntity_IAIPromptConfiguration>('PromptConfiguration', value);
+        const raw = value ? JSON.stringify(value) : null;
+        this.PromptConfiguration = raw;
+        this._PromptConfigurationObject_cached = value;
+        this._PromptConfigurationObject_lastRaw = raw;
     }
 
     /**
@@ -60115,19 +60253,25 @@ export class MJAIRemoteBrowserProviderEntity extends BaseEntity<MJAIRemoteBrowse
         this.Set('SupportedFeatures', value);
     }
 
+    private _SupportedFeaturesObject_cached: MJAIRemoteBrowserProviderEntity_IRemoteBrowserProviderFeatures | null | undefined = undefined;
+    private _SupportedFeaturesObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for SupportedFeatures — a live view of the parsed JSON as MJAIRemoteBrowserProviderEntity_IRemoteBrowserProviderFeatures.
-    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
-    * underlying SupportedFeatures field, so it becomes dirty and Save() persists them. If the raw value changes by
-    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
-    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
-    * ToPlainJSON() from @memberjunction/core.
+    * Typed accessor for SupportedFeatures — returns parsed JSON as MJAIRemoteBrowserProviderEntity_IRemoteBrowserProviderFeatures.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get SupportedFeaturesObject(): MJAIRemoteBrowserProviderEntity_IRemoteBrowserProviderFeatures | null {
-        return this.GetJSONFieldObject<MJAIRemoteBrowserProviderEntity_IRemoteBrowserProviderFeatures>('SupportedFeatures');
+        const raw = this.SupportedFeatures;
+        if (raw !== this._SupportedFeaturesObject_lastRaw) {
+            this._SupportedFeaturesObject_cached = raw ? JSON.parse(raw) : null;
+            this._SupportedFeaturesObject_lastRaw = raw;
+        }
+        return this._SupportedFeaturesObject_cached!;
     }
     set SupportedFeaturesObject(value: MJAIRemoteBrowserProviderEntity_IRemoteBrowserProviderFeatures | null) {
-        this.SetJSONFieldObject<MJAIRemoteBrowserProviderEntity_IRemoteBrowserProviderFeatures>('SupportedFeatures', value);
+        const raw = value ? JSON.stringify(value) : null;
+        this.SupportedFeatures = raw;
+        this._SupportedFeaturesObject_cached = value;
+        this._SupportedFeaturesObject_lastRaw = raw;
     }
 
     /**
@@ -60402,8 +60546,7 @@ export class MJAIResultCacheEntity extends BaseEntity<MJAIResultCacheEntityType>
     /**
     * * Field Name: PromptEmbedding
     * * Display Name: Prompt Embedding
-    * * SQL Data Type: varbinary(MAX)
-    * * Binary Value: base64-encoded string. Decode with Base64ToBytes() — or Base64ToFloat32Vector() for an embedding — from @memberjunction/global.
+    * * SQL Data Type: varbinary
     * * Description: Vector representation of the prompt for similarity matching.
     */
     get PromptEmbedding(): string | null {
@@ -61873,6 +62016,16 @@ export interface MJAIVendorEntity_RealtimeConfigurationSettings {
      * Reasoning plane settings — dual delegation configuration. Absent defaults to `'local'`.
      */
     Reasoning?: MJAIVendorEntity_RealtimeReasoningSettings | null;
+
+    /**
+     * Whether this realtime model natively supports full-duplex conversational audio
+     * (simultaneous speaking and listening with natural interruptions).
+     *
+     * When true, full-duplex models do not receive turn-taking tools or an energy-VAD floor gate,
+     * allowing the provider's native full-duplex model to handle natural turn transitions.
+     * Cascades AIModelType -> Vendor ModelDefaults -> AIModel -> AIModelVendor.
+     */
+    FullDuplex?: boolean | null;
 }
 
 /** Vision knobs. Reserved — no consumers yet. */
@@ -62098,19 +62251,25 @@ export class MJAIVendorEntity extends BaseEntity<MJAIVendorEntityType> {
         this.Set('Configuration', value);
     }
 
+    private _ConfigurationObject_cached: MJAIVendorEntity_IAIVendorConfiguration | null | undefined = undefined;
+    private _ConfigurationObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for Configuration — a live view of the parsed JSON as MJAIVendorEntity_IAIVendorConfiguration.
-    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
-    * underlying Configuration field, so it becomes dirty and Save() persists them. If the raw value changes by
-    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
-    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
-    * ToPlainJSON() from @memberjunction/core.
+    * Typed accessor for Configuration — returns parsed JSON as MJAIVendorEntity_IAIVendorConfiguration.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get ConfigurationObject(): MJAIVendorEntity_IAIVendorConfiguration | null {
-        return this.GetJSONFieldObject<MJAIVendorEntity_IAIVendorConfiguration>('Configuration');
+        const raw = this.Configuration;
+        if (raw !== this._ConfigurationObject_lastRaw) {
+            this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
+            this._ConfigurationObject_lastRaw = raw;
+        }
+        return this._ConfigurationObject_cached!;
     }
     set ConfigurationObject(value: MJAIVendorEntity_IAIVendorConfiguration | null) {
-        this.SetJSONFieldObject<MJAIVendorEntity_IAIVendorConfiguration>('Configuration', value);
+        const raw = value ? JSON.stringify(value) : null;
+        this.Configuration = raw;
+        this._ConfigurationObject_cached = value;
+        this._ConfigurationObject_lastRaw = raw;
     }
 
     /**
@@ -65695,19 +65854,25 @@ export class MJActionEntity extends BaseEntity<MJActionEntityType> {
         this.Set('RuntimeActionConfiguration', value);
     }
 
+    private _RuntimeActionConfigurationObject_cached: MJActionEntity_IRuntimeActionConfiguration | null | undefined = undefined;
+    private _RuntimeActionConfigurationObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for RuntimeActionConfiguration — a live view of the parsed JSON as MJActionEntity_IRuntimeActionConfiguration.
-    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
-    * underlying RuntimeActionConfiguration field, so it becomes dirty and Save() persists them. If the raw value changes by
-    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
-    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
-    * ToPlainJSON() from @memberjunction/core.
+    * Typed accessor for RuntimeActionConfiguration — returns parsed JSON as MJActionEntity_IRuntimeActionConfiguration.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get RuntimeActionConfigurationObject(): MJActionEntity_IRuntimeActionConfiguration | null {
-        return this.GetJSONFieldObject<MJActionEntity_IRuntimeActionConfiguration>('RuntimeActionConfiguration');
+        const raw = this.RuntimeActionConfiguration;
+        if (raw !== this._RuntimeActionConfigurationObject_lastRaw) {
+            this._RuntimeActionConfigurationObject_cached = raw ? JSON.parse(raw) : null;
+            this._RuntimeActionConfigurationObject_lastRaw = raw;
+        }
+        return this._RuntimeActionConfigurationObject_cached!;
     }
     set RuntimeActionConfigurationObject(value: MJActionEntity_IRuntimeActionConfiguration | null) {
-        this.SetJSONFieldObject<MJActionEntity_IRuntimeActionConfiguration>('RuntimeActionConfiguration', value);
+        const raw = value ? JSON.stringify(value) : null;
+        this.RuntimeActionConfiguration = raw;
+        this._RuntimeActionConfigurationObject_cached = value;
+        this._RuntimeActionConfigurationObject_lastRaw = raw;
     }
 
     /**
@@ -66543,19 +66708,25 @@ export class MJApplicationEntity extends BaseEntity<MJApplicationEntityType> {
         this.Set('DefaultNavItems', value);
     }
 
+    private _DefaultNavItemsObject_cached: Array<MJApplicationEntity_IDefaultNavItem> | null | undefined = undefined;
+    private _DefaultNavItemsObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for DefaultNavItems — a live view of the parsed JSON as Array<MJApplicationEntity_IDefaultNavItem>.
-    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
-    * underlying DefaultNavItems field, so it becomes dirty and Save() persists them. If the raw value changes by
-    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
-    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
-    * ToPlainJSON() from @memberjunction/core.
+    * Typed accessor for DefaultNavItems — returns parsed JSON as Array<MJApplicationEntity_IDefaultNavItem>.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get DefaultNavItemsObject(): Array<MJApplicationEntity_IDefaultNavItem> | null {
-        return this.GetJSONFieldObject<Array<MJApplicationEntity_IDefaultNavItem>>('DefaultNavItems');
+        const raw = this.DefaultNavItems;
+        if (raw !== this._DefaultNavItemsObject_lastRaw) {
+            this._DefaultNavItemsObject_cached = raw ? JSON.parse(raw) : null;
+            this._DefaultNavItemsObject_lastRaw = raw;
+        }
+        return this._DefaultNavItemsObject_cached!;
     }
     set DefaultNavItemsObject(value: Array<MJApplicationEntity_IDefaultNavItem> | null) {
-        this.SetJSONFieldObject<Array<MJApplicationEntity_IDefaultNavItem>>('DefaultNavItems', value);
+        const raw = value ? JSON.stringify(value) : null;
+        this.DefaultNavItems = raw;
+        this._DefaultNavItemsObject_cached = value;
+        this._DefaultNavItemsObject_lastRaw = raw;
     }
 
     /**
@@ -66696,19 +66867,25 @@ export class MJApplicationEntity extends BaseEntity<MJApplicationEntityType> {
         this.Set('AgentSettings', value);
     }
 
+    private _AgentSettingsObject_cached: MJApplicationEntity_IAgentSettings | null | undefined = undefined;
+    private _AgentSettingsObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for AgentSettings — a live view of the parsed JSON as MJApplicationEntity_IAgentSettings.
-    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
-    * underlying AgentSettings field, so it becomes dirty and Save() persists them. If the raw value changes by
-    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
-    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
-    * ToPlainJSON() from @memberjunction/core.
+    * Typed accessor for AgentSettings — returns parsed JSON as MJApplicationEntity_IAgentSettings.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get AgentSettingsObject(): MJApplicationEntity_IAgentSettings | null {
-        return this.GetJSONFieldObject<MJApplicationEntity_IAgentSettings>('AgentSettings');
+        const raw = this.AgentSettings;
+        if (raw !== this._AgentSettingsObject_lastRaw) {
+            this._AgentSettingsObject_cached = raw ? JSON.parse(raw) : null;
+            this._AgentSettingsObject_lastRaw = raw;
+        }
+        return this._AgentSettingsObject_cached!;
     }
     set AgentSettingsObject(value: MJApplicationEntity_IAgentSettings | null) {
-        this.SetJSONFieldObject<MJApplicationEntity_IAgentSettings>('AgentSettings', value);
+        const raw = value ? JSON.stringify(value) : null;
+        this.AgentSettings = raw;
+        this._AgentSettingsObject_cached = value;
+        this._AgentSettingsObject_lastRaw = raw;
     }
 }
 
@@ -74952,8 +75129,7 @@ export class MJComponentEntity extends BaseEntity<MJComponentEntityType> {
     /**
     * * Field Name: FunctionalRequirementsVectorBinary
     * * Display Name: Functional Requirements Vector Binary
-    * * SQL Data Type: varbinary(MAX)
-    * * Binary Value: base64-encoded string. Decode with Base64ToBytes() — or Base64ToFloat32Vector() for an embedding — from @memberjunction/global.
+    * * SQL Data Type: varbinary
     * * Description: The functional-requirements embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of FunctionalRequirementsVector. Written alongside FunctionalRequirementsVector; readers prefer it and fall back to FunctionalRequirementsVector when it is NULL.
     */
     get FunctionalRequirementsVectorBinary(): string | null {
@@ -74966,8 +75142,7 @@ export class MJComponentEntity extends BaseEntity<MJComponentEntityType> {
     /**
     * * Field Name: TechnicalDesignVectorBinary
     * * Display Name: Technical Design Vector Binary
-    * * SQL Data Type: varbinary(MAX)
-    * * Binary Value: base64-encoded string. Decode with Base64ToBytes() — or Base64ToFloat32Vector() for an embedding — from @memberjunction/global.
+    * * SQL Data Type: varbinary
     * * Description: The technical-design embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of TechnicalDesignVector. Written alongside TechnicalDesignVector; readers prefer it and fall back to TechnicalDesignVector when it is NULL.
     */
     get TechnicalDesignVectorBinary(): string | null {
@@ -77104,19 +77279,25 @@ export class MJContentProcessRunEntity extends BaseEntity<MJContentProcessRunEnt
         this.Set('Configuration', value);
     }
 
+    private _ConfigurationObject_cached: MJContentProcessRunEntity_IContentProcessRunConfiguration | null | undefined = undefined;
+    private _ConfigurationObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for Configuration — a live view of the parsed JSON as MJContentProcessRunEntity_IContentProcessRunConfiguration.
-    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
-    * underlying Configuration field, so it becomes dirty and Save() persists them. If the raw value changes by
-    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
-    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
-    * ToPlainJSON() from @memberjunction/core.
+    * Typed accessor for Configuration — returns parsed JSON as MJContentProcessRunEntity_IContentProcessRunConfiguration.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get ConfigurationObject(): MJContentProcessRunEntity_IContentProcessRunConfiguration | null {
-        return this.GetJSONFieldObject<MJContentProcessRunEntity_IContentProcessRunConfiguration>('Configuration');
+        const raw = this.Configuration;
+        if (raw !== this._ConfigurationObject_lastRaw) {
+            this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
+            this._ConfigurationObject_lastRaw = raw;
+        }
+        return this._ConfigurationObject_cached!;
     }
     set ConfigurationObject(value: MJContentProcessRunEntity_IContentProcessRunConfiguration | null) {
-        this.SetJSONFieldObject<MJContentProcessRunEntity_IContentProcessRunConfiguration>('Configuration', value);
+        const raw = value ? JSON.stringify(value) : null;
+        this.Configuration = raw;
+        this._ConfigurationObject_cached = value;
+        this._ConfigurationObject_lastRaw = raw;
     }
 
     /**
@@ -77560,19 +77741,25 @@ export class MJContentSourceTypeEntity extends BaseEntity<MJContentSourceTypeEnt
         this.Set('Configuration', value);
     }
 
+    private _ConfigurationObject_cached: MJContentSourceTypeEntity_IContentSourceTypeConfiguration | null | undefined = undefined;
+    private _ConfigurationObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for Configuration — a live view of the parsed JSON as MJContentSourceTypeEntity_IContentSourceTypeConfiguration.
-    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
-    * underlying Configuration field, so it becomes dirty and Save() persists them. If the raw value changes by
-    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
-    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
-    * ToPlainJSON() from @memberjunction/core.
+    * Typed accessor for Configuration — returns parsed JSON as MJContentSourceTypeEntity_IContentSourceTypeConfiguration.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get ConfigurationObject(): MJContentSourceTypeEntity_IContentSourceTypeConfiguration | null {
-        return this.GetJSONFieldObject<MJContentSourceTypeEntity_IContentSourceTypeConfiguration>('Configuration');
+        const raw = this.Configuration;
+        if (raw !== this._ConfigurationObject_lastRaw) {
+            this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
+            this._ConfigurationObject_lastRaw = raw;
+        }
+        return this._ConfigurationObject_cached!;
     }
     set ConfigurationObject(value: MJContentSourceTypeEntity_IContentSourceTypeConfiguration | null) {
-        this.SetJSONFieldObject<MJContentSourceTypeEntity_IContentSourceTypeConfiguration>('Configuration', value);
+        const raw = value ? JSON.stringify(value) : null;
+        this.Configuration = raw;
+        this._ConfigurationObject_cached = value;
+        this._ConfigurationObject_lastRaw = raw;
     }
 }
 
@@ -78066,19 +78253,25 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
         this.Set('Configuration', value);
     }
 
+    private _ConfigurationObject_cached: MJContentSourceEntity_IContentSourceConfiguration | null | undefined = undefined;
+    private _ConfigurationObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for Configuration — a live view of the parsed JSON as MJContentSourceEntity_IContentSourceConfiguration.
-    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
-    * underlying Configuration field, so it becomes dirty and Save() persists them. If the raw value changes by
-    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
-    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
-    * ToPlainJSON() from @memberjunction/core.
+    * Typed accessor for Configuration — returns parsed JSON as MJContentSourceEntity_IContentSourceConfiguration.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get ConfigurationObject(): MJContentSourceEntity_IContentSourceConfiguration | null {
-        return this.GetJSONFieldObject<MJContentSourceEntity_IContentSourceConfiguration>('Configuration');
+        const raw = this.Configuration;
+        if (raw !== this._ConfigurationObject_lastRaw) {
+            this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
+            this._ConfigurationObject_lastRaw = raw;
+        }
+        return this._ConfigurationObject_cached!;
     }
     set ConfigurationObject(value: MJContentSourceEntity_IContentSourceConfiguration | null) {
-        this.SetJSONFieldObject<MJContentSourceEntity_IContentSourceConfiguration>('Configuration', value);
+        const raw = value ? JSON.stringify(value) : null;
+        this.Configuration = raw;
+        this._ConfigurationObject_cached = value;
+        this._ConfigurationObject_lastRaw = raw;
     }
 
     /**
@@ -78649,19 +78842,25 @@ export class MJContentTypeEntity extends BaseEntity<MJContentTypeEntityType> {
         this.Set('Configuration', value);
     }
 
+    private _ConfigurationObject_cached: MJContentTypeEntity_IContentTypeConfiguration | null | undefined = undefined;
+    private _ConfigurationObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for Configuration — a live view of the parsed JSON as MJContentTypeEntity_IContentTypeConfiguration.
-    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
-    * underlying Configuration field, so it becomes dirty and Save() persists them. If the raw value changes by
-    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
-    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
-    * ToPlainJSON() from @memberjunction/core.
+    * Typed accessor for Configuration — returns parsed JSON as MJContentTypeEntity_IContentTypeConfiguration.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get ConfigurationObject(): MJContentTypeEntity_IContentTypeConfiguration | null {
-        return this.GetJSONFieldObject<MJContentTypeEntity_IContentTypeConfiguration>('Configuration');
+        const raw = this.Configuration;
+        if (raw !== this._ConfigurationObject_lastRaw) {
+            this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
+            this._ConfigurationObject_lastRaw = raw;
+        }
+        return this._ConfigurationObject_cached!;
     }
     set ConfigurationObject(value: MJContentTypeEntity_IContentTypeConfiguration | null) {
-        this.SetJSONFieldObject<MJContentTypeEntity_IContentTypeConfiguration>('Configuration', value);
+        const raw = value ? JSON.stringify(value) : null;
+        this.Configuration = raw;
+        this._ConfigurationObject_cached = value;
+        this._ConfigurationObject_lastRaw = raw;
     }
 
     /**
@@ -88139,19 +88338,25 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
         this.Set('Configuration', value);
     }
 
+    private _ConfigurationObject_cached: MJEntityEntity_IEntityConfiguration | null | undefined = undefined;
+    private _ConfigurationObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for Configuration — a live view of the parsed JSON as MJEntityEntity_IEntityConfiguration.
-    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
-    * underlying Configuration field, so it becomes dirty and Save() persists them. If the raw value changes by
-    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
-    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
-    * ToPlainJSON() from @memberjunction/core.
+    * Typed accessor for Configuration — returns parsed JSON as MJEntityEntity_IEntityConfiguration.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get ConfigurationObject(): MJEntityEntity_IEntityConfiguration | null {
-        return this.GetJSONFieldObject<MJEntityEntity_IEntityConfiguration>('Configuration');
+        const raw = this.Configuration;
+        if (raw !== this._ConfigurationObject_lastRaw) {
+            this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
+            this._ConfigurationObject_lastRaw = raw;
+        }
+        return this._ConfigurationObject_cached!;
     }
     set ConfigurationObject(value: MJEntityEntity_IEntityConfiguration | null) {
-        this.SetJSONFieldObject<MJEntityEntity_IEntityConfiguration>('Configuration', value);
+        const raw = value ? JSON.stringify(value) : null;
+        this.Configuration = raw;
+        this._ConfigurationObject_cached = value;
+        this._ConfigurationObject_lastRaw = raw;
     }
 
     /**
@@ -88168,19 +88373,25 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
         this.Set('SubtypeSelector', value);
     }
 
+    private _SubtypeSelectorObject_cached: MJEntityEntity_IEntitySubtypeSelectorConfig | null | undefined = undefined;
+    private _SubtypeSelectorObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for SubtypeSelector — a live view of the parsed JSON as MJEntityEntity_IEntitySubtypeSelectorConfig.
-    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
-    * underlying SubtypeSelector field, so it becomes dirty and Save() persists them. If the raw value changes by
-    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
-    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
-    * ToPlainJSON() from @memberjunction/core.
+    * Typed accessor for SubtypeSelector — returns parsed JSON as MJEntityEntity_IEntitySubtypeSelectorConfig.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get SubtypeSelectorObject(): MJEntityEntity_IEntitySubtypeSelectorConfig | null {
-        return this.GetJSONFieldObject<MJEntityEntity_IEntitySubtypeSelectorConfig>('SubtypeSelector');
+        const raw = this.SubtypeSelector;
+        if (raw !== this._SubtypeSelectorObject_lastRaw) {
+            this._SubtypeSelectorObject_cached = raw ? JSON.parse(raw) : null;
+            this._SubtypeSelectorObject_lastRaw = raw;
+        }
+        return this._SubtypeSelectorObject_cached!;
     }
     set SubtypeSelectorObject(value: MJEntityEntity_IEntitySubtypeSelectorConfig | null) {
-        this.SetJSONFieldObject<MJEntityEntity_IEntitySubtypeSelectorConfig>('SubtypeSelector', value);
+        const raw = value ? JSON.stringify(value) : null;
+        this.SubtypeSelector = raw;
+        this._SubtypeSelectorObject_cached = value;
+        this._SubtypeSelectorObject_lastRaw = raw;
     }
 
     /**
@@ -91741,19 +91952,25 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
         this.Set('EmbeddedRecord', value);
     }
 
+    private _EmbeddedRecordObject_cached: MJEntityFieldEntity_IEmbeddedRecordConfig | null | undefined = undefined;
+    private _EmbeddedRecordObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for EmbeddedRecord — a live view of the parsed JSON as MJEntityFieldEntity_IEmbeddedRecordConfig.
-    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
-    * underlying EmbeddedRecord field, so it becomes dirty and Save() persists them. If the raw value changes by
-    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
-    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
-    * ToPlainJSON() from @memberjunction/core.
+    * Typed accessor for EmbeddedRecord — returns parsed JSON as MJEntityFieldEntity_IEmbeddedRecordConfig.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get EmbeddedRecordObject(): MJEntityFieldEntity_IEmbeddedRecordConfig | null {
-        return this.GetJSONFieldObject<MJEntityFieldEntity_IEmbeddedRecordConfig>('EmbeddedRecord');
+        const raw = this.EmbeddedRecord;
+        if (raw !== this._EmbeddedRecordObject_lastRaw) {
+            this._EmbeddedRecordObject_cached = raw ? JSON.parse(raw) : null;
+            this._EmbeddedRecordObject_lastRaw = raw;
+        }
+        return this._EmbeddedRecordObject_cached!;
     }
     set EmbeddedRecordObject(value: MJEntityFieldEntity_IEmbeddedRecordConfig | null) {
-        this.SetJSONFieldObject<MJEntityFieldEntity_IEmbeddedRecordConfig>('EmbeddedRecord', value);
+        const raw = value ? JSON.stringify(value) : null;
+        this.EmbeddedRecord = raw;
+        this._EmbeddedRecordObject_cached = value;
+        this._EmbeddedRecordObject_lastRaw = raw;
     }
 
     /**
@@ -91770,19 +91987,25 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
         this.Set('Configuration', value);
     }
 
+    private _ConfigurationObject_cached: MJEntityFieldEntity_IEntityFieldConfiguration | null | undefined = undefined;
+    private _ConfigurationObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for Configuration — a live view of the parsed JSON as MJEntityFieldEntity_IEntityFieldConfiguration.
-    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
-    * underlying Configuration field, so it becomes dirty and Save() persists them. If the raw value changes by
-    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
-    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
-    * ToPlainJSON() from @memberjunction/core.
+    * Typed accessor for Configuration — returns parsed JSON as MJEntityFieldEntity_IEntityFieldConfiguration.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get ConfigurationObject(): MJEntityFieldEntity_IEntityFieldConfiguration | null {
-        return this.GetJSONFieldObject<MJEntityFieldEntity_IEntityFieldConfiguration>('Configuration');
+        const raw = this.Configuration;
+        if (raw !== this._ConfigurationObject_lastRaw) {
+            this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
+            this._ConfigurationObject_lastRaw = raw;
+        }
+        return this._ConfigurationObject_cached!;
     }
     set ConfigurationObject(value: MJEntityFieldEntity_IEntityFieldConfiguration | null) {
-        this.SetJSONFieldObject<MJEntityFieldEntity_IEntityFieldConfiguration>('Configuration', value);
+        const raw = value ? JSON.stringify(value) : null;
+        this.Configuration = raw;
+        this._ConfigurationObject_cached = value;
+        this._ConfigurationObject_lastRaw = raw;
     }
 
     /**
@@ -92011,7 +92234,7 @@ export class MJEntityFormContributionEntity extends BaseEntity<MJEntityFormContr
             if (!isValid) {
                 result.Errors.push(new ValidationErrorInfo(
                     "ReplacesFieldNames",
-                    "Replaces Field Names must be a valid, non-empty JSON array (e.g., [\"FieldName\"]).",
+                    "Replaces Field Names must be a valid, non-empty JSON array (e.g., ["FieldName"]).",
                     this.ReplacesFieldNames,
                     ValidationErrorType.Failure
                 ));
@@ -93924,8 +94147,7 @@ export class MJEntityRecordDocumentEntity extends BaseEntity<MJEntityRecordDocum
     /**
     * * Field Name: VectorBinary
     * * Display Name: Vector Binary
-    * * SQL Data Type: varbinary(MAX)
-    * * Binary Value: base64-encoded string. Decode with Base64ToBytes() — or Base64ToFloat32Vector() for an embedding — from @memberjunction/global.
+    * * SQL Data Type: varbinary
     * * Description: The embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of VectorJSON. Written alongside VectorJSON by vector sync; readers prefer it and fall back to VectorJSON when it is NULL.
     */
     get VectorBinary(): string | null {
@@ -94764,19 +94986,25 @@ export class MJEntityRelationshipEntity extends BaseEntity<MJEntityRelationshipE
         this.Set('RelatedRecordCollection', value);
     }
 
+    private _RelatedRecordCollectionObject_cached: MJEntityRelationshipEntity_IRelatedRecordCollectionConfig | null | undefined = undefined;
+    private _RelatedRecordCollectionObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for RelatedRecordCollection — a live view of the parsed JSON as MJEntityRelationshipEntity_IRelatedRecordCollectionConfig.
-    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
-    * underlying RelatedRecordCollection field, so it becomes dirty and Save() persists them. If the raw value changes by
-    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
-    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
-    * ToPlainJSON() from @memberjunction/core.
+    * Typed accessor for RelatedRecordCollection — returns parsed JSON as MJEntityRelationshipEntity_IRelatedRecordCollectionConfig.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get RelatedRecordCollectionObject(): MJEntityRelationshipEntity_IRelatedRecordCollectionConfig | null {
-        return this.GetJSONFieldObject<MJEntityRelationshipEntity_IRelatedRecordCollectionConfig>('RelatedRecordCollection');
+        const raw = this.RelatedRecordCollection;
+        if (raw !== this._RelatedRecordCollectionObject_lastRaw) {
+            this._RelatedRecordCollectionObject_cached = raw ? JSON.parse(raw) : null;
+            this._RelatedRecordCollectionObject_lastRaw = raw;
+        }
+        return this._RelatedRecordCollectionObject_cached!;
     }
     set RelatedRecordCollectionObject(value: MJEntityRelationshipEntity_IRelatedRecordCollectionConfig | null) {
-        this.SetJSONFieldObject<MJEntityRelationshipEntity_IRelatedRecordCollectionConfig>('RelatedRecordCollection', value);
+        const raw = value ? JSON.stringify(value) : null;
+        this.RelatedRecordCollection = raw;
+        this._RelatedRecordCollectionObject_cached = value;
+        this._RelatedRecordCollectionObject_lastRaw = raw;
     }
 
     /**
@@ -94793,19 +95021,25 @@ export class MJEntityRelationshipEntity extends BaseEntity<MJEntityRelationshipE
         this.Set('Configuration', value);
     }
 
+    private _ConfigurationObject_cached: MJEntityRelationshipEntity_IEntityRelationshipConfiguration | null | undefined = undefined;
+    private _ConfigurationObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for Configuration — a live view of the parsed JSON as MJEntityRelationshipEntity_IEntityRelationshipConfiguration.
-    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
-    * underlying Configuration field, so it becomes dirty and Save() persists them. If the raw value changes by
-    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
-    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
-    * ToPlainJSON() from @memberjunction/core.
+    * Typed accessor for Configuration — returns parsed JSON as MJEntityRelationshipEntity_IEntityRelationshipConfiguration.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get ConfigurationObject(): MJEntityRelationshipEntity_IEntityRelationshipConfiguration | null {
-        return this.GetJSONFieldObject<MJEntityRelationshipEntity_IEntityRelationshipConfiguration>('Configuration');
+        const raw = this.Configuration;
+        if (raw !== this._ConfigurationObject_lastRaw) {
+            this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
+            this._ConfigurationObject_lastRaw = raw;
+        }
+        return this._ConfigurationObject_cached!;
     }
     set ConfigurationObject(value: MJEntityRelationshipEntity_IEntityRelationshipConfiguration | null) {
-        this.SetJSONFieldObject<MJEntityRelationshipEntity_IEntityRelationshipConfiguration>('Configuration', value);
+        const raw = value ? JSON.stringify(value) : null;
+        this.Configuration = raw;
+        this._ConfigurationObject_cached = value;
+        this._ConfigurationObject_lastRaw = raw;
     }
 
     /**
@@ -98186,19 +98420,25 @@ export class MJFileStorageProviderEntity extends BaseEntity<MJFileStorageProvide
         this.Set('Configuration', value);
     }
 
+    private _ConfigurationObject_cached: MJFileStorageProviderEntity_IFileStorageProviderConfiguration | null | undefined = undefined;
+    private _ConfigurationObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for Configuration — a live view of the parsed JSON as MJFileStorageProviderEntity_IFileStorageProviderConfiguration.
-    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
-    * underlying Configuration field, so it becomes dirty and Save() persists them. If the raw value changes by
-    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
-    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
-    * ToPlainJSON() from @memberjunction/core.
+    * Typed accessor for Configuration — returns parsed JSON as MJFileStorageProviderEntity_IFileStorageProviderConfiguration.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get ConfigurationObject(): MJFileStorageProviderEntity_IFileStorageProviderConfiguration | null {
-        return this.GetJSONFieldObject<MJFileStorageProviderEntity_IFileStorageProviderConfiguration>('Configuration');
+        const raw = this.Configuration;
+        if (raw !== this._ConfigurationObject_lastRaw) {
+            this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
+            this._ConfigurationObject_lastRaw = raw;
+        }
+        return this._ConfigurationObject_cached!;
     }
     set ConfigurationObject(value: MJFileStorageProviderEntity_IFileStorageProviderConfiguration | null) {
-        this.SetJSONFieldObject<MJFileStorageProviderEntity_IFileStorageProviderConfiguration>('Configuration', value);
+        const raw = value ? JSON.stringify(value) : null;
+        this.Configuration = raw;
+        this._ConfigurationObject_cached = value;
+        this._ConfigurationObject_lastRaw = raw;
     }
 
     /**
@@ -112892,26 +113132,31 @@ export class MJQueryEntity extends BaseEntity<MJQueryEntityType> {
         this.Set('Configuration', value);
     }
 
+    private _ConfigurationObject_cached: MJQueryEntity_IQueryConfiguration | null | undefined = undefined;
+    private _ConfigurationObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for Configuration — a live view of the parsed JSON as MJQueryEntity_IQueryConfiguration.
-    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
-    * underlying Configuration field, so it becomes dirty and Save() persists them. If the raw value changes by
-    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
-    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
-    * ToPlainJSON() from @memberjunction/core.
+    * Typed accessor for Configuration — returns parsed JSON as MJQueryEntity_IQueryConfiguration.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get ConfigurationObject(): MJQueryEntity_IQueryConfiguration | null {
-        return this.GetJSONFieldObject<MJQueryEntity_IQueryConfiguration>('Configuration');
+        const raw = this.Configuration;
+        if (raw !== this._ConfigurationObject_lastRaw) {
+            this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
+            this._ConfigurationObject_lastRaw = raw;
+        }
+        return this._ConfigurationObject_cached!;
     }
     set ConfigurationObject(value: MJQueryEntity_IQueryConfiguration | null) {
-        this.SetJSONFieldObject<MJQueryEntity_IQueryConfiguration>('Configuration', value);
+        const raw = value ? JSON.stringify(value) : null;
+        this.Configuration = raw;
+        this._ConfigurationObject_cached = value;
+        this._ConfigurationObject_lastRaw = raw;
     }
 
     /**
     * * Field Name: EmbeddingVectorBinary
     * * Display Name: Embedding Vector Binary
-    * * SQL Data Type: varbinary(MAX)
-    * * Binary Value: base64-encoded string. Decode with Base64ToBytes() — or Base64ToFloat32Vector() for an embedding — from @memberjunction/global.
+    * * SQL Data Type: varbinary
     * * Description: The query embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of EmbeddingVector. Written alongside EmbeddingVector; readers prefer it and fall back to EmbeddingVector when it is NULL.
     */
     get EmbeddingVectorBinary(): string | null {
@@ -115994,19 +116239,25 @@ export class MJRecordChangeEntity extends BaseEntity<MJRecordChangeEntityType> {
         this.Set('ChangeContext', value);
     }
 
+    private _ChangeContextObject_cached: MJRecordChangeEntity_IRecordChangeContext | null | undefined = undefined;
+    private _ChangeContextObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for ChangeContext — a live view of the parsed JSON as MJRecordChangeEntity_IRecordChangeContext.
-    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
-    * underlying ChangeContext field, so it becomes dirty and Save() persists them. If the raw value changes by
-    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
-    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
-    * ToPlainJSON() from @memberjunction/core.
+    * Typed accessor for ChangeContext — returns parsed JSON as MJRecordChangeEntity_IRecordChangeContext.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get ChangeContextObject(): MJRecordChangeEntity_IRecordChangeContext | null {
-        return this.GetJSONFieldObject<MJRecordChangeEntity_IRecordChangeContext>('ChangeContext');
+        const raw = this.ChangeContext;
+        if (raw !== this._ChangeContextObject_lastRaw) {
+            this._ChangeContextObject_cached = raw ? JSON.parse(raw) : null;
+            this._ChangeContextObject_lastRaw = raw;
+        }
+        return this._ChangeContextObject_cached!;
     }
     set ChangeContextObject(value: MJRecordChangeEntity_IRecordChangeContext | null) {
-        this.SetJSONFieldObject<MJRecordChangeEntity_IRecordChangeContext>('ChangeContext', value);
+        const raw = value ? JSON.stringify(value) : null;
+        this.ChangeContext = raw;
+        this._ChangeContextObject_cached = value;
+        this._ChangeContextObject_lastRaw = raw;
     }
 
     /**
@@ -116557,19 +116808,25 @@ export class MJRecordCloneLogEntity extends BaseEntity<MJRecordCloneLogEntityTyp
         this.Set('PlanJSON', value);
     }
 
+    private _PlanJSONObject_cached: MJRecordCloneLogEntity_IClonePlan | undefined = undefined;
+    private _PlanJSONObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for PlanJSON — a live view of the parsed JSON as MJRecordCloneLogEntity_IClonePlan.
-    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
-    * underlying PlanJSON field, so it becomes dirty and Save() persists them. If the raw value changes by
-    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
-    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
-    * ToPlainJSON() from @memberjunction/core.
+    * Typed accessor for PlanJSON — returns parsed JSON as MJRecordCloneLogEntity_IClonePlan.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get PlanJSONObject(): MJRecordCloneLogEntity_IClonePlan {
-        return this.GetJSONFieldObject<MJRecordCloneLogEntity_IClonePlan>('PlanJSON')!;
+        const raw = this.PlanJSON;
+        if (raw !== this._PlanJSONObject_lastRaw) {
+            this._PlanJSONObject_cached = raw ? JSON.parse(raw) : null;
+            this._PlanJSONObject_lastRaw = raw;
+        }
+        return this._PlanJSONObject_cached!;
     }
     set PlanJSONObject(value: MJRecordCloneLogEntity_IClonePlan) {
-        this.SetJSONFieldObject<MJRecordCloneLogEntity_IClonePlan>('PlanJSON', value);
+        const raw = value ? JSON.stringify(value) : null;
+        this.PlanJSON = raw;
+        this._PlanJSONObject_cached = value;
+        this._PlanJSONObject_lastRaw = raw;
     }
 
     /**
@@ -119000,19 +119257,25 @@ export class MJRemoteOperationEntity extends BaseEntity<MJRemoteOperationEntityT
         this.Set('Libraries', value);
     }
 
+    private _LibrariesObject_cached: Array<MJRemoteOperationEntity_RemoteOperationLibrary> | null | undefined = undefined;
+    private _LibrariesObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for Libraries — a live view of the parsed JSON as Array<MJRemoteOperationEntity_RemoteOperationLibrary>.
-    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
-    * underlying Libraries field, so it becomes dirty and Save() persists them. If the raw value changes by
-    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
-    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
-    * ToPlainJSON() from @memberjunction/core.
+    * Typed accessor for Libraries — returns parsed JSON as Array<MJRemoteOperationEntity_RemoteOperationLibrary>.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get LibrariesObject(): Array<MJRemoteOperationEntity_RemoteOperationLibrary> | null {
-        return this.GetJSONFieldObject<Array<MJRemoteOperationEntity_RemoteOperationLibrary>>('Libraries');
+        const raw = this.Libraries;
+        if (raw !== this._LibrariesObject_lastRaw) {
+            this._LibrariesObject_cached = raw ? JSON.parse(raw) : null;
+            this._LibrariesObject_lastRaw = raw;
+        }
+        return this._LibrariesObject_cached!;
     }
     set LibrariesObject(value: Array<MJRemoteOperationEntity_RemoteOperationLibrary> | null) {
-        this.SetJSONFieldObject<Array<MJRemoteOperationEntity_RemoteOperationLibrary>>('Libraries', value);
+        const raw = value ? JSON.stringify(value) : null;
+        this.Libraries = raw;
+        this._LibrariesObject_cached = value;
+        this._LibrariesObject_lastRaw = raw;
     }
 
     /**
@@ -120737,19 +121000,25 @@ export class MJRubricCriterionEntity extends BaseEntity<MJRubricCriterionEntityT
         this.Set('EvaluatorConfig', value);
     }
 
+    private _EvaluatorConfigObject_cached: MJRubricCriterionEntity_IRubricCriterionEvaluatorConfig | null | undefined = undefined;
+    private _EvaluatorConfigObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for EvaluatorConfig — a live view of the parsed JSON as MJRubricCriterionEntity_IRubricCriterionEvaluatorConfig.
-    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
-    * underlying EvaluatorConfig field, so it becomes dirty and Save() persists them. If the raw value changes by
-    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
-    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
-    * ToPlainJSON() from @memberjunction/core.
+    * Typed accessor for EvaluatorConfig — returns parsed JSON as MJRubricCriterionEntity_IRubricCriterionEvaluatorConfig.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get EvaluatorConfigObject(): MJRubricCriterionEntity_IRubricCriterionEvaluatorConfig | null {
-        return this.GetJSONFieldObject<MJRubricCriterionEntity_IRubricCriterionEvaluatorConfig>('EvaluatorConfig');
+        const raw = this.EvaluatorConfig;
+        if (raw !== this._EvaluatorConfigObject_lastRaw) {
+            this._EvaluatorConfigObject_cached = raw ? JSON.parse(raw) : null;
+            this._EvaluatorConfigObject_lastRaw = raw;
+        }
+        return this._EvaluatorConfigObject_cached!;
     }
     set EvaluatorConfigObject(value: MJRubricCriterionEntity_IRubricCriterionEvaluatorConfig | null) {
-        this.SetJSONFieldObject<MJRubricCriterionEntity_IRubricCriterionEvaluatorConfig>('EvaluatorConfig', value);
+        const raw = value ? JSON.stringify(value) : null;
+        this.EvaluatorConfig = raw;
+        this._EvaluatorConfigObject_cached = value;
+        this._EvaluatorConfigObject_lastRaw = raw;
     }
 
     /**
@@ -121422,19 +121691,25 @@ export class MJRubricEvaluationScoreEntity extends BaseEntity<MJRubricEvaluation
         this.Set('Evidence', value);
     }
 
+    private _EvidenceObject_cached: Array<MJRubricEvaluationScoreEntity_IRubricEvidence> | null | undefined = undefined;
+    private _EvidenceObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for Evidence — a live view of the parsed JSON as Array<MJRubricEvaluationScoreEntity_IRubricEvidence>.
-    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
-    * underlying Evidence field, so it becomes dirty and Save() persists them. If the raw value changes by
-    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
-    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
-    * ToPlainJSON() from @memberjunction/core.
+    * Typed accessor for Evidence — returns parsed JSON as Array<MJRubricEvaluationScoreEntity_IRubricEvidence>.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get EvidenceObject(): Array<MJRubricEvaluationScoreEntity_IRubricEvidence> | null {
-        return this.GetJSONFieldObject<Array<MJRubricEvaluationScoreEntity_IRubricEvidence>>('Evidence');
+        const raw = this.Evidence;
+        if (raw !== this._EvidenceObject_lastRaw) {
+            this._EvidenceObject_cached = raw ? JSON.parse(raw) : null;
+            this._EvidenceObject_lastRaw = raw;
+        }
+        return this._EvidenceObject_cached!;
     }
     set EvidenceObject(value: Array<MJRubricEvaluationScoreEntity_IRubricEvidence> | null) {
-        this.SetJSONFieldObject<Array<MJRubricEvaluationScoreEntity_IRubricEvidence>>('Evidence', value);
+        const raw = value ? JSON.stringify(value) : null;
+        this.Evidence = raw;
+        this._EvidenceObject_cached = value;
+        this._EvidenceObject_lastRaw = raw;
     }
 
     /**
@@ -122301,19 +122576,25 @@ export class MJRubricEvaluationEntity extends BaseEntity<MJRubricEvaluationEntit
         this.Set('Metadata', value);
     }
 
+    private _MetadataObject_cached: MJRubricEvaluationEntity_IRubricEvaluationMetadata | null | undefined = undefined;
+    private _MetadataObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for Metadata — a live view of the parsed JSON as MJRubricEvaluationEntity_IRubricEvaluationMetadata.
-    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
-    * underlying Metadata field, so it becomes dirty and Save() persists them. If the raw value changes by
-    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
-    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
-    * ToPlainJSON() from @memberjunction/core.
+    * Typed accessor for Metadata — returns parsed JSON as MJRubricEvaluationEntity_IRubricEvaluationMetadata.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get MetadataObject(): MJRubricEvaluationEntity_IRubricEvaluationMetadata | null {
-        return this.GetJSONFieldObject<MJRubricEvaluationEntity_IRubricEvaluationMetadata>('Metadata');
+        const raw = this.Metadata;
+        if (raw !== this._MetadataObject_lastRaw) {
+            this._MetadataObject_cached = raw ? JSON.parse(raw) : null;
+            this._MetadataObject_lastRaw = raw;
+        }
+        return this._MetadataObject_cached!;
     }
     set MetadataObject(value: MJRubricEvaluationEntity_IRubricEvaluationMetadata | null) {
-        this.SetJSONFieldObject<MJRubricEvaluationEntity_IRubricEvaluationMetadata>('Metadata', value);
+        const raw = value ? JSON.stringify(value) : null;
+        this.Metadata = raw;
+        this._MetadataObject_cached = value;
+        this._MetadataObject_lastRaw = raw;
     }
 
     /**
@@ -123501,19 +123782,25 @@ export class MJRubricVersionEntity extends BaseEntity<MJRubricVersionEntityType>
         this.Set('ChangeDetails', value);
     }
 
+    private _ChangeDetailsObject_cached: MJRubricVersionEntity_IRubricVersionChangeDetails | null | undefined = undefined;
+    private _ChangeDetailsObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for ChangeDetails — a live view of the parsed JSON as MJRubricVersionEntity_IRubricVersionChangeDetails.
-    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
-    * underlying ChangeDetails field, so it becomes dirty and Save() persists them. If the raw value changes by
-    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
-    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
-    * ToPlainJSON() from @memberjunction/core.
+    * Typed accessor for ChangeDetails — returns parsed JSON as MJRubricVersionEntity_IRubricVersionChangeDetails.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get ChangeDetailsObject(): MJRubricVersionEntity_IRubricVersionChangeDetails | null {
-        return this.GetJSONFieldObject<MJRubricVersionEntity_IRubricVersionChangeDetails>('ChangeDetails');
+        const raw = this.ChangeDetails;
+        if (raw !== this._ChangeDetailsObject_lastRaw) {
+            this._ChangeDetailsObject_cached = raw ? JSON.parse(raw) : null;
+            this._ChangeDetailsObject_lastRaw = raw;
+        }
+        return this._ChangeDetailsObject_cached!;
     }
     set ChangeDetailsObject(value: MJRubricVersionEntity_IRubricVersionChangeDetails | null) {
-        this.SetJSONFieldObject<MJRubricVersionEntity_IRubricVersionChangeDetails>('ChangeDetails', value);
+        const raw = value ? JSON.stringify(value) : null;
+        this.ChangeDetails = raw;
+        this._ChangeDetailsObject_cached = value;
+        this._ChangeDetailsObject_lastRaw = raw;
     }
 
     /**
@@ -125627,19 +125914,25 @@ export class MJScopedPromptPartEntity extends BaseEntity<MJScopedPromptPartEntit
         this.Set('SecondaryScopes', value);
     }
 
+    private _SecondaryScopesObject_cached: MJScopedPromptPartEntity_IAISecondaryScopes | null | undefined = undefined;
+    private _SecondaryScopesObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for SecondaryScopes — a live view of the parsed JSON as MJScopedPromptPartEntity_IAISecondaryScopes.
-    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
-    * underlying SecondaryScopes field, so it becomes dirty and Save() persists them. If the raw value changes by
-    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
-    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
-    * ToPlainJSON() from @memberjunction/core.
+    * Typed accessor for SecondaryScopes — returns parsed JSON as MJScopedPromptPartEntity_IAISecondaryScopes.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get SecondaryScopesObject(): MJScopedPromptPartEntity_IAISecondaryScopes | null {
-        return this.GetJSONFieldObject<MJScopedPromptPartEntity_IAISecondaryScopes>('SecondaryScopes');
+        const raw = this.SecondaryScopes;
+        if (raw !== this._SecondaryScopesObject_lastRaw) {
+            this._SecondaryScopesObject_cached = raw ? JSON.parse(raw) : null;
+            this._SecondaryScopesObject_lastRaw = raw;
+        }
+        return this._SecondaryScopesObject_cached!;
     }
     set SecondaryScopesObject(value: MJScopedPromptPartEntity_IAISecondaryScopes | null) {
-        this.SetJSONFieldObject<MJScopedPromptPartEntity_IAISecondaryScopes>('SecondaryScopes', value);
+        const raw = value ? JSON.stringify(value) : null;
+        this.SecondaryScopes = raw;
+        this._SecondaryScopesObject_cached = value;
+        this._SecondaryScopesObject_lastRaw = raw;
     }
 
     /**
@@ -130311,8 +130604,7 @@ export class MJTagEntity extends BaseEntity<MJTagEntityType> {
     /**
     * * Field Name: EmbeddingVectorBinary
     * * Display Name: Embedding Vector Binary
-    * * SQL Data Type: varbinary(MAX)
-    * * Binary Value: base64-encoded string. Decode with Base64ToBytes() — or Base64ToFloat32Vector() for an embedding — from @memberjunction/global.
+    * * SQL Data Type: varbinary
     * * Description: The tag embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of EmbeddingVector. Written alongside EmbeddingVector; readers prefer it and fall back to EmbeddingVector when it is NULL.
     */
     get EmbeddingVectorBinary(): string | null {
@@ -131553,19 +131845,25 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
         this.Set('Configuration', value);
     }
 
+    private _ConfigurationObject_cached: MJTaskEntity_ITaskStepConfiguration | null | undefined = undefined;
+    private _ConfigurationObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for Configuration — a live view of the parsed JSON as MJTaskEntity_ITaskStepConfiguration.
-    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
-    * underlying Configuration field, so it becomes dirty and Save() persists them. If the raw value changes by
-    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
-    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
-    * ToPlainJSON() from @memberjunction/core.
+    * Typed accessor for Configuration — returns parsed JSON as MJTaskEntity_ITaskStepConfiguration.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get ConfigurationObject(): MJTaskEntity_ITaskStepConfiguration | null {
-        return this.GetJSONFieldObject<MJTaskEntity_ITaskStepConfiguration>('Configuration');
+        const raw = this.Configuration;
+        if (raw !== this._ConfigurationObject_lastRaw) {
+            this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
+            this._ConfigurationObject_lastRaw = raw;
+        }
+        return this._ConfigurationObject_cached!;
     }
     set ConfigurationObject(value: MJTaskEntity_ITaskStepConfiguration | null) {
-        this.SetJSONFieldObject<MJTaskEntity_ITaskStepConfiguration>('Configuration', value);
+        const raw = value ? JSON.stringify(value) : null;
+        this.Configuration = raw;
+        this._ConfigurationObject_cached = value;
+        this._ConfigurationObject_lastRaw = raw;
     }
 
     /**
@@ -135222,19 +135520,25 @@ export class MJTestEntity extends BaseEntity<MJTestEntityType> {
         this.Set('Configuration', value);
     }
 
+    private _ConfigurationObject_cached: MJTestEntity_ITestConfiguration | null | undefined = undefined;
+    private _ConfigurationObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for Configuration — a live view of the parsed JSON as MJTestEntity_ITestConfiguration.
-    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
-    * underlying Configuration field, so it becomes dirty and Save() persists them. If the raw value changes by
-    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
-    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
-    * ToPlainJSON() from @memberjunction/core.
+    * Typed accessor for Configuration — returns parsed JSON as MJTestEntity_ITestConfiguration.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get ConfigurationObject(): MJTestEntity_ITestConfiguration | null {
-        return this.GetJSONFieldObject<MJTestEntity_ITestConfiguration>('Configuration');
+        const raw = this.Configuration;
+        if (raw !== this._ConfigurationObject_lastRaw) {
+            this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
+            this._ConfigurationObject_lastRaw = raw;
+        }
+        return this._ConfigurationObject_cached!;
     }
     set ConfigurationObject(value: MJTestEntity_ITestConfiguration | null) {
-        this.SetJSONFieldObject<MJTestEntity_ITestConfiguration>('Configuration', value);
+        const raw = value ? JSON.stringify(value) : null;
+        this.Configuration = raw;
+        this._ConfigurationObject_cached = value;
+        this._ConfigurationObject_lastRaw = raw;
     }
 
     /**
@@ -138963,19 +139267,25 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
         this.Set('GridState', value);
     }
 
+    private _GridStateObject_cached: MJUserViewEntity_IGridState | null | undefined = undefined;
+    private _GridStateObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for GridState — a live view of the parsed JSON as MJUserViewEntity_IGridState.
-    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
-    * underlying GridState field, so it becomes dirty and Save() persists them. If the raw value changes by
-    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
-    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
-    * ToPlainJSON() from @memberjunction/core.
+    * Typed accessor for GridState — returns parsed JSON as MJUserViewEntity_IGridState.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get GridStateObject(): MJUserViewEntity_IGridState | null {
-        return this.GetJSONFieldObject<MJUserViewEntity_IGridState>('GridState');
+        const raw = this.GridState;
+        if (raw !== this._GridStateObject_lastRaw) {
+            this._GridStateObject_cached = raw ? JSON.parse(raw) : null;
+            this._GridStateObject_lastRaw = raw;
+        }
+        return this._GridStateObject_cached!;
     }
     set GridStateObject(value: MJUserViewEntity_IGridState | null) {
-        this.SetJSONFieldObject<MJUserViewEntity_IGridState>('GridState', value);
+        const raw = value ? JSON.stringify(value) : null;
+        this.GridState = raw;
+        this._GridStateObject_cached = value;
+        this._GridStateObject_lastRaw = raw;
     }
 
     /**
@@ -138992,19 +139302,25 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
         this.Set('FilterState', value);
     }
 
+    private _FilterStateObject_cached: MJUserViewEntity_IFilterState | null | undefined = undefined;
+    private _FilterStateObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for FilterState — a live view of the parsed JSON as MJUserViewEntity_IFilterState.
-    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
-    * underlying FilterState field, so it becomes dirty and Save() persists them. If the raw value changes by
-    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
-    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
-    * ToPlainJSON() from @memberjunction/core.
+    * Typed accessor for FilterState — returns parsed JSON as MJUserViewEntity_IFilterState.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get FilterStateObject(): MJUserViewEntity_IFilterState | null {
-        return this.GetJSONFieldObject<MJUserViewEntity_IFilterState>('FilterState');
+        const raw = this.FilterState;
+        if (raw !== this._FilterStateObject_lastRaw) {
+            this._FilterStateObject_cached = raw ? JSON.parse(raw) : null;
+            this._FilterStateObject_lastRaw = raw;
+        }
+        return this._FilterStateObject_cached!;
     }
     set FilterStateObject(value: MJUserViewEntity_IFilterState | null) {
-        this.SetJSONFieldObject<MJUserViewEntity_IFilterState>('FilterState', value);
+        const raw = value ? JSON.stringify(value) : null;
+        this.FilterState = raw;
+        this._FilterStateObject_cached = value;
+        this._FilterStateObject_lastRaw = raw;
     }
 
     /**
@@ -139115,19 +139431,25 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
         this.Set('SortState', value);
     }
 
+    private _SortStateObject_cached: Array<MJUserViewEntity_ISortStateItem> | null | undefined = undefined;
+    private _SortStateObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for SortState — a live view of the parsed JSON as Array<MJUserViewEntity_ISortStateItem>.
-    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
-    * underlying SortState field, so it becomes dirty and Save() persists them. If the raw value changes by
-    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
-    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
-    * ToPlainJSON() from @memberjunction/core.
+    * Typed accessor for SortState — returns parsed JSON as Array<MJUserViewEntity_ISortStateItem>.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get SortStateObject(): Array<MJUserViewEntity_ISortStateItem> | null {
-        return this.GetJSONFieldObject<Array<MJUserViewEntity_ISortStateItem>>('SortState');
+        const raw = this.SortState;
+        if (raw !== this._SortStateObject_lastRaw) {
+            this._SortStateObject_cached = raw ? JSON.parse(raw) : null;
+            this._SortStateObject_lastRaw = raw;
+        }
+        return this._SortStateObject_cached!;
     }
     set SortStateObject(value: Array<MJUserViewEntity_ISortStateItem> | null) {
-        this.SetJSONFieldObject<Array<MJUserViewEntity_ISortStateItem>>('SortState', value);
+        const raw = value ? JSON.stringify(value) : null;
+        this.SortState = raw;
+        this._SortStateObject_cached = value;
+        this._SortStateObject_lastRaw = raw;
     }
 
     /**
@@ -139177,19 +139499,25 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
         this.Set('CardState', value);
     }
 
+    private _CardStateObject_cached: MJUserViewEntity_ICardState | null | undefined = undefined;
+    private _CardStateObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for CardState — a live view of the parsed JSON as MJUserViewEntity_ICardState.
-    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
-    * underlying CardState field, so it becomes dirty and Save() persists them. If the raw value changes by
-    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
-    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
-    * ToPlainJSON() from @memberjunction/core.
+    * Typed accessor for CardState — returns parsed JSON as MJUserViewEntity_ICardState.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get CardStateObject(): MJUserViewEntity_ICardState | null {
-        return this.GetJSONFieldObject<MJUserViewEntity_ICardState>('CardState');
+        const raw = this.CardState;
+        if (raw !== this._CardStateObject_lastRaw) {
+            this._CardStateObject_cached = raw ? JSON.parse(raw) : null;
+            this._CardStateObject_lastRaw = raw;
+        }
+        return this._CardStateObject_cached!;
     }
     set CardStateObject(value: MJUserViewEntity_ICardState | null) {
-        this.SetJSONFieldObject<MJUserViewEntity_ICardState>('CardState', value);
+        const raw = value ? JSON.stringify(value) : null;
+        this.CardState = raw;
+        this._CardStateObject_cached = value;
+        this._CardStateObject_lastRaw = raw;
     }
 
     /**
@@ -139206,19 +139534,25 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
         this.Set('DisplayState', value);
     }
 
+    private _DisplayStateObject_cached: MJUserViewEntity_IDisplayState | null | undefined = undefined;
+    private _DisplayStateObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for DisplayState — a live view of the parsed JSON as MJUserViewEntity_IDisplayState.
-    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
-    * underlying DisplayState field, so it becomes dirty and Save() persists them. If the raw value changes by
-    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
-    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
-    * ToPlainJSON() from @memberjunction/core.
+    * Typed accessor for DisplayState — returns parsed JSON as MJUserViewEntity_IDisplayState.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
     */
     get DisplayStateObject(): MJUserViewEntity_IDisplayState | null {
-        return this.GetJSONFieldObject<MJUserViewEntity_IDisplayState>('DisplayState');
+        const raw = this.DisplayState;
+        if (raw !== this._DisplayStateObject_lastRaw) {
+            this._DisplayStateObject_cached = raw ? JSON.parse(raw) : null;
+            this._DisplayStateObject_lastRaw = raw;
+        }
+        return this._DisplayStateObject_cached!;
     }
     set DisplayStateObject(value: MJUserViewEntity_IDisplayState | null) {
-        this.SetJSONFieldObject<MJUserViewEntity_IDisplayState>('DisplayState', value);
+        const raw = value ? JSON.stringify(value) : null;
+        this.DisplayState = raw;
+        this._DisplayStateObject_cached = value;
+        this._DisplayStateObject_lastRaw = raw;
     }
 
     /**

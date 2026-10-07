@@ -69,6 +69,20 @@ describe('LiveKitAgentRoomCoordinator — full-duplex turn-taking wiring', () =>
     expect(factoryContexts[0].HostTools?.map(t => t.Name)).toEqual(['i_am_addressed', 'yield_turn']);
   });
 
+  it('withholds turn-taking tools when FullDuplex is true', async () => {
+    const { ops } = makeBridgeOps();
+    coordinator.SetBridgeOps(ops);
+
+    await coordinator.StartAgentRoomSession({
+      AgentSessionID: 'tt-fd',
+      RoomName: 'tt-room-fd',
+      AgentName: 'Sage',
+      FullDuplex: true,
+    });
+
+    expect(factoryContexts[0].HostTools).toBeUndefined();
+  });
+
   it('passes an explicit addressing mode through, and withholds the tools when name matching is forced', async () => {
     const { ops, startCalls } = makeBridgeOps();
     coordinator.SetBridgeOps(ops);

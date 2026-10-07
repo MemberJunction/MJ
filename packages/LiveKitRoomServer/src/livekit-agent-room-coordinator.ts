@@ -15,7 +15,8 @@
 
 import { BaseSingleton } from '@memberjunction/global';
 import { LogError, LogStatus, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import type { IRealtimeSession, RealtimeToolDefinition } from '@memberjunction/ai';
+import { ResolveIsModelFullDuplex, type IRealtimeSession, type RealtimeToolDefinition } from '@memberjunction/ai';
+import type { MJAIAgentEntity, MJAIModelEntity } from '@memberjunction/core-entities';
 import {
   AlwaysAddressedMatcher,
   RegexAddressedMatcher,
@@ -139,6 +140,8 @@ export interface StartAgentRoomSessionParams {
   RealtimeModelID?: string;
   /** Optional per-session VOICE override (provider-native voice id) — gives this agent a distinct voice. */
   RealtimeVoice?: string;
+  /** Explicit override for whether the model is full-duplex. When omitted, resolved from model metadata or driver capabilities. */
+  FullDuplex?: boolean;
   /** Extra aliases the agent answers to (for Passive turn-taking). */
   AgentAliases?: string[];
   /** Turn-taking mode. Default: `'Passive'` (speak only when addressed). */
@@ -311,12 +314,15 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
     // (gated meeting mode + LLM router) for controlled scenarios (webinars, large rooms, weaker models).
     const moderatorMode = process.env.MJ_REALTIME_MODERATOR_MODE === 'on';
     const isMeeting = moderatorMode && existingAgents.length > 0;
-    // A full-duplex model judges for itself whether it was addressed and uses the turn-taking tools; a gated
-    // meeting (moderator mode) decides addressing by name in the engine, so the tools would only confuse it.
+    const isFullDuplex = await this.resolveIsFullDuplex(params);
+    // Full-duplex models judge turn-taking natively without turn-taking tools.
+    // A gated meeting (moderator mode) decides addressing by name in the engine.
     const addressing: TurnAddressingMode = isMeeting ? 'Regex' : params.TurnAddressing ?? 'Auto';
 
     const host = params.Host;
-    const turnTakingTools = addressing === 'Regex' ? [] : [...TURN_TAKING_TOOL_DEFINITIONS];
+    // Full-duplex models never get turn-taking tools (in solo and multi-agent rooms alike), as native full-duplex
+    // models handle turn-taking and background noise natively. Turn-taking tools are reserved for turn-based models.
+    const turnTakingTools = isFullDuplex || addressing === 'Regex' ? [] : [...TURN_TAKING_TOOL_DEFINITIONS];
     const combinedHostTools: RealtimeToolDefinition[] | undefined =
       (host?.HostTools?.length ?? 0) > 0 || turnTakingTools.length > 0
         ? [...(host?.HostTools ?? []), ...turnTakingTools]
@@ -423,19 +429,62 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
     return { SessionBridgeID: active.SessionBridgeID, RoomName: params.RoomName, ServerUrl: botToken.ServerUrl };
   }
 
-  /** Installs the engine's turn-taking tool handler on the model session, when the session has one (a full-duplex model in a room). */
+  /** Installs the engine's turn-taking tool handler on the model session, when the session has one (a turn-based model in a room). */
   private bindTurnTools(session: IRealtimeSession, handler: BridgeTurnTakingToolHandler | undefined, botName: string): void {
     if (!handler) {
       return;
     }
+    // Full-duplex models never get turn-taking tools; do not bind turn-taking handlers to them
+    if (session.Capabilities?.FullDuplex === true) {
+      return;
+    }
     if (!this.turnToolBinder) {
       LogError(
-        `[LiveKitAgentRoomCoordinator] ${botName} is full-duplex but no turn-tool binder is set (SetTurnToolBinder); ` +
-          'its i_am_addressed / yield_turn calls will not execute. The room floor gate still prevents overlap.',
+        `[LiveKitAgentRoomCoordinator] ${botName} has turn-taking tools but no turn-tool binder is set (SetTurnToolBinder); ` +
+          'its i_am_addressed / yield_turn calls will not execute.',
       );
       return;
     }
     this.turnToolBinder(session, handler);
+  }
+
+  /**
+   * Resolves whether the agent room session being started is full-duplex.
+   * Priority:
+   * 1. Explicit `params.FullDuplex` override.
+   * 2. Cascaded metadata configuration from the model (via `params.RealtimeModelID` or `params.AgentID`).
+   * 3. Fallback: false (turn-based model).
+   */
+  private async resolveIsFullDuplex(params: StartAgentRoomSessionParams): Promise<boolean> {
+    if (params.FullDuplex !== undefined) {
+      return params.FullDuplex;
+    }
+    try {
+      const provider = params.MetadataProvider;
+      let modelId = params.RealtimeModelID;
+      if (!modelId && params.AgentID && provider) {
+        const agent = await provider.GetEntityObject<MJAIAgentEntity>('MJ: AI Agents', params.ContextUser);
+        if (await agent.Load(params.AgentID)) {
+          if (agent.TypeConfiguration) {
+            try {
+              const parsed = JSON.parse(agent.TypeConfiguration) as Record<string, unknown>;
+              modelId = (parsed.modelId ?? parsed.preferredModelId ?? parsed.AIModelID) as string | undefined;
+            } catch {
+              // ignore malformed JSON
+            }
+          }
+        }
+      }
+      if (modelId && provider) {
+        const model = await provider.GetEntityObject<MJAIModelEntity>('MJ: AI Models', params.ContextUser);
+        if (await model.Load(modelId)) {
+          return ResolveIsModelFullDuplex(model.ModelConfigurationObject, null);
+        }
+      }
+    } catch {
+      // Degrade gracefully
+    }
+    return false;
   }
 
   /** Appends an agent to a room's roster (creating the room's list on first join). */
