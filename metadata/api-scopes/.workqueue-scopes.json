@@ -1,0 +1,78 @@
+[
+  {
+    "fields": {
+      "Name": "workqueue",
+      "FullPath": "workqueue",
+      "ParentID": null,
+      "Category": "Work Queue",
+      "Description": "Parent scope for the durable work queue.",
+      "ResourceType": null,
+      "IsActive": true,
+      "UIConfig": {
+        "icon": "fa-solid fa-layer-group",
+        "color": "#0e7490"
+      }
+    },
+    "primaryKey": {
+      "ID": "0462591B-AFD7-41DD-802B-F75BB609B9F5"
+    },
+    "sync": {
+      "lastModified": "2026-10-06T20:21:36.532Z",
+      "checksum": "c644eb2ab8697180906729a155e10b57d255e68d0b564c1bd02d0493186eed8c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "publish",
+      "FullPath": "workqueue:publish",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=workqueue",
+      "Category": "Work Queue",
+      "Description": "Publish messages to externally publishable topics through POST /work-queue/topics/{topic}/messages. Resource: topic name.",
+      "ResourceType": "Topic",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "DB82869E-0C00-4510-B570-2E6182C8CF48"
+    },
+    "sync": {
+      "lastModified": "2026-10-06T20:21:36.545Z",
+      "checksum": "7a59709666a6fba1f3aa2801a54d4070995b3511f16d723685ec7ee26b846163"
+    }
+  },
+  {
+    "fields": {
+      "Name": "read",
+      "FullPath": "workqueue:read",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=workqueue",
+      "Category": "Work Queue",
+      "Description": "Read subscription statistics, dead letters, partitions and binding validation through the WorkQueue remote operations. Resource: subscription name.",
+      "ResourceType": "Subscription",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "9450B77D-0AEB-43D6-879E-FACE98915963"
+    },
+    "sync": {
+      "lastModified": "2026-10-06T20:21:36.562Z",
+      "checksum": "82ae03e7bf662413a209480b5599be370904aea7124661273da990f5c76be115"
+    }
+  },
+  {
+    "fields": {
+      "Name": "operate",
+      "FullPath": "workqueue:operate",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=workqueue",
+      "Category": "Work Queue",
+      "Description": "Replay, discard or cancel deliveries through the WorkQueue remote operations. Resource: subscription name.",
+      "ResourceType": "Subscription",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "665F13F8-5690-45BE-911F-1E560CBEB0E1"
+    },
+    "sync": {
+      "lastModified": "2026-10-06T20:21:36.575Z",
+      "checksum": "217fdf8568560e6ef1744fe0b030dc075785cb251e2c836e01592de130fc94b8"
+    }
+  }
+]
