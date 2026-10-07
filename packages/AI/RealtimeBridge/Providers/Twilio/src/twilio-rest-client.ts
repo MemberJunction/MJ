@@ -112,7 +112,8 @@ function unwrapTwilioFactory(mod: unknown): unknown {
 /**
  * A real {@link ITwilioRestLike} over the `twilio` SDK's Programmable Voice REST API.
  *
- * - `CreateCall` → `client.calls.create({ to, from, twiml, statusCallback })`, resolving the new Call SID.
+ * - `CreateCall` → `client.calls.create({ to, from, twiml, statusCallback, statusCallbackEvent, machineDetection, asyncAmd, … })`,
+ *   resolving the new Call SID.
  * - `UpdateCall` → `client.calls(sid).update({ status, twiml })` for hangup / transfer / DTMF.
  *
  * The constructed client is built once on first use and reused for the life of the instance.
@@ -140,6 +141,14 @@ export class RealTwilioRestClient implements ITwilioRestLike {
             from: params.From,
             twiml: params.Twiml,
             ...(params.StatusCallback ? { statusCallback: params.StatusCallback } : {}),
+            ...(params.StatusCallbackEvents?.length ? { statusCallbackEvent: params.StatusCallbackEvents } : {}),
+            ...(params.AsyncAmd && params.AsyncAmdStatusCallback
+                ? {
+                      machineDetection: 'Enable',
+                      asyncAmd: 'true',
+                      asyncAmdStatusCallback: params.AsyncAmdStatusCallback,
+                  }
+                : {}),
         });
         if (!created?.sid) {
             throw new Error('Twilio calls.create returned no Call SID.');

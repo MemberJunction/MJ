@@ -7,11 +7,15 @@ import { MJConversationEntity, UserInfoEngine } from '@memberjunction/core-entit
 const SETTING_KEY = 'mj.form.conversations.headerCollapsed';
 
 @RegisterClassEx(BaseFormPanel, {
-    key: 'form-panel:Conversations:header',
+    key: 'form-panel:MJ: Conversations:header',
     metadata: {
-        entity: 'Conversations',
-        slot: 'header',
-        sortKey: 10,
+        entity: 'MJ: Conversations',
+        // A hero is a bare strip in before-fields. Its sortKey is above the overview's
+        // (higher draws first), so it draws above the overview cards.
+        slot: 'before-fields',
+        presentation: 'bare',
+        contributionKey: 'conversations:header',
+        sortKey: 20,
     },
 })
 @Component({

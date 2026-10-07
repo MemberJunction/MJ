@@ -11,11 +11,13 @@ vi.mock('@memberjunction/ai-engine-base', () => ({
 // --- Mock the client-direct service so CloseSession's run finalization is observable (no DB),
 //     plus the channel-plugin host so the start/close lifecycle notifications are observable. ---
 const finalizeCoAgentRunMock = vi.fn(async () => undefined);
+const keepCoAgentRunAliveMock = vi.fn();
 const hostSessionStartedMock = vi.fn(async () => undefined);
 const hostSessionClosedMock = vi.fn(async () => undefined);
 vi.mock('@memberjunction/ai-agents', () => ({
     RealtimeClientSessionService: class {
         FinalizeCoAgentRun = finalizeCoAgentRunMock;
+        KeepCoAgentRunAlive = keepCoAgentRunAliveMock;
     },
     RealtimeChannelServerHost: {
         get Instance() {
@@ -458,6 +460,35 @@ describe('SessionManager.Heartbeat', () => {
         const ok = await mgr.Heartbeat('session-1', makeUser(), provider);
         expect(ok).toBe(false);
         expect(session.Save).not.toHaveBeenCalled();
+    });
+});
+
+describe('SessionManager.Heartbeat — the session\'s co-agent run stays alive', () => {
+    beforeEach(() => {
+        keepCoAgentRunAliveMock.mockClear();
+    });
+
+    it('keeps the co-agent run alive for the run watchdog on each persisted heartbeat', async () => {
+        const session = makeSessionEntity({ ID: 'session-1', Status: 'Active', Config_: JSON.stringify({ coAgentRunID: 'co-run-1', promptRunID: 'pr-1' }) });
+        const { provider } = makeProvider(() => session);
+        const mgr = new SessionManager();
+
+        await mgr.Heartbeat('session-1', makeUser(), provider);
+        await mgr.Heartbeat('session-1', makeUser(), provider); // coalesced: no write, no re-registration
+
+        expect(keepCoAgentRunAliveMock).toHaveBeenCalledOnce();
+        expect(keepCoAgentRunAliveMock.mock.calls[0][0]).toBe('co-run-1');
+        expect(keepCoAgentRunAliveMock.mock.calls[0][1]).toBe(provider);
+    });
+
+    it('does nothing for a closed session, and passes no run for a session without one', async () => {
+        const closed = makeSessionEntity({ ID: 'session-closed', Status: 'Closed', Config_: JSON.stringify({ coAgentRunID: 'co-run-1' }) });
+        await new SessionManager().Heartbeat('session-closed', makeUser(), makeProvider(() => closed).provider);
+        expect(keepCoAgentRunAliveMock).not.toHaveBeenCalled();
+
+        const workspace = makeSessionEntity({ ID: 'session-2', Status: 'Active', Config_: null });
+        await new SessionManager().Heartbeat('session-2', makeUser(), makeProvider(() => workspace).provider);
+        expect(keepCoAgentRunAliveMock.mock.calls[0][0]).toBeUndefined();
     });
 });
 

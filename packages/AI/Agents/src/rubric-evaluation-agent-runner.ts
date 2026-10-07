@@ -1,6 +1,7 @@
 import { RunView } from '@memberjunction/core';
 import { EscapeSQLString } from '@memberjunction/global';
 import { RegisterRubricAgentRunner, WithAgentRun, type EvaluationAgentRunner } from '@memberjunction/rubrics';
+import type { AIPromptExecutionScope } from '@memberjunction/ai-core-plus';
 
 const RUBRIC_EVALUATION_AGENT = 'Rubric Evaluation Agent';
 
@@ -10,7 +11,12 @@ const RUBRIC_EVALUATION_AGENT = 'Rubric Evaluation Agent';
  * rubrics package does not depend on this package.
  */
 class RubricEvaluationAgentRunner implements EvaluationAgentRunner {
-    public constructor(private readonly provider: unknown, private readonly user: unknown) {}
+    public constructor(
+        private readonly provider: unknown,
+        private readonly user: unknown,
+        /** The evaluating run's configuration, keys and credential scope; the evaluation agent runs under them. */
+        private readonly executionScope?: AIPromptExecutionScope
+    ) {}
 
     public async Run(input: Parameters<EvaluationAgentRunner['Run']>[0]): ReturnType<EvaluationAgentRunner['Run']> {
         const view = RunView.FromMetadataProvider(this.provider as never);
@@ -29,10 +35,13 @@ class RubricEvaluationAgentRunner implements EvaluationAgentRunner {
             payload: { version: input.version, content: input.content, subject: input.subject },
             contextUser: this.user as never,
             conversationMessages: [],
+            configurationId: this.executionScope?.configurationId,
+            apiKeys: this.executionScope?.apiKeys,
+            CredentialScope: this.executionScope?.CredentialScope,
         });
         if (!result.success) throw new Error(result.errorMessage || 'The Rubric Evaluation Agent failed.');
         return WithAgentRun(result.payload, result.agentRun?.ID);
     }
 }
 
-RegisterRubricAgentRunner((provider, user) => new RubricEvaluationAgentRunner(provider, user));
+RegisterRubricAgentRunner((provider, user, executionScope) => new RubricEvaluationAgentRunner(provider, user, executionScope));

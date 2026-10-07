@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-realtime-channel-examples",
-  "version": "6.2.0-edge.1",
+  "version": "6.2.0-edge.3",
   "description": "MemberJunction: worked examples for building realtime-agent channels. A tic-tac-toe channel built ONLY by wrapping a plain Angular component with AngularComponentChannel, with tests that play a whole game with interleaved agent and user moves. Not loaded by default: import it, call LoadExampleTicTacToeChannel(), and bring it to a session as a host channel.",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -25,7 +25,7 @@
   "devDependencies": {
     "@angular/compiler": "21.2.22",
     "@angular/compiler-cli": "21.2.22",
-    "@memberjunction/ng-test-utils": "6.2.0-edge.1",
+    "@memberjunction/ng-test-utils": "6.2.0-edge.3",
     "vitest": "^4.0.18"
   },
   "peerDependencies": {
@@ -33,11 +33,11 @@
     "@angular/core": "^21.2.22"
   },
   "dependencies": {
-    "@memberjunction/ai": "6.2.0-edge.1",
-    "@memberjunction/ai-core-plus": "6.2.0-edge.1",
-    "@memberjunction/global": "6.2.0-edge.1",
-    "@memberjunction/ng-realtime-channels": "6.2.0-edge.1",
-    "@memberjunction/realtime-runtime": "6.2.0-edge.1",
+    "@memberjunction/ai": "6.2.0-edge.3",
+    "@memberjunction/ai-core-plus": "6.2.0-edge.3",
+    "@memberjunction/global": "6.2.0-edge.3",
+    "@memberjunction/ng-realtime-channels": "6.2.0-edge.3",
+    "@memberjunction/realtime-runtime": "6.2.0-edge.3",
     "rxjs": "^7.8.2",
     "tslib": "^2.8.1"
   },
