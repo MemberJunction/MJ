@@ -106,6 +106,7 @@ export * from './checks/agent-compaction-e2e.checks';
 export * from './checks/agent-memory-guards.checks';
 export * from './checks/agent-note-cache-types.checks';
 export * from './checks/agent-rag-search.checks';
+export * from './checks/agent-run-audience.checks';
 export * from './checks/agent-wire-callback.checks';
 export * from './checks/view-security.checks';
 export * from './checks/ai-providers.checks';

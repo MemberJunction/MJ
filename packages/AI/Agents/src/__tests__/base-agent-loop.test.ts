@@ -59,6 +59,8 @@ import type { AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import { DEFAULT_LOOP_AGENT_PROMPT_PARAMS } from '../agent-types/loop-agent-prompt-params';
 import { PayloadFeedbackManager } from '../PayloadFeedbackManager';
 import { AIAPIKeys } from '@memberjunction/ai';
+import { UserInfo as CoreUserInfo } from '@memberjunction/core';
+import { UserCache } from '@memberjunction/generic-database-provider';
 
 // ============================================================================
 // Module mocks (boundaries only)
@@ -167,6 +169,8 @@ interface ScriptedActionParam {
 /** ActionResult-shaped record returned from the scripted RunAction boundary. */
 interface ScriptedActionResult {
     Success: boolean;
+    /** The raw result code (`ActionResult.ResultCode`) — set by the engine's own refusals, e.g. AUDIENCE_UNSUPPORTED. */
+    ResultCode?: string;
     Message: string;
     Params: ScriptedActionParam[];
     Result: { ResultCode: string } | null;
@@ -183,6 +187,8 @@ interface RunActionCall {
     resolveAPIKey?: unknown;
     /** `RunActionParams.CredentialScope` — absent when the run sets none. */
     credentialScope?: unknown;
+    /** `RunActionParams.Audience` — absent when the run's audience adds no reader. */
+    audience?: unknown;
 }
 
 /** Save-queue flush diagnostics (shape from AgentRunStepSaveQueue.Flush). */
@@ -366,10 +372,18 @@ class LoopHarness {
                     ResultCodes: { Items: [] },
                 },
             ],
-            RunAction: async (input: { Action: { Name: string }; Params: ScriptedActionParam[]; Context?: { ActiveSkillIDs?: unknown }; RuntimeAPIKeyResolver?: unknown; CredentialScope?: unknown }): Promise<ScriptedActionResult> => {
+            RunAction: async (input: {
+                Action: { Name: string };
+                Params: ScriptedActionParam[];
+                Context?: { ActiveSkillIDs?: unknown };
+                RuntimeAPIKeyResolver?: unknown;
+                CredentialScope?: unknown;
+                Audience?: unknown;
+            }): Promise<ScriptedActionResult> => {
                 const call: RunActionCall = { actionName: input.Action.Name, params: input.Params, activeSkillIDs: input.Context?.ActiveSkillIDs };
                 if (input.RuntimeAPIKeyResolver !== undefined) call.resolveAPIKey = input.RuntimeAPIKeyResolver;
                 if (input.CredentialScope !== undefined) call.credentialScope = input.CredentialScope;
+                if (input.Audience !== undefined) call.audience = input.Audience;
                 // What any log of the whole RunActionParams could contain — kept off the call record so
                 // the toEqual assertions over runActionCalls stay exact.
                 this.runActionParamsJSON.push(JSON.stringify({ ...input, Action: input.Action.Name }));
@@ -2132,5 +2146,128 @@ describe("BaseAgent.Execute — a memory rerank's cost", () => {
         expect(result.success).toBe(false);
         expect(harness.run.ErrorMessage).toContain('Maximum token limit of 100 exceeded');
         expect(harness.runActionCalls).toHaveLength(0);
+    });
+});
+
+describe('BaseAgent.Execute — a run with an audience (ExecuteAgentParams.Audience)', () => {
+    const READER_ID = 'aaaaaaaa-0000-4000-8000-0000000000b2';
+    const UNKNOWN_ID = 'aaaaaaaa-0000-4000-8000-0000000000e2';
+    const READER = new CoreUserInfo(undefined, { ID: READER_ID, Name: 'Room Reader', Email: 'reader@test.mj', UserRoles: [] });
+    const room = { Audience: { Mode: 'Intersection' as const, UserIDs: [READER_ID] } };
+
+    beforeEach(() => {
+        UserCache.Instance.SetUsers([READER]);
+    });
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+        UserCache.Instance.SetUsers([]);
+    });
+
+    it('fails the run before any prompt when the audience names a user who does not exist (after one cache refresh)', async () => {
+        const refresh = vi.spyOn(UserCache.Instance, 'Refresh').mockResolvedValue(undefined);
+        const { agent, runner } = makeAgent([() => llmEnvelope(successEnvelope())]);
+
+        const result = await agent.Execute(makeParams({ Audience: { Mode: 'Intersection', UserIDs: [READER_ID, UNKNOWN_ID] } }));
+
+        expect(result.success).toBe(false);
+        expect(runner.Calls).toHaveLength(0);
+        expect(harness.runActionCalls).toHaveLength(0);
+        expect(harness.run.Status).toBe('Failed');
+        expect(harness.run.ErrorMessage).toContain(UNKNOWN_ID);
+        // The refresh reads through the run's provider; the harness provider is not a database provider,
+        // so the cache is only consulted again — the point here is that the run is refused, not skipped.
+        expect(refresh).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ['an Intersection with no readers', { Mode: 'Intersection' as const, UserIDs: [] }],
+        ['a Caller audience that names readers', { Mode: 'Caller' as const, UserIDs: [READER_ID] }],
+    ])('fails the run before any prompt for %s', async (_label, audience) => {
+        const { agent, runner } = makeAgent([() => llmEnvelope(successEnvelope())]);
+        const result = await agent.Execute(makeParams({ Audience: audience }));
+        expect(result.success).toBe(false);
+        expect(runner.Calls).toHaveLength(0);
+        expect(harness.run.ErrorMessage).toMatch(/^Invalid Audience: /);
+    });
+
+    it('hands every action dispatch the hydrated readers', async () => {
+        const { agent } = makeAgent([
+            () => llmEnvelope(actionsEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        const result = await agent.Execute(makeParams(room));
+
+        expect(result.success).toBe(true);
+        expect(harness.runActionCalls).toHaveLength(1);
+        expect(harness.runActionCalls[0].audience).toEqual({ Readers: [READER] });
+    });
+
+    it('runs as with no audience when the only reader is the caller: no Audience on the dispatch, task graphs as configured', async () => {
+        harness.agent = makeAgentRow({ AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }) });
+        const { agent, runner } = makeAgent([
+            () => llmEnvelope(actionsEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        await agent.Execute(makeParams({ Audience: { Mode: 'Intersection', UserIDs: [USER_ID.toUpperCase()] } }));
+
+        expect(harness.runActionCalls[0].audience).toBeUndefined();
+        expect(runner.Calls[0].data?.__agentTypePromptParams).toMatchObject({ enableTaskGraphs: true });
+    });
+
+    it('locks out an action the engine refuses for the audience: the model is told, and it is never dispatched again', async () => {
+        harness.runAction = () => ({
+            Success: false,
+            ResultCode: 'AUDIENCE_UNSUPPORTED',
+            Message: `Action '${ACTION_NAME}' is not available here: its output would be shown to people besides the caller.`,
+            Params: [],
+            Result: null,
+            LogEntry: null,
+        });
+        const { agent, runner } = makeAgent([
+            () => llmEnvelope(actionsEnvelope()),
+            () => llmEnvelope(actionsEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        await agent.Execute(makeParams(room));
+
+        expect(harness.runActionCalls).toHaveLength(1);
+        const told = (runner.Calls[1].conversationMessages ?? []).map((m) => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content)));
+        expect(told.some((c) => c.includes('[CRITICAL/ACTION_UNAVAILABLE]') && c.includes(ACTION_NAME))).toBe(true);
+    });
+
+    it('withholds task graphs from the prompt, without writing the cached base params', async () => {
+        harness.agent = makeAgentRow({ AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }) });
+        const { agent, runner } = makeAgent([() => llmEnvelope(successEnvelope())]);
+
+        await agent.Execute(makeParams(room));
+
+        expect(runner.Calls[0].data?.__agentTypePromptParams).toMatchObject({ enableTaskGraphs: false, includeResponseTypeDefinition: { tasks: false } });
+        const catalog = (harness.engineInstance.GetAgentBaseCatalog as (id: string) => { baseAgentTypePromptParams: Record<string, unknown> })(AGENT_ID);
+        expect(catalog.baseAgentTypePromptParams.enableTaskGraphs).toBe(true);
+    });
+
+    it('refuses a session-driven (realtime) agent type before opening a session', async () => {
+        class SessionAgent extends HarnessAgent {
+            public SessionsOpened = 0;
+            protected override isSessionDrivenAgentType(_agentType: BaseAgentType): _agentType is BaseAgentType & { IsSessionDriven: true } {
+                return true;
+            }
+            protected override async executeRealtimeSession<R>(): Promise<never> {
+                this.SessionsOpened++;
+                throw new Error('a session must not be opened for a room');
+            }
+        }
+        const agent = new SessionAgent();
+        (agent as unknown as AgentInternals)._promptRunner = new ScriptedPromptRunner([() => llmEnvelope(successEnvelope())]);
+
+        const result = await agent.Execute(makeParams(room));
+
+        expect(result.success).toBe(false);
+        expect(agent.SessionsOpened).toBe(0);
+        expect(harness.run.ErrorMessage).toMatch(/session-driven/);
     });
 });

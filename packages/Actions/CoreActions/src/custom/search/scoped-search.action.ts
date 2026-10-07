@@ -4,9 +4,11 @@ import { RegisterClass, UUIDsEqual } from "@memberjunction/global";
 import { LogError, LogStatusEx, IsVerboseLoggingEnabled, Metadata, UserInfo } from "@memberjunction/core";
 import {
     SearchEngine,
+    SearchAudience,
     SearchResult,
     SearchResultItem,
-    GetSearchScopePermissionResolver
+    GetSearchScopePermissionResolver,
+    EffectivePermission
 } from "@memberjunction/search-engine";
 import {
     SearchEngineBase,
@@ -111,6 +113,15 @@ const SCOPED_SEARCH_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-
 @RegisterClass(BaseAction, "__Scoped_Search")
 export class ScopedSearchAction extends BaseAction {
 
+    /**
+     * Honours an audience (`RunActionParams.Audience`): every reader must pass the same scope-permission gate
+     * the caller does, the search keeps only results every reader may read (`SearchParams.Audience`), and
+     * `SourceCounts` — counted before that filtering — are left out of the output.
+     */
+    public override get SupportsAudience(): boolean {
+        return true;
+    }
+
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         // Track action-call wall-clock so any Forbidden log row reports
         // accurate latency for "denial took 12ms" telemetry.
@@ -158,9 +169,12 @@ export class ScopedSearchAction extends BaseAction {
             if ('result' in scopeOutcome) return scopeOutcome.result;
             const { scope, scopeID } = scopeOutcome;
 
-            // 3. User-side permission check (Phase 2A) + Read-level gate, with denial logging
+            // 3. User-side permission check (Phase 2A) + Read-level gate, with denial logging — then the same
+            // gate for every reader of the run's audience: a room may search a scope only if each of them may.
             const permDenial = await this.enforceUserPermission(agent, skill, scopeID, query, params, startTime);
             if (permDenial) return permDenial;
+            const audienceDenial = await this.enforceAudiencePermission(agent, skill, scopeID, query, params, startTime);
+            if (audienceDenial) return audienceDenial;
 
             // 4. Run the search (sync or streaming)
             const maxResults = this.getNumericParam(params, "maxresults", 25);
@@ -185,11 +199,12 @@ export class ScopedSearchAction extends BaseAction {
                 query, maxResults, minScore, scopeID, agent,
                 contextUser: params.ContextUser, streamingMode,
                 primaryScopeRecordID, secondaryScopes, aiSkillID: skill?.ID ?? undefined,
+                audience: params.Audience,
             });
             if ('result' in exec) return exec.result;
 
-            // 5. Build the success response
-            return this.buildSuccessResult(exec.sr, scope, scopeID, exec.progressEvents);
+            // 5. Build the success response (no SourceCounts for a room: they are counted before the audience pass)
+            return this.buildSuccessResult(exec.sr, scope, scopeID, exec.progressEvents, params.Audience !== undefined);
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
             LogError(`ScopedSearchAction error: ${msg}`);
@@ -419,6 +434,57 @@ export class ScopedSearchAction extends BaseAction {
     }
 
     /**
+     * Step 3b — the run's audience (`RunActionParams.Audience`, already normalized by the engine to the distinct
+     * readers beyond the caller). Each reader must pass the gate the caller just passed — the same principals and
+     * tenant, the same bar above `Read` — because the search engine judges scope entitlement for the caller only.
+     * Every refused reader gets its own `Forbidden` search-log row naming them; the caller is told only that the
+     * scope is not open to everyone the results are for. A resolver failure propagates, as the caller's does.
+     */
+    private async enforceAudiencePermission(
+        agent: MJAIAgentEntity,
+        skill: MJAISkillEntity | null,
+        scopeID: string | undefined,
+        query: string,
+        params: RunActionParams,
+        startTime: number,
+    ): Promise<ActionResultSimple | null> {
+        const readers = Array.isArray(params.Audience?.Readers) ? params.Audience.Readers : [];
+        if (!scopeID || readers.length === 0) return null;
+        const primaryScopeRecordID = this.getStringParam(params, "primaryscoperecordid") ?? null;
+        const resolver = GetSearchScopePermissionResolver();
+        const verdicts = await Promise.all(readers.map(reader => resolver.ResolveEffectivePermission({
+            User: reader, SearchScopeID: scopeID, Agent: agent, Skill: skill,
+            PrimaryScopeRecordID: primaryScopeRecordID, ContextUser: params.ContextUser,
+        })));
+        const refused = readers
+            .map((reader, i) => ({ reader, verdict: verdicts[i] }))
+            .filter(r => !r.verdict.Allowed || r.verdict.Level === 'Read');
+        if (refused.length === 0) return null;
+        for (const { reader, verdict } of refused) {
+            await SearchEngine.Instance.LogForbiddenSearch({
+                Query: query,
+                ScopeIDs: [scopeID],
+                FailureReason: this.audienceRefusalReason(reader, verdict),
+                StartTime: startTime,
+                ContextUser: params.ContextUser,
+                AIAgentID: agent.ID,
+                AISkillID: skill?.ID ?? null,
+            });
+        }
+        return this.createErrorResult(
+            `Forbidden: scope '${scopeID}' is not open to everyone these results are for (${refused[0].verdict.Source}).`,
+            'PERMISSION_DENIED');
+    }
+
+    /** The audit reason for one refused audience reader: who, and why (capped to the log column). */
+    private audienceRefusalReason(reader: UserInfo, verdict: EffectivePermission): string {
+        const why = verdict.Allowed && verdict.Level === 'Read'
+            ? 'Read grants visibility of the scope, not the right to search it'
+            : verdict.Reason;
+        return `Audience reader '${reader.Name}' (${reader.ID}) may not search this scope: ${why}`.substring(0, 500);
+    }
+
+    /**
      * Step 4 helper — execute the search via either the synchronous
      * `Search()` path or the streaming `streamSearch()` path. Returns the
      * `SearchResult` plus a `progressEvents` array (only populated when
@@ -435,6 +501,7 @@ export class ScopedSearchAction extends BaseAction {
         primaryScopeRecordID: string | undefined;
         secondaryScopes: Record<string, SecondaryScopeValue> | undefined;
         aiSkillID: string | undefined;
+        audience: SearchAudience | undefined;
     }): Promise<{ ok: true; sr: SearchResult; progressEvents: Array<Record<string, unknown>> } | { ok: false; result: ActionResultSimple }> {
         // Construct a SearchContext only when the caller supplied at least
         // one runtime dimension. Leaving it undefined preserves the existing
@@ -470,6 +537,9 @@ export class ScopedSearchAction extends BaseAction {
             // / FolderPath fields at search time so a single scope definition
             // can serve many tenants.
             SearchContext: searchContext,
+            // Everyone else who will see these results (RunActionParams.Audience, normalized by the engine):
+            // the engine keeps only what every reader may read.
+            Audience: input.audience,
         };
         if (input.streamingMode !== 'partials') {
             const sr = await SearchEngine.Instance.Search(baseParams, input.contextUser);
@@ -527,13 +597,17 @@ export class ScopedSearchAction extends BaseAction {
         scope: MJSearchScopeEntity | undefined,
         scopeID: string | undefined,
         progressEvents: Array<Record<string, unknown>>,
+        withholdSourceCounts: boolean,
     ): ActionResultSimple {
         const formatted = this.formatResults(sr.Results);
+        // SourceCounts are counted before the permission and audience passes, so they reveal the caller's
+        // unfiltered reach: never shown to a room.
+        const sourceCounts: ActionParam[] = withholdSourceCounts ? [] : [{ Name: "SourceCounts", Value: sr.SourceCounts, Type: "Output" }];
         const outputParams: ActionParam[] = [
             { Name: "Results",            Value: formatted,                Type: "Output" },
             { Name: "TotalCount",         Value: sr.TotalCount,             Type: "Output" },
             { Name: "ElapsedMs",          Value: sr.ElapsedMs,              Type: "Output" },
-            { Name: "SourceCounts",       Value: sr.SourceCounts,           Type: "Output" },
+            ...sourceCounts,
             { Name: "ScopeID_Resolved",   Value: scopeID ?? null,           Type: "Output" },
             { Name: "ScopeName_Resolved", Value: scope?.Name ?? "Global",   Type: "Output" }
         ];

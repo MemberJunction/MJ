@@ -531,6 +531,9 @@ importers:
       '@memberjunction/core-entities':
         specifier: 6.2.0-edge.2
         version: link:../../MJCoreEntities
+      '@memberjunction/generic-database-provider':
+        specifier: 6.2.0-edge.2
+        version: link:../../GenericDatabaseProvider
       '@memberjunction/global':
         specifier: 6.2.0-edge.2
         version: link:../../MJGlobal

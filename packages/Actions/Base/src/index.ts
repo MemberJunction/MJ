@@ -1,4 +1,5 @@
 export * from './ActionEngine-Base';
+export * from './ActionAudience';
 export * from './DurableEntityActionSubmitter';
 export * from './EntityChangeContext';
 export * from './ParamRedaction';

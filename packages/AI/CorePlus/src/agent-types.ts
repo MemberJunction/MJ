@@ -1035,6 +1035,35 @@ export interface InputArtifact {
 }
 
 /**
+ * How a run's audience bounds what the run may show. See {@link ExecuteAgentParams.Audience}.
+ * - `'Caller'` — the caller's own reach, exactly as if no audience were set. `UserIDs` must be empty.
+ * - `'Intersection'` — only what the caller **and** every user in `UserIDs` may see.
+ *
+ * Union, anchor and narrowing modes are not offered: a run bounded by a shared record or a tenant
+ * uses `PrimaryScope*` / `SecondaryScopes`.
+ *
+ * @since 6.2.0
+ */
+export type AgentAudienceMode = 'Caller' | 'Intersection';
+
+/**
+ * The people, besides the caller, who will see a run's output. See {@link ExecuteAgentParams.Audience}.
+ *
+ * @since 6.2.0
+ */
+export interface AgentRunAudience {
+    /** How the audience bounds the run. */
+    Mode: AgentAudienceMode;
+    /**
+     * `MJ: Users` IDs of everyone besides the caller who will see the output — for a shared
+     * conversation, its other participants. Required and non-empty, with no blank entry, for
+     * `'Intersection'`; empty for `'Caller'`. Listing the caller, or an ID twice, is harmless. Each ID
+     * must name an existing user: a run whose audience names an unknown ID is refused.
+     */
+    UserIDs: string[];
+}
+
+/**
  * Parameters required to execute an AI Agent.
  *
  * @template TContext - Type of the context object passed through agent and action execution.
@@ -1263,6 +1292,48 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      * embeddings outside a prompt run, which are platform infrastructure and resolve their own keys.
      */
     CredentialScope?: AICredentialScope;
+    /**
+     * Everyone besides the caller who will see this run's output — a shared conversation's other
+     * participants. With `Mode: 'Intersection'` the run may show only what the caller **and** every
+     * reader may see: the caller's reach is the ceiling, each reader's reach lowers it. Omitted (or
+     * `'Caller'`), the run is bounded by the caller alone, as before.
+     *
+     * **Server-only.** Set it from the host's own record of who is in the room (the conversation's
+     * participants), never from client input: it is a typed field and is never read from `data`, so
+     * nothing a client sends through GraphQL, MCP or A2A (whose agent runners pass named fields and put
+     * client JSON in `data`) can set or clear it.
+     *
+     * **Validation fails the run** before any prompt, as a refused permission does: an unknown `Mode`;
+     * `'Intersection'` whose `UserIDs` is empty, not an array, or holds a blank entry; `'Caller'` with
+     * any `UserIDs`; or an ID no user has (after one refresh of the server's user cache). Every gate
+     * below fires only when the audience adds a reader **other than the caller**, so an
+     * `'Intersection'` whose only reader is the caller behaves exactly as `'Caller'`.
+     *
+     * **What it bounds.** Each run (sub-agents included — they inherit it and re-hydrate the IDs) loads
+     * the readers from the user cache and then:
+     * - pre-execution RAG checks every reader's scope permission (a refused reader skips that scope and
+     *   writes a `Forbidden` search-log row naming them) and passes the readers to the search, which
+     *   keeps only results every reader may read;
+     * - agent notes and examples are injected only when shared (`UserID` empty); scope matching still applies;
+     * - agent data-source preloading and the previous turn's tool-result carry-forward are skipped;
+     * - every action call carries `RunActionParams.Audience`. Only the Search and Scoped Search actions
+     *   declare they can honour it; any other action is refused (`AUDIENCE_UNSUPPORTED`) without running
+     *   and is locked out for the run, so an agent with other actions is limited to search in a shared room;
+     * - task graphs are not offered, and one the model writes anyway is refused;
+     * - session-driven (realtime / voice / bridge) agent types are refused.
+     *
+     * **Not covered (documented limits).**
+     * - Scope expansion queries and `ServerDerived` dimensions resolve for the caller only
+     *   (`ScopeDimensionResolver` binds one `UserID`); the per-reader result filter covers scopes whose
+     *   lanes carry per-user row filters.
+     * - A resumed run (`MJAIAgentRequestEntityServer.resumeAgent`, after a human answers a request)
+     *   resumes as the responder with no audience: persisting the audience on the run needs a column,
+     *   an open design point shared with bound action parameters.
+     * - The conversation history and artifacts the host passes in are the host's to choose.
+     *
+     * @since 6.2.0
+     */
+    Audience?: AgentRunAudience;
     /**
      * Optional ID of the last run in a run chain.
      * When provided, this links the new run to a previous run, allowing
