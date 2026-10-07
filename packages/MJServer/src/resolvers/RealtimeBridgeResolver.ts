@@ -1,7 +1,7 @@
 import { Resolver, Mutation, Query, Arg, Ctx, ObjectType, InputType, Field } from 'type-graphql';
 import { randomUUID } from 'crypto';
 import { LogError, LogStatusEx, UserInfo, IMetadataProvider } from '@memberjunction/core';
-import { LiveKitTokenService, LiveKitAgentRoomCoordinator, LiveKitEgressService } from '@memberjunction/livekit-room-server';
+import { LiveKitTokenService, LiveKitAgentRoomCoordinator, LiveKitEgressService, LiveKitParticipantService } from '@memberjunction/livekit-room-server';
 import { AppContext } from '../types.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetReadWriteProvider } from '../util.js';
@@ -10,6 +10,7 @@ import { AIBridgeEngine } from '@memberjunction/ai-bridge-server';
 import { SessionManager } from '../agentSessions/SessionManager.js';
 import { NotificationEngine } from '@memberjunction/notifications';
 import { RegisterMeetingRecordingFile, CorrelateRecordingStart } from './meetingRecordingRegistration.js';
+import { WriteAgentVisionConsentAudit } from './agentVisionConsentAudit.js';
 
 /**
  * Binds the agent realtime-session factory onto the LiveKit room coordinator's model-session creation seam.
@@ -179,6 +180,26 @@ export class LiveKitRecordingResult {
   /** The `MJ: Files` row id of the registered recording (set on stop, once the egress MP4 is registered). */
   @Field(() => String, { nullable: true })
   RecordingFileID?: string;
+}
+
+/** A person's choice of whether agents may see their camera and shared screen in a room. */
+@InputType()
+export class SetLiveKitAgentVisionInput {
+  @Field(() => String)
+  RoomName: string;
+
+  /** `true` to let agents see, `false` to stop. */
+  @Field(() => Boolean)
+  Allow: boolean;
+}
+
+@ObjectType()
+export class LiveKitAgentVisionResult {
+  @Field(() => Boolean)
+  Success: boolean;
+
+  @Field(() => String, { nullable: true })
+  ErrorMessage?: string;
 }
 
 /** A selectable provider-native voice for the dev voice picker. */
@@ -501,6 +522,39 @@ export class RealtimeBridgeResolver extends ResolverBase {
       const msg = error instanceof Error ? error.message : String(error);
       LogError(`StopLiveKitRecording failed: ${msg}`);
       return { Success: false, ErrorMessage: msg, EgressID: egressID, Status: '' };
+    }
+  }
+
+  /**
+   * Records whether the current user lets agents see their camera and shared screen in a room. The participant is
+   * worked out from the authenticated user, never sent by the client, so a person can only answer for themselves, and
+   * LiveKit refuses when they are not in the room. The choice is set as their `mj.agentCanSee` attribute through
+   * LiveKit's server SDK (a participant's token can't change its own attributes) and audited, applied or not.
+   */
+  @Mutation(() => LiveKitAgentVisionResult)
+  async SetLiveKitAgentVision(
+    @Arg('input', () => SetLiveKitAgentVisionInput) input: SetLiveKitAgentVisionInput,
+    @Ctx() context: AppContext = {} as AppContext,
+  ): Promise<LiveKitAgentVisionResult> {
+    try {
+      const user = this.GetUserFromPayload(context.userPayload);
+      if (!user) {
+        return { Success: false, ErrorMessage: 'Unable to determine current user.' };
+      }
+      const result = await new LiveKitParticipantService().SetAgentVision(input.RoomName, this.participantIdentity(user), input.Allow);
+      const provider = GetReadWriteProvider(context.providers) as unknown as IMetadataProvider;
+      await WriteAgentVisionConsentAudit(
+        { User: user, RoomName: input.RoomName, Allow: input.Allow, Applied: result.Success, ErrorMessage: result.ErrorMessage },
+        provider,
+      );
+      if (result.Success) {
+        return { Success: true };
+      }
+      return { Success: false, ErrorMessage: result.NotInRoom ? 'You are not in this room.' : result.ErrorMessage };
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      LogError(`SetLiveKitAgentVision failed: ${msg}`);
+      return { Success: false, ErrorMessage: msg };
     }
   }
 

@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT101 - LiveKit Room Agent Vision Consent",
+    "Description": "Client-transport bundle. Drives the LiveKit room's agent-vision consent mutation over the GraphQL wire through GraphQLLiveKitClient, for a room nobody is in: the choice is refused with a reason, answered for the signed-in user (no identity crosses the wire), and audited either way as a Failed 'Realtime Agent Vision Consent' row about that user, with the room and the choice. Needs no LiveKit server. Requires RUN_MUTATION_TESTS because the server writes audit rows; Teardown deletes them.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "A person can only answer for themselves, and a refused choice is still audited."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "livekit-room"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "C7233AD0-A50E-4235-847F-02576E7B77F0"
+  }
+}

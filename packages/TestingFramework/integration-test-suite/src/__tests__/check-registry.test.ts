@@ -267,6 +267,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'fls-lifecycle': 9,
         'layered-base-views': 6,
         'lists': 3,
+        'livekit-room': 1,
         'materialized-entity-read': 2,
         'materialized-read': 3,
         'metadata-consistency': 7,
@@ -340,7 +341,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(100);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(101);
     });
 });
 
@@ -450,6 +451,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'fls-lifecycle.LC7',
         'fls-lifecycle.LC8',
         'fls-lifecycle.LC9',
+        'livekit-room.LKR1',
         'metadata-sync-push.MSP1',
         'metadata-sync-push.MSP10',
         'metadata-sync-push.MSP2',

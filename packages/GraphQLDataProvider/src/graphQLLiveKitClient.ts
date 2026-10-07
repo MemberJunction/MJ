@@ -114,6 +114,14 @@ export interface LiveKitRecordingResult {
   RecordingFileID?: string;
 }
 
+/** Result of recording a person's choice of whether agents may see their camera and shared screen. */
+export interface LiveKitAgentVisionResult {
+  /** Whether LiveKit applied the choice. */
+  Success: boolean;
+  /** Why it was not applied, when {@link Success} is false (for example "You are not in this room."). */
+  ErrorMessage?: string;
+}
+
 /** Typed wrapper over the LiveKit room GraphQL mutations. */
 export class GraphQLLiveKitClient {
   private _dataProvider: GraphQLDataProvider;
@@ -331,6 +339,36 @@ export class GraphQLLiveKitClient {
       'StopLiveKitRecording',
       egressID,
     );
+  }
+
+  /**
+   * Records whether the current user lets agents see their camera and shared screen in a room. The server works out
+   * who is asking from the signed-in user, sets their LiveKit attribute and audits the choice; the room shows the change
+   * once LiveKit reports it. Never throws.
+   *
+   * @param roomName The room the user is in.
+   * @param allow `true` to let agents see, `false` to stop.
+   */
+  public async SetAgentVision(roomName: string, allow: boolean): Promise<LiveKitAgentVisionResult> {
+    try {
+      const mutation = gql`
+        mutation SetLiveKitAgentVision($input: SetLiveKitAgentVisionInput!) {
+          SetLiveKitAgentVision(input: $input) {
+            Success
+            ErrorMessage
+          }
+        }
+      `;
+      const result = await this._dataProvider.ExecuteGQL(mutation, { input: { RoomName: roomName, Allow: allow } });
+      const raw: LiveKitAgentVisionResult | undefined = result?.SetLiveKitAgentVision;
+      if (!raw) {
+        throw new Error('Invalid response from server');
+      }
+      return raw;
+    } catch (error: unknown) {
+      LogError('GraphQLLiveKitClient.SetAgentVision failed', undefined, error);
+      return { Success: false, ErrorMessage: (error instanceof Error ? error.message : String(error)) || 'Unknown error' };
+    }
   }
 
   /** Runs a recording mutation and normalizes the result/error shape. */

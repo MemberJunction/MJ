@@ -47,6 +47,7 @@ export type {
     StartLiveKitAgentRoomSessionInput,
     LiveKitAgentRoomSessionResult,
     LiveKitRecordingResult,
+    LiveKitAgentVisionResult,
     RealtimeModelVoices,
     RealtimeVoiceOption
 } from './graphQLLiveKitClient';

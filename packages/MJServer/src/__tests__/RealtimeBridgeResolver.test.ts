@@ -15,6 +15,8 @@ const h = vi.hoisted(() => ({
   })),
   startRecording: vi.fn(async () => ({ EgressID: 'eg-1', RoomName: 'room-1', Status: 'EGRESS_ACTIVE' })),
   stopRecording: vi.fn(async () => ({ EgressID: 'eg-1', RoomName: 'room-1', Status: 'EGRESS_COMPLETE' })),
+  setAgentVision: vi.fn(async (): Promise<{ Success: boolean; NotInRoom?: boolean; ErrorMessage?: string }> => ({ Success: true })),
+  writeConsentAudit: vi.fn(async () => undefined),
 }));
 
 // These two are instantiated with `new` by the resolver, so they must be constructible. They were
@@ -30,6 +32,15 @@ vi.mock('@memberjunction/livekit-room-server', () => ({
     StartRoomRecording = h.startRecording;
     StopRecording = h.stopRecording;
   },
+  LiveKitParticipantService: class {
+    SetAgentVision = h.setAgentVision;
+  },
+}));
+
+// Mock the consent audit writer so the thin resolver is tested in isolation. Its own behavior is covered by
+// agentVisionConsentAudit.test.ts.
+vi.mock('../resolvers/agentVisionConsentAudit', () => ({
+  WriteAgentVisionConsentAudit: h.writeConsentAudit,
 }));
 
 // Mock the agent factory so importing the resolver doesn't pull the heavy @memberjunction/ai-agents graph
@@ -56,7 +67,7 @@ vi.mock('../resolvers/meetingRecordingRegistration', () => ({
     get correlateRecordingStart() { return this.CorrelateRecordingStart; },
 }));
 
-import { RealtimeBridgeResolver, MintLiveKitClientTokenInput, LiveKitRecordingInput } from '../resolvers/RealtimeBridgeResolver';
+import { RealtimeBridgeResolver, MintLiveKitClientTokenInput, LiveKitRecordingInput, SetLiveKitAgentVisionInput } from '../resolvers/RealtimeBridgeResolver';
 import type { AppContext } from '../types.js';
 
 /** A resolver subclass that supplies a fake authenticated user (GetUserFromPayload is protected). */
@@ -74,6 +85,8 @@ describe('RealtimeBridgeResolver', () => {
 
   beforeEach(() => {
     resolver = new TestableResolver();
+    h.setAgentVision.mockClear();
+    h.writeConsentAudit.mockClear();
   });
 
   describe('MintLiveKitClientToken', () => {
@@ -120,6 +133,47 @@ describe('RealtimeBridgeResolver', () => {
       const result = await resolver.StartLiveKitRecording(input, ctx);
       expect(result.Success).toBe(false);
       expect(result.ErrorMessage).toMatch(/current user/i);
+    });
+  });
+
+  describe('SetLiveKitAgentVision', () => {
+    const choose = (allow: boolean) => Object.assign(new SetLiveKitAgentVisionInput(), { RoomName: 'room-1', Allow: allow });
+
+    it("records the signed-in user's own choice, as their participant identity, and audits it", async () => {
+      const result = await resolver.SetLiveKitAgentVision(choose(true), ctx);
+      expect(result).toEqual({ Success: true });
+      expect(h.setAgentVision).toHaveBeenCalledWith('room-1', 'user-u1', true);
+      expect(h.writeConsentAudit).toHaveBeenCalledWith(
+        { User: resolver.user, RoomName: 'room-1', Allow: true, Applied: true, ErrorMessage: undefined },
+        null,
+      );
+    });
+
+    it('passes a withdrawal through as it is', async () => {
+      await resolver.SetLiveKitAgentVision(choose(false), ctx);
+      expect(h.setAgentVision).toHaveBeenCalledWith('room-1', 'user-u1', false);
+    });
+
+    it('says when the user is not in the room, and audits the refusal', async () => {
+      h.setAgentVision.mockResolvedValueOnce({ Success: false, NotInRoom: true, ErrorMessage: 'user-u1 is not in room room-1.' });
+      const result = await resolver.SetLiveKitAgentVision(choose(true), ctx);
+      expect(result).toEqual({ Success: false, ErrorMessage: 'You are not in this room.' });
+      expect(h.writeConsentAudit).toHaveBeenCalledWith(expect.objectContaining({ Applied: false, ErrorMessage: 'user-u1 is not in room room-1.' }), null);
+    });
+
+    it("passes LiveKit's other refusals on", async () => {
+      h.setAgentVision.mockResolvedValueOnce({ Success: false, ErrorMessage: 'LiveKit is not configured on this server.' });
+      const result = await resolver.SetLiveKitAgentVision(choose(true), ctx);
+      expect(result).toEqual({ Success: false, ErrorMessage: 'LiveKit is not configured on this server.' });
+    });
+
+    it('does nothing without an authenticated user', async () => {
+      resolver.user = undefined;
+      const result = await resolver.SetLiveKitAgentVision(choose(true), ctx);
+      expect(result.Success).toBe(false);
+      expect(result.ErrorMessage).toMatch(/current user/i);
+      expect(h.setAgentVision).not.toHaveBeenCalled();
+      expect(h.writeConsentAudit).not.toHaveBeenCalled();
     });
   });
 });

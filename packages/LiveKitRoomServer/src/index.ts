@@ -29,3 +29,5 @@ export {
 } from './livekit-agent-room-coordinator';
 
 export { LiveKitEgressService, WsToHttpUrl, wsToHttpUrl, type EgressClientLike, type StartRecordingParams, type RecordingInfo } from './livekit-egress-service';
+
+export { LiveKitParticipantService, type RoomServiceClientLike, type ParticipantUpdateResult } from './livekit-participant-service';

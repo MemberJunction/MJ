@@ -102,4 +102,35 @@ describe('GraphQLLiveKitClient', () => {
       expect(result.ErrorMessage).toMatch(/egress unavailable/);
     });
   });
+
+  describe('SetAgentVision', () => {
+    it("sends the room and the user's choice, and returns the server's answer", async () => {
+      const { provider, calls } = makeProvider({ SetLiveKitAgentVision: { Success: false, ErrorMessage: 'You are not in this room.' } });
+      const result = await new GraphQLLiveKitClient(provider).SetAgentVision('r1', true);
+
+      expect(calls[0].variables).toEqual({ input: { RoomName: 'r1', Allow: true } });
+      expect(calls[0].query).toContain('SetLiveKitAgentVision(input: $input)');
+      expect(result).toEqual({ Success: false, ErrorMessage: 'You are not in this room.' });
+    });
+
+    it('sends a withdrawal as it is', async () => {
+      const { provider, calls } = makeProvider({ SetLiveKitAgentVision: { Success: true } });
+      const result = await new GraphQLLiveKitClient(provider).SetAgentVision('r1', false);
+
+      expect(calls[0].variables).toEqual({ input: { RoomName: 'r1', Allow: false } });
+      expect(result.Success).toBe(true);
+    });
+
+    it('turns a missing reply or a transport error into a failure (never throws)', async () => {
+      const empty = await new GraphQLLiveKitClient(makeProvider({}).provider).SetAgentVision('r1', true);
+      const thrown = await new GraphQLLiveKitClient(
+        makeProvider(() => {
+          throw new Error('network down');
+        }).provider,
+      ).SetAgentVision('r1', true);
+
+      expect(empty).toEqual({ Success: false, ErrorMessage: 'Invalid response from server' });
+      expect(thrown).toEqual({ Success: false, ErrorMessage: 'network down' });
+    });
+  });
 });

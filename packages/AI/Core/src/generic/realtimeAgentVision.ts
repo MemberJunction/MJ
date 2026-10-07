@@ -34,3 +34,11 @@ export function AllowsAgentVision(attributes?: RealtimeParticipantAttributes | n
 export function IsAgentWatching(attributes?: RealtimeParticipantAttributes | null): boolean {
     return attributes?.[REALTIME_AGENT_WATCHES_ATTRIBUTE] === 'true';
 }
+
+/**
+ * The attribute change that records a person's choice, for the server to apply: `'true'` to allow, `''` to withdraw.
+ * LiveKit removes an attribute set to `''`, so no stale value is left for anyone to misread.
+ */
+export function AgentVisionAttributes(allow: boolean): Record<string, string> {
+    return { [REALTIME_AGENT_CAN_SEE_ATTRIBUTE]: allow ? 'true' : '' };
+}

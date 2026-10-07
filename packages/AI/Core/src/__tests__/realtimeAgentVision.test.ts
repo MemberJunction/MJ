@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+    AgentVisionAttributes,
     AllowsAgentVision,
     IsAgentWatching,
     REALTIME_AGENT_CAN_SEE_ATTRIBUTE,
@@ -47,6 +48,18 @@ describe('realtime agent vision attributes', () => {
 
         it("ignores a person's consent attribute", () => {
             expect(IsAgentWatching({ [REALTIME_AGENT_CAN_SEE_ATTRIBUTE]: 'true' })).toBe(false);
+        });
+    });
+
+    describe('AgentVisionAttributes', () => {
+        it("sets 'true' to allow, and '' to withdraw so LiveKit removes the attribute", () => {
+            expect(AgentVisionAttributes(true)).toEqual({ [REALTIME_AGENT_CAN_SEE_ATTRIBUTE]: 'true' });
+            expect(AgentVisionAttributes(false)).toEqual({ [REALTIME_AGENT_CAN_SEE_ATTRIBUTE]: '' });
+        });
+
+        it('reads back as the choice it records', () => {
+            expect(AllowsAgentVision(AgentVisionAttributes(true))).toBe(true);
+            expect(AllowsAgentVision(AgentVisionAttributes(false))).toBe(false);
         });
     });
 });
