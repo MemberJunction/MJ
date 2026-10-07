@@ -1,5 +1,136 @@
 # @memberjunction/mobile-app
 
+## 6.2.0-edge.3
+
+### Patch Changes
+
+- 41c2c08: Stop serializing the whole metadata graph into a store nothing can read it back from
+
+  `ProviderBase.SaveLocalMetadataToStorage()` ran `JSON.stringify` over the entire metadata graph on
+  every metadata reload, then copied it into a `Blob`, gzipped it, and base64-encoded it one byte at a
+  time. The snapshot exists so a cold process can start from a cached copy instead of querying — which
+  only works if the store outlives the writer. On a server with no `REDIS_URL` the store is an
+  in-process `Map`, so the only possible reader is the heap that already holds the live objects, and
+  the whole round trip buys nothing.
+
+  Measured on a 791-entity tenant: 131.5M characters per stringify, ~10s and ~1.2GB of transient heap
+  per refresh against a 2.2GB steady state, and the final flatten of that string needs one contiguous
+  ~500MB allocation. Saved queries are metadata members, so an agent writing them marks metadata stale
+  and triggers a refresh roughly every 30 seconds; two overlapping refreshes exhausted the heap and
+  MJAPI died with `Reached heap limit Allocation failed` inside `String::SlowFlatten`.
+
+  `ILocalStorageProvider` gains an optional `SupportsCrossProcessPersistence`. `ProviderBase` skips
+  both the save and the load when it is `false`, logging the reason once per process. A provider that
+  does not declare it is treated as persistent, so Redis and browser behaviour is unchanged — the
+  conservative direction, since a pointless save only wastes work while wrongly skipping a necessary
+  one would leave a cache that never populates. Every in-repo provider now declares it, including the
+  instrumented test wrapper, which delegates to the store it wraps.
+
+  `arrayBufferToBase64` / `base64ToArrayBuffer` use Node's native codec when `Buffer` exists, falling
+  back to the existing loops in the browser. The byte-at-a-time encoder built a rope the size of the
+  payload and then forced a flatten, measured at 3702ms for an 8.6MB buffer under heap pressure
+  against 191ms cold.
+
+  `TelemetryManager.trimIfNeeded()` only ever trimmed `_events`. Three collections derived from it were
+  never released for the life of the process: `_insights` grew by one entry per emitted warning,
+  `_patterns` by one per distinct fingerprint (every new filter combination is a new fingerprint, so it
+  grew with query variety), and `_insightDedupeWindow` by one per dedupe key. All three are now bound
+  on the same schedule as the events they come from — `maxInsights` defaults to 1000, and the two map
+  sweeps are O(n) so they run at most once a minute rather than on every recorded event.
+
+  After the equivalent patch on a live tenant: the refresh cycle went from 10019/9372/8994 ms to
+  330/214/298 ms, heap peak from 3597/3171/3171 MB to 1576/1575/1575 MB, the per-refresh transient
+  spike from +1.0-1.2 GB to 0, and the retained baseline from 2204 MB to 1575 MB.
+
+- Updated dependencies [25bb295]
+- Updated dependencies [dfe40a4]
+- Updated dependencies [131f3c4]
+- Updated dependencies [0f04590]
+- Updated dependencies [41c2c08]
+- Updated dependencies [29b6ec3]
+- Updated dependencies [279b93e]
+- Updated dependencies [5acbec6]
+- Updated dependencies [50a2cf6]
+- Updated dependencies [66fd011]
+- Updated dependencies [196160a]
+- Updated dependencies [bea2386]
+- Updated dependencies [d046715]
+- Updated dependencies [60bd774]
+- Updated dependencies [35da130]
+- Updated dependencies [72e082b]
+- Updated dependencies [28c92e0]
+- Updated dependencies [d0a8dbf]
+- Updated dependencies [ec97ad4]
+- Updated dependencies [b1b6d3d]
+- Updated dependencies [49e0bd8]
+  - @memberjunction/ai@6.2.0-edge.3
+  - @memberjunction/core-entities@6.2.0-edge.3
+  - @memberjunction/global@6.2.0-edge.3
+  - @memberjunction/core@6.2.0-edge.3
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.3
+  - @memberjunction/ai-realtime-client@6.2.0-edge.3
+  - @memberjunction/realtime-runtime@6.2.0-edge.3
+  - @memberjunction/ai-core-plus@6.2.0-edge.3
+  - @memberjunction/interactive-component-types@6.2.0-edge.3
+  - @memberjunction/conversations-runtime@6.2.0-edge.3
+  - @memberjunction/react-runtime@6.2.0-edge.3
+  - @memberjunction/markdown-core@6.2.0-edge.3
+
+## 6.2.0-edge.2
+
+### Patch Changes
+
+- a3d6182: fix: a date-only (SQL `date`) column reads as its stored day in the query viewer, the record change history and restore preview, and the timeline, and exports as `YYYY-MM-DD`
+
+  These paths still formatted a calendar day, which arrives as UTC midnight, in the reader's local zone, so a stored 2026-10-01 read as Sep 30 west of Greenwich: as "Sep 30, 2026" in a query viewer cell and row detail, as "Sep 30, 2026, 7:00 PM" in the change history, and in a "September 30" timeline segment. The query viewer now branches on `IsDateOnlySQLType` and formats with `FormatDateOnly`, and the row detail no longer adds an "hours ago" suffix to a day. The change history and the restore preview share one formatter, so a date-only field shows its day with no time, and the restore preview's live value for a date field is no longer blank. The timeline carries a date-only event as local midnight of its stored day, so its segments and labels land on that day. The export engine gains a `dateonly` column type: CSV and JSON write ISO 8601 `YYYY-MM-DD`, and Excel writes a date cell on the stored day. The entity grid and the query viewer mark SQL `date` columns with it, and the query viewer's export columns now set `dataType` (they set an ignored `type` key before).
+
+  The entity viewer's Timeline view now reads its date field the same way: its rows are plain objects with no entity metadata, so the renderer hands the timeline group the entity (`TimelineGroup.EntityInfo`, used when a record carries none) and drops the time from the card date for a date-only field. The restore preview decides whether a field changed by value, not by its display string, so a timestamp that moved by under a minute is no longer reported unchanged and a snapshot day matches the same live day. The fallback export for Cards, Map and Timeline (the view workspace and Explorer's view resource) types its columns as the grid does, through a shared `ExportColumnTypeForSQLType`, so a date-only field exports as its day there too. The export engine writes a `dateonly` value whose leading `YYYY-MM-DD` is not a real day (`2026-13-45`, `2026-02-30`) as its original text instead of "Invalid Date" or a rolled-over day. The mobile app's entity explorer shows a date-only field in card subtitles and the record detail as its stored day. Closes MJ#4966.
+
+- Updated dependencies [f555162]
+- Updated dependencies [043f418]
+- Updated dependencies [e97d95c]
+- Updated dependencies [ff3097d]
+- Updated dependencies [79279f2]
+- Updated dependencies [2552b1e]
+- Updated dependencies [660ef45]
+- Updated dependencies [21f9e15]
+- Updated dependencies [28fdf22]
+- Updated dependencies [4248fb3]
+- Updated dependencies [f3c6161]
+- Updated dependencies [5148534]
+- Updated dependencies [0adaf76]
+- Updated dependencies [5ee02db]
+- Updated dependencies [ce1a5c3]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [ea4080e]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [26c0178]
+- Updated dependencies [594f2e0]
+- Updated dependencies [7e57b48]
+- Updated dependencies [705ab4e]
+- Updated dependencies [96daca8]
+- Updated dependencies [aa912ca]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [5986939]
+- Updated dependencies [4d647e6]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [369e229]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [2854a2e]
+  - @memberjunction/ai-core-plus@6.2.0-edge.2
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/ai@6.2.0-edge.2
+  - @memberjunction/core-entities@6.2.0-edge.2
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.2
+  - @memberjunction/realtime-runtime@6.2.0-edge.2
+  - @memberjunction/conversations-runtime@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+  - @memberjunction/interactive-component-types@6.2.0-edge.2
+  - @memberjunction/react-runtime@6.2.0-edge.2
+  - @memberjunction/ai-realtime-client@6.2.0-edge.2
+  - @memberjunction/markdown-core@6.2.0-edge.2
+
 ## 6.2.0-edge.1
 
 ### Patch Changes
