@@ -226,11 +226,24 @@ export class SearchFusion {
         maxResults: number,
         fusionWeights?: FusionWeightsByProvider
     ): SearchResultItem[] {
-        // Build ScoredCandidate arrays for each source. `Rank` is carried as an excess
-        // property for test doubles that key off it; production ComputeRRF ignores it.
-        const rankedLists: ScoredCandidate[][] = lists.map(list =>
-            list.Results.map((r, i) => ({
-                ID: r.RecordID,
+        // A result's identity is EntityName + RecordID: record IDs alone collide across entities
+        // (integer keys, e.g. Accounts:1 vs Contacts:1). And each lane counts a record ONCE, at its
+        // first (best) position: ComputeRRF adds every occurrence, so a duplicate within one lane
+        // would score above the [0, 1] maximum. `Rank` is carried as an excess property for test
+        // doubles that key off it; production ComputeRRF ranks by array position.
+        const keyOf = (r: SearchResultItem) => `${r.EntityName}::${r.RecordID}`;
+        const dedupedLists: SearchResultItem[][] = lists.map(list => {
+            const seen = new Set<string>();
+            return list.Results.filter(r => {
+                const key = keyOf(r);
+                if (seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            });
+        });
+        const rankedLists: ScoredCandidate[][] = dedupedLists.map(list =>
+            list.map((r, i) => ({
+                ID: keyOf(r),
                 Score: r.Score,
                 Rank: i + 1
             } as ScoredCandidate))
@@ -239,20 +252,18 @@ export class SearchFusion {
         const weights = lists.map(l => fusionWeights?.[l.Source] ?? 1);
         const fused = this.computeWeightedRRF(rankedLists, weights);
 
-        // Build a lookup from RecordID to full result item. When the same record
-        // appears in multiple provider lists, merge their `ScoreBreakdown`s so the
-        // multi-provider evidence isn't lost. Keeping only the first occurrence
-        // would silently drop the second provider's contribution — which then
-        // causes the downstream `Deduplicate.breakdownMax` post-processing to
-        // under-rank multi-provider hits (they'd look single-provider).
+        // Build a lookup from the result key to the full item. When the same record appears in
+        // several provider lists, merge their `ScoreBreakdown`s so the multi-provider evidence
+        // isn't lost.
         const resultMap = new Map<string, SearchResultItem>();
-        for (const list of lists) {
-            for (const r of list.Results) {
-                const existing = resultMap.get(r.RecordID);
+        for (const list of dedupedLists) {
+            for (const r of list) {
+                const key = keyOf(r);
+                const existing = resultMap.get(key);
                 if (!existing) {
-                    resultMap.set(r.RecordID, r);
+                    resultMap.set(key, r);
                 } else {
-                    resultMap.set(r.RecordID, {
+                    resultMap.set(key, {
                         ...existing,
                         ScoreBreakdown: { ...existing.ScoreBreakdown, ...r.ScoreBreakdown },
                     });

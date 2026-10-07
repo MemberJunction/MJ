@@ -440,6 +440,64 @@ describe('SearchFusion', () => {
         });
     });
 
+    // ────────────────────────────────────────────────────────────────
+    // Score stays in [0, 1]: identity is EntityName + RecordID, once per lane
+    // ────────────────────────────────────────────────────────────────
+    describe('Fused identity and the [0, 1] Score contract', () => {
+        const hit = (entity: string, id: string, source: 'vector' | 'entity' | 'fulltext', score = 0.8) =>
+            makeResult({ EntityName: entity, RecordID: id, Score: score, SourceType: source,
+                ScoreBreakdown: { [source === 'vector' ? 'Vector' : source === 'entity' ? 'Entity' : 'FullText']: score } as SearchScoreBreakdown });
+
+        it('counts a record that appears twice in one lane only once', () => {
+            // ComputeRRF adds every occurrence; a duplicate in one lane used to push Score to ~1.49.
+            const fused = fusion.Fuse([
+                { Source: 'vector', Results: [hit('People', 'a', 'vector'), hit('People', 'a', 'vector', 0.7), hit('People', 'b', 'vector', 0.6)] },
+                { Source: 'entity', Results: [hit('People', 'a', 'entity', 0.59)] },
+            ], 10);
+            const a = fused.filter(r => r.RecordID === 'a');
+            expect(a).toHaveLength(1);
+            expect(a[0].Score).toBeCloseTo(1, 10); // #1 in both lanes
+            // b moves up to rank 2 in the vector lane once the duplicate is removed.
+            expect(fused.find(r => r.RecordID === 'b')?.Score).toBeCloseTo((1 / 62) / (2 / 61), 10);
+            for (const r of fused) expect(r.Score).toBeLessThanOrEqual(1);
+        });
+
+        it('treats the same RecordID in different entities as different results', () => {
+            // Integer keys collide across entities (Accounts:1 vs Contacts:1); they must not merge.
+            const fused = fusion.Fuse([
+                { Source: 'vector', Results: [hit('Accounts', '1', 'vector')] },
+                { Source: 'entity', Results: [hit('Contacts', '1', 'entity', 0.59)] },
+            ], 10);
+            expect(fused).toHaveLength(2);
+            expect(fused.map(r => r.EntityName).sort()).toEqual(['Accounts', 'Contacts']);
+            for (const r of fused) expect(r.Score).toBeCloseTo(0.5, 10);
+        });
+
+        it('computes the maximum from the non-empty lanes when an empty lane is also passed', () => {
+            // Two lanes returned results, a third returned nothing: max = 2/61, not 3/61.
+            const fused = fusion.Fuse([
+                { Source: 'vector', Results: [hit('People', 'v1', 'vector')] },
+                { Source: 'entity', Results: [hit('People', 'k1', 'entity', 0.59)] },
+                { Source: 'fulltext', Results: [] },
+            ], 10);
+            expect(fused).toHaveLength(2);
+            for (const r of fused) expect(r.Score).toBeCloseTo(0.5, 10);
+        });
+
+        it('keeps every Score within [0, 1] for a mixed set with duplicates and collisions', () => {
+            const fused = fusion.Fuse([
+                { Source: 'vector', Results: [hit('A', '1', 'vector'), hit('B', '1', 'vector'), hit('A', '1', 'vector'), hit('A', '2', 'vector')] },
+                { Source: 'entity', Results: [hit('A', '1', 'entity'), hit('A', '1', 'entity'), hit('B', '2', 'entity')] },
+                { Source: 'fulltext', Results: [hit('A', '1', 'fulltext'), hit('B', '1', 'fulltext')] },
+            ], 10);
+            for (const r of fused) {
+                expect(r.Score).toBeGreaterThanOrEqual(0);
+                expect(r.Score).toBeLessThanOrEqual(1);
+            }
+            expect(fused.find(r => r.EntityName === 'A' && r.RecordID === '1')?.Score).toBeCloseTo(1, 10);
+        });
+    });
+
     describe('Fuse (weighted, non-uniform)', () => {
         it('honors heavy-vector weight when records differ across sources', () => {
             const vector: SearchResultItem[] = [

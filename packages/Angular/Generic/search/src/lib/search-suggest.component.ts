@@ -17,7 +17,7 @@ import {
 } from '@angular/core';
 import { StartupManager } from '@memberjunction/core';
 import { UserInfoEngine } from '@memberjunction/core-entities';
-import { SearchResultItem, RecentRecordItem } from './search-types';
+import { SearchResultItem, RecentRecordItem, PassesSemanticFloor } from './search-types';
 import { RecentSearch } from './search.service';
 import { MJEventType, MJGlobal } from '@memberjunction/global';
 
@@ -265,7 +265,7 @@ export class SearchSuggestComponent implements OnInit {
     public get VisiblePreviewResults(): SearchResultItem[] {
         const minScore = this.MinRelevancePercent / 100;
         return [...this.PreviewResults]
-            .filter(r => r.Score >= minScore)
+            .filter(r => PassesSemanticFloor(r, minScore))
             .sort((a, b) => b.Score - a.Score)
             .slice(0, this.MaxPreviewResults);
     }
