@@ -965,8 +965,17 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
     return this.ResolvedActionItems.filter(item => (item.Order ?? 100) >= 50);
   }
 
+  /**
+   * Items drawn on the right, beside the View menu.
+   *
+   * `overflow` is folded in: the placement is part of the public type but the More menu
+   * lists only `actions` items, so without this an item registered for `overflow` would
+   * render nowhere and the caller would have no way to tell.
+   */
   public get ResolvedRightItems(): ResolvedToolbarItem[] {
-    return this.ResolvedToolbarItems.filter(item => item.Placement === 'right');
+    return this.ResolvedToolbarItems.filter(
+      item => item.Placement === 'right' || item.Placement === 'overflow',
+    );
   }
 
   // ── Pinned actions and the More menu ────────────────────────────
