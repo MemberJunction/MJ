@@ -1,5 +1,7 @@
 # MemberJunction Forms Architecture Guide
 
+> **Part of the UI guide set.** This guide is the reference for the forms stack, which lives in `packages/Angular/Generic` and works in any Angular app, not only Explorer. For the big picture (the layers, choosing where UI lives, and why), start with [Building UI on MemberJunction](BUILDING_UI_ON_MJ.md) ([illustrated edition](https://docs.memberjunction.org/v6/building-ui/)).
+
 How MJ renders and edits entity records — as full-page tabs, modal dialogs, or
 slide-in panels — from **one** set of forms, with **no per-surface code** and
 **no regeneration**.

@@ -1453,6 +1453,9 @@ export class EntityVectorSyncer extends VectorBase {
           EntityName: 'MJ: Entity Record Documents',
           ExtraFilter: `EntityID = '${g.entityID}' AND EntityDocumentID = '${g.entityDocumentID}' AND RecordID IN (${inClause})`,
           ResultType: 'entity_object' as const,
+          // A find-or-create read: it must see the database, and each batch's filter is unique, so
+          // a cached copy would only be written and then dropped by the saves below.
+          BypassCache: true,
         };
       }),
       contextUser
