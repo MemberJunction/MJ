@@ -3,23 +3,20 @@
  *
  * Searches files across MJ File Storage accounts that have
  * IncludeInGlobalSearch=true, using each provider's native search API.
- * Results are permission-checked against FileStorageAccountPermission
- * before being returned.
+ * Account permissions (`MJ: File Storage Account Permissions`) are evaluated
+ * per call, for the searching user, before any account is searched.
  *
  * @module @memberjunction/search-engine
  */
 
-import { LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
+import { LogError, LogStatus, UserInfo } from '@memberjunction/core';
 import { NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
-import {
-    MJFileStorageAccountEntity,
-    MJFileStorageAccountPermissionEntity,
-    MJFileStorageProviderEntity
-} from '@memberjunction/core-entities';
+import { MJFileStorageAccountEntity, StorageAccountWithProvider } from '@memberjunction/core-entities';
 import {
     FileSearchResult,
     FileSearchOptions,
-    FileStorageEngine
+    FileStorageEngine,
+    StorageAccessEvaluator
 } from '@memberjunction/storage';
 import { BaseSearchProvider } from './ISearchProvider';
 import { SearchSource, SearchFilters, SearchResultItem, SearchResultType, ScopeConstraints, ScopeStorageConstraint } from './search.types';
@@ -28,28 +25,30 @@ import { SearchSource, SearchFilters, SearchResultItem, SearchResultType, ScopeC
  * Represents a storage account that is eligible for search, along with
  * its associated provider metadata.
  */
-interface SearchableAccount {
-    Account: MJFileStorageAccountEntity;
-    Provider: MJFileStorageProviderEntity;
-}
+type SearchableAccount = StorageAccountWithProvider;
 
 /**
  * Provides file-level search across MJ File Storage accounts using each
  * provider's native SearchFiles() API. Only accounts with
- * IncludeInGlobalSearch=true and providers with SupportsSearch=true are searched.
+ * IncludeInGlobalSearch=true on active providers with SupportsSearch=true are searched.
  *
- * Permission checking is performed against FileStorageAccountPermission records.
- * If no permission records exist for an account, it is accessible to everyone
- * (backwards compatible). Otherwise, the user must have CanRead=true via a
- * direct User permission, a Role permission, or an Everyone permission.
+ * **Nothing is snapshotted.** The searchable accounts are read at search time from
+ * `FileStorageEngine.Instance.AccountsWithProviders` (a `BaseEngine` cache kept current by entity
+ * events), and account permissions are evaluated per call, for the searching user, through
+ * `StorageAccessEvaluator` from `@memberjunction/storage` — so a grant or revocation applies to the
+ * next search, and which user configured the engine first does not matter. The evaluator reads the
+ * permission rows with the MJ system user and decides for the caller: an account with no permission
+ * rows is open to everyone (the current product rule, kept in one place in the evaluator); otherwise
+ * the user needs CanRead through an Everyone, Role or User row. A failed evaluation searches nothing.
+ *
+ * The provider's own check is push-down only: `SearchEngine`'s late permission filter re-checks every
+ * `storage-file` hit (its account, for the user, against this provider's stamped `ProviderId`).
  */
 @RegisterClass(BaseSearchProvider, 'StorageSearchProvider')
 export class StorageSearchProvider extends BaseSearchProvider {
     public readonly SourceType: SearchSource = 'storage';
 
     private _available = false;
-    private _searchableAccounts: SearchableAccount[] = [];
-    private _permissions: MJFileStorageAccountPermissionEntity[] = [];
 
     /**
      * Whether this provider has at least one searchable storage account.
@@ -59,55 +58,18 @@ export class StorageSearchProvider extends BaseSearchProvider {
     }
 
     /**
-     * Load storage accounts and permissions to determine availability.
-     * Must be called once during SearchEngine.Config().
+     * Determine availability: true when at least one searchable storage account exists right now.
+     * Called once during SearchEngine.Config(). Nothing user-specific is captured here — the
+     * searchable accounts and their permissions are re-read on every search.
      *
-     * @param contextUser - The user context for database queries
+     * @param contextUser - The user context for loading the storage engine's metadata cache
      */
     public async CheckAvailability(contextUser: UserInfo): Promise<void> {
         try {
-            // Use cached accounts and providers from the engine — no RunView needed for these
             await FileStorageEngine.Instance.Config(false, contextUser);
-            const allAccounts = FileStorageEngine.Instance.Accounts;
-            const allProviders = FileStorageEngine.Instance.Providers;
-
-            // Filter to accounts with IncludeInGlobalSearch and active providers that support search
-            const accounts = allAccounts.filter(a => a.Get('IncludeInGlobalSearch') === true);
-            const providers = allProviders.filter(p => p.IsActive && p.Get('SupportsSearch') === true);
-
-            // Permissions are user-context-dependent, so we still need a RunView for these
-            const rv = new RunView();
-            const permissionsResult = await rv.RunView<MJFileStorageAccountPermissionEntity>({
-                EntityName: 'MJ: File Storage Account Permissions',
-                ResultType: 'entity_object'
-            }, contextUser);
-
-            this._permissions = permissionsResult.Success
-                ? permissionsResult.Results as MJFileStorageAccountPermissionEntity[]
-                : [];
-
-            // Build a set of provider IDs that support search
-            const searchProviderIDs = new Set(
-                providers.map(p => NormalizeUUID(p.ID))
-            );
-
-            // Filter accounts to those whose provider supports search
-            this._searchableAccounts = [];
-            for (const account of accounts) {
-                if (searchProviderIDs.has(NormalizeUUID(account.ProviderID))) {
-                    const provider = providers.find(
-                        p => UUIDsEqual(p.ID, account.ProviderID)
-                    );
-                    if (provider) {
-                        this._searchableAccounts.push({ Account: account, Provider: provider });
-                    }
-                }
-            }
-
-            this._available = this._searchableAccounts.length > 0;
-            LogStatus(
-                `StorageSearchProvider: Found ${this._searchableAccounts.length} searchable storage account(s)`
-            );
+            const count = this.currentSearchableAccounts().length;
+            this._available = count > 0;
+            LogStatus(`StorageSearchProvider: Found ${count} searchable storage account(s)`);
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
             LogError(`StorageSearchProvider: CheckAvailability failed: ${msg}`);
@@ -116,12 +78,25 @@ export class StorageSearchProvider extends BaseSearchProvider {
     }
 
     /**
-     * Execute a file search across all eligible storage accounts.
+     * The accounts eligible for search at this moment: IncludeInGlobalSearch accounts whose provider is
+     * active and supports search. Read from the engine's live cache, never from a snapshot.
+     */
+    private currentSearchableAccounts(): SearchableAccount[] {
+        return FileStorageEngine.Instance.AccountsWithProviders.filter(entry =>
+            entry.account.IncludeInGlobalSearch === true &&
+            entry.provider.IsActive === true &&
+            entry.provider.SupportsSearch === true
+        );
+    }
+
+    /**
+     * Execute a file search across the storage accounts the user may read right now.
      *
      * @param query - The search query text
      * @param topK - Maximum number of results to retrieve
      * @param _filters - Optional filters (currently unused for storage search)
      * @param contextUser - The user performing the search
+     * @param scopeConstraints - Optional scope narrowing (accounts, folder paths, query transforms)
      * @returns Scored result items from storage search
      */
     public async Search(
@@ -131,60 +106,60 @@ export class StorageSearchProvider extends BaseSearchProvider {
         contextUser: UserInfo,
         scopeConstraints?: ScopeConstraints
     ): Promise<SearchResultItem[]> {
-        if (!this._available || this._searchableAccounts.length === 0) {
+        if (!this._available) {
             return [];
         }
-
         const startTime = Date.now();
 
         // Honor per-provider query transform
         const effectiveQuery = scopeConstraints?.QueryTransforms?.[this.SourceType] ?? query;
-
-        // Narrow the account list per scope if provided. Scope folder paths are already
-        // rendered (Nunjucks + SearchContext applied by SearchEngine) — we pass them
-        // through to the driver per-account.
-        const scopedAccounts = this.applyScopeAccountFilter(
-            this._searchableAccounts,
-            scopeConstraints?.StorageAccounts
-        );
-
-        if (scopedAccounts.length === 0) {
-            // Scope explicitly says "none of these storage accounts" — return empty.
-            return [];
-        }
-
-        // Filter accounts by user permissions (existing push-down)
-        const accessibleAccounts = this.filterAccountsByPermissions(scopedAccounts, contextUser);
-
+        const accessibleAccounts = await this.accountsToSearch(contextUser, scopeConstraints);
         if (accessibleAccounts.length === 0) {
-            LogStatus('StorageSearchProvider: User has no access to any searchable storage accounts');
             return [];
         }
 
-        // Distribute topK across accounts
+        // Distribute topK across accounts, then search them in parallel, threading per-account FolderPath (if any).
+        // Scope folder paths are already rendered (Nunjucks + SearchContext applied by SearchEngine).
         const perAccountLimit = Math.max(3, Math.ceil(topK / accessibleAccounts.length));
-
-        // Search all accounts in parallel, threading per-account FolderPath (if any)
         const searchPromises = accessibleAccounts.map(entry => {
-            const scopeRow = scopeConstraints?.StorageAccounts?.find(
-                r => UUIDsEqual(r.FileStorageAccountID, entry.Account.ID)
-            );
+            const scopeRow = scopeConstraints?.StorageAccounts?.find(r => UUIDsEqual(r.FileStorageAccountID, entry.account.ID));
             return this.searchOneAccount(entry, effectiveQuery, perAccountLimit, contextUser, scopeRow?.FolderPath);
         });
-
-        const results = await Promise.all(searchPromises);
-        const allResults = results.flat();
+        const allResults = (await Promise.all(searchPromises)).flat();
 
         // Sort by score descending and limit to topK
         allResults.sort((a, b) => b.Score - a.Score);
         const trimmed = allResults.slice(0, topK);
-
         LogStatus(
             `StorageSearchProvider: Search complete in ${Date.now() - startTime}ms - ` +
             `${trimmed.length} results from ${accessibleAccounts.length} account(s)`
         );
-
         return trimmed;
+    }
+
+    /**
+     * The accounts this search may touch: searchable now, inside the scope (when it restricts), and readable by
+     * `contextUser` now — account permissions are evaluated per call by `StorageAccessEvaluator`, which fails
+     * closed (an evaluation failure leaves nothing to search).
+     */
+    private async accountsToSearch(contextUser: UserInfo, scopeConstraints?: ScopeConstraints): Promise<SearchableAccount[]> {
+        await FileStorageEngine.Instance.Config(false, contextUser);
+        const scopedAccounts = this.applyScopeAccountFilter(this.currentSearchableAccounts(), scopeConstraints?.StorageAccounts);
+        if (scopedAccounts.length === 0) {
+            // Nothing searchable, or the scope explicitly says "none of these storage accounts".
+            return [];
+        }
+        const readable = await StorageAccessEvaluator.Instance.AccessibleAccountIDs(
+            scopedAccounts.map(entry => entry.account.ID),
+            contextUser,
+            'Read',
+            this.Provider
+        );
+        const accessible = scopedAccounts.filter(entry => readable.has(NormalizeUUID(entry.account.ID)));
+        if (accessible.length === 0) {
+            LogStatus('StorageSearchProvider: User has no access to any searchable storage accounts');
+        }
+        return accessible;
     }
 
     /**
@@ -197,53 +172,7 @@ export class StorageSearchProvider extends BaseSearchProvider {
     ): SearchableAccount[] {
         if (!scopeRows || scopeRows.length === 0) return accounts;
         const allowedIDs = new Set(scopeRows.map(r => NormalizeUUID(r.FileStorageAccountID)));
-        return accounts.filter(a => allowedIDs.has(NormalizeUUID(a.Account.ID)));
-    }
-
-    /**
-     * Filter storage accounts by checking FileStorageAccountPermission records
-     * for the given user. If an account has no permission records, it is
-     * accessible to everyone (backwards compatible).
-     */
-    private filterAccountsByPermissions(
-        accounts: SearchableAccount[],
-        contextUser: UserInfo
-    ): SearchableAccount[] {
-        // userRoleIDs is normalized for Set-key lookups (the canonical idiom);
-        // user ID equality goes through UUIDsEqual since there's only one user
-        // per call, so we don't need a hoisted-normalize hot-loop optimization.
-        const userRoleIDs = new Set(
-            (contextUser.UserRoles ?? []).map(r => NormalizeUUID(r.RoleID))
-        );
-
-        return accounts.filter(entry => {
-            const accountPerms = this._permissions.filter(
-                p => UUIDsEqual(p.FileStorageAccountID, entry.Account.ID)
-            );
-
-            // No permission records means open access (backwards compatible)
-            if (accountPerms.length === 0) {
-                return true;
-            }
-
-            // Check if user has CanRead through any permission path
-            return accountPerms.some(perm => {
-                if (!perm.CanRead) return false;
-
-                switch (perm.Type) {
-                    case 'Everyone':
-                        return true;
-                    case 'User':
-                        return perm.UserID != null &&
-                            UUIDsEqual(perm.UserID, contextUser.ID);
-                    case 'Role':
-                        return perm.RoleID != null &&
-                            userRoleIDs.has(NormalizeUUID(perm.RoleID));
-                    default:
-                        return false;
-                }
-            });
-        });
+        return accounts.filter(a => allowedIDs.has(NormalizeUUID(a.account.ID)));
     }
 
     /**
@@ -259,11 +188,11 @@ export class StorageSearchProvider extends BaseSearchProvider {
         folderPath?: string
     ): Promise<SearchResultItem[]> {
         try {
-            const driver = await FileStorageEngine.Instance.GetDriver(entry.Account.ID, contextUser);
+            const driver = await FileStorageEngine.Instance.GetDriver(entry.account.ID, contextUser);
 
             if (!driver.IsConfigured) {
                 LogError(
-                    `StorageSearchProvider: Driver for account "${entry.Account.Name}" ` +
+                    `StorageSearchProvider: Driver for account "${entry.account.Name}" ` +
                     `is not configured, skipping`
                 );
                 return [];
@@ -280,11 +209,11 @@ export class StorageSearchProvider extends BaseSearchProvider {
                 const prefix = folderPath.endsWith('/') ? folderPath : folderPath + '/';
                 files = files.filter(f => (f.path ?? '').startsWith(prefix));
             }
-            return this.convertResults(files, entry.Account, query);
+            return this.convertResults(files, entry.account, query);
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
             LogError(
-                `StorageSearchProvider: Error searching account "${entry.Account.Name}": ${msg}`
+                `StorageSearchProvider: Error searching account "${entry.account.Name}": ${msg}`
             );
             return [];
         }

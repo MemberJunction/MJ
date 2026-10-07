@@ -251,6 +251,37 @@ sequenceDiagram
     Driver-->>App: initialized driver
 ```
 
+### Account Permissions (`StorageAccessEvaluator`)
+
+Neither `FileStorageEngine.GetDriver()` nor the utility functions check who is asking — they act on whatever account
+they are given. Anything that acts on an account on a user's behalf must ask `StorageAccessEvaluator` first. It is the
+one place `MJ: File Storage Account Permissions` (Everyone / Role / User rows with `CanRead` / `CanWrite`) are decided:
+
+```typescript
+import { StorageAccessEvaluator } from '@memberjunction/storage';
+
+const evaluator = StorageAccessEvaluator.Instance;
+
+// Throws StorageAccountAccessDeniedError ("You do not have access to this storage account or it does not exist.")
+await evaluator.AssertAccountAccess(accountId, contextUser, 'Write', provider);
+
+// Or filter a list: returns the NormalizeUUID'd IDs the user may read
+const readable = await evaluator.AccessibleAccountIDs(accountIds, contextUser, 'Read', provider);
+
+// Object keys in an account that back an MJ: Files row the user cannot read
+const blocked = await evaluator.UnreadableTrackedObjectKeys(account.ProviderID, [objectKey], contextUser, provider);
+```
+
+- **Evaluated per call** — nothing is cached, so a grant or revocation applies to the next call.
+- **Read as the system user, decided for the caller** — the permission rows are read with the MJ system user
+  (`WellKnownUserSource`), so a caller who cannot read the permission table is not mistaken for an account with no rows.
+- **An account with no permission rows is open** to every authenticated user (the current product rule, kept in one
+  place in the evaluator; flipping it needs a data migration that writes explicit `Everyone` rows).
+- **Fails closed** — an unknown account, a malformed ID, a user without `UserRoles`, a missing system user or a failed
+  read all mean "no access". An unknown account is refused with the same message as a restricted one.
+
+The MJServer storage GraphQL routes, `StorageSearchProvider` and `SearchEngine`'s late permission filter all use it.
+
 ### Using Utility Functions
 
 The library provides high-level utility functions that work with MemberJunction's entity system:

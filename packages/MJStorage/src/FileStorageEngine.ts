@@ -326,6 +326,10 @@ export class FileStorageEngine extends BaseSingleton<FileStorageEngine> {
      * - Decrypting credentials via the Credential Engine
      * - Setting up OAuth token refresh callbacks for providers like Box
      *
+     * **No permission check.** The driver cache is process-wide and this method does not ask whether `contextUser` may
+     * use the account. Code acting for a user must call {@link StorageAccessEvaluator.AssertAccountAccess} (or
+     * `AccessibleAccountIDs`) first — the MJServer storage routes and the search lane do.
+     *
      * @param accountId - The FileStorageAccount ID to get a driver for
      * @param contextUser - User context for credential decryption (used for on-demand init)
      * @returns An initialized, ready-to-use FileStorageBase driver

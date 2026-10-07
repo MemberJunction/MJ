@@ -476,12 +476,16 @@ describe('SearchEngine.filterByPermissions (safety net)', () => {
             expect(out).toHaveLength(0);
         });
 
-        it('passes storage-file results through without entity-level checks (handled by FileStorageAccountPermission)', async () => {
+        it('no longer passes storage-file results through on their type: one the engine cannot attribute to a storage provider is dropped', async () => {
+            // `ResultType` is provider output, so `storage-file` alone proves nothing. This result carries no
+            // engine-stamped ProviderId, so it cannot be tied to a StorageSearchProvider and is dropped. The full
+            // storage re-check (provider attribution + per-user account permissions) is covered in
+            // SearchEngine.storagePermissions.test.ts.
             const fileResult = makeResult('file-1', '__synthetic__', 'storage-file');
-            // Note: no mockEntityByName configured — confirms storage path doesn't ask Metadata
             const out = await engine.TestFilterByPermissions([fileResult], user);
-            expect(out).toHaveLength(1);
-            expect(out[0].RecordID).toBe('file-1');
+            expect(out).toHaveLength(0);
+            // The storage path never consults entity metadata.
+            expect(mockEntityByName).not.toHaveBeenCalled();
         });
     });
 });
