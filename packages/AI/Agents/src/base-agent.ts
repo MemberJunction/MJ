@@ -2633,10 +2633,16 @@ export class BaseAgent {
             ? (params.data?.realtimeSelfNames as unknown[]).filter((n): n is string => typeof n === 'string')
             : undefined;
         const hostTools = ReadHostTools(params.data?.realtimeHostTools);
+        // Note: resolveHostTools is an in-process callback function passed directly in params.data.
+        // It will not survive process boundaries or cross-host job queue serialization.
+        const resolveHostTools = typeof params.data?.resolveHostTools === 'function'
+            ? (params.data.resolveHostTools as PrepareClientSessionInput['ResolveHostTools'])
+            : undefined;
         return {
             CoAgent: params.agent,
             TargetAgentID: targetID,
             HostTools: hostTools,
+            ResolveHostTools: resolveHostTools,
             HostFraming: ReadTrimmedString(params.data?.realtimeHostFraming, 'realtimeHostFraming'),
             PriorTranscript: ReadTrimmedString(params.data?.realtimePriorTranscript, 'realtimePriorTranscript'),
             ConversationID: ReadTrimmedString(params.data?.conversationId, 'conversationId'),
