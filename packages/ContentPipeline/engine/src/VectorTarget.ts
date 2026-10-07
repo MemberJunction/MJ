@@ -18,7 +18,7 @@ import {
     MJVectorDatabaseEntity,
     MJVectorIndexEntity,
 } from '@memberjunction/core-entities';
-import { MJGlobal } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { CredentialEngine } from '@memberjunction/credentials';
 import { VectorDBBase } from '@memberjunction/ai-vectordb';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -72,12 +72,12 @@ export class VectorTargetResolver {
     private async load(contentSourceID: string): Promise<ResolvedVectorTarget> {
         const knowledge = KnowledgeHubMetadataEngine.Instance;
         await knowledge.Config(false, this.contextUser, this.provider);
-        const source = knowledge.ContentSources.find((s) => s.ID === contentSourceID);
+        const source = knowledge.ContentSources.find((s) => UUIDsEqual(s.ID, contentSourceID));
         if (!source) {
             throw new Error(`Content Source '${contentSourceID}' not found`);
         }
         const contentType = source.ContentTypeID
-            ? knowledge.ContentTypes.find((t) => t.ID === source.ContentTypeID)
+            ? knowledge.ContentTypes.find((t) => UUIDsEqual(t.ID, source.ContentTypeID))
             : undefined;
 
         // Source first, then its content type. Nothing falls back to a global default: writing a
@@ -91,7 +91,7 @@ export class VectorTargetResolver {
         }
 
         await AIEngine.Instance.Config(false, this.contextUser, this.provider);
-        const index = AIEngine.Instance.VectorIndexes?.find((i) => i.ID === indexID);
+        const index = AIEngine.Instance.VectorIndexes?.find((i) => UUIDsEqual(i.ID, indexID));
         if (!index) {
             throw new Error(`Vector Index '${indexID}' is not in metadata`);
         }
@@ -113,7 +113,7 @@ export class VectorTargetResolver {
     /** The `MJ: Vector Databases` row naming the driver class and the credential for its key. */
     private async loadDatabase(databaseID: string): Promise<MJVectorDatabaseEntity> {
         await AIEngine.Instance.Config(false, this.contextUser, this.provider);
-        const entity = AIEngine.Instance.VectorDatabases?.find((d) => d.ID === databaseID);
+        const entity = AIEngine.Instance.VectorDatabases?.find((d) => UUIDsEqual(d.ID, databaseID));
         if (!entity) {
             throw new Error(`Vector Database '${databaseID}' is not in metadata`);
         }

@@ -84,6 +84,7 @@
     "data-urls": "^7.0.0",
     "decimal.js": "^10.6.0",
     "docx": "^9.5.1",
+    "exceljs": "^4.4.0",
     "html-encoding-sniffer": "^6.0.0",
     "htmlparser2": "^9.1.0",
     "http-proxy-agent": "^7.0.2",

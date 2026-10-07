@@ -12,7 +12,7 @@
  */
 
 import { KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { ResolveSegmenter } from '@memberjunction/ai-segmentation';
 import {
     BasePipelineStage,
@@ -144,12 +144,12 @@ export class SegmentStage extends BasePipelineStage {
         }
         const knowledge = KnowledgeHubMetadataEngine.Instance;
         await knowledge.Config(false, context.ContextUser, context.Provider);
-        const source = knowledge.ContentSources.find((c) => c.ID === contentSourceID);
+        const source = knowledge.ContentSources.find((c) => UUIDsEqual(c.ID, contentSourceID));
         if (source?.SegmenterKey) {
             return source.SegmenterKey;
         }
         const contentType = source?.ContentTypeID
-            ? knowledge.ContentTypes.find((t) => t.ID === source.ContentTypeID)
+            ? knowledge.ContentTypes.find((t) => UUIDsEqual(t.ID, source.ContentTypeID))
             : undefined;
         return contentType?.SegmenterKey ?? null;
     }

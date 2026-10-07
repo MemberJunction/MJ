@@ -17,6 +17,7 @@
  */
 
 import { IMetadataProvider, LogError, UserInfo } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { KnowledgeHubMetadataEngine, MJContentSourceEntity } from '@memberjunction/core-entities';
 
 /** One field a Content Source Type declares its sources must provide. */
@@ -128,13 +129,13 @@ export class ContentSourceConfigurationResolver {
     private async load(contentSourceID: string, contextUser: UserInfo): Promise<ResolvedSourceConfiguration> {
         const engine = KnowledgeHubMetadataEngine.Instance;
         await engine.Config(false, contextUser, this.provider);
-        const source = engine.ContentSources.find((s) => s.ID === contentSourceID);
+        const source = engine.ContentSources.find((s) => UUIDsEqual(s.ID, contentSourceID));
         if (!source) {
             throw new Error(`Content Source '${contentSourceID}' not found`);
         }
         const sourceConfig = this.parse(source.Configuration, `Content Source '${contentSourceID}'`);
         const sourceType = source.ContentSourceTypeID
-            ? (engine.ContentSourceTypes.find((t) => t.ID === source.ContentSourceTypeID) ?? null)
+            ? (engine.ContentSourceTypes.find((t) => UUIDsEqual(t.ID, source.ContentSourceTypeID)) ?? null)
             : null;
         const typeConfig = this.loadTypeConfiguration(source, engine);
 
@@ -168,7 +169,7 @@ export class ContentSourceConfigurationResolver {
         if (!typeID) {
             return {};
         }
-        const type = engine.ContentSourceTypes.find((t) => t.ID === typeID);
+        const type = engine.ContentSourceTypes.find((t) => UUIDsEqual(t.ID, typeID));
         if (!type) {
             return {};
         }

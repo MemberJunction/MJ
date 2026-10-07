@@ -2,7 +2,7 @@
   {
     "entity": "MJ: Record Processes",
     "fields": {
-      "Name": "Content Pipeline — Discover",
+      "Name": "Content Pipeline \u2014 Discover",
       "Description": "Walks each Content Source that is due and records what it found as Content Items. Readiness is the source's schedule or its ForceDiscovery flag; a completed walk clears the flag and stamps LastDiscoveredAt, so there is no status to re-arm.",
       "EntityID": "@lookup:MJ: Entities.Name=MJ: Content Sources",
       "Status": "Active",
@@ -24,16 +24,12 @@
     },
     "primaryKey": {
       "ID": "E4EAABE6-DDA0-4E00-BA9F-DE9880792606"
-    },
-    "sync": {
-      "lastModified": "2026-10-06T23:51:30.295Z",
-      "checksum": "1c71e8b0bcc94d71ef89e41fe7c4ce8b7b4554864fc47ed6f8c8002ad65779d4"
     }
   },
   {
     "entity": "MJ: Record Processes",
     "fields": {
-      "Name": "Content Pipeline — Extract",
+      "Name": "Content Pipeline \u2014 Extract",
       "Description": "Fetches each pending Content Item and reads its text, opening a session first when its source needs one. An artifact that is not text keeps its bytes as an MJ File and routes to the multi-modal path instead.",
       "EntityID": "@lookup:MJ: Entities.Name=MJ: Content Items",
       "Status": "Active",
@@ -55,16 +51,12 @@
     },
     "primaryKey": {
       "ID": "95A91363-74BB-4532-A109-4E6F45EEC100"
-    },
-    "sync": {
-      "lastModified": "2026-10-06T23:51:30.317Z",
-      "checksum": "7e7aa2bceaca612a2070be84aa989f97d9fbe20158fe9e705c44ccc4256c6d85"
     }
   },
   {
     "entity": "MJ: Record Processes",
     "fields": {
-      "Name": "Content Pipeline — Tag",
+      "Name": "Content Pipeline \u2014 Tag",
       "Description": "Classifies each pending Content Item through the managed Content Autotagging prompt and saves the result to MJ: Content Item Tags, promoting each tag through the governed taxonomy.",
       "EntityID": "@lookup:MJ: Entities.Name=MJ: Content Items",
       "Status": "Active",
@@ -86,16 +78,12 @@
     },
     "primaryKey": {
       "ID": "60BE8612-B278-4C06-A06C-CF9365D9C1B2"
-    },
-    "sync": {
-      "lastModified": "2026-10-06T23:51:30.335Z",
-      "checksum": "eb459323eaec844bfe5b7350743561fe94eb7524748d1cc834cd618417c5568c"
     }
   },
   {
     "entity": "MJ: Record Processes",
     "fields": {
-      "Name": "Content Pipeline — Segment",
+      "Name": "Content Pipeline \u2014 Segment",
       "Description": "Splits each pending Content Item's text into Content Item Chunks using the segmenter its source or content type names. A re-segmentation that yields fewer chunks marks the leftovers for deletion rather than leaving them searchable.",
       "EntityID": "@lookup:MJ: Entities.Name=MJ: Content Items",
       "Status": "Active",
@@ -117,16 +105,12 @@
     },
     "primaryKey": {
       "ID": "88F8296E-6300-4938-817C-E3FF2D85DE4E"
-    },
-    "sync": {
-      "lastModified": "2026-10-06T23:51:30.352Z",
-      "checksum": "d9f0f2d5d3848cba3e414f8dc9db6af701b4c3fe0d4bed7dd01c61c275be7cc4"
     }
   },
   {
     "entity": "MJ: Record Processes",
     "fields": {
-      "Name": "Content Pipeline — Embed",
+      "Name": "Content Pipeline \u2014 Embed",
       "Description": "Embeds each pending Content Item Chunk and stores the vector in the index its source or content type names, recording VectorRecordID so the vector can be removed later. Batched: one model call and one store call per page.",
       "EntityID": "@lookup:MJ: Entities.Name=MJ: Content Item Chunks",
       "Status": "Active",
@@ -148,17 +132,13 @@
     },
     "primaryKey": {
       "ID": "9A90F785-8D21-403E-9810-6FFEB75FEFBD"
-    },
-    "sync": {
-      "lastModified": "2026-10-06T23:51:30.374Z",
-      "checksum": "24c766c667fd9c83fce5d8f930079f2cf0df9fdb6e95464847ebb2330722db44"
     }
   },
   {
     "entity": "MJ: Record Processes",
     "fields": {
-      "Name": "Content Pipeline — Delete",
-      "Description": "Removes everything a Content Item marked for deletion produced — its vector, its kept bytes — then marks its chunks and expanded children so each goes through this same stage in turn. A record whose removal could not be attempted stays Pending rather than being marked Deleted.",
+      "Name": "Content Pipeline \u2014 Delete",
+      "Description": "Removes everything a Content Item marked for deletion produced \u2014 its vector, its kept bytes \u2014 then marks its chunks and expanded children so each goes through this same stage in turn. A record whose removal could not be attempted stays Pending rather than being marked Deleted.",
       "EntityID": "@lookup:MJ: Entities.Name=MJ: Content Items",
       "Status": "Active",
       "WorkType": "Pipeline Stage",
@@ -179,16 +159,12 @@
     },
     "primaryKey": {
       "ID": "13FF9508-4BDB-4BF3-A938-AA36EDD2ED46"
-    },
-    "sync": {
-      "lastModified": "2026-10-06T23:51:30.391Z",
-      "checksum": "accbb0cb938fd5ce4965eeef1f3fed1ac0f202902225478f4b7b00866bb25326"
     }
   },
   {
     "entity": "MJ: Record Processes",
     "fields": {
-      "Name": "Content Pipeline — Test (Discover then Extract)",
+      "Name": "Content Pipeline \u2014 Test (Discover then Extract)",
       "Description": "A chained dry run over a single source: walks it, then extracts what the walk produced, and commits nothing. The produced items exist only in memory, which is what makes this a test of the chain rather than of two stages that happen to have run.",
       "EntityID": "@lookup:MJ: Entities.Name=MJ: Content Sources",
       "Status": "Active",
@@ -212,10 +188,6 @@
     },
     "primaryKey": {
       "ID": "78BFDB52-3786-4F16-964A-D7BA7D192561"
-    },
-    "sync": {
-      "lastModified": "2026-10-06T23:51:30.408Z",
-      "checksum": "eaa44cc65ae3deb804bc0cfa33418176952faad60f970a64d4cde77b32fd0e65"
     }
   }
 ]
