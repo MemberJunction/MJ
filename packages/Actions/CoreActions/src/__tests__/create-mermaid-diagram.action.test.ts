@@ -101,6 +101,33 @@ describe('CreateMermaidDiagramAction', () => {
         expect(result.Message).toContain('details');
     });
 
+    it.each([
+        'flowchart TD\nA["x<y"] --> B["online = true"]',
+        "flowchart TD\nA[a<b's] --> B[onClick = save]",
+    ])('accepts label quotes and apostrophes around comparisons: %s', async (code) => {
+        renderMock.mockResolvedValue({ Success: true, Svg: '<svg xmlns="http://www.w3.org/2000/svg"/>' });
+
+        expect((await run({ Code: code })).ResultCode).toBe('SUCCESS');
+    });
+
+    it('accepts class-diagram arrows that precede an on...= word', async () => {
+        renderMock.mockResolvedValue({ Success: true, Svg: '<svg xmlns="http://www.w3.org/2000/svg"/>' });
+
+        const result = await run({ Code: 'classDiagram\nAnimal <|-- Duck\nDuck : onLand = false' });
+
+        expect(result.ResultCode).toBe('SUCCESS');
+    });
+
+    it('checks for tag event handlers in linear time', async () => {
+        renderMock.mockResolvedValue({ Success: true, Svg: '<svg xmlns="http://www.w3.org/2000/svg"/>' });
+        const started = Date.now();
+
+        await run({ Code: '<'.repeat(100_000) });
+
+        // The old /<[^>]*on\w+=/ took over 3 s on this input, blocking the server's event loop.
+        expect(Date.now() - started).toBeLessThan(500);
+    });
+
     it('tells the caller to fall back to Create SVG Diagram when no browser can render', async () => {
         renderMock.mockResolvedValue({ Success: false, ErrorCode: 'BROWSER_UNAVAILABLE', Message: 'details' });
 
@@ -115,6 +142,8 @@ describe('CreateMermaidDiagramAction', () => {
         [{ Code: 'x'.repeat(100_001) }, 'CODE_TOO_LARGE'],
         [{ Code: 'flowchart TD\nA["<script>"]-->B' }, 'INVALID_CODE'],
         [{ Code: 'flowchart TD\nA["<img src=x onerror=alert(1)>"]-->B' }, 'INVALID_CODE'],
+        [{ Code: 'flowchart TD\nA["<img src=\'<\' onerror=alert(1)>"]-->B' }, 'INVALID_CODE'],
+        [{ Code: 'flowchart TD\nA["<img alt=\'>\' onerror=alert(1)>"]-->B' }, 'INVALID_CODE'],
     ])('rejects bad input %# without rendering', async (inputs, resultCode) => {
         const result = await run(inputs);
 

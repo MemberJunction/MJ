@@ -7,7 +7,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 interface FakePage {
     isClosed: ReturnType<typeof vi.fn>;
-    route: ReturnType<typeof vi.fn>;
+    on: ReturnType<typeof vi.fn>;
+    /** The page's context route, where the network block lives. */
+    contextRoute: ReturnType<typeof vi.fn>;
+    context: ReturnType<typeof vi.fn>;
     setContent: ReturnType<typeof vi.fn>;
     addScriptTag: ReturnType<typeof vi.fn>;
     evaluate: ReturnType<typeof vi.fn>;
@@ -34,9 +37,12 @@ import { ShutdownRegistry } from '@memberjunction/global';
 import { MermaidRenderer } from '../custom/visualization/shared/mermaid-renderer';
 
 function makePage(evaluateResult: unknown | (() => Promise<unknown>)): FakePage {
+    const contextRoute = vi.fn().mockResolvedValue(undefined);
     return {
         isClosed: vi.fn().mockReturnValue(false),
-        route: vi.fn().mockResolvedValue(undefined),
+        on: vi.fn(),
+        contextRoute,
+        context: vi.fn(() => ({ route: contextRoute })),
         setContent: vi.fn().mockResolvedValue(undefined),
         addScriptTag: vi.fn().mockResolvedValue(undefined),
         evaluate: vi.fn(typeof evaluateResult === 'function'
@@ -83,7 +89,7 @@ describe('MermaidRenderer', () => {
 
         const scriptArg = page.addScriptTag.mock.calls[0][0] as { path: string };
         expect(scriptArg.path).toMatch(/mermaid[\\/]dist[\\/]mermaid\.min\.js$/);
-        const [pattern, handler] = page.route.mock.calls[0] as [string, (route: { abort: () => void }) => void];
+        const [pattern, handler] = page.contextRoute.mock.calls[0] as [string, (route: { abort: () => void }) => void];
         expect(pattern).toBe('**/*');
         const route = { abort: vi.fn() };
         handler(route);
@@ -99,6 +105,45 @@ describe('MermaidRenderer', () => {
         const args = page.evaluate.mock.calls[0][1] as { Code: string; Config: Record<string, unknown> };
         expect(args.Code).toBe('pie\n"A": 1');
         expect(args.Config).toMatchObject({ theme: 'dark', securityLevel: 'strict', startOnLoad: false, fontSize: 14 });
+    });
+
+    it('keeps only the layout options a caller may set, and forces plain-text labels', () => {
+        const hostile = {
+            fontSize: 14,
+            fontFamily: 'Inter} body{display:none',
+            flowchart: { curve: 'linear', htmlLabels: true },
+            htmlLabels: true,
+            dompurifyConfig: { ADD_ATTR: ['onerror'] },
+            themeCSS: '} body{display:none!important} .x{',
+            secure: [],
+        } as unknown as Parameters<typeof MermaidRenderer.EffectiveConfig>[0];
+
+        const config = MermaidRenderer.EffectiveConfig(hostile, 'default');
+
+        const { secure, ...rest } = config as { secure: string[] } & Record<string, unknown>;
+        expect(rest).toEqual({
+            fontSize: 14,
+            flowchart: { curve: 'linear', htmlLabels: false },
+            theme: 'default',
+            startOnLoad: false,
+            securityLevel: 'strict',
+            htmlLabels: false,
+        });
+        // Diagram code (%%{init}%% directives, a config: header) may not override what was pinned here.
+        expect(secure).toEqual(expect.arrayContaining(['htmlLabels', 'dompurifyConfig', 'themeCSS', 'fontFamily', 'theme']));
+        // Benign per-diagram layout stays settable from the code; Mermaid strips secure keys at any depth.
+        expect(secure).not.toContain('flowchart');
+    });
+
+    it('locks every new page down: no network from its context, and a crashed page is dropped', async () => {
+        const page = makePage({ ok: true, svg: '<svg/>' });
+        launchMock.mockResolvedValue(makeBrowser(page));
+
+        await MermaidRenderer.Instance.Render('flowchart TD\nA-->B', 'default', {});
+
+        expect(page.contextRoute).toHaveBeenCalledWith('**/*', expect.any(Function));
+        expect(page.setContent.mock.calls[0][0]).toContain("default-src 'none'");
+        expect(page.on).toHaveBeenCalledWith('crash', expect.any(Function));
     });
 
     it('reports a Mermaid syntax error as RENDER_FAILED and keeps the healthy page', async () => {

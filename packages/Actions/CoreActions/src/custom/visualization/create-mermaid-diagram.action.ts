@@ -119,20 +119,12 @@ export class CreateMermaidDiagramAction extends BaseAction {
             }
 
             // Check for suspicious patterns (basic XSS prevention)
-            const suspiciousPatterns = [
-                /<script/i,
-                /javascript:/i,
-                /<[^>]*\bon\w+\s*=/i  // Event handlers inside a tag; plain labels like `online = true` pass
-            ];
-
-            for (const pattern of suspiciousPatterns) {
-                if (pattern.test(code)) {
-                    return {
-                        Success: false,
-                        Message: 'Invalid Mermaid code: contains suspicious content',
-                        ResultCode: 'INVALID_CODE'
-                    };
-                }
+            if (/<script/i.test(code) || /javascript:/i.test(code) || this.hasTagEventHandler(code)) {
+                return {
+                    Success: false,
+                    Message: 'Invalid Mermaid code: contains suspicious content',
+                    ResultCode: 'INVALID_CODE'
+                };
             }
 
             const rendered = await MermaidRenderer.Instance.Render(code, theme, config);
@@ -168,6 +160,43 @@ export class CreateMermaidDiagramAction extends BaseAction {
     /**
      * Helper to get parameter value by name (case-insensitive)
      */
+    /**
+     * Whether an HTML tag in the code carries an event handler (`<img onerror=...>`). Each tag is read from
+     * `<name` to its closing `>`, skipping quoted attribute VALUES (a quote right after `=`), so a `<` or `>`
+     * inside a value cannot end it early and hide a handler after it. Any other quote is ordinary text: in
+     * Mermaid, label quotes (`A["x<y"] --> B["online = true"]`) are not tag syntax. Text that doesn't start a tag (labels like `online = true`,
+     * class-diagram arrows like `<|--`) is not checked. One pass, never revisiting a character: a regex such
+     * as /<[^>]*on\w+=/ backtracks quadratically on a run of `<`, and this runs on the server's main thread.
+     */
+    private hasTagEventHandler(code: string): boolean {
+        let index = code.indexOf('<');
+        while (index !== -1) {
+            if (!/[a-z/]/i.test(code[index + 1] ?? '')) {
+                index = code.indexOf('<', index + 1);
+                continue;
+            }
+            let end = index + 1;
+            while (end < code.length && code[end] !== '>') {
+                if (code[end] === '=') {
+                    end++;
+                    while (code[end] === ' ' || code[end] === '\t') end++;
+                    const quote = code[end];
+                    if (quote === '"' || quote === "'") {
+                        const close = code.indexOf(quote, end + 1);
+                        end = close === -1 ? code.length : close + 1;
+                    }
+                } else {
+                    end++;
+                }
+            }
+            if (/\bon\w+\s*=/i.test(code.slice(index, end))) {
+                return true;
+            }
+            index = code.indexOf('<', end);
+        }
+        return false;
+    }
+
     private getParamValue(params: RunActionParams, paramName: string): string | null {
         const param = params.Params.find(p =>
             p.Name.trim().toLowerCase() === paramName.toLowerCase()

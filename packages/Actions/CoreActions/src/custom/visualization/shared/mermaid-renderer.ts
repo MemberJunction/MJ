@@ -37,6 +37,42 @@ const RENDER_TIMEOUT_MS = 20_000;
  */
 const MAX_PAGES = 4; // ponytail: fixed cap; make it configurable if a host needs more parallel renders
 
+/**
+ * Content-Security-Policy for every page this renderer opens. The diagram source is model output and the
+ * page needs nothing from outside, so script and style may run inline (Mermaid and the diagram need that)
+ * but nothing may connect, load or submit anywhere: no fetch, WebSocket, beacon, image or form. The route
+ * block below covers HTTP; this covers what routes cannot, WebSockets above all.
+ */
+const DIAGRAM_PAGE_CSP = "default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval'; style-src 'unsafe-inline'; img-src data:; font-src data:; form-action 'none'; base-uri 'none'";
+
+/**
+ * The Mermaid options a caller may set: the layout knobs `MermaidConfig` declares, per section. Anything
+ * else (`dompurifyConfig`, `htmlLabels`, `themeCSS`, `securityLevel`, ...) is dropped, because those turn
+ * off Mermaid's label scrubbing or inject page CSS, and pages are reused across callers.
+ */
+const ALLOWED_CONFIG_SECTIONS: Readonly<Record<string, readonly string[]>> = {
+    flowchart: ['curve', 'padding', 'useMaxWidth', 'defaultRenderer'],
+    sequence: ['diagramMarginX', 'diagramMarginY', 'boxMargin', 'boxTextMargin', 'noteMargin', 'messageMargin', 'mirrorActors', 'showSequenceNumbers'],
+    er: ['layoutDirection', 'minEntityWidth', 'minEntityHeight', 'entityPadding'],
+    class: ['arrowMarkerAbsolute'],
+    state: ['dividerMargin', 'sizeUnit', 'padding'],
+    gantt: ['titleTopMargin', 'barHeight', 'barGap', 'topPadding', 'leftPadding', 'gridLineStartPadding', 'fontSize'],
+};
+const ALLOWED_CONFIG_TOP_LEVEL: readonly string[] = ['fontFamily', 'fontSize', 'logLevel'];
+
+/**
+ * Keys diagram code may not override. Mermaid also reads config from the code itself (`%%{init: ...}%%`
+ * directives and a `---\nconfig:` header) and lets those override everything outside its `secure` list.
+ * Its sanitizer drops a secure key at every nesting depth, so `htmlLabels` also covers `flowchart.htmlLabels`
+ * and the other per-diagram copies; benign layout options (`flowchart.curve`, `sequence.mirrorActors`, ...)
+ * and theme colours (whose values Mermaid already restricts) stay settable from the code. Mermaid merges this
+ * list into its own defaults (securityLevel, startOnLoad, maxTextSize, ...); it never replaces them.
+ */
+const SECURE_CONFIG_KEYS: readonly string[] = ['htmlLabels', 'dompurifyConfig', 'themeCSS', 'fontFamily', 'theme'];
+
+/** A string option may carry names and numbers, never CSS or markup syntax. */
+const SAFE_CONFIG_STRING = /^[\w .,'"-]{1,200}$/;
+
 /** Optional override for the Chromium binary, for hosts whose browser does not match Playwright's build. */
 const EXECUTABLE_PATH_ENV = 'MJ_CHROMIUM_EXECUTABLE_PATH';
 
@@ -100,8 +136,7 @@ export class MermaidRenderer extends BaseSingleton<MermaidRenderer> implements I
             // One deadline covers loading Mermaid into a new page as well as the render, so a stalled bundle load is a TIMEOUT too.
             const outcome = await this.withTimeout(page.then((p) => this.renderOnPage(p, !idle, {
                 Code: code,
-                // Caller config first so theme and the security level cannot be overridden by it.
-                Config: { ...config, theme, startOnLoad: false, securityLevel: 'strict' },
+                Config: MermaidRenderer.EffectiveConfig(config, theme),
             })), RENDER_TIMEOUT_MS);
             // The page finished normally (a syntax error leaves it healthy too), so it can serve the next render.
             reusable = true;
@@ -114,6 +149,33 @@ export class MermaidRenderer extends BaseSingleton<MermaidRenderer> implements I
         } finally {
             await this.checkInPage(page, browser.Browser, reusable);
         }
+    }
+
+    /**
+     * The config a render actually runs with: only the caller options {@link ALLOWED_CONFIG_SECTIONS} allows,
+     * then the theme, strict security and plain-text labels, which no caller can override. Plain-text labels
+     * (`htmlLabels: false`) put label text in `<text>` instead of `<foreignObject>`, which MJ's markdown SVG
+     * sanitizer strips, so a diagram embedded in chat would otherwise lose every label.
+     */
+    public static EffectiveConfig(config: MermaidConfig, theme: MermaidTheme): Record<string, unknown> {
+        const source = config as Record<string, unknown>;
+        const allowed: Record<string, unknown> = {};
+        for (const key of ALLOWED_CONFIG_TOP_LEVEL) {
+            if (isSafeConfigValue(source[key])) allowed[key] = source[key];
+        }
+        for (const [section, keys] of Object.entries(ALLOWED_CONFIG_SECTIONS)) {
+            const given = source[section];
+            if (typeof given !== 'object' || given === null || Array.isArray(given)) continue;
+            const kept = Object.fromEntries(keys
+                .filter((key) => isSafeConfigValue((given as Record<string, unknown>)[key]))
+                .map((key) => [key, (given as Record<string, unknown>)[key]]));
+            if (Object.keys(kept).length > 0) allowed[section] = kept;
+        }
+        const flowchart = (allowed.flowchart ?? {}) as Record<string, unknown>;
+        return {
+            ...allowed, theme, startOnLoad: false, securityLevel: 'strict', htmlLabels: false,
+            flowchart: { ...flowchart, htmlLabels: false }, secure: [...SECURE_CONFIG_KEYS],
+        };
     }
 
     /** Closes the shared browser, if one was launched. Its pages, idle ones included, close with it. */
@@ -203,9 +265,9 @@ export class MermaidRenderer extends BaseSingleton<MermaidRenderer> implements I
     /** Returns a healthy page to the pool, or closes one that crashed or timed out. Always frees the slot. */
     private async checkInPage(page: Promise<Page>, browser: Browser, reusable: boolean): Promise<void> {
         if (!reusable) {
-            // Free the slot first: a wedged page must not hold one while it closes.
+            // Free the slot and return; a wedged page must not hold a slot, or the result, while it closes.
             this.releaseSlot();
-            await this.closeQuietly(page);
+            void this.closeQuietly(page);
             return;
         }
         this.idlePages.push({ Page: await page, Browser: browser });
@@ -214,9 +276,10 @@ export class MermaidRenderer extends BaseSingleton<MermaidRenderer> implements I
 
     private async renderOnPage(page: Page, isNew: boolean, args: PageRenderArgs): Promise<PageRenderOutcome> {
         if (isNew) {
-            // The diagram source is model output. The page needs nothing from the network, so it gets nothing.
-            await page.route('**/*', (route) => route.abort());
-            await page.setContent('<!DOCTYPE html><html><head><meta charset="utf-8"></head><body></body></html>');
+            await this.lockDown(page);
+            // A page whose renderer crashed while idle must not be handed to the next render.
+            page.on('crash', () => void this.closeQuietly(Promise.resolve(page)));
+            await page.setContent(`<!DOCTYPE html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${DIAGRAM_PAGE_CSP}"></head><body></body></html>`);
             await page.addScriptTag({ path: this.getBundlePath() });
         }
         return page.evaluate(async ({ Code, Config }: PageRenderArgs): Promise<PageRenderOutcome> => {
@@ -225,12 +288,20 @@ export class MermaidRenderer extends BaseSingleton<MermaidRenderer> implements I
                 // A warm page starts every render empty, so nothing from an earlier diagram carries over.
                 document.body.replaceChildren();
                 mermaid.initialize(Config);
-                const { svg } = await mermaid.render(`mermaid-${Date.now()}`, Code);
+                // Unique per render: Mermaid scopes the SVG's <style> and marker ids to this id, so two
+                // diagrams that shared one would restyle each other on the page that embeds both.
+                const { svg } = await mermaid.render(`mermaid-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`, Code);
                 return { ok: true, svg };
             } catch (e) {
                 return { ok: false, error: e instanceof Error ? e.message : String(e) };
             }
         }, args);
+    }
+
+    /** The diagram source is model output and the page needs nothing from outside, so its context gets nothing. */
+    private async lockDown(page: Page): Promise<void> {
+        // The context, not just the page, so a popup the page opens is blocked too.
+        await page.context().route('**/*', (route) => route.abort());
     }
 
     private withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
@@ -270,6 +341,12 @@ export class MermaidRenderer extends BaseSingleton<MermaidRenderer> implements I
     private describe(error: unknown): string {
         return error instanceof Error ? error.message : String(error);
     }
+}
+
+function isSafeConfigValue(value: unknown): boolean {
+    return (typeof value === 'number' && Number.isFinite(value))
+        || typeof value === 'boolean'
+        || (typeof value === 'string' && SAFE_CONFIG_STRING.test(value));
 }
 
 class MermaidRenderTimeoutError extends Error {
