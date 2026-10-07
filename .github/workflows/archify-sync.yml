@@ -55,7 +55,7 @@ jobs:
       # save this job's pnpm store (which the upstream code below can write to) into next's cache
       # scope. Nothing in this job may save a cache, so both are spelled out as off.
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4, pinned like the other workflows that handle untrusted code
         with:
           cache: 'false'
 
