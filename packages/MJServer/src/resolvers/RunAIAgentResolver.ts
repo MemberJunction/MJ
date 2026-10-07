@@ -13,6 +13,7 @@ import { StartLivenessPulse } from '../generic/FireAndForgetHeartbeat.js';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GetReadWriteProvider } from '../util.js';
 import { ResolveWidgetGuestRunContext, ElevateUserPayload } from '../realtimeWidget/widgetGuestElevation.js';
+import { GuardClientAgentRunDataArg } from './agent-run-data-guard.js';
 import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { GetAttachmentService } from '@memberjunction/aiengine';
 import { NotificationEngine } from '@memberjunction/notifications';
@@ -561,13 +562,16 @@ export class RunAIAgentResolver extends ResolverBase {
         await this.CheckAPIKeyScopeAuthorization('agent:execute', agentId, userPayload);
 
         const p = GetReadWriteProvider(providers);
+        // A run's scope and agent-type params are set by server code (a host's own server operation, an
+        // API-key integration or the system user), never by a browser: drop them from anyone else's data.
+        const runData = GuardClientAgentRunDataArg(data, { UserPayload: userPayload, IsWidgetGuestRun: false });
 
         if (fireAndForget) {
             // Fire-and-forget mode: start execution in background, return immediately.
             // The client will receive the result via WebSocket PubSub completion event.
             this.executeAgentInBackground(
                 p, dataSource, agentId, userPayload, messagesJson, sessionId, pubSub,
-                data, payload, lastRunId, autoPopulateLastRunPayload, configurationId,
+                runData, payload, lastRunId, autoPopulateLastRunPayload, configurationId,
                 conversationDetailId, createArtifacts || false, createNotification || false,
                 sourceArtifactId, sourceArtifactVersionId, undefined /*conversationId*/, planMode, requestedSkillIDs, taskGraphDebug
             );
@@ -589,7 +593,7 @@ export class RunAIAgentResolver extends ResolverBase {
             messagesJson,
             sessionId,
             pubSub,
-            data,
+            runData,
             payload,
             templateData,
             lastRunId,
@@ -637,6 +641,9 @@ export class RunAIAgentResolver extends ResolverBase {
         @Arg('requestedSkillIDs', () => [String], { nullable: true }) requestedSkillIDs?: string[]
     ): Promise<AIAgentRunResult> {
         const p = GetReadWriteProvider(providers);
+        // @RequireSystemUser admits only the system user, who keeps the reserved keys; the guard still runs
+        // so every resolver entry that takes a client's data applies the same rule.
+        const runData = GuardClientAgentRunDataArg(data, { UserPayload: userPayload, IsWidgetGuestRun: false });
         return this.executeAIAgent(
             p,
             dataSource,
@@ -645,7 +652,7 @@ export class RunAIAgentResolver extends ResolverBase {
             messagesJson,
             sessionId,
             pubSub,
-            data,
+            runData,
             payload,
             templateData,
             lastRunId,
@@ -916,6 +923,10 @@ export class RunAIAgentResolver extends ResolverBase {
         const widgetElevation = await ResolveWidgetGuestRunContext(userPayload, p);
         const effectiveAgentId = widgetElevation ? widgetElevation.PinnedAgentId : agentId;
         const effectiveUserPayload = widgetElevation ? ElevateUserPayload(userPayload, widgetElevation.ElevatedUser) : userPayload;
+        // A run's scope and agent-type params are set by server code (a host's own server operation, an
+        // API-key integration or the system user), never by a browser. Judged on the caller's own payload:
+        // a widget guest runs under an elevated server principal but never keeps them.
+        const runData = GuardClientAgentRunDataArg(data, { UserPayload: userPayload, IsWidgetGuestRun: widgetElevation !== null });
 
         try {
             // Parsed before anything loads: a floor the caller asked for must never be dropped.
@@ -955,7 +966,7 @@ export class RunAIAgentResolver extends ResolverBase {
                 // The client will receive the result via WebSocket PubSub completion event.
                 this.executeAgentInBackground(
                     p, dataSource, effectiveAgentId, effectiveUserPayload, messagesJson, sessionId, pubSub,
-                    data, payload, lastRunId, autoPopulateLastRunPayload, configurationId,
+                    runData, payload, lastRunId, autoPopulateLastRunPayload, configurationId,
                     conversationDetailId, createArtifacts || false, createNotification || false,
                     sourceArtifactId, sourceArtifactVersionId, conversationId, planMode, requestedSkillIDs,
                     undefined, // taskGraphDebug
@@ -979,7 +990,7 @@ export class RunAIAgentResolver extends ResolverBase {
                 messagesJson,
                 sessionId,
                 pubSub,
-                data,
+                runData,
                 payload,
                 undefined, // templateData
                 lastRunId,
