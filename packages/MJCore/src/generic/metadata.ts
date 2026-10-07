@@ -613,7 +613,7 @@ export class Metadata {
      * @param itemFilters 
      * @param dataset 
      */
-    public async CacheDataset(datasetName: string, itemFilters: DatasetItemFilterType[], dataset: DatasetResultType): Promise<void> {
+    public async CacheDataset(datasetName: string, itemFilters: DatasetItemFilterType[] | undefined, dataset: DatasetResultType): Promise<void> {
         return Metadata.Provider.CacheDataset(datasetName, itemFilters, dataset);  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
     }
 

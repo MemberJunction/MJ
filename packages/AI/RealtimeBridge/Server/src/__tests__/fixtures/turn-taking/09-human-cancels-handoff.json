@@ -1,0 +1,31 @@
+{
+  "Name": "human-cancels-handoff",
+  "Description": "Sage hands the floor to Demo Loop, then a person speaks before Demo Loop starts. The reservation is cancelled: Demo Loop is denied while the person talks, and once they finish the floor is open to anyone, not reserved for Demo Loop.",
+  "Agents": [
+    { "Id": "sage", "Names": ["Sage"] },
+    { "Id": "demo", "Names": ["Demo Loop"] },
+    { "Id": "scout", "Names": ["Scout"] }
+  ],
+  "Events": [
+    { "Type": "HumanSpeech", "AtMs": 0, "DurationMs": 1500, "Text": "Sage, start us off.",
+      "ExpectDecisions": { "sage": "Speak", "demo": "Silent", "scout": "Silent" } },
+    { "Type": "AgentSpeech", "AtMs": 2500, "Agent": "sage", "DurationMs": 8000, "Text": "Happy to, and Demo Loop will follow with the data." },
+    { "Type": "Yield", "AtMs": 6000, "Agent": "sage", "To": "demo" },
+    { "Type": "HumanSpeech", "AtMs": 6500, "DurationMs": 2500, "Text": "Actually, hold on, I have a question first.",
+      "ExpectDecisions": { "sage": "Silent", "demo": "Silent", "scout": "Silent" } },
+    { "Type": "AgentSpeech", "AtMs": 9500, "Agent": "demo", "DurationMs": 3000, "Text": "Go ahead and ask, I am ready." },
+    { "Type": "AgentSpeech", "AtMs": 10500, "Agent": "scout", "DurationMs": 3000, "Text": "Whenever you are ready, I can take that question." }
+  ],
+  "Expect": {
+    "Speeches": [
+      { "Agent": "sage", "Kind": "Turn", "Granted": true, "Reason": "FloorFree" },
+      { "Agent": "demo", "Kind": "Turn", "Granted": false, "Reason": "HumanSpeaking" },
+      { "Agent": "scout", "Kind": "Turn", "Granted": true, "Reason": "FloorFree" }
+    ],
+    "Yields": [{ "Reason": "Yielded", "HandoffTo": "demo" }],
+    "Preempted": [],
+    "BackchannelCount": 0,
+    "LoopCapReached": false,
+    "FinalFloorHolder": null
+  }
+}

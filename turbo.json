@@ -15,7 +15,8 @@
     },
     "start": {
       "cache": false,
-      "persistent": true
+      "persistent": true,
+      "passThroughEnv": ["REDIS_URL", "REDIS_KEY_PREFIX", "REDIS_TTL_SECONDS", "GRAPHQL_PORT"]
     },
     "watch": {
       "cache": false,
@@ -24,6 +25,7 @@
     "test": {
       "dependsOn": ["build"],
       "outputs": ["coverage/**"],
+      "env": ["REDIS_URL"],
       "inputs": [
         "src/**/*.ts",
         "src/**/*.tsx",

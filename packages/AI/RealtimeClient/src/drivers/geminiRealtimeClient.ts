@@ -25,7 +25,7 @@ import {
     type LiveServerMessage,
     type Transcription,
 } from '@google/genai';
-import { BaseRealtimeClient, RealtimeClientState } from '../generic/baseRealtimeClient';
+import { BaseRealtimeClient, RealtimeClientState, REQUESTED_TRACKS_SESSION_KEY } from '../generic/baseRealtimeClient';
 import { Base64ToArrayBuffer } from '../audio/pcmUtils';
 import { IRealtimePcmPlayback, RealtimePcmPlayback } from '../audio/pcmPlayback';
 import { RealtimeAudioMeter } from '../audio/audioMeter';
@@ -364,6 +364,9 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.negotiateTracks(requestedTracks, supportedTracks, isVideoModel ? (maxInboundVideoStreams ?? 1) : 0);
 
         this.playback = this.createPlayback();
+        // The agent voice plays through Web Audio only; publish it so a host recorder can mix
+        // it in (issue #5153). Null for playbacks with no output stream (fakes, no WebAudio).
+        this.publishRemoteMediaStream(this.playback.GetOutputStream?.() ?? null);
         this.resumption?.Dispose();
         this.resumption = this.createResumption();
         this.connectTarget = { Model: model, Config: liveConfig, EphemeralToken: config.EphemeralToken };
@@ -411,6 +414,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.resumption = null;
         this.connectTarget = null;
         this.currentConnection = 0;
+        this.clearRemoteMediaStream();
         this.firstVideoSendTimestamp = 0;
         this.lastVideoSendTimestamp = 0;
         this.videoFramesSent = 0;
@@ -698,7 +702,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         const rawMaxStreams = sessionConfig['maxInboundVideoStreams'];
         const maxInboundVideoStreams =
             typeof rawMaxStreams === 'number' && Number.isInteger(rawMaxStreams) && rawMaxStreams >= 0 ? rawMaxStreams : undefined;
-        const rawRequestedTracks = sessionConfig['requestedTracks'];
+        const rawRequestedTracks = sessionConfig[REQUESTED_TRACKS_SESSION_KEY];
         let requestedTracks: readonly RealtimeTrackDescriptor[] | undefined = undefined;
         if (Array.isArray(rawRequestedTracks)) {
             const list: RealtimeTrackDescriptor[] = [];
