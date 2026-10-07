@@ -604,6 +604,9 @@ export class GeminiLLM extends BaseLLM {
      * shape (`temperature` defaulting to 0.5, `topP`, `topK`) because they still honor it. Every
      * other model gets none of the three: Google ignores them since Gemini 3.6 Flash and upcoming
      * models reject them with a 400, so a caller-supplied value is dropped with a one-time warning.
+     *
+     * A `ModelSpecific` response format is merged in after this gate, so it can still set these
+     * fields explicitly; that is the caller's deliberate override.
      */
     private buildGenerationOptions(params: ChatParams, modelName: string): Record<string, unknown> {
         const modelOptions: Record<string, unknown> = {};

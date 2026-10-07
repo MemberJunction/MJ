@@ -848,6 +848,8 @@ describe('GeminiLLM — generation config by model version', () => {
     create = vi.fn().mockReturnValue({ sendMessage, sendMessageStream });
     (llm as unknown as Record<string, unknown>)['_gemini'] = { chats: { create } };
     warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    // The warn-once set is static (per process); clear it so each test sees its own warnings.
+    (GeminiLLM as unknown as { _warnedUnsupportedSampling: Set<string> })._warnedUnsupportedSampling.clear();
   });
 
   afterEach(() => {
