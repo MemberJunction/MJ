@@ -5,8 +5,9 @@
  */
 
 import { Resolver, Mutation, Arg, Ctx, ObjectType, Field } from 'type-graphql';
-import { LogError, IMetadataProvider } from '@memberjunction/core';
+import { LogError } from '@memberjunction/core';
 import { TelephonyResolverContext, GetUserFromPayload, GetReadWriteProvider } from '../types.js';
+import { OutboundCallRefusedError } from '../telephony/outboundCallPolicy.js';
 import { GetTwilioTelephonyService } from '../telephony/telephony-runtime.js';
 
 /** Result of an outbound place-call attempt. */
@@ -52,7 +53,9 @@ export class TelephonyResolver {
             return { Success: true, CallSid: callSid };
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
-            LogError(`PlaceTwilioCall failed: ${msg}`);
+            if (!(error instanceof OutboundCallRefusedError)) {
+                LogError(`PlaceTwilioCall failed: ${msg}`); // a refusal was already logged (masked) by the outbound gate
+            }
             return failure(msg);
         }
     }

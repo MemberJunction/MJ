@@ -1,5 +1,120 @@
 # @memberjunction/testing-integration
 
+## 6.2.0-edge.3
+
+### Patch Changes
+
+- 41c2c08: Stop serializing the whole metadata graph into a store nothing can read it back from
+
+  `ProviderBase.SaveLocalMetadataToStorage()` ran `JSON.stringify` over the entire metadata graph on
+  every metadata reload, then copied it into a `Blob`, gzipped it, and base64-encoded it one byte at a
+  time. The snapshot exists so a cold process can start from a cached copy instead of querying — which
+  only works if the store outlives the writer. On a server with no `REDIS_URL` the store is an
+  in-process `Map`, so the only possible reader is the heap that already holds the live objects, and
+  the whole round trip buys nothing.
+
+  Measured on a 791-entity tenant: 131.5M characters per stringify, ~10s and ~1.2GB of transient heap
+  per refresh against a 2.2GB steady state, and the final flatten of that string needs one contiguous
+  ~500MB allocation. Saved queries are metadata members, so an agent writing them marks metadata stale
+  and triggers a refresh roughly every 30 seconds; two overlapping refreshes exhausted the heap and
+  MJAPI died with `Reached heap limit Allocation failed` inside `String::SlowFlatten`.
+
+  `ILocalStorageProvider` gains an optional `SupportsCrossProcessPersistence`. `ProviderBase` skips
+  both the save and the load when it is `false`, logging the reason once per process. A provider that
+  does not declare it is treated as persistent, so Redis and browser behaviour is unchanged — the
+  conservative direction, since a pointless save only wastes work while wrongly skipping a necessary
+  one would leave a cache that never populates. Every in-repo provider now declares it, including the
+  instrumented test wrapper, which delegates to the store it wraps.
+
+  `arrayBufferToBase64` / `base64ToArrayBuffer` use Node's native codec when `Buffer` exists, falling
+  back to the existing loops in the browser. The byte-at-a-time encoder built a rope the size of the
+  payload and then forced a flatten, measured at 3702ms for an 8.6MB buffer under heap pressure
+  against 191ms cold.
+
+  `TelemetryManager.trimIfNeeded()` only ever trimmed `_events`. Three collections derived from it were
+  never released for the life of the process: `_insights` grew by one entry per emitted warning,
+  `_patterns` by one per distinct fingerprint (every new filter combination is a new fingerprint, so it
+  grew with query variety), and `_insightDedupeWindow` by one per dedupe key. All three are now bound
+  on the same schedule as the events they come from — `maxInsights` defaults to 1000, and the two map
+  sweeps are O(n) so they run at most once a minute rather than on every recorded event.
+
+  After the equivalent patch on a live tenant: the refresh cycle went from 10019/9372/8994 ms to
+  330/214/298 ms, heap peak from 3597/3171/3171 MB to 1576/1575/1575 MB, the per-refresh transient
+  spike from +1.0-1.2 GB to 0, and the retained baseline from 2204 MB to 1575 MB.
+
+- Updated dependencies [25bb295]
+- Updated dependencies [dfe40a4]
+- Updated dependencies [131f3c4]
+- Updated dependencies [0f04590]
+- Updated dependencies [fe39606]
+- Updated dependencies [41c2c08]
+- Updated dependencies [29b6ec3]
+- Updated dependencies [b545842]
+- Updated dependencies [279b93e]
+- Updated dependencies [66fd011]
+- Updated dependencies [196160a]
+- Updated dependencies [d046715]
+- Updated dependencies [60bd774]
+- Updated dependencies [35da130]
+- Updated dependencies [28c92e0]
+- Updated dependencies [d0a8dbf]
+- Updated dependencies [ec97ad4]
+- Updated dependencies [b1b6d3d]
+- Updated dependencies [49e0bd8]
+  - @memberjunction/core-entities@6.2.0-edge.3
+  - @memberjunction/global@6.2.0-edge.3
+  - @memberjunction/core@6.2.0-edge.3
+  - @memberjunction/generic-database-provider@6.2.0-edge.3
+  - @memberjunction/sqlserver-dataprovider@6.2.0-edge.3
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.3
+  - @memberjunction/testing-engine@6.2.0-edge.3
+  - @memberjunction/server-bootstrap-lite@6.2.0-edge.3
+  - @memberjunction/testing-engine-base@6.2.0-edge.3
+  - @memberjunction/dynamic-packages@6.2.0-edge.3
+
+## 6.2.0-edge.2
+
+### Patch Changes
+
+- 55c1c58: Add the `record-cloning` integration bundle (`IT96 - Record Cloning`, client transport): RC1 to RC9 from the record cloning plan (user, prompt and action clones, dry run, authorization refusal, rollback, provenance, stale plan hash, Record Change annotation) plus RC10 to RC12, read-only plans against the live database (unlisted relationships skipped, company integrations and encrypted values kept out of a scheduled job plan, and the user settings exclusions). `IntegrationCheckContext` gains a `RecordCloningFixture`.
+- Updated dependencies [e97d95c]
+- Updated dependencies [2552b1e]
+- Updated dependencies [660ef45]
+- Updated dependencies [21f9e15]
+- Updated dependencies [28fdf22]
+- Updated dependencies [4248fb3]
+- Updated dependencies [72d8a40]
+- Updated dependencies [f3c6161]
+- Updated dependencies [50ba290]
+- Updated dependencies [ffb3c0f]
+- Updated dependencies [0adaf76]
+- Updated dependencies [5ee02db]
+- Updated dependencies [513e608]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [ea4080e]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [7e57b48]
+- Updated dependencies [705ab4e]
+- Updated dependencies [7e57b48]
+- Updated dependencies [2ceedb4]
+- Updated dependencies [7e57b48]
+- Updated dependencies [5986939]
+- Updated dependencies [4d647e6]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [369e229]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [2854a2e]
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/core-entities@6.2.0-edge.2
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.2
+  - @memberjunction/testing-engine@6.2.0-edge.2
+  - @memberjunction/server-bootstrap-lite@6.2.0-edge.2
+  - @memberjunction/generic-database-provider@6.2.0-edge.2
+  - @memberjunction/sqlserver-dataprovider@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+  - @memberjunction/testing-engine-base@6.2.0-edge.2
+  - @memberjunction/dynamic-packages@6.2.0-edge.2
+
 ## 6.2.0-edge.1
 
 ### Patch Changes

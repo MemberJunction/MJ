@@ -23,6 +23,10 @@ on:
       - 'pnpm-lock.yaml'
       - '.github/workflows/lockfile-guard.yml'
 
+# Least-privilege token: nothing in this workflow writes to the repository.
+permissions:
+  contents: read
+
 concurrency:
   group: lockfile-guard-${{ github.event.pull_request.number }}
   cancel-in-progress: true
