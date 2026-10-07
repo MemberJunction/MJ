@@ -222,7 +222,7 @@ describe('SystemOneDecision', () => {
       const result = await new SystemOneDecision('{"apiKey":"sk-123","endpoint":"https://s1.example",}').Decide(params());
 
       expect(calls).toHaveLength(0);
-      expect(result.errorMessage).toContain('looks like JSON but does not parse');
+      expect(result.errorMessage).toContain('is not valid JSON');
       expect(result.errorMessage).not.toContain('sk-123');
       expect(result.errorInfo).toEqual({ errorType: 'NoCredentials', severity: 'Retriable', canFailover: true });
     });

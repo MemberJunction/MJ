@@ -87,7 +87,7 @@ Bundles live in [`integration-test-suite/src/checks/`](../integration-test-suite
 **882 checks / 109 registered bundles today** (IT01–IT110, with IT107 unassigned; the table above lists the majors — run `mj test list` or read `integration-test-suite/src/checks/` for the full set): 93 members land in the **deterministic** suite, 16 in **live-model**. The 2026-07 expansion added the IT31–IT52 client-first bundles; IT64 onward followed, through the Clef, Kev and Perplexity Decider decision-model bundles at IT108–IT110. The bundle count is pinned by `check-registry.test.ts` — treat that as the source of truth over any hand-count here. The older bundles are `bootstrapIntegrationServer` (in-process) — migrating them to client transport where a client path exists is tracked in the plan (Workstream M); the 2026-07 bundles are client-first where a client surface exists.
 
 > **Suite ordering invariant**: ALL server-transport members are sequenced before ALL
-> client-transport members (deterministic suite: servers 1–48, clients 49–68). The first client
+> client-transport members (deterministic suite: servers 1–49, clients 50–74). The first client
 > bundle rebinds the process-global provider to GraphQL (issue #3251), so a server member
 > sequenced after any client member hard-errors. Keep the invariant when joining new members.
 

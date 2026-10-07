@@ -93,8 +93,9 @@ export function ParseSystemOneCredential(apiKey: string): SystemOneCredential {
     try {
         parsed = JSON.parse(trimmed);
     } catch {
-        // The parser's own message is left out: it can quote the credential's text.
-        return { APIKey: '', ParseError: 'The credential looks like JSON but does not parse; fix the AI Credential\'s values' };
+        // The parser's own message is left out: it can quote the key's text. A bound AI Credential always
+        // arrives as valid JSON, so this is a legacy AI_VENDOR_API_KEY__* value or a runtime apiKeys entry.
+        return { APIKey: '', ParseError: 'the API key starts with "{" but is not valid JSON; check the AI_VENDOR_API_KEY__* variable or apiKeys entry it came from' };
     }
     if (!IsSystemOneWireObject(parsed)) {
         return { APIKey: raw };
@@ -246,7 +247,9 @@ export abstract class BaseSystemOneDecision extends BaseDecision {
     protected async DoDecide(params: DecisionParams): Promise<DecisionResult> {
         const startTime = new Date();
         const parseError = this.Credential.ParseError;
-        const configurationError = parseError ? { ErrorType: 'NoCredentials' as const, Message: `${this.ServiceName}: ${parseError}` } : this.GetConfigurationError();
+        const configurationError: SystemOneConfigurationError | undefined = parseError
+            ? { ErrorType: 'NoCredentials', Message: `${this.ServiceName}: ${parseError}` }
+            : this.GetConfigurationError();
         if (configurationError) {
             return this.configurationFailure(configurationError, startTime);
         }
