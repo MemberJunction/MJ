@@ -25,6 +25,8 @@ class CollapsiblePanelStub {
   @Input() SectionKey = '';
   @Input() SectionName = '';
   @Input() Icon = '';
+  /** The panel's own slot position, which a compiled panel passes so it is not drawn last. */
+  @Input() Order: number | null = null;
   @Input() Form: unknown;
   @Input() FormContext: unknown;
 }
