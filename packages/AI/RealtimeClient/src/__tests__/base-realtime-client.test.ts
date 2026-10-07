@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { ClientRealtimeSessionConfig } from '@memberjunction/ai';
 import {
     BaseRealtimeClient,
@@ -54,6 +54,12 @@ class StubRealtimeClient extends BaseRealtimeClient {
     }
     public EmitRemoteVideo(video: MediaVideoSource | MediaStream): void {
         this.emitRemoteVideo(video);
+    }
+    public Publish(s: MediaStream | null): void {
+        this.publishRemoteMediaStream(s);
+    }
+    public Clear(): void {
+        this.clearRemoteMediaStream();
     }
 }
 
@@ -183,6 +189,96 @@ describe('BaseRealtimeClient', () => {
                 client.EmitInterruption();
                 client.EmitUsage({ InputTokens: 1 });
             }).not.toThrow();
+        });
+    });
+
+    describe('remote media stream slot', () => {
+        const fakeStream = (): MediaStream => ({ id: 'remote' }) as unknown as MediaStream;
+
+        afterEach(() => {
+            vi.restoreAllMocks();
+        });
+
+        it('is null before anything is published', () => {
+            expect(new StubRealtimeClient().GetRemoteMediaStream()).toBeNull();
+        });
+
+        it('fires a handler registered BEFORE publish once, with the stream', () => {
+            const client = new StubRealtimeClient();
+            const received: MediaStream[] = [];
+            client.OnRemoteMediaStream((s) => received.push(s));
+            const stream = fakeStream();
+            client.Publish(stream);
+            expect(received).toEqual([stream]);
+            expect(client.GetRemoteMediaStream()).toBe(stream);
+        });
+
+        it('fires a handler registered AFTER publish immediately and synchronously', () => {
+            const client = new StubRealtimeClient();
+            const stream = fakeStream();
+            client.Publish(stream);
+            const received: MediaStream[] = [];
+            client.OnRemoteMediaStream((s) => received.push(s));
+            expect(received).toEqual([stream]);
+        });
+
+        it('delivers to every registered handler', () => {
+            const client = new StubRealtimeClient();
+            const a: MediaStream[] = [];
+            const b: MediaStream[] = [];
+            client.OnRemoteMediaStream((s) => a.push(s));
+            client.OnRemoteMediaStream((s) => b.push(s));
+            const stream = fakeStream();
+            client.Publish(stream);
+            expect(a).toEqual([stream]);
+            expect(b).toEqual([stream]);
+        });
+
+        it('isolates a throwing handler: sibling still fires, nothing throws, console.warn is called', () => {
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+            const client = new StubRealtimeClient();
+            const sibling: MediaStream[] = [];
+            client.OnRemoteMediaStream(() => {
+                throw new Error('host boom');
+            });
+            client.OnRemoteMediaStream((s) => sibling.push(s));
+            expect(() => client.Publish(fakeStream())).not.toThrow();
+            expect(sibling).toHaveLength(1);
+            expect(warn).toHaveBeenCalled();
+
+            // Late registration against an already-landed stream must isolate too.
+            expect(() =>
+                client.OnRemoteMediaStream(() => {
+                    throw new Error('late boom');
+                }),
+            ).not.toThrow();
+            expect(warn).toHaveBeenCalledTimes(2);
+        });
+
+        it('publish(null) sets null and fires nothing', () => {
+            const client = new StubRealtimeClient();
+            const received: MediaStream[] = [];
+            client.OnRemoteMediaStream((s) => received.push(s));
+            client.Publish(null);
+            expect(client.GetRemoteMediaStream()).toBeNull();
+            expect(received).toHaveLength(0);
+        });
+
+        it('clear drops the stream AND the handlers, so a later publish reaches only new handlers', () => {
+            const client = new StubRealtimeClient();
+            const stale: MediaStream[] = [];
+            client.OnRemoteMediaStream((s) => stale.push(s));
+            client.Publish(fakeStream());
+            expect(stale).toHaveLength(1);
+
+            client.Clear();
+            expect(client.GetRemoteMediaStream()).toBeNull();
+
+            const fresh: MediaStream[] = [];
+            client.OnRemoteMediaStream((s) => fresh.push(s));
+            client.Publish(fakeStream());
+            expect(stale).toHaveLength(1);
+            expect(fresh).toHaveLength(1);
         });
     });
 });

@@ -8,6 +8,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Test Rubrics"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:45.537Z",
+      "checksum": "b6fbc98c8615c5556a7416bea1255a3a4ed98b8856cd0f6bddbeeffec56ea03a"
     }
   }
 ]

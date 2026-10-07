@@ -19,7 +19,8 @@ import { InMemoryLocalStorageProvider } from '../generic/InMemoryLocalStoragePro
  */
 export function runStorageProviderContractTests(
     providerName: string,
-    factory: () => ILocalStorageProvider | Promise<ILocalStorageProvider>
+    factory: () => ILocalStorageProvider | Promise<ILocalStorageProvider>,
+    expectedCrossProcessPersistence?: boolean
 ): void {
     describe(`${providerName} — ILocalStorageProvider contract`, () => {
         let provider: ILocalStorageProvider;
@@ -27,6 +28,14 @@ export function runStorageProviderContractTests(
         beforeEach(async () => {
             provider = await factory();
         });
+
+        if (expectedCrossProcessPersistence !== undefined) {
+            // A wrong value either skips the cold-start metadata cache (false on a persistent
+            // store) or serializes the whole metadata graph for nothing (true on an in-process one).
+            it(`declares SupportsCrossProcessPersistence = ${expectedCrossProcessPersistence}`, () => {
+                expect(provider.SupportsCrossProcessPersistence).toBe(expectedCrossProcessPersistence);
+            });
+        }
 
         // ──────────────────────────────────────────────────────────────────
         // Basic round-trip
@@ -457,7 +466,8 @@ export function runStorageProviderContractTests(
 // ────────────────────────────────────────────────────────────────────────────
 runStorageProviderContractTests(
     'InMemoryLocalStorageProvider',
-    () => new InMemoryLocalStorageProvider()
+    () => new InMemoryLocalStorageProvider(),
+    false
 );
 
 // ────────────────────────────────────────────────────────────────────────────
