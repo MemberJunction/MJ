@@ -11,7 +11,7 @@ import { By } from '@angular/platform-browser';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import type { IMetadataProvider } from '@memberjunction/core';
 import type { RealtimeModelVoices } from '@memberjunction/graphql-dataprovider';
-import type { MJLiveKitConnectionMode } from '@memberjunction/ng-mj-livekit-room';
+import type { MJLiveKitConnectionMode, TurnAddressingChoice, TurnModeChoice } from '@memberjunction/ng-mj-livekit-room';
 import { NavigationService } from '@memberjunction/ng-shared';
 import { LiveKitRoomResource } from './livekit-room-resource.component';
 
@@ -32,6 +32,8 @@ class StubAgentRoom {
   @Input() ShowWhiteboard = false;
   @Input() EnableLayoutSwitcher = false;
   @Input() EnablePinning = false;
+  @Input() TurnMode: TurnModeChoice | null = null;
+  @Input() TurnAddressing: TurnAddressingChoice | null = null;
   @Output() Connected = new EventEmitter<void>();
   @Output() Disconnected = new EventEmitter<void>();
   @Output() ErrorOccurred = new EventEmitter<void>();
