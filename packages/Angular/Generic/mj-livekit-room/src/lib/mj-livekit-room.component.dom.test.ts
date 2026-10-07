@@ -54,7 +54,7 @@ function person(identity: string, over: { Local?: boolean; Agent?: boolean } = {
 }
 
 /** A connected room with the user, Ada, Bo and the agent, and a controller that does nothing. */
-function fakeController(): ILiveKitRoomController {
+function fakeController(over: Partial<LiveKitRoomState> = {}): ILiveKitRoomController {
   const state: LiveKitRoomState = {
     Status: 'connected',
     Local: person('you', { Local: true }),
@@ -65,6 +65,7 @@ function fakeController(): ILiveKitRoomController {
     NoiseFilterEnabled: false,
     BackgroundEffect: { Kind: 'none' },
     E2EEEnabled: false,
+    ...over,
   };
   return {
     Events: new LiveKitRoomEventBus(),
@@ -123,7 +124,7 @@ describe('MJLiveKitRoomComponent: the saved layout (DOM)', () => {
   /** The binding with its room shown, as once its token is resolved. */
   const render = (inputs: Record<string, unknown> = {}) => {
     const f = renderComponentFixture(MJLiveKitRoomComponent, {
-      providers: [{ provide: LIVEKIT_ROOM_CONTROLLER_FACTORY, useValue: fakeController }],
+      providers: [{ provide: LIVEKIT_ROOM_CONTROLLER_FACTORY, useValue: () => fakeController() }],
       inputs: { AutoStart: false, Mode: 'join', Layout: 'spotlight', ShowPreJoin: false, ...inputs },
     });
     f.componentInstance.ServerUrl = 'wss://example.test';
@@ -326,8 +327,10 @@ describe('MJLiveKitRoomComponent: the preview room (DOM)', () => {
     expect(media[0].Released).toBe(true);
   });
 
-  it('lets you choose what the agent sees, and the preview room records it at once', async () => {
+  it('lets you choose what the agent sees, and the preview room records it at once, without asking MJAPI', async () => {
+    const set = vi.spyOn(GraphQLLiveKitClient.prototype, 'SetAgentVision').mockResolvedValue({ Success: true });
     const f = await render();
+    f.componentInstance.ResolvedRoomName = 'preview-room';
     const button = (title: string) => f.nativeElement.querySelector(`button[title="${title}"]`) as HTMLButtonElement | null;
     button('Let the agent see your camera and screen')?.click();
     f.detectChanges();
@@ -336,10 +339,100 @@ describe('MJLiveKitRoomComponent: the preview room (DOM)', () => {
     f.detectChanges();
     expect(roomOf(f).State.LocalMedia.AgentVisionOn).toBe(false);
     expect(button('Let the agent see your camera and screen')).not.toBeNull();
+    expect(set).not.toHaveBeenCalled();
   });
 
   it('offers no switch when the host turns it off', async () => {
     const f = await render({ EnableAgentVisionControl: false });
     expect(f.nativeElement.querySelector('button[title="Let the agent see your camera and screen"]')).toBeNull();
+  });
+});
+
+/**
+ * DOM spec for the agent-vision switch in a meeting: the binding asks MJAPI to record the user's choice for the room,
+ * and when MJAPI can't, says why in a notice over the room, which stays open. The room is the real one, on a fake
+ * controller whose agent watches; MJAPI is a stand-in for `GraphQLLiveKitClient.SetAgentVision`.
+ */
+describe('MJLiveKitRoomComponent: what the agent sees, in a meeting (DOM)', () => {
+  const LET = 'button[title="Let the agent see your camera and screen"]';
+
+  beforeEach(() => {
+    vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
+    vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation(() => undefined);
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    clearOverlayContainers();
+  });
+
+  /** The binding in a meeting whose agent watches, with its room shown. */
+  const render = (over: Partial<LiveKitRoomState> = {}) => {
+    const f = renderComponentFixture(MJLiveKitRoomComponent, {
+      providers: [{ provide: LIVEKIT_ROOM_CONTROLLER_FACTORY, useValue: () => fakeController({ AgentWatching: true, ...over }) }],
+      inputs: { AutoStart: false, Mode: 'join', ShowPreJoin: false },
+    });
+    f.componentInstance.ServerUrl = 'wss://example.test';
+    f.componentInstance.Token = 'token';
+    f.componentInstance.ResolvedRoomName = 'room-1';
+    f.componentRef.injector.get(ChangeDetectorRef).markForCheck();
+    f.detectChanges();
+    return f;
+  };
+  /** Clicks the switch, then lets MJAPI's answer arrive. */
+  const flip = async (f: ReturnType<typeof render>, button = LET) => {
+    (f.nativeElement.querySelector(button) as HTMLButtonElement).click();
+    for (let i = 0; i < 3; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      f.detectChanges();
+    }
+  };
+  const notice = (f: ReturnType<typeof render>) => f.nativeElement.querySelector('mj-alert') as HTMLElement | null;
+
+  it("asks MJAPI to record the user's choice for this room, and says nothing when it does", async () => {
+    const set = vi.spyOn(GraphQLLiveKitClient.prototype, 'SetAgentVision').mockResolvedValue({ Success: true });
+    const f = render();
+    await flip(f);
+    expect(set).toHaveBeenCalledWith('room-1', true);
+    expect(notice(f)).toBeNull();
+  });
+
+  it('asks MJAPI to withdraw it when the user turns the switch off', async () => {
+    const set = vi.spyOn(GraphQLLiveKitClient.prototype, 'SetAgentVision').mockResolvedValue({ Success: true });
+    const f = render({ LocalMedia: { MicrophoneEnabled: false, CameraEnabled: false, ScreenShareEnabled: false, AgentVisionOn: true } });
+    await flip(f, 'button[title="Stop letting the agent see your camera and screen"]');
+    expect(set).toHaveBeenCalledWith('room-1', false);
+  });
+
+  it("says why when MJAPI can't, emits the error, and keeps the room open", async () => {
+    vi.spyOn(GraphQLLiveKitClient.prototype, 'SetAgentVision').mockResolvedValue({ Success: false, ErrorMessage: 'You are not in this room.' });
+    const f = render();
+    const errors: string[] = [];
+    f.componentInstance.ErrorOccurred.subscribe((e: { Kind: string; Message: string }) => errors.push(`${e.Kind}: ${e.Message}`));
+    await flip(f);
+    expect(notice(f)?.textContent).toContain("Couldn't change what the agent sees: You are not in this room.");
+    expect(errors).toEqual(["agent-vision: Couldn't change what the agent sees: You are not in this room."]);
+    expect(f.nativeElement.querySelector('mj-livekit-room')).not.toBeNull();
+  });
+
+  it('lets the user dismiss the notice, and clears it when they choose again', async () => {
+    const set = vi.spyOn(GraphQLLiveKitClient.prototype, 'SetAgentVision').mockResolvedValue({ Success: false, ErrorMessage: 'LiveKit is unreachable.' });
+    const f = render();
+    await flip(f);
+    (notice(f)?.querySelector('button[aria-label="Dismiss"]') as HTMLButtonElement).click();
+    f.detectChanges();
+    expect(notice(f)).toBeNull();
+    await flip(f);
+    expect(notice(f)).not.toBeNull();
+    set.mockResolvedValue({ Success: true });
+    await flip(f);
+    expect(notice(f)).toBeNull();
+  });
+
+  it('asks nothing until the room has a name', async () => {
+    const set = vi.spyOn(GraphQLLiveKitClient.prototype, 'SetAgentVision').mockResolvedValue({ Success: true });
+    const f = render();
+    f.componentInstance.ResolvedRoomName = null;
+    await flip(f);
+    expect(set).not.toHaveBeenCalled();
   });
 });

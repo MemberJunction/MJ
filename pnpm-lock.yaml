@@ -8123,6 +8123,9 @@ importers:
       '@memberjunction/ng-realtime-media':
         specifier: 6.2.0-edge.1
         version: link:../realtime-media
+      '@memberjunction/ng-ui-components':
+        specifier: 6.2.0-edge.1
+        version: link:../ui-components
       rxjs:
         specifier: ^7.8.2
         version: 7.8.2

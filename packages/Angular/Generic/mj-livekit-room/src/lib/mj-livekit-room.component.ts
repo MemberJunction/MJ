@@ -6,6 +6,7 @@ import { GraphQLDataProvider, GraphQLLiveKitClient, RealtimeModelVoices, Realtim
 import { LIVEKIT_ROOM_CONTROLLER_FACTORY, LiveKitRoomComponent, type LiveKitRoomLayout } from '@memberjunction/ng-livekit-room';
 import { LOCAL_MEDIA_CONTROLLER_FACTORY } from '@memberjunction/ng-realtime-media';
 import { MJStorageMediaPlayerComponent } from '@memberjunction/ng-media-player';
+import { MJAlertComponent } from '@memberjunction/ng-ui-components';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { MediaLayoutPrefs, type MediaPipRect, type MediaPlacementMove } from '@memberjunction/ai-realtime-client/media';
 import {
@@ -79,7 +80,7 @@ export interface AgentInRoom {
   selector: 'mj-livekit-agent-room',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [LiveKitRoomComponent, MJStorageMediaPlayerComponent],
+  imports: [LiveKitRoomComponent, MJStorageMediaPlayerComponent, MJAlertComponent],
   providers: [{ provide: LIVEKIT_ROOM_CONTROLLER_FACTORY, useFactory: roomControllerFactory }],
   template: `
     @if (recordingFileId && showRecordingPanel) {
@@ -152,6 +153,10 @@ export interface AgentInRoom {
         (ToggleRecording)="onToggleRecording()"
         (ErrorOccurred)="ErrorOccurred.emit($event)"
       ></mj-livekit-room>
+
+      @if (AgentVisionNotice) {
+        <mj-alert class="mj-lk-notice" Variant="error" Size="sm" [Message]="AgentVisionNotice" [Dismissible]="true" (Dismissed)="AgentVisionNotice = null"></mj-alert>
+      }
 
       @if (Mode === 'agent' && EnableAgentManagement && resolvedRoomName) {
         <div class="mj-lk-agents">
@@ -262,6 +267,15 @@ export interface AgentInRoom {
         position: relative;
         width: 100%;
         height: 100%;
+      }
+      /* Over the room, under its header, clear of the agents panel at the bottom left. */
+      .mj-lk-notice {
+        position: absolute;
+        top: 64px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 41;
+        width: min(480px, calc(100% - 32px));
       }
       .mj-lk-agents {
         position: absolute;
@@ -741,8 +755,14 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
   public set resolvedDisplayName(value: string | null) {
     this.ResolvedDisplayName = value;
   }
-  /** The resolved room name (for recording calls). */
+  /** The resolved room name (for recording and agent-vision calls). */
   public ResolvedRoomName: string | null = null;
+
+  /**
+   * Why the server could not record the user's last choice of what the agent sees, shown over the room until they
+   * dismiss it or choose again; `null` when there is nothing to say.
+   */
+  public AgentVisionNotice: string | null = null;
 
   /** @deprecated Use {@link ResolvedRoomName}. */
   public get resolvedRoomName(): string | null {
@@ -827,12 +847,32 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
   }
 
   /**
-   * The user chose whether agents may see their camera and screen. The preview room records it at once. A meeting
-   * room can't: participant tokens can't change their own attributes, so a meeting's consent has to be set by the server.
+   * The user chose whether agents may see their camera and screen. The preview room records it at once. In a meeting,
+   * MJAPI records it, since a participant's token can't change its own attributes, and the room shows the change when
+   * LiveKit reports it; when MJAPI can't, a notice says why.
    */
   public OnAgentVisionChange(on: boolean): void {
     const controller = this.roomComponent?.Controller;
-    if (controller instanceof LiveKitPreviewRoomController) controller.SetAgentVision(on);
+    if (controller instanceof LiveKitPreviewRoomController) {
+      controller.SetAgentVision(on);
+      return;
+    }
+    void this.recordAgentVision(on);
+  }
+
+  /** Asks MJAPI to record the user's choice for this room; when it can't, shows why and emits the error. */
+  private async recordAgentVision(on: boolean): Promise<void> {
+    if (!this.ResolvedRoomName) {
+      return;
+    }
+    this.AgentVisionNotice = null;
+    const client = new GraphQLLiveKitClient(this.ProviderToUse as unknown as GraphQLDataProvider);
+    const result = await client.SetAgentVision(this.ResolvedRoomName, on);
+    if (!result.Success) {
+      this.AgentVisionNotice = `Couldn't change what the agent sees: ${result.ErrorMessage ?? 'unknown error'}`;
+      this.ErrorOccurred.emit({ Kind: 'agent-vision', Message: this.AgentVisionNotice });
+    }
+    this.cdr.markForCheck();
   }
 
   /**

@@ -114,8 +114,11 @@ export interface LiveKitDataMessage {
 
 /** A normalized error surfaced by the room (connection failure, device error, publish failure). */
 export interface LiveKitRoomError {
-  /** A stable category for programmatic handling. */
-  Kind: 'connect' | 'device' | 'publish' | 'data' | 'disconnect' | 'unknown';
+  /**
+   * A stable category for programmatic handling. `'agent-vision'`: the server could not record whether the user lets
+   * agents see their camera and shared screen.
+   */
+  Kind: 'connect' | 'device' | 'publish' | 'data' | 'disconnect' | 'agent-vision' | 'unknown';
   /** A human-readable message. */
   Message: string;
   /** The original error, when available. */
