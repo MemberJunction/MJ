@@ -460,7 +460,7 @@ describe('BuildClientConfig: the requested-tracks key has one home', () => {
     it('writes channel-sourced tracks under REQUESTED_TRACKS_SESSION_KEY, keeping the mint-supplied ones', () => {
         const runtime = new RealtimeSessionRuntime(new FakeMediaHost());
         const video = { Direction: 'Inbound', Modality: 'Video' } as const;
-        runtime['_activeChannels$'].next([{ GetSourcedTracks: () => [video] } as never]);
+        runtime['_activeChannels$'].next([{ GetSourcedTracks: () => [video], GetSunkTracks: () => [] } as never]);
         const minted = { Direction: 'Outbound', Modality: 'Video' };
         const config = runtime.BuildClientConfig(session(JSON.stringify({ [REQUESTED_TRACKS_SESSION_KEY]: [minted] })));
         const tracks = config.SessionConfig?.[REQUESTED_TRACKS_SESSION_KEY] as Array<{ Direction: string; Modality: string }>;
