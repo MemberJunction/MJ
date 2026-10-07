@@ -391,6 +391,7 @@ export class MJTestFormComponentExtended extends MJTestFormComponent implements 
   }
 
   ngOnDestroy() {
+    super.ngOnDestroy();
     this.destroy$.next();
     this.destroy$.complete();
   }

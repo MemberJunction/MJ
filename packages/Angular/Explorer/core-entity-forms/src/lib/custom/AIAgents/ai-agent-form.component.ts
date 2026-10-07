@@ -4049,6 +4049,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
      * Component cleanup - critical for preventing memory leaks
      */
     ngOnDestroy(): void {
+        super.ngOnDestroy();
         // Signal all subscriptions to complete
         this.destroy$.next();
         this.destroy$.complete();
