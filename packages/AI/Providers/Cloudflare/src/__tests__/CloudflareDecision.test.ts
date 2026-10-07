@@ -259,7 +259,7 @@ describe('CloudflareDecision', () => {
       const result = await new CloudflareDecision(`{"apiKey":"${COMPOUND_KEY}",}`).Decide(params());
 
       expect(calls).toHaveLength(0);
-      expect(result.errorMessage).toContain('looks like JSON but does not parse');
+      expect(result.errorMessage).toContain('is not valid JSON');
       expect(result.errorMessage).not.toContain(API_TOKEN);
       expect(result.errorInfo).toEqual({ errorType: 'NoCredentials', severity: 'Retriable', canFailover: true });
     });

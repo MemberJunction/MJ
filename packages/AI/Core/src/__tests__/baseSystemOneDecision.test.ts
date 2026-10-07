@@ -199,7 +199,10 @@ describe('BaseSystemOneDecision', () => {
                 .toEqual({ APIKey: '', Endpoint: 'https://e.example.test', AccountID: undefined });
             expect(ParseSystemOneCredential('{"apiKey":7}')).toEqual({ APIKey: '', Endpoint: undefined, AccountID: undefined });
             expect(ParseSystemOneCredential('acct:token')).toEqual({ APIKey: 'acct:token' });
-            expect(ParseSystemOneCredential('{not json')).toMatchObject({ APIKey: '', ParseError: expect.stringContaining('looks like JSON') });
+            expect(ParseSystemOneCredential('{not json')).toEqual({
+                APIKey: '',
+                ParseError: 'the API key starts with "{" but is not valid JSON; check the AI_VENDOR_API_KEY__* variable or apiKeys entry it came from',
+            });
             expect(ParseSystemOneCredential('["a"]')).toEqual({ APIKey: '["a"]' });
             expect(ParseSystemOneCredential('')).toEqual({ APIKey: '' });
         });
@@ -224,7 +227,7 @@ describe('BaseSystemOneDecision', () => {
 
             expect(driver.Sent).toHaveLength(0);
             expect(result.success).toBe(false);
-            expect(result.errorMessage).toMatch(/^Test Decisions API: The credential looks like JSON but does not parse/);
+            expect(result.errorMessage).toMatch(/^Test Decisions API: the API key starts with "\{" but is not valid JSON/);
             expect(result.errorMessage).not.toContain('sk-123');
             expect(result.errorInfo).toEqual({ errorType: 'NoCredentials', severity: 'Retriable', canFailover: true });
         });
