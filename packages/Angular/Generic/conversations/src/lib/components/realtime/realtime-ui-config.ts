@@ -203,7 +203,9 @@ export interface RealtimeUiSignals {
   /**
    * Has the user revealed text this session? (i.e. tapped "show the
    * conversation" / engaged the composer — disclosure level ≥ 1.) This is the
-   * intent half of the auto orb↔console rule.
+   * intent half of the auto orb↔console rule. While the agent's video presents
+   * in the hero, captions alone run over the video, so the overlay reports this
+   * only once the user asks for the conversation.
    */
   TextRevealed: boolean;
   /** Disclosure model says a transcript may be shown. */

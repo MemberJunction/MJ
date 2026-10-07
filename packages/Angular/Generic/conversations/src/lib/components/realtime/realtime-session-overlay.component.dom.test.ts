@@ -9,6 +9,7 @@ import {
   REALTIME_CAPTURE_OFFERS_NONE,
   ReadChannelSurfacePlacement,
   type ChannelSurfacePlacement,
+  type RealtimeCaption,
   type RealtimeCaptureOffers,
   type RealtimeCaptureState,
   type RealtimeCaptureStates,
@@ -73,10 +74,12 @@ function fakeSession() {
   const activity$ = new Subject<BaseRealtimeChannelClient>();
   const captures$ = new BehaviorSubject<RealtimeCaptureStates>(REALTIME_CAPTURES_OFF);
   const offers$ = new BehaviorSubject<RealtimeCaptureOffers>(REALTIME_CAPTURE_OFFERS_NONE);
+  /** The call's captions, as the runtime grows them. */
+  const captions$ = new BehaviorSubject<RealtimeCaption[]>([]);
   /** The capture calls the overlay made, in order. */
   const calls: string[] = [];
   const service = {
-    Captions$: EMPTY,
+    Captions$: captions$.asObservable(),
     DelegationProgress$: EMPTY,
     DelegationResult$: EMPTY,
     DelegationNarration$: EMPTY,
@@ -125,7 +128,7 @@ function fakeSession() {
     EndRealtimeSession: async (): Promise<void> => undefined,
     CancelDelegation: async (): Promise<boolean> => true,
   } satisfies Partial<RealtimeSessionService>;
-  return { service, channels$, focus$, activity$, captures$, offers$, calls };
+  return { service, channels$, focus$, activity$, captures$, offers$, captions$, calls };
 }
 
 /**
@@ -625,6 +628,63 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
       expect(f.componentInstance.PresenterOnStage).toBe(false);
       expect(query(f, '.hero__orb')).not.toBeNull();
       expect(savedLayouts.at(-1)).toBe('[{"SurfaceKey":"Avatar","Placement":"pip"}]');
+    });
+
+    describe('captions over the video', () => {
+      const caption = (f: Awaited<ReturnType<typeof renderWithAvatar>>['f']) => query(f, '.hero__caption')?.textContent?.replace(/\s+/g, ' ').trim();
+
+      it('keeps the hero with captions on, and runs the newest caption over the video, the user marked as you', async () => {
+        const { f, sendVideo, captions$ } = await renderWithAvatar('orb');
+        await sendVideo();
+        f.componentInstance.SetCaptions(true);
+        captions$.next([{ Role: 'Assistant', Text: 'Hello there.' }]);
+        await settle();
+        expect(query(f, 'mj-realtime-session-thread')).toBeNull();
+        expect(query(f, '.hero__presenter--on .hero__caption')).not.toBeNull();
+        expect(caption(f)).toBe('Hello there.');
+        expect(query(f, '.hero__caption')?.getAttribute('aria-hidden')).toBe('true');
+        captions$.next([{ Role: 'Assistant', Text: 'Hello there.' }, { Role: 'User', Text: 'Hi Sage' }]);
+        await settle();
+        expect(caption(f)).toBe('You: Hi Sage');
+      });
+
+      it('opens the conversation from "Show the conversation", and runs captions alone again once they are turned off and on', async () => {
+        const { f, sendVideo, captions$ } = await renderWithAvatar('orb');
+        await sendVideo();
+        captions$.next([{ Role: 'Assistant', Text: 'Hello there.' }]);
+        (query(f, '.hero__reveal') as HTMLButtonElement).click();
+        await settle();
+        expect(query(f, 'mj-realtime-session-thread')).not.toBeNull();
+        expect(query(f, '.hero__caption')).toBeNull();
+        f.componentInstance.SetCaptions(false);
+        await settle();
+        expect(query(f, '.hero')).not.toBeNull();
+        expect(query(f, '.hero__caption')).toBeNull();
+        f.componentInstance.SetCaptions(true);
+        await settle();
+        expect(query(f, 'mj-realtime-session-thread')).toBeNull();
+        expect(caption(f)).toBe('Hello there.');
+      });
+
+      it('opens the conversation with captions on while no video presents, as before', async () => {
+        const { f, captions$ } = await renderWithAvatar('orb');
+        captions$.next([{ Role: 'Assistant', Text: 'Hello there.' }]);
+        f.componentInstance.SetCaptions(true);
+        await settle();
+        expect(query(f, 'mj-realtime-session-thread')).not.toBeNull();
+        expect(query(f, '.hero__caption')).toBeNull();
+      });
+
+      it('opens the conversation once the video leaves the hero', async () => {
+        const { f, sendVideo, captions$ } = await renderWithAvatar('orb');
+        await sendVideo();
+        captions$.next([{ Role: 'Assistant', Text: 'Hello there.' }]);
+        f.componentInstance.SetCaptions(true);
+        await settle();
+        await pick(f, '.stage-presenter-move', 'Picture-in-picture');
+        expect(query(f, 'mj-realtime-session-thread')).not.toBeNull();
+        expect(query(f, '.hero__caption')).toBeNull();
+      });
     });
 
     it('gives the stage to a whiteboard moved there, and the avatar goes to picture-in-picture', async () => {

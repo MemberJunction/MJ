@@ -83,6 +83,12 @@ export interface RealtimeStartLiveRequest {
   LastSessionId: string;
 }
 
+/** A caption as it runs over the agent's video: who said it (`null` for the agent, whose video it is) and what. */
+export interface RealtimeAvatarCaption {
+  Speaker: string | null;
+  Text: string;
+}
+
 
 /**
  * The "call mode" overlay for a live real-time voice session. Hosted by the
@@ -539,6 +545,13 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
    */
   public ShowCaptions = false;
 
+  /**
+   * Whether the user asked for the conversation itself (the hero's "Show the conversation", {@link RevealText}), not only
+   * captions. While the agent's video presents in the hero, captions alone keep the hero and run over the video; this
+   * opens the thread. Cleared when captions turn off.
+   */
+  private conversationShown = false;
+
   /** UserInfoEngine key for the persisted captions (text-vs-orb) preference. */
   private static readonly captionsPrefKey = 'mj.realtimeVoice.captions.v1';
 
@@ -636,6 +649,23 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
    */
   public get PresenterOnStage(): boolean {
     return this.StagePlugin?.ShowsAgentVideo ?? false;
+  }
+
+  /** Whether captions run over the agent's video: they are on, and the video presents in the hero. */
+  public get ShowAvatarCaptions(): boolean {
+    return this.ShowCaptions && this.ShowHero && this.PresenterOnStage;
+  }
+
+  /** The newest caption, as the captions over the agent's video show it: the user's is marked "You". `null` before any. */
+  public get AvatarCaption(): RealtimeAvatarCaption | null {
+    const items = this.State.Items;
+    for (let i = items.length - 1; i >= 0; i--) {
+      const item = items[i];
+      if (item.Kind === 'caption') {
+        return { Speaker: item.Role === 'User' ? 'You' : null, Text: item.Text };
+      }
+    }
+    return null;
   }
 
   /** The agent's place in the call, as last reported to the stage, or `null` while the call shows none. */
@@ -880,7 +910,9 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
       // (the captions toggle, the hero's "Show the conversation", RevealText(), and SetCaptions()
       // all route through ShowCaptions). NOT the disclosure ratchet: a power user still opens to
       // the calm orb until they ask for text, matching the historical ShowHero = !ShowCaptions.
-      TextRevealed: this.ShowCaptions,
+      // While the agent's video presents, captions alone keep the hero (they run over the video);
+      // only asking for the conversation opens the thread.
+      TextRevealed: this.ShowCaptions && (this.conversationShown || !this.PresenterOnStage),
       DisclosureShowThread: disclosure.ShowThread,
       DisclosureShowComposer: disclosure.ShowComposer,
       DisclosureShowPanel: disclosure.ShowPanel,
@@ -1426,8 +1458,9 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     this.recomputeUi();
   }
 
-  /** The hero's "Show the conversation" affordance — turns the text preference on. */
+  /** The hero's "Show the conversation" affordance — turns the text preference on, and opens the thread even over the agent's video. */
   public OnTextReveal(): void {
+    this.conversationShown = true;
     this.OnCaptionsToggled(true);
     this.TextRevealed.emit();
     this.ControlInvoked.emit('reveal-text');
@@ -1730,6 +1763,8 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     this.ShowCaptions = on;
     if (on) {
       this.Disclosure.Raise('text'); // emits Changed$ → recomputeUi()
+    } else {
+      this.conversationShown = false;
     }
     this.persistCaptionsPref();
     this.ControlInvoked.emit('captions');

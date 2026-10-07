@@ -126,11 +126,53 @@
 }
 .hero__presenter--on {
   display: block;
+  position: relative;
+  container-type: size;
   flex: 1 1 auto;
   min-height: 160px;
   max-height: 520px;
   aspect-ratio: 3 / 4;
   margin-bottom: 8px;
+}
+/* Captions over the agent's video, as subtitles: the newest two lines, over the lower third and clear of the tile's
+   footer. Above the stage (z-index 1), where the video is. Light on a dark band in both themes, like the tile's chips. */
+.hero__caption {
+  position: absolute;
+  left: 6%;
+  right: 6%;
+  bottom: 16%;
+  z-index: 2;
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: var(--mj-radius-md);
+  background: rgba(0, 0, 0, 0.6);
+  color: rgba(255, 255, 255, 0.95);
+  font-size: 0.95rem;
+  line-height: 1.4;
+  text-align: center;
+}
+/* Two lines, the newest: older ones leave through the top. The window clips, not the padded band, so nothing of an
+   older line shows in the padding. */
+.hero__caption-window {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  max-height: 2.8em;
+  overflow: hidden;
+}
+.hero__caption-speaker {
+  font-weight: 600;
+}
+/* A small tile (a short window): one smaller line, so the video still shows. */
+@container (max-height: 240px) {
+  .hero__caption {
+    bottom: 22%;
+    padding: 3px 6px;
+    font-size: 0.75rem;
+  }
+  .hero__caption-window {
+    max-height: 1.4em;
+  }
 }
 /* In the console it sits above the scrolling thread, so it stays in view as the conversation grows. Wide enough for
    the tile's "AI-generated video" label on one line. */
