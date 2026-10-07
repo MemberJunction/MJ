@@ -1,4 +1,5 @@
 import { EntityFieldInfo, EntityFieldTSType, FormatDateOnly, IsDateOnlySQLType } from '@memberjunction/core';
+import { FormatBinaryChangeValue, IsBinaryChangeValue } from '@memberjunction/global';
 
 /** An instant: the moment it happened, in the reader's zone. */
 const TIMESTAMP_FORMAT: Intl.DateTimeFormatOptions = {
@@ -29,6 +30,12 @@ const DATE_ONLY_FORMAT: Intl.DateTimeFormatOptions = { month: 'short', day: 'num
  */
 export function FormatChangeValue(value: unknown, field: EntityFieldInfo | undefined): string {
   if (value == null) return '';
+
+  // A binary field holds base64 (an embedding, a file). Show its size, never the text: a snapshot
+  // value is formatted here; a diff value already arrives as the size text and is shown as-is.
+  if (field?.IsBinaryFieldType && typeof value === 'string') {
+    return IsBinaryChangeValue(value) ? value : FormatBinaryChangeValue(value);
+  }
 
   if (field?.TSType === EntityFieldTSType.Date && (value instanceof Date || typeof value === 'string')) {
     const date = value instanceof Date ? value : new Date(value);
@@ -63,6 +70,10 @@ export function FormatChangeValue(value: unknown, field: EntityFieldInfo | undef
  * @param field The field's metadata, when known
  */
 export function ChangeValuesMatch(a: unknown, b: unknown, field: EntityFieldInfo | undefined): boolean {
+  // Two binary values of the same size format identically, so compare the base64 itself.
+  if (field?.IsBinaryFieldType) {
+    return (a ?? '') === (b ?? '');
+  }
   if (field?.TSType === EntityFieldTSType.Date) {
     const left = asValidDate(a);
     const right = asValidDate(b);
