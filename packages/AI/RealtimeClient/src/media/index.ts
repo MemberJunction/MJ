@@ -1,7 +1,8 @@
 /**
  * @fileoverview The `@memberjunction/ai-realtime-client/media` entry point: the browser media code that
  * no provider driver sits behind (frame capture and sampling, display capture, the local camera and
- * microphone controller, the video source arbiter, frame pacing, the channel video bridge, the audio meter).
+ * microphone controller, the video source arbiter, frame pacing, the channel video bridge, the audio meter), and the
+ * media stage's layout model with the user's placement moves in their saved form.
  *
  * A consumer that only needs media, such as the LiveKit room, imports this entry and bundles no driver
  * and no `@google/genai`. Everything reachable from here may import only other `/media` modules,
@@ -16,6 +17,7 @@ export * from './frameCapture';
 export * from './frameSampler';
 export * from './localMediaController';
 export * from './mediaStage';
+export * from './mediaLayout';
 export * from './model';
 export * from './channelVideoSource';
 export * from './displayCapture';

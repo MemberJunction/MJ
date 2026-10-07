@@ -15,6 +15,9 @@
  * - A participant already shown through a surface on the stage or in a PiP (the avatar, the user's camera) is not
  *   repeated among the others, and one shown in a PiP does not take the spotlight: the next in line does.
  *
+ * A host that lets the user move participants' tiles passes each as a surface ({@link ParticipantTileSurface}), as the
+ * meeting room does; a host with channel surfaces passes those, as the realtime call does.
+ *
  * @module @memberjunction/ai-realtime-client/media
  */
 
@@ -54,6 +57,33 @@ export interface MediaStageLayout {
     Others: readonly MediaParticipant[];
     /** The screen being shared and the current speaker, for a split view; null when nobody is sharing. */
     Split: { Sharer: MediaParticipant; Speaker: MediaParticipant | null } | null;
+}
+
+/** The key a participant's tile is moved under, so it never collides with a channel's surface key. */
+export function ParticipantTileKey(identity: string): string {
+    return `participant:${identity}`;
+}
+
+/**
+ * A participant's tile as a surface the user can move: among the others (`tab`, a filmstrip or grid) until moved,
+ * showing the participant's camera, within the places the host offers (every placement when it names none).
+ */
+export function ParticipantTileSurface(participant: MediaParticipant, allowed?: readonly MediaPlacement[]): MediaSurface {
+    return {
+        Key: ParticipantTileKey(participant.Identity),
+        Label: participant.DisplayName,
+        DefaultPlacement: 'tab',
+        ...(allowed ? { AllowedPlacements: allowed } : {}),
+        Video: { ParticipantIdentity: participant.Identity, Kind: 'camera' },
+    };
+}
+
+/** Who fills the stage: the participant a surface on it shows (a tile moved there, an avatar), else the spotlight participant. */
+export function StageParticipantIdentity(stage: MediaTile | null): string | null {
+    if (stage?.Kind === 'surface') {
+        return stage.Surface.Video?.ParticipantIdentity ?? null;
+    }
+    return stage?.Participant.Identity ?? null;
 }
 
 /** Lays out the stage. Pure: the same input always gives the same layout. */

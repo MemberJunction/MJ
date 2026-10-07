@@ -9,7 +9,7 @@ import {
   type MediaStagePipRectChange,
   type MediaStageSurface,
 } from './media-stage.component';
-import type { MediaPipRect } from '../pip-geometry';
+import type { MediaPipRect } from '@memberjunction/ai-realtime-client/media';
 
 /**
  * A surface's content: records each creation and destruction, so a test can tell a move from a re-creation, and the

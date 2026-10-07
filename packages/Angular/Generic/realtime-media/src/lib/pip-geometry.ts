@@ -1,8 +1,10 @@
 /**
  * Framework-free geometry for picture-in-picture boxes on `mj-media-stage`: where a box goes before the user moves it,
  * how a drag or a resize changes it, and how it is kept inside the stage. Boxes are pixels relative to the stage; a
- * saved box is fractions of the stage ({@link MediaPipRect}), so a layout survives a resized window.
+ * saved box is fractions of the stage (`MediaPipRect`, from `@memberjunction/ai-realtime-client/media`, which also
+ * reads and writes a host's saved boxes), so a layout survives a resized window.
  */
+import type { MediaPipRect } from '@memberjunction/ai-realtime-client/media';
 
 /** A box in pixels, relative to the stage's top-left corner. */
 export interface MediaStageBox {
@@ -10,14 +12,6 @@ export interface MediaStageBox {
   Top: number;
   Width: number;
   Height: number;
-}
-
-/** A picture-in-picture box as fractions of the stage (0 to 1): what a host saves. */
-export interface MediaPipRect {
-  X: number;
-  Y: number;
-  W: number;
-  H: number;
 }
 
 /** The stage's size in pixels. */
@@ -101,6 +95,7 @@ export function PipRectToBox(rect: MediaPipRect, stage: MediaStageSize): MediaSt
   };
   return ClampPipBox(box, stage);
 }
+
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), Math.max(min, max));

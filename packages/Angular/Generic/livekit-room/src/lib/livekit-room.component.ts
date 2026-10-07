@@ -52,9 +52,14 @@ import {
 } from '@memberjunction/ng-realtime-media';
 import {
   LayoutMediaStage,
+  ParticipantTileKey,
+  ParticipantTileSurface,
+  RecordPlacementMove,
   SelectDisplayParticipants,
   SelectScreenSharer,
   SelectSplitSpeaker,
+  StageParticipantIdentity,
+  WithoutStageMoves,
   type DisplayCaptureSurface,
   type MediaDevice,
   type MediaDeviceSelection,
@@ -63,7 +68,6 @@ import {
   type MediaPlacementMove,
   type MediaStageLayout,
   type MediaSurface,
-  type MediaTile,
   type MediaVideoSource,
 } from '@memberjunction/ai-realtime-client/media';
 import { LiveKitControlBarComponent } from './components/livekit-control-bar.component';
@@ -371,13 +375,13 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
    */
   public get PinnedIdentity(): string | null {
     const spotlight = this.stage.Layout.Stage;
-    return spotlight?.Kind === 'surface' ? (spotlight.Surface.Video?.ParticipantIdentity ?? null) : null;
+    return spotlight?.Kind === 'surface' ? StageParticipantIdentity(spotlight) : null;
   }
   public set PinnedIdentity(identity: string | null) {
     if (identity) {
       this.recordTileMove(identity, 'stage');
     } else {
-      this.tileMoves = withoutPin(this.tileMoves);
+      this.tileMoves = WithoutStageMoves(this.tileMoves);
     }
   }
 
@@ -698,8 +702,8 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
    * so a later unpin gives the spotlight back to the call, not to an earlier pin.
    */
   private recordTileMove(identity: string, placement: MediaPlacement): void {
-    const kept = placement === 'stage' ? withoutPin(this.tileMoves) : this.tileMoves;
-    this.tileMoves = withTileMove(kept, identity, placement);
+    const kept = placement === 'stage' ? WithoutStageMoves(this.tileMoves) : this.tileMoves;
+    this.tileMoves = RecordPlacementMove(kept, { SurfaceKey: ParticipantTileKey(identity), Placement: placement });
   }
 
   /** @deprecated Use {@link OnTogglePin}. */
@@ -832,7 +836,7 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
   /** The participant featured in spotlight layout (pinned → active speaker → agent → first remote → local). */
   public get SpotlightParticipant(): LiveKitParticipantView | null {
     const stage = this.stage;
-    const identity = identityOnStage(stage.Layout.Stage);
+    const identity = StageParticipantIdentity(stage.Layout.Stage);
     return identity ? stage.ViewOf(identity) : null;
   }
 
@@ -883,7 +887,7 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
     if (memo && memo.State === this.State && memo.Moves === moves && memo.Pinning === pinning && memo.ShowSelf === showSelf) {
       return memo.Stage;
     }
-    const counted = pinning ? moves : withoutPin(moves);
+    const counted = pinning ? moves : WithoutStageMoves(moves);
     const stage = layOutRoom(this.State, (view) => this.MediaParticipantFor(view), counted, showSelf);
     this.stageMemo = { State: this.State, Moves: moves, Pinning: pinning, ShowSelf: showSelf, Stage: stage };
     return stage;
@@ -1080,7 +1084,10 @@ interface RoomStage {
   ViewOf(identity: string): LiveKitParticipantView;
 }
 
-/** Where a participant's tile is when nobody moved it: among the others, in the filmstrip or the grid. */
+/**
+ * Where a participant's tile is when nobody moved it: among the others, in the filmstrip or the grid. It is the default
+ * placement `ParticipantTileSurface` gives every tile.
+ */
 const ROOM_STRIP: MediaPlacement = 'tab';
 
 /** Where the user may move a participant's tile: the spotlight, back among the others, or a picture-in-picture box. */
@@ -1097,40 +1104,6 @@ const UNPINNED_CALLS_PICK_MOVES: readonly MediaPlacement[] = ['pip'];
 const GALLERY_LABELS: Partial<Readonly<Record<MediaPlacement, string>>> = { stage: 'Spotlight', [ROOM_STRIP]: 'Gallery' };
 const FILMSTRIP_LABELS: Partial<Readonly<Record<MediaPlacement, string>>> = { stage: 'Spotlight', [ROOM_STRIP]: 'Filmstrip' };
 
-/** The key a participant's tile is moved under. */
-function tileKey(identity: string): string {
-  return `participant:${identity}`;
-}
-
-/** The moves without a move to the spotlight: the pinned tile, if any, goes back to the strip. */
-function withoutPin(moves: readonly MediaPlacementMove[]): MediaPlacementMove[] {
-  return moves.filter((m) => m.Placement !== 'stage');
-}
-
-/** The moves with a tile's move replacing its earlier one, as the newest. */
-function withTileMove(moves: readonly MediaPlacementMove[], identity: string, placement: MediaPlacement): MediaPlacementMove[] {
-  const key = tileKey(identity);
-  return [...moves.filter((m) => m.SurfaceKey !== key), { SurfaceKey: key, Placement: placement }];
-}
-
-/** Who fills the stage: the participant whose tile was moved there, else the spotlight participant. */
-function identityOnStage(tile: MediaTile | null): string | null {
-  if (tile?.Kind === 'surface') {
-    return tile.Surface.Video?.ParticipantIdentity ?? null;
-  }
-  return tile?.Participant.Identity ?? null;
-}
-
-/** A participant's tile, as a surface of the shared media stage. */
-function tileSurface(view: LiveKitParticipantView): MediaSurface {
-  return {
-    Key: tileKey(view.Identity),
-    Label: view.DisplayName,
-    DefaultPlacement: ROOM_STRIP,
-    Video: { ParticipantIdentity: view.Identity, Kind: 'camera' },
-  };
-}
-
 /** Lays out a room's participants with the shared media stage, their tiles where the user moved them. */
 function layOutRoom(
   state: LiveKitRoomState,
@@ -1146,7 +1119,7 @@ function layOutRoom(
     Participants: participants,
     ActiveSpeakers: activeSpeakers,
     // The user's own tile is no surface while their self-view is off, so it cannot stay in a box.
-    Surfaces: views.filter((view) => showSelf || !view.IsLocal).map(tileSurface),
+    Surfaces: participants.filter((p) => showSelf || p.Role !== 'self').map((p) => ParticipantTileSurface(p)),
     Moves: moves,
     ShowSelfView: showSelf,
   });

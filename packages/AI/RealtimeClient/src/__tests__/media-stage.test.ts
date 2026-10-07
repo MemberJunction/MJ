@@ -1,12 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import {
     LayoutMediaStage,
+    ParticipantTileKey,
+    ParticipantTileSurface,
     PlacementOffStage,
     ResolveSurfacePlacements,
     SelectDisplayParticipants,
     SelectScreenSharer,
     SelectSplitSpeaker,
     SelectSpotlight,
+    StageParticipantIdentity,
 } from '../media/mediaStage';
 import type { MediaParticipant, MediaPlacementMove, MediaSurface, MediaVideoSource } from '../media/model';
 
@@ -213,6 +216,36 @@ describe('surface placement', () => {
         expect(layout.Stage).toEqual({ Kind: 'participant', Participant: expect.objectContaining({ Identity: 'guest' }) });
         expect(keys(layout.Pips)).toEqual(['bot-box']);
         expect(ids(layout.Others)).toEqual(['me']);
+    });
+
+    describe("participants' tiles as surfaces", () => {
+        const ada = person('ada', { DisplayName: 'Ada Lovelace' });
+
+        it('a tile is keyed apart from channel surfaces, starts among the others and shows the camera', () => {
+            expect(ParticipantTileSurface(ada)).toEqual({
+                Key: 'participant:ada',
+                Label: 'Ada Lovelace',
+                DefaultPlacement: 'tab',
+                Video: { ParticipantIdentity: 'ada', Kind: 'camera' },
+            });
+            expect(ParticipantTileKey('ada')).toBe('participant:ada');
+        });
+
+        it('a tile goes only where the host offers', () => {
+            const tile = ParticipantTileSurface(ada, ['stage', 'tab']);
+            expect(tile.AllowedPlacements).toEqual(['stage', 'tab']);
+            expect(ResolveSurfacePlacements([tile], [moved('participant:ada', 'pip')]).Pips).toEqual([]);
+        });
+
+        it('names who fills the stage: the participant a surface there shows, else the spotlight participant', () => {
+            const tiles = [ME, ada, person('bot', { Role: 'agent' })].map((p) => ParticipantTileSurface(p));
+            const withMove = LayoutMediaStage({ Participants: [ME, ada, person('bot', { Role: 'agent' })], Surfaces: tiles, Moves: [moved('participant:ada', 'stage')] });
+            expect(StageParticipantIdentity(withMove.Stage)).toBe('ada');
+            const unmoved = LayoutMediaStage({ Participants: [ME, ada, person('bot', { Role: 'agent' })], Surfaces: tiles });
+            expect(StageParticipantIdentity(unmoved.Stage)).toBe('bot');
+            expect(StageParticipantIdentity(null)).toBeNull();
+            expect(StageParticipantIdentity({ Kind: 'surface', Surface: surface('whiteboard', 'stage') })).toBeNull();
+        });
     });
 
     it('reports a split while someone shares a screen', () => {

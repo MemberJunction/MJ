@@ -151,3 +151,11 @@ export interface MediaPlacementMove {
     SurfaceKey: string;
     Placement: MediaPlacement;
 }
+
+/** A picture-in-picture box as fractions of the stage (0 to 1), so it survives a resized window: what a host saves. */
+export interface MediaPipRect {
+    X: number;
+    Y: number;
+    W: number;
+    H: number;
+}

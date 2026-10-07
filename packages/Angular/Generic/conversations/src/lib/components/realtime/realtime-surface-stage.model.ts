@@ -1,7 +1,6 @@
-import { PlacementOffStage, ResolveSurfacePlacements, type MediaPlacementMove, type MediaSurface } from '@memberjunction/ai-realtime-client/media';
+import { PlacementOffStage, RecordPlacementMove, ResolveSurfacePlacements, type MediaPlacementMove, type MediaSurface } from '@memberjunction/ai-realtime-client/media';
 import type { MediaStagePlacement, MediaStageSurface } from '@memberjunction/ng-realtime-media';
 import type { BaseRealtimeChannelClient } from '@memberjunction/realtime-runtime';
-import { RecordSurfaceMove } from './realtime-surface-placement-prefs';
 
 /**
  * Which channel surfaces the call overlay's stage (`mj-media-stage`) holds, and where each one shows.
@@ -121,7 +120,7 @@ export class RealtimeSurfaceStageModel {
     if (!this.AllowedFor(key).includes(placement) || this.placements.get(key) === placement) {
       return false;
     }
-    this.moves = RecordSurfaceMove(this.moves, { SurfaceKey: key, Placement: placement });
+    this.moves = RecordPlacementMove(this.moves, { SurfaceKey: key, Placement: placement });
     this.update();
     return true;
   }

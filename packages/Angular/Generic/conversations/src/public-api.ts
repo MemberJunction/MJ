@@ -152,7 +152,6 @@ export * from './lib/components/realtime/realtime-activity-rail.component';
 export * from './lib/components/realtime/realtime-surface-tabs.component';
 export * from './lib/components/realtime/realtime-surface-tabs.model';
 export * from './lib/components/realtime/realtime-surface-stage.model';
-export * from './lib/components/realtime/realtime-surface-move-menu.component';
 export * from './lib/components/realtime/realtime-surface-placement-prefs';
 export * from './lib/components/realtime/realtime-surface-panel-prefs';
 export * from './lib/components/realtime/realtime-disclosure';

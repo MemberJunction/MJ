@@ -28,10 +28,7 @@ import { RealtimeSurfaceTabsComponent, RealtimeChannelSlot } from './realtime-su
 import { RealtimeSurfaceStageModel } from './realtime-surface-stage.model';
 import { AgentOrbStateFor, RealtimeAgentOrbComponent, type RealtimeAgentOrbState } from './realtime-agent-orb.component';
 import { RealtimeCameraCheckCardComponent } from './capture/realtime-camera-check-card.component';
-import {
-  ParseSurfacePipPref, ParseSurfacePlacementPref, SerializeSurfacePipPref, SerializeSurfacePlacementPref,
-  SURFACE_PIP_PREF_KEY, SURFACE_PLACEMENT_PREF_KEY
-} from './realtime-surface-placement-prefs';
+import { SURFACE_PIP_PREF_KEY, SURFACE_PLACEMENT_PREF_KEY } from './realtime-surface-placement-prefs';
 import { RealtimeChannelPaneComponent } from './channels/realtime-channel-pane.component';
 import {
   ClampSurfacePanelWidth, DefaultSurfacePanelWidth, IsSurfacePanelDrag, ParseSurfacePanelPref,
@@ -51,8 +48,11 @@ import { BaseRealtimeChannelClient } from '@memberjunction/realtime-runtime';
 import { RealtimeWhiteboardBoardComponent, WhiteboardState } from '@memberjunction/ng-whiteboard';
 import {
   MediaMoveMenuComponent, MediaStageComponent, MediaStagePipActionsDirective, MediaStageSurfaceDirective,
-  type MediaMoveRequest, type MediaPipRect, type MediaShareRequest, type MediaStagePipRectChange
+  type MediaMoveRequest, type MediaShareRequest, type MediaStagePipRectChange
 } from '@memberjunction/ng-realtime-media';
+import {
+  ParsePipRects, ParsePlacementMoves, SerializePipRects, SerializePlacementMoves, type MediaPipRect
+} from '@memberjunction/ai-realtime-client/media';
 
 /**
  * A request to open an entity record, emitted by the call overlay's gear-gated developer
@@ -1692,8 +1692,8 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   /** Starts from the user's saved layout and picture-in-picture boxes (no-op when the engine isn't configured). */
   private loadPlacementPref(): void {
     try {
-      this.SurfaceStage.LoadMoves(ParseSurfacePlacementPref(UserInfoEngine.Instance.GetSetting(SURFACE_PLACEMENT_PREF_KEY)));
-      this.PipRects = ParseSurfacePipPref(UserInfoEngine.Instance.GetSetting(SURFACE_PIP_PREF_KEY));
+      this.SurfaceStage.LoadMoves(ParsePlacementMoves(UserInfoEngine.Instance.GetSetting(SURFACE_PLACEMENT_PREF_KEY)));
+      this.PipRects = ParsePipRects(UserInfoEngine.Instance.GetSetting(SURFACE_PIP_PREF_KEY));
     } catch {
       // UserInfoEngine not configured (plain-node tests / early bootstrap): every surface starts on its tab.
     }
@@ -1702,7 +1702,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   /** Saves the picture-in-picture boxes, debounced (no-op when the engine isn't configured). */
   private savePipPref(): void {
     try {
-      UserInfoEngine.Instance.SetSettingDebounced(SURFACE_PIP_PREF_KEY, SerializeSurfacePipPref(this.PipRects));
+      UserInfoEngine.Instance.SetSettingDebounced(SURFACE_PIP_PREF_KEY, SerializePipRects(this.PipRects));
     } catch {
       // UserInfoEngine not configured: the boxes stay where they are for this overlay only.
     }
@@ -1711,7 +1711,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   /** Saves the layout, debounced (no-op when the engine isn't configured). */
   private savePlacementPref(): void {
     try {
-      UserInfoEngine.Instance.SetSettingDebounced(SURFACE_PLACEMENT_PREF_KEY, SerializeSurfacePlacementPref(this.SurfaceStage.Moves));
+      UserInfoEngine.Instance.SetSettingDebounced(SURFACE_PLACEMENT_PREF_KEY, SerializePlacementMoves(this.SurfaceStage.Moves));
     } catch {
       // UserInfoEngine not configured: the layout lasts for this overlay only.
     }

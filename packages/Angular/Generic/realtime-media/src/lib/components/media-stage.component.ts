@@ -15,7 +15,7 @@ import {
   inject,
 } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
-import type { MediaPlacement } from '@memberjunction/ai-realtime-client/media';
+import type { MediaPipRect, MediaPlacement } from '@memberjunction/ai-realtime-client/media';
 import {
   DefaultPipBox,
   MovePipBox,
@@ -23,7 +23,6 @@ import {
   PipRectToBox,
   ResizePipBox,
   PIP_KEY_STEP,
-  type MediaPipRect,
   type MediaStageBox,
   type MediaStageSize,
 } from '../pip-geometry';
