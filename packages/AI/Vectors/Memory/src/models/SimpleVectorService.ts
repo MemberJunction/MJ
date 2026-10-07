@@ -1,9 +1,84 @@
 import { LogError } from '@memberjunction/core';
+import {
+  CosineFromNorms,
+  DistanceMetric,
+  DotProductScore,
+  EuclideanScore,
+  HammingScore,
+  IsKnownMetric,
+  JaccardScore,
+  ManhattanScore,
+  MetricScore,
+  NumericVector,
+  ScoredRows,
+  SearchRows,
+  SumOfSquares,
+  VectorArray,
+  VectorRowsView,
+  VectorSearchSpec,
+} from './VectorKernels';
+import { VectorPrecision, VectorStore } from './VectorStore';
+import {
+  BaseVectorAccelerator,
+  VectorAcceleratorResolver,
+  VectorClusterJob,
+  VectorClusterJobResult,
+  VectorSearchJob,
+} from './VectorAccelerator';
+
+// Kept exported from this module too: callers have long imported it from here.
+export type { DistanceMetric } from './VectorKernels';
 
 /**
- * Supported distance/similarity metrics for vector operations
+ * Construction options for {@link SimpleVectorService}.
  */
-export type DistanceMetric = 'cosine' | 'euclidean' | 'manhattan' | 'dotproduct' | 'jaccard' | 'hamming';
+export interface SimpleVectorServiceOptions {
+  /**
+   * Element precision of the packed store. `'float64'` (the default) keeps
+   * every value and score exactly as given. `'float32'` halves memory and is
+   * the right choice for model embeddings, which are float32 at the source;
+   * scores then differ from float64 only in the 7th significant digit.
+   */
+  Precision?: VectorPrecision;
+  /**
+   * Accelerator to use instead of the process-wide one resolved through the
+   * ClassFactory. Mainly for tests and for callers that must stay in-process.
+   */
+  Accelerator?: BaseVectorAccelerator;
+}
+
+/** A validated search, ready for the kernel or an accelerator. */
+interface SearchPlan<TMetadata> {
+  Mode: 'kernel' | 'custom';
+  QueryVector: number[];
+  /** The caller's topK, applied with `Array.slice` semantics */
+  TopK: number;
+  Metric: DistanceMetric;
+  Threshold: number | null;
+  Filter: ((metadata: TMetadata) => boolean) | undefined;
+  /** Row→key mapping when the job was dispatched (survives compaction) */
+  KeysAtDispatch: ReadonlyArray<string | null>;
+  VersionAtDispatch: number;
+  Job: VectorSearchJob;
+}
+
+interface RankedHit {
+  Row: number;
+  Score: number;
+}
+
+/** A K-Means centroid with its cached sum of squares. */
+interface Centroid {
+  Values: Float64Array;
+  NormSq: number;
+}
+
+/** Scoring closures bound to one metric and one store view. */
+interface MetricScorer {
+  RowVsCentroid(row: number, centroid: Centroid): number;
+  RowVsRow(a: number, b: number): number;
+  EuclideanBetween(a: Centroid, b: Centroid): number;
+}
 
 /**
  * Result of clustering operations
@@ -31,6 +106,26 @@ export interface ClusterResult<TMetadata = Record<string, unknown>> {
 /**
  * Represents a vector entry with a unique key and associated embedding
  */
+/**
+ * The values of a vector supplied to the service. A typed array is copied into the store just like
+ * a `number[]` — passing the `Float32Array` that `Base64ToFloat32Vector` (from
+ * `@memberjunction/global`) decodes from a binary embedding column avoids building an intermediate
+ * `number[]`.
+ */
+export type VectorValues = number[] | Float32Array | Float64Array;
+
+/**
+ * A vector to load into the service: like {@link VectorEntry}, but the values may be a typed array.
+ */
+export interface VectorInputEntry<TMetadata = Record<string, unknown>> {
+  /** User-defined unique identifier for the vector */
+  key: string;
+  /** The embedding values; copied into the store */
+  vector: VectorValues;
+  /** Optional metadata associated with the vector */
+  metadata?: TMetadata;
+}
+
 export interface VectorEntry<TMetadata = Record<string, unknown>> {
   /** User-defined unique identifier for the vector */
   key: string;
@@ -76,14 +171,77 @@ export interface VectorSearchResult<TMetadata = Record<string, unknown>> {
  * @public
  */
 export class SimpleVectorService<TMetadata = Record<string, unknown>> {
-  private vectors: Map<string, VectorEntry<TMetadata>> = new Map();
+  private store: VectorStore<TMetadata>;
   private expectedDimensions: number | null = null;
-  
+  private readonly explicitAccelerator: BaseVectorAccelerator | undefined;
+
+  /**
+   * @param {SimpleVectorServiceOptions} [options] - Storage precision and an optional explicit accelerator
+   */
+  constructor(options?: SimpleVectorServiceOptions) {
+    this.explicitAccelerator = options?.Accelerator;
+    // Resolve the allocator lazily: buffers are allocated on first write, by
+    // which time a server package may have registered a shared-memory accelerator.
+    this.store = new VectorStore<TMetadata>(options?.Precision ?? 'float64', (bytes) => this.accelerator.AllocateBuffer(bytes));
+  }
+
+  /**
+   * Builds a read-only service over packed rows produced elsewhere — typically
+   * shared memory a worker thread received. Each row in `candidates` (or every
+   * live row) is keyed by `String(row)`, so results map straight back to rows.
+   */
+  public static FromRowsView<T = Record<string, unknown>>(
+    view: VectorRowsView,
+    precision: VectorPrecision,
+    candidates: Int32Array | null
+  ): SimpleVectorService<T> {
+    const service = new SimpleVectorService<T>({ Precision: precision, Accelerator: new BaseVectorAccelerator() });
+    service.store = VectorStore.Adopt<T>(view, precision, candidates);
+    service.expectedDimensions = view.Dims > 0 ? view.Dims : null;
+    return service;
+  }
+
+  /**
+   * Runs a clustering job in-process and returns it in rows. This is what a
+   * worker thread calls; it reuses the exact clustering code the service runs
+   * on the calling thread.
+   */
+  public static RunClusterJob(job: VectorClusterJob): VectorClusterJobResult {
+    const service = SimpleVectorService.FromRowsView(job.Snapshot, job.Snapshot.Precision, job.Candidates);
+    const result = job.Algorithm === 'kmeans'
+      ? service.KMeansCluster(job.K ?? 1, job.MaxIterations ?? 100, job.Metric, job.Tolerance ?? 0.0001)
+      : service.DBSCANCluster(job.Epsilon ?? 0.1, job.MinPoints ?? 1, job.Metric);
+    return SimpleVectorService.clusterResultToRows(result);
+  }
+
+  /** Process-unique identity of this service's storage, for diagnostics and accelerator caches. */
+  public get StoreID(): number {
+    return this.store.StoreID;
+  }
+
+  /** The storage precision chosen at construction. */
+  public get Precision(): VectorPrecision {
+    return this.store.Precision;
+  }
+
+  /**
+   * Pre-sizes storage for `additionalVectors` more vectors of `dimensions`
+   * each, so a loader adding rows one at a time allocates once instead of
+   * growing repeatedly. Optional; `LoadVectors` does this automatically.
+   *
+   * @throws {Error} If `dimensions` conflicts with vectors already loaded
+   */
+  public ReserveCapacity(additionalVectors: number, dimensions: number): void {
+    if (additionalVectors <= 0 || dimensions <= 0) return;
+    this.validateAndSetDimensionCount(dimensions);
+    this.store.Reserve(additionalVectors, dimensions);
+  }
+
   /**
    * Loads vectors into memory. Can accept either an array of VectorEntry objects
    * or a Map where keys are identifiers and values are vector arrays.
    * 
-   * @param {VectorEntry<TMetadata>[] | Map<string, number[]>} entries - The vectors to load
+   * @param {VectorInputEntry<TMetadata>[] | Map<string, VectorValues>} entries - The vectors to load; values may be `number[]` or a typed array
    * @throws {Error} If entries is null or undefined
    * 
    * @example
@@ -104,20 +262,28 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
    * @public
    * @method
    */
-  public LoadVectors(entries: VectorEntry<TMetadata>[] | Map<string, number[]>): void {
+  public LoadVectors(entries: VectorInputEntry<TMetadata>[] | Map<string, VectorValues>): void {
     if (!entries) {
       throw new Error('Entries cannot be null or undefined');
+    }
+
+    const incoming = entries instanceof Map ? entries.size : entries.length;
+    const firstVector = entries instanceof Map ? entries.values().next().value : entries[0]?.vector;
+    if (incoming > 0 && firstVector) {
+      // One allocation for the whole batch instead of repeated growth.
+      this.validateAndSetDimensions(firstVector);
+      this.store.Reserve(incoming, firstVector.length);
     }
 
     if (entries instanceof Map) {
       entries.forEach((vector, key) => {
         this.validateAndSetDimensions(vector);
-        this.vectors.set(key, { key, vector } as VectorEntry<TMetadata>);
+        this.store.SetMetadata(this.store.Write(key, vector), undefined);
       });
     } else {
       entries.forEach(entry => {
         this.validateAndSetDimensions(entry.vector);
-        this.vectors.set(entry.key, entry);
+        this.store.SetMetadata(this.store.Write(entry.key, entry.vector), entry.metadata);
       });
     }
   }
@@ -126,7 +292,7 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
    * Adds or updates a single vector in the service
    * 
    * @param {string} key - The unique identifier for the vector
-   * @param {number[]} vector - The vector/embedding array
+   * @param {VectorValues} vector - The vector/embedding values (`number[]` or a typed array; copied)
    * @param {TMetadata} metadata - Optional metadata to associate with the vector
    * @throws {Error} If key is null/undefined, or if vector is invalid
    * 
@@ -141,7 +307,7 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
    * @public
    * @method
    */
-  public AddVector(key: string, vector: number[], metadata?: TMetadata): void {
+  public AddVector(key: string, vector: VectorValues, metadata?: TMetadata): void {
     if (!key) {
       throw new Error('Key cannot be null or undefined');
     }
@@ -150,7 +316,7 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
     }
 
     this.validateAndSetDimensions(vector);
-    this.vectors.set(key, { key, vector, metadata });
+    this.store.SetMetadata(this.store.Write(key, vector), metadata);
   }
   
   /**
@@ -198,36 +364,205 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
     metric: DistanceMetric = 'cosine',
     filter?: (metadata: TMetadata) => boolean
   ): VectorSearchResult<TMetadata>[] {
+    const plan = this.planSearch(queryVector, topK, threshold, metric, filter);
+    if (!plan) return [];
+    if (plan.Mode === 'custom') return this.searchWithCustomMetric(plan);
+
+    const fast = this.accelerator.TrySearchSync(plan.Job);
+    if (fast) return this.finalizeSearch(plan, fast, true);
+    return this.finalizeSearch(plan, SearchRows(plan.Job.Snapshot, plan.Job), false);
+  }
+
+  /**
+   * Async form of {@link FindNearest} with identical arguments and results.
+   * Server hosts register an accelerator that runs large searches on a worker
+   * thread (and/or a native backend), so the calling thread — typically the
+   * one serving every other request — is not blocked by the scan. With no
+   * accelerator registered it runs in-process exactly like `FindNearest`.
+   *
+   * @public
+   * @method
+   */
+  public async FindNearestAsync(
+    queryVector: number[],
+    topK: number = 10,
+    threshold?: number,
+    metric: DistanceMetric = 'cosine',
+    filter?: (metadata: TMetadata) => boolean
+  ): Promise<VectorSearchResult<TMetadata>[]> {
+    const plan = this.planSearch(queryVector, topK, threshold, metric, filter);
+    if (!plan) return [];
+    if (plan.Mode === 'custom') return this.searchWithCustomMetric(plan);
+
+    const rows = await this.accelerator.SearchAsync(plan.Job);
+    return this.finalizeSearch(plan, rows, true);
+  }
+
+  /**
+   * Validates a search and turns it into a job over the packed store.
+   * Returns null when the search can only produce an empty result.
+   */
+  private planSearch(
+    queryVector: number[],
+    topK: number,
+    threshold: number | undefined,
+    metric: DistanceMetric,
+    filter: ((metadata: TMetadata) => boolean) | undefined
+  ): SearchPlan<TMetadata> | null {
     if (!queryVector || queryVector.length === 0) {
       throw new Error('Query vector cannot be null, undefined, or empty');
     }
+    const candidates = filter ? this.filterRows(filter) : null;
+    const candidateCount = candidates ? candidates.length : this.store.Size;
+    if (candidateCount === 0) return null;
+    const custom = this.usesCustomMetric;
+    // A bad metric or dimension count fails every row identically. The service
+    // has always logged and returned no results rather than thrown; keep that,
+    // but log once instead of once per row.
+    if (!custom && !IsKnownMetric(metric)) {
+      LogError(`Error calculating ${metric} similarity: Unknown distance metric: ${metric}`);
+      return null;
+    }
+    if (!custom && this.store.Dims !== queryVector.length) {
+      LogError(`Error calculating ${metric} similarity: Vectors must have same dimensions. Got ${queryVector.length} and ${this.store.Dims}`);
+      return null;
+    }
+    const k = Math.trunc(topK);
+    const bounded = k >= 1 && k < candidateCount;
+    const plan: SearchPlan<TMetadata> = {
+      Mode: custom ? 'custom' : 'kernel',
+      QueryVector: queryVector,
+      TopK: topK,
+      Metric: metric,
+      Threshold: threshold == null ? null : threshold,
+      Filter: filter,
+      KeysAtDispatch: this.store.Keys,
+      VersionAtDispatch: this.store.Version,
+      Job: this.buildSearchJob(queryVector, bounded ? k : null, threshold, metric, candidates),
+    };
+    return plan;
+  }
 
-    // Pre-filter vectors by metadata BEFORE similarity calculation
-    const candidateVectors = filter
-      ? Array.from(this.vectors.values()).filter(entry => entry.metadata && filter(entry.metadata))
-      : Array.from(this.vectors.values());
+  private buildSearchJob(
+    queryVector: number[],
+    topK: number | null,
+    threshold: number | undefined,
+    metric: DistanceMetric,
+    candidates: Int32Array | null
+  ): VectorSearchJob {
+    const query = this.store.ToStorePrecision(queryVector);
+    const spec: VectorSearchSpec = {
+      Query: query,
+      QueryNormSq: SumOfSquares(query, 0, query.length),
+      Candidates: candidates,
+      Metric: metric,
+      TopK: topK,
+      Threshold: threshold == null ? null : threshold,
+    };
+    return { ...spec, Snapshot: this.store.Snapshot(), Source: this.store };
+  }
 
-    // Calculate similarity ONLY for filtered candidates
-    const results = candidateVectors
-      .map(entry => {
-        try {
-          return {
-            key: entry.key,
-            score: this.CalculateDistance(queryVector, entry.vector, metric),
-            metadata: entry.metadata
-          };
-        } catch (error) {
-          // Log error and skip this entry
-          LogError(`Error calculating ${metric} similarity for key ${entry.key}: ${error}`);
-          return null;
+  /** Ascending live rows whose metadata passes the filter (rows without metadata never do). */
+  private filterRows(filter: (metadata: TMetadata) => boolean): Int32Array {
+    const rows: number[] = [];
+    const rowCount = this.store.RowCount;
+    for (let row = 0; row < rowCount; row++) {
+      if (!this.store.IsLive(row)) continue;
+      const metadata = this.store.MetadataAt(row);
+      if (metadata && filter(metadata)) rows.push(row);
+    }
+    return Int32Array.from(rows);
+  }
+
+  /**
+   * Turns ranked rows into results. When the rows came from somewhere other
+   * than an in-process scan of the current store (another thread, a native
+   * backend, an approximate index) they are re-scored against the live store,
+   * so a concurrent write or a lower-precision backend can never surface a
+   * wrong score. `topK` is applied with `Array.slice` semantics, as before.
+   */
+  private finalizeSearch(plan: SearchPlan<TMetadata>, ranked: ScoredRows, rescore: boolean): VectorSearchResult<TMetadata>[] {
+    const exact = !rescore && plan.VersionAtDispatch === this.store.Version;
+    const hits = exact ? this.hitsFromRows(ranked) : this.rescoreRows(plan, ranked);
+    return hits.slice(0, plan.TopK).map(hit => ({
+      key: this.store.KeyAt(hit.Row) as string,
+      score: hit.Score,
+      metadata: this.store.MetadataAt(hit.Row),
+    }));
+  }
+
+  private hitsFromRows(ranked: ScoredRows): RankedHit[] {
+    const hits: RankedHit[] = new Array(ranked.Rows.length);
+    for (let i = 0; i < ranked.Rows.length; i++) {
+      hits[i] = { Row: ranked.Rows[i], Score: ranked.Scores[i] };
+    }
+    return hits;
+  }
+
+  /** Maps rows from the dispatch-time snapshot to current rows and scores them exactly. */
+  private rescoreRows(plan: SearchPlan<TMetadata>, ranked: ScoredRows): RankedHit[] {
+    const job = plan.Job;
+    const view = this.store.View();
+    const seen = new Set<number>();
+    const hits: RankedHit[] = [];
+    for (let i = 0; i < ranked.Rows.length; i++) {
+      const key = plan.KeysAtDispatch[ranked.Rows[i]];
+      const row = key == null ? undefined : this.store.RowOf(key);
+      if (row === undefined || seen.has(row)) continue;
+      seen.add(row);
+      if (plan.Filter) {
+        const metadata = this.store.MetadataAt(row);
+        if (!metadata || !plan.Filter(metadata)) continue;
+      }
+      const score = MetricScore(job.Metric, job.Query, 0, job.QueryNormSq, view.Data, row * view.Dims, view.Norms[row], view.Dims);
+      if (score !== score) continue; // NaN
+      if (job.Threshold !== null && !(score >= job.Threshold)) continue;
+      hits.push({ Row: row, Score: score });
+    }
+    hits.sort((a, b) => (b.Score - a.Score) || (a.Row - b.Row));
+    return job.TopK === null ? hits : hits.slice(0, job.TopK);
+  }
+
+  /**
+   * Subclasses that override a metric method keep working: rank with their
+   * override, one row at a time, exactly as the service did before packing.
+   */
+  private searchWithCustomMetric(plan: SearchPlan<TMetadata>): VectorSearchResult<TMetadata>[] {
+    const rows = plan.Job.Candidates ?? this.store.LiveRows();
+    const results: VectorSearchResult<TMetadata>[] = [];
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const key = this.store.KeyAt(row) as string;
+      try {
+        const score = this.CalculateDistance(plan.QueryVector, this.store.ReadRow(row), plan.Metric);
+        if (plan.Threshold === null || score >= plan.Threshold) {
+          results.push({ key, score, metadata: this.store.MetadataAt(row) });
         }
-      })
-      .filter(result => result !== null)
-      .filter(result => threshold == null || result!.score >= threshold)
-      .sort((a, b) => b!.score - a!.score)
-      .slice(0, topK) as VectorSearchResult<TMetadata>[];
+      } catch (error) {
+        LogError(`Error calculating ${plan.Metric} similarity for key ${key}: ${error}`);
+      }
+    }
+    return results.sort((a, b) => b.score - a.score).slice(0, plan.TopK);
+  }
 
-    return results;
+  /** The accelerator this service uses: the explicit one, else the process-wide registration. */
+  private get accelerator(): BaseVectorAccelerator {
+    return this.explicitAccelerator ?? VectorAcceleratorResolver.Instance.Current;
+  }
+
+  /**
+   * True when a subclass overrides any metric method. The packed kernels
+   * cannot call an override, so such subclasses are scored row by row.
+   */
+  private get usesCustomMetric(): boolean {
+    const base = SimpleVectorService.prototype;
+    return this.CalculateDistance !== base.CalculateDistance
+      || this.CosineSimilarity !== base.CosineSimilarity
+      || this.EuclideanDistance !== base.EuclideanDistance
+      || this.ManhattanDistance !== base.ManhattanDistance
+      || this.DotProduct !== base.DotProduct
+      || this.JaccardSimilarity !== base.JaccardSimilarity
+      || this.HammingDistance !== base.HammingDistance;
   }
   
   /**
@@ -273,13 +608,13 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
     metric: DistanceMetric = 'cosine',
     filter?: (metadata: TMetadata) => boolean
   ): VectorSearchResult<TMetadata>[] {
-    const sourceVector = this.vectors.get(key);
-    if (!sourceVector) {
+    const row = this.store.RowOf(key);
+    if (row === undefined) {
       throw new Error(`Vector with key "${key}" not found`);
     }
 
     // Get topK + 1 to account for excluding self
-    return this.FindNearest(sourceVector.vector, topK + 1, threshold, metric, filter)
+    return this.FindNearest(this.store.ReadRow(row), topK + 1, threshold, metric, filter)
       .filter(result => result.key !== key)  // Exclude self
       .slice(0, topK);
   }
@@ -302,17 +637,21 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
    * @method
    */
   public Similarity(key1: string, key2: string): number {
-    const v1 = this.vectors.get(key1);
-    const v2 = this.vectors.get(key2);
-    
-    if (!v1) {
+    const row1 = this.store.RowOf(key1);
+    const row2 = this.store.RowOf(key2);
+
+    if (row1 === undefined) {
       throw new Error(`Vector with key "${key1}" not found`);
     }
-    if (!v2) {
+    if (row2 === undefined) {
       throw new Error(`Vector with key "${key2}" not found`);
     }
-    
-    return this.CosineSimilarity(v1.vector, v2.vector);
+
+    if (this.usesCustomMetric) {
+      return this.CosineSimilarity(this.store.ReadRow(row1), this.store.ReadRow(row2));
+    }
+    const view = this.store.View();
+    return CosineFromNorms(view.Data, row1 * view.Dims, view.Norms[row1], view.Data, row2 * view.Dims, view.Norms[row2], view.Dims);
   }
   
   /**
@@ -372,40 +711,8 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
     if (a.length !== b.length) {
       throw new Error(`Vectors must have same dimensions. Got ${a.length} and ${b.length}`);
     }
-    
-    // Initialize our three accumulator variables:
-    // - dotProduct: Sum of element-wise products (measures alignment)
-    // - normA: Sum of squares for vector A (used to calculate magnitude)
-    // - normB: Sum of squares for vector B (used to calculate magnitude)
-    let dotProduct = 0;
-    let normA = 0;
-    let normB = 0;
-    
-    // Single pass through both vectors to calculate all needed values
-    // This is more efficient than multiple loops
-    for (let i = 0; i < a.length; i++) {
-      // Dot product: Multiply corresponding elements and sum them
-      // This measures how much the vectors "agree" at each dimension
-      dotProduct += a[i] * b[i];
-      
-      // Calculate sum of squares for each vector
-      // These will be used to normalize the dot product
-      normA += a[i] * a[i];  // Same as Math.pow(a[i], 2) but faster
-      normB += b[i] * b[i];  // Same as Math.pow(b[i], 2) but faster
-    }
-    
-    // Handle edge case: Zero vectors (all elements are 0)
-    // A zero vector has no direction, so similarity is undefined
-    // We return 0 by convention (neither similar nor dissimilar)
-    if (normA === 0 || normB === 0) {
-      return 0;
-    }
-    
-    // Final calculation: Normalize the dot product by the magnitudes
-    // Math.sqrt(normA) = magnitude of vector A (||A||)
-    // Math.sqrt(normB) = magnitude of vector B (||B||)
-    // This gives us the cosine of the angle between the vectors
-    return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+    // Zero vectors have no direction, so the kernel returns 0 for them by convention
+    return CosineFromNorms(a, 0, SumOfSquares(a, 0, a.length), b, 0, SumOfSquares(b, 0, b.length), a.length);
   }
 
   /**
@@ -452,16 +759,8 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
     if (a.length !== b.length) {
       throw new Error(`Vectors must have same dimensions. Got ${a.length} and ${b.length}`);
     }
-    
-    let sumSquaredDiff = 0;
-    for (let i = 0; i < a.length; i++) {
-      const diff = a[i] - b[i];
-      sumSquaredDiff += diff * diff;
-    }
-    
-    const distance = Math.sqrt(sumSquaredDiff);
-    // Normalize to 0-1 range: closer = higher score
-    return 1 / (1 + distance);
+    // Normalized to 0-1: closer = higher score
+    return EuclideanScore(a, 0, b, 0, a.length);
   }
 
   /**
@@ -510,14 +809,7 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
     if (a.length !== b.length) {
       throw new Error(`Vectors must have same dimensions. Got ${a.length} and ${b.length}`);
     }
-    
-    let sumAbsDiff = 0;
-    for (let i = 0; i < a.length; i++) {
-      sumAbsDiff += Math.abs(a[i] - b[i]);
-    }
-    
-    // Normalize to 0-1 range
-    return 1 / (1 + sumAbsDiff);
+    return ManhattanScore(a, 0, b, 0, a.length);
   }
 
   /**
@@ -565,19 +857,7 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
     if (a.length !== b.length) {
       throw new Error(`Vectors must have same dimensions. Got ${a.length} and ${b.length}`);
     }
-    
-    let dotProduct = 0;
-    for (let i = 0; i < a.length; i++) {
-      dotProduct += a[i] * b[i];
-    }
-    
-    // Normalize using tanh for bounded output
-    // Scale factor based on expected vector dimensions
-    const scale = Math.sqrt(a.length);
-    const normalized = Math.tanh(dotProduct / scale);
-    
-    // Convert from [-1, 1] to [0, 1]
-    return (normalized + 1) / 2;
+    return DotProductScore(a, 0, b, 0, a.length);
   }
 
   /**
@@ -630,28 +910,7 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
     if (a.length !== b.length) {
       throw new Error(`Vectors must have same dimensions. Got ${a.length} and ${b.length}`);
     }
-    
-    let intersection = 0;
-    let union = 0;
-    
-    for (let i = 0; i < a.length; i++) {
-      const aPresent = a[i] !== 0;
-      const bPresent = b[i] !== 0;
-      
-      if (aPresent && bPresent) {
-        intersection++;
-      }
-      if (aPresent || bPresent) {
-        union++;
-      }
-    }
-    
-    // Handle edge case: both vectors are all zeros
-    if (union === 0) {
-      return 1; // Consider empty sets as identical
-    }
-    
-    return intersection / union;
+    return JaccardScore(a, 0, b, 0, a.length);
   }
 
   /**
@@ -704,16 +963,7 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
     if (a.length !== b.length) {
       throw new Error(`Vectors must have same dimensions. Got ${a.length} and ${b.length}`);
     }
-    
-    let differences = 0;
-    for (let i = 0; i < a.length; i++) {
-      if (a[i] !== b[i]) {
-        differences++;
-      }
-    }
-    
-    // Normalize to similarity score (1 = identical, 0 = all different)
-    return 1 - (differences / a.length);
+    return HammingScore(a, 0, b, 0, a.length);
   }
 
   /**
@@ -763,7 +1013,7 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
    * @readonly
    */
   public get Size(): number {
-    return this.vectors.size;
+    return this.store.Size;
   }
   
   /**
@@ -779,7 +1029,7 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
    * @method
    */
   public Clear(): void {
-    this.vectors.clear();
+    this.store.Clear();
   }
   
   /**
@@ -799,14 +1049,14 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
    * @method
    */
   public Has(key: string): boolean {
-    return this.vectors.has(key);
+    return this.store.Has(key);
   }
   
   /**
    * Retrieves a specific vector by its key
    * 
    * @param {string} key - The key of the vector to retrieve
-   * @returns {number[] | undefined} The vector array, or undefined if not found
+   * @returns {number[] | undefined} A copy of the vector, or undefined if not found
    * 
    * @example
    * ```typescript
@@ -820,7 +1070,8 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
    * @method
    */
   public GetVector(key: string): number[] | undefined {
-    return this.vectors.get(key)?.vector;
+    const row = this.store.RowOf(key);
+    return row === undefined ? undefined : this.store.ReadRow(row);
   }
 
   /**
@@ -841,7 +1092,8 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
    * @method
    */
   public GetMetadata(key: string): TMetadata | undefined {
-    return this.vectors.get(key)?.metadata;
+    const row = this.store.RowOf(key);
+    return row === undefined ? undefined : this.store.MetadataAt(row);
   }
 
   /**
@@ -882,9 +1134,9 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
    * @public
    * @method
    */
-  public UpdateVector(key: string, updates: { vector?: number[]; metadata?: TMetadata }): boolean {
-    const existing = this.vectors.get(key);
-    if (!existing) {
+  public UpdateVector(key: string, updates: { vector?: VectorValues; metadata?: TMetadata }): boolean {
+    const row = this.store.RowOf(key);
+    if (row === undefined) {
       throw new Error(`Vector with key "${key}" not found. Use AddVector to create new entries.`);
     }
 
@@ -897,11 +1149,11 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
         throw new Error('Vector cannot be empty');
       }
       this.validateAndSetDimensions(updates.vector);
-      existing.vector = updates.vector;
+      this.store.Write(key, updates.vector);
     }
 
     if (updates.metadata != null) {
-      existing.metadata = updates.metadata;
+      this.store.SetMetadata(row, updates.metadata);
     }
 
     return true;
@@ -932,7 +1184,7 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
    * @public
    * @method
    */
-  public AddOrUpdateVector(key: string, vector: number[], metadata?: TMetadata): boolean {
+  public AddOrUpdateVector(key: string, vector: VectorValues, metadata?: TMetadata): boolean {
     if (!key) {
       throw new Error('Key cannot be null or undefined');
     }
@@ -940,7 +1192,7 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
       throw new Error('Vector cannot be null, undefined, or empty');
     }
 
-    const exists = this.vectors.has(key);
+    const exists = this.store.Has(key);
     if (exists) {
       this.UpdateVector(key, { vector, metadata });
     } else {
@@ -966,7 +1218,7 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
    * @method
    */
   public RemoveVector(key: string): boolean {
-    return this.vectors.delete(key);
+    return this.store.Remove(key);
   }
 
   /**
@@ -984,14 +1236,14 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
    * @method
    */
   public GetAllKeys(): string[] {
-    return Array.from(this.vectors.keys());
+    return Array.from(this.store.LiveRows(), row => this.store.KeyAt(row) as string);
   }
 
   /**
    * Exports all vectors as an array of VectorEntry objects.
    * Useful for persistence or transferring data.
    * 
-   * @returns {VectorEntry<TMetadata>[]} Array of all vector entries
+   * @returns {VectorEntry<TMetadata>[]} Array of all vector entries (vectors are copies)
    * 
    * @example
    * ```typescript
@@ -1004,7 +1256,11 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
    * @method
    */
   public ExportVectors(): VectorEntry<TMetadata>[] {
-    return Array.from(this.vectors.values());
+    return Array.from(this.store.LiveRows(), row => ({
+      key: this.store.KeyAt(row) as string,
+      vector: this.store.ReadRow(row),
+      metadata: this.store.MetadataAt(row),
+    }));
   }
 
   /**
@@ -1017,13 +1273,17 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
    * @private
    * @method
    */
-  private validateAndSetDimensions(vector: number[]): void {
+  private validateAndSetDimensions(vector: VectorValues): void {
+    this.validateAndSetDimensionCount(vector.length);
+  }
+
+  private validateAndSetDimensionCount(dimensions: number): void {
     if (this.expectedDimensions === null) {
       // First vector sets the expected dimensions
-      this.expectedDimensions = vector.length;
-    } else if (vector.length !== this.expectedDimensions) {
+      this.expectedDimensions = dimensions;
+    } else if (dimensions !== this.expectedDimensions) {
       throw new Error(
-        `Vector dimension mismatch. Expected ${this.expectedDimensions} dimensions, got ${vector.length}. ` +
+        `Vector dimension mismatch. Expected ${this.expectedDimensions} dimensions, got ${dimensions}. ` +
         `All vectors must have the same number of dimensions for similarity calculations to work.`
       );
     }
@@ -1076,7 +1336,7 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
     metric: DistanceMetric = 'cosine',
     filter?: (metadata: TMetadata) => boolean
   ): VectorSearchResult<TMetadata>[] {
-    return this.FindNearest(queryVector, this.vectors.size, threshold, metric, filter);
+    return this.FindNearest(queryVector, this.store.Size, threshold, metric, filter);
   }
 
   // ============================================================================
@@ -1130,69 +1390,33 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
     metric: DistanceMetric = 'euclidean',
     tolerance: number = 0.0001
   ): ClusterResult<TMetadata> {
-    if (k <= 0 || k > this.vectors.size) {
-      throw new Error(`Invalid k: ${k}. Must be between 1 and ${this.vectors.size}`);
+    if (k <= 0 || k > this.store.Size) {
+      throw new Error(`Invalid k: ${k}. Must be between 1 and ${this.store.Size}`);
     }
 
-    const entries = Array.from(this.vectors.values());
-    if (entries.length === 0) {
-      throw new Error('No vectors loaded for clustering');
-    }
-
+    // Non-empty: the k check above rejects an empty store.
+    const rows = this.store.LiveRows();
+    const scorer = this.createScorer(metric);
     // Initialize centroids using K-Means++
-    const centroids = this.initializeKMeansPlusPlus(entries, k, metric);
-    let assignments = new Map<string, number>();
+    const centroids = this.initializeKMeansPlusPlus(rows, k, scorer);
+    let assignments: Int32Array | null = null;
     let iterations = 0;
     let converged = false;
 
     while (iterations < maxIterations && !converged) {
       // Assignment step: assign each point to nearest centroid
-      const newAssignments = new Map<string, number>();
-      entries.forEach(entry => {
-        let minDistance = Infinity;
-        let assignedCluster = 0;
-        
-        centroids.forEach((centroid, clusterId) => {
-          const distance = 1 - this.CalculateDistance(entry.vector, centroid, metric);
-          if (distance < minDistance) {
-            minDistance = distance;
-            assignedCluster = clusterId;
-          }
-        });
-        
-        newAssignments.set(entry.key, assignedCluster);
-      });
-
+      const newAssignments = this.assignToNearestCentroid(rows, centroids, scorer);
       // Check for convergence
-      converged = this.checkConvergence(assignments, newAssignments);
+      converged = assignments !== null && this.sameAssignments(assignments, newAssignments);
       assignments = newAssignments;
 
       if (!converged) {
-        // Update step: recalculate centroids
-        const newCentroids = new Map<number, number[]>();
-        
-        for (let clusterId = 0; clusterId < k; clusterId++) {
-          const clusterMembers = entries.filter(e => assignments.get(e.key) === clusterId);
-          if (clusterMembers.length > 0) {
-            newCentroids.set(clusterId, this.FindCentroid(clusterMembers.map(m => m.vector)));
-          } else {
-            // Empty cluster - keep old centroid
-            newCentroids.set(clusterId, centroids.get(clusterId)!);
-          }
-        }
-
-        // Check if centroids moved significantly
-        let maxCentroidMovement = 0;
-        newCentroids.forEach((newCentroid, clusterId) => {
-          const oldCentroid = centroids.get(clusterId)!;
-          const movement = 1 - this.CalculateDistance(oldCentroid, newCentroid, 'euclidean');
-          maxCentroidMovement = Math.max(maxCentroidMovement, movement);
-        });
-
-        if (maxCentroidMovement < tolerance) {
+        // Update step: recalculate centroids, keeping the old one for an empty cluster
+        const newCentroids = this.recomputeCentroids(rows, assignments, k, centroids);
+        // Stop when no centroid moved significantly
+        if (this.maxCentroidMovement(centroids, newCentroids, scorer) < tolerance) {
           converged = true;
         }
-
         centroids.clear();
         newCentroids.forEach((centroid, id) => centroids.set(id, centroid));
       }
@@ -1200,33 +1424,44 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
       iterations++;
     }
 
-    // Build result
+    return this.buildKMeansResult(rows, assignments ?? this.assignToNearestCentroid(rows, centroids, scorer), centroids, k, metric, iterations, scorer);
+  }
+
+  /** Assembles the K-Means result: members per cluster in insertion order, inertia, silhouette. */
+  private buildKMeansResult(
+    rows: Int32Array,
+    assignments: Int32Array,
+    centroids: Map<number, Centroid>,
+    k: number,
+    metric: DistanceMetric,
+    iterations: number,
+    scorer: MetricScorer
+  ): ClusterResult<TMetadata> {
     const clusters = new Map<number, string[]>();
     for (let i = 0; i < k; i++) {
       clusters.set(i, []);
     }
-    
-    assignments.forEach((clusterId, key) => {
-      clusters.get(clusterId)!.push(key);
-    });
+    for (let i = 0; i < rows.length; i++) {
+      clusters.get(assignments[i])!.push(this.store.KeyAt(rows[i]) as string);
+    }
 
     // Calculate inertia (sum of squared distances to centroids)
     let inertia = 0;
-    entries.forEach(entry => {
-      const clusterId = assignments.get(entry.key)!;
-      const centroid = centroids.get(clusterId)!;
-      const distance = 1 - this.CalculateDistance(entry.vector, centroid, metric);
+    for (let i = 0; i < rows.length; i++) {
+      const distance = 1 - scorer.RowVsCentroid(rows[i], centroids.get(assignments[i])!);
       inertia += distance * distance;
-    });
+    }
 
+    const publicCentroids = new Map<number, number[]>();
+    centroids.forEach((centroid, id) => publicCentroids.set(id, Array.from(centroid.Values)));
     return {
       clusters,
-      centroids,
+      centroids: publicCentroids,
       metadata: {
         metric,
         iterations,
         inertia,
-        silhouetteScore: this.SilhouetteScore({ clusters, centroids }, metric)
+        silhouetteScore: this.SilhouetteScore({ clusters, centroids: publicCentroids }, metric)
       }
     };
   }
@@ -1237,37 +1472,36 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
    * 
    * @private
    */
-  private initializeKMeansPlusPlus(
-    entries: VectorEntry<TMetadata>[],
-    k: number,
-    metric: DistanceMetric
-  ): Map<number, number[]> {
-    const centroids = new Map<number, number[]>();
-    
+  private initializeKMeansPlusPlus(rows: Int32Array, k: number, scorer: MetricScorer): Map<number, Centroid> {
+    const centroids = new Map<number, Centroid>();
+
     // Choose first centroid randomly
-    const firstIdx = Math.floor(Math.random() * entries.length);
-    centroids.set(0, [...entries[firstIdx].vector]);
+    const firstIdx = Math.floor(Math.random() * rows.length);
+    centroids.set(0, this.centroidFromRow(rows[firstIdx]));
 
     // Choose remaining centroids
     for (let i = 1; i < k; i++) {
-      const distances = entries.map(entry => {
+      const distances = new Float64Array(rows.length);
+      for (let j = 0; j < rows.length; j++) {
         let minDist = Infinity;
         centroids.forEach(centroid => {
-          const dist = 1 - this.CalculateDistance(entry.vector, centroid, metric);
-          minDist = Math.min(minDist, dist);
+          minDist = Math.min(minDist, 1 - scorer.RowVsCentroid(rows[j], centroid));
         });
-        return minDist;
-      });
+        distances[j] = minDist;
+      }
 
       // Choose next centroid with probability proportional to squared distance
-      const sumSquaredDist = distances.reduce((sum, d) => sum + d * d, 0);
-      let threshold = Math.random() * sumSquaredDist;
+      let sumSquaredDist = 0;
+      for (let j = 0; j < distances.length; j++) {
+        sumSquaredDist += distances[j] * distances[j];
+      }
+      const threshold = Math.random() * sumSquaredDist;
       let cumSum = 0;
-      
-      for (let j = 0; j < entries.length; j++) {
+
+      for (let j = 0; j < rows.length; j++) {
         cumSum += distances[j] * distances[j];
         if (cumSum >= threshold) {
-          centroids.set(i, [...entries[j].vector]);
+          centroids.set(i, this.centroidFromRow(rows[j]));
           break;
         }
       }
@@ -1276,23 +1510,104 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
     return centroids;
   }
 
+  /** Index of the nearest centroid for each row (first centroid wins a tie). */
+  private assignToNearestCentroid(rows: Int32Array, centroids: Map<number, Centroid>, scorer: MetricScorer): Int32Array {
+    const assignments = new Int32Array(rows.length);
+    for (let i = 0; i < rows.length; i++) {
+      let minDistance = Infinity;
+      let assignedCluster = 0;
+      centroids.forEach((centroid, clusterId) => {
+        const distance = 1 - scorer.RowVsCentroid(rows[i], centroid);
+        if (distance < minDistance) {
+          minDistance = distance;
+          assignedCluster = clusterId;
+        }
+      });
+      assignments[i] = assignedCluster;
+    }
+    return assignments;
+  }
+
+  /** Mean of each cluster's members, summed in insertion order like {@link FindCentroid}. */
+  private recomputeCentroids(
+    rows: Int32Array,
+    assignments: Int32Array,
+    k: number,
+    previous: Map<number, Centroid>
+  ): Map<number, Centroid> {
+    const dims = this.store.Dims;
+    const view = this.store.View();
+    const sums: Float64Array[] = [];
+    const counts = new Int32Array(k);
+    for (let c = 0; c < k; c++) sums.push(new Float64Array(dims));
+    for (let i = 0; i < rows.length; i++) {
+      const sum = sums[assignments[i]];
+      const offset = rows[i] * dims;
+      for (let d = 0; d < dims; d++) sum[d] += view.Data[offset + d];
+      counts[assignments[i]]++;
+    }
+    const next = new Map<number, Centroid>();
+    for (let c = 0; c < k; c++) {
+      if (counts[c] === 0) {
+        // Empty cluster - keep old centroid
+        next.set(c, previous.get(c)!);
+        continue;
+      }
+      const values = sums[c];
+      for (let d = 0; d < dims; d++) values[d] /= counts[c];
+      next.set(c, { Values: values, NormSq: SumOfSquares(values, 0, dims) });
+    }
+    return next;
+  }
+
+  /** Largest euclidean distance (1 - similarity) any centroid moved. */
+  private maxCentroidMovement(oldCentroids: Map<number, Centroid>, newCentroids: Map<number, Centroid>, scorer: MetricScorer): number {
+    let maxMovement = 0;
+    newCentroids.forEach((newCentroid, clusterId) => {
+      const movement = 1 - scorer.EuclideanBetween(oldCentroids.get(clusterId)!, newCentroid);
+      maxMovement = Math.max(maxMovement, movement);
+    });
+    return maxMovement;
+  }
+
+  private centroidFromRow(row: number): Centroid {
+    const values = Float64Array.from(this.store.CopyRow(row));
+    return { Values: values, NormSq: SumOfSquares(values, 0, values.length) };
+  }
+
   /**
    * Check if cluster assignments have converged
    * @private
    */
-  private checkConvergence(
-    oldAssignments: Map<string, number>,
-    newAssignments: Map<string, number>
-  ): boolean {
-    if (oldAssignments.size !== newAssignments.size) return false;
-    
-    for (const [key, clusterId] of newAssignments) {
-      if (oldAssignments.get(key) !== clusterId) {
-        return false;
-      }
+  private sameAssignments(oldAssignments: Int32Array, newAssignments: Int32Array): boolean {
+    // Both cover the same rows, so they always have the same length.
+    for (let i = 0; i < newAssignments.length; i++) {
+      if (oldAssignments[i] !== newAssignments[i]) return false;
     }
-    
     return true;
+  }
+
+  /**
+   * Scores rows and centroids with the clustering metric. Subclasses that
+   * override a metric method get it honoured here too, row by row.
+   */
+  private createScorer(metric: DistanceMetric): MetricScorer {
+    const view = this.store.View();
+    const dims = view.Dims;
+    if (this.usesCustomMetric) {
+      return {
+        RowVsCentroid: (row, centroid) => this.CalculateDistance(this.store.ReadRow(row), Array.from(centroid.Values), metric),
+        RowVsRow: (a, b) => this.CalculateDistance(this.store.ReadRow(a), this.store.ReadRow(b), metric),
+        EuclideanBetween: (a, b) => this.CalculateDistance(Array.from(a.Values), Array.from(b.Values), 'euclidean'),
+      };
+    }
+    return {
+      RowVsCentroid: (row, centroid) =>
+        MetricScore(metric, view.Data, row * dims, view.Norms[row], centroid.Values, 0, centroid.NormSq, dims),
+      RowVsRow: (a, b) =>
+        MetricScore(metric, view.Data, a * dims, view.Norms[a], view.Data, b * dims, view.Norms[b], dims),
+      EuclideanBetween: (a, b) => EuclideanScore(a.Values, 0, b.Values, 0, dims),
+    };
   }
 
   /**
@@ -1358,61 +1673,38 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
     }
 
     // Pre-filter vectors if filter provided
-    const entries = filter
-      ? Array.from(this.vectors.values()).filter(entry => entry.metadata && filter(entry.metadata))
-      : Array.from(this.vectors.values());
+    const rows = filter ? this.filterRows(filter) : this.store.LiveRows();
 
-    const visited = new Set<string>();
-    const clustered = new Set<string>();
+    // Build neighborhood map for efficiency (using filtered rows)
+    const neighborhoods = this.buildNeighborhoods(rows, 1 - epsilon, metric, filter);
+
+    const visited = new Uint8Array(this.store.RowCount);
+    const clustered = new Uint8Array(this.store.RowCount);
     const clusters = new Map<number, string[]>();
-    const outliers: string[] = [];
+    const outliers: number[] = [];
     let clusterId = 0;
 
-    // Build neighborhood map for efficiency (using filtered entries)
-    const neighborhoods = new Map<string, string[]>();
-    entries.forEach(entry => {
-      const neighbors = this.FindNearest(
-        entry.vector,
-        entries.length,  // Search within filtered space
-        1 - epsilon, // Convert epsilon to similarity threshold
-        metric,
-        filter  // Apply same filter to neighborhood search
-      ).map(r => r.key);
-      neighborhoods.set(entry.key, neighbors);
-    });
-
     // DBSCAN algorithm
-    entries.forEach(entry => {
-      if (visited.has(entry.key)) return;
-      
-      visited.add(entry.key);
-      const neighbors = neighborhoods.get(entry.key)!;
-      
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      if (visited[row]) continue;
+      visited[row] = 1;
+      const neighbors = neighborhoods[row]!;
+
       if (neighbors.length < minPoints) {
         // Mark as noise (may later be added to a cluster)
-        outliers.push(entry.key);
+        outliers.push(row);
       } else {
         // Start a new cluster
         const cluster: string[] = [];
         clusters.set(clusterId, cluster);
-        
-        this.expandCluster(
-          entry.key,
-          neighbors,
-          cluster,
-          visited,
-          clustered,
-          neighborhoods,
-          minPoints,
-          outliers
-        );
-        
+        this.expandCluster(row, neighbors, cluster, visited, clustered, neighborhoods, minPoints);
         clusterId++;
       }
-    });
+    }
 
     // Remove outliers that were later added to clusters
-    const finalOutliers = outliers.filter(key => !clustered.has(key));
+    const finalOutliers = outliers.filter(row => !clustered[row]).map(row => this.store.KeyAt(row) as string);
 
     return {
       clusters,
@@ -1427,50 +1719,77 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
   }
 
   /**
+   * Each row's neighbours — every row in `rows` scoring at least
+   * `similarityThreshold` (itself included) — ranked highest first, ties in
+   * insertion order. Indexed by row.
+   */
+  private buildNeighborhoods(
+    rows: Int32Array,
+    similarityThreshold: number,
+    metric: DistanceMetric,
+    filter: ((metadata: TMetadata) => boolean) | undefined
+  ): Array<Int32Array | undefined> {
+    const neighborhoods: Array<Int32Array | undefined> = new Array(this.store.RowCount);
+    if (this.usesCustomMetric) {
+      for (let i = 0; i < rows.length; i++) {
+        const neighbors = this.FindNearest(this.store.ReadRow(rows[i]), rows.length, similarityThreshold, metric, filter);
+        neighborhoods[rows[i]] = Int32Array.from(neighbors, n => this.store.RowOf(n.key) as number);
+      }
+      return neighborhoods;
+    }
+    const view = this.store.View();
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const ranked = SearchRows(view, {
+        Query: Float64Array.from(view.Data.subarray(row * view.Dims, (row + 1) * view.Dims)),
+        QueryNormSq: view.Norms[row],
+        Candidates: rows,
+        Metric: metric,
+        TopK: null,
+        Threshold: similarityThreshold,
+      });
+      neighborhoods[row] = ranked.Rows;
+    }
+    return neighborhoods;
+  }
+
+  /**
    * Expand a cluster in DBSCAN
    * @private
    */
   private expandCluster(
-    key: string,
-    neighbors: string[],
+    row: number,
+    neighbors: Int32Array,
     cluster: string[],
-    visited: Set<string>,
-    clustered: Set<string>,
-    neighborhoods: Map<string, string[]>,
-    minPoints: number,
-    outliers: string[]
+    visited: Uint8Array,
+    clustered: Uint8Array,
+    neighborhoods: Array<Int32Array | undefined>,
+    minPoints: number
   ): void {
-    cluster.push(key);
-    clustered.add(key);
-    
-    const queue = [...neighbors];
-    
-    while (queue.length > 0) {
-      const neighborKey = queue.shift()!;
-      
-      if (!visited.has(neighborKey)) {
-        visited.add(neighborKey);
-        const neighborNeighbors = neighborhoods.get(neighborKey)!;
-        
+    cluster.push(this.store.KeyAt(row) as string);
+    clustered[row] = 1;
+
+    const queue: number[] = Array.from(neighbors);
+    for (let head = 0; head < queue.length; head++) {
+      const neighborRow = queue[head];
+
+      if (!visited[neighborRow]) {
+        visited[neighborRow] = 1;
+        const neighborNeighbors = neighborhoods[neighborRow]!;
+
         if (neighborNeighbors.length >= minPoints) {
           // Add unprocessed neighbors to queue
-          neighborNeighbors.forEach(nn => {
-            if (!visited.has(nn)) {
-              queue.push(nn);
+          for (let j = 0; j < neighborNeighbors.length; j++) {
+            if (!visited[neighborNeighbors[j]]) {
+              queue.push(neighborNeighbors[j]);
             }
-          });
+          }
         }
       }
-      
-      if (!clustered.has(neighborKey)) {
-        cluster.push(neighborKey);
-        clustered.add(neighborKey);
-        
-        // Remove from outliers if it was there
-        const outlierIdx = outliers.indexOf(neighborKey);
-        if (outlierIdx !== -1) {
-          outliers.splice(outlierIdx, 1);
-        }
+
+      if (!clustered[neighborRow]) {
+        cluster.push(this.store.KeyAt(neighborRow) as string);
+        clustered[neighborRow] = 1;
       }
     }
   }
@@ -1562,17 +1881,16 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
   ): number {
     let totalDistance = 0;
     let totalPairs = 0;
+    const scorer = this.createScorer(metric);
 
     clusterResult.clusters.forEach((members) => {
+      const rows = this.rowsForKeys(members);
       // Calculate pairwise distances within cluster
-      for (let i = 0; i < members.length; i++) {
-        for (let j = i + 1; j < members.length; j++) {
-          const vec1 = this.vectors.get(members[i])?.vector;
-          const vec2 = this.vectors.get(members[j])?.vector;
-          
-          if (vec1 && vec2) {
+      for (let i = 0; i < rows.length; i++) {
+        for (let j = i + 1; j < rows.length; j++) {
+          if (rows[i] >= 0 && rows[j] >= 0) {
             // Convert similarity to distance
-            totalDistance += 1 - this.CalculateDistance(vec1, vec2, metric);
+            totalDistance += 1 - scorer.RowVsRow(rows[i], rows[j]);
             totalPairs++;
           }
         }
@@ -1620,25 +1938,23 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
 
     let totalDistance = 0;
     let totalPairs = 0;
+    const scorer = this.createScorer(metric);
 
     // Calculate distances between all pairs of clusters
     for (let i = 0; i < clusterIds.length; i++) {
       for (let j = i + 1; j < clusterIds.length; j++) {
-        const cluster1 = clusterResult.clusters.get(clusterIds[i])!;
-        const cluster2 = clusterResult.clusters.get(clusterIds[j])!;
-        
+        const rows1 = this.rowsForKeys(clusterResult.clusters.get(clusterIds[i])!);
+        const rows2 = this.rowsForKeys(clusterResult.clusters.get(clusterIds[j])!);
+
         // Calculate average distance between all pairs across clusters
-        cluster1.forEach(key1 => {
-          cluster2.forEach(key2 => {
-            const vec1 = this.vectors.get(key1)?.vector;
-            const vec2 = this.vectors.get(key2)?.vector;
-            
-            if (vec1 && vec2) {
-              totalDistance += 1 - this.CalculateDistance(vec1, vec2, metric);
+        for (let a = 0; a < rows1.length; a++) {
+          for (let b = 0; b < rows2.length; b++) {
+            if (rows1[a] >= 0 && rows2[b] >= 0) {
+              totalDistance += 1 - scorer.RowVsRow(rows1[a], rows2[b]);
               totalPairs++;
             }
-          });
-        });
+          }
+        }
       }
     }
 
@@ -1683,46 +1999,46 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
     metric: DistanceMetric = 'euclidean'
   ): number {
     const scores: number[] = [];
-    
+    const scorer = this.createScorer(metric);
+    const rowsByCluster = new Map<number, Int32Array>();
+    clusterResult.clusters.forEach((members, clusterId) => rowsByCluster.set(clusterId, this.rowsForKeys(members)));
+
     clusterResult.clusters.forEach((members, clusterId) => {
-      members.forEach(key => {
-        const vector = this.vectors.get(key)?.vector;
-        if (!vector) return;
-        
+      const memberRows = rowsByCluster.get(clusterId)!;
+      for (let m = 0; m < members.length; m++) {
+        const row = memberRows[m];
+        if (row < 0) continue;
+
         // Calculate a(i): average distance to other points in same cluster
         let a = 0;
         if (members.length > 1) {
-          const sameClusterDistances = members
-            .filter(k => k !== key)
-            .map(k => {
-              const otherVec = this.vectors.get(k)?.vector;
-              return otherVec ? 1 - this.CalculateDistance(vector, otherVec, metric) : 0;
-            });
-          a = sameClusterDistances.reduce((sum, d) => sum + d, 0) / sameClusterDistances.length;
+          let sum = 0;
+          let count = 0;
+          for (let o = 0; o < members.length; o++) {
+            if (members[o] === members[m]) continue;
+            sum += memberRows[o] >= 0 ? 1 - scorer.RowVsRow(row, memberRows[o]) : 0;
+            count++;
+          }
+          a = sum / count;
         }
-        
+
         // Calculate b(i): minimum average distance to points in other clusters
         let b = Infinity;
-        clusterResult.clusters.forEach((otherMembers, otherClusterId) => {
-          if (otherClusterId === clusterId) return;
-          
-          const otherClusterDistances = otherMembers.map(k => {
-            const otherVec = this.vectors.get(k)?.vector;
-            return otherVec ? 1 - this.CalculateDistance(vector, otherVec, metric) : 0;
-          });
-          
-          if (otherClusterDistances.length > 0) {
-            const avgDist = otherClusterDistances.reduce((sum, d) => sum + d, 0) / otherClusterDistances.length;
-            b = Math.min(b, avgDist);
+        rowsByCluster.forEach((otherRows, otherClusterId) => {
+          if (otherClusterId === clusterId || otherRows.length === 0) return;
+          let sum = 0;
+          for (let o = 0; o < otherRows.length; o++) {
+            sum += otherRows[o] >= 0 ? 1 - scorer.RowVsRow(row, otherRows[o]) : 0;
           }
+          b = Math.min(b, sum / otherRows.length);
         });
-        
+
         // Calculate silhouette coefficient for this point
         if (b !== Infinity) {
           const s = (b - a) / Math.max(a, b);
           scores.push(s);
         }
-      });
+      }
     });
     
     // Return average silhouette score
@@ -1767,7 +2083,7 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
     maxK: number,
     metric: DistanceMetric = 'euclidean'
   ): Map<number, number> {
-    if (minK < 1 || maxK > this.vectors.size || minK > maxK) {
+    if (minK < 1 || maxK > this.store.Size || minK > maxK) {
       throw new Error('Invalid k range');
     }
 
@@ -1779,5 +2095,114 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
     }
     
     return results;
+  }
+
+  /**
+   * Async form of {@link KMeansCluster} with identical arguments and results.
+   * On a server host with a worker-pool accelerator the whole run — including
+   * the O(n²) silhouette score — happens on a worker thread, so a large
+   * clustering request does not stall every other request on the process.
+   *
+   * @public
+   * @method
+   */
+  public async KMeansClusterAsync(
+    k: number,
+    maxIterations: number = 100,
+    metric: DistanceMetric = 'euclidean',
+    tolerance: number = 0.0001
+  ): Promise<ClusterResult<TMetadata>> {
+    if (k <= 0 || k > this.store.Size) {
+      throw new Error(`Invalid k: ${k}. Must be between 1 and ${this.store.Size}`);
+    }
+    if (this.usesCustomMetric) return this.KMeansCluster(k, maxIterations, metric, tolerance);
+    const keys = this.store.Keys;
+    const offloaded = await this.accelerator.ClusterAsync({
+      Snapshot: this.store.Snapshot(), Candidates: null, Algorithm: 'kmeans',
+      Metric: metric, K: k, MaxIterations: maxIterations, Tolerance: tolerance,
+    });
+    return offloaded ? this.clusterResultFromRows(offloaded, keys, metric) : this.KMeansCluster(k, maxIterations, metric, tolerance);
+  }
+
+  /**
+   * Async form of {@link DBSCANCluster} with identical arguments and results.
+   * The metadata filter runs on the calling thread; the O(n²) neighbourhood
+   * scan and the silhouette score run on a worker when one is available.
+   *
+   * @public
+   * @method
+   */
+  public async DBSCANClusterAsync(
+    epsilon: number,
+    minPoints: number,
+    metric: DistanceMetric = 'euclidean',
+    filter?: (metadata: TMetadata) => boolean
+  ): Promise<ClusterResult<TMetadata>> {
+    if (epsilon <= 0 || epsilon >= 1) {
+      throw new Error('Epsilon must be between 0 and 1 (exclusive)');
+    }
+    if (minPoints <= 0) {
+      throw new Error('MinPoints must be positive');
+    }
+    if (this.usesCustomMetric) return this.DBSCANCluster(epsilon, minPoints, metric, filter);
+    const keys = this.store.Keys;
+    const offloaded = await this.accelerator.ClusterAsync({
+      Snapshot: this.store.Snapshot(), Candidates: filter ? this.filterRows(filter) : null, Algorithm: 'dbscan',
+      Metric: metric, Epsilon: epsilon, MinPoints: minPoints,
+    });
+    return offloaded ? this.clusterResultFromRows(offloaded, keys, metric) : this.DBSCANCluster(epsilon, minPoints, metric, filter);
+  }
+
+  /** Converts a key-based result whose keys are `String(row)` (see {@link FromRowsView}) into rows. */
+  private static clusterResultToRows(result: ClusterResult<Record<string, unknown>>): VectorClusterJobResult {
+    const toRows = (keys: string[]): Int32Array => Int32Array.from(keys, key => Number(key));
+    const clusters = new Map<number, Int32Array>();
+    result.clusters.forEach((keys, id) => clusters.set(id, toRows(keys)));
+    return {
+      Clusters: clusters,
+      Centroids: result.centroids ?? null,
+      Outliers: result.outliers ? toRows(result.outliers) : null,
+      Iterations: result.metadata?.iterations,
+      Inertia: result.metadata?.inertia,
+      SilhouetteScore: result.metadata?.silhouetteScore,
+    };
+  }
+
+  /** Maps an off-thread result back to keys using the row→key array captured at dispatch. */
+  private clusterResultFromRows(
+    result: VectorClusterJobResult,
+    keysAtDispatch: ReadonlyArray<string | null>,
+    metric: DistanceMetric
+  ): ClusterResult<TMetadata> {
+    // A row removed while the job ran off-thread has a null key here: VectorStore.Remove nulls the
+    // dispatch-time key array in place. Drop it, as the search path does when it re-scores.
+    const toKeys = (rows: Int32Array): string[] => {
+      const keys: string[] = [];
+      for (let i = 0; i < rows.length; i++) {
+        const key = keysAtDispatch[rows[i]];
+        if (key !== null && key !== undefined) keys.push(key);
+      }
+      return keys;
+    };
+    const clusters = new Map<number, string[]>();
+    result.Clusters.forEach((rows, id) => clusters.set(id, toKeys(rows)));
+    const mapped: ClusterResult<TMetadata> = {
+      clusters,
+      metadata: { metric, silhouetteScore: result.SilhouetteScore },
+    };
+    if (result.Centroids) mapped.centroids = result.Centroids;
+    if (result.Outliers) mapped.outliers = toKeys(result.Outliers);
+    if (result.Iterations !== undefined) mapped.metadata!.iterations = result.Iterations;
+    if (result.Inertia !== undefined) mapped.metadata!.inertia = result.Inertia;
+    return mapped;
+  }
+
+  /** Current rows for `keys`, -1 where a key is not stored. */
+  private rowsForKeys(keys: string[]): Int32Array {
+    const rows = new Int32Array(keys.length);
+    for (let i = 0; i < keys.length; i++) {
+      rows[i] = this.store.RowOf(keys[i]) ?? -1;
+    }
+    return rows;
   }
 }

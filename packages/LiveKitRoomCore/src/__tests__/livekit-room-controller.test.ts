@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { ConnectionQuality, ConnectionState, DisconnectReason, RoomEvent, Track } from 'livekit-client';
-import { LiveKitRoomController } from '../livekit-room-controller';
+import { ConnectionQuality, ConnectionState, DisconnectReason, RoomEvent, Track, type Room, type RoomOptions } from 'livekit-client';
+import { DEFAULT_SPEECH_ROOM_OPTIONS, LiveKitRoomController } from '../livekit-room-controller';
 
 /**
  * A structural fake of the subset of livekit-client `Participant` the controller uses. Cast to the real
@@ -88,9 +88,15 @@ class FakeRoom {
   public switchActiveDevice = vi.fn(async (): Promise<boolean> => true);
 }
 
+let capturedRoomOptions: RoomOptions | undefined;
+
 function makeController(room: FakeRoom): LiveKitRoomController {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return new LiveKitRoomController({ RoomFactory: () => room as any });
+  return new LiveKitRoomController({
+    RoomFactory: (options) => {
+      capturedRoomOptions = options;
+      return room as unknown as Room;
+    },
+  });
 }
 
 describe('LiveKitRoomController', () => {
@@ -98,6 +104,7 @@ describe('LiveKitRoomController', () => {
   let controller: LiveKitRoomController;
 
   beforeEach(() => {
+    capturedRoomOptions = undefined;
     room = new FakeRoom();
     controller = makeController(room);
   });
@@ -114,6 +121,26 @@ describe('LiveKitRoomController', () => {
       expect(controller.State.Local?.DisplayName).toBe('Amith');
       expect(controller.State.LocalMedia.MicrophoneEnabled).toBe(true);
       expect(connected).toHaveBeenCalledOnce();
+    });
+
+    it('applies DEFAULT_SPEECH_ROOM_OPTIONS by default', async () => {
+      await controller.Connect('wss://x', 'token');
+      expect(capturedRoomOptions).toMatchObject({
+        publishDefaults: { dtx: false, red: true },
+        audioCaptureDefaults: { voiceIsolation: false, echoCancellation: true },
+      });
+    });
+
+    it('allows RoomOptions overrides', async () => {
+      await controller.Connect('wss://x', 'token', {
+        RoomOptions: {
+          publishDefaults: { dtx: true },
+        },
+      });
+      expect(capturedRoomOptions).toMatchObject({
+        publishDefaults: { dtx: true, red: true },
+        audioCaptureDefaults: { voiceIsolation: false, echoCancellation: true },
+      });
     });
 
     it('honors a canceling beforeConnect handler and never connects', async () => {
@@ -294,6 +321,36 @@ describe('LiveKitRoomController', () => {
       expect(proceeded).toBe(true);
       expect(controller.Status).toBe('disconnected');
       expect(disconnected).toHaveBeenCalled();
+    });
+
+    it('maps null/undefined disconnect reason to connection-lost', async () => {
+      await controller.Connect('wss://x', 'token');
+      let reason: string | undefined;
+      controller.Events.On('disconnected', (e) => {
+        reason = e.Reason;
+      });
+      room.emit(RoomEvent.Disconnected, undefined);
+      expect(reason).toBe('connection-lost');
+    });
+
+    it('maps CLIENT_INITIATED disconnect reason to client-initiated', async () => {
+      await controller.Connect('wss://x', 'token');
+      let reason: string | undefined;
+      controller.Events.On('disconnected', (e) => {
+        reason = e.Reason;
+      });
+      room.emit(RoomEvent.Disconnected, DisconnectReason.CLIENT_INITIATED);
+      expect(reason).toBe('client-initiated');
+    });
+
+    it('maps terminal disconnect reasons correctly', async () => {
+      await controller.Connect('wss://x', 'token');
+      const reasons: string[] = [];
+      controller.Events.On('disconnected', (e) => {
+        if (e.Reason) reasons.push(e.Reason);
+      });
+      room.emit(RoomEvent.Disconnected, DisconnectReason.ROOM_DELETED);
+      expect(reasons[0]).toBe('room-deleted');
     });
   });
 });

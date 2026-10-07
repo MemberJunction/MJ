@@ -372,6 +372,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
     }
 
     ngOnDestroy() {
+        super.ngOnDestroy();
         this.destroy$.next();
         this.destroy$.complete();
     }
