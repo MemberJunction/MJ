@@ -174,9 +174,9 @@ export class MediaWorkerSession {
             this.port.postMessage({ type: 'participantDisconnected', participantIdentity });
         });
 
-        client.onDisconnected(() => {
+        client.onDisconnected((reason) => {
             this.resetPacing();
-            this.port.postMessage({ type: 'disconnected', reason: 'room disconnected' });
+            this.port.postMessage({ type: 'disconnected', reason: reason ?? 'room disconnected' });
         });
 
         const result = await client.connect(args);

@@ -32,7 +32,7 @@
  *   LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET
  *   Optional: BENCH_DURATION_S (default 20), BENCH_LOAD=off to disable synthetic load,
  *             BENCH_SKIP_CRASH=1 to skip the crash-recovery phase.
- * Build first:  pnpm run build   (this script imports ../dist)
+ * Build first:  pnpm run build   (this script statically imports ../dist/index.js)
  * Run:          LIVEKIT_URL=... LIVEKIT_API_KEY=... LIVEKIT_API_SECRET=... node scripts/worker-meet-live-benchmark.mjs
  */
 
@@ -40,7 +40,8 @@ import { monitorEventLoopDelay, performance } from 'node:perf_hooks';
 import { Worker } from 'node:worker_threads';
 import { createRequire } from 'node:module';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
+import { LiveKitRtcNodeRoomClient, LiveKitWorkerRoomClient, DefaultRtcNodeLoader } from '../dist/index.js';
 
 const REQUIRED_ENV = ['LIVEKIT_URL', 'LIVEKIT_API_KEY', 'LIVEKIT_API_SECRET'];
 const missing = REQUIRED_ENV.filter((k) => !process.env[k]);
@@ -61,10 +62,10 @@ const FRAME_SAMPLES = (SAMPLE_RATE * FRAME_MS) / 1000;
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const pkgDist = path.resolve(here, '../dist');
+// `livekit-server-sdk` (token minting) is not a dependency of this package; it is resolved from the sibling
+// @memberjunction/livekit-room-server package, which already depends on it. Build that package's deps first.
 const requireFromRoomServer = createRequire(path.resolve(here, '../../../../../LiveKitRoomServer/package.json'));
 const { AccessToken } = requireFromRoomServer('livekit-server-sdk');
-const native = await import(pathToFileURL(path.join(pkgDist, 'index.js')).href);
-const { LiveKitRtcNodeRoomClient, LiveKitWorkerRoomClient, DefaultRtcNodeLoader } = native;
 const workerBootstrapPath = path.join(pkgDist, 'media-worker-bootstrap.js');
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

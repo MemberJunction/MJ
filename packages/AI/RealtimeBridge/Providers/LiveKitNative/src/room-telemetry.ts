@@ -64,7 +64,9 @@ export interface RoomAudioTelemetrySnapshot {
 }
 
 /** A {@link NativeRoomClient} that can also report audio telemetry. */
-export type TelemetryRoomClient = NativeRoomClient & {
+export type TelemetryRoomClient = Omit<NativeRoomClient, 'onDisconnected'> & {
+    /** Registers the room-disconnected callback; `reason` is the LiveKit disconnect reason when known. */
+    onDisconnected(cb: (reason?: string) => void): void;
     /** Returns the current audio telemetry snapshot. */
     GetTelemetry(): RoomAudioTelemetrySnapshot;
 };

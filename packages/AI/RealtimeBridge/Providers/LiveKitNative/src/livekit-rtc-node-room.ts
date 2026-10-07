@@ -192,10 +192,10 @@ export interface CreateLiveKitRtcNodeModuleOptions {
     /** Loader override (tests inject a fake `@livekit/rtc-node`). */
     Loader?: RtcNodeLoader;
     /**
-     * Whether to isolate media-plane processing in a dedicated worker thread. Default: ON, unless
-     * `process.env.MJ_LIVEKIT_WORKER_MEDIA` is `off` / `false` / `0`, or a custom {@link Loader} is supplied
-     * (a loader function cannot cross the thread boundary, so a custom loader implies in-process). An
-     * explicit value here overrides both. If the worker cannot be spawned or dies before the room is
+     * Whether to isolate media-plane processing in a dedicated worker thread (experimental). Default: OFF;
+     * enabled by `process.env.MJ_LIVEKIT_WORKER_MEDIA` = `on` / `true` / `1`. A custom {@link Loader}
+     * always implies in-process unless this is set explicitly (a loader function cannot cross the thread
+     * boundary). An explicit value here overrides the env. If the worker cannot be spawned or dies before the room is
      * joined, the client falls back to the in-process room client.
      */
     UseWorker?: boolean;
@@ -327,7 +327,7 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
     private audioHandler?: (frame: NativeRoomAudioFrame) => void;
     private participantConnectedHandler?: (p: NativeRoomParticipant) => void;
     private participantDisconnectedHandler?: (identity: string) => void;
-    private disconnectedHandler?: () => void;
+    private disconnectedHandler?: (reason?: string) => void;
 
     private warnedVideo = false;
     private warnedScreen = false;
@@ -553,7 +553,7 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
     }
 
     /** Registers the room-disconnected handler. */
-    public onDisconnected(cb: () => void): void {
+    public onDisconnected(cb: (reason?: string) => void): void {
         this.disconnectedHandler = cb;
     }
 
@@ -577,7 +577,8 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
             this.participantDisconnectedHandler?.(participant.identity);
         }) as (...args: never[]) => void);
 
-        room.on(rtc.RoomEvent.Disconnected, (() => this.disconnectedHandler?.()) as (...args: never[]) => void);
+        room.on(rtc.RoomEvent.Disconnected, ((reason?: unknown) =>
+            this.disconnectedHandler?.(reason === undefined ? undefined : String(reason))) as (...args: never[]) => void);
     }
 
     /**
@@ -661,12 +662,13 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
 }
 
 /**
- * Resolves the `MJ_LIVEKIT_WORKER_MEDIA` switch. Worker media is ON by default; only an explicit
- * `off` / `false` / `0` (case-insensitive) disables it.
+ * Resolves the `MJ_LIVEKIT_WORKER_MEDIA` switch. The worker media plane is experimental and OFF by
+ * default: only an explicit `on` / `true` / `1` (case-insensitive) enables it; anything else, including
+ * unset, means in-process.
  */
 export function IsWorkerMediaEnabled(envValue: string | undefined): boolean {
     const v = (envValue ?? '').trim().toLowerCase();
-    return !(v === 'off' || v === 'false' || v === '0');
+    return v === 'on' || v === 'true' || v === '1';
 }
 
 /**

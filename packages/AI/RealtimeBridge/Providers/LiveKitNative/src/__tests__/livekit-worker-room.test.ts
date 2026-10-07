@@ -90,7 +90,7 @@ class FakeRoomClient implements TelemetryRoomClient {
     public disconnectCount = 0;
     public roster: NativeRoomParticipant[] = [];
     public audioCb?: (frame: NativeRoomAudioFrame) => void;
-    public disconnectedCb?: () => void;
+    public disconnectedCb?: (reason?: string) => void;
     public connectedCb?: (p: NativeRoomParticipant) => void;
     public constructor(private readonly clock: () => number = () => 0) {}
     public async connect(args: NativeConnectArgs): Promise<NativeConnectResult> {
@@ -119,7 +119,7 @@ class FakeRoomClient implements TelemetryRoomClient {
         return this.roster;
     }
     public async publishData(): Promise<void> {}
-    public onDisconnected(cb: () => void): void {
+    public onDisconnected(cb: (reason?: string) => void): void {
         this.disconnectedCb = cb;
     }
     public GetTelemetry(): RoomAudioTelemetrySnapshot {
@@ -146,30 +146,30 @@ async function connected(client: LiveKitWorkerRoomClient, workers: MockMediaWork
 }
 
 describe('IsWorkerMediaEnabled', () => {
-    it('is ON by default and only off/false/0 disable it', () => {
-        expect(IsWorkerMediaEnabled(undefined)).toBe(true);
-        expect(IsWorkerMediaEnabled('')).toBe(true);
-        expect(IsWorkerMediaEnabled('on')).toBe(true);
-        expect(IsWorkerMediaEnabled('true')).toBe(true);
+    it('is OFF by default; only on/true/1 enable it', () => {
+        expect(IsWorkerMediaEnabled(undefined)).toBe(false);
+        expect(IsWorkerMediaEnabled('')).toBe(false);
         expect(IsWorkerMediaEnabled('off')).toBe(false);
-        expect(IsWorkerMediaEnabled('OFF')).toBe(false);
-        expect(IsWorkerMediaEnabled(' false ')).toBe(false);
-        expect(IsWorkerMediaEnabled('0')).toBe(false);
+        expect(IsWorkerMediaEnabled('false')).toBe(false);
+        expect(IsWorkerMediaEnabled('yes-please')).toBe(false);
+        expect(IsWorkerMediaEnabled('on')).toBe(true);
+        expect(IsWorkerMediaEnabled('ON')).toBe(true);
+        expect(IsWorkerMediaEnabled(' true ')).toBe(true);
+        expect(IsWorkerMediaEnabled('1')).toBe(true);
     });
 });
 
 describe('CreateLiveKitRtcNodeModule worker selection', () => {
     afterEach(() => vi.unstubAllEnvs());
 
-    it('defaults to the worker-backed client', () => {
+    it('defaults to the in-process client', () => {
         vi.stubEnv('MJ_LIVEKIT_WORKER_MEDIA', '');
-        const client = CreateLiveKitRtcNodeModule().createRoomClient({});
-        expect(client).toBeInstanceOf(LiveKitWorkerRoomClient);
+        expect(CreateLiveKitRtcNodeModule().createRoomClient({})).toBeInstanceOf(LiveKitRtcNodeRoomClient);
     });
 
-    it('MJ_LIVEKIT_WORKER_MEDIA=off selects the in-process client', () => {
-        vi.stubEnv('MJ_LIVEKIT_WORKER_MEDIA', 'off');
-        expect(CreateLiveKitRtcNodeModule().createRoomClient({})).toBeInstanceOf(LiveKitRtcNodeRoomClient);
+    it('MJ_LIVEKIT_WORKER_MEDIA=on selects the worker-backed client', () => {
+        vi.stubEnv('MJ_LIVEKIT_WORKER_MEDIA', 'on');
+        expect(CreateLiveKitRtcNodeModule().createRoomClient({})).toBeInstanceOf(LiveKitWorkerRoomClient);
     });
 
     it('UseWorker overrides the env switch in both directions', () => {
@@ -179,7 +179,8 @@ describe('CreateLiveKitRtcNodeModule worker selection', () => {
         expect(CreateLiveKitRtcNodeModule({ UseWorker: false }).createRoomClient({})).toBeInstanceOf(LiveKitRtcNodeRoomClient);
     });
 
-    it('a custom Loader implies in-process (a loader cannot cross the thread boundary)', () => {
+    it('a custom Loader implies in-process even when the env enables the worker', () => {
+        vi.stubEnv('MJ_LIVEKIT_WORKER_MEDIA', 'on');
         const client = CreateLiveKitRtcNodeModule({ Loader: async () => { throw new Error('unused'); } }).createRoomClient({});
         expect(client).toBeInstanceOf(LiveKitRtcNodeRoomClient);
     });
@@ -249,6 +250,23 @@ describe('LiveKitWorkerRoomClient', () => {
             expect(fallback.flushCount).toBe(1);
             await client.disconnect();
             expect(fallback.disconnectCount).toBe(1);
+        });
+
+        it('passes the LiveKit disconnect reason through the fallback client and clears it on disconnect', async () => {
+            const fallback = new FakeRoomClient();
+            const client = new LiveKitWorkerRoomClient({
+                workerFactory: () => { throw new Error('unavailable'); },
+                fallbackFactory: () => fallback,
+                telemetryPollMs: 0,
+            });
+            const reasons: (string | undefined)[] = [];
+            client.onDisconnected((r) => reasons.push(r));
+            await client.connect(ARGS);
+            fallback.disconnectedCb?.('PARTICIPANT_REMOVED');
+            expect(reasons).toEqual(['PARTICIPANT_REMOVED']);
+            await client.disconnect();
+            client.publishAudio(new ArrayBuffer(8));
+            expect(fallback.published).toHaveLength(0);
         });
 
         it('rejects (does not hang) when the worker cannot spawn and no fallback is configured', async () => {
@@ -387,6 +405,44 @@ describe('LiveKitWorkerRoomClient', () => {
             expect(onDisconnected).toHaveBeenCalledTimes(1);
             expect(onDisconnected.mock.calls[0][0]).toContain('token expired');
             expect(workers[1].terminated).toBe(true);
+        });
+
+        it('treats a rejected rejoin as terminal even with the default attempt budget', async () => {
+            const client = newClient(workers); // default maxRestartAttempts = 3
+            const onDisconnected = vi.fn();
+            client.onDisconnected(onDisconnected);
+            await connected(client, workers);
+
+            workers[0].emitExit(1);
+            await vi.advanceTimersByTimeAsync(250);
+            const cmd = workers[1].commandsOf('connect')[0];
+            workers[1].emitMessage({ type: 'commandError', id: cmd.id, error: 'token expired' });
+            await vi.advanceTimersByTimeAsync(60_000);
+
+            expect(workers).toHaveLength(2);
+            expect(onDisconnected).toHaveBeenCalledTimes(1);
+            expect(onDisconnected.mock.calls[0][0]).toBe('rejoin rejected: token expired');
+        });
+
+        it('disconnect() during a rejoin leaves no pending request, restart timer or further spawn', async () => {
+            const client = newClient(workers, { restartBackoffBaseMs: 100 });
+            const onDisconnected = vi.fn();
+            client.onDisconnected(onDisconnected);
+            await connected(client, workers);
+
+            workers[0].emitExit(1);
+            await vi.advanceTimersByTimeAsync(100); // rejoin now in flight on workers[1]
+            expect(workers).toHaveLength(2);
+
+            const p = client.disconnect();
+            workers[1].emitMessage({ type: 'commandSuccess', id: workers[1].commandsOf('disconnect')[0].id });
+            await p;
+            await vi.advanceTimersByTimeAsync(120_000);
+
+            expect(workers).toHaveLength(2);
+            expect(workers[1].terminated).toBe(true);
+            expect(onDisconnected).not.toHaveBeenCalled();
+            expect(vi.getTimerCount()).toBe(0);
         });
 
         it('refuses to rejoin with a join token older than maxRejoinTokenAgeMs and raises disconnect instead', async () => {
@@ -688,6 +744,13 @@ describe('MediaWorkerSession', () => {
         expect(tel?.type === 'telemetry' && tel.id).toBe('t1');
         expect(tel?.type === 'telemetry' && tel.snapshot.pacerQueuedMs).toBe(60);
         expect(tel?.type === 'telemetry' && typeof tel.snapshot.workerEventLoopDelayP99Ms).toBe('number');
+    });
+
+    it('forwards the LiveKit disconnect reason from the native client', async () => {
+        await connectSession();
+        fake.disconnectedCb?.('SERVER_SHUTDOWN');
+        const ev = events.find((e) => e.message.type === 'disconnected')?.message;
+        expect(ev).toEqual({ type: 'disconnected', reason: 'SERVER_SHUTDOWN' });
     });
 
     it('answers a failing correlated command with commandError carrying the same id', async () => {

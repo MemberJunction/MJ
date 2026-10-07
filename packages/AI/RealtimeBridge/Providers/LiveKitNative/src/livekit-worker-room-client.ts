@@ -9,6 +9,9 @@
  * - Fallback to the in-process client when the worker cannot be started or joined.
  * - Bounded, backed-off worker crash recovery that ends in a raised disconnect, never a zombie session.
  *
+ * ## Opt-in
+ * Experimental and OFF by default; enabled with `MJ_LIVEKIT_WORKER_MEDIA=on` (see README, "Worker media plane").
+ *
  * ## Rejoin and token TTL
  * A restarted worker re-joins the room with the SAME access token the session originally connected with
  * (the `NativeRoomClient` contract has no token-refresh callback). LiveKit validates `exp` at join time,
@@ -185,6 +188,7 @@ export class LiveKitWorkerRoomClient implements TelemetryRoomClient {
             entry.timer = setTimeout(() => {
                 this.take(id)?.reject(new WorkerInfraError(`media worker request ${id} timed out after ${timeoutMs}ms`));
             }, timeoutMs);
+            entry.timer.unref?.();
         }
         this.pending.set(id, entry);
         return id;
@@ -353,6 +357,7 @@ export class LiveKitWorkerRoomClient implements TelemetryRoomClient {
             this.restartTimer = null;
             void this.restartWorker();
         }, delayMs);
+        this.restartTimer.unref?.();
     }
 
     /** Spawns a replacement worker and rejoins the room with the stored arguments. */
@@ -374,6 +379,11 @@ export class LiveKitWorkerRoomClient implements TelemetryRoomClient {
             LogError(`[LiveKitWorkerRoomClient] Worker restart failed: ${message}`);
             await this.terminateWorker();
             this.isReconnecting = false;
+            if (err instanceof WorkerReportedError) {
+                // The server/addon rejected the rejoin (e.g. expired token): retrying cannot succeed.
+                this.raiseDisconnected(`rejoin rejected: ${message}`);
+                return;
+            }
             this.scheduleRestart(message);
             return;
         }
@@ -411,6 +421,8 @@ export class LiveKitWorkerRoomClient implements TelemetryRoomClient {
     private async terminateWorker(): Promise<void> {
         const worker = this.worker;
         this.worker = null;
+        // handleWorkerExit ignores the exit of a detached worker, so settle its requests here.
+        this.rejectAllPending(new WorkerInfraError('worker terminated'));
         if (worker) {
             try {
                 await worker.terminate();
@@ -464,7 +476,7 @@ export class LiveKitWorkerRoomClient implements TelemetryRoomClient {
         if (this.participantDisconnectedCallback) fallback.onParticipantDisconnected(this.participantDisconnectedCallback);
         if (this.disconnectedCallback) {
             const cb = this.disconnectedCallback;
-            fallback.onDisconnected(() => cb('room disconnected'));
+            fallback.onDisconnected((reason) => cb(reason ?? 'room disconnected'));
         }
         return fallback.connect(args);
     }
@@ -480,7 +492,9 @@ export class LiveKitWorkerRoomClient implements TelemetryRoomClient {
             this.restartTimer = null;
         }
         if (this.fallback) {
-            await this.fallback.disconnect();
+            const fallback = this.fallback;
+            this.fallback = null;
+            await fallback.disconnect();
             return;
         }
         const worker = this.worker;
@@ -581,7 +595,7 @@ export class LiveKitWorkerRoomClient implements TelemetryRoomClient {
      */
     public onDisconnected(cb: (reason?: string) => void): void {
         this.disconnectedCallback = cb;
-        this.fallback?.onDisconnected(() => cb('room disconnected'));
+        this.fallback?.onDisconnected((reason) => cb(reason ?? 'room disconnected'));
     }
 
     // ──────────────────────────────────────────────────────────────────────────
