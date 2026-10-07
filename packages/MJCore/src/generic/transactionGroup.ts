@@ -385,6 +385,16 @@ export abstract class TransactionGroupBase {
      *
      * A group submitted inside a provider transaction joins that transaction's open batch, which
      * then applies when the transaction settles.
+     *
+     * `Submit()` waits for each batch to close, so its result now includes the cache maintenance
+     * (slot reads and writes, and any wait on a shared cache's cross-process lock) that per-row
+     * maintenance used to run without waiting. That is one wait per provider per group.
+     *
+     * Batches are keyed by provider, not by group. Any save raised for the same provider while the
+     * callbacks and notification run joins this group's batch, and is invalidated rather than
+     * applied if the group fails. In a browser every entity shares one provider, so an unrelated
+     * save in that window is affected. Invalidating is the safe direction: the slot reloads on its
+     * next read.
      */
     private async completeSubmittedResults(results: TransactionResult[], groupSucceeded: boolean): Promise<void> {
         const cache = LocalCacheManager.Instance;

@@ -58,6 +58,11 @@ interface PlannedItem {
     /**
      * Where the item raises its save. An entity's `Save()` raises it when the group notifies its
      * outcome ('notification', the default); 'callback' raises it from the item's callback.
+     *
+     * A real `BaseEntity` raises its save only from a successful notification, so 'callback' is a
+     * synthetic source. The failure-path tests use it to put a save inside a batch that then fails,
+     * standing in for any other save raised for the same provider during the group's callbacks: a
+     * callback that saves another entity, or, in a browser, an unrelated save on the shared provider.
      */
     RaiseFrom?: 'notification' | 'callback';
     /** When set, the item's callback waits for this before it finishes. */

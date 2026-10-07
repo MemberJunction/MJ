@@ -593,8 +593,13 @@ export const CacheArchitectureChecks: NamedCheck[] = [
     {
         Id: 'cache-architecture.CA10',
         RequiresMutation: true,
-        Name: 'CA10: a transaction group that rolls back writes no cached slot and leaves no rows',
+        Name: 'CA10: a transaction group that rolls back writes no cached slot and leaves no rows (end-to-end guard)',
         Fn: async (ctx): Promise<void> => {
+            // An end-to-end guard, not a pin for the batch's failure path. On SQL Server a group
+            // that fails on a foreign key throws inside HandleSubmit, before any callback runs, so
+            // TransactionGroupBase.completeSubmittedResults is never reached and this check passes
+            // with or without batching. The failed-batch path is pinned by the unit tests in
+            // transactionGroup.entityEventBatch.test.ts.
             const engineSlot = await seedEngineSlot(ctx, CATEGORY_ENTITY);
             const privateSlot = await seedPrivateSlot(ctx, CATEGORY_ENTITY, 'ca10');
             const writesBefore = await slotWriteCounts(ctx, CATEGORY_ENTITY);
