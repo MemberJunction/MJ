@@ -30,6 +30,7 @@ import { AgentDecisionsSwitchChecks } from '../checks/agent-decisions-switch.che
 import { ListsChecks } from '../checks/lists.checks';
 import { OpenAppTeardownChecks } from '../checks/open-app-teardown.checks';
 import { UserRoutinesChecks } from '../checks/user-routines.checks';
+import { WorkQueueRuntimeChecks } from '../checks/work-queue-runtime.checks';
 import { AgentLoopLiveChecks } from '../checks/agent-loop-live.checks';
 import { ShippedAgentsLiveChecks } from '../checks/shipped-agents-live.checks';
 import { AgentCarryForwardChecks } from '../checks/agent-carry-forward.checks';
@@ -136,6 +137,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['lists', ListsChecks, 3],
         ['open-app-teardown', OpenAppTeardownChecks, 2],
         ['user-routines', UserRoutinesChecks, 16],
+        ['work-queue-runtime', WorkQueueRuntimeChecks, 19], // WR1-WR19 host, RunOnce, partitions, cancel, operators, sweeper, REST (IT105)
         ['conversation-compaction', ConversationCompactionChecks, 18], // CC1-CC18
         ['trailing-runtime-state', TrailingRuntimeStateChecks, 6], // TRS1-TRS6
         ['agent-decisions-switch', AgentDecisionsSwitchChecks, 9], // DS1-DS9 the decisionsEnabled master switch, scripted chat and decision drivers (IT97)
@@ -330,6 +332,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'user-routines': 16,
         'view-execution': 12,
         'view-security': 4,
+        'work-queue-runtime': 19,
         'workflow-demo-agents': 5,
     };
 
