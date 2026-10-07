@@ -44,7 +44,7 @@ import {
     KnowledgeHubMetadataEngine,
 } from "@memberjunction/core-entities";
 import { VectorBase } from "@memberjunction/ai-vectors";
-import { EntityVectorSyncer, VectorizeEntityParams } from "@memberjunction/ai-vector-sync";
+import { EntityDocumentTemplateDataBuilder, EntityVectorSyncer, VectorizeEntityParams } from "@memberjunction/ai-vector-sync";
 import { AIEngine } from "@memberjunction/aiengine";
 import { EntityDocumentTemplateParser } from "@memberjunction/entity-documents";
 import { TemplateEngineServer } from "@memberjunction/templates";
@@ -1224,10 +1224,16 @@ export class DuplicateRecordDetector extends VectorBase {
     // ─────────────────────────────────────────────
 
     /**
-     * Generate human-readable template text for each record using the entity document template.
+     * Generate the template text for each record: the text that is embedded and queried with.
      *
-     * Loads the template from TemplateEngineServer and renders it via Nunjucks,
-     * matching the same approach used by the vectorization pipeline.
+     * It must be the text vector sync embedded for the record, or the query vector describes a
+     * different document than the stored one and genuine duplicates fall below the threshold. So
+     * the template is rendered exactly as sync renders it: from the row RunView returns for the
+     * record ({@link LoadTemplateRows}), with every `Entity` param's related rows (a person's
+     * Phones, Emails...), through the same {@link EntityDocumentTemplateDataBuilder} sync uses.
+     *
+     * @throws when a related param's rows can't be loaded: a query rendered without them can't
+     * match the stored text, and would quietly miss the duplicates the run exists to find
      */
     protected async GenerateTemplateTexts(
         templateParser: ReturnType<typeof EntityDocumentTemplateParser.CreateInstance>,
@@ -1239,15 +1245,30 @@ export class DuplicateRecordDetector extends VectorBase {
         const template = this.loadTemplate(entityDocument);
         const templateContent = template.Content[0] as MJTemplateContentEntity;
         TemplateEngineServer.Instance.SetupNunjucks();
+        if (records.length === 0) {
+            return [];
+        }
+
+        const entityInfo = records[0].EntityInfo;
+        const rows = await this.LoadTemplateRows(records, entityInfo);
+        const dataBuilder = new EntityDocumentTemplateDataBuilder(this.RunView, contextUser ?? this.CurrentUser);
+        // Only saved records have related rows: a new record's key, even a client-generated one, has none yet.
+        const savedRows = rows.filter((_, index) => records[index].IsSaved);
+        const relatedData = await dataBuilder.LoadRelatedData(entityInfo, savedRows, template);
+        const missingParams = dataBuilder.MissingRelatedParams(template, relatedData);
+        if (missingParams.length > 0) {
+            throw new Error(`Duplicate detection could not load the related rows for template param(s) ${missingParams.join(', ')} ` +
+                `of entity document '${entityDocument.Name}'; without them the query text would not match the text vector sync stored`);
+        }
 
         const templateTexts: string[] = [];
-        for (const record of records) {
-            // NEW convention: main entity fields are TOP-LEVEL variables (no Entity. prefix).
-            // Spread record fields directly into root context so templates use {{FieldName}}.
-            const data: Record<string, unknown> = { ...record.GetAll() };
+        for (const [index, record] of records.entries()) {
+            const data = dataBuilder.BuildTemplateData(entityInfo, rows[index], template, relatedData);
 
+            // Skip validation and suppress its warnings, as sync does: records commonly have null
+            // fields, and the templates handle them with {% if %} conditionals.
             const result = await TemplateEngineServer.Instance.RenderTemplate(
-                template, templateContent, data, true
+                template, templateContent, data, true, true
             );
 
             if (result.Success) {
@@ -1258,6 +1279,35 @@ export class DuplicateRecordDetector extends VectorBase {
             }
         }
         return templateTexts;
+    }
+
+    /**
+     * Each record's row as vector sync reads it — RunView with `ResultType: 'simple'` and every
+     * column — in the order of `records`, so the template renders the values sync rendered.
+     * `BaseEntity.GetAll()` differs: it turns date fields into `Date` objects, for one.
+     *
+     * An unsaved record (the entry-time check), or one whose row is no longer there, renders from its own values.
+     */
+    protected async LoadTemplateRows(records: BaseEntity[], entityInfo: EntityInfo): Promise<Record<string, unknown>[]> {
+        const saved = records.filter(r => r.IsSaved);
+        const rowsByKey = new Map<string, Record<string, unknown>>();
+        if (saved.length > 0) {
+            const result = await this.RunView.RunView<Record<string, unknown>>({
+                EntityName: entityInfo.Name,
+                ExtraFilter: this.BuildExtraFilter(saved.map(r => r.PrimaryKey)),
+                ResultType: 'simple',
+                IgnoreMaxRows: true, // bounded by the key filter; an entity's UserViewMaxRows can be smaller than a sub-batch
+            }, this.CurrentUser);
+            if (!result.Success) {
+                throw new Error(`Failed to load ${entityInfo.Name} rows for template rendering: ${result.ErrorMessage}`);
+            }
+            for (const row of result.Results) {
+                rowsByKey.set(NormalizeUUID(CompositeKey.FromEntityRecord(entityInfo, row).ToCompactURLSegment()), row);
+            }
+        }
+        return records.map(r =>
+            (r.IsSaved ? rowsByKey.get(NormalizeUUID(r.PrimaryKey.ToCompactURLSegment())) : undefined) ?? r.GetAll()
+        );
     }
 
     /**
