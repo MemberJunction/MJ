@@ -7,7 +7,7 @@ import { PageRecordsParams, VectorBase } from '@memberjunction/ai-vectors';
 import { BaseEntity, CompositeKey, EntityField, EntityFieldInfo, EntityInfo, IMetadataProvider, LogError, LogStatus, LogStatusEx, Metadata, RunView, RunViewResult, UserInfo } from '@memberjunction/core';
 import { MJAIModelEntity, MJEntityDocumentEntity, MJEntityDocumentTypeEntity, MJEntityRecordDocumentEntity, MJTemplateContentEntity,
   MJTemplateContentTypeEntity, MJTemplateEntity, MJTemplateEntityExtended, MJTemplateParamEntity, MJVectorDatabaseEntity, MJVectorIndexEntity } from '@memberjunction/core-entities';
-import { IsValidUUID, MJGlobal, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { Float32VectorToBase64, IsValidUUID, MJGlobal, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { pipeline } from 'node:stream/promises';
 import { EmbeddingData, TemplateParamData, VectorEmeddingData, VectorizeEntityParams, VectorizeEntityResponse, VectorizeProgressUpdate } from '../generic/vectorSync.types';
 import { EntityDocumentConfiguration, EntityDocumentMetadataConfig, EntityDocumentFieldConfig } from '../generic/entityDocumentConfig.types';
@@ -760,7 +760,7 @@ export class EntityVectorSyncer extends VectorBase {
     const idStrategy = docConfig.vectorIdStrategy ?? 'hash';
 
     // Short-circuit for read-only providers (e.g. SimpleVectorServiceProvider,
-    // which reads vectors directly from MJ: Entity Record Documents.VectorJSON
+    // which reads vectors directly from MJ: Entity Record Documents.VectorBinary / VectorJSON
     // — there is no remote store to upsert into). Still stamp VectorIDs on the
     // batch so the downstream ERD upserter has consistent record IDs to write.
     if (vectorDB.IsReadOnly) {
@@ -1441,6 +1441,9 @@ export class EntityVectorSyncer extends VectorBase {
           EntityName: 'MJ: Entity Record Documents',
           ExtraFilter: `EntityID = '${g.entityID}' AND EntityDocumentID = '${g.entityDocumentID}' AND RecordID IN (${inClause})`,
           ResultType: 'entity_object' as const,
+          // A find-or-create read: it must see the database, and each batch's filter is unique, so
+          // a cached copy would only be written and then dropped by the saves below.
+          BypassCache: true,
         };
       }),
       contextUser
@@ -1497,7 +1500,10 @@ export class EntityVectorSyncer extends VectorBase {
     erdEntity.RecordID = recordID;
     erdEntity.DocumentText = embeddingData.TemplateContent ?? null;
     erdEntity.VectorID = embeddingData.VectorID != null ? String(embeddingData.VectorID) : null;
+    // Both persisted forms: JSON for readers that predate the binary column, float32 bytes (base64) for
+    // readers that prefer a copy over a parse (SimpleVectorServiceProvider, clustering).
     erdEntity.VectorJSON = JSON.stringify(embeddingData.Vector);
+    erdEntity.VectorBinary = Float32VectorToBase64(embeddingData.Vector);
     erdEntity.VectorIndexID = vectorIndexID;
     erdEntity.EntityRecordUpdatedAt = new Date();
     erdEntity.EntityDocumentID = entityDocumentID;

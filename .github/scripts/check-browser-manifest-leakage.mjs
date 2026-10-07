@@ -101,12 +101,13 @@ const BUNDLE_PACKAGE_JSON = 'packages/AI/Providers/Bundle/package.json';
  * Tier 1 — named verbatim as forbidden by `packages/Angular/Bootstrap/CLAUDE.md` and
  * `packages/Angular/BootstrapLite/CLAUDE.md`. Each has a browser-safe counterpart where one
  * is needed: aiengine → ai-engine-base, ai-vectors-pinecone → ai-vectors-memory,
- * templates → templates-base-types.
+ * ai-vectors-memory-server → ai-vectors-memory, templates → templates-base-types.
  */
 const TIER_1 = [
     '@memberjunction/aiengine',
     '@memberjunction/ai-provider-bundle',
     '@memberjunction/ai-vectors-pinecone',
+    '@memberjunction/ai-vectors-memory-server',
     '@memberjunction/storage',
     '@memberjunction/templates',
     '@memberjunction/server',

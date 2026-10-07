@@ -1,0 +1,27 @@
+{
+  "Name": "facilitator-override",
+  "Description": "Demo Loop is mid-answer when the designated facilitator calls time. The facilitator takes the floor over the sitting holder (the one sanctioned override); a non-facilitator who tries the same is denied. No two turns overlap: Demo Loop's turn is cut where the facilitator's begins.",
+  "Agents": [
+    { "Id": "sage", "Names": ["Sage"] },
+    { "Id": "demo", "Names": ["Demo Loop"] },
+    { "Id": "chair", "Names": ["Chair"], "Facilitator": true }
+  ],
+  "Events": [
+    { "Type": "HumanSpeech", "AtMs": 0, "DurationMs": 2000, "Text": "Demo Loop, go through the proposal. Chair, keep us on time.",
+      "ExpectDecisions": { "sage": "Silent", "demo": "Speak", "chair": "Speak" } },
+    { "Type": "AgentSpeech", "AtMs": 3000, "Agent": "demo", "DurationMs": 9000, "Text": "Let me walk through all of the details of the proposal." },
+    { "Type": "AgentSpeech", "AtMs": 8000, "Agent": "chair", "DurationMs": 4000, "Text": "We are at time, so let us move to the next item." },
+    { "Type": "AgentSpeech", "AtMs": 9000, "Agent": "sage", "DurationMs": 3000, "Text": "Before we move on I have a concern." }
+  ],
+  "Expect": {
+    "Speeches": [
+      { "Agent": "demo", "Kind": "Turn", "Granted": true, "Reason": "FloorFree" },
+      { "Agent": "chair", "Kind": "Turn", "Granted": true, "Reason": "FacilitatorOverride" },
+      { "Agent": "sage", "Kind": "Turn", "Granted": false, "Reason": "HeldByOtherAgent" }
+    ],
+    "Preempted": [],
+    "BackchannelCount": 0,
+    "LoopCapReached": false,
+    "FinalFloorHolder": null
+  }
+}
