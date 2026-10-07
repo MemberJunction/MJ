@@ -1,0 +1,133 @@
+.wq-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.wq-picker-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.wq-label {
+    font-size: 0.8rem;
+    color: var(--mj-text-secondary);
+}
+
+.wq-select {
+    min-width: 320px;
+    padding: 8px 10px;
+    border: 1px solid var(--mj-border-default);
+    border-radius: 8px;
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-primary);
+    font: inherit;
+}
+
+.wq-select:focus {
+    outline: none;
+    border-color: var(--mj-border-focus);
+}
+
+.wq-chips {
+    display: flex;
+    gap: 6px;
+}
+
+.wq-loading {
+    padding: 40px 0;
+}
+
+.wq-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+    background: var(--mj-bg-surface-card);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.wq-table th {
+    text-align: left;
+    padding: 8px 12px;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--mj-text-secondary);
+    border-bottom: 1px solid var(--mj-border-subtle);
+}
+
+.wq-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--mj-border-subtle);
+    color: var(--mj-text-primary);
+    vertical-align: middle;
+}
+
+.wq-row-blocked td:first-child {
+    box-shadow: inset 3px 0 0 var(--mj-status-error);
+}
+
+.wq-key {
+    font-family: var(--mj-font-family-mono);
+    font-size: 0.8rem;
+}
+
+.wq-id {
+    font-size: 0.75rem;
+    color: var(--mj-text-secondary);
+}
+
+.wq-num {
+    text-align: right;
+    white-space: nowrap;
+}
+
+.wq-actions {
+    display: flex;
+    gap: 6px;
+    justify-content: flex-end;
+}
+
+.wq-muted {
+    color: var(--mj-text-muted);
+}
+
+.wq-chip {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+
+.wq-chip-neutral {
+    background: var(--mj-bg-surface-sunken);
+    color: var(--mj-text-secondary);
+}
+
+.wq-chip-info {
+    background: color-mix(in srgb, var(--mj-status-info) 14%, var(--mj-bg-surface));
+    color: var(--mj-status-info-text);
+}
+
+.wq-chip-error {
+    background: color-mix(in srgb, var(--mj-status-error) 14%, var(--mj-bg-surface));
+    color: var(--mj-status-error-text);
+}
+
+.wq-footnote {
+    margin: 0;
+    font-size: 0.8rem;
+    color: var(--mj-text-muted);
+}
+
+@media (max-width: 800px) {
+    .wq-select {
+        min-width: 0;
+        width: 100%;
+    }
+}

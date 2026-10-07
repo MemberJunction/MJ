@@ -980,6 +980,11 @@ export const MJAIAgentExampleSchema = z.object({
         * * Display Name: Expires At
         * * SQL Data Type: datetimeoffset
         * * Description: Optional expiration timestamp. Examples past this date are candidates for archival. NULL means no expiration.`),
+    EmbeddingVectorBinary: z.string().nullable().describe(`
+        * * Field Name: EmbeddingVectorBinary
+        * * Display Name: Embedding Vector Binary
+        * * SQL Data Type: varbinary(MAX)
+        * * Description: The example embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of EmbeddingVector. Written alongside EmbeddingVector; readers prefer it and fall back to EmbeddingVector when it is NULL.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -1516,6 +1521,11 @@ export const MJAIAgentNoteSchema = z.object({
     *   * MemoryManager
     *   * User
         * * Description: Type of author that created the note: Agent = written in-flight during an agent run, MemoryManager = extracted/consolidated by the scheduled Memory Manager, User = manually created by a person.`),
+    EmbeddingVectorBinary: z.string().nullable().describe(`
+        * * Field Name: EmbeddingVectorBinary
+        * * Display Name: Embedding Vector Binary
+        * * SQL Data Type: varbinary(MAX)
+        * * Description: The note embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of EmbeddingVector. Written alongside EmbeddingVector; readers prefer it and fall back to EmbeddingVector when it is NULL.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent Name
@@ -7641,7 +7651,7 @@ export const MJAIResultCacheSchema = z.object({
     PromptEmbedding: z.string().nullable().describe(`
         * * Field Name: PromptEmbedding
         * * Display Name: Prompt Embedding
-        * * SQL Data Type: varbinary
+        * * SQL Data Type: varbinary(MAX)
         * * Description: Vector representation of the prompt for similarity matching.`),
     PromptRunID: z.string().nullable().describe(`
         * * Field Name: PromptRunID
@@ -13178,6 +13188,16 @@ export const MJComponentSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates whether the component has any custom properties that are marked as required. This is auto-calculated based on the component's properties array to identify components with mandatory custom configuration.`),
+    FunctionalRequirementsVectorBinary: z.string().nullable().describe(`
+        * * Field Name: FunctionalRequirementsVectorBinary
+        * * Display Name: Functional Requirements Vector Binary
+        * * SQL Data Type: varbinary(MAX)
+        * * Description: The functional-requirements embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of FunctionalRequirementsVector. Written alongside FunctionalRequirementsVector; readers prefer it and fall back to FunctionalRequirementsVector when it is NULL.`),
+    TechnicalDesignVectorBinary: z.string().nullable().describe(`
+        * * Field Name: TechnicalDesignVectorBinary
+        * * Display Name: Technical Design Vector Binary
+        * * SQL Data Type: varbinary(MAX)
+        * * Description: The technical-design embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of TechnicalDesignVector. Written alongside TechnicalDesignVector; readers prefer it and fall back to TechnicalDesignVector when it is NULL.`),
     SourceRegistry: z.string().nullable().describe(`
         * * Field Name: SourceRegistry
         * * Display Name: Source Registry
@@ -19334,6 +19354,220 @@ export const MJEntityFieldSchema = z.object({
 export type MJEntityFieldEntityType = z.infer<typeof MJEntityFieldSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Entity Form Contributions
+ */
+export const MJEntityFormContributionSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    EntityID: z.string().describe(`
+        * * Field Name: EntityID
+        * * Display Name: Parent Entity
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: Parent form entity the panel mounts on.`),
+    ComponentID: z.string().describe(`
+        * * Field Name: ComponentID
+        * * Display Name: Component
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Components (vwComponents.ID)
+        * * Description: MJ: Components row (Type=Widget) whose Specification declares componentRole=form-panel.`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)`),
+    Slot: z.union([z.literal('after-everything'), z.literal('after-fields'), z.literal('after-related'), z.literal('before-fields'), z.literal('top-area')]).describe(`
+        * * Field Name: Slot
+        * * Display Name: Slot
+        * * SQL Data Type: nvarchar(30)
+        * * Default Value: after-fields
+    * * Value List Type: List
+    * * Possible Values 
+    *   * after-everything
+    *   * after-fields
+    *   * after-related
+    *   * before-fields
+    *   * top-area
+        * * Description: Slot inside the generated form: top-area, before-fields, after-fields, after-related, after-everything.`),
+    SortKey: z.number().describe(`
+        * * Field Name: SortKey
+        * * Display Name: Sort Key
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Order among panels drawn in the same place; higher renders earlier.`),
+    ContributionKey: z.string().nullable().describe(`
+        * * Field Name: ContributionKey
+        * * Display Name: Contribution Key
+        * * SQL Data Type: nvarchar(256)
+        * * Description: Last-wins identity shared with compiled registrations and MJ: Form Chrome Rules. Null derives related:<entity>:<join> for related claims, otherwise the row never collapses.`),
+    RelatedEntityID: z.string().nullable().describe(`
+        * * Field Name: RelatedEntityID
+        * * Display Name: Related Entity
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: When set, this panel replaces the related-entity grid for that relationship on the parent form.`),
+    RelatedJoinField: z.string().nullable().describe(`
+        * * Field Name: RelatedJoinField
+        * * Display Name: Related Join Field
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Disambiguates two FKs to the same related entity (BillToPersonID vs ShipToPersonID).`),
+    ReplacesSectionKey: z.string().nullable().describe(`
+        * * Field Name: ReplacesSectionKey
+        * * Display Name: Replaces Section Key
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Section key of one baked block, or rail key of one tab, this contribution stands in for. The panel draws in its place. Mutually exclusive with every other claim.`),
+    ReplacesSectionKeys: z.string().nullable().describe(`
+        * * Field Name: ReplacesSectionKeys
+        * * Display Name: Replaces Section Keys
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of section keys this contribution stands in for, all within one tab. The panel draws in the place of the first of them and the others are not drawn. Mutually exclusive with every other claim.`),
+    ReplacesFieldNames: z.string().nullable().describe(`
+        * * Field Name: ReplacesFieldNames
+        * * Display Name: Replaces Field Names
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of field names this contribution stands in for, all within one section. The panel draws inside that section, at SectionPosition, and the named fields are not drawn. Mutually exclusive with every other claim.`),
+    InSectionKey: z.string().nullable().describe(`
+        * * Field Name: InSectionKey
+        * * Display Name: In Section Key
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Section key of a section this contribution draws inside, replacing nothing. SectionPosition says whether it draws at the start or the end. Mutually exclusive with every other claim.`),
+    SectionPosition: z.union([z.literal('end'), z.literal('start')]).nullable().describe(`
+        * * Field Name: SectionPosition
+        * * Display Name: Section Position
+        * * SQL Data Type: nvarchar(10)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * end
+    *   * start
+        * * Description: Where inside its section the panel draws: start or end. Applies to InSectionKey and to a ReplacesFieldNames claim; null means start.`),
+    Inclusion: z.union([z.literal('More'), z.literal('None'), z.literal('Primary')]).nullable().describe(`
+        * * Field Name: Inclusion
+        * * Display Name: Inclusion
+        * * SQL Data Type: nvarchar(10)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * More
+    *   * None
+    *   * Primary
+        * * Description: L1 chrome inclusion: Primary (own rail item), More (folder), None (hidden). Null = default rail behavior.`),
+    ChromeGroup: z.union([z.literal('details'), z.literal('more')]).nullable().describe(`
+        * * Field Name: ChromeGroup
+        * * Display Name: Chrome Group
+        * * SQL Data Type: nvarchar(10)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * details
+    *   * more
+        * * Description: Pin to the details or more chrome bucket instead of an own rail item.`),
+    Presentation: z.union([z.literal('bare'), z.literal('panel')]).describe(`
+        * * Field Name: Presentation
+        * * Display Name: Presentation
+        * * SQL Data Type: nvarchar(10)
+        * * Default Value: panel
+    * * Value List Type: List
+    * * Possible Values 
+    *   * bare
+    *   * panel
+        * * Description: panel = wrapped in a collapsible section with header; bare = hero strip with no chrome and no rail item.`),
+    Title: z.string().nullable().describe(`
+        * * Field Name: Title
+        * * Display Name: Title
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Section header and rail label. Null falls back to Name.`),
+    Icon: z.string().nullable().describe(`
+        * * Field Name: Icon
+        * * Display Name: Icon
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Font Awesome class for the section header and rail item.`),
+    Scope: z.union([z.literal('Global'), z.literal('Role'), z.literal('User')]).describe(`
+        * * Field Name: Scope
+        * * Display Name: Scope
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: User
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Global
+    *   * Role
+    *   * User
+        * * Description: Who sees the contribution: User (UserID), Role (RoleID) or Global.`),
+    UserID: z.string().nullable().describe(`
+        * * Field Name: UserID
+        * * Display Name: User
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
+    RoleID: z.string().nullable().describe(`
+        * * Field Name: RoleID
+        * * Display Name: Role
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)`),
+    Precedence: z.number().describe(`
+        * * Field Name: Precedence
+        * * Display Name: Precedence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Last-wins precedence against compiled registrations sharing ContributionKey. Ties go to the compiled registration; a row wins only when strictly higher.`),
+    Status: z.union([z.literal('Active'), z.literal('Inactive'), z.literal('Pending')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+    *   * Pending
+        * * Description: Active rows render. Pending rows are drafts awaiting activation. Inactive rows are history.`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON passed to the component as contribution.configuration so one component can serve several rows.`),
+    Notes: z.string().nullable().describe(`
+        * * Field Name: Notes
+        * * Display Name: Notes
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Free-form authoring notes; agents append an iteration log here.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Entity: z.string().describe(`
+        * * Field Name: Entity
+        * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)`),
+    Component: z.string().describe(`
+        * * Field Name: Component
+        * * Display Name: Component
+        * * SQL Data Type: nvarchar(500)`),
+    RelatedEntity: z.string().nullable().describe(`
+        * * Field Name: RelatedEntity
+        * * Display Name: Related Entity
+        * * SQL Data Type: nvarchar(255)`),
+    User: z.string().nullable().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)`),
+    Role: z.string().nullable().describe(`
+        * * Field Name: Role
+        * * Display Name: Role
+        * * SQL Data Type: nvarchar(50)`),
+});
+
+export type MJEntityFormContributionEntityType = z.infer<typeof MJEntityFormContributionSchema>;
+
+/**
  * zod schema definition for the entity MJ: Entity Form Overrides
  */
 export const MJEntityFormOverrideSchema = z.object({
@@ -19796,6 +20030,11 @@ export const MJEntityRecordDocumentSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    VectorBinary: z.string().nullable().describe(`
+        * * Field Name: VectorBinary
+        * * Display Name: Vector Binary
+        * * SQL Data Type: varbinary(MAX)
+        * * Description: The embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of VectorJSON. Written alongside VectorJSON by vector sync; readers prefer it and fall back to VectorJSON when it is NULL.`),
     Entity: z.string().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
@@ -27049,6 +27288,11 @@ export const MJQuerySchema = z.object({
         * * SQL Data Type: nvarchar(MAX)
         * * JSON Type: MJQueryEntity_IQueryConfiguration
         * * Description: Optional JSON configuration bag defining query-level policies and semantic capabilities (shape = IQueryConfiguration). Includes Priority (1-100) for ground-truth ranking in the semantic layer, LogExecution to control query execution logging, AlternativeQuestions for multi-phrasing vector recall, UsageGuidance and WhenNotToUse bounds for AI agents, and DomainScope.`),
+    EmbeddingVectorBinary: z.string().nullable().describe(`
+        * * Field Name: EmbeddingVectorBinary
+        * * Display Name: Embedding Vector Binary
+        * * SQL Data Type: varbinary(MAX)
+        * * Description: The query embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of EmbeddingVector. Written alongside EmbeddingVector; readers prefer it and fall back to EmbeddingVector when it is NULL.`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
         * * Display Name: Category Name
@@ -33444,6 +33688,11 @@ export const MJTagSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
         * * Description: AI model whose embedding produced EmbeddingVector. When the configured tag-embedding model differs from this value, the cached vector is treated as stale and recomputed.`),
+    EmbeddingVectorBinary: z.string().nullable().describe(`
+        * * Field Name: EmbeddingVectorBinary
+        * * Display Name: Embedding Vector Binary
+        * * SQL Data Type: varbinary(MAX)
+        * * Description: The tag embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of EmbeddingVector. Written alongside EmbeddingVector; readers prefer it and fall back to EmbeddingVector when it is NULL.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent Name
@@ -37255,6 +37504,562 @@ export const MJWebSearchProviderSchema = z.object({
 export type MJWebSearchProviderEntityType = z.infer<typeof MJWebSearchProviderSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Work Queue Deduplications
+ */
+export const MJWorkQueueDeduplicationSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    TopicID: z.string().describe(`
+        * * Field Name: TopicID
+        * * Display Name: Topic ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Work Queue Topics (vwWorkQueueTopics.ID)`),
+    DeduplicationKey: z.string().describe(`
+        * * Field Name: DeduplicationKey
+        * * Display Name: Deduplication Key
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Producer-supplied key identifying one logical message within the topic. Compared case-sensitively (binary collation).`),
+    MessageID: z.string().describe(`
+        * * Field Name: MessageID
+        * * Display Name: Message ID
+        * * SQL Data Type: uniqueidentifier
+        * * Description: MessageID of the publish that owns the key. Not a foreign key: cloud messages have no row.`),
+    Status: z.union([z.literal('Confirmed'), z.literal('Reserved')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Confirmed
+    *   * Reserved
+        * * Description: Reserved: a send is in progress (short expiry) and proves nothing about its outcome. Confirmed: the publish was accepted. Only Confirmed rows make a later publish a Duplicate.`),
+    ExpiresAt: z.date().describe(`
+        * * Field Name: ExpiresAt
+        * * Display Name: Expires At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When the key stops suppressing duplicates. Expired rows are replaced on publish and purged by the sweeper.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Topic: z.string().describe(`
+        * * Field Name: Topic
+        * * Display Name: Topic
+        * * SQL Data Type: nvarchar(200)`),
+});
+
+export type MJWorkQueueDeduplicationEntityType = z.infer<typeof MJWorkQueueDeduplicationSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Work Queue Deliveries
+ */
+export const MJWorkQueueDeliverySchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    MessageID: z.string().describe(`
+        * * Field Name: MessageID
+        * * Display Name: Message ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Work Queue Messages (vwWorkQueueMessages.ID)`),
+    SubscriptionID: z.string().describe(`
+        * * Field Name: SubscriptionID
+        * * Display Name: Subscription ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Work Queue Subscriptions (vwWorkQueueSubscriptions.ID)`),
+    Status: z.union([z.literal('Completed'), z.literal('DeadLettered'), z.literal('Discarded'), z.literal('InFlight'), z.literal('Pending')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Completed
+    *   * DeadLettered
+    *   * Discarded
+    *   * InFlight
+    *   * Pending
+        * * Description: Pending: awaiting claim. InFlight: leased. Completed: handler succeeded. DeadLettered: exhausted or rejected, needs an operator. Discarded: cancelled or resolved by an operator.`),
+    PartitionKey: z.string().nullable().describe(`
+        * * Field Name: PartitionKey
+        * * Display Name: Partition Key
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Copy of the message partition key, populated only for Exclusive and Ordered subscriptions. Drives the in-flight uniqueness rule.`),
+    OrderKey: z.number().describe(`
+        * * Field Name: OrderKey
+        * * Display Name: Order Key
+        * * SQL Data Type: bigint
+        * * Description: Position within the partition key: always the message PublishOrdinal.`),
+    AttemptCount: z.number().describe(`
+        * * Field Name: AttemptCount
+        * * Display Name: Attempt Count
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Claims so far, including claims whose lease expired. Reset to 0 by replay.`),
+    IsReplay: z.boolean().describe(`
+        * * Field Name: IsReplay
+        * * Display Name: Is Replay
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: 1 once an operator has replayed this delivery from the dead-letter state.`),
+    VisibleAt: z.date().describe(`
+        * * Field Name: VisibleAt
+        * * Display Name: Visible At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: sysdatetimeoffset()
+        * * Description: Earliest time the delivery may be claimed; retry backoff moves it forward.`),
+    LeaseOwner: z.string().nullable().describe(`
+        * * Field Name: LeaseOwner
+        * * Display Name: Lease Owner
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Worker instance holding the current lease.`),
+    LeaseToken: z.string().nullable().describe(`
+        * * Field Name: LeaseToken
+        * * Display Name: Lease Token
+        * * SQL Data Type: uniqueidentifier
+        * * Description: New value per claim; a cancel leaves it unchanged. Every heartbeat and settle must present it, so a worker that lost its lease cannot overwrite a newer claim.`),
+    LeaseExpiresAt: z.date().nullable().describe(`
+        * * Field Name: LeaseExpiresAt
+        * * Display Name: Lease Expires At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When the current lease expires, on the database clock.`),
+    LastHeartbeatAt: z.date().nullable().describe(`
+        * * Field Name: LastHeartbeatAt
+        * * Display Name: Last Heartbeat At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When the lease was last renewed.`),
+    Progress: z.string().nullable().describe(`
+        * * Field Name: Progress
+        * * Display Name: Progress
+        * * SQL Data Type: nvarchar(4000)
+        * * Description: Latest handler progress JSON ({"Percent","Message","Checkpoint"}).`),
+    LastError: z.string().nullable().describe(`
+        * * Field Name: LastError
+        * * Display Name: Last Error
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Most recent failure text, including LeaseExpired.`),
+    DeadLetterReason: z.string().nullable().describe(`
+        * * Field Name: DeadLetterReason
+        * * Display Name: Dead Letter Reason
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Why the delivery was dead-lettered: a handler reason, MaxAttemptsExceeded, LeaseExpired or HandlerNotRegistered.`),
+    DeadLetteredAt: z.date().nullable().describe(`
+        * * Field Name: DeadLetteredAt
+        * * Display Name: Dead Lettered At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When the delivery entered DeadLettered.`),
+    CompletedAt: z.date().nullable().describe(`
+        * * Field Name: CompletedAt
+        * * Display Name: Completed At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Terminal time for both Completed and Discarded; the retention purge key.`),
+    CancelRequestedAt: z.date().nullable().describe(`
+        * * Field Name: CancelRequestedAt
+        * * Display Name: Cancel Requested At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Set when an operator cancels an in-flight delivery. From then on every holder write except AcknowledgeCancel fails; the holder acknowledges and the row becomes Discarded at once, or ExpireLeases discards it when the lease runs out. Never retried.`),
+    ResolvedByUserID: z.string().nullable().describe(`
+        * * Field Name: ResolvedByUserID
+        * * Display Name: Resolved By User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
+    ResolutionNote: z.string().nullable().describe(`
+        * * Field Name: ResolutionNote
+        * * Display Name: Resolution Note
+        * * SQL Data Type: nvarchar(1000)
+        * * Description: Operator note recorded with a replay or the reason recorded with a discard.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Subscription: z.string().describe(`
+        * * Field Name: Subscription
+        * * Display Name: Subscription
+        * * SQL Data Type: nvarchar(200)`),
+    ResolvedByUser: z.string().nullable().describe(`
+        * * Field Name: ResolvedByUser
+        * * Display Name: Resolved By User
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJWorkQueueDeliveryEntityType = z.infer<typeof MJWorkQueueDeliverySchema>;
+
+/**
+ * zod schema definition for the entity MJ: Work Queue Messages
+ */
+export const MJWorkQueueMessageSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier`),
+    PublishOrdinal: z.number().describe(`
+        * * Field Name: PublishOrdinal
+        * * Display Name: Publish Ordinal
+        * * SQL Data Type: bigint
+        * * Description: Publish order, assigned by the database. Every delivery of the message carries it as its OrderKey.`),
+    TopicID: z.string().describe(`
+        * * Field Name: TopicID
+        * * Display Name: Topic ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Work Queue Topics (vwWorkQueueTopics.ID)`),
+    PartitionKey: z.string().nullable().describe(`
+        * * Field Name: PartitionKey
+        * * Display Name: Partition Key
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Producer-supplied key used by Exclusive and Ordered subscriptions. Compared case-sensitively (binary collation).`),
+    Attributes: z.string().nullable().describe(`
+        * * Field Name: Attributes
+        * * Display Name: Attributes
+        * * SQL Data Type: nvarchar(4000)
+        * * Description: JSON object of string attributes (at most 10). The only envelope fields subscription filters see.`),
+    Payload: z.string().nullable().describe(`
+        * * Field Name: Payload
+        * * Display Name: Payload
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Inline JSON payload. Mutually exclusive with PayloadRef.`),
+    PayloadRef: z.string().nullable().describe(`
+        * * Field Name: PayloadRef
+        * * Display Name: Payload Ref
+        * * SQL Data Type: nvarchar(2000)
+        * * Description: JSON claim-check reference ({"Uri":...}) to data held outside the queue.`),
+    CorrelationID: z.string().nullable().describe(`
+        * * Field Name: CorrelationID
+        * * Display Name: Correlation ID
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Caller-supplied identifier for tracing related work.`),
+    PublishedAt: z.date().describe(`
+        * * Field Name: PublishedAt
+        * * Display Name: Published At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: sysdatetimeoffset()
+        * * Description: When MJ accepted the publish, on the database clock.`),
+    PublishedByUserID: z.string().nullable().describe(`
+        * * Field Name: PublishedByUserID
+        * * Display Name: Published By User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Topic: z.string().describe(`
+        * * Field Name: Topic
+        * * Display Name: Topic
+        * * SQL Data Type: nvarchar(200)`),
+    PublishedByUser: z.string().nullable().describe(`
+        * * Field Name: PublishedByUser
+        * * Display Name: Published By User
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJWorkQueueMessageEntityType = z.infer<typeof MJWorkQueueMessageSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Work Queue Subscriptions
+ */
+export const MJWorkQueueSubscriptionSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    TopicID: z.string().describe(`
+        * * Field Name: TopicID
+        * * Display Name: Topic ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Work Queue Topics (vwWorkQueueTopics.ID)`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Globally unique subscription name, used in manifests and consumer configuration.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: What this consumer does and who owns it.`),
+    Filter: z.string().nullable().describe(`
+        * * Field Name: Filter
+        * * Display Name: Filter
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional attribute filter as MJ CompositeFilterDescriptor JSON (03 section 4), restricted to the broker-translatable operators eq, neq, startswith, isnull and isnotnull over envelope attribute names. Null matches every message.`),
+    PartitionMode: z.union([z.literal('Exclusive'), z.literal('None'), z.literal('Ordered')]).describe(`
+        * * Field Name: PartitionMode
+        * * Display Name: Partition Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: None
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Exclusive
+    *   * None
+    *   * Ordered
+        * * Description: None: no key constraints. Exclusive: one delivery in flight per partition key, no order promise. Ordered (Database transport only): a key's deliveries run in publish order, one at a time, and a dead-lettered head blocks its key. Immutable once the subscription has deliveries.`),
+    MaxAttempts: z.number().describe(`
+        * * Field Name: MaxAttempts
+        * * Display Name: Max Attempts
+        * * SQL Data Type: int
+        * * Default Value: 5
+        * * Description: Attempts allowed per delivery, including lease expiries, before it is dead-lettered.`),
+    BackoffBaseSeconds: z.number().describe(`
+        * * Field Name: BackoffBaseSeconds
+        * * Display Name: Backoff Base Seconds
+        * * SQL Data Type: int
+        * * Default Value: 10
+        * * Description: Base retry delay in seconds; full-jitter exponential backoff doubles it per attempt.`),
+    BackoffMaxSeconds: z.number().describe(`
+        * * Field Name: BackoffMaxSeconds
+        * * Display Name: Backoff Max Seconds
+        * * SQL Data Type: int
+        * * Default Value: 900
+        * * Description: Upper bound on the retry delay, in seconds.`),
+    LeaseSeconds: z.number().describe(`
+        * * Field Name: LeaseSeconds
+        * * Display Name: Lease Seconds
+        * * SQL Data Type: int
+        * * Default Value: 60
+        * * Description: Seconds a claim lasts before it expires unless renewed by a heartbeat. Measured on the transport clock.`),
+    HeartbeatMode: z.union([z.literal('Auto'), z.literal('Manual')]).describe(`
+        * * Field Name: HeartbeatMode
+        * * Display Name: Heartbeat Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Auto
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Auto
+    *   * Manual
+        * * Description: Auto: the runtime renews the lease while the handler runs. Manual: only handler heartbeats renew it, so hung handlers are detected.`),
+    MaxProcessingSeconds: z.number().nullable().describe(`
+        * * Field Name: MaxProcessingSeconds
+        * * Display Name: Max Processing Seconds
+        * * SQL Data Type: int
+        * * Description: Optional cap on handler run time; Auto heartbeats stop and the handler is aborted after it. Above a host's known ceiling it produces a validation warning.`),
+    HostType: z.union([z.literal('External'), z.literal('MJWorker')]).describe(`
+        * * Field Name: HostType
+        * * Display Name: Host Type
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: MJWorker
+    * * Value List Type: List
+    * * Possible Values 
+    *   * External
+    *   * MJWorker
+        * * Description: MJWorker: the handler runs inside an MJ server process. External: the handler runs elsewhere, for example a Lambda (cloud transports only).`),
+    HandlerKey: z.string().nullable().describe(`
+        * * Field Name: HandlerKey
+        * * Display Name: Handler Key
+        * * SQL Data Type: nvarchar(200)
+        * * Description: ClassFactory key of the BaseWorkHandler registration that processes deliveries. Required for MJWorker subscriptions.`),
+    ExternalRef: z.string().nullable().describe(`
+        * * Field Name: ExternalRef
+        * * Display Name: External Ref
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Informational reference to an external consumer, for example a Lambda ARN.`),
+    BindingConfig: z.string().nullable().describe(`
+        * * Field Name: BindingConfig
+        * * Display Name: Binding Config
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Transport binding JSON imported after provisioning, for example queue and dead-letter queue URLs. Empty for Database subscriptions.`),
+    Status: z.union([z.literal('Active'), z.literal('Disabled'), z.literal('Paused')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    *   * Paused
+        * * Description: Active: deliveries are created and processed. Paused: deliveries are created but nothing is claimed. Disabled: no new deliveries are created.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Topic: z.string().describe(`
+        * * Field Name: Topic
+        * * Display Name: Topic
+        * * SQL Data Type: nvarchar(200)`),
+});
+
+export type MJWorkQueueSubscriptionEntityType = z.infer<typeof MJWorkQueueSubscriptionSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Work Queue Topics
+ */
+export const MJWorkQueueTopicSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Unique dotted lowercase topic name, for example email.events.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: What the topic represents and who publishes to it.`),
+    TransportID: z.string().describe(`
+        * * Field Name: TransportID
+        * * Display Name: Transport ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Work Queue Transports (vwWorkQueueTransports.ID)`),
+    IsFifo: z.boolean().describe(`
+        * * Field Name: IsFifo
+        * * Display Name: Is Fifo
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Cloud transports: the topic uses FIFO resources. Required on AWS when any subscription is Exclusive.`),
+    AllowExternalPublish: z.boolean().describe(`
+        * * Field Name: AllowExternalPublish
+        * * Display Name: Allow External Publish
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1, API callers may publish to this topic through POST /work-queue/topics/{topic}/messages. In-process code may publish to any active topic.`),
+    MaxPayloadBytes: z.number().describe(`
+        * * Field Name: MaxPayloadBytes
+        * * Display Name: Max Payload Bytes
+        * * SQL Data Type: int
+        * * Default Value: 262144
+        * * Description: Largest serialized envelope accepted, in bytes (at most 262144).`),
+    DefaultDeduplicationTTLSeconds: z.number().describe(`
+        * * Field Name: DefaultDeduplicationTTLSeconds
+        * * Display Name: Default Deduplication TTL Seconds
+        * * SQL Data Type: int
+        * * Default Value: 86400
+        * * Description: Window, in seconds, during which a DeduplicationKey suppresses repeat publishes when the publisher does not supply one.`),
+    RetentionDays: z.number().describe(`
+        * * Field Name: RetentionDays
+        * * Display Name: Retention Days
+        * * SQL Data Type: int
+        * * Default Value: 7
+        * * Description: Days completed and discarded deliveries, and their messages, are kept before the sweeper purges them (Database transport).`),
+    BindingConfig: z.string().nullable().describe(`
+        * * Field Name: BindingConfig
+        * * Display Name: Binding Config
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Transport binding JSON imported after provisioning, for example {"SnsTopicArn":"..."}. Empty for Database topics.`),
+    Status: z.union([z.literal('Active'), z.literal('Disabled')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+        * * Description: Active topics accept publishes; Disabled topics reject them.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Transport: z.string().describe(`
+        * * Field Name: Transport
+        * * Display Name: Transport
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJWorkQueueTopicEntityType = z.infer<typeof MJWorkQueueTopicSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Work Queue Transports
+ */
+export const MJWorkQueueTransportSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Unique transport name, for example Database or AWS-prod-us-east-1.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: What this transport is used for and who operates it.`),
+    DriverClass: z.string().describe(`
+        * * Field Name: DriverClass
+        * * Display Name: Driver Class
+        * * SQL Data Type: nvarchar(100)
+        * * Description: ClassFactory key of the BaseTransportDriverFactory registration that builds the driver: Database or AWS.`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Driver-specific JSON configuration, for example {"Region":"us-east-1"}. Never holds secrets; use CredentialID.`),
+    CredentialID: z.string().nullable().describe(`
+        * * Field Name: CredentialID
+        * * Display Name: Credential ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)`),
+    Status: z.union([z.literal('Active'), z.literal('Disabled')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+        * * Description: Active transports can deliver; Disabled transports reject publishes.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Credential: z.string().nullable().describe(`
+        * * Field Name: Credential
+        * * Display Name: Credential
+        * * SQL Data Type: nvarchar(200)`),
+});
+
+export type MJWorkQueueTransportEntityType = z.infer<typeof MJWorkQueueTransportSchema>;
+
+/**
  * zod schema definition for the entity MJ: Workspace Items
  */
 export const MJWorkspaceItemSchema = z.object({
@@ -38458,25 +39263,19 @@ export class MJAIAgentChannelEntity extends BaseEntity<MJAIAgentChannelEntityTyp
         this.Set('UIConfig', value);
     }
 
-    private _UIConfigObject_cached: MJAIAgentChannelEntity_IChannelUIConfig | null | undefined = undefined;
-    private _UIConfigObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for UIConfig — returns parsed JSON as MJAIAgentChannelEntity_IChannelUIConfig.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for UIConfig — a live view of the parsed JSON as MJAIAgentChannelEntity_IChannelUIConfig.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying UIConfig field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get UIConfigObject(): MJAIAgentChannelEntity_IChannelUIConfig | null {
-        const raw = this.UIConfig;
-        if (raw !== this._UIConfigObject_lastRaw) {
-            this._UIConfigObject_cached = raw ? JSON.parse(raw) : null;
-            this._UIConfigObject_lastRaw = raw;
-        }
-        return this._UIConfigObject_cached!;
+        return this.GetJSONFieldObject<MJAIAgentChannelEntity_IChannelUIConfig>('UIConfig');
     }
     set UIConfigObject(value: MJAIAgentChannelEntity_IChannelUIConfig | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.UIConfig = raw;
-        this._UIConfigObject_cached = value;
-        this._UIConfigObject_lastRaw = raw;
+        this.SetJSONFieldObject<MJAIAgentChannelEntity_IChannelUIConfig>('UIConfig', value);
     }
 }
 
@@ -40050,6 +40849,20 @@ export class MJAIAgentExampleEntity extends BaseEntity<MJAIAgentExampleEntityTyp
     }
 
     /**
+    * * Field Name: EmbeddingVectorBinary
+    * * Display Name: Embedding Vector Binary
+    * * SQL Data Type: varbinary(MAX)
+    * * Binary Value: base64-encoded string. Decode with Base64ToBytes() — or Base64ToFloat32Vector() for an embedding — from @memberjunction/global.
+    * * Description: The example embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of EmbeddingVector. Written alongside EmbeddingVector; readers prefer it and fall back to EmbeddingVector when it is NULL.
+    */
+    get EmbeddingVectorBinary(): string | null {
+        return this.Get('EmbeddingVectorBinary');
+    }
+    set EmbeddingVectorBinary(value: string | null) {
+        this.Set('EmbeddingVectorBinary', value);
+    }
+
+    /**
     * * Field Name: Agent
     * * Display Name: Agent
     * * SQL Data Type: nvarchar(255)
@@ -40374,25 +41187,19 @@ export class MJAIAgentHarnessEntity extends BaseEntity<MJAIAgentHarnessEntityTyp
         this.Set('CapabilitySettings', value);
     }
 
-    private _CapabilitySettingsObject_cached: MJAIAgentHarnessEntity_IHarnessCapabilitySettings | null | undefined = undefined;
-    private _CapabilitySettingsObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for CapabilitySettings — returns parsed JSON as MJAIAgentHarnessEntity_IHarnessCapabilitySettings.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for CapabilitySettings — a live view of the parsed JSON as MJAIAgentHarnessEntity_IHarnessCapabilitySettings.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying CapabilitySettings field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get CapabilitySettingsObject(): MJAIAgentHarnessEntity_IHarnessCapabilitySettings | null {
-        const raw = this.CapabilitySettings;
-        if (raw !== this._CapabilitySettingsObject_lastRaw) {
-            this._CapabilitySettingsObject_cached = raw ? JSON.parse(raw) : null;
-            this._CapabilitySettingsObject_lastRaw = raw;
-        }
-        return this._CapabilitySettingsObject_cached!;
+        return this.GetJSONFieldObject<MJAIAgentHarnessEntity_IHarnessCapabilitySettings>('CapabilitySettings');
     }
     set CapabilitySettingsObject(value: MJAIAgentHarnessEntity_IHarnessCapabilitySettings | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.CapabilitySettings = raw;
-        this._CapabilitySettingsObject_cached = value;
-        this._CapabilitySettingsObject_lastRaw = raw;
+        this.SetJSONFieldObject<MJAIAgentHarnessEntity_IHarnessCapabilitySettings>('CapabilitySettings', value);
     }
 
     /**
@@ -41373,25 +42180,19 @@ export class MJAIAgentNoteEntity extends BaseEntity<MJAIAgentNoteEntityType> {
         this.Set('SecondaryScopes', value);
     }
 
-    private _SecondaryScopesObject_cached: MJAIAgentNoteEntity_IAISecondaryScopes | null | undefined = undefined;
-    private _SecondaryScopesObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for SecondaryScopes — returns parsed JSON as MJAIAgentNoteEntity_IAISecondaryScopes.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for SecondaryScopes — a live view of the parsed JSON as MJAIAgentNoteEntity_IAISecondaryScopes.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying SecondaryScopes field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get SecondaryScopesObject(): MJAIAgentNoteEntity_IAISecondaryScopes | null {
-        const raw = this.SecondaryScopes;
-        if (raw !== this._SecondaryScopesObject_lastRaw) {
-            this._SecondaryScopesObject_cached = raw ? JSON.parse(raw) : null;
-            this._SecondaryScopesObject_lastRaw = raw;
-        }
-        return this._SecondaryScopesObject_cached!;
+        return this.GetJSONFieldObject<MJAIAgentNoteEntity_IAISecondaryScopes>('SecondaryScopes');
     }
     set SecondaryScopesObject(value: MJAIAgentNoteEntity_IAISecondaryScopes | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.SecondaryScopes = raw;
-        this._SecondaryScopesObject_cached = value;
-        this._SecondaryScopesObject_lastRaw = raw;
+        this.SetJSONFieldObject<MJAIAgentNoteEntity_IAISecondaryScopes>('SecondaryScopes', value);
     }
 
     /**
@@ -41525,6 +42326,20 @@ export class MJAIAgentNoteEntity extends BaseEntity<MJAIAgentNoteEntityType> {
     }
     set AuthorType(value: 'Agent' | 'MemoryManager' | 'User') {
         this.Set('AuthorType', value);
+    }
+
+    /**
+    * * Field Name: EmbeddingVectorBinary
+    * * Display Name: Embedding Vector Binary
+    * * SQL Data Type: varbinary(MAX)
+    * * Binary Value: base64-encoded string. Decode with Base64ToBytes() — or Base64ToFloat32Vector() for an embedding — from @memberjunction/global.
+    * * Description: The note embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of EmbeddingVector. Written alongside EmbeddingVector; readers prefer it and fall back to EmbeddingVector when it is NULL.
+    */
+    get EmbeddingVectorBinary(): string | null {
+        return this.Get('EmbeddingVectorBinary');
+    }
+    set EmbeddingVectorBinary(value: string | null) {
+        this.Set('EmbeddingVectorBinary', value);
     }
 
     /**
@@ -42000,25 +42815,19 @@ export class MJAIAgentPersonaEntity extends BaseEntity<MJAIAgentPersonaEntityTyp
         this.Set('StyleOverride', value);
     }
 
-    private _StyleOverrideObject_cached: MJAIAgentPersonaEntity_IAIAgentPersonaStyleOverride | null | undefined = undefined;
-    private _StyleOverrideObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for StyleOverride — returns parsed JSON as MJAIAgentPersonaEntity_IAIAgentPersonaStyleOverride.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for StyleOverride — a live view of the parsed JSON as MJAIAgentPersonaEntity_IAIAgentPersonaStyleOverride.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying StyleOverride field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get StyleOverrideObject(): MJAIAgentPersonaEntity_IAIAgentPersonaStyleOverride | null {
-        const raw = this.StyleOverride;
-        if (raw !== this._StyleOverrideObject_lastRaw) {
-            this._StyleOverrideObject_cached = raw ? JSON.parse(raw) : null;
-            this._StyleOverrideObject_lastRaw = raw;
-        }
-        return this._StyleOverrideObject_cached!;
+        return this.GetJSONFieldObject<MJAIAgentPersonaEntity_IAIAgentPersonaStyleOverride>('StyleOverride');
     }
     set StyleOverrideObject(value: MJAIAgentPersonaEntity_IAIAgentPersonaStyleOverride | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.StyleOverride = raw;
-        this._StyleOverrideObject_cached = value;
-        this._StyleOverrideObject_lastRaw = raw;
+        this.SetJSONFieldObject<MJAIAgentPersonaEntity_IAIAgentPersonaStyleOverride>('StyleOverride', value);
     }
 
     /**
@@ -43535,25 +44344,19 @@ export class MJAIAgentRubricEntity extends BaseEntity<MJAIAgentRubricEntityType>
         this.Set('EvaluatorConfig', value);
     }
 
-    private _EvaluatorConfigObject_cached: MJAIAgentRubricEntity_IRubricEvaluatorSelection | null | undefined = undefined;
-    private _EvaluatorConfigObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for EvaluatorConfig — returns parsed JSON as MJAIAgentRubricEntity_IRubricEvaluatorSelection.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for EvaluatorConfig — a live view of the parsed JSON as MJAIAgentRubricEntity_IRubricEvaluatorSelection.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying EvaluatorConfig field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get EvaluatorConfigObject(): MJAIAgentRubricEntity_IRubricEvaluatorSelection | null {
-        const raw = this.EvaluatorConfig;
-        if (raw !== this._EvaluatorConfigObject_lastRaw) {
-            this._EvaluatorConfigObject_cached = raw ? JSON.parse(raw) : null;
-            this._EvaluatorConfigObject_lastRaw = raw;
-        }
-        return this._EvaluatorConfigObject_cached!;
+        return this.GetJSONFieldObject<MJAIAgentRubricEntity_IRubricEvaluatorSelection>('EvaluatorConfig');
     }
     set EvaluatorConfigObject(value: MJAIAgentRubricEntity_IRubricEvaluatorSelection | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.EvaluatorConfig = raw;
-        this._EvaluatorConfigObject_cached = value;
-        this._EvaluatorConfigObject_lastRaw = raw;
+        this.SetJSONFieldObject<MJAIAgentRubricEntity_IRubricEvaluatorSelection>('EvaluatorConfig', value);
     }
 
     /**
@@ -44417,25 +45220,19 @@ detailed information about what validation rules failed.
         this.Set('Skills', value);
     }
 
-    private _SkillsObject_cached: Array<MJAIAgentRunStepEntity_AgentSkillInvocation> | null | undefined = undefined;
-    private _SkillsObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for Skills — returns parsed JSON as Array<MJAIAgentRunStepEntity_AgentSkillInvocation>.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for Skills — a live view of the parsed JSON as Array<MJAIAgentRunStepEntity_AgentSkillInvocation>.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Skills field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get SkillsObject(): Array<MJAIAgentRunStepEntity_AgentSkillInvocation> | null {
-        const raw = this.Skills;
-        if (raw !== this._SkillsObject_lastRaw) {
-            this._SkillsObject_cached = raw ? JSON.parse(raw) : null;
-            this._SkillsObject_lastRaw = raw;
-        }
-        return this._SkillsObject_cached!;
+        return this.GetJSONFieldObject<Array<MJAIAgentRunStepEntity_AgentSkillInvocation>>('Skills');
     }
     set SkillsObject(value: Array<MJAIAgentRunStepEntity_AgentSkillInvocation> | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.Skills = raw;
-        this._SkillsObject_cached = value;
-        this._SkillsObject_lastRaw = raw;
+        this.SetJSONFieldObject<Array<MJAIAgentRunStepEntity_AgentSkillInvocation>>('Skills', value);
     }
 
     /**
@@ -45344,25 +46141,19 @@ each time the agent processes a prompt step.
         this.Set('SecondaryScopes', value);
     }
 
-    private _SecondaryScopesObject_cached: MJAIAgentRunEntity_IAISecondaryScopes | null | undefined = undefined;
-    private _SecondaryScopesObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for SecondaryScopes — returns parsed JSON as MJAIAgentRunEntity_IAISecondaryScopes.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for SecondaryScopes — a live view of the parsed JSON as MJAIAgentRunEntity_IAISecondaryScopes.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying SecondaryScopes field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get SecondaryScopesObject(): MJAIAgentRunEntity_IAISecondaryScopes | null {
-        const raw = this.SecondaryScopes;
-        if (raw !== this._SecondaryScopesObject_lastRaw) {
-            this._SecondaryScopesObject_cached = raw ? JSON.parse(raw) : null;
-            this._SecondaryScopesObject_lastRaw = raw;
-        }
-        return this._SecondaryScopesObject_cached!;
+        return this.GetJSONFieldObject<MJAIAgentRunEntity_IAISecondaryScopes>('SecondaryScopes');
     }
     set SecondaryScopesObject(value: MJAIAgentRunEntity_IAISecondaryScopes | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.SecondaryScopes = raw;
-        this._SecondaryScopesObject_cached = value;
-        this._SecondaryScopesObject_lastRaw = raw;
+        this.SetJSONFieldObject<MJAIAgentRunEntity_IAISecondaryScopes>('SecondaryScopes', value);
     }
 
     /**
@@ -50583,25 +51374,19 @@ export class MJAIBridgeProviderEntity extends BaseEntity<MJAIBridgeProviderEntit
         this.Set('SupportedFeatures', value);
     }
 
-    private _SupportedFeaturesObject_cached: MJAIBridgeProviderEntity_IBridgeProviderFeatures | null | undefined = undefined;
-    private _SupportedFeaturesObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for SupportedFeatures — returns parsed JSON as MJAIBridgeProviderEntity_IBridgeProviderFeatures.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for SupportedFeatures — a live view of the parsed JSON as MJAIBridgeProviderEntity_IBridgeProviderFeatures.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying SupportedFeatures field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get SupportedFeaturesObject(): MJAIBridgeProviderEntity_IBridgeProviderFeatures | null {
-        const raw = this.SupportedFeatures;
-        if (raw !== this._SupportedFeaturesObject_lastRaw) {
-            this._SupportedFeaturesObject_cached = raw ? JSON.parse(raw) : null;
-            this._SupportedFeaturesObject_lastRaw = raw;
-        }
-        return this._SupportedFeaturesObject_cached!;
+        return this.GetJSONFieldObject<MJAIBridgeProviderEntity_IBridgeProviderFeatures>('SupportedFeatures');
     }
     set SupportedFeaturesObject(value: MJAIBridgeProviderEntity_IBridgeProviderFeatures | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.SupportedFeatures = raw;
-        this._SupportedFeaturesObject_cached = value;
-        this._SupportedFeaturesObject_lastRaw = raw;
+        this.SetJSONFieldObject<MJAIBridgeProviderEntity_IBridgeProviderFeatures>('SupportedFeatures', value);
     }
 
     /**
@@ -53239,6 +54024,13 @@ export interface MJAIModelTypeEntity_LLMConfigurationSettings {
     NativeToolResults?: boolean | null;
 
     /**
+     * **Catalog layers only.** Whether this model accepts a forced tool choice — a named tool or
+     * `'required'`. Absent means it does. When `false`, the prompt runner sends `'auto'` in place of a
+     * forced choice, and the agent's prompt is what steers the model to the tool.
+     */
+    SupportsForcedToolChoice?: boolean | null;
+
+    /**
      * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
      * it reuses a prior request only when that request's entire prompt is a prefix of the new one
      * (OpenAI's automatic cache, xAI), so per-iteration framework state must be appended, never
@@ -53573,25 +54365,19 @@ export class MJAIModelTypeEntity extends BaseEntity<MJAIModelTypeEntityType> {
         this.Set('ModelConfiguration', value);
     }
 
-    private _ModelConfigurationObject_cached: MJAIModelTypeEntity_IAIModelConfiguration | null | undefined = undefined;
-    private _ModelConfigurationObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for ModelConfiguration — returns parsed JSON as MJAIModelTypeEntity_IAIModelConfiguration.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for ModelConfiguration — a live view of the parsed JSON as MJAIModelTypeEntity_IAIModelConfiguration.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying ModelConfiguration field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get ModelConfigurationObject(): MJAIModelTypeEntity_IAIModelConfiguration | null {
-        const raw = this.ModelConfiguration;
-        if (raw !== this._ModelConfigurationObject_lastRaw) {
-            this._ModelConfigurationObject_cached = raw ? JSON.parse(raw) : null;
-            this._ModelConfigurationObject_lastRaw = raw;
-        }
-        return this._ModelConfigurationObject_cached!;
+        return this.GetJSONFieldObject<MJAIModelTypeEntity_IAIModelConfiguration>('ModelConfiguration');
     }
     set ModelConfigurationObject(value: MJAIModelTypeEntity_IAIModelConfiguration | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.ModelConfiguration = raw;
-        this._ModelConfigurationObject_cached = value;
-        this._ModelConfigurationObject_lastRaw = raw;
+        this.SetJSONFieldObject<MJAIModelTypeEntity_IAIModelConfiguration>('ModelConfiguration', value);
     }
 
     /**
@@ -53718,6 +54504,13 @@ export interface MJAIModelVendorEntity_LLMConfigurationSettings {
      * only when the gate resolves native.
      */
     NativeToolResults?: boolean | null;
+
+    /**
+     * **Catalog layers only.** Whether this model accepts a forced tool choice — a named tool or
+     * `'required'`. Absent means it does. When `false`, the prompt runner sends `'auto'` in place of a
+     * forced choice, and the agent's prompt is what steers the model to the tool.
+     */
+    SupportsForcedToolChoice?: boolean | null;
 
     /**
      * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
@@ -54237,25 +55030,19 @@ export class MJAIModelVendorEntity extends BaseEntity<MJAIModelVendorEntityType>
         this.Set('ModelConfiguration', value);
     }
 
-    private _ModelConfigurationObject_cached: MJAIModelVendorEntity_IAIModelConfiguration | null | undefined = undefined;
-    private _ModelConfigurationObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for ModelConfiguration — returns parsed JSON as MJAIModelVendorEntity_IAIModelConfiguration.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for ModelConfiguration — a live view of the parsed JSON as MJAIModelVendorEntity_IAIModelConfiguration.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying ModelConfiguration field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get ModelConfigurationObject(): MJAIModelVendorEntity_IAIModelConfiguration | null {
-        const raw = this.ModelConfiguration;
-        if (raw !== this._ModelConfigurationObject_lastRaw) {
-            this._ModelConfigurationObject_cached = raw ? JSON.parse(raw) : null;
-            this._ModelConfigurationObject_lastRaw = raw;
-        }
-        return this._ModelConfigurationObject_cached!;
+        return this.GetJSONFieldObject<MJAIModelVendorEntity_IAIModelConfiguration>('ModelConfiguration');
     }
     set ModelConfigurationObject(value: MJAIModelVendorEntity_IAIModelConfiguration | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.ModelConfiguration = raw;
-        this._ModelConfigurationObject_cached = value;
-        this._ModelConfigurationObject_lastRaw = raw;
+        this.SetJSONFieldObject<MJAIModelVendorEntity_IAIModelConfiguration>('ModelConfiguration', value);
     }
 
     /**
@@ -54391,6 +55178,13 @@ export interface MJAIModelEntity_LLMConfigurationSettings {
      * only when the gate resolves native.
      */
     NativeToolResults?: boolean | null;
+
+    /**
+     * **Catalog layers only.** Whether this model accepts a forced tool choice — a named tool or
+     * `'required'`. Absent means it does. When `false`, the prompt runner sends `'auto'` in place of a
+     * forced choice, and the agent's prompt is what steers the model to the tool.
+     */
+    SupportsForcedToolChoice?: boolean | null;
 
     /**
      * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
@@ -54863,25 +55657,19 @@ export class MJAIModelEntity extends BaseEntity<MJAIModelEntityType> {
         this.Set('ModelConfiguration', value);
     }
 
-    private _ModelConfigurationObject_cached: MJAIModelEntity_IAIModelConfiguration | null | undefined = undefined;
-    private _ModelConfigurationObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for ModelConfiguration — returns parsed JSON as MJAIModelEntity_IAIModelConfiguration.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for ModelConfiguration — a live view of the parsed JSON as MJAIModelEntity_IAIModelConfiguration.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying ModelConfiguration field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get ModelConfigurationObject(): MJAIModelEntity_IAIModelConfiguration | null {
-        const raw = this.ModelConfiguration;
-        if (raw !== this._ModelConfigurationObject_lastRaw) {
-            this._ModelConfigurationObject_cached = raw ? JSON.parse(raw) : null;
-            this._ModelConfigurationObject_lastRaw = raw;
-        }
-        return this._ModelConfigurationObject_cached!;
+        return this.GetJSONFieldObject<MJAIModelEntity_IAIModelConfiguration>('ModelConfiguration');
     }
     set ModelConfigurationObject(value: MJAIModelEntity_IAIModelConfiguration | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.ModelConfiguration = raw;
-        this._ModelConfigurationObject_cached = value;
-        this._ModelConfigurationObject_lastRaw = raw;
+        this.SetJSONFieldObject<MJAIModelEntity_IAIModelConfiguration>('ModelConfiguration', value);
     }
 
     /**
@@ -55143,25 +55931,19 @@ export class MJAIPersonaVendorEntity extends BaseEntity<MJAIPersonaVendorEntityT
         this.Set('VendorSettings', value);
     }
 
-    private _VendorSettingsObject_cached: MJAIPersonaVendorEntity_IAIPersonaVendorSettings | null | undefined = undefined;
-    private _VendorSettingsObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for VendorSettings — returns parsed JSON as MJAIPersonaVendorEntity_IAIPersonaVendorSettings.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for VendorSettings — a live view of the parsed JSON as MJAIPersonaVendorEntity_IAIPersonaVendorSettings.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying VendorSettings field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get VendorSettingsObject(): MJAIPersonaVendorEntity_IAIPersonaVendorSettings | null {
-        const raw = this.VendorSettings;
-        if (raw !== this._VendorSettingsObject_lastRaw) {
-            this._VendorSettingsObject_cached = raw ? JSON.parse(raw) : null;
-            this._VendorSettingsObject_lastRaw = raw;
-        }
-        return this._VendorSettingsObject_cached!;
+        return this.GetJSONFieldObject<MJAIPersonaVendorEntity_IAIPersonaVendorSettings>('VendorSettings');
     }
     set VendorSettingsObject(value: MJAIPersonaVendorEntity_IAIPersonaVendorSettings | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.VendorSettings = raw;
-        this._VendorSettingsObject_cached = value;
-        this._VendorSettingsObject_lastRaw = raw;
+        this.SetJSONFieldObject<MJAIPersonaVendorEntity_IAIPersonaVendorSettings>('VendorSettings', value);
     }
 
     /**
@@ -55392,25 +56174,19 @@ export class MJAIPersonaEntity extends BaseEntity<MJAIPersonaEntityType> {
         this.Set('StyleDescriptors', value);
     }
 
-    private _StyleDescriptorsObject_cached: MJAIPersonaEntity_IAIPersonaStyleDescriptors | null | undefined = undefined;
-    private _StyleDescriptorsObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for StyleDescriptors — returns parsed JSON as MJAIPersonaEntity_IAIPersonaStyleDescriptors.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for StyleDescriptors — a live view of the parsed JSON as MJAIPersonaEntity_IAIPersonaStyleDescriptors.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying StyleDescriptors field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get StyleDescriptorsObject(): MJAIPersonaEntity_IAIPersonaStyleDescriptors | null {
-        const raw = this.StyleDescriptors;
-        if (raw !== this._StyleDescriptorsObject_lastRaw) {
-            this._StyleDescriptorsObject_cached = raw ? JSON.parse(raw) : null;
-            this._StyleDescriptorsObject_lastRaw = raw;
-        }
-        return this._StyleDescriptorsObject_cached!;
+        return this.GetJSONFieldObject<MJAIPersonaEntity_IAIPersonaStyleDescriptors>('StyleDescriptors');
     }
     set StyleDescriptorsObject(value: MJAIPersonaEntity_IAIPersonaStyleDescriptors | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.StyleDescriptors = raw;
-        this._StyleDescriptorsObject_cached = value;
-        this._StyleDescriptorsObject_lastRaw = raw;
+        this.SetJSONFieldObject<MJAIPersonaEntity_IAIPersonaStyleDescriptors>('StyleDescriptors', value);
     }
 
     /**
@@ -55768,6 +56544,13 @@ export interface MJAIPromptModelEntity_LLMConfigurationSettings {
      * only when the gate resolves native.
      */
     NativeToolResults?: boolean | null;
+
+    /**
+     * **Catalog layers only.** Whether this model accepts a forced tool choice — a named tool or
+     * `'required'`. Absent means it does. When `false`, the prompt runner sends `'auto'` in place of a
+     * forced choice, and the agent's prompt is what steers the model to the tool.
+     */
+    SupportsForcedToolChoice?: boolean | null;
 
     /**
      * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
@@ -56296,25 +57079,19 @@ export class MJAIPromptModelEntity extends BaseEntity<MJAIPromptModelEntityType>
         this.Set('PromptConfiguration', value);
     }
 
-    private _PromptConfigurationObject_cached: MJAIPromptModelEntity_IAIPromptModelConfiguration | null | undefined = undefined;
-    private _PromptConfigurationObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for PromptConfiguration — returns parsed JSON as MJAIPromptModelEntity_IAIPromptModelConfiguration.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for PromptConfiguration — a live view of the parsed JSON as MJAIPromptModelEntity_IAIPromptModelConfiguration.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying PromptConfiguration field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get PromptConfigurationObject(): MJAIPromptModelEntity_IAIPromptModelConfiguration | null {
-        const raw = this.PromptConfiguration;
-        if (raw !== this._PromptConfigurationObject_lastRaw) {
-            this._PromptConfigurationObject_cached = raw ? JSON.parse(raw) : null;
-            this._PromptConfigurationObject_lastRaw = raw;
-        }
-        return this._PromptConfigurationObject_cached!;
+        return this.GetJSONFieldObject<MJAIPromptModelEntity_IAIPromptModelConfiguration>('PromptConfiguration');
     }
     set PromptConfigurationObject(value: MJAIPromptModelEntity_IAIPromptModelConfiguration | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.PromptConfiguration = raw;
-        this._PromptConfigurationObject_cached = value;
-        this._PromptConfigurationObject_lastRaw = raw;
+        this.SetJSONFieldObject<MJAIPromptModelEntity_IAIPromptModelConfiguration>('PromptConfiguration', value);
     }
 
     /**
@@ -58389,6 +59166,13 @@ export interface MJAIPromptEntity_LLMConfigurationSettings {
     NativeToolResults?: boolean | null;
 
     /**
+     * **Catalog layers only.** Whether this model accepts a forced tool choice — a named tool or
+     * `'required'`. Absent means it does. When `false`, the prompt runner sends `'auto'` in place of a
+     * forced choice, and the agent's prompt is what steers the model to the tool.
+     */
+    SupportsForcedToolChoice?: boolean | null;
+
+    /**
      * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
      * it reuses a prior request only when that request's entire prompt is a prefix of the new one
      * (OpenAI's automatic cache, xAI), so per-iteration framework state must be appended, never
@@ -59614,25 +60398,19 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
         this.Set('PromptConfiguration', value);
     }
 
-    private _PromptConfigurationObject_cached: MJAIPromptEntity_IAIPromptConfiguration | null | undefined = undefined;
-    private _PromptConfigurationObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for PromptConfiguration — returns parsed JSON as MJAIPromptEntity_IAIPromptConfiguration.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for PromptConfiguration — a live view of the parsed JSON as MJAIPromptEntity_IAIPromptConfiguration.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying PromptConfiguration field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get PromptConfigurationObject(): MJAIPromptEntity_IAIPromptConfiguration | null {
-        const raw = this.PromptConfiguration;
-        if (raw !== this._PromptConfigurationObject_lastRaw) {
-            this._PromptConfigurationObject_cached = raw ? JSON.parse(raw) : null;
-            this._PromptConfigurationObject_lastRaw = raw;
-        }
-        return this._PromptConfigurationObject_cached!;
+        return this.GetJSONFieldObject<MJAIPromptEntity_IAIPromptConfiguration>('PromptConfiguration');
     }
     set PromptConfigurationObject(value: MJAIPromptEntity_IAIPromptConfiguration | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.PromptConfiguration = raw;
-        this._PromptConfigurationObject_cached = value;
-        this._PromptConfigurationObject_lastRaw = raw;
+        this.SetJSONFieldObject<MJAIPromptEntity_IAIPromptConfiguration>('PromptConfiguration', value);
     }
 
     /**
@@ -59893,25 +60671,19 @@ export class MJAIRemoteBrowserProviderEntity extends BaseEntity<MJAIRemoteBrowse
         this.Set('SupportedFeatures', value);
     }
 
-    private _SupportedFeaturesObject_cached: MJAIRemoteBrowserProviderEntity_IRemoteBrowserProviderFeatures | null | undefined = undefined;
-    private _SupportedFeaturesObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for SupportedFeatures — returns parsed JSON as MJAIRemoteBrowserProviderEntity_IRemoteBrowserProviderFeatures.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for SupportedFeatures — a live view of the parsed JSON as MJAIRemoteBrowserProviderEntity_IRemoteBrowserProviderFeatures.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying SupportedFeatures field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get SupportedFeaturesObject(): MJAIRemoteBrowserProviderEntity_IRemoteBrowserProviderFeatures | null {
-        const raw = this.SupportedFeatures;
-        if (raw !== this._SupportedFeaturesObject_lastRaw) {
-            this._SupportedFeaturesObject_cached = raw ? JSON.parse(raw) : null;
-            this._SupportedFeaturesObject_lastRaw = raw;
-        }
-        return this._SupportedFeaturesObject_cached!;
+        return this.GetJSONFieldObject<MJAIRemoteBrowserProviderEntity_IRemoteBrowserProviderFeatures>('SupportedFeatures');
     }
     set SupportedFeaturesObject(value: MJAIRemoteBrowserProviderEntity_IRemoteBrowserProviderFeatures | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.SupportedFeatures = raw;
-        this._SupportedFeaturesObject_cached = value;
-        this._SupportedFeaturesObject_lastRaw = raw;
+        this.SetJSONFieldObject<MJAIRemoteBrowserProviderEntity_IRemoteBrowserProviderFeatures>('SupportedFeatures', value);
     }
 
     /**
@@ -60186,7 +60958,8 @@ export class MJAIResultCacheEntity extends BaseEntity<MJAIResultCacheEntityType>
     /**
     * * Field Name: PromptEmbedding
     * * Display Name: Prompt Embedding
-    * * SQL Data Type: varbinary
+    * * SQL Data Type: varbinary(MAX)
+    * * Binary Value: base64-encoded string. Decode with Base64ToBytes() — or Base64ToFloat32Vector() for an embedding — from @memberjunction/global.
     * * Description: Vector representation of the prompt for similarity matching.
     */
     get PromptEmbedding(): string | null {
@@ -61579,6 +62352,13 @@ export interface MJAIVendorEntity_LLMConfigurationSettings {
     NativeToolResults?: boolean | null;
 
     /**
+     * **Catalog layers only.** Whether this model accepts a forced tool choice — a named tool or
+     * `'required'`. Absent means it does. When `false`, the prompt runner sends `'auto'` in place of a
+     * forced choice, and the agent's prompt is what steers the model to the tool.
+     */
+    SupportsForcedToolChoice?: boolean | null;
+
+    /**
      * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
      * it reuses a prior request only when that request's entire prompt is a prefix of the new one
      * (OpenAI's automatic cache, xAI), so per-iteration framework state must be appended, never
@@ -61874,25 +62654,19 @@ export class MJAIVendorEntity extends BaseEntity<MJAIVendorEntityType> {
         this.Set('Configuration', value);
     }
 
-    private _ConfigurationObject_cached: MJAIVendorEntity_IAIVendorConfiguration | null | undefined = undefined;
-    private _ConfigurationObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for Configuration — returns parsed JSON as MJAIVendorEntity_IAIVendorConfiguration.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for Configuration — a live view of the parsed JSON as MJAIVendorEntity_IAIVendorConfiguration.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Configuration field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get ConfigurationObject(): MJAIVendorEntity_IAIVendorConfiguration | null {
-        const raw = this.Configuration;
-        if (raw !== this._ConfigurationObject_lastRaw) {
-            this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
-            this._ConfigurationObject_lastRaw = raw;
-        }
-        return this._ConfigurationObject_cached!;
+        return this.GetJSONFieldObject<MJAIVendorEntity_IAIVendorConfiguration>('Configuration');
     }
     set ConfigurationObject(value: MJAIVendorEntity_IAIVendorConfiguration | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.Configuration = raw;
-        this._ConfigurationObject_cached = value;
-        this._ConfigurationObject_lastRaw = raw;
+        this.SetJSONFieldObject<MJAIVendorEntity_IAIVendorConfiguration>('Configuration', value);
     }
 
     /**
@@ -65477,25 +66251,19 @@ export class MJActionEntity extends BaseEntity<MJActionEntityType> {
         this.Set('RuntimeActionConfiguration', value);
     }
 
-    private _RuntimeActionConfigurationObject_cached: MJActionEntity_IRuntimeActionConfiguration | null | undefined = undefined;
-    private _RuntimeActionConfigurationObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for RuntimeActionConfiguration — returns parsed JSON as MJActionEntity_IRuntimeActionConfiguration.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for RuntimeActionConfiguration — a live view of the parsed JSON as MJActionEntity_IRuntimeActionConfiguration.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying RuntimeActionConfiguration field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get RuntimeActionConfigurationObject(): MJActionEntity_IRuntimeActionConfiguration | null {
-        const raw = this.RuntimeActionConfiguration;
-        if (raw !== this._RuntimeActionConfigurationObject_lastRaw) {
-            this._RuntimeActionConfigurationObject_cached = raw ? JSON.parse(raw) : null;
-            this._RuntimeActionConfigurationObject_lastRaw = raw;
-        }
-        return this._RuntimeActionConfigurationObject_cached!;
+        return this.GetJSONFieldObject<MJActionEntity_IRuntimeActionConfiguration>('RuntimeActionConfiguration');
     }
     set RuntimeActionConfigurationObject(value: MJActionEntity_IRuntimeActionConfiguration | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.RuntimeActionConfiguration = raw;
-        this._RuntimeActionConfigurationObject_cached = value;
-        this._RuntimeActionConfigurationObject_lastRaw = raw;
+        this.SetJSONFieldObject<MJActionEntity_IRuntimeActionConfiguration>('RuntimeActionConfiguration', value);
     }
 
     /**
@@ -66331,25 +67099,19 @@ export class MJApplicationEntity extends BaseEntity<MJApplicationEntityType> {
         this.Set('DefaultNavItems', value);
     }
 
-    private _DefaultNavItemsObject_cached: Array<MJApplicationEntity_IDefaultNavItem> | null | undefined = undefined;
-    private _DefaultNavItemsObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for DefaultNavItems — returns parsed JSON as Array<MJApplicationEntity_IDefaultNavItem>.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for DefaultNavItems — a live view of the parsed JSON as Array<MJApplicationEntity_IDefaultNavItem>.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying DefaultNavItems field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get DefaultNavItemsObject(): Array<MJApplicationEntity_IDefaultNavItem> | null {
-        const raw = this.DefaultNavItems;
-        if (raw !== this._DefaultNavItemsObject_lastRaw) {
-            this._DefaultNavItemsObject_cached = raw ? JSON.parse(raw) : null;
-            this._DefaultNavItemsObject_lastRaw = raw;
-        }
-        return this._DefaultNavItemsObject_cached!;
+        return this.GetJSONFieldObject<Array<MJApplicationEntity_IDefaultNavItem>>('DefaultNavItems');
     }
     set DefaultNavItemsObject(value: Array<MJApplicationEntity_IDefaultNavItem> | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.DefaultNavItems = raw;
-        this._DefaultNavItemsObject_cached = value;
-        this._DefaultNavItemsObject_lastRaw = raw;
+        this.SetJSONFieldObject<Array<MJApplicationEntity_IDefaultNavItem>>('DefaultNavItems', value);
     }
 
     /**
@@ -66490,25 +67252,19 @@ export class MJApplicationEntity extends BaseEntity<MJApplicationEntityType> {
         this.Set('AgentSettings', value);
     }
 
-    private _AgentSettingsObject_cached: MJApplicationEntity_IAgentSettings | null | undefined = undefined;
-    private _AgentSettingsObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for AgentSettings — returns parsed JSON as MJApplicationEntity_IAgentSettings.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for AgentSettings — a live view of the parsed JSON as MJApplicationEntity_IAgentSettings.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying AgentSettings field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get AgentSettingsObject(): MJApplicationEntity_IAgentSettings | null {
-        const raw = this.AgentSettings;
-        if (raw !== this._AgentSettingsObject_lastRaw) {
-            this._AgentSettingsObject_cached = raw ? JSON.parse(raw) : null;
-            this._AgentSettingsObject_lastRaw = raw;
-        }
-        return this._AgentSettingsObject_cached!;
+        return this.GetJSONFieldObject<MJApplicationEntity_IAgentSettings>('AgentSettings');
     }
     set AgentSettingsObject(value: MJApplicationEntity_IAgentSettings | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.AgentSettings = raw;
-        this._AgentSettingsObject_cached = value;
-        this._AgentSettingsObject_lastRaw = raw;
+        this.SetJSONFieldObject<MJApplicationEntity_IAgentSettings>('AgentSettings', value);
     }
 }
 
@@ -74750,6 +75506,34 @@ export class MJComponentEntity extends BaseEntity<MJComponentEntityType> {
     }
 
     /**
+    * * Field Name: FunctionalRequirementsVectorBinary
+    * * Display Name: Functional Requirements Vector Binary
+    * * SQL Data Type: varbinary(MAX)
+    * * Binary Value: base64-encoded string. Decode with Base64ToBytes() — or Base64ToFloat32Vector() for an embedding — from @memberjunction/global.
+    * * Description: The functional-requirements embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of FunctionalRequirementsVector. Written alongside FunctionalRequirementsVector; readers prefer it and fall back to FunctionalRequirementsVector when it is NULL.
+    */
+    get FunctionalRequirementsVectorBinary(): string | null {
+        return this.Get('FunctionalRequirementsVectorBinary');
+    }
+    set FunctionalRequirementsVectorBinary(value: string | null) {
+        this.Set('FunctionalRequirementsVectorBinary', value);
+    }
+
+    /**
+    * * Field Name: TechnicalDesignVectorBinary
+    * * Display Name: Technical Design Vector Binary
+    * * SQL Data Type: varbinary(MAX)
+    * * Binary Value: base64-encoded string. Decode with Base64ToBytes() — or Base64ToFloat32Vector() for an embedding — from @memberjunction/global.
+    * * Description: The technical-design embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of TechnicalDesignVector. Written alongside TechnicalDesignVector; readers prefer it and fall back to TechnicalDesignVector when it is NULL.
+    */
+    get TechnicalDesignVectorBinary(): string | null {
+        return this.Get('TechnicalDesignVectorBinary');
+    }
+    set TechnicalDesignVectorBinary(value: string | null) {
+        this.Set('TechnicalDesignVectorBinary', value);
+    }
+
+    /**
     * * Field Name: SourceRegistry
     * * Display Name: Source Registry
     * * SQL Data Type: nvarchar(255)
@@ -76876,25 +77660,19 @@ export class MJContentProcessRunEntity extends BaseEntity<MJContentProcessRunEnt
         this.Set('Configuration', value);
     }
 
-    private _ConfigurationObject_cached: MJContentProcessRunEntity_IContentProcessRunConfiguration | null | undefined = undefined;
-    private _ConfigurationObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for Configuration — returns parsed JSON as MJContentProcessRunEntity_IContentProcessRunConfiguration.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for Configuration — a live view of the parsed JSON as MJContentProcessRunEntity_IContentProcessRunConfiguration.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Configuration field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get ConfigurationObject(): MJContentProcessRunEntity_IContentProcessRunConfiguration | null {
-        const raw = this.Configuration;
-        if (raw !== this._ConfigurationObject_lastRaw) {
-            this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
-            this._ConfigurationObject_lastRaw = raw;
-        }
-        return this._ConfigurationObject_cached!;
+        return this.GetJSONFieldObject<MJContentProcessRunEntity_IContentProcessRunConfiguration>('Configuration');
     }
     set ConfigurationObject(value: MJContentProcessRunEntity_IContentProcessRunConfiguration | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.Configuration = raw;
-        this._ConfigurationObject_cached = value;
-        this._ConfigurationObject_lastRaw = raw;
+        this.SetJSONFieldObject<MJContentProcessRunEntity_IContentProcessRunConfiguration>('Configuration', value);
     }
 
     /**
@@ -77338,25 +78116,19 @@ export class MJContentSourceTypeEntity extends BaseEntity<MJContentSourceTypeEnt
         this.Set('Configuration', value);
     }
 
-    private _ConfigurationObject_cached: MJContentSourceTypeEntity_IContentSourceTypeConfiguration | null | undefined = undefined;
-    private _ConfigurationObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for Configuration — returns parsed JSON as MJContentSourceTypeEntity_IContentSourceTypeConfiguration.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for Configuration — a live view of the parsed JSON as MJContentSourceTypeEntity_IContentSourceTypeConfiguration.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Configuration field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get ConfigurationObject(): MJContentSourceTypeEntity_IContentSourceTypeConfiguration | null {
-        const raw = this.Configuration;
-        if (raw !== this._ConfigurationObject_lastRaw) {
-            this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
-            this._ConfigurationObject_lastRaw = raw;
-        }
-        return this._ConfigurationObject_cached!;
+        return this.GetJSONFieldObject<MJContentSourceTypeEntity_IContentSourceTypeConfiguration>('Configuration');
     }
     set ConfigurationObject(value: MJContentSourceTypeEntity_IContentSourceTypeConfiguration | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.Configuration = raw;
-        this._ConfigurationObject_cached = value;
-        this._ConfigurationObject_lastRaw = raw;
+        this.SetJSONFieldObject<MJContentSourceTypeEntity_IContentSourceTypeConfiguration>('Configuration', value);
     }
 }
 
@@ -77850,25 +78622,19 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
         this.Set('Configuration', value);
     }
 
-    private _ConfigurationObject_cached: MJContentSourceEntity_IContentSourceConfiguration | null | undefined = undefined;
-    private _ConfigurationObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for Configuration — returns parsed JSON as MJContentSourceEntity_IContentSourceConfiguration.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for Configuration — a live view of the parsed JSON as MJContentSourceEntity_IContentSourceConfiguration.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Configuration field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get ConfigurationObject(): MJContentSourceEntity_IContentSourceConfiguration | null {
-        const raw = this.Configuration;
-        if (raw !== this._ConfigurationObject_lastRaw) {
-            this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
-            this._ConfigurationObject_lastRaw = raw;
-        }
-        return this._ConfigurationObject_cached!;
+        return this.GetJSONFieldObject<MJContentSourceEntity_IContentSourceConfiguration>('Configuration');
     }
     set ConfigurationObject(value: MJContentSourceEntity_IContentSourceConfiguration | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.Configuration = raw;
-        this._ConfigurationObject_cached = value;
-        this._ConfigurationObject_lastRaw = raw;
+        this.SetJSONFieldObject<MJContentSourceEntity_IContentSourceConfiguration>('Configuration', value);
     }
 
     /**
@@ -78439,25 +79205,19 @@ export class MJContentTypeEntity extends BaseEntity<MJContentTypeEntityType> {
         this.Set('Configuration', value);
     }
 
-    private _ConfigurationObject_cached: MJContentTypeEntity_IContentTypeConfiguration | null | undefined = undefined;
-    private _ConfigurationObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for Configuration — returns parsed JSON as MJContentTypeEntity_IContentTypeConfiguration.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for Configuration — a live view of the parsed JSON as MJContentTypeEntity_IContentTypeConfiguration.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Configuration field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get ConfigurationObject(): MJContentTypeEntity_IContentTypeConfiguration | null {
-        const raw = this.Configuration;
-        if (raw !== this._ConfigurationObject_lastRaw) {
-            this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
-            this._ConfigurationObject_lastRaw = raw;
-        }
-        return this._ConfigurationObject_cached!;
+        return this.GetJSONFieldObject<MJContentTypeEntity_IContentTypeConfiguration>('Configuration');
     }
     set ConfigurationObject(value: MJContentTypeEntity_IContentTypeConfiguration | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.Configuration = raw;
-        this._ConfigurationObject_cached = value;
-        this._ConfigurationObject_lastRaw = raw;
+        this.SetJSONFieldObject<MJContentTypeEntity_IContentTypeConfiguration>('Configuration', value);
     }
 
     /**
@@ -86576,6 +87336,20 @@ export interface MJEntityEntity_IEntityFormConfiguration {
      * `inclusion: 'Primary'` is never capped by this number.
      */
     PrimaryRelatedBudget?: number;
+
+    /**
+     * Default empty-section behaviour for this form's related sections when a
+     * relationship does not set `UI.whenEmpty` itself.
+     * `'show'` | `'hide'` | `'more'` — see `IEntityRelationshipUIConfiguration.whenEmpty`.
+     * Omit to treat as `'show'`.
+     */
+    RelatedWhenEmpty?: 'show' | 'hide' | 'more';
+
+    /**
+     * Default for prefetching related-section row counts (badges) when a
+     * relationship does not set `UI.showCount` itself. Omit to treat as `true`.
+     */
+    ShowRelatedCounts?: boolean;
 }
 
 /**
@@ -87921,25 +88695,19 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
         this.Set('Configuration', value);
     }
 
-    private _ConfigurationObject_cached: MJEntityEntity_IEntityConfiguration | null | undefined = undefined;
-    private _ConfigurationObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for Configuration — returns parsed JSON as MJEntityEntity_IEntityConfiguration.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for Configuration — a live view of the parsed JSON as MJEntityEntity_IEntityConfiguration.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Configuration field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get ConfigurationObject(): MJEntityEntity_IEntityConfiguration | null {
-        const raw = this.Configuration;
-        if (raw !== this._ConfigurationObject_lastRaw) {
-            this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
-            this._ConfigurationObject_lastRaw = raw;
-        }
-        return this._ConfigurationObject_cached!;
+        return this.GetJSONFieldObject<MJEntityEntity_IEntityConfiguration>('Configuration');
     }
     set ConfigurationObject(value: MJEntityEntity_IEntityConfiguration | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.Configuration = raw;
-        this._ConfigurationObject_cached = value;
-        this._ConfigurationObject_lastRaw = raw;
+        this.SetJSONFieldObject<MJEntityEntity_IEntityConfiguration>('Configuration', value);
     }
 
     /**
@@ -87956,25 +88724,19 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
         this.Set('SubtypeSelector', value);
     }
 
-    private _SubtypeSelectorObject_cached: MJEntityEntity_IEntitySubtypeSelectorConfig | null | undefined = undefined;
-    private _SubtypeSelectorObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for SubtypeSelector — returns parsed JSON as MJEntityEntity_IEntitySubtypeSelectorConfig.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for SubtypeSelector — a live view of the parsed JSON as MJEntityEntity_IEntitySubtypeSelectorConfig.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying SubtypeSelector field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get SubtypeSelectorObject(): MJEntityEntity_IEntitySubtypeSelectorConfig | null {
-        const raw = this.SubtypeSelector;
-        if (raw !== this._SubtypeSelectorObject_lastRaw) {
-            this._SubtypeSelectorObject_cached = raw ? JSON.parse(raw) : null;
-            this._SubtypeSelectorObject_lastRaw = raw;
-        }
-        return this._SubtypeSelectorObject_cached!;
+        return this.GetJSONFieldObject<MJEntityEntity_IEntitySubtypeSelectorConfig>('SubtypeSelector');
     }
     set SubtypeSelectorObject(value: MJEntityEntity_IEntitySubtypeSelectorConfig | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.SubtypeSelector = raw;
-        this._SubtypeSelectorObject_cached = value;
-        this._SubtypeSelectorObject_lastRaw = raw;
+        this.SetJSONFieldObject<MJEntityEntity_IEntitySubtypeSelectorConfig>('SubtypeSelector', value);
     }
 
     /**
@@ -91535,25 +92297,19 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
         this.Set('EmbeddedRecord', value);
     }
 
-    private _EmbeddedRecordObject_cached: MJEntityFieldEntity_IEmbeddedRecordConfig | null | undefined = undefined;
-    private _EmbeddedRecordObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for EmbeddedRecord — returns parsed JSON as MJEntityFieldEntity_IEmbeddedRecordConfig.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for EmbeddedRecord — a live view of the parsed JSON as MJEntityFieldEntity_IEmbeddedRecordConfig.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying EmbeddedRecord field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get EmbeddedRecordObject(): MJEntityFieldEntity_IEmbeddedRecordConfig | null {
-        const raw = this.EmbeddedRecord;
-        if (raw !== this._EmbeddedRecordObject_lastRaw) {
-            this._EmbeddedRecordObject_cached = raw ? JSON.parse(raw) : null;
-            this._EmbeddedRecordObject_lastRaw = raw;
-        }
-        return this._EmbeddedRecordObject_cached!;
+        return this.GetJSONFieldObject<MJEntityFieldEntity_IEmbeddedRecordConfig>('EmbeddedRecord');
     }
     set EmbeddedRecordObject(value: MJEntityFieldEntity_IEmbeddedRecordConfig | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.EmbeddedRecord = raw;
-        this._EmbeddedRecordObject_cached = value;
-        this._EmbeddedRecordObject_lastRaw = raw;
+        this.SetJSONFieldObject<MJEntityFieldEntity_IEmbeddedRecordConfig>('EmbeddedRecord', value);
     }
 
     /**
@@ -91570,25 +92326,19 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
         this.Set('Configuration', value);
     }
 
-    private _ConfigurationObject_cached: MJEntityFieldEntity_IEntityFieldConfiguration | null | undefined = undefined;
-    private _ConfigurationObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for Configuration — returns parsed JSON as MJEntityFieldEntity_IEntityFieldConfiguration.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for Configuration — a live view of the parsed JSON as MJEntityFieldEntity_IEntityFieldConfiguration.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Configuration field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get ConfigurationObject(): MJEntityFieldEntity_IEntityFieldConfiguration | null {
-        const raw = this.Configuration;
-        if (raw !== this._ConfigurationObject_lastRaw) {
-            this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
-            this._ConfigurationObject_lastRaw = raw;
-        }
-        return this._ConfigurationObject_cached!;
+        return this.GetJSONFieldObject<MJEntityFieldEntity_IEntityFieldConfiguration>('Configuration');
     }
     set ConfigurationObject(value: MJEntityFieldEntity_IEntityFieldConfiguration | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.Configuration = raw;
-        this._ConfigurationObject_cached = value;
-        this._ConfigurationObject_lastRaw = raw;
+        this.SetJSONFieldObject<MJEntityFieldEntity_IEntityFieldConfiguration>('Configuration', value);
     }
 
     /**
@@ -91732,6 +92482,756 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
     */
     get RelatedEntityClassName(): string | null {
         return this.Get('RelatedEntityClassName');
+    }
+}
+
+
+/**
+ * MJ: Entity Form Contributions - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: EntityFormContribution
+ * * Base View: vwEntityFormContributions
+ * * @description Metadata-registered form contribution: mounts a form-panel Component on a parent entity's form at a slot or inside a section, optionally standing in for baked sections, a rail tab, a set of fields or a related grid. Peer of compiled BaseFormPanel registrations.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Entity Form Contributions')
+export class MJEntityFormContributionEntity extends BaseEntity<MJEntityFormContributionEntityType> {
+    /**
+    * Loads the MJ: Entity Form Contributions record from the database
+    * @param ID: string - primary key value to load the MJ: Entity Form Contributions record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJEntityFormContributionEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Entity Form Contributions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * ReplacesFieldNames: If Replaces Field Names is provided, it must be a valid, non-empty JSON array of field names.
+    * * ReplacesSectionKeys: If Replaces Section Keys is provided, it must be a valid JSON array containing at least one element. It cannot be empty or just an empty array structure.
+    * * Table-Level: Only one of the following fields can be set at a time: Replaces Section Key, Related Entity ID, Replaces Field Names, Replaces Section Keys, or In Section Key. This prevents conflicting configuration definitions.
+    * * Table-Level: If the presentation style is set to 'bare', then both Inclusion and ChromeGroup must be left empty.
+    * * Table-Level: If a Related Join Field is specified, a Related Entity must also be provided to ensure the join field has a valid target entity.
+    * * Table-Level: Ensures that the assigned User or Role matches the selected Scope. A 'User' scope requires a User ID and no Role ID, a 'Role' scope requires a Role ID and no User ID, and a 'Global' scope requires both User ID and Role ID to be empty.
+    * * Table-Level: If a Section Position is specified, either the Replaces Field Names or the In Section Key must also be provided to define the context of the position.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateReplacesFieldNamesIsNonEmptyJsonArray(result);
+        this.ValidateReplacesSectionKeysIsNonEmptyJsonArray(result);
+        this.ValidateMutuallyExclusiveReplacementAndRelationshipFields(result);
+        this.ValidatePresentationBareInclusionAndChromeGroup(result);
+        this.ValidateRelatedJoinFieldRequiresRelatedEntityID(result);
+        this.ValidateScopeAssociations(result);
+        this.ValidateSectionPositionDependencies(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * If Replaces Field Names is provided, it must be a valid, non-empty JSON array of field names.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateReplacesFieldNamesIsNonEmptyJsonArray(result: ValidationResult) {
+        if (this.ReplacesFieldNames != null) {
+            let isValid = false;
+            try {
+                const trimmed = this.ReplacesFieldNames.trim();
+                if (trimmed.startsWith("[")) {
+                    const parsed = JSON.parse(trimmed);
+                    if (Array.isArray(parsed) && parsed.length > 0) {
+                        isValid = true;
+                    }
+                }
+            } catch (e) {
+                // JSON parsing failed
+            }
+    
+            if (!isValid) {
+                result.Errors.push(new ValidationErrorInfo(
+                    "ReplacesFieldNames",
+                    "Replaces Field Names must be a valid, non-empty JSON array (e.g., [\"FieldName\"]).",
+                    this.ReplacesFieldNames,
+                    ValidationErrorType.Failure
+                ));
+            }
+        }
+    }
+
+    /**
+    * If Replaces Section Keys is provided, it must be a valid JSON array containing at least one element. It cannot be empty or just an empty array structure.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateReplacesSectionKeysIsNonEmptyJsonArray(result: ValidationResult) {
+    	if (this.ReplacesSectionKeys != null) {
+    		let isValid = false;
+    		let isEmpty = true;
+    		try {
+    			const value = this.ReplacesSectionKeys.trim();
+    			if (value.startsWith("[")) {
+    				const parsed = JSON.parse(value);
+    				if (Array.isArray(parsed)) {
+    					isValid = true;
+    					if (parsed.length > 0) {
+    						isEmpty = false;
+    					}
+    				}
+    			}
+    		} catch (e) {
+    			isValid = false;
+    		}
+    
+    		if (!isValid) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"ReplacesSectionKeys",
+    				"Replaces Section Keys must be a valid JSON array.",
+    				this.ReplacesSectionKeys,
+    				ValidationErrorType.Failure
+    			));
+    		} else if (isEmpty) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"ReplacesSectionKeys",
+    				"Replaces Section Keys array cannot be empty.",
+    				this.ReplacesSectionKeys,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
+    }
+
+    /**
+    * Only one of the following fields can be set at a time: Replaces Section Key, Related Entity ID, Replaces Field Names, Replaces Section Keys, or In Section Key. This prevents conflicting configuration definitions.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateMutuallyExclusiveReplacementAndRelationshipFields(result: ValidationResult) {
+    	let count = 0;
+    	if (this.ReplacesSectionKey != null) {
+    		count++;
+    	}
+    	if (this.RelatedEntityID != null) {
+    		count++;
+    	}
+    	if (this.ReplacesFieldNames != null) {
+    		count++;
+    	}
+    	if (this.ReplacesSectionKeys != null) {
+    		count++;
+    	}
+    	if (this.InSectionKey != null) {
+    		count++;
+    	}
+    
+    	if (count > 1) {
+    		const message = "Only one of ReplacesSectionKey, RelatedEntityID, ReplacesFieldNames, ReplacesSectionKeys, or InSectionKey may be specified.";
+    		if (this.ReplacesSectionKey != null) {
+    			result.Errors.push(new ValidationErrorInfo("ReplacesSectionKey", message, this.ReplacesSectionKey, ValidationErrorType.Failure));
+    		}
+    		if (this.RelatedEntityID != null) {
+    			result.Errors.push(new ValidationErrorInfo("RelatedEntityID", message, this.RelatedEntityID, ValidationErrorType.Failure));
+    		}
+    		if (this.ReplacesFieldNames != null) {
+    			result.Errors.push(new ValidationErrorInfo("ReplacesFieldNames", message, this.ReplacesFieldNames, ValidationErrorType.Failure));
+    		}
+    		if (this.ReplacesSectionKeys != null) {
+    			result.Errors.push(new ValidationErrorInfo("ReplacesSectionKeys", message, this.ReplacesSectionKeys, ValidationErrorType.Failure));
+    		}
+    		if (this.InSectionKey != null) {
+    			result.Errors.push(new ValidationErrorInfo("InSectionKey", message, this.InSectionKey, ValidationErrorType.Failure));
+    		}
+    	}
+    }
+
+    /**
+    * If the presentation style is set to 'bare', then both Inclusion and ChromeGroup must be left empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidatePresentationBareInclusionAndChromeGroup(result: ValidationResult) {
+    	if (this.Presentation === "bare") {
+    		if (this.Inclusion != null || this.ChromeGroup != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"Presentation",
+    				"When Presentation is set to 'bare', both Inclusion and ChromeGroup must be empty.",
+    				this.Presentation,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
+    }
+
+    /**
+    * If a Related Join Field is specified, a Related Entity must also be provided to ensure the join field has a valid target entity.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateRelatedJoinFieldRequiresRelatedEntityID(result: ValidationResult) {
+    	if (this.RelatedJoinField != null && this.RelatedJoinField.trim() !== "" && this.RelatedEntityID == null) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"RelatedEntityID",
+    			"A Related Entity must be specified when a Related Join Field is provided.",
+    			this.RelatedEntityID,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Ensures that the assigned User or Role matches the selected Scope. A 'User' scope requires a User ID and no Role ID, a 'Role' scope requires a Role ID and no User ID, and a 'Global' scope requires both User ID and Role ID to be empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateScopeAssociations(result: ValidationResult) {
+    	if (this.Scope === 'User') {
+    		if (this.UserID == null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"UserID",
+    				"A User must be specified when the Scope is set to 'User'.",
+    				this.UserID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    		if (this.RoleID != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"RoleID",
+    				"Role cannot be specified when the Scope is set to 'User'.",
+    				this.RoleID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	} else if (this.Scope === 'Role') {
+    		if (this.RoleID == null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"RoleID",
+    				"A Role must be specified when the Scope is set to 'Role'.",
+    				this.RoleID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    		if (this.UserID != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"UserID",
+    				"User cannot be specified when the Scope is set to 'Role'.",
+    				this.UserID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	} else if (this.Scope === 'Global') {
+    		if (this.UserID != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"UserID",
+    				"User cannot be specified when the Scope is set to 'Global'.",
+    				this.UserID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    		if (this.RoleID != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"RoleID",
+    				"Role cannot be specified when the Scope is set to 'Global'.",
+    				this.RoleID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
+    }
+
+    /**
+    * If a Section Position is specified, either the Replaces Field Names or the In Section Key must also be provided to define the context of the position.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateSectionPositionDependencies(result: ValidationResult) {
+    	// If SectionPosition is provided, at least one of ReplacesFieldNames or InSectionKey must also be provided
+    	if (this.SectionPosition != null && this.ReplacesFieldNames == null && this.InSectionKey == null) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"SectionPosition",
+    			"When Section Position is specified, you must also provide either Replaces Field Names or In Section Key.",
+    			this.SectionPosition,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Parent Entity
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: Parent form entity the panel mounts on.
+    */
+    get EntityID(): string {
+        return this.Get('EntityID');
+    }
+    set EntityID(value: string) {
+        this.Set('EntityID', value);
+    }
+
+    /**
+    * * Field Name: ComponentID
+    * * Display Name: Component
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Components (vwComponents.ID)
+    * * Description: MJ: Components row (Type=Widget) whose Specification declares componentRole=form-panel.
+    */
+    get ComponentID(): string {
+        return this.Get('ComponentID');
+    }
+    set ComponentID(value: string) {
+        this.Set('ComponentID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Slot
+    * * Display Name: Slot
+    * * SQL Data Type: nvarchar(30)
+    * * Default Value: after-fields
+    * * Value List Type: List
+    * * Possible Values 
+    *   * after-everything
+    *   * after-fields
+    *   * after-related
+    *   * before-fields
+    *   * top-area
+    * * Description: Slot inside the generated form: top-area, before-fields, after-fields, after-related, after-everything.
+    */
+    get Slot(): 'after-everything' | 'after-fields' | 'after-related' | 'before-fields' | 'top-area' {
+        return this.Get('Slot');
+    }
+    set Slot(value: 'after-everything' | 'after-fields' | 'after-related' | 'before-fields' | 'top-area') {
+        this.Set('Slot', value);
+    }
+
+    /**
+    * * Field Name: SortKey
+    * * Display Name: Sort Key
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Order among panels drawn in the same place; higher renders earlier.
+    */
+    get SortKey(): number {
+        return this.Get('SortKey');
+    }
+    set SortKey(value: number) {
+        this.Set('SortKey', value);
+    }
+
+    /**
+    * * Field Name: ContributionKey
+    * * Display Name: Contribution Key
+    * * SQL Data Type: nvarchar(256)
+    * * Description: Last-wins identity shared with compiled registrations and MJ: Form Chrome Rules. Null derives related:<entity>:<join> for related claims, otherwise the row never collapses.
+    */
+    get ContributionKey(): string | null {
+        return this.Get('ContributionKey');
+    }
+    set ContributionKey(value: string | null) {
+        this.Set('ContributionKey', value);
+    }
+
+    /**
+    * * Field Name: RelatedEntityID
+    * * Display Name: Related Entity
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: When set, this panel replaces the related-entity grid for that relationship on the parent form.
+    */
+    get RelatedEntityID(): string | null {
+        return this.Get('RelatedEntityID');
+    }
+    set RelatedEntityID(value: string | null) {
+        this.Set('RelatedEntityID', value);
+    }
+
+    /**
+    * * Field Name: RelatedJoinField
+    * * Display Name: Related Join Field
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Disambiguates two FKs to the same related entity (BillToPersonID vs ShipToPersonID).
+    */
+    get RelatedJoinField(): string | null {
+        return this.Get('RelatedJoinField');
+    }
+    set RelatedJoinField(value: string | null) {
+        this.Set('RelatedJoinField', value);
+    }
+
+    /**
+    * * Field Name: ReplacesSectionKey
+    * * Display Name: Replaces Section Key
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Section key of one baked block, or rail key of one tab, this contribution stands in for. The panel draws in its place. Mutually exclusive with every other claim.
+    */
+    get ReplacesSectionKey(): string | null {
+        return this.Get('ReplacesSectionKey');
+    }
+    set ReplacesSectionKey(value: string | null) {
+        this.Set('ReplacesSectionKey', value);
+    }
+
+    /**
+    * * Field Name: ReplacesSectionKeys
+    * * Display Name: Replaces Section Keys
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of section keys this contribution stands in for, all within one tab. The panel draws in the place of the first of them and the others are not drawn. Mutually exclusive with every other claim.
+    */
+    get ReplacesSectionKeys(): string | null {
+        return this.Get('ReplacesSectionKeys');
+    }
+    set ReplacesSectionKeys(value: string | null) {
+        this.Set('ReplacesSectionKeys', value);
+    }
+
+    /**
+    * * Field Name: ReplacesFieldNames
+    * * Display Name: Replaces Field Names
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of field names this contribution stands in for, all within one section. The panel draws inside that section, at SectionPosition, and the named fields are not drawn. Mutually exclusive with every other claim.
+    */
+    get ReplacesFieldNames(): string | null {
+        return this.Get('ReplacesFieldNames');
+    }
+    set ReplacesFieldNames(value: string | null) {
+        this.Set('ReplacesFieldNames', value);
+    }
+
+    /**
+    * * Field Name: InSectionKey
+    * * Display Name: In Section Key
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Section key of a section this contribution draws inside, replacing nothing. SectionPosition says whether it draws at the start or the end. Mutually exclusive with every other claim.
+    */
+    get InSectionKey(): string | null {
+        return this.Get('InSectionKey');
+    }
+    set InSectionKey(value: string | null) {
+        this.Set('InSectionKey', value);
+    }
+
+    /**
+    * * Field Name: SectionPosition
+    * * Display Name: Section Position
+    * * SQL Data Type: nvarchar(10)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * end
+    *   * start
+    * * Description: Where inside its section the panel draws: start or end. Applies to InSectionKey and to a ReplacesFieldNames claim; null means start.
+    */
+    get SectionPosition(): 'end' | 'start' | null {
+        return this.Get('SectionPosition');
+    }
+    set SectionPosition(value: 'end' | 'start' | null) {
+        this.Set('SectionPosition', value);
+    }
+
+    /**
+    * * Field Name: Inclusion
+    * * Display Name: Inclusion
+    * * SQL Data Type: nvarchar(10)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * More
+    *   * None
+    *   * Primary
+    * * Description: L1 chrome inclusion: Primary (own rail item), More (folder), None (hidden). Null = default rail behavior.
+    */
+    get Inclusion(): 'More' | 'None' | 'Primary' | null {
+        return this.Get('Inclusion');
+    }
+    set Inclusion(value: 'More' | 'None' | 'Primary' | null) {
+        this.Set('Inclusion', value);
+    }
+
+    /**
+    * * Field Name: ChromeGroup
+    * * Display Name: Chrome Group
+    * * SQL Data Type: nvarchar(10)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * details
+    *   * more
+    * * Description: Pin to the details or more chrome bucket instead of an own rail item.
+    */
+    get ChromeGroup(): 'details' | 'more' | null {
+        return this.Get('ChromeGroup');
+    }
+    set ChromeGroup(value: 'details' | 'more' | null) {
+        this.Set('ChromeGroup', value);
+    }
+
+    /**
+    * * Field Name: Presentation
+    * * Display Name: Presentation
+    * * SQL Data Type: nvarchar(10)
+    * * Default Value: panel
+    * * Value List Type: List
+    * * Possible Values 
+    *   * bare
+    *   * panel
+    * * Description: panel = wrapped in a collapsible section with header; bare = hero strip with no chrome and no rail item.
+    */
+    get Presentation(): 'bare' | 'panel' {
+        return this.Get('Presentation');
+    }
+    set Presentation(value: 'bare' | 'panel') {
+        this.Set('Presentation', value);
+    }
+
+    /**
+    * * Field Name: Title
+    * * Display Name: Title
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Section header and rail label. Null falls back to Name.
+    */
+    get Title(): string | null {
+        return this.Get('Title');
+    }
+    set Title(value: string | null) {
+        this.Set('Title', value);
+    }
+
+    /**
+    * * Field Name: Icon
+    * * Display Name: Icon
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Font Awesome class for the section header and rail item.
+    */
+    get Icon(): string | null {
+        return this.Get('Icon');
+    }
+    set Icon(value: string | null) {
+        this.Set('Icon', value);
+    }
+
+    /**
+    * * Field Name: Scope
+    * * Display Name: Scope
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: User
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Global
+    *   * Role
+    *   * User
+    * * Description: Who sees the contribution: User (UserID), Role (RoleID) or Global.
+    */
+    get Scope(): 'Global' | 'Role' | 'User' {
+        return this.Get('Scope');
+    }
+    set Scope(value: 'Global' | 'Role' | 'User') {
+        this.Set('Scope', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    */
+    get UserID(): string | null {
+        return this.Get('UserID');
+    }
+    set UserID(value: string | null) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: RoleID
+    * * Display Name: Role
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)
+    */
+    get RoleID(): string | null {
+        return this.Get('RoleID');
+    }
+    set RoleID(value: string | null) {
+        this.Set('RoleID', value);
+    }
+
+    /**
+    * * Field Name: Precedence
+    * * Display Name: Precedence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Last-wins precedence against compiled registrations sharing ContributionKey. Ties go to the compiled registration; a row wins only when strictly higher.
+    */
+    get Precedence(): number {
+        return this.Get('Precedence');
+    }
+    set Precedence(value: number) {
+        this.Set('Precedence', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+    *   * Pending
+    * * Description: Active rows render. Pending rows are drafts awaiting activation. Inactive rows are history.
+    */
+    get Status(): 'Active' | 'Inactive' | 'Pending' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Inactive' | 'Pending') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON passed to the component as contribution.configuration so one component can serve several rows.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * * Field Name: Notes
+    * * Display Name: Notes
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Free-form authoring notes; agents append an iteration log here.
+    */
+    get Notes(): string | null {
+        return this.Get('Notes');
+    }
+    set Notes(value: string | null) {
+        this.Set('Notes', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string {
+        return this.Get('Entity');
+    }
+
+    /**
+    * * Field Name: Component
+    * * Display Name: Component
+    * * SQL Data Type: nvarchar(500)
+    */
+    get Component(): string {
+        return this.Get('Component');
+    }
+
+    /**
+    * * Field Name: RelatedEntity
+    * * Display Name: Related Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get RelatedEntity(): string | null {
+        return this.Get('RelatedEntity');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string | null {
+        return this.Get('User');
+    }
+
+    /**
+    * * Field Name: Role
+    * * Display Name: Role
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Role(): string | null {
+        return this.Get('Role');
     }
 }
 
@@ -92978,6 +94478,20 @@ export class MJEntityRecordDocumentEntity extends BaseEntity<MJEntityRecordDocum
     }
 
     /**
+    * * Field Name: VectorBinary
+    * * Display Name: Vector Binary
+    * * SQL Data Type: varbinary(MAX)
+    * * Binary Value: base64-encoded string. Decode with Base64ToBytes() — or Base64ToFloat32Vector() for an embedding — from @memberjunction/global.
+    * * Description: The embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of VectorJSON. Written alongside VectorJSON by vector sync; readers prefer it and fall back to VectorJSON when it is NULL.
+    */
+    get VectorBinary(): string | null {
+        return this.Get('VectorBinary');
+    }
+    set VectorBinary(value: string | null) {
+        this.Set('VectorBinary', value);
+    }
+
+    /**
     * * Field Name: Entity
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
@@ -93329,6 +94843,27 @@ export interface MJEntityRelationshipEntity_IEntityRelationshipUIConfiguration {
      * after lead contributions such as Overview). Omit = 0.
      */
     sortKey?: number;
+
+    /**
+     * What the parent form does with this section when it has 0 rows.
+     * Counts are fetched in one batched round trip when the record loads.
+     *
+     * - `'show'` — always show (use when users create the first row here).
+     * - `'hide'` — hide while empty. The "show empty fields" toolbar toggle reveals it.
+     * - `'more'` — move into the More folder while empty; returns to its normal
+     *   placement once it has rows.
+     *
+     * Omit = inherit the parent entity's `UI.Form.RelatedWhenEmpty`, else `'show'`.
+     */
+    whenEmpty?: 'show' | 'hide' | 'more';
+
+    /**
+     * Prefetch this section's row count when the record loads and show it as a
+     * badge. Set `false` for known-expensive related entities.
+     *
+     * Omit = inherit the parent entity's `UI.Form.ShowRelatedCounts`, else `true`.
+     */
+    showCount?: boolean;
 }
 
 /**
@@ -93785,25 +95320,19 @@ export class MJEntityRelationshipEntity extends BaseEntity<MJEntityRelationshipE
         this.Set('RelatedRecordCollection', value);
     }
 
-    private _RelatedRecordCollectionObject_cached: MJEntityRelationshipEntity_IRelatedRecordCollectionConfig | null | undefined = undefined;
-    private _RelatedRecordCollectionObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for RelatedRecordCollection — returns parsed JSON as MJEntityRelationshipEntity_IRelatedRecordCollectionConfig.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for RelatedRecordCollection — a live view of the parsed JSON as MJEntityRelationshipEntity_IRelatedRecordCollectionConfig.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying RelatedRecordCollection field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get RelatedRecordCollectionObject(): MJEntityRelationshipEntity_IRelatedRecordCollectionConfig | null {
-        const raw = this.RelatedRecordCollection;
-        if (raw !== this._RelatedRecordCollectionObject_lastRaw) {
-            this._RelatedRecordCollectionObject_cached = raw ? JSON.parse(raw) : null;
-            this._RelatedRecordCollectionObject_lastRaw = raw;
-        }
-        return this._RelatedRecordCollectionObject_cached!;
+        return this.GetJSONFieldObject<MJEntityRelationshipEntity_IRelatedRecordCollectionConfig>('RelatedRecordCollection');
     }
     set RelatedRecordCollectionObject(value: MJEntityRelationshipEntity_IRelatedRecordCollectionConfig | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.RelatedRecordCollection = raw;
-        this._RelatedRecordCollectionObject_cached = value;
-        this._RelatedRecordCollectionObject_lastRaw = raw;
+        this.SetJSONFieldObject<MJEntityRelationshipEntity_IRelatedRecordCollectionConfig>('RelatedRecordCollection', value);
     }
 
     /**
@@ -93820,25 +95349,19 @@ export class MJEntityRelationshipEntity extends BaseEntity<MJEntityRelationshipE
         this.Set('Configuration', value);
     }
 
-    private _ConfigurationObject_cached: MJEntityRelationshipEntity_IEntityRelationshipConfiguration | null | undefined = undefined;
-    private _ConfigurationObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for Configuration — returns parsed JSON as MJEntityRelationshipEntity_IEntityRelationshipConfiguration.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for Configuration — a live view of the parsed JSON as MJEntityRelationshipEntity_IEntityRelationshipConfiguration.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Configuration field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get ConfigurationObject(): MJEntityRelationshipEntity_IEntityRelationshipConfiguration | null {
-        const raw = this.Configuration;
-        if (raw !== this._ConfigurationObject_lastRaw) {
-            this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
-            this._ConfigurationObject_lastRaw = raw;
-        }
-        return this._ConfigurationObject_cached!;
+        return this.GetJSONFieldObject<MJEntityRelationshipEntity_IEntityRelationshipConfiguration>('Configuration');
     }
     set ConfigurationObject(value: MJEntityRelationshipEntity_IEntityRelationshipConfiguration | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.Configuration = raw;
-        this._ConfigurationObject_cached = value;
-        this._ConfigurationObject_lastRaw = raw;
+        this.SetJSONFieldObject<MJEntityRelationshipEntity_IEntityRelationshipConfiguration>('Configuration', value);
     }
 
     /**
@@ -97219,25 +98742,19 @@ export class MJFileStorageProviderEntity extends BaseEntity<MJFileStorageProvide
         this.Set('Configuration', value);
     }
 
-    private _ConfigurationObject_cached: MJFileStorageProviderEntity_IFileStorageProviderConfiguration | null | undefined = undefined;
-    private _ConfigurationObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for Configuration — returns parsed JSON as MJFileStorageProviderEntity_IFileStorageProviderConfiguration.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for Configuration — a live view of the parsed JSON as MJFileStorageProviderEntity_IFileStorageProviderConfiguration.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Configuration field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get ConfigurationObject(): MJFileStorageProviderEntity_IFileStorageProviderConfiguration | null {
-        const raw = this.Configuration;
-        if (raw !== this._ConfigurationObject_lastRaw) {
-            this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
-            this._ConfigurationObject_lastRaw = raw;
-        }
-        return this._ConfigurationObject_cached!;
+        return this.GetJSONFieldObject<MJFileStorageProviderEntity_IFileStorageProviderConfiguration>('Configuration');
     }
     set ConfigurationObject(value: MJFileStorageProviderEntity_IFileStorageProviderConfiguration | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.Configuration = raw;
-        this._ConfigurationObject_cached = value;
-        this._ConfigurationObject_lastRaw = raw;
+        this.SetJSONFieldObject<MJFileStorageProviderEntity_IFileStorageProviderConfiguration>('Configuration', value);
     }
 
     /**
@@ -111931,25 +113448,33 @@ export class MJQueryEntity extends BaseEntity<MJQueryEntityType> {
         this.Set('Configuration', value);
     }
 
-    private _ConfigurationObject_cached: MJQueryEntity_IQueryConfiguration | null | undefined = undefined;
-    private _ConfigurationObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for Configuration — returns parsed JSON as MJQueryEntity_IQueryConfiguration.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for Configuration — a live view of the parsed JSON as MJQueryEntity_IQueryConfiguration.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Configuration field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get ConfigurationObject(): MJQueryEntity_IQueryConfiguration | null {
-        const raw = this.Configuration;
-        if (raw !== this._ConfigurationObject_lastRaw) {
-            this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
-            this._ConfigurationObject_lastRaw = raw;
-        }
-        return this._ConfigurationObject_cached!;
+        return this.GetJSONFieldObject<MJQueryEntity_IQueryConfiguration>('Configuration');
     }
     set ConfigurationObject(value: MJQueryEntity_IQueryConfiguration | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.Configuration = raw;
-        this._ConfigurationObject_cached = value;
-        this._ConfigurationObject_lastRaw = raw;
+        this.SetJSONFieldObject<MJQueryEntity_IQueryConfiguration>('Configuration', value);
+    }
+
+    /**
+    * * Field Name: EmbeddingVectorBinary
+    * * Display Name: Embedding Vector Binary
+    * * SQL Data Type: varbinary(MAX)
+    * * Binary Value: base64-encoded string. Decode with Base64ToBytes() — or Base64ToFloat32Vector() for an embedding — from @memberjunction/global.
+    * * Description: The query embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of EmbeddingVector. Written alongside EmbeddingVector; readers prefer it and fall back to EmbeddingVector when it is NULL.
+    */
+    get EmbeddingVectorBinary(): string | null {
+        return this.Get('EmbeddingVectorBinary');
+    }
+    set EmbeddingVectorBinary(value: string | null) {
+        this.Set('EmbeddingVectorBinary', value);
     }
 
     /**
@@ -115025,25 +116550,19 @@ export class MJRecordChangeEntity extends BaseEntity<MJRecordChangeEntityType> {
         this.Set('ChangeContext', value);
     }
 
-    private _ChangeContextObject_cached: MJRecordChangeEntity_IRecordChangeContext | null | undefined = undefined;
-    private _ChangeContextObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for ChangeContext — returns parsed JSON as MJRecordChangeEntity_IRecordChangeContext.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for ChangeContext — a live view of the parsed JSON as MJRecordChangeEntity_IRecordChangeContext.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying ChangeContext field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get ChangeContextObject(): MJRecordChangeEntity_IRecordChangeContext | null {
-        const raw = this.ChangeContext;
-        if (raw !== this._ChangeContextObject_lastRaw) {
-            this._ChangeContextObject_cached = raw ? JSON.parse(raw) : null;
-            this._ChangeContextObject_lastRaw = raw;
-        }
-        return this._ChangeContextObject_cached!;
+        return this.GetJSONFieldObject<MJRecordChangeEntity_IRecordChangeContext>('ChangeContext');
     }
     set ChangeContextObject(value: MJRecordChangeEntity_IRecordChangeContext | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.ChangeContext = raw;
-        this._ChangeContextObject_cached = value;
-        this._ChangeContextObject_lastRaw = raw;
+        this.SetJSONFieldObject<MJRecordChangeEntity_IRecordChangeContext>('ChangeContext', value);
     }
 
     /**
@@ -115594,25 +117113,19 @@ export class MJRecordCloneLogEntity extends BaseEntity<MJRecordCloneLogEntityTyp
         this.Set('PlanJSON', value);
     }
 
-    private _PlanJSONObject_cached: MJRecordCloneLogEntity_IClonePlan | undefined = undefined;
-    private _PlanJSONObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for PlanJSON — returns parsed JSON as MJRecordCloneLogEntity_IClonePlan.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for PlanJSON — a live view of the parsed JSON as MJRecordCloneLogEntity_IClonePlan.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying PlanJSON field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get PlanJSONObject(): MJRecordCloneLogEntity_IClonePlan {
-        const raw = this.PlanJSON;
-        if (raw !== this._PlanJSONObject_lastRaw) {
-            this._PlanJSONObject_cached = raw ? JSON.parse(raw) : null;
-            this._PlanJSONObject_lastRaw = raw;
-        }
-        return this._PlanJSONObject_cached!;
+        return this.GetJSONFieldObject<MJRecordCloneLogEntity_IClonePlan>('PlanJSON')!;
     }
     set PlanJSONObject(value: MJRecordCloneLogEntity_IClonePlan) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.PlanJSON = raw;
-        this._PlanJSONObject_cached = value;
-        this._PlanJSONObject_lastRaw = raw;
+        this.SetJSONFieldObject<MJRecordCloneLogEntity_IClonePlan>('PlanJSON', value);
     }
 
     /**
@@ -118043,25 +119556,19 @@ export class MJRemoteOperationEntity extends BaseEntity<MJRemoteOperationEntityT
         this.Set('Libraries', value);
     }
 
-    private _LibrariesObject_cached: Array<MJRemoteOperationEntity_RemoteOperationLibrary> | null | undefined = undefined;
-    private _LibrariesObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for Libraries — returns parsed JSON as Array<MJRemoteOperationEntity_RemoteOperationLibrary>.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for Libraries — a live view of the parsed JSON as Array<MJRemoteOperationEntity_RemoteOperationLibrary>.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Libraries field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get LibrariesObject(): Array<MJRemoteOperationEntity_RemoteOperationLibrary> | null {
-        const raw = this.Libraries;
-        if (raw !== this._LibrariesObject_lastRaw) {
-            this._LibrariesObject_cached = raw ? JSON.parse(raw) : null;
-            this._LibrariesObject_lastRaw = raw;
-        }
-        return this._LibrariesObject_cached!;
+        return this.GetJSONFieldObject<Array<MJRemoteOperationEntity_RemoteOperationLibrary>>('Libraries');
     }
     set LibrariesObject(value: Array<MJRemoteOperationEntity_RemoteOperationLibrary> | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.Libraries = raw;
-        this._LibrariesObject_cached = value;
-        this._LibrariesObject_lastRaw = raw;
+        this.SetJSONFieldObject<Array<MJRemoteOperationEntity_RemoteOperationLibrary>>('Libraries', value);
     }
 
     /**
@@ -119786,25 +121293,19 @@ export class MJRubricCriterionEntity extends BaseEntity<MJRubricCriterionEntityT
         this.Set('EvaluatorConfig', value);
     }
 
-    private _EvaluatorConfigObject_cached: MJRubricCriterionEntity_IRubricCriterionEvaluatorConfig | null | undefined = undefined;
-    private _EvaluatorConfigObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for EvaluatorConfig — returns parsed JSON as MJRubricCriterionEntity_IRubricCriterionEvaluatorConfig.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for EvaluatorConfig — a live view of the parsed JSON as MJRubricCriterionEntity_IRubricCriterionEvaluatorConfig.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying EvaluatorConfig field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get EvaluatorConfigObject(): MJRubricCriterionEntity_IRubricCriterionEvaluatorConfig | null {
-        const raw = this.EvaluatorConfig;
-        if (raw !== this._EvaluatorConfigObject_lastRaw) {
-            this._EvaluatorConfigObject_cached = raw ? JSON.parse(raw) : null;
-            this._EvaluatorConfigObject_lastRaw = raw;
-        }
-        return this._EvaluatorConfigObject_cached!;
+        return this.GetJSONFieldObject<MJRubricCriterionEntity_IRubricCriterionEvaluatorConfig>('EvaluatorConfig');
     }
     set EvaluatorConfigObject(value: MJRubricCriterionEntity_IRubricCriterionEvaluatorConfig | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.EvaluatorConfig = raw;
-        this._EvaluatorConfigObject_cached = value;
-        this._EvaluatorConfigObject_lastRaw = raw;
+        this.SetJSONFieldObject<MJRubricCriterionEntity_IRubricCriterionEvaluatorConfig>('EvaluatorConfig', value);
     }
 
     /**
@@ -120477,25 +121978,19 @@ export class MJRubricEvaluationScoreEntity extends BaseEntity<MJRubricEvaluation
         this.Set('Evidence', value);
     }
 
-    private _EvidenceObject_cached: Array<MJRubricEvaluationScoreEntity_IRubricEvidence> | null | undefined = undefined;
-    private _EvidenceObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for Evidence — returns parsed JSON as Array<MJRubricEvaluationScoreEntity_IRubricEvidence>.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for Evidence — a live view of the parsed JSON as Array<MJRubricEvaluationScoreEntity_IRubricEvidence>.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Evidence field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get EvidenceObject(): Array<MJRubricEvaluationScoreEntity_IRubricEvidence> | null {
-        const raw = this.Evidence;
-        if (raw !== this._EvidenceObject_lastRaw) {
-            this._EvidenceObject_cached = raw ? JSON.parse(raw) : null;
-            this._EvidenceObject_lastRaw = raw;
-        }
-        return this._EvidenceObject_cached!;
+        return this.GetJSONFieldObject<Array<MJRubricEvaluationScoreEntity_IRubricEvidence>>('Evidence');
     }
     set EvidenceObject(value: Array<MJRubricEvaluationScoreEntity_IRubricEvidence> | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.Evidence = raw;
-        this._EvidenceObject_cached = value;
-        this._EvidenceObject_lastRaw = raw;
+        this.SetJSONFieldObject<Array<MJRubricEvaluationScoreEntity_IRubricEvidence>>('Evidence', value);
     }
 
     /**
@@ -121362,25 +122857,19 @@ export class MJRubricEvaluationEntity extends BaseEntity<MJRubricEvaluationEntit
         this.Set('Metadata', value);
     }
 
-    private _MetadataObject_cached: MJRubricEvaluationEntity_IRubricEvaluationMetadata | null | undefined = undefined;
-    private _MetadataObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for Metadata — returns parsed JSON as MJRubricEvaluationEntity_IRubricEvaluationMetadata.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for Metadata — a live view of the parsed JSON as MJRubricEvaluationEntity_IRubricEvaluationMetadata.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Metadata field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get MetadataObject(): MJRubricEvaluationEntity_IRubricEvaluationMetadata | null {
-        const raw = this.Metadata;
-        if (raw !== this._MetadataObject_lastRaw) {
-            this._MetadataObject_cached = raw ? JSON.parse(raw) : null;
-            this._MetadataObject_lastRaw = raw;
-        }
-        return this._MetadataObject_cached!;
+        return this.GetJSONFieldObject<MJRubricEvaluationEntity_IRubricEvaluationMetadata>('Metadata');
     }
     set MetadataObject(value: MJRubricEvaluationEntity_IRubricEvaluationMetadata | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.Metadata = raw;
-        this._MetadataObject_cached = value;
-        this._MetadataObject_lastRaw = raw;
+        this.SetJSONFieldObject<MJRubricEvaluationEntity_IRubricEvaluationMetadata>('Metadata', value);
     }
 
     /**
@@ -122568,25 +124057,19 @@ export class MJRubricVersionEntity extends BaseEntity<MJRubricVersionEntityType>
         this.Set('ChangeDetails', value);
     }
 
-    private _ChangeDetailsObject_cached: MJRubricVersionEntity_IRubricVersionChangeDetails | null | undefined = undefined;
-    private _ChangeDetailsObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for ChangeDetails — returns parsed JSON as MJRubricVersionEntity_IRubricVersionChangeDetails.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for ChangeDetails — a live view of the parsed JSON as MJRubricVersionEntity_IRubricVersionChangeDetails.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying ChangeDetails field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get ChangeDetailsObject(): MJRubricVersionEntity_IRubricVersionChangeDetails | null {
-        const raw = this.ChangeDetails;
-        if (raw !== this._ChangeDetailsObject_lastRaw) {
-            this._ChangeDetailsObject_cached = raw ? JSON.parse(raw) : null;
-            this._ChangeDetailsObject_lastRaw = raw;
-        }
-        return this._ChangeDetailsObject_cached!;
+        return this.GetJSONFieldObject<MJRubricVersionEntity_IRubricVersionChangeDetails>('ChangeDetails');
     }
     set ChangeDetailsObject(value: MJRubricVersionEntity_IRubricVersionChangeDetails | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.ChangeDetails = raw;
-        this._ChangeDetailsObject_cached = value;
-        this._ChangeDetailsObject_lastRaw = raw;
+        this.SetJSONFieldObject<MJRubricVersionEntity_IRubricVersionChangeDetails>('ChangeDetails', value);
     }
 
     /**
@@ -124700,25 +126183,19 @@ export class MJScopedPromptPartEntity extends BaseEntity<MJScopedPromptPartEntit
         this.Set('SecondaryScopes', value);
     }
 
-    private _SecondaryScopesObject_cached: MJScopedPromptPartEntity_IAISecondaryScopes | null | undefined = undefined;
-    private _SecondaryScopesObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for SecondaryScopes — returns parsed JSON as MJScopedPromptPartEntity_IAISecondaryScopes.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for SecondaryScopes — a live view of the parsed JSON as MJScopedPromptPartEntity_IAISecondaryScopes.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying SecondaryScopes field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get SecondaryScopesObject(): MJScopedPromptPartEntity_IAISecondaryScopes | null {
-        const raw = this.SecondaryScopes;
-        if (raw !== this._SecondaryScopesObject_lastRaw) {
-            this._SecondaryScopesObject_cached = raw ? JSON.parse(raw) : null;
-            this._SecondaryScopesObject_lastRaw = raw;
-        }
-        return this._SecondaryScopesObject_cached!;
+        return this.GetJSONFieldObject<MJScopedPromptPartEntity_IAISecondaryScopes>('SecondaryScopes');
     }
     set SecondaryScopesObject(value: MJScopedPromptPartEntity_IAISecondaryScopes | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.SecondaryScopes = raw;
-        this._SecondaryScopesObject_cached = value;
-        this._SecondaryScopesObject_lastRaw = raw;
+        this.SetJSONFieldObject<MJScopedPromptPartEntity_IAISecondaryScopes>('SecondaryScopes', value);
     }
 
     /**
@@ -129388,6 +130865,20 @@ export class MJTagEntity extends BaseEntity<MJTagEntityType> {
     }
 
     /**
+    * * Field Name: EmbeddingVectorBinary
+    * * Display Name: Embedding Vector Binary
+    * * SQL Data Type: varbinary(MAX)
+    * * Binary Value: base64-encoded string. Decode with Base64ToBytes() — or Base64ToFloat32Vector() for an embedding — from @memberjunction/global.
+    * * Description: The tag embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of EmbeddingVector. Written alongside EmbeddingVector; readers prefer it and fall back to EmbeddingVector when it is NULL.
+    */
+    get EmbeddingVectorBinary(): string | null {
+        return this.Get('EmbeddingVectorBinary');
+    }
+    set EmbeddingVectorBinary(value: string | null) {
+        this.Set('EmbeddingVectorBinary', value);
+    }
+
+    /**
     * * Field Name: Parent
     * * Display Name: Parent Name
     * * SQL Data Type: nvarchar(255)
@@ -130618,25 +132109,19 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
         this.Set('Configuration', value);
     }
 
-    private _ConfigurationObject_cached: MJTaskEntity_ITaskStepConfiguration | null | undefined = undefined;
-    private _ConfigurationObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for Configuration — returns parsed JSON as MJTaskEntity_ITaskStepConfiguration.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for Configuration — a live view of the parsed JSON as MJTaskEntity_ITaskStepConfiguration.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Configuration field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get ConfigurationObject(): MJTaskEntity_ITaskStepConfiguration | null {
-        const raw = this.Configuration;
-        if (raw !== this._ConfigurationObject_lastRaw) {
-            this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
-            this._ConfigurationObject_lastRaw = raw;
-        }
-        return this._ConfigurationObject_cached!;
+        return this.GetJSONFieldObject<MJTaskEntity_ITaskStepConfiguration>('Configuration');
     }
     set ConfigurationObject(value: MJTaskEntity_ITaskStepConfiguration | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.Configuration = raw;
-        this._ConfigurationObject_cached = value;
-        this._ConfigurationObject_lastRaw = raw;
+        this.SetJSONFieldObject<MJTaskEntity_ITaskStepConfiguration>('Configuration', value);
     }
 
     /**
@@ -134293,25 +135778,19 @@ export class MJTestEntity extends BaseEntity<MJTestEntityType> {
         this.Set('Configuration', value);
     }
 
-    private _ConfigurationObject_cached: MJTestEntity_ITestConfiguration | null | undefined = undefined;
-    private _ConfigurationObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for Configuration — returns parsed JSON as MJTestEntity_ITestConfiguration.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for Configuration — a live view of the parsed JSON as MJTestEntity_ITestConfiguration.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Configuration field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get ConfigurationObject(): MJTestEntity_ITestConfiguration | null {
-        const raw = this.Configuration;
-        if (raw !== this._ConfigurationObject_lastRaw) {
-            this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
-            this._ConfigurationObject_lastRaw = raw;
-        }
-        return this._ConfigurationObject_cached!;
+        return this.GetJSONFieldObject<MJTestEntity_ITestConfiguration>('Configuration');
     }
     set ConfigurationObject(value: MJTestEntity_ITestConfiguration | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.Configuration = raw;
-        this._ConfigurationObject_cached = value;
-        this._ConfigurationObject_lastRaw = raw;
+        this.SetJSONFieldObject<MJTestEntity_ITestConfiguration>('Configuration', value);
     }
 
     /**
@@ -138040,25 +139519,19 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
         this.Set('GridState', value);
     }
 
-    private _GridStateObject_cached: MJUserViewEntity_IGridState | null | undefined = undefined;
-    private _GridStateObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for GridState — returns parsed JSON as MJUserViewEntity_IGridState.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for GridState — a live view of the parsed JSON as MJUserViewEntity_IGridState.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying GridState field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get GridStateObject(): MJUserViewEntity_IGridState | null {
-        const raw = this.GridState;
-        if (raw !== this._GridStateObject_lastRaw) {
-            this._GridStateObject_cached = raw ? JSON.parse(raw) : null;
-            this._GridStateObject_lastRaw = raw;
-        }
-        return this._GridStateObject_cached!;
+        return this.GetJSONFieldObject<MJUserViewEntity_IGridState>('GridState');
     }
     set GridStateObject(value: MJUserViewEntity_IGridState | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.GridState = raw;
-        this._GridStateObject_cached = value;
-        this._GridStateObject_lastRaw = raw;
+        this.SetJSONFieldObject<MJUserViewEntity_IGridState>('GridState', value);
     }
 
     /**
@@ -138075,25 +139548,19 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
         this.Set('FilterState', value);
     }
 
-    private _FilterStateObject_cached: MJUserViewEntity_IFilterState | null | undefined = undefined;
-    private _FilterStateObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for FilterState — returns parsed JSON as MJUserViewEntity_IFilterState.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for FilterState — a live view of the parsed JSON as MJUserViewEntity_IFilterState.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying FilterState field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get FilterStateObject(): MJUserViewEntity_IFilterState | null {
-        const raw = this.FilterState;
-        if (raw !== this._FilterStateObject_lastRaw) {
-            this._FilterStateObject_cached = raw ? JSON.parse(raw) : null;
-            this._FilterStateObject_lastRaw = raw;
-        }
-        return this._FilterStateObject_cached!;
+        return this.GetJSONFieldObject<MJUserViewEntity_IFilterState>('FilterState');
     }
     set FilterStateObject(value: MJUserViewEntity_IFilterState | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.FilterState = raw;
-        this._FilterStateObject_cached = value;
-        this._FilterStateObject_lastRaw = raw;
+        this.SetJSONFieldObject<MJUserViewEntity_IFilterState>('FilterState', value);
     }
 
     /**
@@ -138204,25 +139671,19 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
         this.Set('SortState', value);
     }
 
-    private _SortStateObject_cached: Array<MJUserViewEntity_ISortStateItem> | null | undefined = undefined;
-    private _SortStateObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for SortState — returns parsed JSON as Array<MJUserViewEntity_ISortStateItem>.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for SortState — a live view of the parsed JSON as Array<MJUserViewEntity_ISortStateItem>.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying SortState field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get SortStateObject(): Array<MJUserViewEntity_ISortStateItem> | null {
-        const raw = this.SortState;
-        if (raw !== this._SortStateObject_lastRaw) {
-            this._SortStateObject_cached = raw ? JSON.parse(raw) : null;
-            this._SortStateObject_lastRaw = raw;
-        }
-        return this._SortStateObject_cached!;
+        return this.GetJSONFieldObject<Array<MJUserViewEntity_ISortStateItem>>('SortState');
     }
     set SortStateObject(value: Array<MJUserViewEntity_ISortStateItem> | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.SortState = raw;
-        this._SortStateObject_cached = value;
-        this._SortStateObject_lastRaw = raw;
+        this.SetJSONFieldObject<Array<MJUserViewEntity_ISortStateItem>>('SortState', value);
     }
 
     /**
@@ -138272,25 +139733,19 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
         this.Set('CardState', value);
     }
 
-    private _CardStateObject_cached: MJUserViewEntity_ICardState | null | undefined = undefined;
-    private _CardStateObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for CardState — returns parsed JSON as MJUserViewEntity_ICardState.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for CardState — a live view of the parsed JSON as MJUserViewEntity_ICardState.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying CardState field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get CardStateObject(): MJUserViewEntity_ICardState | null {
-        const raw = this.CardState;
-        if (raw !== this._CardStateObject_lastRaw) {
-            this._CardStateObject_cached = raw ? JSON.parse(raw) : null;
-            this._CardStateObject_lastRaw = raw;
-        }
-        return this._CardStateObject_cached!;
+        return this.GetJSONFieldObject<MJUserViewEntity_ICardState>('CardState');
     }
     set CardStateObject(value: MJUserViewEntity_ICardState | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.CardState = raw;
-        this._CardStateObject_cached = value;
-        this._CardStateObject_lastRaw = raw;
+        this.SetJSONFieldObject<MJUserViewEntity_ICardState>('CardState', value);
     }
 
     /**
@@ -138307,25 +139762,19 @@ export class MJUserViewEntity extends BaseEntity<MJUserViewEntityType> {
         this.Set('DisplayState', value);
     }
 
-    private _DisplayStateObject_cached: MJUserViewEntity_IDisplayState | null | undefined = undefined;
-    private _DisplayStateObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for DisplayState — returns parsed JSON as MJUserViewEntity_IDisplayState.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for DisplayState — a live view of the parsed JSON as MJUserViewEntity_IDisplayState.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying DisplayState field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get DisplayStateObject(): MJUserViewEntity_IDisplayState | null {
-        const raw = this.DisplayState;
-        if (raw !== this._DisplayStateObject_lastRaw) {
-            this._DisplayStateObject_cached = raw ? JSON.parse(raw) : null;
-            this._DisplayStateObject_lastRaw = raw;
-        }
-        return this._DisplayStateObject_cached!;
+        return this.GetJSONFieldObject<MJUserViewEntity_IDisplayState>('DisplayState');
     }
     set DisplayStateObject(value: MJUserViewEntity_IDisplayState | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.DisplayState = raw;
-        this._DisplayStateObject_cached = value;
-        this._DisplayStateObject_lastRaw = raw;
+        this.SetJSONFieldObject<MJUserViewEntity_IDisplayState>('DisplayState', value);
     }
 
     /**
@@ -140336,6 +141785,1645 @@ export class MJWebSearchProviderEntity extends BaseEntity<MJWebSearchProviderEnt
     }
     set Comments(value: string | null) {
         this.Set('Comments', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Credential
+    * * Display Name: Credential
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Credential(): string | null {
+        return this.Get('Credential');
+    }
+}
+
+
+/**
+ * MJ: Work Queue Deduplications - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: WorkQueueDeduplication
+ * * Base View: vwWorkQueueDeduplications
+ * * @description Publish deduplication ledger for every transport: a key suppresses repeat publishes to a topic until ExpiresAt.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Work Queue Deduplications')
+export class MJWorkQueueDeduplicationEntity extends BaseEntity<MJWorkQueueDeduplicationEntityType> {
+    /**
+    * Loads the MJ: Work Queue Deduplications record from the database
+    * @param ID: string - primary key value to load the MJ: Work Queue Deduplications record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJWorkQueueDeduplicationEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * MJ: Work Queue Deduplications - AllowCreateAPI and AllowUpdateAPI are both set to 0 in the database.  Save is not allowed, so this method is generated to override the base class method and throw an error. To enable save for this entity, set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
+    * @public
+    * @method
+    * @override
+    * @memberof MJWorkQueueDeduplicationEntity
+    * @throws {Error} - Save is not allowed for MJ: Work Queue Deduplications, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
+    */
+    public override async Save(options?: EntitySaveOptions) : Promise<boolean> {
+        throw new Error('Save is not allowed for MJ: Work Queue Deduplications, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.');
+    }
+
+    /**
+    * MJ: Work Queue Deduplications - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+    * @public
+    * @method
+    * @override
+    * @memberof MJWorkQueueDeduplicationEntity
+    * @throws {Error} - Delete is not allowed for MJ: Work Queue Deduplications, to enable it set AllowDeleteAPI to 1 in the database.
+    */
+    public override async Delete(): Promise<boolean> {
+        throw new Error('Delete is not allowed for MJ: Work Queue Deduplications, to enable it set AllowDeleteAPI to 1 in the database.');
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: TopicID
+    * * Display Name: Topic ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Work Queue Topics (vwWorkQueueTopics.ID)
+    */
+    get TopicID(): string {
+        return this.Get('TopicID');
+    }
+    set TopicID(value: string) {
+        this.Set('TopicID', value);
+    }
+
+    /**
+    * * Field Name: DeduplicationKey
+    * * Display Name: Deduplication Key
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Producer-supplied key identifying one logical message within the topic. Compared case-sensitively (binary collation).
+    */
+    get DeduplicationKey(): string {
+        return this.Get('DeduplicationKey');
+    }
+    set DeduplicationKey(value: string) {
+        this.Set('DeduplicationKey', value);
+    }
+
+    /**
+    * * Field Name: MessageID
+    * * Display Name: Message ID
+    * * SQL Data Type: uniqueidentifier
+    * * Description: MessageID of the publish that owns the key. Not a foreign key: cloud messages have no row.
+    */
+    get MessageID(): string {
+        return this.Get('MessageID');
+    }
+    set MessageID(value: string) {
+        this.Set('MessageID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Confirmed
+    *   * Reserved
+    * * Description: Reserved: a send is in progress (short expiry) and proves nothing about its outcome. Confirmed: the publish was accepted. Only Confirmed rows make a later publish a Duplicate.
+    */
+    get Status(): 'Confirmed' | 'Reserved' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Confirmed' | 'Reserved') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: ExpiresAt
+    * * Display Name: Expires At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When the key stops suppressing duplicates. Expired rows are replaced on publish and purged by the sweeper.
+    */
+    get ExpiresAt(): Date {
+        return this.Get('ExpiresAt');
+    }
+    set ExpiresAt(value: Date) {
+        this.Set('ExpiresAt', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Topic
+    * * Display Name: Topic
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Topic(): string {
+        return this.Get('Topic');
+    }
+}
+
+
+/**
+ * MJ: Work Queue Deliveries - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: WorkQueueDelivery
+ * * Base View: vwWorkQueueDeliveries
+ * * @description One subscription's processing of one message: status, attempts and lease.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Work Queue Deliveries')
+export class MJWorkQueueDeliveryEntity extends BaseEntity<MJWorkQueueDeliveryEntityType> {
+    /**
+    * Loads the MJ: Work Queue Deliveries record from the database
+    * @param ID: string - primary key value to load the MJ: Work Queue Deliveries record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJWorkQueueDeliveryEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * MJ: Work Queue Deliveries - AllowCreateAPI and AllowUpdateAPI are both set to 0 in the database.  Save is not allowed, so this method is generated to override the base class method and throw an error. To enable save for this entity, set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
+    * @public
+    * @method
+    * @override
+    * @memberof MJWorkQueueDeliveryEntity
+    * @throws {Error} - Save is not allowed for MJ: Work Queue Deliveries, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
+    */
+    public override async Save(options?: EntitySaveOptions) : Promise<boolean> {
+        throw new Error('Save is not allowed for MJ: Work Queue Deliveries, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.');
+    }
+
+    /**
+    * MJ: Work Queue Deliveries - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+    * @public
+    * @method
+    * @override
+    * @memberof MJWorkQueueDeliveryEntity
+    * @throws {Error} - Delete is not allowed for MJ: Work Queue Deliveries, to enable it set AllowDeleteAPI to 1 in the database.
+    */
+    public override async Delete(): Promise<boolean> {
+        throw new Error('Delete is not allowed for MJ: Work Queue Deliveries, to enable it set AllowDeleteAPI to 1 in the database.');
+    }
+
+    /**
+    * Validate() method override for MJ: Work Queue Deliveries entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * AttemptCount: Attempt count must be zero or greater. This ensures the system never records a negative number of delivery attempts, maintaining accurate tracking of message processing retries.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateAttemptCountNonNegative(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Attempt count must be zero or greater. This ensures the system never records a negative number of delivery attempts, maintaining accurate tracking of message processing retries.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateAttemptCountNonNegative(result: ValidationResult) {
+    	if (this.AttemptCount < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"AttemptCount",
+    			"Attempt count cannot be negative. It must be zero or greater.",
+    			this.AttemptCount,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: MessageID
+    * * Display Name: Message ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Work Queue Messages (vwWorkQueueMessages.ID)
+    */
+    get MessageID(): string {
+        return this.Get('MessageID');
+    }
+    set MessageID(value: string) {
+        this.Set('MessageID', value);
+    }
+
+    /**
+    * * Field Name: SubscriptionID
+    * * Display Name: Subscription ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Work Queue Subscriptions (vwWorkQueueSubscriptions.ID)
+    */
+    get SubscriptionID(): string {
+        return this.Get('SubscriptionID');
+    }
+    set SubscriptionID(value: string) {
+        this.Set('SubscriptionID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Completed
+    *   * DeadLettered
+    *   * Discarded
+    *   * InFlight
+    *   * Pending
+    * * Description: Pending: awaiting claim. InFlight: leased. Completed: handler succeeded. DeadLettered: exhausted or rejected, needs an operator. Discarded: cancelled or resolved by an operator.
+    */
+    get Status(): 'Completed' | 'DeadLettered' | 'Discarded' | 'InFlight' | 'Pending' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Completed' | 'DeadLettered' | 'Discarded' | 'InFlight' | 'Pending') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: PartitionKey
+    * * Display Name: Partition Key
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Copy of the message partition key, populated only for Exclusive and Ordered subscriptions. Drives the in-flight uniqueness rule.
+    */
+    get PartitionKey(): string | null {
+        return this.Get('PartitionKey');
+    }
+    set PartitionKey(value: string | null) {
+        this.Set('PartitionKey', value);
+    }
+
+    /**
+    * * Field Name: OrderKey
+    * * Display Name: Order Key
+    * * SQL Data Type: bigint
+    * * Description: Position within the partition key: always the message PublishOrdinal.
+    */
+    get OrderKey(): number {
+        return this.Get('OrderKey');
+    }
+    set OrderKey(value: number) {
+        this.Set('OrderKey', value);
+    }
+
+    /**
+    * * Field Name: AttemptCount
+    * * Display Name: Attempt Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Claims so far, including claims whose lease expired. Reset to 0 by replay.
+    */
+    get AttemptCount(): number {
+        return this.Get('AttemptCount');
+    }
+    set AttemptCount(value: number) {
+        this.Set('AttemptCount', value);
+    }
+
+    /**
+    * * Field Name: IsReplay
+    * * Display Name: Is Replay
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: 1 once an operator has replayed this delivery from the dead-letter state.
+    */
+    get IsReplay(): boolean {
+        return this.Get('IsReplay');
+    }
+    set IsReplay(value: boolean) {
+        this.Set('IsReplay', value);
+    }
+
+    /**
+    * * Field Name: VisibleAt
+    * * Display Name: Visible At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: sysdatetimeoffset()
+    * * Description: Earliest time the delivery may be claimed; retry backoff moves it forward.
+    */
+    get VisibleAt(): Date {
+        return this.Get('VisibleAt');
+    }
+    set VisibleAt(value: Date) {
+        this.Set('VisibleAt', value);
+    }
+
+    /**
+    * * Field Name: LeaseOwner
+    * * Display Name: Lease Owner
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Worker instance holding the current lease.
+    */
+    get LeaseOwner(): string | null {
+        return this.Get('LeaseOwner');
+    }
+    set LeaseOwner(value: string | null) {
+        this.Set('LeaseOwner', value);
+    }
+
+    /**
+    * * Field Name: LeaseToken
+    * * Display Name: Lease Token
+    * * SQL Data Type: uniqueidentifier
+    * * Description: New value per claim; a cancel leaves it unchanged. Every heartbeat and settle must present it, so a worker that lost its lease cannot overwrite a newer claim.
+    */
+    get LeaseToken(): string | null {
+        return this.Get('LeaseToken');
+    }
+    set LeaseToken(value: string | null) {
+        this.Set('LeaseToken', value);
+    }
+
+    /**
+    * * Field Name: LeaseExpiresAt
+    * * Display Name: Lease Expires At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When the current lease expires, on the database clock.
+    */
+    get LeaseExpiresAt(): Date | null {
+        return this.Get('LeaseExpiresAt');
+    }
+    set LeaseExpiresAt(value: Date | null) {
+        this.Set('LeaseExpiresAt', value);
+    }
+
+    /**
+    * * Field Name: LastHeartbeatAt
+    * * Display Name: Last Heartbeat At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When the lease was last renewed.
+    */
+    get LastHeartbeatAt(): Date | null {
+        return this.Get('LastHeartbeatAt');
+    }
+    set LastHeartbeatAt(value: Date | null) {
+        this.Set('LastHeartbeatAt', value);
+    }
+
+    /**
+    * * Field Name: Progress
+    * * Display Name: Progress
+    * * SQL Data Type: nvarchar(4000)
+    * * Description: Latest handler progress JSON ({"Percent","Message","Checkpoint"}).
+    */
+    get Progress(): string | null {
+        return this.Get('Progress');
+    }
+    set Progress(value: string | null) {
+        this.Set('Progress', value);
+    }
+
+    /**
+    * * Field Name: LastError
+    * * Display Name: Last Error
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Most recent failure text, including LeaseExpired.
+    */
+    get LastError(): string | null {
+        return this.Get('LastError');
+    }
+    set LastError(value: string | null) {
+        this.Set('LastError', value);
+    }
+
+    /**
+    * * Field Name: DeadLetterReason
+    * * Display Name: Dead Letter Reason
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Why the delivery was dead-lettered: a handler reason, MaxAttemptsExceeded, LeaseExpired or HandlerNotRegistered.
+    */
+    get DeadLetterReason(): string | null {
+        return this.Get('DeadLetterReason');
+    }
+    set DeadLetterReason(value: string | null) {
+        this.Set('DeadLetterReason', value);
+    }
+
+    /**
+    * * Field Name: DeadLetteredAt
+    * * Display Name: Dead Lettered At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When the delivery entered DeadLettered.
+    */
+    get DeadLetteredAt(): Date | null {
+        return this.Get('DeadLetteredAt');
+    }
+    set DeadLetteredAt(value: Date | null) {
+        this.Set('DeadLetteredAt', value);
+    }
+
+    /**
+    * * Field Name: CompletedAt
+    * * Display Name: Completed At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Terminal time for both Completed and Discarded; the retention purge key.
+    */
+    get CompletedAt(): Date | null {
+        return this.Get('CompletedAt');
+    }
+    set CompletedAt(value: Date | null) {
+        this.Set('CompletedAt', value);
+    }
+
+    /**
+    * * Field Name: CancelRequestedAt
+    * * Display Name: Cancel Requested At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Set when an operator cancels an in-flight delivery. From then on every holder write except AcknowledgeCancel fails; the holder acknowledges and the row becomes Discarded at once, or ExpireLeases discards it when the lease runs out. Never retried.
+    */
+    get CancelRequestedAt(): Date | null {
+        return this.Get('CancelRequestedAt');
+    }
+    set CancelRequestedAt(value: Date | null) {
+        this.Set('CancelRequestedAt', value);
+    }
+
+    /**
+    * * Field Name: ResolvedByUserID
+    * * Display Name: Resolved By User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    */
+    get ResolvedByUserID(): string | null {
+        return this.Get('ResolvedByUserID');
+    }
+    set ResolvedByUserID(value: string | null) {
+        this.Set('ResolvedByUserID', value);
+    }
+
+    /**
+    * * Field Name: ResolutionNote
+    * * Display Name: Resolution Note
+    * * SQL Data Type: nvarchar(1000)
+    * * Description: Operator note recorded with a replay or the reason recorded with a discard.
+    */
+    get ResolutionNote(): string | null {
+        return this.Get('ResolutionNote');
+    }
+    set ResolutionNote(value: string | null) {
+        this.Set('ResolutionNote', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Subscription
+    * * Display Name: Subscription
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Subscription(): string {
+        return this.Get('Subscription');
+    }
+
+    /**
+    * * Field Name: ResolvedByUser
+    * * Display Name: Resolved By User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get ResolvedByUser(): string | null {
+        return this.Get('ResolvedByUser');
+    }
+}
+
+
+/**
+ * MJ: Work Queue Messages - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: WorkQueueMessage
+ * * Base View: vwWorkQueueMessages
+ * * @description One published unit of work (the envelope). Immutable. Stored for Database-transport topics only. ID is the globally unique MessageID.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Work Queue Messages')
+export class MJWorkQueueMessageEntity extends BaseEntity<MJWorkQueueMessageEntityType> {
+    /**
+    * Loads the MJ: Work Queue Messages record from the database
+    * @param ID: string - primary key value to load the MJ: Work Queue Messages record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJWorkQueueMessageEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * MJ: Work Queue Messages - AllowCreateAPI and AllowUpdateAPI are both set to 0 in the database.  Save is not allowed, so this method is generated to override the base class method and throw an error. To enable save for this entity, set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
+    * @public
+    * @method
+    * @override
+    * @memberof MJWorkQueueMessageEntity
+    * @throws {Error} - Save is not allowed for MJ: Work Queue Messages, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
+    */
+    public override async Save(options?: EntitySaveOptions) : Promise<boolean> {
+        throw new Error('Save is not allowed for MJ: Work Queue Messages, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.');
+    }
+
+    /**
+    * MJ: Work Queue Messages - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+    * @public
+    * @method
+    * @override
+    * @memberof MJWorkQueueMessageEntity
+    * @throws {Error} - Delete is not allowed for MJ: Work Queue Messages, to enable it set AllowDeleteAPI to 1 in the database.
+    */
+    public override async Delete(): Promise<boolean> {
+        throw new Error('Delete is not allowed for MJ: Work Queue Messages, to enable it set AllowDeleteAPI to 1 in the database.');
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: PublishOrdinal
+    * * Display Name: Publish Ordinal
+    * * SQL Data Type: bigint
+    * * Description: Publish order, assigned by the database. Every delivery of the message carries it as its OrderKey.
+    */
+    get PublishOrdinal(): number {
+        return this.Get('PublishOrdinal');
+    }
+    set PublishOrdinal(value: number) {
+        this.Set('PublishOrdinal', value);
+    }
+
+    /**
+    * * Field Name: TopicID
+    * * Display Name: Topic ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Work Queue Topics (vwWorkQueueTopics.ID)
+    */
+    get TopicID(): string {
+        return this.Get('TopicID');
+    }
+    set TopicID(value: string) {
+        this.Set('TopicID', value);
+    }
+
+    /**
+    * * Field Name: PartitionKey
+    * * Display Name: Partition Key
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Producer-supplied key used by Exclusive and Ordered subscriptions. Compared case-sensitively (binary collation).
+    */
+    get PartitionKey(): string | null {
+        return this.Get('PartitionKey');
+    }
+    set PartitionKey(value: string | null) {
+        this.Set('PartitionKey', value);
+    }
+
+    /**
+    * * Field Name: Attributes
+    * * Display Name: Attributes
+    * * SQL Data Type: nvarchar(4000)
+    * * Description: JSON object of string attributes (at most 10). The only envelope fields subscription filters see.
+    */
+    get Attributes(): string | null {
+        return this.Get('Attributes');
+    }
+    set Attributes(value: string | null) {
+        this.Set('Attributes', value);
+    }
+
+    /**
+    * * Field Name: Payload
+    * * Display Name: Payload
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Inline JSON payload. Mutually exclusive with PayloadRef.
+    */
+    get Payload(): string | null {
+        return this.Get('Payload');
+    }
+    set Payload(value: string | null) {
+        this.Set('Payload', value);
+    }
+
+    /**
+    * * Field Name: PayloadRef
+    * * Display Name: Payload Ref
+    * * SQL Data Type: nvarchar(2000)
+    * * Description: JSON claim-check reference ({"Uri":...}) to data held outside the queue.
+    */
+    get PayloadRef(): string | null {
+        return this.Get('PayloadRef');
+    }
+    set PayloadRef(value: string | null) {
+        this.Set('PayloadRef', value);
+    }
+
+    /**
+    * * Field Name: CorrelationID
+    * * Display Name: Correlation ID
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Caller-supplied identifier for tracing related work.
+    */
+    get CorrelationID(): string | null {
+        return this.Get('CorrelationID');
+    }
+    set CorrelationID(value: string | null) {
+        this.Set('CorrelationID', value);
+    }
+
+    /**
+    * * Field Name: PublishedAt
+    * * Display Name: Published At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: sysdatetimeoffset()
+    * * Description: When MJ accepted the publish, on the database clock.
+    */
+    get PublishedAt(): Date {
+        return this.Get('PublishedAt');
+    }
+    set PublishedAt(value: Date) {
+        this.Set('PublishedAt', value);
+    }
+
+    /**
+    * * Field Name: PublishedByUserID
+    * * Display Name: Published By User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    */
+    get PublishedByUserID(): string | null {
+        return this.Get('PublishedByUserID');
+    }
+    set PublishedByUserID(value: string | null) {
+        this.Set('PublishedByUserID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Topic
+    * * Display Name: Topic
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Topic(): string {
+        return this.Get('Topic');
+    }
+
+    /**
+    * * Field Name: PublishedByUser
+    * * Display Name: Published By User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get PublishedByUser(): string | null {
+        return this.Get('PublishedByUser');
+    }
+}
+
+
+/**
+ * MJ: Work Queue Subscriptions - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: WorkQueueSubscription
+ * * Base View: vwWorkQueueSubscriptions
+ * * @description A consumer's standing request for a topic's messages: filter, partition mode, retry and lease policy, and where the handler runs.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Work Queue Subscriptions')
+export class MJWorkQueueSubscriptionEntity extends BaseEntity<MJWorkQueueSubscriptionEntityType> {
+    /**
+    * Loads the MJ: Work Queue Subscriptions record from the database
+    * @param ID: string - primary key value to load the MJ: Work Queue Subscriptions record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJWorkQueueSubscriptionEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Work Queue Subscriptions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * BackoffBaseSeconds: Backoff base seconds must be greater than or equal to zero. This ensures that retry delays are never negative, maintaining valid backoff timing for subscription processing.
+    * * BackoffMaxSeconds: The maximum backoff seconds for retry attempts must be a non-negative value (zero or greater). This ensures that the retry delay configuration is valid and prevents negative time values that would be meaningless in a retry mechanism.
+    * * LeaseSeconds: The lease duration for this subscription must be at least 5 seconds to ensure minimum viability of the lease period
+    * * MaxAttempts: The maximum number of retry attempts must be at least 1. This ensures that subscription handlers have a minimum opportunity to attempt processing before giving up, preventing configurations where messages would fail immediately without any retry effort.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateBackoffBaseSecondsNonNegative(result);
+        this.ValidateBackoffMaxSecondsNonNegative(result);
+        this.ValidateLeaseSecondsMinimum(result);
+        this.ValidateMaxAttemptsMinimum(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Backoff base seconds must be greater than or equal to zero. This ensures that retry delays are never negative, maintaining valid backoff timing for subscription processing.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateBackoffBaseSecondsNonNegative(result: ValidationResult) {
+    	if (this.BackoffBaseSeconds < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"BackoffBaseSeconds",
+    			"Backoff base seconds must be greater than or equal to zero",
+    			this.BackoffBaseSeconds,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * The maximum backoff seconds for retry attempts must be a non-negative value (zero or greater). This ensures that the retry delay configuration is valid and prevents negative time values that would be meaningless in a retry mechanism.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateBackoffMaxSecondsNonNegative(result: ValidationResult) {
+    	if (this.BackoffMaxSeconds < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"BackoffMaxSeconds",
+    			"Maximum backoff seconds must be greater than or equal to 0.",
+    			this.BackoffMaxSeconds,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * The lease duration for this subscription must be at least 5 seconds to ensure minimum viability of the lease period
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateLeaseSecondsMinimum(result: ValidationResult) {
+    	if (this.LeaseSeconds < 5) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"LeaseSeconds",
+    			"Lease duration must be at least 5 seconds.",
+    			this.LeaseSeconds,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * The maximum number of retry attempts must be at least 1. This ensures that subscription handlers have a minimum opportunity to attempt processing before giving up, preventing configurations where messages would fail immediately without any retry effort.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateMaxAttemptsMinimum(result: ValidationResult) {
+    	if (this.MaxAttempts < 1) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"MaxAttempts",
+    			"Maximum attempts must be at least 1",
+    			this.MaxAttempts,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: TopicID
+    * * Display Name: Topic ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Work Queue Topics (vwWorkQueueTopics.ID)
+    */
+    get TopicID(): string {
+        return this.Get('TopicID');
+    }
+    set TopicID(value: string) {
+        this.Set('TopicID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Globally unique subscription name, used in manifests and consumer configuration.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: What this consumer does and who owns it.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Filter
+    * * Display Name: Filter
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional attribute filter as MJ CompositeFilterDescriptor JSON (03 section 4), restricted to the broker-translatable operators eq, neq, startswith, isnull and isnotnull over envelope attribute names. Null matches every message.
+    */
+    get Filter(): string | null {
+        return this.Get('Filter');
+    }
+    set Filter(value: string | null) {
+        this.Set('Filter', value);
+    }
+
+    /**
+    * * Field Name: PartitionMode
+    * * Display Name: Partition Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: None
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Exclusive
+    *   * None
+    *   * Ordered
+    * * Description: None: no key constraints. Exclusive: one delivery in flight per partition key, no order promise. Ordered (Database transport only): a key's deliveries run in publish order, one at a time, and a dead-lettered head blocks its key. Immutable once the subscription has deliveries.
+    */
+    get PartitionMode(): 'Exclusive' | 'None' | 'Ordered' {
+        return this.Get('PartitionMode');
+    }
+    set PartitionMode(value: 'Exclusive' | 'None' | 'Ordered') {
+        this.Set('PartitionMode', value);
+    }
+
+    /**
+    * * Field Name: MaxAttempts
+    * * Display Name: Max Attempts
+    * * SQL Data Type: int
+    * * Default Value: 5
+    * * Description: Attempts allowed per delivery, including lease expiries, before it is dead-lettered.
+    */
+    get MaxAttempts(): number {
+        return this.Get('MaxAttempts');
+    }
+    set MaxAttempts(value: number) {
+        this.Set('MaxAttempts', value);
+    }
+
+    /**
+    * * Field Name: BackoffBaseSeconds
+    * * Display Name: Backoff Base Seconds
+    * * SQL Data Type: int
+    * * Default Value: 10
+    * * Description: Base retry delay in seconds; full-jitter exponential backoff doubles it per attempt.
+    */
+    get BackoffBaseSeconds(): number {
+        return this.Get('BackoffBaseSeconds');
+    }
+    set BackoffBaseSeconds(value: number) {
+        this.Set('BackoffBaseSeconds', value);
+    }
+
+    /**
+    * * Field Name: BackoffMaxSeconds
+    * * Display Name: Backoff Max Seconds
+    * * SQL Data Type: int
+    * * Default Value: 900
+    * * Description: Upper bound on the retry delay, in seconds.
+    */
+    get BackoffMaxSeconds(): number {
+        return this.Get('BackoffMaxSeconds');
+    }
+    set BackoffMaxSeconds(value: number) {
+        this.Set('BackoffMaxSeconds', value);
+    }
+
+    /**
+    * * Field Name: LeaseSeconds
+    * * Display Name: Lease Seconds
+    * * SQL Data Type: int
+    * * Default Value: 60
+    * * Description: Seconds a claim lasts before it expires unless renewed by a heartbeat. Measured on the transport clock.
+    */
+    get LeaseSeconds(): number {
+        return this.Get('LeaseSeconds');
+    }
+    set LeaseSeconds(value: number) {
+        this.Set('LeaseSeconds', value);
+    }
+
+    /**
+    * * Field Name: HeartbeatMode
+    * * Display Name: Heartbeat Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Auto
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Auto
+    *   * Manual
+    * * Description: Auto: the runtime renews the lease while the handler runs. Manual: only handler heartbeats renew it, so hung handlers are detected.
+    */
+    get HeartbeatMode(): 'Auto' | 'Manual' {
+        return this.Get('HeartbeatMode');
+    }
+    set HeartbeatMode(value: 'Auto' | 'Manual') {
+        this.Set('HeartbeatMode', value);
+    }
+
+    /**
+    * * Field Name: MaxProcessingSeconds
+    * * Display Name: Max Processing Seconds
+    * * SQL Data Type: int
+    * * Description: Optional cap on handler run time; Auto heartbeats stop and the handler is aborted after it. Above a host's known ceiling it produces a validation warning.
+    */
+    get MaxProcessingSeconds(): number | null {
+        return this.Get('MaxProcessingSeconds');
+    }
+    set MaxProcessingSeconds(value: number | null) {
+        this.Set('MaxProcessingSeconds', value);
+    }
+
+    /**
+    * * Field Name: HostType
+    * * Display Name: Host Type
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: MJWorker
+    * * Value List Type: List
+    * * Possible Values 
+    *   * External
+    *   * MJWorker
+    * * Description: MJWorker: the handler runs inside an MJ server process. External: the handler runs elsewhere, for example a Lambda (cloud transports only).
+    */
+    get HostType(): 'External' | 'MJWorker' {
+        return this.Get('HostType');
+    }
+    set HostType(value: 'External' | 'MJWorker') {
+        this.Set('HostType', value);
+    }
+
+    /**
+    * * Field Name: HandlerKey
+    * * Display Name: Handler Key
+    * * SQL Data Type: nvarchar(200)
+    * * Description: ClassFactory key of the BaseWorkHandler registration that processes deliveries. Required for MJWorker subscriptions.
+    */
+    get HandlerKey(): string | null {
+        return this.Get('HandlerKey');
+    }
+    set HandlerKey(value: string | null) {
+        this.Set('HandlerKey', value);
+    }
+
+    /**
+    * * Field Name: ExternalRef
+    * * Display Name: External Ref
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Informational reference to an external consumer, for example a Lambda ARN.
+    */
+    get ExternalRef(): string | null {
+        return this.Get('ExternalRef');
+    }
+    set ExternalRef(value: string | null) {
+        this.Set('ExternalRef', value);
+    }
+
+    /**
+    * * Field Name: BindingConfig
+    * * Display Name: Binding Config
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Transport binding JSON imported after provisioning, for example queue and dead-letter queue URLs. Empty for Database subscriptions.
+    */
+    get BindingConfig(): string | null {
+        return this.Get('BindingConfig');
+    }
+    set BindingConfig(value: string | null) {
+        this.Set('BindingConfig', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    *   * Paused
+    * * Description: Active: deliveries are created and processed. Paused: deliveries are created but nothing is claimed. Disabled: no new deliveries are created.
+    */
+    get Status(): 'Active' | 'Disabled' | 'Paused' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Disabled' | 'Paused') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Topic
+    * * Display Name: Topic
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Topic(): string {
+        return this.Get('Topic');
+    }
+}
+
+
+/**
+ * MJ: Work Queue Topics - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: WorkQueueTopic
+ * * Base View: vwWorkQueueTopics
+ * * @description A named destination producers publish work to. Each topic is bound to one transport and fans out to its subscriptions.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Work Queue Topics')
+export class MJWorkQueueTopicEntity extends BaseEntity<MJWorkQueueTopicEntityType> {
+    /**
+    * Loads the MJ: Work Queue Topics record from the database
+    * @param ID: string - primary key value to load the MJ: Work Queue Topics record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJWorkQueueTopicEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Work Queue Topics entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * DefaultDeduplicationTTLSeconds: The default deduplication time-to-live setting must be at least 60 seconds to ensure messages have a reasonable minimum window for deduplication processing
+    * * MaxPayloadBytes: Maximum payload size must be greater than 0 bytes and cannot exceed 262,144 bytes (256 KB) to ensure messages stay within reasonable size limits for transmission and storage
+    * * RetentionDays: Retention period must be at least 1 day. This ensures that all message queues maintain a minimum retention window to prevent data loss and allow consumers adequate time to process messages.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateDefaultDeduplicationTTLSecondsMinimum(result);
+        this.ValidateMaxPayloadBytesRange(result);
+        this.ValidateRetentionDaysMinimum(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * The default deduplication time-to-live setting must be at least 60 seconds to ensure messages have a reasonable minimum window for deduplication processing
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateDefaultDeduplicationTTLSecondsMinimum(result: ValidationResult) {
+    	if (this.DefaultDeduplicationTTLSeconds < 60) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"DefaultDeduplicationTTLSeconds",
+    			"Default deduplication time-to-live must be at least 60 seconds",
+    			this.DefaultDeduplicationTTLSeconds,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Maximum payload size must be greater than 0 bytes and cannot exceed 262,144 bytes (256 KB) to ensure messages stay within reasonable size limits for transmission and storage
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateMaxPayloadBytesRange(result: ValidationResult) {
+    	if (this.MaxPayloadBytes <= 0 || this.MaxPayloadBytes > 262144) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"MaxPayloadBytes",
+    			"Maximum payload size must be greater than 0 bytes and cannot exceed 262,144 bytes (256 KB)",
+    			this.MaxPayloadBytes,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Retention period must be at least 1 day. This ensures that all message queues maintain a minimum retention window to prevent data loss and allow consumers adequate time to process messages.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateRetentionDaysMinimum(result: ValidationResult) {
+    	if (this.RetentionDays < 1) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"RetentionDays",
+    			"Retention period must be at least 1 day",
+    			this.RetentionDays,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Unique dotted lowercase topic name, for example email.events.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: What the topic represents and who publishes to it.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: TransportID
+    * * Display Name: Transport ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Work Queue Transports (vwWorkQueueTransports.ID)
+    */
+    get TransportID(): string {
+        return this.Get('TransportID');
+    }
+    set TransportID(value: string) {
+        this.Set('TransportID', value);
+    }
+
+    /**
+    * * Field Name: IsFifo
+    * * Display Name: Is Fifo
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Cloud transports: the topic uses FIFO resources. Required on AWS when any subscription is Exclusive.
+    */
+    get IsFifo(): boolean {
+        return this.Get('IsFifo');
+    }
+    set IsFifo(value: boolean) {
+        this.Set('IsFifo', value);
+    }
+
+    /**
+    * * Field Name: AllowExternalPublish
+    * * Display Name: Allow External Publish
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, API callers may publish to this topic through POST /work-queue/topics/{topic}/messages. In-process code may publish to any active topic.
+    */
+    get AllowExternalPublish(): boolean {
+        return this.Get('AllowExternalPublish');
+    }
+    set AllowExternalPublish(value: boolean) {
+        this.Set('AllowExternalPublish', value);
+    }
+
+    /**
+    * * Field Name: MaxPayloadBytes
+    * * Display Name: Max Payload Bytes
+    * * SQL Data Type: int
+    * * Default Value: 262144
+    * * Description: Largest serialized envelope accepted, in bytes (at most 262144).
+    */
+    get MaxPayloadBytes(): number {
+        return this.Get('MaxPayloadBytes');
+    }
+    set MaxPayloadBytes(value: number) {
+        this.Set('MaxPayloadBytes', value);
+    }
+
+    /**
+    * * Field Name: DefaultDeduplicationTTLSeconds
+    * * Display Name: Default Deduplication TTL Seconds
+    * * SQL Data Type: int
+    * * Default Value: 86400
+    * * Description: Window, in seconds, during which a DeduplicationKey suppresses repeat publishes when the publisher does not supply one.
+    */
+    get DefaultDeduplicationTTLSeconds(): number {
+        return this.Get('DefaultDeduplicationTTLSeconds');
+    }
+    set DefaultDeduplicationTTLSeconds(value: number) {
+        this.Set('DefaultDeduplicationTTLSeconds', value);
+    }
+
+    /**
+    * * Field Name: RetentionDays
+    * * Display Name: Retention Days
+    * * SQL Data Type: int
+    * * Default Value: 7
+    * * Description: Days completed and discarded deliveries, and their messages, are kept before the sweeper purges them (Database transport).
+    */
+    get RetentionDays(): number {
+        return this.Get('RetentionDays');
+    }
+    set RetentionDays(value: number) {
+        this.Set('RetentionDays', value);
+    }
+
+    /**
+    * * Field Name: BindingConfig
+    * * Display Name: Binding Config
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Transport binding JSON imported after provisioning, for example {"SnsTopicArn":"..."}. Empty for Database topics.
+    */
+    get BindingConfig(): string | null {
+        return this.Get('BindingConfig');
+    }
+    set BindingConfig(value: string | null) {
+        this.Set('BindingConfig', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    * * Description: Active topics accept publishes; Disabled topics reject them.
+    */
+    get Status(): 'Active' | 'Disabled' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Disabled') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Transport
+    * * Display Name: Transport
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Transport(): string {
+        return this.Get('Transport');
+    }
+}
+
+
+/**
+ * MJ: Work Queue Transports - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: WorkQueueTransport
+ * * Base View: vwWorkQueueTransports
+ * * @description A configured backend that stores and delivers work-queue messages (Database, AWS, ...). Topics bind to exactly one transport.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Work Queue Transports')
+export class MJWorkQueueTransportEntity extends BaseEntity<MJWorkQueueTransportEntityType> {
+    /**
+    * Loads the MJ: Work Queue Transports record from the database
+    * @param ID: string - primary key value to load the MJ: Work Queue Transports record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJWorkQueueTransportEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Unique transport name, for example Database or AWS-prod-us-east-1.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: What this transport is used for and who operates it.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(100)
+    * * Description: ClassFactory key of the BaseTransportDriverFactory registration that builds the driver: Database or AWS.
+    */
+    get DriverClass(): string {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string) {
+        this.Set('DriverClass', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Driver-specific JSON configuration, for example {"Region":"us-east-1"}. Never holds secrets; use CredentialID.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * * Field Name: CredentialID
+    * * Display Name: Credential ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
+    */
+    get CredentialID(): string | null {
+        return this.Get('CredentialID');
+    }
+    set CredentialID(value: string | null) {
+        this.Set('CredentialID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    * * Description: Active transports can deliver; Disabled transports reject publishes.
+    */
+    get Status(): 'Active' | 'Disabled' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Disabled') {
+        this.Set('Status', value);
     }
 
     /**
