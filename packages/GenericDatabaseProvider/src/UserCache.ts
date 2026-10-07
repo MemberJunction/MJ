@@ -669,21 +669,6 @@ export class UserCache extends BaseSingleton<UserCache> {
     }
 
     /**
-     * Whether `MJ: Users` or `MJ: User Roles` has **declared** that its rows can change without
-     * firing an event — the only thing a periodic database check can discover.
-     *
-     * `Entity.TrustServerCacheCompletely` is that declaration: true (the default) means every
-     * mutation flows through `BaseEntity.Save()`, which this cache already hears. Polling such an
-     * entity buys nothing and costs a recurring query, which on Azure SQL serverless prevents
-     * auto-pause outright — the interval cannot fix that, only not running can.
-     *
-     * Nothing is lost for the case that motivated this cache's rework (#4247, a new user unable to
-     * log in): a save in any process raises an event, a save in another process publishes the shared
-     * stamp, and a lookup that misses still falls back to an authoritative read in `FindUser`. So
-     * even a user inserted by raw SQL can authenticate without this poll — it is the backstop for
-     * out-of-band writes, and now runs only where those are declared.
-     */
-    /**
      * Whether {@link RefreshIfChangedInDatabase} should query: rows can change without an event, or
      * peers share this cache and one of their notices could have been lost. See that method for why
      * the second case cannot be left to the event path.
@@ -697,6 +682,22 @@ export class UserCache extends BaseSingleton<UserCache> {
       return this._provider?.LocalStorageProvider?.SharedAcrossProcesses === true;
     }
 
+    /**
+     * Whether `MJ: Users` or `MJ: User Roles` has **declared** that its rows can change without
+     * firing an event — the only thing a periodic database check can discover.
+     *
+     * `Entity.TrustServerCacheCompletely` is that declaration: true (the default) means every
+     * mutation flows through `BaseEntity.Save()`, which this cache already hears. Polling such an
+     * entity buys nothing and costs a recurring query, which on Azure SQL serverless prevents
+     * auto-pause outright — the interval cannot fix that, only not running can.
+     *
+     * Nothing is lost for the case that motivated this cache's rework (a new user unable to log
+     * in): a save in any process raises an event, a save in another process publishes the shared
+     * stamp, and a lookup that misses still falls back to an authoritative read in `FindUser`. So
+     * even a user inserted by raw SQL can authenticate without this poll — it is the backstop for
+     * out-of-band writes. It is one of the two conditions under which the staleness check runs; see
+     * {@link stalenessCheckWarranted}.
+     */
     private usersMayChangeWithoutAnEvent(): boolean {
       const provider = this._provider;
       if (!provider) {

@@ -2584,9 +2584,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * on Azure SQL serverless it prevents auto-pause outright, which several installs pay for, and
      * the interval does not help — auto-pause needs sustained inactivity, so a long interval is no
      * better than a short one. Gating here makes the cost proportional to the declared risk: an
-     * install where nothing writes out of band sweeps nothing and issues no queries, with no knob to
-     * find. Operators who do write out of band mark those entities — which they must do anyway for
-     * the cache to be correct at all — and get the backstop exactly there.
+     * engine whose entities are all trusted is never swept and issues no queries. Operators who do
+     * write out of band mark those entities — which they must do anyway for the cache to be correct
+     * at all — and get the backstop exactly there.
      *
      * An entity absent from metadata answers false: the sweep cannot establish that it drifts, and
      * guessing in favour of a recurring query is the expensive guess.

@@ -2403,6 +2403,11 @@ entity:
   `KeyLockLostError` rather than applied on top of a peer's — and when Redis cannot be read at all to
   check, the answer comes from the clock: a lock cannot outlive its TTL measured from the last
   renewal that landed.
+
+  **One known gap:** a caller that waits longer than `KEY_LOCK_WAIT_MS` (5 s) for the lock gives up
+  and invalidates the slot without it. If the holder then writes a slot built from rows read before
+  that save, the save's row is missing from the slot until it is next reloaded. A lock held that long
+  is rare, and before the lock existed every concurrent save could lose a row this way.
 - **The engine sweep** (`BaseEngineSweeper`, MJAPI's `cacheSettings.engineSweepIntervalSeconds`,
   default 300 s) compares each loaded engine config's row count and newest `__mj_UpdatedAt` with the
   database and reloads only what differs — the safety net for changes made outside MJ. It writes a
@@ -2418,10 +2423,11 @@ entity:
   This matters for cost, not just tidiness. A periodic query is never free, and on **Azure SQL
   serverless it prevents auto-pause outright** — auto-pause needs sustained inactivity, so a longer
   interval is no better than a shorter one; only not running is. Gating on the declaration makes the
-  cost proportional to the declared risk: an install where nothing writes out of band sweeps nothing,
-  issues no queries, and lets the database sleep, with no setting to discover. Mark the entities you
-  do write out of band — which you must do anyway for the cache to be correct — and the backstop
-  applies exactly there. `engineSweepIntervalSeconds: 0` still turns the timer off entirely.
+  cost proportional to the declared risk: an engine whose entities are all trusted claims no lease
+  and runs no query. That does not make a stock install idle, because MJ ships some entities as
+  untrusted and an engine that caches one of them is swept (see "Enabling sweeping" below). Mark the
+  entities you do write out of band — which you must do anyway for the cache to be correct — and the
+  backstop applies there. `engineSweepIntervalSeconds: 0` turns the timer off entirely.
 
   **Opting an entity in takes effect only once the metadata snapshot is refreshed.** Servers read
   `TrustServerCacheCompletely` from the entity metadata they hold, and a warm-booting server reads
@@ -2505,8 +2511,9 @@ flipping a switch. On a stock installation:
 - **The engine sweep queries only the untrusted entities that a loaded engine holds as a config.**
   MJ ships about two dozen log, run and audit entities as untrusted. Being untrusted is not enough to
   be swept: an entity that no engine caches, or that is read only through one-off `RunView` calls, is
-  never visited. To see what your installation sweeps, look for `{prefix}:__lease__:engine-sweep:*`
-  keys in a shared cache. No such key means the engine sweep reads nothing.
+  never visited. On a shared cache, the `{prefix}:__lease__:engine-sweep:*` keys show which engines
+  are swept. A single server without a shared cache takes no lease, so it has no such keys even when
+  it sweeps.
 - **The user-cache staleness check runs on any fleet that shares a cache** (a store whose
   `SharedAcrossProcesses` is true, such as Redis). That holds even when `MJ: Users` and
   `MJ: User Roles` are trusted. A lost or deferred notice can leave a peer's user cache stale, and
@@ -2525,10 +2532,11 @@ The metadata sweep and the user-cache periodic reload stay idle on a stock insta
 | User-cache periodic reload | `databaseSettings.metadataCacheRefreshInterval` (milliseconds, 180000) | `MJ: Users` or `MJ: User Roles` declares drift |
 
 Each takes `0` to stop its timer outright. **If you want the database to idle** (Azure SQL serverless,
-where any recurring query prevents auto-pause), the defaults may not get you there. On a
-shared-cache fleet, set `userCacheCheckIntervalSeconds` to `0`. If any `engine-sweep` lease key appears,
-set `engineSweepIntervalSeconds` to `0` too, but only if nothing writes those entities outside MJ. A server
-whose user-cache check is off picks up a peer's lost user or role change at its next restart.
+where any recurring query prevents auto-pause), the defaults do not get you there:
+- Set `engineSweepIntervalSeconds` to `0`, with or without Redis, unless you have confirmed that no
+  loaded engine holds an untrusted entity. Do it only if nothing writes those entities outside MJ.
+- On a shared-cache fleet, also set `userCacheCheckIntervalSeconds` to `0`. A server whose user-cache
+  check is off picks up a peer's lost user or role change at its next restart.
 
 ### Turning a sweep on
 

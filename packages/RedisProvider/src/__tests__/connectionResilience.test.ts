@@ -599,10 +599,6 @@ describe('RedisLocalStorageProvider — surviving an outage', () => {
         });
 
         /**
-         * The symmetric half. This process wrote while it could not tell anyone, so its SIBLINGS are
-         * stale with respect to those writes; bumping the epoch is what makes them flush.
-         */
-        /**
          * An index-group read only happens on the save/delete path: an entity just changed and its
          * peers' slots needed maintaining. Answering "none" alone would let that change vanish — the
          * caller writes nothing, so nothing is recorded, the epoch never moves, and peers keep those
@@ -623,6 +619,10 @@ describe('RedisLocalStorageProvider — surviving an outage', () => {
             expect(provider.LastSeenEpoch).toBe(8);
         });
 
+        /**
+         * The symmetric half. This process wrote while it could not tell anyone, so its SIBLINGS are
+         * stale with respect to those writes; bumping the epoch is what makes them flush.
+         */
         it('bumps the epoch when it mutated while disconnected, so siblings flush too', async () => {
             const { provider, sub, client } = await withSubscriber();
             client._setEpoch(7);

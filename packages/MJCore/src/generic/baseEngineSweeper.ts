@@ -81,7 +81,7 @@ export class BaseEngineSweeper extends BaseSingleton<BaseEngineSweeper> {
             }
             // Ask before paying. The lease is a cross-process round trip and the sweep a database
             // query, and an engine whose entities all trust their cache has nothing for either to
-            // find — so on a stock installation this loop claims no leases at all.
+            // find, so it claims no lease and runs no query.
             if (!engine.HasSweepableConfigs()) {
                 continue;
             }
