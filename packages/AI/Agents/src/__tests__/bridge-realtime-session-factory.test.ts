@@ -125,6 +125,31 @@ describe('CreateBridgeRealtimeSession', () => {
         expect(configSpy).toHaveBeenCalledOnce(); // engine configured defensively
     });
 
+    it('threads host tools, host framing, the prior transcript, history and conversation into the session start', async () => {
+        const tool = { Name: 'end_call', Description: 'Ends the call', ParametersSchema: { type: 'object', properties: {} } };
+        await CreateBridgeRealtimeSession({
+            AgentID: 'AAAA0000-0000-0000-0000-000000000001',
+            HostTools: [tool],
+            HostFraming: '  This is a phone call.  ',
+            PriorTranscript: ' User: hi\nAssistant: hello ',
+            ConversationMessages: [{ role: 'user', content: 'earlier' }],
+            ConversationID: ' conv-9 ',
+        });
+        expect(lastStartParams?.data).toMatchObject({
+            realtimeHostTools: [tool],
+            realtimeHostFraming: 'This is a phone call.',
+            realtimePriorTranscript: 'User: hi\nAssistant: hello',
+            conversationId: 'conv-9',
+        });
+        expect(lastStartParams?.conversationMessages).toEqual([{ role: 'user', content: 'earlier' }]);
+    });
+
+    it('starts a fresh call with no history and omits unset realtime extras', async () => {
+        await CreateBridgeRealtimeSession({ AgentID: 'AAAA0000-0000-0000-0000-000000000001' });
+        expect(lastStartParams?.conversationMessages).toEqual([]);
+        expect(lastStartParams?.data).toBeUndefined();
+    });
+
     it('resolves by name (case-insensitive) when no id is given', async () => {
         await CreateBridgeRealtimeSession({ AgentName: '  sage  ' });
         expect((lastStartParams?.agent as { ID: string }).ID).toBe('AAAA0000-0000-0000-0000-000000000001');

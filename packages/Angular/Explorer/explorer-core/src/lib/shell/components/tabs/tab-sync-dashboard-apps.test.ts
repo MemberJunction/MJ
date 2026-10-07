@@ -35,7 +35,8 @@ vi.mock('@angular/core', () => ({
   ViewEncapsulation: { None: 0 },
   runInInjectionContext: vi.fn(),
   createComponent: vi.fn(() => {
-    const instance: Record<string, unknown> = { LoadComplete: false, RebindTabId: vi.fn() };
+    // A reattach reads IsEditing to decide whether to pin an editing records tab.
+    const instance: Record<string, unknown> = { LoadComplete: false, RebindTabId: vi.fn(), IsEditing: () => false };
     created.instances.push(instance);
     return { instance, hostView: { rootNodes: [{}] }, destroy: vi.fn() };
   }),

@@ -246,6 +246,28 @@
             "checksum": "a7e59cf163c03ae0eab02918f49d6f680370a91c6e3e1ce2773554d03d8a6aa5"
           }
         }
+      ],
+      "MJ: AI Agent Rubrics": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "RubricID": "@lookup:MJ: Rubrics.Name=Schema proposal",
+            "Purpose": "Evaluation",
+            "IsDefault": true,
+            "Status": "Active",
+            "EvaluatorConfig": {
+              "EvaluatorType": "AIPrompt",
+              "PromptName": "Rubric Judge - Database Designer"
+            }
+          },
+          "primaryKey": {
+            "ID": "F0D66E1B-4FB8-44F5-9B23-A1673361A489"
+          },
+          "sync": {
+            "lastModified": "2026-10-06T20:21:55.281Z",
+            "checksum": "dc31f0725382b29f99de3ffa0101750cb94edecc6cffafe3c4ccb22b2c8ccc4f"
+          }
+        }
       ]
     },
     "primaryKey": {

@@ -115,7 +115,7 @@ describe('NavigationService agent updates on tab detach and reattach', () => {
     expect(updates.at(-1)).toEqual({ Caller: browse, Lifecycle: 'Detached' });
   });
 
-  it('does not replay the attached surface\'s tools when that other tab reattaches', () => {
+  it('marks the reattach of that other tab without replaying the attached surface\'s tools', () => {
     const dashboard = resource('tab-dashboard');
     const browse = resource('tab-browse');
     service.SetAgentClientTools(dashboard, TOOLS);
@@ -123,7 +123,7 @@ describe('NavigationService agent updates on tab detach and reattach', () => {
 
     service.NotifyResourceReattached(browse);
 
-    expect(updates.at(-1)).toEqual({ Caller: browse, Lifecycle: 'Detached' });
+    expect(updates.at(-1)).toEqual({ Caller: browse, Lifecycle: 'Reattached' });
   });
 
   it('clears the tools when the attached surface\'s own tab detaches after another tab did', () => {

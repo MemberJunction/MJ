@@ -96,6 +96,7 @@ import { APIUsagePanelComponent } from './APIKeys/api-usage-panel.component';
 import { ApplicationRolesResourceComponent } from './ApplicationRoles/application-roles-resource.component';
 // Realtime Recordings (recorded realtime sessions — replay audio + transcript)
 import { RealtimeRecordingsDashboardComponent } from './RealtimeRecordings/realtime-recordings-dashboard.component';
+import { TelephonyOperationsDashboardComponent } from './TelephonyOperations/telephony-operations-dashboard.component';
 import { MJStorageMediaPlayerComponent } from '@memberjunction/ng-media-player';
 import { AngularSplitModule } from 'angular-split';
 // Permissions (Phase 2a/b/c — unified permissions admin); three independent resources
@@ -158,6 +159,8 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     ApplicationRolesResourceComponent,
     // Realtime Recordings
     RealtimeRecordingsDashboardComponent,
+    // Telephony Operations Dashboard
+    TelephonyOperationsDashboardComponent,
     // Permissions admin — three independent resource tabs
     PermissionsUserAccessResourceComponent,
     PermissionsResourceAccessResourceComponent,
@@ -257,6 +260,7 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     APIUsagePanelComponent,
     ApplicationRolesResourceComponent,
     RealtimeRecordingsDashboardComponent,
+    TelephonyOperationsDashboardComponent,
     PermissionsUserAccessResourceComponent,
     PermissionsResourceAccessResourceComponent,
     PermissionsAuditLogResourceComponent,

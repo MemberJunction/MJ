@@ -3,9 +3,10 @@ import { EncodePcm16Wav, PeakAccumulator } from './realtime-pcm-wav';
 /**
  * Browser-side audio recorder for a CLIENT-DIRECT realtime voice session.
  *
- * Mixes the user's microphone stream with the agent's remote-audio stream (when the driver
- * exposes one — `OpenAIRealtimeClient.GetRemoteMediaStream()`) into a single mono **WAV** (16-bit
- * PCM) blob via the Web Audio API. Rather than a `MediaRecorder` (which only emits webm/opus —
+ * Mixes the user's microphone stream with the agent's remote-audio stream (every driver exposes
+ * one via `GetRemoteMediaStream()`: WebRTC drivers publish their remote track, PCM drivers —
+ * Gemini, ElevenLabs, AssemblyAI, xAI, HuggingFace — publish their playout engine's output) into a
+ * single mono **WAV** (16-bit PCM) blob via the Web Audio API. Rather than a `MediaRecorder` (which only emits webm/opus —
  * header-less, no duration/cues, so HTTP-range seeking is unreliable), the mix is routed into an
  * {@link AudioWorkletNode} (preferred) or a {@link ScriptProcessorNode} (fallback) that captures
  * Float32 PCM frames. PCM is accumulated in memory and encoded as a seekable RIFF/WAVE file at
@@ -17,7 +18,10 @@ import { EncodePcm16Wav, PeakAccumulator } from './realtime-pcm-wav';
  * - No `AudioContext` (server-side render / unsupported env) → the recorder disables itself
  *   ({@link IsRecording} stays `false`, {@link Stop} resolves `null`); the voice call proceeds.
  * - No `AudioWorkletNode` AND no `ScriptProcessorNode` → disables itself rather than throwing.
- * - No remote stream (non-WebRTC drivers, or the track hasn't landed yet) → records mic only.
+ * - No remote stream yet (e.g. the WebRTC track hasn't landed) → records mic only until it does.
+ * - A remote stream that can't be connected (e.g. a browser that rejects cross-sample-rate
+ *   `createMediaStreamSource` — the PCM playout context runs at 24 kHz, this one at the device
+ *   rate) → warns and records mic only; the mic recording is never lost to the agent stream.
  * - Any construction/start error is logged and disables the recorder rather than throwing into
  *   the session-start path.
  *
@@ -74,6 +78,13 @@ export class RealtimeAudioRecorder {
 
     /** Sample rate of the capturing {@link AudioContext}; 0 before {@link Start}. Needed to wrap shards. */
     private sampleRate = 0;
+
+    /**
+     * Bumped by {@link cleanup}. The async setup snapshots it and, after each await, gives up if it moved:
+     * a {@link Stop} that lands mid-setup can only release what setup has already published, so setup
+     * must release the rest itself rather than build a live graph on a stopped recorder.
+     */
+    private setupGeneration = 0;
 
     /** True while a recorder is actively capturing. */
     public get IsRecording(): boolean {
@@ -144,8 +155,7 @@ export class RealtimeAudioRecorder {
             return;
         }
         if (this.audioContext && this.captureNode()) {
-            this.connectStream(this.audioContext, stream);
-            this.remoteAttached = true;
+            this.remoteAttached = this.connectRemoteStream(this.audioContext, stream);
         } else {
             // Audio-graph setup still in flight (awaiting resume / worklet load) — connect at setup.
             this.pendingRemoteStream = stream;
@@ -211,12 +221,18 @@ export class RealtimeAudioRecorder {
 
     /** Wires up the Web Audio mix graph + PCM capture node (worklet preferred) and starts capture. */
     private async startMixedRecording(micStream: MediaStream, remoteStream: MediaStream | null): Promise<void> {
+        const generation = this.setupGeneration;
         const audioContext = new AudioContext();
         // CRITICAL: browsers create an AudioContext in the `suspended` state under the autoplay policy.
         // Without resuming it, the mix graph never processes audio and we capture only silence. Starting
         // a voice call is a user gesture, so resume() succeeds here.
         if (audioContext.state === 'suspended') {
             await audioContext.resume();
+        }
+        if (generation !== this.setupGeneration) {
+            // Stopped while resuming: the context was never published, so cleanup() could not close it.
+            void audioContext.close().catch(() => { /* already closed */ });
+            return;
         }
         const destination = audioContext.createMediaStreamDestination();
         // Publish the context + sample rate BEFORE wiring the remote so a concurrent AttachRemoteStream()
@@ -228,6 +244,9 @@ export class RealtimeAudioRecorder {
         // Build the PCM capture node: AudioWorklet preferred, ScriptProcessor fallback. Either way the
         // node both pulls audio from the mix AND drives the destination so the graph keeps processing.
         await this.createCaptureNode(audioContext, destination);
+        if (generation !== this.setupGeneration) {
+            return; // Stopped while the capture node loaded: cleanup() already closed the published context.
+        }
 
         this.connectStream(audioContext, micStream);
         // Connect the agent's stream if it was passed now, or if AttachRemoteStream() stashed one while
@@ -235,8 +254,23 @@ export class RealtimeAudioRecorder {
         const remote = remoteStream ?? this.pendingRemoteStream;
         this.pendingRemoteStream = null;
         if (remote && remote.getAudioTracks().length > 0) {
-            this.connectStream(audioContext, remote);
-            this.remoteAttached = true;
+            this.remoteAttached = this.connectRemoteStream(audioContext, remote);
+        }
+    }
+
+    /**
+     * Connects the agent stream, degrading to mic-only on failure. Unlike the mic (whose failure
+     * rightly disables the recorder), the agent stream is best-effort: a browser may reject it
+     * (cross-sample-rate `NotSupportedError`) and that must not discard the user's recording.
+     * Returns whether it was connected, so the caller only marks it attached on success.
+     */
+    private connectRemoteStream(audioContext: AudioContext, stream: MediaStream): boolean {
+        try {
+            this.connectStream(audioContext, stream);
+            return true;
+        } catch (error) {
+            console.warn('[RealtimeAudioRecorder] Could not mix the agent stream into the recording — continuing mic-only:', error);
+            return false;
         }
     }
 
@@ -373,6 +407,7 @@ export class RealtimeAudioRecorder {
 
     /** Releases the audio graph + capture node and resets state. Idempotent. */
     private cleanup(): void {
+        this.setupGeneration++;
         this.recording = false;
         this.pcmFrames = [];
         this.totalSamples = 0;

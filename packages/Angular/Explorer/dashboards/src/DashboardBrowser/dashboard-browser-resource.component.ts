@@ -1,6 +1,5 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy, inject } from '@angular/core';
-import { merge } from 'rxjs';
-import { takeUntil } from 'rxjs/operators';
+import { skip, takeUntil } from 'rxjs/operators';
 import { LogError } from '@memberjunction/core';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, DashboardFavoritesService } from '@memberjunction/ng-shared';
@@ -37,7 +36,7 @@ import {
     VisibleLibraryDashboards,
     WithExpandedAncestors,
 } from './dashboard-library-filter';
-import { GetRecentDashboardIds, ObserveRecentDashboardChanges } from '../shared/dashboard-recents';
+import { LoadRecentDashboardIds, ObserveRecentDashboardIds } from '../shared/dashboard-recents';
 import { ObserveDashboardLibraryChanges } from '../shared/dashboard-library-changes';
 import { BuildOwnerLabels, LoadDashboardOwnerNames, OwnerIdsToLoad } from '../shared/dashboard-owner-names';
 import { CreateBlankDashboard, DashboardNameMaxLength, DashboardsAppOpenOptions } from '../shared/dashboards-app.helpers';
@@ -185,6 +184,9 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
     // snapshot never changes, so later loads must not apply it again.
     private _initialQueryParamsApplied = false;
 
+    /** The ids of the dashboards the user opened, most recent first, as last read from the record logs. */
+    private recentDashboardIds: string[] = [];
+
     private favorites = inject(DashboardFavoritesService);
     private recentAccess = inject(RecentAccessService);
     private appManager = inject(ApplicationManager);
@@ -258,12 +260,16 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
         // that arrive before loadDashboards() finishes are captured by OnQueryParamsChanged
         // into _pendingQueryParams and applied once the dashboard list is available.
 
-        // Favorites and recents change while the Library is also a background tab. RecentItems fires
-        // right after a dashboard open is logged; the record-log cache that recents are read from
-        // reloads about 1.5 s later and then ObserveRecentDashboardChanges fires.
-        merge(this.favorites.Changed$, this.recentAccess.RecentItems, ObserveRecentDashboardChanges())
+        // Favorites and recents change while the Library is also a background tab. RecentItems emits
+        // right after a dashboard open is logged, and each emission reads the recently opened
+        // dashboards again. It also replays its current list on subscribe; loadDashboards() reads
+        // the first list, so that replay is skipped.
+        this.favorites.Changed$
             .pipe(takeUntil(this.destroy$))
             .subscribe(() => this.onLibrarySourcesChanged());
+        ObserveRecentDashboardIds(this.ProviderToUse, this.recentAccess.RecentItems.pipe(skip(1)))
+            .pipe(takeUntil(this.destroy$))
+            .subscribe(ids => this.onRecentDashboardIdsChanged(ids));
         // The dashboard cache also changes while the Library is a background tab (saves and deletes
         // in other tabs or sessions), so the Library re-reads it and refreshes the view.
         ObserveDashboardLibraryChanges()
@@ -441,7 +447,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
         return {
             CurrentUserId: this.ProviderToUse.CurrentUser.ID,
             FavoriteIds: this.favorites.FavoriteIds(),
-            RecentIds: GetRecentDashboardIds(this.ProviderToUse),
+            RecentIds: this.recentDashboardIds,
         };
     }
 
@@ -453,6 +459,12 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
     private onLibrarySourcesChanged(): void {
         this.refreshLibraryView();
         this.cdr.detectChanges();
+    }
+
+    /** The recently opened dashboards were read again: keep them, then refresh as {@link onLibrarySourcesChanged} does. */
+    private onRecentDashboardIdsChanged(ids: string[]): void {
+        this.recentDashboardIds = ids;
+        this.onLibrarySourcesChanged();
     }
 
     /**
@@ -1256,10 +1268,14 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             this.isLoading = true;
             this.cdr.detectChanges();
 
-            // Use DashboardEngine for consistent cached data. RecentAccessService is loaded only as a
-            // change trigger; Recently opened reads the record-log cache (GetRecentDashboardIds).
+            // Use DashboardEngine for consistent cached data. Recently opened reads the user's dashboard
+            // record logs (LoadRecentDashboardIds); RecentAccessService is only its change trigger.
             const engine = DashboardEngine.Instance;
-            await Promise.all([engine.Config(false), this.recentAccess.LoadRecentItems()]);
+            const [, recentDashboardIds] = await Promise.all([
+                engine.Config(false),
+                LoadRecentDashboardIds(this.ProviderToUse),
+            ]);
+            this.recentDashboardIds = recentDashboardIds;
 
             this.readLibraryFromEngine();
 

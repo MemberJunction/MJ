@@ -39,6 +39,7 @@ import { AutotagBaseEngine, FieldPathResolver } from '@memberjunction/content-au
 import { AIEmbeddingRunner } from '@memberjunction/ai-prompts';
 import type { EmbeddingRunParams, EmbeddingRunResult } from '@memberjunction/ai-prompts';
 import { AIEngine } from '@memberjunction/aiengine';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import {
     KnowledgeHubMetadataEngine,
     type MJContentItemEntity,
@@ -253,9 +254,15 @@ async function loadChunks(ctx: IntegrationCheckContext, itemID: string): Promise
     const r = await new RunView().RunView<MJContentItemChunkEntity>({ EntityName: 'MJ: Content Item Chunks', ExtraFilter: `ContentItemID='${itemID}'`, OrderBy: 'Sequence ASC', ResultType: 'entity_object' }, ctx.User);
     return r.Results;
 }
-/** Refresh the KH cache so a just-created source (+ the fixture index) is visible to the engine. */
+/**
+ * Refresh the KH cache so a just-created source is visible to the engine, and AIEngineBase so a
+ * just-created fixture index is. AIEngineBase owns the Vector Indexes cache and overrides
+ * AdditionalLoading, so BaseEngine applies a save event to it only as a debounced full refresh,
+ * seconds later — the check would look the index up before it lands.
+ */
 async function refreshEngines(ctx: IntegrationCheckContext): Promise<void> {
     await KnowledgeHubMetadataEngine.Instance.Config(true, ctx.User, ctx.Provider);
+    await AIEngineBase.Instance.Config(true, ctx.User, ctx.Provider);
 }
 function resetCaptures(): void { S.Upserts.length = 0; S.DeletedVectorIds.length = 0; S.EmbedCalls.length = 0; }
 /** The single upserted vector record's metadata for a single-item run. */
@@ -602,7 +609,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('content-vectorization', {
         await AIEngine.Instance.Config(false, ctx.User, ctx.Provider);
         await KnowledgeHubMetadataEngine.Instance.Config(false, ctx.User, ctx.Provider);
         await AutotagBaseEngine.Instance.Config(false, ctx.User, ctx.Provider);
-        const idx = KnowledgeHubMetadataEngine.Instance.VectorIndexes[0];
+        const idx = AIEngine.Instance.VectorIndexes[0];
         if (!idx?.EmbeddingModelID || !idx?.VectorDatabaseID) {
             S.Skip = true;
             S.SkipReason = 'no Vector Index with an embedding model + vector DB to borrow — content vectorization cannot be exercised';

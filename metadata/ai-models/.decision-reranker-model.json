@@ -27,12 +27,20 @@
           },
           "primaryKey": {
             "ID": "178C2832-AB3B-4EE6-8942-D40A5697C52B"
+          },
+          "sync": {
+            "lastModified": "2026-10-02T21:42:02.659Z",
+            "checksum": "9f8eccc0725ef252bb505134a047b0a24a11cac9a88022a61e5d1e4de50e2c7a"
           }
         }
       ]
     },
     "primaryKey": {
       "ID": "6057A6E8-87AF-4263-A177-C2BA66717C26"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:02.641Z",
+      "checksum": "ed2dcc614793c1b6db0ba8e7e9502ba465721ede6b744060cb9dcc8c5a535f67"
     }
   }
 ]

@@ -683,6 +683,44 @@ describe('WorkspaceStateManager records temp-tab pool (TempScope)', () => {
     });
   });
 
+  describe('PinTab (promote-on-edit)', () => {
+    it('pins an unpinned region record', () => {
+      const id = openRecord('r1');
+      manager.PinTab(id);
+      expect(tabs().find(t => t.id === id)!.isPinned).toBe(true);
+    });
+
+    it('is a no-op for an already-pinned tab: no configuration emission', () => {
+      const id = openRecord('r1');
+      manager.PinTab(id);
+      const spy = vi.spyOn(manager, 'UpdateConfiguration');
+      manager.PinTab(id);
+      expect(spy).not.toHaveBeenCalled();
+      spy.mockRestore();
+    });
+
+    it('is a no-op for an unknown tab id', () => {
+      openRecord('r1');
+      const spy = vi.spyOn(manager, 'UpdateConfiguration');
+      manager.PinTab('no-such-tab');
+      expect(spy).not.toHaveBeenCalled();
+      spy.mockRestore();
+    });
+
+    it('a promoted record survives the next plain open, and survives after the edit ends', () => {
+      // The issue's repro: edit (promote), save (edit mode ends), click the next row.
+      const editedId = openRecord('r1');
+      manager.PinTab(editedId);
+      // Nothing unpins on save — promotion is sticky. The next plain open must
+      // land in its own tab rather than replacing r1.
+      const nextId = openRecord('r2');
+      expect(nextId).not.toBe(editedId);
+      expect(tabs().length).toBe(2);
+      expect(tabs().find(t => t.id === editedId)!.resourceRecordId).toBe('r1');
+      expect(tabs().find(t => t.id === editedId)!.isPinned).toBe(true);
+    });
+  });
+
   describe('dedup beats consumption', () => {
     // These pin the already-open tab first. Consumption also reuses a tab id,
     // so against an unpinned tab both mechanisms look identical from the

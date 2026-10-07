@@ -98,6 +98,8 @@ vi.mock('@memberjunction/aiengine', () => ({
         Instance: {
             Config: vi.fn(),
             get Models() { return mockModelsRef.value; },
+            // Mirrors the real engine: the provider-side name is ExternalID, falling back to Name.
+            GetProviderIndexName: (v: { Name: string; ExternalID?: string | null }) => v.ExternalID?.trim() || v.Name,
         },
     },
 }));

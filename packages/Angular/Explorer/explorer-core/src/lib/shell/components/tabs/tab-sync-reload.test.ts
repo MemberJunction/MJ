@@ -130,7 +130,8 @@ function createHarness(initial: TestTab, live: LiveData): Harness {
   let current = initial;
   const component = Object.create(TabContainerComponent.prototype) as TabContainerComponent;
   const internals = component as unknown as Record<string, unknown>;
-  const instance = { Data: live, LoadComplete: false, RebindTabId: vi.fn() };
+  // A reattach reads IsEditing to decide whether to pin an editing records tab.
+  const instance = { Data: live, LoadComplete: false, RebindTabId: vi.fn(), IsEditing: () => false };
   const cleanupTabComponent = vi.fn();
   const markNotLoaded = vi.fn();
 

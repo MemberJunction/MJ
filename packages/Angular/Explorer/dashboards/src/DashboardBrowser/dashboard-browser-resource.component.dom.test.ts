@@ -3,7 +3,7 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { ComponentFixture } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { BehaviorSubject, Subject } from 'rxjs';
-import type { EngineDataChangeEvent, EntityInfo, IMetadataProvider, RunViewParams, RunViewResult } from '@memberjunction/core';
+import type { EngineDataChangeEvent, EntityInfo, IMetadataProvider, IRunViewProvider, RunViewParams, RunViewResult, UserInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { DashboardFavoritesService, NavigationService } from '@memberjunction/ng-shared';
 import type { DashboardNavigationOptions } from '@memberjunction/ng-shared';
@@ -46,7 +46,7 @@ import { DashboardBrowserResourceComponent } from './dashboard-browser-resource.
  * The page chrome, the library rail and the New dashboard name dialog are the real components; the
  * generic browser is stubbed, the dashboard engine is an in-memory double that can emit cache
  * changes, favorites, notifications and RecentAccessService are doubles, UserInfoEngine is a double
- * holding the user settings and the record-log cache that Recently opened reads, and
+ * holding the user settings, the provider answers the record-log read that Recently opened makes, and
  * NavigationService is a double whose tab params behave like the workspace (writes merge in and
  * replay to the tab), so the real BaseResourceComponent query-param delivery runs.
  */
@@ -109,7 +109,7 @@ interface LibraryFixture {
   categories?: MJDashboardCategoryEntity[];
   links?: MJDashboardCategoryLinkEntity[];
   favoriteIds?: string[];
-  /** Dashboard ids in UserInfoEngine's record-log cache, most recently opened first. */
+  /** Dashboard ids in the user's record logs, most recently opened first. */
   recentIds?: string[];
   /** The list RecentAccessService holds. The Library only uses that service as a change trigger. */
   serviceRecentIds?: string[];
@@ -159,29 +159,47 @@ function stubDashboardEngine(dashboards: MJDashboardEntity[], categories: MJDash
 /** Record logs for dashboard ids, the first opened most recently. */
 const recordLogsFor = (ids: string[]) => ids.map((RecordID, i) => ({ RecordID, LatestAt: new Date(Date.UTC(2026, 8, 20, 12, 0, 59 - i)) }));
 
-/**
- * Replaces UserInfoEngine.Instance with a double: user settings, and the record-log cache.
- * `ReloadRecordLogs` replaces the cache and emits the change the engine emits after it reloads.
- */
-function stubUserInfoEngine(recentIds: string[], settings: Record<string, string>) {
-  const changes = new Subject<EngineDataChangeEvent>();
-  let logs = recordLogsFor(recentIds);
+/** Replaces UserInfoEngine.Instance with a double that holds the user settings. */
+function stubUserInfoEngine(settings: Record<string, string>) {
   const engine = {
-    IsPermissionConstrained: false,
-    DataChange$: changes.asObservable(),
-    GetRecentRecordsForEntity: vi.fn((entityId: string, _maxItems?: number) => (entityId === DASHBOARDS_ENTITY_ID ? logs : [])),
     GetSetting: vi.fn((key: string): string | undefined => settings[key]),
     SetSettingDebounced: vi.fn((_key: string, _value: string) => undefined),
-    ReloadRecordLogs: (ids: string[]) => {
-      logs = recordLogsFor(ids);
-      changes.next({ config: { EntityName: 'MJ: User Record Logs', PropertyName: '_UserRecordLogs' }, changeType: 'refresh', data: logs } as unknown as EngineDataChangeEvent);
-    },
-    EmitOtherChange: () => {
-      changes.next({ config: { EntityName: 'MJ: User Settings', PropertyName: '_UserSettings' }, changeType: 'refresh', data: [] } as unknown as EngineDataChangeEvent);
-    },
   };
   vi.spyOn(UserInfoEngine, 'Instance', 'get').mockReturnValue(engine as unknown as UserInfoEngine);
   return engine;
+}
+
+/** The user's dashboard record logs, which Recently opened reads. `Set` replaces them, as logging an open does. */
+function recordLogStore(recentIds: string[]) {
+  let logs = recordLogsFor(recentIds);
+  return {
+    Read: () => logs,
+    Set: (ids: string[]) => {
+      logs = recordLogsFor(ids);
+    },
+  };
+}
+
+type RecordLogStore = ReturnType<typeof recordLogStore>;
+
+/**
+ * Makes `provider` answer its MJ: User Record Logs reads from `logs`, recording each in `logReads`; its
+ * other reads go to its own RunView. The provider keeps its identity, so specs can still compare it.
+ */
+function withRecordLogs(provider: IMetadataProvider, logs: RecordLogStore, logReads: RunViewParams[]): IMetadataProvider {
+  // Every provider is also a RunView provider; RunView.FromMetadataProvider reads it the same way.
+  const views = provider as unknown as IRunViewProvider;
+  const readOthers = views.RunView.bind(views);
+  const runView = async (params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult> => {
+    if (params.EntityName !== 'MJ: User Record Logs') {
+      return readOthers(params, contextUser);
+    }
+    logReads.push(params);
+    const rows = logs.Read();
+    return { Success: true, Results: rows, RowCount: rows.length, TotalRowCount: rows.length } as RunViewResult;
+  };
+  Object.assign(views, { RunView: runView });
+  return provider;
 }
 
 /** A fake provider whose metadata knows the MJ: Dashboards entity and its Name length. `ownerRows` answers MJ: Users reads. */
@@ -310,7 +328,10 @@ function renderPage(initialParams: Record<string, string> = {}, provider: IMetad
   if (library.loadFails) {
     engine.Config.mockRejectedValue(new Error('network down'));
   }
-  const userInfo = stubUserInfoEngine(library.recentIds ?? [], library.settings ?? {});
+  const userInfo = stubUserInfoEngine(library.settings ?? {});
+  const recordLogs = recordLogStore(library.recentIds ?? []);
+  const logReads: RunViewParams[] = [];
+  const libraryProvider = withRecordLogs(provider, recordLogs, logReads);
   const navigation = fakeNavigation(initialParams);
   const favorites = fakeFavorites(library.favoriteIds ?? []);
   const recents = fakeRecents(library.serviceRecentIds ?? []);
@@ -336,7 +357,7 @@ function renderPage(initialParams: Record<string, string> = {}, provider: IMetad
       { provide: MJNotificationService, useValue: notifications },
     ],
     setup: instance => {
-      instance.Provider = provider;
+      instance.Provider = libraryProvider;
       instance.Data = new ResourceData({
         Configuration: {
           tabId: TAB_ID,
@@ -349,7 +370,7 @@ function renderPage(initialParams: Record<string, string> = {}, provider: IMetad
       instance.LoadCompleteEvent = loadComplete;
     },
   });
-  return { fixture, navigation, favorites, recents, notifications, engine, userInfo, loadComplete };
+  return { fixture, navigation, favorites, recents, notifications, engine, userInfo, recordLogs, logReads, loadComplete };
 }
 
 /** Lets the async list load and any deferred tab-param writes finish. */
@@ -894,50 +915,60 @@ describe('DashboardBrowserResourceComponent (DOM)', () => {
       }
     });
 
-    it('Recently opened reads the record-log cache, in recents order, not the RecentAccessService list', async () => {
-      const { fixture, recents, userInfo } = await renderLibrary();
+    it('Recently opened reads the user\'s dashboard record logs once on load, in recents order, not the RecentAccessService list', async () => {
+      const { fixture, recents, logReads } = await renderLibrary();
       clickRail(fixture, 'Recently opened');
 
       expect(recents.RecentItemsValue).toEqual([]);
       expect(names(browser(fixture).Dashboards)).toEqual(['Board Pack', 'Custom Code', 'Quota']);
-      expect(userInfo.GetRecentRecordsForEntity).toHaveBeenCalledWith(DASHBOARDS_ENTITY_ID, Number.MAX_SAFE_INTEGER);
+      expect(logReads).toHaveLength(1);
+      expect(logReads[0]).toMatchObject({ EntityName: 'MJ: User Record Logs', OrderBy: 'LatestAt DESC', ResultType: 'simple' });
+      expect(logReads[0].ExtraFilter).toBe(`UserID='${USER_ID}' AND EntityID='${DASHBOARDS_ENTITY_ID}'`);
     });
 
-    it('shows a dashboard opened in this session once the record-log cache reloads', async () => {
-      const { fixture, recents, userInfo, library: lib } = await renderLibrary({ lib: 'recent' });
-      expect(recents.LoadRecentItems).toHaveBeenCalledTimes(1);
+    it('shows a dashboard opened in this session once RecentAccessService re-emits after logging it', async () => {
+      const { fixture, recents, recordLogs, library: lib } = await renderLibrary({ lib: 'recent' });
+      // The Library only listens to RecentAccessService; loading its list would start a second log read.
+      expect(recents.LoadRecentItems).not.toHaveBeenCalled();
       expect(railItem(fixture, 'Recently opened').badge).toBe('2');
 
-      // Opening Revenue: RecentAccessService re-emits right after saving the log, before the engine reloads it.
+      // A re-emit with no new open reads the same logs.
       recents.Emit();
+      await settle();
       fixture.detectChanges();
       expect(railItem(fixture, 'Recently opened').badge).toBe('2');
 
-      // The engine reloads its record-log cache and emits DataChange$.
-      userInfo.ReloadRecordLogs([lib.byName('Revenue').ID, ...lib.recentIds]);
+      // Opening Revenue saves its record log, then RecentAccessService re-emits.
+      recordLogs.Set([lib.byName('Revenue').ID, ...lib.recentIds]);
+      recents.Emit();
+      await settle();
       fixture.detectChanges();
 
       expect(railItem(fixture, 'Recently opened').badge).toBe('3');
       expect(names(browser(fixture).Dashboards)).toEqual(['Revenue', 'Board Pack', 'Custom Code', 'Quota']);
     });
 
-    it('ignores engine changes to caches other than the record logs', async () => {
-      const { fixture, userInfo } = await renderLibrary();
-      const reads = userInfo.GetRecentRecordsForEntity.mock.calls.length;
+    it('reads the record logs again when RecentAccessService re-emits, not when the favorites change', async () => {
+      const { fixture, favorites, recents, logReads, library: lib } = await renderLibrary();
+      const reads = logReads.length;
 
-      userInfo.EmitOtherChange();
+      favorites.Set([lib.byName('Quota').ID]);
       fixture.detectChanges();
+      expect(logReads).toHaveLength(reads);
 
-      expect(userInfo.GetRecentRecordsForEntity).toHaveBeenCalledTimes(reads);
+      recents.Emit();
+      await settle();
+      expect(logReads).toHaveLength(reads + 1);
     });
 
     it('refreshes on favorites and recents changes without reporting to the agent', async () => {
-      const { fixture, navigation, favorites, recents, userInfo, library: lib } = await renderLibrary();
+      const { fixture, navigation, favorites, recents, recordLogs, library: lib } = await renderLibrary();
       const reported = navigation.service.SetAgentContext.mock.calls.length;
 
       favorites.Set([lib.byName('Quota').ID]);
+      recordLogs.Set([lib.byName('Revenue').ID]);
       recents.Emit();
-      userInfo.ReloadRecordLogs([lib.byName('Revenue').ID]);
+      await settle();
       fixture.detectChanges();
 
       expect(navigation.service.SetAgentContext).toHaveBeenCalledTimes(reported);

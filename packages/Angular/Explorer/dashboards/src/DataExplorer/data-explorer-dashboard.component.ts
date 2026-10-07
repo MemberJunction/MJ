@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef, Input, 
 
 import { trigger, transition, style, animate } from '@angular/animations';
 import { Subject } from 'rxjs';
-import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
+import { takeUntil, debounceTime } from 'rxjs/operators';
 import { BaseDashboard, NavigationService } from '@memberjunction/ng-shared';
 import { RecentAccessService } from '@memberjunction/ng-shared-generic';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
@@ -822,10 +822,15 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     this.filterInput$
       .pipe(
         debounceTime(500),
-        distinctUntilChanged(),
         takeUntil(this.destroy$)
       )
       .subscribe(filterText => {
+        // Compare against the APPLIED filter, not the last debounced value: navigation and view
+        // switches reset DebouncedFilterText directly, and a distinctUntilChanged() here would
+        // then swallow the user re-typing the same search until the box was cleared first.
+        if (filterText === this.DebouncedFilterText) {
+          return;
+        }
         this.DebouncedFilterText = filterText;
         this.cdr.detectChanges();
       });
@@ -2780,14 +2785,22 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
           this.StateService.selectEntity(entity.Name);
         }
 
+        // These params are also delivered back after this dashboard writes them itself (the tab's
+        // param stream echoes every write), so only apply what actually differs from the state
+        // on screen — re-applying an echo would wipe the user's search and re-resolve a record
+        // they just clicked against whatever page happens to be loaded.
+        const viewChanged = entityChanged || !this.isSelectedView(urlState.viewId);
+
         // Restore saved view by ID if specified. The workspace applies the view's grid state
         // itself once selectedViewEntity flows into its [SelectedView] input.
-        if (urlState.viewId) {
-          await this.restoreViewFromUrl(urlState.viewId, entity);
-        } else {
-          // No specific view — clear view selection to use default
-          this.SelectedViewEntity = null;
-          this.StateService.selectView(null);
+        if (viewChanged) {
+          if (urlState.viewId) {
+            await this.restoreViewFromUrl(urlState.viewId, entity);
+          } else {
+            // No specific view — clear view selection to use default
+            this.SelectedViewEntity = null;
+            this.StateService.selectView(null);
+          }
         }
 
         // Filters live in saved views (DB), never in URL query strings.
@@ -2795,12 +2808,16 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         if (entityChanged && !urlState.viewId) {
           this.StateService.setSmartFilterPrompt('');
         }
-        // User search text is always cleared when applying URL state
-        this.LiveFilterText = '';
-        this.DebouncedFilterText = '';
+        // User search text belongs to the entity + view it was typed against
+        if (viewChanged) {
+          this.LiveFilterText = '';
+          this.DebouncedFilterText = '';
+        }
 
         // Handle record selection
-        if (urlState.record) {
+        if (urlState.record && !entityChanged && this.isSelectedRecord(urlState.record)) {
+          // Already showing this record — nothing to re-resolve
+        } else if (urlState.record) {
           if (entityChanged) {
             // Entity changed - need to wait for data to load
             this.pendingRecordSelection = urlState.record;
@@ -2839,6 +2856,24 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     }
 
     this.cdr.detectChanges();
+  }
+
+  /** Whether `viewId` (absent = the default view) is the view currently selected. */
+  private isSelectedView(viewId: string | undefined): boolean {
+    const selectedId = this.SelectedViewEntity?.ID;
+    if (!viewId || !selectedId) {
+      return !viewId && !selectedId;
+    }
+    return UUIDsEqual(selectedId, viewId);
+  }
+
+  /** Whether `recordKey` (concatenated or compact URL form) is the record shown in the detail panel. */
+  private isSelectedRecord(recordKey: string): boolean {
+    if (!this.SelectedRecord || !this.SelectedEntity) {
+      return false;
+    }
+    const key = buildCompositeKey(this.SelectedRecord, this.SelectedEntity);
+    return key.ToConcatenatedString() === recordKey || key.ToCompactURLSegment() === recordKey;
   }
 
   /**

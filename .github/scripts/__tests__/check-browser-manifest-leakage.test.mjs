@@ -77,6 +77,11 @@ describe('scanSource — detection', () => {
         const src = `import { X } from '@memberjunction/ai-openai';\nimport { Y } from '@memberjunction/ai-vectors-pinecone';\n`;
         expect(scanSource(src, 'f')).toHaveLength(2);
     });
+
+    it('denies the server-only vector accelerator while its browser-safe base stays allowed', () => {
+        const src = `import { A } from '@memberjunction/ai-vectors-memory-server';\nimport { B } from '@memberjunction/ai-vectors-memory';\n`;
+        expect(scanSource(src, 'f').map((v) => v.pkg)).toEqual(['@memberjunction/ai-vectors-memory-server']);
+    });
 });
 
 // ---------------------------------------------------------------------------

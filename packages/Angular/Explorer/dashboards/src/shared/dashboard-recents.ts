@@ -2,37 +2,29 @@
  * @fileoverview The user's recently opened dashboards, for the Library (its order and Recently
  * opened).
  *
- * The list comes from UserInfoEngine's cache of the user's MJ: User Record Logs, which holds every
- * record the user has opened, so it lists every opened dashboard, not only the dashboards among
- * the latest records of any entity.
+ * The list comes from a query of the user's MJ: User Record Logs for the MJ: Dashboards entity, so it
+ * lists every dashboard the user opened, not only the dashboards among the latest records of any
+ * entity. Record logs are not cached, so the list is read again each time it can have changed.
  *
- * Opening a dashboard saves a record log (RecentAccessService.LogAccess). UserInfoEngine reloads
- * its record-log cache after that save (a debounced reload, about 1.5 seconds later) and then emits
- * DataChange$. ObserveRecentDashboardChanges emits at that moment, so a caller that re-reads then
- * shows the new open.
+ * Opening a dashboard saves a record log (RecentAccessService.LogAccess). The service then reloads its
+ * recent items and emits RecentItems, after the log is saved. ObserveRecentDashboardIds reads the list
+ * again each time its trigger emits, so a caller that passes RecentItems shows the new open.
  */
-import type { EngineDataChangeEvent, IMetadataProvider } from '@memberjunction/core';
-import { UserInfoEngine } from '@memberjunction/core-entities';
-import { UUIDsEqual } from '@memberjunction/global';
-import { Observable } from 'rxjs';
-import { filter, map } from 'rxjs/operators';
+import { LogError, RunView } from '@memberjunction/core';
+import type { IMetadataProvider } from '@memberjunction/core';
+import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
+import { from, Observable } from 'rxjs';
+import { switchMap } from 'rxjs/operators';
 
 /** The entity whose record logs are dashboard opens. */
 export const DASHBOARDS_ENTITY_NAME = 'MJ: Dashboards';
 
 const USER_RECORD_LOGS_ENTITY_NAME = 'MJ: User Record Logs';
 
-/** A record log, as far as dashboard recents need it. */
+/** A record log, as far as dashboard recents need it. A simple RunView row can carry `LatestAt` as text. */
 export interface DashboardRecordLog {
   RecordID: string;
-  LatestAt: Date;
-}
-
-/** The part of UserInfoEngine the dashboard recents read. UserInfoEngine satisfies it. */
-export interface DashboardRecentsSource {
-  readonly IsPermissionConstrained: boolean;
-  readonly DataChange$: Observable<EngineDataChangeEvent>;
-  GetRecentRecordsForEntity(entityId: string, maxItems?: number): ReadonlyArray<DashboardRecordLog>;
+  LatestAt: Date | string;
 }
 
 /**
@@ -54,38 +46,57 @@ export function OrderRecentDashboardIds(logs: ReadonlyArray<DashboardRecordLog>,
 }
 
 /**
- * The ids of the dashboards the current user opened, most recent first, at most `maxItems` (all
- * of them when omitted). Reads the record-log cache of `source`; the MJ: Dashboards entity id
- * comes from `provider`'s metadata. Returns an empty list when that entity is unknown or the user
- * cannot read the record logs.
+ * Loads the ids of the dashboards the current user of `provider` opened, most recent first, at most
+ * `maxItems` (all of them when omitted), with one query of the user's MJ: User Record Logs for the
+ * MJ: Dashboards entity. Returns an empty list when the metadata has no MJ: Dashboards entity, there
+ * is no current user, or the query fails or throws (for example when the user cannot read the record
+ * logs, or the server cannot be reached). A failed or thrown read is logged; it never rejects.
  */
-export function GetRecentDashboardIds(
-  provider: IMetadataProvider,
-  maxItems?: number,
-  source: DashboardRecentsSource = UserInfoEngine.Instance
-): string[] {
+export async function LoadRecentDashboardIds(provider: IMetadataProvider, maxItems?: number): Promise<string[]> {
   const dashboardsEntity = provider.EntityByName(DASHBOARDS_ENTITY_NAME);
-  if (!dashboardsEntity || source.IsPermissionConstrained) {
+  const user = provider.CurrentUser;
+  if (!dashboardsEntity || !user) {
     return [];
   }
-  return OrderRecentDashboardIds(source.GetRecentRecordsForEntity(dashboardsEntity.ID, Number.MAX_SAFE_INTEGER), maxItems);
+  try {
+    const result = await RunView.FromMetadataProvider(provider).RunView<DashboardRecordLog>({
+      EntityName: USER_RECORD_LOGS_ENTITY_NAME,
+      ExtraFilter: `UserID='${EscapeSQLString(user.ID)}' AND EntityID='${EscapeSQLString(dashboardsEntity.ID)}'`,
+      OrderBy: 'LatestAt DESC',
+      Fields: ['RecordID', 'LatestAt'],
+      ResultType: 'simple',
+    });
+    if (!result.Success) {
+      LogError(`Recently opened dashboards could not be read: ${result.ErrorMessage}`);
+      return [];
+    }
+    return OrderRecentDashboardIds(result.Results, maxItems);
+  } catch (error) {
+    LogError(`Recently opened dashboards could not be read: ${error instanceof Error ? error.message : String(error)}`);
+    return [];
+  }
 }
 
-/** Emits each time the record-log cache of `source` changes, which is when a new dashboard open can be read. */
-export function ObserveRecentDashboardChanges(source: DashboardRecentsSource = UserInfoEngine.Instance): Observable<void> {
-  return source.DataChange$.pipe(
-    filter(IsRecordLogChange),
-    map(() => undefined)
-  );
-}
-
-/** True when an engine change event is for the MJ: User Record Logs cache. */
-export function IsRecordLogChange(event: EngineDataChangeEvent): boolean {
-  return (event.config.EntityName ?? '').trim().toLowerCase() === USER_RECORD_LOGS_ENTITY_NAME.toLowerCase();
+/**
+ * Emits the ids of the dashboards the current user opened (see {@link LoadRecentDashboardIds}) each
+ * time `trigger` emits, read again each time. A read that a newer emission overtakes is dropped.
+ * With the default `load`, a read that fails or throws gives an empty list, so the stream keeps running.
+ *
+ * @param provider The provider whose metadata and current user the read uses.
+ * @param trigger Emits when the list can have changed, for example RecentAccessService.RecentItems,
+ *   which emits after a dashboard open is logged.
+ * @param load Reads the ids. The default is {@link LoadRecentDashboardIds}.
+ */
+export function ObserveRecentDashboardIds(
+  provider: IMetadataProvider,
+  trigger: Observable<unknown>,
+  load: (provider: IMetadataProvider) => Promise<string[]> = LoadRecentDashboardIds
+): Observable<string[]> {
+  return trigger.pipe(switchMap(() => from(load(provider))));
 }
 
 /** Milliseconds since the epoch, or 0 for a missing or invalid date. */
-function timeOf(value: Date): number {
+function timeOf(value: Date | string): number {
   const time = new Date(value).getTime();
   return Number.isNaN(time) ? 0 : time;
 }

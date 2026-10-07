@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy, ChangeDetectorRef, inject, OnChanges, SimpleChanges, OnDestroy, ElementRef, Renderer2 } from '@angular/core';
+import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy, ChangeDetectorRef, inject, OnChanges, SimpleChanges, OnDestroy, ElementRef, Renderer2, HostBinding} from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { BaseEntity, EntityInfo, EntityFieldInfo, EntityFieldTSType, CompositeKey, KeyValuePair, RunView, LogError, CoerceImageSrc, IsInlineImageDataUri, CoerceRawImageBase64ToDataUri, MaxStoredImageChars, MaxInlineImageBytes, FormatByteSize, ParseCssHexColor, PrettyPrintJson, IsDateOnlySQLType, FormatDateOnly } from '@memberjunction/core';
 import { BaseEngineRegistry } from '@memberjunction/core';
@@ -170,6 +170,24 @@ interface FKColumnPlan {
   styleUrls: ['./form-field.component.css']
 })
 export class MjFormFieldComponent extends BaseAngularComponent implements OnChanges, OnDestroy  {
+  /**
+   * The field's own name on the element, so a form's field layout can be read from the DOM.
+   *
+   * The placement dialog probes a form offscreen to find out what it really draws; reading
+   * this needs no injector access, which is what lets the probe stay a DOM sweep. Mirrors
+   * `data-section-key` on the collapsible panel.
+   */
+  @HostBinding('attr.data-field-name')
+  get HostFieldName(): string {
+    return this.FieldName;
+  }
+
+  /** The label the field would show, for the same DOM sweep. Present even when hidden. */
+  @HostBinding('attr.data-field-label')
+  get HostFieldLabel(): string {
+    return this.DisplayNameOverride || this.FieldInfo?.DisplayNameOrName || this.FieldName;
+  }
+
   private cdr = inject(ChangeDetectorRef);
   private renderer = inject(Renderer2);
   private hostRef = inject(ElementRef<HTMLElement>);
@@ -583,8 +601,21 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     this.cdr.markForCheck();
   }
 
+  /**
+   * Whether a form contribution stands in for this field.
+   *
+   * Such a field is not drawn at all, in either mode: a panel is rendering in its place at
+   * the top of the section, so drawing the field too would show the same value twice.
+   */
+  get IsClaimedByContribution(): boolean {
+    const claimed = this.FormContext?.claimedFieldNames;
+    if (!claimed || claimed.length === 0) return false;
+    return claimed.includes(this.FieldName);
+  }
+
   /** Whether this field should be hidden (empty in read-only mode) */
   get ShouldHideField(): boolean {
+    if (this.IsClaimedByContribution) return true;
     // A read-denied field is always hidden. This must run before Value is touched: the
     // template's own @if guards rendering behind IsFieldReadableByUser, but programmatic
     // callers (MjCollapsiblePanelComponent.hasRenderableContent sweeps ShouldHideField to
@@ -592,6 +623,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     // a denied field. Returning true here is also what lets a section whose fields are all
     // denied collapse away instead of rendering an empty card.
     if (!this.IsFieldReadableByUser) return true;
+    if (this.FormContext?.hiddenFieldNames?.includes(this.FieldName)) return true;
     if (this.EditMode) return false;
     if (!this.HideWhenEmptyInReadOnlyMode) return false;
     if (this.FormContext?.showEmptyFields) return false;

@@ -8,12 +8,30 @@
  * @module @memberjunction/ng-timeline/timeline-group
  */
 
-import { IMetadataProvider, Metadata, RunView } from '@memberjunction/core';
+import { EntityInfo, IMetadataProvider, IsDateOnlySQLType, Metadata, RunView } from '@memberjunction/core';
 import {
   TimelineCardConfig,
   TimelineEventConfig,
   DEFAULT_CARD_CONFIG
 } from './types';
+
+// ============================================================================
+// HELPER FUNCTION - CALENDAR DAYS
+// ============================================================================
+
+/**
+ * A SQL `date` value re-anchored on LOCAL midnight of the day it stores.
+ *
+ * A calendar day arrives as UTC midnight. The timeline groups and labels every event with local
+ * getters (day, week, month, quarter, year segments and its own date formatter), which read that as
+ * the previous day west of Greenwich: an event dated Oct 1 fell into a "September 30" day segment
+ * and, on the 1st of a month, into the prior month. Carrying the day as local midnight makes every
+ * one of those local readings return the stored day.
+ */
+function calendarDayAsLocalDate(date: Date): Date {
+  if (isNaN(date.getTime())) return date;
+  return new Date(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+}
 
 // ============================================================================
 // HELPER FUNCTION - FIELD VALUE ACCESS
@@ -184,6 +202,16 @@ export class TimelineGroup<T = any> {
    * @example 'Tasks', 'MJ: AI Agents', 'Users'
    */
   EntityName?: string;
+
+  /**
+   * Metadata for the entity this group's records come from, for records that do not carry their own.
+   *
+   * A BaseEntity record exposes `EntityInfo`, and the group reads field types from it. A plain object
+   * (an `'array'` group fed `simple` RunView rows, as the entity viewer's timeline does) has none, so
+   * without this a SQL `date` field is read as an instant and lands a day early west of Greenwich.
+   * A record's own `EntityInfo` wins when it has one.
+   */
+  EntityInfo?: EntityInfo;
 
   /**
    * How data is provided to the timeline.
@@ -440,13 +468,29 @@ export class TimelineGroup<T = any> {
    */
   GetDate(record: T): Date {
     const value = this.GetValue(record, this.DateFieldName);
+    let date: Date;
     if (value instanceof Date) {
-      return value;
+      date = value;
+    } else if (typeof value === 'string' || typeof value === 'number') {
+      date = new Date(value);
+    } else {
+      return new Date();
     }
-    if (typeof value === 'string' || typeof value === 'number') {
-      return new Date(value);
-    }
-    return new Date();
+    return this.isDateOnlyDateField(record) ? calendarDayAsLocalDate(date) : date;
+  }
+
+  /**
+   * Whether `DateFieldName` is a SQL `date` column (a calendar day), from the record's own entity
+   * metadata, else the group's {@link EntityInfo}. Entity-sourced groups load BaseEntity objects,
+   * which carry it; a plain object relies on the group's. With neither, the date is treated as an
+   * instant, as before.
+   */
+  private isDateOnlyDateField(record: T): boolean {
+    const fieldName = this.DateFieldName?.trim().toLowerCase();
+    if (!fieldName) return false;
+    const entityInfo = (record as { EntityInfo?: EntityInfo } | null)?.EntityInfo ?? this.EntityInfo;
+    const field = entityInfo?.Fields?.find(f => f.Name.trim().toLowerCase() === fieldName);
+    return IsDateOnlySQLType(field?.Type);
   }
 
   /** @deprecated Use {@link GetDate}. */
