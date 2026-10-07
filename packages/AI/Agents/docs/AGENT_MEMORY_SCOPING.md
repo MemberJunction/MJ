@@ -233,7 +233,7 @@ Secondary scopes are arbitrary key/value pairs for external applications (Skip, 
 
 ### GraphQL Callers
 
-GraphQL callers pass scope info via the `data` JSON parameter. BaseAgent reads them from `params.data` as a fallback:
+Server-to-server GraphQL callers (the system user, or a request authenticated with an API key) can pass scope info via the `data` JSON parameter. BaseAgent reads them from `params.data` as a fallback. MJServer's agent-run resolvers drop these keys, and `__agentTypePromptParams`, from every other caller's `data`, and always from a widget-guest run, so a browser cannot choose a run's scope; a host that needs one sets it in its own server operation:
 
 ```json
 {
