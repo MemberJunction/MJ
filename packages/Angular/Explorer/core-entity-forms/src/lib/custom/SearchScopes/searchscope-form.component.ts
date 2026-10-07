@@ -100,6 +100,7 @@ export class MJSearchScopeFormComponentExtended extends MJSearchScopeFormCompone
     public LastRunSimilarityPercent: number | null = null;
 
     public override ngOnDestroy(): void {
+        super.ngOnDestroy();
         this.previewSubscription?.unsubscribe();
         this.previewSubscription = null;
     }

@@ -161,23 +161,31 @@ export class WorkerPool {
         this.workers[id] = worker;
 
         // Wait for ready message
-        await new Promise<void>((resolve, reject) => {
-            const timeout = setTimeout(() => {
-                reject(new Error(`Worker ${id} failed to start within 5 seconds`));
-            }, 5000);
+        try {
+            await new Promise<void>((resolve, reject) => {
+                const timeout = setTimeout(() => {
+                    reject(new Error(`Worker ${id} failed to start within 5 seconds`));
+                }, 5000);
 
-            childProcess.once('message', (msg: any) => {
-                if (msg.type === 'ready') {
+                childProcess.once('message', (msg: any) => {
+                    if (msg.type === 'ready') {
+                        clearTimeout(timeout);
+                        resolve();
+                    }
+                });
+
+                childProcess.once('error', (error) => {
                     clearTimeout(timeout);
-                    resolve();
-                }
+                    reject(error);
+                });
             });
-
-            childProcess.once('error', (error) => {
-                clearTimeout(timeout);
-                reject(error);
-            });
-        });
+        } catch (startError) {
+            // The crash handler is attached only after the worker is ready, so a worker that
+            // never reports ready would otherwise stay alive as an orphaned process.
+            this.workers[id] = null as unknown as Worker;
+            childProcess.kill('SIGKILL');
+            throw startError;
+        }
 
         // Set up message handler for responses
         childProcess.on('message', (message: any) => {
@@ -626,7 +634,8 @@ export class WorkerPool {
             .filter(w => w !== null)
             .map(worker => {
                 return new Promise<void>((resolve) => {
-                    if (worker.process.killed) {
+                    // `killed` only means a signal was sent, not that the process exited.
+                    if (worker.process.exitCode !== null || worker.process.signalCode !== null) {
                         resolve();
                         return;
                     }

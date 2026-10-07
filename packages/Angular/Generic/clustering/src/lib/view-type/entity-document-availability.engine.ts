@@ -114,7 +114,8 @@ export class EntityDocumentAvailabilityEngine extends BaseEngine<EntityDocumentA
     const results = await rv.RunViews(
       docs.map((d) => ({
         EntityName: 'MJ: Entity Record Documents',
-        ExtraFilter: `EntityDocumentID = '${d.ID}' AND VectorJSON IS NOT NULL`,
+        // Either vector column counts — the same rule the clustering source (EntityDocumentVectorSource) applies.
+        ExtraFilter: `EntityDocumentID = '${d.ID}' AND (VectorBinary IS NOT NULL OR VectorJSON IS NOT NULL)`,
         Fields: ['ID'],
         MaxRows: 1,
         ResultType: 'simple' as const,
