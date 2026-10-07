@@ -28,6 +28,71 @@ describe('ErrorAnalyzer', () => {
             expect(info.canFailover).toBe(true);
         });
 
+        it("should detect Google's invalid-key 400 as authentication, which stops failover", () => {
+            // The shape @google/genai surfaces: the vendor's JSON error body as the message, HTTP 400.
+            const error = {
+                status: 400,
+                message: JSON.stringify({
+                    error: {
+                        code: 400,
+                        message: 'API key not valid. Please pass a valid API key.',
+                        status: 'INVALID_ARGUMENT',
+                        details: [{ '@type': 'type.googleapis.com/google.rpc.ErrorInfo', reason: 'API_KEY_INVALID' }]
+                    }
+                })
+            };
+            const info = ErrorAnalyzer.analyzeError(error, 'Google');
+
+            expect(info.errorType).toBe('Authentication');
+            expect(info.severity).toBe('Fatal');
+        });
+
+        it("should detect Google's expired-key 400 as authentication, which stops failover", () => {
+            // Same shape as the invalid key, but reason API_KEY_EXPIRED. It read as InvalidRequest before.
+            const error = {
+                status: 400,
+                message: JSON.stringify({
+                    error: {
+                        code: 400,
+                        message: 'API key expired. Please renew the API key.',
+                        status: 'INVALID_ARGUMENT',
+                        details: [{ '@type': 'type.googleapis.com/google.rpc.ErrorInfo', reason: 'API_KEY_EXPIRED' }]
+                    }
+                })
+            };
+            const info = ErrorAnalyzer.analyzeError(error, 'Google');
+
+            expect(info.errorType).toBe('Authentication');
+            expect(info.severity).toBe('Fatal');
+        });
+
+        it("does not read Google's FAILED_PRECONDITION 400 (unsupported user location) as authentication", () => {
+            const error = {
+                status: 400,
+                message: JSON.stringify({
+                    error: {
+                        code: 400,
+                        message: 'User location is not supported for the API use.',
+                        status: 'FAILED_PRECONDITION'
+                    }
+                })
+            };
+            const info = ErrorAnalyzer.analyzeError(error, 'Google');
+
+            expect(info.errorType).not.toBe('Authentication');
+        });
+
+        it('keeps the classification a failed result already carries — a rejected streaming ChatResult', () => {
+            // BaseLLM rejects a failed stream with its ChatResult; analyzed afresh that is 'Unknown'/'Transient'.
+            const driverInfo = { error: { name: 'ApiError', status: 400 }, errorType: 'Authentication', severity: 'Fatal', canFailover: true };
+            const rejected = { success: false, errorMessage: 'API key not valid. Please pass a valid API key.', errorInfo: driverInfo };
+
+            const info = ErrorAnalyzer.analyzeError(rejected, 'AIPromptRunner');
+
+            expect(info.errorType).toBe('Authentication');
+            expect(info.severity).toBe('Fatal');
+        });
+
         it('should detect context length exceeded', () => {
             const error = { message: 'context_length_exceeded: maximum context length is 128k' };
             const info = ErrorAnalyzer.analyzeError(error);
