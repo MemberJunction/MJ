@@ -1,5 +1,99 @@
 # @memberjunction/ai-reranker
 
+## 6.2.0-edge.3
+
+### Patch Changes
+
+- Updated dependencies [25bb295]
+- Updated dependencies [dfe40a4]
+- Updated dependencies [131f3c4]
+- Updated dependencies [0f04590]
+- Updated dependencies [0a75bb2]
+- Updated dependencies [41c2c08]
+- Updated dependencies [29b6ec3]
+- Updated dependencies [279b93e]
+- Updated dependencies [66fd011]
+- Updated dependencies [196160a]
+- Updated dependencies [bea2386]
+- Updated dependencies [60bd774]
+- Updated dependencies [35da130]
+- Updated dependencies [28c92e0]
+- Updated dependencies [ec97ad4]
+- Updated dependencies [28df136]
+- Updated dependencies [49e0bd8]
+  - @memberjunction/ai@6.2.0-edge.3
+  - @memberjunction/aiengine@6.2.0-edge.3
+  - @memberjunction/core-entities@6.2.0-edge.3
+  - @memberjunction/global@6.2.0-edge.3
+  - @memberjunction/core@6.2.0-edge.3
+  - @memberjunction/ai-prompts@6.2.0-edge.3
+  - @memberjunction/ai-core-plus@6.2.0-edge.3
+
+## 6.2.0-edge.2
+
+### Minor Changes
+
+- 4b680f9: Reranking now goes through a new `AIRerankerRunner`, which picks a reranker model from the new `Default Rerank` prompt's bindings (or the model the caller pins), fails over between candidates, and writes an `MJ: AI Prompt Runs` row for every call. `RerankerService.RerankNotes` uses it, so agent memory reranking now appears in AI run history.
+- 672b4c6: Adds a `DecisionReranker` and a `Decision Reranker` model: it scores each candidate note with one typed-decision Likelihood question, and an agent opts in by pointing its `RerankerConfiguration.rerankerModelId` at the model. Examples can now be reranked too, with the same reranker, when an agent's reranker configuration sets `rerankExamples` to true; it is off by default. The examples rerank records a `Rerank Examples` step on the agent run, linked to its prompt run, as the notes rerank records `Rerank Notes`.
+
+  A rerank's prompt runs (the decision runs, or `LLMReranker`'s chat run) are children of the rerank's run, whose cost and token rollups include them, and the rerank's run step joins the agent run's steps, so the agent run's cost and token totals and its `MaxCostPerRun` / `MaxTokensPerRun` guardrails count the rerank.
+
+  A `DecisionReranker` rerank has a time budget, 15 seconds unless `RerankerConfiguration.decisionTimeoutMS` sets another: when it runs out the decision calls are aborted and the rerank fails, so the agent falls back as `fallbackOnError` says. When no decision model declares `MaxQuestionsPerCall`, each decision call carries at most 20 documents, or `RerankerConfiguration.decisionMaxDocumentsPerCall`, and a larger rerank is split across parallel calls.
+
+  When no candidate reaches `minRelevanceThreshold`, the agent keeps the vector search results instead of injecting nothing. For a `DecisionReranker`, whose probabilities are not calibrated, 0.1 is the recommended threshold.
+
+  `RerankerService.GetReranker` builds a `DecisionReranker` without a prompt ID, as its docs say: it asks the decision prompt its model-vendor `APIName` names, or `Default Decision`.
+
+### Patch Changes
+
+- ed77dd7: Cohere reranking works again. `CohereReranker` is registered under `CohereReranker`, the driver class every Cohere reranker model-vendor row carries, as well as `CohereLLM`; before, the ClassFactory fell back to a bare `BaseReranker` and every Cohere rerank failed. Its docs now name the right legacy environment variable, `AI_VENDOR_API_KEY__COHERERERANKER`. `RerankerService.GetReranker` is deprecated in favour of `AIRerankerRunner`.
+- 5148534: A rerank answered by `LLMReranker` now carries its chat model's cost: the chat prompt's run is a child of the rerank's run, and its cost is recorded as the rerank run's `DescendantCost` and `TotalCost`. `RerankResponse` gains an optional `Usage`, which a reranker driver sets when it knows its call's tokens and cost.
+- Updated dependencies [f555162]
+- Updated dependencies [043f418]
+- Updated dependencies [e97d95c]
+- Updated dependencies [ff3097d]
+- Updated dependencies [79279f2]
+- Updated dependencies [3fbda62]
+- Updated dependencies [eaa9455]
+- Updated dependencies [ff00d60]
+- Updated dependencies [2552b1e]
+- Updated dependencies [660ef45]
+- Updated dependencies [8fd1c46]
+- Updated dependencies [21f9e15]
+- Updated dependencies [28fdf22]
+- Updated dependencies [4248fb3]
+- Updated dependencies [f3c6161]
+- Updated dependencies [01fafc6]
+- Updated dependencies [35ffb95]
+- Updated dependencies [5148534]
+- Updated dependencies [0adaf76]
+- Updated dependencies [ce1a5c3]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [26c0178]
+- Updated dependencies [594f2e0]
+- Updated dependencies [861cbf0]
+- Updated dependencies [705ab4e]
+- Updated dependencies [e51ce8a]
+- Updated dependencies [96daca8]
+- Updated dependencies [aa912ca]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [14e2a3a]
+- Updated dependencies [5986939]
+- Updated dependencies [4d647e6]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [369e229]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [2854a2e]
+  - @memberjunction/ai-core-plus@6.2.0-edge.2
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/ai@6.2.0-edge.2
+  - @memberjunction/ai-prompts@6.2.0-edge.2
+  - @memberjunction/aiengine@6.2.0-edge.2
+  - @memberjunction/core-entities@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+
 ## 6.2.0-edge.1
 
 ### Patch Changes

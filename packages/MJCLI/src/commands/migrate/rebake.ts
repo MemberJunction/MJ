@@ -175,6 +175,12 @@ export default class MigrateRebake extends Command {
       this.error('migrate rebake requires DB_PLATFORM=postgresql with PG_* connection env (the working DB CodeGen is captured from).');
     }
     initializeConfig(process.cwd());
+    // The bake's artifact is the migration it writes, and CodeGen's own CodeGen_Run log is never
+    // opened here. With SQLOutput enabled (the default), CodeGen's no-artifact guard therefore
+    // refuses every metadata statement the capture executes, including the layered base-view
+    // setup, and the error is logged rather than thrown, so the bake reports success with
+    // views missing from both the working DB and the captured output.
+    if (configInfo.SQLOutput) configInfo.SQLOutput.enabled = false;
 
     let ds: DataSourceResult;
     try {
