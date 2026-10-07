@@ -172,7 +172,7 @@ describe('LiveKitPreviewRoomController: a meeting room with no server', () => {
       LIVEKIT_PREVIEW_PEOPLE.map((p, i) => [p.Identity, p.Role, i === 0])
     );
     expect(state.ActiveSpeakerIdentities).toEqual([LIVEKIT_PREVIEW_PEOPLE[0].Identity]);
-    expect(state.LocalMedia).toEqual({ MicrophoneEnabled: true, CameraEnabled: false, ScreenShareEnabled: false });
+    expect(state.LocalMedia).toEqual({ MicrophoneEnabled: true, CameraEnabled: false, ScreenShareEnabled: false, AgentVisionOn: false });
     expect(log).toEqual(['start microphone default']);
     expect(connected).toHaveBeenCalledWith({ State: state });
   });
@@ -195,7 +195,7 @@ describe('LiveKitPreviewRoomController: a meeting room with no server', () => {
   it('starts with nothing on when the options say so', async () => {
     const { room, log } = await joined({ EnableMicrophone: false, EnableCamera: false });
     expect(log).toEqual([]);
-    expect(room.State.LocalMedia).toEqual({ MicrophoneEnabled: false, CameraEnabled: false, ScreenShareEnabled: false });
+    expect(room.State.LocalMedia).toEqual({ MicrophoneEnabled: false, CameraEnabled: false, ScreenShareEnabled: false, AgentVisionOn: false });
   });
 
   it('lets a beforeConnect handler cancel joining, before any device opens', async () => {
@@ -452,6 +452,47 @@ describe('LiveKitPreviewRoomController: leaving', () => {
     room.Dispose();
     expect(made[0].Disposed).toBe(true);
     expect(complete).toHaveBeenCalled();
+  });
+});
+
+describe('LiveKitPreviewRoomController: what the agent sees', () => {
+  it('has the agent watching, so the room offers the choice; Ada allows it, nobody else yet', async () => {
+    const { room } = await joined();
+    expect(room.State.AgentWatching).toBe(true);
+    expect(room.State.LocalMedia.AgentVisionOn).toBe(false);
+    expect(room.State.Local?.AgentCanSee).toBe(false);
+    expect(room.State.Remote.filter((p) => p.AgentCanSee).map((p) => p.DisplayName)).toEqual(['Ada']);
+    expect(ToMediaParticipant(room.State.Remote[1]).AgentCanSee).toBe(true);
+  });
+
+  it('records your choice at once and raises localMediaChanged; turning it off takes it back', async () => {
+    const { room } = await joined();
+    const changes: (boolean | undefined)[] = [];
+    room.Events.On('localMediaChanged', (m) => changes.push(m.AgentVisionOn));
+    room.SetAgentVision(true);
+    expect(room.State.LocalMedia.AgentVisionOn).toBe(true);
+    expect(you(room).AgentCanSee).toBe(true);
+    room.SetAgentVision(true);
+    room.SetAgentVision(false);
+    expect(room.State.Local?.AgentCanSee).toBe(false);
+    expect(changes).toEqual([true, false]);
+  });
+
+  it('shows nobody as seen when no agent watches, whatever they chose', async () => {
+    const { room } = await joined({}, { AgentWatches: false });
+    room.SetAgentVision(true);
+    expect(room.State.AgentWatching).toBe(false);
+    expect(room.State.LocalMedia.AgentVisionOn).toBe(true);
+    expect([room.State.Local, ...room.State.Remote].some((p) => p?.AgentCanSee)).toBe(false);
+  });
+
+  it('forgets your choice when you leave, and ignores it outside the room', async () => {
+    const { room } = await joined();
+    room.SetAgentVision(true);
+    await room.Disconnect();
+    room.SetAgentVision(true);
+    await room.Connect('preview://local', 'unused');
+    expect(room.State.LocalMedia.AgentVisionOn).toBe(false);
   });
 });
 

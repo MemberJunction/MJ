@@ -7,6 +7,9 @@
  *   the browser's picker, as in a real room.
  * - **Everyone else.** The people in the options (by default an agent and three participants) are in the room from the
  *   start, without cameras, and take turns speaking, so the speaking ring, the active speaker and the meters move.
+ * - **What the agent sees.** The simulated agent watches (unless `AgentWatches` is off), so the room offers the
+ *   "Let the agent see" choice; {@link LiveKitPreviewRoomController.SetAgentVision} records yours at once, where a
+ *   meeting records it through the server. A simulated person can allow it too (Ada does, by default).
  * - **Not simulated.** Nobody else sends chat or whiteboard messages, joins or leaves, or shares a screen; noise
  *   filtering and background effects are unavailable.
  *
@@ -55,12 +58,14 @@ export interface LiveKitPreviewPerson {
   DisplayName: string;
   /** `'agent'` shows as the room's AI agent. */
   Role: LiveKitParticipantRole;
+  /** Whether this person lets agents see their camera and shared screen. */
+  AgentCanSee?: boolean;
 }
 
 /** The people in a preview room unless the options name others: an agent and three participants. */
 export const LIVEKIT_PREVIEW_PEOPLE: readonly LiveKitPreviewPerson[] = [
   { Identity: 'preview-sage', DisplayName: 'Sage', Role: 'agent' },
-  { Identity: 'preview-ada', DisplayName: 'Ada', Role: 'participant' },
+  { Identity: 'preview-ada', DisplayName: 'Ada', Role: 'participant', AgentCanSee: true },
   { Identity: 'preview-bo', DisplayName: 'Bo', Role: 'participant' },
   { Identity: 'preview-cy', DisplayName: 'Cy', Role: 'participant' },
 ];
@@ -83,6 +88,8 @@ export interface LiveKitPreviewRoomOptions {
   RequestScreenShare?: (options: DisplayCaptureOptions) => Promise<DisplayCaptureResult>;
   /** Meters your microphone. Defaults to `MediaPreview`'s meter; a test passes its own. */
   MeterFor?: MediaPreviewOptions['MeterFor'];
+  /** Whether the simulated agent watches the cameras and screens people let it see. Defaults to `true`. */
+  AgentWatches?: boolean;
   /** A shared event bus (e.g. so a host can subscribe before connecting). */
   EventBus?: LiveKitRoomEventBus;
 }
@@ -107,6 +114,8 @@ interface PreviewSession {
   Speaker: number;
   Turns: ReturnType<typeof setInterval> | null;
   Share: PreviewShare | null;
+  /** Whether you let agents see your camera and shared screen, in this join. */
+  AgentVisionOn: boolean;
 }
 
 const DEFAULT_TURN_MS = 4000;
@@ -122,6 +131,7 @@ export class LiveKitPreviewRoomController implements ILiveKitRoomController {
   private readonly turnMs: number;
   private readonly requestShare: (options: DisplayCaptureOptions) => Promise<DisplayCaptureResult>;
   private readonly meterFor: MediaPreviewOptions['MeterFor'];
+  private readonly agentWatches: boolean;
   private session: PreviewSession | null = null;
 
   constructor(options: LiveKitPreviewRoomOptions = {}) {
@@ -130,6 +140,7 @@ export class LiveKitPreviewRoomController implements ILiveKitRoomController {
     this.turnMs = options.TurnMs ?? DEFAULT_TURN_MS;
     this.requestShare = options.RequestScreenShare ?? RequestDisplayCapture;
     this.meterFor = options.MeterFor;
+    this.agentWatches = options.AgentWatches ?? true;
     this.Events = options.EventBus ?? new LiveKitRoomEventBus();
   }
 
@@ -251,6 +262,20 @@ export class LiveKitPreviewRoomController implements ILiveKitRoomController {
     await this.SetScreenShareEnabled(true, preferredSurface);
   }
 
+  /**
+   * Records whether you let agents see your camera and shared screen, as a meeting's server would, and raises
+   * `localMediaChanged`. Outside the room it does nothing.
+   */
+  public SetAgentVision(on: boolean): void {
+    const session = this.session;
+    if (!session || session.AgentVisionOn === on) {
+      return;
+    }
+    session.AgentVisionOn = on;
+    this.rebuildState();
+    this.Events.Emit('localMediaChanged', this.State.LocalMedia);
+  }
+
   // ── What the preview does not simulate ──────────────────────────────────────────
 
   /** Raises the cancelable `beforeSendData`; nobody else is in the room to receive the message. */
@@ -326,6 +351,7 @@ export class LiveKitPreviewRoomController implements ILiveKitRoomController {
       Speaker: this.people.length > 0 ? 0 : -1,
       Turns: null,
       Share: null,
+      AgentVisionOn: false,
     };
   }
 
@@ -451,14 +477,16 @@ export class LiveKitPreviewRoomController implements ILiveKitRoomController {
       return;
     }
     const media = session.Media.State;
-    const remote = this.people.map((person, index) => personView(session, person, index));
+    const watching = this.agentWatches;
+    const remote = this.people.map((person, index) => personView(session, person, index, watching));
     this.patchState({
       Status: 'connected',
       RoomName: LIVEKIT_PREVIEW_ROOM_NAME,
-      Local: localView(session, media),
+      Local: localView(session, media, watching),
       Remote: remote,
       ActiveSpeakerIdentities: remote.filter((p) => p.IsSpeaking).map((p) => p.Identity),
       LocalMedia: localMediaState(session, media),
+      AgentWatching: watching,
     });
   }
 
@@ -476,7 +504,7 @@ export class LiveKitPreviewRoomController implements ILiveKitRoomController {
 }
 
 /** Your view: your camera and share from the browser, and your microphone's level. */
-function localView(session: PreviewSession, media: MediaPreviewState): LiveKitParticipantView {
+function localView(session: PreviewSession, media: MediaPreviewState, watching: boolean): LiveKitParticipantView {
   const camera = media.CameraSource;
   const screen = session.Share?.Source ?? null;
   return {
@@ -490,6 +518,7 @@ function localView(session: PreviewSession, media: MediaPreviewState): LiveKitPa
     HasVideo: camera !== null,
     IsScreenSharing: screen !== null,
     ConnectionQuality: 'excellent',
+    AgentCanSee: session.AgentVisionOn && watching,
     Raw: session.Local,
     Media: {
       Video: { ...(camera ? { camera } : {}), ...(screen ? { screen } : {}) },
@@ -499,7 +528,7 @@ function localView(session: PreviewSession, media: MediaPreviewState): LiveKitPa
 }
 
 /** A simulated person's view: no camera, and a speaking level while it is their turn. */
-function personView(session: PreviewSession, person: LiveKitPreviewPerson, index: number): LiveKitParticipantView {
+function personView(session: PreviewSession, person: LiveKitPreviewPerson, index: number, watching: boolean): LiveKitParticipantView {
   const speaking = index === session.Speaker;
   return {
     Identity: person.Identity,
@@ -512,6 +541,7 @@ function personView(session: PreviewSession, person: LiveKitPreviewPerson, index
     HasVideo: false,
     IsScreenSharing: false,
     ConnectionQuality: 'excellent',
+    AgentCanSee: person.AgentCanSee === true && watching,
     Raw: session.Others[index],
     Media: { GetAudioLevel: speaking ? () => speechLevel(Date.now()) : () => 0 },
   };
@@ -525,6 +555,7 @@ function localMediaState(session: PreviewSession, media: MediaPreviewState): Liv
     CameraEnabled: media.Camera.Status === 'on',
     ScreenShareEnabled: share !== null,
     ...(share ? { ScreenShareSurface: share.Capture.Surface } : {}),
+    AgentVisionOn: session.AgentVisionOn,
   };
 }
 
@@ -567,5 +598,6 @@ function initialState(): LiveKitRoomState {
     NoiseFilterEnabled: false,
     BackgroundEffect: { Kind: 'none' },
     E2EEEnabled: false,
+    AgentWatching: false,
   };
 }

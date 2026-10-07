@@ -325,4 +325,21 @@ describe('MJLiveKitRoomComponent: the preview room (DOM)', () => {
     f.destroy();
     expect(media[0].Released).toBe(true);
   });
+
+  it('lets you choose what the agent sees, and the preview room records it at once', async () => {
+    const f = await render();
+    const button = (title: string) => f.nativeElement.querySelector(`button[title="${title}"]`) as HTMLButtonElement | null;
+    button('Let the agent see your camera and screen')?.click();
+    f.detectChanges();
+    expect(roomOf(f).State.LocalMedia.AgentVisionOn).toBe(true);
+    button('Stop letting the agent see your camera and screen')?.click();
+    f.detectChanges();
+    expect(roomOf(f).State.LocalMedia.AgentVisionOn).toBe(false);
+    expect(button('Let the agent see your camera and screen')).not.toBeNull();
+  });
+
+  it('offers no switch when the host turns it off', async () => {
+    const f = await render({ EnableAgentVisionControl: false });
+    expect(f.nativeElement.querySelector('button[title="Let the agent see your camera and screen"]')).toBeNull();
+  });
 });

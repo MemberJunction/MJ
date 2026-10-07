@@ -98,6 +98,12 @@ describe('ToMediaParticipant', () => {
         expect(participant.GetAudioLevel?.()).toBe(0.7);
     });
 
+    it('carries whether an agent can see the participant, for the tile', () => {
+        expect(ToMediaParticipant(view(fakeRaw({}), { AgentCanSee: true })).AgentCanSee).toBe(true);
+        expect(ToMediaParticipant(view(fakeRaw({}), { AgentCanSee: false })).AgentCanSee).toBeUndefined();
+        expect(ToMediaParticipant(view(fakeRaw({}))).AgentCanSee).toBeUndefined();
+    });
+
     it('shows media from outside LiveKit in place of the tracks and the level it covers', () => {
         const raw = fakeRaw({
             [Track.Source.Camera]: { track: new FakeTrack(), isMuted: false },

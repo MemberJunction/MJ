@@ -251,6 +251,11 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
   /** Allow leaving the room from the control bar. */
   @Input() public EnableLeaveControl = true;
   /**
+   * Offer the "Let the agent see" switch while an agent in the room watches ({@link LiveKitRoomState.AgentWatching}).
+   * The switch only asks: see {@link AgentVisionChange}.
+   */
+  @Input() public EnableAgentVisionControl = true;
+  /**
    * Turns the leave button into a Zoom/Teams-style split offering **Leave** vs. **End meeting for everyone**.
    * Purely presentational here — this generic component has no notion of "ending for everyone"; it just emits
    * {@link EndForAll} so the host (e.g. the MJ binding) can tear down agents/the room. Default `false` (plain Leave).
@@ -309,6 +314,12 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
    * {@link CanEndForAll}). The host should tear down the meeting (e.g. stop all agents), then disconnect.
    */
   @Output() public EndForAll = new EventEmitter<void>();
+  /**
+   * The user asked to let agents see their camera and shared screen (`true`) or to stop (`false`). The room changes
+   * nothing itself: the host records the choice (in a LiveKit room, the server sets the person's attribute), and the
+   * room shows it once its controller reports it.
+   */
+  @Output() public AgentVisionChange = new EventEmitter<boolean>();
   /** Fired when reconnection begins. */
   @Output() public Reconnecting = new EventEmitter<void>();
   /** Fired when reconnection succeeds. */
@@ -1020,6 +1031,11 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
   /** Whether the room is connected. */
   public get IsConnected(): boolean {
     return this.State.Status === 'connected';
+  }
+
+  /** Whether the bar offers the "Let the agent see" switch: the host allows it, and an agent in the room watches. */
+  public get ShowAgentVisionControl(): boolean {
+    return this.EnableAgentVisionControl && this.State.AgentWatching === true;
   }
 
   /** Whether the connection overlay should be visible. */

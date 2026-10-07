@@ -16,7 +16,7 @@ import { MediaControlsComponent, type MediaShareRequest } from '@memberjunction/
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="lk-bar">
-      @if (EnableMicrophoneControl || EnableCameraControl || EnableScreenShareControl) {
+      @if (EnableMicrophoneControl || EnableCameraControl || EnableScreenShareControl || ShowAgentVision) {
         <mj-media-controls
           [MicrophoneOn]="LocalMedia.MicrophoneEnabled"
           [CameraOn]="LocalMedia.CameraEnabled"
@@ -25,10 +25,13 @@ import { MediaControlsComponent, type MediaShareRequest } from '@memberjunction/
           [ShowCamera]="EnableCameraControl"
           [ShowShare]="EnableScreenShareControl"
           [ShowShareMenu]="EnableShareMenu"
+          [ShowAgentVision]="ShowAgentVision"
+          [AgentVisionOn]="AgentVisionOn"
           (MicrophoneToggled)="ToggleMicrophone.emit()"
           (CameraToggled)="ToggleCamera.emit()"
           (ShareRequested)="OnShareRequested($event)"
           (StopShareRequested)="ToggleScreenShare.emit()"
+          (AgentVisionToggled)="ToggleAgentVision.emit($event)"
         ></mj-media-controls>
       }
       @if (EnableLayoutSwitcher) {
@@ -277,6 +280,10 @@ export class LiveKitControlBarComponent {
   @Input() public EnableWhiteboard = false;
   /** Whether the whiteboard surface is currently active. */
   @Input() public WhiteboardActive = false;
+  /** Show the "Let the agent see" button: an agent in the room watches. */
+  @Input() public ShowAgentVision = false;
+  /** Whether the user lets agents see their camera and shared screen. */
+  @Input() public AgentVisionOn = false;
 
   // ── Intent outputs ─────────────────────────────────────────────────────────────────
   /** The user clicked the microphone toggle. */
@@ -299,6 +306,8 @@ export class LiveKitControlBarComponent {
   @Output() public ToggleLayoutMenu = new EventEmitter<void>();
   /** The user clicked the whiteboard toggle. */
   @Output() public ToggleWhiteboard = new EventEmitter<void>();
+  /** The user asked to let agents see their camera and screen (`true`) or to stop (`false`). */
+  @Output() public ToggleAgentVision = new EventEmitter<boolean>();
   /** The user clicked leave (they disconnect; any meeting continues for everyone else). */
   @Output() public Leave = new EventEmitter<void>();
   /** The user chose "End meeting for everyone" from the split-leave menu (only reachable when {@link CanEndForAll}). */

@@ -103,6 +103,7 @@ function buildMediaParticipant(view: LiveKitParticipantView): MediaParticipant {
         ConnectionQuality: view.ConnectionQuality,
         // The live level, not the view's snapshot: a meter reads it on every frame.
         GetAudioLevel: view.Media?.GetAudioLevel ?? (() => raw.audioLevel),
+        ...(view.AgentCanSee ? { AgentCanSee: true } : {}),
     };
 }
 

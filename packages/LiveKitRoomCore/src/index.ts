@@ -27,6 +27,7 @@ export {
 } from './audio-meter';
 
 export { LiveKitMediaPreview } from './livekit-preview';
+export { LIVEKIT_AGENT_CAN_SEE_ATTRIBUTE, LIVEKIT_AGENT_WATCHES_ATTRIBUTE } from './types';
 export { ToMediaParticipant, ToMediaDevice, ToMediaDeviceKind, ToLiveKitDeviceKind, ToScreenShareCaptureOptions } from './media-adapters';
 export {
   LiveKitPreviewRoomController,

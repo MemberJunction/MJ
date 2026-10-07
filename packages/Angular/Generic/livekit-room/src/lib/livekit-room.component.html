@@ -185,6 +185,8 @@
           [EnableLayoutSwitcher]="EnableLayoutSwitcher"
           [EnableWhiteboard]="ShowWhiteboard"
           [WhiteboardActive]="WhiteboardActive"
+          [ShowAgentVision]="ShowAgentVisionControl"
+          [AgentVisionOn]="State.LocalMedia.AgentVisionOn ?? false"
           (ToggleMicrophone)="onToggleMicrophone()"
           (ToggleCamera)="onToggleCamera()"
           (ToggleScreenShare)="onToggleScreenShare()"
@@ -195,6 +197,7 @@
           (ToggleLayoutMenu)="onToggleLayoutMenu()"
           (ToggleRecording)="onToggleRecording()"
           (ToggleWhiteboard)="onToggleWhiteboard()"
+          (ToggleAgentVision)="AgentVisionChange.emit($event)"
           (Leave)="Leave()"
           (EndForAll)="EndForAll.emit()"
         ></mj-livekit-control-bar>

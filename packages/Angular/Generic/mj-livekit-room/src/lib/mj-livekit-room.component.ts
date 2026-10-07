@@ -131,6 +131,7 @@ export interface AgentInRoom {
         [ShowAgentState]="ShowAgentState"
         [ShowWhiteboard]="ShowWhiteboard"
         [ShowPreJoin]="ShowPreJoin"
+        [EnableAgentVisionControl]="EnableAgentVisionControl"
         [ShowRecordingControl]="EnableRecording && Mode !== 'preview'"
         [IsRecording]="isRecording"
         [E2EEPassphrase]="E2EEPassphrase"
@@ -141,6 +142,7 @@ export interface AgentInRoom {
         [PipRects]="PipRects"
         (TileMovesChange)="OnTileMovesChange($event)"
         (PipRectsChange)="OnPipRectsChange($event)"
+        (AgentVisionChange)="OnAgentVisionChange($event)"
         (Connected)="Connected.emit($event)"
         (Disconnected)="Disconnected.emit($event)"
         (EndForAll)="EndMeeting()"
@@ -661,6 +663,8 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
   @Input() public ShowWhiteboard = false;
   /** @see LiveKitRoomComponent.ShowPreJoin */
   @Input() public ShowPreJoin = false;
+  /** @see LiveKitRoomComponent.EnableAgentVisionControl */
+  @Input() public EnableAgentVisionControl = true;
   /** Enable the server-authorized recording control (composite egress). */
   @Input() public EnableRecording = false;
   /** @see LiveKitRoomComponent.E2EEPassphrase */
@@ -820,6 +824,15 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
   public OnPipRectsChange(rects: ReadonlyMap<string, MediaPipRect>): void {
     this.PipRects = rects;
     this.layoutPrefs.SavePipRects(rects);
+  }
+
+  /**
+   * The user chose whether agents may see their camera and screen. The preview room records it at once. A meeting
+   * room can't: participant tokens can't change their own attributes, so a meeting's consent has to be set by the server.
+   */
+  public OnAgentVisionChange(on: boolean): void {
+    const controller = this.roomComponent?.Controller;
+    if (controller instanceof LiveKitPreviewRoomController) controller.SetAgentVision(on);
   }
 
   /**
