@@ -1,14 +1,15 @@
 import { ActionResultSimple, RunActionParams, ActionParam } from "@memberjunction/actions-base";
-import { RegisterClass } from "@memberjunction/global";
+import { NormalizeUUID, RegisterClass } from "@memberjunction/global";
 import { BaseFileStorageAction } from "./base-file-storage.action";
 import { BaseAction } from "@memberjunction/actions";
-import { FileStorageEngine } from "@memberjunction/storage";
+import { FileStorageEngine, StorageAccessEvaluator } from "@memberjunction/storage";
 
 /**
  * Action that retrieves a list of configured file storage accounts.
  *
- * This action returns storage accounts that are configured in the enterprise model,
- * along with their associated provider information. Storage accounts link to
+ * This action returns the storage accounts the caller may read (`StorageAccessEvaluator`, evaluated per call against
+ * `MJ: File Storage Account Permissions`) — an account the caller is refused is not listed — along with their
+ * associated provider information. Storage accounts link to
  * providers (Google Drive, Dropbox, etc.) and credentials managed at the org level.
  *
  * This is useful for AI agents to discover what storage accounts are available
@@ -42,9 +43,12 @@ export class ListStorageAccountsAction extends BaseFileStorageAction {
         try {
             await FileStorageEngine.Instance.Config(false, params.ContextUser);
 
-            // Use cached metadata from the engine — no RunView needed
-            const accountsWithProviders = FileStorageEngine.Instance.AccountsWithProviders
-                .filter(a => a.provider.IsActive !== false);
+            // Use cached metadata from the engine, keeping only active accounts the caller may read
+            const active = FileStorageEngine.Instance.AccountsWithProviders.filter(a => a.provider.IsActive !== false);
+            const readable = await StorageAccessEvaluator.Instance.AccessibleAccountIDs(
+                active.map(a => a.account.ID), params.ContextUser, 'Read'
+            );
+            const accountsWithProviders = active.filter(a => readable.has(NormalizeUUID(a.account.ID)));
 
             const availableAccounts: Array<{
                 Name: string;
@@ -56,7 +60,7 @@ export class ListStorageAccountsAction extends BaseFileStorageAction {
             }> = [];
 
             for (const { account, provider } of accountsWithProviders) {
-                const supportsSearch = provider.Get('SupportsSearch') ?? false;
+                const supportsSearch = provider.SupportsSearch ?? false;
 
                 // Skip if filtering for search-only and this provider doesn't support it
                 if (searchSupportedOnly && !supportsSearch) {

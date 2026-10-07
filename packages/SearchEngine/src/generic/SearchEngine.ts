@@ -34,7 +34,7 @@ import {
     ScopeBundle
 } from '@memberjunction/core-entities';
 import { BaseSingleton, EscapeSQLString, IsValidUUID, MJGlobal, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
-import { StorageAccessEvaluator } from '@memberjunction/storage';
+import { FileStorageEngine, StorageAccessEvaluator } from '@memberjunction/storage';
 import {
     SearchParams,
     SearchResult,
@@ -1073,8 +1073,8 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
 
         const checkable = results.filter(r => r.ResultType !== 'storage-file');
         if (checkable.length < results.length) {
-            LogStatus(`SearchEngine: ${results.length - checkable.length} storage result(s) refused under an audience — ` +
-                'storage permissions are evaluated for the caller only and cannot be re-checked per reader.');
+            LogStatus(`SearchEngine: ${results.length - checkable.length} storage result(s) dropped under an audience — ` +
+                'storage hits are re-checked for the caller only; per-reader storage checks are a follow-up.');
         }
 
         const survivors = await Promise.all(readers.map(reader => this.filterByPermissions(checkable, reader)));
@@ -2660,11 +2660,14 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
      * ones that pass into `permitted`.
      *
      * `ResultType` is set by whichever provider produced a result, so being typed `storage-file` proves nothing. A
-     * storage hit is kept only when BOTH hold:
+     * storage hit is kept only when ALL hold:
      * - its `ProviderId` — stamped by this engine on every result, overwriting whatever the provider set — names a
-     *   configured entry whose provider is a {@link StorageSearchProvider}; and
+     *   configured entry whose provider is a {@link StorageSearchProvider};
      * - the account it names (`RawMetadata.accountId`, as that provider writes it) is one `contextUser` may read now,
-     *   per `StorageAccessEvaluator` (per call; the account-without-rows rule lives there).
+     *   per `StorageAccessEvaluator` (per call; the account-without-rows rule lives there); and
+     * - the object it names (`RawMetadata.path` / `objectId`) does not back an `MJ: Files` row `contextUser` may not
+     *   read — the tracked-file rule `CreatePreAuthDownloadUrl` applies, so a hit never names (or excerpts) a file the
+     *   caller would be refused ({@link dropUnreadableTrackedStorageHits}).
      *
      * Anything else — no or a foreign `ProviderId`, missing or unparseable metadata, an evaluator failure or throw —
      * drops the result (fail closed). Order is restored by the caller.
@@ -2684,11 +2687,9 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                 'Read',
                 this.ProviderToUse
             );
-            for (const candidate of candidates) {
-                if (readable.has(NormalizeUUID(candidate.AccountID))) {
-                    permitted.push(candidate.Item);
-                }
-            }
+            const onReadableAccounts = candidates.filter(c => readable.has(NormalizeUUID(c.AccountID)));
+            const visible = await this.dropUnreadableTrackedStorageHits(onReadableAccounts, contextUser);
+            permitted.push(...visible.map(c => c.Item));
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
             LogError(`SearchEngine: Storage permission filtering failed — ${results.length} storage result(s) dropped: ${msg}`);
@@ -2696,29 +2697,81 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
     }
 
     /**
-     * The storage results that came from a configured {@link StorageSearchProvider} entry and name a well-formed
-     * account, paired with that account. Everything else is left out, which drops it.
+     * The tracked-file rule on storage hits: grouped by account, each account's hits are checked in one batched lookup
+     * against the `MJ: Files` rows on that account's provider (`StorageAccessEvaluator.UnreadableTrackedObjectKeys`,
+     * compared the way the account's driver addresses keys), and a hit whose path or object ID backs a row the caller
+     * may not read is dropped. An account whose provider or driver cannot be resolved loses all its hits (fail closed).
      */
-    private storageCandidates(results: SearchResultItem[]): Array<{ Item: SearchResultItem; AccountID: string }> {
+    private async dropUnreadableTrackedStorageHits(
+        candidates: Array<{ Item: SearchResultItem; AccountID: string; ObjectKeys: string[] }>,
+        contextUser: UserInfo
+    ): Promise<Array<{ Item: SearchResultItem; AccountID: string; ObjectKeys: string[] }>> {
+        const byAccount = new Map<string, Array<{ Item: SearchResultItem; AccountID: string; ObjectKeys: string[] }>>();
+        for (const candidate of candidates) {
+            const key = NormalizeUUID(candidate.AccountID);
+            byAccount.set(key, [...(byAccount.get(key) ?? []), candidate]);
+        }
+        const kept = await Promise.all([...byAccount.values()].map(group => this.readableTrackedStorageHits(group, contextUser)));
+        return kept.flat();
+    }
+
+    /** {@link dropUnreadableTrackedStorageHits} for one account's hits; any failure drops them all. */
+    private async readableTrackedStorageHits(
+        group: Array<{ Item: SearchResultItem; AccountID: string; ObjectKeys: string[] }>,
+        contextUser: UserInfo
+    ): Promise<Array<{ Item: SearchResultItem; AccountID: string; ObjectKeys: string[] }>> {
+        const accountID = group[0].AccountID;
+        try {
+            await FileStorageEngine.Instance.Config(false, contextUser, this.ProviderToUse);
+            const account = FileStorageEngine.Instance.GetAccountById(accountID);
+            if (!account) {
+                LogError(`SearchEngine: storage account ${accountID} is not in the storage cache — its ${group.length} hit(s) dropped`);
+                return [];
+            }
+            const driver = await FileStorageEngine.Instance.GetDriver(account.ID, contextUser);
+            const unreadable = await StorageAccessEvaluator.Instance.UnreadableTrackedObjectKeys(
+                account.ProviderID, group.flatMap(c => c.ObjectKeys), contextUser, this.ProviderToUse, driver
+            );
+            return group.filter(c => !c.ObjectKeys.some(key => unreadable.has(key)));
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            LogError(`SearchEngine: tracked-file check failed for storage account ${accountID} — its ${group.length} hit(s) dropped: ${msg}`);
+            return [];
+        }
+    }
+
+    /**
+     * The storage results that came from a configured {@link StorageSearchProvider} entry and name a well-formed account
+     * and at least one object key, paired with them. Everything else is left out, which drops it.
+     */
+    private storageCandidates(results: SearchResultItem[]): Array<{ Item: SearchResultItem; AccountID: string; ObjectKeys: string[] }> {
         const storageProviderIDs = new Set(
             this._providerEntries.filter(e => e.Provider instanceof StorageSearchProvider).map(e => NormalizeUUID(e.ID))
         );
-        const candidates: Array<{ Item: SearchResultItem; AccountID: string }> = [];
+        const candidates: Array<{ Item: SearchResultItem; AccountID: string; ObjectKeys: string[] }> = [];
         for (const item of results) {
             if (!item.ProviderId || !storageProviderIDs.has(NormalizeUUID(item.ProviderId))) continue;
-            const accountID = this.storageAccountIDOf(item);
-            if (accountID) candidates.push({ Item: item, AccountID: accountID });
+            const location = this.storageLocationOf(item);
+            if (location) candidates.push({ Item: item, ...location });
         }
         return candidates;
     }
 
-    /** The storage account a `storage-file` result names in `RawMetadata.accountId`, or null when absent or malformed. */
-    private storageAccountIDOf(item: SearchResultItem): string | null {
+    /**
+     * The account (`RawMetadata.accountId`) and object keys (`RawMetadata.path`, `RawMetadata.objectId`) a
+     * `storage-file` result names, or null when the account is absent or malformed or no object key is present.
+     */
+    private storageLocationOf(item: SearchResultItem): { AccountID: string; ObjectKeys: string[] } | null {
         if (!item.RawMetadata) return null;
         try {
-            const parsed: { accountId?: string | number | boolean | object | null } | null = JSON.parse(item.RawMetadata);
-            const accountId = parsed && typeof parsed === 'object' ? parsed.accountId : undefined;
-            return typeof accountId === 'string' && IsValidUUID(accountId) ? accountId : null;
+            type StorageMetadataValue = string | number | boolean | object | null;
+            const parsed: { accountId?: StorageMetadataValue; path?: StorageMetadataValue; objectId?: StorageMetadataValue } | null =
+                JSON.parse(item.RawMetadata);
+            if (!parsed || typeof parsed !== 'object') return null;
+            const accountId = parsed.accountId;
+            const objectKeys = [parsed.path, parsed.objectId].filter((k): k is string => typeof k === 'string' && k.length > 0);
+            if (typeof accountId !== 'string' || !IsValidUUID(accountId) || objectKeys.length === 0) return null;
+            return { AccountID: accountId, ObjectKeys: objectKeys };
         } catch {
             return null;
         }

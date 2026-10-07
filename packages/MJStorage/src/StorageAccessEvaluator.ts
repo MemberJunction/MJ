@@ -4,11 +4,14 @@
  *
  * `MJ: File Storage Account Permissions` rows grant `CanRead` and/or `CanWrite` on a storage account to Everyone, to a
  * Role, or to a single User. Every consumer of that model asks {@link StorageAccessEvaluator}: the storage GraphQL routes
- * (MJServer `FileResolver`), the search lane (`StorageSearchProvider`) and the search engine's late permission filter.
+ * (MJServer `FileResolver`, `ArtifactFileResolver`), the File Storage core actions and the agent file handler, the
+ * search lane (`StorageSearchProvider`), the search engine's late permission filter, and every route that goes from an
+ * `MJ: Files` row to its object (through `FileStorageEngine.ResolveFileObject`).
  *
  * **Evaluated per call.** Nothing is snapshotted: each question reads the permission rows for exactly the accounts it
  * names, so a grant or a revocation is seen by the next call, and the answer for one user never depends on which user
- * happened to ask first.
+ * happened to ask first. Reads set `IgnoreMaxRows`, so the entity's row cap can never drop an account's rows (which the
+ * zero-rows rule would read as "open") or a tracked file's row.
  *
  * **Read with an elevated identity, decided for the caller.** The permission rows are read as the MJ system user
  * (resolved through `WellKnownUserSource`, the same way server-side `BaseEngine`s load). Reading them as the caller
@@ -16,11 +19,17 @@
  * below treats as open. When no elevated identity can be resolved, or any read fails, the answer is "no access"
  * (fail closed).
  *
+ * **The tracked-file rule.** An object that backs an `MJ: Files` row may be read, signed, listed, returned by search,
+ * overwritten, moved, copied or deleted only when the caller can read that row ({@link StorageAccessEvaluator.UnreadableTrackedObjectKeys}).
+ * Keys are compared through the account driver's `NormalizeObjectKey` and case-insensitively; a key whose meaning
+ * depends on the provider (`..`, `\`, `%2F`, ...) is refused outright (`IsSafeStorageObjectKey`).
+ *
  * @module @memberjunction/storage
  */
 import { IMetadataProvider, LogError, Metadata, RunView, RunViewResult, UserInfo, WellKnownUserSource } from '@memberjunction/core';
 import { BaseSingleton, EscapeSQLString, IsValidUUID, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import type { MJFileEntity, MJFileStorageAccountEntity, MJFileStorageAccountPermissionEntity } from '@memberjunction/core-entities';
+import { DEFAULT_OBJECT_KEY_NORMALIZER, IsSafeStorageObjectKey, StorageObjectKeyNormalizer } from './generic/ObjectKeys';
 
 /** What a caller wants to do with a storage account: list/download/search (`Read`) or upload/delete/move/copy into it (`Write`). */
 export type StorageAccountAccess = 'Read' | 'Write';
@@ -55,6 +64,24 @@ export class StorageAccountAccessDeniedError extends Error {
         this.name = 'StorageAccountAccessDeniedError';
     }
 }
+
+/**
+ * Thrown by {@link StorageAccessEvaluator.AssertTrackedObjectsReadable} when an object backs an `MJ: Files` row the caller
+ * may not read (or its key is one the checks refuse — see {@link IsSafeStorageObjectKey}). Carries
+ * {@link TRACKED_FILE_ACCESS_DENIED_MESSAGE}, the wording `GetFileContents` uses for a row it cannot load.
+ */
+export class TrackedFileAccessDeniedError extends Error {
+    public constructor(message: string = TRACKED_FILE_ACCESS_DENIED_MESSAGE) {
+        super(message);
+        this.name = 'TrackedFileAccessDeniedError';
+    }
+}
+
+/**
+ * How many values one `IN (...)` list carries. The tracked-file lookups are batched into lists of this size so a long
+ * listing or search page never becomes one oversized statement.
+ */
+const IN_LIST_BATCH_SIZE = 500;
 
 /** The account ID column read back from `MJ: File Storage Accounts`. */
 type AccountIDRow = Pick<MJFileStorageAccountEntity, 'ID'>;
@@ -189,12 +216,15 @@ export class StorageAccessEvaluator extends BaseSingleton<StorageAccessEvaluator
         }
         const inList = accountIDs.map(id => `'${EscapeSQLString(id)}'`).join(', ');
         const [accounts, permissions] = await RunView.FromMetadataProvider(md).RunViews<AccountIDRow | StorageAccountPermissionRow>([
-            { EntityName: 'MJ: File Storage Accounts', ExtraFilter: `ID IN (${inList})`, Fields: ['ID'], ResultType: 'simple' },
+            // IgnoreMaxRows on both: a truncated read would drop rows, and an account whose rows were all dropped would look
+            // like an account with none — which the zero-rows rule treats as open.
+            { EntityName: 'MJ: File Storage Accounts', ExtraFilter: `ID IN (${inList})`, Fields: ['ID'], ResultType: 'simple', IgnoreMaxRows: true },
             {
                 EntityName: 'MJ: File Storage Account Permissions',
                 ExtraFilter: `FileStorageAccountID IN (${inList})`,
                 Fields: ['FileStorageAccountID', 'Type', 'UserID', 'RoleID', 'CanRead', 'CanWrite'],
-                ResultType: 'simple'
+                ResultType: 'simple',
+                IgnoreMaxRows: true
             }
         ], reader);
         if (!accounts?.Success || !permissions?.Success) {
@@ -227,33 +257,49 @@ export class StorageAccessEvaluator extends BaseSingleton<StorageAccessEvaluator
      * on the account's storage provider resolves to it the way the server resolves every row to an object — `ProviderKey`,
      * or `Name` when `ProviderKey` is empty. The mapping is read with the elevated reader (so a row the user cannot see
      * still counts as tracked); whether the user may read each row is then asked as the user, through `RunView` (entity
-     * permission and row-level security both apply, as they do for `Load`). One batched lookup per call.
+     * permission and row-level security both apply, as they do for `Load`). Reads are batched and never truncated.
      *
-     * Untracked keys are never returned — they are governed by the account gate alone. Matching is case-insensitive, and
-     * `MJ: Files` rows are keyed by PROVIDER, not account, so a tracked row in another account on the same provider with
-     * the same key also counts: the error is always toward refusing. Fails closed — when the mapping cannot be read every
-     * key is returned, and when the user-side read fails every tracked key is.
+     * **Matching.** The key a caller sends and the key a row stores are both put through `keyNormalizer` — pass the
+     * account's driver, whose `NormalizeObjectKey` knows how that driver spells one object several ways (S3's key prefix;
+     * leading, trailing and repeated `/` everywhere) — and compared case-insensitively. The lookup finds rows whose stored
+     * key is the canonical key with or without a leading or trailing `/`, or the caller's own spelling; a row stored in any
+     * other non-canonical spelling (a driver prefix written into `ProviderKey`, doubled slashes) is not found, and MJ's
+     * own writers store neither.
+     *
+     * **Refused keys.** A key {@link IsSafeStorageObjectKey} rejects (a `.`/`..` segment, a backslash, a
+     * meaning-changing percent encoding, a control character) is always returned: its meaning depends on the provider,
+     * so it is never compared.
+     *
+     * Untracked keys are never returned — they are governed by the account gate alone. `MJ: Files` rows are keyed by
+     * PROVIDER, not account, so a tracked row in another account on the same provider with the same key also counts: the
+     * error is always toward refusing. Fails closed — when the mapping cannot be read every key is returned, and when the
+     * user-side read fails every tracked key is.
      *
      * @param fileStorageProviderID - The `MJ: File Storage Providers` ID of the account the objects live in
-     * @param objectKeys - Object keys as the driver reports them (path and/or provider object ID)
+     * @param objectKeys - Object keys as the caller or the driver spells them (path and/or provider object ID)
+     * @param keyNormalizer - The account's canonicalizer (its driver); defaults to `NormalizeStorageObjectKey`
      */
     public async UnreadableTrackedObjectKeys(
         fileStorageProviderID: string,
         objectKeys: string[],
         user: UserInfo,
-        provider?: IMetadataProvider
+        provider?: IMetadataProvider,
+        keyNormalizer: StorageObjectKeyNormalizer = DEFAULT_OBJECT_KEY_NORMALIZER
     ): Promise<Set<string>> {
-        const keys = Array.from(new Set(objectKeys.filter(k => typeof k === 'string' && k.length > 0)));
-        if (keys.length === 0) {
-            return new Set<string>();
-        }
+        const keys = Array.from(new Set((objectKeys ?? []).filter(k => typeof k === 'string' && k.length > 0)));
+        const refused = keys.filter(k => !IsSafeStorageObjectKey(k));
         try {
+            const canonical = this.canonicalKeys(keys.filter(k => IsSafeStorageObjectKey(k)), keyNormalizer);
+            if (canonical.size === 0) {
+                return new Set(refused);
+            }
             const md = provider ?? Metadata.Provider;
-            const tracked = await this.FindTrackedFiles(fileStorageProviderID, keys, md);
+            const tracked = await this.FindTrackedFiles(fileStorageProviderID, this.lookupValues(canonical), md);
             if (!tracked) {
                 return new Set(keys);
             }
-            return await this.keysBehindUnreadableRows(keys, tracked, user, md);
+            const unreadable = await this.keysBehindUnreadableRows(canonical, tracked, keyNormalizer, user, md);
+            return new Set([...refused, ...unreadable]);
         } catch (error) {
             LogError(`StorageAccessEvaluator: tracked-file check failed: ${error instanceof Error ? error.message : String(error)}`);
             return new Set(keys);
@@ -261,12 +307,30 @@ export class StorageAccessEvaluator extends BaseSingleton<StorageAccessEvaluator
     }
 
     /**
-     * Reads, with the elevated reader, the `MJ: Files` rows on `fileStorageProviderID` whose object key (`ProviderKey`, else
-     * `Name`) is one of `keys`. Returns `null` when the read could not be made. Protected so a host can change the mapping.
+     * Throws {@link TrackedFileAccessDeniedError} when any of `objectKeys` backs an `MJ: Files` row `user` may not read
+     * (or is a key the checks refuse). See {@link UnreadableTrackedObjectKeys} for the rule.
+     */
+    public async AssertTrackedObjectsReadable(
+        fileStorageProviderID: string,
+        objectKeys: string[],
+        user: UserInfo,
+        provider?: IMetadataProvider,
+        keyNormalizer: StorageObjectKeyNormalizer = DEFAULT_OBJECT_KEY_NORMALIZER
+    ): Promise<void> {
+        const unreadable = await this.UnreadableTrackedObjectKeys(fileStorageProviderID, objectKeys, user, provider, keyNormalizer);
+        if (unreadable.size > 0) {
+            throw new TrackedFileAccessDeniedError();
+        }
+    }
+
+    /**
+     * Reads, with the elevated reader, the `MJ: Files` rows on `fileStorageProviderID` whose stored object key
+     * (`ProviderKey`, else `Name`), lower-cased, is one of `lookupValues` (already lower-cased). Batched, never truncated.
+     * Returns `null` when the read could not be made. Protected so a host can change the mapping.
      */
     protected async FindTrackedFiles(
         fileStorageProviderID: string,
-        keys: string[],
+        lookupValues: string[],
         provider: IMetadataProvider
     ): Promise<TrackedFileRow[] | null> {
         if (!IsValidUUID(fileStorageProviderID)) {
@@ -277,19 +341,24 @@ export class StorageAccessEvaluator extends BaseSingleton<StorageAccessEvaluator
             LogError('StorageAccessEvaluator: no elevated reader (MJ system user) could be resolved — tracked-file check denied');
             return null;
         }
-        const inList = keys.map(k => `'${EscapeSQLString(k)}'`).join(', ');
-        const result = await RunView.FromMetadataProvider(provider).RunView<TrackedFileRow>({
-            EntityName: 'MJ: Files',
-            ExtraFilter: `ProviderID = '${EscapeSQLString(fileStorageProviderID)}' AND ` +
-                `(ProviderKey IN (${inList}) OR (ProviderKey IS NULL AND Name IN (${inList})))`,
-            Fields: ['ID', 'Name', 'ProviderKey'],
-            ResultType: 'simple'
-        }, reader);
-        if (!result.Success) {
-            LogError(`StorageAccessEvaluator: tracked-file lookup failed: ${result.ErrorMessage}`);
+        const providerFilter = `ProviderID = '${EscapeSQLString(fileStorageProviderID)}'`;
+        const views = this.batches(lookupValues).map(batch => {
+            const inList = batch.map(v => `'${EscapeSQLString(v)}'`).join(', ');
+            return {
+                EntityName: 'MJ: Files',
+                ExtraFilter: `${providerFilter} AND (LOWER(ProviderKey) IN (${inList}) OR (ProviderKey IS NULL AND LOWER(Name) IN (${inList})))`,
+                Fields: ['ID', 'Name', 'ProviderKey'],
+                ResultType: 'simple' as const,
+                IgnoreMaxRows: true
+            };
+        });
+        const results = await RunView.FromMetadataProvider(provider).RunViews<TrackedFileRow>(views, reader);
+        const failed = results.find(r => !r?.Success);
+        if (failed || results.length !== views.length) {
+            LogError(`StorageAccessEvaluator: tracked-file lookup failed: ${failed?.ErrorMessage ?? 'no result'}`);
             return null;
         }
-        return result.Results;
+        return results.flatMap(r => r.Results);
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -369,45 +438,89 @@ export class StorageAccessEvaluator extends BaseSingleton<StorageAccessEvaluator
         return 'FileStorageAccountID' in row;
     }
 
-    /** The keys whose tracked rows include one the user may not read. */
+    /** Each safe key paired with its lower-cased canonical form; keys that canonicalize to the root (`''`) name no object. */
+    private canonicalKeys(keys: string[], keyNormalizer: StorageObjectKeyNormalizer): Map<string, string> {
+        const canonical = new Map<string, string>();
+        for (const key of keys) {
+            const normalized = keyNormalizer.NormalizeObjectKey(key).toLowerCase();
+            if (normalized.length > 0) {
+                canonical.set(key, normalized);
+            }
+        }
+        return canonical;
+    }
+
+    /**
+     * The lower-cased stored spellings the lookup matches for each key: the canonical key bare, with a leading `/`, with a
+     * trailing `/`, with both — and the caller's own spelling, so a row stored exactly as the caller spells it is found.
+     */
+    private lookupValues(canonical: Map<string, string>): string[] {
+        const values = new Set<string>();
+        for (const [raw, key] of canonical) {
+            [key, `/${key}`, `${key}/`, `/${key}/`, raw.trim().toLowerCase()].forEach(v => values.add(v));
+        }
+        return Array.from(values);
+    }
+
+    /** `items` in consecutive batches of {@link IN_LIST_BATCH_SIZE}. */
+    private batches<T>(items: T[]): T[][] {
+        const out: T[][] = [];
+        for (let i = 0; i < items.length; i += IN_LIST_BATCH_SIZE) {
+            out.push(items.slice(i, i + IN_LIST_BATCH_SIZE));
+        }
+        return out;
+    }
+
+    /** The keys (as the caller spelled them) whose tracked rows include one the user may not read. */
     private async keysBehindUnreadableRows(
-        keys: string[],
+        canonical: Map<string, string>,
         tracked: TrackedFileRow[],
+        keyNormalizer: StorageObjectKeyNormalizer,
         user: UserInfo,
         provider: IMetadataProvider
     ): Promise<Set<string>> {
         const unreadable = new Set<string>();
-        if (tracked.length === 0) {
+        const wanted = new Set(canonical.values());
+        const rowsByKey = new Map<string, TrackedFileRow[]>();
+        for (const row of tracked) {
+            const key = this.trackedKeyOf(row, keyNormalizer);
+            if (wanted.has(key)) {
+                rowsByKey.set(key, [...(rowsByKey.get(key) ?? []), row]);
+            }
+        }
+        if (rowsByKey.size === 0) {
             return unreadable;
         }
-        const readable = await this.readableFileIDs(tracked.map(f => f.ID), user, provider);
-        for (const key of keys) {
-            const rows = tracked.filter(f => this.trackedKeyOf(f) === key.toLowerCase());
-            if (rows.some(f => !readable || !readable.has(NormalizeUUID(f.ID)))) {
-                unreadable.add(key);
+        const rowIDs = new Set(Array.from(rowsByKey.values()).flat().map(f => f.ID));
+        const readable = await this.readableFileIDs(Array.from(rowIDs), user, provider);
+        for (const [raw, key] of canonical) {
+            if ((rowsByKey.get(key) ?? []).some(f => !readable || !readable.has(NormalizeUUID(f.ID)))) {
+                unreadable.add(raw);
             }
         }
         return unreadable;
     }
 
-    /** The object key the server resolves an `MJ: Files` row to (`ProviderKey`, else `Name`), lowercased for matching. */
-    private trackedKeyOf(file: TrackedFileRow): string {
-        return (file.ProviderKey ?? file.Name ?? '').toLowerCase();
+    /** The canonical, lower-cased object key the server resolves an `MJ: Files` row to (`ProviderKey`, else `Name`). */
+    private trackedKeyOf(file: TrackedFileRow, keyNormalizer: StorageObjectKeyNormalizer): string {
+        return keyNormalizer.NormalizeObjectKey(file.ProviderKey ?? file.Name ?? '').toLowerCase();
     }
 
-    /** Which of `fileIDs` `user` may read, asked as the user; `null` when the read fails (the caller fails closed). */
+    /** Which of `fileIDs` `user` may read, asked as the user (batched, never truncated); `null` when a read fails. */
     private async readableFileIDs(fileIDs: string[], user: UserInfo, provider: IMetadataProvider): Promise<Set<string> | null> {
-        const inList = fileIDs.map(id => `'${EscapeSQLString(id)}'`).join(', ');
-        const result = await RunView.FromMetadataProvider(provider).RunView<Pick<MJFileEntity, 'ID'>>({
+        const views = this.batches(fileIDs).map(batch => ({
             EntityName: 'MJ: Files',
-            ExtraFilter: `ID IN (${inList})`,
+            ExtraFilter: `ID IN (${batch.map(id => `'${EscapeSQLString(id)}'`).join(', ')})`,
             Fields: ['ID'],
-            ResultType: 'simple'
-        }, user);
-        if (!result.Success) {
-            LogError(`StorageAccessEvaluator: reading MJ: Files as the user failed: ${result.ErrorMessage}`);
+            ResultType: 'simple' as const,
+            IgnoreMaxRows: true
+        }));
+        const results = await RunView.FromMetadataProvider(provider).RunViews<Pick<MJFileEntity, 'ID'>>(views, user);
+        const failed = results.find(r => !r?.Success);
+        if (failed || results.length !== views.length) {
+            LogError(`StorageAccessEvaluator: reading MJ: Files as the user failed: ${failed?.ErrorMessage ?? 'no result'}`);
             return null;
         }
-        return new Set(result.Results.map(r => NormalizeUUID(r.ID)));
+        return new Set(results.flatMap(r => r.Results).map(r => NormalizeUUID(r.ID)));
     }
 }

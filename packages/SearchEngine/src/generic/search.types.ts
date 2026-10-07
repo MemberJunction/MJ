@@ -142,8 +142,9 @@ export interface SearchParams {
      *    with no `ID` or with no `UserRoles` array — fails the search (`Success: false`, an error starting
      *    "SearchEngine: invalid Audience"); it is never skipped. `UserRoles: []` is legitimate and reads
      *    nothing, which empties the result.
-     * 2. **Expect no storage hits.** `storage-file` results are refused under an audience: their permissions
-     *    are evaluated by the storage lane for the caller only and cannot be re-checked per reader.
+     * 2. **Expect no storage hits.** `storage-file` results are dropped under an audience: storage hits are
+     *    re-checked (account permission and the tracked-file rule) for the caller only; per-reader storage
+     *    checks are a follow-up.
      * 3. **Show the room `fused`/`final` results.** `streamSearch`'s `provider` events never carry results
      *    (only `providerName`, `durationMs` and `resultCount`, for progress): they arrive before any permission pass.
      * 4. **Check each reader's scope entitlement yourself.** Scope entitlement (`SearchScopePermission`),

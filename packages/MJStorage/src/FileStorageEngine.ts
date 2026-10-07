@@ -9,6 +9,7 @@ import {
 } from '@memberjunction/core-entities';
 import { FileStorageBase } from './generic/FileStorageBase';
 import { InitializeDriverWithAccountCredentials } from './util';
+import { StorageAccessEvaluator, StorageAccountAccess } from './StorageAccessEvaluator';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -63,6 +64,19 @@ export interface UploadFileResult {
     Account: MJFileStorageAccountEntity;
     /** The storage provider that was used */
     Provider: MJFileStorageProviderEntity;
+}
+
+/** Where an `MJ: Files` row says its bytes live — what {@link FileStorageEngine.ResolveFileObject} reads. */
+export type StorageFileLocation = Pick<MJFileEntity, 'ProviderID' | 'ProviderKey' | 'Name'>;
+
+/** The account, driver and object key that serve an `MJ: Files` row, as {@link FileStorageEngine.ResolveFileObject} returns them. */
+export interface ResolvedFileObject {
+    /** The storage account the row's provider resolves to (the provider's first account). */
+    Account: MJFileStorageAccountEntity;
+    /** An initialized driver for that account. */
+    Driver: FileStorageBase;
+    /** The object key the row resolves to: `ProviderKey`, else `Name`. */
+    ObjectKey: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -328,7 +342,8 @@ export class FileStorageEngine extends BaseSingleton<FileStorageEngine> {
      *
      * **No permission check.** The driver cache is process-wide and this method does not ask whether `contextUser` may
      * use the account. Code acting for a user must call {@link StorageAccessEvaluator.AssertAccountAccess} (or
-     * `AccessibleAccountIDs`) first — the MJServer storage routes and the search lane do.
+     * `AccessibleAccountIDs`) first — the MJServer storage routes, the File Storage core actions and the search lane do —
+     * and, going from an `MJ: Files` row to its object, should use {@link ResolveFileObject} instead.
      *
      * @param accountId - The FileStorageAccount ID to get a driver for
      * @param contextUser - User context for credential decryption (used for on-demand init)
@@ -362,6 +377,56 @@ export class FileStorageEngine extends BaseSingleton<FileStorageEngine> {
         // Cache it for future calls
         this._driverCache.set(accountId, driver);
         return driver;
+    }
+
+    /**
+     * Resolves an `MJ: Files` row to the account, driver and object key that serve its bytes — and refuses unless
+     * `contextUser` may use that account for `access` and may read every `MJ: Files` row that tracks the object.
+     *
+     * Every route that goes from a file ID to bytes or a URL uses this: the row names only a PROVIDER (and `ProviderKey`
+     * / `Name` are written by whoever saved the row), so without the account gate a row could reach an account the caller
+     * is refused, and without the tracked-file rule a second row could alias an object whose own row the caller cannot
+     * read. Load the row as the caller first — this decides storage access, not whether the caller may see the row.
+     *
+     * @param file - The row's storage location (`ProviderID`, `ProviderKey`, `Name`)
+     * @param contextUser - The caller the decision is for
+     * @param access - `Read` to download or sign a URL; `Write` to delete, rename or overwrite the object
+     * @param provider - The metadata provider to read permissions through; defaults to `Metadata.Provider`
+     * @returns The resolved object, or `null` when the row's provider has no storage account
+     * @throws StorageAccountAccessDeniedError when the account refuses `access`;
+     *   TrackedFileAccessDeniedError when a row tracking the object is not readable by the caller
+     */
+    public async ResolveFileObject(
+        file: StorageFileLocation,
+        contextUser: UserInfo,
+        access: StorageAccountAccess = 'Read',
+        provider?: IMetadataProvider
+    ): Promise<ResolvedFileObject | null> {
+        const account = await this.firstAccountForProvider(file.ProviderID, contextUser, provider);
+        if (!account) {
+            return null;
+        }
+        const evaluator = StorageAccessEvaluator.Instance;
+        await evaluator.AssertAccountAccess(account.ID, contextUser, access, provider);
+        const driver = await this.GetDriver(account.ID, contextUser);
+        const objectKey = file.ProviderKey ?? file.Name;
+        await evaluator.AssertTrackedObjectsReadable(file.ProviderID, [objectKey], contextUser, provider, driver);
+        return { Account: account, Driver: driver, ObjectKey: objectKey };
+    }
+
+    /** The first storage account on `providerID`, refreshing the cache once when none is found; `null` when there is none. */
+    private async firstAccountForProvider(
+        providerID: string,
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
+    ): Promise<MJFileStorageAccountEntity | null> {
+        await this.Config(false, contextUser, provider);
+        let accounts = this.Base.GetAccountsByProviderID(providerID);
+        if (accounts.length === 0) {
+            await this.Config(true, contextUser, provider);
+            accounts = this.Base.GetAccountsByProviderID(providerID);
+        }
+        return accounts[0] ?? null;
     }
 
     /**
@@ -416,6 +481,9 @@ export class FileStorageEngine extends BaseSingleton<FileStorageEngine> {
         const rawPrefix = options.pathPrefix ?? `artifacts/${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}`;
         const cleanPrefix = rawPrefix.replace(/\.\./g, '').replace(/^[/\\]+/, '').replace(/[\x00-\x1f\x7f]/g, '').replace(/[/\\]+/g, '/').replace(/\/+$/, '') || 'artifacts';
         const storagePath = `${cleanPrefix}/${cleanFileName}`;
+        // Never overwrite an object that backs an `MJ: Files` row the caller cannot read (a caller-chosen pathPrefix can
+        // name one). The account gate is the caller's job — this method uploads to the account it is given.
+        await StorageAccessEvaluator.Instance.AssertTrackedObjectsReadable(resolved.provider.ID, [storagePath], contextUser, md, driver);
         const uploaded = await driver.PutObject(storagePath, content, mimeType);
         if (!uploaded) {
             throw new Error(`FileStorageEngine.UploadFile: PutObject returned false for path '${storagePath}'`);

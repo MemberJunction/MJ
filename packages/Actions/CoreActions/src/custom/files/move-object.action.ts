@@ -1,6 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
+import { StorageAccountAccess } from "@memberjunction/storage";
 import { BaseFileStorageAction } from "./base-file-storage.action";
 
 /**
@@ -26,6 +27,11 @@ import { BaseFileStorageAction } from "./base-file-storage.action";
 @RegisterClass(BaseAction, "File Storage: Move Object")
 export class MoveObjectAction extends BaseFileStorageAction {
 
+    /** {@inheritDoc BaseFileStorageAction.AccountAccess} — this action WRITES to the account. */
+    protected override get AccountAccess(): StorageAccountAccess {
+        return 'Write';
+    }
+
     /**
      * Move/rename a file object
      *
@@ -40,7 +46,7 @@ export class MoveObjectAction extends BaseFileStorageAction {
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
             // Get and initialize storage driver
-            const { driver, error } = await this.getDriverFromParams(params);
+            const { driver, account, error } = await this.getDriverFromParams(params);
             if (error) return error;
 
             // Get required parameters
@@ -59,6 +65,10 @@ export class MoveObjectAction extends BaseFileStorageAction {
                     "MISSING_DESTINATION"
                 );
             }
+
+            // Tracked-file rule on both ends: the source is read and removed, the destination may be overwritten
+            const refused = await this.CheckObjectsReadable(account!, driver!, [sourceObjectName, destinationObjectName], params.ContextUser);
+            if (refused) return refused;
 
             // Execute the move operation
             const success: boolean = await driver!.MoveObject(sourceObjectName, destinationObjectName);
