@@ -1,10 +1,14 @@
 /**
- * `resolveToolChoiceForTurn` — withholding tools on the turn the run will not survive (plan §8.3).
+ * `resolveToolChoiceForTurn` — forcing a terminal answer on the turn the run will not survive (plan §8.3).
+ *
+ * The final turn forces `complete_task` rather than `'none'`: under implicit control flow `'none'`
+ * forbids the only call that can store the result. The runner downgrades the named choice to
+ * `'none'` for a model on the hybrid, which never receives `complete_task`.
  *
  * The off-by-one is the whole point and is invisible by inspection: the loop increments
  * `TotalPromptIterations` immediately BEFORE composing the prompt, so inside the gate the counter
  * already includes the turn about to go out. `iterations >= limit` therefore means "this turn is
- * the last one", not "the last one has been used". Getting it backwards forces `'none'` one turn
+ * the last one", not "the last one has been used". Getting it backwards forces the final turn one turn
  * early — which reads as native tool calling quietly not working — or one turn late, which is the
  * bug the gate exists to prevent.
  */
@@ -12,6 +16,9 @@ import { describe, it, expect } from 'vitest';
 import { BaseAgent } from '../base-agent';
 import type { ChatToolChoice } from '@memberjunction/ai';
 import type { AIPromptParams, ExecuteAgentParams } from '@memberjunction/ai-core-plus';
+import { COMPLETE_TASK_TOOL } from '../native-tools/control-tools';
+
+const FORCED_COMPLETION: ChatToolChoice = { name: COMPLETE_TASK_TOOL };
 
 /** Reaches the protected gate without running a loop, and fakes the run counter it reads. */
 class Probe extends BaseAgent {
@@ -33,14 +40,14 @@ describe('resolveToolChoiceForTurn', () => {
         expect(new Probe(3).Choice(params(10))).toBe('auto');
     });
 
-    it("withholds them on the agent's last permitted iteration", () => {
+    it("forces complete_task on the agent's last permitted iteration", () => {
         // 10th of 10: the limit check fires the moment this turn returns, so a tool call here
         // would be executed and its result never read.
-        expect(new Probe(10).Choice(params(10))).toBe('none');
+        expect(new Probe(10).Choice(params(10))).toEqual(FORCED_COMPLETION);
     });
 
-    it('withholds them past the limit too, not only exactly on it', () => {
-        expect(new Probe(11).Choice(params(10))).toBe('none');
+    it('forces it past the limit too, not only exactly on it', () => {
+        expect(new Probe(11).Choice(params(10))).toEqual(FORCED_COMPLETION);
     });
 
     it('still offers them on the turn before the last', () => {
@@ -49,17 +56,17 @@ describe('resolveToolChoiceForTurn', () => {
 
     it('honours the per-run absolute override', () => {
         expect(new Probe(4).Choice(params(undefined, 5))).toBe('auto');
-        expect(new Probe(5).Choice(params(undefined, 5))).toBe('none');
+        expect(new Probe(5).Choice(params(undefined, 5))).toEqual(FORCED_COMPLETION);
     });
 
     it('falls back to the shared absolute cap when no limit is configured', () => {
         expect(new Probe(4999).Choice(params())).toBe('auto');
-        expect(new Probe(5000).Choice(params())).toBe('none');
+        expect(new Probe(5000).Choice(params())).toEqual(FORCED_COMPLETION);
     });
 
     it('takes whichever limit binds first', () => {
         // A generous absolute cap must not rescue a turn the per-agent limit has already ended.
-        expect(new Probe(3).Choice(params(3, 5000))).toBe('none');
+        expect(new Probe(3).Choice(params(3, 5000))).toEqual(FORCED_COMPLETION);
     });
 
     it('offers tools when no run is in flight', () => {
@@ -69,7 +76,7 @@ describe('resolveToolChoiceForTurn', () => {
         expect(new Probe(0).Choice(params(10))).toBe('auto');
     });
 
-    it('ignores a non-positive configured limit rather than forcing none forever', () => {
+    it('ignores a non-positive configured limit rather than forcing completion forever', () => {
         expect(new Probe(1).Choice(params(0))).toBe('auto');
     });
 });

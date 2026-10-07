@@ -253,9 +253,43 @@ EXCEPTION WHEN invalid_table_definition THEN
     view_name   TEXT,
     relkind     CHAR(1),
     definition  TEXT,
-    grants_sql  TEXT
+    grants_sql  TEXT,
+    depth       INT
   ) ON COMMIT DROP;
   DELETE FROM _vw_regen_deps;
+
+  -- Every view that DROP ... CASCADE removes: direct dependents AND theirs, transitively.
+  -- Capturing only direct dependents restored vwTestRuns after a vwTestSuiteRuns regen but
+  -- not vwConversations / vwConversationDetails, which select from vwTestRuns — they and their
+  -- CRUD functions stayed permanently missing. depth is the LONGEST path from the target, so
+  -- replaying in depth order always recreates a view after every view it reads.
+  CREATE TEMP TABLE IF NOT EXISTS _vw_regen_dep_oids (
+    view_oid OID,
+    depth    INT
+  ) ON COMMIT DROP;
+  DELETE FROM _vw_regen_dep_oids;
+  INSERT INTO _vw_regen_dep_oids (view_oid, depth)
+  WITH RECURSIVE deps(view_oid, depth) AS (
+      SELECT DISTINCT dc.oid, 1
+      FROM pg_depend d
+      JOIN pg_rewrite r ON r.oid = d.objid AND d.classid = 'pg_rewrite'::regclass
+      JOIN pg_class dc ON dc.oid = r.ev_class AND dc.relkind IN ('v', 'm')
+      JOIN pg_class tc ON tc.oid = d.refobjid
+      JOIN pg_namespace tn ON tn.oid = tc.relnamespace
+      WHERE tn.nspname = '${schemaLit}'
+        AND tc.relname = '${viewNameLit}'
+        AND tc.relkind IN ('v', 'm')
+        AND dc.oid <> tc.oid
+    UNION
+      SELECT dc.oid, deps.depth + 1
+      FROM deps
+      JOIN pg_depend d ON d.refobjid = deps.view_oid
+      JOIN pg_rewrite r ON r.oid = d.objid AND d.classid = 'pg_rewrite'::regclass
+      JOIN pg_class dc ON dc.oid = r.ev_class AND dc.relkind IN ('v', 'm')
+      WHERE dc.oid <> deps.view_oid
+        AND deps.depth < 50
+  )
+  SELECT view_oid, MAX(depth) FROM deps GROUP BY view_oid;
 
   -- Capture dependent FUNCTIONS too. CASCADE drops every function with
   -- RETURNS SETOF <view> (the codegen-emitted spCreate/spUpdate/spDelete
@@ -295,8 +329,8 @@ EXCEPTION WHEN invalid_table_definition THEN
   --   - PUBLIC is grantee oid 0; pg_get_userbyid(0) returns 'unknown
   --     (OID=0)' so handle the PUBLIC case explicitly and use it as the
   --     literal 'PUBLIC' rather than quote_ident on the synthetic name.
-  INSERT INTO _vw_regen_deps (schema_name, view_name, relkind, definition, grants_sql)
-  SELECT DISTINCT
+  INSERT INTO _vw_regen_deps (schema_name, view_name, relkind, definition, grants_sql, depth)
+  SELECT
       dn.nspname,
       dc.relname,
       dc.relkind,
@@ -309,17 +343,11 @@ EXCEPTION WHEN invalid_table_definition THEN
            SELECT (aclexplode(dc.relacl)).grantee AS grantee_oid,
                   (aclexplode(dc.relacl)).privilege_type AS privilege
        ) g
-       WHERE g.privilege IN ('SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER'))
-  FROM pg_depend d
-  JOIN pg_rewrite r ON r.oid = d.objid AND d.classid = 'pg_rewrite'::regclass
-  JOIN pg_class dc ON dc.oid = r.ev_class AND dc.relkind IN ('v', 'm')
-  JOIN pg_namespace dn ON dn.oid = dc.relnamespace
-  JOIN pg_class tc ON tc.oid = d.refobjid
-  JOIN pg_namespace tn ON tn.oid = tc.relnamespace
-  WHERE tn.nspname = '${schemaLit}'
-    AND tc.relname = '${viewNameLit}'
-    AND tc.relkind IN ('v', 'm')
-    AND dc.oid <> tc.oid;
+       WHERE g.privilege IN ('SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER')),
+      o.depth
+  FROM _vw_regen_dep_oids o
+  JOIN pg_class dc ON dc.oid = o.view_oid
+  JOIN pg_namespace dn ON dn.oid = dc.relnamespace;
 
   -- Capture dependent functions. Two paths matter on PG:
   --   1. Functions whose RETURN type references the view (RETURNS SETOF
@@ -331,37 +359,31 @@ EXCEPTION WHEN invalid_table_definition THEN
   -- statement that we replay verbatim. We DO include RETURNS-only
   -- references because that's the dominant codegen pattern (sp* CRUD
   -- functions all RETURNS SETOF the matching vwX).
+  -- The set is the target view plus every view captured above, because CASCADE drops the
+  -- functions of each of them, not only the target's.
   INSERT INTO _vw_regen_fn_deps (schema_name, fn_name, fn_oid, definition)
   SELECT DISTINCT
       pn.nspname,
       pp.proname,
       pp.oid,
       pg_get_functiondef(pp.oid)
-  FROM pg_depend d
-  JOIN pg_proc pp ON pp.oid = d.objid AND d.classid = 'pg_proc'::regclass
+  FROM pg_proc pp
   JOIN pg_namespace pn ON pn.oid = pp.pronamespace
-  JOIN pg_class tc ON tc.oid = d.refobjid
-  JOIN pg_namespace tn ON tn.oid = tc.relnamespace
-  WHERE tn.nspname = '${schemaLit}'
-    AND tc.relname = '${viewNameLit}'
-    AND tc.relkind IN ('v', 'm')
-  UNION
-  SELECT DISTINCT
-      pn.nspname,
-      pp.proname,
-      pp.oid,
-      pg_get_functiondef(pp.oid)
-  FROM pg_depend d
-  JOIN pg_type pt ON pt.oid = d.refobjid AND d.refclassid = 'pg_type'::regclass
-  JOIN pg_proc pp ON pp.prorettype = pt.oid OR pt.typrelid = pp.oid
-  JOIN pg_namespace pn ON pn.oid = pp.pronamespace
-  WHERE EXISTS (
-      SELECT 1 FROM pg_class tc
-      JOIN pg_namespace tn ON tn.oid = tc.relnamespace
-      WHERE tc.reltype = pt.oid
-        AND tn.nspname = '${schemaLit}'
-        AND tc.relname = '${viewNameLit}'
-        AND tc.relkind IN ('v', 'm')
+  WHERE pp.prokind IN ('f', 'p')
+    AND EXISTS (
+      SELECT 1
+      FROM pg_class c
+      WHERE (c.oid IN (SELECT view_oid FROM _vw_regen_dep_oids)
+             OR c.oid = (SELECT tc.oid FROM pg_class tc
+                         JOIN pg_namespace tn ON tn.oid = tc.relnamespace
+                         WHERE tn.nspname = '${schemaLit}'
+                           AND tc.relname = '${viewNameLit}'
+                           AND tc.relkind IN ('v', 'm')))
+        AND (pp.prorettype = c.reltype
+             OR EXISTS (SELECT 1 FROM pg_depend d
+                        WHERE d.classid = 'pg_proc'::regclass
+                          AND d.objid = pp.oid
+                          AND d.refobjid = c.oid))
   );
 
   DROP VIEW IF EXISTS ${quotedView} CASCADE;
@@ -375,7 +397,7 @@ EXCEPTION WHEN invalid_table_definition THEN
   -- present in target environment), the just-recreated VIEW would also
   -- get rolled back and stay missing — the exact failure mode this
   -- wrapper exists to prevent.
-  FOR rec IN SELECT schema_name, view_name, relkind, definition, grants_sql FROM _vw_regen_deps LOOP
+  FOR rec IN SELECT schema_name, view_name, relkind, definition, grants_sql FROM _vw_regen_deps ORDER BY depth, view_name LOOP
     BEGIN
       IF rec.relkind = 'm' THEN
         EXECUTE 'CREATE MATERIALIZED VIEW ' || quote_ident(rec.schema_name) || '.' || quote_ident(rec.view_name) || ' AS ' || rec.definition;
@@ -409,6 +431,7 @@ EXCEPTION WHEN invalid_table_definition THEN
   END LOOP;
 
   DROP TABLE _vw_regen_deps;
+  DROP TABLE _vw_regen_dep_oids;
   DROP TABLE _vw_regen_fn_deps;
 END $vw_regen$;
 `;

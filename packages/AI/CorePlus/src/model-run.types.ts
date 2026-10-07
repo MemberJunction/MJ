@@ -1,5 +1,5 @@
 import type { UserInfo } from '@memberjunction/core';
-import type { AIAPIKey } from '@memberjunction/ai';
+import type { AIAPIKey, AICredentialScope } from '@memberjunction/ai';
 import type { MJAIPromptRunEntity } from '@memberjunction/core-entities';
 import type { ExecutionStatus, CancellationReason, ModelInfo, AIModelSelectionInfo } from './prompt.types';
 
@@ -139,6 +139,17 @@ export class AIModelRunParams {
    * ```
    */
   apiKeys?: AIAPIKey[];  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+
+  /**
+   * Which credentials this execution may spend. Omitted means `'Any'`: the run's own credentials,
+   * then the platform's (credential bindings, the vendor's default credential, environment keys).
+   *
+   * `'RuntimeOnly'` restricts it to what the caller supplied — {@link apiKeys}, or a prompt's
+   * per-request `credentialId`. A model-vendor candidate whose driver class the run carries no key
+   * for is unavailable, so selection and failover stay on the caller's own keys and a run they do not
+   * cover fails with a "no valid API credentials" error instead of running on the platform's account.
+   */
+  CredentialScope?: AICredentialScope;
 
   /**
    * Whether to enable verbose logging during prompt execution.

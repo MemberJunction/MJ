@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT101 - Binary Fields and Vector Columns",
+    "Description": "Binary (varbinary / bytea) fields end to end, exercised CLIENT-FIRST over the real GraphQL wire (bundle 'binary-fields', BF1-BF6; guide: guides/BINARY_FIELDS_GUIDE.md). A binary field's value is a base64 string above the database; providers convert at the DB boundary, and RunView omits binary fields unless IncludeBinaryFields is set or a binary field is named in Fields. BF1 the seven binary vector companion columns (Entity Record Documents.VectorBinary, the EmbeddingVectorBinary column on AI Agent Notes / AI Agent Examples / Queries / Tags, and the two Component vector companions) exist, are binary, nullable, and sit beside their JSON vector column. BF2 RunView omits binary fields by default, returns them as base64 when IncludeBinaryFields is set or when one is named in Fields, and a flagged read never leaks into a later unflagged read through the cache. BF3 every persisted binary vector decodes to whole, finite float32 values and agrees with its JSON companion to float32 precision (skips loudly when nothing has been embedded yet). BF4 (mutation) all 256 byte values survive create, Load, RunView, update and clear byte for byte. BF5 a non-base64 value is refused by validation before any INSERT, with a message naming base64. BF6 (mutation) a 1,536-dimension float32 vector saved as binary reads back bit-identical through a RunView that only names the field. BF4 and BF6 write throwaway MJ: Entity Record Documents rows under an existing Entity Document and Vector Index (skipping loudly when the install has neither), RecordID prefixed mj-it101-<timestamp> and DocumentText tagged (mj-integration-test — safe to delete), and delete them in a finally block; BF4 also proves the same row is returned WITHOUT its binary field by a default RunView.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Binary fields travel as base64 on every surface, are omitted unless requested, round-trip byte-for-byte, refuse non-base64 input, and the binary vector columns agree with their JSON companions."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "binary-fields"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "CF4EABCE-5943-4633-A4EE-8833B7B7EB52"
+  }
+}
