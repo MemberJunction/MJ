@@ -1,0 +1,97 @@
+import {
+    BaseEntity,
+    type EntityDeleteOptions,
+    type EntitySaveOptions,
+    type IMetadataProvider,
+    type ValidationResult,
+} from '@memberjunction/core';
+import { RegisterClass } from '@memberjunction/global';
+import { MJEntityFormContributionEntity } from '@memberjunction/core-entities';
+import {
+    ApplyFormScopeValidation,
+    FormScopeDeleteRefusal,
+    FormScopeRefusalResult,
+    FormScopeReplayRefusal,
+    type GuardedFormScopeRow,
+} from './FormScopeGuard';
+import { FormRowComponentGuardRefusal, type GuardedFormComponentRow } from './FormComponentGuard';
+
+/**
+ * Server-side `MJ: Entity Form Contributions` entity, enforcing who may write a panel at which scope.
+ *
+ * Anyone may manage their own personal panels. Creating, changing or removing one for a role
+ * or for everyone — and moving one between scopes in either direction — needs the
+ * `Manage Form Defaults` authorization. The rule lives in `@memberjunction/core-entities`
+ * (`FormScopeWriteRefusal`), shared with the browser, so this class only feeds it.
+ *
+ * All three write entry points are overridden, following `MJUserRoleEntityServer`:
+ * `Validate()` runs inside every normal `Save()`; `Save()` is overridden because a `ReplayOnly`
+ * save skips `Validate()` while still writing; and `Delete()` never calls `Validate()` at all.
+ * Anything less leaves a path around the rule.
+ *
+ * `Save()` also checks the component the row points at, on create or when `ComponentID` changes
+ * (`FormRowComponentGuardRefusal`). Without the grant the component must be the caller's own: used
+ * by at least one row and only by the caller's own personal rows, or used by no row and created by
+ * the caller, read from its Internal `Create` record change. With the grant, a component another
+ * user's personal row uses is refused for everyone, an Owner included, and any other is allowed.
+ * That check needs a query, so it runs in `Save()` rather than `Validate()`.
+ */
+@RegisterClass(BaseEntity, 'MJ: Entity Form Contributions')
+export class MJEntityFormContributionEntityServer extends MJEntityFormContributionEntity {
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        ApplyFormScopeValidation(this.scopeRow, this.scopeProvider, result);
+        return result;
+    }
+
+    public override async Save(options?: EntitySaveOptions): Promise<boolean> {
+        const refusal = FormScopeReplayRefusal(this.scopeRow, this.scopeProvider, options)
+            ?? await FormRowComponentGuardRefusal(this.componentRow);
+        if (refusal) {
+            this.RegisterResultHistoryEntry(FormScopeRefusalResult(this.IsSaved ? 'update' : 'create', refusal));
+            return false;
+        }
+        return super.Save(options);
+    }
+
+    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+        const refusal = FormScopeDeleteRefusal(this.scopeRow, this.scopeProvider);
+        if (refusal) {
+            this.RegisterResultHistoryEntry(FormScopeRefusalResult('delete', refusal));
+            return false;
+        }
+        return super.Delete(options);
+    }
+
+    /**
+     * This row as the scope guard reads it. Built here because `ActiveUser` is protected on
+     * `BaseEntity`, so only the subclass itself can hand it over.
+     */
+    private get scopeRow(): GuardedFormScopeRow {
+        return {
+            IsSaved: this.IsSaved,
+            ActiveUser: this.ActiveUser,
+            Scope: this.Scope,
+            UserID: this.UserID,
+            GetFieldByName: (name: string) => this.GetFieldByName(name),
+        };
+    }
+
+    /** This row as the component check reads it. */
+    private get componentRow(): GuardedFormComponentRow {
+        return {
+            IsSaved: this.IsSaved,
+            ActiveUser: this.ActiveUser,
+            ID: this.ID,
+            ComponentID: this.ComponentID,
+            GetFieldByName: (name: string) => this.GetFieldByName(name),
+            RunViewProvider: this.RunViewProviderToUse,
+            MetadataProvider: this.scopeProvider,
+        };
+    }
+
+    /** The provider the caller's authorizations are read from. */
+    private get scopeProvider(): IMetadataProvider {
+        return this.ProviderToUse as unknown as IMetadataProvider;
+    }
+}

@@ -37,6 +37,7 @@ import {
     IsMaterializedDataSource,
     RunViewResult,
     RunViewWithCacheCheckParams,
+    RunViewDatabaseStatus,
     RunViewsWithCacheCheckResponse,
     RunViewWithCacheCheckResult,
     RunQueryParams,
@@ -55,6 +56,7 @@ import {
     DatasetStatusResultType,
     DatasetStatusEntityUpdateDateType,
     IMetadataProvider,
+    ProviderConfigDataBase,
     UserInfo,
     LocalCacheManager,
     CachedRunViewResult,
@@ -76,7 +78,7 @@ import {
     QueryInfo,
 } from '@memberjunction/core';
 
-import { MJGlobal, NormalizeUUID, SQLExpressionValidator, UUIDsEqual } from '@memberjunction/global';
+import { BytesToBase64, IsByteArray, MJGlobal, NormalizeUUID, SQLExpressionValidator, UUIDsEqual } from '@memberjunction/global';
 import { QueryPagingEngine } from './queryPagingEngine.js';
 // QueryParameterProcessor is now called internally by RenderPipeline
 import { createHash } from 'node:crypto';
@@ -84,7 +86,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { SqlLoggingSessionImpl } from './SqlLogger.js';
 import { SqlLoggingOptions, SqlLoggingSession } from './types.js';
 import { SQLDialect, GetDialect } from '@memberjunction/sql-dialect';
-import { SQLParser } from '@memberjunction/sql-parser';
+import { SQLParser, IsReadOnlyQuery } from '@memberjunction/sql-parser';
 // QueryCompositionEngine is now owned by RenderPipeline
 import { RenderPipeline, type RenderResult } from './renderPipeline.js';
 import { CRUDSprocType, UseJsonArgShape } from './crudSprocFieldRules.js';
@@ -107,6 +109,7 @@ import { QueueManager } from '@memberjunction/queue';
 import { BuildEntityActionDispatchKey, EntityActionDispatchGuard, EntityActionEngineServer } from '@memberjunction/actions';
 import { ActionResult, BuildEntityChangeContext } from '@memberjunction/actions-base';
 import { TransactionFrameTracker } from './TransactionFrameTracker';
+import { CountOnlyBatchCoalescer, CountOnlyRow, IsCoalescibleCountBatch } from './countOnlyBatch';
 import { EncryptionEngine } from '@memberjunction/encryption';
 import { GeoCodeSyncService, GeocodeResult } from '@memberjunction/geo-core';
 
@@ -124,6 +127,12 @@ export interface ExecuteSQLBatchOptions {
     /** Run on the pool even while an ambient transaction is open — see ExecuteSQLOptions.ignoreAmbientTransaction (#4514). */
     ignoreAmbientTransaction?: boolean;
 }
+
+/**
+ * Execution options for SQL a caller supplied rather than a saved query (ad-hoc SQL, transient test
+ * queries): run it read-only and roll back, so it can neither write nor leave session state behind.
+ */
+const CALLER_SQL_OPTIONS: ExecuteSQLOptions = { readOnlyTransaction: true, description: 'caller-supplied query' };
 
 /** A {@link GenericDatabaseProvider.RunAfterCommit} task waiting for the outermost commit. */
 interface PostCommitEntry {
@@ -223,6 +232,20 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      */
     public SetLocalStorageProvider(provider: ILocalStorageProvider): void {
         this._localStorageProvider = provider;
+    }
+
+    /**
+     * Installs {@link ProviderConfigDataBase.LocalStorageProvider}, when the configuration carries
+     * one, before the base configuration loads metadata. A server fleet passes its shared (Redis)
+     * store this way so the metadata load and the engines loaded at startup use it from the first
+     * read: the first server to start fills the shared cache, and the others read it instead of
+     * each querying the database and broadcasting what they loaded.
+     */
+    public override async Config(data: ProviderConfigDataBase, providerToUse?: IMetadataProvider): Promise<boolean> {
+        if (data?.LocalStorageProvider) {
+            this.SetLocalStorageProvider(data.LocalStorageProvider);
+        }
+        return super.Config(data, providerToUse);
     }
 
     /**************************************************************************/
@@ -820,6 +843,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     ): Promise<Record<string, unknown>[]> {
         if (!rows || rows.length === 0) return rows;
 
+        // Step 0: binary columns → base64. Drivers return varbinary/bytea as byte arrays (Node
+        // Buffers); BaseEntity, the caches and every transport hold binary values as base64
+        // strings, so the conversion happens once, here, for every row a provider returns.
+        // Applies to external entities too — their drivers return Buffers just the same.
+        this.ConvertBinaryFieldsToBase64(rows, entityInfo.BinaryFields);
+
         // Step 1: Platform-specific datetime adjustment (virtual hook).
         // SKIP for external entities: AdjustDatetimeFields applies THIS provider's platform correction
         // (e.g. SQL Server appends 'Z' to compensate for how tedious marshals datetimes from the LOCAL
@@ -862,6 +891,62 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
             return processedRow;
         }));
+    }
+
+    /**
+     * Public entry point to {@link PostProcessRows} for code that runs SQL outside the provider's
+     * own read paths but returns entity rows — the transaction groups. Every row a provider hands
+     * back must pass through here, so binary columns become base64, datetimes are adjusted and
+     * encrypted fields are decrypted no matter which path saved the record.
+     *
+     * @param rows - Raw rows for `entityInfo`.
+     * @param entityInfo - The entity the rows belong to.
+     * @param contextUser - The user the rows are processed for (decryption runs as this user).
+     * @returns The processed rows.
+     */
+    public async ProcessEntityRows(rows: Record<string, unknown>[], entityInfo: EntityInfo, contextUser?: UserInfo): Promise<Record<string, unknown>[]> {
+        if (!rows || rows.length === 0) return rows;
+        return this.PostProcessRows(rows, entityInfo, contextUser as UserInfo);
+    }
+
+    /**
+     * Converts the byte-array values of an entity's binary fields to base64 strings, in place.
+     *
+     * Database drivers return `varbinary` / `binary` / `image` (SQL Server) and `bytea`
+     * (PostgreSQL) columns as `Uint8Array`s (Node `Buffer`s). MemberJunction's representation of
+     * a binary value above the provider is a base64 string, so it is JSON-safe for dirty tracking,
+     * Record Changes, the RunView caches and every transport. Values that are already strings,
+     * null or absent are left untouched, which makes the conversion idempotent.
+     *
+     * @param rows - Rows as returned by the driver; mutated in place.
+     * @param binaryFields - The entity's binary fields (`EntityInfo.BinaryFields`).
+     */
+    protected ConvertBinaryFieldsToBase64(rows: Record<string, unknown>[], binaryFields: EntityFieldInfo[]): void {
+        if (binaryFields.length === 0) return;
+        for (const row of rows) {
+            for (const field of binaryFields) {
+                const value = row[field.Name];
+                if (IsByteArray(value)) row[field.Name] = BytesToBase64(value);
+            }
+        }
+    }
+
+    /**
+     * Converts every byte-array value in a set of rows to a base64 string, in place. For results
+     * with no entity metadata, such as RunQuery and ad-hoc SQL, where binary columns can only be
+     * recognised by value. See {@link ConvertBinaryFieldsToBase64}.
+     *
+     * @param rows - Rows as returned by the driver; mutated in place.
+     */
+    protected ConvertByteArrayValuesToBase64(rows: Record<string, unknown>[] | null | undefined): void {
+        if (!rows) return;
+        for (const row of rows) {
+            if (!row || typeof row !== 'object') continue;
+            for (const key of Object.keys(row)) {
+                const value = row[key];
+                if (IsByteArray(value)) row[key] = BytesToBase64(value);
+            }
+        }
     }
 
     /**************************************************************************/
@@ -1784,6 +1869,20 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * aggregates, parallel query execution, post-processing, and audit logging.
      */
     protected override async InternalRunView<T = unknown>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>> {
+        return this.RunViewCore<T>(params, contextUser);
+    }
+
+    /**
+     * The body of {@link InternalRunView}. `countExecutor`, when supplied, replaces the
+     * direct execution of a `count_only` view's COUNT query — {@link InternalRunViews} uses
+     * it to coalesce an all-`count_only` batch into one statement (see countOnlyBatch.ts).
+     * Everything before that step — permissions, RLS, filter screening — is unchanged.
+     */
+    protected async RunViewCore<T = unknown>(
+        params: RunViewParams,
+        contextUser?: UserInfo,
+        countExecutor?: (countSQL: string) => Promise<CountOnlyRow[]>,
+    ): Promise<RunViewResult<T>> {
         if (params?.Aggregates?.length) {
             LogStatus(`[GenericDatabaseProvider] InternalRunView received aggregates: entityName=${params.EntityName}, viewID=${params.ViewID}, viewName=${params.ViewName}, aggregateCount=${params.Aggregates.length}`);
         }
@@ -2116,7 +2215,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const maxRowsUsed = params.MaxRows || entityInfo.UserViewMaxRows;
             const willNeedCount = countSQL && (usingPagination || params.ResultType === 'count_only');
             if (willNeedCount) {
-                queries.push(this.ExecuteSQL(countSQL!, undefined, undefined, contextUser));
+                queries.push(countExecutor && params.ResultType === 'count_only'
+                    ? countExecutor(countSQL!)
+                    : this.ExecuteSQL(countSQL!, undefined, undefined, contextUser));
                 queryKeys.push('count');
             }
 
@@ -2219,8 +2320,31 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     protected override async InternalRunViews<T = unknown>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
+        if (IsCoalescibleCountBatch(params)) {
+            return this.RunCoalescedCountBatch<T>(params, contextUser);
+        }
         const promises = params.map((p) => this.InternalRunView<T>(p, contextUser));
         return Promise.all(promises);
+    }
+
+    /**
+     * All-`count_only` batch: every view runs the normal per-view path (so every
+     * security gate applies per view), but their COUNT queries are executed as ONE
+     * `UNION ALL` statement — one database round trip for, e.g., every related-section
+     * badge on a form. A view that fails keeps its own `Success:false` result; a connection
+     * failure is thrown, as on the per-view path.
+     */
+    protected async RunCoalescedCountBatch<T = unknown>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
+        const batch = new CountOnlyBatchCoalescer(
+            params.length,
+            (sql) => this.ExecuteSQL<Record<string, unknown>>(sql, undefined, undefined, contextUser),
+            (name) => this.QuoteIdentifier(name),
+            (error) => this.isConnectionError(error),
+        );
+        return Promise.all(params.map((p, index) =>
+            this.RunViewCore<T>(p, contextUser, (countSQL) => batch.Execute(index, countSQL))
+                .finally(() => batch.MarkSettled(index)),
+        ));
     }
 
     /**************************************************************************/
@@ -2293,6 +2417,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 if (!entityInfo) throw new Error(`Entity ${params.EntityName} not found in metadata`);
             }
 
+            // Binary columns are omitted from every implicit field list (saved-view columns and
+            // the no-Fields wildcard) unless requested; an explicit params.Fields entry is honoured.
+            const includeBinary = params.IncludeBinaryFields === true;
             const flsUser = contextUser ?? this.CurrentUser;
             const denied: Set<string> = params.ResultType !== 'entity_object' && flsUser && entityInfo.EnableFieldLevelSecurity
                 ? entityInfo.GetDeniedReadFields(flsUser)
@@ -2313,6 +2440,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     if (!c.hidden) {
                         if (c.EntityField) {
                             if (denied.has(c.EntityField.Name.trim().toLowerCase())) return; // silent narrowing
+                            if (!includeBinary && c.EntityField.IsBinaryFieldType) return; // binary only on request
                             fieldList.push(c.EntityField);
                         } else {
                             LogError(`View Field ${c.Name} doesn't match an Entity Field in entity ${entityInfo!.Name}.`);
@@ -2322,12 +2450,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 for (const ef of entityInfo.PrimaryKeys) {
                     if (!fieldList.find((f) => f.Name?.trim().toLowerCase() === ef.Name?.toLowerCase())) fieldList.push(ef);
                 }
-            } else if (denied.size > 0) {
-                // No explicit fields and no saved view would emit `SELECT *` — for a restricted
-                // user that pulls denied columns out of the database, so emit the explicit
-                // allowed-column list instead (PKs are unrestrictable and always included).
+            } else if (denied.size > 0 || (entityInfo.HasBinaryFields && !includeBinary)) {
+                // No explicit fields and no saved view would emit `SELECT *`. For a restricted
+                // user that pulls denied columns out of the database, and for an entity with
+                // binary columns it pulls large values nobody asked for — so emit the explicit
+                // column list instead (PKs are unrestrictable and always included).
                 for (const ef of entityInfo.Fields) {
-                    if (!denied.has(ef.Name.trim().toLowerCase())) fieldList.push(ef);
+                    if (denied.has(ef.Name.trim().toLowerCase())) continue;
+                    if (!includeBinary && ef.IsBinaryFieldType && !ef.IsPrimaryKey) continue;
+                    fieldList.push(ef);
                 }
             }
         } catch (e) {
@@ -2658,6 +2789,55 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     /**************************************************************************/
 
     /**
+     * Row count and newest `__mj_UpdatedAt` for each view, read from the database and never from
+     * a cache. Uses the same WHERE clause (filter, user search, row-level security, pre-run hooks)
+     * and the same batched status query as {@link RunViewsWithCacheCheck}. One entry per param,
+     * in order; a failure is reported per entry.
+     */
+    public async GetRunViewsDatabaseStatus(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewDatabaseStatus[]> {
+        const user = contextUser || this.CurrentUser;
+        const statuses: RunViewDatabaseStatus[] = params.map(() => ({ Success: false, ErrorMessage: 'not checked' }));
+        if (!user) {
+            return statuses.map(() => ({ Success: false, ErrorMessage: 'No user context available' }));
+        }
+        const items = await this.buildDatabaseStatusItems(params, user, statuses);
+        const results = await this.getBatchedServerCacheStatus(items, contextUser);
+        for (const { index } of items) {
+            const status = results.get(index);
+            statuses[index] = status?.success
+                ? { Success: true, RowCount: status.rowCount ?? 0, MaxUpdatedAt: status.maxUpdatedAt }
+                : { Success: false, ErrorMessage: status?.errorMessage ?? 'no status returned' };
+        }
+        return statuses;
+    }
+
+    /** Status-query inputs for {@link GetRunViewsDatabaseStatus}; entries that cannot be built record their error. */
+    private async buildDatabaseStatusItems(
+        params: RunViewParams[],
+        user: UserInfo,
+        statuses: RunViewDatabaseStatus[],
+    ): Promise<Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; whereSQL: string }>> {
+        const items: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; whereSQL: string }> = [];
+        for (let index = 0; index < params.length; index++) {
+            try {
+                const viewParams: RunViewParams = { ...params[index] };
+                this.ResolvePlatformSQLInParams(viewParams);
+                const hooked = await this.RunPreRunViewHooks(viewParams, user);
+                const entityInfo = hooked.EntityName ? this.EntityByName(hooked.EntityName) : undefined;
+                if (!entityInfo) {
+                    statuses[index] = { Success: false, ErrorMessage: `Entity ${hooked.EntityName ?? '(none)'} not found` };
+                    continue;
+                }
+                const whereSQL = await this.buildWhereClauseForCacheCheck(hooked, entityInfo, user);
+                items.push({ index, item: { params: hooked }, entityInfo, whereSQL });
+            } catch (e) {
+                statuses[index] = { Success: false, ErrorMessage: e instanceof Error ? e.message : String(e) };
+            }
+        }
+        return items;
+    }
+
+    /**
      * Smart cache validation for batch RunViews.
      * For each view request, if cacheStatus is provided, checks if the cache is current
      * by comparing MAX(__mj_UpdatedAt) and COUNT(*) with client's values.
@@ -2724,7 +2904,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     // ALL fields, for every user: server slots are full-width and shared, and
                     // field security narrows per request at read time via
                     // ApplyFieldSecurityProjection rather than at fetch time.
-                    p.Fields = this.ComputeRunViewFetchFields(widenEntity);
+                    this.ResolveIncludeBinaryFields(p, widenEntity);
+                    p.Fields = this.ComputeRunViewFetchFields(widenEntity, p);
                     if (requested) {
                         callerFieldsByIndex.set(i, ProviderBase.UnionFieldsWithPrimaryKeys(requested, widenEntity));
                     }
@@ -2861,6 +3042,18 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const noCacheStatusNeedsDB: Array<{ index: number; item: RunViewWithCacheCheckParams }> = [];
 
             for (const entry of itemsWithoutCacheCheck) {
+                // A param carrying BypassCache lands here because it is ineligible for a cache status,
+                // NOT because the caller has nothing cached — and those two must not be treated alike.
+                // Serving it from the server cache is precisely what it asked not to happen: its
+                // documented contract is "the query always hits the database", and it is the only way a
+                // client can escape a server slot that a missed invalidation left stale. The write side
+                // already refuses to store such a result (runViewCacheEligible starts with
+                // !param.BypassCache); this is the matching read-side gate.
+                if (entry.item.params.BypassCache) {
+                    LogStatusEx({ message: `    🚫 [SmartCache BYPASS] "${entry.item.params.EntityName || 'unknown'}" — BypassCache requested, going to the database`, verboseOnly: true });
+                    noCacheStatusNeedsDB.push(entry);
+                    continue;
+                }
                 if (LocalCacheManager.Instance.IsInitialized) {
                     const rlsWhereClause = this.ComputeRunViewRLSWhereClause(entry.item.params, contextUser);
                     const flsFieldsKey = this.ComputeRunViewFLSFingerprintKey(entry.item.params);
@@ -3032,6 +3225,23 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /**
+     * The freshness probe for one view: a row count, plus the newest `__mj_UpdatedAt` **when the
+     * entity has that column**. Selecting it unconditionally made the probe fail outright for an
+     * entity whose view does not carry it, instead of comparing by count alone the way
+     * `BaseEngine.SweepAgainstDatabase` documents.
+     */
+    protected BuildCacheStatusSQL(entityInfo: EntityInfo, effectiveView: string, whereSQL: string): string {
+        const from = `FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, effectiveView)}${whereSQL ? ' WHERE ' + whereSQL : ''}`;
+        const count = `COUNT(*) AS ${this.QuoteIdentifier('TotalRows')}`;
+        // `Fields` absent (a partial EntityInfo) degrades to the count-only probe rather than
+        // throwing: a freshness check must not be the thing that breaks a sweep.
+        if (!entityInfo.Fields?.some(f => f.IsUpdatedAtField)) {
+            return `SELECT ${count} ${from}`;
+        }
+        return `SELECT ${count}, MAX(${this.QuoteIdentifier('__mj_UpdatedAt')}) AS ${this.QuoteIdentifier('MaxUpdatedAt')} ${from}`;
+    }
+
+    /**
      * Executes cache status checks for multiple views.
      * Default: parallel individual queries (works on all platforms).
      * SQL Server overrides to use ExecuteSQLBatch for multi-result-set efficiency.
@@ -3052,7 +3262,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 // (Materialized reads are normally kept out of the client cache by runViewCacheEligible; this
                 // matches the SQL Server override and is defense-in-depth on the PG/default path.)
                 const effectiveView = await this.resolveEffectiveBaseView(entityInfo, item.params, contextUser);
-                const statusSQL = `SELECT COUNT(*) AS ${this.QuoteIdentifier('TotalRows')}, MAX(${this.QuoteIdentifier('__mj_UpdatedAt')}) AS ${this.QuoteIdentifier('MaxUpdatedAt')} FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, effectiveView)}${whereSQL ? ' WHERE ' + whereSQL : ''}`;
+                const statusSQL = this.BuildCacheStatusSQL(entityInfo, effectiveView, whereSQL);
                 const rows = await this.ExecuteSQL<Record<string, unknown>>(statusSQL, undefined, undefined, contextUser);
                 if (rows && rows.length > 0) {
                     const row = rows[0];
@@ -4136,6 +4346,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                         ]);
                         matExecutionTime = Date.now() - start;
                         rows = dataResult ?? [];
+                        this.ConvertByteArrayValuesToBase64(rows);
                         matTotalRowCount = countResult?.[0]?.TotalRowCount != null ? Number(countResult[0].TotalRowCount) : rows.length;
                     } else {
                         const timing = await this.executeQueryWithTiming(materializedSQL, contextUser, matPlan.parameters);
@@ -4223,6 +4434,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 if (!dataResult) throw new Error('Error executing paged query SQL');
 
                 paginatedResult = dataResult;
+                this.ConvertByteArrayValuesToBase64(paginatedResult);
                 totalRowCount = countResult?.[0]?.TotalRowCount != null
                     ? Number(countResult[0].TotalRowCount)
                     : paginatedResult.length;
@@ -4312,7 +4524,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         try {
             const validator = SQLExpressionValidator.Instance;
             const validation = validator.validateFullQuery(params.SQL!);
-            if (!validation.valid) {
+            const statementCheck = IsReadOnlyQuery(params.SQL!, this.Dialect);
+            if (!validation.valid || !statementCheck.IsReadOnly) {
                 return {
                     Success: false,
                     QueryID: '',
@@ -4321,20 +4534,20 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     RowCount: 0,
                     TotalRowCount: 0,
                     ExecutionTime: 0,
-                    ErrorMessage: validation.error || 'SQL validation failed',
+                    ErrorMessage: !validation.valid
+                        ? validation.error || 'SQL validation failed'
+                        : `Ad-hoc SQL must be a single read query: ${statementCheck.Reason}.`,
                 };
             }
 
-            const { result, executionTime } = await this.executeQueryWithTiming(params.SQL!, contextUser);
-
-            const { paginatedResult, totalRowCount } = this.applyQueryPagination(result, params);
+            const { rows, totalRowCount, executionTime } = await this.runAdhocSQL(params, contextUser);
 
             return {
                 Success: true,
                 QueryID: '',
                 QueryName: 'Ad-Hoc Query',
-                Results: paginatedResult,
-                RowCount: paginatedResult.length,
+                Results: rows,
+                RowCount: rows.length,
                 TotalRowCount: totalRowCount,
                 ExecutionTime: executionTime,
                 ErrorMessage: '',
@@ -4353,6 +4566,64 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 ErrorMessage: `Ad-hoc query execution failed: ${errorMessage}`,
             };
         }
+    }
+
+    /**
+     * Runs validated ad-hoc SQL. It is rendered the way caller-supplied SQL always is: composition
+     * tokens resolved, comments removed, and a single read query required. With `MaxRows` the
+     * database returns that page and a count runs beside it, as for saved queries, so the server
+     * sends one page rather than every row; without it every row is returned, offset by `StartRow`
+     * when one is given. `TimeoutSeconds` limits every statement the run sends.
+     */
+    private async runAdhocSQL(
+        params: RunQueryParams,
+        contextUser?: UserInfo,
+    ): Promise<{ rows: Record<string, unknown>[]; totalRowCount: number; executionTime: number }> {
+        const usePaging = QueryPagingEngine.ShouldPage(params.StartRow, params.MaxRows);
+        const startRow = QueryPagingEngine.ResolveStartRow(params.StartRow);
+        const rendered = RenderPipeline.Run(params.SQL!, {
+            Platform: this.PlatformKey as DatabasePlatform,
+            ContextUser: contextUser,
+            RequireReadStatement: true,
+            ...(usePaging ? { Paging: { StartRow: startRow, MaxRows: params.MaxRows! } } : {}),
+        });
+        const options = this.adhocSQLOptions(params);
+        if (!usePaging) {
+            const { result, executionTime } = await this.executeQueryWithTiming(rendered.FinalSQL, contextUser, undefined, options);
+            const { paginatedResult, totalRowCount } = this.applyQueryPagination(result, params);
+            return { rows: paginatedResult, totalRowCount, executionTime };
+        }
+        const start = Date.now();
+        const [dataResult, total] = await Promise.all([
+            this.ExecuteSQL<Record<string, unknown>>(rendered.FinalSQL, undefined, options, contextUser),
+            this.countAdhocRows(rendered.PagingResult?.CountSQL ?? null, options, contextUser),
+        ]);
+        const rows = dataResult ?? [];
+        return { rows, totalRowCount: total ?? startRow + rows.length, executionTime: Date.now() - start };
+    }
+
+    /**
+     * The total row count for a page of ad-hoc SQL, or `null` when it cannot be had. A count that
+     * fails does not fail the run: some queries page fine but cannot be counted (duplicate column
+     * names are legal in a result but not inside the count's wrap), so the caller reports a lower
+     * bound instead.
+     */
+    private async countAdhocRows(countSQL: string | null, options: ExecuteSQLOptions, contextUser?: UserInfo): Promise<number | null> {
+        if (!countSQL) return null;
+        try {
+            const countResult = await this.ExecuteSQL<{ TotalRowCount: number }>(countSQL, undefined, options, contextUser);
+            const total = Number(countResult?.[0]?.TotalRowCount);
+            return Number.isFinite(total) && total >= 0 ? Math.floor(total) : null;
+        } catch (e) {
+            LogError(`Ad-hoc query row count failed; reporting a lower-bound total. ${e instanceof Error ? e.message : String(e)}`);
+            return null;
+        }
+    }
+
+    /** The options every statement of an ad-hoc run uses: caller-SQL protections, plus its timeout. */
+    private adhocSQLOptions(params: RunQueryParams): ExecuteSQLOptions {
+        const seconds = params.TimeoutSeconds;
+        return seconds && seconds > 0 ? { ...CALLER_SQL_OPTIONS, timeoutMs: seconds * 1000 } : CALLER_SQL_OPTIONS;
     }
 
     /**
@@ -4553,7 +4824,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             finalSQL = resolved.finalSQL;
 
             // Execute
-            const { result, executionTime } = await this.executeQueryWithTiming(finalSQL, contextUser);
+            const { result, executionTime } = await this.executeQueryWithTiming(finalSQL, contextUser, undefined, CALLER_SQL_OPTIONS);
 
             return {
                 Success: true,
@@ -4609,6 +4880,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 Dependencies: spec.Dependencies,
                 OriginalSQL: spec.SQL,
                 MaxRows: spec.MaxRows,
+                RequireReadStatement: true,
             }
         );
 
@@ -4653,14 +4925,17 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         sql: string,
         contextUser?: UserInfo,
         parameters?: unknown[],
+        options?: ExecuteSQLOptions,
     ): Promise<{ result: Record<string, unknown>[]; executionTime: number }> {
         const start = Date.now();
-        const result = await this.ExecuteSQL<Record<string, unknown>>(sql, parameters, undefined, contextUser);
+        const result = await this.ExecuteSQL<Record<string, unknown>>(sql, parameters, options, contextUser);
         const executionTime = Date.now() - start;
 
         if (!result) {
             throw new Error('Error executing query SQL');
         }
+        // Query results carry no entity metadata, so binary columns are found by value.
+        this.ConvertByteArrayValuesToBase64(result);
 
         return { result, executionTime };
     }
@@ -5372,6 +5647,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             }
 
             let itemData = batchResults[i] || [];
+            // Binary columns become base64 whether or not the entity post-processing below runs —
+            // at boot there is no context user, and a raw Buffer must never reach the metadata
+            // cache or the wire (it serializes as {"type":"Buffer","data":[...]}).
+            this.ConvertByteArrayValuesToBase64(itemData);
 
             // Post-process rows for encryption/datetime
             if (itemData.length > 0) {
@@ -5615,9 +5894,21 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     /**
      * Validates columns for a dataset item and returns the column list string.
      * Returns null if columns are invalid.
+     *
+     * An item that names no columns selects every column EXCEPT binary ones, matching RunView's
+     * default (binary columns are large and rarely wanted; see guides/BINARY_FIELDS_GUIDE.md). A
+     * binary column can still be named explicitly. When the entity's metadata is not loaded yet —
+     * the first `MJ_Metadata` read at boot — the item falls back to `*`, and the rows' byte arrays
+     * are converted to base64 by the caller.
      */
     protected getColumnsForDatasetItem(item: Record<string, unknown>, datasetName: string): string | null {
         const specifiedColumns = item['Columns'] ? String(item['Columns']).split(',').map(col => col.trim()) : [];
+        if (specifiedColumns.length === 0) {
+            const entity = this.EntityByID(item['EntityID'] as string);
+            if (entity?.HasBinaryFields) {
+                return entity.Fields.filter(f => !f.IsBinaryFieldType).map(f => this.QuoteIdentifier(f.Name)).join(',');
+            }
+        }
         if (specifiedColumns.length > 0) {
             const entity = this.EntityByID(item['EntityID'] as string);
             if (!entity && this.Entities.length > 0) {
@@ -6124,19 +6415,70 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     public async ResetTransactionState(): Promise<void> {
         await this.WithTransactionLock(() => this.abandonDoomedTransaction());
         await this.drainIdlePostCommitTasks();
+        // The frames are gone, so no settle will ever close this instance's batch. Drop it here or
+        // its entities count as pending forever and every cached read of them misses.
+        this._openBatchLevels = 0;
+        await LocalCacheManager.Instance.AbandonEntityEventBatch(this);
     }
 
+    /**
+     * Cache maintenance for the saves inside a transaction waits for the outermost settle: one
+     * rewrite per cached slot on commit instead of one per save, and nothing written for work that
+     * is rolled back.
+     *
+     * The batch is opened HERE, on the raw primitive, not only in
+     * `DatabaseProviderBase.BeginEntityTransaction` — 41 call sites across the repo use
+     * `BeginTransaction()` directly, including new-user creation on first login, the magic-link
+     * service, the roles/users sync resolver, `MergeRecords` and every generated cascade-delete
+     * override. Those saves each published their own cache write, and a rollback left rows in the
+     * shared cache that were never committed. `BeginEntityTransaction` still opens
+     * its own level on top; the levels are depth-counted, so the batch applies once, at the
+     * outermost settle, either way.
+     */
     public async BeginTransaction(): Promise<void> {
-        return this.WithTransactionLock(() => this.beginTransactionCore());
+        await this.WithTransactionLock(() => this.beginTransactionCore());
+        LocalCacheManager.Instance.BeginEntityEventBatch(this);
+        this._openBatchLevels++;
+    }
+
+    /**
+     * Batch levels this provider has opened and not yet closed.
+     *
+     * The open happens only after a begin SUCCEEDS, while a commit or rollback closes in a
+     * `finally` — so a rollback issued for a begin that threw would close a level it never opened.
+     * That happens for real: a nested begin whose savepoint creation fails leaves the caller's
+     * catch to roll back, and the seventeen generated cascade-delete overrides are written exactly
+     * that way. Closing an outer unit of work's batch early un-batches the rest of its saves, which
+     * then write to the shared cache one by one — the uncommitted-rows-in-the-fleet failure the
+     * batch exists to prevent.
+     */
+    private _openBatchLevels = 0;
+
+    /** Closes one batch level, but only if this provider opened one. @internal */
+    private async endBatchLevelIfOpen(succeeded: boolean): Promise<void> {
+        if (this._openBatchLevels <= 0) {
+            return;
+        }
+        this._openBatchLevels--;
+        await LocalCacheManager.Instance.EndEntityEventBatch(this, succeeded);
     }
 
     public async CommitTransaction(): Promise<void> {
         // null = not the outermost commit, so nothing drains and the subclass hook does not run.
-        const committedTasks = await this.WithTransactionLock(async (): Promise<PostCommitEntry[] | null> => {
-            const outermost = this._transactionDepth === 1;
-            const tasks = await this.commitTransactionCore();
-            return outermost ? tasks : null;
-        });
+        let committedTasks: PostCommitEntry[] | null;
+        try {
+            committedTasks = await this.WithTransactionLock(async (): Promise<PostCommitEntry[] | null> => {
+                const outermost = this._transactionDepth === 1;
+                const tasks = await this.commitTransactionCore();
+                return outermost ? tasks : null;
+            });
+        } catch (e) {
+            // The commit failed: the rows may not be in the database, so the batch settles as a
+            // failure (its slots are invalidated) rather than being left open.
+            await this.endBatchLevelIfOpen(false);
+            throw e;
+        }
+        await this.endBatchLevelIfOpen(true);
         if (committedTasks) {
             await this.runPostCommitTasks(committedTasks);
             await this.AfterPhysicalCommit();
@@ -6145,7 +6487,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     public async RollbackTransaction(): Promise<void> {
-        await this.WithTransactionLock(() => this.rollbackTransactionCore());
+        try {
+            await this.WithTransactionLock(() => this.rollbackTransactionCore());
+        } finally {
+            await this.endBatchLevelIfOpen(false);
+        }
         await this.drainIdlePostCommitTasks();
     }
 

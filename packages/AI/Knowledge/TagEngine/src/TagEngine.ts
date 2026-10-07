@@ -1,8 +1,8 @@
-import { BaseSingleton, MJGlobal, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
+import { BaseSingleton, Float32VectorToBase64, MJGlobal, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { UserInfo, LogError, LogStatus, Metadata } from '@memberjunction/core';
 import { MJTagEntity, MJTaggedItemEntity, MJTagScopeEntity } from '@memberjunction/core-entities';
 import { TagEngineBase, TagTreeNode, TagScopeContext } from '@memberjunction/tag-engine-base';
-import { SimpleVectorService, VectorEntry } from '@memberjunction/ai-vectors-memory';
+import { ReadStoredVector, SimpleVectorService, VectorEntry, VectorInputEntry } from '@memberjunction/ai-vectors-memory';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIEmbeddingRunner } from '@memberjunction/ai-prompts';
 import type { EmbeddingRunResult } from '@memberjunction/ai-prompts';
@@ -266,7 +266,8 @@ export class TagEngine extends BaseSingleton<TagEngine> {
 
         // Always initialize the vector service — even when empty — so new tags
         // created during a pipeline run can be embedded and added on-the-fly.
-        this._tagVectorService = new SimpleVectorService<TagEmbeddingMetadata>();
+        // float32: embeddings are float32 at the source, and it halves the pool's memory
+        this._tagVectorService = new SimpleVectorService<TagEmbeddingMetadata>({ Precision: 'float32' });
 
         const tags = this.Tags;
         if (tags.length === 0) {
@@ -275,13 +276,13 @@ export class TagEngine extends BaseSingleton<TagEngine> {
         }
 
         // Phase 1c.1 hydration strategy:
-        //   1. Hydrate from persisted EmbeddingVector when EmbeddingModelID matches
+        //   1. Hydrate from the persisted vector (EmbeddingVectorBinary, else EmbeddingVector) when EmbeddingModelID matches
         //      the currently configured model — zero LLM calls for these.
         //   2. Re-embed only tags missing a vector or pinned to a stale model.
         //   3. Persist the freshly-computed vectors back to the entity so the
         //      next cold start can hydrate them too.
         const configuredModelID = modelInfo.ModelID;
-        const hydrated: VectorEntry<TagEmbeddingMetadata>[] = [];
+        const hydrated: VectorInputEntry<TagEmbeddingMetadata>[] = [];
         const toCompute: MJTagEntity[] = [];
 
         for (const tag of tags) {
@@ -320,33 +321,28 @@ export class TagEngine extends BaseSingleton<TagEngine> {
     }
 
     /**
-     * Try to hydrate a tag's vector from its persisted `EmbeddingVector` column.
-     * Returns null if the column is empty, malformed, or the model the vector
-     * was computed under no longer matches the configured embedding model.
+     * Try to hydrate a tag's vector from its persisted columns — the binary `EmbeddingVectorBinary`
+     * (float32 bytes) when valid, else the JSON `EmbeddingVector` (see `ReadStoredVector`).
+     * Returns null if neither holds a usable vector, or the model the vector was computed under
+     * no longer matches the configured embedding model.
      */
     private tryHydrateFromPersisted(
         tag: MJTagEntity,
         configuredModelID: string
-    ): VectorEntry<TagEmbeddingMetadata> | null {
-        if (!tag.EmbeddingVector || !tag.EmbeddingModelID) return null;
-        if (!UUIDsEqual(tag.EmbeddingModelID, configuredModelID)) return null;
-
-        try {
-            const vector = JSON.parse(tag.EmbeddingVector) as number[];
-            if (!Array.isArray(vector) || vector.length === 0) return null;
-            return {
-                key: NormalizeUUID(tag.ID),
-                vector,
-                metadata: { Name: tag.Name, ParentID: tag.ParentID }
-            };
-        } catch {
-            return null;
-        }
+    ): VectorInputEntry<TagEmbeddingMetadata> | null {
+        if (!tag.EmbeddingModelID || !UUIDsEqual(tag.EmbeddingModelID, configuredModelID)) return null;
+        const vector = ReadStoredVector(tag.EmbeddingVectorBinary, tag.EmbeddingVector);
+        if (!vector) return null;
+        return {
+            key: NormalizeUUID(tag.ID),
+            vector,
+            metadata: { Name: tag.Name, ParentID: tag.ParentID }
+        };
     }
 
     /**
      * Persist freshly-computed embeddings back to the Tag entity's `EmbeddingVector`
-     * + `EmbeddingModelID` columns so the next cold start can hydrate without
+     * (JSON) + `EmbeddingVectorBinary` (float32 bytes) + `EmbeddingModelID` columns so the next cold start can hydrate without
      * re-running the LLM. Failures here log and continue — the in-memory cache
      * already has the vector, so the running process is unaffected.
      */
@@ -361,6 +357,7 @@ export class TagEngine extends BaseSingleton<TagEngine> {
             if (!vector) continue;
             try {
                 tag.EmbeddingVector = JSON.stringify(vector);
+                tag.EmbeddingVectorBinary = Float32VectorToBase64(vector);
                 tag.EmbeddingModelID = modelID;
                 // Skip async validation here — we know nothing else changed.
                 const saved = await tag.Save({ SkipAsyncValidation: true } as never);
@@ -394,7 +391,7 @@ export class TagEngine extends BaseSingleton<TagEngine> {
         const configuredModelID = modelInfo.ModelID;
         const stale: MJTagEntity[] = [];
         for (const tag of this.Tags) {
-            if (!tag.EmbeddingVector
+            if (!ReadStoredVector(tag.EmbeddingVectorBinary, tag.EmbeddingVector)
                 || !tag.EmbeddingModelID
                 || !UUIDsEqual(tag.EmbeddingModelID, configuredModelID)) {
                 stale.push(tag);
@@ -448,25 +445,16 @@ export class TagEngine extends BaseSingleton<TagEngine> {
      */
     public AddOrUpdateSingleTagEmbeddingFromPersisted(tag: MJTagEntity): void {
         if (!this._tagVectorService) return;
-        if (!tag.EmbeddingVector) {
-            this._tagVectorService.RemoveVector(NormalizeUUID(tag.ID));
+        const key = NormalizeUUID(tag.ID);
+        const vector = ReadStoredVector(tag.EmbeddingVectorBinary, tag.EmbeddingVector);
+        if (!vector) {
+            if (tag.EmbeddingVector || tag.EmbeddingVectorBinary) {
+                LogError(`TagEngine.AddOrUpdateSingleTagEmbeddingFromPersisted: malformed vector on tag "${tag.Name}"`);
+            }
+            this._tagVectorService.RemoveVector(key);
             return;
         }
-        try {
-            const vector = JSON.parse(tag.EmbeddingVector) as number[];
-            if (!Array.isArray(vector) || vector.length === 0) {
-                this._tagVectorService.RemoveVector(NormalizeUUID(tag.ID));
-                return;
-            }
-            this._tagVectorService.AddVector(
-                NormalizeUUID(tag.ID),
-                vector,
-                { Name: tag.Name, ParentID: tag.ParentID }
-            );
-        } catch (error) {
-            LogError(`TagEngine.AddOrUpdateSingleTagEmbeddingFromPersisted: malformed vector on tag "${tag.Name}": ${error instanceof Error ? error.message : String(error)}`);
-            this._tagVectorService.RemoveVector(NormalizeUUID(tag.ID));
-        }
+        this._tagVectorService.AddVector(key, vector, { Name: tag.Name, ParentID: tag.ParentID });
     }
 
     /** Batch size for parallel tag embedding */
@@ -877,7 +865,7 @@ export class TagEngine extends BaseSingleton<TagEngine> {
         // the suggestion-band path needs the raw score.
         const lowestThreshold = 0;
 
-        const results = this._tagVectorService.FindNearest(
+        const results = await this._tagVectorService.FindNearestAsync(
             queryVector,
             1,
             lowestThreshold,
