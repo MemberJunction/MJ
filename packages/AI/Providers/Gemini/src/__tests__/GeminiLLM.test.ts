@@ -733,6 +733,42 @@ describe('GeminiLLM — native tool calling', () => {
       expect(modelTurn.parts).toEqual([{ functionCall: { id: 'call_1', name: 'get_weather', args: { city: 'NYC' } }, thoughtSignature: 'sig-abc' }]);
     });
 
+    it('replays a signature minted here — same endpoint and model', async () => {
+      await run({
+        messages: [
+          { role: 'user', content: 'weather?' },
+          { role: 'assistant', content: '', toolCalls: [{ id: 'call_1', name: 'get_weather', arguments: {}, providerMetadata: { thoughtSignature: 'sig-here', thoughtSignatureOrigin: 'gemini-api:gemini-2.5-flash' } }] },
+          { role: 'user', content: 'thanks' }
+        ],
+        tools: [WEATHER_TOOL]
+      });
+      expect(sentHistory()[1].parts).toEqual([{ functionCall: { id: 'call_1', name: 'get_weather', args: {} }, thoughtSignature: 'sig-here' }]);
+    });
+
+    it('swaps in the placeholder for a signature minted by Vertex AI (failover) — AI Studio rejects it as corrupted', async () => {
+      await run({
+        messages: [
+          { role: 'user', content: 'weather?' },
+          { role: 'assistant', content: '', toolCalls: [{ id: 'call_1', name: 'get_weather', arguments: {}, providerMetadata: { thoughtSignature: 'sig-vertex', thoughtSignatureOrigin: 'vertex:gemini-2.5-flash' } }] },
+          { role: 'user', content: 'thanks' }
+        ],
+        tools: [WEATHER_TOOL]
+      });
+      expect(sentHistory()[1].parts).toEqual([{ functionCall: { id: 'call_1', name: 'get_weather', args: {} }, thoughtSignature: 'skip_thought_signature_validator' }]);
+    });
+
+    it('swaps in the placeholder for a signature minted by another model', async () => {
+      await run({
+        messages: [
+          { role: 'user', content: 'weather?' },
+          { role: 'assistant', content: '', toolCalls: [{ id: 'call_1', name: 'get_weather', arguments: {}, providerMetadata: { thoughtSignature: 'sig-other', thoughtSignatureOrigin: 'gemini-api:gemini-3-pro' } }] },
+          { role: 'user', content: 'thanks' }
+        ],
+        tools: [WEATHER_TOOL]
+      });
+      expect(sentHistory()[1].parts[0].thoughtSignature).toBe('skip_thought_signature_validator');
+    });
+
     it('sends a tool result as a functionResponse part with the output key', async () => {
       await run({
         messages: [
@@ -805,7 +841,7 @@ describe('GeminiLLM — native tool calling', () => {
 
       // The model's thought signature rides on the call so a replay can send it back.
       expect(result.data.choices[0].message.toolCalls).toEqual([
-        { id: 'call_1', name: 'get_weather', arguments: { city: 'NYC' }, providerMetadata: { thoughtSignature: 'sig-from-model' } }
+        { id: 'call_1', name: 'get_weather', arguments: { city: 'NYC' }, providerMetadata: { thoughtSignature: 'sig-from-model', thoughtSignatureOrigin: 'gemini-api:gemini-2.5-flash' } }
       ]);
       expect(result.data.choices[0].finish_reason).toBe('tool_calls');
     });
