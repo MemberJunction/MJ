@@ -9,6 +9,10 @@
     },
     "primaryKey": {
       "ID": "098260FA-8902-4071-9950-18C6743A9877"
+    },
+    "sync": {
+      "lastModified": "2026-10-06T20:21:37.980Z",
+      "checksum": "9a91d1043c645aec90a1dd44dc47b0a9b596cbda9d1b4418d6737efe06f1a091"
     }
   }
 ]

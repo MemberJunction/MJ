@@ -34,7 +34,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (441 classes)
+// @memberjunction/core-entities (447 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -473,6 +473,12 @@ import {
     MJVersionLabelRestoreEntity,
     MJViewTypeEntity,
     MJWebSearchProviderEntity,
+    MJWorkQueueDeduplicationEntity,
+    MJWorkQueueDeliveryEntity,
+    MJWorkQueueMessageEntity,
+    MJWorkQueueSubscriptionEntity,
+    MJWorkQueueTopicEntity,
+    MJWorkQueueTransportEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
     QueryPermissionProvider,
@@ -695,7 +701,7 @@ import {
     TagEngineBase,
 } from '@memberjunction/tag-engine-base';
 
-// @memberjunction/ng-dashboards (107 classes)
+// @memberjunction/ng-dashboards (108 classes)
 import {
     AIAnalyticsResourceComponent,
     AIOverviewHubComponent,
@@ -801,6 +807,7 @@ import {
     VersionHistoryLabelsResourceComponent,
     VersionHistoryRestoreResourceComponent,
     VisualizeResourceComponent,
+    WorkQueueDashboardComponent,
     WorkflowRunsResourceComponent,
     WorkflowsDashboardComponent,
     WorkflowsResourceComponent,
@@ -1289,6 +1296,12 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJVersionLabelRestoreEntity,
     MJViewTypeEntity,
     MJWebSearchProviderEntity,
+    MJWorkQueueDeduplicationEntity,
+    MJWorkQueueDeliveryEntity,
+    MJWorkQueueMessageEntity,
+    MJWorkQueueSubscriptionEntity,
+    MJWorkQueueTopicEntity,
+    MJWorkQueueTransportEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
     QueryPermissionProvider,
@@ -1435,16 +1448,16 @@ const CLASS_REGISTRATIONS_2: any[] = [
     TestSuiteHierarchyPanel,
     UserHeaderPanel,
     UserOverviewPanel,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     UserViewCategoryHierarchyPanel,
     TagEngineBase,
     AIAnalyticsResourceComponent,
     AIOverviewHubComponent,
     APIKeysResourceComponent,
     ActionExecutionMonitoringComponent,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     ActionExplorerComponent,
     ActionsOverviewComponent,
     ActivityComponent,
@@ -1545,6 +1558,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     VersionHistoryLabelsResourceComponent,
     VersionHistoryRestoreResourceComponent,
     VisualizeResourceComponent,
+    WorkQueueDashboardComponent,
     WorkflowRunsResourceComponent,
     WorkflowsDashboardComponent,
     WorkflowsResourceComponent,
@@ -1576,7 +1590,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 717;
+export const CLASS_REGISTRATIONS_COUNT = 724;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

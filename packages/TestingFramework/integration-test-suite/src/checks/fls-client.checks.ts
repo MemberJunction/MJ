@@ -81,7 +81,7 @@ async function findUserId(ctx: IntegrationCheckContext, email: string): Promise<
  * (scopeCacheTTLMs, default 60s), so a freshly-granted `full_access` rule can be denied for
  * up to a minute after it is written. Bounded, so a genuinely unauthorized key still fails.
  */
-async function buildUserKeyProviderWithRetry(rawKey: string): Promise<IMetadataProvider> {
+export async function BuildUserKeyProviderWithRetry(rawKey: string): Promise<IMetadataProvider> {
     const deadline = Date.now() + 90_000;
     for (;;) {
         try {
@@ -250,12 +250,15 @@ async function tightenReaderEmail(ctx: IntegrationCheckContext): Promise<string>
     return rows.Results[0].ID;
 }
 
+/** The created-ID accumulators {@link MintFullAccessUserKey} appends to and {@link DeleteMintedUserKeys} sweeps. */
+export type MintedUserKeyIds = Pick<FlsClientFixture, 'CreatedKeyIds' | 'CreatedScopeRuleIds'>;
+
 /**
  * Mint a user API key over the wire and grant it `full_access` on '*' — scope enforcement
  * fails closed, so a key with no scope rules cannot even run a batched view. Records the key
  * (and its scope rule) for teardown; returns the raw key.
  */
-async function mintKey(ctx: IntegrationCheckContext, fx: FlsClientFixture, userId: string, label: string): Promise<string> {
+export async function MintFullAccessUserKey(ctx: IntegrationCheckContext, fx: MintedUserKeyIds, userId: string, label: string): Promise<string> {
     const engine = GetAPIKeyEngine();
     const created = await engine.CreateAPIKey({ UserId: userId, Label: label }, ctx.User);
     if (!created.Success || !created.RawKey || !created.APIKeyId) {
@@ -347,16 +350,16 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('fls-enforcement-client', {
         try {
             await enableOverWire(ctx, entity.ID);
             fx.ReaderEfpRowID = await tightenReaderEmail(ctx);
-            const readerKey = await mintKey(ctx, fx, readerId, 'IT92 FLS reader (mj-integration-test)');
-            const writerKey = await mintKey(ctx, fx, writerId, 'IT92 FLS writer (mj-integration-test)');
-            fx.ReaderProvider = await buildUserKeyProviderWithRetry(readerKey);
-            fx.WriterProvider = await buildUserKeyProviderWithRetry(writerKey);
+            const readerKey = await MintFullAccessUserKey(ctx, fx, readerId, 'IT92 FLS reader (mj-integration-test)');
+            const writerKey = await MintFullAccessUserKey(ctx, fx, writerId, 'IT92 FLS writer (mj-integration-test)');
+            fx.ReaderProvider = await BuildUserKeyProviderWithRetry(readerKey);
+            fx.WriterProvider = await BuildUserKeyProviderWithRetry(writerKey);
             if (multiId) {
                 // Readable, but neither updatable nor creatable — the write-denial shape.
                 fx.DenierEfpRowID = await setFieldRuleOverWire(
                     ctx, FLS_UPDATE_DENY_FIELD, FLS_DENIER_ROLE, { Read: 'Allow', Update: 'Deny', Create: 'Deny' });
-                const multiKey = await mintKey(ctx, fx, multiId, 'IT92 FLS multi (mj-integration-test)');
-                fx.MultiProvider = await buildUserKeyProviderWithRetry(multiKey);
+                const multiKey = await MintFullAccessUserKey(ctx, fx, multiId, 'IT92 FLS multi (mj-integration-test)');
+                fx.MultiProvider = await BuildUserKeyProviderWithRetry(multiKey);
             }
 
             // Phase 1: the reader key's scope rule is honored — any successful read proves it
@@ -454,27 +457,31 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('fls-enforcement-client', {
                 await ent.Save();
             }
         } catch { /* best-effort */ }
-        // Minted keys: scope rules and usage logs first (FKs), then the keys.
-        for (const ruleId of fx.CreatedScopeRuleIds) {
-            await ctx.Provider.GetEntityObject<MJAPIKeyScopeEntity>('MJ: API Key Scopes', ctx.User)
-                .then(async rule => { if (await rule.Load(ruleId)) { await rule.Delete(); } })
-                .catch(() => undefined);
-        }
-        for (const keyId of fx.CreatedKeyIds) {
-            const logs = await new RunView().RunView<MJAPIKeyUsageLogEntity>(
-                { EntityName: 'MJ: API Key Usage Logs', ExtraFilter: `APIKeyID = '${keyId}'`, ResultType: 'entity_object' }, ctx.User
-            ).catch(() => ({ Success: false, Results: [] as MJAPIKeyUsageLogEntity[] }));
-            if (logs.Success) {
-                for (const log of logs.Results) {
-                    await log.Delete().catch(() => undefined);
-                }
-            }
-            await ctx.Provider.GetEntityObject<MJAPIKeyEntity>('MJ: API Keys', ctx.User)
-                .then(async key => { if (await key.Load(keyId)) { await key.Delete(); } })
-                .catch(() => undefined);
-        }
+        await DeleteMintedUserKeys(ctx, fx);
     }
 });
+
+/** Best-effort teardown of keys minted by {@link MintFullAccessUserKey}: scope rules and usage logs first (FKs), then the keys. */
+export async function DeleteMintedUserKeys(ctx: IntegrationCheckContext, fx: MintedUserKeyIds): Promise<void> {
+    for (const ruleId of fx.CreatedScopeRuleIds) {
+        await ctx.Provider.GetEntityObject<MJAPIKeyScopeEntity>('MJ: API Key Scopes', ctx.User)
+            .then(async rule => { if (await rule.Load(ruleId)) { await rule.Delete(); } })
+            .catch(() => undefined);
+    }
+    for (const keyId of fx.CreatedKeyIds) {
+        const logs = await new RunView().RunView<MJAPIKeyUsageLogEntity>(
+            { EntityName: 'MJ: API Key Usage Logs', ExtraFilter: `APIKeyID = '${keyId}'`, ResultType: 'entity_object' }, ctx.User
+        ).catch(() => ({ Success: false, Results: [] as MJAPIKeyUsageLogEntity[] }));
+        if (logs.Success) {
+            for (const log of logs.Results) {
+                await log.Delete().catch(() => undefined);
+            }
+        }
+        await ctx.Provider.GetEntityObject<MJAPIKeyEntity>('MJ: API Keys', ctx.User)
+            .then(async key => { if (await key.Load(keyId)) { await key.Delete(); } })
+            .catch(() => undefined);
+    }
+}
 
 /** First company ID over the wire; creates a marker fixture company when the table is empty. */
 async function firstCompanyId(ctx: IntegrationCheckContext, fx: FlsClientFixture): Promise<string> {

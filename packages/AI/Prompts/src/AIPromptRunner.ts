@@ -343,18 +343,13 @@ export class AIPromptRunner extends BaseModelRunner {
         // actually selected — not merely the caller's override, which is usually absent — and the
         // selected candidate's AIPromptModel bag. Resolving without those skips the two layers the
         // capability is normally declared on and silently inverts the decision.
-        if (params.tools?.length) {
-          const nativeDecision = this.ResolveNativeToolCallingDecision(
-            prompt, params, selection.model,
-            selection.selectionInfo?.vendorSelected?.ID ?? params.override?.vendorId ?? null,
-            selection.promptModelConfiguration);
-          params.data = {
-            ...(params.data ?? {}),
-            _NATIVE_TOOL_CALLING: nativeDecision.useNativeTools,
-            // The template renders the implicit-mode section only when this is the gate's REAL answer.
-            _NATIVE_CONTROL_FLOW: nativeDecision.controlFlow
-          };
-        }
+        const nativeDecision = params.tools?.length
+          ? this.ResolveNativeToolCallingDecision(
+              prompt, params, selection.model,
+              selection.selectionInfo?.vendorSelected?.ID ?? params.override?.vendorId ?? null,
+              selection.promptModelConfiguration)
+          : null;
+        params.data = this.ApplyNativeTemplateFlags(params.data, nativeDecision);
 
         // Check if we have a system prompt override
         if (params.systemPromptOverride) {
@@ -1942,6 +1937,37 @@ export class AIPromptRunner extends BaseModelRunner {
     }
   }
 
+
+  /**
+   * Returns the template data with `_NATIVE_TOOL_CALLING` and `_NATIVE_CONTROL_FLOW` set.
+   *
+   * With a decision, both carry the gate's real answer. Without one (a run that declares no tools),
+   * they are set to the envelope path's values unless the caller already supplied them. The Loop
+   * system prompt reads both unconditionally, so template parameter extraction marks them required,
+   * and a run that left them unset failed to render.
+   *
+   * @param data The caller's template data, if any
+   * @param decision The resolved native tool-calling decision, or null when no tools were declared
+   */
+  protected ApplyNativeTemplateFlags(
+    data: Record<string, unknown> | undefined,
+    decision: NativeToolCallingDecision | null
+  ): Record<string, unknown> {
+    const current = data ?? {};
+    if (decision) {
+      return {
+        ...current,
+        _NATIVE_TOOL_CALLING: decision.useNativeTools,
+        // The template renders the implicit-mode section only when this is the gate's REAL answer.
+        _NATIVE_CONTROL_FLOW: decision.controlFlow
+      };
+    }
+    return {
+      ...current,
+      _NATIVE_TOOL_CALLING: current._NATIVE_TOOL_CALLING ?? false,
+      _NATIVE_CONTROL_FLOW: current._NATIVE_CONTROL_FLOW ?? 'envelope'
+    };
+  }
 
   /** @deprecated Use {@link ResolveNativeToolCallingDecision}. */
   public resolveNativeToolCallingDecision(

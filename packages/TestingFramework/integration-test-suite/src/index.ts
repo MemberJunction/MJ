@@ -44,6 +44,7 @@ export * from './checks/rls-isolation.checks';
 export * from './checks/fls-enforcement.checks';
 export * from './checks/fls-lifecycle.checks';
 export * from './checks/fls-client.checks';
+export * from './checks/self-avatar-client.checks';
 export * from './checks/keyrowfilter.checks'; // KF1–KF6: registers into the 'rls-isolation' bundle AFTER RLS1–RLS10 (order matters for GetBundle parity)
 export * from './checks/runquery-cache.checks';
 export * from './checks/scheduled-jobs.checks';
@@ -92,6 +93,7 @@ export * from './checks/scoped-anon-elevation.checks';
 export * from './checks/search.checks';
 export * from './checks/storage.checks';
 export * from './checks/queue.checks';
+export * from './checks/work-queue-runtime.checks';
 export * from './checks/auth-validation.checks';
 export * from './checks/agent-loop-live.checks';
 export * from './checks/shipped-agents-live.checks';

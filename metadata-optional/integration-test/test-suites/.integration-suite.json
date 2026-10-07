@@ -1291,6 +1291,17 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT105 - Work Queue Runtime (native host, operators, REST)",
+            "Sequence": 48,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "B88AFB7E-06E4-47D4-BC45-8DDE8FF215A8"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT103 - RunQuery Rendering over GraphQL",
             "Sequence": 72,
             "Status": "Active"
@@ -1308,6 +1319,17 @@
           },
           "primaryKey": {
             "ID": "80642370-A10B-405B-89CC-536AAAA00397"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT106 - Self-Service Avatar (client transport)",
+            "Sequence": 74,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "7364BCB7-A3AA-41D7-B77A-910F0A372E13"
           }
         }
       ]
