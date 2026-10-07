@@ -209,7 +209,7 @@
             <mj-realtime-channel-pane [Plugin]="plugin" [Visible]="visible" [Placement]="placement"></mj-realtime-channel-pane>
             <!-- A surface presenting the agent has no focus pill, so its "Move to…" menu rides on it. -->
             @if (placement === 'stage' && plugin.ShowsAgentVideo) {
-              <mj-realtime-surface-move-menu
+              <mj-media-move-menu
                 class="stage-presenter-move"
                 [Key]="key"
                 [Title]="plugin.TabTitle"
@@ -217,7 +217,7 @@
                 [Allowed]="SurfaceStage.AllowedFor(key)"
                 (MoveRequested)="OnMoveRequested($event)"
                 (ResetLayoutRequested)="OnResetLayout()">
-              </mj-realtime-surface-move-menu>
+              </mj-media-move-menu>
             }
           </div>
         }
@@ -225,14 +225,14 @@
       <!-- A picture-in-picture box's bar carries the same "Move to…" menu. -->
       <ng-template mjMediaStagePipActions let-key>
         @if (SurfaceStage.PluginFor(key); as plugin) {
-          <mj-realtime-surface-move-menu
+          <mj-media-move-menu
             [Key]="key"
             [Title]="plugin.TabTitle"
             Placement="pip"
             [Allowed]="SurfaceStage.AllowedFor(key)"
             (MoveRequested)="OnMoveRequested($event)"
             (ResetLayoutRequested)="OnResetLayout()">
-          </mj-realtime-surface-move-menu>
+          </mj-media-move-menu>
         }
       </ng-template>
     </mj-media-stage>
@@ -261,14 +261,14 @@
           <i class="fa-solid fa-table-columns" aria-hidden="true"></i>
         </button>
         @if (StagePlugin; as stagePlugin) {
-          <mj-realtime-surface-move-menu
+          <mj-media-move-menu
             [Key]="stagePlugin.ChannelName"
             [Title]="stagePlugin.TabTitle"
             Placement="stage"
             [Allowed]="SurfaceStage.AllowedFor(stagePlugin.ChannelName)"
             (MoveRequested)="OnMoveRequested($event)"
             (ResetLayoutRequested)="OnResetLayout()">
-          </mj-realtime-surface-move-menu>
+          </mj-media-move-menu>
         }
         <button type="button" class="board-focus-pill__btn board-focus-pill__btn--end"
                 (click)="OnFocusPillEnd()"

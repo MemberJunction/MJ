@@ -3,7 +3,7 @@ import {
   QueryList, ViewChild, ViewChildren, inject
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import type { MediaStagePlacement } from '@memberjunction/ng-realtime-media';
+import { MediaMoveMenuComponent, type MediaMoveRequest, type MediaStagePlacement } from '@memberjunction/ng-realtime-media';
 import { MEDIA_PLACEMENTS } from '@memberjunction/ai-realtime-client/media';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { Subscription } from 'rxjs';
@@ -13,7 +13,6 @@ import { ArtifactsModule } from '@memberjunction/ng-artifacts';
 import { RealtimeSessionState } from './realtime-session-state';
 import { RealtimeActivityRailComponent } from './realtime-activity-rail.component';
 import { ChannelOnboardingPanelComponent } from './channels/channel-onboarding-panel.component';
-import { RealtimeSurfaceMoveMenuComponent, type RealtimeSurfaceMove } from './realtime-surface-move-menu.component';
 import { ChannelOnboardingDetails } from '@memberjunction/realtime-runtime';
 import {
   RealtimeSurfaceTabsModel, RealtimeSurfaceTab, RealtimeChannelTabRegistration
@@ -80,7 +79,7 @@ export interface RealtimeChannelSlot {
   selector: 'mj-realtime-surface-tabs',
   imports: [
     CommonModule, ArtifactsModule, RealtimeActivityRailComponent, ChannelOnboardingPanelComponent,
-    RealtimeSurfaceMoveMenuComponent, MJButtonDirective
+    MediaMoveMenuComponent, MJButtonDirective
   ],
   templateUrl: './realtime-surface-tabs.component.html',
   styleUrl: './realtime-surface-tabs.component.css'
@@ -171,7 +170,7 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy, AfterVie
   @Input() AllowedPlacements: ReadonlyMap<string, readonly MediaStagePlacement[]> = new Map();
 
   /** The user asked to move a channel's surface (from "Move to…" or "Bring it here"). */
-  @Output() MoveRequested = new EventEmitter<RealtimeSurfaceMove>();
+  @Output() MoveRequested = new EventEmitter<MediaMoveRequest>();
 
   /** The user asked to put every surface back where its channel places it. */
   @Output() ResetLayoutRequested = new EventEmitter<void>();

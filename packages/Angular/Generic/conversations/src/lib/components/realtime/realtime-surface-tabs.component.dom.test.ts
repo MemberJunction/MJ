@@ -4,7 +4,7 @@ import type { RealtimeToolDefinition } from '@memberjunction/ai';
 import { BaseRealtimeChannelClient } from '@memberjunction/realtime-runtime';
 import { renderComponentFixture, query, queryAll, click, capture, overlayQueryAll, clearOverlayContainers } from '@memberjunction/ng-test-utils';
 import { RealtimeSurfaceTabsComponent, type RealtimeChannelSlot } from './realtime-surface-tabs.component';
-import type { RealtimeSurfaceMove } from './realtime-surface-move-menu.component';
+import type { MediaMoveRequest } from '@memberjunction/ng-realtime-media';
 import { RealtimeSurfaceTabsModel } from './realtime-surface-tabs.model';
 import type { RealtimeSessionState } from './realtime-session-state';
 
@@ -210,19 +210,19 @@ describe('RealtimeSurfaceTabsComponent: moving surfaces (DOM)', () => {
     register(f, 'Whiteboard', true);
     register(f, 'Media');
     await settle(f);
-    expect(queryAll(f, 'mj-realtime-surface-move-menu')).toHaveLength(1);
-    expect(query(f, '.s-tab--active + mj-realtime-surface-move-menu')).not.toBeNull();
+    expect(queryAll(f, 'mj-media-move-menu')).toHaveLength(1);
+    expect(query(f, '.s-tab--active + mj-media-move-menu')).not.toBeNull();
     f.componentInstance.Model.Focus('Media');
     await settle(f);
-    expect(query(f, '.s-tab--active + mj-realtime-surface-move-menu button')?.getAttribute('aria-label')).toBe('Move Media');
+    expect(query(f, '.s-tab--active + mj-media-move-menu button')?.getAttribute('aria-label')).toBe('Move Media');
   });
 
   it('passes on the move chosen in the menu', async () => {
     const f = render();
-    const moves: RealtimeSurfaceMove[] = capture(f.componentInstance.MoveRequested);
+    const moves: MediaMoveRequest[] = capture(f.componentInstance.MoveRequested);
     register(f, 'Whiteboard', true);
     await settle(f);
-    (query(f, 'mj-realtime-surface-move-menu button') as HTMLButtonElement).click();
+    (query(f, 'mj-media-move-menu button') as HTMLButtonElement).click();
     f.detectChanges();
     (overlayQueryAll('mj-menu-item') as HTMLElement[]).find((item) => item.textContent?.trim() === 'Hide')?.click();
     expect(moves).toEqual([{ Key: 'Whiteboard', Placement: 'hidden' }]);
@@ -230,7 +230,7 @@ describe('RealtimeSurfaceTabsComponent: moving surfaces (DOM)', () => {
 
   it('says where a moved surface is, keeps no slot for it, and brings it back', async () => {
     const f = render(new Map([['Whiteboard', 'hidden']]));
-    const moves: RealtimeSurfaceMove[] = capture(f.componentInstance.MoveRequested);
+    const moves: MediaMoveRequest[] = capture(f.componentInstance.MoveRequested);
     const slots: Array<RealtimeChannelSlot | null> = capture(f.componentInstance.ChannelSlotChange);
     register(f, 'Whiteboard', true);
     await settle(f);
@@ -247,7 +247,7 @@ describe('RealtimeSurfaceTabsComponent: moving surfaces (DOM)', () => {
     await settle(f);
     expect(query(f, '.s-pane__away span')?.textContent?.trim()).toBe('Camera is in picture-in-picture.');
     expect(query(f, '.s-pane__away button')).toBeNull();
-    (query(f, 'mj-realtime-surface-move-menu button') as HTMLButtonElement).click();
+    (query(f, 'mj-media-move-menu button') as HTMLButtonElement).click();
     f.detectChanges();
     const items = (overlayQueryAll('mj-menu-item') as HTMLElement[]).map((item) => item.textContent?.trim());
     expect(items).toEqual(['Picture-in-picture', 'Hide', 'Reset layout']);

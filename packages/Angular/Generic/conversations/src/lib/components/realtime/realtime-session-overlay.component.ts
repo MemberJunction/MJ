@@ -26,7 +26,6 @@ import { RealtimePerceptionChipComponent, RealtimePerceptionToggle } from './rea
 import { RealtimeComposerComponent } from './realtime-composer.component';
 import { RealtimeSurfaceTabsComponent, RealtimeChannelSlot } from './realtime-surface-tabs.component';
 import { RealtimeSurfaceStageModel } from './realtime-surface-stage.model';
-import { RealtimeSurfaceMoveMenuComponent, type RealtimeSurfaceMove } from './realtime-surface-move-menu.component';
 import { AgentOrbStateFor, RealtimeAgentOrbComponent, type RealtimeAgentOrbState } from './realtime-agent-orb.component';
 import { RealtimeCameraCheckCardComponent } from './capture/realtime-camera-check-card.component';
 import {
@@ -51,8 +50,8 @@ import { ShouldRegisterChannelTabUpFront } from './realtime-surface-tab-style';
 import { BaseRealtimeChannelClient } from '@memberjunction/realtime-runtime';
 import { RealtimeWhiteboardBoardComponent, WhiteboardState } from '@memberjunction/ng-whiteboard';
 import {
-  MediaStageComponent, MediaStagePipActionsDirective, MediaStageSurfaceDirective,
-  type MediaPipRect, type MediaShareRequest, type MediaStagePipRectChange
+  MediaMoveMenuComponent, MediaStageComponent, MediaStagePipActionsDirective, MediaStageSurfaceDirective,
+  type MediaMoveRequest, type MediaPipRect, type MediaShareRequest, type MediaStagePipRectChange
 } from '@memberjunction/ng-realtime-media';
 
 /**
@@ -159,7 +158,7 @@ export interface RealtimeAvatarCaption {
     RealtimeComposerComponent,
     RealtimeSurfaceTabsComponent,
     RealtimeChannelPaneComponent,
-    RealtimeSurfaceMoveMenuComponent,
+    MediaMoveMenuComponent,
     MediaStageComponent,
     MediaStageSurfaceDirective,
     MediaStagePipActionsDirective,
@@ -1659,7 +1658,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   // ── Moving surfaces: "Move to…", saved per user ────────────────────────────
 
   /** The user moved a channel's surface ("Move to…", "Bring it here"). */
-  public OnMoveRequested(move: RealtimeSurfaceMove): void {
+  public OnMoveRequested(move: MediaMoveRequest): void {
     this.moveSurface(move);
   }
 
@@ -1682,7 +1681,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   }
 
   /** Moves a surface, saves the layout, and re-resolves the UI (a surface on the stage is the focus layout). */
-  private moveSurface(move: RealtimeSurfaceMove): void {
+  private moveSurface(move: MediaMoveRequest): void {
     if (!this.SurfaceStage.Move(move.Key, move.Placement)) {
       return;
     }

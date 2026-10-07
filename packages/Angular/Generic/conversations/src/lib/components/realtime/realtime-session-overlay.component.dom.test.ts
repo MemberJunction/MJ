@@ -304,7 +304,7 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
     expect(query(f, '.call-overlay')?.classList.contains('board-focus')).toBe(true);
     expect(savedLayouts.at(-1)).toBe('[{"SurfaceKey":"Whiteboard","Placement":"stage"}]');
 
-    await pick(f, '.board-focus-pill mj-realtime-surface-move-menu', 'Tab');
+    await pick(f, '.board-focus-pill mj-media-move-menu', 'Tab');
     expect(surface(f).classList.contains('stage-surface--stage')).toBe(false);
     expect(query(f, '.call-overlay')?.classList.contains('board-focus')).toBe(false);
     expect(isShown(f)).toBe(true);
@@ -348,7 +348,7 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
   it('resets the layout from the pill: the board goes back to its tab and the saved layout is cleared', async () => {
     savedLayout = '[{"SurfaceKey":"Whiteboard","Placement":"stage"}]';
     const { f } = await renderWithBoard();
-    await pick(f, '.board-focus-pill mj-realtime-surface-move-menu', 'Reset layout');
+    await pick(f, '.board-focus-pill mj-media-move-menu', 'Reset layout');
     expect(f.componentInstance.ChannelFocusMode).toBe(false);
     expect(savedLayouts.at(-1)).toBe('[]');
   });
@@ -362,7 +362,7 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
       expect(surface(f).classList.contains('stage-surface--pip')).toBe(true);
       expect(place(surface(f))).toEqual(['664px', '384px', '320px', '200px']);
       expect(surface(f).querySelector('.stage-pip-title')?.textContent?.trim()).toBe('Whiteboard');
-      expect(surface(f).querySelector('.stage-pip-bar mj-realtime-surface-move-menu')).not.toBeNull();
+      expect(surface(f).querySelector('.stage-pip-bar mj-media-move-menu')).not.toBeNull();
       expect(query(f, '.s-pane__away span')?.textContent?.trim()).toBe('Whiteboard is in picture-in-picture.');
       expect(f.componentInstance.ChannelFocusMode).toBe(false);
       expect(board.Placements).toEqual(['tab', 'pip']);
@@ -392,7 +392,7 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
       savedLayout = '[{"SurfaceKey":"Whiteboard","Placement":"pip"}]';
       savedPips = '{"Whiteboard":{"X":0.1,"Y":0.1,"W":0.3,"H":0.3}}';
       const { f } = await renderWithBoard();
-      await pick(f, '.stage-pip-bar mj-realtime-surface-move-menu', 'Reset layout');
+      await pick(f, '.stage-pip-bar mj-media-move-menu', 'Reset layout');
       expect(savedPipLayouts.at(-1)).toBe('{}');
       expect(savedLayouts.at(-1)).toBe('[]');
       expect(surface(f).classList.contains('stage-surface--pip')).toBe(false);
@@ -508,16 +508,16 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
       expect(surface(f).classList.contains('stage-surface--pip')).toBe(true);
       expect(query(f, '.s-pane__away span')?.textContent?.trim()).toBe('Whiteboard is in picture-in-picture.');
       expect(query(f, '.s-pane__away button')).toBeNull();
-      expect(await menuItems(f, '.stage-pip-bar mj-realtime-surface-move-menu')).toEqual(['Stage', 'Picture-in-picture', 'Hide', 'Reset layout']);
+      expect(await menuItems(f, '.stage-pip-bar mj-media-move-menu')).toEqual(['Stage', 'Picture-in-picture', 'Hide', 'Reset layout']);
       expect(board.Placements).toEqual(['pip']);
       expect(savedLayouts).toEqual([]);
     });
 
     it('sends the board back to its box, not a tab, when the user leaves the stage', async () => {
       const { f, board } = await renderWithBoard({ Default: 'pip', Allowed: ['stage', 'pip', 'hidden'] });
-      await pick(f, '.stage-pip-bar mj-realtime-surface-move-menu', 'Stage');
+      await pick(f, '.stage-pip-bar mj-media-move-menu', 'Stage');
       expect(f.componentInstance.ChannelFocusMode).toBe(true);
-      expect(await menuItems(f, '.board-focus-pill mj-realtime-surface-move-menu')).toEqual(['Stage', 'Picture-in-picture', 'Hide', 'Reset layout']);
+      expect(await menuItems(f, '.board-focus-pill mj-media-move-menu')).toEqual(['Stage', 'Picture-in-picture', 'Hide', 'Reset layout']);
       click(f, '.board-focus-pill__btn[title="Show thread"]');
       await settle();
       expect(f.componentInstance.ChannelFocusMode).toBe(false);

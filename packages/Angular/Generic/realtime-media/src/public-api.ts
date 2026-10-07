@@ -13,6 +13,7 @@ export * from './lib/components/audio-meter.component';
 export * from './lib/components/media-tile.component';
 export * from './lib/components/media-stage.component';
 export * from './lib/components/media-controls.component';
+export * from './lib/components/media-move-menu.component';
 export * from './lib/components/self-view.component';
 export * from './lib/components/share-preview.component';
 export * from './lib/components/camera-check.component';

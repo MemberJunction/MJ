@@ -47,7 +47,7 @@
         </button>
         @if (tab.Kind === 'channel' && tab.Data?.Plugin && tab.Key === Model.ActiveKey) {
           <!-- "Move to…" for the active channel's surface: beside its tab, since a tab is itself a button. -->
-          <mj-realtime-surface-move-menu
+          <mj-media-move-menu
             class="s-tab-move"
             [Key]="tab.Key"
             [Title]="tab.Title"
@@ -55,7 +55,7 @@
             [Allowed]="AllowedOf(tab.Key)"
             (MoveRequested)="MoveRequested.emit($event)"
             (ResetLayoutRequested)="ResetLayoutRequested.emit()">
-          </mj-realtime-surface-move-menu>
+          </mj-media-move-menu>
         }
       }
       <div class="tabs-end">
