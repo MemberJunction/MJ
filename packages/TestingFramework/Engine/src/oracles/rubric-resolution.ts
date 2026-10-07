@@ -1,3 +1,5 @@
+import { MJLruCache } from '@memberjunction/global';
+
 /** Which rubric a test run uses. The first source that names one wins. */
 export interface RubricChoice {
     RubricId?: string;
@@ -72,12 +74,16 @@ function walkSuites(suites: RubricSuiteRow[], start?: string): string | undefine
  * An explicitly named version is returned and does not replace the pin.
  */
 export class PublishedVersionPin {
-    private readonly pinned = new Map<string, Map<string, string>>();
+    /**
+     * Bounded: the pin lives on a driver cached for the process lifetime, and standalone
+     * tests key it by TestRun ID, so a plain Map would grow with every execution.
+     */
+    private readonly pinned = new MJLruCache<string, Map<string, string>>({ maxSize: 5000, ttlMs: 6 * 60 * 60 * 1000 });
 
     public async Remember(suiteRunId: string, rubricId: string, explicitVersionId: string | undefined, lookupLatest: () => Promise<string | undefined>): Promise<string | undefined> {
         if (explicitVersionId) return explicitVersionId;
-        const suite = this.pinned.get(suiteRunId) ?? new Map<string, string>();
-        this.pinned.set(suiteRunId, suite);
+        const suite = this.pinned.Get(suiteRunId) ?? new Map<string, string>();
+        this.pinned.Set(suiteRunId, suite);
         const existing = suite.get(rubricId);
         if (existing) return existing;
         const latest = await lookupLatest();

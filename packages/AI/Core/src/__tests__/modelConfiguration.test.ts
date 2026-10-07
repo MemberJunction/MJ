@@ -14,6 +14,7 @@ import {
     ParseModelConfiguration,
     ParseVendorConfiguration,
     ResolveEffectiveModelConfiguration,
+    ResolveIsModelFullDuplex,
 } from '../generic/modelConfiguration';
 
 describe('ParseModelConfiguration — tolerant single-layer parse', () => {
@@ -326,3 +327,22 @@ describe('Privacy.ZeroDataRetention', () => {
         expect(IsZeroDataRetention(merged)).toBe(false);
     });
 });
+describe('ResolveIsModelFullDuplex — metadata wins over driver fallback', () => {
+    it('returns true when metadata FullDuplex is true, regardless of driver capability', () => {
+        expect(ResolveIsModelFullDuplex({ Realtime: { FullDuplex: true } }, false)).toBe(true);
+        expect(ResolveIsModelFullDuplex({ Realtime: { FullDuplex: true } }, undefined)).toBe(true);
+    });
+
+    it('returns false when metadata FullDuplex is false, even if driver capability is true', () => {
+        expect(ResolveIsModelFullDuplex({ Realtime: { FullDuplex: false } }, true)).toBe(false);
+    });
+
+    it('falls back to driver capability when metadata FullDuplex is omitted or null', () => {
+        expect(ResolveIsModelFullDuplex({ Realtime: { FullDuplex: null } }, true)).toBe(true);
+        expect(ResolveIsModelFullDuplex({ Realtime: {} }, true)).toBe(true);
+        expect(ResolveIsModelFullDuplex(null, true)).toBe(true);
+        expect(ResolveIsModelFullDuplex(null, false)).toBe(false);
+        expect(ResolveIsModelFullDuplex(null, undefined)).toBe(false);
+    });
+});
+
