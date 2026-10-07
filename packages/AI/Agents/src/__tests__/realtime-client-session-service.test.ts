@@ -36,6 +36,7 @@ import {
 } from '../realtime/realtime-client-session-service';
 import { INVOKE_TARGET_AGENT_TOOL_NAME, INVOKE_TARGET_AGENT_DESCRIPTION, DelegateToTargetRequest, DelegatedResult, DelegatedRunArtifact, RealtimeColleague } from '../realtime/realtime-tool-broker';
 import { BuildAppRealtimeOverridesJson, RealtimeCoAgentConfig } from '../realtime/realtime-coagent-config';
+import { AgentRunWatchdog } from '../agent-run-watchdog';
 
 // Mock AgentRunner so the REAL delegateToTarget path (below) can be exercised without DB/SDK.
 // `runAgentMock` is hoisted so the vi.mock factory can close over it.
@@ -315,6 +316,21 @@ describe('RealtimeClientSessionService.PrepareClientSession', () => {
         );
         expect(result.Success).toBe(false);
         expect(result.ErrorMessage).toContain('Realtime Co-Agent could not be resolved');
+    });
+
+    it('adds host tools to the tool set and host framing to the prompt WITHOUT the interactive-surface clause', async () => {
+        const svc = new TestableService();
+        const hostTool: RealtimeToolDefinition = { Name: 'end_call', Description: 'Ends the call', ParametersSchema: { type: 'object', properties: {} } };
+        const duplicate: RealtimeToolDefinition = { Name: INVOKE_TARGET_AGENT_TOOL_NAME, Description: 'dup', ParametersSchema: { type: 'object', properties: {} } };
+        const result = await svc.PrepareClientSession(
+            makePrepInput({ HostTools: [hostTool, duplicate], HostFraming: 'PHONE CALL: audio only.' }),
+            contextUser, provider,
+        );
+        const names = (result.SessionParams!.Tools ?? []).map(t => t.Name);
+        expect(names).toContain('end_call');
+        expect(names.filter(n => n === INVOKE_TARGET_AGENT_TOOL_NAME)).toHaveLength(1);
+        expect(result.SessionParams!.SystemPrompt).toContain('PHONE CALL: audio only.');
+        expect(result.SessionParams!.SystemPrompt).not.toContain('interactive-surface');
     });
 
     it('returns a failure result (no throw) when the model rejects minting', async () => {
@@ -1016,6 +1032,137 @@ function makeObsProvider(agentRun: FakeObsRun, promptRun: FakeObsRun, runStep: F
         return promptRun;
     });
 }
+
+// ════════════════════════════════════════════════════════════════════
+// The co-agent run: the voice model's cost, and liveness for the run watchdog
+// ════════════════════════════════════════════════════════════════════
+
+/** A provider the run watchdog accepts (a database provider), serving the given fakes. */
+function makeDatabaseProvider(byName: (entityName: string) => FakeRun): IMetadataProvider {
+    return Object.assign(Object.create(coreModule.DatabaseProviderBase.prototype), {
+        GetEntityObject: vi.fn(async (name: string) => byName(name)),
+    }) as IMetadataProvider;
+}
+
+describe('RealtimeClientSessionService — the co-agent run carries the voice model\'s cost', () => {
+    /** What a 17-minute Gemini Live call accumulated on its prompt run (prod, 2026-10-02). */
+    const callUsage = { TokensPrompt: 1_048_871, TokensCompletion: 5_879, TokensUsed: 1_054_750, Cost: 0.81310875, TotalCost: 0.81310875 };
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it('copies the prompt run\'s tokens and cost onto the co-agent run when the session ends', async () => {
+        const agentRun = makeRun({ ID: 'co-run-1', Dirty: true });
+        const promptRun = makeRun({ ID: 'prompt-run-1', ...callUsage });
+        const prov = makeRunProvider(name => (name === 'MJ: AI Agent Runs' ? agentRun : promptRun));
+
+        await new RealtimeClientSessionService().FinalizeCoAgentRun('co-run-1', 'prompt-run-1', contextUser, prov, true);
+
+        // Before: TotalCost stayed 0, so anything summing agent runs saw only the delegated runs.
+        expect(agentRun).toMatchObject({
+            TotalPromptTokensUsed: 1_048_871,
+            TotalCompletionTokensUsed: 5_879,
+            TotalTokensUsed: 1_054_750,
+            TotalCost: 0.81310875,
+        });
+        expect(agentRun.Save).toHaveBeenCalledTimes(2); // the finalize, then the totals
+    });
+
+    it('still charges a run the watchdog (or a shutdown) already ended', async () => {
+        const agentRun = makeRun({ ID: 'co-run-1', Status: 'Failed', Dirty: true });
+        const promptRun = makeRun({ ID: 'prompt-run-1', ...callUsage });
+        const prov = makeRunProvider(name => (name === 'MJ: AI Agent Runs' ? agentRun : promptRun));
+
+        await new RealtimeClientSessionService().FinalizeCoAgentRun('co-run-1', 'prompt-run-1', contextUser, prov, true);
+
+        expect(agentRun.Status).toBe('Failed'); // the status is not rewritten …
+        expect(agentRun.TotalCost).toBe(0.81310875); // … but the cost is owed all the same
+    });
+
+    it('falls back to the prompt run\'s own cost and summed tokens when the totals are missing', async () => {
+        const agentRun = makeRun({ ID: 'co-run-1', Dirty: true });
+        const promptRun = makeRun({ ID: 'prompt-run-1', TokensPrompt: 100, TokensCompletion: 20, TokensUsed: null, Cost: 0.5, TotalCost: null });
+        const prov = makeRunProvider(name => (name === 'MJ: AI Agent Runs' ? agentRun : promptRun));
+
+        await new RealtimeClientSessionService().FinalizeCoAgentRun('co-run-1', 'prompt-run-1', contextUser, prov, true);
+
+        expect(agentRun).toMatchObject({ TotalTokensUsed: 120, TotalCost: 0.5 });
+    });
+
+    it('leaves the run\'s totals alone when the session had no prompt run', async () => {
+        const agentRun = makeRun({ ID: 'co-run-1' });
+
+        await new RealtimeClientSessionService().FinalizeCoAgentRun('co-run-1', null, contextUser, makeRunProvider(() => agentRun), true);
+
+        expect(agentRun.TotalCost).toBeUndefined();
+    });
+});
+
+describe('RealtimeClientSessionService — the co-agent run stays alive for the run watchdog', () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it('registers a session\'s co-agent run — only with an id, and only on a database provider', () => {
+        const track = vi.spyOn(AgentRunWatchdog.Instance, 'Track').mockImplementation(() => undefined);
+        const svc = new RealtimeClientSessionService();
+        const dbProvider = makeDatabaseProvider(() => makeRun());
+
+        svc.KeepCoAgentRunAlive('co-run-1', dbProvider, contextUser);
+        svc.KeepCoAgentRunAlive(null, dbProvider, contextUser);
+        svc.KeepCoAgentRunAlive('co-run-1', makeRunProvider(() => makeRun()), contextUser); // can't stamp heartbeats
+
+        expect(track.mock.calls).toEqual([['co-run-1', dbProvider, contextUser]]);
+    });
+
+    it('registers the run the moment it is created, so a long call is never taken for a dead process', async () => {
+        const track = vi.spyOn(AgentRunWatchdog.Instance, 'Track').mockImplementation(() => undefined);
+        const agentRun = makeObsRun('co-run-real');
+        const prov = makeDatabaseProvider(name => {
+            if (name === 'MJ: AI Agent Runs') return agentRun;
+            return makeObsRun(name === 'MJ: AI Agent Run Steps' ? 'run-step-real' : 'prompt-run-real');
+        });
+
+        await new ObservabilityTestService().CallCreateObservabilityRun(makeCoAgent(), 'prompt-1', 'model-1', 'vendor-1', 'u1', 'session-1', prov);
+
+        expect(track).toHaveBeenCalledWith('co-run-real', prov, contextUser);
+    });
+
+    it('unregisters it, and still charges it, even when finalizing the run throws', async () => {
+        const untrack = vi.spyOn(AgentRunWatchdog.Instance, 'Untrack');
+        let agentRunLoads = 0;
+        const agentRun = makeRun({
+            ID: 'co-run-1',
+            Dirty: true,
+            // The finalize's load fails hard; the cost copy's load (the second) succeeds.
+            Load: vi.fn(async () => {
+                agentRunLoads++;
+                if (agentRunLoads === 1) {
+                    throw new Error('connection reset');
+                }
+                return true;
+            }),
+        });
+        const promptRun = makeRun({ ID: 'prompt-run-1', TokensPrompt: 10, TokensCompletion: 2, TokensUsed: 12, TotalCost: 0.25 });
+        const prov = makeRunProvider(name => (name === 'MJ: AI Agent Runs' ? agentRun : promptRun));
+
+        await expect(
+            new RealtimeClientSessionService().FinalizeCoAgentRun('co-run-1', 'prompt-run-1', contextUser, prov, true)
+        ).rejects.toThrow('connection reset');
+
+        expect(untrack).toHaveBeenCalledWith('co-run-1');
+        expect(agentRun.TotalCost).toBe(0.25);
+    });
+
+    it('unregisters it when the session ends', async () => {
+        const untrack = vi.spyOn(AgentRunWatchdog.Instance, 'Untrack');
+
+        await new RealtimeClientSessionService().FinalizeCoAgentRun('co-run-1', null, contextUser, makeRunProvider(() => makeRun({ ID: 'co-run-1' })), true);
+
+        expect(untrack).toHaveBeenCalledWith('co-run-1');
+    });
+});
 
 describe('RealtimeClientSessionService.createCoAgentObservabilityRun (real path)', () => {
     it('creates the co-agent AIAgentRun + linked AIPromptRun + single run step with full linkage stamping', async () => {

@@ -20,5 +20,9 @@
   },
   "primaryKey": {
     "ID": "812F226F-C0C4-48DA-9E24-511D527CF5BB"
+  },
+  "sync": {
+    "lastModified": "2026-10-02T21:42:41.713Z",
+    "checksum": "b0e85cab488e58c47239f431c918f5a63c6ebc3f6303e235b95e0e1f48a6bb06"
   }
 }
