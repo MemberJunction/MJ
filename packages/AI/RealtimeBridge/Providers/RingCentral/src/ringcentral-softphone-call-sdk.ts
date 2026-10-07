@@ -205,6 +205,18 @@ export class RingCentralSoftphoneCallSdk implements ITelephonyCallSdk {
         }
     }
 
+    /**
+     * After a SIP REFER transfer the call belongs to the far end: stop MJ's RTP clock and forget the session
+     * WITHOUT hanging up (a BYE would drop the transferred party).
+     *
+     * @param _callId The platform call id (unused).
+     */
+    public async detach(_callId: string): Promise<void> {
+        this.sender?.stop();
+        this.sender = null;
+        this.session = null;
+    }
+
     /** Barge-in: drop the agent's queued (not-yet-sent) outbound audio so it goes silent immediately. */
     public flushOutbound(): void {
         this.sender?.flush();

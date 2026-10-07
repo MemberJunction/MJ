@@ -102,6 +102,23 @@ describe('SQLFullType', () => {
         it('float with precision', () => {
             expect(SQLFullType('float', 0, 53, 0)).toBe('float(53)');
         });
+        // A bare `varbinary` parameter is varbinary(1) in T-SQL and truncates every value to one
+        // byte, so the length must always be emitted.
+        it('varbinary unbounded (-1) emits MAX', () => {
+            expect(SQLFullType('varbinary', -1, 0, 0)).toBe('varbinary(MAX)');
+        });
+        it('varbinary with a length keeps it (bytes, not halved)', () => {
+            expect(SQLFullType('varbinary', 16, 0, 0)).toBe('varbinary(16)');
+        });
+        it('varbinary is case- and whitespace-insensitive', () => {
+            expect(SQLFullType(' VarBinary ', -1, 0, 0)).toBe('varbinary(MAX)');
+        });
+        it('binary with a length keeps it', () => {
+            expect(SQLFullType('binary', 8, 0, 0)).toBe('binary(8)');
+        });
+        it('binary without a length falls back to binary(1), its T-SQL default', () => {
+            expect(SQLFullType('binary', 0, 0, 0)).toBe('binary(1)');
+        });
     });
 
     describe('PostgreSQL types (no length params)', () => {
@@ -177,6 +194,12 @@ describe('TypeScriptTypeFromSQLType', () => {
         });
         it('maps bool to boolean', () => {
             expect(TypeScriptTypeFromSQLType('bool')).toBe('boolean');
+        });
+        it('maps tsvector to string', () => {
+            expect(TypeScriptTypeFromSQLType('tsvector')).toBe('string');
+        });
+        it('maps tsquery to string', () => {
+            expect(TypeScriptTypeFromSQLType('tsquery')).toBe('string');
         });
     });
 });

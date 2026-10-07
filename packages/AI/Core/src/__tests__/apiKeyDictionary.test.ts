@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { AIAPIKeys, GetAIAPIKey, GetAIAPIKeyGlobal, MakeAIAPIKeyResolver } from '../generic/apiKeyDictionary';
+import { AIAPIKeys, AICredentialScope, CredentialScopeAllows, GetAIAPIKey, GetAIAPIKeyGlobal, MakeAIAPIKeyResolver } from '../generic/apiKeyDictionary';
 import { MJGlobal } from '@memberjunction/global';
 
 describe('AIAPIKeys', () => {
@@ -111,6 +111,63 @@ describe('GetAIAPIKey', () => {
 
         expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Using local API key'));
         consoleSpy.mockRestore();
+    });
+});
+
+describe('CredentialScopeAllows', () => {
+    it('Any (and an omitted scope) allows every source', () => {
+        for (const scope of ['Any', undefined] as const) {
+            expect(CredentialScopeAllows(scope, 'Runtime')).toBe(true);
+            expect(CredentialScopeAllows(scope, 'PlatformCredential')).toBe(true);
+            expect(CredentialScopeAllows(scope, 'Environment')).toBe(true);
+        }
+    });
+
+    it('RuntimeOnly allows only what the caller supplied', () => {
+        expect(CredentialScopeAllows('RuntimeOnly', 'Runtime')).toBe(true);
+        expect(CredentialScopeAllows('RuntimeOnly', 'PlatformCredential')).toBe(false);
+        expect(CredentialScopeAllows('RuntimeOnly', 'Environment')).toBe(false);
+    });
+
+    it('fails closed on a value outside the type — an untyped caller gets an error, not the platform key', () => {
+        expect(() => CredentialScopeAllows('runtimeonly' as AICredentialScope, 'Environment')).toThrow(/Unknown AI credential scope/);
+    });
+});
+
+describe('GetAIAPIKey with a RuntimeOnly credential scope', () => {
+    beforeEach(() => {
+        (AIAPIKeys as Record<string, Record<string, string>>)['_cachedAPIKeys'] = {};
+        process.env['AI_VENDOR_API_KEY__VERTEXLLM'] = 'platform-key';
+    });
+
+    afterEach(() => {
+        delete process.env['AI_VENDOR_API_KEY__VERTEXLLM'];
+    });
+
+    it('still answers with the run key for a driver class the run carries', () => {
+        const runKeys = [{ driverClass: 'GeminiLLM', apiKey: 'customer-key' }];
+        expect(GetAIAPIKey('GeminiLLM', runKeys, false, 'RuntimeOnly')).toBe('customer-key');
+    });
+
+    it('never falls back to the platform key for a driver class the run does not carry', () => {
+        // The #601 failover: the org keyed GeminiLLM, failover reached VertexLLM, and the platform paid.
+        const runKeys = [{ driverClass: 'GeminiLLM', apiKey: 'customer-key' }];
+        expect(GetAIAPIKey('VertexLLM', runKeys, false, 'RuntimeOnly')).toBeUndefined();
+    });
+
+    it('has no key at all when the run carries none — a caller that dropped apiKeys fails loudly', () => {
+        expect(GetAIAPIKey('VertexLLM', undefined, false, 'RuntimeOnly')).toBeUndefined();
+        expect(GetAIAPIKey('VertexLLM', [], false, 'RuntimeOnly')).toBeUndefined();
+    });
+
+    it('defaults to Any, which keeps the platform fallback', () => {
+        expect(GetAIAPIKey('VertexLLM', [{ driverClass: 'GeminiLLM', apiKey: 'customer-key' }])).toBe('platform-key');
+    });
+
+    it('reaches MakeAIAPIKeyResolver too', () => {
+        const resolve = MakeAIAPIKeyResolver([{ driverClass: 'GeminiLLM', apiKey: 'customer-key' }], false, 'RuntimeOnly');
+        expect(resolve('GeminiLLM')).toBe('customer-key');
+        expect(resolve('VertexLLM')).toBeUndefined();
     });
 });
 
