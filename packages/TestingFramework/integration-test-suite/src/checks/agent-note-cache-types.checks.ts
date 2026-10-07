@@ -1,5 +1,5 @@
 /**
- * agent-note-cache-types.checks.ts — the 'agent-note-cache-types' bundle (NC1–NC3).
+ * agent-note-cache-types.checks.ts — the 'agent-note-cache-types' bundle (NC1–NC5).
  *
  * DETERMINISTIC tier (no model calls). Pins the invariant behind the agent-context date-sort crash:
  * a `BaseEngine` property configured as `entity_object` must hold real `BaseEntity` instances after
@@ -37,9 +37,14 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /** The engine property whose poisoning produced the observed agent crash. */
 const NOTES_PROPERTY = '_agentNotes';
+
+/** The fixture row NC5 edits. Named so its assertion can find the row back without reading an
+ *  `unknown` off the deliberately loose payload shape below, and so the two cannot drift apart. */
+const EDITED_ROW_ID = '22222222-2222-4222-8222-222222222222';
 
 /** Rows shaped like `MJ: AI Agent Notes` as a serialized cache payload holds them — dates are STRINGS. */
 const PAYLOAD_ROWS: Array<Record<string, unknown>> = [
@@ -55,7 +60,7 @@ const PAYLOAD_ROWS: Array<Record<string, unknown>> = [
         __mj_UpdatedAt: '2026-08-01T00:00:00.000Z',
     },
     {
-        ID: '22222222-2222-4222-8222-222222222222',
+        ID: EDITED_ROW_ID,
         AgentID: null,
         Note: 'IT cache-type probe (newer)',
         Type: 'Preference',
@@ -114,6 +119,23 @@ async function sendMalformedCacheEvent(): Promise<void> {
         SourceServerId: 'integration-test-foreign-process',
         Data: 'not json at all',
     });
+}
+
+/**
+ * Counts `_agentNotes` emissions from now on. `ObserveProperty` replays the current value on
+ * subscribe; that replay is dropped so the count is only what the event under test caused.
+ */
+function countNotesEmissions(): { count: () => number; stop: () => void } {
+    let emissions = 0;
+    let replayed = false;
+    const sub = AIEngineBase.Instance.ObserveProperty('_agentNotes').subscribe(() => {
+        if (replayed) {
+            emissions++;
+        }
+        replayed = true;
+    });
+    replayed = true;
+    return { count: () => emissions, stop: () => sub.unsubscribe() };
 }
 
 /** Restores the engine to true database state after a check has poisoned it. */
@@ -191,6 +213,59 @@ export const AgentNoteCacheTypeChecks: NamedCheck[] = [
                     Assert(note instanceof BaseEntity, 'reload path yields BaseEntity rows');
                 }
                 console.log(`      → malformed payload reloaded ${AIEngine.Instance.AgentNotes.length} rows from the database`);
+            } finally {
+                await restoreEngine(ctx);
+            }
+        }
+    },
+    {
+        Id: 'agent-note-cache-types.NC4',
+        Name: 'NC4: a payload carrying the rows AgentNotes already holds is skipped — same array, no emit (plan 1.3)',
+        Fn: async (ctx: IntegrationCheckContext) => {
+            try {
+                await poisonNotesCache(PAYLOAD_ROWS);
+                const held = AIEngine.Instance.AgentNotes;
+                AssertEqual(held.length, PAYLOAD_ROWS.length, 'precondition: AgentNotes holds the payload rows');
+
+                const emissions = countNotesEmissions();
+                try {
+                    // The same rows again, as a peer republishing its warm cache would send them.
+                    await poisonNotesCache(PAYLOAD_ROWS.map(r => ({ ...r })));
+                    Assert(AIEngine.Instance.AgentNotes === held,
+                        'an identical payload must not replace the AgentNotes array (it was re-materialized)');
+                    AssertEqual(emissions.count(), 0, 'an identical payload must not notify AgentNotes observers');
+                } finally {
+                    emissions.stop();
+                }
+                console.log('      → identical payload skipped: array kept, no emission');
+            } finally {
+                await restoreEngine(ctx);
+            }
+        }
+    },
+    {
+        Id: 'agent-note-cache-types.NC5',
+        Name: 'NC5: the same rows with one newer __mj_UpdatedAt are applied (plan 1.3)',
+        Fn: async (ctx: IntegrationCheckContext) => {
+            try {
+                await poisonNotesCache(PAYLOAD_ROWS);
+                const held = AIEngine.Instance.AgentNotes;
+
+                const changed = PAYLOAD_ROWS.map(r => ({ ...r }));
+                changed[1].Note = 'IT cache-type probe (newer, edited)';
+                changed[1].__mj_UpdatedAt = '2026-08-03T00:00:00.000Z';
+
+                const emissions = countNotesEmissions();
+                try {
+                    await poisonNotesCache(changed);
+                    Assert(AIEngine.Instance.AgentNotes !== held, 'a changed payload must replace the AgentNotes array');
+                    const edited = AIEngine.Instance.AgentNotes.find(n => UUIDsEqual(n.ID, EDITED_ROW_ID));
+                    AssertEqual(edited?.Note, 'IT cache-type probe (newer, edited)', 'the edited row is visible');
+                    AssertEqual(emissions.count(), 1, 'a changed payload notifies AgentNotes observers once');
+                } finally {
+                    emissions.stop();
+                }
+                console.log('      → changed payload applied');
             } finally {
                 await restoreEngine(ctx);
             }

@@ -176,6 +176,10 @@ export { ApplicationRolesResourceComponent, LoadApplicationRolesResource } from 
 // Realtime Recordings — review & replay recorded realtime sessions (audio + transcript)
 export { RealtimeRecordingsDashboardComponent, LoadRealtimeRecordingsDashboard } from './RealtimeRecordings/realtime-recordings-dashboard.component';
 
+// Telephony & Interaction Operations
+export { TelephonyOperationsDashboardComponent } from './TelephonyOperations/telephony-operations-dashboard.component';
+export * from './TelephonyOperations/telephony-operations-agent-context';
+
 // Permissions admin — three independent resource tabs (Phase 2a/b/c — unified permissions)
 export {
     PermissionsUserAccessResourceComponent,
@@ -239,6 +243,10 @@ export * from './DatabaseDesigner/database-designer-dashboards.module';
 export { DatabaseDesignerDashboardComponent, LoadDatabaseDesignerDashboard } from './DatabaseDesigner/components/database-designer-dashboard.component';
 export * from './shared/shared-dashboard-widgets.module';
 export * from './archiving-dashboards.module';
+
+// Work Queue app — operator dashboard over the WorkQueue.* remote operations (spec 09b)
+export * from './work-queue-dashboards.module';
+export { WorkQueueDashboardComponent } from './WorkQueue/work-queue-dashboard.component';
 
 // Routines app — schedule AI agents to run on a cron cadence
 export { UserRoutinesResourceComponent, LoadUserRoutinesResource } from './UserRoutines/user-routines-resource.component';

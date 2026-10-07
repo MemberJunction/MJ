@@ -13,7 +13,9 @@ import os from 'os';
 import path from 'path';
 import { BaseEntity, EntityInfo, RunView, RunViewResult, UserInfo } from '@memberjunction/core';
 import { PullService } from '../services/PullService';
+import { FileWriteBatch } from '../lib/file-write-batch';
 import { SyncEngine, RecordData } from '../lib/sync-engine';
+import { resetMissingEntitySubclassWarnings } from '../lib/entity-subclass-guard';
 
 const ENTITY = 'PullTest: Companies';
 
@@ -47,7 +49,7 @@ function runViewResult(records: BaseEntity[]): RunViewResult<BaseEntity> {
 }
 
 /** The entity directory layout from the bug report: one array file new records are appended to. */
-async function createEntityDir(root: string): Promise<string> {
+async function createEntityDir(root: string, pullOverrides: { backupDirectory?: string; updateExistingRecords?: boolean } = {}): Promise<string> {
   const dir = path.join(root, 'companies');
   await fs.ensureDir(dir);
   await fs.writeJson(path.join(dir, '.mj-sync.json'), {
@@ -59,6 +61,8 @@ async function createEntityDir(root: string): Promise<string> {
       appendRecordsToExistingFile: true,
       updateExistingRecords: true,
       mergeStrategy: 'merge',
+      backupBeforeUpdate: true,
+      ...pullOverrides,
     },
   });
   return dir;
@@ -68,13 +72,16 @@ describe('PullService.pull — records whose entity subclass is not registered',
   const originalCwd = process.cwd();
   let root: string;
   let service: PullService;
+  let warnings: string[];
 
   beforeEach(async () => {
     root = await fs.mkdtemp(path.join(os.tmpdir(), 'mj-pull-'));
+    resetMissingEntitySubclassWarnings();
     const user = new UserInfo(null, { ID: 'user-1', Name: 'Test', Email: 'test@example.com' });
     const syncEngine = new SyncEngine(user);
     vi.spyOn(syncEngine, 'getEntityInfo').mockReturnValue(companyInfo);
     service = new PullService(syncEngine, user);
+    warnings = [];
   });
 
   afterEach(async () => {
@@ -85,7 +92,7 @@ describe('PullService.pull — records whose entity subclass is not registered',
 
   async function pull(dir: string, records: BaseEntity[]) {
     vi.spyOn(RunView.prototype, 'RunView').mockResolvedValue(runViewResult(records));
-    return service.pull({ entity: ENTITY, targetDir: dir });
+    return service.pull({ entity: ENTITY, targetDir: dir }, { onWarn: (m) => warnings.push(m) });
   }
 
   async function readCompanies(dir: string): Promise<RecordData[]> {
@@ -138,5 +145,100 @@ describe('PullService.pull — records whose entity subclass is not registered',
 
     const written = await readCompanies(dir);
     expect(written.map((r) => r.primaryKey?.ID)).toEqual(keys);
+  });
+
+  it('warns once that the entity subclass is missing, in pull terms', async () => {
+    const dir = await createEntityDir(root);
+    await pull(dir, dbCompanies(2));
+
+    const subclassWarnings = warnings.filter((w) => w.includes(`No entity subclass is registered for '${ENTITY}'`));
+    expect(subclassWarnings).toHaveLength(1);
+    expect(subclassWarnings[0]).toMatch(/read through the generic BaseEntity/);
+  });
+});
+
+describe('PullService.pull — backupBeforeUpdate', () => {
+  const originalCwd = process.cwd();
+  let root: string;
+  let service: PullService;
+
+  beforeEach(async () => {
+    root = await fs.mkdtemp(path.join(os.tmpdir(), 'mj-pull-backup-'));
+    const user = new UserInfo(null, { ID: 'user-1', Name: 'Test', Email: 'test@example.com' });
+    const syncEngine = new SyncEngine(user);
+    vi.spyOn(syncEngine, 'getEntityInfo').mockReturnValue(companyInfo);
+    service = new PullService(syncEngine, user);
+  });
+
+  afterEach(async () => {
+    process.chdir(originalCwd);
+    vi.restoreAllMocks();
+    await fs.remove(root);
+  });
+
+  async function pull(dir: string, count: number) {
+    vi.spyOn(RunView.prototype, 'RunView').mockResolvedValue(runViewResult(dbCompanies(count)));
+    return service.pull({ entity: ENTITY, targetDir: dir });
+  }
+
+  async function backups(backupDir: string): Promise<string[]> {
+    return (await fs.pathExists(backupDir)) ? (await fs.readdir(backupDir)).sort() : [];
+  }
+
+  async function readCompanies(dir: string): Promise<RecordData[]> {
+    return fs.readJson(path.join(dir, '.companies.json'));
+  }
+
+  /** Makes the next flush fail after it has started rewriting files. */
+  function failNextFlush(): void {
+    vi.spyOn(FileWriteBatch.prototype, 'flush').mockImplementationOnce(async function (this: FileWriteBatch) {
+      for (const file of this.getPendingFiles()) {
+        await fs.writeJson(file, []);
+      }
+      throw new Error('disk full');
+    });
+  }
+
+  it('removes its backups after a successful pull', async () => {
+    const dir = await createEntityDir(root);
+    await pull(dir, 2);
+    await pull(dir, 4);
+
+    expect(await fs.pathExists(path.join(dir, '.backups'))).toBe(false);
+    expect(await readCompanies(dir)).toHaveLength(4);
+  });
+
+  it('restores a file that only gained new records when the pull fails', async () => {
+    const dir = await createEntityDir(root, { updateExistingRecords: false });
+    await pull(dir, 2);
+
+    failNextFlush();
+    await expect(pull(dir, 4)).rejects.toThrow(/disk full/);
+
+    expect((await readCompanies(dir)).map((r) => r.primaryKey?.ID)).toEqual([idOf(1), idOf(2)]);
+  });
+
+  it('restores from a nested backupDirectory, and treats an absolute one as inside the folder', async () => {
+    for (const backupDirectory of ['backups/pull', '/abs-backups']) {
+      const dir = await createEntityDir(root, { backupDirectory });
+      await fs.remove(path.join(dir, '.companies.json'));
+      await pull(dir, 2);
+
+      failNextFlush();
+      await expect(pull(dir, 3)).rejects.toThrow(/disk full/);
+
+      expect(await readCompanies(dir)).toHaveLength(2);
+      expect(await backups(path.join(dir, backupDirectory))).toHaveLength(1);
+    }
+  });
+
+  it('refuses a backupDirectory outside the folder of the files, before writing anything', async () => {
+    const dir = await createEntityDir(root, { backupDirectory: '../escaped' });
+    await pull(dir, 1);
+
+    await expect(pull(dir, 2)).rejects.toThrow(/points outside/);
+
+    expect(await readCompanies(dir)).toHaveLength(1);
+    expect(await fs.pathExists(path.join(root, 'escaped'))).toBe(false);
   });
 });
