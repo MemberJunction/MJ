@@ -18,6 +18,7 @@ export * from './frameSampler';
 export * from './localMediaController';
 export * from './mediaStage';
 export * from './mediaLayout';
+export * from './mediaPreview';
 export * from './model';
 export * from './channelVideoSource';
 export * from './displayCapture';
