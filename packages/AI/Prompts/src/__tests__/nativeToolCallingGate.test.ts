@@ -10,6 +10,7 @@ import { describe, it, expect } from 'vitest';
 import { AIModelConfiguration, AIPromptConfiguration, ChatParams, ChatResult } from '@memberjunction/ai';
 import {
     ResolveNativeToolCalling,
+    ResolveToolChoiceForRequest,
     RecordToolCallingMode,
     RecordToolCallingDecision,
     GetToolCallingDecision,
@@ -162,6 +163,31 @@ describe('ResolveNativeToolCalling — cascade semantics', () => {
         expect(decision.useNativeTools).toBe(false);
         expect(decision.mode).toBe('Envelope');
         expect(decision.warning).toBeUndefined();
+    });
+});
+
+describe('ResolveToolChoiceForRequest — the choice that actually goes out', () => {
+    const tools = [{ name: 'run_ad_hoc_query', description: 'x', inputSchema: { type: 'object' } }, { name: 'complete_task', description: 'y', inputSchema: { type: 'object' } }];
+    const rejectsForced: AIModelConfiguration = { LLM: { SupportsForcedToolChoice: false } };
+
+    it("passes 'auto', 'none' and an absent choice through unchanged", () => {
+        expect(ResolveToolChoiceForRequest('auto', tools, rejectsForced)).toBe('auto');
+        expect(ResolveToolChoiceForRequest('none', tools, rejectsForced)).toBe('none');
+        expect(ResolveToolChoiceForRequest(undefined, tools, rejectsForced)).toBeUndefined();
+    });
+    it('keeps a forced choice for a model that accepts it, or whose catalog says nothing', () => {
+        expect(ResolveToolChoiceForRequest({ name: 'complete_task' }, tools, null)).toEqual({ name: 'complete_task' });
+        expect(ResolveToolChoiceForRequest('required', tools, { LLM: { SupportsForcedToolChoice: true } })).toBe('required');
+    });
+    it("downgrades a named choice to 'none' when that tool is not on the request", () => {
+        expect(ResolveToolChoiceForRequest({ name: 'complete_task' }, [tools[0]], null)).toBe('none');
+    });
+    it("downgrades a named or required choice to 'auto' for a model that rejects forced tool choice", () => {
+        expect(ResolveToolChoiceForRequest({ name: 'complete_task' }, tools, rejectsForced)).toBe('auto');
+        expect(ResolveToolChoiceForRequest('required', tools, rejectsForced)).toBe('auto');
+    });
+    it("prefers 'none' over 'auto' when the named tool was stripped, whatever the catalog says", () => {
+        expect(ResolveToolChoiceForRequest({ name: 'complete_task' }, [tools[0]], rejectsForced)).toBe('none');
     });
 });
 

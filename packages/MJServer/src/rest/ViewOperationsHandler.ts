@@ -206,17 +206,20 @@ export class ViewOperationsHandler {
             params.Fields = (params.Fields as string).split(',');
         }
         
-        // Sanitize numeric values
+        // Sanitize numeric values: base-10, integral, and clamped to a sane range so a
+        // negative/garbage value can never reach the SQL layer.
         if (params.MaxRows !== undefined) {
-            params.MaxRows = typeof params.MaxRows === 'string' 
-                ? parseInt(params.MaxRows as string) 
+            const parsed = typeof params.MaxRows === 'string'
+                ? parseInt(params.MaxRows as string, 10)
                 : params.MaxRows;
+            params.MaxRows = Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed as number)) : undefined;
         }
         
         if (params.StartRow !== undefined) {
-            params.StartRow = typeof params.StartRow === 'string' 
-                ? parseInt(params.StartRow as string) 
+            const parsed = typeof params.StartRow === 'string'
+                ? parseInt(params.StartRow as string, 10)
                 : params.StartRow;
+            params.StartRow = Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed as number)) : undefined;
         }
         
         // Default ResultType if not provided
