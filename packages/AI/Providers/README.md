@@ -16,7 +16,7 @@ Direct integrations with large language model APIs.
 | [Gemini](./Gemini/readme.md) | `@memberjunction/ai-gemini` | Wrapper for Google Gemini AI Models |
 | [Groq](./Groq/readme.md) | `@memberjunction/ai-groq` | Wrapper for Groq AI LPU inference engine |
 | [Mistral](./Mistral/readme.md) | `@memberjunction/ai-mistral` | Wrapper for Mistral AI Models |
-| [OpenAI](./OpenAI/readme.md) | `@memberjunction/ai-openai` | Wrapper for OpenAI AI Models (GPT-4, etc.) |
+| [OpenAI](./OpenAI/readme.md) | `@memberjunction/ai-openai` | Wrapper for OpenAI AI Models (GPT-4, etc.), including the Decisions API decision model (GPT-6 Luna Decisions, public beta) |
 | [xAI](./xAI/README.md) | `@memberjunction/ai-xai` | Wrapper for xAI models (Grok) |
 
 ### Cloud Platform Providers

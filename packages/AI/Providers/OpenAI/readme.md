@@ -2,7 +2,7 @@
 
 # @memberjunction/ai-openai
 
-MemberJunction AI provider for OpenAI. Implements `BaseLLM`, `BaseEmbeddings`, `BaseImageGenerator`, and `BaseAudio` from `@memberjunction/ai`. This is the foundational LLM provider in MemberJunction -- many other providers (Groq, Cerebras, Fireworks, OpenRouter, LMStudio, xAI) extend this package since they use OpenAI-compatible APIs.
+MemberJunction AI provider for OpenAI. Implements `BaseLLM`, `BaseEmbeddings`, `BaseImageGenerator`, `BaseAudio`, and `BaseDecision` (OpenAI's Decisions API) from `@memberjunction/ai`. This is the foundational LLM provider in MemberJunction -- many other providers (Groq, Cerebras, Fireworks, OpenRouter, LMStudio, xAI) extend this package since they use OpenAI-compatible APIs.
 
 ## Architecture
 
@@ -56,6 +56,7 @@ graph TD
 - **Response Formats**: JSON mode, text, and structured output controls
 - **Effort Level**: Maps MJ effort levels to OpenAI reasoning effort parameters
 - **Error Analysis**: Integrated error analysis via `ErrorAnalyzer`
+- **Typed Decisions**: OpenAI's Decisions API (`gpt-6-luna`, public beta) via `OpenAIDecision`; see [Typed decisions](#typed-decisions-gpt-6-luna-decisions)
 - **Extensible Base**: Designed as the foundation for any OpenAI-compatible provider
 
 ## Installation
@@ -117,6 +118,66 @@ const result = await embedder.EmbedText({
 console.log(`Dimensions: ${result.vector.length}`);
 ```
 
+## Typed decisions (GPT-6 Luna Decisions)
+
+`OpenAIDecision` is a `BaseDecision` driver for OpenAI's **Decisions API** (`POST https://api.openai.com/v1/decisions`), which OpenAI announced at DevDay on September 29, 2026. **The API is in public beta** (OpenAI says GA is coming in the next few weeks), so expect changes. It serves one model, `gpt-6-luna`, which MJ's catalog lists as the `GPT-6 Luna Decisions` model. That model has the `Decision` type and is separate from the `GPT-6 Luna` LLM. It answers Likelihood, Choice and Score questions with a probability for every allowed option and writes no text. OpenAI charges $0.10 per million input tokens, with no output or cache charge, and reports a latency of about 150 ms.
+
+```typescript
+import { OpenAIDecision } from "@memberjunction/ai-openai";
+
+const luna = new OpenAIDecision("your-openai-api-key");
+const result = await luna.Decide({
+    Model: "gpt-6-luna",
+    State: "I was charged twice for March. Please refund the duplicate.",
+    Questions: {
+        refund: { Kind: "Likelihood", Instructions: "Is the customer asking for money back?" },
+        team: {
+            Kind: "Choice",
+            Instructions: "Which team should handle this?",
+            Options: [
+                { Value: "billing", Description: "Payments, invoices and refunds" },
+                { Value: "technical", Description: "Outages and errors" },
+            ],
+        },
+    },
+});
+// result.Answers.refund → { Kind: 'Likelihood', Probability: … }
+```
+
+Most callers reach it through `AIDecisionRunner` (`@memberjunction/ai-prompts`) with `override.modelId` naming `GPT-6 Luna Decisions`, or a Decision prompt bound to it.
+
+**Two routes.** The model has two Inference Provider rows:
+
+| Vendor | Driver | `APIName` | Priority |
+|---|---|---|---|
+| OpenAI | `OpenAIDecision` (this package) | `gpt-6-luna` | 2 (preferred) |
+| OpenRouter | `OpenRouterDecision` ([`@memberjunction/ai-openrouter`](../OpenRouter/README.md)) | `openai/gpt-6-luna-decisions-20261006` (pinned), 1,050,000-token context | 1 |
+
+OpenRouter serves the model through its own Decisions API, which speaks the System One format, so the OpenRouter route needs no new code. The runner picks the higher-priority row that has a credential and fails over to the other when that call fails with an error that allows failover.
+
+**The wire format.** The format is OpenAI's own, not System One, so `OpenAIDecision` extends `BaseDecision` directly. Its shape comes from OpenAI's Node SDK (`openai` 7.30.0, `client.decisions.create`). MJ's `openai` dependency is 6.18.0, which has no `decisions` resource, so the driver calls the endpoint with `fetch`.
+- The request is `{ model, input, questions }`. `questions` is an ordered array, and each entry is named by its MJ question key:
+  - a Likelihood is `{ type: 'predicate' }`;
+  - a Choice has `choices: [{ value, description }]`;
+  - a Score has `levels: [{ label }]`.
+- The state is sent as `input`. An object state is sent as JSON text.
+- Answers come back in question order and carry the question's `name`. The driver matches them by name, and by position only when an answer has no name.
+- A Choice's probabilities are keyed by option value, and a Score's by level label. Both are renormalised.
+- A Score's `score` is mapped onto MJ's 0-based level positions through each level's numeric `value`.
+- Usage comes from `input_tokens` and `output_tokens`. The response carries no cost, so `AIDecisionRunner` prices the run from the model's cost row.
+
+**Refusals.** OpenAI can decline any question, and returns `{ type: 'refusal', name }` for it. The result then fails with an error that names the question (`Question 'team': OpenAI declined to answer it (refusal)`). That error allows failover, so the runner tries the next candidate, such as the OpenRouter row.
+
+**Configuration.**
+- **Key.** Bind an `API Key` credential to the OpenAI vendor or to the model's OpenAI row, or set the legacy variable `AI_VENDOR_API_KEY__OPENAIDECISION`. A bound credential reaches the driver as JSON (`{"apiKey":"…"}`); the driver sends its `apiKey` as the bearer token, never the JSON.
+- **No key.** With no key, the runner skips this route. A driver built with an empty key fails before any request with a `NoCredentials` error that allows failover. The same happens when the key starts with `{` but is not valid JSON.
+- **Endpoint.** The default is `https://api.openai.com/v1/decisions`. To change it, pass a second constructor argument or give the credential an `endpoint`. A URL that does not end in `/decisions`, such as an SDK-style base ending in `/v1`, gets `/decisions` appended.
+- **Errors.** A non-2xx response throws an error that carries the HTTP status and OpenAI's `error.message`, with the key redacted if the body ever echoes it. `ErrorAnalyzer` classifies it: a 429 or 5xx fails over, and a 401 stops the failover loop.
+
+**Not documented by OpenAI yet.** OpenAI has not published per-request limits (questions per call, options per Choice, levels per Score, context) or Azure OpenAI availability. So the model's `Decision` limits are left unset, and the OpenAI row has no input-token limit. The API also accepts images, as data URLs only and at most 128 per request; MJ sends the state as text and does not use them yet.
+
+**Default Decision.** `Default Decision` does not bind this model, and its bindings are unchanged. As an active `Decision` model, it is one of the power-matched fallbacks of any Decision prompt that does not require specific models. Its PowerRank is 57, below Jev (60) and Clef (58) because it is unmeasured on MJ's data, and that puts it first among `Default Decision`'s fallbacks, after Jev and `LLM Decision`. A call reaches it only when every credentialed candidate ahead of it has failed with an error that allows failover, and only when one of its rows has a credential. An OpenRouter key set for Jev also works for its OpenRouter row.
+
 ## Supported Parameters
 
 | Parameter | Supported | Notes |
@@ -161,6 +222,7 @@ export class MyProviderLLM extends OpenAILLM {
 - `OpenAILLM` -- Registered via `@RegisterClass(BaseLLM, OpenAILLM)`
 - `OpenAIEmbedding` -- Registered via `@RegisterClass(BaseEmbeddings, OpenAIEmbedding)`
 - `OpenAIAudioGenerator` -- Registered under the key `'OpenAIAudioGenerator'` against `BaseTextToSpeech`, `BaseSpeechToText` and the deprecated `BaseAudioGenerator`, so the TTS and speech-to-text runners and older callers all resolve it
+- `OpenAIDecision` -- Registered via `@RegisterClass(BaseDecision, 'OpenAIDecision')`. The `GPT-6 Luna Decisions` model's OpenAI row names it as its `DriverClass`
 
 ## Dependencies
 

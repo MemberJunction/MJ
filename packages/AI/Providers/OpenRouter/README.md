@@ -102,6 +102,15 @@ SiliconFlow) through the same Decisions API, so the `Kev-4B` model's OpenRouter 
 `Default Decision` does not bind Kev-4B, but as an active Decision model it is one of the
 power-matched fallbacks, after Jev and `LLM Decision`, for any host that has this key.
 
+**GPT-6 Luna Decisions.** OpenRouter also serves OpenAI's decision model, `gpt-6-luna`, through the
+same Decisions API, as `openai/gpt-6-luna-decisions`. The model's OpenRouter row pins the dated
+`openai/gpt-6-luna-decisions-20261006`, served by OpenAI with a 1,050,000-token context, and uses
+`OpenRouterDecision` and the same key. OpenRouter's response for it is in the System One format, so
+this driver maps it unchanged. The model's other route is OpenAI's own Decisions API, which has its own
+wire format, through `OpenAIDecision` in [`@memberjunction/ai-openai`](../OpenAI/README.md). That row
+has the higher priority, so with keys for both, the runner tries OpenAI first and fails over to
+OpenRouter.
+
 **The wire format.** Jev and Kev speak the System One decisions format. `OpenRouterDecision` extends
 `BaseSystemOneDecision` (`@memberjunction/ai`), which owns the request and answer mapping; this class
 supplies only the endpoint and the default model. Cloudflare's Clef models speak the same format on

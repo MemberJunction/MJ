@@ -103,7 +103,7 @@ Each provider implements one or more capability interfaces from `@memberjunction
 
 | Provider | npm Package | LLM | Embeddings | Image Gen | Audio | Video | Reranking | Decision |
 |----------|-------------|:---:|:----------:|:---------:|:-----:|:-----:|:---------:|:--------:|
-| **OpenAI** | `@memberjunction/ai-openai` | x | x | x | x | | | |
+| **OpenAI** | `@memberjunction/ai-openai` | x | x | x | x | | | x |
 | **Anthropic** | `@memberjunction/ai-anthropic` | x | | | | | | |
 | **Google Gemini** | `@memberjunction/ai-gemini` | x | x | x | | | | |
 | **Mistral** | `@memberjunction/ai-mistral` | x | x | | | | | |
