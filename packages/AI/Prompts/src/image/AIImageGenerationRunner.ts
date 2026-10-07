@@ -174,7 +174,7 @@ export class AIImageGenerationRunner extends BaseModelRunner {
 
   /**
    * The base runner reads its settings from `AIPromptParams`, so the image params are mapped onto
-   * one: the carrier prompt, the context user, the keys, the parent run, the agent and its
+   * one: the carrier prompt, the context user, the keys and credential scope, the parent run, the agent and its
    * run-created hook, and the runner's provider.
    */
   private buildPromptParams(params: ImageRunParams, prompt: MJAIPromptEntityExtended): AIPromptParams {
@@ -182,6 +182,7 @@ export class AIImageGenerationRunner extends BaseModelRunner {
     promptParams.prompt = prompt;
     promptParams.contextUser = params.ContextUser;
     promptParams.apiKeys = params.APIKeys;
+    promptParams.CredentialScope = params.CredentialScope;
     promptParams.parentPromptRunId = params.ParentRunID;
     promptParams.agentId = params.AgentID;
     promptParams.onPromptRunCreated = params.OnPromptRunCreated;
