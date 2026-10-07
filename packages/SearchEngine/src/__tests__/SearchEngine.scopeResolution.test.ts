@@ -41,6 +41,9 @@ const MISSING = 'A0000000-0000-4000-8000-0000000000ff';
 
 const user = { ID: 'u-1', Name: 'Test User', Email: 't@example.com' } as UserInfo;
 
+/** The one entity the fixture scopes have a lane on. */
+const DOCS_ENTITY = { ID: 'E0000000-0000-4000-8000-0000000000d0', Name: 'Docs', FirstPrimaryKey: { Name: 'ID' }, PrimaryKeys: [{ Name: 'ID' }] };
+
 /** Counts its calls: a refused search must run no provider, which is what proves it did not go global. */
 class CountingProvider extends BaseSearchProvider {
     public readonly SourceType: SearchSource = 'vector';
@@ -77,9 +80,16 @@ class FakeScopeCatalogue {
         const scope = this.GetScopeByID(id);
         return scope && this.Active.has(scope.ID) ? scope : undefined;
     }
+    /**
+     * A non-global scope is bounded by its rows (it runs only its enabled provider rows over its lanes), so each
+     * fixture scope carries one enabled row for the injected provider and one entity lane on `Docs`.
+     */
     public GetScopeBundle(id: string): ScopeBundle | undefined {
         const scope = this.GetScopeByID(id);
-        return scope ? { Scope: scope, Providers: [], ExternalIndexes: [], Entities: [], StorageAccounts: [] } : undefined;
+        if (!scope) return undefined;
+        const providerRow = { ID: `${scope.ID}-p`, SearchScopeID: scope.ID, SearchProviderID: 'prov-1', Enabled: true, MaxResultsOverride: null };
+        const lane = { ID: `${scope.ID}-e`, SearchScopeID: scope.ID, EntityID: DOCS_ENTITY.ID, Entity: DOCS_ENTITY.Name, ExtraFilter: null };
+        return { Scope: scope, Providers: [providerRow], ExternalIndexes: [], Entities: [lane], StorageAccounts: [] } as unknown as ScopeBundle;
     }
 }
 
@@ -111,8 +121,8 @@ class TestSearchEngine extends SearchEngine {
     protected override get ProviderToUse(): IMetadataProvider {
         const rows = this.AuditRows;
         return {
-            EntityByName: (_name: string) => null,
-            Entities: [],
+            EntityByName: (name: string) => (name.trim().toLowerCase() === 'docs' ? DOCS_ENTITY : null),
+            Entities: [DOCS_ENTITY],
             GetEntityObject: async () => {
                 const row = { SearchScopeID: null, Status: '', FailureReason: null, Query: '' } as AuditRow;
                 return Object.assign(row, { Save: async () => { rows.push({ ...row }); return true; } });
