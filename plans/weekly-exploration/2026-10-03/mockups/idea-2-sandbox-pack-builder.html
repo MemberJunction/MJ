@@ -1,0 +1,18 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sandbox Pack Builder mockup</title><style>@import url(_base.css);.band{background:repeating-linear-gradient(45deg,#f6c445,#f6c445 14px,#222 14px,#222 28px);height:6px}.bandt{background:#222;color:#f6c445;text-align:center;padding:5px;font-weight:700;letter-spacing:.08em;font-size:12px}</style></head><body>
+<div class="app"><nav class="side"><b>MemberJunction</b><a>Home</a><a>Data</a><a class="on">Sandbox Packs</a><a>Admin</a></nav>
+<main><h1>Build a Sandbox Pack</h1><div class="sub">A realistic, relationship-intact copy with no real people in it.</div>
+<div class="row"><div class="card"><b>1 · Subset</b><p class="mut">5% of <code>Members</code> + everything they touch</p><div class="bar"><i style="width:5%"></i></div><p><span class="chip pri">≈ 610 members</span> <span class="chip pri">3,940 related rows</span> <span class="chip gr">seed 4821</span></p></div>
+<div class="card"><b>2 · Leak check</b><p><span class="chip ok">0 original values found</span></p><p class="mut">Scanned 48,210 values exact + fuzzy. Pack is publishable.</p></div>
+<div class="card"><b>3 · Output</b><p>☑ Private sandbox DB<br>☑ Evaluation population for Rubrics<br>☐ Share bundle (needs permission)</p></div></div>
+<div class="card"><b>Field treatments</b> <span class="mut">— inferred from field security, encryption &amp; column semantics; you decide</span>
+<table><tr><th>Field</th><th>Sensitivity</th><th>Treatment</th><th>Real → Safe sample</th></tr>
+<tr><td>Members.FirstName / LastName</td><td><span class="chip bad">PII</span></td><td><span class="chip pri">Fake · person-name</span></td><td>Maria Alvarez → Dana Whitfield</td></tr>
+<tr><td>Members.Email</td><td><span class="chip bad">PII</span></td><td><span class="chip pri">Fake · email (consistent)</span></td><td>maria@acme.org → dana.w@example.test</td></tr>
+<tr><td>Members.DateOfBirth</td><td><span class="chip bad">PII</span></td><td><span class="chip pri">Shift · ±(random, pack-wide)</span></td><td>1984-03-02 → 1984-07-19</td></tr>
+<tr><td>Donations.Amount</td><td><span class="chip warn">Financial</span></td><td><span class="chip pri">Jitter ±8%</span></td><td>$250.00 → $263.40</td></tr>
+<tr><td>Notes.Body</td><td><span class="chip bad">Free text</span></td><td><span class="chip warn">Drop (LLM paraphrase: off)</span></td><td>“needs wheelchair access…” → —</td></tr>
+<tr><td>Members.MembershipType</td><td><span class="chip ok">Low</span></td><td><span class="chip gr">Keep</span></td><td>Student → Student</td></tr></table>
+<p class="mut">Same real person → same fake person in every table and every rebuild (keyed HMAC), so joins, households and duplicates survive.</p></div>
+<div class="card"><b>What trainees see</b><div class="band"></div><div class="bandt">SANDBOX — NOT REAL DATA · outbound email goes to a sink</div><div style="padding:12px;background:#fafbfd;border:1px solid var(--line)">Dana Whitfield · Student member · Renewal due Nov 30 &nbsp;<span class="btn">Send renewal reminder (sink)</span></div></div>
+<span class="btn">Build pack</span> <span class="btn o">Save recipe</span>
+</main></div></body></html>
