@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-mj-livekit-room",
-  "version": "6.2.0-edge.1",
+  "version": "6.2.0-edge.3",
   "description": "MemberJunction: MJ binding layer for the LiveKit room UI. Wraps @memberjunction/ng-livekit-room and connects it to the MJ realtime-bridge infrastructure — mints scoped tokens and starts agent room sessions via the RealtimeBridge GraphQL surface, threading MJ user/provider/agent context.",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -10,8 +10,7 @@
   "scripts": {
     "test": "vitest run",
     "build": "ngc",
-    "test:watch": "vitest",
-    "test:types": "tsc --noEmit -p tsconfig.spec.json"
+    "test:watch": "vitest"
   },
   "keywords": [
     "MemberJunction",
@@ -25,24 +24,26 @@
   "devDependencies": {
     "@angular/compiler": "21.2.22",
     "@angular/compiler-cli": "21.2.22",
-    "@memberjunction/ng-test-utils": "6.2.0-edge.1",
+    "@memberjunction/ng-test-utils": "6.2.0-edge.3",
     "vitest": "^4.0.18"
   },
   "peerDependencies": {
     "@angular/common": "^21.2.22",
     "@angular/core": "^21.2.22",
+    "@angular/forms": "^21.2.22",
     "rxjs": "^7.8.2"
   },
   "dependencies": {
-    "@memberjunction/ai-realtime-client": "6.2.0-edge.1",
-    "@memberjunction/core": "6.2.0-edge.1",
-    "@memberjunction/core-entities": "6.2.0-edge.1",
-    "@memberjunction/global": "6.2.0-edge.1",
-    "@memberjunction/graphql-dataprovider": "6.2.0-edge.1",
-    "@memberjunction/livekit-room-core": "6.2.0-edge.1",
-    "@memberjunction/ng-base-types": "6.2.0-edge.1",
-    "@memberjunction/ng-livekit-room": "6.2.0-edge.1",
-    "@memberjunction/ng-media-player": "6.2.0-edge.1",
+    "@memberjunction/ai-realtime-client": "6.2.0-edge.3",
+    "@memberjunction/core": "6.2.0-edge.3",
+    "@memberjunction/core-entities": "6.2.0-edge.3",
+    "@memberjunction/global": "6.2.0-edge.3",
+    "@memberjunction/graphql-dataprovider": "6.2.0-edge.3",
+    "@memberjunction/livekit-room-core": "6.2.0-edge.3",
+    "@memberjunction/ng-base-types": "6.2.0-edge.3",
+    "@memberjunction/ng-livekit-room": "6.2.0-edge.3",
+    "@memberjunction/ng-media-player": "6.2.0-edge.3",
+    "livekit-client": "^2.7.4",
     "tslib": "^2.8.1"
   },
   "sideEffects": false,

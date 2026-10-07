@@ -354,6 +354,7 @@ export class MJTestSuiteRunFormComponentExtended extends MJTestSuiteRunFormCompo
   }
 
   ngOnDestroy() {
+    super.ngOnDestroy();
     this.destroy$.next();
     this.destroy$.complete();
   }
