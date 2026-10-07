@@ -6,7 +6,7 @@
       "JobTypeID": "@lookup:MJ: Scheduled Job Types.DriverClass=SkillUpdateCheckScheduledJobDriver",
       "CronExpression": "0 0 5 * * *",
       "Timezone": "UTC",
-      "Status": "Active",
+      "Status": "Disabled",
       "Configuration": {}
     },
     "primaryKey": {

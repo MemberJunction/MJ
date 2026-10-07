@@ -338,8 +338,9 @@ timeout and a size cap (512 KB per file, 10 MB for the GitHub tree listing). A s
 skill row is re-validated with the same parser before the check fetches it, so editing a row's
 `SourceURL` cannot point the job somewhere an import would refuse.
 
-The **Skill Update Check** scheduled job (`SkillUpdateCheckScheduledJobDriver`, shipped Active daily at
-05:00 UTC) re-fetches every Active sourced skill. When the hash differs it sets the skill to
+The **Skill Update Check** scheduled job (`SkillUpdateCheckScheduledJobDriver`, daily at 05:00 UTC)
+ships **Disabled**: set its `MJ: Scheduled Jobs` row to Active once the deployment imports external skills.
+When enabled it re-fetches every Active sourced skill. When the hash differs it sets the skill to
 **`Pending`** — the content is not overwritten, and a Pending skill is not activatable, so upstream
 instruction text never reaches an agent's prompt unreviewed. (It re-reads the row before saving, so an
 import that landed during the fetch is neither overwritten nor flagged.) An admin then either:
