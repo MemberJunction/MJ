@@ -10,7 +10,9 @@ import {
 } from '@memberjunction/core';
 import { BaseSingleton, MJGlobal, EscapeSQLString } from '@memberjunction/global';
 import {
+    InboundVideoStreamsOf,
     IRealtimeSession,
+    RealtimeMediaKind,
     RealtimeTranscript,
 } from '@memberjunction/ai';
 import {
@@ -958,9 +960,9 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
      * that pipe.
      *
      * Two hooks, one per direction:
-     * - **Inbound** (`bridge.OnMedia` → `session.SendInput`): what the agent HEARS. Each inbound
-     *   {@link BridgeMediaFrame} from the endpoint is unwrapped to its raw `ArrayBuffer` payload and
-     *   streamed straight to the model.
+     * - **Inbound** (`bridge.OnMedia` → `session.SendInput`): what the agent HEARS (and, for a video model, SEES).
+     *   Each inbound {@link BridgeMediaFrame} from the endpoint is unwrapped to its raw `ArrayBuffer` payload and
+     *   streamed straight to the model. Camera and screen frames go only to a session that declares inbound video.
      * - **Outbound** (`session.OnOutput` → `bridge.SendMedia`): what the agent SAYS. Each model
      *   output `ArrayBuffer` is wrapped in an outbound audio {@link BridgeMediaFrame} and sent into
      *   the meeting/call.
@@ -997,8 +999,11 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             return;
         }
 
-        // Inbound: endpoint media → the agent hears (and, for a video model, SEES) it. The frame's
-        // Track tags the plane, so a human's camera (`video-in`) reaches the model as a `video` frame.
+        // Inbound: endpoint media → the agent hears (and, for a video model, SEES) it. The frame's Track tags the
+        // plane: a camera (`video-in`) or a shared screen (`screen-in`) reaches the model as a `video` frame. Only a
+        // session that declares inbound video gets one; any other driver would read the image as audio.
+        const takesVideo = InboundVideoStreamsOf(RealtimeSession.Capabilities) > 0;
+        let videoDropNoted = false;
         Bridge.OnMedia((frame: BridgeMediaFrame) => {
             active.LastActivityMs = Date.now();
             // DIARIZATION: the inbound frame carries the speaking participant's identity (when the provider
@@ -1008,6 +1013,14 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             if (frame.Track === 'audio-in' && frame.SpeakerLabel) {
                 active.LastInboundSpeaker = frame.SpeakerLabel;
             }
+            const kind = mediaKindOf(frame.Track);
+            if (kind === 'video' && !takesVideo) {
+                if (!videoDropNoted) {
+                    videoDropNoted = true;
+                    LogStatusEx({ message: `[AIBridgeEngine] ${frame.Track} frames are not sent to bridge ${active.SessionBridgeID}: its realtime session does not take inbound video.`, verboseOnly: true });
+                }
+                return;
+            }
             const chunk = this.frameToArrayBuffer(frame);
             if (chunk) {
                 if (!this.diagInbound.has(active.SessionBridgeID)) {
@@ -1016,7 +1029,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
                 }
                 RealtimeSession.SendInput({
                     Data: chunk,
-                    Kind: frame.Track === 'video-in' ? 'video' : 'audio',
+                    Kind: kind,
                     MimeType: frame.MimeType,
                     TimestampMs: frame.TimestampMs,
                 });
@@ -2313,4 +2326,9 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         }
         return saved;
     }
+}
+
+/** The realtime media plane a bridge track feeds: cameras and shared screens are both video to the model. */
+function mediaKindOf(track: BridgeMediaTrackKind): RealtimeMediaKind {
+    return track === 'video-in' || track === 'screen-in' ? 'video' : 'audio';
 }

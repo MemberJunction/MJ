@@ -78,6 +78,20 @@ export interface BridgeMediaFrame {
      * be sent to a model that needs an image type, and the realtime driver drops it.
      */
     MimeType?: string;
+
+    /**
+     * Which source a `video-in` or `screen-in` frame comes from, when the endpoint can have several (each
+     * participant's camera, a shared screen): an opaque key that stays the same for one source, for example
+     * `'participant:ada:camera'`. A model that takes one video stream is shown one source at a time; this key is how
+     * the host tells sources apart and notices a switch. Absent on audio frames and where there is only one source.
+     */
+    SourceID?: string;
+
+    /**
+     * A human-readable name for the {@link BridgeMediaFrame.SourceID} source ("Ada's camera", "Ada's screen"), for
+     * the note that tells the model what it is now looking at.
+     */
+    SourceLabel?: string;
 }
 
 /**

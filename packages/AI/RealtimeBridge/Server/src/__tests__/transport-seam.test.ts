@@ -14,7 +14,7 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
 });
 
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
-import type { IRealtimeSession, RealtimeInputFrame, RealtimeTranscript } from '@memberjunction/ai';
+import type { IRealtimeSession, RealtimeInputFrame, RealtimeSessionCapabilities, RealtimeTranscript } from '@memberjunction/ai';
 import type {
     MJAIBridgeProviderEntity,
     MJAIBridgeProviderEntity_IBridgeProviderFeatures,
@@ -32,11 +32,27 @@ import { LoopbackBridge, LOOPBACK_BRIDGE_DRIVER_CLASS } from '../loopback-bridge
 // Test doubles.
 // ──────────────────────────────────────────────────────────────────────────────
 
+/** The tracks a session declares: audio only, as every realtime model before Gemini 3.8 Live did. */
+const AUDIO_SESSION: Pick<RealtimeSessionCapabilities, 'SupportedInboundTracks'> = {
+    SupportedInboundTracks: [{ Modality: 'audio', Direction: 'inbound' }],
+};
+
+/** The tracks a session declares: audio and one inbound video stream (JPEG), as Gemini 3.8 Live does. */
+const VIDEO_SESSION: Pick<RealtimeSessionCapabilities, 'SupportedInboundTracks'> = {
+    SupportedInboundTracks: [
+        { Modality: 'audio', Direction: 'inbound' },
+        { Modality: 'video', Direction: 'inbound', Encoding: 'image/jpeg', Rate: 1 },
+    ],
+};
+
 /**
  * A mock IRealtimeSession capturing what the agent "hears" (SendInput) and exposing the registered
  * output/transcript handlers so a test can drive what the agent "says" / what is transcribed.
  */
 class MockRealtimeSession implements IRealtimeSession {
+    /** @param tracks The media tracks the session declares; none by default, which the engine reads as audio only. */
+    constructor(private readonly tracks?: Pick<RealtimeSessionCapabilities, 'SupportedInboundTracks'>) {}
+
     public readonly Heard: ArrayBuffer[] = [];
     public readonly HeardFrames: RealtimeInputFrame[] = [];
     public readonly SpokenUpdates: string[] = [];
@@ -81,8 +97,8 @@ class MockRealtimeSession implements IRealtimeSession {
     /** Capability flag + capture for the live-reconfigure path (§6). */
     public CanReconfigure = true;
     public readonly ReconfigureCalls: Array<{ DisableAutoResponse?: boolean }> = [];
-    public get Capabilities(): { CanReconfigureTurnMode: boolean } {
-        return { CanReconfigureTurnMode: this.CanReconfigure };
+    public get Capabilities(): RealtimeSessionCapabilities {
+        return { CanReconfigureTurnMode: this.CanReconfigure, ...this.tracks };
     }
     public Reconfigure(params: { DisableAutoResponse?: boolean }): void {
         this.ReconfigureCalls.push(params);
@@ -258,7 +274,7 @@ describe('AIBridgeEngine — transport seam round-trip (LoopbackBridge + mock se
     });
 
     it('tags inbound media by track and passes its type and capture time to the session', async () => {
-        const session = new MockRealtimeSession();
+        const session = new MockRealtimeSession(VIDEO_SESSION);
         const { provider } = makeProvider(() => makeBridgeRow());
         const active = await engine().StartBridgeSession(baseParams(session, provider));
         const loopback = active.Bridge as LoopbackBridge;
@@ -271,6 +287,48 @@ describe('AIBridgeEngine — transport seam round-trip (LoopbackBridge + mock se
             { Kind: 'video', MimeType: 'image/jpeg', TimestampMs: 1234 },
         ]);
         expect(new Uint8Array(session.HeardFrames[1].Data)).toEqual(new Uint8Array([0xff, 0xd8]));
+
+        await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
+    });
+
+    it('sends a shared screen to a video model as a video frame', async () => {
+        const session = new MockRealtimeSession(VIDEO_SESSION);
+        const { provider } = makeProvider(() => makeBridgeRow());
+        const active = await engine().StartBridgeSession(baseParams(session, provider));
+        const loopback = active.Bridge as LoopbackBridge;
+
+        loopback.EmitInbound({ Track: 'screen-in', Bytes: bytes(0xff, 0xd8), MimeType: 'image/jpeg', SourceID: 'participant:ada:screen', SourceLabel: "Ada's screen" });
+
+        expect(session.HeardFrames.map((f) => ({ Kind: f.Kind, MimeType: f.MimeType }))).toEqual([{ Kind: 'video', MimeType: 'image/jpeg' }]);
+
+        await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
+    });
+
+    it('sends no camera or screen frames to a session that takes no video: it would read the image as audio', async () => {
+        const session = new MockRealtimeSession(AUDIO_SESSION);
+        const { provider } = makeProvider(() => makeBridgeRow());
+        const active = await engine().StartBridgeSession(baseParams(session, provider));
+        const loopback = active.Bridge as LoopbackBridge;
+
+        loopback.EmitInbound({ Track: 'video-in', Bytes: bytes(0xff, 0xd8), MimeType: 'image/jpeg' });
+        loopback.EmitInbound({ Track: 'audio-in', Bytes: bytes(1, 2) });
+        loopback.EmitInbound({ Track: 'screen-in', Bytes: bytes(0xff, 0xd8), MimeType: 'image/jpeg' });
+
+        expect(session.HeardFrames.map((f) => f.Kind)).toEqual(['audio']);
+
+        await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
+    });
+
+    it('treats a session that declares no capabilities as audio only', async () => {
+        const session = new MockRealtimeSession();
+        const { provider } = makeProvider(() => makeBridgeRow());
+        const active = await engine().StartBridgeSession(baseParams(session, provider));
+        const loopback = active.Bridge as LoopbackBridge;
+
+        loopback.EmitInbound({ Track: 'video-in', Bytes: bytes(0xff, 0xd8), MimeType: 'image/jpeg' });
+        loopback.EmitInbound({ Track: 'audio-in', Bytes: bytes(1, 2) });
+
+        expect(session.HeardFrames.map((f) => f.Kind)).toEqual(['audio']);
 
         await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
     });

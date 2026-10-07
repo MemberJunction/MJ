@@ -25,6 +25,7 @@
  */
 
 import { BaseSingleton } from '@memberjunction/global';
+import type { RealtimeSessionCapabilities } from './baseRealtime';
 
 /**
  * Which way samples flow on a track, relative to the model.
@@ -163,6 +164,22 @@ export function ResolveMaxInboundVideoStreams(supportsInboundVideo: boolean, dec
         return 0;
     }
     return typeof declaredMax === 'number' && Number.isInteger(declaredMax) && declaredMax > 0 ? declaredMax : 1;
+}
+
+/**
+ * How many inbound video streams a **live session** accepts, read from its declared capabilities: `0` when it declares
+ * no inbound video track, and when it declares no capabilities at all (an undeclared session is treated as audio only,
+ * as {@link import('./baseRealtime').IRealtimeSession.Capabilities} prescribes). Otherwise its declared stream ceiling,
+ * resolved by {@link ResolveMaxInboundVideoStreams}.
+ *
+ * A host checks this before streaming video frames: a driver without inbound video would otherwise treat an image as
+ * audio.
+ *
+ * @param capabilities The session's declared capabilities, if any.
+ */
+export function InboundVideoStreamsOf(capabilities?: RealtimeSessionCapabilities | null): number {
+    const declaresVideo = capabilities?.SupportedInboundTracks?.some((t) => t.Modality === 'video') ?? false;
+    return ResolveMaxInboundVideoStreams(declaresVideo, capabilities?.MaxInboundVideoStreams);
 }
 
 /**
