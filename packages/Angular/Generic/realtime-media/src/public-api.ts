@@ -18,3 +18,4 @@ export * from './lib/components/self-view.component';
 export * from './lib/components/share-preview.component';
 export * from './lib/components/camera-check.component';
 export * from './lib/pip-geometry';
+export * from './lib/local-media-controller.token';

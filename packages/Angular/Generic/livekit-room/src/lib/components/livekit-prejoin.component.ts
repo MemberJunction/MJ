@@ -22,9 +22,10 @@ export interface LiveKitPreJoinChoices {
  * {@link LiveKitMediaPreview} (camera, microphone level, devices) and renders `mj-camera-check`, then emits
  * {@link Join} with the chosen {@link LiveKitPreJoinChoices}.
  *
- * @deprecated Render `mj-camera-check` (`CameraCheckComponent`) from `@memberjunction/ng-realtime-media` and run the
- * preview yourself: give it the camera as a source and the microphone level as a reader. This wrapper does exactly
- * that with `LiveKitMediaPreview`. The room still renders it until task F2 moves the preview into the room.
+ * @deprecated Render `mj-camera-check` (`CameraCheckComponent`) from `@memberjunction/ng-realtime-media` on a
+ * `MediaPreview` from `@memberjunction/ai-realtime-client/media`, as the room's lobby does: give it the preview's camera
+ * source, its microphone level reader, its devices and choices. This wrapper still runs the deprecated
+ * `LiveKitMediaPreview`; the room no longer renders it.
  */
 @Component({
   selector: 'mj-livekit-prejoin',

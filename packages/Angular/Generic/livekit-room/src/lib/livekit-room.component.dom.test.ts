@@ -1,8 +1,18 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { ChangeDetectorRef } from '@angular/core';
 import { By } from '@angular/platform-browser';
-import { MediaStageComponent } from '@memberjunction/ng-realtime-media';
-import type { MediaPipRect, MediaPlacementMove } from '@memberjunction/ai-realtime-client/media';
+import { BehaviorSubject } from 'rxjs';
+import { CameraCheckComponent, LOCAL_MEDIA_CONTROLLER_FACTORY, MediaStageComponent } from '@memberjunction/ng-realtime-media';
+import type {
+  ILocalMediaController,
+  LocalMediaKind,
+  LocalMediaResult,
+  LocalMediaState,
+  LocalTrackState,
+  MediaDevice,
+  MediaPipRect,
+  MediaPlacementMove,
+} from '@memberjunction/ai-realtime-client/media';
 import { renderComponentFixture, query, queryAll, text, overlayQueryAll, clearOverlayContainers } from '@memberjunction/ng-test-utils';
 import type { LiveKitParticipantView, LiveKitRoomController, LiveKitRoomState } from '@memberjunction/livekit-room-core';
 import { LiveKitRoomComponent, LIVEKIT_ROOM_CONTROLLER_FACTORY } from './livekit-room.component';
@@ -718,6 +728,163 @@ describe('LiveKitRoomComponent (DOM, fake controller)', () => {
       f.componentInstance.OnResetLayout();
       expect(moves).toEqual([[]]);
       expect(rects.map((r) => r.size)).toEqual([0]);
+    });
+  });
+
+  describe('the lobby', () => {
+    /** Everything the lobby's devices and the room's connection did, in order. */
+    let log: string[];
+    /** A camera and microphone the test drives; its devices appear on the first listing. */
+    class FakeMedia implements ILocalMediaController {
+      private readonly state = new BehaviorSubject<LocalMediaState>({ Camera: { Status: 'off' }, Microphone: { Status: 'off' }, Devices: [] });
+      private readonly stream = (id: string) => ({ id, getTracks: () => [], getAudioTracks: () => [] }) as unknown as MediaStream;
+      public get State() {
+        return this.state.value;
+      }
+      public get State$() {
+        return this.state.asObservable();
+      }
+      public GetStream(): MediaStream | null {
+        return null;
+      }
+      public async RefreshDevices(): Promise<MediaDevice[]> {
+        const devices: MediaDevice[] = [
+          { DeviceID: 'mic-1', Kind: 'microphone', Label: 'Microphone', GroupID: 'g1' },
+          { DeviceID: 'cam-1', Kind: 'camera', Label: 'Camera 1', GroupID: 'g1' },
+          { DeviceID: 'cam-2', Kind: 'camera', Label: 'Camera 2', GroupID: 'g2' },
+        ];
+        log.push('list');
+        this.state.next({ ...this.state.value, Devices: devices });
+        return devices;
+      }
+      public async Start(kind: LocalMediaKind, deviceId?: string): Promise<LocalMediaResult> {
+        log.push(`start ${kind}${deviceId ? ' ' + deviceId : ''}`);
+        this.set(kind, { Status: 'on', DeviceID: deviceId ?? (kind === 'camera' ? 'cam-1' : 'mic-1') });
+        return { Status: 'started', Stream: this.stream(kind) };
+      }
+      public async SwitchDevice(kind: LocalMediaKind, deviceId: string): Promise<LocalMediaResult> {
+        log.push(`switch ${kind} ${deviceId}`);
+        this.set(kind, { Status: 'on', DeviceID: deviceId });
+        return { Status: 'started', Stream: this.stream(kind) };
+      }
+      public Stop(kind: LocalMediaKind): void {
+        log.push(`stop ${kind}`);
+        this.set(kind, { Status: 'off' });
+      }
+      public Dispose(): void {
+        log.push('release devices');
+      }
+      private set(kind: LocalMediaKind, track: LocalTrackState): void {
+        this.state.next(kind === 'camera' ? { ...this.state.value, Camera: track } : { ...this.state.value, Microphone: track });
+      }
+    }
+
+    let made: number;
+    const renderLobby = (inputs: Record<string, unknown> = {}) => {
+      log = [];
+      made = 0;
+      const fc = makeFakeController(makeState({ Status: 'idle' }));
+      (fc.controller.Connect as ReturnType<typeof vi.fn>).mockImplementation(() => {
+        log.push('connect');
+        return Promise.resolve();
+      });
+      const f = renderComponentFixture(LiveKitRoomComponent, {
+        providers: [
+          { provide: LIVEKIT_ROOM_CONTROLLER_FACTORY, useValue: () => fc.controller },
+          {
+            provide: LOCAL_MEDIA_CONTROLLER_FACTORY,
+            useValue: () => {
+              made++;
+              return new FakeMedia();
+            },
+          },
+        ],
+        inputs: { AutoConnect: false, ServerUrl: 'wss://example.test', Token: 'token', ...inputs },
+      });
+      return { f, fc };
+    };
+    const checkOf = (f: ReturnType<typeof render>) => f.debugElement.query(By.directive(CameraCheckComponent))?.componentInstance as CameraCheckComponent | undefined;
+    /** Lets the lobby's devices start (promises outside Angular's view of pending work), then renders. */
+    const settle = async (f: ReturnType<typeof render>) => {
+      for (let i = 0; i < 4; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+      f.detectChanges();
+    };
+    // jsdom does not play media: a stream source's <video> calls play(), and pause() when it lets go.
+    beforeEach(() => {
+      vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
+      vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => undefined);
+    });
+
+    it('shows the camera check before joining, starting the microphone and the camera as the room starts with them', async () => {
+      const { f } = renderLobby({ ShowPreJoin: true, StartWithCamera: true });
+      await settle(f);
+      expect(checkOf(f)).toBeDefined();
+      expect(log).toEqual(['start microphone', 'start camera', 'list']);
+      expect(checkOf(f)?.CameraSource).toEqual({ Kind: 'stream', Stream: expect.objectContaining({ id: 'camera' }) });
+      expect(checkOf(f)?.Devices.map((d) => d.DeviceID)).toEqual(['mic-1', 'cam-1', 'cam-2']);
+      expect(typeof checkOf(f)?.MicrophoneLevel).toBe('function');
+    });
+
+    it('leaves the microphone off when the room starts without it', async () => {
+      const { f } = renderLobby({ ShowPreJoin: true, StartWithMicrophone: false });
+      await settle(f);
+      expect(log).toEqual(['list']);
+      expect(checkOf(f)?.MicrophoneOn).toBe(false);
+    });
+
+    it('turns the camera on from the check', async () => {
+      const { f } = renderLobby({ ShowPreJoin: true });
+      await settle(f);
+      expect(checkOf(f)?.CameraSource).toBeNull();
+      checkOf(f)?.CameraToggled.emit(true);
+      await settle(f);
+      expect(log).toContain('start camera');
+      expect(checkOf(f)?.CameraOn).toBe(true);
+      expect(checkOf(f)?.CameraSource).not.toBeNull();
+    });
+
+    it('joins with the name from the check and the devices the lobby chose, after freeing them', async () => {
+      const { f, fc } = renderLobby({ ShowPreJoin: true });
+      await settle(f);
+      checkOf(f)?.DeviceSelected.emit({ Kind: 'camera', DeviceID: 'cam-2' });
+      checkOf(f)?.CameraToggled.emit(true);
+      await settle(f);
+      checkOf(f)?.Confirmed.emit({ DisplayName: ' Ada ', MicrophoneOn: true, CameraOn: true });
+      await settle(f);
+      expect(log.slice(-2)).toEqual(['release devices', 'connect']);
+      expect(fc.controller.Connect).toHaveBeenCalledWith(
+        'wss://example.test',
+        'token',
+        expect.objectContaining({ DisplayName: 'Ada', EnableMicrophone: true, EnableCamera: true, MicrophoneDeviceId: 'mic-1', CameraDeviceId: 'cam-2' })
+      );
+      expect(checkOf(f)).toBeUndefined();
+    });
+
+    it("frees the lobby's devices when the room goes away", async () => {
+      const { f } = renderLobby({ ShowPreJoin: true });
+      await settle(f);
+      f.destroy();
+      expect(log).toContain('release devices');
+    });
+
+    it("runs on the browser's own camera and microphone by default: one that cannot capture leaves the microphone off", async () => {
+      const fc = makeFakeController(makeState({ Status: 'idle' }));
+      const f = renderComponentFixture(LiveKitRoomComponent, {
+        providers: [{ provide: LIVEKIT_ROOM_CONTROLLER_FACTORY, useValue: () => fc.controller }],
+        inputs: { AutoConnect: false, ShowPreJoin: true },
+      });
+      await settle(f);
+      expect(checkOf(f)?.MicrophoneOn).toBe(false);
+      expect(f.componentInstance.LobbyState?.Microphone).toMatchObject({ Status: 'failed', Failure: 'unsupported' });
+    });
+
+    it('has no lobby without ShowPreJoin, and never opens the devices', async () => {
+      const { f } = renderLobby();
+      await settle(f);
+      expect(checkOf(f)).toBeUndefined();
+      expect(made).toBe(0);
     });
   });
 

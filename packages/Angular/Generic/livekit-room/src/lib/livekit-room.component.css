@@ -272,3 +272,9 @@
   border-radius: var(--mj-radius-full);
   box-shadow: var(--mj-shadow-md);
 }
+
+/* The lobby before joining: the camera check fills the room. */
+.lk-room__lobby {
+  height: 100%;
+  background: var(--mj-bg-page);
+}

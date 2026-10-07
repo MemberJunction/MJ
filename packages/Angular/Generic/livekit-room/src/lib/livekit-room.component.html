@@ -1,5 +1,25 @@
 @if (ShowPreJoin && !PreJoinComplete) {
-  <mj-livekit-prejoin [InitialDisplayName]="DisplayName" [StartWithCamera]="StartWithCamera" (Join)="onPreJoinJoin($event)"></mj-livekit-prejoin>
+  <!-- The lobby: the shared camera check, on the lobby's own camera and microphone (MediaPreview). -->
+  <div class="lk-room__lobby">
+    <mj-camera-check
+      Heading="Ready to join?"
+      ConfirmLabel="Join now"
+      [InitialDisplayName]="DisplayName"
+      [ShowDisplayName]="true"
+      [RequireDisplayName]="true"
+      [MicrophoneOn]="LobbyState?.Choices?.MicrophoneOn ?? StartWithMicrophone"
+      [CameraOn]="LobbyState?.Choices?.CameraOn ?? StartWithCamera"
+      [CameraSource]="LobbyState?.CameraSource ?? null"
+      [MicrophoneLevel]="LobbyMicrophoneLevel"
+      [Devices]="LobbyState?.Devices ?? []"
+      [SelectedMicrophoneID]="LobbyState?.Choices?.MicrophoneDeviceID ?? null"
+      [SelectedCameraID]="LobbyState?.Choices?.CameraDeviceID ?? null"
+      (MicrophoneToggled)="OnLobbyMicrophoneToggled($event)"
+      (CameraToggled)="OnLobbyCameraToggled($event)"
+      (DeviceSelected)="OnLobbyDeviceSelected($event)"
+      (Confirmed)="OnLobbyConfirmed($event)"
+    ></mj-camera-check>
+  </div>
 } @else {
   <div class="lk-room lk-room--{{ Layout }}" [class.lk-room--panel-open]="SidePanel !== 'none'">
     @if (ShowHeader) {

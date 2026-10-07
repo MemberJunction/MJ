@@ -37,7 +37,10 @@ import {
   ToMediaParticipant,
 } from '@memberjunction/livekit-room-core';
 import { NgTemplateOutlet } from '@angular/common';
+import type { Subscription } from 'rxjs';
 import {
+  CameraCheckComponent,
+  LOCAL_MEDIA_CONTROLLER_FACTORY,
   MediaAgentStateComponent,
   MediaConnectionOverlayComponent,
   MediaDeviceMenuComponent,
@@ -48,11 +51,13 @@ import {
   MediaTileComponent,
   SelfViewComponent,
   SharePreviewComponent,
+  type MediaCameraCheckChoices,
   type MediaStagePipRectChange,
   type MediaStageSurface,
 } from '@memberjunction/ng-realtime-media';
 import {
   LayoutMediaStage,
+  MediaPreview,
   ParticipantTileKey,
   ParticipantTileSurface,
   RecordPipRect,
@@ -69,6 +74,7 @@ import {
   type MediaPipRect,
   type MediaPlacement,
   type MediaPlacementMove,
+  type MediaPreviewState,
   type MediaStageLayout,
   type MediaSurface,
   type MediaVideoSource,
@@ -77,7 +83,7 @@ import { LiveKitControlBarComponent } from './components/livekit-control-bar.com
 import { LiveKitChatPanelComponent } from './components/livekit-chat-panel.component';
 import { LiveKitParticipantsPanelComponent } from './components/livekit-participants-panel.component';
 import { LiveKitParticipantAudioComponent } from './components/livekit-participant-audio.component';
-import { LiveKitPreJoinComponent, type LiveKitPreJoinChoices } from './components/livekit-prejoin.component';
+import type { LiveKitPreJoinChoices } from './components/livekit-prejoin.component';
 import type { LiveKitAgentVisualState } from './components/livekit-agent-state.component';
 import { LiveKitWhiteboardSurfaceComponent } from './components/livekit-whiteboard-surface.component';
 import { MJButtonDirective, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
@@ -160,7 +166,7 @@ export interface LiveKitLayoutOption {
     LiveKitControlBarComponent,
     LiveKitChatPanelComponent,
     LiveKitParticipantsPanelComponent,
-    LiveKitPreJoinComponent,
+    CameraCheckComponent,
     LiveKitWhiteboardSurfaceComponent,
     MJEmptyStateComponent,
   ],
@@ -171,6 +177,7 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
   private readonly zone = inject(NgZone);
   private readonly cdr = inject(ChangeDetectorRef);
   private readonly controller: LiveKitRoomController = inject(LIVEKIT_ROOM_CONTROLLER_FACTORY)();
+  private readonly mediaControllerFactory = inject(LOCAL_MEDIA_CONTROLLER_FACTORY);
   private unsubscribers: Array<() => void> = [];
   private serverUrl: string | null = null;
   private token: string | null = null;
@@ -432,6 +439,9 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
   public ngOnInit(): void {
     this.initialized = true;
     this.PreJoinComplete = !this.ShowPreJoin;
+    if (!this.PreJoinComplete) {
+      this.openLobby();
+    }
     this.wireControllerEvents();
     this.maybeAutoConnect();
     if (this.ChatOpenByDefault && this.ShowChat) {
@@ -453,6 +463,7 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
   }
 
   public ngOnDestroy(): void {
+    this.closeLobby();
     this.unsubscribers.forEach((u) => u());
     this.unsubscribers = [];
     if (this.agentStateTimer) {
@@ -480,6 +491,67 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
       CameraDeviceId: choices?.CameraDeviceId,
       E2EE: this.buildE2EEOptions(),
     });
+  }
+
+  // ── The lobby ─────────────────────────────────────────────────────────────────
+  /** The lobby's camera and microphone, while it shows (the shared `MediaPreview`, which owns its devices). */
+  private lobby: MediaPreview | null = null;
+  private lobbyWatch: Subscription | null = null;
+  /** What the lobby shows: the camera, the devices and the user's choices; `null` outside the lobby. */
+  public LobbyState: MediaPreviewState | null = null;
+  /** Reads the lobby microphone's level, for the camera check's meter; `null` outside the lobby. */
+  public LobbyMicrophoneLevel: (() => number) | null = null;
+
+  /** The user turned the lobby's microphone on or off. */
+  public OnLobbyMicrophoneToggled(on: boolean): void {
+    void this.lobby?.SetMicrophoneOn(on);
+  }
+
+  /** The user turned the lobby's camera on or off. */
+  public OnLobbyCameraToggled(on: boolean): void {
+    void this.lobby?.SetCameraOn(on);
+  }
+
+  /** The user picked a microphone or camera in the lobby. */
+  public OnLobbyDeviceSelected(selection: MediaDeviceSelection): void {
+    void this.lobby?.SelectDevice(selection);
+  }
+
+  /**
+   * The user joined from the lobby: the lobby frees its devices first, so the room can open them, then the room
+   * connects with the name from the check and the devices the lobby chose.
+   */
+  public OnLobbyConfirmed(checked: MediaCameraCheckChoices): void {
+    const chosen = this.LobbyState?.Choices;
+    this.closeLobby();
+    this.OnPreJoinJoin({
+      DisplayName: checked.DisplayName.trim(),
+      MicrophoneEnabled: chosen?.MicrophoneOn ?? checked.MicrophoneOn,
+      CameraEnabled: chosen?.CameraOn ?? checked.CameraOn,
+      MicrophoneDeviceId: chosen?.MicrophoneDeviceID ?? undefined,
+      CameraDeviceId: chosen?.CameraDeviceID ?? undefined,
+    });
+  }
+
+  /** Starts the lobby's preview: the microphone and camera as the room starts with them. */
+  private openLobby(): void {
+    const lobby = new MediaPreview(this.mediaControllerFactory(), { MicrophoneOn: this.StartWithMicrophone, CameraOn: this.StartWithCamera });
+    this.lobby = lobby;
+    this.LobbyMicrophoneLevel = lobby.ReadMicrophoneLevel;
+    this.lobbyWatch = lobby.State$.subscribe((state) => {
+      this.LobbyState = state;
+      this.cdr.markForCheck();
+    });
+    void lobby.Start();
+  }
+
+  /** Releases the lobby's devices. */
+  private closeLobby(): void {
+    this.lobbyWatch?.unsubscribe();
+    this.lobbyWatch = null;
+    this.lobby?.Dispose();
+    this.lobby = null;
+    this.LobbyMicrophoneLevel = null;
   }
 
   /** Handles PreJoin completion: stores the choices, marks PreJoin complete, and connects. */
