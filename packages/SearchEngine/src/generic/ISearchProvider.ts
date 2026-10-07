@@ -65,6 +65,24 @@ export abstract class BaseSearchProvider {
     /** Which search source this provider represents */
     abstract readonly SourceType: SearchSource;
 
+    /**
+     * Whether every result this provider returns is a row of the MJ entity its `EntityName` names, with
+     * `RecordID` that row's primary key, read from that entity through `RunView` as the searching user — so
+     * the entity's permissions and the user's row filters were applied when the row was read.
+     *
+     * The engine's permission pass trusts such results without re-reading them when no row filter applies
+     * (the hot path of the entity and full-text lanes). It verifies every other result with one `PK IN (...)`
+     * read per labelled entity, because a vector or external-index hit's `EntityName` is whatever the index
+     * says (an index or collection name, a metadata key) and its `RecordID` is the document's own id.
+     *
+     * Trust follows the provider instance the engine stamped on the result (`SearchResultItem.ProviderId`),
+     * never the `SourceType` a provider declares or stamps: `SearchSource` is a closed union, so any provider
+     * can call itself `'entity'` or `'fulltext'`. `EntitySearchProvider` and `FullTextSearchProvider` set this.
+     * Leave it `false` (the default) unless your hits really come out of `RunView` against the labelled entity;
+     * set on any other provider, it lets whoever writes the index choose which entity's permissions apply.
+     */
+    public readonly ResultsAreRowsOfLabelledEntity: boolean = false;
+
     /** Config from the SearchProvider metadata record, set during Initialize() */
     protected config: SearchProviderConfig | null = null;
 

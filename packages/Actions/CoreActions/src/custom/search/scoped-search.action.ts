@@ -494,7 +494,8 @@ export class ScopedSearchAction extends BaseAction {
                 finalEvent = { results: ev.results, sourceCounts: ev.sourceCounts, elapsedMs: ev.elapsedMs };
                 progressEvents.push({ phase: 'final', count: ev.results.length, elapsedMs: ev.elapsedMs });
             } else if (ev.phase === 'provider') {
-                progressEvents.push({ phase: 'provider', providerName: ev.providerName, count: ev.results.length, durationMs: ev.durationMs });
+                // Progress only: a provider event carries a count, never the rows (they precede the permission pass).
+                progressEvents.push({ phase: 'provider', providerName: ev.providerName, count: ev.resultCount, durationMs: ev.durationMs });
             } else if (ev.phase === 'fused') {
                 progressEvents.push({ phase: 'fused', count: ev.results.length });
             } else if (ev.phase === 'reranked') {

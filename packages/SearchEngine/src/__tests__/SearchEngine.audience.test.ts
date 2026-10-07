@@ -1,8 +1,8 @@
 /**
  * Tests for `SearchParams.Audience`: a shared conversation's results are the intersection of what
  * every reader may see. The engine validates the audience, runs its permission safety net for the
- * caller and then once per reader, withholds streamed partials from a room, and keys the result
- * cache on the readers.
+ * caller and then once per reader, streams only progress (never results) before the permission pass,
+ * and keys the result cache on the readers.
  *
  * One engine subclass, two permission modes: the real `filterByPermissions` over mocked metadata and
  * RunView (`Readable === null`), or a per-user stub of it (`Readable` set) for the end-to-end legs.
@@ -37,6 +37,7 @@ vi.mock('@memberjunction/core', async () => {
 
 import { SearchEngine } from '../generic/SearchEngine';
 import { BaseSearchProvider } from '../generic/ISearchProvider';
+import { EntitySearchProvider } from '../generic/EntitySearchProvider';
 import type { SearchAudience, SearchParams, SearchResultItem, SearchSource, SearchStreamEvent } from '../generic/search.types';
 import type { UserInfo, EntityInfo, IMetadataProvider, RunViewParams } from '@memberjunction/core';
 
@@ -54,6 +55,23 @@ class FixedProvider extends BaseSearchProvider {
 
     public override async Search(): Promise<SearchResultItem[]> {
         this.Calls++;
+        return this.items.map(item => ({ ...item }));
+    }
+}
+
+/**
+ * The real entity lane, returning a fixed list instead of querying: its hits are rows read through RunView, so the
+ * engine trusts them without a verification read when no row filter applies.
+ */
+class FixedEntityLaneProvider extends EntitySearchProvider {
+    private readonly items: SearchResultItem[];
+
+    constructor(items: SearchResultItem[]) {
+        super();
+        this.items = items;
+    }
+
+    public override async Search(): Promise<SearchResultItem[]> {
         return this.items.map(item => ({ ...item }));
     }
 }
@@ -83,7 +101,7 @@ class TestSearchEngine extends SearchEngine {
     /** The user of every `filterByPermissions` call, in call order. */
     public PermissionChecks: string[] = [];
 
-    public InjectProviders(...providers: FixedProvider[]): void {
+    public InjectProviders(...providers: BaseSearchProvider[]): void {
         const state = this as unknown as SearchEngineTestState;
         state._providerEntries = providers.map((provider, i) => ({
             Provider: provider, ID: `prov-${i}`, DisplayName: provider.SourceType, Icon: 'fa-solid fa-circle',
@@ -374,13 +392,13 @@ describe('SearchParams.Audience — results every reader may see', () => {
         it('still checks a reader on an entity-lane result with no row filter: entity read gates it, with no RunView', async () => {
             mockEntityByName.mockReturnValue(entity('Documents', u => u.ID !== bea.ID, ''));
             const entityLane = [makeResult('d1', { sourceType: 'entity' }), makeResult('d2', { sourceType: 'entity' })];
-            engine.InjectProviders(new FixedProvider('entity', entityLane));
+            engine.InjectProviders(new FixedEntityLaneProvider(entityLane));
 
             const blocked = await engine.Search(withAudience([bea]), asker);
             expect(blocked.Results).toEqual([]);
             const allowed = await engine.Search(withAudience([cal]), asker);
             expect(recordIDs(allowed.Results).sort()).toEqual(['d1', 'd2']);
-            expect(mockRunViewFn).not.toHaveBeenCalled(); // self-evident lane, no row filter: the gate is entity read
+            expect(mockRunViewFn).not.toHaveBeenCalled(); // the entity lane, no row filter: the gate is entity read
         });
 
         it('mixed entities: a reader who cannot read one entity loses only that entity\'s results', async () => {
@@ -394,7 +412,7 @@ describe('SearchParams.Audience — results every reader may see', () => {
                 makeResult('i1', { sourceType: 'entity', entityName: 'Invoices' }),
                 makeResult('d2', { sourceType: 'entity' }),
             ];
-            engine.InjectProviders(new FixedProvider('entity', mixed));
+            engine.InjectProviders(new FixedEntityLaneProvider(mixed));
 
             const res = await engine.Search(withAudience([bea]), asker);
             expect(res.Results.map(r => `${r.EntityName}/${r.RecordID}`).sort()).toEqual(['Documents/d1', 'Documents/d2']);
@@ -408,7 +426,7 @@ describe('SearchParams.Audience — results every reader may see', () => {
             return events;
         }
 
-        it('withholds provider partials under an audience; final carries the audience-filtered set', async () => {
+        it('streams progress without results under an audience; final carries the audience-filtered set', async () => {
             engine.InjectProviders(new FixedProvider('vector', docs));
             engine.Readable = { [asker.ID]: ['d1', 'd2', 'd3'], [bea.ID]: ['d1', 'd3'] };
 
@@ -416,20 +434,22 @@ describe('SearchParams.Audience — results every reader may see', () => {
             const partials = events.filter(ev => ev.phase === 'provider');
             expect(partials).toHaveLength(1);
             for (const ev of partials) {
-                expect(ev).toMatchObject({ providerName: 'Vector', results: [] });
+                expect(ev).toMatchObject({ providerName: 'Vector', results: [], resultCount: 3 });
                 expect(typeof ev.durationMs).toBe('number');
             }
             const final = events.find(ev => ev.phase === 'final');
             expect(final && recordIDs(final.results).sort()).toEqual(['d1', 'd3']);
         });
 
-        it('still streams partials with their results when there is no audience', async () => {
+        it('streams progress without results when there is no audience too — partials precede the permission pass', async () => {
             engine.InjectProviders(new FixedProvider('vector', docs));
-            engine.Readable = { [asker.ID]: ['d1', 'd2', 'd3'] };
+            engine.Readable = { [asker.ID]: ['d1', 'd3'] };
 
             const events = await collect({ Query: 'budget' });
             const partial = events.find(ev => ev.phase === 'provider');
-            expect(partial && recordIDs(partial.results)).toEqual(['d1', 'd2', 'd3']);
+            expect(partial).toMatchObject({ phase: 'provider', results: [], resultCount: 3 });
+            const final = events.find(ev => ev.phase === 'final');
+            expect(final && recordIDs(final.results).sort()).toEqual(['d1', 'd3']); // d2 never reached the stream
         });
     });
 

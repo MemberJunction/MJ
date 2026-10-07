@@ -170,6 +170,29 @@ describe('SearchService', () => {
             sub.unsubscribe();
         });
 
+        it('forwards a provider event\'s ResultCount — progress events carry a count, not rows', () => {
+            const stream$ = new Subject<{ StreamID: string; Phase: string; ProviderName?: string; ResultCount?: number; Results?: ReturnType<typeof makeClientResultItem>[] }>();
+            vi.spyOn(GraphQLSearchClient.prototype, 'StreamSearch').mockReturnValue(stream$);
+
+            const events: Array<{ Phase: string; ResultCount?: number; Results?: SearchResultItem[] }> = [];
+            const sub = service.StreamSearch({
+                Query: 'progress',
+                MaxResults: 10,
+                ActiveFilters: {},
+                IncludeSources: ['fulltext']
+            }).subscribe({
+                next: ev => events.push(ev),
+            });
+
+            stream$.next({ StreamID: 'sid-3', Phase: 'provider', ProviderName: 'FullText', ResultCount: 4, Results: [] });
+
+            expect(events).toHaveLength(1);
+            expect(events[0].ResultCount).toBe(4);
+            expect(events[0].Results).toEqual([]);
+
+            sub.unsubscribe();
+        });
+
         it('omits Results from emitted event when the wire frame has no Results', () => {
             const stream$ = new Subject<{ StreamID: string; Phase: string; ElapsedMs?: number }>();
             vi.spyOn(GraphQLSearchClient.prototype, 'StreamSearch').mockReturnValue(stream$);

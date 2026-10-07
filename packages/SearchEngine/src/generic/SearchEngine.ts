@@ -189,7 +189,10 @@ interface ReRankerConfig {
 export type OnProviderResolved = (event: {
     /** Source type as reported by the provider (e.g. 'vector', 'fulltext'). */
     sourceType: string;
-    /** Result rows from this provider, with metadata already stamped. */
+    /**
+     * Result rows from this provider, with metadata already stamped — before any permission pass, so
+     * {@link SearchEngine.streamSearch} forwards only their count, never the rows.
+     */
     results: SearchResultItem[];
     /** Wall-clock time spent inside `Provider.Search()` for this invocation. */
     durationMs: number;
@@ -429,7 +432,11 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             // ──────────────────────────────────────────────────────────
             // Resolve scopes (when supplied)
             // ──────────────────────────────────────────────────────────
-            const resolvedScopes = this.resolveScopes(params.ScopeIDs);
+            const { Bundles: resolvedScopes, Unresolved: unresolvedScopeIDs } = this.resolveScopes(params.ScopeIDs);
+            if (unresolvedScopeIDs.length > 0) {
+                // Before the cache lookup: a scope deactivated seconds ago must not be served from its old entry.
+                return this.refuseUnresolvableScopes(unresolvedScopeIDs, params, contextUser, startTime);
+            }
             const isUnconstrained = resolvedScopes.length === 0 || resolvedScopes.some(s => s.Scope.IsGlobal);
 
 
@@ -454,8 +461,8 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             // Resolved after the cache lookup, so a cache hit never pays for scope-config parsing or logs a clamp.
             const overfetchFactor = this.ResolvePermissionOverfetchFactor(params, resolvedScopes);
             const providerTopK = Math.max(topK, Math.ceil(topK * overfetchFactor));
-            // Partial (per-provider) events go out before any permission pass, so the over-fetch factor
-            // must not multiply what a stream client sees: cap each event to the caller's own topK.
+            // Per-provider events report a count of hits taken before any permission pass. Cap it at the
+            // caller's own topK so the over-fetch factor does not inflate what a stream client is told.
             const partialEvents: OnProviderResolved | undefined = onProviderResolved
                 ? (ev) => onProviderResolved({ ...ev, results: ev.results.slice(0, topK) })
                 : undefined;
@@ -632,36 +639,31 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
     }
 
     /**
-     * Streaming variant of {@link Search}. Yields events as each pipeline
-     * stage produces output so the caller can emit partials to the UI / agent
-     * before fusion + reranking complete.
+     * Streaming variant of {@link Search}: the same pipeline, with a progress event as each provider
+     * returns, so a UI or agent can show progress before fusion, the permission pass and enrichment finish.
      *
-     * **Phase 2C v1 semantics:** runs the same internal pipeline as
-     * {@link Search} and emits synthetic events at each transition. This
-     * preserves all existing fusion / permission / dedup / enrich behavior
-     * — important because those steps have subtle correctness rules that
-     * we don't want to re-implement in a parallel code path. Per-provider
-     * partials are reconstructed from the final SourceCounts; a future
-     * refactor (Phase 2C v2) can split provider emission to true real-time
-     * concurrent emission once we measure that the synthetic phase is the
-     * actual bottleneck.
+     * **Progress, not partial results.** A `provider` event carries the provider's name, its duration and
+     * `resultCount` — how many hits it returned, capped at `MaxResults` — and never the hits themselves
+     * (`results` is always empty). They arrive before the permission pass, so they include rows the caller's
+     * row filters would drop, external-index hits not yet verified against the entity they name, and content
+     * whose origin record the caller may not read. Results arrive only in `fused` and `final`, which carry
+     * exactly what {@link Search} returns. `resultCount` is counted before the permission and audience passes,
+     * like `SearchResult.SourceCounts`, so don't show it to a room.
      *
-     * Cancellation: the consumer can stop iterating at any point — the
-     * underlying Search() will run to completion but its result is
-     * discarded. AbortSignal-based mid-pipeline cancellation is a Phase 2C
-     * v2 concern.
+     * Cancellation: the consumer can stop iterating at any point — the underlying search runs to
+     * completion and its result is discarded. Mid-pipeline AbortSignal cancellation is not supported.
      *
      * Event ordering:
-     *   1. Zero or more `provider` events (one per non-empty source)
+     *   1. One `provider` event per provider that ran, in the order they return (a provider that failed
+     *      reports `resultCount: 0`)
      *   2. Exactly one `fused` event
-     *   3. Optional one `reranked` event (when a reranker is configured)
-     *   4. Exactly one `final` event
-     *   5. On error: a single `error` event in place of `final`.
+     *   3. Exactly one `final` event (`reranked` is part of the type but not emitted today)
+     *   4. On error: a single `error` event in place of `fused` and `final`.
      *
      * @example
      * for await (const ev of SearchEngine.Instance.streamSearch(params, user)) {
      *   switch (ev.phase) {
-     *     case 'provider':  scratchpad.append(`${ev.providerName}: ${ev.results.length} hits`); break;
+     *     case 'provider':  scratchpad.append(`${ev.providerName}: ${ev.resultCount} hits`); break;
      *     case 'final':     scratchpad.commit(ev.results); break;
      *     case 'error':     scratchpad.fail(ev.error); break;
      *   }
@@ -715,16 +717,16 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             storage: 'Storage',
         };
 
-        // A provider's partials arrive before any permission pass. Under an audience they would show the
-        // room what only the caller may read, so the event keeps its progress fields and drops its results;
-        // the room's results arrive in `fused`/`final`, after the audience pass.
-        const withholdPartials = this.audienceWithholdsPartials(params, contextUser);
+        // A provider's hits arrive before any permission pass, so its event carries progress only: the name,
+        // the duration and a count. The hits themselves reach the caller in `fused`/`final`, after the
+        // permission pass (and, under an audience, after the audience pass).
         const onProviderResolved: OnProviderResolved = (ev) => {
             const label = sourceTypeToLabel[ev.sourceType.toLowerCase()] ?? ev.sourceType;
             push({
                 phase: 'provider',
                 providerName: label,
-                results: withholdPartials ? [] : ev.results,
+                results: [],
+                resultCount: ev.results.length,
                 durationMs: ev.durationMs,
             });
         };
@@ -955,21 +957,6 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
     }
 
     /**
-     * Whether `streamSearch` must withhold provider partials: when the audience adds a reader (partials have
-     * passed no permission check for the room), and when the audience is malformed (the search is about to fail;
-     * nothing unchecked is emitted before it does).
-     */
-    private audienceWithholdsPartials(params: SearchParams, contextUser: UserInfo): boolean {
-        if (params.Audience === undefined) return false;
-        try {
-            this.validateAudience(params.Audience);
-        } catch {
-            return true;
-        }
-        return this.distinctReaders(params.Audience, contextUser).length > 0;
-    }
-
-    /**
      * Keep only the results every reader in `params.Audience` may read, on top of the caller's own filter.
      * Each reader gets the same safety net the caller did (`filterByPermissions`: entity read, row filters,
      * ownership), so a shared conversation's results are the intersection of what every participant may see —
@@ -1105,7 +1092,9 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
      *
      * Unlike a real search this never throws for a scope-level problem; a scope that would fail
      * closed comes back with `Reachable: false` and the reason, since "it would have failed"
-     * is precisely the finding the caller asked for.
+     * is precisely the finding the caller asked for. A scope that cannot be resolved (inactive,
+     * expired, or missing) refuses the whole search, so when one is named every scope comes back
+     * unreachable, each saying why.
      *
      * @param input   scopes to explain plus the hypothetical caller context and principals
      * @param contextUser the user to evaluate entitlement for
@@ -1116,7 +1105,22 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         for (const scopeID of input.ScopeIDs) {
             explanations.push(await this.explainOneScope(scopeID, input, contextUser));
         }
-        return explanations;
+        return this.markRefusedTogether(explanations, this.resolveScopes(input.ScopeIDs).Unresolved);
+    }
+
+    /**
+     * A search naming a scope it cannot resolve is refused outright (see `refuseUnresolvableScopes`), so a dry
+     * run over the same IDs reaches nothing through ANY of them — including a scope that is reachable on its
+     * own. Each such scope is marked unreachable with the reason; the unresolvable ones already explain
+     * themselves.
+     */
+    private markRefusedTogether(explanations: ScopeExplanation[], unresolved: string[]): ScopeExplanation[] {
+        if (unresolved.length === 0) return explanations;
+        const note = `searched together with ${unresolved.join(', ')}, which cannot be resolved, the search is refused — `
+            + 'this scope reaches nothing in it (on its own it would be searched as explained above)';
+        return explanations.map(e => unresolved.some(id => UUIDsEqual(id, e.ScopeID))
+            ? e
+            : { ...e, Reachable: false, Diagnostics: [...e.Diagnostics, note] });
     }
 
     /**
@@ -1141,8 +1145,10 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         input: ExplainScopeInput,
         contextUser: UserInfo
     ): Promise<ScopeExplanation> {
-        const bundle = this.Base.GetScopeBundle(scopeID);
-        const scope = bundle?.Scope ?? this.Base.GetActiveScopeByID(scopeID);
+        // Active first, as the search resolves it: `GetScopeBundle` alone finds a scope of any status, so an
+        // inactive or expired scope used to be explained as searchable while the search refused it.
+        const scope = this.Base.GetActiveScopeByID(scopeID);
+        const bundle = scope ? this.Base.GetScopeBundle(scopeID) : undefined;
         if (!bundle || !scope) {
             return this.buildUnresolvableExplanation(scopeID, input, contextUser);
         }
@@ -1470,7 +1476,8 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
     ): ScopeExplanation {
         return {
             ScopeID: scopeID,
-            ScopeName: '(not found)',
+            // An inactive or expired scope still has a row, and its name is what an admin will recognise.
+            ScopeName: this.Base.GetScopeByID(scopeID)?.Name ?? '(not found)',
             Entitlement: {
                 Allowed: false,
                 Level: 'None',
@@ -1485,7 +1492,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             },
             Dimensions: [],
             Lanes: [],
-            Diagnostics: [`scope "${scopeID}" is not an active scope`],
+            Diagnostics: [`scope "${scopeID}" is not an active scope — a search naming it is refused, never widened to a global search`],
             Reachable: false,
             // Not "known to be bounded" — the scope could not be loaded, so nothing about its
             // configuration was observed. It is unreachable either way.
@@ -1515,22 +1522,58 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
     // ────────────────────────────────────────────────────────────────
 
     /**
-     * Load `ScopeBundle`s for each requested scope ID, filtering out inactive / expired.
-     * Returns an empty array when no scope IDs are supplied (caller treats as Global).
+     * Load the `ScopeBundle` of each requested scope ID that names a scope active right now, and collect the IDs
+     * that do not (inactive, expired, or missing). A search refuses when any ID is unresolved
+     * ({@link refuseUnresolvableScopes}); `ExplainScope` reports the same. No IDs → no bundles, which the
+     * search treats as Global.
      */
-    private resolveScopes(scopeIDs?: string[]): ScopeBundle[] {
-        if (!scopeIDs || scopeIDs.length === 0) return [];
-        const bundles: ScopeBundle[] = [];
-        for (const id of scopeIDs) {
-            const scope = this.Base.GetActiveScopeByID(id);
-            if (!scope) {
-                LogStatus(`SearchEngine: Requested scope "${id}" is not active or does not exist — skipping.`);
-                continue;
-            }
-            const bundle = this.Base.GetScopeBundle(id);
-            if (bundle) bundles.push(bundle);
+    private resolveScopes(scopeIDs?: string[]): { Bundles: ScopeBundle[]; Unresolved: string[] } {
+        const resolution = { Bundles: [] as ScopeBundle[], Unresolved: [] as string[] };
+        for (const id of scopeIDs ?? []) {
+            const bundle = this.Base.GetActiveScopeByID(id) ? this.Base.GetScopeBundle(id) : undefined;
+            if (bundle) resolution.Bundles.push(bundle);
+            else resolution.Unresolved.push(id);
         }
-        return bundles;
+        return resolution;
+    }
+
+    /**
+     * Refuse a search that named a scope the engine cannot resolve (inactive, expired, or missing): an error
+     * result and a `Failure` row in `MJ: Search Execution Logs`, never a wider search.
+     *
+     * Before, an unresolvable scope was skipped, and a search whose scopes were all skipped ran UNSCOPED —
+     * every provider, every entity, no scope filter — because no resolved scope reads as Global. Refused when
+     * ANY named scope fails, not only when all do: dropping one of several scopes silently changes what the
+     * caller asked for, and nothing in the results would tell them. An error result is how the engine already
+     * reports a scope it refuses (a `ScopeDimensionError`, a restricting filter that did not render).
+     */
+    private refuseUnresolvableScopes(
+        unresolved: string[],
+        params: SearchParams,
+        contextUser: UserInfo,
+        startTime: number
+    ): SearchResult {
+        const named = `${unresolved.length === 1 ? 'scope' : 'scopes'} ${unresolved.map(id => `"${id}"`).join(', ')}`;
+        const message = `SearchEngine: search refused — ${named} could not be resolved (inactive, expired, or not found). ` +
+            'A search naming a scope it cannot resolve is refused, never run without that scope.';
+        LogError(message);
+        this.logSearchExecution({
+            Status: 'Failure',
+            FailureReason: message,
+            Query: params.Query,
+            // The log row's SearchScopeID is a foreign key, so it names a scope row that exists, or none.
+            ScopeIDs: (params.ScopeIDs ?? []).filter(id => this.Base.GetScopeByID(id) !== undefined),
+            StartTime: startTime,
+            ResultCount: 0,
+            RerankerName: null,
+            RerankerCostCents: null,
+            SourceCounts: undefined,
+            ContextUser: contextUser,
+            AIAgentID: params.AIAgentID ?? null,
+            AISkillID: params.AISkillID ?? null,
+            PrimaryScopeRecordID: params.SearchContext?.PrimaryScopeRecordID ?? null,
+        });
+        return this.buildErrorResult(message, startTime);
     }
 
     /**
@@ -2323,10 +2366,10 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
      * permissions get evaluated, so a label naming an entity the user CAN read admits documents that are not
      * that entity's records at all.
      *
-     * Results from a lane that queried the entity directly need no such check — their ids came out of a
-     * RunView against it. So those pass untouched (this is the hot path and its cost is unchanged) and only
-     * the rest are verified. When a row filter applies, every lane is verified: ownership is checked as a side
-     * effect of filtering.
+     * Results that came out of a RunView against the entity need no such check, so those pass untouched (this
+     * is the hot path and its cost is unchanged) and only the rest are verified — see {@link isSelfEvidentRow}
+     * for which results qualify. When a row filter applies, every result is verified: ownership is checked as
+     * a side effect of filtering.
      */
     private async admitOwnRows(
         entity: EntityInfo,
@@ -2341,7 +2384,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         }
         const unverified: SearchResultItem[] = [];
         for (const item of entityResults) {
-            (SearchEngine.lanesWithSelfEvidentOwnership.has(item.SourceType) ? ownRows : unverified).push(item);
+            (this.isSelfEvidentRow(item) ? ownRows : unverified).push(item);
         }
         if (unverified.length > 0) {
             await this.verifyOwnershipAndRowFilters(entity, unverified, undefined, contextUser, ownRows);
@@ -2350,10 +2393,42 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
     }
 
     /**
-     * Lanes whose results are self-evidently records of the entity they are labelled with, because the
-     * provider obtained them by querying that entity through `RunView`. Everything else — the vector
-     * lane, and any 3rd-party provider keyed by its own `SourceType` — carries a label supplied by
-     * whatever populated the index, and must be verified before its permissions are trusted.
+     * Whether `item` is self-evidently a row of the entity it is labelled with: the engine stamped it with a
+     * configured provider that reads that entity through `RunView`
+     * ({@link BaseSearchProvider.ResultsAreRowsOfLabelledEntity}), AND it carries one of the lanes in
+     * {@link lanesWithSelfEvidentOwnership}.
+     *
+     * Trust follows the engine's stamp, never the label. `SourceType` is provider output and `SearchSource` is a
+     * closed union, so every shipped external-index provider (Azure AI Search, Typesense, Elasticsearch,
+     * OpenSearch) stamps `'fulltext'` with the index name as `EntityName`, and a third-party provider may stamp
+     * `'entity'`. A result with no `ProviderId` (a fusion fallback, a hand-built hit) or one naming no configured
+     * provider is verified. Fusion and dedup never move a `ProviderId` off the result it was stamped on: each
+     * merged result is one provider's item, with only scores, tags and a generic snippet borrowed from a
+     * duplicate of the same `EntityName` + `RecordID` — a key a trusted hit has already proved readable.
+     */
+    private isSelfEvidentRow(item: SearchResultItem): boolean {
+        if (!SearchEngine.lanesWithSelfEvidentOwnership.has(item.SourceType)) return false;
+        return this.ProviderForResult(item)?.ResultsAreRowsOfLabelledEntity === true;
+    }
+
+    /**
+     * The configured provider whose engine-stamped `ProviderId` `item` carries, or `undefined` when it carries
+     * none or names no configured provider. The engine overwrites `ProviderId` on every result a provider
+     * returns, before fusion.
+     *
+     * Protected so a probe can map a hand-built hit to a provider instance without configuring the engine. It
+     * decides which results skip ownership verification, so an override must only ever return the provider
+     * that actually produced the result.
+     */
+    protected ProviderForResult(item: SearchResultItem): BaseSearchProvider | undefined {
+        if (!item.ProviderId) return undefined;
+        return this._providerEntries.find(e => UUIDsEqual(e.ID, item.ProviderId))?.Provider;
+    }
+
+    /**
+     * Lanes whose results can be self-evident rows of the entity they are labelled with — a necessary
+     * condition only: the provider that produced the result must also say it reads that entity through
+     * `RunView` (see {@link isSelfEvidentRow}). The vector lane, and anything else, is always verified.
      *
      * An allowlist rather than a denylist on purpose: a `SourceType` nobody anticipated is verified by
      * default instead of trusted by default.

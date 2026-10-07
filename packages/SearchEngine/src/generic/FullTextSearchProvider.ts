@@ -25,6 +25,12 @@ export class FullTextSearchProvider extends BaseSearchProvider {
     public readonly SourceType: SearchSource = 'fulltext';
 
     /**
+     * Every hit is a row of the entity it names: `FullTextSearch` reads each FTS-enabled entity through
+     * `RunViews` as the user (see the base class).
+     */
+    public override readonly ResultsAreRowsOfLabelledEntity: boolean = true;
+
+    /**
      * Minimum trimmed term length we accept. SQL Server FTS treats single
      * characters as noise; rejecting them matches the EntitySearchProvider guard. Set to 2
      * (was 3) so legitimate short queries aren't silently dropped (bug C3).

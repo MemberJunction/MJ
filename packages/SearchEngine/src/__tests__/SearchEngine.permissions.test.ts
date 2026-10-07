@@ -35,12 +35,59 @@ vi.mock('@memberjunction/core', async () => {
 });
 
 import { SearchEngine } from '../generic/SearchEngine';
-import type { SearchResultItem } from '../generic/search.types';
-import type { UserInfo, EntityInfo, IMetadataProvider } from '@memberjunction/core';
+import { SearchFusion } from '../generic/SearchFusion';
+import { BaseSearchProvider } from '../generic/ISearchProvider';
+import { EntitySearchProvider } from '../generic/EntitySearchProvider';
+import { FullTextSearchProvider } from '../generic/FullTextSearchProvider';
+import { VectorSearchProvider } from '../generic/VectorSearchProvider';
+import { AzureAISearchProvider } from '../providers/AzureAISearchProvider';
+import { TypesenseSearchProvider } from '../providers/TypesenseSearchProvider';
+import { ElasticsearchSearchProvider } from '../providers/ElasticsearchSearchProvider';
+import { OpenSearchSearchProvider } from '../providers/OpenSearchSearchProvider';
+import type { SearchResultItem, SearchSource } from '../generic/search.types';
+import type { UserInfo, EntityInfo, IMetadataProvider, RunViewParams } from '@memberjunction/core';
 import { SearchScopePermissionResolver } from '../permissions/SearchScopePermissionResolver';
 import type { SearchScopePermissionSource } from '../permissions/SearchScopePermissionResolver';
 
+/**
+ * A third-party provider that labels its hits `'entity'`. `SearchSource` is a closed union, so a provider has
+ * to pick one of its values — and nothing stops it picking the one the engine used to trust on sight.
+ */
+class SelfLabelledEntityProvider extends BaseSearchProvider {
+    public readonly SourceType: SearchSource = 'entity';
+    public async Search(): Promise<SearchResultItem[]> { return []; }
+}
+
+/** The engine-stamped `ProviderId` of each configured provider the tests inject. */
+const PROVIDER = {
+    Entity: 'prov-entity',
+    FullText: 'prov-fulltext',
+    Vector: 'prov-vector',
+    Azure: 'prov-azure',
+    Typesense: 'prov-typesense',
+    Elasticsearch: 'prov-elasticsearch',
+    OpenSearch: 'prov-opensearch',
+    SelfLabelledEntity: 'prov-self-labelled-entity',
+} as const;
+
+/** The private fields the harness sets to bypass Config(), narrowed structurally rather than through `any`. */
+interface SearchEngineTestState {
+    _providerEntries: Array<{
+        Provider: BaseSearchProvider; ID: string; DisplayName: string; Icon: string; Priority: number;
+        SupportsPreview: boolean; MaxResultsOverride: number | null; Record: unknown;
+    }>;
+}
+
 class TestSearchEngine extends SearchEngine {
+    /** Configure one entry per provider, as `Config()` would from the `MJ: Search Providers` rows. */
+    public InjectProviders(providers: Array<[string, BaseSearchProvider]>): void {
+        const state = this as unknown as SearchEngineTestState;
+        state._providerEntries = providers.map(([ID, Provider], i) => ({
+            Provider, ID, DisplayName: ID, Icon: 'fa-solid fa-circle', Priority: i,
+            SupportsPreview: false, MaxResultsOverride: null, Record: {},
+        }));
+    }
+
     public async TestFilterByPermissions(
         results: SearchResultItem[],
         contextUser: UserInfo,
@@ -62,11 +109,16 @@ function createUser(id: string): UserInfo {
     return { ID: id, Name: 'Test User', Email: 't@example.com' } as UserInfo;
 }
 
+/**
+ * A hit as a provider returns it. `providerId` is the stamp the engine puts on every result a configured
+ * provider returns; leave it out for a hit no provider stamped (a fusion fallback, a hand-built result).
+ */
 function makeResult(
     recordId: string,
     entityName: string,
     resultType: SearchResultItem['ResultType'] = 'entity-record',
-    sourceType: string = 'entity'
+    sourceType: string = 'entity',
+    providerId?: string
 ): SearchResultItem {
     return {
         ID: `r-${recordId}`,
@@ -80,7 +132,19 @@ function makeResult(
         Tags: [],
         MatchedAt: new Date(),
         ResultType: resultType,
+        ProviderId: providerId,
     };
+}
+
+/** A hit from the entity lane, stamped with the configured `EntitySearchProvider`. */
+function entityLaneHit(recordId: string, entityName: string): SearchResultItem {
+    return makeResult(recordId, entityName, 'entity-record', 'entity', PROVIDER.Entity);
+}
+
+/** The record ids a `PK IN (...)` verification RunView asked about. */
+function idsAskedAbout(call: unknown[]): string[] {
+    const filter = (call[0] as RunViewParams).ExtraFilter ?? '';
+    return Array.from(String(filter).matchAll(/'([^']+)'/g), m => m[1]);
 }
 
 interface MockEntity {
@@ -118,6 +182,16 @@ describe('SearchEngine.filterByPermissions (safety net)', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         engine = TestSearchEngine.getInstance<TestSearchEngine>();
+        engine.InjectProviders([
+            [PROVIDER.Entity, new EntitySearchProvider()],
+            [PROVIDER.FullText, new FullTextSearchProvider()],
+            [PROVIDER.Vector, new VectorSearchProvider()],
+            [PROVIDER.Azure, new AzureAISearchProvider()],
+            [PROVIDER.Typesense, new TypesenseSearchProvider()],
+            [PROVIDER.Elasticsearch, new ElasticsearchSearchProvider()],
+            [PROVIDER.OpenSearch, new OpenSearchSearchProvider()],
+            [PROVIDER.SelfLabelledEntity, new SelfLabelledEntityProvider()],
+        ]);
     });
 
     describe('PM-10: RLS-blocked records never appear in results', () => {
@@ -188,9 +262,9 @@ describe('SearchEngine.filterByPermissions (safety net)', () => {
     });
 
     describe('Allowed cases', () => {
-        it('passes all rows through when the user is RLS-exempt', async () => {
-            const r1 = makeResult('aaa', 'Customers');
-            const r2 = makeResult('bbb', 'Customers');
+        it('passes entity-lane rows through when the user is RLS-exempt', async () => {
+            const r1 = entityLaneHit('aaa', 'Customers');
+            const r2 = entityLaneHit('bbb', 'Customers');
 
             mockEntityByName.mockReturnValue(makeEntity({
                 Name: 'Customers',
@@ -205,8 +279,8 @@ describe('SearchEngine.filterByPermissions (safety net)', () => {
             expect(mockRunViewFn).not.toHaveBeenCalled();
         });
 
-        it('passes all rows through when there is no RLS clause for the user/entity', async () => {
-            const r1 = makeResult('aaa', 'Customers');
+        it('passes entity-lane rows through when there is no RLS clause for the user/entity', async () => {
+            const r1 = entityLaneHit('aaa', 'Customers');
 
             mockEntityByName.mockReturnValue(makeEntity({
                 Name: 'Customers',
@@ -224,9 +298,9 @@ describe('SearchEngine.filterByPermissions (safety net)', () => {
         it('preserves input order (RRF / re-rank order) of permitted rows', async () => {
             // Three rows from one entity, all RLS-permitted. The function groups by
             // entity internally, so we want to confirm the original order is restored.
-            const r1 = makeResult('first', 'Customers');
-            const r2 = makeResult('second', 'Customers');
-            const r3 = makeResult('third', 'Customers');
+            const r1 = entityLaneHit('first', 'Customers');
+            const r2 = entityLaneHit('second', 'Customers');
+            const r3 = entityLaneHit('third', 'Customers');
 
             mockEntityByName.mockReturnValue(makeEntity({
                 Name: 'Customers',
@@ -249,7 +323,8 @@ describe('SearchEngine.filterByPermissions (safety net)', () => {
         // Admitting on the label alone lets whoever writes the index choose which entity's permissions
         // are evaluated.
         //
-        // Lanes that queried the entity through RunView are exempt because their ids came out of it.
+        // Results from a configured provider that queried the entity through RunView are exempt, because their
+        // ids came out of it. Trust follows the engine-stamped provider (`ProviderId`), never the label.
         // ─────────────────────────────────────────────────────────────────
         const readableNoRowFilter = () => makeEntity({
             Name: 'Customers',
@@ -404,9 +479,7 @@ describe('SearchEngine.filterByPermissions (safety net)', () => {
         it('does NOT verify entity-lane results — the hot path costs nothing extra', async () => {
             mockEntityByName.mockReturnValue(readableNoRowFilter());
 
-            const out = await engine.TestFilterByPermissions(
-                [makeResult('aaa', 'Customers', 'entity-record', 'entity')], user
-            );
+            const out = await engine.TestFilterByPermissions([entityLaneHit('aaa', 'Customers')], user);
 
             expect(out).toHaveLength(1);
             expect(mockRunViewFn).not.toHaveBeenCalled();
@@ -416,22 +489,23 @@ describe('SearchEngine.filterByPermissions (safety net)', () => {
             mockEntityByName.mockReturnValue(readableNoRowFilter());
 
             const out = await engine.TestFilterByPermissions(
-                [makeResult('aaa', 'Customers', 'entity-record', 'fulltext')], user
+                [makeResult('aaa', 'Customers', 'entity-record', 'fulltext', PROVIDER.FullText)], user
             );
 
             expect(out).toHaveLength(1);
             expect(mockRunViewFn).not.toHaveBeenCalled();
         });
 
-        it('verifies an unrecognised 3rd-party SourceType — the allowlist fails safe', async () => {
+        it('verifies an unrecognised SourceType even from a provider that reads through RunView — the allowlist fails safe', async () => {
             mockEntityByName.mockReturnValue(readableNoRowFilter());
             mockRunViewFn.mockResolvedValue({ Success: true, Results: [] });
 
             const out = await engine.TestFilterByPermissions(
-                [makeResult('aaa', 'Customers', 'entity-record', 'azure-ai-search')], user
+                [makeResult('aaa', 'Customers', 'entity-record', 'azure-ai-search', PROVIDER.Entity)], user
             );
 
             expect(out).toHaveLength(0);
+            expect(mockRunViewFn).toHaveBeenCalledTimes(1);
         });
 
         it('partitions a mixed group: entity-lane passes through, vector hit is verified', async () => {
@@ -440,11 +514,14 @@ describe('SearchEngine.filterByPermissions (safety net)', () => {
             mockRunViewFn.mockResolvedValue({ Success: true, Results: [] });
 
             const out = await engine.TestFilterByPermissions([
-                makeResult('from-entity-lane', 'Customers', 'entity-record', 'entity'),
-                makeResult('from-vector-lane', 'Customers', 'entity-record', 'vector'),
+                entityLaneHit('from-entity-lane', 'Customers'),
+                makeResult('from-vector-lane', 'Customers', 'entity-record', 'vector', PROVIDER.Vector),
             ], user);
 
             expect(out.map(r => r.RecordID)).toEqual(['from-entity-lane']);
+            // One verification read, and it asks only about the vector hit: the entity lane adds nothing to it.
+            expect(mockRunViewFn).toHaveBeenCalledTimes(1);
+            expect(idsAskedAbout(mockRunViewFn.mock.calls[0])).toEqual(['from-vector-lane']);
         });
 
         it('still verifies ownership for an RLS-EXEMPT user', async () => {
@@ -482,6 +559,151 @@ describe('SearchEngine.filterByPermissions (safety net)', () => {
             const out = await engine.TestFilterByPermissions([fileResult], user);
             expect(out).toHaveLength(1);
             expect(out[0].RecordID).toBe('file-1');
+        });
+    });
+
+    // ─────────────────────────────────────────────────────────────────
+    // A12.2(a): trust follows the provider the engine stamped on the result, never the label.
+    //
+    // Every shipped external-index provider labels its hits `SourceType: 'fulltext'`, with the index name
+    // as `EntityName` and the document's own id as `RecordID`. When trust followed the label, an index
+    // named after an entity the user can read admitted any document in it as that entity's row, unverified.
+    // ─────────────────────────────────────────────────────────────────
+    describe('trust follows the engine-stamped provider, not the SourceType label', () => {
+        /** `Customers` has no row filter for the user; only `real-1` is a Customer. */
+        const REAL_CUSTOMERS = new Set(['real-1']);
+        beforeEach(() => {
+            mockEntityByName.mockReturnValue(makeEntity({ Name: 'Customers', CanRead: true, Exempt: false, RlsClause: '' }) as unknown as EntityInfo);
+            mockRunViewFn.mockImplementation(async (params: RunViewParams) => ({
+                Success: true,
+                Results: idsAskedAbout([params]).filter(id => REAL_CUSTOMERS.has(id)).map(ID => ({ ID })),
+            }));
+        });
+
+        const externalProviders: Array<[string, BaseSearchProvider, string]> = [
+            ['AzureAISearchProvider', new AzureAISearchProvider(), PROVIDER.Azure],
+            ['TypesenseSearchProvider', new TypesenseSearchProvider(), PROVIDER.Typesense],
+            ['ElasticsearchSearchProvider', new ElasticsearchSearchProvider(), PROVIDER.Elasticsearch],
+            ['OpenSearchSearchProvider', new OpenSearchSearchProvider(), PROVIDER.OpenSearch],
+        ];
+
+        it.each(externalProviders)('verifies a %s hit labelled with the SourceType it really emits', async (_name, provider, providerId) => {
+            // The SourceType the shipped provider declares and stamps — 'fulltext' for all four.
+            expect(provider.SourceType).toBe('fulltext');
+            expect(provider.ResultsAreRowsOfLabelledEntity).toBe(false);
+            const hits = [
+                makeResult('real-1', 'Customers', 'entity-record', provider.SourceType, providerId),
+                makeResult('index-doc-7', 'Customers', 'entity-record', provider.SourceType, providerId),
+            ];
+
+            const out = await engine.TestFilterByPermissions(hits, user);
+
+            expect(out.map(r => r.RecordID)).toEqual(['real-1']); // the document id that is not a Customer is dropped
+            expect(mockRunViewFn).toHaveBeenCalledTimes(1);
+            expect(idsAskedAbout(mockRunViewFn.mock.calls[0])).toEqual(['real-1', 'index-doc-7']);
+        });
+
+        it('verifies a third-party provider that labels its hits \'entity\'', async () => {
+            const out = await engine.TestFilterByPermissions(
+                [makeResult('forged', 'Customers', 'entity-record', 'entity', PROVIDER.SelfLabelledEntity)], user
+            );
+            expect(out).toHaveLength(0);
+            expect(mockRunViewFn).toHaveBeenCalledTimes(1);
+        });
+
+        it('trusts only the two providers that read the labelled entity through RunView', () => {
+            expect(new EntitySearchProvider().ResultsAreRowsOfLabelledEntity).toBe(true);
+            expect(new FullTextSearchProvider().ResultsAreRowsOfLabelledEntity).toBe(true);
+            expect(new VectorSearchProvider().ResultsAreRowsOfLabelledEntity).toBe(false);
+            expect(new SelfLabelledEntityProvider().ResultsAreRowsOfLabelledEntity).toBe(false);
+        });
+
+        it.each([
+            ['no ProviderId (a fusion fallback or a hand-built hit)', undefined],
+            ['a ProviderId that names no configured provider', 'prov-never-configured'],
+        ])('verifies an \'entity\' or \'fulltext\' hit with %s', async (_label, providerId) => {
+            const out = await engine.TestFilterByPermissions([
+                makeResult('real-1', 'Customers', 'entity-record', 'entity', providerId),
+                makeResult('forged', 'Customers', 'entity-record', 'fulltext', providerId),
+            ], user);
+            expect(out.map(r => r.RecordID)).toEqual(['real-1']);
+            expect(mockRunViewFn).toHaveBeenCalledTimes(1);
+        });
+
+        it('keeps the hot path free: entity and full-text hits next to an external hit add nothing to its one read', async () => {
+            const out = await engine.TestFilterByPermissions([
+                entityLaneHit('entity-1', 'Customers'),
+                makeResult('fts-1', 'Customers', 'entity-record', 'fulltext', PROVIDER.FullText),
+                makeResult('index-doc-7', 'Customers', 'entity-record', 'fulltext', PROVIDER.Azure),
+            ], user);
+
+            expect(out.map(r => r.RecordID)).toEqual(['entity-1', 'fts-1']);
+            expect(mockRunViewFn).toHaveBeenCalledTimes(1);
+            expect(idsAskedAbout(mockRunViewFn.mock.calls[0])).toEqual(['index-doc-7']);
+        });
+
+        it('issues no read at all for a group of only entity and full-text hits', async () => {
+            const out = await engine.TestFilterByPermissions([
+                entityLaneHit('entity-1', 'Customers'),
+                makeResult('fts-1', 'Customers', 'entity-record', 'fulltext', PROVIDER.FullText),
+            ], user);
+            expect(out).toHaveLength(2);
+            expect(mockRunViewFn).not.toHaveBeenCalled();
+        });
+
+        describe('a hit merged by fusion or dedup keeps the ProviderId of the item it came from', () => {
+            const fusion = new SearchFusion();
+            const fts = (id: string, score = 0.5) => ({ ...makeResult(id, 'Customers', 'entity-record', 'fulltext', PROVIDER.FullText), Score: score });
+            const azure = (id: string, score = 0.5) => ({ ...makeResult(id, 'Customers', 'entity-record', 'fulltext', PROVIDER.Azure), Score: score });
+
+            it('RRF keeps the full-text item for a key both lanes returned, and still verifies the external-only hit', async () => {
+                const fused = fusion.Deduplicate(fusion.Fuse([
+                    { Source: 'fulltext', Results: [fts('real-1')] },
+                    { Source: 'fulltext', Results: [azure('real-1'), azure('index-doc-7')] },
+                ], 10));
+
+                const out = await engine.TestFilterByPermissions(fused, user);
+
+                expect(out.map(r => [r.RecordID, r.ProviderId])).toEqual([['real-1', PROVIDER.FullText]]);
+                expect(idsAskedAbout(mockRunViewFn.mock.calls[0])).toEqual(['index-doc-7']);
+            });
+
+            it('RRF that keeps the external item for a shared key verifies it — the merge never upgrades it', async () => {
+                const fused = fusion.Deduplicate(fusion.Fuse([
+                    { Source: 'fulltext', Results: [azure('real-1')] },
+                    { Source: 'fulltext', Results: [fts('real-1')] },
+                ], 10));
+
+                const out = await engine.TestFilterByPermissions(fused, user);
+
+                expect(fused.map(r => r.ProviderId)).toEqual([PROVIDER.Azure]);
+                expect(out.map(r => r.RecordID)).toEqual(['real-1']); // kept because it IS a Customer, not because of the merge
+                expect(idsAskedAbout(mockRunViewFn.mock.calls[0])).toEqual(['real-1']);
+            });
+
+            it('dedup prefers an \'entity\' label, and the preferred item keeps its own ProviderId, so a self-labelled hit is still verified', async () => {
+                const selfLabelled = { ...makeResult('forged', 'Customers', 'entity-record', 'entity', PROVIDER.SelfLabelledEntity), Score: 0.4 };
+                const merged = fusion.Deduplicate([fts('forged', 0.9), selfLabelled]);
+
+                expect(merged.map(r => [r.SourceType, r.ProviderId])).toEqual([['entity', PROVIDER.SelfLabelledEntity]]);
+                const out = await engine.TestFilterByPermissions(merged, user);
+                expect(out).toHaveLength(0);
+                expect(idsAskedAbout(mockRunViewFn.mock.calls[0])).toEqual(['forged']);
+            });
+
+            it('a fusion fallback item carries no ProviderId and is verified', async () => {
+                const fallback = { ...makeResult('forged', 'Customers', 'entity-record', 'fused'), ProviderId: undefined };
+                const out = await engine.TestFilterByPermissions([fallback], user);
+                expect(out).toHaveLength(0);
+                expect(mockRunViewFn).toHaveBeenCalledTimes(1);
+            });
+        });
+
+        it('verifies every hit, trusted lane or not, when a row filter applies', async () => {
+            mockEntityByName.mockReturnValue(makeEntity({ Name: 'Customers', CanRead: true, Exempt: false, RlsClause: "Region='West'" }) as unknown as EntityInfo);
+            await engine.TestFilterByPermissions([entityLaneHit('entity-1', 'Customers')], user);
+            expect(mockRunViewFn).toHaveBeenCalledTimes(1);
+            expect((mockRunViewFn.mock.calls[0][0] as RunViewParams).ExtraFilter).toBe("(ID IN ('entity-1')) AND (Region='West')");
         });
     });
 });

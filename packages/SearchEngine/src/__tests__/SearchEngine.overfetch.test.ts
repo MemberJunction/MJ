@@ -169,18 +169,23 @@ describe('the over-fetch factor in a search', () => {
         expect(result.Results).toHaveLength(2);
     });
 
-    it('caps each streamed partial event to the caller\'s MaxResults while the provider is still asked for more', async () => {
+    it('caps each streamed progress count to the caller\'s MaxResults while the provider is still asked for more', async () => {
         const engine = TestSearchEngine.getInstance<TestSearchEngine>();
         const provider = new CountingProvider();
         engine.InjectProviders([entry(provider)]);
-        const partialSizes: number[] = [];
+        const partialCounts: number[] = [];
+        const partialResults: number[] = [];
         let finalSize = -1;
         for await (const ev of engine.streamSearch({ Query: 'budget plan streamed', MaxResults: 2, PermissionOverfetchFactor: 3 }, user)) {
-            if (ev.phase === 'provider') partialSizes.push(ev.results.length);
+            if (ev.phase === 'provider') {
+                partialCounts.push(ev.resultCount);
+                partialResults.push(ev.results.length);
+            }
             if (ev.phase === 'final') finalSize = ev.results.length;
         }
         expect(provider.askedFor).toEqual([6]);
-        expect(partialSizes).toEqual([2]);
+        expect(partialCounts).toEqual([2]); // capped at MaxResults, not the over-fetched 6
+        expect(partialResults).toEqual([0]); // a progress event never carries the hits
         expect(finalSize).toBe(2);
     });
 });
