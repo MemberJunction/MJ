@@ -270,7 +270,7 @@ describe('LiveKitRtcNodeRoomClient — connect + audio', () => {
         client.publishAudio(new Int16Array([10, 20]).buffer);
         await new Promise((r) => setTimeout(r, 10));
 
-        const tele = client.getTelemetry();
+        const tele = client.GetTelemetry();
         expect(tele.outbound.captureCount).toBe(1);
         expect(tele.outbound.lastQueuedDuration).toBe(50);
         expect(tele.inboundGaps['user-1']).toBeDefined();
@@ -278,10 +278,10 @@ describe('LiveKitRtcNodeRoomClient — connect + audio', () => {
 
         // Pruning on participant disconnect
         emit(ROOM_EVENT.ParticipantDisconnected, { identity: 'user-1' });
-        expect(client.getTelemetry().inboundGaps['user-1']).toBeUndefined();
+        expect(client.GetTelemetry().inboundGaps['user-1']).toBeUndefined();
 
         await client.disconnect();
-        expect(Object.keys(client.getTelemetry().inboundGaps)).toHaveLength(0);
+        expect(Object.keys(client.GetTelemetry().inboundGaps)).toHaveLength(0);
     });
 });
 

@@ -36,8 +36,6 @@ import {
     TurnTranscriptSegment,
     BridgeTurnMode,
     IAddressedMatcher,
-    AlwaysAddressedMatcher,
-    RegexAddressedMatcher,
     IWorthSayingScorer,
     IBridgeChannelHost,
     BridgeChannelToolDefinition,
@@ -544,6 +542,9 @@ export interface ActiveBridgeSession {
 
     /** The model-side addressing latch the model's `i_am_addressed` signal feeds — present only in `ModelSide` mode. */
     ModelSideMatcher?: ModelSideAddressedMatcher;
+
+    /** Whether this session operates in full-duplex conversational mode. */
+    FullDuplex: boolean;
 
     /** The floor gate over this full-duplex model's outbound audio (see {@link FullDuplexTurnGate}); absent for turn-based models. */
     TurnGate?: FullDuplexTurnGate;
@@ -1075,6 +1076,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
                 TurnPolicy: turn.Policy,
                 AddressingMode: turn.Mode,
                 ModelSideMatcher: turn.ModelSide,
+                FullDuplex: fullDuplex,
                 DisableAutoResponse: params.DisableAutoResponse === true,
                 HasSeenHuman: false,
                 RoomKey: result.ExternalConnectionId,
@@ -2080,7 +2082,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         if (!active.RoomKey || params.FullDuplexTurnGate === false) {
             return;
         }
-        if (active.RealtimeSession.Capabilities?.FullDuplex !== true) {
+        if (!active.FullDuplex) {
             return;
         }
         const moderatorMode = process.env.MJ_REALTIME_MODERATOR_MODE === 'on';
@@ -2173,7 +2175,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
      */
     private wireTurnTakingTools(active: ActiveBridgeSession): void {
         const moderatorMode = process.env.MJ_REALTIME_MODERATOR_MODE === 'on';
-        const isFullDuplex = active.RealtimeSession.Capabilities?.FullDuplex === true;
+        const isFullDuplex = active.FullDuplex;
         if (isFullDuplex && !moderatorMode) {
             return;
         }
@@ -2200,7 +2202,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         }
         const moderatorMode = process.env.MJ_REALTIME_MODERATOR_MODE === 'on';
         for (const agent of this.roomAgents(roomKey)) {
-            const isFullDuplex = agent.RealtimeSession.Capabilities?.FullDuplex === true;
+            const isFullDuplex = agent.FullDuplex;
             if (isFullDuplex && !moderatorMode) {
                 continue;
             }
@@ -2314,7 +2316,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             Names: a.AgentNames,
             TurnMode: a.TurnPolicy.Mode,
             Addressing: a.AddressingMode ?? 'Regex',
-            FullDuplex: a.RealtimeSession.Capabilities?.FullDuplex === true,
+            FullDuplex: a.FullDuplex,
         }));
         return { ...state, Agents: agents };
     }

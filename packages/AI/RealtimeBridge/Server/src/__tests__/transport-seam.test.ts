@@ -339,6 +339,18 @@ describe('AIBridgeEngine — lifecycle and status transitions', () => {
         expect(explicitRow.TurnAddressing).toBe('ModelSide');
         expect(a3.AddressingMode).toBe('ModelSide');
         await engine().StopBridgeSession(a3.SessionBridgeID, 'Explicit');
+
+        // Explicit ModelSide requested for a turn-based (non-full-duplex) model forces ModelSide
+        const turnBasedSession = new MockRealtimeSession();
+        turnBasedSession.FullDuplex = false;
+        const turnBasedRow = makeBridgeRow();
+        const { provider: turnBasedProvider } = makeProvider(() => turnBasedRow);
+        const a4 = await engine().StartBridgeSession(baseParams(turnBasedSession, turnBasedProvider, { TurnAddressing: 'ModelSide', FullDuplex: false }));
+        expect(turnBasedRow.TurnAddressing).toBe('ModelSide');
+        expect(a4.AddressingMode).toBe('ModelSide');
+        expect(a4.FullDuplex).toBe(false);
+        expect(a4.ModelSideMatcher).toBeDefined();
+        await engine().StopBridgeSession(a4.SessionBridgeID, 'Explicit');
     });
 
     it('StopBridgeSession disconnects the driver and marks the row Disconnected with the reason', async () => {

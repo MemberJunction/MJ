@@ -1,3 +1,13 @@
+/**
+ * @file worker-spike.mjs
+ * @scope Limited Spike Scope: Demonstrates that the native `@livekit/rtc-node` C++ addon loads
+ * cleanly inside a Node.js Worker thread, constructs AudioSource, and accepts zero-copy
+ * transferred ArrayBuffer PCM frames via captureFrame().
+ *
+ * NOTE: This spike does not connect to a live LiveKit SFU room over network or publish
+ * tracks. Full network audio and media-plane lifecycle are implemented in the production
+ * worker media plane split.
+ */
 import { Worker, isMainThread, parentPort } from 'node:worker_threads';
 import { fileURLToPath } from 'node:url';
 
@@ -45,6 +55,9 @@ if (isMainThread) {
   (async () => {
     try {
       console.log('[Worker] Worker thread running. Attempting to import @livekit/rtc-node...');
+      // Dynamic import justification (AGENTS.md Rule 8 Category 2/5): @livekit/rtc-node is an optional native
+      // C++ addon. Loading it dynamically inside the worker thread ensures the native binding is initialized
+      // exclusively within the worker thread isolate without loading into the main thread isolate.
       const rtcNode = await import('@livekit/rtc-node');
       console.log('[Worker] @livekit/rtc-node loaded successfully! Keys:', Object.keys(rtcNode).filter(k => typeof rtcNode[k] === 'function'));
 

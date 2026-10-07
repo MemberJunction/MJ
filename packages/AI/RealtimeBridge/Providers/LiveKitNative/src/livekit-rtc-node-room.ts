@@ -668,7 +668,7 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
     }
 
     /** Returns a snapshot of room audio telemetry (inbound gaps, outbound underruns/captures, event-loop p99). */
-    public getTelemetry(): RoomAudioTelemetrySnapshot {
+    public GetTelemetry(): RoomAudioTelemetrySnapshot {
         const inboundGaps: Record<string, InboundFrameGapHistogram> = {};
         for (const [k, v] of this.inboundGaps.entries()) {
             inboundGaps[k] = { ...v };
@@ -678,6 +678,7 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
         if (monitor) {
             try {
                 eventLoopDelayP99Ms = monitor.percentile(99) / 1e6;
+                monitor.reset();
             } catch {
                 // Intentionally best-effort telemetry
             }

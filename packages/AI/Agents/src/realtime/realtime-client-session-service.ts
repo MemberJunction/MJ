@@ -47,6 +47,7 @@ import {
     IRealtimeSession,
     JSONObject,
     RealtimeSessionParams,
+    RealtimeSessionCapabilities,
     RealtimeToolCall,
     RealtimeToolDefinition
 } from '@memberjunction/ai';
@@ -153,6 +154,11 @@ export interface PrepareClientSessionInput {
      * local tool handler ({@link BridgeRealtimeRuntime.SetLocalToolHandler}).
      */
     HostTools?: RealtimeToolDefinition[];
+    /**
+     * Optional callback that allows the host to resolve host tools dynamically based on
+     * the model and driver capabilities actually resolved for the session, before session opening.
+     */
+    ResolveHostTools?: (resolved: { ModelID?: string; Capabilities?: RealtimeSessionCapabilities }) => RealtimeToolDefinition[] | undefined;
     /**
      * Host-authored instructions appended to the system prompt (e.g. "this is an audio-only phone call …",
      * the caller's number and verification status). Empty/absent adds nothing.
@@ -947,12 +953,45 @@ export class RealtimeClientSessionService {
         }
         const resolution = outcome.Resolution;
 
+        if (input.ResolveHostTools) {
+            const dynamicHostTools = input.ResolveHostTools({
+                ModelID: resolution.ModelID,
+                Capabilities: resolution.Model.Capabilities,
+            });
+            if (dynamicHostTools !== undefined) {
+                input.HostTools = dynamicHostTools;
+            }
+        }
+
         const sessionParams = await this.buildSessionParams(
             input, coAgent, resolution.APIName, contextUser, provider, effectiveConfig, resolution.DriverClass,
             resolution.ModelID, resolution.ModelVendorID,
         );
 
         return { Success: true, CoAgent: coAgent, Resolution: resolution, EffectiveConfig: effectiveConfig, SessionParams: sessionParams };
+    }
+
+    /**
+     * Resolves the realtime model for a session (public wrapper over {@link resolveModelForSession}).
+     */
+    public async ResolveModelForSession(
+        input: PrepareClientSessionInput,
+        coAgent: MJAIAgentEntityExtended,
+        effectiveConfig?: RealtimeCoAgentConfig
+    ): Promise<RealtimeModelResolutionOutcome> {
+        return this.resolveModelForSession(input, coAgent, effectiveConfig);
+    }
+
+    /**
+     * Resolves the effective realtime configuration (public wrapper over {@link resolveEffectiveConfig}).
+     */
+    public ResolveEffectiveConfig(
+        coAgent: MJAIAgentEntityExtended,
+        overridesJson?: string,
+        targetAgent?: MJAIAgentEntityExtended,
+        appSettingsJson?: string
+    ): RealtimeCoAgentConfig {
+        return this.resolveEffectiveConfig(coAgent, overridesJson, targetAgent, appSettingsJson);
     }
 
     /**
