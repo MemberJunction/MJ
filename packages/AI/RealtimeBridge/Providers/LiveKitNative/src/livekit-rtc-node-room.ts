@@ -33,7 +33,7 @@
  */
 
 import { LogError, LogStatus, LogStatusEx } from '@memberjunction/core';
-import { monitorEventLoopDelay, performance, type IntervalHistogram } from 'node:perf_hooks';
+import { performance } from 'node:perf_hooks';
 import type {
     NativeRoomModule,
     NativeRoomClient,
@@ -45,80 +45,13 @@ import type {
 } from '@memberjunction/ai-bridge-livekit';
 import { LiveKitWorkerRoomClient } from './livekit-worker-room-client';
 import type { IMediaWorker } from './media-worker-types';
-
-/** Inbound inter-frame gap histogram per participant. */
-export interface InboundFrameGapHistogram {
-    /** Inter-frame gap < 10ms. */
-    lt10ms: number;
-    /** Inter-frame gap 10ms <= t < 20ms. */
-    b10_20ms: number;
-    /** Inter-frame gap 20ms <= t < 30ms. */
-    b20_30ms: number;
-    /** Inter-frame gap 30ms <= t < 50ms. */
-    b30_50ms: number;
-    /** Inter-frame gap 50ms <= t < 100ms. */
-    b50_100ms: number;
-    /** Inter-frame gap >= 100ms. */
-    gte100ms: number;
-    /** Total frames measured. */
-    totalFrames: number;
-    /** Timestamp of the last frame received in ms (`performance.now()`). */
-    lastFrameMs?: number;
-}
-
-/** Outbound audio telemetry stats. */
-export interface OutboundAudioTelemetry {
-    /** Total frames captured and sent to the audio source. */
-    captureCount: number;
-    /** Number of buffer underruns detected (when audio queue starved while actively speaking). */
-    underrunCount: number;
-    /** Last observed queuedDuration from AudioSource (in ms or seconds, depending on driver). */
-    lastQueuedDuration?: number;
-}
-
-/** Telemetry snapshot for the room client. */
-export interface RoomAudioTelemetrySnapshot {
-    /** Inbound inter-frame gap histogram per participant identity. */
-    inboundGaps: Record<string, InboundFrameGapHistogram>;
-    /** Outbound telemetry. */
-    outbound: OutboundAudioTelemetry;
-    /** Event-loop delay p99 in ms (if monitorEventLoopDelay is available and enabled). */
-    eventLoopDelayP99Ms?: number;
-    /** Elapsed window duration in ms over which eventLoopDelayP99Ms was sampled. */
-    eventLoopWindowMs?: number;
-}
-
-/** Lazily initialized module-scoped event-loop monitor (shared across connections to prevent leaks). */
-let moduleEventLoopMonitor: IntervalHistogram | null = null;
-let monitorWindowStartedAt = Date.now();
-let monitorResetTimer: NodeJS.Timeout | null = null;
-
-function getModuleEventLoopMonitor(): IntervalHistogram | null {
-    if (!moduleEventLoopMonitor) {
-        try {
-            moduleEventLoopMonitor = monitorEventLoopDelay({ resolution: 20 });
-            moduleEventLoopMonitor.enable();
-            monitorWindowStartedAt = Date.now();
-            if (!monitorResetTimer) {
-                // Reset the shared histogram on a fixed 30s owner timer so individual per-room
-                // GetTelemetry() readers don't wipe it out under concurrent access.
-                monitorResetTimer = setInterval(() => {
-                    try {
-                        moduleEventLoopMonitor?.reset();
-                        monitorWindowStartedAt = Date.now();
-                    } catch {
-                        // ignore best-effort timer
-                    }
-                }, 30_000);
-                monitorResetTimer.unref?.();
-            }
-        } catch {
-            // Intentionally best-effort: environment may not support monitorEventLoopDelay
-            moduleEventLoopMonitor = null;
-        }
-    }
-    return moduleEventLoopMonitor;
-}
+import {
+    GetModuleEventLoopMonitor,
+    ReadEventLoop,
+    type InboundFrameGapHistogram,
+    type OutboundAudioTelemetry,
+    type RoomAudioTelemetrySnapshot,
+} from './room-telemetry';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // The minimal `@livekit/rtc-node` surface this wrapper depends on — declared locally
@@ -259,8 +192,11 @@ export interface CreateLiveKitRtcNodeModuleOptions {
     /** Loader override (tests inject a fake `@livekit/rtc-node`). */
     Loader?: RtcNodeLoader;
     /**
-     * Whether to isolate media-plane processing in a dedicated worker thread (default: false
-     * unless process.env.MJ_LIVEKIT_WORKER_MEDIA is set to 'true' or 'on').
+     * Whether to isolate media-plane processing in a dedicated worker thread. Default: ON, unless
+     * `process.env.MJ_LIVEKIT_WORKER_MEDIA` is `off` / `false` / `0`, or a custom {@link Loader} is supplied
+     * (a loader function cannot cross the thread boundary, so a custom loader implies in-process). An
+     * explicit value here overrides both. If the worker cannot be spawned or dies before the room is
+     * joined, the client falls back to the in-process room client.
      */
     UseWorker?: boolean;
     /** Outbound pre-buffer duration in milliseconds when worker mode is enabled (default: 150ms). */
@@ -412,7 +348,7 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
     /** Connects to the room, publishes the bot's audio track, and wires inbound audio + roster events. */
     public async connect(args: NativeConnectArgs): Promise<NativeConnectResult> {
         // Ensure module-level event-loop monitor is initialized (best-effort)
-        getModuleEventLoopMonitor();
+        GetModuleEventLoopMonitor();
 
         const rtc = await this.loadRtc();
         const room = new rtc.Room();
@@ -440,7 +376,7 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
     /** Disconnects, closes inbound streams, and releases the room. Tolerant of teardown errors. */
     public async disconnect(): Promise<void> {
         const room = this.room;
-        const monitor = getModuleEventLoopMonitor();
+        const monitor = GetModuleEventLoopMonitor();
         if (monitor) {
             try {
                 const p99 = monitor.percentile(99) / 1e6;
@@ -702,22 +638,12 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
         for (const [k, v] of this.inboundGaps.entries()) {
             inboundGaps[k] = { ...v };
         }
-        let eventLoopDelayP99Ms: number | undefined;
-        let eventLoopWindowMs: number | undefined;
-        const monitor = getModuleEventLoopMonitor();
-        if (monitor) {
-            try {
-                eventLoopDelayP99Ms = monitor.percentile(99) / 1e6;
-                eventLoopWindowMs = Date.now() - monitorWindowStartedAt;
-            } catch {
-                // Intentionally best-effort telemetry
-            }
-        }
+        const loop = ReadEventLoop();
         return {
             inboundGaps,
             outbound: { ...this.outboundTelemetry },
-            eventLoopDelayP99Ms,
-            eventLoopWindowMs,
+            eventLoopDelayP99Ms: loop?.P99Ms,
+            eventLoopWindowMs: loop?.WindowMs,
         };
     }
 
@@ -735,6 +661,15 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
 }
 
 /**
+ * Resolves the `MJ_LIVEKIT_WORKER_MEDIA` switch. Worker media is ON by default; only an explicit
+ * `off` / `false` / `0` (case-insensitive) disables it.
+ */
+export function IsWorkerMediaEnabled(envValue: string | undefined): boolean {
+    const v = (envValue ?? '').trim().toLowerCase();
+    return !(v === 'off' || v === 'false' || v === '0');
+}
+
+/**
  * Builds a {@link NativeRoomModule} backed by `@livekit/rtc-node`. The bridge's
  * `LiveKitNativeMeetingSdk` calls `createRoomClient(options)` and then `client.connect(...)`.
  *
@@ -746,7 +681,7 @@ export function CreateLiveKitRtcNodeModule(opts: CreateLiveKitRtcNodeModuleOptio
     const inbound = opts.InboundSampleRate ?? DEFAULT_SAMPLE_RATE;
     const channels = opts.Channels ?? DEFAULT_CHANNELS;
     const loader = opts.Loader ?? DefaultRtcNodeLoader;
-    const useWorker = opts.UseWorker ?? (process.env.MJ_LIVEKIT_WORKER_MEDIA === 'true' || process.env.MJ_LIVEKIT_WORKER_MEDIA === 'on');
+    const useWorker = opts.UseWorker ?? (opts.Loader === undefined && IsWorkerMediaEnabled(process.env.MJ_LIVEKIT_WORKER_MEDIA));
     const preBufferMs = opts.PreBufferMs ?? 150;
     const workerFactory = opts.WorkerFactory;
 
@@ -765,6 +700,7 @@ export function CreateLiveKitRtcNodeModule(opts: CreateLiveKitRtcNodeModuleOptio
                     channels,
                     preBufferMs,
                     workerFactory,
+                    fallbackFactory: () => new LiveKitRtcNodeRoomClient(outRate, inRate, channels, loader),
                 });
             }
             return new LiveKitRtcNodeRoomClient(

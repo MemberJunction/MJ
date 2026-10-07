@@ -403,15 +403,13 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
       // If full duplex is active, but turn-taking tools were declared to the session initially
       // (e.g. because full-duplex was only discovered after open, or custom factory ignored ResolveHostTools):
       if (resolvedFullDuplex && declaredTurnToolsInitially) {
-        if (typeof opened.RegisterTools === 'function') {
-          const desiredTools = buildToolsForFullDuplex(true);
-          try {
-            await opened.RegisterTools(desiredTools ?? []);
-          } catch (err) {
-            LogError(
-              `[LiveKitAgentRoomCoordinator] Failed to reconfigure tools after discovering FullDuplex: ${err instanceof Error ? err.message : String(err)}`
-            );
-          }
+        const desiredTools = buildToolsForFullDuplex(true);
+        try {
+          await opened.RegisterTools(desiredTools ?? []);
+        } catch (err) {
+          LogError(
+            `[LiveKitAgentRoomCoordinator] Failed to reconfigure tools after discovering FullDuplex: ${err instanceof Error ? err.message : String(err)}`
+          );
         }
         // Explicitly bind a no-op handler so any in-flight or model-cached turn-taking tool calls return a clear "not available" result
         if (this.turnToolBinder) {

@@ -128,6 +128,37 @@ describe('LiveKitAgentRoomCoordinator — full-duplex turn-taking wiring', () =>
     expect(binder).not.toHaveBeenCalled();
   });
 
+  it('post-open full-duplex discovery re-registers tools without turn tools and binds a no-op turn handler', async () => {
+    const registerTools = vi.fn(async () => {});
+    const discoveredFdSession: IRealtimeSession = {
+      ...createStubSession(),
+      RegisterTools: registerTools,
+      Capabilities: { FullDuplex: true },
+    };
+    coordinator.SetSessionFactory(async (ctx) => {
+      factoryContexts.push(ctx);
+      return discoveredFdSession;
+    });
+    const { ops } = makeBridgeOps();
+    coordinator.SetBridgeOps(ops);
+    const binder = vi.fn();
+    coordinator.SetTurnToolBinder(binder);
+
+    // No FullDuplex param and no model id: full-duplex is only discoverable after the session opens.
+    await coordinator.StartAgentRoomSession({ AgentSessionID: 'tt-post-open', RoomName: 'tt-room-post-open', AgentName: 'Sage' });
+
+    expect(factoryContexts[0].HostTools?.map(t => t.Name)).toEqual(['i_am_addressed', 'yield_turn']);
+    expect(registerTools).toHaveBeenCalledTimes(1);
+    expect(registerTools).toHaveBeenCalledWith([]);
+    expect(binder).toHaveBeenCalledTimes(1);
+    const bound = binder.mock.calls[0][1] as { Handles(name: string): boolean; Execute(call: { ToolName: string; Arguments: string }): Promise<string> };
+    expect(bound.Handles('yield_turn')).toBe(true);
+    expect(bound.Handles('some_other_tool')).toBe(false);
+    const result = JSON.parse(await bound.Execute({ ToolName: 'yield_turn', Arguments: '{}' })) as { success: boolean; error: string };
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('full-duplex');
+  });
+
   it('passes an explicit addressing mode through, and withholds the tools when name matching is forced', async () => {
     const { ops, startCalls } = makeBridgeOps();
     coordinator.SetBridgeOps(ops);

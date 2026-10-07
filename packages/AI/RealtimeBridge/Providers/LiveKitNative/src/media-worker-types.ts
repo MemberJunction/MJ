@@ -5,6 +5,10 @@
  * used to isolate `@livekit/rtc-node` WebRTC audio processing, outbound frame pacing, and pre-buffering
  * off the main Node.js event loop into a dedicated `worker_threads.Worker`.
  *
+ * Request/response commands (`connect`, `publishData`, `disconnect`, `getTelemetry`) carry a correlation
+ * `id`; the worker answers each with exactly one of `connected` / `commandSuccess` / `telemetry` /
+ * `commandError` bearing the same `id`. Everything else is fire-and-forget or an unsolicited event.
+ *
  * @module @memberjunction/ai-bridge-livekit-native
  */
 
@@ -14,7 +18,7 @@ import type {
     NativeRoomAudioFrame,
     NativeRoomParticipant,
 } from '@memberjunction/ai-bridge-livekit';
-import type { RoomAudioTelemetrySnapshot } from './livekit-rtc-node-room';
+import type { RoomAudioTelemetrySnapshot } from './room-telemetry';
 
 /**
  * Options configured for the media worker room client.
@@ -43,6 +47,9 @@ export type MediaWorkerCommand =
     | { type: 'disconnect'; id: string }
     | { type: 'getTelemetry'; id: string };
 
+/** Commands that carry a correlation id and expect a response. */
+export type MediaWorkerRequest = Extract<MediaWorkerCommand, { id: string }>;
+
 /**
  * Events sent from the Media Worker Thread to the Main Thread.
  */
@@ -54,7 +61,8 @@ export type MediaWorkerEvent =
     | { type: 'audioFrame'; frame: NativeRoomAudioFrame }
     | { type: 'participantConnected'; participant: NativeRoomParticipant }
     | { type: 'participantDisconnected'; participantIdentity: string }
-    | { type: 'data'; text: string; senderIdentity: string }
+    /** Full remote roster, sent after every successful join (including rejoins), before `connected`. */
+    | { type: 'rosterSnapshot'; participants: NativeRoomParticipant[] }
     | { type: 'disconnected'; reason?: string }
     | { type: 'telemetry'; id: string; snapshot: RoomAudioTelemetrySnapshot }
     | { type: 'workerError'; error: string };
@@ -65,7 +73,7 @@ export type MediaWorkerEvent =
  */
 export interface IMediaWorker {
     /** Sends a command to the worker, optionally transferring ownership of ArrayBuffers without copying. */
-    postMessage(message: MediaWorkerCommand, transferList?: ReadonlyArray<Transferable>): void;
+    postMessage(message: MediaWorkerCommand, transferList?: ReadonlyArray<ArrayBuffer>): void;
     /** Registers an event listener on messages from the worker. */
     on(event: 'message', listener: (msg: MediaWorkerEvent) => void): this;
     /** Registers an event listener on worker-level errors. */

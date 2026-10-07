@@ -1,6 +1,7 @@
 export * from './livekit-rtc-node-room';
 export * from './media-worker-types';
-export * from './media-worker-entry';
+export * from './media-worker-session';
+export * from './room-telemetry';
 export * from './livekit-worker-room-client';
 
 import { CreateLiveKitRtcNodeModule } from './livekit-rtc-node-room';
