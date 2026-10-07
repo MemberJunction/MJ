@@ -590,6 +590,28 @@ describe('AIEmbeddingRunner', () => {
     expect(result.Vectors[0]).toHaveLength(512);
   });
 
+  it('a driver that degrades to an empty result fails the call instead of answering with no vectors', async () => {
+    // BaseEmbeddings drivers answer a failed request with `vectors: []` (graceful degrade) rather than
+    // throwing; OpenAI does this when a model rejects `dimensions` (#5234). Read as a success, that empty
+    // answer would leave every caller querying with no vector and reporting no matches.
+    const degraded = async (params: EmbedTextsParams): Promise<EmbedTextsResult> =>
+      ({ object: 'list', model: params.model ?? '', ModelUsage: new ModelUsage(0, 0), vectors: [] });
+    for (const key of [DRIVER_1, DRIVER_1B, DRIVER_2, DRIVER_LOCAL]) {
+      scriptFor(key).Answer = degraded;
+    }
+
+    const result = await runner.RunEmbedding({
+      Texts: ['degraded embedding text'],
+      ContextUser: mockUser,
+      PromptID: PROMPT_ID,
+      Dimensions: 1536,
+    });
+
+    expect(result.Success).toBe(false);
+    expect(result.ErrorMessage).toContain('No vectors returned');
+    expect(result.Vectors).toEqual([]);
+  });
+
   describe('keyless drivers', () => {
     it('a pinned call to a model whose driver needs no key succeeds with no key configured', async () => {
       h.state.configuredDrivers.clear();
