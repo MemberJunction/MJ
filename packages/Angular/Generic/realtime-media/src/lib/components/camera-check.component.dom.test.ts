@@ -103,6 +103,28 @@ describe('CameraCheckComponent (DOM)', () => {
     expect(queryAll(render({ ShowDeviceSelection: false }), 'select')).toHaveLength(0);
   });
 
+  describe('a check of the camera alone', () => {
+    it('leaves out the buttons when the host turns them off', () => {
+      expect(query(render({ ShowControls: false }), 'mj-media-controls')).toBeNull();
+    });
+
+    it('shows no heading when it is empty', () => {
+      expect(query(render({ Heading: '' }), '.check__heading')).toBeNull();
+      expect(text(render(), '.check__heading')).toBe('Ready to join?');
+    });
+
+    it('offers a way out after the confirm button, with its label', () => {
+      const f = render({ CancelLabel: 'Not now' });
+      const cancelled = vi.fn();
+      f.componentInstance.Cancelled.subscribe(cancelled);
+      const buttons = queryAll(f, '.check__actions button') as HTMLButtonElement[];
+      expect(buttons.map((b) => b.textContent?.trim())).toEqual(['Continue', 'Not now']);
+      buttons[1].click();
+      expect(cancelled).toHaveBeenCalledTimes(1);
+      expect(query(render(), '.check__cancel')).toBeNull();
+    });
+  });
+
   it('asks for no name by default, and confirms the state and the picked devices', () => {
     const f = render({ MicrophoneOn: true, CameraOn: true, SelectedMicrophoneID: 'mic-2', SelectedCameraID: 'cam-1' });
     const emitted = choices(f);

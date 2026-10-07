@@ -98,6 +98,14 @@ function fakeSession() {
     StopCamera: (): void => {
       calls.push('StopCamera');
     },
+    ConfirmCamera: (): RealtimeCaptureState => {
+      calls.push('ConfirmCamera');
+      return { Status: 'on' };
+    },
+    SwitchCamera: async (deviceId: string): Promise<RealtimeCaptureState> => {
+      calls.push(`SwitchCamera:${deviceId}`);
+      return { Status: 'starting', Checking: true };
+    },
     StartScreenShare: async (options?: DisplayCaptureOptions): Promise<RealtimeCaptureState> => {
       calls.push(`StartScreenShare:${options?.PreferredSurface ?? 'any'}`);
       return { Status: 'starting' };
@@ -417,6 +425,38 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
       await settle();
       composerButton(f, 'Stop sharing')?.click();
       expect(calls).toEqual(['StartScreenShare:any', 'StartScreenShare:tab', 'StopScreenShare']);
+    });
+  });
+
+  describe('the camera check', () => {
+    const checking: RealtimeCaptureState = {
+      Status: 'starting',
+      Checking: true,
+      Stream: { id: 'camera', getTracks: () => [] } as unknown as MediaStream,
+      DeviceID: 'cam-1',
+      Devices: [
+        { DeviceID: 'cam-1', Kind: 'camera', Label: 'Front camera', GroupID: 'laptop' },
+        { DeviceID: 'cam-2', Kind: 'camera', Label: 'Desk camera', GroupID: 'desk' },
+      ],
+    };
+
+    it('shows the check over the call while the camera waits for it, and answers through the session', async () => {
+      vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
+      vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => undefined);
+      const { f, captures$, calls } = await renderWithBoard();
+      expect(query(f, 'mj-realtime-camera-check-card')).toBeNull();
+      captures$.next({ ...REALTIME_CAPTURES_OFF, Camera: checking });
+      await settle();
+      expect(query(f, 'mj-realtime-camera-check-card .mj-dialog-title')?.textContent?.trim()).toBe('Check your camera');
+      const select = query(f, 'mj-realtime-camera-check-card select') as HTMLSelectElement;
+      select.value = 'cam-2';
+      select.dispatchEvent(new Event('change'));
+      (query(f, 'mj-realtime-camera-check-card .check__confirm') as HTMLButtonElement).click();
+      (query(f, 'mj-realtime-camera-check-card .check__cancel') as HTMLButtonElement).click();
+      expect(calls).toEqual(['SwitchCamera:cam-2', 'ConfirmCamera', 'StopCamera']);
+      captures$.next({ ...REALTIME_CAPTURES_OFF, Camera: { Status: 'on', Stream: checking.Stream } });
+      await settle();
+      expect(query(f, 'mj-realtime-camera-check-card')).toBeNull();
     });
   });
 

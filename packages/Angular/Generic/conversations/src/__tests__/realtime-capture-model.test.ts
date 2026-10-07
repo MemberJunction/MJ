@@ -53,6 +53,38 @@ describe('RealtimeCaptureModel', () => {
     expect(events).toEqual(['started']);
   });
 
+  it("takes a camera check that ends with the camera off as the user declining the agent's request", () => {
+    const { m, events } = model();
+    m.Ask('to see the label');
+    m.FollowCapture({ Status: 'starting' });
+    m.FollowCapture({ Status: 'starting', Checking: true, Stream: stream('cam') });
+    expect(m.View).toMatchObject({ Status: 'starting', Participant: null });
+    m.FollowCapture({ Status: 'off' });
+    expect(events).toEqual(['asked', 'declined']);
+    expect(m.View).toMatchObject({ Status: 'off', Reason: null });
+    expect(m.ToState()).toEqual({ status: 'off', reason: '', problem: '' });
+  });
+
+  it("leaves the agent's request standing when a start without a check is stopped before it opens", () => {
+    const { m, events } = model();
+    m.Ask('to see the label');
+    m.FollowCapture({ Status: 'starting' });
+    m.FollowCapture({ Status: 'off' });
+    expect(events).toEqual(['asked']);
+    expect(m.View).toMatchObject({ Status: 'asked', Reason: 'to see the label' });
+  });
+
+  it('streams nothing when a check the user started alone ends with the camera off, and starts when it is confirmed', () => {
+    const { m, events } = model();
+    m.FollowCapture({ Status: 'starting', Checking: true, Stream: stream('cam') });
+    m.FollowCapture({ Status: 'off' });
+    expect(events).toEqual([]);
+    m.Ask('please');
+    m.FollowCapture({ Status: 'starting', Checking: true, Stream: stream('cam') });
+    m.FollowCapture({ Status: 'on', Stream: stream('cam') });
+    expect(events).toEqual(['asked', 'started']);
+  });
+
   it('declines a standing request, and has nothing to decline otherwise', () => {
     const { m, events } = model();
     m.Decline();

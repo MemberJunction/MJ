@@ -72,6 +72,13 @@
   font-size: 1.1rem;
 }
 
+/* Confirm first, then the way out: MJ's order for a dialog's buttons. */
+.check__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .check__field {
   display: flex;
   flex-direction: column;

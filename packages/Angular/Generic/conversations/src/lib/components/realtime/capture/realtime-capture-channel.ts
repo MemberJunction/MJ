@@ -29,9 +29,12 @@ export const CONVERSATION_CALL_HOST_CHANNELS: readonly RealtimeHostChannelDeclar
   { ClientPluginClass: REALTIME_SCREEN_SHARE_CHANNEL_CLASS },
 ]);
 
-/** The start options the conversations UI passes with every call it starts: the channels it brings. */
+/**
+ * The start options the conversations UI passes with every call it starts: the channels it brings, and the camera check
+ * its call overlay shows the first time the user turns the camera on in a call.
+ */
 export function ConversationCallStartOptions(): RealtimeSessionStartOptions {
-  return { HostChannels: [...CONVERSATION_CALL_HOST_CHANNELS] };
+  return { HostChannels: [...CONVERSATION_CALL_HOST_CHANNELS], CameraCheck: true };
 }
 
 /** What tells the two capture channels apart. */

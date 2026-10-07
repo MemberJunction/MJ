@@ -261,6 +261,18 @@
       </div>
     }
 
+    <!-- THE CAMERA CHECK: the first time the user turns the camera on in a call, they see it, and can pick another
+         camera, before the agent does. Until they choose, the camera's own box says it is waiting. -->
+    @if (CameraCheck; as camera) {
+      <mj-realtime-camera-check-card
+        [Camera]="camera"
+        [AgentName]="AgentName"
+        [Switch]="SwitchCheckedCamera"
+        (Confirmed)="OnCameraCheckConfirmed()"
+        (Declined)="OnCameraCheckDeclined()">
+      </mj-realtime-camera-check-card>
+    }
+
   </div>
 }
 

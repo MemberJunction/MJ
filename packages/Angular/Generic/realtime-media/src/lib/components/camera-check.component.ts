@@ -24,6 +24,9 @@ export interface MediaCameraCheckChoices {
  * name. Presentational: the host runs the preview. It passes the camera as {@link CameraSource} and the level as
  * {@link MicrophoneLevel}, and starts, stops or switches devices when the check asks. {@link Confirmed} hands over
  * the choices.
+ *
+ * For a check of the camera alone, give it cameras only and no microphone level, and turn off {@link ShowControls}; a
+ * {@link CancelLabel} adds a way out ({@link Cancelled}) beside the confirm button.
  */
 @Component({
   selector: 'mj-camera-check',
@@ -46,7 +49,9 @@ export interface MediaCameraCheckChoices {
       </div>
 
       <div class="check__controls">
-        <h3 class="check__heading">{{ Heading }}</h3>
+        @if (Heading) {
+          <h3 class="check__heading">{{ Heading }}</h3>
+        }
 
         @if (ShowDisplayName) {
           <label class="check__field">
@@ -55,13 +60,15 @@ export interface MediaCameraCheckChoices {
           </label>
         }
 
-        <mj-media-controls
-          [ShowShare]="false"
-          [MicrophoneOn]="MicrophoneOn"
-          [CameraOn]="CameraOn"
-          (MicrophoneToggled)="MicrophoneToggled.emit($event)"
-          (CameraToggled)="CameraToggled.emit($event)"
-        ></mj-media-controls>
+        @if (ShowControls) {
+          <mj-media-controls
+            [ShowShare]="false"
+            [MicrophoneOn]="MicrophoneOn"
+            [CameraOn]="CameraOn"
+            (MicrophoneToggled)="MicrophoneToggled.emit($event)"
+            (CameraToggled)="CameraToggled.emit($event)"
+          ></mj-media-controls>
+        }
 
         @if (ShowDeviceSelection && Microphones.length > 0) {
           <label class="check__field">
@@ -84,9 +91,16 @@ export interface MediaCameraCheckChoices {
           </label>
         }
 
-        <button type="button" mjButton Variant="primary" class="check__confirm" [disabled]="!CanConfirm" (click)="Confirm()">
-          {{ ConfirmLabel }}
-        </button>
+        <div class="check__actions">
+          <button type="button" mjButton Variant="primary" class="check__confirm" [disabled]="!CanConfirm" (click)="Confirm()">
+            {{ ConfirmLabel }}
+          </button>
+          @if (CancelLabel) {
+            <button type="button" mjButton Variant="secondary" class="check__cancel" (click)="Cancelled.emit()">
+              {{ CancelLabel }}
+            </button>
+          }
+        </div>
       </div>
     </div>
   `,
@@ -107,16 +121,20 @@ export class CameraCheckComponent implements AfterViewInit, OnDestroy {
   /** The name being typed. */
   public DisplayName = '';
 
-  /** The heading above the controls. */
+  /** The heading above the controls; none when empty, as when the host titles the check itself. */
   @Input() public Heading = 'Ready to join?';
   /** The confirm button's label. */
   @Input() public ConfirmLabel = 'Continue';
+  /** The label of a button beside the confirm button that backs out of the check ({@link Cancelled}); none when empty. */
+  @Input() public CancelLabel = '';
   /** Ask for a name. */
   @Input() public ShowDisplayName = false;
   /** Keep the confirm button off until a name is typed. */
   @Input() public RequireDisplayName = false;
   /** Show the microphone and camera pickers. */
   @Input() public ShowDeviceSelection = true;
+  /** Show the microphone and camera buttons. Off when the confirm and cancel buttons are the only choices. */
+  @Input() public ShowControls = true;
   /** Whether the microphone is on. */
   @Input() public MicrophoneOn = true;
   /** Whether the camera is on. */
@@ -167,6 +185,8 @@ export class CameraCheckComponent implements AfterViewInit, OnDestroy {
   @Output() public DeviceSelected = new EventEmitter<MediaDeviceSelection>();
   /** The user confirmed their choices. */
   @Output() public Confirmed = new EventEmitter<MediaCameraCheckChoices>();
+  /** The user backed out of the check with the {@link CancelLabel} button. */
+  @Output() public Cancelled = new EventEmitter<void>();
 
   /** Whether the preview shows the camera: it is on and the host gave a source. */
   public get ShowsCamera(): boolean {

@@ -88,14 +88,22 @@ export class RealtimeCaptureModel {
     this.publish({ Name: 'declined', Payload: {} });
   }
 
-  /** The runtime's capture changed. Turning on answers the agent's request. */
+  /**
+   * The runtime's capture changed. Turning on answers the agent's request, and so does a camera check that ends with the
+   * camera off: the user said not now.
+   */
   public FollowCapture(capture: RealtimeCaptureState): void {
-    const was = this.capture.Status;
+    const was = this.capture;
     this.capture = capture;
     if (capture.Status === 'on') {
       this.reason = null;
     }
-    this.publish(this.eventFor(was, capture));
+    if (was.Checking && capture.Status === 'off' && this.reason !== null) {
+      this.reason = null;
+      this.publish({ Name: 'declined', Payload: {} });
+      return;
+    }
+    this.publish(this.eventFor(was.Status, capture));
   }
 
   /** Whether the channel lets the agent see pixels (its exposure). */

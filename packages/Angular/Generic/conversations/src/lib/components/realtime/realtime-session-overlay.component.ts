@@ -28,6 +28,7 @@ import { RealtimeSurfaceTabsComponent, RealtimeChannelSlot } from './realtime-su
 import { RealtimeSurfaceStageModel } from './realtime-surface-stage.model';
 import { RealtimeSurfaceMoveMenuComponent, type RealtimeSurfaceMove } from './realtime-surface-move-menu.component';
 import { AgentOrbStateFor, RealtimeAgentOrbComponent, type RealtimeAgentOrbState } from './realtime-agent-orb.component';
+import { RealtimeCameraCheckCardComponent } from './capture/realtime-camera-check-card.component';
 import {
   ParseSurfacePipPref, ParseSurfacePlacementPref, SerializeSurfacePipPref, SerializeSurfacePlacementPref,
   SURFACE_PIP_PREF_KEY, SURFACE_PLACEMENT_PREF_KEY
@@ -145,6 +146,7 @@ export interface RealtimeStartLiveRequest {
     SharedGenericModule,
     RealtimeAgentBannerComponent,
     RealtimeAgentOrbComponent,
+    RealtimeCameraCheckCardComponent,
     RealtimeSessionThreadComponent,
     RealtimeChannelStripComponent,
     RealtimePerceptionChipComponent,
@@ -725,6 +727,24 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   public get CameraOn(): boolean {
     return isCapturing(this.CaptureStates.Camera);
   }
+
+  /** The camera while the user checks it, before the agent sees it; `null` otherwise. The camera check card shows it. */
+  public get CameraCheck(): RealtimeCaptureState | null {
+    return this.CaptureStates.Camera.Checking ? this.CaptureStates.Camera : null;
+  }
+
+  /** The camera check's "Turn on camera": the agent sees the camera from now on. */
+  public OnCameraCheckConfirmed(): void {
+    this.realtime.ConfirmCamera();
+  }
+
+  /** The camera check's "Not now": the camera turns off. */
+  public OnCameraCheckDeclined(): void {
+    this.realtime.StopCamera();
+  }
+
+  /** Moves the camera being checked to another device: the camera check's picker. */
+  public readonly SwitchCheckedCamera = (deviceId: string): Promise<RealtimeCaptureState> => this.realtime.SwitchCamera(deviceId);
 
   /** Whether a share is on or starting: the composer's Share button reads as sharing. */
   public get Sharing(): boolean {

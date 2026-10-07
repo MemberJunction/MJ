@@ -104,7 +104,7 @@ describe('the Camera and Screen Share channels', () => {
   it("are the conversations UI's host channels, in the options it starts every call with", () => {
     expect(CONVERSATION_CALL_HOST_CHANNELS).toEqual([{ ClientPluginClass: 'RealtimeCameraChannel' }, { ClientPluginClass: 'RealtimeScreenShareChannel' }]);
     const options = ConversationCallStartOptions();
-    expect(options).toEqual({ HostChannels: [...CONVERSATION_CALL_HOST_CHANNELS] });
+    expect(options).toEqual({ HostChannels: [...CONVERSATION_CALL_HOST_CHANNELS], CameraCheck: true });
     expect(options.HostChannels).not.toBe(CONVERSATION_CALL_HOST_CHANNELS);
   });
 
