@@ -38,8 +38,14 @@ describe('RealtimeAudioRecorder — disabled when Web Audio is unavailable', () 
 describe('RealtimeAudioRecorder — with stubbed Web Audio', () => {
     const g = globalThis as Record<string, unknown>;
     const saved: Record<string, unknown> = {};
+    /** Streams handed to createMediaStreamSource, in call order. */
+    let sourceCalls: MediaStream[] = [];
+    /** When set, createMediaStreamSource throws a cross-rate NotSupportedError for exactly this stream. */
+    let throwForStream: MediaStream | null = null;
 
     beforeEach(() => {
+        sourceCalls = [];
+        throwForStream = null;
         for (const key of ['AudioContext', 'AudioWorkletNode', 'Blob', 'URL']) {
             saved[key] = g[key];
         }
@@ -54,7 +60,11 @@ describe('RealtimeAudioRecorder — with stubbed Web Audio', () => {
             public createMediaStreamDestination() {
                 return { stream: {} };
             }
-            public createMediaStreamSource() {
+            public createMediaStreamSource(stream: MediaStream) {
+                sourceCalls.push(stream);
+                if (stream === throwForStream) {
+                    throw new DOMException('cross-rate', 'NotSupportedError');
+                }
                 return { connect: () => undefined };
             }
             public createScriptProcessor() {
@@ -266,6 +276,68 @@ describe('RealtimeAudioRecorder — with stubbed Web Audio', () => {
         });
     });
 
+    it('closes its AudioContext and wires no mic when Stop lands while the context is still resuming', async () => {
+        // Browsers usually create the context suspended; a call that ends inside that await used to
+        // leave the context open and connect the mic into a recorder that had already stopped.
+        const Base = g['AudioContext'] as new () => object;
+        let releaseResume: () => void = () => undefined;
+        class SuspendedAudioContext extends Base {
+            public state = 'suspended';
+            public Closed = false;
+            public resume(): Promise<void> {
+                return new Promise<void>((resolve) => { releaseResume = resolve; });
+            }
+            public close(): Promise<void> {
+                this.Closed = true;
+                return Promise.resolve();
+            }
+        }
+        const contexts: SuspendedAudioContext[] = [];
+        g['AudioContext'] = class extends SuspendedAudioContext {
+            constructor() {
+                super();
+                contexts.push(this);
+            }
+        };
+        const mic = fakeStream(1);
+        const recorder = new RealtimeAudioRecorder();
+        recorder.Start(mic, null);
+
+        await recorder.Stop();
+        releaseResume();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(contexts).toHaveLength(1);
+        expect(contexts[0].Closed).toBe(true);
+        expect(sourceCalls).not.toContain(mic);
+    });
+
+    it('wires no mic when Stop lands while the capture worklet is still loading', async () => {
+        const Base = g['AudioContext'] as new () => object;
+        let releaseModule: (() => void) | null = null;
+        g['AudioContext'] = class extends Base {
+            public audioWorklet = {
+                addModule: (): Promise<void> => new Promise<void>((resolve) => { releaseModule = resolve; }),
+            };
+        };
+        g['AudioWorkletNode'] = class {
+            public port = { onmessage: null };
+            public connect(): void {}
+            public disconnect(): void {}
+        };
+        const mic = fakeStream(1);
+        const recorder = new RealtimeAudioRecorder();
+        recorder.Start(mic, null);
+        // Precondition: setup has reached the worklet load and is parked inside it.
+        await vi.waitFor(() => expect(releaseModule).not.toBeNull());
+
+        await recorder.Stop();
+        releaseModule!();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(sourceCalls).not.toContain(mic);
+    });
+
     it('MimeType reverts to empty after Stop (recording flag cleared)', async () => {
         const recorder = new RealtimeAudioRecorder();
         recorder.Start(fakeStream(1), null);
@@ -299,5 +371,68 @@ describe('RealtimeAudioRecorder — with stubbed Web Audio', () => {
         expect(internals.pendingRemoteStream).toBeNull();
         expect(recorder.IsRecording).toBe(false);
         expect(recorder.SnapshotNewSegment()).toBeNull(); // no leftover unflushed segment
+    });
+    describe('remote stream that cannot be mixed in', () => {
+        const captureOne = (recorder: RealtimeAudioRecorder): void => {
+            (recorder as unknown as { captureFrame(f: Float32Array): void }).captureFrame(new Float32Array(128).fill(0.5));
+        };
+
+        it('Start(mic, remote) keeps recording mic-only and warns when the remote connect throws', async () => {
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+            const remote = fakeStream(1);
+            throwForStream = remote;
+            const recorder = new RealtimeAudioRecorder();
+            recorder.Start(fakeStream(1), remote);
+            await vi.waitFor(() => expect(sourceCalls).toContain(remote));
+
+            expect(recorder.IsRecording).toBe(true);
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining('agent stream'), expect.any(DOMException));
+            captureOne(recorder);
+            const blob = await recorder.Stop();
+            expect(blob).not.toBeNull();
+            expect(blob!.size).toBeGreaterThan(44);
+        });
+
+        it('AttachRemoteStream after setup keeps recording mic-only and warns when the connect throws', async () => {
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+            const recorder = new RealtimeAudioRecorder();
+            recorder.Start(fakeStream(1), null);
+            await vi.waitFor(() => expect(sourceCalls.length).toBe(1)); // mic connected => graph ready
+            const remote = fakeStream(1);
+            throwForStream = remote;
+
+            expect(() => recorder.AttachRemoteStream(remote)).not.toThrow();
+            expect(recorder.IsRecording).toBe(true);
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining('agent stream'), expect.any(DOMException));
+            captureOne(recorder);
+            const blob = await recorder.Stop();
+            expect(blob).not.toBeNull();
+            expect(blob!.size).toBeGreaterThan(44);
+        });
+
+        it('connects the same remote stream exactly once when Start(mic, remote) is followed by AttachRemoteStream(remote)', async () => {
+            const remote = fakeStream(1);
+            const recorder = new RealtimeAudioRecorder();
+            recorder.Start(fakeStream(1), remote);
+            await vi.waitFor(() => expect(sourceCalls).toContain(remote));
+            recorder.AttachRemoteStream(remote); // the post-Connect PCM case: handler fires with the same stream
+
+            expect(sourceCalls.filter((s) => s === remote)).toHaveLength(1);
+            await recorder.Stop();
+        });
+
+        it('connects the same remote stream exactly once when AttachRemoteStream(remote) arrives before setup finishes (the runtime order)', async () => {
+            // RealtimeSessionRuntime.startRecording: Start(mic, remote), then OnRemoteMediaStream fires
+            // synchronously with the same stream while the async graph setup is still pending.
+            const remote = fakeStream(1);
+            const recorder = new RealtimeAudioRecorder();
+            recorder.Start(fakeStream(1), remote);
+            recorder.AttachRemoteStream(remote);
+            await vi.waitFor(() => expect(sourceCalls).toContain(remote));
+            await new Promise((resolve) => setTimeout(resolve, 0));
+
+            expect(sourceCalls.filter((s) => s === remote)).toHaveLength(1);
+            await recorder.Stop();
+        });
     });
 });
