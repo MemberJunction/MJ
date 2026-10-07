@@ -1,9 +1,9 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
-import mermaid from 'mermaid';
 import { SVGUtils } from './shared/svg-utils';
 import { MermaidTheme, MermaidConfig } from './shared/mermaid-types';
+import { MermaidRenderer } from './shared/mermaid-renderer';
 
 /**
  * Action that generates SVG diagrams from Mermaid text syntax.
@@ -11,9 +11,15 @@ import { MermaidTheme, MermaidConfig } from './shared/mermaid-types';
  * Gantt charts, and more.
  *
  * Mermaid is a text-based diagram generation tool that converts markdown-like
- * syntax into rich visual diagrams. This action uses the Mermaid library to
- * render diagrams server-side as SVG, suitable for embedding in reports,
- * artifacts, and AI-generated content.
+ * syntax into rich visual diagrams. This action renders diagrams server-side as
+ * static SVG (no script), suitable for embedding in reports, artifacts, and
+ * AI-generated content.
+ *
+ * Rendering runs in headless Chromium via {@link MermaidRenderer}, because Mermaid
+ * measures rendered text to lay diagrams out and cannot run in plain Node. Hosts
+ * that use this action need a Chromium build for the `playwright` dependency
+ * (`npx playwright install chromium`); without one the action fails with `BROWSER_UNAVAILABLE` rather
+ * than producing a broken diagram.
  *
  * @example
  * ```typescript
@@ -73,8 +79,9 @@ export class CreateMermaidDiagramAction extends BaseAction {
      */
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
-            // Extract required Code parameter
-            const code = this.getStringParam(params, 'Code');
+            // Extract required Code parameter. Default to '' so a missing Code reaches the
+            // MISSING_PARAMETERS check below instead of throwing into DIAGRAM_GENERATION_FAILED.
+            const code = this.getStringParam(params, 'Code', '');
             if (!code) {
                 return {
                     Success: false,
@@ -112,43 +119,32 @@ export class CreateMermaidDiagramAction extends BaseAction {
             }
 
             // Check for suspicious patterns (basic XSS prevention)
-            const suspiciousPatterns = [
-                /<script/i,
-                /javascript:/i,
-                /on\w+\s*=/i  // Event handlers
-            ];
-
-            for (const pattern of suspiciousPatterns) {
-                if (pattern.test(code)) {
-                    return {
-                        Success: false,
-                        Message: 'Invalid Mermaid code: contains suspicious content',
-                        ResultCode: 'INVALID_CODE'
-                    };
-                }
+            if (/<script/i.test(code) || /javascript:/i.test(code) || this.hasTagEventHandler(code)) {
+                return {
+                    Success: false,
+                    Message: 'Invalid Mermaid code: contains suspicious content',
+                    ResultCode: 'INVALID_CODE'
+                };
             }
 
-            // Initialize Mermaid with configuration
-            mermaid.initialize({
-                theme,
-                startOnLoad: false,  // Headless mode for server-side rendering
-                securityLevel: 'strict',  // Enforce strict security
-                ...config
-            });
+            const rendered = await MermaidRenderer.Instance.Render(code, theme, config);
+            if (rendered.Success === false) {
+                // Every agent that holds this action needs the fallback, not just the ones whose prompt spells it out.
+                const fallback = rendered.ErrorCode === 'BROWSER_UNAVAILABLE'
+                    ? ' Retrying will not help; build the diagram with Create SVG Diagram instead.'
+                    : '';
+                return {
+                    Success: false,
+                    ResultCode: rendered.ErrorCode === 'RENDER_FAILED' ? 'DIAGRAM_GENERATION_FAILED' : rendered.ErrorCode,
+                    Message: `Failed to generate Mermaid diagram: ${rendered.Message}${fallback}`
+                };
+            }
 
-            // Generate unique ID for this render
-            const renderId = `mermaid-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
-            // Render diagram to SVG
-            const { svg } = await mermaid.render(renderId, code);
-
-            // Sanitize SVG (XSS prevention)
-            const sanitizedSvg = SVGUtils.sanitizeSVG(svg);
-
+            // Sanitize SVG (XSS prevention) — the source is model output, so never trust the markup.
             return {
                 Success: true,
                 ResultCode: "SUCCESS",
-                Message: sanitizedSvg
+                Message: SVGUtils.SanitizeSVG(rendered.Svg)
             };
 
         } catch (error) {
@@ -164,6 +160,43 @@ export class CreateMermaidDiagramAction extends BaseAction {
     /**
      * Helper to get parameter value by name (case-insensitive)
      */
+    /**
+     * Whether an HTML tag in the code carries an event handler (`<img onerror=...>`). Each tag is read from
+     * `<name` to its closing `>`, skipping quoted attribute VALUES (a quote right after `=`), so a `<` or `>`
+     * inside a value cannot end it early and hide a handler after it. Any other quote is ordinary text: in
+     * Mermaid, label quotes (`A["x<y"] --> B["online = true"]`) are not tag syntax. Text that doesn't start a tag (labels like `online = true`,
+     * class-diagram arrows like `<|--`) is not checked. One pass, never revisiting a character: a regex such
+     * as /<[^>]*on\w+=/ backtracks quadratically on a run of `<`, and this runs on the server's main thread.
+     */
+    private hasTagEventHandler(code: string): boolean {
+        let index = code.indexOf('<');
+        while (index !== -1) {
+            if (!/[a-z/]/i.test(code[index + 1] ?? '')) {
+                index = code.indexOf('<', index + 1);
+                continue;
+            }
+            let end = index + 1;
+            while (end < code.length && code[end] !== '>') {
+                if (code[end] === '=') {
+                    end++;
+                    while (code[end] === ' ' || code[end] === '\t') end++;
+                    const quote = code[end];
+                    if (quote === '"' || quote === "'") {
+                        const close = code.indexOf(quote, end + 1);
+                        end = close === -1 ? code.length : close + 1;
+                    }
+                } else {
+                    end++;
+                }
+            }
+            if (/\bon\w+\s*=/i.test(code.slice(index, end))) {
+                return true;
+            }
+            index = code.indexOf('<', end);
+        }
+        return false;
+    }
+
     private getParamValue(params: RunActionParams, paramName: string): string | null {
         const param = params.Params.find(p =>
             p.Name.trim().toLowerCase() === paramName.toLowerCase()

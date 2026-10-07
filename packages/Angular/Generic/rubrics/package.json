@@ -1,10 +1,12 @@
 {
   "name": "@memberjunction/ng-rubrics",
-  "version": "6.2.0-edge.1",
+  "version": "6.2.0-edge.3",
   "description": "Presentational rubric widgets: the draft author, the answer form, and the read-only result.",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
-  "files": ["/dist"],
+  "files": [
+    "/dist"
+  ],
   "scripts": {
     "test": "vitest run",
     "test:types": "tsc --noEmit -p tsconfig.spec.json",
@@ -13,13 +15,16 @@
   "license": "BUSL-1.1",
   "sideEffects": false,
   "mjUILayer": "widgets",
-  "repository": { "type": "git", "url": "https://github.com/MemberJunction/MJ" },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  },
   "dependencies": {
-    "@memberjunction/core": "6.2.0-edge.1",
-    "@memberjunction/core-entities": "6.2.0-edge.1",
-    "@memberjunction/global": "6.2.0-edge.1",
-    "@memberjunction/ng-ui-components": "6.2.0-edge.1",
-    "@memberjunction/rubrics-base": "6.2.0-edge.1",
+    "@memberjunction/core": "6.2.0-edge.3",
+    "@memberjunction/core-entities": "6.2.0-edge.3",
+    "@memberjunction/global": "6.2.0-edge.3",
+    "@memberjunction/ng-ui-components": "6.2.0-edge.3",
+    "@memberjunction/rubrics-base": "6.2.0-edge.3",
     "tslib": "^2.8.1"
   },
   "peerDependencies": {

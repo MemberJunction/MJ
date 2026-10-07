@@ -137,6 +137,11 @@ async function loadUserRole(ctx: IntegrationCheckContext, userId: string, roleId
  * `metadata-optional/integration-test/users/.integration-test-fls-users.json`. The next
  * `mj sync push` then cannot find its pinned primary key, creates the row a second time, and the
  * pair is duplicated; LC8's `loadUserRole` asserts exactly one row and fails on the run after that.
+ *
+ * The caller must therefore read the row's key BEFORE deleting it: `BaseEntity.Delete()` leaves the
+ * object no longer carrying the deleted row's key, so passing `entity.ID` afterwards restores the
+ * membership under a NEW id and loses the identity the fixture pinned — the same duplication by a
+ * different route, and invisible until the next push.
  * That is invisible on a from-scratch CI database and only bites a persistent dev database, which
  * is exactly the kind of failure that wastes an afternoon.
  */
@@ -418,8 +423,9 @@ export async function CheckLc7SystemRoleRemovalGuard(ctx: IntegrationCheckContex
 
     // 1) every role still duplicates the others' Allows → removal permitted.
     const first = await loadUserRole(ctx, sysUser.ID, keeper);
+    const firstId = first.ID; // read BEFORE Delete(): a deleted BaseEntity no longer carries the row's key
     Assert(await first.Delete(), `removing a redundant system-user role must be permitted: ${first.LatestResult?.CompleteMessage ?? ''}`);
-    await restoreUserRole(ctx, sysUser.ID, keeper, first.ID);
+    await restoreUserRole(ctx, sysUser.ID, keeper, firstId);
 
     // 2) narrow every OTHER role to No Access by direct SQL, so `keeper` carries the only Allows.
     const entity = FlsEntity(ctx);
@@ -436,8 +442,9 @@ export async function CheckLc7SystemRoleRemovalGuard(ctx: IntegrationCheckContex
 
     // 3) a role contributing no Allow can still be removed.
     const redundant = await loadUserRole(ctx, sysUser.ID, spare);
+    const redundantId = redundant.ID; // read BEFORE Delete() — see above
     Assert(await redundant.Delete(), `removing a no-Allow system-user role must still be permitted: ${redundant.LatestResult?.CompleteMessage ?? ''}`);
-    await restoreUserRole(ctx, sysUser.ID, spare, redundant.ID);
+    await restoreUserRole(ctx, sysUser.ID, spare, redundantId);
 }
 
 /** @deprecated Use {@link CheckLc7SystemRoleRemovalGuard}. */
@@ -452,8 +459,9 @@ export async function CheckLc8OrdinaryUserRoleRemovalUnaffected(ctx: Integration
     await enableFresh(ctx);
     const roleId = fx.RoleIDs!.Neutral; // one of multi's three roles
     const ur = await loadUserRole(ctx, fx.Multi!.ID, roleId);
+    const pinnedId = ur.ID; // read BEFORE Delete() — see CheckLc7SystemRoleRemovalGuard
     Assert(await ur.Delete(), `removing a role from an ordinary user must be permitted: ${ur.LatestResult?.CompleteMessage ?? ''}`);
-    await restoreUserRole(ctx, fx.Multi!.ID, roleId, ur.ID);
+    await restoreUserRole(ctx, fx.Multi!.ID, roleId, pinnedId);
 }
 
 /** @deprecated Use {@link CheckLc8OrdinaryUserRoleRemovalUnaffected}. */
