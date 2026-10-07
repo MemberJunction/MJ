@@ -215,7 +215,25 @@ export class PotentialDuplicateResult {
 export class PotentialDuplicateResponse {
     Status: 'Inprogress' | 'Success' | 'Error';
     ErrorMessage?: string;
+    /**
+     * Per-record results. For a whole-entity run this is CAPPED — see
+     * {@link PotentialDuplicateResponse.ResultsTruncated}. Every result is persisted as
+     * `Duplicate Run Detail` / `Duplicate Run Detail Match` rows regardless, so the durable
+     * record of a run is the database, not this array.
+     */
     PotentialDuplicateResult: PotentialDuplicateResult[];
+    /**
+     * Count of source records found to have at least one potential duplicate, across the WHOLE
+     * run. Unlike `PotentialDuplicateResult.length` this is never capped, so it stays correct
+     * for runs of any size. Prefer it when reporting "how many duplicates were found".
+     */
+    TotalRecordsWithDuplicates?: number;
+    /**
+     * True when `PotentialDuplicateResult` holds fewer entries than the run actually produced,
+     * because retaining every result would grow without bound. Consumers that need the full set
+     * should read the persisted `Duplicate Run Detail Match` rows for the run.
+     */
+    ResultsTruncated?: boolean;
 }
 
 /**
