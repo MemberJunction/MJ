@@ -28,3 +28,4 @@ export * from './generic/errorAnalyzer';
 export * from './generic/realtimeToolBatchBarrier';
 export * from './generic/realtimeSessionResumption';
 export * from './generic/realtimeTracks';
+export * from './generic/realtimeAgentVision';

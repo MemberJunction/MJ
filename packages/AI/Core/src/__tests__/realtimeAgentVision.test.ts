@@ -1,0 +1,52 @@
+import { describe, it, expect } from 'vitest';
+import {
+    AllowsAgentVision,
+    IsAgentWatching,
+    REALTIME_AGENT_CAN_SEE_ATTRIBUTE,
+    REALTIME_AGENT_WATCHES_ATTRIBUTE,
+} from '../generic/realtimeAgentVision';
+
+describe('realtime agent vision attributes', () => {
+    it('keeps the names the room, the server and the bot agree on', () => {
+        expect(REALTIME_AGENT_CAN_SEE_ATTRIBUTE).toBe('mj.agentCanSee');
+        expect(REALTIME_AGENT_WATCHES_ATTRIBUTE).toBe('mj.agentWatches');
+    });
+
+    describe('AllowsAgentVision', () => {
+        it("is true only for the value 'true'", () => {
+            expect(AllowsAgentVision({ [REALTIME_AGENT_CAN_SEE_ATTRIBUTE]: 'true' })).toBe(true);
+        });
+
+        it('is false when the attribute is missing, empty or anything else', () => {
+            for (const value of ['', 'false', 'TRUE', 'yes', '1']) {
+                expect(AllowsAgentVision({ [REALTIME_AGENT_CAN_SEE_ATTRIBUTE]: value })).toBe(false);
+            }
+            expect(AllowsAgentVision({})).toBe(false);
+            expect(AllowsAgentVision(undefined)).toBe(false);
+            expect(AllowsAgentVision(null)).toBe(false);
+        });
+
+        it("ignores the bot's attribute", () => {
+            expect(AllowsAgentVision({ [REALTIME_AGENT_WATCHES_ATTRIBUTE]: 'true' })).toBe(false);
+        });
+    });
+
+    describe('IsAgentWatching', () => {
+        it("is true only for the value 'true'", () => {
+            expect(IsAgentWatching({ [REALTIME_AGENT_WATCHES_ATTRIBUTE]: 'true' })).toBe(true);
+        });
+
+        it('is false when the attribute is missing, empty or anything else', () => {
+            for (const value of ['', 'false', 'TRUE', 'yes', '1']) {
+                expect(IsAgentWatching({ [REALTIME_AGENT_WATCHES_ATTRIBUTE]: value })).toBe(false);
+            }
+            expect(IsAgentWatching({})).toBe(false);
+            expect(IsAgentWatching(undefined)).toBe(false);
+            expect(IsAgentWatching(null)).toBe(false);
+        });
+
+        it("ignores a person's consent attribute", () => {
+            expect(IsAgentWatching({ [REALTIME_AGENT_CAN_SEE_ATTRIBUTE]: 'true' })).toBe(false);
+        });
+    });
+});

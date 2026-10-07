@@ -29,13 +29,12 @@ import {
   type ScreenShareCaptureOptions,
 } from 'livekit-client';
 import { BehaviorSubject, Observable } from 'rxjs';
+import { AllowsAgentVision, IsAgentWatching } from '@memberjunction/ai';
 import { CapturedSurfaceOf, type DisplayCaptureSurface } from '@memberjunction/ai-realtime-client/media';
 import { LiveKitRoomEventBus } from './events';
 import { ApplyBackgroundEffect, ApplyNoiseFilter } from './livekit-effects';
 import { ToScreenShareCaptureOptions } from './media-adapters';
 import {
-  LIVEKIT_AGENT_CAN_SEE_ATTRIBUTE,
-  LIVEKIT_AGENT_WATCHES_ATTRIBUTE,
   LiveKitBackgroundEffect,
   LiveKitConnectionStatus,
   LiveKitDevice,
@@ -614,7 +613,7 @@ export class LiveKitRoomController implements ILiveKitRoomController {
       NoiseFilterEnabled: this.noiseFilterEnabled,
       BackgroundEffect: this.backgroundEffect,
       E2EEEnabled: this.e2eeEnabled,
-      AgentWatching: isAgentWatching(room),
+      AgentWatching: agentWatchesIn(room),
     });
   }
 
@@ -631,7 +630,7 @@ export class LiveKitRoomController implements ILiveKitRoomController {
       HasVideo: this.hasLiveTrack(participant, Track.Source.Camera),
       IsScreenSharing: this.hasLiveTrack(participant, Track.Source.ScreenShare),
       ConnectionQuality: this.mapConnectionQuality(participant.connectionQuality),
-      AgentCanSee: allowsAgentVision(participant) && this.room !== null && isAgentWatching(this.room),
+      AgentCanSee: AllowsAgentVision(participant.attributes) && this.room !== null && agentWatchesIn(this.room),
       Raw: participant,
     };
   }
@@ -684,7 +683,7 @@ export class LiveKitRoomController implements ILiveKitRoomController {
       CameraEnabled: lp ? lp.isCameraEnabled : false,
       ScreenShareEnabled: lp ? lp.isScreenShareEnabled : false,
       ...(screen ? { ScreenShareSurface: CapturedSurfaceOf(screen) } : {}),
-      AgentVisionOn: lp ? allowsAgentVision(lp) : false,
+      AgentVisionOn: lp ? AllowsAgentVision(lp.attributes) : false,
     };
   }
 
@@ -847,12 +846,7 @@ export class LiveKitRoomController implements ILiveKitRoomController {
   }
 }
 
-/** Whether a participant lets agents see their camera and shared screen ({@link LIVEKIT_AGENT_CAN_SEE_ATTRIBUTE}). */
-function allowsAgentVision(participant: Participant): boolean {
-  return participant.attributes?.[LIVEKIT_AGENT_CAN_SEE_ATTRIBUTE] === 'true';
-}
-
-/** Whether an agent in the room watches the cameras and screens people let it see ({@link LIVEKIT_AGENT_WATCHES_ATTRIBUTE}). */
-function isAgentWatching(room: Room): boolean {
-  return Array.from(room.remoteParticipants.values()).some((p) => p.attributes?.[LIVEKIT_AGENT_WATCHES_ATTRIBUTE] === 'true');
+/** Whether an agent in the room watches the cameras and screens people let it see (its bot's attributes say so). */
+function agentWatchesIn(room: Room): boolean {
+  return Array.from(room.remoteParticipants.values()).some((p) => IsAgentWatching(p.attributes));
 }

@@ -11621,6 +11621,9 @@ importers:
       '@livekit/track-processors':
         specifier: ^0.7.2
         version: 0.7.2(@types/dom-mediacapture-transform@0.1.11)(livekit-client@2.19.2(@types/dom-mediacapture-record@1.0.22))
+      '@memberjunction/ai':
+        specifier: 6.2.0-edge.1
+        version: link:../AI/Core
       '@memberjunction/ai-realtime-client':
         specifier: 6.2.0-edge.1
         version: link:../AI/RealtimeClient

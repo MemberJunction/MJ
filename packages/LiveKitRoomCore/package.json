@@ -18,6 +18,7 @@
   "dependencies": {
     "@livekit/krisp-noise-filter": "^0.4.3",
     "@livekit/track-processors": "^0.7.2",
+    "@memberjunction/ai": "6.2.0-edge.1",
     "@memberjunction/ai-realtime-client": "6.2.0-edge.1",
     "@memberjunction/global": "6.2.0-edge.1",
     "livekit-client": "^2.7.4",

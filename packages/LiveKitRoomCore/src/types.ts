@@ -32,18 +32,6 @@ export type LiveKitDisconnectReason =
 /** The role a participant holds in the room, derived from LiveKit participant metadata. */
 export type LiveKitParticipantRole = 'host' | 'agent' | 'participant';
 
-/**
- * The LiveKit participant attribute that says a person lets agents see their camera and shared screen: `'true'` while
- * they do. The server sets it on their behalf: a participant's token can't change its own attributes.
- */
-export const LIVEKIT_AGENT_CAN_SEE_ATTRIBUTE = 'mj.agentCanSee';
-
-/**
- * The LiveKit participant attribute that says an agent's bot watches the cameras and screens people let it see:
- * `'true'` while it does. The room offers people the choice only while an agent watches.
- */
-export const LIVEKIT_AGENT_WATCHES_ATTRIBUTE = 'mj.agentWatches';
-
 /** The kind of a media track, normalized from `Track.Kind`. */
 export type LiveKitTrackKind = 'audio' | 'video' | 'screen' | 'screen-audio' | 'unknown';
 
@@ -90,9 +78,8 @@ export interface LiveKitParticipantView {
   /** Connection quality bucket as LiveKit reports it. */
   ConnectionQuality: 'excellent' | 'good' | 'poor' | 'lost' | 'unknown';
   /**
-   * Whether an agent can see this participant's camera and shared screen: they allowed it
-   * ({@link LIVEKIT_AGENT_CAN_SEE_ATTRIBUTE}) and an agent in the room watches ({@link LiveKitRoomState.AgentWatching}).
-   * Absent means no.
+   * Whether an agent can see this participant's camera and shared screen: they allowed it (`AllowsAgentVision` in
+   * `@memberjunction/ai`) and an agent in the room watches ({@link LiveKitRoomState.AgentWatching}). Absent means no.
    */
   AgentCanSee?: boolean;
   /**
@@ -209,8 +196,8 @@ export interface LiveKitRoomState {
   /** The reason for disconnect, once disconnected. */
   DisconnectReason?: LiveKitDisconnectReason;
   /**
-   * Whether an agent in the room watches the cameras and screens people let it see
-   * ({@link LIVEKIT_AGENT_WATCHES_ATTRIBUTE} on its bot). The room offers the choice only then. Absent means no.
+   * Whether an agent in the room watches the cameras and screens people let it see (`IsAgentWatching` in
+   * `@memberjunction/ai`, on its bot's attributes). The room offers the choice only then. Absent means no.
    */
   AgentWatching?: boolean;
 }

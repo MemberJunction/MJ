@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ConnectionQuality, ConnectionState, DisconnectReason, RoomEvent, Track, type ScreenShareCaptureOptions } from 'livekit-client';
 import { LiveKitRoomController } from '../livekit-room-controller';
-import { LIVEKIT_AGENT_CAN_SEE_ATTRIBUTE, LIVEKIT_AGENT_WATCHES_ATTRIBUTE } from '../types';
+import { REALTIME_AGENT_CAN_SEE_ATTRIBUTE, REALTIME_AGENT_WATCHES_ATTRIBUTE } from '@memberjunction/ai';
 
 /** A publication reduced to what the controller reads: whether it is muted, and a screen share's track settings. */
 interface FakePublication {
@@ -294,38 +294,38 @@ describe('LiveKitRoomController', () => {
     });
 
     it("marks a person the agent can see: they allowed it and an agent watches; only 'true' allows it", () => {
-      join('ada', { [LIVEKIT_AGENT_CAN_SEE_ATTRIBUTE]: 'true' });
-      join('bo', { [LIVEKIT_AGENT_CAN_SEE_ATTRIBUTE]: 'false' });
-      join('agent-1', { [LIVEKIT_AGENT_WATCHES_ATTRIBUTE]: 'true' }, JSON.stringify({ mjRole: 'agent' }));
+      join('ada', { [REALTIME_AGENT_CAN_SEE_ATTRIBUTE]: 'true' });
+      join('bo', { [REALTIME_AGENT_CAN_SEE_ATTRIBUTE]: 'false' });
+      join('agent-1', { [REALTIME_AGENT_WATCHES_ATTRIBUTE]: 'true' }, JSON.stringify({ mjRole: 'agent' }));
       expect(controller.State.AgentWatching).toBe(true);
       expect(viewOf('ada')?.AgentCanSee).toBe(true);
       expect(viewOf('bo')?.AgentCanSee).toBe(false);
     });
 
     it("shows nobody as seen while no agent watches, whatever they allowed; only 'true' means it watches", () => {
-      join('ada', { [LIVEKIT_AGENT_CAN_SEE_ATTRIBUTE]: 'true' });
-      join('agent-1', { [LIVEKIT_AGENT_WATCHES_ATTRIBUTE]: 'false' }, JSON.stringify({ mjRole: 'agent' }));
+      join('ada', { [REALTIME_AGENT_CAN_SEE_ATTRIBUTE]: 'true' });
+      join('agent-1', { [REALTIME_AGENT_WATCHES_ATTRIBUTE]: 'false' }, JSON.stringify({ mjRole: 'agent' }));
       expect(controller.State.AgentWatching).toBe(false);
       expect(viewOf('ada')?.AgentCanSee).toBe(false);
     });
 
     it("reads the local person's own choice, whether or not an agent watches", () => {
-      room.localParticipant.attributes = { [LIVEKIT_AGENT_CAN_SEE_ATTRIBUTE]: 'true' };
+      room.localParticipant.attributes = { [REALTIME_AGENT_CAN_SEE_ATTRIBUTE]: 'true' };
       join('bo', {});
       expect(controller.State.LocalMedia.AgentVisionOn).toBe(true);
       expect(controller.State.Local?.AgentCanSee).toBe(false);
-      join('agent-1', { [LIVEKIT_AGENT_WATCHES_ATTRIBUTE]: 'true' });
+      join('agent-1', { [REALTIME_AGENT_WATCHES_ATTRIBUTE]: 'true' });
       expect(controller.State.Local?.AgentCanSee).toBe(true);
     });
 
     it('follows attribute changes as the server makes them', () => {
       const ada = join('ada', {});
-      const agent = join('agent-1', { [LIVEKIT_AGENT_WATCHES_ATTRIBUTE]: 'true' });
-      ada.attributes = { [LIVEKIT_AGENT_CAN_SEE_ATTRIBUTE]: 'true' };
-      room.emit(RoomEvent.ParticipantAttributesChanged, { [LIVEKIT_AGENT_CAN_SEE_ATTRIBUTE]: 'true' }, ada);
+      const agent = join('agent-1', { [REALTIME_AGENT_WATCHES_ATTRIBUTE]: 'true' });
+      ada.attributes = { [REALTIME_AGENT_CAN_SEE_ATTRIBUTE]: 'true' };
+      room.emit(RoomEvent.ParticipantAttributesChanged, { [REALTIME_AGENT_CAN_SEE_ATTRIBUTE]: 'true' }, ada);
       expect(viewOf('ada')?.AgentCanSee).toBe(true);
       agent.attributes = {};
-      room.emit(RoomEvent.ParticipantAttributesChanged, { [LIVEKIT_AGENT_WATCHES_ATTRIBUTE]: '' }, agent);
+      room.emit(RoomEvent.ParticipantAttributesChanged, { [REALTIME_AGENT_WATCHES_ATTRIBUTE]: '' }, agent);
       expect(controller.State.AgentWatching).toBe(false);
       expect(viewOf('ada')?.AgentCanSee).toBe(false);
     });
