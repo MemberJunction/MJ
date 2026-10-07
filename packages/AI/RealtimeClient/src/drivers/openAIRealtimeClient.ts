@@ -1,7 +1,7 @@
 import { RegisterClass } from '@memberjunction/global';
 import { ClientRealtimeSessionConfig, JSONObject } from '@memberjunction/ai';
 import { RealtimeAudioMeter } from '../audio/audioMeter';
-import { BaseRealtimeClient } from '../generic/baseRealtimeClient';
+import { BaseRealtimeClient, ToProviderSessionConfig } from '../generic/baseRealtimeClient';
 import {
     OpenAIProtocolRealtimeClient,
     OpenAIProtocolClientEvent,
@@ -75,14 +75,6 @@ export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
     /** Protected so test subclasses can inspect/inject; production code treats it as private. */
     protected dataChannel: IRealtimeDataChannel | null = null;
     private remoteAudioEl: IRealtimeAudioSink | null = null;
-    /**
-     * The AGENT's remote-audio stream, captured from the peer connection's `ontrack` event
-     * (see {@link attachRemoteAudio}). Exposed via {@link GetRemoteMediaStream} so a host can
-     * mix the agent's voice into a browser-side recording. `null` until the remote track lands.
-     */
-    private remoteStream: MediaStream | null = null;
-    /** Host handlers notified when the agent's remote-audio stream lands (or immediately, if already present). */
-    private remoteStreamHandlers: Array<(stream: MediaStream) => void> = [];
     /**
      * The server-built session config applied verbatim via `session.update` when the data
      * channel opens. Protected so test subclasses can seed it without a full Connect.
@@ -162,9 +154,8 @@ export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
             this.remoteAudioEl.remove();
             this.remoteAudioEl = null;
         }
-        this.remoteStream = null;
-        // Session-scoped host handlers must not survive into a later Connect on a reused instance.
-        this.remoteStreamHandlers = [];
+        // Drops the stream and the session-scoped host handlers (must not survive a reused instance).
+        this.clearRemoteMediaStream();
 
         this.sessionConfig = null;
         this.resetResponseState();
@@ -277,54 +268,15 @@ export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
         pc.ontrack = (e: RTCTrackEvent) => {
             if (this.remoteAudioEl && e.streams[0]) {
                 this.remoteAudioEl.srcObject = e.streams[0];
-                // Capture the agent's remote stream so a host can mix it into a recording
-                // (see GetRemoteMediaStream). Playback still flows through the <audio> element.
-                this.remoteStream = e.streams[0];
-                // Notify hosts (e.g. a browser recorder) that the agent's stream is now available
-                // so they can mix it in — the track typically lands AFTER recording already began.
-                this.notifyRemoteStream(e.streams[0]);
+                // Publish the agent's remote stream so a host can mix it into a recording
+                // (see GetRemoteMediaStream) — the track typically lands AFTER recording already
+                // began. Playback still flows through the <audio> element.
+                this.publishRemoteMediaStream(e.streams[0]);
                 // Agent-side audio meter taps the remote stream (obligation #9). The
                 // analyser sinks nowhere — playback still flows through the <audio> element.
                 this.attachOutputAudioMeter(RealtimeAudioMeter.ForStream(e.streams[0]));
             }
         };
-    }
-
-    /**
-     * Returns the AGENT's remote-audio stream once the WebRTC `ontrack` event has delivered it,
-     * or `null` before the track lands. Lets a host mix the agent's voice into a browser-side
-     * recording alongside the mic.
-     */
-    public GetRemoteMediaStream(): MediaStream | null {
-        return this.remoteStream;
-    }
-
-    /**
-     * Registers a handler invoked when the agent's remote-audio stream becomes available — either
-     * later via the WebRTC `ontrack`, or IMMEDIATELY if the track has already landed. Lets a host
-     * attach the agent voice to a recording that started (mic-only) before the track arrived.
-     */
-    public OnRemoteMediaStream(handler: (stream: MediaStream) => void): void {
-        this.remoteStreamHandlers.push(handler);
-        if (this.remoteStream) {
-            this.invokeRemoteStreamHandler(handler, this.remoteStream);
-        }
-    }
-
-    /** Fans a freshly-landed remote stream out to all registered host handlers. */
-    private notifyRemoteStream(stream: MediaStream): void {
-        for (const handler of this.remoteStreamHandlers) {
-            this.invokeRemoteStreamHandler(handler, stream);
-        }
-    }
-
-    /** Invokes one remote-stream handler, isolating host errors so they never disturb the call. */
-    private invokeRemoteStreamHandler(handler: (stream: MediaStream) => void, stream: MediaStream): void {
-        try {
-            handler(stream);
-        } catch (error) {
-            console.warn('[OpenAIRealtimeClient] remote-stream handler threw:', error);
-        }
     }
 
     /**
@@ -362,6 +314,19 @@ export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
     }
 
     /**
+     * @inheritdoc
+     *
+     * This transport keeps the pact in {@link sessionConfig} rather than in the protocol
+     * client's `sessionObject` — WebRTC applies it over the data channel, so the base field is
+     * never populated here. Without this override a spoken update would find no identity to
+     * carry and would send the caller's direction alone, which is the defect the base method
+     * documents (#397).
+     */
+    protected override currentSessionInstructions(): string | null {
+        return OpenAIProtocolRealtimeClient.readInstructions(this.sessionConfig);
+    }
+
+    /**
      * Sends the server-controlled session config (instructions + tools) as a
      * `session.update` so the co-agent's identity and tool set apply. Skipped when the
      * host supplied no config (e.g. it failed to parse the server payload — the host
@@ -372,7 +337,7 @@ export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
             return;
         }
         if (channel.readyState === 'open') {
-            channel.send(JSON.stringify({ type: 'session.update', session: this.sessionConfig }));
+            channel.send(JSON.stringify({ type: 'session.update', session: ToProviderSessionConfig(this.sessionConfig) }));
         }
     }
 }

@@ -653,11 +653,14 @@ function resolveTypesEntryPoint(packageDir: string): string | null {
         const typesField = pkg.types || pkg.typings;
         if (typesField) {
             const resolved = path.resolve(packageDir, typesField);
-            // If the field points to a .ts source file, convert to .d.ts in dist
+            // If the field points to a .ts source file, convert to .d.ts in dist. Rewrite only the
+            // package-relative `src/` segment: replacing the first `/src/` in the ABSOLUTE path
+            // rewrites a parent directory instead when the checkout itself lives under a `src`
+            // folder, the fallback then parses the raw .ts entry (no `declare`, re-exports not
+            // followed), and the manifest silently drops every re-exported class.
             if (resolved.endsWith('.ts') && !resolved.endsWith('.d.ts')) {
-                const dtsPath = resolved
-                    .replace(/\/src\//, '/dist/')
-                    .replace(/\.ts$/, '.d.ts');
+                const relative = path.relative(packageDir, resolved);
+                const dtsPath = path.join(packageDir, relative.replace(/^src(\/|\\)/, `dist$1`).replace(/\.ts$/, '.d.ts'));
                 if (fs.existsSync(dtsPath)) return dtsPath;
             }
             if (fs.existsSync(resolved)) return resolved;

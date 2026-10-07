@@ -70,31 +70,79 @@ export class AIAPIKeys {
 }
 
 /**
+ * Which credentials a run may spend.
+ *
+ * - `'Any'` (the default): the run's own credentials first, then the platform's — MJ Credentials
+ *   bound to the prompt, model or vendor, then the `AI_VENDOR_API_KEY__<DRIVER>` environment keys.
+ * - `'RuntimeOnly'`: only what the caller supplied for this run — `apiKeys`, or a per-request
+ *   `credentialId` on a prompt. A driver class the run carries no key for has NO key, so that vendor
+ *   is not a candidate and failover cannot reach the platform account.
+ *
+ * A host that runs work for a customer on the customer's own key sets `'RuntimeOnly'`, so a key the
+ * customer did not supply is a visible failure rather than a silent charge to the platform.
+ */
+export type AICredentialScope = 'Any' | 'RuntimeOnly';
+
+/**
+ * Where a credential comes from, from the point of view of the run spending it.
+ *
+ * - `'Runtime'`: supplied by the caller for this run — `apiKeys`, or a prompt's per-request `credentialId`.
+ * - `'PlatformCredential'`: MJ Credentials the platform configured — `AICredentialBinding`s on the
+ *   prompt-model, model-vendor or vendor, and a vendor's default credential.
+ * - `'Environment'`: the platform's `AI_VENDOR_API_KEY__<DRIVER>` keys, and any host seam whose
+ *   default is them (a registered `AIAPIKeys` subclass, `RealtimeClientSessionService.getAPIKeyForDriver`).
+ */
+export type AICredentialSource = 'Runtime' | 'PlatformCredential' | 'Environment';
+
+/**
+ * Whether a run under `scope` may spend a credential from `source`. Every credential-scope decision
+ * goes through here, so adding an {@link AICredentialScope} value is a compile error in this switch
+ * until it is answered — never a value that silently behaves as `'Any'` at a call site that compared
+ * against `'RuntimeOnly'`. A value outside the type (an untyped caller) throws, failing closed.
+ *
+ * @param scope The run's scope; omitted means `'Any'`.
+ * @param source The source a caller is about to consult.
+ */
+export function CredentialScopeAllows(scope: AICredentialScope | undefined, source: AICredentialSource): boolean {
+    const effective = scope ?? 'Any';
+    switch (effective) {
+        case 'Any':
+            return true;
+        case 'RuntimeOnly':
+            return source === 'Runtime';
+        default: {
+            const unhandled: never = effective;
+            throw new Error(`Unknown AI credential scope '${String(unhandled)}'; expected 'Any' or 'RuntimeOnly'`);
+        }
+    }
+}
+
+/**
  * Helper function that gets the API Key for a given AI Driver Name using the AIAPIKeys class or any registered sub-class of AIAPIKeys
  * @param AIDriverName 
  * @param apiKeys - optional array of AIAPIKey objects to check first before falling back to the global AIAPIKeys class
  * @param verbose - optional flag to enable verbose logging
- * @returns 
+ * @param scope - `'RuntimeOnly'` answers from `apiKeys` alone and never falls back to the global key; see {@link AICredentialScope}
+ * @returns The key, or `undefined` when none applies
  */
-export function GetAIAPIKey(AIDriverName: string, apiKeys?: AIAPIKey[], verbose?: boolean): string {
-    let apiKey: string;
-    if (apiKeys && apiKeys.length > 0) {
-    const localKey = apiKeys.find(k => k.driverClass === AIDriverName);
+export function GetAIAPIKey(AIDriverName: string, apiKeys?: AIAPIKey[], verbose?: boolean, scope: AICredentialScope = 'Any'): string {
+    const localKey = apiKeys?.find(k => k.driverClass === AIDriverName);
     if (localKey) {
-        apiKey = localKey.apiKey;
         if (verbose) {
             console.log(`   Using local API key for driver class: ${AIDriverName}`);
         }
-    } else {
-        apiKey = GetAIAPIKeyGlobal(AIDriverName);
+        return localKey.apiKey;
+    }
+    if (!CredentialScopeAllows(scope, 'Environment')) {
         if (verbose) {
-            console.log(`   No local API key found for driver class ${AIDriverName}, using global key`);
+            console.log(`   No local API key found for driver class ${AIDriverName}; credential scope ${scope} does not allow the global key`);
         }
+        return undefined;
     }
-    } else {
-        apiKey = GetAIAPIKeyGlobal(AIDriverName);
+    if (verbose && apiKeys && apiKeys.length > 0) {
+        console.log(`   No local API key found for driver class ${AIDriverName}, using global key`);
     }
-    return apiKey;
+    return GetAIAPIKeyGlobal(AIDriverName);
 }
 
 export function GetAIAPIKeyGlobal(AIDriverName: string): string {
@@ -115,7 +163,8 @@ export function GetAIAPIKeyGlobal(AIDriverName: string): string {
  * the key list (`AIPromptParams.apiKeys`).
  *
  * `undefined` means "no key for that driver class" — which is also how a deliberate refusal reads,
- * so a caller treats both the same way: fall back to the platform key, or skip that vendor.
+ * so a caller treats both the same way: fall back to the platform key, or skip that vendor. Under a
+ * `'RuntimeOnly'` {@link AICredentialScope} the caller must skip it — falling back is what the scope forbids.
  *
  * Build one with {@link MakeAIAPIKeyResolver}.
  */
@@ -136,7 +185,8 @@ export type AIAPIKeyResolver = (driverClass: string) => string | undefined;
  *
  * @param apiKeys The runtime keys for a run, if any (`ExecuteAgentParams.apiKeys`).
  * @param verbose Log which source answered — never the key itself.
+ * @param scope `'RuntimeOnly'` drops the environment fallback (`ExecuteAgentParams.CredentialScope`).
  */
-export function MakeAIAPIKeyResolver(apiKeys?: AIAPIKey[], verbose?: boolean): AIAPIKeyResolver {
-    return (driverClass: string): string | undefined => GetAIAPIKey(driverClass, apiKeys, verbose) || undefined;
+export function MakeAIAPIKeyResolver(apiKeys?: AIAPIKey[], verbose?: boolean, scope: AICredentialScope = 'Any'): AIAPIKeyResolver {
+    return (driverClass: string): string | undefined => GetAIAPIKey(driverClass, apiKeys, verbose, scope) || undefined;
 }
