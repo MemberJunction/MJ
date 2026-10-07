@@ -145,6 +145,7 @@ export class RunAdhocQueryAction extends BaseAction {
 
                 // Perform analysis if requested
                 let analysis: string | undefined;
+                let analysisError: string | undefined;
                 if (analysisRequest && (returnType === 'analysis only' || returnType === 'data and analysis')) {
                     if (results.length === 0) {
                         // Don't call LLM for empty results - generate immediate response
@@ -161,12 +162,24 @@ export class RunAdhocQueryAction extends BaseAction {
                         if (analysisResult.success) {
                             analysis = analysisResult.analysis;
                         } else {
-                            LogError(`Failed to analyze query data: ${analysisResult.error}`);
+                            analysisError = analysisResult.error || 'the analysis prompt returned no result';
+                            LogError(`Failed to analyze query data: ${analysisError}`);
                         }
                     }
                 }
 
                 const totalExecutionTime = Date.now() - startTime;
+
+                // The analysis was the whole answer, so its failure is the action's. (It fails by design
+                // under a 'RuntimeOnly' credential scope, which this action cannot satisfy.) There is no
+                // declared result code for it: the engine records none, and Success/Message carry it.
+                if (analysisError && returnType === 'analysis only') {
+                    return {
+                        Success: false,
+                        ResultCode: "ANALYSIS_FAILED",
+                        Message: `The query ran and returned ${results.length} row(s), but the analysis could not be produced: ${analysisError}`
+                    };
+                }
 
                 // Build detailed message based on return type
                 const message = this.buildDetailedMessage(
@@ -201,6 +214,12 @@ export class RunAdhocQueryAction extends BaseAction {
                 }
                 if (returnType === 'analysis only' || returnType === 'data and analysis') {
                     (resultData as any).Analysis = analysis;
+                }
+                // The data still stands; say why there is no analysis instead of leaving it silently empty.
+                if (analysisError) {
+                    const withError = resultData as ActionResultSimple & { AnalysisError?: string };
+                    withError.AnalysisError = analysisError;
+                    withError.Message = `${withError.Message}\n\nThe analysis could not be produced: ${analysisError}`;
                 }
 
                 return resultData;

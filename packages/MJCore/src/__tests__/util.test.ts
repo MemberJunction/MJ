@@ -195,6 +195,12 @@ describe('TypeScriptTypeFromSQLType', () => {
         it('maps bool to boolean', () => {
             expect(TypeScriptTypeFromSQLType('bool')).toBe('boolean');
         });
+        it('maps tsvector to string', () => {
+            expect(TypeScriptTypeFromSQLType('tsvector')).toBe('string');
+        });
+        it('maps tsquery to string', () => {
+            expect(TypeScriptTypeFromSQLType('tsquery')).toBe('string');
+        });
     });
 });
 

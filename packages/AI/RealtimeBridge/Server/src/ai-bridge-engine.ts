@@ -8,6 +8,7 @@ import {
     RunView,
     RegisterForStartup,
 } from '@memberjunction/core';
+import { performance } from 'node:perf_hooks';
 import { BaseSingleton, MJGlobal, EscapeSQLString } from '@memberjunction/global';
 import {
     IRealtimeSession,
@@ -349,6 +350,12 @@ export interface StartBridgeSessionParams {
     TurnAddressing?: TurnAddressingMode;
 
     /**
+     * Whether this session is full-duplex. When omitted, defaults to
+     * `RealtimeSession.Capabilities?.FullDuplex === true`.
+     */
+    FullDuplex?: boolean;
+
+    /**
      * Whether a full-duplex model's outbound audio runs through the room floor gate in a MULTI-agent room
      * (the safety net behind the model's own turn-taking). Defaults to `true`; sessions whose model is not
      * full-duplex are never gated. Set `false` to let a full-duplex agent speak freely (debugging).
@@ -536,6 +543,9 @@ export interface ActiveBridgeSession {
     /** The model-side addressing latch the model's `i_am_addressed` signal feeds — present only in `ModelSide` mode. */
     ModelSideMatcher?: ModelSideAddressedMatcher;
 
+    /** Whether this session operates in full-duplex conversational mode. */
+    FullDuplex: boolean;
+
     /** The floor gate over this full-duplex model's outbound audio (see {@link FullDuplexTurnGate}); absent for turn-based models. */
     TurnGate?: FullDuplexTurnGate;
 
@@ -674,6 +684,9 @@ export interface ActiveBridgeSession {
 
     /** How many times the model session has been re-opened (capped by {@link MAX_MODEL_RECOVERY_ATTEMPTS}). */
     ModelRecoveryAttempts: number;
+
+    /** High-resolution timestamp (ms) when the most recent user turn completed, for transcript-to-next-audio latency telemetry. */
+    LastUserSpeechEndMs?: number;
 
     /** Whether a model-session recovery is in flight; inbound audio is dropped meanwhile. */
     ModelRecovering: boolean;
@@ -1032,7 +1045,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
      * @throws When the driver cannot be resolved or `Connect` fails (the row is stamped `Failed`).
      */
     public async StartBridgeSession(params: StartBridgeSessionParams): Promise<ActiveBridgeSession> {
-        const fullDuplex = params.RealtimeSession.Capabilities?.FullDuplex === true;
+        const fullDuplex = params.FullDuplex ?? params.RealtimeSession.Capabilities?.FullDuplex === true;
         const turn = this.buildTurnPolicy(params, fullDuplex);
         const bridgeRow = await this.createBridgeRow(params, turn.Mode);
 
@@ -1063,6 +1076,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
                 TurnPolicy: turn.Policy,
                 AddressingMode: turn.Mode,
                 ModelSideMatcher: turn.ModelSide,
+                FullDuplex: fullDuplex,
                 DisableAutoResponse: params.DisableAutoResponse === true,
                 HasSeenHuman: false,
                 RoomKey: result.ExternalConnectionId,
@@ -1247,6 +1261,14 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
                 return; // a stale (replaced) session
             }
             active.LastActivityMs = Date.now();
+            if (active.LastUserSpeechEndMs !== undefined) {
+                const latencyMs = Math.round(performance.now() - active.LastUserSpeechEndMs);
+                active.LastUserSpeechEndMs = undefined;
+                LogStatusEx({
+                    message: `[AIBridgeEngine][telemetry] transcript-to-next-audio latency: ${latencyMs}ms (bridge ${active.SessionBridgeID})`,
+                    verboseOnly: true,
+                });
+            }
             if (!this.diagOutbound.has(active.SessionBridgeID)) {
                 this.diagOutbound.add(active.SessionBridgeID);
                 LogStatusEx({ message: `[AIBridgeEngine][diag] FIRST outbound audio from the agent (bridge ${active.SessionBridgeID}). The agent is SPEAKING into the room.`, verboseOnly: true });
@@ -1277,6 +1299,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
 
     /** A true barge-in: flush queued audio, drop stale room moderator state, free the floor, tell the host. */
     private handleBargeIn(active: ActiveBridgeSession): void {
+        active.LastUserSpeechEndMs = undefined;
         if (this.diagOutbound.has(active.SessionBridgeID)) {
             LogStatusEx({ message: `[AIBridgeEngine][diag] barge-in — flushing the agent's queued audio (bridge ${active.SessionBridgeID}).`, verboseOnly: true });
         }
@@ -1660,6 +1683,9 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
                 return; // partials fire per-word — act only on a completed turn (and don't flood the log)
             }
             LogStatusEx({ message: `[AIBridgeEngine][diag] transcript(final): role=${t.Role} text="${(t.Text ?? '').slice(0, 80)}" (bridge ${active.SessionBridgeID})`, verboseOnly: true });
+            if (t.Role === 'user') {
+                active.LastUserSpeechEndMs = performance.now();
+            }
             if (t.Role === 'user' || t.Role === 'assistant') {
                 AppendTranscriptTurn(active.TranscriptTail, { Role: t.Role, Text: t.Text ?? '' });
             }
@@ -2044,8 +2070,10 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
     // ──────────────────────────────────────────────────────────────────────────────
 
     /**
-     * Gives a FULL-DUPLEX model the floor gate + human-speech detector (see {@link FullDuplexTurnGate}).
-     * Turn-based models are never gated: the engine triggers their speech, so it already decides when.
+     * Gives a FULL-DUPLEX model the floor gate + human-speech detector (see {@link FullDuplexTurnGate})
+     * ONLY when moderator mode (`MJ_REALTIME_MODERATOR_MODE=on`) is explicitly enabled (or explicitly opted into).
+     * In normal operation (solo and multi-agent rooms alike), full-duplex models are never gated:
+     * native full-duplex models are better at turn-taking and ignoring background noise.
      *
      * @param active The freshly connected session.
      * @param params The start parameters (`FullDuplexTurnGate: false` opts out).
@@ -2054,7 +2082,11 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         if (!active.RoomKey || params.FullDuplexTurnGate === false) {
             return;
         }
-        if (active.RealtimeSession.Capabilities?.FullDuplex !== true) {
+        if (!active.FullDuplex) {
+            return;
+        }
+        const moderatorMode = process.env.MJ_REALTIME_MODERATOR_MODE === 'on';
+        if (!moderatorMode && params.FullDuplexTurnGate !== true) {
             return;
         }
         active.TurnGate = new FullDuplexTurnGate({
@@ -2142,6 +2174,11 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
      * @param active The live bridged session.
      */
     private wireTurnTakingTools(active: ActiveBridgeSession): void {
+        const moderatorMode = process.env.MJ_REALTIME_MODERATOR_MODE === 'on';
+        const isFullDuplex = active.FullDuplex;
+        if (isFullDuplex && !moderatorMode) {
+            return;
+        }
         if (!active.RoomKey || !(active.AddressingMode === 'ModelSide' || active.TurnGate)) {
             return;
         }
@@ -2163,7 +2200,12 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         if (!roomKey || !this.roomCoordinator.IsMultiAgentRoom(roomKey)) {
             return;
         }
+        const moderatorMode = process.env.MJ_REALTIME_MODERATOR_MODE === 'on';
         for (const agent of this.roomAgents(roomKey)) {
+            const isFullDuplex = agent.FullDuplex;
+            if (isFullDuplex && !moderatorMode) {
+                continue;
+            }
             if (agent.TurnTakingToolHandler && !agent.TurnTakingAnnounced) {
                 agent.RealtimeSession.SendContextNote?.(MODEL_SIDE_TURN_TAKING_FRAMING);
                 agent.TurnTakingAnnounced = true;
@@ -2274,7 +2316,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             Names: a.AgentNames,
             TurnMode: a.TurnPolicy.Mode,
             Addressing: a.AddressingMode ?? 'Regex',
-            FullDuplex: a.RealtimeSession.Capabilities?.FullDuplex === true,
+            FullDuplex: a.FullDuplex,
         }));
         return { ...state, Agents: agents };
     }
@@ -2287,13 +2329,16 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
      * @returns The configured policy plus the addressing mode in effect and the model-side latch, when any.
      */
     private buildTurnPolicy(params: StartBridgeSessionParams, fullDuplex: boolean): BuiltTurnPolicy {
+        const moderatorMode = process.env.MJ_REALTIME_MODERATOR_MODE === 'on';
         let matcher = params.TurnMatcher;
         let mode: ResolvedTurnAddressingMode = 'Regex';
         let modelSide: ModelSideAddressedMatcher | undefined;
         if (params.TurnAddressing !== undefined) {
-            // The model's own judgement when it is full-duplex (and asked for); otherwise name matching, with
-            // a caller-supplied matcher (e.g. a 1:1 call's always-addressed one) taking precedence as the fallback.
-            const built = BuildAddressedMatcher(params.AgentNames ?? [], params.TurnAddressing, fullDuplex);
+            // Full-duplex models only use ModelSide addressing automatically when moderator mode is enabled.
+            // Outside moderator mode, Auto falls back to name/regex matching (keeping AlwaysAddressedMatcher for 1:1 / solo),
+            // while explicit 'ModelSide' is still honoured.
+            const enableModelSide = params.TurnAddressing === 'ModelSide' || (fullDuplex && moderatorMode);
+            const built = BuildAddressedMatcher(params.AgentNames ?? [], params.TurnAddressing, enableModelSide);
             mode = built.Mode;
             modelSide = built.ModelSide;
             matcher = built.Mode === 'ModelSide' ? built.Matcher : (params.TurnMatcher ?? built.Matcher);

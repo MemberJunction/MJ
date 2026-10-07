@@ -25,6 +25,7 @@ import {
   type TurnAddressingChoice,
   type TurnModeChoice,
 } from './turn-taking-options';
+import type { RoomOptions } from 'livekit-client';
 
 /** How the MJ binding obtains its room: start an agent in a room, or just join an existing room. */
 export type MJLiveKitConnectionMode = 'agent' | 'join';
@@ -116,6 +117,7 @@ export interface AgentInRoom {
         [IsRecording]="isRecording"
         [E2EEPassphrase]="E2EEPassphrase"
         [E2EEWorker]="E2EEWorker"
+        [RoomOptions]="RoomOptions"
         [AgentAvatarUrl]="AgentAvatarUrl"
         [CanEndForAll]="EnableEndForAll && !!resolvedRoomName"
         (Connected)="Connected.emit($event)"
@@ -757,6 +759,8 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
   @Input() public E2EEPassphrase: string | null = null;
   /** @see LiveKitRoomComponent.E2EEWorker */
   @Input() public E2EEWorker: Worker | null = null;
+  /** Advanced livekit-client room options merged into the constructed Room (overrides speech defaults). */
+  @Input() public RoomOptions?: RoomOptions;
 
   // ── Outputs ────────────────────────────────────────────────────────────────────
   /** Emitted once the agent room session is started (agent mode). */
