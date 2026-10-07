@@ -28,6 +28,8 @@ import {
     AIPromptParams,
     AIPromptRunResult,
     MJAIPromptEntityExtended,
+    PickPromptExecutionScope,
+    type AIPromptExecutionScope,
 } from '@memberjunction/ai-core-plus';
 import { AIPromptRunner } from '../AIPromptRunner';
 
@@ -79,6 +81,14 @@ export class LLMDecision extends BaseDecision {
      * `AIDecisionRunner` sets it to its own run before it calls the driver.
      */
     public ParentPromptRunID?: string;
+
+    /**
+     * The decision's {@link AIPromptExecutionScope} — configuration, runtime API keys and credential
+     * scope — which the chat prompt runs under. `AIDecisionRunner` sets it from the decision's params.
+     * Without it the chat prompt carried only the user, so it answered on the platform's keys even
+     * when the decision itself was restricted to the caller's.
+     */
+    public ExecutionScope?: AIPromptExecutionScope;
 
     /**
      * Creates an instance of LLMDecision.
@@ -180,6 +190,9 @@ export class LLMDecision extends BaseDecision {
      */
     private buildPromptParams(prompt: MJAIPromptEntityExtended, params: DecisionParams): AIPromptParams {
         const promptParams = new AIPromptParams();
+        if (this.ExecutionScope) {
+            Object.assign(promptParams, PickPromptExecutionScope(this.ExecutionScope));
+        }
         promptParams.prompt = prompt;
         promptParams.contextUser = this._contextUser;
         promptParams.attemptJSONRepair = true;

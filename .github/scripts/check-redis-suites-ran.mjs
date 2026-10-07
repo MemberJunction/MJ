@@ -4,9 +4,10 @@
  *
  * Those files are gated `describe.skipIf(!REDIS_URL)`. A gate like that turns a missing service
  * into a green run: vitest reports the file as passed with every test skipped, and the workflow
- * summary looks the same as a real pass. That is how the shared-cache behaviour they pin — index
- * pruning, TTL, the key lock, leases — went a release with no CI coverage while the branch that
- * introduced them reported "97 passing" from a developer machine (plan §16.7).
+ * summary looks the same as a real pass. That is how the shared-cache behaviour they pin — pub/sub
+ * delivery, TTL, the key lock, leases — went a release with no CI coverage, while the branch that
+ * introduced them reported a full green suite from a developer machine where Redis happened to be
+ * running.
  *
  * Run after the shard's tests. Re-runs the two files with a reporter we can read, and requires a
  * non-zero passed count and zero skipped.

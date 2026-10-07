@@ -9,6 +9,7 @@ vi.mock('@memberjunction/core-entities', () => ({}));
 import {
     BaseTelephonyBridge,
     ITelephonyCallSdk,
+    CALLER_NUMBER_CONFIG_KEY,
     DIRECTION_CONFIG_KEY,
     FROM_NUMBER_CONFIG_KEY,
     INBOUND_CALL_ID_CONFIG_KEY,
@@ -410,5 +411,97 @@ describe('BaseTelephonyBridge — no video / screen / Meeting Controls', () => {
         await expect(bridge.Connect(ctx({ OutboundDial: true, AudioIn: true }))).rejects.toBeInstanceOf(
             BridgeCapabilityNotSupportedError,
         );
+    });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Hand-off: a transferred / announced call belongs to the carrier — Disconnect must not hang it up.
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe('BaseTelephonyBridge — carrier hand-off', () => {
+    it('hangs up on a normal Disconnect', async () => {
+        const bridge = makeBridge(sdk);
+        await bridge.Connect(ctx());
+        await bridge.Disconnect('HostEnded');
+        expect(sdk.HungUp).toBe('call-out-1');
+        expect(bridge.IsHandedOff).toBe(false);
+    });
+
+    it('does NOT hang up after a transfer, and detaches instead when the SDK can', async () => {
+        const detach = vi.fn(async () => {});
+        (sdk as unknown as { detach: typeof detach }).detach = detach;
+        const bridge = makeBridge(sdk);
+        await bridge.Connect(ctx());
+        await bridge.TransferCall('+15550009999');
+        expect(bridge.IsHandedOff).toBe(true);
+        await bridge.Disconnect('HostEnded');
+        expect(sdk.HungUp).toBeUndefined();
+        expect(detach).toHaveBeenCalledWith('call-out-1');
+    });
+
+    it('skips the hang-up for a handed-off call even when the SDK has no detach', async () => {
+        const bridge = makeBridge(sdk);
+        await bridge.Connect(ctx());
+        await bridge.TransferCall('+15550009999');
+        await bridge.Disconnect('HostEnded');
+        expect(sdk.HungUp).toBeUndefined();
+    });
+
+    it('a failed transfer does not mark the call handed off', async () => {
+        sdk.transfer = async () => {
+            throw new Error('carrier refused');
+        };
+        const bridge = makeBridge(sdk);
+        await bridge.Connect(ctx());
+        await expect(bridge.TransferCall('+1555')).rejects.toThrow('carrier refused');
+        await bridge.Disconnect('HostEnded');
+        expect(sdk.HungUp).toBe('call-out-1');
+    });
+
+    it('AnnounceAndEndCall speaks at the carrier and then leaves the hang-up to it', async () => {
+        const spoken: string[] = [];
+        (sdk as unknown as { playMessageAndHangup: (id: string, m: string) => Promise<void> }).playMessageAndHangup = async (_id, m) => {
+            spoken.push(m);
+        };
+        const bridge = makeBridge(sdk);
+        await bridge.Connect(ctx());
+        await bridge.AnnounceAndEndCall('Goodbye');
+        await bridge.Disconnect('Error');
+        expect(spoken).toEqual(['Goodbye']);
+        expect(sdk.HungUp).toBeUndefined();
+    });
+
+    it('AnnounceAndEndCall falls back to a plain hang-up when the SDK cannot speak', async () => {
+        const bridge = makeBridge(sdk);
+        await bridge.Connect(ctx());
+        await bridge.AnnounceAndEndCall('Goodbye');
+        expect(sdk.HungUp).toBe('call-out-1');
+    });
+});
+
+describe('BaseTelephonyBridge — DTMF validation', () => {
+    it('rejects digits outside 0-9*# and over-long strings before reaching the SDK', async () => {
+        const bridge = makeBridge(sdk);
+        await bridge.Connect(ctx());
+        await expect(bridge.SendDTMF('12a')).rejects.toThrow(/DTMF digits/);
+        await expect(bridge.SendDTMF('1'.repeat(33))).rejects.toThrow(/DTMF digits/);
+        expect(sdk.SentDtmf).toEqual([]);
+    });
+});
+
+describe('BaseTelephonyBridge — inbound numbers', () => {
+    it('takes the agent number from Address and the caller from CallerNumber', async () => {
+        const bridge = makeBridge(sdk);
+        await bridge.Connect(
+            ctx(
+                TEL_FEATURES,
+                { [DIRECTION_CONFIG_KEY]: 'Inbound', [INBOUND_CALL_ID_CONFIG_KEY]: 'CA1', [FROM_NUMBER_CONFIG_KEY]: '', [CALLER_NUMBER_CONFIG_KEY]: '+14155550100' },
+                '+18005550199',
+            ),
+        );
+        expect(bridge.AgentNumber).toBe('+18005550199');
+        expect(bridge.RemoteNumber).toBe('+14155550100');
+        const roster = await bridge.GetParticipants();
+        expect(roster.find((p) => !p.IsAgent)?.DisplayName).toBe('+14155550100');
     });
 });

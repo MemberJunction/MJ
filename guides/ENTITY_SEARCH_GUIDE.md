@@ -9,7 +9,7 @@ A focused guide to MJ's per-entity ranked search API. For the broader picture of
 `SearchEntity` blends two signals against the records of one entity:
 
 1. **Lexical** — substring / prefix matching on the entity's name field and any field marked `IncludeInUserSearchAPI`. A `RunView` with `LIKE` filters.
-2. **Semantic** — vector cosine against embeddings stored on `MJ: Entity Record Documents.VectorJSON`. Embeddings are produced from a Nunjucks-rendered template tied to the entity via an `EntityDocument` of type `Search`.
+2. **Semantic** — vector cosine against embeddings stored on `MJ: Entity Record Documents` (`VectorBinary` float32 bytes, read in preference to the `VectorJSON` copy — see the [Binary Fields Guide](BINARY_FIELDS_GUIDE.md)). Embeddings are produced from a Nunjucks-rendered template tied to the entity via an `EntityDocument` of type `Search`.
 
 The two ranked lists fuse via canonical weighted Reciprocal Rank Fusion (`ComputeRRF`), permission filtering drops records the caller can't read, and the top-K slice is returned. All modes (lexical-only, semantic-only, hybrid) are first-class via the `mode` option.
 
@@ -184,7 +184,7 @@ Opting another entity in is purely additive metadata — no code.
 
    Templates can reference any field on the record — including denormalized view fields (e.g. `{{ Vendor }}`, `{{ Category }}`). Keep them focused on the text a user would actually phrase — descriptive fields, business-language tags, not internal IDs.
 
-3. **Run the vector sync**. The seeded `Entity Vector Sync - Daily` scheduled job (cron `0 0 4 * * *`, `RunImmediatelyIfNeverRun: true`) drives the `Vectorize Entity` action over every Active `Search` EntityDocument, generates embeddings for each record, and writes them to `EntityRecordDocument.VectorJSON`. No manual step required — though you can force a run from the Scheduling dashboard. If **no** Active `Search` EntityDocuments exist, the job is a clean no-op (`ResultCode: NO_DOCUMENTS`), not a failure.
+3. **Run the vector sync**. The seeded `Entity Vector Sync - Daily` scheduled job (cron `0 0 4 * * *`, `RunImmediatelyIfNeverRun: true`) drives the `Vectorize Entity` action over every Active `Search` EntityDocument, generates embeddings for each record, and writes them to `EntityRecordDocument.VectorJSON` and `VectorBinary`. No manual step required — though you can force a run from the Scheduling dashboard. If **no** Active `Search` EntityDocuments exist, the job is a clean no-op (`ResultCode: NO_DOCUMENTS`), not a failure.
 
 That's it. `Provider.SearchEntity({ entityName: 'Accounts', searchText: query })` now returns semantic results.
 
