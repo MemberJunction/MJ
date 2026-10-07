@@ -1,16 +1,27 @@
 import { Resolver, Mutation, Query, Arg, Ctx, ObjectType, InputType, Field } from 'type-graphql';
 import { randomUUID } from 'crypto';
-import { LogError, LogStatusEx, UserInfo, IMetadataProvider } from '@memberjunction/core';
-import { LiveKitTokenService, LiveKitAgentRoomCoordinator, LiveKitEgressService, LiveKitParticipantService } from '@memberjunction/livekit-room-server';
+import { LogError, LogStatusEx, UserInfo, IMetadataProvider, RunView } from '@memberjunction/core';
+import { EscapeSQLString } from '@memberjunction/global';
+import type { TurnAddressingMode } from '@memberjunction/ai-bridge-base';
+import {
+  LiveKitTokenService,
+  LiveKitAgentRoomCoordinator,
+  LiveKitEgressService,
+  LiveKitParticipantService,
+  LiveKitUserIdentity,
+  RoomHandoffEngine,
+  type ParticipantUpdateResult,
+} from '@memberjunction/livekit-room-server';
 import { AppContext } from '../types.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetReadWriteProvider } from '../util.js';
-import { CreateBridgeRealtimeSession, FinalizeBridgeCoAgentRuns, GetRealtimeModelVoices, CreateBridgeRoomTranscriptSink, RealtimeTurnModeratorDecision } from '@memberjunction/ai-agents';
+import { CreateBridgeRealtimeSession, FinalizeBridgeCoAgentRuns, GetRealtimeModelVoices, CreateBridgeRoomTranscriptSink, RealtimeTurnModeratorDecision, GetBridgeRealtimeRuntime } from '@memberjunction/ai-agents';
 import { AIBridgeEngine } from '@memberjunction/ai-bridge-server';
 import { SessionManager } from '../agentSessions/SessionManager.js';
 import { NotificationEngine } from '@memberjunction/notifications';
 import { RegisterMeetingRecordingFile, CorrelateRecordingStart } from './meetingRecordingRegistration.js';
 import { WriteAgentVisionConsentAudit } from './agentVisionConsentAudit.js';
+import { RoomAuthorizationService } from '@memberjunction/livekit-room-server';
 
 /**
  * Binds the agent realtime-session factory onto the LiveKit room coordinator's model-session creation seam.
@@ -21,6 +32,20 @@ import { WriteAgentVisionConsentAudit } from './agentVisionConsentAudit.js';
  * other. Idempotent (latest-wins).
  */
 LiveKitAgentRoomCoordinator.Instance.SetSessionFactory(CreateBridgeRealtimeSession);
+
+/**
+ * Binds the turn-taking tool handler seam (same module-load rationale as the factory above). A full-duplex model
+ * in a shared room calls `i_am_addressed` / `yield_turn`; the bridge engine owns what those mean, and this installs
+ * the engine's handler as the model session runtime's local tool handler (`@memberjunction/ai-agents`).
+ */
+LiveKitAgentRoomCoordinator.Instance.SetTurnToolBinder((session, handler) => {
+  const runtime = GetBridgeRealtimeRuntime(session);
+  if (!runtime) {
+    LogError('[RealtimeBridge] the model session has no bridge runtime; i_am_addressed / yield_turn will not execute for it.');
+    return;
+  }
+  runtime.SetLocalToolHandler(handler);
+});
 
 /**
  * Binds the co-agent run finalizer onto the bridge engine (same module-load rationale as the factory above).
@@ -128,6 +153,35 @@ export class StartLiveKitAgentRoomSessionInput {
 
   @Field(() => String, { nullable: true })
   TurnMode?: string;
+
+  /**
+   * Start the agent able to bring someone into this room: a person (who is offered the conversation and may accept), a
+   * phone number, or another agent. Opt-in, and honoured only when this server has the handoff collaborators configured
+   * (the LiveKit SIP extension); otherwise the agent starts as it always did.
+   */
+  @Field(() => Boolean, { nullable: true })
+  EnableHandoff?: boolean;
+
+  /**
+   * How this agent decides it was addressed: `Auto` (default — the model's own judgement when it is full-duplex,
+   * name matching otherwise), `ModelSide`, or `Regex`.
+   */
+  @Field(() => String, { nullable: true })
+  TurnAddressing?: string;
+}
+
+/** The live turn-taking state of a room (floor holder, human speaking, hand-off, loop cap, recent events, seated agents). */
+@ObjectType()
+export class LiveKitRoomTurnStateResult {
+  @Field(() => Boolean)
+  Success: boolean;
+
+  @Field(() => String, { nullable: true })
+  ErrorMessage?: string;
+
+  /** JSON of the room's `RoomTurnSnapshot`; `null` when the room holds no agents. Parsed by the typed client. */
+  @Field(() => String, { nullable: true })
+  StateJSON?: string;
 }
 
 @ObjectType()
@@ -252,6 +306,11 @@ export class RealtimeBridgeResolver extends ResolverBase {
       if (!user) {
         return failure('Unable to determine current user.');
       }
+      const provider = GetReadWriteProvider(context.providers) as IMetadataProvider;
+      const auth = await RoomAuthorizationService.Instance.AuthorizeRoomAccess(input.RoomName, user, provider);
+      if (!auth.Authorized) {
+        return failure(auth.Reason ?? 'Unauthorized room access.');
+      }
       const tokenService = new LiveKitTokenService();
       const minted = await tokenService.MintClientToken(input.RoomName, this.participantIdentity(user), input.DisplayName ?? user.Name ?? user.Email);
       return { Success: true, ...minted };
@@ -285,8 +344,30 @@ export class RealtimeBridgeResolver extends ResolverBase {
       if (!user) {
         return failure('Unable to determine current user.');
       }
-      const provider = GetReadWriteProvider(context.providers) as unknown as IMetadataProvider;
+      const provider = GetReadWriteProvider(context.providers) as IMetadataProvider;
       const roomName = input.RoomName?.trim() || `mj-${randomUUID()}`;
+
+      if (input.RoomName?.trim()) {
+        const auth = await RoomAuthorizationService.Instance.AuthorizeRoomAccess(roomName, user, provider);
+        if (!auth.Authorized) {
+          return failure(auth.Reason ?? 'Unauthorized room access.', roomName);
+        }
+      }
+
+      // Opt-in: an agent that can bring a person, a number or another agent into this room (the same room, so a visitor
+      // is escalated without leaving it). Falls through to the standard start when the server cannot do handoffs.
+      const handoffSessionBridgeID = await this.startWithHandoff(input, roomName, user, provider);
+      if (handoffSessionBridgeID) {
+        const handoffToken = await new LiveKitTokenService().MintClientToken(roomName, this.participantIdentity(user), user.Name ?? user.Email);
+        return {
+          Success: true,
+          SessionBridgeID: handoffSessionBridgeID,
+          RoomName: roomName,
+          ServerUrl: handoffToken.ServerUrl,
+          ClientToken: handoffToken.Token,
+          Identity: handoffToken.Identity,
+        };
+      }
 
       // Resolve the AIAgentSession the bridge will reference. The bridge row FK-references
       // AIAgentSession(ID), so we must use an EXISTING session — either one the caller supplied, or a
@@ -314,6 +395,7 @@ export class RealtimeBridgeResolver extends ResolverBase {
         RealtimeModelID: input.RealtimeModelID,
         RealtimeVoice: input.RealtimeVoice,
         TurnMode: this.normalizeTurnMode(input.TurnMode),
+        TurnAddressing: this.normalizeTurnAddressing(input.TurnAddressing),
         ContextUser: user,
         MetadataProvider: provider,
       });
@@ -353,7 +435,15 @@ export class RealtimeBridgeResolver extends ResolverBase {
       if (!user) {
         return false;
       }
-      const provider = GetReadWriteProvider(context.providers) as unknown as IMetadataProvider;
+      const provider = GetReadWriteProvider(context.providers) as IMetadataProvider;
+      const roomName = LiveKitAgentRoomCoordinator.Instance.GetRoomForBridge(sessionBridgeID);
+      if (roomName) {
+        const auth = await RoomAuthorizationService.Instance.AuthorizeRoomAccess(roomName, user, provider);
+        if (!auth.Authorized) {
+          LogError(`StopLiveKitAgentRoomSession unauthorized: user ${user.ID} cannot access room ${roomName} (${auth.Reason})`);
+          return false;
+        }
+      }
       return await LiveKitAgentRoomCoordinator.Instance.StopAgentRoomSession(sessionBridgeID, 'Explicit', user, provider);
     } catch (error) {
       LogError(`StopLiveKitAgentRoomSession failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -379,12 +469,48 @@ export class RealtimeBridgeResolver extends ResolverBase {
       if (!user) {
         return false;
       }
-      const provider = GetReadWriteProvider(context.providers) as unknown as IMetadataProvider;
+      const provider = GetReadWriteProvider(context.providers) as IMetadataProvider;
+      const auth = await RoomAuthorizationService.Instance.AuthorizeRoomAccess(roomName, user, provider);
+      if (!auth.Authorized) {
+        LogError(`EndLiveKitRoom unauthorized: user ${user.ID} cannot access room ${roomName} (${auth.Reason})`);
+        return false;
+      }
       await LiveKitAgentRoomCoordinator.Instance.StopAllAgentsInRoom(roomName, 'Explicit', user, provider);
       return true;
     } catch (error) {
       LogError(`EndLiveKitRoom failed: ${error instanceof Error ? error.message : String(error)}`);
       return false;
+    }
+  }
+
+  /**
+   * A room's live turn-taking state — who holds the floor, whether a person is speaking, any pending hand-off,
+   * the agent-to-agent loop-cap progress, the most recent floor/backchannel/yield events, and who is seated. The
+   * agent test bed polls it. Read-only. `StateJSON` is `null` when no agent is in the room.
+   *
+   * @param roomName The LiveKit room.
+   */
+  @Query(() => LiveKitRoomTurnStateResult)
+  async GetLiveKitRoomTurnState(
+    @Arg('roomName', () => String) roomName: string,
+    @Ctx() context: AppContext = {} as AppContext,
+  ): Promise<LiveKitRoomTurnStateResult> {
+    try {
+      const user = this.GetUserFromPayload(context.userPayload);
+      if (!user) {
+        return { Success: false, ErrorMessage: 'Unable to determine current user.' };
+      }
+      const provider = GetReadWriteProvider(context.providers) as IMetadataProvider;
+      const auth = await RoomAuthorizationService.Instance.AuthorizeRoomAccess(roomName, user, provider);
+      if (!auth.Authorized) {
+        return { Success: false, ErrorMessage: auth.Reason ?? 'Unauthorized room access.' };
+      }
+      const snapshot = LiveKitAgentRoomCoordinator.Instance.GetRoomTurnState(roomName);
+      return { Success: true, StateJSON: snapshot ? JSON.stringify(snapshot) : undefined };
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      LogError(`GetLiveKitRoomTurnState failed: ${msg}`);
+      return { Success: false, ErrorMessage: msg };
     }
   }
 
@@ -402,7 +528,7 @@ export class RealtimeBridgeResolver extends ResolverBase {
       if (!user) {
         return [];
       }
-      const provider = GetReadWriteProvider(context.providers) as unknown as IMetadataProvider;
+      const provider = GetReadWriteProvider(context.providers) as IMetadataProvider;
       return await GetRealtimeModelVoices(user, provider);
     } catch (error) {
       LogError(`GetRealtimeModelVoices failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -432,7 +558,12 @@ export class RealtimeBridgeResolver extends ResolverBase {
       if (!user) {
         return false;
       }
-      const provider = GetReadWriteProvider(context.providers) as unknown as IMetadataProvider;
+      const provider = GetReadWriteProvider(context.providers) as IMetadataProvider;
+      const auth = await RoomAuthorizationService.Instance.AuthorizeRoomAccess(roomName, user, provider);
+      if (!auth.Authorized) {
+        LogError(`InviteUsersToLiveKitRoom unauthorized: user ${user.ID} cannot access room ${roomName} (${auth.Reason})`);
+        return false;
+      }
       await NotificationEngine.Instance.Config(false, user, provider);
 
       const inviter = user.Name?.trim() || user.Email || 'Someone';
@@ -474,11 +605,15 @@ export class RealtimeBridgeResolver extends ResolverBase {
       if (!user) {
         return { Success: false, ErrorMessage: 'Unable to determine current user.', EgressID: '', Status: '' };
       }
+      const provider = GetReadWriteProvider(context.providers) as IMetadataProvider;
+      const auth = await RoomAuthorizationService.Instance.AuthorizeRoomAccess(input.RoomName, user, provider);
+      if (!auth.Authorized) {
+        return { Success: false, ErrorMessage: auth.Reason ?? 'Unauthorized room access.', EgressID: '', Status: '' };
+      }
       const info = await new LiveKitEgressService().StartRoomRecording({ RoomName: input.RoomName, Layout: input.Layout });
 
       // Best-effort: correlate the live recording with the room's Meeting-Room Conversation (if it exists
       // yet) by stamping its EgressID. Never fail the start on this — the stop-flow resolves/creates it.
-      const provider = GetReadWriteProvider(context.providers) as unknown as IMetadataProvider;
       void CorrelateRecordingStart(input.RoomName, info.EgressID, user, provider);
 
       return { Success: true, EgressID: info.EgressID, Status: info.Status };
@@ -502,8 +637,43 @@ export class RealtimeBridgeResolver extends ResolverBase {
       if (!user) {
         return { Success: false, ErrorMessage: 'Unable to determine current user.', EgressID: egressID, Status: '' };
       }
-      const info = await new LiveKitEgressService().StopRecording(egressID);
-      const provider = GetReadWriteProvider(context.providers) as unknown as IMetadataProvider;
+      const provider = GetReadWriteProvider(context.providers) as IMetadataProvider;
+
+      // Map egress ID to room name: check LiveKit egress service first, fallback to Conversation if available.
+      const egressService = new LiveKitEgressService();
+      let roomName = await egressService.GetRoomForEgress(egressID);
+      if (!roomName && provider) {
+        try {
+          const rv = RunView.FromMetadataProvider(provider);
+          const convResult = await rv.RunView<{ ExternalID: string }>(
+            {
+              EntityName: 'MJ: Conversations',
+              ExtraFilter: `EgressID='${EscapeSQLString(egressID)}' AND (IsArchived IS NULL OR IsArchived=0)`,
+              Fields: ['ExternalID'],
+              OrderBy: '__mj_CreatedAt DESC',
+              MaxRows: 1,
+              ResultType: 'simple',
+            },
+            user,
+          );
+          if (convResult.Success && convResult.Results.length > 0 && convResult.Results[0].ExternalID) {
+            roomName = convResult.Results[0].ExternalID;
+          }
+        } catch (err) {
+          LogError(`StopLiveKitRecording: error looking up Conversation for egress ID '${egressID}'`, undefined, err);
+        }
+      }
+
+      if (roomName) {
+        const auth = await RoomAuthorizationService.Instance.AuthorizeRoomAccess(roomName, user, provider);
+        if (!auth.Authorized) {
+          return { Success: false, ErrorMessage: auth.Reason ?? 'Unauthorized room access.', EgressID: egressID, Status: '' };
+        }
+      } else {
+        return { Success: false, ErrorMessage: `Unable to determine room for egress ID '${egressID}'.`, EgressID: egressID, Status: '' };
+      }
+
+      const info = await egressService.StopRecording(egressID);
 
       // Register the completed egress MP4 as a Files row on the Meeting-Room Conversation. Best-effort:
       // any failure (e.g. storage provider not configured) leaves RecordingFileID unset but still
@@ -527,9 +697,10 @@ export class RealtimeBridgeResolver extends ResolverBase {
 
   /**
    * Records whether the current user lets agents see their camera and shared screen in a room. The participant is
-   * worked out from the authenticated user, never sent by the client, so a person can only answer for themselves, and
-   * LiveKit refuses when they are not in the room. The choice is set as their `mj.agentCanSee` attribute through
-   * LiveKit's server SDK (a participant's token can't change its own attributes) and audited, applied or not.
+   * worked out from the authenticated user, never sent by the client, so a person can only answer for themselves. The
+   * room must be one they may enter ({@link RoomAuthorizationService}, as for every room mutation), and LiveKit refuses
+   * when they are not in it. The choice is set as their `mj.agentCanSee` attribute through LiveKit's server SDK (a
+   * participant's token can't change its own attributes) and audited, applied or not.
    */
   @Mutation(() => LiveKitAgentVisionResult)
   async SetLiveKitAgentVision(
@@ -541,8 +712,11 @@ export class RealtimeBridgeResolver extends ResolverBase {
       if (!user) {
         return { Success: false, ErrorMessage: 'Unable to determine current user.' };
       }
-      const result = await new LiveKitParticipantService().SetAgentVision(input.RoomName, this.participantIdentity(user), input.Allow);
       const provider = GetReadWriteProvider(context.providers) as unknown as IMetadataProvider;
+      const auth = await RoomAuthorizationService.Instance.AuthorizeRoomAccess(input.RoomName, user, provider);
+      const result: ParticipantUpdateResult = auth.Authorized
+        ? await new LiveKitParticipantService().SetAgentVision(input.RoomName, this.participantIdentity(user), input.Allow)
+        : { Success: false, ErrorMessage: auth.Reason ?? 'Unauthorized room access.' };
       await WriteAgentVisionConsentAudit(
         { User: user, RoomName: input.RoomName, Allow: input.Allow, Applied: result.Success, ErrorMessage: result.ErrorMessage },
         provider,
@@ -558,9 +732,55 @@ export class RealtimeBridgeResolver extends ResolverBase {
     }
   }
 
-  /** Builds a stable, lowercased participant identity from the authenticated user. */
+  /**
+   * Starts the agent through the handoff-capable room starter when the caller asked for it and the server can do it.
+   * Returns the bridge id, or `undefined` to mean "use the standard start" (not requested, no starter, no agent named).
+   */
+  private async startWithHandoff(
+    input: StartLiveKitAgentRoomSessionInput,
+    roomName: string,
+    user: UserInfo,
+    provider: IMetadataProvider,
+  ): Promise<string | undefined> {
+    if (!input.EnableHandoff) {
+      return undefined;
+    }
+    const starter = RoomHandoffEngine.Instance.Deps.AgentStarter;
+    const agentID = input.TargetAgentID?.trim() || input.AgentID?.trim();
+    if (!starter || !agentID) {
+      LogError('StartLiveKitAgentRoomSession: handoff was requested but this server has no handoff-capable agent starter; starting the agent without it.');
+      return undefined;
+    }
+    const started = await starter({
+      RoomName: roomName,
+      AgentID: agentID,
+      AgentName: input.AgentName?.trim() ?? '',
+      CallerLabel: user.Name?.trim() || user.Email || 'Web visitor',
+      ContextUser: user,
+      Provider: provider,
+      RealtimeModelID: input.RealtimeModelID,
+      RealtimeVoice: input.RealtimeVoice,
+    });
+    return started.SessionBridgeID;
+  }
+
+  /** Builds a stable, lowercased participant identity from the authenticated user (shared with the handoff engine, which watches for it). */
   private participantIdentity(user: UserInfo): string {
-    return `user-${user.ID}`.toLowerCase();
+    return LiveKitUserIdentity(user.ID);
+  }
+
+  /** Normalizes an addressing-mode string; unknown/absent leaves the coordinator's default (`Auto`). */
+  private normalizeTurnAddressing(mode?: string): TurnAddressingMode | undefined {
+    switch ((mode ?? '').trim().toLowerCase()) {
+      case 'auto':
+        return 'Auto';
+      case 'modelside':
+        return 'ModelSide';
+      case 'regex':
+        return 'Regex';
+      default:
+        return undefined;
+    }
   }
 
   /** Normalizes a turn-mode string to the bridge's accepted values. */

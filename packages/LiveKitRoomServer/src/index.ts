@@ -16,7 +16,7 @@ import { LoadLiveKitBridge } from '@memberjunction/ai-bridge-livekit';
 // fails with "No bridge driver registered for DriverClass 'LiveKitBridge'".
 LoadLiveKitBridge();
 
-export { LiveKitTokenService, type LiveKitServerConfig, type LiveKitTokenRole, type MintTokenParams, type MintedToken } from './livekit-token-service';
+export { LiveKitTokenService, LiveKitUserIdentity, type LiveKitServerConfig, type LiveKitTokenRole, type MintTokenParams, type MintedToken } from './livekit-token-service';
 
 export {
   LiveKitAgentRoomCoordinator,
@@ -24,10 +24,45 @@ export {
   type BridgeOps,
   type RealtimeSessionFactory,
   type RealtimeSessionStartContext,
+  type AgentRoomHostOptions,
   type StartAgentRoomSessionParams,
   type AgentRoomSession,
 } from './livekit-agent-room-coordinator';
 
 export { LiveKitEgressService, WsToHttpUrl, wsToHttpUrl, type EgressClientLike, type StartRecordingParams, type RecordingInfo } from './livekit-egress-service';
 
-export { LiveKitParticipantService, type RoomServiceClientLike, type ParticipantUpdateResult } from './livekit-participant-service';
+export { LiveKitParticipantService, type ParticipantUpdateClientLike, type ParticipantUpdateResult } from './livekit-participant-service';
+
+export {
+  LiveKitSipService,
+  LIVEKIT_PARTICIPANT_KIND_SIP,
+  LIVEKIT_SIP_ATTRIBUTES,
+  SIP_DIAL_REQUEST_TIMEOUT_SECONDS,
+  SIP_DIAL_MAX_DURATION_SECONDS,
+  type SipClientLike,
+  type RoomServiceClientLike,
+  type RoomParticipantSummary,
+  type SipTrunkSummary,
+  type DialSipParticipantParams,
+  type EnsureInboundRoutingParams,
+  type InboundRoutingResult,
+} from './livekit-sip-service';
+
+export { LiveKitWebhookParser, type LiveKitRoomWebhookEvent, type WebhookReceiverLike } from './livekit-webhook';
+
+export * from './room-handoff/handoff-types';
+export * from './room-handoff/handoff-offer-registry';
+export * from './room-handoff/room-handoff-engine';
+export * from './room-authorization';
+export * from './meeting-dial-in-service';
+
+export { DEFAULT_LIVEKIT_NATIVE_MODULE, ResolveLiveKitNativeModuleSpecifier } from './livekit-native-module';
+
+// Room audio player (contact-center hold music + ducked announcements).
+export * from './room-audio/audio-decoder';
+export * from './room-audio/comfort-tone';
+export * from './room-audio/pcm-frame-pump';
+export * from './room-audio/room-audio-decode-cache';
+export * from './room-audio/room-audio-sources';
+export * from './room-audio/room-speech-synthesizer';
+export * from './room-audio/room-audio-player';

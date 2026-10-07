@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ParticipantInfo, TwirpError } from 'livekit-server-sdk';
-import { LiveKitParticipantService, type RoomServiceClientLike } from '../livekit-participant-service';
+import { LiveKitParticipantService, type ParticipantUpdateClientLike } from '../livekit-participant-service';
 
 const CONFIG = { ServerUrl: 'wss://test.livekit.cloud', ApiKey: 'devkey', ApiSecret: 'devsecretdevsecretdevsecret123456' };
 
@@ -12,7 +12,7 @@ function makeClient(failWith?: Error) {
     }
     return new ParticipantInfo({ identity, name: room });
   });
-  const client = { updateParticipant } satisfies RoomServiceClientLike;
+  const client = { updateParticipant } satisfies ParticipantUpdateClientLike;
   return { client, updateParticipant };
 }
 
