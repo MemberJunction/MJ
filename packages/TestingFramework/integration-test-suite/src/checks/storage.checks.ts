@@ -45,7 +45,7 @@
  *          take): on a role-restricted fixture account the seeded no-grant user gets `ACCESS_DENIED`
  *          with the access-denied message from `File Storage: Get Download URL`, an unknown account
  *          name gets the identical result, the role holder passes the gate (whatever the driver then
- *          does with the fixture credential), and `List Storage Accounts` omits the account for the
+ *          does with the fixture credential), and `List Storage Providers` (driver `List Storage Accounts`) omits the account for the
  *          no-grant user while listing it for the role holder.
  *
  * Read-only except ST4's single self-cleaning `MJ: Files` row and ST8/ST9's fixtures (a credential
@@ -567,7 +567,8 @@ export const StorageChecks: NamedCheck[] = [
             }
             const roleID = ctx.User.UserRoles?.[0]?.RoleID;
             const download = await coreAction('File Storage: Get Download URL', ctx.User);
-            const list = await coreAction('List Storage Accounts', ctx.User);
+            // The shipped action is named 'List Storage Providers'; 'List Storage Accounts' is only its driver class key.
+            const list = await coreAction('List Storage Providers', ctx.User);
             if (!roleID || !download || !list) {
                 console.warn(`  ⚠ storage.ST9 SKIPPED — ${!roleID ? 'the context user has no role to restrict the fixture account to'
                     : 'the File Storage core actions are not in the action catalog'}`);

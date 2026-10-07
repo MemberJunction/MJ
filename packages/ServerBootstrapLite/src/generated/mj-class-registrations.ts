@@ -2403,11 +2403,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     RunStoredQueryAction,
     ScheduledGeocodingAction,
     ScopedSearchAction,
-    SearchAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    SearchAction,
     SearchEntityAction,
     SearchQueryCatalogAction,
     SearchStorageFilesAction,
