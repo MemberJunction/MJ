@@ -3,7 +3,7 @@ import { BaseAction } from "@memberjunction/actions";
 import { Metadata, LogError, RunView } from "@memberjunction/core";
 import { RegisterClass, UUIDsEqual } from "@memberjunction/global";
 import {
-    AddOutput, CheckOverrideOwnership, Failure, GetNumberParam, GetStringParam, LoadComponent, LoadOverride, MapToComponentStatus,
+    AddOutput, CheckPersonalWrite, Failure, GetNumberParam, GetStringParam, LoadComponent, LoadOverride, MapToComponentStatus,
 } from "./_shared";
 
 /**
@@ -21,8 +21,20 @@ import {
  *   - Flip the previously-pointed Component to Status='Inactive', target
  *     Component to Status='Active'.
  *
+ * The override is saved first. Both Component status saves are then tried, even
+ * when the first fails. If either fails, or the target Component cannot be loaded
+ * for its status save, the action returns `PERSIST_FAILED` that names every
+ * Component whose status was not updated; the override stays re-pointed. The
+ * override then already points at the target, so a retry with the same target
+ * returns SUCCESS from the no-op path and the Component statuses stay as they are.
+ *
  * Old Component rows are never deleted — they remain as immutable history.
  * A subsequent revert can move forward again to any version.
+ *
+ * Only the caller's own User-scope overrides can be reverted. A Role or Global
+ * override, or another user's, returns FORBIDDEN for every caller (see
+ * `CheckPersonalWrite` in `_shared.ts`): shared forms are managed from Form
+ * Builder or the form's Manage drawer.
  *
  * Inputs:
  *   - `ActiveOverrideID` (required, string) — the Active override to re-point
@@ -62,7 +74,7 @@ export class RevertInteractiveFormAction extends BaseAction {
             if (!override) {
                 return Failure("OVERRIDE_NOT_FOUND", `EntityFormOverride '${activeOverrideID}' not found.`);
             }
-            const ownershipFail = CheckOverrideOwnership(override, user);
+            const ownershipFail = CheckPersonalWrite(override, user);
             if (ownershipFail) return ownershipFail;
             if (override.Status !== 'Active') {
                 return Failure("NOT_ACTIVE",
@@ -125,13 +137,26 @@ export class RevertInteractiveFormAction extends BaseAction {
             }
 
             // Flip Component statuses to reflect the new active selection.
+            const notUpdated: string[] = [];
             const newActive = await LoadComponent(provider, user, target.ID);
             if (newActive) {
                 newActive.Status = MapToComponentStatus('Active');
-                await newActive.Save();
+                if (!(await newActive.Save())) {
+                    notUpdated.push(`the status of Component ${target.ID} was not updated ` +
+                        `(${newActive.LatestResult?.CompleteMessage ?? 'unknown error'})`);
+                }
+            } else {
+                notUpdated.push(`Component ${target.ID} could not be loaded, so its status was not updated`);
             }
             currentComponent.Status = MapToComponentStatus('Inactive');
-            await currentComponent.Save();
+            if (!(await currentComponent.Save())) {
+                notUpdated.push(`the status of Component ${currentComponent.ID} was not updated ` +
+                    `(${currentComponent.LatestResult?.CompleteMessage ?? 'unknown error'})`);
+            }
+            if (notUpdated.length > 0) {
+                return Failure("PERSIST_FAILED",
+                    `Override ${override.ID} was re-pointed to Component ${target.ID}, but ${notUpdated.join('; ')}.`);
+            }
 
             AddOutput(params, "OverrideID", override.ID);
             AddOutput(params, "ComponentID", target.ID);

@@ -17,6 +17,7 @@ import {
   AIModelSelectionInfo,
   SystemPlaceholderManager,
   AIPromptParams,
+  PickPromptExecutionScope,
 } from '@memberjunction/ai-core-plus';
 import {
   BaseModelRunner,
@@ -417,6 +418,11 @@ export class AIDecisionRunner extends BaseModelRunner {
         return `LLMDecision's chat prompt '${candidate.apiName ?? ''}' was not found`;
       }
       driver = MJGlobal.Instance.ClassFactory.CreateInstance<BaseDecision>(BaseDecision, candidate.driverClass, apiKey, chatPrompt.ID, params.contextUser);
+      // LLMDecision answers by running a chat prompt of its own, which must spend the decision's
+      // credentials, not resolve its own from the platform.
+      if (driver instanceof LLMDecision) {
+        driver.ExecutionScope = PickPromptExecutionScope(params);
+      }
     } else {
       driver = MJGlobal.Instance.ClassFactory.CreateInstance<BaseDecision>(BaseDecision, candidate.driverClass, apiKey);
     }

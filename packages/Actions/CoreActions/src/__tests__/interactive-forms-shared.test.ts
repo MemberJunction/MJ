@@ -10,8 +10,14 @@ import {
     ParseSpecParam,
     GetStringParam,
     GetNumberParam,
+    GetPrecedenceParam,
+    ResolveContributionRegistration,
+    CheckPersonalWrite,
+    WriteAtomically,
 } from '../custom/interactive-forms/_shared';
 import type { RunActionParams } from '@memberjunction/actions-base';
+import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import type { ComponentSpec } from '@memberjunction/interactive-component-types';
 
 /**
  * The interactive-form action family shares a small kit of helpers in
@@ -222,5 +228,160 @@ describe('getNumberParam', () => {
         expect(GetNumberParam(p('garbage'), 'TargetVersionSequence')).toBeNull();
         expect(GetNumberParam(p(null), 'TargetVersionSequence')).toBeNull();
         expect(GetNumberParam(p(undefined), 'TargetVersionSequence')).toBeNull();
+    });
+});
+
+/**
+ * Create and Modify both read a spec's registration through this one function, so the two
+ * resolve the related entity and derive the row's key the same way.
+ */
+describe('ResolveContributionRegistration', () => {
+    const TICKETS = 'MJ_BizApps_Orders: Event Order Lines';
+    const provider = {
+        EntityByName: (name: string) => name.trim().toLowerCase() === TICKETS.toLowerCase()
+            ? { ID: 'ENT-TICKETS', Name: TICKETS } : undefined,
+    } as unknown as IMetadataProvider;
+
+    function panelSpec(formContribution: Record<string, unknown>): ComponentSpec {
+        return {
+            name: 'TicketsPanel', componentRole: 'form-panel',
+            formContribution: { presentation: 'panel', title: 'Tickets', ...formContribution },
+        } as unknown as ComponentSpec;
+    }
+
+    it('resolves the related entity to its registered name and ID and derives the related key', () => {
+        const result = ResolveContributionRegistration(
+            provider, panelSpec({ relatedEntity: TICKETS.toLowerCase(), relatedJoinField: '[PersonID]' }));
+        expect('error' in result).toBe(false);
+        if ('error' in result) return;
+        expect(result.Contribution.relatedEntity).toBe(TICKETS);
+        expect(result.RowOptions).toEqual({ relatedEntityID: 'ENT-TICKETS', relatedEntityName: TICKETS, componentName: 'TicketsPanel' });
+        expect(result.WriteKey).toBe(`related:${TICKETS}:PersonID`);
+    });
+
+    it('derives the panel key from spec.name when the spec names no key and claims no grid', () => {
+        const result = ResolveContributionRegistration(provider, panelSpec({}));
+        expect('error' in result ? null : result.WriteKey).toBe('panel:TicketsPanel');
+    });
+
+    it('keeps the current panel key of a row whose spec names no key and claims no grid', () => {
+        const result = ResolveContributionRegistration(provider, panelSpec({}), 'panel:OldName');
+        expect('error' in result ? null : result.WriteKey).toBe('panel:OldName');
+    });
+
+    it('derives a new key when the current key is not a panel key, or the spec supplies one', () => {
+        const fromRelated = ResolveContributionRegistration(provider, panelSpec({}), `related:${TICKETS}:PersonID`);
+        expect('error' in fromRelated ? null : fromRelated.WriteKey).toBe('panel:TicketsPanel');
+        const authored = ResolveContributionRegistration(provider, panelSpec({ contributionKey: 'skip:tickets' }), 'panel:OldName');
+        expect('error' in authored ? null : authored.WriteKey).toBe('skip:tickets');
+        const claimed = ResolveContributionRegistration(provider, panelSpec({ relatedEntity: TICKETS }), 'panel:OldName');
+        expect('error' in claimed ? null : claimed.WriteKey).toBe(`related:${TICKETS}:`);
+    });
+
+    it('fails with RELATED_ENTITY_NOT_FOUND for an unregistered related entity', () => {
+        const result = ResolveContributionRegistration(provider, panelSpec({ relatedEntity: 'Nope' }));
+        expect('error' in result ? result.error.ResultCode : null).toBe('RELATED_ENTITY_NOT_FOUND');
+    });
+
+    it('fails with INVALID_CONTRIBUTION_KEY for a key outside the permitted character set', () => {
+        const result = ResolveContributionRegistration(provider, panelSpec({ contributionKey: "x'; DROP--" }));
+        expect('error' in result ? result.error.ResultCode : null).toBe('INVALID_CONTRIBUTION_KEY');
+    });
+
+    it('fails with LINT_FAILED when the spec is not a form panel', () => {
+        const spec = { ...panelSpec({}), componentRole: 'form' } as ComponentSpec;
+        const result = ResolveContributionRegistration(provider, spec);
+        expect('error' in result ? result.error.ResultCode : null).toBe('LINT_FAILED');
+    });
+
+    it('fails with INVALID_CLAIM for a spec that makes two claims', () => {
+        const result = ResolveContributionRegistration(provider, panelSpec({ relatedEntity: TICKETS, replacesSectionKey: 'contact' }));
+        expect('error' in result ? result.error.ResultCode : null).toBe('INVALID_CLAIM');
+    });
+});
+
+describe('GetPrecedenceParam', () => {
+    function p(value: unknown): RunActionParams {
+        return { Params: value === undefined ? [] : [{ Name: 'Precedence', Type: 'Input', Value: value }] } as unknown as RunActionParams;
+    }
+
+    it('reads a whole number of zero or more, from a number or a numeric string', () => {
+        expect(GetPrecedenceParam(p(3))).toBe(3);
+        expect(GetPrecedenceParam(p('4.7'))).toBe(4);
+        expect(GetPrecedenceParam(p(0))).toBe(0);
+    });
+
+    it('returns null for a missing, negative or unparseable value', () => {
+        expect(GetPrecedenceParam(p(undefined))).toBeNull();
+        expect(GetPrecedenceParam(p(-1))).toBeNull();
+        expect(GetPrecedenceParam(p('high'))).toBeNull();
+    });
+});
+
+/**
+ * Actions change the caller's own personal forms and panels only; shared ones are managed by
+ * people. The check must never accept a write the server entity would refuse on save.
+ */
+describe('CheckPersonalWrite', () => {
+    const me = { ID: 'USER-1', Type: 'User', UserRoles: [{ RoleID: 'ROLE-1' }] } as unknown as UserInfo;
+    const owner = { ID: 'USER-1', Type: 'Owner', UserRoles: [{ RoleID: 'ROLE-1' }] } as unknown as UserInfo;
+
+    it('accepts the caller\'s own personal row, whatever the casing of its owner ID', () => {
+        expect(CheckPersonalWrite({ ID: 'R', Scope: 'User', UserID: 'USER-1' }, me)).toBeNull();
+        expect(CheckPersonalWrite({ ID: 'R', Scope: 'User', UserID: 'user-1' }, me)).toBeNull();
+    });
+
+    it('refuses another user\'s personal row, for a holder too', () => {
+        const result = CheckPersonalWrite({ ID: 'R', Scope: 'User', UserID: 'USER-2' }, owner);
+        expect(result?.ResultCode).toBe('FORBIDDEN');
+        expect(result?.Message).toMatch(/your own/i);
+    });
+
+    it('refuses a Role or Global row for a role member and for a holder, pointing at Form Builder', () => {
+        for (const row of [{ ID: 'R', Scope: 'Role', UserID: null }, { ID: 'G', Scope: 'Global', UserID: null }] as const) {
+            for (const user of [me, owner]) {
+                const result = CheckPersonalWrite(row, user);
+                expect(result?.ResultCode).toBe('FORBIDDEN');
+                expect(result?.Message).toMatch(/Form Builder/);
+                expect(result?.Message).toMatch(/Manage drawer/);
+            }
+        }
+    });
+
+    it('refuses a Scope that is not exactly User', () => {
+        expect(CheckPersonalWrite({ ID: 'R', Scope: 'user' as 'User', UserID: 'USER-1' }, me)?.ResultCode).toBe('FORBIDDEN');
+    });
+});
+
+describe('WriteAtomically', () => {
+    function transactable() {
+        const log: string[] = [];
+        const provider = {
+            SupportsEntityTransactions: true,
+            async BeginEntityTransaction() {
+                log.push('begin');
+                return { IsNested: false, async Commit() { log.push('commit'); }, async Rollback() { log.push('rollback'); } };
+            },
+        } as unknown as IMetadataProvider;
+        return { log, provider };
+    }
+
+    it('commits and returns what the work returns', async () => {
+        const { log, provider } = transactable();
+        expect(await WriteAtomically(provider, async () => ({ id: 'X' }))).toEqual({ id: 'X' });
+        expect(log).toEqual(['begin', 'commit']);
+    });
+
+    it('rolls back and returns a failure the work returns', async () => {
+        const { log, provider } = transactable();
+        const failure = { error: { Success: false, ResultCode: 'PERSIST_FAILED', Message: 'refused' } };
+        expect(await WriteAtomically(provider, async () => failure)).toBe(failure);
+        expect(log).toEqual(['begin', 'rollback']);
+    });
+
+    it('rolls back and rethrows what the work throws', async () => {
+        const { log, provider } = transactable();
+        await expect(WriteAtomically(provider, async () => { throw new Error('boom'); })).rejects.toThrow('boom');
+        expect(log).toEqual(['begin', 'rollback']);
     });
 });

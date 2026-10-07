@@ -165,7 +165,7 @@ export class RecentAccessService {
   }
 
   /**
-   * Loads recent access items for the current user using UserInfoEngine (cached).
+   * Loads recent access items for the current user from `MJ: User Record Logs`.
    * @param maxItems - Maximum number of items to return (default 15)
    * @param forceRefresh - Force refresh even if already loaded
    */
@@ -179,8 +179,7 @@ export class RecentAccessService {
 
       const md = this.Provider;
 
-      // Get recent records, limited to maxItems (already ordered by LatestAt DESC in engine)
-      const userRecordLogs = UserInfoEngine.Instance.UserRecordLogs.slice(0, maxItems);
+      const userRecordLogs = await UserInfoEngine.Instance.LoadRecentRecordLogs(maxItems, md.CurrentUser, md);
 
       const items: RecentAccessItem[] = [];
 

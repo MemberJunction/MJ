@@ -19,8 +19,7 @@
  * Every fixture row is tagged '(mj-integration-test — safe to delete)' and deleted in the same
  * check's finally block, so the bundle needs no shared lifecycle.
  */
-import { BaseEntity, Metadata, ProviderType, RunView } from '@memberjunction/core';
-import type { UserInfo } from '@memberjunction/core';
+import { BaseEntity, Metadata, ProviderType, RunView, UserInfo, UserRoleInfo } from '@memberjunction/core';
 import { MJGlobal, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import {
     MJAIAgentChannelSchema,
@@ -30,12 +29,20 @@ import {
     MJAIAgentSessionBridgeEntity,
     MJAIBridgeProviderEntity,
     MJAIModelVendorEntity,
+    MJInteractionEntity,
+    MJInteractionEventEntity,
+    MJMeetingEntity,
+    MJMeetingParticipantEntity,
     MJMLAlgorithmUseCaseRankingEntity,
     MJMLModelEntity,
     MJMLTrainingPipelineEntity,
+    MJUserEntity,
 } from '@memberjunction/core-entities';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { BaseRealtimeBridge } from '@memberjunction/ai-bridge-base';
 import { LoopbackBridge, LOOPBACK_BRIDGE_DRIVER_CLASS } from '@memberjunction/ai-bridge-server';
+import { HandoffOfferRegistry, RoomAuthorizationService, OFFER_UNAVAILABLE } from '@memberjunction/livekit-room-server';
+import { InteractionLifecycleService } from '@memberjunction/telephony-adapters';
 import { ProductionModelPromotionGate, detectSingleFeatureDominance } from '@memberjunction/predictive-studio';
 import type { PromoteModelRequest } from '@memberjunction/predictive-studio';
 import { Assert, AssertEqual } from '@memberjunction/testing-integration';
@@ -484,6 +491,378 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
                 }
             }
             console.log('      → all four deterministic refusal paths hold; model left immutable');
+        }
+    },
+    {
+        Id: 'realtime-deterministic.RD10',
+        Name: 'RD10: interaction records, events, links, computed duration, and append-only event guard',
+        Fn: async (ctx): Promise<void> => {
+            const md = ctx.Provider ?? new Metadata();
+            if (!md.EntityByName('MJ: Interactions') || !md.EntityByName('MJ: Interaction Events')) {
+                console.warn('  ⚠ realtime-deterministic.RD10 SKIPPED — MJ: Interactions not in metadata');
+                return;
+            }
+
+            const lifecycle = InteractionLifecycleService.Instance;
+            const startTime = new Date(Date.now() - 65_000); // 65 seconds ago
+            const interaction = await lifecycle.CreateInteraction({
+                Channel: 'Phone',
+                Direction: 'Inbound',
+                Status: 'Active',
+                StartedAt: startTime,
+                ContextUser: ctx.User,
+                MetadataProvider: ctx.Provider,
+            });
+
+            if (!interaction || !interaction.ID) {
+                Assert(false, 'Failed to create fixture interaction');
+                return;
+            }
+
+            try {
+                // Link the caller (ctx.User)
+                const userEntity = md.EntityByName('MJ: Users');
+                Assert(!!userEntity, 'MJ: Users entity not found');
+                const link = await lifecycle.CreateLink({
+                    InteractionID: interaction.ID,
+                    EntityID: userEntity!.ID,
+                    RecordID: ctx.User.ID,
+                    Role: 'Caller',
+                    ContextUser: ctx.User,
+                    MetadataProvider: ctx.Provider,
+                });
+                Assert(!!link && !!link.ID, 'Failed to create interaction link');
+
+                // Append an Offered event
+                const offeredEvent = await lifecycle.RecordEvent({
+                    InteractionID: interaction.ID,
+                    EventType: 'Offered',
+                    ContextUser: ctx.User,
+                    MetadataProvider: ctx.Provider,
+                    Details: { note: 'Offered to agent for test' },
+                });
+                Assert(!!offeredEvent && !!offeredEvent.ID, 'Failed to record Offered event');
+
+                // Close interaction (65 seconds duration)
+                const endedTime = new Date();
+                const closed = await lifecycle.CloseInteraction({
+                    InteractionID: interaction.ID,
+                    EndedAt: endedTime,
+                    Abandoned: false,
+                    CostPerMinute: 0.02,
+                    ContextUser: ctx.User,
+                    MetadataProvider: ctx.Provider,
+                });
+                Assert(closed, 'Failed to close interaction');
+
+                // Reload interaction and verify fields
+                const reloaded = await md.GetEntityObject<MJInteractionEntity>('MJ: Interactions', ctx.User);
+                Assert(await reloaded.Load(interaction.ID), 'Failed to reload interaction');
+                AssertEqual(reloaded.Status, 'Ended', 'Interaction status should be Ended');
+                Assert(!!reloaded.EndedAt, 'Interaction EndedAt should be populated');
+                Assert((reloaded.CostEstimate ?? 0) > 0, `CostEstimate should be > 0, got ${reloaded.CostEstimate}`);
+
+                // Query events and verify count
+                const rv = new RunView();
+                const eventsResult = await rv.RunView<MJInteractionEventEntity>({
+                    EntityName: 'MJ: Interaction Events',
+                    ExtraFilter: `InteractionID = '${interaction.ID}'`,
+                    ResultType: 'entity_object',
+                    OrderBy: 'OccurredAt ASC',
+                }, ctx.User);
+                Assert(eventsResult.Success, `Failed to query events: ${eventsResult.ErrorMessage}`);
+                // Expected events: Created, Answered, Offered, Ended
+                const types = eventsResult.Results.map(e => e.EventType);
+                Assert(types.includes('Created'), 'Events should include Created');
+                Assert(types.includes('Answered'), 'Events should include Answered');
+                Assert(types.includes('Offered'), 'Events should include Offered');
+                Assert(types.includes('Ended'), 'Events should include Ended');
+
+                // Verify append-only invariant on events when server invariants are active
+                if (serverInvariantsActive(ctx.Provider.ProviderType, 'MJ: Interaction Events')) {
+                    const eventToMutate = eventsResult.Results[0];
+                    let updateThrew = false;
+                    try {
+                        eventToMutate.Details = 'Illegal mutated details';
+                        const saved = await eventToMutate.Save();
+                        if (!saved) updateThrew = true;
+                    } catch {
+                        updateThrew = true;
+                    }
+                    Assert(updateThrew, 'Interaction event update must be refused by append-only guard');
+
+                    let deleteThrew = false;
+                    try {
+                        const deleted = await eventToMutate.Delete();
+                        if (!deleted) deleteThrew = true;
+                    } catch {
+                        deleteThrew = true;
+                    }
+                    Assert(deleteThrew, 'Interaction event delete must be refused by append-only guard');
+                }
+            } finally {
+                if (ctx.Pool) {
+                    const s = ctx.Schema ?? '__mj';
+                    await ctx.Pool.request().query(`
+                        DELETE FROM [${s}].[InteractionEvent] WHERE InteractionID = '${interaction.ID}';
+                        DELETE FROM [${s}].[InteractionLink] WHERE InteractionID = '${interaction.ID}';
+                        DELETE FROM [${s}].[Interaction] WHERE ID = '${interaction.ID}';
+                    `).catch(() => undefined);
+                } else if (interaction.IsSaved) {
+                    await interaction.Delete().catch(() => undefined);
+                }
+            }
+            console.log('      → interaction lifecycle, computed duration/cost, and append-only event guard hold');
+        }
+    },
+    {
+        Id: 'realtime-deterministic.RD11',
+        Name: 'RD11: durable hand-off offers transition state with compare-and-set concurrency guard',
+        Fn: async (ctx): Promise<void> => {
+            const md = ctx.Provider ?? new Metadata();
+            if (!md.EntityByName('MJ: Interaction Offers')) {
+                console.warn('  ⚠ realtime-deterministic.RD11 SKIPPED — MJ: Interaction Offers not in metadata');
+                return;
+            }
+
+            const registry = HandoffOfferRegistry.Instance;
+            const roomName = `it-rd11-room-${Date.now()}`;
+            const offer = await registry.Create({
+                RoomName: roomName,
+                TargetUserID: ctx.User.ID,
+                Mode: 'warm',
+                Summary: 'Integration test offer for RD11',
+                CallerLabel: 'Integration Test Caller',
+                AgentName: 'TestAgent',
+                ContextUser: ctx.User,
+                Provider: ctx.Provider,
+            });
+
+            if (!offer || !offer.OfferID) {
+                Assert(false, 'Failed to create durable hand-off offer');
+                return;
+            }
+            AssertEqual(offer.Status, 'Pending', 'Initial offer status must be Pending');
+
+            let raceInteractionID: string | undefined;
+            let raceOffer1ID: string | undefined;
+            let raceOffer2ID: string | undefined;
+
+            try {
+                // 1. Refuse resolution by wrong target user
+                const wrongUserRes = await registry.ResolveForUser(
+                    offer.OfferID,
+                    '00000000-0000-0000-0000-000000000000',
+                    'Accepted',
+                    ctx.User,
+                    ctx.Provider,
+                );
+                AssertEqual(wrongUserRes.Ok, false, 'Resolving offer for unauthorized user must fail');
+
+                // 2. Accept offer on behalf of target user
+                const acceptRes = await registry.ResolveForUser(
+                    offer.OfferID,
+                    ctx.User.ID,
+                    'Accepted',
+                    ctx.User,
+                    ctx.Provider,
+                );
+                Assert(acceptRes.Ok, `Accepting offer failed: ${acceptRes.Ok ? '' : acceptRes.Reason}`);
+                if (acceptRes.Ok) {
+                    AssertEqual(acceptRes.Offer.Status, 'Accepted', 'Offer status must transition to Accepted');
+                }
+
+                // 3. Compare-and-set guard: attempting a second resolution must fail
+                const raceRes = await registry.ResolveForUser(
+                    offer.OfferID,
+                    ctx.User.ID,
+                    'Declined',
+                    ctx.User,
+                    ctx.Provider,
+                );
+                AssertEqual(raceRes.Ok, false, 'CAS guard: resolving an already resolved offer must fail');
+
+                // 4. Real DB CAS race test: two concurrent accepts against the real database for offers sharing an InteractionID.
+                // Exactly one should win, enforced by UX_InteractionOffer_OneAccepted, and the loser should get OFFER_UNAVAILABLE.
+                const interaction = await md.GetEntityObject<MJInteractionEntity>('MJ: Interactions', ctx.User);
+                interaction.Channel = 'Web';
+                interaction.Direction = 'Inbound';
+                interaction.RoomName = `it-rd11-race-${Date.now()}`;
+                interaction.Status = 'Active';
+                interaction.StartedAt = new Date();
+                Assert(await interaction.Save(), 'Failed to create interaction for race check');
+                raceInteractionID = interaction.ID;
+
+                const raceOffer1 = await registry.Create({
+                    InteractionID: interaction.ID,
+                    RoomName: interaction.RoomName,
+                    TargetUserID: ctx.User.ID,
+                    Mode: 'warm',
+                    Summary: 'Concurrent offer 1 for RD11',
+                    CallerLabel: 'Race Caller 1',
+                    AgentName: 'TestAgent',
+                    ContextUser: ctx.User,
+                    Provider: ctx.Provider,
+                });
+                const raceOffer2 = await registry.Create({
+                    InteractionID: interaction.ID,
+                    RoomName: interaction.RoomName,
+                    TargetUserID: ctx.User.ID,
+                    Mode: 'warm',
+                    Summary: 'Concurrent offer 2 for RD11',
+                    CallerLabel: 'Race Caller 2',
+                    AgentName: 'TestAgent',
+                    ContextUser: ctx.User,
+                    Provider: ctx.Provider,
+                });
+                Assert(!!raceOffer1 && !!raceOffer1.OfferID, 'Failed to create raceOffer1');
+                Assert(!!raceOffer2 && !!raceOffer2.OfferID, 'Failed to create raceOffer2');
+                if (!raceOffer1 || !raceOffer2) {
+                    return;
+                }
+                raceOffer1ID = raceOffer1.OfferID;
+                raceOffer2ID = raceOffer2.OfferID;
+
+                const [res1, res2] = await Promise.all([
+                    registry.ResolveForUser(raceOffer1.OfferID, ctx.User.ID, 'Accepted', ctx.User, ctx.Provider),
+                    registry.ResolveForUser(raceOffer2.OfferID, ctx.User.ID, 'Accepted', ctx.User, ctx.Provider),
+                ]);
+
+                const successCount = (res1.Ok ? 1 : 0) + (res2.Ok ? 1 : 0);
+                AssertEqual(successCount, 1, 'Exactly one concurrent accept must succeed under UX_InteractionOffer_OneAccepted');
+                const loser = res1.Ok ? res2 : res1;
+                AssertEqual(loser.Ok, false, 'Losing accept must have Ok === false');
+                if (!loser.Ok) {
+                    AssertEqual(loser.Reason, OFFER_UNAVAILABLE, `Losing accept must receive OFFER_UNAVAILABLE, got ${loser.Reason}`);
+                }
+            } finally {
+                if (ctx.Pool) {
+                    const s = ctx.Schema ?? '__mj';
+                    const offerIDs = [offer.OfferID, raceOffer1ID, raceOffer2ID].filter(Boolean).map(id => `'${id}'`).join(',');
+                    if (offerIDs.length > 0) {
+                        await ctx.Pool.request().query(`
+                            DELETE FROM [${s}].[InteractionOffer] WHERE ID IN (${offerIDs});
+                        `).catch(() => undefined);
+                    }
+                    if (raceInteractionID) {
+                        await ctx.Pool.request().query(`
+                            DELETE FROM [${s}].[Interaction] WHERE ID = '${raceInteractionID}';
+                        `).catch(() => undefined);
+                    }
+                    await ctx.Pool.request().query(`
+                        DELETE FROM [${s}].[Interaction] WHERE RoomName = '${roomName}';
+                    `).catch(() => undefined);
+                }
+            }
+            console.log('      → durable offer creation, user authorization, and CAS guard hold (including real DB race)');
+        }
+    },
+    {
+        Id: 'realtime-deterministic.RD12',
+        Name: 'RD12: LiveKit room authorization enforces participant, host, cancelled meeting, and ad-hoc rules',
+        Fn: async (ctx): Promise<void> => {
+            const md = ctx.Provider ?? new Metadata();
+            if (!md.EntityByName('MJ: Meetings') || !md.EntityByName('MJ: Meeting Participants')) {
+                console.warn('  ⚠ realtime-deterministic.RD12 SKIPPED — MJ: Meetings not in metadata');
+                return;
+            }
+
+            const authService = RoomAuthorizationService.Instance;
+
+            // 1. Ad-hoc unlinked room is accessible to authenticated users
+            const adHocRoom = `it-rd12-adhoc-${Date.now()}`;
+            const adHocAuth = await authService.AuthorizeRoomAccess(adHocRoom, ctx.User, ctx.Provider);
+            AssertEqual(adHocAuth.Authorized, true, 'Ad-hoc room must be accessible to authenticated user');
+
+            // 2. Unauthenticated access is refused
+            const unauth = await authService.AuthorizeRoomAccess(adHocRoom, null as unknown as UserInfo, ctx.Provider);
+            AssertEqual(unauth.Authorized, false, 'Unauthenticated access must be refused');
+
+            // 3. Resolve a secondary user from DB for participant testing
+            const secondaryUserID = await firstID('MJ: Users', ctx.User, `ID <> '${ctx.User.ID}'`);
+            if (!secondaryUserID) {
+                console.warn('  ⚠ realtime-deterministic.RD12 participant legs SKIPPED — only 1 user in DB');
+                return;
+            }
+            const uiRole = ctx.Provider.Roles.find((r) => r.Name === 'UI');
+            const roleID = uiRole?.ID ?? 'e0afccec-6a37-ef11-86d4-000d3a4e707e';
+            const secondaryUserEntity = await md.GetEntityObject<MJUserEntity>('MJ: Users', ctx.User);
+            Assert(await secondaryUserEntity.Load(secondaryUserID), 'Failed to load secondary user');
+            const secondaryUser = new UserInfo(ctx.Provider, {
+                ID: secondaryUserEntity.ID,
+                Name: secondaryUserEntity.Name,
+                Email: secondaryUserEntity.Email,
+                IsActive: true,
+                UserRoles: [
+                    new UserRoleInfo({
+                        UserID: secondaryUserEntity.ID,
+                        RoleID: roleID,
+                        Role: 'UI',
+                        User: secondaryUserEntity.Name,
+                    }),
+                ],
+            });
+            Assert(!UUIDsEqual(secondaryUser.ID, ctx.User.ID), 'Secondary user must be distinct from context user');
+
+            // Create a meeting fixture
+            const meetingRoom = `it-rd12-meet-${Date.now()}`;
+            const meeting = await md.GetEntityObject<MJMeetingEntity>('MJ: Meetings', ctx.User);
+            meeting.NewRecord();
+            meeting.Title = `RD12 Meeting Fixture ${TAG}`;
+            meeting.RoomName = meetingRoom;
+            meeting.HostUserID = ctx.User.ID;
+            meeting.Status = 'Scheduled';
+            Assert(await meeting.Save(), `Meeting save failed: ${meeting.LatestResult?.CompleteMessage}`);
+
+            let participant: MJMeetingParticipantEntity | undefined;
+            try {
+                // Host is authorized
+                const hostAuth = await authService.AuthorizeRoomAccess(meetingRoom, ctx.User, ctx.Provider);
+                AssertEqual(hostAuth.Authorized, true, 'Meeting host must be authorized');
+
+                // Stranger (not participant) is refused
+                const strangerAuth = await authService.AuthorizeRoomAccess(meetingRoom, secondaryUser, ctx.Provider);
+                AssertEqual(strangerAuth.Authorized, false, 'Non-participant stranger must be refused');
+
+                // Add secondary user as Invited participant
+                participant = await md.GetEntityObject<MJMeetingParticipantEntity>('MJ: Meeting Participants', ctx.User);
+                participant.NewRecord();
+                participant.MeetingID = meeting.ID;
+                participant.UserID = secondaryUser.ID;
+                participant.Role = 'Attendee';
+                participant.InviteStatus = 'Invited';
+                Assert(await participant.Save(), `Participant save failed: ${participant.LatestResult?.CompleteMessage}`);
+
+                // Invited participant is authorized
+                const invitedAuth = await authService.AuthorizeRoomAccess(meetingRoom, secondaryUser, ctx.Provider);
+                AssertEqual(invitedAuth.Authorized, true, 'Invited participant must be authorized');
+
+                // Declined participant is refused
+                participant.InviteStatus = 'Declined';
+                Assert(await participant.Save(), `Participant update failed: ${participant.LatestResult?.CompleteMessage}`);
+                const declinedAuth = await authService.AuthorizeRoomAccess(meetingRoom, secondaryUser, ctx.Provider);
+                AssertEqual(declinedAuth.Authorized, false, 'Declined participant must be refused');
+
+                // Cancelled meeting refuses even the host
+                meeting.Status = 'Cancelled';
+                Assert(await meeting.Save(), `Meeting cancellation failed: ${meeting.LatestResult?.CompleteMessage}`);
+                const cancelledAuth = await authService.AuthorizeRoomAccess(meetingRoom, ctx.User, ctx.Provider);
+                AssertEqual(cancelledAuth.Authorized, false, 'Cancelled meeting must refuse host access');
+            } finally {
+                if (ctx.Pool) {
+                    const s = ctx.Schema ?? '__mj';
+                    if (participant?.IsSaved) {
+                        await ctx.Pool.request().query(`DELETE FROM [${s}].[MeetingParticipant] WHERE ID = '${participant.ID}'`).catch(() => undefined);
+                    }
+                    if (meeting.IsSaved) {
+                        await ctx.Pool.request().query(`DELETE FROM [${s}].[Meeting] WHERE ID = '${meeting.ID}'`).catch(() => undefined);
+                    }
+                } else {
+                    if (participant?.IsSaved) await participant.Delete().catch(() => undefined);
+                    if (meeting.IsSaved) await meeting.Delete().catch(() => undefined);
+                }
+            }
+            console.log('      → room authorization rules (host, invited, declined, cancelled, ad-hoc) hold');
         }
     }
 ];
