@@ -70,6 +70,7 @@ Bundles live in [`integration-test-suite/src/checks/`](../integration-test-suite
 | ai-embeddings | 5 | det | **client** |
 | agent-loop-standin | 6 | det | server |
 | agent-decisions-switch | 9 | det | server |
+| binary-fields | 6 | det (+mut) | **client** |
 | transaction-groups | 5 | det | **client** |
 | class-resolution | 5 | det | server |
 | metadata-sync | 9 | det | server |
