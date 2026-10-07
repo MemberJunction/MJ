@@ -20,6 +20,7 @@ import {
     type RealtimeCaptureStates,
     type RealtimeChannelContext,
     type IRealtimeMediaHost,
+    type RealtimeSessionStartOptions,
     type StartRealtimeClientSessionResult,
 } from '../index';
 import { ShareHost, VideoClient } from './capture-test-helpers';
@@ -132,9 +133,10 @@ function build(channels: CaptureChannel[] = [], mediaHost?: (host: ShareHost) =>
     runtime.ChannelActivity$.subscribe((c) => used.push(c.ChannelName));
     const offers: RealtimeCaptureOffers[] = [];
     runtime.CaptureOffers$.subscribe((o) => offers.push(o));
-    const start = () =>
+    const start = (options: RealtimeSessionStartOptions = {}) =>
         runtime.StartRealtimeSession('agent-1', null, null, 'Sage', null, null, null, null, false, null, null, null, {
             HostChannels: channels.map((channel) => ({ Create: () => channel })),
+            ...options,
         });
     return { host, runtime, provider, captures, used, offers, start, sources: () => sources };
 }
@@ -334,6 +336,46 @@ describe('RealtimeSessionRuntime camera and screen share', () => {
             runtime.SetUserChannelExposure('Camera', undefined);
             expect(sources()[0].Enabled).toBe(true);
             await runtime.EndRealtimeSession();
+        });
+    });
+
+    describe("the host's camera check", () => {
+        it("holds the call's first camera start for the user's check, with its channel open, and shows the agent the camera on confirm", async () => {
+            const camera = new CaptureChannel('Camera', 'camera');
+            const { host, runtime, captures, start, sources } = build([camera]);
+            await start({ CameraCheck: true });
+            const controller = host.Controllers[0];
+            expect(await runtime.StartCamera('cam-1')).toEqual({ Status: 'starting', Checking: true, Stream: controller.CameraStream });
+            expect(controller.StartCalls).toContainEqual(['camera', 'cam-1']);
+            expect(camera.Opened).toBe(1);
+            expect(sources()).toEqual([]);
+            expect(runtime.ConfirmCamera()).toEqual({ Status: 'on', Stream: controller.CameraStream });
+            expect(captures.at(-1)?.Camera.Status).toBe('on');
+            expect(sources().map((s) => s.SourceID)).toEqual(['capture:camera']);
+            runtime.StopCamera();
+            expect(await runtime.StartCamera()).toMatchObject({ Status: 'on' });
+            await runtime.EndRealtimeSession();
+        });
+
+        it('checks again in the next call, and never in a call started without it', async () => {
+            const { runtime, start } = build();
+            const withCamera = (options: RealtimeSessionStartOptions = {}) =>
+                start({ HostChannels: [{ Create: () => new CaptureChannel('Camera', 'camera') }], ...options });
+            await withCamera({ CameraCheck: true });
+            await runtime.StartCamera();
+            runtime.ConfirmCamera();
+            await runtime.EndRealtimeSession();
+            await withCamera({ CameraCheck: true });
+            expect(await runtime.StartCamera()).toMatchObject({ Status: 'starting', Checking: true });
+            await runtime.EndRealtimeSession();
+            await withCamera();
+            expect(await runtime.StartCamera()).toMatchObject({ Status: 'on' });
+            await runtime.EndRealtimeSession();
+        });
+
+        it('confirms nothing outside a call', () => {
+            const { runtime } = build();
+            expect(runtime.ConfirmCamera()).toEqual({ Status: 'failed', Failure: 'no-session', Message: 'There is no call to share with.' });
         });
     });
 });

@@ -1172,7 +1172,7 @@ export class RealtimeSessionRuntime {
       return;
     }
 
-    await this.runMintedSession(session, conversationId ?? null, consent);
+    await this.runMintedSession(session, conversationId ?? null, consent, options?.CameraCheck === true);
   }
 
   /**
@@ -1249,7 +1249,7 @@ export class RealtimeSessionRuntime {
       return;
     }
     const consent = this.beginSessionStart(effectiveOptions);
-    await this.runMintedSession(result, effectiveOptions.conversationId ?? null, consent);
+    await this.runMintedSession(result, effectiveOptions.conversationId ?? null, consent, false);
   }
 
   /**
@@ -1290,12 +1290,14 @@ export class RealtimeSessionRuntime {
   /**
    * The RUN half of a session start, shared by both entry points: consume the minted result, open
    * the provider connection, and go live. `inputConversationId` is the conversation the START asked
-   * for (null ⇒ "server, make me one") — the result alone can't distinguish the two.
+   * for (null ⇒ "server, make me one") — the result alone can't distinguish the two. `cameraCheck` is
+   * whether the host shows a camera check ({@link RealtimeSessionStartOptions.CameraCheck}).
    */
   private async runMintedSession(
     session: StartRealtimeClientSessionResult,
     inputConversationId: string | null,
-    consent: boolean
+    consent: boolean,
+    cameraCheck: boolean
   ): Promise<void> {
     // Captured up front: every await below is a window in which the host can end the session.
     const generation = this.startGeneration;
@@ -1342,7 +1344,7 @@ export class RealtimeSessionRuntime {
         return;
       }
       // Tracks are negotiated now, so a capture can tell whether the model takes video.
-      this.openCaptures(client);
+      this.openCaptures(client, cameraCheck);
 
       // Notify active channels that the session client is connected and tracks are established
       for (const channel of this._activeChannels$.value) {
@@ -1490,14 +1492,18 @@ export class RealtimeSessionRuntime {
     this.localMedia = null;
   }
 
-  /** Creates the session's camera and screen share and mirrors their state on {@link Captures$}. */
-  private openCaptures(client: BaseRealtimeClient): void {
+  /**
+   * Creates the session's camera and screen share and mirrors their state on {@link Captures$}. With `cameraCheck`, the
+   * call's first camera start waits for {@link ConfirmCamera}.
+   */
+  private openCaptures(client: BaseRealtimeClient, cameraCheck: boolean): void {
     this.closeCaptures();
     const captures = new RealtimeCaptures({
       Client: client,
       LocalMedia: this.localMedia,
       Host: this.mediaHost,
       Admit: (kind) => this.admitCapture(kind),
+      CameraCheck: cameraCheck,
     });
     this.captures = captures;
     this.capturesSubscription = captures.States$.subscribe((states) => this._captures$.next(states));
@@ -1593,6 +1599,10 @@ export class RealtimeSessionRuntime {
    * permission) is a state with a message, never a throw. While the camera is on, it is a source on
    * {@link VideoSources$}, and it stops by itself if the device goes away.
    *
+   * When the host shows a camera check ({@link RealtimeSessionStartOptions.CameraCheck}), the call's first start
+   * resolves still starting, with `Checking` set and the stream for the host to preview. The agent sees the camera
+   * once the host calls {@link ConfirmCamera}; {@link StopCamera} is the user's "not now".
+   *
    * @param deviceId The camera to open; the system default when absent.
    */
   public async StartCamera(deviceId?: string): Promise<RealtimeCaptureState> {
@@ -1607,6 +1617,15 @@ export class RealtimeSessionRuntime {
   /** Stops the user's camera. Safe to call when it is off. */
   public StopCamera(): void {
     this.captures?.Stop('camera');
+  }
+
+  /**
+   * The user checked the camera and turned it on: the agent sees it from now on, and later camera starts in this call
+   * skip the check. Returns the camera's state; unless the camera is waiting for its check (see {@link StartCamera}),
+   * nothing changes.
+   */
+  public ConfirmCamera(): RealtimeCaptureState {
+    return this.captures ? this.captures.ConfirmCamera() : this.noSessionCapture();
   }
 
   /**

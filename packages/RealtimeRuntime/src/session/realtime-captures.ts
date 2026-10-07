@@ -12,6 +12,10 @@
  * 3. it becomes a source of the session's video source arbiter, which decides what the model sees and tells it
  *    when that changes, and frames are sampled at the rate the track negotiated.
  *
+ * With the camera check on ({@link RealtimeCapturesOptions.CameraCheck}), the first camera start waits between 2 and 3:
+ * the camera is open for the user to look at, and becomes a source only once the user confirms
+ * ({@link RealtimeCaptures.ConfirmCamera}).
+ *
  * Stopping undoes all three. The track is removed again only when this class added it and no capture is left, so
  * a video track the session was minted with (a channel's) stays. A camera that goes away (unplugged) or a share
  * the user ends from the browser's own bar stops the capture the same way.
@@ -58,7 +62,15 @@ export type RealtimeCaptureFailure =
 /** One capture. */
 export interface RealtimeCaptureState {
     Status: 'off' | 'starting' | 'on' | 'failed';
-    /** The live stream while on: the camera (show it mirrored) or the shared surface (show it as is). */
+    /**
+     * The camera is open for the user to check, and the agent sees nothing until {@link RealtimeCaptures.ConfirmCamera}.
+     * Set only on a starting camera.
+     */
+    Checking?: boolean;
+    /**
+     * The live stream while on, or while the user checks the camera: the camera (show it mirrored) or the shared surface
+     * (show it as is).
+     */
     Stream?: MediaStream;
     /** What a screen share shows, while on. */
     Surface?: CapturedDisplaySurface;
@@ -115,6 +127,11 @@ export interface RealtimeCapturesOptions {
     CreateSampler?: RealtimeFrameSamplerFactory;
     /** Asked before each start, before anything is added or opened. Default: admitted, visible, with no channel. */
     Admit?: (kind: RealtimeCaptureKind) => RealtimeCaptureAdmission;
+    /**
+     * Hold the first camera start for the user's check: the camera opens, and reaches the agent only after
+     * {@link RealtimeCaptures.ConfirmCamera}. Later starts skip the check. Default: off.
+     */
+    CameraCheck?: boolean;
 }
 
 const OFF: RealtimeCaptureState = { Status: 'off' };
@@ -148,9 +165,11 @@ type Acquired =
     | { Status: 'started'; Stream: MediaStream; Surface?: CapturedDisplaySurface; Release: () => void }
     | { Status: 'failed'; Failure: RealtimeCaptureFailure; Message: string };
 
-/** A capture that is on: what has to be undone to stop it. */
+/** A capture whose device or surface is open: what has to be undone to stop it. */
 interface LiveCapture {
-    Sampler: { Stop(): void };
+    Stream: MediaStream;
+    /** Samples it for the agent; `null` while the user checks the camera. */
+    Sampler: { Stop(): void } | null;
     Release: () => void;
 }
 
@@ -162,6 +181,8 @@ export class RealtimeCaptures {
     private readonly generation: Record<RealtimeCaptureKind, number> = { camera: 0, screen: 0 };
     /** Whether this class added the session's inbound video track, and so may remove it. */
     private addedVideoTrack = false;
+    /** Whether the user has confirmed the camera check; later camera starts skip it. */
+    private cameraChecked = false;
     private disposed = false;
     /** How each capture is shown to the agent: set at its start, kept up to date by {@link SetVisibleToAgent}. */
     private readonly showing: Record<RealtimeCaptureKind, { ChannelKey?: string; VisibleToAgent: boolean }> = {
@@ -183,7 +204,8 @@ export class RealtimeCaptures {
 
     /**
      * Starts a capture and shows it to the agent. Already starting or on, it returns where it is. Always resolves;
-     * a failure is a state, with a message for the user.
+     * a failure is a state, with a message for the user. A camera that waits for the user's check resolves still
+     * starting, with `Checking` set and the stream to preview.
      *
      * @param kind The camera or a screen share.
      * @param options The camera's device id, or what the share picker offers first (and a panel to share).
@@ -220,8 +242,26 @@ export class RealtimeCaptures {
             this.releaseVideoTrack();
             return failed;
         }
-        this.live[kind] = { Sampler: this.showToAgent(kind, acquired.Stream), Release: acquired.Release };
+        if (kind === 'camera' && this.options.CameraCheck && !this.cameraChecked) {
+            this.live.camera = { Stream: acquired.Stream, Sampler: null, Release: acquired.Release };
+            return this.setState('camera', { Status: 'starting', Checking: true, Stream: acquired.Stream });
+        }
+        this.live[kind] = { Stream: acquired.Stream, Sampler: this.showToAgent(kind, acquired.Stream), Release: acquired.Release };
         return this.setState(kind, { Status: 'on', Stream: acquired.Stream, ...(acquired.Surface ? { Surface: acquired.Surface } : {}) });
+    }
+
+    /**
+     * The user checked the camera and turned it on: it is shown to the agent from now on, and later camera starts skip the
+     * check. Returns the camera's state; unless the camera is waiting for its check, nothing changes.
+     */
+    public ConfirmCamera(): RealtimeCaptureState {
+        const live = this.live.camera;
+        if (!live || !this.States.Camera.Checking) {
+            return this.States.Camera;
+        }
+        this.cameraChecked = true;
+        live.Sampler = this.showToAgent('camera', live.Stream);
+        return this.setState('camera', { Status: 'on', Stream: live.Stream });
     }
 
     /**
@@ -241,7 +281,7 @@ export class RealtimeCaptures {
         const live = this.live[kind];
         this.live[kind] = null;
         if (live) {
-            live.Sampler.Stop();
+            live.Sampler?.Stop();
             VideoSourceArbiter.ForSink(this.options.Client).UnregisterSource(SOURCE_IDS[kind]);
             live.Release();
         }

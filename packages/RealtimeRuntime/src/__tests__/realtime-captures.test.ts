@@ -1,7 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { CHANNEL_INBOUND_VIDEO_TRACK, type RealtimeTrackDescriptor } from '@memberjunction/ai';
 import { VideoSourceArbiter, type SampledFrame } from '@memberjunction/ai-realtime-client';
-import { RealtimeCaptures, type RealtimeCaptureAdmission, type RealtimeCaptureKind, type RealtimeFrameSamplerFactory } from '../session/realtime-captures';
+import {
+    RealtimeCaptures,
+    type RealtimeCaptureAdmission,
+    type RealtimeCaptureKind,
+    type RealtimeCapturesOptions,
+    type RealtimeFrameSamplerFactory,
+} from '../session/realtime-captures';
 import type { IRealtimeMediaHost } from '../hosts/IRealtimeMediaHost';
 import { FakeController, FakeShare, ShareHost, VideoClient, stream } from './capture-test-helpers';
 
@@ -13,7 +19,12 @@ interface FakeSampler {
     Running: boolean;
 }
 
-function harness(takesVideo = true, requested: RealtimeTrackDescriptor[] = [], admit?: (kind: RealtimeCaptureKind) => RealtimeCaptureAdmission) {
+function harness(
+    takesVideo = true,
+    requested: RealtimeTrackDescriptor[] = [],
+    admit?: (kind: RealtimeCaptureKind) => RealtimeCaptureAdmission,
+    extra: Pick<RealtimeCapturesOptions, 'CameraCheck'> = {}
+) {
     const client = new VideoClient();
     client.Negotiate(takesVideo, requested);
     const controller = new FakeController();
@@ -34,7 +45,7 @@ function harness(takesVideo = true, requested: RealtimeTrackDescriptor[] = [], a
             },
         };
     };
-    const captures = new RealtimeCaptures({ Client: client, LocalMedia: controller, Host: host, CreateSampler: createSampler, Admit: admit });
+    const captures = new RealtimeCaptures({ Client: client, LocalMedia: controller, Host: host, CreateSampler: createSampler, Admit: admit, ...extra });
     const sources = () => VideoSourceArbiter.ForSink(client).GetSources().map((s) => ({ SourceID: s.SourceID, Label: s.Label, Kind: s.Kind }));
     return { client, controller, host, samplers, captures, sources };
 }
@@ -208,6 +219,99 @@ describe('RealtimeCaptures', () => {
             controller.Release();
             await starting;
             expect(VideoSourceArbiter.ForSink(client).GetSources()[0].Enabled).toBe(false);
+        });
+    });
+
+    describe('the camera check', () => {
+        /** Captures whose first camera start waits for the user's check, under the given policy. */
+        const checked = (admit?: (kind: RealtimeCaptureKind) => RealtimeCaptureAdmission) => harness(true, [], admit, { CameraCheck: true });
+
+        it('opens the camera for the user only: starting, checking, with the stream, and nothing for the agent', async () => {
+            const { client, controller, samplers, captures, sources } = checked();
+            const state = await captures.Start('camera', { DeviceID: 'cam-2' });
+            expect(state).toEqual({ Status: 'starting', Checking: true, Stream: controller.CameraStream });
+            expect(captures.States.Camera).toEqual(state);
+            expect(controller.StartCalls).toEqual([['camera', 'cam-2']]);
+            expect(sources()).toEqual([]);
+            expect(samplers).toEqual([]);
+            expect(client.Frames).toEqual([]);
+            expect(client.Notes).toEqual([]);
+        });
+
+        it('shows the camera to the agent once the user confirms, and skips the check on the next start', async () => {
+            const { client, controller, samplers, captures, sources } = checked();
+            await captures.Start('camera');
+            expect(captures.ConfirmCamera()).toEqual({ Status: 'on', Stream: controller.CameraStream });
+            expect(sources()).toEqual([{ SourceID: 'capture:camera', Label: 'Camera', Kind: 'camera' }]);
+            expect(samplers[0]).toMatchObject({ Stream: controller.CameraStream, Rate: 2, Running: true });
+            samplers[0].Push('frame-1');
+            expect(client.Frames).toEqual(['frame-1']);
+            captures.Stop('camera');
+            expect(await captures.Start('camera')).toEqual({ Status: 'on', Stream: controller.CameraStream });
+        });
+
+        it('a stop during the check (the user said not now) lets go of the camera and the track, and the next start checks again', async () => {
+            const { client, controller, captures, sources } = checked();
+            await captures.Start('camera');
+            captures.Stop('camera');
+            expect(captures.States.Camera).toEqual({ Status: 'off' });
+            expect(controller.StopCalls).toEqual(['camera']);
+            expect(sources()).toEqual([]);
+            expect(client.IsTrackEstablished('video', 'inbound')).toBe(false);
+            expect(await captures.Start('camera')).toMatchObject({ Status: 'starting', Checking: true });
+        });
+
+        it('confirms nothing unless the camera waits for its check', async () => {
+            const plain = harness();
+            expect(plain.captures.ConfirmCamera()).toEqual({ Status: 'off' });
+            await plain.captures.Start('camera');
+            plain.captures.ConfirmCamera();
+            expect(plain.samplers).toHaveLength(1);
+            const { captures, samplers } = checked();
+            expect(captures.ConfirmCamera()).toEqual({ Status: 'off' });
+            await captures.Start('camera');
+            captures.ConfirmCamera();
+            captures.ConfirmCamera();
+            expect(samplers).toHaveLength(1);
+        });
+
+        it('a start during the check returns the check without opening the camera again', async () => {
+            const { controller, captures } = checked();
+            await captures.Start('camera');
+            expect(await captures.Start('camera')).toMatchObject({ Status: 'starting', Checking: true });
+            expect(controller.StartCalls).toHaveLength(1);
+        });
+
+        it('applies a policy change made during the check when the user confirms', async () => {
+            const { client, samplers, captures } = checked(() => ({ Admitted: true, ChannelKey: 'Camera', VisibleToAgent: true }));
+            await captures.Start('camera');
+            captures.SetVisibleToAgent('camera', false);
+            captures.ConfirmCamera();
+            expect(VideoSourceArbiter.ForSink(client).GetSources()).toMatchObject([{ SourceID: 'capture:camera', ChannelKey: 'Camera', Enabled: false }]);
+            samplers[0].Push('hidden');
+            expect(client.Frames).toEqual([]);
+        });
+
+        it('stops the check when the camera goes away', async () => {
+            const { client, controller, captures } = checked();
+            await captures.Start('camera');
+            controller.LoseCamera();
+            expect(captures.States.Camera).toEqual({ Status: 'off' });
+            expect(captures.ConfirmCamera()).toEqual({ Status: 'off' });
+            expect(client.IsTrackEstablished('video', 'inbound')).toBe(false);
+        });
+
+        it('never holds a screen share', async () => {
+            const { captures } = checked();
+            expect(await captures.Start('screen')).toMatchObject({ Status: 'on', Surface: 'window' });
+        });
+
+        it('Dispose during the check lets go of the camera', async () => {
+            const { controller, captures } = checked();
+            await captures.Start('camera');
+            captures.Dispose();
+            expect(controller.StopCalls).toEqual(['camera']);
+            expect(captures.States.Camera).toEqual({ Status: 'off' });
         });
     });
 
