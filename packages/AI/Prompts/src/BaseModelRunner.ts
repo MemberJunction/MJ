@@ -1732,22 +1732,7 @@ export abstract class BaseModelRunner {
       }
 
       try {
-        // Log the attempt if not the first one
-        if (i > 0) {
-          const vendorName = candidate.vendorName || 'default';
-          LogStatusEx({
-            message: `🔄 Trying candidate ${i + 1}/${allCandidates.length}: ${candidate.model.Name} via ${vendorName}`,
-            category: 'AI',
-            additionalArgs: [{
-              promptId: prompt.ID,
-              modelId: candidate.model.ID,
-              model: candidate.model.Name,
-              vendorId: candidate.vendorId,
-              vendor: candidate.vendorName,
-              attemptNumber: i + 1
-            }]
-          });
-        }
+        this.logCandidateAttempt(prompt, candidate, i, allCandidates.length, failoverAttempts.length, skippedForCredentials);
 
         // Execute the model with this candidate
         const result = await executeOnCandidate(candidate);
@@ -1854,6 +1839,53 @@ export abstract class BaseModelRunner {
 
     return createErrorResult(lastError, failoverAttempts);
   }
+
+  /**
+   * Logs the candidate the failover loop is about to call. The failover banner is logged only after
+   * an attempt has really failed. Candidates skipped for missing credentials make no request, so a
+   * first attempt after skips gets a verbose-only note instead. A first attempt with no skips logs
+   * nothing.
+   */
+  private logCandidateAttempt(
+    prompt: MJAIPromptEntityExtended,
+    candidate: ModelVendorCandidate,
+    index: number,
+    candidateCount: number,
+    priorFailures: number,
+    skippedForCredentials: number
+  ): void {
+    if (priorFailures === 0 && skippedForCredentials === 0) {
+      return;
+    }
+    const vendorName = candidate.vendorName || 'default';
+    const position = `${index + 1}/${candidateCount}`;
+    const additionalArgs = [{
+      promptId: prompt.ID,
+      modelId: candidate.model.ID,
+      model: candidate.model.Name,
+      vendorId: candidate.vendorId,
+      vendor: candidate.vendorName,
+      candidatePosition: index + 1,
+      candidateCount,
+      priorFailures,
+      skippedForCredentials
+    }];
+    if (priorFailures > 0) {
+      LogStatusEx({
+        message: `🔄 Failover after ${priorFailures} failed attempt(s) — trying candidate ${position}: ${candidate.model.Name} via ${vendorName}`,
+        category: 'AI',
+        additionalArgs
+      });
+      return;
+    }
+    LogStatusEx({
+      message: `Using candidate ${position}: ${candidate.model.Name} via ${vendorName} — skipped ${skippedForCredentials} higher-priority candidate(s) with no credentials configured`,
+      category: 'AI',
+      verboseOnly: true,
+      additionalArgs
+    });
+  }
+
   /**
    * Engine-level default model-call timeout, in milliseconds, applied when the caller supplies no
    * `AIPromptParams.timeoutMS`. `undefined` (the default) means NO implicit bound — a prompt run
