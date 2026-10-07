@@ -4,8 +4,8 @@ import {
   ContentChildren, QueryList, AfterContentInit, DoCheck, OnDestroy,
   ViewChild, ViewEncapsulation, ElementRef
 } from '@angular/core';
-import { BaseEntity, CompositeKey, EntityInfo, RunView, type FormChromeRule, type FormInclusion } from '@memberjunction/core';
-import { UUIDsEqual, type ValidationErrorInfo } from '@memberjunction/global';
+import { BaseEntity, CompositeKey, EntityInfo, LogError, RunView, type FormChromeRule, type FormInclusion } from '@memberjunction/core';
+import { EscapeSQLString, UUIDsEqual, type ValidationErrorInfo } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { Subject } from 'rxjs';
@@ -35,10 +35,14 @@ import { RestoreVersionEvent, RecordChangesComponent } from '@memberjunction/ng-
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ListManagementResult } from '@memberjunction/ng-list-management';
 import { FormSlotCoordinator } from '../panel-slot/form-slot-coordinator.service';
+import { BuildFormCompositionSnapshot } from '../chrome/form-composition-snapshot';
+import { FormCompositionRegistry } from '../chrome/form-composition-registry';
+import { FormPanelAdminService } from '../panel-manager/form-panel-admin.service';
+import type { FormChromeSpec } from '../chrome/form-chrome';
 import { FormChromeCoordinator } from '../chrome/form-chrome-coordinator.service';
 import { ResolveFormChrome, OrderChromeGroups, OrderMoreSectionKeys, MoveChromeGroupInSectionOrder, OverlayChromeSectionOrder } from '../chrome/resolve-form-chrome';
 import { LoadFormChromeRules } from '../chrome/load-form-chrome-rules';
-import { MORE_SECTION_KEY, HumanizeEntityTitle, IsAlwaysMoreSection, IsDetailsSectionKey, DetailsCardEdges } from '../chrome/form-chrome';
+import { MORE_SECTION_KEY, HumanizeEntityTitle, IsAlwaysMoreSection, IsDetailsSectionKey, DetailsCardEdges, ReplacedSectionChromeGroup, RailGroupSectionKeys, SlotChromeGroup, SectionDrawingAnyField } from '../chrome/form-chrome';
 import type { FormChromeGroup, FormChromePanelSnapshot } from '../chrome/form-chrome';
 import {
   ClampRailWidth,
@@ -54,10 +58,37 @@ import {
   UnsavedLeadGroupKey,
 } from '../chrome/form-chrome-rail-pref';
 import { ApplyClippedTitle } from '../chrome/clipped-title';
-import { CollectFormPanelRegistrations } from '../panel-slot/collect-form-panel-registrations';
+import { DETAILS_SECTION_KEY } from '../chrome/form-chrome';
+import { CollectFormContributionRegistrations } from '../panel-slot/collect-form-contribution-registrations';
+import { HiddenPanelKeys, PanelHideKey } from '../panel-slot/panel-hides';
+import { FORM_PLACEMENT_PREVIEW } from '../panel-slot/placement-preview';
 import type { FormPanelRegistrationMetadata } from '../panel-slot/base-form-panel';
-import { ContributionHiddenSectionKeys, ResolveFormContributions } from '../panel-slot/form-contribution';
+import {
+  ContributionDrawsInSection,
+  ContributionHiddenSectionKeys,
+  IsWildcardPlaceClaim,
+  PlacedInSectionKey,
+  ReplacedSectionKeys,
+  ResolveContributionKey,
+  ResolveFormContributionWinners,
+  ResolveFormContributions,
+  StripJoinFieldBrackets,
+  type FormContributionRegistration,
+  type ResolvedFormContributions,
+} from '../panel-slot/form-contribution';
+import type { FormPanelCompiledRow, FormPanelStockGridRow } from '../panel-manager/form-panel-inventory';
+import type { FormPlacementRelated } from '../apply/form-placement';
 import { IsFormSectionHidden } from '../types/entity-form-config';
+import {
+  ApplyFormCountResults,
+  BuildFormCountPlan,
+  FormCountPlanParams,
+  ResolveEmptySectionBehavior,
+  type FormCountContribution,
+  type FormCountPhase,
+  type FormCountPlan,
+  type FormCountResults,
+} from '../section-counts/form-section-counts';
 import { FormRecordRefreshCoordinator } from '../form-record-refresh.coordinator';
 import { FormFieldEditCoordinator } from '../form-field-edit.coordinator';
 import type { DuplicateEntryCandidate } from '@memberjunction/graphql-dataprovider';
@@ -134,9 +165,17 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   private chrome = inject(FormChromeCoordinator);
   private sectionIndicators = inject(FormSectionIndicatorCoordinator);
   private slots = inject(FormSlotCoordinator);
+  private panelAdmin = inject(FormPanelAdminService);
   private recordRefresh = inject(FormRecordRefreshCoordinator);
   private fieldEdits = inject(FormFieldEditCoordinator);
   private host = inject(ElementRef<HTMLElement>);
+  /** The placement dialog's unsaved panel, when this form is the dialog's preview. */
+  private placementPreview = inject(FORM_PLACEMENT_PREVIEW, { optional: true });
+  private compositionRegistry = inject(FormCompositionRegistry);
+  /** The last snapshot published, as JSON, and the form it was published on. */
+  private lastComposition: { Form: BaseFormComponent; Json: string } | null = null;
+  /** Set in ngOnDestroy, so a late async result schedules nothing and draws nothing. */
+  private destroyed = false;
   private destroy$ = new Subject<void>();
   private panelNavReset$ = new Subject<void>();
   private chromeResolveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -175,6 +214,17 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
   /** Number of tracked record change versions for this record */
   VersionCount = 0;
+
+  // ---- Section counts (one batched round trip per saved record) ----
+  /** What was requested for the current record; null until a saved record loads. */
+  private countPlan: FormCountPlan | null = null;
+  private countPhase: FormCountPhase = 'none';
+  /** Bumped per request so a slow response for a previous record is ignored. */
+  private countRequestToken = 0;
+  /** Sections seen with rows this session — never hidden or moved when they empty out (no yank). */
+  private stickySectionKeys = new Set<string>();
+  /** Last resolved `whenEmpty` outcome, applied by chrome + DOM visibility. */
+  private emptySectionBehavior = new Map<string, 'hide' | 'more'>();
 
   /** Controls visibility of list management dialog */
   ShowListManagement = false;
@@ -419,10 +469,40 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   }
 
   get EffectiveRegisteredToolbarItems(): FormToolbarItemConfig[] {
-    if (this.Fc?.RegisteredToolbarItems && this.Fc.RegisteredToolbarItems.length > 0) {
-      return this.Fc.RegisteredToolbarItems;
+    const registered = this.Fc?.RegisteredToolbarItems && this.Fc.RegisteredToolbarItems.length > 0
+      ? this.Fc.RegisteredToolbarItems
+      : this.RegisteredToolbarItems;
+    const manage = this.managePanelsToolbarItem();
+    return manage ? [...registered, manage] : [...registered];
+  }
+
+  /** Memoised so the toolbar's identity check does not see a new object every pass. */
+  private managePanelsItem: FormToolbarItemConfig | null = null;
+
+  /**
+   * The way back out of applying a panel.
+   *
+   * Offered only when the form carries a contribution someone could switch or remove.
+   * Registering it as an overflow toolbar item rather than adding a button to the toolbar
+   * keeps the toolbar's own list of actions unchanged, and a form that declares its own
+   * items keeps them — this is appended, never substituted.
+   */
+  private managePanelsToolbarItem(): FormToolbarItemConfig | null {
+    if (!this.HasManageablePanels) return null;
+    if (!this.managePanelsItem) {
+      this.managePanelsItem = {
+        Key: 'manage-form-panels',
+        Text: 'Manage this form',
+        Description: 'Choose your form, hide panels you do not need, and manage the ones you added',
+        Icon: 'fa-solid fa-layer-group',
+        // Beside the section controls: this acts on the form's chrome, not on the record.
+        Placement: 'right',
+        Mode: 'both',
+        Order: 80,
+        OnClick: () => this.OnManagePanels(),
+      };
     }
-    return this.RegisteredToolbarItems;
+    return this.managePanelsItem;
   }
 
   get EffectiveToolbarItemOverrides(): ReadonlyMap<string, Partial<FormToolbarItemConfig>> | null {
@@ -499,6 +579,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   }
 
   get EffectiveShowRelatedEntities(): boolean {
+    if (this.Fc?.OwnsEntireFormBody) return false;
     return this.Fc?.Config?.ShowRelatedEntities !== false;
   }
 
@@ -684,6 +765,13 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       this.scheduleChromeResolve();
     });
 
+    // The placement dialog's preview re-mounts its panel in a slot without any of the
+    // triggers above firing. On a railed form the panel shows only on the tab its key
+    // belongs to, so the rail is worked out again or the panel belongs to none.
+    this.placementPreview?.Changed$.pipe(takeUntil(this.destroy$)).subscribe(() => {
+      this.scheduleChromeResolve();
+    });
+
     // A section registering / leaving, or reporting an edit, changes what the rail
     // shows; the container is OnPush, so re-read on the next pass rather than on the
     // 200ms dirty poll below.
@@ -731,6 +819,11 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   }
 
   ngOnDestroy(): void {
+    this.destroyed = true;
+    // A count or chrome-rule result still in flight then matches nothing and is dropped.
+    this.countRequestToken++;
+    this.chromeRulesForEntityId = null;
+    this.compositionRegistry.Remove(this);
     if (this.chromeResolveTimer) {
       clearTimeout(this.chromeResolveTimer);
       this.chromeResolveTimer = null;
@@ -824,6 +917,13 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
   public RailWarningTitle(count: number, where: string): string {
     return DescribeSectionWarnings(count, where);
+  }
+
+  /** Sum of the row counts of every section in More (shown on the collapsed folder). */
+  public get ChromeMoreRowCount(): number | undefined {
+    const keys = this.chrome.Spec.MoreSectionKeys;
+    if (keys.length === 0) return undefined;
+    return this.ChromeGroupRowCount({ Key: MORE_SECTION_KEY, Title: 'More', Icon: '', SectionKeys: keys, IsMore: true });
   }
 
   public ChromeGroupRowCount(group: FormChromeGroup): number | undefined {
@@ -978,6 +1078,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   }
 
   private scheduleChromeResolve(): void {
+    if (this.destroyed) return;
     if (this.chromeResolveTimer) {
       clearTimeout(this.chromeResolveTimer);
     }
@@ -985,8 +1086,48 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       this.chromeResolveTimer = null;
       this.resolveChrome();
       this.applyChromeVisibility();
+      this.showPreviewedPanelTab();
       this.cdr.markForCheck();
     }, 0);
+  }
+
+  /**
+   * On the placement dialog's preview, show the tab where the previewed panel can be seen.
+   *
+   * The preview is read-only and exists to show that panel, so the tab it opens on — the user's
+   * saved tab for the real form — is the wrong one whenever the panel lives elsewhere. Which tab
+   * holds what is this container's own decision, so it is answered here rather than guessed at
+   * from outside. A More child is its own rail item, so it is shown by its key.
+   */
+  private showPreviewedPanelTab(): void {
+    if (!this.placementPreview?.Registration || this.chrome.Spec.Layout !== 'left-nav') return;
+    const groups = this.chrome.Spec.Groups;
+    const key = this.previewedPanelSectionKey();
+    const group = key ? groups.find((g) => g.Key === key || g.SectionKeys.includes(key)) : undefined;
+    const target = group
+      ? (group.IsMore ? key! : group.Key)
+      : (groups.find((g) => g.Key === DETAILS_SECTION_KEY) ?? groups.find((g) => !g.IsMore))?.Key;
+    if (target && target !== this.chrome.ActiveGroupKey) this.OnChromeGroupActivate(target);
+  }
+
+  /**
+   * The section whose tab shows the previewed panel.
+   *
+   * A panel that stands in for fields draws inside the section holding them. A panel draws as
+   * its own section. A bare strip draws no section, so the one it replaces is where its effect
+   * shows; with nothing replaced it sits above every tab and there is no section to name.
+   */
+  private previewedPanelSectionKey(): string | null {
+    const reg = this.placementPreview?.Registration;
+    if (!reg) return null;
+    const mark = (this.host.nativeElement as HTMLElement).querySelector('[data-placement-preview]');
+    const inSection = mark?.parentElement?.closest('mj-collapsible-panel[data-section-key]');
+    if (inSection) return inSection.getAttribute('data-section-key');
+    const bare = (reg.Presentation ?? reg.Metadata.presentation) === 'bare';
+    // A bare strip that replaces blocks is a member of their tab under its own key; one that
+    // replaces nothing sits above every tab and names no section.
+    if (!bare || ReplacedSectionKeys(reg.Metadata).length > 0) return reg.Metadata.contributionKey ?? null;
+    return null;
   }
 
   private loadChromeRulesIfNeeded(): void {
@@ -998,6 +1139,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
   private async loadChromeRules(entityId: string): Promise<void> {
     const rules = await LoadFormChromeRules(entityId, this.ProviderToUse);
+    // Also false once the container is destroyed (ngOnDestroy clears the id).
     if (this.chromeRulesForEntityId !== entityId) return;
     this.chromeRules = rules;
     this.scheduleChromeResolve();
@@ -1008,18 +1150,22 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     if (!entity) return;
     this.loadChromeRulesIfNeeded();
 
+    // Read once for this resolve; every step below uses the same hidden sections and panels.
+    const hidden = this.contributionHiddenSectionKeys();
+    const panels = this.chromePanelSnapshots(hidden);
     const result = ResolveFormChrome({
       Entity: entity,
-      Panels: this.chromePanelSnapshots(),
+      Panels: panels,
       RelatedSchemaByEntityId: this.buildRelatedSchemaMap(entity),
       InboundRelationshipCountByEntityId: this.buildInboundRelationshipCounts(),
-      HiddenSectionKeys: [...this.contributionHiddenSectionKeys()],
+      HiddenSectionKeys: [...hidden],
       ContributionSectionKeys: this.contributionSectionKeys(),
-      ContributionChromeGroupByKey: this.contributionChromeGroupByKey(),
+      ContributionChromeGroupByKey: this.contributionChromeGroupByKey(panels),
       ContributionInclusionByKey: this.contributionInclusionByKey(),
       ContributionSortKeyByKey: this.contributionSortKeyByKey(),
       ChromeRules: this.chromeRules,
       IncludeUnbakedRelated: this.EffectiveShowRelatedEntities,
+      EmptySectionBehavior: this.refreshEmptySectionBehavior(),
       Membership: {
         moreSectionKeys: this.Fc?.getMoreSectionKeys?.() ?? [],
         firstClassSectionKeys: this.Fc?.getFirstClassSectionKeys?.() ?? [],
@@ -1036,6 +1182,161 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       this.expandActiveGroupSections(this.chrome.ActiveGroupKey);
     }
     this.AfterLayoutResolved.emit(new AfterLayoutResolvedEventArgs(result.Spec.Layout));
+
+    if (this.Fc) this.Fc.ChromeLayout = result.Spec.Layout;
+    this.warnUnmatchedReplaceKeys();
+    this.warnUnmatchedFieldClaims();
+    this.publishCompositionSnapshot(result.Spec, panels);
+  }
+
+  private warnedReplaceKeys = new Set<string>();
+  private warnedFieldClaims = new Set<string>();
+
+  /**
+   * Contributions that may act on this form. Empty when the form suppresses them — a
+   * full custom entity form owns its body, so nothing may mount on it, claim one of its
+   * sections, or hide a related grid it would otherwise show.
+   */
+  private formContributionRegistrations(): FormContributionRegistration[] {
+    if (this.Fc?.OwnsEntireFormBody) return [];
+    return CollectFormContributionRegistrations(this.EffectiveEntityInfo, this.ProviderToUse, { Preview: this.placementPreview });
+  }
+
+  /**
+   * This form's contributions after the one collapse every renderer shares: the winner per key,
+   * and the winners the rail files. The rail, the counts, the chrome groups and the warnings all
+   * read this value, so they agree with the slots about which panel holds a key.
+   */
+  private resolvedContributions(): ResolvedFormContributions {
+    const entityName = this.EffectiveEntityInfo?.Name;
+    return entityName
+      ? ResolveFormContributionWinners(entityName, this.formContributionRegistrations())
+      : NO_RESOLVED_CONTRIBUTIONS;
+  }
+
+  /**
+   * A section a winner stands in for that this form does not draw hides nothing, and the
+   * contribution mounts beside the section it meant to replace. Section keys are not a
+   * closed set (custom forms invent their own), so this is validated and reported rather
+   * than restricted. A rail tab's key is a tab claim, and matches when the tab has sections.
+   * Wildcard panels are skipped: they act on every form, so most forms lack what they name.
+   */
+  private warnUnmatchedReplaceKeys(): void {
+    const entity = this.EffectiveEntityInfo;
+    if (!entity) return;
+    const present = this.presentSectionKeys();
+    const tabMembers = this.railTabMembership();
+    for (const reg of this.resolvedContributions().Winners) {
+      if (reg.Metadata.entity === '*') continue;
+      const tabKey = reg.Metadata.replacesSectionKey?.trim();
+      for (const key of ReplacedSectionKeys(reg.Metadata)) {
+        if (present.has(key) || this.warnedReplaceKeys.has(key)) continue;
+        if (key === tabKey && tabMembers(key).length > 0) continue;
+        this.warnedReplaceKeys.add(key);
+        const id = ResolveContributionKey(reg.Metadata) || reg.RowID || 'unknown';
+        console.warn(
+          `[mj-record-form-container] contribution ${id} replaces section "${key}", but the ` +
+          `${entity.Name} form has no section or tab with that key. Nothing was hidden.`,
+        );
+      }
+    }
+  }
+
+  /**
+   * A winner drawn inside a section that no section on this form hosts renders nowhere at all.
+   *
+   * Unlike a section claim, which still mounts beside the section it meant to replace, such a
+   * panel is mounted by the section named by its `inSectionKey` or drawing one of its claimed
+   * fields — so when there is none, the panel is simply absent. That is a worse silence than a
+   * misplaced panel, which is why it is reported separately. Wildcard panels are skipped.
+   */
+  private warnUnmatchedFieldClaims(): void {
+    const entity = this.EffectiveEntityInfo;
+    if (!entity) return;
+    const drawn = new Set<string>();
+    for (const panel of this.allChromePanels()) {
+      for (const field of panel.ClaimableFields) drawn.add(field.Name);
+    }
+    const sections = this.presentSectionKeys();
+    if (drawn.size === 0 && sections.size === 0) return;
+    for (const reg of this.resolvedContributions().Winners) {
+      if (reg.Metadata.entity === '*') continue;
+      const reason = unhostedSectionClaim(reg.Metadata, sections, drawn);
+      if (!reason) continue;
+      const id = ResolveContributionKey(reg.Metadata) || reg.RowID || 'unknown';
+      if (this.warnedFieldClaims.has(id)) continue;
+      this.warnedFieldClaims.add(id);
+      console.warn(
+        `[mj-record-form-container] contribution ${id} ${reason.Claim}, but the ${entity.Name} form ` +
+        `${reason.Missing}. The panel has no section to render in.`,
+      );
+    }
+  }
+
+  /** Section keys of every panel on the form: the projected ones and the slot-mounted ones. */
+  private presentSectionKeys(): Set<string> {
+    return new Set([
+      ...this.allChromePanels().map((p) => p.SectionKey),
+      ...this.domPanelSnapshots().map((p) => p.SectionKey),
+    ]);
+  }
+
+  /**
+   * Publish what is actually on this form: through `CompositionChanged`, which the record tab
+   * turns into the agent's compact form context, and into the {@link FormCompositionRegistry},
+   * where the apply flow reads the whole snapshot. Every section is listed; the ones the form
+   * does not show are marked hidden. A snapshot equal to the last one published on the same
+   * form is not published again. The placement dialog's preview is not registered: it is not a
+   * form the user has open.
+   *
+   * @param shown The sections the form shows, as the chrome resolve used them.
+   */
+  private publishCompositionSnapshot(spec: FormChromeSpec, shown: FormChromePanelSnapshot[] = this.chromePanelSnapshots()): void {
+    const entity = this.EffectiveEntityInfo;
+    const form = this.Fc;
+    if (!entity || !form) return;
+    const shownKeys = new Set(shown.map((p) => p.SectionKey));
+    const panels = this.chromePanelSnapshots(new Set(), true);
+    const hiddenSectionKeys = new Set(panels.map((p) => p.SectionKey).filter((key) => !shownKeys.has(key)));
+    const hiddenContributionKeys = new Set(
+      [...this.contributionInclusionByKey()].filter(([, inclusion]) => inclusion === 'None').map(([key]) => key),
+    );
+    // With the panels this user hid, marked hidden: the apply flow reads a key's holder from
+    // here, and a hidden panel still holds its key.
+    const registrations = this.Fc?.OwnsEntireFormBody
+      ? []
+      : CollectFormContributionRegistrations(entity, this.ProviderToUse, { IncludeHidden: true, Preview: this.placementPreview });
+    const record = form.record;
+    const snapshot = BuildFormCompositionSnapshot({
+      EntityName: entity.Name,
+      RecordPrimaryKey: record?.IsSaved ? record.PrimaryKey.ToURLSegment() : null,
+      FormChoice: {
+        FullCustomForm: form.OwnsEntireFormBody === true,
+        OverrideID: this.EffectiveCurrentVariantID,
+        Label: this.CurrentVariantLabel,
+      },
+      Layout: spec.Layout,
+      Groups: spec.Groups,
+      Panels: panels,
+      HiddenSectionKeys: hiddenSectionKeys,
+      RelatedEntities: this.Fc?.OwnsEntireFormBody ? [] : (entity.RelatedEntities ?? []),
+      IsaChildEntityIDs: (entity.ChildEntities ?? []).map((c) => c.ID),
+      BakedSectionKeys: this.BakedRelatedSectionKeys,
+      Registrations: registrations,
+      HiddenPanelKeys: HiddenPanelKeys(entity.Name),
+      RelatedRoles: spec.RelatedRoles,
+      HiddenContributionKeys: hiddenContributionKeys,
+      SlotsPresent: this.Fc?.OwnsEntireFormBody ? [] : this.slots.PresentSlots,
+      ChromeRuleCount: this.chromeRules.length,
+    });
+    // The builder emits a fixed key order, so equal snapshots have equal JSON.
+    const json = JSON.stringify(snapshot);
+    const last = this.lastComposition;
+    if (last && last.Form === form && last.Json === json) return;
+    this.lastComposition = { Form: form, Json: json };
+    form.CompositionSnapshot = snapshot;
+    if (!this.placementPreview) this.compositionRegistry.Publish(this, snapshot);
+    form.CompositionChanged.emit(snapshot);
   }
 
   private expandActiveGroupSections(groupKey: string): void {
@@ -1139,7 +1440,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
         panel.Hidden = !this.chrome.IsAccordionSectionVisible(panel.SectionKey);
       }
     }
-    this.applyChromeDomVisibility();
+    this.applyChromeDomVisibility(claimed);
   }
 
   /**
@@ -1148,15 +1449,22 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
    * coordinator. Toggle host classes on every `mj-collapsible-panel` in
    * the live DOM so left-nav hide/show still reaches them.
    */
-  private applyChromeDomVisibility(): void {
+  private applyChromeDomVisibility(claimed: ReadonlySet<string>): void {
     const host = this.host.nativeElement;
     if (!host) return;
     const layout = this.chrome.Spec.Layout;
     const detailsKeys: string[] = [];
+    const detailsOrder = new Map<string, number>();
+    // A bare strip that replaces blocks shows only on the tab it belongs to. It is hidden by
+    // its own style because it lives in another component's view, out of this one's CSS.
+    host.querySelectorAll('[data-bare-section-key]').forEach((node: Element) => {
+      const key = node.getAttribute('data-bare-section-key') ?? '';
+      (node as HTMLElement).style.display = !key || this.isChromeKeyVisible(key, 'default', claimed) ? '' : 'none';
+    });
     host.querySelectorAll('mj-collapsible-panel').forEach((node: Element) => {
       const key = node.getAttribute('data-section-key') ?? '';
       const variant = node.getAttribute('data-variant') ?? 'default';
-      const visible = this.isChromeKeyVisible(key, variant);
+      const visible = this.isChromeKeyVisible(key, variant, claimed);
       const inMore = this.chrome.Spec.MoreSectionKeys.includes(key);
       node.classList.toggle('mj-chrome-show', layout === 'left-nav' && visible);
       node.classList.toggle('mj-chrome-hidden', !visible);
@@ -1174,11 +1482,16 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       // excludes it, or it has no renderable content while empty fields are
       // hidden) is display: none — it must not hold a card edge, or the
       // visible card loses that border, radius and edge padding.
-      if (isDetails && !node.classList.contains('mj-search-hidden')) detailsKeys.push(key);
+      if (isDetails && !node.classList.contains('mj-search-hidden')) {
+        detailsKeys.push(key);
+        detailsOrder.set(key, this.visualOrderOf(node, key));
+      }
     });
-    // The card's top and bottom edges follow the VISUAL order (CSS `order`
-    // = the form's section display order), not DOM order.
-    const edges = DetailsCardEdges(detailsKeys, (k) => this.FormComponent?.getSectionDisplayOrder(k) ?? 0);
+    // The card's top and bottom edges follow the VISUAL order — the CSS `order` each
+    // panel actually carries, not what the form's section list would have given it. A
+    // contribution is in no such list, so asking the form would place every one of them
+    // last and draw the card's top edge under the panel instead of above it.
+    const edges = DetailsCardEdges(detailsKeys, (k) => detailsOrder.get(k) ?? 0);
     host.querySelectorAll('mj-collapsible-panel.mj-chrome-details').forEach((node: Element) => {
       const key = node.getAttribute('data-section-key') ?? '';
       node.classList.toggle('mj-chrome-details-first', key === edges.First);
@@ -1189,8 +1502,23 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     });
   }
 
-  private isChromeKeyVisible(sectionKey: string, variant: string): boolean {
-    if (this.contributionHiddenSectionKeys().has(sectionKey)) return false;
+  /**
+   * The CSS `order` a panel is laid out with.
+   *
+   * Read from the element, because a panel sets its own: a slot-mounted contribution
+   * orders itself by its slot band, and only the panel knows which. The form's section
+   * list is the fallback for anything that has not bound an order yet.
+   */
+  private visualOrderOf(node: Element, sectionKey: string): number {
+    const inline = (node as HTMLElement).style?.order;
+    const parsed = inline ? Number(inline) : Number.NaN;
+    if (Number.isFinite(parsed)) return parsed;
+    return this.FormComponent?.getSectionDisplayOrder(sectionKey) ?? 0;
+  }
+
+  private isChromeKeyVisible(sectionKey: string, variant: string, claimed: ReadonlySet<string>): boolean {
+    if (claimed.has(sectionKey)) return false;
+    if (this.emptySectionBehavior.get(sectionKey) === 'hide') return false;
     if (this.chrome.Spec.Layout === 'accordion') {
       return this.chrome.IsAccordionSectionVisible(sectionKey);
     }
@@ -1200,63 +1528,131 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     return this.chrome.IsFirstClassSectionVisible(sectionKey);
   }
 
+  /** The section keys the rail files contributions by. */
   private contributionSectionKeys(): string[] {
-    return this.contributionRegistrations().map((row) => row.Key);
+    return [...this.resolvedContributions().RailItems.keys()];
   }
 
-  private contributionChromeGroupByKey(): Map<string, 'details' | 'more'> {
+  /**
+   * The sections a contribution has claimed a whole rail tab from, across every such claim.
+   *
+   * A rail tab is assembled at render time, so it has no panel a contribution could name
+   * one-to-one. A contribution naming a TAB's key instead means "stand in for that tab",
+   * and this expands it to the sections that tab is made of. Its own panel is left alone,
+   * and so is every other tab on the form.
+   *
+   * No tab is privileged: Details is one key among the rail's, and a contribution may name
+   * any of them.
+   */
+  private railTabSectionKeys(): string[] {
+    const claimed = this.claimedRailTabKeys();
+    if (claimed.length === 0) return [];
+    const membersOf = this.railTabMembership();
+    const keys = new Set<string>();
+    for (const tab of claimed) {
+      for (const key of membersOf(tab)) keys.add(key);
+    }
+    return [...keys];
+  }
+
+  /**
+   * The sections a rail tab is made of, other than contributions' own, for any tab key. Read
+   * from the live panels rather than the resolved chrome spec, because the spec is computed
+   * FROM the sections a tab claim hides — asking it here would be circular.
+   */
+  private railTabMembership(): (tab: string) => string[] {
+    const mine = this.contributionSectionKeys();
+    const panels = this.allChromePanels()
+      .filter((panel) => !!panel.SectionKey)
+      .map((panel) => ({
+        SectionKey: panel.SectionKey,
+        SectionName: panel.SectionName,
+        Variant: panel.Variant,
+      }));
+    return (tab) => RailGroupSectionKeys(panels, mine, tab).filter((key) => !mine.includes(key));
+  }
+
+  /**
+   * Rail tab keys named by a winning contribution's `replacesSectionKey`.
+   *
+   * A key that matches a panel on the form is that panel, not a tab, and is handled by the
+   * ordinary single-section claim. Only a key matching no panel can be a tab's. A wildcard
+   * panel's claim is ignored, as the composer ignores it.
+   */
+  private claimedRailTabKeys(): string[] {
+    const panelKeys = new Set(this.allChromePanels().map((panel) => panel.SectionKey));
+    const out: string[] = [];
+    for (const reg of this.resolvedContributions().Winners) {
+      if (IsWildcardPlaceClaim(reg.Metadata)) continue;
+      const key = reg.Metadata.replacesSectionKey?.trim();
+      if (!key) continue;
+      if (key === DETAILS_SECTION_KEY || key === MORE_SECTION_KEY || !panelKeys.has(key)) out.push(key);
+    }
+    return out;
+  }
+
+  /**
+   * Which rail item each contribution belongs to.
+   *
+   * An explicit `chromeGroup` wins. Otherwise a contribution that replaces a section
+   * inherits that section's group, because replacing something means standing where it
+   * stood: a panel put in place of a field section belongs in the Details tab that section
+   * was part of, not in a rail item of its own beside it. Without this the replaced section
+   * disappears and the panel surfaces somewhere else, so the form loses a section and gains
+   * a tab and neither is what was asked for. A panel drawn inside a section belongs to that
+   * section's rail item the same way, and anything else to the item its slot sits in.
+   *
+   * Derived here rather than written to the row, because which rail item a section belongs
+   * to is a property of the rendered form. The same contribution on an accordion form, or
+   * on a form whose layout later changes, would need a different answer.
+   */
+  private contributionChromeGroupByKey(panels: readonly FormChromePanelSnapshot[]): Map<string, 'details' | 'more'> {
     const map = new Map<string, 'details' | 'more'>();
-    for (const row of this.contributionRegistrations()) {
-      if (row.ChromeGroup) map.set(row.Key, row.ChromeGroup);
+    for (const [key, reg] of this.resolvedContributions().RailItems) {
+      const meta = reg.Metadata;
+      if (meta.chromeGroup === 'details' || meta.chromeGroup === 'more') {
+        map.set(key, meta.chromeGroup);
+        continue;
+      }
+      const hostSection = ContributionDrawsInSection(meta)
+        ? PlacedInSectionKey(meta) || SectionDrawingAnyField(panels, meta.replacesFieldNames ?? [])
+        : undefined;
+      const group = this.groupOfReplacedSection(ReplacedSectionKeys(meta)[0])
+        ?? this.groupOfReplacedSection(hostSection)
+        ?? SlotChromeGroup(meta.slot);
+      if (group) map.set(key, group);
     }
     return map;
   }
 
+  /**
+   * The rail item a replaced section sat in. Read from the live panels, and from the
+   * slot-mounted ones in the DOM, because a replaced panel is hidden and so is already
+   * out of the resolved chrome spec by the time this is asked.
+   */
+  private groupOfReplacedSection(sectionKey: string | undefined): 'details' | 'more' | null {
+    if (!sectionKey) return null;
+    const panel = this.allChromePanels().find((p) => p.SectionKey === sectionKey)
+      ?? this.domPanelSnapshots().find((p) => p.SectionKey === sectionKey);
+    return ReplacedSectionChromeGroup(sectionKey, panel);
+  }
+
   private contributionInclusionByKey(): Map<string, FormInclusion> {
     const map = new Map<string, FormInclusion>();
-    for (const row of this.contributionRegistrations()) {
-      if (row.Inclusion) map.set(row.Key, row.Inclusion);
+    for (const [key, reg] of this.resolvedContributions().RailItems) {
+      const inclusion = ReadRegisteredInclusion(reg.Metadata.inclusion);
+      if (inclusion) map.set(key, inclusion);
     }
     return map;
   }
 
   private contributionSortKeyByKey(): Map<string, number> {
     const map = new Map<string, number>();
-    for (const row of this.contributionRegistrations()) {
-      if (row.SortKey != null) map.set(row.Key, row.SortKey);
+    for (const [key, reg] of this.resolvedContributions().RailItems) {
+      const sortKey = reg.Metadata.sortKey;
+      if (typeof sortKey === 'number' && Number.isFinite(sortKey)) map.set(key, sortKey);
     }
     return map;
-  }
-
-  /**
-   * Winning registration per contribution key (highest ClassFactory Priority).
-   * Headers are not rail sections.
-   */
-  private contributionRegistrations(): Array<{
-    Key: string;
-    Inclusion: FormInclusion | null;
-    SortKey: number | null;
-    ChromeGroup: 'details' | 'more' | null;
-  }> {
-    const entityName = this.EffectiveEntityInfo?.Name;
-    if (!entityName) return [];
-    const byKey = new Map<string, { Key: string; Inclusion: FormInclusion | null; SortKey: number | null; ChromeGroup: 'details' | 'more' | null; Priority: number }>();
-    const regs = [...CollectFormPanelRegistrations()].sort((a, b) => (a.Priority ?? 0) - (b.Priority ?? 0));
-    for (const reg of regs) {
-      const meta = reg.Metadata;
-      if (!meta || meta.entity !== entityName) continue;
-      if (meta.contributionKey === 'header') continue;
-      const key = contributionRailKey(meta);
-      if (!key) continue;
-      byKey.set(key, {
-        Key: key,
-        Inclusion: ReadRegisteredInclusion(meta.inclusion),
-        SortKey: typeof meta.sortKey === 'number' && Number.isFinite(meta.sortKey) ? meta.sortKey : null,
-        ChromeGroup: meta.chromeGroup === 'details' || meta.chromeGroup === 'more' ? meta.chromeGroup : null,
-        Priority: reg.Priority ?? 0,
-      });
-    }
-    return [...byKey.values()];
   }
 
   private contributionHiddenSectionKeys(): Set<string> {
@@ -1267,19 +1663,26 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       entity.Name,
       entity.RelatedEntities ?? [],
       (entity.ChildEntities ?? []).map((child) => child.ID),
-      CollectFormPanelRegistrations(),
+      this.formContributionRegistrations(),
     );
     for (const key of claimed) hidden.add(key);
+    for (const key of this.railTabSectionKeys()) hidden.add(key);
     return hidden;
   }
 
-  private chromePanelSnapshots(): FormChromePanelSnapshot[] {
-    const skip = this.contributionHiddenSectionKeys();
+  /**
+   * The sections on the form, once each, in panel order.
+   *
+   * @param skip Section keys to leave out.
+   * @param keepHidden Keep the sections the form's own config hides too, rather than leaving
+   *   them out.
+   */
+  private chromePanelSnapshots(skip: ReadonlySet<string> = this.contributionHiddenSectionKeys(), keepHidden = false): FormChromePanelSnapshot[] {
     const ctx = this.Fc?.formContext;
     const byKey = new Map<string, FormChromePanelSnapshot>();
     const add = (snapshot: FormChromePanelSnapshot) => {
       if (!snapshot.SectionKey || skip.has(snapshot.SectionKey)) return;
-      if (IsFormSectionHidden(ctx, snapshot.SectionKey, snapshot.Variant)) return;
+      if (!keepHidden && IsFormSectionHidden(ctx, snapshot.SectionKey, snapshot.Variant)) return;
       if (!byKey.has(snapshot.SectionKey)) {
         byKey.set(snapshot.SectionKey, snapshot);
       }
@@ -1292,6 +1695,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
         SectionName: panel.SectionName,
         Variant: panel.Variant,
         Icon: panel.Icon,
+        Fields: panel.ClaimableFields,
       });
     }
     for (const snapshot of this.domPanelSnapshots()) {
@@ -1316,6 +1720,13 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
         Icon: node.getAttribute('data-icon') || undefined,
       });
     });
+    // A bare strip that replaces blocks belongs to their tab. It draws no collapsible panel, so
+    // it marks itself; counted here, it keeps a tab whose every block it replaced.
+    host.querySelectorAll('[data-bare-section-key]').forEach((node: Element) => {
+      const sectionKey = node.getAttribute('data-bare-section-key') ?? '';
+      if (!sectionKey) return;
+      out.push({ SectionKey: sectionKey, SectionName: node.getAttribute('data-bare-title') || sectionKey, Variant: 'default' });
+    });
     return out;
   }
 
@@ -1326,7 +1737,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       EntityName: entity.Name,
       RelatedEntities: entity.RelatedEntities ?? [],
       IsaChildEntityIDs: (entity.ChildEntities ?? []).map((child) => child.ID),
-      Registrations: CollectFormPanelRegistrations(),
+      Registrations: this.formContributionRegistrations(),
       BakedSectionKeys: this.BakedRelatedSectionKeys,
       ShowRelatedEntities: this.EffectiveShowRelatedEntities,
     });
@@ -1364,10 +1775,12 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
   /** Delegates to the pure decision in `form-chrome-rail-pref`, supplying this form's registrations. */
   private unsavedLeadGroupKey(): string | null {
+    const railItems = this.resolvedContributions().RailItems;
+    const keyByMetadata = new Map([...railItems].map(([key, reg]) => [reg.Metadata, key]));
     return UnsavedLeadGroupKey(
       this.EffectiveEntityInfo?.Name,
-      CollectFormPanelRegistrations(),
-      contributionRailKey,
+      [...railItems.values()],
+      (meta) => keyByMetadata.get(meta) ?? null,
     );
   }
 
@@ -1395,6 +1808,9 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   }
 
   private persistChromePrefs(): void {
+    // The placement dialog's preview is a second copy of a form the user may have open.
+    // Browsing its rail must not move the real form's saved tab or rail width.
+    if (this.placementPreview) return;
     if (ShouldPersistChromeActiveGroup(this.EffectiveRecord?.IsSaved) && this.chrome.ActiveGroupKey) {
       UserInfoEngine.Instance.SetSettingDebounced(
         this.chromePrefKey('activeGroup'),
@@ -1425,6 +1841,9 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     if (this.Fc) {
       this.Fc.RecordReady.pipe(takeUntil(this.panelNavReset$)).subscribe(() => {
         this.loadBadgeCounts();
+      });
+      this.Fc.SectionRowCountChanged?.pipe(takeUntil(this.panelNavReset$)).subscribe((e) => {
+        this.onSectionRowCountChanged(e);
       });
       this.Fc.RecordRefreshed.pipe(takeUntil(this.panelNavReset$)).subscribe((e) => {
         this.onFormRecordRefreshed(e.Record);
@@ -1525,11 +1944,121 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     if (!record?.EntityInfo) return;
 
     this.badgeCountsLoaded = true;
+    // Fire and forget — counts land while the form renders; nothing awaits them.
+    void this.loadFormCounts(record);
+  }
 
-    // Fire queries in parallel — no await needed, they update state async
-    this.loadTagCount(record);
-    this.loadVersionCount(record);
-    this.loadAttachmentCount(record);
+  /**
+   * ONE `RunViews` call for every count the form shows: each related section's
+   * rows (badges + `whenEmpty` chrome) and the tag / attachment / version toolbar
+   * badges. All items are `count_only`, which the database provider runs as a
+   * single `UNION ALL` statement. Skipped entirely for unsaved records.
+   */
+  private async loadFormCounts(record: BaseEntity): Promise<void> {
+    const plan = this.buildFormCountPlan(record);
+    this.countPlan = plan;
+    this.stickySectionKeys.clear();
+    this.applyBadgeVisibility(plan);
+    const params = FormCountPlanParams(plan);
+    const token = ++this.countRequestToken;
+    if (params.length === 0) {
+      this.countPhase = 'none';
+      this.scheduleChromeResolve();
+      return;
+    }
+    this.countPhase = 'loading';
+    this.scheduleChromeResolve();
+    try {
+      const results = await RunView.FromMetadataProvider(this.ProviderToUse).RunViews(params);
+      if (token !== this.countRequestToken) return;
+      this.applyFormCounts(ApplyFormCountResults(plan, results));
+      this.countPhase = 'loaded';
+    } catch (e) {
+      if (token !== this.countRequestToken) return;
+      // Fail open: every section shows, badges stay at their defaults.
+      LogError(`Form section counts failed for ${record.EntityInfo.Name}: ${e instanceof Error ? e.message : String(e)}`);
+      this.countPhase = 'failed';
+    }
+    this.scheduleChromeResolve();
+    this.cdr.detectChanges();
+  }
+
+  private buildFormCountPlan(record: BaseEntity): FormCountPlan {
+    const entity = record.EntityInfo;
+    return BuildFormCountPlan({
+      Record: record,
+      Entity: entity,
+      IsaChildEntityIDs: (entity.ChildEntities ?? []).map((child) => child.ID),
+      HiddenSectionKeys: this.contributionHiddenSectionKeys(),
+      Contributions: this.countContributions(),
+      IncludeAttachments: this.AttachmentsAvailable,
+    });
+  }
+
+  /**
+   * The contributions the rail files, with their metadata, for counting. Counts, badges and
+   * whenEmpty key off the section the user sees: `sectionKey` when the panel names one, else
+   * its contribution key.
+   */
+  private countContributions(): FormCountContribution[] {
+    return [...this.resolvedContributions().RailItems].map(([key, reg]) => ({
+      SectionKey: reg.Metadata.sectionKey?.trim() || key,
+      Metadata: reg.Metadata,
+    }));
+  }
+
+  private applyBadgeVisibility(plan: FormCountPlan): void {
+    const form = this.Fc;
+    if (!form?.SetSectionBadgeVisible) return;
+    const suppressed = new Set(plan.SuppressedBadgeKeys);
+    for (const target of plan.Sections) form.SetSectionBadgeVisible(target.SectionKey, !suppressed.has(target.SectionKey));
+    for (const key of suppressed) form.SetSectionBadgeVisible(key, false);
+  }
+
+  private applyFormCounts(counts: FormCountResults): void {
+    const tags = counts.System.get('tags');
+    if (tags !== undefined) this.TagCount = tags;
+    const attachments = counts.System.get('attachments');
+    if (attachments !== undefined) this.AttachmentCount = attachments;
+    const versions = counts.System.get('versions');
+    if (versions !== undefined) this.VersionCount = versions;
+    // Each call fires SectionRowCountChanged → onSectionRowCountChanged; the
+    // chrome re-resolve is debounced, so this is one pass however many sections.
+    for (const [key, count] of counts.Sections) this.Fc?.SetSectionRowCount?.(key, count);
+  }
+
+  /**
+   * A section's count changed (prefetch, grid load, manual grid refresh, or a
+   * contribution reporting). Re-resolve chrome when it crosses zero for a section
+   * whose `whenEmpty` is not 'show'.
+   */
+  private onSectionRowCountChanged(e: { SectionKey: string; RowCount: number; Previous: number | undefined }): void {
+    if (e.RowCount > 0) this.stickySectionKeys.add(e.SectionKey);
+    const target = this.countPlan?.Sections.find((t) => t.SectionKey === e.SectionKey);
+    if (!target || target.WhenEmpty === 'show') return;
+    const crossedZero = e.Previous === undefined || (e.Previous === 0) !== (e.RowCount === 0);
+    if (crossedZero) this.scheduleChromeResolve();
+  }
+
+  private refreshEmptySectionBehavior(): Map<string, 'hide' | 'more'> {
+    this.emptySectionBehavior = this.computeEmptySectionBehavior();
+    return this.emptySectionBehavior;
+  }
+
+  /** `whenEmpty` outcome for the current state. Fail open everywhere. */
+  private computeEmptySectionBehavior(): Map<string, 'hide' | 'more'> {
+    const sticky = new Set(this.stickySectionKeys);
+    // Never hide what the user has open in the left-nav rail.
+    const active = this.chrome.ActiveGroupKey;
+    const activeGroup = active ? this.chrome.Spec.Groups.find((g) => g.Key === active && !g.IsMore) : undefined;
+    for (const key of activeGroup?.SectionKeys ?? (active ? [active] : [])) sticky.add(key);
+    return ResolveEmptySectionBehavior({
+      Targets: this.countPlan?.Sections ?? [],
+      CountOf: (key) => this.Fc?.PeekSectionRowCount?.(key),
+      Phase: this.countPhase,
+      ShowEmptyFields: this.EffectiveShowEmptyFields,
+      StickyKeys: sticky,
+    });
   }
 
   /**
@@ -1540,18 +2069,18 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     if (!this.AttachmentsAvailable) return;
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-      const result = await rv.RunView<{ ID: string }>({
+      const result = await rv.RunView({
         EntityName: 'MJ: File Entity Record Links',
-        Fields: ['ID'],
-        ExtraFilter: `EntityID='${record.EntityInfo.ID}' AND RecordID='${record.PrimaryKey.Values()}'`,
-        ResultType: 'simple'
+        ExtraFilter: `EntityID='${EscapeSQLString(record.EntityInfo.ID)}' AND RecordID='${EscapeSQLString(record.PrimaryKey.Values())}'`,
+        ResultType: 'count_only'
       });
-      if (result.Success) {
-        this.AttachmentCount = result.Results.length;
+      if (result.Success && !this.destroyed) {
+        this.AttachmentCount = result.TotalRowCount ?? 0;
         this.cdr.detectChanges();
       }
-    } catch {
-      // Non-critical — badge just stays at 0
+    } catch (e) {
+      // Non-critical — the badge keeps its last value.
+      LogError(`Toolbar badge count failed for ${record.EntityInfo.Name}: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
@@ -1562,19 +2091,19 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   private async loadTagCount(record: BaseEntity): Promise<void> {
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-      // Don't narrow Fields — the server caches RunView results by entity+filter (ignoring Fields),
-      // so a narrow query here would poison the cache for the subsequent full-field load in the Tags panel.
+      // count_only is never cached, so it cannot poison the Tags panel's full load.
       const result = await rv.RunView({
         EntityName: 'MJ: Tagged Items',
-        ExtraFilter: `EntityID='${record.EntityInfo.ID}' AND RecordID='${record.PrimaryKey.Values()}'`,
-        ResultType: 'simple'
+        ExtraFilter: `EntityID='${EscapeSQLString(record.EntityInfo.ID)}' AND RecordID='${EscapeSQLString(record.PrimaryKey.Values())}'`,
+        ResultType: 'count_only'
       });
-      if (result.Success) {
-        this.TagCount = result.Results.length;
+      if (result.Success && !this.destroyed) {
+        this.TagCount = result.TotalRowCount ?? 0;
         this.cdr.detectChanges();
       }
-    } catch {
-      // Non-critical — badge just stays at 0
+    } catch (e) {
+      // Non-critical — the badge keeps its last value.
+      LogError(`Toolbar badge count failed for ${record.EntityInfo.Name}: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
@@ -1586,18 +2115,18 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     if (!record.EntityInfo.TrackRecordChanges) return;
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-      const result = await rv.RunView<{ ID: string }>({
+      const result = await rv.RunView({
         EntityName: 'MJ: Record Changes',
-        Fields: ['ID'],
-        ExtraFilter: `EntityID='${record.EntityInfo.ID}' AND RecordID='${record.PrimaryKey.ToConcatenatedString()}'`,
-        ResultType: 'simple'
+        ExtraFilter: `EntityID='${EscapeSQLString(record.EntityInfo.ID)}' AND RecordID='${EscapeSQLString(record.PrimaryKey.ToConcatenatedString())}'`,
+        ResultType: 'count_only'
       });
-      if (result.Success) {
-        this.VersionCount = result.Results.length;
+      if (result.Success && !this.destroyed) {
+        this.VersionCount = result.TotalRowCount ?? 0;
         this.cdr.detectChanges();
       }
-    } catch {
-      // Non-critical — badge just stays at 0
+    } catch (e) {
+      // Non-critical — the badge keeps its last value.
+      LogError(`Toolbar badge count failed for ${record.EntityInfo.Name}: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
@@ -2074,20 +2603,187 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     this.ShowSectionManager = false;
     this.cdr.markForCheck();
   }
+
+  // ============================================
+  // PANEL MANAGER
+  // ============================================
+
+  /** Whether the panel manager drawer is open. */
+  public ShowPanelManager = false;
+
+  /**
+   * Whether this form has anything the panel manager could act on.
+   *
+   * Read from every contribution row on the entity, not from the ones currently
+   * rendering. Turning a panel off is a thing the manager does, so gating the way back in
+   * on a panel being on made the door lock behind the user: the last panel switched off
+   * took the button with it and there was no way to switch it on again.
+   *
+   * Still gated rather than always shown. A form that has never carried a contribution
+   * has nothing to switch or remove, and a button that opens an empty drawer teaches the
+   * user the feature is not for them.
+   */
+  get HasManageablePanels(): boolean {
+    return this.panelAdmin.HasRowsForEntity(this.EffectiveEntityInfo);
+  }
+
+  /**
+   * The drawer's inputs, taken when it opens and after each change it makes.
+   *
+   * Fields, not getters: a getter hands the drawer a new array on every change-detection pass,
+   * which fires its `ngOnChanges` — and its whole rebuild — on every pass while the form is open.
+   */
+  public PanelManagerCompiled: FormPanelCompiledRow[] = [];
+  public PanelManagerStockGrids: FormPanelStockGridRow[] = [];
+  public PanelManagerRelated: FormPlacementRelated[] = [];
+  /** The saved record's key, for the placement dialog's preview. Null for a new record. */
+  public PanelManagerRecordKey: CompositeKey | null = null;
+  public PanelManagerTitles: Map<string, string> = new Map();
+
+  private refreshPanelManagerInputs(): void {
+    this.PanelManagerCompiled = this.buildPanelManagerCompiled();
+    this.PanelManagerStockGrids = this.buildPanelManagerStockGrids();
+    this.PanelManagerRelated = this.buildPanelManagerRelated();
+    this.PanelManagerTitles = this.buildPanelManagerTitles();
+    const record = this.EffectiveRecord;
+    this.PanelManagerRecordKey = record?.IsSaved ? record.PrimaryKey : null;
+  }
+
+  /**
+   * Compiled panels on this form, for the drawer to list and let the user hide.
+   *
+   * Read with the user's hides included, so a hidden panel is still listed and can be shown
+   * again. A wildcard panel mounts on every form but draws only where it applies, so it is
+   * listed only where it drew something — or where the user has hidden it, which is the only
+   * way to bring it back.
+   */
+  private buildPanelManagerCompiled(): FormPanelCompiledRow[] {
+    const entity = this.EffectiveEntityInfo;
+    if (!entity) return [];
+    const hidden = new Set(HiddenPanelKeys(entity.Name));
+    const all = CollectFormContributionRegistrations(entity, this.ProviderToUse, { IncludeHidden: true });
+    return all
+      .filter((reg) => reg.Source !== 'metadata')
+      .filter((reg) => {
+        if (reg.Metadata?.entity === entity.Name) return true;
+        if (reg.Metadata?.entity !== '*') return false;
+        const key = PanelHideKey(reg);
+        return !!key && (hidden.has(key) || this.panelDrewHere(key));
+      })
+      .map((reg, index) => {
+        const hideKey = PanelHideKey(reg);
+        return {
+          Key: hideKey ?? `${reg.Metadata.slot}#${index}`,
+          Title: reg.Title || ResolveContributionKey(reg.Metadata) || 'Panel',
+          Slot: reg.Metadata.slot,
+          HideKey: hideKey,
+        };
+      });
+  }
+
+  /** Whether a mounted panel with this hide key drew anything on this form. */
+  private panelDrewHere(hideKey: string): boolean {
+    const host = this.host.nativeElement as HTMLElement | null;
+    if (!host) return false;
+    const escaped = hideKey.replace(/["\\]/g, '\\$&');
+    const element = host.querySelector(`[data-panel-key="${escaped}"]`);
+    return !!element && element.childElementCount > 0;
+  }
+
+  /** Grids the container filled in from a relationship, for the same reason. */
+  private buildPanelManagerStockGrids(): FormPanelStockGridRow[] {
+    return this.allChromePanels()
+      .filter((panel) => panel.Variant === 'related-entity' && !!panel.SectionKey)
+      .map((panel) => ({
+        SectionKey: panel.SectionKey,
+        DisplayName: HumanizeEntityTitle(panel.SectionName || panel.SectionKey),
+      }));
+  }
+
+  /**
+   * Related grids on this entity, so re-placing a panel can still offer to take one over.
+   * A probe cannot supply these: it reports the panels a form drew, not the join fields
+   * behind them.
+   */
+  private buildPanelManagerRelated(): FormPlacementRelated[] {
+    const entity = this.EffectiveEntityInfo;
+    if (!entity) return [];
+    return (entity.RelatedEntities ?? [])
+      .filter((rel) => rel.DisplayInForm)
+      .map((rel) => ({
+        Entity: rel.RelatedEntity,
+        JoinField: StripJoinFieldBrackets(rel.RelatedEntityJoinField),
+        DisplayName: HumanizeEntityTitle(rel.RelatedEntity),
+      }));
+  }
+
+  /** Titles by section and rail key, so the manager names a claim instead of printing it. */
+  private buildPanelManagerTitles(): Map<string, string> {
+    const map = new Map<string, string>();
+    for (const panel of this.allChromePanels()) {
+      if (panel.SectionKey) map.set(panel.SectionKey, HumanizeEntityTitle(panel.SectionName || panel.SectionKey));
+    }
+    for (const group of this.chrome.Spec.Groups) {
+      map.set(group.Key, group.Title);
+    }
+    return map;
+  }
+
+  /** The drawer switched forms: the same path the toolbar picker takes. */
+  OnPanelManagerFormChosen(variantID: string | null): void {
+    this.ShowPanelManager = false;
+    this.OnVariantPicked(variantID);
+    this.cdr.markForCheck();
+  }
+
+  OnManagePanels(): void {
+    this.refreshPanelManagerInputs();
+    this.ShowPanelManager = true;
+    this.cdr.markForCheck();
+  }
+
+  OnPanelManagerClosed(): void {
+    this.ShowPanelManager = false;
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * A panel was switched, hidden, shown or removed. The registration memo is already dropped
+   * by the admin service. The slot hosts mount the new panel set, then the chrome is resolved
+   * again from it.
+   */
+  OnPanelManagerChanged(): void {
+    this.slots.NotifyPanelsChanged();
+    this.scheduleChromeResolve();
+    this.refreshPanelManagerInputs();
+    this.cdr.markForCheck();
+  }
 }
 
-function contributionRailKey(meta: FormPanelRegistrationMetadata): string | null {
-  if (meta.contributionKey?.trim()) {
-    return meta.contributionKey.trim();
+/** The value a form with no entity resolves to. */
+const NO_RESOLVED_CONTRIBUTIONS: ResolvedFormContributions = { Winners: [], RailItems: new Map() };
+
+/**
+ * Why a winner drawn inside a section has no section to draw in, or null when one hosts it: a
+ * section with its `inSectionKey`, or one drawing a field it claims. Fields are only judged once
+ * the form has drawn some.
+ */
+function unhostedSectionClaim(
+  meta: FormPanelRegistrationMetadata,
+  sections: ReadonlySet<string>,
+  drawn: ReadonlySet<string>,
+): { Claim: string; Missing: string } | null {
+  if (!ContributionDrawsInSection(meta)) return null;
+  const placedIn = PlacedInSectionKey(meta);
+  const claimed = (meta.replacesFieldNames ?? []).map((name) => name.trim()).filter((name) => name.length > 0);
+  if (placedIn && sections.has(placedIn)) return null;
+  if (claimed.some((name) => drawn.has(name))) return null;
+  if (!placedIn) {
+    return drawn.size === 0 ? null : { Claim: `stands in for ${claimed.join(', ')}`, Missing: 'draws none of those fields' };
   }
-  if (!meta.relatedEntity) {
-    return null;
-  }
-  const derived = meta.relatedEntity.split(':').pop()?.trim();
-  if (!derived) {
-    return null;
-  }
-  return derived.charAt(0).toLowerCase() + derived.slice(1).replace(/\s+/g, '');
+  return claimed.length === 0
+    ? { Claim: `is placed in section "${placedIn}"`, Missing: 'has no section with that key' }
+    : { Claim: `stands in for ${claimed.join(', ')} in section "${placedIn}"`, Missing: 'has neither that section nor any of those fields' };
 }
 
 function ReadRegisteredInclusion(raw: FormInclusion | undefined): FormInclusion | null {

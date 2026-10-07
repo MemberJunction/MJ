@@ -54,8 +54,6 @@ export class OpenAILiveClient extends BaseRealtimeClient {
     private peerConnection: IRealtimeLivePeerConnection | null = null;
     protected dataChannel: IRealtimeDataChannel | null = null;
     private remoteAudioEl: IRealtimeAudioSink | null = null;
-    private remoteStream: MediaStream | null = null;
-    private remoteStreamHandlers: Array<(stream: MediaStream) => void> = [];
     private micStream: MediaStream | null = null;
     /** The senders carrying the mic tracks, kept so {@link ReplaceMicrophone} can move them to a new track. */
     private micSenders: IRealtimeRtpSender[] = [];
@@ -189,8 +187,7 @@ export class OpenAILiveClient extends BaseRealtimeClient {
             this.remoteAudioEl = null;
         }
 
-        this.remoteStream = null;
-        this.remoteStreamHandlers = [];
+        this.clearRemoteMediaStream();
         this.sessionConfig = null;
         this.responseActive = false;
         this.audioPlaying = false;
@@ -349,27 +346,6 @@ export class OpenAILiveClient extends BaseRealtimeClient {
         this.attachInputAudioMeter(RealtimeAudioMeter.ForMicStream(micStream));
     }
 
-    /**
-     * Returns the agent's remote audio MediaStream if available.
-     */
-    public override GetRemoteMediaStream(): MediaStream | null {
-        return this.remoteStream;
-    }
-
-    /**
-     * Registers a callback for when the agent's remote audio MediaStream lands.
-     */
-    public override OnRemoteMediaStream(handler: (stream: MediaStream) => void): void {
-        this.remoteStreamHandlers.push(handler);
-        if (this.remoteStream) {
-            try {
-                handler(this.remoteStream);
-            } catch (error) {
-                console.warn('[OpenAILiveClient] remote-stream handler threw:', error);
-            }
-        }
-    }
-
     // ── Overridable Factory / Network Seams (Tests inject fakes) ───────────────
 
     /** Creates the peer connection. Production returns a real `RTCPeerConnection`. */
@@ -463,14 +439,7 @@ export class OpenAILiveClient extends BaseRealtimeClient {
         pc.ontrack = (e: RTCTrackEvent) => {
             if (this.remoteAudioEl && e.streams[0]) {
                 this.remoteAudioEl.srcObject = e.streams[0];
-                this.remoteStream = e.streams[0];
-                for (const h of this.remoteStreamHandlers) {
-                    try {
-                        h(e.streams[0]);
-                    } catch (err) {
-                        console.warn('[OpenAILiveClient] remote stream handler threw:', err);
-                    }
-                }
+                this.publishRemoteMediaStream(e.streams[0]);
                 // Capability obligation #9: agent-side audio meter
                 this.attachOutputAudioMeter(RealtimeAudioMeter.ForStream(e.streams[0]));
             }

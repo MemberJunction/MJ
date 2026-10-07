@@ -235,6 +235,15 @@ describe('GenerateImageAction through AIImageGenerationRunner', () => {
         ]);
     });
 
+    it("under a RuntimeOnly scope hands the runner the run's keys alone, and the scope so it skips the rest", async () => {
+        const resolver: RuntimeAPIKeyResolver = (driverClass) => (driverClass === 'OpenAIImageGenerator' ? 'sk-customer' : undefined);
+
+        await action.RunForTest({ ...paramsFor({ Prompt: 'x' }, resolver), CredentialScope: 'RuntimeOnly' });
+
+        expect(h.generateCalls[0].APIKeys).toEqual([{ driverClass: 'OpenAIImageGenerator', apiKey: 'sk-customer' }]);
+        expect(h.generateCalls[0].CredentialScope).toBe('RuntimeOnly');
+    });
+
     it('a vendor-name-only key still works: it reaches the runner under the driver class', async () => {
         // No key for the driver class anywhere; the platform has one under the vendor's name.
         h.platformKeys = new Map([['OpenAI', 'platform-openai-by-vendor']]);

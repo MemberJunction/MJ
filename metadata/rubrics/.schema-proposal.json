@@ -52,6 +52,10 @@
                     },
                     "primaryKey": {
                       "ID": "64BB14A9-5763-4B14-8F38-05114AD34811"
+                    },
+                    "sync": {
+                      "lastModified": "2026-10-02T21:42:24.326Z",
+                      "checksum": "e6f104ce9cd3ab6147336269bfa58a7290e9983e2ac6aa381da49c977d35b73a"
                     }
                   },
                   {
@@ -62,6 +66,10 @@
                     },
                     "primaryKey": {
                       "ID": "24DF065B-1C54-421E-9924-71187B5FF8B1"
+                    },
+                    "sync": {
+                      "lastModified": "2026-10-02T21:42:24.340Z",
+                      "checksum": "62e4656e6194935c08d29712f27148f2099e74dfba970f0b99553bd8d23c866a"
                     }
                   },
                   {
@@ -72,9 +80,17 @@
                     },
                     "primaryKey": {
                       "ID": "0B4A6CED-B3D1-4F1D-A0D6-6091F6D3778C"
+                    },
+                    "sync": {
+                      "lastModified": "2026-10-02T21:42:24.353Z",
+                      "checksum": "c0f4840eab05d3ad403c0791036fe2df2e73dd2f826c7d433ad6da889369a33a"
                     }
                   }
                 ]
+              },
+              "sync": {
+                "lastModified": "2026-10-02T21:42:24.238Z",
+                "checksum": "7ad9a922e2f0e9da92a1416fd4e1287d476eb7bde0841cf0d2273e31647d0732"
               }
             },
             {
@@ -103,6 +119,10 @@
                     },
                     "primaryKey": {
                       "ID": "E128C83D-0AE1-4A4D-ABD5-9E939040616B"
+                    },
+                    "sync": {
+                      "lastModified": "2026-10-02T21:42:24.382Z",
+                      "checksum": "377e0a0e7c201a7293fbe77739bb75af5d7e220aa7ac10151fd2b21bea579018"
                     }
                   },
                   {
@@ -113,6 +133,10 @@
                     },
                     "primaryKey": {
                       "ID": "1F766AC6-B950-4858-A1FD-C57D15DA6C37"
+                    },
+                    "sync": {
+                      "lastModified": "2026-10-02T21:42:24.399Z",
+                      "checksum": "f8d0103eff998ac10e06e8bbeb547e34958460b4719f2c228fa060e0341561ce"
                     }
                   },
                   {
@@ -123,9 +147,17 @@
                     },
                     "primaryKey": {
                       "ID": "0C7BA1DB-335A-4FAF-A852-38B262BAA297"
+                    },
+                    "sync": {
+                      "lastModified": "2026-10-02T21:42:24.413Z",
+                      "checksum": "462a7b7e6f66ea9230e4dd373924e5c9d57d6f788e89644c0fb7d47e66bfb6d6"
                     }
                   }
                 ]
+              },
+              "sync": {
+                "lastModified": "2026-10-02T21:42:24.264Z",
+                "checksum": "4bd5232afc3161452e7c0f222a8492272a35098726ef9fc173971c329e0fa260"
               }
             },
             {
@@ -154,6 +186,10 @@
                     },
                     "primaryKey": {
                       "ID": "8BCD7A48-F7ED-4EFD-B498-F08E275F94FF"
+                    },
+                    "sync": {
+                      "lastModified": "2026-10-02T21:42:24.444Z",
+                      "checksum": "8f11f5312aef3d4edc330f12c644bdccc0c8d53e43b24f18ae0cb824af3cbf38"
                     }
                   },
                   {
@@ -164,6 +200,10 @@
                     },
                     "primaryKey": {
                       "ID": "F44CCF9B-DF1A-4C1F-8698-BBEFE7A544D1"
+                    },
+                    "sync": {
+                      "lastModified": "2026-10-02T21:42:24.474Z",
+                      "checksum": "74e5244009da90e73a676a7ed281a279b5ee93685cac3b7d9143d838625387e4"
                     }
                   },
                   {
@@ -174,14 +214,30 @@
                     },
                     "primaryKey": {
                       "ID": "A5072129-63A8-4FFB-9AEE-6FDB41339A94"
+                    },
+                    "sync": {
+                      "lastModified": "2026-10-02T21:42:24.501Z",
+                      "checksum": "6280192a75b89da9fd7cc97278e19e65177c90ee19f14993fb890f76f4de79c8"
                     }
                   }
                 ]
+              },
+              "sync": {
+                "lastModified": "2026-10-02T21:42:24.289Z",
+                "checksum": "afd4ab2d8500a3fbd0b662bd1972906e472eb7be1d1f80f55cfdb2803a036032"
               }
             }
           ]
+        },
+        "sync": {
+          "lastModified": "2026-10-02T21:42:24.203Z",
+          "checksum": "a538420290b4c6a3b81ef301b02aabc2e75b5a521a8a8950a5fc9533a23eae42"
         }
       }
     ]
+  },
+  "sync": {
+    "lastModified": "2026-10-02T21:42:24.183Z",
+    "checksum": "864e53ed5fd1ddc5fca87a5363242d23fbbea1e2d8528aaa56f16af87e85612a"
   }
 }
