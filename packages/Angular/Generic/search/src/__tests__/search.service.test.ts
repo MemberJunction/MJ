@@ -171,7 +171,9 @@ describe('SearchService', () => {
         });
 
         it('forwards a provider event\'s ResultCount — progress events carry a count, not rows', () => {
-            const stream$ = new Subject<{ StreamID: string; Phase: string; ProviderName?: string; ResultCount?: number; Results?: ReturnType<typeof makeClientResultItem>[] }>();
+            const stream$ = new Subject<{
+                StreamID: string; Phase: string; ProviderName?: string; ResultCount?: number; Results?: ReturnType<typeof makeClientResultItem>[];
+            }>();
             vi.spyOn(GraphQLSearchClient.prototype, 'StreamSearch').mockReturnValue(stream$);
 
             const events: Array<{ Phase: string; ResultCount?: number; Results?: SearchResultItem[] }> = [];

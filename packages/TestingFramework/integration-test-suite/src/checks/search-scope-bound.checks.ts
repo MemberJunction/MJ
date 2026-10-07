@@ -36,7 +36,7 @@ import type {
     MJSearchScopeProviderEntity
 } from '@memberjunction/core-entities';
 import { BaseSearchProvider, SearchEngine } from '@memberjunction/search-engine';
-import type { ScopeExplanation, SearchResult, SearchResultItem, SearchSource } from '@memberjunction/search-engine';
+import type { LaneKind, ScopeExplanation, SearchResult, SearchResultItem, SearchSource } from '@memberjunction/search-engine';
 import { Assert, AssertEqual, IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import type { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
@@ -98,9 +98,14 @@ interface ProbeEngineState {
     _configured: boolean;
 }
 
-/** A non-entity provider that returns fixed hits and counts its calls. */
+/**
+ * A non-entity provider that returns fixed hits and counts its calls. It stands in for a full-text provider, which
+ * reads the scope's entity lanes — so it declares that lane kind, or the engine would not call it for an
+ * entity-lane-only scope (a provider whose lane kinds are all empty in a scope is never called).
+ */
 class FixedHitsProvider extends BaseSearchProvider {
     public readonly SourceType: SearchSource = 'fulltext';
+    public override readonly ConsumesLaneKinds: readonly LaneKind[] = ['Entity'];
     public Calls = 0;
     private hits: SearchResultItem[];
 

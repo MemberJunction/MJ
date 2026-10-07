@@ -704,10 +704,41 @@ describe('SearchEngine.filterByPermissions (safety net)', () => {
         });
 
         it('verifies every hit, trusted lane or not, when a row filter applies', async () => {
-            mockEntityByName.mockReturnValue(makeEntity({ Name: 'Customers', CanRead: true, Exempt: false, RlsClause: "Region='West'" }) as unknown as EntityInfo);
+            const westOnly = makeEntity({ Name: 'Customers', CanRead: true, Exempt: false, RlsClause: "Region='West'" });
+            mockEntityByName.mockReturnValue(westOnly as unknown as EntityInfo);
             await engine.TestFilterByPermissions([entityLaneHit('entity-1', 'Customers')], user);
             expect(mockRunViewFn).toHaveBeenCalledTimes(1);
             expect((mockRunViewFn.mock.calls[0][0] as RunViewParams).ExtraFilter).toBe("(ID IN ('entity-1')) AND (Region='West')");
+        });
+
+        // A content item promoted to its origin record names a row its provider never read: the provider read the
+        // content item. A stale document can name an origin that no longer exists (a ghost hit), so trust is cleared.
+        describe('a hit promoted from a content item to its origin record is verified, whichever provider found it', () => {
+            const promoted = (id: string, providerId: string, sourceType: string) =>
+                ({ ...makeResult(id, 'Customers', 'entity-record', sourceType, providerId), PromotedFromContentItemID: `ci-${id}` });
+
+            it.each([
+                ['the full-text provider', PROVIDER.FullText, 'fulltext'],
+                ['the entity provider', PROVIDER.Entity, 'entity'],
+            ])('verifies a hit %s found on a content item, and drops it when the origin row does not exist', async (_label, providerId, sourceType) => {
+                const hits = [promoted('ghost-1', providerId, sourceType), promoted('real-1', providerId, sourceType)];
+                const out = await engine.TestFilterByPermissions(hits, user);
+
+                expect(out.map(r => r.RecordID)).toEqual(['real-1']);
+                expect(mockRunViewFn).toHaveBeenCalledTimes(1);
+                expect(idsAskedAbout(mockRunViewFn.mock.calls[0])).toEqual(['ghost-1', 'real-1']);
+            });
+
+            it('control: the same full-text hit, not promoted, skips verification', async () => {
+                const out = await engine.TestFilterByPermissions([makeResult('ghost-1', 'Customers', 'entity-record', 'fulltext', PROVIDER.FullText)], user);
+                expect(out).toHaveLength(1);
+                expect(mockRunViewFn).not.toHaveBeenCalled();
+            });
+
+            it('keeps the provider attribution on the promoted hit — only the trust is withdrawn', async () => {
+                const [kept] = await engine.TestFilterByPermissions([promoted('real-1', PROVIDER.FullText, 'fulltext')], user);
+                expect(kept.ProviderId).toBe(PROVIDER.FullText);
+            });
         });
     });
 });

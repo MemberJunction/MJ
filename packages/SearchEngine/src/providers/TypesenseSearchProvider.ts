@@ -23,6 +23,7 @@
 import { LogError, UserInfo } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseSearchProvider, SearchProviderConfig } from '../generic/ISearchProvider';
+import type { LaneKind } from '../generic/ScopeExplanation';
 import { CheckScopeStringFilter } from '../generic/ScopeFilterGuard';
 import {
     SearchSource,
@@ -52,6 +53,9 @@ interface TypesenseProviderConfig {
 @RegisterClass(BaseSearchProvider, 'TypesenseSearchProvider')
 export class TypesenseSearchProvider extends BaseSearchProvider {
     public readonly SourceType: SearchSource = 'fulltext';
+
+    /** Reads the scope's `Typesense` external-index rows (see `BaseSearchProvider.ConsumesLaneKinds`). */
+    public override readonly ConsumesLaneKinds: readonly LaneKind[] = ['ExternalIndex'];
 
     private parsedConfig: TypesenseProviderConfig | null = null;
     private available = false;

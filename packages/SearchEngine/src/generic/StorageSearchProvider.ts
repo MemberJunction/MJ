@@ -19,6 +19,7 @@ import {
     StorageAccessEvaluator
 } from '@memberjunction/storage';
 import { BaseSearchProvider } from './ISearchProvider';
+import type { LaneKind } from './ScopeExplanation';
 import { SearchSource, SearchFilters, SearchResultItem, SearchResultType, ScopeConstraints, ScopeStorageConstraint } from './search.types';
 
 /**
@@ -47,6 +48,9 @@ type SearchableAccount = StorageAccountWithProvider;
 @RegisterClass(BaseSearchProvider, 'StorageSearchProvider')
 export class StorageSearchProvider extends BaseSearchProvider {
     public readonly SourceType: SearchSource = 'storage';
+
+    /** Reads the scope's storage-account lanes (see `BaseSearchProvider.ConsumesLaneKinds`). */
+    public override readonly ConsumesLaneKinds: readonly LaneKind[] = ['StorageAccount'];
 
     private _available = false;
 

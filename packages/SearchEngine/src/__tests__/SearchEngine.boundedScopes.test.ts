@@ -11,7 +11,13 @@
  *     per entity per scope, fail closed). Only an `EntitySearchProvider` entry — judged by the engine-stamped
  *     `ProviderId`, not the declared `SourceType` — is exempt, because it applied the filter itself.
  *  4. A storage lane's `FolderPath` restricts: rendered empty, with an empty segment, or with traversal, the
- *     search is refused and the dry run marks the lane skipped.
+ *     search is refused and the dry run marks the lane skipped — and the scope unreachable, even beside a
+ *     healthy lane, because the real search refuses on the first unusable lane.
+ *  5. A listed provider runs only when it is configured, available, and reads a lane kind the scope configures
+ *     (`ConsumesLaneKinds`); otherwise it is never called (it cannot fall back to a default index), and the dry
+ *     run reports the scope unreachable exactly when the search runs no provider.
+ *  6. A `MJ: Content Items` hit promoted to its origin record is promoted per scope and held to the origin
+ *     entity's lane `ExtraFilter` — whichever provider found it, since none read the origin row.
  *
  * Real code throughout: the real `SearchEngineBase` bundle assembly (only its cached rows are supplied), the
  * real `buildScopeConstraints` / `executeScopeBundle` / `ExplainScope`, stub providers that record the
@@ -30,7 +36,7 @@ vi.mock('@memberjunction/core', async () => {
 });
 
 import type { IMetadataProvider, RunViewParams, UserInfo } from '@memberjunction/core';
-import { SearchEngineBase } from '@memberjunction/core-entities';
+import { KnowledgeHubMetadataEngine, SearchEngineBase } from '@memberjunction/core-entities';
 import type {
     MJSearchScopeEntity,
     MJSearchScopeEntityEntity,
@@ -41,8 +47,17 @@ import type {
 import { SearchEngine } from '../generic/SearchEngine';
 import { BaseSearchProvider } from '../generic/ISearchProvider';
 import { EntitySearchProvider } from '../generic/EntitySearchProvider';
+import { FullTextSearchProvider } from '../generic/FullTextSearchProvider';
+import { TagSearchProvider } from '../generic/TagSearchProvider';
+import { VectorSearchProvider } from '../generic/VectorSearchProvider';
+import { StorageSearchProvider } from '../generic/StorageSearchProvider';
+import { SearchEnricher } from '../generic/SearchEnricher';
+import { AzureAISearchProvider } from '../providers/AzureAISearchProvider';
+import { ElasticsearchSearchProvider } from '../providers/ElasticsearchSearchProvider';
+import { OpenSearchSearchProvider } from '../providers/OpenSearchSearchProvider';
+import { TypesenseSearchProvider } from '../providers/TypesenseSearchProvider';
 import type { ScopeConstraints, SearchContext, SearchParams, SearchResultItem, SearchSource } from '../generic/search.types';
-import type { EntitlementExplanation, ScopeExplanation } from '../generic/ScopeExplanation';
+import type { EntitlementExplanation, LaneKind, ScopeExplanation } from '../generic/ScopeExplanation';
 
 const SCOPE_ID = '101232A8-2E4D-47AF-B554-74594AA22C82';
 const FULLTEXT_ID = '3252C44B-86EF-450B-9343-D6642828B4DE';
@@ -157,14 +172,19 @@ class BoundedTestEngine extends SearchEngine {
     }
 }
 
+/** Every lane kind: a test double that reads them all, so a scope's lane mix never decides whether it is called. */
+const ALL_LANE_KINDS: readonly LaneKind[] = ['ExternalIndex', 'Entity', 'StorageAccount'];
+
 /** A provider that records the constraints it was handed and returns copies of fixed hits. */
 class RecordingProvider extends BaseSearchProvider {
     public readonly SourceType: SearchSource;
+    public override readonly ConsumesLaneKinds: readonly LaneKind[];
     public Calls: Array<ScopeConstraints | undefined> = [];
     private hits: SearchResultItem[];
-    public constructor(sourceType: SearchSource, hits: SearchResultItem[] = []) {
+    public constructor(sourceType: SearchSource, hits: SearchResultItem[] = [], consumes: readonly LaneKind[] = ALL_LANE_KINDS) {
         super();
         this.SourceType = sourceType;
+        this.ConsumesLaneKinds = consumes;
         this.hits = hits;
     }
     public override async Search(_q: string, _k: number, _f: unknown, _u: UserInfo, constraints?: ScopeConstraints): Promise<SearchResultItem[]> {
@@ -217,6 +237,13 @@ function entityLane(laneID: string, extraFilter: string | null): MJSearchScopeEn
         ID: laneID, SearchScopeID: SCOPE_ID, EntityID: AGENTS_ENTITY_ID, ExtraFilter: extraFilter,
         UserSearchString: null, RequiredMetadataKeys: null,
     } as unknown as MJSearchScopeEntityEntity;
+}
+
+function vectorIndexLane(laneID: string): MJSearchScopeExternalIndexEntity {
+    return {
+        ID: laneID, SearchScopeID: SCOPE_ID, IndexType: 'Vector', VectorIndexID: 'D6E1A5C2-3F4B-4E8A-9C1D-2B7F0E9A8C11',
+        ExternalIndexName: null, ExternalIndexConfig: null, MetadataFilter: null, RequiredMetadataKeys: null,
+    } as unknown as MJSearchScopeExternalIndexEntity;
 }
 
 function storageLane(folderPath: string | null): MJSearchScopeStorageAccountEntity {
@@ -527,5 +554,247 @@ describe('a storage lane\'s FolderPath restricts — it refuses rather than wide
         expect(storage.Calls[0]?.StorageAccounts?.[0].FolderPath).toBe('clients/acme');
         const [explanation] = await engine.ExplainScope({ ScopeIDs: [SCOPE_ID], SearchContext: { SecondaryScopes: { Client: 'acme' } } }, user);
         expect(explanation.Lanes[0].Status).toBe('Active');
+    });
+});
+
+describe('a FolderPath problem beside a healthy lane: the dry run says unreachable, as the search refuses', () => {
+    let engine: BoundedTestEngine;
+    let provider: RecordingProvider;
+    const CLIENT_PATH = 'clients/{{ context.SecondaryScopes.Client }}';
+
+    beforeEach(() => {
+        mockRunViewFn.mockReset();
+        engine = BoundedTestEngine.Create();
+        provider = new RecordingProvider('fulltext', [hit(AGENT_A, 'fulltext', 'a')]);
+        engine.Inject([entry(FULLTEXT_ID, provider)]);
+        setRows({ Entities: [entityLane('lane-1', null)], StorageAccounts: [storageLane(CLIENT_PATH)], Providers: [providerRow(FULLTEXT_ID)] });
+    });
+
+    it('marks only the storage lane Skipped, yet reports the scope unreachable — the real search is refused', async () => {
+        const context: SearchContext = { SecondaryScopes: { Client: '..' } };
+        const [explanation] = await engine.ExplainScope({ ScopeIDs: [SCOPE_ID], SearchContext: context }, user);
+
+        expect(explanation.Lanes.map(l => [l.Kind, l.Status])).toEqual([['Entity', 'Active'], ['StorageAccount', 'Skipped']]);
+        expect(explanation.Reachable).toBe(false);
+        expect(explanation.Diagnostics.join(' ')).toMatch(/a real search would be refused/);
+
+        const result = await engine.Search(scoped(context), user);
+        expect(result.Success).toBe(false);
+        expect(provider.Calls).toHaveLength(0);
+    });
+
+    it('control: with the FolderPath rendering, both lanes are Active and the scope is reachable and searched', async () => {
+        const context: SearchContext = { SecondaryScopes: { Client: 'acme' } };
+        const [explanation] = await engine.ExplainScope({ ScopeIDs: [SCOPE_ID], SearchContext: context }, user);
+        expect(explanation.Lanes.every(l => l.Status === 'Active')).toBe(true);
+        expect(explanation.Reachable).toBe(true);
+
+        expect((await engine.Search(scoped(context), user)).Success).toBe(true);
+        expect(provider.Calls).toHaveLength(1);
+    });
+});
+
+describe('a listed provider runs only when it reads a lane kind the scope configures — dry run and search agree', () => {
+    let engine: BoundedTestEngine;
+    let vector: VectorSearchProvider;
+    let vectorSearch: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+        mockRunViewFn.mockReset();
+        engine = BoundedTestEngine.Create();
+        // The real provider, so its real lane declaration decides. Marked available and its Search stubbed: no index is queried.
+        vector = new VectorSearchProvider();
+        vi.spyOn(vector, 'IsAvailable').mockReturnValue(true);
+        vectorSearch = vi.spyOn(vector, 'Search').mockResolvedValue([hit(AGENT_A, 'vector', 'a')]);
+        engine.Inject([entry(VECTOR_ID, vector)]);
+    });
+
+    it('a Vector provider row over an entity lane only (the guide\'s old example) reaches nothing, in the dry run and the search', async () => {
+        setRows({ Entities: [entityLane('lane-1', null)], Providers: [providerRow(VECTOR_ID)] });
+
+        const [explanation] = await engine.ExplainScope({ ScopeIDs: [SCOPE_ID] }, user);
+        expect(explanation.Reachable).toBe(false);
+        expect(explanation.Diagnostics.join(' ')).toMatch(/none of this scope's providers reads a lane kind it configures/);
+
+        const result = await engine.Search(scoped(), user);
+        expect(result.Results).toEqual([]);
+        expect(vectorSearch).not.toHaveBeenCalled();
+        const decision = await engine.LastDecision();
+        expect(decision.Reachable).toBe(false);
+        expect(decision.Diagnostics.join(' ')).toMatch(/none of this scope's providers reads a lane kind it configures/);
+    });
+
+    it('control: with a Vector external-index lane added, the same row is reachable and the provider is called', async () => {
+        setRows({ Entities: [entityLane('lane-1', null)], ExternalIndexes: [vectorIndexLane('ix-1')], Providers: [providerRow(VECTOR_ID)] });
+
+        const [explanation] = await engine.ExplainScope({ ScopeIDs: [SCOPE_ID] }, user);
+        expect(explanation.Reachable).toBe(true);
+        const result = await engine.Search(scoped(), user);
+        expect(vectorSearch).toHaveBeenCalledTimes(1);
+        expect(result.Results.map(r => r.RecordID)).toEqual([AGENT_A]);
+        expect((await engine.LastDecision()).Reachable).toBe(true);
+    });
+
+    it('a provider row naming no configured provider, or an unavailable one, is unreachable in the dry run as in the search', async () => {
+        for (const arrange of [
+            () => setRows({ Entities: [entityLane('lane-1', null)], ExternalIndexes: [vectorIndexLane('ix-1')], Providers: [providerRow(ENTITY_ID)] }),
+            () => {
+                setRows({ Entities: [entityLane('lane-1', null)], ExternalIndexes: [vectorIndexLane('ix-1')], Providers: [providerRow(VECTOR_ID)] });
+                vi.spyOn(vector, 'IsAvailable').mockReturnValue(false);
+            },
+        ]) {
+            arrange();
+            const [explanation] = await engine.ExplainScope({ ScopeIDs: [SCOPE_ID] }, user);
+            expect(explanation.Reachable).toBe(false);
+            expect(explanation.Diagnostics.join(' ')).toMatch(/name no configured, available provider/);
+            await engine.Search(scoped(), user);
+            expect((await engine.LastDecision()).Reachable).toBe(false);
+        }
+        expect(vectorSearch).not.toHaveBeenCalled();
+    });
+
+    it('never calls a provider whose lane kinds are all empty, so an old `?.length` provider cannot fall back to its default index', async () => {
+        /** A third-party provider written before `[]` meant "nothing": an empty list reads as unscoped. */
+        class LegacyDefaultIndexProvider extends BaseSearchProvider {
+            public readonly SourceType: SearchSource = 'fulltext';
+            public Calls = 0;
+            public override async Search(_q: string, _k: number, _f: unknown, _u: UserInfo, c?: ScopeConstraints): Promise<SearchResultItem[]> {
+                this.Calls++;
+                return c?.ExternalIndexes?.length ? [] : [hit(AGENT_B, 'fulltext', 'default-index-doc')];
+            }
+        }
+        const legacy = new LegacyDefaultIndexProvider();
+        const fulltext = new RecordingProvider('fulltext', [hit(AGENT_A, 'fulltext', 'a')], ['Entity']);
+        engine.Inject([entry(FULLTEXT_ID, fulltext), entry(EXTERNAL_ID, legacy)]);
+        setRows({ Entities: [entityLane('lane-1', null)], Providers: [providerRow(FULLTEXT_ID), providerRow(EXTERNAL_ID)] });
+
+        const result = await engine.Search(scoped(), user);
+
+        expect(legacy.ConsumesLaneKinds).toEqual(['ExternalIndex']); // the base-class default
+        expect(legacy.Calls).toBe(0);
+        expect(fulltext.Calls).toHaveLength(1);
+        expect(result.Results.map(r => r.RecordID)).toEqual([AGENT_A]);
+        expect((await engine.LastDecision()).Reachable).toBe(true);
+    });
+
+    it('declares a lane kind for every shipped provider, and the ExtraFilter capability only on the entity provider', () => {
+        const declared = (p: BaseSearchProvider) => [p.ConsumesLaneKinds, p.AppliesLaneExtraFilter];
+        expect(declared(new EntitySearchProvider())).toEqual([['Entity'], true]);
+        expect(declared(new FullTextSearchProvider())).toEqual([['Entity'], false]);
+        expect(declared(new TagSearchProvider())).toEqual([['Entity'], false]);
+        expect(declared(new VectorSearchProvider())).toEqual([['ExternalIndex'], false]);
+        expect(declared(new StorageSearchProvider())).toEqual([['StorageAccount'], false]);
+        const externals = [new AzureAISearchProvider(), new ElasticsearchSearchProvider(), new OpenSearchSearchProvider(), new TypesenseSearchProvider()];
+        for (const external of externals) {
+            expect(declared(external)).toEqual([['ExternalIndex'], false]);
+        }
+    });
+});
+
+describe('the lane ExtraFilter exemption is a provider capability, resolved through the engine-stamped provider', () => {
+    let engine: BoundedTestEngine;
+
+    beforeEach(() => {
+        mockRunViewFn.mockReset().mockResolvedValue({ Success: true, Results: [] });
+        engine = BoundedTestEngine.Create();
+    });
+
+    function arrange(provider: BaseSearchProvider): void {
+        engine.Inject([entry(FULLTEXT_ID, provider)]);
+        setRows({ Entities: [entityLane('lane-1', `ID='${AGENT_A}'`)], Providers: [providerRow(FULLTEXT_ID)] });
+    }
+
+    it('exempts a provider that declares AppliesLaneExtraFilter, whatever its class', async () => {
+        class SelfFilteringProvider extends RecordingProvider {
+            public override readonly AppliesLaneExtraFilter: boolean = true;
+        }
+        arrange(new SelfFilteringProvider('fulltext', [hit(AGENT_B, 'fulltext', 'b')], ['Entity']));
+
+        const result = await engine.Search(scoped(), user);
+
+        expect(result.Results.map(r => r.RecordID)).toEqual([AGENT_B]);
+        expect(mockRunViewFn).not.toHaveBeenCalled();
+    });
+
+    it('re-checks an EntitySearchProvider subclass that overrides the capability off (it changed Search)', async () => {
+        class UnfilteredEntityProvider extends FixedEntityProvider {
+            public override readonly AppliesLaneExtraFilter: boolean = false;
+        }
+        arrange(new UnfilteredEntityProvider([hit(AGENT_B, 'entity', 'b')]));
+
+        const result = await engine.Search(scoped(), user);
+
+        expect(result.Results).toEqual([]);
+        expect(laneReads()).toHaveLength(1);
+        expect(laneReads()[0].ExtraFilter).toContain(AGENT_B);
+    });
+});
+
+describe('a content item promoted to its origin record is held to the origin entity\'s lane ExtraFilter', () => {
+    const CONTENT_ITEMS = 'MJ: Content Items';
+    let engine: BoundedTestEngine;
+
+    /** A `MJ: Content Items` hit whose metadata names the agent it was derived from, as the vector index stores it. */
+    function contentItemHit(contentItemID: string, originAgentID: string, sourceType: SearchSource): SearchResultItem {
+        return {
+            ...hit(contentItemID, sourceType, `content-${originAgentID}`, CONTENT_ITEMS),
+            ResultType: 'content-item',
+            RawMetadata: JSON.stringify({ Entity: AGENTS, RecordID: originAgentID }),
+        };
+    }
+
+    beforeEach(() => {
+        mockRunViewFn.mockReset();
+        // The lane read returns the agents that satisfy the lane filter `ID='<agent A>'`.
+        mockRunViewFn.mockResolvedValue({ Success: true, Results: [{ ID: AGENT_A }] });
+        vi.spyOn(KnowledgeHubMetadataEngine.Instance, 'Config').mockResolvedValue(undefined);
+        engine = BoundedTestEngine.Create();
+    });
+
+    it('drops a vector content-item hit whose origin is outside the bound and keeps the one inside it', async () => {
+        const vector = new RecordingProvider('vector', [contentItemHit('ci-in', AGENT_A, 'vector'), contentItemHit('ci-out', AGENT_B, 'vector')]);
+        engine.Inject([entry(VECTOR_ID, vector)]);
+        setRows({
+            Entities: [entityLane('lane-1', `ID='${AGENT_A}'`)], ExternalIndexes: [vectorIndexLane('ix-1')], Providers: [providerRow(VECTOR_ID)],
+        });
+
+        const result = await engine.Search(scoped(), user);
+
+        expect(result.Results.map(r => [r.EntityName, r.RecordID, r.PromotedFromContentItemID])).toEqual([[AGENTS, AGENT_A, 'ci-in']]);
+        expect(laneReads()).toHaveLength(1);
+        expect(laneReads()[0].ExtraFilter).toContain(`(ID='${AGENT_A}')`);
+        expect(laneReads()[0].ExtraFilter).toContain(AGENT_B);
+    });
+
+    it('re-checks a hit the ENTITY provider found on a content item: it applied no filter to the origin row', async () => {
+        const entityLaneProvider = new FixedEntityProvider([contentItemHit('ci-out', AGENT_B, 'entity')]);
+        engine.Inject([entry(ENTITY_ID, entityLaneProvider)]);
+        setRows({ Entities: [entityLane('lane-1', `ID='${AGENT_A}'`)], Providers: [providerRow(ENTITY_ID)] });
+
+        const result = await engine.Search(scoped(), user);
+
+        expect(entityLaneProvider.Calls).toBe(1);
+        expect(result.Results).toEqual([]);
+        expect(laneReads()).toHaveLength(1);
+        expect(laneReads()[0].ExtraFilter).toContain(AGENT_B);
+    });
+
+    it('promotes a scoped search\'s content items once (per scope), and an unscoped search\'s after fusion', async () => {
+        const promote = vi.spyOn(SearchEnricher.prototype, 'ExcludeEntitySourcedContentItems');
+        const vector = new RecordingProvider('vector', [contentItemHit('ci-in', AGENT_A, 'vector')]);
+        engine.Inject([entry(VECTOR_ID, vector)]);
+        setRows({
+            Entities: [entityLane('lane-1', `ID='${AGENT_A}'`)], ExternalIndexes: [vectorIndexLane('ix-1')], Providers: [providerRow(VECTOR_ID)],
+        });
+
+        await engine.Search(scoped(), user);
+        expect(promote).toHaveBeenCalledTimes(1);
+
+        promote.mockClear();
+        queryCounter++;
+        const unscoped = await engine.Search({ Query: `unscoped promotion ${queryCounter}`, MaxResults: 20 }, user);
+        expect(promote).toHaveBeenCalledTimes(1);
+        expect(unscoped.Results.map(r => [r.EntityName, r.PromotedFromContentItemID])).toEqual([[AGENTS, 'ci-in']]);
+        promote.mockRestore();
     });
 });

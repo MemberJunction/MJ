@@ -94,32 +94,43 @@ export function EscapeFilterByLiteral(value: string): string {
 }
 
 /**
- * Why a value cannot be a **storage path segment**, or null when it can: it contains `..` or a
- * separator (`/` or a backslash). A legitimate segment value (a uuid, an enum, an int) contains neither.
+ * Why a value cannot be a **storage path segment**, or null when it can: it IS `..` or `.` (ignoring
+ * surrounding whitespace, as the FolderPath guard reads segments), or it contains a separator (`/` or a
+ * backslash). A value that merely contains `..` (`Acme..Inc`) is one ordinary segment: without a separator
+ * it cannot climb out of the folder. A legitimate segment value (a uuid, an enum, an int) is none of these.
  */
 function pathSegmentProblem(value: string): string | null {
-    if (value.includes('..')) return 'it contains ".." (path traversal)';
+    // Judged as it would be interpolated: control characters are stripped first, so `.\0.` is `..`.
+    const segment = stripPathControlCharacters(value).trim();
+    if (segment === '..') return 'it is ".." (path traversal)';
+    if (segment === '.') return 'it is "." (the enclosing folder)';
     if (/[/\\]/.test(value)) return 'it contains a path separator';
     return null;
+}
+
+/** The control characters a path segment loses before it is interpolated. */
+function stripPathControlCharacters(value: string): string {
+    return value.replace(/[\0\b\n\r\t\x1a]/g, '');
 }
 
 /**
  * Escape a value for a **storage path segment** (`FolderPath`).
  *
- * Path traversal is the risk, not quoting. A value containing `..` or a separator is REFUSED
- * (this throws) rather than stripped: stripping turned `..` into nothing and `../other` into
+ * Path traversal is the risk, not quoting. A value that is `..` or `.`, or contains a separator, is
+ * REFUSED (this throws) rather than stripped: stripping turned `..` into nothing and `../other` into
  * `other`, so `clients/{{ context.X }}` rendered `clients/` (every client's folder) or another
- * client's folder — a wider or different bound, silently. Control characters are still removed.
- * Every legitimate value (uuid, enum, int, iso-date, bool) is returned unchanged.
+ * client's folder — a wider or different bound, silently. `.` names the enclosing folder, so it widens
+ * the same way. Control characters are still removed. Every legitimate value (uuid, enum, int,
+ * iso-date, bool, and a name such as `Acme..Inc`) is returned unchanged.
  *
- * @throws {Error} when the value contains `..`, `/` or a backslash
+ * @throws {Error} when the value is `..` or `.`, or contains `/` or a backslash
  */
 export function EscapePathSegment(value: string): string {
     const problem = pathSegmentProblem(value);
     if (problem) {
         throw new Error(`a value interpolated into a storage path was refused because ${problem}: ${JSON.stringify(value.substring(0, 80))}`);
     }
-    return value.replace(/[\0\b\n\r\t\x1a]/g, '');
+    return stripPathControlCharacters(value);
 }
 
 /**

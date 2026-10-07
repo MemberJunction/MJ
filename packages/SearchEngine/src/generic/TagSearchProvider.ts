@@ -20,6 +20,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { MJTaggedItemEntity, MJContentItemTagEntity, MJTagEntity } from '@memberjunction/core-entities';
 import { TagEngineBase } from '@memberjunction/tag-engine-base';
 import { BaseSearchProvider, SearchProviderConfig } from './ISearchProvider';
+import type { LaneKind } from './ScopeExplanation';
 import {
     SearchFilters,
     SearchResultItem,
@@ -74,6 +75,9 @@ function escapeRegex(str: string): string {
 @RegisterClass(BaseSearchProvider, 'TagSearchProvider')
 export class TagSearchProvider extends BaseSearchProvider {
     public readonly SourceType: SearchSource = 'tag';
+
+    /** Reads the entity names of the scope's entity lanes (see `BaseSearchProvider.ConsumesLaneKinds`). */
+    public override readonly ConsumesLaneKinds: readonly LaneKind[] = ['Entity'];
 
     /**
      * Minimum query length to evaluate for tag matching.

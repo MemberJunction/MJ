@@ -15,6 +15,7 @@
 import { IMetadataProvider, LogError, Metadata, UserInfo } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import { SearchSource, SearchFilters, SearchResultItem, ScopeConstraints, ScopeExternalIndexConstraint } from './search.types';
+import type { LaneKind } from './ScopeExplanation';
 
 /**
  * Lightweight catalog entry for a registered search provider, returned by
@@ -80,8 +81,43 @@ export abstract class BaseSearchProvider {
      * can call itself `'entity'` or `'fulltext'`. `EntitySearchProvider` and `FullTextSearchProvider` set this.
      * Leave it `false` (the default) unless your hits really come out of `RunView` against the labelled entity;
      * set on any other provider, it lets whoever writes the index choose which entity's permissions apply.
+     * It never covers a hit the engine promoted from `MJ: Content Items` to its origin record
+     * (`SearchResultItem.PromotedFromContentItemID`): the provider never read that row.
+     *
+     * A subclass inherits this flag. A subclass that changes `Search` so its hits no longer come out of
+     * `RunView` against the labelled entity must override it to `false`.
      */
     public readonly ResultsAreRowsOfLabelledEntity: boolean = false;
+
+    /**
+     * Whether this provider applies each entity lane's rendered `ExtraFilter` itself, in the `RunView` that reads
+     * the entity — so the engine need not re-check its hits against that lane bound. Only `EntitySearchProvider`
+     * sets it. Every other provider's hits for an entity with a lane `ExtraFilter` are re-checked by the engine,
+     * as the user, with `PK IN (...) AND (<ExtraFilter>)`.
+     *
+     * Like {@link ResultsAreRowsOfLabelledEntity}, it is read from the provider the engine stamped on the result
+     * (`ProviderId`), never from a label, and never covers a promoted content-item hit (the filter was applied to
+     * the content item, not to the origin record it now names). A subclass inherits it; a subclass that changes
+     * `Search` so the lane `ExtraFilter` is no longer applied must override it to `false`.
+     */
+    public readonly AppliesLaneExtraFilter: boolean = false;
+
+    /**
+     * The scope lane kinds this provider reads in a scoped search: `'ExternalIndex'` (`ScopeConstraints.ExternalIndexes`),
+     * `'Entity'` (`Entities`) and `'StorageAccount'` (`StorageAccounts`).
+     *
+     * The engine uses it on both paths, so they agree. `ExplainScope` reports a non-global scope unreachable
+     * when none of its listed providers reads a lane kind the scope configures. A scoped search never calls a
+     * provider whose lane kinds are all empty in that scope: it could only search nothing — or, written with the
+     * old `ExternalIndexes?.length ? scoped : defaultIndex` pattern, fall back to its default index.
+     *
+     * Default `['ExternalIndex']`: a third-party provider serves an external index of its own `IndexType` (see
+     * {@link ScopedExternalIndexRows}). A provider that reads another lane kind must override this, or no scoped
+     * search without an external-index lane will call it. It is declared rather than derived from `SourceType`
+     * because the external-index providers and `FullTextSearchProvider` all declare `'fulltext'` yet read
+     * different lanes. A subclass inherits it; override it when the subclass's `Search` reads other lanes.
+     */
+    public readonly ConsumesLaneKinds: readonly LaneKind[] = ['ExternalIndex'];
 
     /** Config from the SearchProvider metadata record, set during Initialize() */
     protected config: SearchProviderConfig | null = null;
@@ -152,7 +188,9 @@ export abstract class BaseSearchProvider {
      * compatible pre-scope behavior). Inside `scopeConstraints`, a lane list that is
      * `undefined` means unscoped too, but a DEFINED, EMPTY list means the scope gives this
      * provider nothing: return no results without querying — never fall back to "everything"
-     * or to a default index.
+     * or to a default index (see the field docs on `ScopeConstraints`). The engine does not call a
+     * provider whose {@link ConsumesLaneKinds} are all empty in a scope, but a provider reading several
+     * lane kinds still receives `[]` for the ones a scope leaves empty.
      *
      * @param query - The search query text
      * @param topK - Maximum number of results to retrieve

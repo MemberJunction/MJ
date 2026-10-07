@@ -34,10 +34,11 @@ export type LaneKind = 'ExternalIndex' | 'Entity' | 'StorageAccount';
  *
  * `Skipped` is the interesting state and the reason this type exists. A lane is skipped when
  * its restriction could not be applied safely — an unparseable filter, a template that lost a
- * clause, a required metadata key the rendered filter never mentions. Skipping is the correct
- * outcome (the alternative is querying unfiltered), but it is also silent: the search still
- * succeeds, just against fewer sources. Without this record, "the filter broke and we searched
- * three lanes instead of four" is indistinguishable from a scope that only ever had three.
+ * clause, a required metadata key the rendered filter never mentions, a FolderPath that would
+ * widen. Only a dry run (`ExplainScope`) reports a lane as skipped: a real search refuses on the
+ * first such lane rather than search the others, so a scope with any skipped lane is
+ * `Reachable: false`. The dry run reports every broken lane in one pass, so a scope can be fixed in
+ * one sitting.
  */
 export interface LaneExplanation {
     Kind: LaneKind;
@@ -54,12 +55,19 @@ export interface LaneExplanation {
     Reason?: string;
 }
 
+/**
+ * Where an {@link EntitlementExplanation} came from: a path of the scope-permission resolver, or
+ * `'ScopeUnresolvable'` — the scope is inactive, expired or missing, so a search naming it is refused before
+ * any entitlement is judged. The resolver itself never returns `'ScopeUnresolvable'`.
+ */
+export type EntitlementSource = SearchScopePermissionSource | 'ScopeUnresolvable';
+
 /** The entitlement half of the decision: was this principal allowed to reach the scope at all. */
 export interface EntitlementExplanation {
     Allowed: boolean;
     Level: SearchScopePermissionLevel;
-    /** Which resolution path produced the answer (direct grant, role, agent fallback, skill…). */
-    Source: SearchScopePermissionSource;
+    /** Which resolution path produced the answer (direct grant, role, agent fallback, skill…), or `'ScopeUnresolvable'`. */
+    Source: EntitlementSource;
     Reason: string;
     /** The principals in play, so a log row is self-describing without joining three tables. */
     Principals: {
@@ -100,9 +108,11 @@ export interface ScopeExplanation {
     Diagnostics: string[];
     /**
      * True when this scope would actually contribute results: entitlement did not deny it AND
-     * at least one lane is active AND (for a non-global scope) it has an enabled provider row. A
-     * non-global scope with no enabled provider row, or no lane, reaches nothing. When `Entitlement`
-     * is null, this reflects the configuration alone.
+     * at least one lane is active AND (for a non-global scope) an enabled provider row names a
+     * configured, available provider that reads a lane kind the scope configures
+     * (`BaseSearchProvider.ConsumesLaneKinds`) AND no lane is skipped — a skipped lane is a problem a
+     * real search refuses on. A non-global scope with no enabled provider row, or no lane, reaches
+     * nothing. When `Entitlement` is null, this reflects the configuration alone.
      *
      * Entitled-but-zero-active-lanes is the case worth surfacing on its own. It looks like a
      * permissions problem to whoever reports it ("I have access but get nothing"), while the
@@ -147,29 +157,43 @@ export interface ExplainScopeInput {
  * Explorer panel, or a test can format one without constructing a `SearchEngine`.
  */
 export function SummarizeExplanation(explanation: ScopeExplanation): string[] {
-    const lines: string[] = [];
-    lines.push(`Scope: ${explanation.ScopeName} (${explanation.ScopeID})`);
+    const lines: string[] = [`Scope: ${explanation.ScopeName} (${explanation.ScopeID})`];
     const ent = explanation.Entitlement;
-    lines.push(
-        `  Reachable: ${explanation.Reachable ? 'YES' : 'NO'} — ` +
-        (ent
-            ? `entitlement ${ent.Allowed ? 'granted' : 'DENIED'} at ${ent.Level} via ${ent.Source}`
-            : 'entitlement not evaluated at this layer')
-    );
-    if (ent) lines.push(`  Why: ${ent.Reason}`);
-
-    if (explanation.Dimensions.length) {
-        lines.push('  Dimensions:');
-        for (const d of explanation.Dimensions) {
-            const bound = d.Restricts ? ' [BOUND]' : '';
-            const note = d.Note ? ` — ${d.Note}` : '';
-            lines.push(`    ${d.Name}${bound} = ${JSON.stringify(d.Value)} (${d.Provenance})${note}`);
-        }
+    if (ent?.Source === 'ScopeUnresolvable') {
+        // Its rows were never loaded, so there are no dimensions or lanes to describe — only the refusal.
+        lines.push('  Reachable: NO — REFUSED: the scope is inactive, expired, or does not exist', `  Why: ${ent.Reason}`);
+        lines.push('  (no dimensions or lanes were loaded: a search naming this scope is refused, never widened)');
     } else {
-        lines.push('  Dimensions: none declared (legacy scope — the caller context passes through unchecked)');
+        lines.push(`  Reachable: ${explanation.Reachable ? 'YES' : 'NO'} — ${describeEntitlement(ent)}`);
+        if (ent) lines.push(`  Why: ${ent.Reason}`);
+        lines.push(...summarizeDimensions(explanation.Dimensions), ...summarizeLanes(explanation));
     }
+    for (const d of explanation.Diagnostics) lines.push(`  note: ${d}`);
+    return lines;
+}
 
-    lines.push('  Lanes:');
+/** The entitlement half of the `Reachable` line. */
+function describeEntitlement(ent: EntitlementExplanation | null): string {
+    return ent
+        ? `entitlement ${ent.Allowed ? 'granted' : 'DENIED'} at ${ent.Level} via ${ent.Source}`
+        : 'entitlement not evaluated at this layer';
+}
+
+/** The `Dimensions:` block of {@link SummarizeExplanation}. */
+function summarizeDimensions(dimensions: DimensionExplanation[]): string[] {
+    if (!dimensions.length) {
+        return ['  Dimensions: none declared (legacy scope — the caller context passes through unchecked)'];
+    }
+    return ['  Dimensions:', ...dimensions.map(d => {
+        const bound = d.Restricts ? ' [BOUND]' : '';
+        const note = d.Note ? ` — ${d.Note}` : '';
+        return `    ${d.Name}${bound} = ${JSON.stringify(d.Value)} (${d.Provenance})${note}`;
+    })];
+}
+
+/** The `Lanes:` block of {@link SummarizeExplanation}. */
+function summarizeLanes(explanation: ScopeExplanation): string[] {
+    const lines = ['  Lanes:'];
     if (!explanation.Lanes.length) {
         lines.push(explanation.Unbounded
             ? '    (NONE CONFIGURED — this global scope is UNSCOPED: providers apply no filter)'
@@ -177,17 +201,9 @@ export function SummarizeExplanation(explanation: ScopeExplanation): string[] {
     }
     for (const lane of explanation.Lanes) {
         lines.push(`    [${lane.Status}] ${lane.Kind}: ${lane.Target}`);
-        if (lane.RequiredMetadataKeys?.length) {
-            lines.push(`        requires: ${lane.RequiredMetadataKeys.join(', ')}`);
-        }
-        if (lane.RenderedFilter) {
-            lines.push(`        filter: ${lane.RenderedFilter.substring(0, 200)}`);
-        }
-        if (lane.Reason) {
-            lines.push(`        SKIPPED: ${lane.Reason}`);
-        }
+        if (lane.RequiredMetadataKeys?.length) lines.push(`        requires: ${lane.RequiredMetadataKeys.join(', ')}`);
+        if (lane.RenderedFilter) lines.push(`        filter: ${lane.RenderedFilter.substring(0, 200)}`);
+        if (lane.Reason) lines.push(`        SKIPPED: ${lane.Reason}`);
     }
-
-    for (const d of explanation.Diagnostics) lines.push(`  note: ${d}`);
     return lines;
 }

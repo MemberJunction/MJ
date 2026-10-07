@@ -12,6 +12,7 @@
 import { IRunViewProvider, LogError, UserInfo } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseSearchProvider, SearchProviderConfig } from './ISearchProvider';
+import type { LaneKind } from './ScopeExplanation';
 import { SearchSource, SearchFilters, SearchResultItem, SearchResultType, ScopeConstraints } from './search.types';
 import { SearchEnricher } from './SearchEnricher';
 import { EnvIntOverride } from './env-config';
@@ -23,6 +24,9 @@ import { EnvIntOverride } from './env-config';
 @RegisterClass(BaseSearchProvider, 'FullTextSearchProvider')
 export class FullTextSearchProvider extends BaseSearchProvider {
     public readonly SourceType: SearchSource = 'fulltext';
+
+    /** Reads the entity names of the scope's entity lanes (see `BaseSearchProvider.ConsumesLaneKinds`). */
+    public override readonly ConsumesLaneKinds: readonly LaneKind[] = ['Entity'];
 
     /**
      * Every hit is a row of the entity it names: `FullTextSearch` reads each FTS-enabled entity through

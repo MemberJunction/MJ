@@ -66,8 +66,8 @@ env.addFilter('jsonparse', (value: unknown): unknown => {
  * string unchanged when `template` is null/empty. Returns the original string on render
  * failure (logged via LogError) so a single bad template does not bring down a search.
  *
- * @throws {Error} on the `path` lane only, when a value interpolated into the output contains
- *   `..` or a path separator (see `EscapePathSegment`). Such a value is refused, never stripped.
+ * @throws {Error} on the `path` lane only, when a value interpolated into the output is `..` or
+ *   `.`, or contains a path separator (see `EscapePathSegment`). Such a value is refused, never stripped.
  */
 export function RenderScopeTemplate(
     template: string | null | undefined,

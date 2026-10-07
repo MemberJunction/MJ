@@ -34,6 +34,7 @@ import type { MJSearchScopeEntity, ScopeBundle, SearchEngineBase } from '@member
 import { SearchEngine } from '../generic/SearchEngine';
 import { BaseSearchProvider } from '../generic/ISearchProvider';
 import type { SearchResultItem, SearchSource } from '../generic/search.types';
+import type { LaneKind } from '../generic/ScopeExplanation';
 
 const ACTIVE = 'A0000000-0000-4000-8000-000000000001';
 const INACTIVE = 'A0000000-0000-4000-8000-000000000002';
@@ -47,6 +48,8 @@ const DOCS_ENTITY = { ID: 'E0000000-0000-4000-8000-0000000000d0', Name: 'Docs', 
 /** Counts its calls: a refused search must run no provider, which is what proves it did not go global. */
 class CountingProvider extends BaseSearchProvider {
     public readonly SourceType: SearchSource = 'vector';
+    /** Its hits are `Docs` rows and the fixture scopes give it an entity lane on `Docs`, so it reads entity lanes. */
+    public override readonly ConsumesLaneKinds: readonly LaneKind[] = ['Entity'];
     public Calls = 0;
     public async Search(): Promise<SearchResultItem[]> {
         this.Calls++;
@@ -206,6 +209,18 @@ describe('a named scope that cannot be resolved', () => {
             expect(byQuery.get('budget inactive')).toMatchObject({ Status: 'Failure', SearchScopeID: INACTIVE });
         });
 
+        it('attributes the refusal to a scope that was refused, never to a valid scope searched beside a missing one', async () => {
+            await engine.Search({ Query: 'budget active+missing', ScopeIDs: [ACTIVE, MISSING] }, user);
+            await engine.Search({ Query: 'budget active+inactive', ScopeIDs: [ACTIVE, INACTIVE] }, user);
+            await vi.waitFor(() => expect(engine.AuditRows).toHaveLength(2), { timeout: 500, interval: 5 });
+
+            const byQuery = new Map(engine.AuditRows.map(r => [r.Query, r]));
+            // The missing scope has no row to name, so none is named — ACTIVE was not refused.
+            expect(byQuery.get('budget active+missing')).toMatchObject({ Status: 'Failure', SearchScopeID: null });
+            // The inactive scope has a row: it is the one refused, so it is the one named.
+            expect(byQuery.get('budget active+inactive')).toMatchObject({ Status: 'Failure', SearchScopeID: INACTIVE });
+        });
+
         it('streams a single error event and no progress for a refused scope', async () => {
             const phases: string[] = [];
             for await (const ev of engine.streamSearch({ Query: 'budget', ScopeIDs: [MISSING] }, user)) phases.push(ev.phase);
@@ -221,6 +236,8 @@ describe('a named scope that cannot be resolved', () => {
             expect(explained.ScopeName).toBe('Retired Scope');
             expect(explained.Lanes).toEqual([]);
             expect(explained.Diagnostics.join(' ')).toMatch(/refused, never widened to a global search/);
+            // Nothing about the caller's grants was judged: the scope's status refused it, so the source says that.
+            expect(explained.Entitlement?.Source).toBe('ScopeUnresolvable');
         });
 
         it('explains a missing scope as unreachable', async () => {

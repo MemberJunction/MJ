@@ -11,6 +11,7 @@
 import { CompositeKey, IMetadataProvider, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseSearchProvider } from './ISearchProvider';
+import type { LaneKind } from './ScopeExplanation';
 import { SearchSource, SearchFilters, SearchResultItem, SearchResultType, ScopeConstraints, ScopeEntityConstraint } from './search.types';
 import { EnvIntOverride } from './env-config';
 
@@ -23,8 +24,14 @@ import { EnvIntOverride } from './env-config';
 export class EntitySearchProvider extends BaseSearchProvider {
     public readonly SourceType: SearchSource = 'entity';
 
+    /** Reads the scope's entity lanes, each with its own ExtraFilter and UserSearchString (see `BaseSearchProvider.ConsumesLaneKinds`). */
+    public override readonly ConsumesLaneKinds: readonly LaneKind[] = ['Entity'];
+
     /** Every hit is a row of the entity it names, read through `RunView` as the user (see the base class). */
     public override readonly ResultsAreRowsOfLabelledEntity: boolean = true;
+
+    /** Each lane's rendered `ExtraFilter` is applied in the `RunView` that reads its entity (see the base class). */
+    public override readonly AppliesLaneExtraFilter: boolean = true;
 
     /**
      * Minimum trimmed term length we accept. A single-character substring against a
