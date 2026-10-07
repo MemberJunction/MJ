@@ -1,7 +1,7 @@
 {
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
-    "Name": "IT107 - Agent Pre-Execution RAG Permission Gate",
+    "Name": "IT108 - Agent Pre-Execution RAG Permission Gate",
     "Description": "Pre-execution RAG's scope-permission gate, deterministic, no LLM: the checks call AgentPreExecutionRAG.Execute() directly for the seeded IT: Search Agent. The bundle seeds no notes (a note save embeds); the proof is the search log.",
     "InputDefinition": {},
     "ExpectedOutcomes": {

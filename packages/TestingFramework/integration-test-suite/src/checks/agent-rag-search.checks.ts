@@ -17,7 +17,7 @@
  * DETERMINISM (§3): structural observables only — returned RecordIDs / SourceCounts, the Scoped Search
  * Actions step, the injected result + <retrieved_context> in the assembled prompt — never model prose.
  *
- * 'agent-rag-gate' (IT107, deterministic tier) shares this file's fixture lifecycle and runs pre-execution RAG
+ * 'agent-rag-gate' (IT108, deterministic tier) shares this file's fixture lifecycle and runs pre-execution RAG
  * DIRECTLY — `new AgentPreExecutionRAG().Execute(...)`, no model — so its scope-permission gate is covered by
  * the deterministic lane: RG1 a permitted run retrieves the seeded notes, RG2 a refused run returns null and
  * writes exactly one Forbidden search-log row. (IT62 is live-model tier as a whole, so checks added to
@@ -443,7 +443,7 @@ for (const check of AgentRagSearchChecks) {
 }
 
 /**
- * 'agent-rag-gate' (IT107, deterministic): pre-execution RAG's scope-permission gate, exercised by calling
+ * 'agent-rag-gate' (IT108, deterministic): pre-execution RAG's scope-permission gate, exercised by calling
  * `AgentPreExecutionRAG.Execute()` directly (no model). It seeds no corpus (a note save embeds, which the
  * deterministic lane cannot rely on): the proof is the search log, a Success row for a granted run and a Forbidden row for a refused one.
  *

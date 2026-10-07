@@ -1,7 +1,7 @@
 {
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
-    "Name": "IT108 - Search Provider Trust and Unresolvable Scopes",
+    "Name": "IT109 - Search Provider Trust and Unresolvable Scopes",
     "Description": "Two places the search engine trusted what it should not, against the live database, with no model, network call or vector index. SPT1: hits built exactly as AzureAISearchProvider builds them (SourceType 'fulltext', the index name 'MJ: AI Agents' as EntityName, the document id as RecordID) and stamped with that provider pass the engine's permission filter as the run user — the hit naming a real agent survives and the never-minted id is dropped; as a control, the same never-minted id stamped by the full-text provider (which reads the entity through RunView) skips verification when no row filter applies, so the drop is the provider identity, not the label. SPT2: a search naming a scope that does not exist is refused (Success false, no results, the scope named in the error) and logged as a Failure row with no SearchScopeID; naming the seeded 'IT: Integration Test Scope' alone searches, naming it together with the dead scope is still refused; ExplainScope reports the dead scope unreachable. Teardown sweeps the bundle's MJ: Search Execution Logs rows.",
     "InputDefinition": {},
     "ExpectedOutcomes": {

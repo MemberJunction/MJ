@@ -18,4 +18,4 @@ The Scoped Search action takes its tenant from the agent run, not from the model
 - **`@memberjunction/ai-core-plus`**: new `RESERVED_AGENT_RUN_DATA_KEYS` and `WithoutReservedAgentRunDataKeys`. `@memberjunction/server`'s agent-run `data` guard now uses this shared list instead of its own copy.
 - **`@memberjunction/core-actions`**: Scoped Search resolves the tenant (`resolveTenant`). Forbidden rows now record the tenant they were judged under. TSDoc and `guides/SEARCH_SCOPES_AND_RAG_GUIDE.md` updated.
 
-Tests: unit tests in each package, and a new check in the deterministic `agent-run-audience` bundle (IT109, AU7). No migration.
+Tests: unit tests in each package, and a new check in the deterministic `agent-run-audience` bundle (IT110, AU7). No migration.

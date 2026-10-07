@@ -25,6 +25,6 @@ Review fixes for agent run audiences and run scope. No migration, no metadata ch
   - `Forbidden` rows for a refused reader name the reader's ID and the verdict `Source` only.
   - The `ActionRunScopeValue` drift-guard TSDoc is corrected.
   - Scoped Search's `INVALID_PARAM` messages say exactly what to pass.
-- **Tests.** Unit tests in each package, and `agent-run-audience` (IT109) gains AU8 (prototype-name mode) and AU9 (Search refused in a tenant-scoped run).
+- **Tests.** Unit tests in each package, and `agent-run-audience` (IT110) gains AU8 (prototype-name mode) and AU9 (Search refused in a tenant-scoped run).
 
 Follow-up: the Scoped Search parameter descriptions in `metadata/actions/.scoped-search.json` are stale. They describe the tenant as supplied per call and say malformed `SecondaryScopes` are skipped. Update them in a metadata PR (a `minor` changeset).

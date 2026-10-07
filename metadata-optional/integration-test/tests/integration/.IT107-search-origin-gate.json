@@ -1,7 +1,7 @@
 {
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
-    "Name": "IT106 - Search Origin-Record Gate",
+    "Name": "IT107 - Search Origin-Record Gate",
     "Description": "The search engine's origin-record gate (SearchEngine.VerifyOriginRecords) against the live views, with no model, embedding or vector index. Setup creates, as the run user, a content source (with its own source type, file type and content type), an Inactive entity document on MJ: AI Agents, and two Entity Record Document -> Content Item -> Content Item Chunk chains: one naming an existing agent, one naming an agent id that is never minted. SOG1: the chunk and item hits of the readable-origin chain pass both permission gates for the run user. SOG2: the missing-origin chain's chunk and item are readable rows of their own entities, yet the origin gate drops their hits while the readable chain in the same call is kept. SOG3: the seeded role-less user it-nogrant@integration.test is shown none of the hits through both gates, and the origin gate called on its own keeps nothing for it. SOG4: every fixture row is deleted and confirmed gone; Teardown removes anything a failed check left behind.",
     "InputDefinition": {},
     "ExpectedOutcomes": {

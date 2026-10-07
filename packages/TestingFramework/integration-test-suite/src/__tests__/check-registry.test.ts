@@ -56,6 +56,7 @@ import { EntityGraphChecks } from '../checks/entity-graph.checks';
 import { EntityEmbeddedChecks } from '../checks/entity-embedded.checks';
 import { EntityGraphClientChecks } from '../checks/entity-graph-client.checks';
 import { JSONTypeLiveSyncChecks, JSONTypeLiveSyncClientChecks } from '../checks/jsontype-live-sync.checks';
+import { SelfAvatarClientChecks } from '../checks/self-avatar-client.checks';
 import { RecordCloningChecks } from '../checks/record-cloning.checks';
 import { BinaryFieldsChecks } from '../checks/binary-fields.checks';
 import { TaskGraphOrchestrationChecks } from '../checks/task-graph-orchestration.checks';
@@ -155,8 +156,8 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['agent-memory-guards', AgentMemoryGuardsChecks, 5],
         ['agent-note-cache-types', AgentNoteCacheTypeChecks, 3], // NC1-NC3 entity_object cache-event invariant (IT84)
         ['agent-rag-search', AgentRagSearchChecks, 7], // extended-agents suite (live-model, IT53-62)
-        ['agent-rag-gate', AgentRagGateChecks, 2], // RG1-RG2 pre-execution RAG permission gate, run directly with no model (IT107)
-        ['agent-run-audience', AgentRunAudienceChecks, 9], // AU1-AU6, AU8 a run's audience; AU7, AU9 its tenant binds the search actions (IT109)
+        ['agent-rag-gate', AgentRagGateChecks, 2], // RG1-RG2 pre-execution RAG permission gate, run directly with no model (IT108)
+        ['agent-run-audience', AgentRunAudienceChecks, 9], // AU1-AU6, AU8 a run's audience; AU7, AU9 its tenant binds the search actions (IT110)
         ['agent-wire-callback', AgentWireCallbackChecks, 2], // over-the-wire fire-and-forget callback (IT63)
         ['view-security', ViewSecurityChecks, 4], // two-identity V14/V15/V16 + RV17 (IT64)
         ['ai-providers', AiProvidersChecks, 3], // AI7/AI13/AI15 model-resolution seams (IT65)
@@ -182,12 +183,13 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['fls-enforcement', FlsEnforcementChecks, 24], // FLS1-FLS24 field-level security against a live DB (IT90); FLS22/FLS23 cover the Record Changes payload projection, FLS24 record names, FLS21 measures metadata-refresh cost
         ['fls-lifecycle', FlsLifecycleChecks, 9], // LC1-LC9 FLS lifecycle + system-user guards, mutation tier (IT91)
         ['fls-enforcement-client', FlsClientChecks, 6], // FC1-FC6 FLS over the wire via per-user API keys (IT92)
+        ['self-avatar-client', SelfAvatarClientChecks, 6], // AV1-AV6 self-service avatar mutation over the wire via per-user API keys (IT106)
         ['metadata-sync-push', MetadataSyncPushChecks, 10], // MSP1-MSP10 sync push atomicity, in-transaction metadata reload, and one row-level security filter, mutation tier (IT94)
         ['record-cloning', RecordCloningChecks, 13], // RC1-RC9 plan §13.2 + RC10-RC13 real-database dry runs, client transport (IT96)
         ['binary-fields', BinaryFieldsChecks, 6], // BF1-BF6 binary fields end to end + binary vector columns, client transport (IT101)
-        ['search-origin-gate', SearchOriginGateChecks, 4], // SOG1-SOG4 the search origin-record gate against the live views (IT106)
-        ['search-provider-trust', SearchProviderTrustChecks, 2], // SPT1 external-index hits verified, SPT2 unresolvable scope refused (IT108)
-        ['search-scope-bound', SearchScopeBoundChecks, 3], // SSB1-SSB3 a scoped search is bounded by its scope's rows (IT110)
+        ['search-origin-gate', SearchOriginGateChecks, 4], // SOG1-SOG4 the search origin-record gate against the live views (IT107)
+        ['search-provider-trust', SearchProviderTrustChecks, 2], // SPT1 external-index hits verified, SPT2 unresolvable scope refused (IT109)
+        ['search-scope-bound', SearchScopeBoundChecks, 3], // SSB1-SSB3 a scoped search is bounded by its scope's rows (IT111)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
@@ -329,6 +331,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'search-origin-gate': 4,
         'search-provider-trust': 2,
         'search-scope-bound': 3,
+        'self-avatar-client': 6,
         'server-cache': 32,
         'shipped-agents-live': 4,
         'startup-mode': 3,
@@ -368,7 +371,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(110);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(111);
     });
 });
 
@@ -537,6 +540,12 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'rubrics.R8',
         'rubrics.R9',
         'rubrics.W1',
+        'self-avatar-client.AV1',
+        'self-avatar-client.AV2',
+        'self-avatar-client.AV3',
+        'self-avatar-client.AV4',
+        'self-avatar-client.AV5',
+        'self-avatar-client.AV6',
         'server-cache.S17',
         'server-cache.S23',
         'server-cache.S24',

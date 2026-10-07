@@ -1,5 +1,5 @@
 /**
- * agent-run-audience.checks.ts — the 'agent-run-audience' bundle (AU1–AU7, IT109, deterministic tier): an agent run
+ * agent-run-audience.checks.ts — the 'agent-run-audience' bundle (AU1–AU7, IT110, deterministic tier): an agent run
  * bounded by an audience (`ExecuteAgentParams.Audience`) and by its tenant (AU7), against the real search engine, permission resolver,
  * action engine and user cache. No model is called: pre-execution RAG runs directly, actions go through
  * `BaseAgent.ExecuteSingleAction` (the seam every action call in a run passes), and AU6's run is refused before Phase 2.
