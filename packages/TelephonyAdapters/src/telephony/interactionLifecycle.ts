@@ -79,7 +79,7 @@ export interface CloseInteractionParams {
     EndReason?: string | null;
     CostPerMinute?: number;
     Abandoned?: boolean;
-    Status?: MJInteractionEntity['Status'];
+    Status?: Extract<MJInteractionEntity['Status'], 'Ended' | 'Abandoned' | 'Failed'>;
     ActorUserID?: string | null;
     ActorAgentID?: string | null;
     ContextUser: UserInfo;

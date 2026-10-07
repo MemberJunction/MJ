@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type { MJAIBridgeProviderEntity } from '@memberjunction/core-entities';
+import type { MJAIBridgeProviderEntity, MJAIModelEntity, MJAIModelVendorEntity } from '@memberjunction/core-entities';
 import type { ActiveBridgeSession, StartBridgeSessionParams, RoomTurnSnapshot } from '@memberjunction/ai-bridge-server';
 import type { IRealtimeSession } from '@memberjunction/ai';
+import { AIEngine } from '@memberjunction/aiengine';
 import { LiveKitAgentRoomCoordinator, LIVEKIT_BRIDGE_DRIVER_CLASS, type BridgeOps, type RealtimeSessionStartContext } from '../livekit-agent-room-coordinator';
 import { LiveKitTokenService } from '../livekit-token-service';
 
@@ -56,6 +57,7 @@ describe('LiveKitAgentRoomCoordinator — full-duplex turn-taking wiring', () =>
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     vi.unstubAllEnvs();
   });
 
@@ -81,6 +83,49 @@ describe('LiveKitAgentRoomCoordinator — full-duplex turn-taking wiring', () =>
     });
 
     expect(factoryContexts[0].HostTools).toBeUndefined();
+  });
+
+  it('withholds turn tools, sets FullDuplex true, and skips binder when model has no explicit FullDuplex metadata but vendor has GPT-Live driver', async () => {
+    const handler = { Handles: () => true, Execute: async () => '{}' };
+    const { ops, startCalls } = makeBridgeOps(handler);
+    coordinator.SetBridgeOps(ops);
+    const binder = vi.fn();
+    coordinator.SetTurnToolBinder(binder);
+
+    const mockModel = {
+      ID: 'gpt-live-model-1',
+      Name: 'GPT-Live 1',
+      AIModelType: 'Realtime',
+      IsActive: true,
+      PowerRank: 100,
+      ModelConfigurationObject: null,
+    } as unknown as MJAIModelEntity;
+
+    const mockVendor = {
+      ID: 'mv-1',
+      ModelID: 'gpt-live-model-1',
+      DriverClass: 'OpenAILiveRealtime',
+      Status: 'Active',
+      Priority: 10,
+    } as unknown as MJAIModelVendorEntity;
+
+    vi.spyOn(AIEngine.Instance, 'Models', 'get').mockReturnValue([mockModel]);
+    vi.spyOn(AIEngine.Instance, 'ModelVendors', 'get').mockReturnValue([mockVendor]);
+    vi.spyOn(AIEngine.Instance, 'GetEffectiveModelConfiguration').mockReturnValue(null);
+
+    await coordinator.StartAgentRoomSession({
+      AgentSessionID: 'tt-gpt-live',
+      RoomName: 'tt-room-gpt-live',
+      AgentName: 'Sage',
+      RealtimeModelID: 'gpt-live-model-1',
+    });
+
+    // 1. Turn tools are withheld from session factory HostTools
+    expect(factoryContexts[0].HostTools).toBeUndefined();
+    // 2. FullDuplex is passed as true to StartBridgeSession
+    expect(startCalls[0].FullDuplex).toBe(true);
+    // 3. Tool binder is NOT called for full-duplex session
+    expect(binder).not.toHaveBeenCalled();
   });
 
   it('passes an explicit addressing mode through, and withholds the tools when name matching is forced', async () => {

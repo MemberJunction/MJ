@@ -276,7 +276,12 @@ describe('LiveKitRtcNodeRoomClient — connect + audio', () => {
         expect(tele.inboundGaps['user-1']).toBeDefined();
         expect(tele.inboundGaps['user-1'].totalFrames).toBeGreaterThanOrEqual(1);
 
+        // Pruning on participant disconnect
+        emit(ROOM_EVENT.ParticipantDisconnected, { identity: 'user-1' });
+        expect(client.getTelemetry().inboundGaps['user-1']).toBeUndefined();
+
         await client.disconnect();
+        expect(Object.keys(client.getTelemetry().inboundGaps)).toHaveLength(0);
     });
 });
 

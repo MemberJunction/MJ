@@ -146,6 +146,23 @@ describe('AIBridgeEngine — full-duplex wiring', () => {
         await stopAll(a);
     });
 
+    it('skips ModelSide addressing, turn tools, and framing for a full-duplex session outside moderator mode', async () => {
+        const sa = new FakeSession(true);
+        const a = await seat('fd-nomod-a', 'Sage', sa, { TurnAddressing: 'Auto' });
+        expect(a.TurnGate).toBeUndefined();
+        expect(a.HumanSpeech).toBeUndefined();
+        expect(a.AddressingMode).toBe('Regex');
+        expect(a.ModelSideMatcher).toBeUndefined();
+        expect(a.TurnTakingToolHandler).toBeUndefined();
+
+        // Second agent joins: no framing note sent to full-duplex agent
+        const sb = new FakeSession(true);
+        const b = await seat('fd-nomod-b', 'Demo', sb, { TurnAddressing: 'Auto' });
+        expect(sa.ContextNotes).toHaveLength(0);
+        expect(sb.ContextNotes).toHaveLength(0);
+        await stopAll(a, b);
+    });
+
     it('gives a full-duplex session a gate, a human-speech detector and the turn-taking tool handler in moderator mode', async () => {
         const prev = process.env.MJ_REALTIME_MODERATOR_MODE;
         process.env.MJ_REALTIME_MODERATOR_MODE = 'on';
@@ -218,293 +235,293 @@ describe('AIBridgeEngine — moderator mode (floor gate and turn-taking tools)',
         else delete process.env.MJ_REALTIME_MODERATOR_MODE;
     });
 
-describe('AIBridgeEngine — the floor gate on outbound audio', () => {
-    it('never gates a single-agent room', async () => {
-        const session = new FakeSession(true);
-        const a = await seat('solo', 'Sage', session);
-        session.Say(200);
-        session.Say(200);
-        expect(sent(a)).toBe(2);
-        await stopAll(a);
-    });
+    describe('AIBridgeEngine — the floor gate on outbound audio', () => {
+        it('never gates a single-agent room', async () => {
+            const session = new FakeSession(true);
+            const a = await seat('solo', 'Sage', session);
+            session.Say(200);
+            session.Say(200);
+            expect(sent(a)).toBe(2);
+            await stopAll(a);
+        });
 
-    it('lets the first agent speak and cuts a second agent that talks over it', async () => {
-        const sa = new FakeSession(true);
-        const sb = new FakeSession(true);
-        const a = await seat('duo-a', 'Sage', sa);
-        const b = await seat('duo-b', 'Demo', sb);
-        const flush = vi.spyOn(b.Bridge, 'FlushOutboundMedia');
-
-        sa.Say(300); // Sage takes the floor
-        expect(sent(a)).toBe(1);
-        sb.Say(300); // a backchannel-length overlay is let through
-        expect(sent(b)).toBe(1);
-        sb.Say(1600); // …but a turn that outlasts the bound is cut
-        expect(sent(b)).toBe(1);
-        expect(flush).toHaveBeenCalledTimes(1);
-        sb.Say(300); // and the rest of the burst is dropped
-        expect(sent(b)).toBe(1);
-        expect(engine().RoomCoordinator.IsFloorHolder(a.RoomKey!, a.AgentSessionID)).toBe(true);
-        await stopAll(a, b);
-    });
-
-    it('frees the floor on the agent\'s final transcript so the next agent can speak', async () => {
-        const sa = new FakeSession(true);
-        const sb = new FakeSession(true);
-        const a = await seat('seq-a', 'Sage', sa);
-        const b = await seat('seq-b', 'Demo', sb);
-
-        sa.Say(3000);
-        sa.FinishTurn('Here is a thorough answer to the question that was asked');
-        expect(engine().RoomCoordinator.IsFloorHolder(a.RoomKey!, a.AgentSessionID)).toBe(false);
-        expect(a.HoldsFloor).toBe(false);
-
-        sb.Say(3000);
-        expect(sent(b)).toBe(1);
-        expect(engine().RoomCoordinator.IsFloorHolder(b.RoomKey!, b.AgentSessionID)).toBe(true);
-        await stopAll(a, b);
-    });
-
-    it('does not bill a short acknowledgement against the loop cap', async () => {
-        const sa = new FakeSession(true);
-        const a = await seat('bc-a', 'Sage', sa);
-        const b = await seat('bc-b', 'Demo', new FakeSession(true));
-        sa.Say(400);
-        sa.FinishTurn('mm-hm');
-        const snap = engine().GetRoomTurnSnapshot(a.RoomKey!)!;
-        expect(snap.ConsecutiveAgentTurns).toBe(0);
-        expect(snap.BackchannelCount).toBe(1);
-        await stopAll(a, b);
-    });
-});
-
-describe('AIBridgeEngine — humans win', () => {
-    it('preempts the floor holder when a diarized human talks: flushes its output, frees the floor, fires the barge-in hook', async () => {
-        const onBargeIn = vi.fn();
-        const sa = new FakeSession(true);
-        const a = await seat('hum-a', 'Sage', sa, { OnBargeIn: onBargeIn });
-        const b = await seat('hum-b', 'Demo', new FakeSession(true));
-        const flush = vi.spyOn(a.Bridge, 'FlushOutboundMedia');
-
-        sa.Say(2000);
-        expect(a.HoldsFloor).toBe(true);
-
-        (b.Bridge as LoopbackBridge).EmitInbound({ Track: 'audio-in', Bytes: loudFrame(), SpeakerLabel: 'user-amith' });
-
-        expect(flush).toHaveBeenCalled();
-        expect(a.HoldsFloor).toBe(false);
-        expect(onBargeIn).toHaveBeenCalledTimes(1);
-        expect(engine().RoomCoordinator.IsFloorHolder(a.RoomKey!, a.AgentSessionID)).toBe(false);
-        // The preempted agent's remaining audio is dropped, not forwarded.
-        const before = sent(a);
-        sa.Say(500);
-        expect(sent(a)).toBe(before);
-        await stopAll(a, b);
-    });
-
-    it('keeps every agent quiet while the human talks', async () => {
-        const sa = new FakeSession(true);
-        const sb = new FakeSession(true);
-        const a = await seat('hq-a', 'Sage', sa);
-        const b = await seat('hq-b', 'Demo', sb);
-        (a.Bridge as LoopbackBridge).EmitInbound({ Track: 'audio-in', Bytes: loudFrame(), SpeakerLabel: 'user-amith' });
-        sb.Say(500);
-        expect(sent(b)).toBe(0);
-        await stopAll(a, b);
-    });
-
-    it('never treats a peer agent\'s voice as a human', async () => {
-        const sa = new FakeSession(true);
-        const a = await seat('pa-a', 'Sage', sa);
-        const b = await seat('pa-b', 'Demo', new FakeSession(true));
-        sa.Say(2000);
-        (b.Bridge as LoopbackBridge).EmitInbound({ Track: 'audio-in', Bytes: loudFrame(), SpeakerLabel: 'agent-pa-a' });
-        expect(a.HoldsFloor).toBe(true);
-        await stopAll(a, b);
-    });
-
-    it('ignores audio with no speaker label (it could be a peer)', async () => {
-        const sa = new FakeSession(true);
-        const a = await seat('ul-a', 'Sage', sa);
-        const b = await seat('ul-b', 'Demo', new FakeSession(true));
-        sa.Say(2000);
-        (b.Bridge as LoopbackBridge).EmitInbound({ Track: 'audio-in', Bytes: loudFrame() });
-        expect(a.HoldsFloor).toBe(true);
-        await stopAll(a, b);
-    });
-
-    it('ignores quiet room noise from a human', async () => {
-        const sa = new FakeSession(true);
-        const a = await seat('qn-a', 'Sage', sa);
-        const b = await seat('qn-b', 'Demo', new FakeSession(true));
-        sa.Say(2000);
-        (b.Bridge as LoopbackBridge).EmitInbound({ Track: 'audio-in', Bytes: new ArrayBuffer(960), SpeakerLabel: 'user-amith' });
-        expect(a.HoldsFloor).toBe(true);
-        await stopAll(a, b);
-    });
-
-    it('a finished human turn resets the loop counter without cutting a quick agent that already started', async () => {
-        const sa = new FakeSession(true);
-        const a = await seat('ht-a', 'Sage', sa);
-        const b = await seat('ht-b', 'Demo', new FakeSession(true));
-        sa.Say(1000);
-        sa.HearHuman('Sage, what do you think?'); // the final transcript lands after Sage began answering
-        expect(a.HoldsFloor).toBe(true);
-        expect(engine().GetRoomTurnSnapshot(a.RoomKey!)!.ConsecutiveAgentTurns).toBe(0);
-        await stopAll(a, b);
-    });
-});
-
-describe('AIBridgeEngine — the turn-taking host tools', () => {
-    it('i_am_addressed latches the model-side matcher and reserves the floor before any audio', async () => {
-        const a = await seat('tool-a', 'Sage', new FakeSession(true), { TurnAddressing: 'ModelSide' });
-        const b = await seat('tool-b', 'Demo', new FakeSession(true), { TurnAddressing: 'ModelSide' });
-
-        const result = JSON.parse(await a.TurnTakingToolHandler!.Execute({ ToolName: 'i_am_addressed', Arguments: '{}' }));
-        expect(result).toMatchObject({ ok: true, floor: 'granted' });
-        expect(a.ModelSideMatcher!.HasPendingSignal).toBe(true);
-        expect(a.TurnPolicy.EvaluateTurn({ Segment: { Text: 'Sage?' } }).Action).toBe('Speak');
-        expect(engine().RoomCoordinator.IsFloorHolder(a.RoomKey!, a.AgentSessionID)).toBe(true);
-
-        // A peer that claims it too is told to stay silent.
-        const denied = JSON.parse(await b.TurnTakingToolHandler!.Execute({ ToolName: 'i_am_addressed', Arguments: '{}' }));
-        expect(denied).toMatchObject({ ok: false, floor: 'denied', reason: 'HeldByOtherAgent' });
-        await stopAll(a, b);
-    });
-
-    it('i_am_addressed in a single-agent room needs no floor', async () => {
-        const a = await seat('tool-solo', 'Sage', new FakeSession(true), { TurnAddressing: 'ModelSide' });
-        const result = JSON.parse(await a.TurnTakingToolHandler!.Execute({ ToolName: 'i_am_addressed', Arguments: '' }));
-        expect(result).toMatchObject({ ok: true, floor: 'granted' });
-        await stopAll(a);
-    });
-
-    it('yield_turn hands the floor to the named agent: reserved, nudged, and no third agent can start', async () => {
-        const sa = new FakeSession(true);
-        const sb = new FakeSession(true);
-        const sc = new FakeSession(true);
-        const a = await seat('yl-a', 'Sage', sa);
-        const b = await seat('yl-b', 'Demo Loop', sb);
-        const c = await seat('yl-c', 'Scout', sc);
-
-        sa.Say(500); // Sage holds the floor
-        const result = JSON.parse(await a.TurnTakingToolHandler!.Execute({ ToolName: 'yield_turn', Arguments: '{"to":"demo loop"}' }));
-
-        expect(result).toMatchObject({ ok: true, floor: 'released', handedTo: 'Demo Loop', reason: 'Yielded' });
-        expect(sb.ContextNotes.join(' ')).toContain('Sage handed the floor to you');
-        expect(sb.SpokenUpdates).toHaveLength(1); // Demo Loop was triggered
-        expect(engine().RoomCoordinator.IsFloorHolder(a.RoomKey!, b.AgentSessionID)).toBe(true);
-        expect(engine().RoomCoordinator.IsFloorHolder(a.RoomKey!, a.AgentSessionID)).toBe(false);
-        expect(a.HoldsFloor).toBe(false);
-
-        sc.Say(2500); // Scout cannot start — Demo Loop has the floor
-        expect(sent(c)).toBe(0);
-        await stopAll(a, b, c);
-    });
-
-    it('yield_turn to an unknown name just returns the floor to the room, and says so', async () => {
-        const sa = new FakeSession(true);
-        const a = await seat('yu-a', 'Sage', sa);
-        const b = await seat('yu-b', 'Demo', new FakeSession(true));
-        sa.Say(500);
-        const result = JSON.parse(await a.TurnTakingToolHandler!.Execute({ ToolName: 'yield_turn', Arguments: '{"to":"Nobody"}' }));
-        expect(result.ok).toBe(true);
-        expect(result.handedTo).toBeNull();
-        expect(result.note).toContain("No agent named 'Nobody'");
-        expect(engine().RoomCoordinator.IsFloorHolder(a.RoomKey!, a.AgentSessionID)).toBe(false);
-        await stopAll(a, b);
-    });
-
-    it('yield_turn does not nudge a target whose driver cannot be triggered', async () => {
-        const sa = new FakeSession(true);
-        const sb = new FakeSession(true);
-        (sb as unknown as { RequestSpokenUpdate?: unknown }).RequestSpokenUpdate = undefined;
-        const a = await seat('yn-a', 'Sage', sa);
-        const b = await seat('yn-b', 'Demo', sb);
-        sa.Say(500);
-        await a.TurnTakingToolHandler!.Execute({ ToolName: 'yield_turn', Arguments: '{"to":"Demo"}' });
-        expect(sb.ContextNotes.filter(n => n.includes('handed the floor'))).toHaveLength(1);
-        expect(sb.SpokenUpdates).toHaveLength(0);
-        await stopAll(a, b);
-    });
-
-    it('reports an unreadable yield and an unknown tool as structured failures instead of throwing', async () => {
-        const a = await seat('bad-a', 'Sage', new FakeSession(true));
-        const bad = JSON.parse(await a.TurnTakingToolHandler!.Execute({ ToolName: 'yield_turn', Arguments: '{oops' }));
-        expect(bad.ok).toBe(false);
-        const unknown = JSON.parse(await a.TurnTakingToolHandler!.Execute({ ToolName: 'nope', Arguments: '{}' }));
-        expect(unknown.ok).toBe(false);
-        await stopAll(a);
-    });
-});
-
-describe('AIBridgeEngine — telling a model how to take turns', () => {
-    it('keeps a solo agent in a one-on-one answering everything: no framing until the room has a second agent', async () => {
-        const sa = new FakeSession(true);
-        const a = await seat('ann-a', 'Sage', sa);
-        expect(sa.ContextNotes).toHaveLength(0);
-
-        const sb = new FakeSession(true);
-        const b = await seat('ann-b', 'Demo', sb);
-        expect(sa.ContextNotes).toHaveLength(1); // the first agent is told now that it has company
-        expect(sb.ContextNotes).toHaveLength(1);
-        expect(sa.ContextNotes[0]).toContain('i_am_addressed');
-
-        const sc = new FakeSession(true);
-        const c = await seat('ann-c', 'Scout', sc);
-        expect(sa.ContextNotes).toHaveLength(1); // never repeated
-        expect(sb.ContextNotes).toHaveLength(1);
-        expect(sc.ContextNotes).toHaveLength(1);
-        await stopAll(a, b, c);
-    });
-
-    it('never tells a turn-based model (it has no tools to use and the engine triggers its speech)', async () => {
-        const sa = new FakeSession(false);
-        const a = await seat('ann-t1', 'Sage', sa);
-        const b = await seat('ann-t2', 'Demo', new FakeSession(false));
-        expect(sa.ContextNotes).toHaveLength(0);
-        await stopAll(a, b);
-    });
-});
-
-describe('AIBridgeEngine — turn-taking observability and limits', () => {
-    it('describes the room: who is seated, how each addresses, who holds the floor', async () => {
-        const sa = new FakeSession(true);
-        const a = await seat('obs-a', 'Sage', sa, { TurnAddressing: 'Auto' });
-        const b = await seat('obs-b', 'Demo', new FakeSession(false), { TurnAddressing: 'Auto', TurnMode: 'Active' });
-        sa.Say(300);
-
-        const snap = engine().GetRoomTurnSnapshot(a.RoomKey!)!;
-        expect(snap.FloorHolderAgentSessionId).toBe('obs-a');
-        expect(snap.Agents).toEqual([
-            { AgentSessionID: 'obs-a', SessionBridgeID: a.SessionBridgeID, Names: ['Sage'], TurnMode: 'Passive', Addressing: 'ModelSide', FullDuplex: true },
-            { AgentSessionID: 'obs-b', SessionBridgeID: b.SessionBridgeID, Names: ['Demo'], TurnMode: 'Active', Addressing: 'Regex', FullDuplex: false },
-        ]);
-        expect(snap.RecentEvents.some(e => e.Type === 'FloorGranted')).toBe(true);
-        await stopAll(a, b);
-    });
-
-    it('returns null for an unknown room', () => {
-        expect(engine().GetRoomTurnSnapshot('no-such-room')).toBeNull();
-    });
-
-    it('lets the loop cap be tuned and enforces it', async () => {
-        engine().ConfigureTurnLimits({ MaxConsecutiveAgentTurns: 1 });
-        try {
+        it('lets the first agent speak and cuts a second agent that talks over it', async () => {
             const sa = new FakeSession(true);
             const sb = new FakeSession(true);
-            const a = await seat('cap-a', 'Sage', sa);
-            const b = await seat('cap-b', 'Demo', sb);
-            sa.Say(3000);
-            sa.FinishTurn('A complete answer with plenty of words in it');
-            sb.Say(100); // the cap of 1 is already spent → cut
-            expect(sent(b)).toBe(0);
-            expect(engine().GetRoomTurnSnapshot(a.RoomKey!)!.LoopCapReached).toBe(true);
+            const a = await seat('duo-a', 'Sage', sa);
+            const b = await seat('duo-b', 'Demo', sb);
+            const flush = vi.spyOn(b.Bridge, 'FlushOutboundMedia');
+
+            sa.Say(300); // Sage takes the floor
+            expect(sent(a)).toBe(1);
+            sb.Say(300); // a backchannel-length overlay is let through
+            expect(sent(b)).toBe(1);
+            sb.Say(1600); // …but a turn that outlasts the bound is cut
+            expect(sent(b)).toBe(1);
+            expect(flush).toHaveBeenCalledTimes(1);
+            sb.Say(300); // and the rest of the burst is dropped
+            expect(sent(b)).toBe(1);
+            expect(engine().RoomCoordinator.IsFloorHolder(a.RoomKey!, a.AgentSessionID)).toBe(true);
             await stopAll(a, b);
-        } finally {
-            engine().ConfigureTurnLimits({ MaxConsecutiveAgentTurns: 8 });
-        }
+        });
+
+        it('frees the floor on the agent\'s final transcript so the next agent can speak', async () => {
+            const sa = new FakeSession(true);
+            const sb = new FakeSession(true);
+            const a = await seat('seq-a', 'Sage', sa);
+            const b = await seat('seq-b', 'Demo', sb);
+
+            sa.Say(3000);
+            sa.FinishTurn('Here is a thorough answer to the question that was asked');
+            expect(engine().RoomCoordinator.IsFloorHolder(a.RoomKey!, a.AgentSessionID)).toBe(false);
+            expect(a.HoldsFloor).toBe(false);
+
+            sb.Say(3000);
+            expect(sent(b)).toBe(1);
+            expect(engine().RoomCoordinator.IsFloorHolder(b.RoomKey!, b.AgentSessionID)).toBe(true);
+            await stopAll(a, b);
+        });
+
+        it('does not bill a short acknowledgement against the loop cap', async () => {
+            const sa = new FakeSession(true);
+            const a = await seat('bc-a', 'Sage', sa);
+            const b = await seat('bc-b', 'Demo', new FakeSession(true));
+            sa.Say(400);
+            sa.FinishTurn('mm-hm');
+            const snap = engine().GetRoomTurnSnapshot(a.RoomKey!)!;
+            expect(snap.ConsecutiveAgentTurns).toBe(0);
+            expect(snap.BackchannelCount).toBe(1);
+            await stopAll(a, b);
+        });
     });
-});
+
+    describe('AIBridgeEngine — humans win', () => {
+        it('preempts the floor holder when a diarized human talks: flushes its output, frees the floor, fires the barge-in hook', async () => {
+            const onBargeIn = vi.fn();
+            const sa = new FakeSession(true);
+            const a = await seat('hum-a', 'Sage', sa, { OnBargeIn: onBargeIn });
+            const b = await seat('hum-b', 'Demo', new FakeSession(true));
+            const flush = vi.spyOn(a.Bridge, 'FlushOutboundMedia');
+
+            sa.Say(2000);
+            expect(a.HoldsFloor).toBe(true);
+
+            (b.Bridge as LoopbackBridge).EmitInbound({ Track: 'audio-in', Bytes: loudFrame(), SpeakerLabel: 'user-amith' });
+
+            expect(flush).toHaveBeenCalled();
+            expect(a.HoldsFloor).toBe(false);
+            expect(onBargeIn).toHaveBeenCalledTimes(1);
+            expect(engine().RoomCoordinator.IsFloorHolder(a.RoomKey!, a.AgentSessionID)).toBe(false);
+            // The preempted agent's remaining audio is dropped, not forwarded.
+            const before = sent(a);
+            sa.Say(500);
+            expect(sent(a)).toBe(before);
+            await stopAll(a, b);
+        });
+
+        it('keeps every agent quiet while the human talks', async () => {
+            const sa = new FakeSession(true);
+            const sb = new FakeSession(true);
+            const a = await seat('hq-a', 'Sage', sa);
+            const b = await seat('hq-b', 'Demo', sb);
+            (a.Bridge as LoopbackBridge).EmitInbound({ Track: 'audio-in', Bytes: loudFrame(), SpeakerLabel: 'user-amith' });
+            sb.Say(500);
+            expect(sent(b)).toBe(0);
+            await stopAll(a, b);
+        });
+
+        it('never treats a peer agent\'s voice as a human', async () => {
+            const sa = new FakeSession(true);
+            const a = await seat('pa-a', 'Sage', sa);
+            const b = await seat('pa-b', 'Demo', new FakeSession(true));
+            sa.Say(2000);
+            (b.Bridge as LoopbackBridge).EmitInbound({ Track: 'audio-in', Bytes: loudFrame(), SpeakerLabel: 'agent-pa-a' });
+            expect(a.HoldsFloor).toBe(true);
+            await stopAll(a, b);
+        });
+
+        it('ignores audio with no speaker label (it could be a peer)', async () => {
+            const sa = new FakeSession(true);
+            const a = await seat('ul-a', 'Sage', sa);
+            const b = await seat('ul-b', 'Demo', new FakeSession(true));
+            sa.Say(2000);
+            (b.Bridge as LoopbackBridge).EmitInbound({ Track: 'audio-in', Bytes: loudFrame() });
+            expect(a.HoldsFloor).toBe(true);
+            await stopAll(a, b);
+        });
+
+        it('ignores quiet room noise from a human', async () => {
+            const sa = new FakeSession(true);
+            const a = await seat('qn-a', 'Sage', sa);
+            const b = await seat('qn-b', 'Demo', new FakeSession(true));
+            sa.Say(2000);
+            (b.Bridge as LoopbackBridge).EmitInbound({ Track: 'audio-in', Bytes: new ArrayBuffer(960), SpeakerLabel: 'user-amith' });
+            expect(a.HoldsFloor).toBe(true);
+            await stopAll(a, b);
+        });
+
+        it('a finished human turn resets the loop counter without cutting a quick agent that already started', async () => {
+            const sa = new FakeSession(true);
+            const a = await seat('ht-a', 'Sage', sa);
+            const b = await seat('ht-b', 'Demo', new FakeSession(true));
+            sa.Say(1000);
+            sa.HearHuman('Sage, what do you think?'); // the final transcript lands after Sage began answering
+            expect(a.HoldsFloor).toBe(true);
+            expect(engine().GetRoomTurnSnapshot(a.RoomKey!)!.ConsecutiveAgentTurns).toBe(0);
+            await stopAll(a, b);
+        });
+    });
+
+    describe('AIBridgeEngine — the turn-taking host tools', () => {
+        it('i_am_addressed latches the model-side matcher and reserves the floor before any audio', async () => {
+            const a = await seat('tool-a', 'Sage', new FakeSession(true), { TurnAddressing: 'ModelSide' });
+            const b = await seat('tool-b', 'Demo', new FakeSession(true), { TurnAddressing: 'ModelSide' });
+
+            const result = JSON.parse(await a.TurnTakingToolHandler!.Execute({ ToolName: 'i_am_addressed', Arguments: '{}' }));
+            expect(result).toMatchObject({ ok: true, floor: 'granted' });
+            expect(a.ModelSideMatcher!.HasPendingSignal).toBe(true);
+            expect(a.TurnPolicy.EvaluateTurn({ Segment: { Text: 'Sage?' } }).Action).toBe('Speak');
+            expect(engine().RoomCoordinator.IsFloorHolder(a.RoomKey!, a.AgentSessionID)).toBe(true);
+
+            // A peer that claims it too is told to stay silent.
+            const denied = JSON.parse(await b.TurnTakingToolHandler!.Execute({ ToolName: 'i_am_addressed', Arguments: '{}' }));
+            expect(denied).toMatchObject({ ok: false, floor: 'denied', reason: 'HeldByOtherAgent' });
+            await stopAll(a, b);
+        });
+
+        it('i_am_addressed in a single-agent room needs no floor', async () => {
+            const a = await seat('tool-solo', 'Sage', new FakeSession(true), { TurnAddressing: 'ModelSide' });
+            const result = JSON.parse(await a.TurnTakingToolHandler!.Execute({ ToolName: 'i_am_addressed', Arguments: '' }));
+            expect(result).toMatchObject({ ok: true, floor: 'granted' });
+            await stopAll(a);
+        });
+
+        it('yield_turn hands the floor to the named agent: reserved, nudged, and no third agent can start', async () => {
+            const sa = new FakeSession(true);
+            const sb = new FakeSession(true);
+            const sc = new FakeSession(true);
+            const a = await seat('yl-a', 'Sage', sa);
+            const b = await seat('yl-b', 'Demo Loop', sb);
+            const c = await seat('yl-c', 'Scout', sc);
+
+            sa.Say(500); // Sage holds the floor
+            const result = JSON.parse(await a.TurnTakingToolHandler!.Execute({ ToolName: 'yield_turn', Arguments: '{"to":"demo loop"}' }));
+
+            expect(result).toMatchObject({ ok: true, floor: 'released', handedTo: 'Demo Loop', reason: 'Yielded' });
+            expect(sb.ContextNotes.join(' ')).toContain('Sage handed the floor to you');
+            expect(sb.SpokenUpdates).toHaveLength(1); // Demo Loop was triggered
+            expect(engine().RoomCoordinator.IsFloorHolder(a.RoomKey!, b.AgentSessionID)).toBe(true);
+            expect(engine().RoomCoordinator.IsFloorHolder(a.RoomKey!, a.AgentSessionID)).toBe(false);
+            expect(a.HoldsFloor).toBe(false);
+
+            sc.Say(2500); // Scout cannot start — Demo Loop has the floor
+            expect(sent(c)).toBe(0);
+            await stopAll(a, b, c);
+        });
+
+        it('yield_turn to an unknown name just returns the floor to the room, and says so', async () => {
+            const sa = new FakeSession(true);
+            const a = await seat('yu-a', 'Sage', sa);
+            const b = await seat('yu-b', 'Demo', new FakeSession(true));
+            sa.Say(500);
+            const result = JSON.parse(await a.TurnTakingToolHandler!.Execute({ ToolName: 'yield_turn', Arguments: '{"to":"Nobody"}' }));
+            expect(result.ok).toBe(true);
+            expect(result.handedTo).toBeNull();
+            expect(result.note).toContain("No agent named 'Nobody'");
+            expect(engine().RoomCoordinator.IsFloorHolder(a.RoomKey!, a.AgentSessionID)).toBe(false);
+            await stopAll(a, b);
+        });
+
+        it('yield_turn does not nudge a target whose driver cannot be triggered', async () => {
+            const sa = new FakeSession(true);
+            const sb = new FakeSession(true);
+            (sb as unknown as { RequestSpokenUpdate?: unknown }).RequestSpokenUpdate = undefined;
+            const a = await seat('yn-a', 'Sage', sa);
+            const b = await seat('yn-b', 'Demo', sb);
+            sa.Say(500);
+            await a.TurnTakingToolHandler!.Execute({ ToolName: 'yield_turn', Arguments: '{"to":"Demo"}' });
+            expect(sb.ContextNotes.filter(n => n.includes('handed the floor'))).toHaveLength(1);
+            expect(sb.SpokenUpdates).toHaveLength(0);
+            await stopAll(a, b);
+        });
+
+        it('reports an unreadable yield and an unknown tool as structured failures instead of throwing', async () => {
+            const a = await seat('bad-a', 'Sage', new FakeSession(true));
+            const bad = JSON.parse(await a.TurnTakingToolHandler!.Execute({ ToolName: 'yield_turn', Arguments: '{oops' }));
+            expect(bad.ok).toBe(false);
+            const unknown = JSON.parse(await a.TurnTakingToolHandler!.Execute({ ToolName: 'nope', Arguments: '{}' }));
+            expect(unknown.ok).toBe(false);
+            await stopAll(a);
+        });
+    });
+
+    describe('AIBridgeEngine — telling a model how to take turns', () => {
+        it('keeps a solo agent in a one-on-one answering everything: no framing until the room has a second agent', async () => {
+            const sa = new FakeSession(true);
+            const a = await seat('ann-a', 'Sage', sa);
+            expect(sa.ContextNotes).toHaveLength(0);
+
+            const sb = new FakeSession(true);
+            const b = await seat('ann-b', 'Demo', sb);
+            expect(sa.ContextNotes).toHaveLength(1); // the first agent is told now that it has company
+            expect(sb.ContextNotes).toHaveLength(1);
+            expect(sa.ContextNotes[0]).toContain('i_am_addressed');
+
+            const sc = new FakeSession(true);
+            const c = await seat('ann-c', 'Scout', sc);
+            expect(sa.ContextNotes).toHaveLength(1); // never repeated
+            expect(sb.ContextNotes).toHaveLength(1);
+            expect(sc.ContextNotes).toHaveLength(1);
+            await stopAll(a, b, c);
+        });
+
+        it('never tells a turn-based model (it has no tools to use and the engine triggers its speech)', async () => {
+            const sa = new FakeSession(false);
+            const a = await seat('ann-t1', 'Sage', sa);
+            const b = await seat('ann-t2', 'Demo', new FakeSession(false));
+            expect(sa.ContextNotes).toHaveLength(0);
+            await stopAll(a, b);
+        });
+    });
+
+    describe('AIBridgeEngine — turn-taking observability and limits', () => {
+        it('describes the room: who is seated, how each addresses, who holds the floor', async () => {
+            const sa = new FakeSession(true);
+            const a = await seat('obs-a', 'Sage', sa, { TurnAddressing: 'Auto' });
+            const b = await seat('obs-b', 'Demo', new FakeSession(false), { TurnAddressing: 'Auto', TurnMode: 'Active' });
+            sa.Say(300);
+
+            const snap = engine().GetRoomTurnSnapshot(a.RoomKey!)!;
+            expect(snap.FloorHolderAgentSessionId).toBe('obs-a');
+            expect(snap.Agents).toEqual([
+                { AgentSessionID: 'obs-a', SessionBridgeID: a.SessionBridgeID, Names: ['Sage'], TurnMode: 'Passive', Addressing: 'ModelSide', FullDuplex: true },
+                { AgentSessionID: 'obs-b', SessionBridgeID: b.SessionBridgeID, Names: ['Demo'], TurnMode: 'Active', Addressing: 'Regex', FullDuplex: false },
+            ]);
+            expect(snap.RecentEvents.some(e => e.Type === 'FloorGranted')).toBe(true);
+            await stopAll(a, b);
+        });
+
+        it('returns null for an unknown room', () => {
+            expect(engine().GetRoomTurnSnapshot('no-such-room')).toBeNull();
+        });
+
+        it('lets the loop cap be tuned and enforces it', async () => {
+            engine().ConfigureTurnLimits({ MaxConsecutiveAgentTurns: 1 });
+            try {
+                const sa = new FakeSession(true);
+                const sb = new FakeSession(true);
+                const a = await seat('cap-a', 'Sage', sa);
+                const b = await seat('cap-b', 'Demo', sb);
+                sa.Say(3000);
+                sa.FinishTurn('A complete answer with plenty of words in it');
+                sb.Say(100); // the cap of 1 is already spent → cut
+                expect(sent(b)).toBe(0);
+                expect(engine().GetRoomTurnSnapshot(a.RoomKey!)!.LoopCapReached).toBe(true);
+                await stopAll(a, b);
+            } finally {
+                engine().ConfigureTurnLimits({ MaxConsecutiveAgentTurns: 8 });
+            }
+        });
+    });
 });
 

@@ -36,6 +36,8 @@ import {
     TurnTranscriptSegment,
     BridgeTurnMode,
     IAddressedMatcher,
+    AlwaysAddressedMatcher,
+    RegexAddressedMatcher,
     IWorthSayingScorer,
     IBridgeChannelHost,
     BridgeChannelToolDefinition,
@@ -348,6 +350,12 @@ export interface StartBridgeSessionParams {
      * the `Regex`-side matcher (e.g. a 1:1 call's always-addressed matcher).
      */
     TurnAddressing?: TurnAddressingMode;
+
+    /**
+     * Whether this session is full-duplex. When omitted, defaults to
+     * `RealtimeSession.Capabilities?.FullDuplex === true`.
+     */
+    FullDuplex?: boolean;
 
     /**
      * Whether a full-duplex model's outbound audio runs through the room floor gate in a MULTI-agent room
@@ -676,7 +684,7 @@ export interface ActiveBridgeSession {
     /** How many times the model session has been re-opened (capped by {@link MAX_MODEL_RECOVERY_ATTEMPTS}). */
     ModelRecoveryAttempts: number;
 
-    /** High-resolution timestamp (ms) when the most recent user turn completed, for speech-to-audio latency telemetry. */
+    /** High-resolution timestamp (ms) when the most recent user turn completed, for transcript-to-next-audio latency telemetry. */
     LastUserSpeechEndMs?: number;
 
     /** Whether a model-session recovery is in flight; inbound audio is dropped meanwhile. */
@@ -1036,7 +1044,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
      * @throws When the driver cannot be resolved or `Connect` fails (the row is stamped `Failed`).
      */
     public async StartBridgeSession(params: StartBridgeSessionParams): Promise<ActiveBridgeSession> {
-        const fullDuplex = params.RealtimeSession.Capabilities?.FullDuplex === true;
+        const fullDuplex = params.FullDuplex ?? params.RealtimeSession.Capabilities?.FullDuplex === true;
         const turn = this.buildTurnPolicy(params, fullDuplex);
         const bridgeRow = await this.createBridgeRow(params, turn.Mode);
 
@@ -1255,7 +1263,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
                 const latencyMs = Math.round(performance.now() - active.LastUserSpeechEndMs);
                 active.LastUserSpeechEndMs = undefined;
                 LogStatusEx({
-                    message: `[AIBridgeEngine][telemetry] speech-to-audio latency: ${latencyMs}ms (bridge ${active.SessionBridgeID})`,
+                    message: `[AIBridgeEngine][telemetry] transcript-to-next-audio latency: ${latencyMs}ms (bridge ${active.SessionBridgeID})`,
                     verboseOnly: true,
                 });
             }
@@ -2164,6 +2172,11 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
      * @param active The live bridged session.
      */
     private wireTurnTakingTools(active: ActiveBridgeSession): void {
+        const moderatorMode = process.env.MJ_REALTIME_MODERATOR_MODE === 'on';
+        const isFullDuplex = active.RealtimeSession.Capabilities?.FullDuplex === true;
+        if (isFullDuplex && !moderatorMode) {
+            return;
+        }
         if (!active.RoomKey || !(active.AddressingMode === 'ModelSide' || active.TurnGate)) {
             return;
         }
@@ -2185,7 +2198,12 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         if (!roomKey || !this.roomCoordinator.IsMultiAgentRoom(roomKey)) {
             return;
         }
+        const moderatorMode = process.env.MJ_REALTIME_MODERATOR_MODE === 'on';
         for (const agent of this.roomAgents(roomKey)) {
+            const isFullDuplex = agent.RealtimeSession.Capabilities?.FullDuplex === true;
+            if (isFullDuplex && !moderatorMode) {
+                continue;
+            }
             if (agent.TurnTakingToolHandler && !agent.TurnTakingAnnounced) {
                 agent.RealtimeSession.SendContextNote?.(MODEL_SIDE_TURN_TAKING_FRAMING);
                 agent.TurnTakingAnnounced = true;
@@ -2309,13 +2327,16 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
      * @returns The configured policy plus the addressing mode in effect and the model-side latch, when any.
      */
     private buildTurnPolicy(params: StartBridgeSessionParams, fullDuplex: boolean): BuiltTurnPolicy {
+        const moderatorMode = process.env.MJ_REALTIME_MODERATOR_MODE === 'on';
         let matcher = params.TurnMatcher;
         let mode: ResolvedTurnAddressingMode = 'Regex';
         let modelSide: ModelSideAddressedMatcher | undefined;
         if (params.TurnAddressing !== undefined) {
-            // The model's own judgement when it is full-duplex (and asked for); otherwise name matching, with
-            // a caller-supplied matcher (e.g. a 1:1 call's always-addressed one) taking precedence as the fallback.
-            const built = BuildAddressedMatcher(params.AgentNames ?? [], params.TurnAddressing, fullDuplex);
+            // Full-duplex models only use ModelSide addressing automatically when moderator mode is enabled.
+            // Outside moderator mode, Auto falls back to name/regex matching (keeping AlwaysAddressedMatcher for 1:1 / solo),
+            // while explicit 'ModelSide' is still honoured.
+            const enableModelSide = params.TurnAddressing === 'ModelSide' || (fullDuplex && moderatorMode);
+            const built = BuildAddressedMatcher(params.AgentNames ?? [], params.TurnAddressing, enableModelSide);
             mode = built.Mode;
             modelSide = built.ModelSide;
             matcher = built.Mode === 'ModelSide' ? built.Matcher : (params.TurnMatcher ?? built.Matcher);

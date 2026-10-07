@@ -13,9 +13,10 @@
  * @module @memberjunction/livekit-room-server
  */
 
-import { BaseSingleton } from '@memberjunction/global';
+import { BaseSingleton, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { LogError, LogStatus, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { ResolveIsModelFullDuplex, type IRealtimeSession, type RealtimeToolDefinition } from '@memberjunction/ai';
+import { AIEngine } from '@memberjunction/aiengine';
 import type { MJAIAgentEntity, MJAIModelEntity } from '@memberjunction/core-entities';
 import {
   AlwaysAddressedMatcher,
@@ -321,7 +322,8 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
 
     const host = params.Host;
     // Full-duplex models never get turn-taking tools (in solo and multi-agent rooms alike), as native full-duplex
-    // models handle turn-taking and background noise natively. Turn-taking tools are reserved for turn-based models.
+    // models handle turn-taking and background noise natively. Turn-taking tools are reserved for turn-based models
+    // in ModelSide addressing mode (the engine never builds a handler for Regex-mode sessions).
     const turnTakingTools = isFullDuplex || addressing === 'Regex' ? [] : [...TURN_TAKING_TOOL_DEFINITIONS];
     const combinedHostTools: RealtimeToolDefinition[] | undefined =
       (host?.HostTools?.length ?? 0) > 0 || turnTakingTools.length > 0
@@ -350,11 +352,12 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
       });
       host?.OnModelSession?.(opened);
       if (activeTurnHandler) {
-        this.bindTurnTools(opened, activeTurnHandler, botName);
+        this.bindTurnTools(opened, activeTurnHandler, botName, isFullDuplex || opened.Capabilities?.FullDuplex === true);
       }
       return opened;
     };
     const session = await openModelSession();
+    const effectiveFullDuplex = isFullDuplex || session.Capabilities?.FullDuplex === true;
 
     // The bridge id is known only after the engine starts the session, but the end-of-session hook is registered at start,
     // so it reaches the id through this holder.
@@ -364,6 +367,7 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
       AgentID: params.AgentID,
       Provider: provider,
       RealtimeSession: session,
+      FullDuplex: effectiveFullDuplex,
       Address: botToken.ServerUrl,
       JoinMethod: host?.JoinMethod ?? 'OnDemand',
       Direction: host?.Direction,
@@ -410,7 +414,7 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
 
     this.addToRoster(roomKey, { AgentSessionID: params.AgentSessionID, SessionBridgeID: active.SessionBridgeID, Names: selfNames });
     activeTurnHandler = active.TurnTakingToolHandler;
-    this.bindTurnTools(session, active.TurnTakingToolHandler, botName);
+    this.bindTurnTools(session, active.TurnTakingToolHandler, botName, effectiveFullDuplex);
 
     // The room just became (or stayed) multi-agent → retroactively re-gate the agents already in it into
     // meeting mode so the whole room takes turns, not just the newcomers. Capability-gated in the engine:
@@ -430,12 +434,12 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
   }
 
   /** Installs the engine's turn-taking tool handler on the model session, when the session has one (a turn-based model in a room). */
-  private bindTurnTools(session: IRealtimeSession, handler: BridgeTurnTakingToolHandler | undefined, botName: string): void {
+  private bindTurnTools(session: IRealtimeSession, handler: BridgeTurnTakingToolHandler | undefined, botName: string, isFullDuplex: boolean): void {
     if (!handler) {
       return;
     }
     // Full-duplex models never get turn-taking tools; do not bind turn-taking handlers to them
-    if (session.Capabilities?.FullDuplex === true) {
+    if (isFullDuplex || session.Capabilities?.FullDuplex === true) {
       return;
     }
     if (!this.turnToolBinder) {
@@ -452,39 +456,128 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
    * Resolves whether the agent room session being started is full-duplex.
    * Priority:
    * 1. Explicit `params.FullDuplex` override.
-   * 2. Cascaded metadata configuration from the model (via `params.RealtimeModelID` or `params.AgentID`).
-   * 3. Fallback: false (turn-based model).
+   * 2. Cascaded metadata configuration from the model (via `params.RealtimeModelID`, or co-agent config,
+   *    or fallback to the default active realtime model in the AI catalog).
+   * 3. Driver fallback (e.g. `OpenAILiveRealtime` driver capabilities).
+   * 4. Fallback: false (turn-based model).
    */
   private async resolveIsFullDuplex(params: StartAgentRoomSessionParams): Promise<boolean> {
     if (params.FullDuplex !== undefined) {
       return params.FullDuplex;
     }
     try {
-      const provider = params.MetadataProvider;
-      let modelId = params.RealtimeModelID;
-      if (!modelId && params.AgentID && provider) {
-        const agent = await provider.GetEntityObject<MJAIAgentEntity>('MJ: AI Agents', params.ContextUser);
-        if (await agent.Load(params.AgentID)) {
-          if (agent.TypeConfiguration) {
-            try {
-              const parsed = JSON.parse(agent.TypeConfiguration) as Record<string, unknown>;
-              modelId = (parsed.modelId ?? parsed.preferredModelId ?? parsed.AIModelID) as string | undefined;
-            } catch {
-              // ignore malformed JSON
-            }
+      if (params.MetadataProvider && params.ContextUser) {
+        try {
+          await AIEngine.Instance.Config(false, params.ContextUser, params.MetadataProvider);
+        } catch (configErr) {
+          LogError(`[LiveKitAgentRoomCoordinator] Failed to configure AIEngine cache: ${configErr instanceof Error ? configErr.message : String(configErr)}`);
+        }
+      }
+
+      const models = AIEngine.Instance.Models ?? [];
+      let model: MJAIModelEntity | undefined = undefined;
+
+      // 1. Explicit model ID / Name from params
+      if (params.RealtimeModelID) {
+        const wanted = params.RealtimeModelID.trim().toLowerCase();
+        model = models.find(m => UUIDsEqual(m.ID, params.RealtimeModelID!) || m.Name?.trim().toLowerCase() === wanted);
+      }
+
+      // 2. If not found, resolve from agent/target-agent configuration
+      if (!model) {
+        const agents = AIEngine.Instance.Agents ?? [];
+        const agent = agents.find(a =>
+          (params.AgentID && UUIDsEqual(a.ID, params.AgentID)) ||
+          (params.AgentName && a.Name?.trim().toLowerCase() === params.AgentName.trim().toLowerCase()),
+        );
+        const targetAgent = params.TargetAgentID
+          ? agents.find(a => UUIDsEqual(a.ID, params.TargetAgentID!))
+          : undefined;
+
+        // Try extracting model preference from targetAgent, then agent, then agentType
+        let modelPref = this.extractModelPreference(targetAgent?.TypeConfiguration);
+        if (!modelPref && agent) {
+          modelPref = this.extractModelPreference(agent.TypeConfiguration);
+          if (!modelPref && agent.TypeID) {
+            const agentType = (AIEngine.Instance.AgentTypes ?? []).find(t => UUIDsEqual(t.ID, agent.TypeID));
+            modelPref = this.extractModelPreference(agentType?.DefaultConfiguration);
           }
         }
-      }
-      if (modelId && provider) {
-        const model = await provider.GetEntityObject<MJAIModelEntity>('MJ: AI Models', params.ContextUser);
-        if (await model.Load(modelId)) {
-          return ResolveIsModelFullDuplex(model.ModelConfigurationObject, null);
+
+        if (modelPref) {
+          const wantedPref = modelPref.toLowerCase();
+          model = models.find(m => UUIDsEqual(m.ID, modelPref!) || m.Name?.trim().toLowerCase() === wantedPref);
         }
       }
-    } catch {
-      // Degrade gracefully
+
+      // 3. Fallback to default active Realtime model (highest PowerRank)
+      if (!model) {
+        const realtimeCandidates = models
+          .filter(m => m.IsActive && typeof m.AIModelType === 'string' && m.AIModelType.trim().toLowerCase().includes('realtime'))
+          .sort((a, b) => (b.PowerRank ?? 0) - (a.PowerRank ?? 0));
+        model = realtimeCandidates[0];
+      }
+
+      if (model) {
+        const effective = AIEngine.Instance.GetEffectiveModelConfiguration(model.ID);
+        // Driver capabilities fallback (e.g. OpenAILiveRealtime)
+        let driverCapabilities: { FullDuplex?: boolean } | null = null;
+        const vendors = (AIEngine.Instance.ModelVendorsByModelID?.get(NormalizeUUID(model.ID)) ??
+          (AIEngine.Instance.ModelVendors ?? []).filter(mv => UUIDsEqual(mv.ModelID, model!.ID)))
+          .filter(v => v.DriverClass != null && (v.Status === undefined || v.Status === 'Active'))
+          .sort((a, b) => (b.Priority ?? 0) - (a.Priority ?? 0));
+        const primaryVendor = vendors[0];
+        if (primaryVendor?.DriverClass) {
+          const dc = primaryVendor.DriverClass.toLowerCase();
+          if (dc === 'openailiverealtime' || dc.includes('live')) {
+            driverCapabilities = { FullDuplex: true };
+          }
+        }
+        return ResolveIsModelFullDuplex(effective ?? model.ModelConfigurationObject, driverCapabilities);
+      }
+    } catch (err) {
+      LogError(`[LiveKitAgentRoomCoordinator] resolveIsFullDuplex failed: ${err instanceof Error ? err.message : String(err)}`);
     }
     return false;
+  }
+
+  /**
+   * Tolerantly parses JSON agent configuration (type/co-agent/target) and extracts a configured model preference.
+   */
+  private extractModelPreference(configJson: string | null | undefined): string | undefined {
+    if (typeof configJson !== 'string' || configJson.trim().length === 0) {
+      return undefined;
+    }
+    try {
+      const parsed: unknown = JSON.parse(configJson);
+      if (parsed && typeof parsed === 'object') {
+        const rec = parsed as Record<string, unknown>;
+        if (rec.realtime && typeof rec.realtime === 'object') {
+          const rt = rec.realtime as Record<string, unknown>;
+          if (typeof rt.modelPreference === 'string' && rt.modelPreference.trim().length > 0) {
+            return rt.modelPreference.trim();
+          }
+          if (typeof rt.modelId === 'string' && rt.modelId.trim().length > 0) {
+            return rt.modelId.trim();
+          }
+        }
+        if (typeof rec.modelPreference === 'string' && rec.modelPreference.trim().length > 0) {
+          return rec.modelPreference.trim();
+        }
+        if (typeof rec.modelId === 'string' && rec.modelId.trim().length > 0) {
+          return rec.modelId.trim();
+        }
+        if (typeof rec.preferredModelId === 'string' && rec.preferredModelId.trim().length > 0) {
+          return rec.preferredModelId.trim();
+        }
+        if (typeof rec.AIModelID === 'string' && rec.AIModelID.trim().length > 0) {
+          return rec.AIModelID.trim();
+        }
+      }
+    } catch (err) {
+      LogError(`[LiveKitAgentRoomCoordinator] Failed to parse agent configuration JSON: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    return undefined;
   }
 
   /** Appends an agent to a room's roster (creating the room's list on first join). */

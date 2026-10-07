@@ -84,6 +84,22 @@ export interface RoomAudioTelemetrySnapshot {
     eventLoopDelayP99Ms?: number;
 }
 
+/** Lazily initialized module-scoped event-loop monitor (shared across connections to prevent leaks). */
+let moduleEventLoopMonitor: IntervalHistogram | null = null;
+
+function getModuleEventLoopMonitor(): IntervalHistogram | null {
+    if (!moduleEventLoopMonitor) {
+        try {
+            moduleEventLoopMonitor = monitorEventLoopDelay({ resolution: 20 });
+            moduleEventLoopMonitor.enable();
+        } catch {
+            // Intentionally best-effort: environment may not support monitorEventLoopDelay
+            moduleEventLoopMonitor = null;
+        }
+    }
+    return moduleEventLoopMonitor;
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // The minimal `@livekit/rtc-node` surface this wrapper depends on — declared locally
 // so NONE of the SDK's types leak and the package compiles WITHOUT the addon installed.
@@ -341,7 +357,6 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
         captureCount: 0,
         underrunCount: 0,
     };
-    private elDelayMonitor: IntervalHistogram | null = null;
     private lastCaptureFinishMs?: number;
 
     private audioHandler?: (frame: NativeRoomAudioFrame) => void;
@@ -367,12 +382,8 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
 
     /** Connects to the room, publishes the bot's audio track, and wires inbound audio + roster events. */
     public async connect(args: NativeConnectArgs): Promise<NativeConnectResult> {
-        try {
-            this.elDelayMonitor = monitorEventLoopDelay({ resolution: 20 });
-            this.elDelayMonitor.enable();
-        } catch {
-            // best-effort if unsupported in environment
-        }
+        // Ensure module-level event-loop monitor is initialized (best-effort)
+        getModuleEventLoopMonitor();
 
         const rtc = await this.loadRtc();
         const room = new rtc.Room();
@@ -400,21 +411,22 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
     /** Disconnects, closes inbound streams, and releases the room. Tolerant of teardown errors. */
     public async disconnect(): Promise<void> {
         const room = this.room;
-        if (this.elDelayMonitor) {
+        const monitor = getModuleEventLoopMonitor();
+        if (monitor) {
             try {
-                const p99 = this.elDelayMonitor.percentile(99) / 1e6;
+                const p99 = monitor.percentile(99) / 1e6;
                 LogStatusEx({
                     message: `[LiveKitRtcNodeRoomClient][telemetry] event loop delay p99=${p99.toFixed(2)}ms (room ${room?.name ?? 'unknown'})`,
                     verboseOnly: true,
                 });
-                this.elDelayMonitor.disable();
             } catch {
-                // ignore
+                // Intentionally best-effort telemetry
             }
-            this.elDelayMonitor = null;
         }
 
         this.closeInboundStreams();
+        this.inboundGaps.clear();
+        this.lastCaptureFinishMs = undefined;
         this.outboundQueue.length = 0; // stop the drain loop (it bails when audioSource is null)
         this.room = null;
         this.audioSource = null;
@@ -476,7 +488,7 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
 
                 let qd: number | undefined;
                 if (typeof source.queuedDuration === 'function') {
-                    qd = (source.queuedDuration as () => number)();
+                    qd = source.queuedDuration();
                 } else if (typeof source.queuedDuration === 'number') {
                     qd = source.queuedDuration;
                 }
@@ -498,6 +510,10 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
             // A frame may have arrived after the loop's last length check — pick it up.
             if (this.outboundQueue.length > 0 && this.rtc && this.audioSource) {
                 void this.drainOutbound();
+            } else {
+                // Outbound queue fully drained: reset lastCaptureFinishMs so the silence gap between turns
+                // is not counted as an audio buffer underrun when the next turn begins.
+                this.lastCaptureFinishMs = undefined;
             }
         }
     }
@@ -510,6 +526,7 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
      */
     public flushOutbound(): void {
         this.outboundQueue.length = 0;
+        this.lastCaptureFinishMs = undefined;
         try {
             this.audioSource?.clearQueue();
         } catch (err: unknown) {
@@ -591,6 +608,7 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
         }) as (...args: never[]) => void);
 
         room.on(rtc.RoomEvent.ParticipantDisconnected, ((participant: RtcParticipant) => {
+            this.inboundGaps.delete(participant.identity);
             this.participantDisconnectedHandler?.(participant.identity);
         }) as (...args: never[]) => void);
 
@@ -656,11 +674,12 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
             inboundGaps[k] = { ...v };
         }
         let eventLoopDelayP99Ms: number | undefined;
-        if (this.elDelayMonitor) {
+        const monitor = getModuleEventLoopMonitor();
+        if (monitor) {
             try {
-                eventLoopDelayP99Ms = this.elDelayMonitor.percentile(99) / 1e6;
+                eventLoopDelayP99Ms = monitor.percentile(99) / 1e6;
             } catch {
-                // ignore
+                // Intentionally best-effort telemetry
             }
         }
         return {

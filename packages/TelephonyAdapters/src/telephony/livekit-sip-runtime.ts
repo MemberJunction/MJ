@@ -42,7 +42,11 @@ export interface LiveKitSipInboundHandlerResult {
  */
 export interface ILiveKitSipInboundHandler {
     HandleInboundCall: (context: LiveKitSipInboundCallContext) => Promise<LiveKitSipInboundHandlerResult>;
-    /** Optional teardown hook invoked when a LiveKit room finishes. */
+    /**
+     * Optional teardown hook invoked when a LiveKit room finishes.
+     * Fires for EVERY room finishing on this LiveKit server (whether handled by this custom handler or the default
+     * AI-agent path); implementations should scope by room name or active session set.
+     */
     HandleRoomFinished?: (roomName: string, contextUser: UserInfo, provider: IMetadataProvider) => Promise<void>;
 }
 

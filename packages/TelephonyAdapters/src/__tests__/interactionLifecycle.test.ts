@@ -267,6 +267,39 @@ describe('InteractionLifecycleService', () => {
             expect(mockRow.Status).toBe('Abandoned');
             expect(savedEvents.some((e) => e.EventType === 'Abandoned')).toBe(true);
         });
+
+        it('respects an explicit terminal Status override such as Failed', async () => {
+            const { provider, savedEvents } = createMockProvider();
+            const startedAt = new Date('2026-10-06T12:00:00.000Z');
+            const endedAt = new Date('2026-10-06T12:00:10.000Z');
+
+            const mockRow = {
+                ID: 'int-failed-1',
+                Status: 'Active',
+                StartedAt: startedAt,
+                AnsweredAt: null,
+                EndedAt: null,
+                DurationSeconds: null,
+                CostEstimate: null,
+                Load: vi.fn(async () => true),
+                Save: vi.fn(async () => true),
+            } as unknown as MJInteractionEntity;
+
+            (provider.GetEntityObject as ReturnType<typeof vi.fn>).mockResolvedValueOnce(mockRow);
+
+            const closed = await lifecycle.CloseInteraction({
+                InteractionID: 'int-failed-1',
+                EndedAt: endedAt,
+                EndReason: 'CarrierTransportError',
+                Status: 'Failed',
+                ContextUser: USER,
+                MetadataProvider: provider,
+            });
+
+            expect(closed).toBe(true);
+            expect(mockRow.Status).toBe('Failed');
+            expect(savedEvents.some((e) => e.EventType === 'Ended')).toBe(true);
+        });
     });
 
     describe('RecordRoomEvent', () => {

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import * as Core from '@memberjunction/core';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { LiveKitUserIdentity } from '../livekit-token-service';
 import { HandoffOfferRegistry, HANDOFF_OFFER_TIMEOUT_MS } from '../room-handoff/handoff-offer-registry';
@@ -469,6 +470,7 @@ describe('RoomHandoffEngine', () => {
     });
 
     it('catches and logs async observer rejections without producing unhandled rejections', async () => {
+      const logErrorSpy = vi.spyOn(Core, 'LogError');
       const { agent } = makeAgent();
       let registeredCalled = false;
       let primaryCalled = false;
@@ -489,8 +491,13 @@ describe('RoomHandoffEngine', () => {
       });
 
       await expect(engine.RequestHandoff(agent, userRequest())).resolves.toBeDefined();
+      await vi.advanceTimersByTimeAsync(10);
+
       expect(registeredCalled).toBe(true);
       expect(primaryCalled).toBe(true);
+      expect(logErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Async primary observer rejection boom'));
+      expect(logErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Async registered observer rejection boom'));
+      logErrorSpy.mockRestore();
     });
   });
 });
