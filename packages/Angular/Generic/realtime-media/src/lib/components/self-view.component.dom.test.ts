@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import { Component, Input } from '@angular/core';
 import { renderComponentFixture, query, ExpectNoAxeViolations } from '@memberjunction/ng-test-utils';
 import type { MediaParticipant, MediaVideoSource } from '@memberjunction/ai-realtime-client/media';
 import { SelfViewComponent } from './self-view.component';
@@ -10,6 +11,16 @@ function elementSource(): MediaVideoSource {
 
 function me(over: Partial<MediaParticipant> = {}): MediaParticipant {
   return { Identity: 'me', DisplayName: 'Grace Hopper', Role: 'self', IsSpeaking: false, Video: { camera: elementSource() }, ...over };
+}
+
+/** A host that puts its own action in the self-view's corner. */
+@Component({
+  standalone: true,
+  imports: [SelfViewComponent],
+  template: `<mj-self-view [Participant]="Participant"><button class="own-action" mjMediaTileActions>Move</button></mj-self-view>`,
+})
+class ActionsHostComponent {
+  @Input() public Participant: MediaParticipant | null = null;
 }
 
 /** DOM spec for <mj-self-view>: the user's tile, mirrored, with the agent badge and Hide. */
@@ -44,6 +55,12 @@ describe('SelfViewComponent (DOM)', () => {
     expect(button.getAttribute('aria-label')).toBe('Hide self-view');
     button.click();
     expect(hide).toHaveBeenCalledOnce();
+  });
+
+  it("puts a host's actions in the tile's corner, before Hide", () => {
+    const f = renderComponentFixture(ActionsHostComponent, { inputs: { Participant: me() } });
+    const corner = [...(query(f, 'mj-media-tile .tile__actions-slot')?.querySelectorAll('button') ?? [])];
+    expect(corner.map((button) => button.className.split(' ')[0])).toEqual(['own-action', 'self__hide']);
   });
 
   it('leaves out Hide when the host does not offer it', () => {

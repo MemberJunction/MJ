@@ -113,6 +113,31 @@ describe('LiveKitRoomComponent (DOM, fake controller)', () => {
       inputs: { AutoConnect: false, ...inputs },
     });
 
+  /** A participant who may be the agent, may be speaking, and may share a screen. */
+  const person = (identity: string, over: { Local?: boolean; Agent?: boolean; Speaking?: boolean; Sharing?: boolean } = {}): LiveKitParticipantView => ({
+    ...view(identity, { Local: over.Local, Sharing: over.Sharing }),
+    Role: over.Agent ? 'agent' : 'participant',
+    IsSpeaking: over.Speaking ?? false,
+  }) as LiveKitParticipantView;
+
+  /** The names on the tiles inside the matching containers, in order (an agent's "AI" badge left off). */
+  const names = (f: ReturnType<typeof render>, selector: string): string[] =>
+    queryAll(f, `${selector} .tile__name`).map((name) => (name.textContent ?? '').trim().split(/\s+/)[0]);
+
+  /** A connected room: the user, and the remote participants given. */
+  const room = (remote: LiveKitParticipantView[], over: Partial<LiveKitRoomState> = {}) =>
+    makeFakeController(makeState({ Status: 'connected', Local: person('you', { Local: true }), Remote: remote, ...over }));
+
+  /** The named participant's tile, wherever it is. */
+  const tileOf = (f: ReturnType<typeof render>, name: string): HTMLElement | undefined =>
+    queryAll(f, 'mj-media-tile, mj-self-view').find((t) => t.querySelector('.tile__name')?.textContent?.trim().split(/\s+/)[0] === name);
+
+  /** Clicks the pin on the named participant's tile. */
+  const pin = (f: ReturnType<typeof render>, name: string) => {
+    (tileOf(f, name)?.querySelector('.tile__pin') as HTMLButtonElement).click();
+    f.detectChanges();
+  };
+
   it('renders the connection overlay (not the connected stage) when the controller reports "connecting"', () => {
     const fc = makeFakeController(makeState({ Status: 'connecting' }));
     const f = render(fc.controller);
@@ -258,20 +283,6 @@ describe('LiveKitRoomComponent (DOM, fake controller)', () => {
   });
 
   describe('the layouts', () => {
-    /** A participant who may be the agent, may be speaking, and may share a screen. */
-    const person = (identity: string, over: { Local?: boolean; Agent?: boolean; Speaking?: boolean; Sharing?: boolean } = {}): LiveKitParticipantView => ({
-      ...view(identity, { Local: over.Local, Sharing: over.Sharing }),
-      Role: over.Agent ? 'agent' : 'participant',
-      IsSpeaking: over.Speaking ?? false,
-    }) as LiveKitParticipantView;
-
-    /** The names on the tiles inside the matching containers, in order (an agent's "AI" badge left off). */
-    const names = (f: ReturnType<typeof render>, selector: string): string[] =>
-      queryAll(f, `${selector} .tile__name`).map((name) => (name.textContent ?? '').trim().split(/\s+/)[0]);
-
-    const room = (remote: LiveKitParticipantView[], over: Partial<LiveKitRoomState> = {}) =>
-      makeFakeController(makeState({ Status: 'connected', Local: person('you', { Local: true }), Remote: remote, ...over }));
-
     it('Active speaker: the remote who speaks has the spotlight, and the filmstrip has everyone else, the user first', () => {
       const fc = room([person('ada', { Speaking: true }), person('sage', { Agent: true })]);
       const f = render(fc.controller, { Layout: 'spotlight' });
@@ -351,22 +362,6 @@ describe('LiveKitRoomComponent (DOM, fake controller)', () => {
   });
 
   describe('the spotlight, as a move', () => {
-    const person = (identity: string, over: { Local?: boolean; Agent?: boolean; Speaking?: boolean } = {}): LiveKitParticipantView => ({
-      ...view(identity, { Local: over.Local }),
-      Role: over.Agent ? 'agent' : 'participant',
-      IsSpeaking: over.Speaking ?? false,
-    }) as LiveKitParticipantView;
-    const names = (f: ReturnType<typeof render>, selector: string): string[] =>
-      queryAll(f, `${selector} .tile__name`).map((name) => (name.textContent ?? '').trim().split(/\s+/)[0]);
-    const room = (remote: LiveKitParticipantView[]) =>
-      makeFakeController(makeState({ Status: 'connected', Local: person('you', { Local: true }), Remote: remote }));
-    /** Clicks the pin on the named participant's tile, wherever it is. */
-    const pin = (f: ReturnType<typeof render>, name: string) => {
-      const tile = queryAll(f, 'mj-media-tile, mj-self-view').find((t) => t.querySelector('.tile__name')?.textContent?.trim().split(/\s+/)[0] === name);
-      (tile?.querySelector('.tile__pin') as HTMLButtonElement).click();
-      f.detectChanges();
-    };
-
     it('pinning in Gallery switches to Active speaker with that person in the spotlight, and the room says so', () => {
       const f = render(room([person('ada'), person('sage', { Agent: true })]).controller, { Layout: 'grid' });
       const layouts: string[] = [];
@@ -441,6 +436,98 @@ describe('LiveKitRoomComponent (DOM, fake controller)', () => {
       expect(layouts).toEqual([]);
       expect(f.componentInstance.PinnedIdentity).toBeNull();
       expect(query(f, '.tile__pin')).toBeNull();
+    });
+  });
+
+  describe('"Move to…" on every tile', () => {
+    /** Opens the "Move to…" menu in the named participant's tile and lists its items. */
+    const openMenu = (f: ReturnType<typeof render>, name: string): HTMLElement[] => {
+      (tileOf(f, name)?.querySelector('mj-media-move-menu button') as HTMLButtonElement).click();
+      f.detectChanges();
+      return overlayQueryAll('mj-menu-item') as HTMLElement[];
+    };
+    const labels = (items: HTMLElement[]) => items.map((item) => item.textContent?.trim());
+    const disabled = (items: HTMLElement[]) => items.map((item) => item.getAttribute('aria-disabled') === 'true');
+    /** Picks an item from the named participant's menu. */
+    const pick = (f: ReturnType<typeof render>, name: string, item: string) => {
+      openMenu(f, name).find((el) => el.textContent?.trim() === item)?.click();
+      f.detectChanges();
+    };
+    const twoAndAgent = () => room([person('ada'), person('bo'), person('sage', { Agent: true })]).controller;
+
+    it("offers a filmstrip tile the spotlight, its own place disabled, then Reset layout, in the tile's corner", () => {
+      const f = render(twoAndAgent(), { Layout: 'spotlight' });
+      const menu = tileOf(f, 'ada')?.querySelector('.tile__actions-slot mj-media-move-menu');
+      expect(menu?.classList.contains('media-move--over-video')).toBe(true);
+      expect(menu?.querySelector('button')?.getAttribute('aria-label')).toBe('Move ada');
+      const items = openMenu(f, 'ada');
+      expect(labels(items)).toEqual(['Spotlight', 'Filmstrip', 'Reset layout']);
+      expect(disabled(items)).toEqual([false, true, false]);
+    });
+
+    it("offers the call's own spotlight pick the spotlight alone, which pins them there", () => {
+      const f = render(twoAndAgent(), { Layout: 'spotlight' });
+      const items = openMenu(f, 'sage');
+      expect(labels(items)).toEqual(['Spotlight', 'Reset layout']);
+      items[0].click();
+      f.detectChanges();
+      expect(f.componentInstance.PinnedIdentity).toBe('sage');
+    });
+
+    it('moves a tile to the spotlight and back to the filmstrip', () => {
+      const f = render(twoAndAgent(), { Layout: 'spotlight' });
+      pick(f, 'ada', 'Spotlight');
+      expect(names(f, '.lk-room__spotlight')).toEqual(['ada']);
+      const items = openMenu(f, 'ada');
+      expect(labels(items)).toEqual(['Spotlight', 'Filmstrip', 'Reset layout']);
+      expect(disabled(items)).toEqual([true, false, false]);
+      items.find((el) => el.textContent?.trim() === 'Filmstrip')?.click();
+      f.detectChanges();
+      expect(names(f, '.lk-room__spotlight')).toEqual(['sage']);
+    });
+
+    it('calls the strip Gallery in Gallery, where Spotlight switches to Active speaker', () => {
+      const f = render(twoAndAgent(), { Layout: 'grid' });
+      const layouts: string[] = [];
+      f.componentInstance.LayoutChange.subscribe((layout: string) => layouts.push(layout));
+      const items = openMenu(f, 'ada');
+      expect(labels(items)).toEqual(['Spotlight', 'Gallery', 'Reset layout']);
+      items[0].click();
+      f.detectChanges();
+      expect(layouts).toEqual(['spotlight']);
+      expect(names(f, '.lk-room__spotlight')).toEqual(['ada']);
+    });
+
+    it('Reset layout gives the spotlight back to the call', () => {
+      const f = render(twoAndAgent(), { Layout: 'spotlight' });
+      pin(f, 'bo');
+      pick(f, 'ada', 'Reset layout');
+      expect(names(f, '.lk-room__spotlight')).toEqual(['sage']);
+      expect(f.componentInstance.PinnedIdentity).toBeNull();
+    });
+
+    it("puts the user's own menu before their Hide button", () => {
+      const f = render(twoAndAgent(), { Layout: 'spotlight' });
+      const corner = [...(tileOf(f, 'you')?.querySelectorAll('.tile__actions-slot > *') ?? [])];
+      expect(corner.map((el) => (el.tagName.toLowerCase() === 'mj-media-move-menu' ? 'menu' : el.className.split(' ')[0]))).toEqual(['menu', 'self__hide']);
+    });
+
+    it("puts the menu on the user's share preview while they share", () => {
+      const sharing = { MicrophoneEnabled: false, CameraEnabled: false, ScreenShareEnabled: true, ScreenShareSurface: 'window' as const };
+      const f = render(room([person('ada')], { Local: person('you', { Local: true, Sharing: true }), LocalMedia: sharing }).controller, { Layout: 'spotlight' });
+      expect(query(f, 'mj-share-preview .share__corner mj-media-move-menu')).not.toBeNull();
+    });
+
+    it('has no menu while pinning is off', () => {
+      expect(query(render(twoAndAgent(), { Layout: 'spotlight', EnablePinning: false }), 'mj-media-move-menu')).toBeNull();
+    });
+
+    it('has no menu on the shared screen in split view, and one on the speaker', () => {
+      const fc = room([person('ada', { Sharing: true }), person('sage', { Agent: true })]);
+      const f = render(fc.controller, { Layout: 'split' });
+      const [sharePane, speakerPane] = queryAll(f, '.lk-room__split-pane');
+      expect(sharePane.querySelector('mj-media-move-menu')).toBeNull();
+      expect(speakerPane.querySelector('mj-media-move-menu')).not.toBeNull();
     });
   });
 

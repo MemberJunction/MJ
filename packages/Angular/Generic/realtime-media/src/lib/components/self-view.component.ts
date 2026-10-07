@@ -6,7 +6,8 @@ import type { MediaAudioMeterSettings } from './audio-meter.component';
 /**
  * `mj-self-view`: the user's own tile, as `mj-media-tile` draws it, with the camera mirrored as in a mirror (a
  * shared screen is not mirrored). "Agent can see this" shows while the host says the user's frames reach an agent.
- * The Hide button asks the host to take the tile away; the camera stays on, so others still see the user.
+ * The Hide button asks the host to take the tile away; the camera stays on, so others still see the user. Content
+ * marked `mjMediaTileActions` goes to the tile's top corner, before the Hide button.
  */
 @Component({
   selector: 'mj-self-view',
@@ -23,14 +24,18 @@ import type { MediaAudioMeterSettings } from './audio-meter.component';
       [ShowConnectionQuality]="ShowConnectionQuality"
       [AvatarUrl]="AvatarUrl"
       [MeterSettings]="MeterSettings"
-    ></mj-media-tile>
+    >
+      <ng-container ngProjectAs="[mjMediaTileActions]">
+        <ng-content select="[mjMediaTileActions]"></ng-content>
+        @if (ShowHide) {
+          <button type="button" class="self__hide" aria-label="Hide self-view" title="Hide self-view (others still see you)" (click)="HideRequested.emit()">
+            <i class="fa-solid fa-eye-slash" aria-hidden="true"></i>
+          </button>
+        }
+      </ng-container>
+    </mj-media-tile>
     @if (AgentCanSee) {
       <span class="self__badge"><i class="fa-solid fa-eye" aria-hidden="true"></i> Agent can see this</span>
-    }
-    @if (ShowHide) {
-      <button type="button" class="self__hide" aria-label="Hide self-view" title="Hide self-view (others still see you)" (click)="HideRequested.emit()">
-        <i class="fa-solid fa-eye-slash" aria-hidden="true"></i>
-      </button>
     }
   `,
   styleUrls: ['./self-view.component.css'],

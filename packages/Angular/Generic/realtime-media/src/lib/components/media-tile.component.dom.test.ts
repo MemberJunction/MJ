@@ -15,6 +15,16 @@ class PlaceholderHostComponent {
   @Input() public StallAfterMs: number | null = null;
 }
 
+/** A host that puts its own action in the tile's corner. */
+@Component({
+  standalone: true,
+  imports: [MediaTileComponent],
+  template: `<mj-media-tile [Participant]="Participant" [Pinnable]="true"><button class="own-action" mjMediaTileActions>Move</button></mj-media-tile>`,
+})
+class ActionsHostComponent {
+  @Input() public Participant: MediaParticipant | null = null;
+}
+
 /** An element source that records what it was attached to and how often it was detached. */
 function elementSource(): MediaVideoSource & { Attached: HTMLVideoElement[]; Detaches: number } {
   const source = {
@@ -126,6 +136,13 @@ describe('MediaTileComponent (DOM)', () => {
       pin.click();
       expect(spy).toHaveBeenCalled();
       expect(query(render(participant()), '.tile__pin')).toBeNull();
+    });
+
+    it("puts a host's actions in the top corner, before the pin", () => {
+      const f = renderComponentFixture(ActionsHostComponent, { inputs: { Participant: participant() } });
+      const corner = [...(query(f, '.tile__actions')?.querySelectorAll('.own-action, .tile__pin') ?? [])];
+      expect(corner.map((el) => el.className.split(' ')[0])).toEqual(['own-action', 'tile__pin']);
+      expect(query(f, '.tile__actions-slot .own-action')).not.toBeNull();
     });
 
     it('meters a participant that offers a level and is not muted', () => {

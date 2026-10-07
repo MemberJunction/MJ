@@ -41,6 +41,7 @@ import {
   MediaAgentStateComponent,
   MediaConnectionOverlayComponent,
   MediaDeviceMenuComponent,
+  MediaMoveMenuComponent,
   MediaTileComponent,
   SelfViewComponent,
   SharePreviewComponent,
@@ -69,7 +70,7 @@ import { LiveKitPreJoinComponent, type LiveKitPreJoinChoices } from './component
 import type { LiveKitAgentVisualState } from './components/livekit-agent-state.component';
 import { LiveKitWhiteboardSurfaceComponent } from './components/livekit-whiteboard-surface.component';
 import { MJButtonDirective, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
-import { LiveKitRoomTileDirective } from './livekit-room-tile.directive';
+import { LiveKitRoomTileDirective, type LiveKitTilePlace } from './livekit-room-tile.directive';
 import { DeriveAgentState, IsAgentVisualState, SelectAllParticipants } from './livekit-room-logic';
 import {
   LIVEKIT_CHAT_TOPIC,
@@ -133,6 +134,7 @@ export interface LiveKitLayoutOption {
   imports: [
     NgTemplateOutlet,
     MediaTileComponent,
+    MediaMoveMenuComponent,
     SelfViewComponent,
     SharePreviewComponent,
     LiveKitRoomTileDirective,
@@ -638,6 +640,33 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
   }
 
   /**
+   * Where a participant's tile may go from where it shows, for its "Move to…" menu, or `null` for no menu. The participant
+   * the call put in the spotlight may be pinned there but not sent to the strip, where the call would not keep them while
+   * they speak. Without pinning the strip is the only place, so there is no menu; the screen-share pane has none either.
+   */
+  public TileMovesFor(identity: string, place: LiveKitTilePlace): readonly MediaPlacement[] | null {
+    if (place === 'split-share' || !this.EnablePinning) {
+      return null;
+    }
+    return place === 'spotlight' && this.PinnedIdentity !== identity ? CALLS_PICK_MOVES : TILE_PLACEMENTS;
+  }
+
+  /** Where a participant's tile is, for its "Move to…" menu: the spotlight when the user put it there, else the strip. */
+  public TilePlacementOf(identity: string): MediaPlacement {
+    return this.PinnedIdentity === identity ? 'stage' : ROOM_STRIP;
+  }
+
+  /** What the "Move to…" menu calls the room's places: the strip is the gallery in Gallery, else the filmstrip. */
+  public get TileMoveLabels(): Partial<Readonly<Record<MediaPlacement, string>>> {
+    return this.Layout === 'grid' ? GALLERY_LABELS : FILMSTRIP_LABELS;
+  }
+
+  /** "Reset layout": every tile goes back where the call places it, so the pin is cleared. */
+  public OnResetLayout(): void {
+    this.tileMoves = [];
+  }
+
+  /**
    * Records a tile's move, replacing its earlier one. A move to the spotlight also sends the last pin back to the strip,
    * so a later unpin gives the spotlight back to the call, not to an earlier pin.
    */
@@ -1027,6 +1056,13 @@ const ROOM_STRIP: MediaPlacement = 'tab';
 
 /** Where the user may move a participant's tile: the spotlight, or back among the others. */
 const TILE_PLACEMENTS: readonly MediaPlacement[] = ['stage', ROOM_STRIP];
+
+/** Where the user may move the participant the call put in the spotlight: pin them there. */
+const CALLS_PICK_MOVES: readonly MediaPlacement[] = ['stage'];
+
+/** The room's names for its places in the "Move to…" menu, in Gallery and in the other layouts. */
+const GALLERY_LABELS: Partial<Readonly<Record<MediaPlacement, string>>> = { stage: 'Spotlight', [ROOM_STRIP]: 'Gallery' };
+const FILMSTRIP_LABELS: Partial<Readonly<Record<MediaPlacement, string>>> = { stage: 'Spotlight', [ROOM_STRIP]: 'Filmstrip' };
 
 /** The key a participant's tile is moved under. */
 function tileKey(identity: string): string {

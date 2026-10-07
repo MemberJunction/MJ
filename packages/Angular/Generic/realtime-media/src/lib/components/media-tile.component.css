@@ -135,10 +135,34 @@
   vertical-align: middle;
 }
 
-.tile__pin {
+/* The top corner: a host's actions (`mjMediaTileActions`), then the pin. Both show on hover or focus. */
+.tile__actions {
   position: absolute;
   top: 8px;
   right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tile__actions-slot {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.tile__actions-slot:empty {
+  display: none;
+}
+
+.tile:hover .tile__actions-slot,
+.tile__actions-slot:focus-within {
+  opacity: 1;
+}
+
+.tile__pin {
   width: 28px;
   height: 28px;
   border: none;

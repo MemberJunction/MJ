@@ -28,6 +28,27 @@
   display: none;
 }
 
+/* A host's actions (`mjMediaTileActions`), in the top corner as on the tile, shown on hover or focus. */
+.share__corner {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.share__corner:empty {
+  display: none;
+}
+
+.share:hover .share__corner,
+.share__corner:focus-within {
+  opacity: 1;
+}
+
 .share__bar {
   position: absolute;
   left: 0;

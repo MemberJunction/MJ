@@ -31,7 +31,9 @@ export class MediaTilePlaceholderDirective {}
  * or their picture or initials when there is none; name, role badge, mute and screen-sharing indicators, an
  * "AI-generated video" label while it shows an avatar, connection quality, an active-speaker ring, an optional audio
  * meter and a pin button. With {@link StallAfterMs} set, a video that stops sending frames cross-fades to the picture or
- * initials until its frames come back. Content marked {@link MediaTilePlaceholderDirective} takes the picture's place.
+ * initials until its frames come back. Content marked {@link MediaTilePlaceholderDirective} takes the picture's place,
+ * and content marked `mjMediaTileActions` (such as a "Move to…" menu) sits in the top corner beside the pin, shown on
+ * hover or focus: `<mj-media-tile><mj-media-move-menu mjMediaTileActions …></mj-media-move-menu></mj-media-tile>`.
  *
  * The tile never plays audio: a voice must not stop because its tile left the screen, so the host plays each
  * voice once, outside the layout.
@@ -81,19 +83,22 @@ export class MediaTilePlaceholderDirective {}
         </div>
       }
 
-      @if (Pinnable) {
-        <button
-          type="button"
-          class="tile__pin"
-          [class.tile__pin--active]="IsPinned"
-          [attr.aria-label]="IsPinned ? 'Unpin' : 'Pin'"
-          [attr.aria-pressed]="IsPinned"
-          [title]="IsPinned ? 'Unpin' : 'Pin'"
-          (click)="TogglePin.emit()"
-        >
-          <i class="fa-solid fa-thumbtack" aria-hidden="true"></i>
-        </button>
-      }
+      <div class="tile__actions">
+        <span class="tile__actions-slot"><ng-content select="[mjMediaTileActions]"></ng-content></span>
+        @if (Pinnable) {
+          <button
+            type="button"
+            class="tile__pin"
+            [class.tile__pin--active]="IsPinned"
+            [attr.aria-label]="IsPinned ? 'Unpin' : 'Pin'"
+            [attr.aria-pressed]="IsPinned"
+            [title]="IsPinned ? 'Unpin' : 'Pin'"
+            (click)="TogglePin.emit()"
+          >
+            <i class="fa-solid fa-thumbtack" aria-hidden="true"></i>
+          </button>
+        }
+      </div>
 
       <div class="tile__footer">
         @if (ShowName) {

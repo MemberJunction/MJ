@@ -7,7 +7,7 @@ import { MediaMoveMenuComponent, type MediaMoveRequest } from './media-move-menu
 describe('MediaMoveMenuComponent (DOM)', () => {
   afterEach(() => clearOverlayContainers());
 
-  const render = (inputs: { Placement?: MediaPlacement; Allowed?: readonly MediaPlacement[]; Labels?: Partial<Record<MediaPlacement, string>> } = {}) =>
+  const render = (inputs: { Placement?: MediaPlacement; Allowed?: readonly MediaPlacement[]; Labels?: Partial<Record<MediaPlacement, string>>; OverVideo?: boolean } = {}) =>
     renderComponentFixture(MediaMoveMenuComponent, { inputs: { Key: 'board-1', Title: 'Whiteboard', Placement: 'tab', ...inputs } });
 
   const open = (f: ReturnType<typeof render>) => {
@@ -48,6 +48,11 @@ describe('MediaMoveMenuComponent (DOM)', () => {
     const moves: MediaMoveRequest[] = capture(f.componentInstance.MoveRequested);
     open(f).find((item) => item.textContent?.trim() === 'Picture-in-picture')?.click();
     expect(moves).toEqual([{ Key: 'board-1', Placement: 'pip' }]);
+  });
+
+  it("over a picture, takes the tile pin's scrim", () => {
+    expect(render({ OverVideo: true }).nativeElement.classList.contains('media-move--over-video')).toBe(true);
+    expect(render().nativeElement.classList.contains('media-move--over-video')).toBe(false);
   });
 
   it('asks to reset the layout', () => {

@@ -12,7 +12,8 @@ const SURFACE_LABELS: Record<CapturedDisplaySurface, string> = {
 
 /**
  * `mj-share-preview`: what the user is sharing, shown whole and not mirrored, labelled with the kind of surface, with
- * Stop sharing and Change. Presentational: the host stops the share, or asks the browser's picker again.
+ * Stop sharing and Change. Presentational: the host stops the share, or asks the browser's picker again. Content marked
+ * `mjMediaTileActions` sits in the top corner, shown on hover or focus, as on `mj-media-tile`.
  */
 @Component({
   selector: 'mj-share-preview',
@@ -22,6 +23,7 @@ const SURFACE_LABELS: Record<CapturedDisplaySurface, string> = {
   template: `
     <div class="share">
       <video #video class="share__video" [class.share__video--hidden]="!Source" autoplay playsinline [muted]="true"></video>
+      <span class="share__corner"><ng-content select="[mjMediaTileActions]"></ng-content></span>
       <div class="share__bar">
         <span class="share__label"><i class="fa-solid fa-display" aria-hidden="true"></i> {{ Label }}</span>
         <span class="share__actions">

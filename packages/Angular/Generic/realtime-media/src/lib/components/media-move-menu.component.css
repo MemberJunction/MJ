@@ -2,3 +2,20 @@
   display: inline-flex;
   align-items: center;
 }
+
+/* Over a picture: the dark round scrim of a tile's pin, the same size, in both themes. */
+:host(.media-move--over-video) > button {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0;
+  border-radius: 50%;
+  color: rgba(255, 255, 255, 0.95);
+  background: rgba(0, 0, 0, 0.5);
+}
+
+:host(.media-move--over-video) > button:hover:not(:disabled) {
+  color: rgba(255, 255, 255, 0.95);
+  background: rgba(0, 0, 0, 0.7);
+}

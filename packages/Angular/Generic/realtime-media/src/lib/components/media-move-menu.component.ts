@@ -36,13 +36,15 @@ const MEDIA_MOVE_ICONS: Readonly<Record<MediaPlacement, string>> = {
  * `mj-media-move-menu`: the "Move to…" menu for one surface. It lists the places the surface may go, in the order
  * stage, picture-in-picture, tab, hidden, with the current one listed but disabled, then "Reset layout". The realtime
  * call shows it for its channels' surfaces and the meeting room for its participants' tiles; each host names its
- * places ({@link Labels}), as the room calls the stage the spotlight.
+ * places ({@link Labels}), as the room calls the stage the spotlight. Over a picture, such as in a tile's corner, its
+ * button takes the dark round scrim of the tile's pin ({@link OverVideo}).
  */
 @Component({
   selector: 'mj-media-move-menu',
   standalone: true,
   imports: [MJButtonDirective, MJMenuTriggerDirective, MJMenuComponent, MJMenuItemComponent, MJMenuDividerComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  host: { '[class.media-move--over-video]': 'OverVideo' },
   template: `
     <button type="button" mjButton Variant="icon" Size="sm" [AriaLabel]="'Move ' + Title" [mjMenuTriggerFor]="moveMenu">
       <i class="fa-solid fa-ellipsis-vertical" aria-hidden="true"></i>
@@ -77,6 +79,9 @@ export class MediaMoveMenuComponent {
    * {@link MEDIA_MOVE_LABELS}.
    */
   @Input() public Labels: Partial<Readonly<Record<MediaPlacement, string>>> = {};
+
+  /** Whether the button sits over a picture: it then takes the dark round scrim of a tile's pin, so it shows on any frame. */
+  @Input() public OverVideo = false;
 
   /** The user picked a place. */
   @Output() public MoveRequested = new EventEmitter<MediaMoveRequest>();

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import { Component } from '@angular/core';
 import { renderComponentFixture, query, queryAll, ExpectNoAxeViolations } from '@memberjunction/ng-test-utils';
 import type { MediaVideoSource } from '@memberjunction/ai-realtime-client/media';
 import { SharePreviewComponent } from './share-preview.component';
@@ -18,6 +19,14 @@ function elementSource(): MediaVideoSource & { Attached: HTMLVideoElement[]; Det
   };
   return source;
 }
+
+/** A host that puts its own action in the preview's corner. */
+@Component({
+  standalone: true,
+  imports: [SharePreviewComponent],
+  template: `<mj-share-preview><button class="own-action" mjMediaTileActions>Move</button></mj-share-preview>`,
+})
+class ActionsHostComponent {}
 
 /** DOM spec for <mj-share-preview>: the share shown whole, labelled by its kind, with Stop sharing and Change. */
 describe('SharePreviewComponent (DOM)', () => {
@@ -68,6 +77,11 @@ describe('SharePreviewComponent (DOM)', () => {
     changeButton.click();
     expect(stop).toHaveBeenCalledOnce();
     expect(change).toHaveBeenCalledOnce();
+  });
+
+  it("puts a host's actions in the top corner", () => {
+    const f = renderComponentFixture(ActionsHostComponent);
+    expect(query(f, '.share__corner .own-action')).not.toBeNull();
   });
 
   it('leaves out Change when the host does not offer it', () => {

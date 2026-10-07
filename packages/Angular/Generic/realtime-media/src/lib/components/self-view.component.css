@@ -18,12 +18,12 @@
   border-radius: 999px;
   color: rgba(255, 255, 255, 0.95);
   background: rgba(0, 0, 0, 0.55);
+  /* A label, not a control: the pointer passes through to the tile, so its corner actions stay shown. */
+  pointer-events: none;
 }
 
+/* In the tile's top corner, after a host's actions; the tile shows them on hover or focus. */
 .self__hide {
-  position: absolute;
-  top: 8px;
-  right: 8px;
   width: 28px;
   height: 28px;
   border: none;
@@ -31,13 +31,6 @@
   cursor: pointer;
   color: rgba(255, 255, 255, 0.95);
   background: rgba(0, 0, 0, 0.5);
-  opacity: 0;
-  transition: opacity 120ms ease;
-}
-
-:host(:hover) .self__hide,
-.self__hide:focus-visible {
-  opacity: 1;
 }
 
 .self__hide:focus-visible {
