@@ -13,6 +13,7 @@
  */
 
 import { BaseSingleton } from '@memberjunction/global';
+import { IProcessRunTracker } from './interfaces';
 import { IRecordProcessor } from './interfaces';
 
 /**
@@ -40,6 +41,15 @@ export interface RecordProcessorBuildContext {
     /** True when this is a dry-run (compute-only) pass — the factory should honor it when supported. */
     DryRun?: boolean;
     /**
+     * The tracker this run will use, when the caller supplied one.
+     *
+     * Some processors are paired with a tracker: the processor reports progress and per-child
+     * outcomes, and the tracker is what turns those into rows. A factory that needs the pairing
+     * reads it here, so the pairing survives however the run was triggered. Absent when the caller
+     * supplied no tracker and the engine will use its default.
+     */
+    Tracker?: IProcessRunTracker;
+    /**
      * The loaded Record Process record itself, as an opaque object. The engine passes the real
      * `MJRecordProcessEntity`; a factory that needs fields beyond those projected above can read them
      * off this with its own typing. Typed as `unknown` so the base package stays free of
@@ -57,6 +67,22 @@ export interface RecordProcessorBuildContext {
 export type RecordProcessorFactory = (context: RecordProcessorBuildContext) => IRecordProcessor | null | undefined;
 
 /**
+ * Builds the tracker a work type's processor is paired with.
+ *
+ * Some processors only half-work without their tracker: they report live progress and per-child
+ * outcomes, and the tracker is what turns those into rows. Registering the pairing here is what
+ * makes it survive every trigger — a scheduled run and an on-change run reach the executor directly,
+ * and neither has any way to know a particular work type wanted a particular tracker. Without this
+ * the pairing could only be established by wrapping the executor, which works for exactly the one
+ * caller that uses the wrapper and silently loses the rows for all the others.
+ *
+ * Returning `undefined` leaves the engine's default tracker in place.
+ */
+export type RecordProcessorTrackerFactory = (
+    context: RecordProcessorBuildContext,
+) => IProcessRunTracker | null | undefined;
+
+/**
  * Process-wide registry of work-type → processor factory, used by the engine's `buildProcessor()` to
  * resolve work types beyond its built-ins. A {@link BaseSingleton} so there is exactly one instance
  * across the process even when a bundler duplicates the module (per CLAUDE.md rule 7).
@@ -67,6 +93,9 @@ export type RecordProcessorFactory = (context: RecordProcessorBuildContext) => I
 export class RecordProcessorRegistry extends BaseSingleton<RecordProcessorRegistry> {
     /** work-type (normalized) → factory. */
     private readonly factories = new Map<string, RecordProcessorFactory>();
+
+    /** work-type (normalized) → the tracker its processor is paired with, when it has one. */
+    private readonly trackerFactories = new Map<string, RecordProcessorTrackerFactory>();
 
     /** @internal — use {@link RecordProcessorRegistry.Instance}. */
     protected constructor() {
@@ -95,6 +124,25 @@ export class RecordProcessorRegistry extends BaseSingleton<RecordProcessorRegist
             throw new Error('RecordProcessorRegistry.Register: workType must be a non-empty string');
         }
         this.factories.set(this.normalize(workType), factory);
+    }
+
+    /**
+     * Register the tracker a work type's processor is paired with.
+     *
+     * Optional and independent of {@link Register}: a work type whose processor needs nothing beyond
+     * the default tracker simply does not call this.
+     */
+    public RegisterTracker(workType: string, factory: RecordProcessorTrackerFactory): void {
+        if (!workType || !workType.trim()) {
+            throw new Error('RecordProcessorRegistry.RegisterTracker: workType must be a non-empty string');
+        }
+        this.trackerFactories.set(this.normalize(workType), factory);
+    }
+
+    /** The tracker registered for a work type, or undefined to use the engine's default. */
+    public ResolveTracker(context: RecordProcessorBuildContext): IProcessRunTracker | undefined {
+        const factory = this.trackerFactories.get(this.normalize(context.WorkType));
+        return factory?.(context) ?? undefined;
     }
 
     /** Whether a factory is registered for the given work type (case-insensitive). */

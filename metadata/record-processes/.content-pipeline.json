@@ -1,0 +1,193 @@
+[
+  {
+    "entity": "MJ: Record Processes",
+    "fields": {
+      "Name": "Content Pipeline \u2014 Discover",
+      "Description": "Walks each Content Source that is due and records what it found as Content Items. Readiness is the source's schedule or its ForceDiscovery flag; a completed walk clears the flag and stamps LastDiscoveredAt, so there is no status to re-arm.",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Content Sources",
+      "Status": "Active",
+      "WorkType": "Pipeline Stage",
+      "ScopeType": "Filter",
+      "ScopeFilter": "ForceDiscovery = 1",
+      "OnChangeEnabled": false,
+      "ScheduleEnabled": false,
+      "OnDemandEnabled": true,
+      "SkipUnchanged": false,
+      "WatermarkStrategy": "Checksum",
+      "BatchSize": 25,
+      "MaxConcurrency": 1,
+      "Configuration": {
+        "Stages": [
+          "Discover"
+        ]
+      }
+    },
+    "primaryKey": {
+      "ID": "E4EAABE6-DDA0-4E00-BA9F-DE9880792606"
+    }
+  },
+  {
+    "entity": "MJ: Record Processes",
+    "fields": {
+      "Name": "Content Pipeline \u2014 Extract",
+      "Description": "Fetches each pending Content Item and reads its text, opening a session first when its source needs one. An artifact that is not text keeps its bytes as an MJ File and routes to the multi-modal path instead.",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Content Items",
+      "Status": "Active",
+      "WorkType": "Pipeline Stage",
+      "ScopeType": "Filter",
+      "ScopeFilter": "(ExtractionStatus IS NULL OR ExtractionStatus = 'Pending') AND (DeleteStatus IS NULL)",
+      "OnChangeEnabled": false,
+      "ScheduleEnabled": false,
+      "OnDemandEnabled": true,
+      "SkipUnchanged": true,
+      "WatermarkStrategy": "Checksum",
+      "BatchSize": 25,
+      "MaxConcurrency": 4,
+      "Configuration": {
+        "Stages": [
+          "Extract"
+        ]
+      }
+    },
+    "primaryKey": {
+      "ID": "95A91363-74BB-4532-A109-4E6F45EEC100"
+    }
+  },
+  {
+    "entity": "MJ: Record Processes",
+    "fields": {
+      "Name": "Content Pipeline \u2014 Tag",
+      "Description": "Classifies each pending Content Item through the managed Content Autotagging prompt and saves the result to MJ: Content Item Tags, promoting each tag through the governed taxonomy.",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Content Items",
+      "Status": "Active",
+      "WorkType": "Pipeline Stage",
+      "ScopeType": "Filter",
+      "ScopeFilter": "(TaggingStatus IS NULL OR TaggingStatus = 'Pending') AND (DeleteStatus IS NULL)",
+      "OnChangeEnabled": false,
+      "ScheduleEnabled": false,
+      "OnDemandEnabled": true,
+      "SkipUnchanged": true,
+      "WatermarkStrategy": "Checksum",
+      "BatchSize": 10,
+      "MaxConcurrency": 2,
+      "Configuration": {
+        "Stages": [
+          "Tag"
+        ]
+      }
+    },
+    "primaryKey": {
+      "ID": "60BE8612-B278-4C06-A06C-CF9365D9C1B2"
+    }
+  },
+  {
+    "entity": "MJ: Record Processes",
+    "fields": {
+      "Name": "Content Pipeline \u2014 Segment",
+      "Description": "Splits each pending Content Item's text into Content Item Chunks using the segmenter its source or content type names. A re-segmentation that yields fewer chunks marks the leftovers for deletion rather than leaving them searchable.",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Content Items",
+      "Status": "Active",
+      "WorkType": "Pipeline Stage",
+      "ScopeType": "Filter",
+      "ScopeFilter": "(SegmentationStatus IS NULL OR SegmentationStatus = 'Pending') AND (DeleteStatus IS NULL)",
+      "OnChangeEnabled": false,
+      "ScheduleEnabled": false,
+      "OnDemandEnabled": true,
+      "SkipUnchanged": true,
+      "WatermarkStrategy": "Checksum",
+      "BatchSize": 25,
+      "MaxConcurrency": 4,
+      "Configuration": {
+        "Stages": [
+          "Segment"
+        ]
+      }
+    },
+    "primaryKey": {
+      "ID": "88F8296E-6300-4938-817C-E3FF2D85DE4E"
+    }
+  },
+  {
+    "entity": "MJ: Record Processes",
+    "fields": {
+      "Name": "Content Pipeline \u2014 Embed",
+      "Description": "Embeds each pending Content Item Chunk and stores the vector in the index its source or content type names, recording VectorRecordID so the vector can be removed later. Batched: one model call and one store call per page.",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Content Item Chunks",
+      "Status": "Active",
+      "WorkType": "Pipeline Stage",
+      "ScopeType": "Filter",
+      "ScopeFilter": "(EmbeddingStatus IS NULL OR EmbeddingStatus IN ('Pending','MetadataOnly')) AND (DeleteStatus IS NULL)",
+      "OnChangeEnabled": false,
+      "ScheduleEnabled": false,
+      "OnDemandEnabled": true,
+      "SkipUnchanged": true,
+      "WatermarkStrategy": "Checksum",
+      "BatchSize": 50,
+      "MaxConcurrency": 2,
+      "Configuration": {
+        "Stages": [
+          "Embed"
+        ]
+      }
+    },
+    "primaryKey": {
+      "ID": "9A90F785-8D21-403E-9810-6FFEB75FEFBD"
+    }
+  },
+  {
+    "entity": "MJ: Record Processes",
+    "fields": {
+      "Name": "Content Pipeline \u2014 Delete",
+      "Description": "Removes everything a Content Item marked for deletion produced \u2014 its vector, its kept bytes \u2014 then marks its chunks and expanded children so each goes through this same stage in turn. A record whose removal could not be attempted stays Pending rather than being marked Deleted.",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Content Items",
+      "Status": "Active",
+      "WorkType": "Pipeline Stage",
+      "ScopeType": "Filter",
+      "ScopeFilter": "DeleteStatus = 'Pending'",
+      "OnChangeEnabled": false,
+      "ScheduleEnabled": false,
+      "OnDemandEnabled": true,
+      "SkipUnchanged": false,
+      "WatermarkStrategy": "Checksum",
+      "BatchSize": 25,
+      "MaxConcurrency": 1,
+      "Configuration": {
+        "Stages": [
+          "DeleteContentItem"
+        ]
+      }
+    },
+    "primaryKey": {
+      "ID": "13FF9508-4BDB-4BF3-A938-AA36EDD2ED46"
+    }
+  },
+  {
+    "entity": "MJ: Record Processes",
+    "fields": {
+      "Name": "Content Pipeline \u2014 Test (Discover then Extract)",
+      "Description": "A chained dry run over a single source: walks it, then extracts what the walk produced, and commits nothing. The produced items exist only in memory, which is what makes this a test of the chain rather than of two stages that happen to have run.",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Content Sources",
+      "Status": "Active",
+      "WorkType": "Pipeline Stage",
+      "ScopeType": "SingleRecord",
+      "OnChangeEnabled": false,
+      "ScheduleEnabled": false,
+      "OnDemandEnabled": true,
+      "SkipUnchanged": false,
+      "WatermarkStrategy": "Checksum",
+      "BatchSize": 5,
+      "MaxConcurrency": 1,
+      "Configuration": {
+        "Stages": [
+          "Discover",
+          "Extract"
+        ],
+        "IsTest": true,
+        "StageBudgetMs": 60000
+      }
+    },
+    "primaryKey": {
+      "ID": "78BFDB52-3786-4F16-964A-D7BA7D192561"
+    }
+  }
+]

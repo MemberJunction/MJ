@@ -1,0 +1,32 @@
+{
+  "name": "@memberjunction/content-pipeline-base",
+  "type": "module",
+  "version": "6.2.0-edge.3",
+  "description": "MemberJunction: Content Pipeline Base - the working record, the stage contract, and the confidence convention shared by every content pipeline stage. Client-safe.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "watch": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "author": "MemberJunction.com",
+  "license": "BUSL-1.1",
+  "dependencies": {
+    "@memberjunction/core": "6.2.0-edge.3",
+    "@memberjunction/global": "6.2.0-edge.3"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.11",
+    "typescript": "^5.9.3",
+    "vitest": "^3.1.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

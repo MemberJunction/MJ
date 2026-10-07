@@ -4,8 +4,7 @@ import { RegisterClass } from "@memberjunction/global";
 import { SafeFetch, SSRFError, DrainResponseBody } from "@memberjunction/network-utils";
 import TurndownService from 'turndown';
 import { JSDOM } from 'jsdom';
-import pdfParse from 'pdf-parse';
-import mammoth from 'mammoth';
+import { ParsePdf, ParseWordToHtml } from '@memberjunction/document-parsing';
 import xml2js from 'xml2js';
 import Papa from 'papaparse';
 
@@ -322,7 +321,7 @@ export class WebPageContentAction extends BaseAction {
      */
     private async processPdf(response: Response, outputType: string, includeMetadata: boolean, maxLength: number): Promise<Record<string, unknown>> {
         const buffer = await response.arrayBuffer();
-        const pdfData = await pdfParse(Buffer.from(buffer));
+        const pdfData = await ParsePdf(Buffer.from(buffer));
 
         const result: Record<string, unknown> = {
             detectedType: 'pdf',
@@ -331,19 +330,19 @@ export class WebPageContentAction extends BaseAction {
 
         if (includeMetadata) {
             result.metadata = {
-                pages: pdfData.numpages,
-                info: pdfData.info,
-                version: pdfData.version
+                pages: pdfData.Pages,
+                info: pdfData.Info,
+                version: pdfData.Version
             };
         }
 
-        const text = pdfData.text || '';
+        const text = pdfData.Text || '';
 
         if (outputType === 'json') {
             result.content = {
                 text: this.truncateContent(text, maxLength),
-                pages: pdfData.numpages,
-                metadata: pdfData.info
+                pages: pdfData.Pages,
+                metadata: pdfData.Info
             };
         } else {
             result.content = this.truncateContent(text, maxLength);
@@ -357,8 +356,8 @@ export class WebPageContentAction extends BaseAction {
      */
     private async processDocx(response: Response, outputType: string, includeMetadata: boolean, maxLength: number): Promise<Record<string, unknown>> {
         const buffer = await response.arrayBuffer();
-        const docxResult = await mammoth.convertToHtml({ buffer: Buffer.from(buffer) });
-        const htmlContent = docxResult.value;
+        const docxResult = await ParseWordToHtml(Buffer.from(buffer));
+        const htmlContent = docxResult.Html;
 
         const result: Record<string, unknown> = {
             detectedType: 'docx',
@@ -367,7 +366,7 @@ export class WebPageContentAction extends BaseAction {
 
         if (includeMetadata) {
             result.metadata = {
-                warnings: docxResult.messages,
+                warnings: docxResult.Messages,
                 htmlLength: htmlContent.length
             };
         }
