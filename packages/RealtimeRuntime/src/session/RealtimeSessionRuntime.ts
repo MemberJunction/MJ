@@ -1504,7 +1504,8 @@ export class RealtimeSessionRuntime {
   }
 
   /**
-   * Runs the `UploadRealtimeRecording` mutation; failures are logged, never thrown. Sends the
+   * Runs the `UploadRealtimeRecording` mutation. A `Success:false` payload is logged; a transport
+   * rejection propagates to `uploadStoppedRecording`, which catches and logs it. Sends the
    * capture-time waveform `peaks` (max-abs per bucket, normalized 0..1) so the server can persist a
    * `peaks.json` sidecar for fast waveform rendering without re-decoding the audio.
    */

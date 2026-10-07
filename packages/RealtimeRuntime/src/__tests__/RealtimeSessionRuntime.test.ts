@@ -395,6 +395,7 @@ describe('session lifecycle, driven end to end with fakes', () => {
             await runtime.EndRealtimeSession();
 
             expect(mutationNames(provider)).toContain('CloseAgentSession');
+            expect(mutationNames(provider)).toContain('UploadRealtimeRecording');
             expect(runtime.IsActive).toBe(false);
             expect(runtime.CurrentAgentSessionId).toBeNull();
         });
