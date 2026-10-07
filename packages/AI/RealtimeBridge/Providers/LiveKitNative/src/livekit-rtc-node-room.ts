@@ -82,16 +82,34 @@ export interface RoomAudioTelemetrySnapshot {
     outbound: OutboundAudioTelemetry;
     /** Event-loop delay p99 in ms (if monitorEventLoopDelay is available and enabled). */
     eventLoopDelayP99Ms?: number;
+    /** Elapsed window duration in ms over which eventLoopDelayP99Ms was sampled. */
+    eventLoopWindowMs?: number;
 }
 
 /** Lazily initialized module-scoped event-loop monitor (shared across connections to prevent leaks). */
 let moduleEventLoopMonitor: IntervalHistogram | null = null;
+let monitorWindowStartedAt = Date.now();
+let monitorResetTimer: NodeJS.Timeout | null = null;
 
 function getModuleEventLoopMonitor(): IntervalHistogram | null {
     if (!moduleEventLoopMonitor) {
         try {
             moduleEventLoopMonitor = monitorEventLoopDelay({ resolution: 20 });
             moduleEventLoopMonitor.enable();
+            monitorWindowStartedAt = Date.now();
+            if (!monitorResetTimer) {
+                // Reset the shared histogram on a fixed 30s owner timer so individual per-room
+                // GetTelemetry() readers don't wipe it out under concurrent access.
+                monitorResetTimer = setInterval(() => {
+                    try {
+                        moduleEventLoopMonitor?.reset();
+                        monitorWindowStartedAt = Date.now();
+                    } catch {
+                        // ignore best-effort timer
+                    }
+                }, 30_000);
+                monitorResetTimer.unref?.();
+            }
         } catch {
             // Intentionally best-effort: environment may not support monitorEventLoopDelay
             moduleEventLoopMonitor = null;
@@ -674,11 +692,12 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
             inboundGaps[k] = { ...v };
         }
         let eventLoopDelayP99Ms: number | undefined;
+        let eventLoopWindowMs: number | undefined;
         const monitor = getModuleEventLoopMonitor();
         if (monitor) {
             try {
                 eventLoopDelayP99Ms = monitor.percentile(99) / 1e6;
-                monitor.reset();
+                eventLoopWindowMs = Date.now() - monitorWindowStartedAt;
             } catch {
                 // Intentionally best-effort telemetry
             }
@@ -687,6 +706,7 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
             inboundGaps,
             outbound: { ...this.outboundTelemetry },
             eventLoopDelayP99Ms,
+            eventLoopWindowMs,
         };
     }
 

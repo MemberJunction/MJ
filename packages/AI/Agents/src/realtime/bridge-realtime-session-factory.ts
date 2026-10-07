@@ -23,7 +23,7 @@ import { MJGlobal, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { BaseAgent } from '../base-agent';
-import { RealtimeClientSessionService, PrepareClientSessionInput } from './realtime-client-session-service';
+import { RealtimeClientSessionService, PrepareClientSessionInput, RealtimeHostToolsResolver } from './realtime-client-session-service';
 import { SelectRealtimeVendorForModel } from './realtime-vendor-resolution';
 
 /**
@@ -80,9 +80,9 @@ export interface BridgeRealtimeSessionContext {
     HostTools?: RealtimeToolDefinition[];
     /**
      * Optional callback that allows the host to resolve host tools dynamically based on
-     * the model and driver capabilities actually resolved for the session, before session opening.
+     * the model, vendor, and driver actually resolved for the session, before session opening.
      */
-    ResolveHostTools?: (resolved: { ModelID?: string; Capabilities?: RealtimeSessionCapabilities }) => RealtimeToolDefinition[] | undefined;
+    ResolveHostTools?: RealtimeHostToolsResolver;
     /** Host-authored instructions appended to the system prompt (e.g. the phone-call and caller framing). */
     HostFraming?: string;
     /**
@@ -228,46 +228,6 @@ function buildRealtimeData(ctx: BridgeRealtimeSessionContext): Record<string, un
         data.realtimeSelfNames = ctx.SelfNames;
     }
     return Object.keys(data).length > 0 ? data : undefined;
-}
-
-/**
- * Resolves the realtime model and capabilities that would be used for an agent session under `ctx`
- * without starting the session. Uses {@link RealtimeClientSessionService} model resolution.
- */
-export async function ResolveRealtimeModelForBridge(
-    ctx: BridgeRealtimeSessionContext
-): Promise<{ ModelID: string; Capabilities?: RealtimeSessionCapabilities; DriverClass?: string } | null> {
-    const provider = ctx.MetadataProvider ?? Metadata.Provider;
-    await AIEngine.Instance.Config(false, ctx.ContextUser, provider);
-
-    const agent = resolveAgentEntity(ctx);
-    if (!agent) {
-        return null;
-    }
-
-    const service = new RealtimeClientSessionService();
-    const data = buildRealtimeData(ctx);
-    const modelID = (data?.realtimeModelID as string | undefined)?.trim() || undefined;
-    const targetID = (data?.targetAgentID as string | undefined)?.trim() || '';
-
-    const input: PrepareClientSessionInput = {
-        CoAgent: agent,
-        TargetAgentID: targetID,
-        PreferredModelID: modelID,
-        AgentSessionID: (data?.agentSessionId as string | undefined) ?? '',
-    };
-
-    const targetAgent = targetID ? (AIEngine.Instance.Agents ?? []).find(a => UUIDsEqual(a.ID, targetID)) : undefined;
-    const effectiveConfig = service.ResolveEffectiveConfig(agent, undefined, targetAgent);
-    const outcome = await service.ResolveModelForSession(input, agent, effectiveConfig);
-    if (!outcome.Resolution) {
-        return null;
-    }
-    return {
-        ModelID: outcome.Resolution.ModelID,
-        Capabilities: outcome.Resolution.Model.Capabilities,
-        DriverClass: outcome.Resolution.DriverClass,
-    };
 }
 
 /**

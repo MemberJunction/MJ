@@ -17,7 +17,22 @@ import { BaseSingleton, NormalizeUUID, UUIDsEqual } from '@memberjunction/global
 import { LogError, LogStatus, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { ResolveIsModelFullDuplex, type IRealtimeSession, type RealtimeToolDefinition, type RealtimeSessionCapabilities } from '@memberjunction/ai';
 import { AIEngine } from '@memberjunction/aiengine';
-import type { MJAIAgentEntity, MJAIModelEntity } from '@memberjunction/core-entities';
+import {
+  AlwaysAddressedMatcher,
+  RegexAddressedMatcher,
+  TURN_TAKING_TOOL_DEFINITIONS,
+  type BridgeDisconnectReason,
+  type BridgeTurnMode,
+  type TurnAddressingMode,
+} from '@memberjunction/ai-bridge-base';
+import {
+  AIBridgeEngine,
+  type BridgeTranscriptSink,
+  type BridgeTurnTakingToolHandler,
+  type RoomTurnSnapshot,
+} from '@memberjunction/ai-bridge-server';
+import { LiveKitTokenService } from './livekit-token-service';
+import { ResolveLiveKitNativeModuleSpecifier } from './livekit-native-module';
 
 /**
  * Static capability map for known realtime drivers when resolving full-duplex capability before session connect.
@@ -39,22 +54,6 @@ function GetDriverStaticCapabilities(driverClass?: string | null): { FullDuplex?
   }
   return null;
 }
-import {
-  AlwaysAddressedMatcher,
-  RegexAddressedMatcher,
-  TURN_TAKING_TOOL_DEFINITIONS,
-  type BridgeDisconnectReason,
-  type BridgeTurnMode,
-  type TurnAddressingMode,
-} from '@memberjunction/ai-bridge-base';
-import {
-  AIBridgeEngine,
-  type BridgeTranscriptSink,
-  type BridgeTurnTakingToolHandler,
-  type RoomTurnSnapshot,
-} from '@memberjunction/ai-bridge-server';
-import { LiveKitTokenService } from './livekit-token-service';
-import { ResolveLiveKitNativeModuleSpecifier } from './livekit-native-module';
 
 /** The subset of {@link AIBridgeEngine} the coordinator drives — an injectable seam for unit testing. */
 export type BridgeOps = Pick<AIBridgeEngine, 'Config' | 'ProviderByDriverClass' | 'StartBridgeSession' | 'StopBridgeSession' | 'ReconfigureSessionToMeeting'>;
@@ -95,7 +94,7 @@ export interface RealtimeSessionStartContext {
    * Optional callback allowing the coordinator to resolve host tools dynamically based on
    * the model and driver capabilities actually resolved for the session, before session opening.
    */
-  ResolveHostTools?: (resolved: { ModelID?: string; Capabilities?: RealtimeSessionCapabilities }) => RealtimeToolDefinition[] | undefined;
+  ResolveHostTools?: (resolved: { ModelID?: string; ModelVendorID?: string; DriverClass?: string }) => RealtimeToolDefinition[] | undefined;
   /** Host-authored instructions appended to the system prompt (for example the phone framing). */
   HostFraming?: string;
   /** Role-tagged transcript so far, framed into the prompt when a lost model session is re-opened mid-call. */
@@ -379,18 +378,25 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
         ResolveHostTools: (resolved) => {
           if (resolvedFullDuplex === undefined) {
             if (resolved.ModelID) {
-              const effective = AIEngine.Instance.GetEffectiveModelConfiguration(resolved.ModelID);
+              const effective = AIEngine.Instance.GetEffectiveModelConfiguration(resolved.ModelID, resolved.ModelVendorID);
               const model = (AIEngine.Instance.Models ?? []).find(m => UUIDsEqual(m.ID, resolved.ModelID!));
-              resolvedFullDuplex = ResolveIsModelFullDuplex(effective ?? model?.ModelConfigurationObject, resolved.Capabilities);
-            } else {
-              resolvedFullDuplex = resolved.Capabilities?.FullDuplex === true;
+              const staticCaps = GetDriverStaticCapabilities(resolved.DriverClass);
+              resolvedFullDuplex = ResolveIsModelFullDuplex(effective ?? model?.ModelConfigurationObject, staticCaps);
+            } else if (resolved.DriverClass) {
+              const staticCaps = GetDriverStaticCapabilities(resolved.DriverClass);
+              resolvedFullDuplex = staticCaps?.FullDuplex === true;
             }
           }
-          return buildToolsForFullDuplex(resolvedFullDuplex);
+          return buildToolsForFullDuplex(resolvedFullDuplex ?? false);
         },
       });
       if (resolvedFullDuplex === undefined) {
         resolvedFullDuplex = opened.Capabilities?.FullDuplex === true;
+      } else if (opened.Capabilities?.FullDuplex !== undefined && opened.Capabilities.FullDuplex !== resolvedFullDuplex) {
+        LogStatus(
+          `[LiveKitAgentRoomCoordinator] WARNING: Session factory opened with Capabilities.FullDuplex=${opened.Capabilities.FullDuplex}, ` +
+          `which disagrees with pre-open resolved FullDuplex=${resolvedFullDuplex}. Initial tools may mismatch.`
+        );
       }
       host?.OnModelSession?.(opened);
       if (activeTurnHandler) {
@@ -503,12 +509,12 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
       if (!model) {
         return undefined;
       }
-      const effective = AIEngine.Instance.GetEffectiveModelConfiguration(model.ID);
       const vendors = (AIEngine.Instance.ModelVendorsByModelID?.get(NormalizeUUID(model.ID)) ??
         (AIEngine.Instance.ModelVendors ?? []).filter(mv => UUIDsEqual(mv.ModelID, model.ID)))
         .filter(v => v.DriverClass != null && (v.Status === undefined || v.Status === 'Active'))
         .sort((a, b) => (b.Priority ?? 0) - (a.Priority ?? 0));
       const primaryVendor = vendors[0];
+      const effective = AIEngine.Instance.GetEffectiveModelConfiguration(model.ID, primaryVendor?.ID);
       const staticCaps = GetDriverStaticCapabilities(primaryVendor?.DriverClass);
       return ResolveIsModelFullDuplex(effective ?? model.ModelConfigurationObject, staticCaps);
     } catch (err) {
