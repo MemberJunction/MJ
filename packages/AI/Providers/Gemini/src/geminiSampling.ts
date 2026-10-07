@@ -20,7 +20,9 @@
  * `undefined` when the id carries none (`gemini-flash-latest`, `gemini-exp-1206`).
  */
 export function ParseGeminiVersion(modelName: string): { Major: number; Minor: number } | undefined {
-    const match = /gemini-(\d+)(?:\.(\d+))?(?=[.\-]|$)/i.exec(modelName);
+    // (?!\d) rather than a separator lookahead: a suffix right after the minor version
+    // (`gemini-3.6@001`) must not make the minor optional and read the id as 3.0.
+    const match = /gemini-(\d+)(?:\.(\d+))?(?!\d)/i.exec(modelName);
     if (!match) {
         return undefined;
     }
