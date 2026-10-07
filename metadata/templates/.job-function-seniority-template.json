@@ -15,7 +15,8 @@
           "TemplateID": "@parent:ID"
         },
         "deleteRecord": {
-          "delete": true
+          "delete": true,
+          "deletedAt": "2026-10-02T21:42:50.834Z"
         }
       }
     ],
@@ -29,12 +30,14 @@
           "Name": "CurrentJobTitle"
         },
         "deleteRecord": {
-          "delete": true
+          "delete": true,
+          "deletedAt": "2026-10-02T21:42:50.861Z"
         }
       }
     ]
   },
   "deleteRecord": {
-    "delete": true
+    "delete": true,
+    "deletedAt": "2026-10-02T21:42:50.873Z"
   }
 }

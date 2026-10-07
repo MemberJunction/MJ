@@ -268,6 +268,72 @@ describe('EntitySubClassGeneratorBase', () => {
             expect(result).not.toContain('Description_');
         });
 
+        // ── Binary fields (varbinary / bytea): getter doc tells consumers how to decode ──
+        describe('binary field getter documentation', () => {
+            const BINARY_DOC_LINE = '* * Binary Value: base64-encoded string. Decode with Base64ToBytes() — or Base64ToFloat32Vector() for an embedding — from @memberjunction/global.';
+
+            const binaryEntity = () => ({
+                Name: 'Vector Things',
+                ClassName: 'VectorThing',
+                PrimaryKeys: [{ Name: 'ID', CodeName: 'ID', TSType: 'string', IsPrimaryKey: true, AutoIncrement: false }],
+                Fields: [
+                    { Name: 'ID', CodeName: 'ID', Type: 'uniqueidentifier', SQLFullType: 'uniqueidentifier', AllowsNull: false, ReadOnly: false, IsPrimaryKey: true, AutoIncrement: false, IsVirtual: false, AllowUpdateAPI: true, ValueListType: '', ValueListTypeEnum: 0, EntityFieldValues: [], Status: 'Active', NeedsQuotes: true, IsBinaryFieldType: false },
+                    { Name: 'Embedding', CodeName: 'Embedding', Type: 'varbinary', SQLFullType: 'varbinary(MAX)', AllowsNull: true, ReadOnly: false, IsPrimaryKey: false, AutoIncrement: false, IsVirtual: false, AllowUpdateAPI: true, ValueListType: '', ValueListTypeEnum: 0, EntityFieldValues: [], Status: 'Active', NeedsQuotes: true, IsBinaryFieldType: true },
+                    { Name: 'Label', CodeName: 'Label', Type: 'nvarchar', SQLFullType: 'nvarchar(100)', AllowsNull: true, ReadOnly: false, IsPrimaryKey: false, AutoIncrement: false, IsVirtual: false, AllowUpdateAPI: true, ValueListType: '', ValueListTypeEnum: 0, EntityFieldValues: [], Status: 'Active', NeedsQuotes: true, IsBinaryFieldType: false },
+                ],
+                EntityObjectSubclassName: '',
+                EntityObjectSubclassImport: '',
+                AllowDeleteAPI: true,
+                AllowCreateAPI: true,
+                AllowUpdateAPI: true,
+                CascadeDeletes: false,
+                IsChildType: false,
+                Status: 'Active',
+                SchemaName: '__mj',
+                BaseTable: 'VectorThing',
+                BaseView: 'vwVectorThings',
+                Description: ''
+            });
+
+            const generateBinary = () =>
+                generator.generateEntitySubClass(
+                    {} as Parameters<typeof generator.generateEntitySubClass>[0],
+                    binaryEntity() as Parameters<typeof generator.generateEntitySubClass>[1],
+                    false,
+                    true
+                );
+
+            /** The JSDoc block that immediately precedes `get <name>()`. */
+            const docFor = (source: string, getterName: string): string => {
+                const getterIdx = source.indexOf(`get ${getterName}()`);
+                expect(getterIdx, `getter ${getterName}`).toBeGreaterThan(-1);
+                const docStart = source.lastIndexOf('/**', getterIdx);
+                return source.substring(docStart, getterIdx);
+            };
+
+            it('adds the base64 decode note to the binary field getter, right after its SQL data type', async () => {
+                const result = await generateBinary();
+                const doc = docFor(result, 'Embedding');
+
+                expect(doc).toContain(BINARY_DOC_LINE);
+                expect(doc).toMatch(/SQL Data Type: varbinary\(MAX\)\n\s*\* \* Binary Value: base64-encoded string\./);
+            });
+
+            it('emits the note exactly once — only for the binary field', async () => {
+                const result = await generateBinary();
+
+                expect(result.split(BINARY_DOC_LINE).length - 1).toBe(1);
+                expect(docFor(result, 'Label')).not.toContain('Binary Value');
+                expect(docFor(result, 'ID')).not.toContain('Binary Value');
+            });
+
+            it('still types the binary getter as a string', async () => {
+                const result = await generateBinary();
+
+                expect(result).toMatch(/get Embedding\(\): string \| null/);
+            });
+        });
+
         // ── Base-class selection for external data source entities ──
         const makeEntity = (overrides: Record<string, unknown>) => ({
             Name: 'Snowflake Sales',
