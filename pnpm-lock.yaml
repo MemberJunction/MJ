@@ -15644,6 +15644,9 @@ importers:
       '@memberjunction/ai-engine-base':
         specifier: 6.2.0-edge.3
         version: link:../../AI/BaseAIEngine
+      '@memberjunction/ai-openai':
+        specifier: 6.2.0-edge.3
+        version: link:../../AI/Providers/OpenAI
       '@memberjunction/ai-openrouter':
         specifier: 6.2.0-edge.3
         version: link:../../AI/Providers/OpenRouter

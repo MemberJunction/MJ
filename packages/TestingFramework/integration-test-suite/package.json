@@ -24,6 +24,7 @@
     "@memberjunction/ai-cloudflare": "6.2.0-edge.3",
     "@memberjunction/ai-core-plus": "6.2.0-edge.3",
     "@memberjunction/ai-engine-base": "6.2.0-edge.3",
+    "@memberjunction/ai-openai": "6.2.0-edge.3",
     "@memberjunction/ai-openrouter": "6.2.0-edge.3",
     "@memberjunction/ai-prompts": "6.2.0-edge.3",
     "@memberjunction/ai-systemone": "6.2.0-edge.3",

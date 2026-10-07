@@ -72,7 +72,6 @@ import { RunView } from '@memberjunction/core';
 import { EscapeSQLString, MJGlobal, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import {
     BaseDecision,
-    DecisionResult,
     IsSystemOneWireObject,
     type ChoiceAnswer,
     type DecisionQuestion,
@@ -90,7 +89,7 @@ import type { MJAIVendorEntity } from '@memberjunction/core-entities';
 import { Assert, AssertEqual, IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import type { IntegrationCheckContext, NamedCheck } from '@memberjunction/testing-integration';
 import { DeleteById, RequireRows } from './agent-live-shared';
-import { RegisterScriptedDecision, ScriptedDecision, SCRIPTED_DECISION_DRIVER_CLASSES } from './decision-test-double';
+import { RegisterScriptedDecision, ScriptedDecision, SCRIPTED_DECISION_DRIVER_CLASSES, UnavailableDecision } from './decision-test-double';
 import {
     ClearEnvironment,
     DecisionFixtures,
@@ -706,22 +705,7 @@ async function assertSelectionWithBoundKev(
 }
 
 /** The drivers KV4's failover leg makes unavailable: every decision driver but System One's. */
-const UNAVAILABLE_DRIVER_CLASSES: readonly string[] = ['OpenRouterDecision', 'LLMDecision', 'CloudflareDecision'];
-
-/** A decision driver that fails every call with an error that allows failover, as a 503 does. */
-class UnavailableDecision extends BaseDecision {
-    constructor(apiKey?: string) {
-        super(apiKey || 'it-unavailable-decision');
-    }
-
-    protected async DoDecide(): Promise<DecisionResult> {
-        const now = new Date();
-        const failed = new DecisionResult(false, now, now);
-        failed.errorMessage = 'The integration-test decision stand-in is unavailable';
-        failed.errorInfo = { errorType: 'ServiceUnavailable', severity: 'Retriable', canFailover: true };
-        return failed;
-    }
-}
+const UNAVAILABLE_DRIVER_CLASSES: readonly string[] = ['OpenRouterDecision', 'LLMDecision', 'CloudflareDecision', 'OpenAIDecision'];
 
 /**
  * KV4 failover: with Jev, LLM Decision and Clef unavailable, `Default Decision` fails over from model to
