@@ -81,6 +81,7 @@ vi.mock('@memberjunction/ai-vector-sync', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/ai-vector-sync')>();
     return {
         GetEntityDocumentRecordFilter: actual.GetEntityDocumentRecordFilter,
+        CombineExtraFilters: actual.CombineExtraFilters,
         EntityDocumentTemplateParser: { CreateInstance: vi.fn() },
         EntityVectorSyncer: class {},
         VectorizeEntityParams: class {},

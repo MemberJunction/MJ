@@ -44,7 +44,7 @@ import {
     KnowledgeHubMetadataEngine,
 } from "@memberjunction/core-entities";
 import { VectorBase } from "@memberjunction/ai-vectors";
-import { EntityDocumentTemplateDataBuilder, EntityVectorSyncer, GetEntityDocumentRecordFilter, VectorizeEntityParams } from "@memberjunction/ai-vector-sync";
+import { CombineExtraFilters, EntityDocumentTemplateDataBuilder, EntityVectorSyncer, GetEntityDocumentRecordFilter, VectorizeEntityParams } from "@memberjunction/ai-vector-sync";
 import { AIEngine } from "@memberjunction/aiengine";
 import { EntityDocumentTemplateParser } from "@memberjunction/entity-documents";
 import { TemplateEngineServer } from "@memberjunction/templates";
@@ -111,6 +111,10 @@ const SAVE_BATCH_SIZE = 20;
  * How many times TopK to query for when the entity document has a record filter. Candidates that
  * fail the filter are dropped after the query, so asking for only TopK would let them take slots
  * that a genuine duplicate should have had; the result is trimmed back to TopK afterwards.
+ *
+ * A heuristic: when most of a record's nearest neighbors fail the filter, fewer than TopK can
+ * survive. Those neighbors are vectors sync stored before the filter excluded their records;
+ * once stale vectors are removed from the index (#5201), the over-fetch should rarely matter.
  */
 const RECORD_FILTER_TOPK_FACTOR = 3;
 
@@ -962,7 +966,7 @@ export class DuplicateRecordDetector extends VectorBase {
             return this.KeepRecordIDsPassingFilter(await this.LoadRecordIDsFromView(params.ViewID, entityInfo), entityInfo, recordFilter);
         }
         // ExtraFilter or all records, narrowed by the record filter
-        return this.LoadRecordIDsFromEntity(entityInfo, combineFilters(params.ExtraFilter, recordFilter));
+        return this.LoadRecordIDsFromEntity(entityInfo, CombineExtraFilters(params.ExtraFilter, recordFilter));
     }
 
     /**
@@ -1744,7 +1748,7 @@ export class DuplicateRecordDetector extends VectorBase {
                 : chunk.map((id) => `(${CompositeKey.FromURLSegment(entityInfo, id).ToWhereClause()})`).join(' OR ');
             const rv = await this.RunView.RunView<Record<string, unknown>>({
                 EntityName: entityInfo.Name,
-                ExtraFilter: combineFilters(keyFilter, recordFilter),
+                ExtraFilter: CombineExtraFilters(keyFilter, recordFilter),
                 Fields: keyFields,
                 ResultType: 'simple',
                 IgnoreMaxRows: true, // bounded by the key filter; an entity's UserViewMaxRows can be smaller than a chunk
@@ -1769,7 +1773,9 @@ export class DuplicateRecordDetector extends VectorBase {
 
     /**
      * The entity document's record filter (`Configuration.recordFilter.extraFilter`): the records
-     * that take part in duplicate detection, as the record checked or as a candidate. Vector sync
+     * that take part in duplicate detection. A batch run checks only records that pass it, and every
+     * run offers only candidates that pass it. {@link CheckSingleRecord} and the entry-time check
+     * still check the record they are given, since the caller asked about that record. Vector sync
      * applies the same filter to the records it vectorizes.
      *
      * @returns the predicate, or null when none is set
@@ -2423,19 +2429,6 @@ export class DuplicateRecordDetector extends VectorBase {
 // ─────────────────────────────────────────────
 // Utility Functions
 // ─────────────────────────────────────────────
-
-/**
- * AND RunView ExtraFilter predicates together, skipping empty ones.
- *
- * @returns the one predicate unchanged, several each parenthesized and ANDed, or undefined for none
- */
-function combineFilters(...filters: (string | null | undefined)[]): string | undefined {
-    const present = filters.filter((f): f is string => !!f && f.trim().length > 0);
-    if (present.length <= 1) {
-        return present[0];
-    }
-    return present.map(f => `(${f})`).join(' AND ');
-}
 
 /**
  * Split an array into chunks of a given size.

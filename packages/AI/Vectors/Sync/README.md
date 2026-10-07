@@ -279,6 +279,8 @@ type VectorizeEntityParams = {
 
 Records the filter excludes keep any vectors already stored for them; sync does not remove those.
 
+Keep the filter to plain comparisons (`=`, `<>`, `IN`, `IS NULL`, `AND`/`OR`) so it runs on both SQL Server and PostgreSQL. The PostgreSQL provider rewrites identifiers, `[brackets]`, boolean `= 0`/`= 1` and the T-SQL date functions, but passes other T-SQL (`ISNULL`, `LEN`, `+` concatenation) through unchanged, where it fails.
+
 ### EntitySyncConfig
 
 ```typescript

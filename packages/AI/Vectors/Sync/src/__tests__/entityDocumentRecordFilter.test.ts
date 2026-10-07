@@ -67,7 +67,7 @@ vi.mock('@memberjunction/templates-base-types', () => ({}));
 import type { IMetadataProvider } from '@memberjunction/core';
 import type { MJEntityDocumentEntity } from '@memberjunction/core-entities';
 import { EntityVectorSyncer } from '../models/entityVectorSync';
-import { GetEntityDocumentRecordFilter, ParseEntityDocumentConfiguration } from '../generic/entityDocumentConfig';
+import { CombineExtraFilters, GetEntityDocumentRecordFilter, ParseEntityDocumentConfiguration } from '../generic/entityDocumentConfig';
 import type { VectorizeEntityParams } from '../generic/vectorSync.types';
 
 /**
@@ -110,6 +110,24 @@ describe('Entity document record filter', () => {
     it('parses the rest of the configuration as before', () => {
       expect(ParseEntityDocumentConfiguration(doc(JSON.stringify({ vectorIdStrategy: 'recordId' })))).toEqual({ vectorIdStrategy: 'recordId' });
       expect(ParseEntityDocumentConfiguration(doc(null))).toEqual({});
+    });
+  });
+
+  describe('CombineExtraFilters', () => {
+    it('returns a single predicate unchanged, without parentheses', () => {
+      expect(CombineExtraFilters(NOT_DELETED)).toBe(NOT_DELETED);
+      expect(CombineExtraFilters(undefined, NOT_DELETED, null)).toBe(NOT_DELETED);
+    });
+
+    it('parenthesizes and ANDs several, in order, so an OR inside one cannot leak', () => {
+      expect(CombineExtraFilters("A = 1 OR B = 2", NOT_DELETED, "C IS NULL"))
+        .toBe(`(A = 1 OR B = 2) AND (${NOT_DELETED}) AND (C IS NULL)`);
+    });
+
+    it('skips null, undefined, empty and blank predicates, and is undefined when none remain', () => {
+      expect(CombineExtraFilters('', '   ', null, undefined)).toBeUndefined();
+      expect(CombineExtraFilters()).toBeUndefined();
+      expect(CombineExtraFilters('  ', "A = 1", null, "B = 2")).toBe('(A = 1) AND (B = 2)');
     });
   });
 

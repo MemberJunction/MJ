@@ -11,7 +11,7 @@ import { Float32VectorToBase64, IsValidUUID, MJGlobal, NormalizeUUID, UUIDsEqual
 import { pipeline } from 'node:stream/promises';
 import { EmbeddingData, TemplateParamData, VectorEmeddingData, VectorizeEntityParams, VectorizeEntityResponse, VectorizeProgressUpdate } from '../generic/vectorSync.types';
 import { EntityDocumentConfiguration, EntityDocumentMetadataConfig, EntityDocumentFieldConfig } from '../generic/entityDocumentConfig.types';
-import { GetEntityDocumentRecordFilter, ParseEntityDocumentConfiguration } from '../generic/entityDocumentConfig';
+import { CombineExtraFilters, GetEntityDocumentRecordFilter, ParseEntityDocumentConfiguration } from '../generic/entityDocumentConfig';
 import { EntityDocumentCache } from '@memberjunction/entity-documents';
 import { PagedRecords } from './PagedRecords';
 import { EntityDocumentTemplateDataBuilder } from './EntityDocumentTemplateData';
@@ -806,18 +806,8 @@ export class EntityVectorSyncer extends VectorBase {
    * is set, ANDed together. Undefined when neither applies.
    */
   protected BuildRecordPageFilter(entity: EntityInfo, params: VectorizeEntityParams, entityDocument: MJEntityDocumentEntity, md: IMetadataProvider): string | undefined {
-    const filters: string[] = [];
-    if (params.listID) {
-      filters.push(this.BuildListFilter(entity, md.ConfigData.MJCoreSchemaName, params.listID));
-    }
-    const recordFilter = GetEntityDocumentRecordFilter(entityDocument);
-    if (recordFilter) {
-      filters.push(recordFilter);
-    }
-    if (filters.length <= 1) {
-      return filters[0];
-    }
-    return filters.map((filter) => `(${filter})`).join(' AND ');
+    const listFilter = params.listID ? this.BuildListFilter(entity, md.ConfigData.MJCoreSchemaName, params.listID) : undefined;
+    return CombineExtraFilters(listFilter, GetEntityDocumentRecordFilter(entityDocument));
   }
 
   /**
