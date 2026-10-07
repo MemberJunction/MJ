@@ -1,5 +1,19 @@
 # @memberjunction/ai-zhipu
 
+## 6.2.0-edge.3
+
+### Patch Changes
+
+- Updated dependencies [25bb295]
+- Updated dependencies [dfe40a4]
+- Updated dependencies [29b6ec3]
+- Updated dependencies [279b93e]
+- Updated dependencies [bea2386]
+- Updated dependencies [72e082b]
+  - @memberjunction/ai@6.2.0-edge.3
+  - @memberjunction/global@6.2.0-edge.3
+  - @memberjunction/ai-openai@6.2.0-edge.3
+
 ## 6.2.0-edge.2
 
 ### Patch Changes

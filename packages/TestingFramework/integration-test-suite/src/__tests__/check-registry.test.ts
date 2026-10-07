@@ -30,6 +30,7 @@ import { AgentDecisionsSwitchChecks } from '../checks/agent-decisions-switch.che
 import { ListsChecks } from '../checks/lists.checks';
 import { OpenAppTeardownChecks } from '../checks/open-app-teardown.checks';
 import { UserRoutinesChecks } from '../checks/user-routines.checks';
+import { WorkQueueRuntimeChecks } from '../checks/work-queue-runtime.checks';
 import { AgentLoopLiveChecks } from '../checks/agent-loop-live.checks';
 import { ShippedAgentsLiveChecks } from '../checks/shipped-agents-live.checks';
 import { AgentCarryForwardChecks } from '../checks/agent-carry-forward.checks';
@@ -40,6 +41,7 @@ import { AgentPlanModeChecks } from '../checks/agent-plan-mode.checks';
 import { AgentCompactionE2EChecks } from '../checks/agent-compaction-e2e.checks';
 import { AgentMemoryGuardsChecks } from '../checks/agent-memory-guards.checks';
 import { AgentNoteCacheTypeChecks } from '../checks/agent-note-cache-types.checks';
+import { CacheArchitectureChecks } from '../checks/cache-architecture.checks';
 import { AgentRagSearchChecks } from '../checks/agent-rag-search.checks';
 import { AgentWireCallbackChecks } from '../checks/agent-wire-callback.checks';
 import { ViewSecurityChecks } from '../checks/view-security.checks';
@@ -48,12 +50,15 @@ import { AppBehavioralChecks } from '../checks/app-behavioral.checks';
 import { ContentVectorizationChecks } from '../checks/content-vectorization.checks';
 import { MaterializedReadChecks } from '../checks/materialized-read.checks';
 import { MaterializedEntityReadChecks } from '../checks/materialized-entity-read.checks';
+import { FormContributionsChecks } from '../checks/form-contributions.checks';
 import { ScopedAnonElevationChecks } from '../checks/scoped-anon-elevation.checks';
 import { EntityGraphChecks } from '../checks/entity-graph.checks';
 import { EntityEmbeddedChecks } from '../checks/entity-embedded.checks';
 import { EntityGraphClientChecks } from '../checks/entity-graph-client.checks';
 import { JSONTypeLiveSyncChecks, JSONTypeLiveSyncClientChecks } from '../checks/jsontype-live-sync.checks';
+import { SelfAvatarClientChecks } from '../checks/self-avatar-client.checks';
 import { RecordCloningChecks } from '../checks/record-cloning.checks';
+import { BinaryFieldsChecks } from '../checks/binary-fields.checks';
 import { TaskGraphOrchestrationChecks } from '../checks/task-graph-orchestration.checks';
 import { EntityActionChecks } from '../checks/entity-actions.checks';
 import { FlsEnforcementChecks } from '../checks/fls-enforcement.checks';
@@ -133,6 +138,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['lists', ListsChecks, 3],
         ['open-app-teardown', OpenAppTeardownChecks, 2],
         ['user-routines', UserRoutinesChecks, 16],
+        ['work-queue-runtime', WorkQueueRuntimeChecks, 19], // WR1-WR19 host, RunOnce, partitions, cancel, operators, sweeper, REST (IT105)
         ['conversation-compaction', ConversationCompactionChecks, 18], // CC1-CC18
         ['trailing-runtime-state', TrailingRuntimeStateChecks, 6], // TRS1-TRS6
         ['agent-decisions-switch', AgentDecisionsSwitchChecks, 9], // DS1-DS9 the decisionsEnabled master switch, scripted chat and decision drivers (IT97)
@@ -145,7 +151,8 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['agent-plan-mode', AgentPlanModeChecks, 6],
         ['agent-compaction-e2e', AgentCompactionE2EChecks, 3],
         ['agent-memory-guards', AgentMemoryGuardsChecks, 5],
-        ['agent-note-cache-types', AgentNoteCacheTypeChecks, 3], // NC1-NC3 entity_object cache-event invariant (IT84)
+        ['agent-note-cache-types', AgentNoteCacheTypeChecks, 5], // NC1-NC3 entity_object cache-event invariant, NC4-NC5 identical-payload skip (IT84)
+        ['cache-architecture', CacheArchitectureChecks, 6], // CA1-CA6 engine/cache architecture pins (IT107)
         ['agent-rag-search', AgentRagSearchChecks, 7], // extended-agents suite (live-model, IT53-62)
         ['agent-wire-callback', AgentWireCallbackChecks, 2], // over-the-wire fire-and-forget callback (IT63)
         ['view-security', ViewSecurityChecks, 4], // two-identity V14/V15/V16 + RV17 (IT64)
@@ -154,6 +161,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['content-vectorization', ContentVectorizationChecks, 10], // CV1-CV10 content vectorization pipeline (IT67)
         ['materialized-read', MaterializedReadChecks, 3], // MR1-MR2 served-from-snapshot proof + MR3 delete-path FK cleanup (IT79)
         ['materialized-entity-read', MaterializedEntityReadChecks, 2], // EMR1-EMR2 entity base-view RunView redirect (IT78)
+        ['form-contributions', FormContributionsChecks, 17], // FC1-FC17 metadata form contributions: schema, actions, clamp, kill switch, scoping, section claims, component guard (IT104)
         ['scoped-anon-elevation', ScopedAnonElevationChecks, 6], // SA1-SA6 scoped-anonymous elevation permission contract (IT68)
         ['entity-graph', EntityGraphChecks, 11], // EG1-EG8 related-record collection graph saves (IT72)
         ['entity-embedded', EntityEmbeddedChecks, 6], // EE1-EE6 owner-held embedded records
@@ -171,8 +179,10 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['fls-enforcement', FlsEnforcementChecks, 24], // FLS1-FLS24 field-level security against a live DB (IT90); FLS22/FLS23 cover the Record Changes payload projection, FLS24 record names, FLS21 measures metadata-refresh cost
         ['fls-lifecycle', FlsLifecycleChecks, 9], // LC1-LC9 FLS lifecycle + system-user guards, mutation tier (IT91)
         ['fls-enforcement-client', FlsClientChecks, 6], // FC1-FC6 FLS over the wire via per-user API keys (IT92)
+        ['self-avatar-client', SelfAvatarClientChecks, 6], // AV1-AV6 self-service avatar mutation over the wire via per-user API keys (IT106)
         ['metadata-sync-push', MetadataSyncPushChecks, 10], // MSP1-MSP10 sync push atomicity, in-transaction metadata reload, and one row-level security filter, mutation tier (IT94)
         ['record-cloning', RecordCloningChecks, 13], // RC1-RC9 plan §13.2 + RC10-RC13 real-database dry runs, client transport (IT96)
+        ['binary-fields', BinaryFieldsChecks, 6], // BF1-BF6 binary fields end to end + binary vector columns, client transport (IT101)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
@@ -230,7 +240,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'agent-loop-standin': 11,
         'prompt-eval-harness': 7,
         'agent-memory-guards': 5,
-        'agent-note-cache-types': 3,
+        'agent-note-cache-types': 5,
         'agent-payload-guards': 9,
         'agent-plan-mode': 6,
         'agent-rag-search': 7,
@@ -247,6 +257,8 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'app-behavioral': 3,
         'app-wiring': 10,
         'auth-validation': 7,
+        'binary-fields': 6,
+        'cache-architecture': 6,
         'cache-gauntlet': 8,
         'cache-immutability': 15,
         'class-resolution': 5,
@@ -257,7 +269,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'content-vectorization': 10,
         'conversation-compaction': 18,
         'trailing-runtime-state': 6,
-        'dataset-cache': 3,
+        'dataset-cache': 4,
         'entity-actions': 8,
         'entity-embedded': 6,
         'entity-graph': 11,
@@ -270,6 +282,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'fls-enforcement': 24,
         'fls-enforcement-client': 6,
         'fls-lifecycle': 9,
+        'form-contributions': 17,
         'layered-base-views': 6,
         'lists': 3,
         'materialized-entity-read': 2,
@@ -307,6 +320,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'scope-enforcement': 5,
         'scoped-anon-elevation': 6,
         'search': 7,
+        'self-avatar-client': 6,
         'server-cache': 32,
         'shipped-agents-live': 4,
         'startup-mode': 3,
@@ -321,6 +335,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'user-routines': 16,
         'view-execution': 12,
         'view-security': 4,
+        'work-queue-runtime': 19,
         'workflow-demo-agents': 5,
     };
 
@@ -345,7 +360,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(102);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(107);
     });
 });
 
@@ -386,6 +401,11 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'actions-pipeline.AP2',
         'app-behavioral.AB1',
         'app-behavioral.AB2',
+        'binary-fields.BF4',
+        'binary-fields.BF6',
+        'cache-architecture.CA2',
+        'cache-architecture.CA4',
+        'cache-architecture.CA5',
         'cache-gauntlet.CG1',
         'cache-gauntlet.CG2',
         'cache-gauntlet.CG3',
@@ -512,6 +532,12 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'rubrics.R8',
         'rubrics.R9',
         'rubrics.W1',
+        'self-avatar-client.AV1',
+        'self-avatar-client.AV2',
+        'self-avatar-client.AV3',
+        'self-avatar-client.AV4',
+        'self-avatar-client.AV5',
+        'self-avatar-client.AV6',
         'server-cache.S17',
         'server-cache.S23',
         'server-cache.S24',

@@ -1,0 +1,44 @@
+[
+  {
+    "_comments": [
+      "Entities read on a schedule with a filter that embeds the current time.",
+      "The RunView cache fingerprint includes the filter, so every poll minted a new permanent cache",
+      "key that was never read again and published a pub/sub event to every peer server and, through",
+      "the MJAPI relay, an invalidation to every connected browser. In one production Redis 97% of the",
+      "keys were this shape (the User Routine dispatcher, every minute). AllowCaching=false stops the",
+      "write at source (LocalCacheManager.SetRunViewResult honours it as a write gate).",
+      "See plans/engine-cache-architecture-plan.md F2 / N4."
+    ],
+    "fields": {
+      "Name": "MJ: User Routines",
+      "AllowCaching": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: User Routines"
+    }
+  },
+  {
+    "_comments": [
+      "Polled every 60 s by the scheduled bridge runner with ScheduledStartTime <= now."
+    ],
+    "fields": {
+      "Name": "MJ: AI Agent Session Bridges",
+      "AllowCaching": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Agent Session Bridges"
+    }
+  },
+  {
+    "_comments": [
+      "Append-only log table; the retention driver reads it with a StartedAt < cutoff filter per run."
+    ],
+    "fields": {
+      "Name": "MJ: Action Execution Logs",
+      "AllowCaching": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Action Execution Logs"
+    }
+  }
+]

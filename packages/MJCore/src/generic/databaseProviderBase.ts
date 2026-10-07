@@ -8,9 +8,10 @@ import { TransactionItem } from "./transactionGroup";
 import { CompositeKey } from "./compositeKey";
 import { EntityTransactionScope } from "./entityTransactionScope";
 import { LogError } from "./logging";
+import { LocalCacheManager } from "./localCacheManager";
 import { AggregateResult, EntityRecordNameInput, EntityRecordNameResult, RunQueryResult } from "./interfaces";
 import { QueryExecutionSpec } from "./queryExecutionSpec";
-import { EscapeSQLString, SQLExpressionValidator, StripSQLStringLiterals, uuidv4 } from "@memberjunction/global";
+import { EscapeSQLString, FormatBinaryChangeValue, SQLExpressionValidator, StripSQLStringLiterals, uuidv4 } from "@memberjunction/global";
 import { GetDialect, SQLDialect } from "@memberjunction/sql-dialect";
 
 // Re-export PlatformSQL types from their canonical location for backward compatibility
@@ -236,6 +237,11 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 await this.ResetTransactionState();
             }
         }
+        // Belt and braces: whatever route the rollback took, this instance is going away, so it
+        // must not leave an entity-event batch behind. A batch whose owner is collected is
+        // unreachable while its entities keep counting as pending, which makes every cached read
+        // of them miss for the life of the process.
+        await LocalCacheManager.Instance.AbandonEntityEventBatch(this);
     }
 
     /** @deprecated Use {@link TransactionDepth}. */
@@ -350,6 +356,10 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         const isNested = this.IsInTransaction || this.CurrentTransactionDepth > 0;
         await this.BeginTransaction();
         const depthAtBegin = this.CurrentTransactionDepth;
+        // Cache maintenance for the saves in this scope waits for the outermost settle: one rewrite
+        // per cached slot on commit instead of one per save, and nothing written for work that is
+        // rolled back. Nested scopes join the same batch.
+        LocalCacheManager.Instance.BeginEntityEventBatch(this);
 
         let settled = false;
         const settle = async (commit: boolean): Promise<void> => {
@@ -375,10 +385,16 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                     `per-request providers (as MJServer does) or serialize the units of work.`,
                 );
             }
-            if (commit) {
-                await this.CommitTransaction();
-            } else {
-                await this.RollbackTransaction();
+            let settledAsCommit = false;
+            try {
+                if (commit) {
+                    await this.CommitTransaction();
+                    settledAsCommit = true;
+                } else {
+                    await this.RollbackTransaction();
+                }
+            } finally {
+                await LocalCacheManager.Instance.EndEntityEventBatch(this, settledAsCommit);
             }
         };
 
@@ -617,12 +633,25 @@ export abstract class DatabaseProviderBase extends ProviderBase {
 
             const bDiff = this.isFieldDifferent(f, oldData[key], newData[key]);
             if (bDiff) {
+                if (f.IsBinaryFieldType) {
+                    // A binary value (base64, possibly megabytes) is recorded by size, not content:
+                    // the record snapshot (FullRecordJSON) keeps the bytes for restore, so the diff
+                    // does not need to carry them twice more. Readers get a readable change either way.
+                    changes[key] = { field: key, oldValue: this.describeBinaryForDiff(oldData[key]), newValue: this.describeBinaryForDiff(newData[key]) };
+                    continue;
+                }
                 const o = this.escapeValueForDiff(oldData[key], quoteToEscape);
                 const n = this.escapeValueForDiff(newData[key], quoteToEscape);
                 changes[key] = { field: key, oldValue: o, newValue: n };
             }
         }
         return changes;
+    }
+
+    /** The diff entry for a binary field: its size, never its base64 (null and undefined pass through). */
+    private describeBinaryForDiff(value: unknown): unknown {
+        if (value === null || value === undefined) return value;
+        return FormatBinaryChangeValue(typeof value === 'string' ? value : String(value));
     }
 
     /**

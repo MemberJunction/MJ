@@ -1,5 +1,82 @@
 # Change Log - @memberjunction/ai
 
+## 6.2.0-edge.3
+
+### Minor Changes
+
+- 25bb295: AI model & vendor metadata refresh (weekly research run, 2026-10-05).
+
+  Most vendor documentation sites are unreachable from this session, but three first-party sources are:
+  `platform.claude.com`, AWS's machine-readable Price List API, and the documentation repositories
+  several vendors publish their docs sites from. Everything below is verified against one of those, or
+  is a self-contained consistency repair needing no vendor data. No new model and no new vendor is
+  included. The full candidate list — including three live mispricings on hosts that could not be
+  reached, and four MJ routes that retire within 15 days — is in
+  `reports/ai-model-research/2026-10-05-weekly-report.md`.
+  - **Fixes two Cohere reranker API ids that would 404 on every call.** Cohere spells its v4 rerankers
+    `rerank-v4.0-pro` and `rerank-v4.0-fast`; MJ had the `.0` missing on both. The record _names_ are
+    deliberately unchanged, because `metadata/prompts/.default-rerank-prompt.json` resolves these
+    models by name — renaming them would break `mj sync push`. Also sets the published 4,096-token
+    context length on `rerank-v3.5` and `rerank-multilingual-v3.0`.
+  - **Corrects Claude Sonnet 4.5's output cap from 8,192 to 64,000** on all three routes — Anthropic
+    publishes 64K, so the recorded figure was wrong by nearly 8× and would have truncated long
+    generations. Marks the Anthropic route `Deprecated` (announced 2026-09-30, retires 2026-11-30,
+    replaced by Claude Sonnet 5.5) while leaving the cost row `Active`, since it serves until then.
+  - **Corrects Claude Sonnet 4.6's context window to 1,000,000 and its output cap to 128,000** on all
+    three routes (recorded as 200,000 / 64,000).
+  - **Corrects three prices**, expiring the superseded row in each case: `mistral-large-latest`
+    $4/$12 → **$0.50/$1.50** (the alias now resolves to Mistral Large 3; an 8× overstatement on
+    input), `mistral-medium-latest` $2.75/$8.10 → **$1.50/$7.50**, and Amazon Bedrock GPT-OSS-20B
+    output $0.20 → **$0.30**. Also corrects the Mistral Medium 3.5 id to `mistral-medium-3-5`.
+  - **Fills the published prompt-cache rates** on eight cost rows that had none — Anthropic's own rows
+    for Opus 4.8, Sonnet 5 and Fable 5, and Amazon Bedrock's for Opus 4.8, Sonnet 5, Fable 5 and
+    Fable 5.1. Base rates are unchanged, so the rows are amended rather than superseded.
+  - **Retires the Magistral 1.2 pair on their Mistral-direct route**, which Mistral shut down
+    2026-07-31: vendor row `Inactive`, cost row `Expired` with `EndedAt`. The Amazon Bedrock and
+    OpenRouter routes are untouched — AWS still sells the Bedrock edition.
+  - **Expires nine never-closed duplicate cost rows**, cutting concurrent-`Active` rows on the same
+    model + vendor + processing type from 13 pairs to 2. Claude Sonnet 5 on three vendors (the launch
+    row recorded introductory pricing through 2026-08-31 and a second row was added when that became
+    standard; Anthropic now confirms the increase to $3/$15 will not occur); Claude 4 Opus, Claude 4
+    Sonnet, Llama 4 Maverick and Llama 4 Scout (exact duplicates from the January 2026 seed import);
+    and GPT 5.6-terra and GPT 5.6-luna (older rows the 2026-07-30 rows already superseded). Every row
+    is expired, never deleted, so the pricing history stays intact.
+  - **Sets `IsActive: false` on five models whose every inference route was already dropped** —
+    Llama 2 70B / Groq, Gemini 1.5 Flash, Gemini 1.5 Pro, Gemini 2.5 Pro Preview and Gemini 2.5 Flash
+    Preview. They were advertising themselves as active while being unreachable on every route.
+
+### Patch Changes
+
+- 29b6ec3: fix: native tool calling — object action params, a one-turn `complete_task` finish, an implicit-mode Loop prompt, and Gemini thought signatures across failover
+
+  Found running Skip's Query Writer on Gemini 3 Flash with native implicit control flow. `Simple Object` action params are declared as `object` and a JSON-string argument is decoded before the Action runs (`Other` stays `string`). A new `complete_task` control tool applies the final payload change and completes in one turn; its `payloadChangeRequest` is a JSON string because the forced final turn is schema-constrained and an open object decodes as `{}`, and the final permitted turn now forces `complete_task` instead of `'none'` (downgraded to `'none'` for hybrid models). The Loop system prompt's implicit mode no longer tells the model to answer in a JSON envelope, and unreadable JSON text is a Retry rather than a final answer that drops its payload. The Gemini driver records where a thought signature was minted and replays it only there, so a failover between Google AI Studio and Vertex AI no longer fails with a 400 "Corrupted thought signature." A model that rejects a forced tool choice gets `'auto'` instead: Claude Opus 5.5 and Sonnet 5.5 through a new catalog flag, `LLM.SupportsForcedToolChoice: false`, and any Claude request using budget thinking in the Anthropic driver. Envelope and hybrid prompts render byte-identically.
+
+- 279b93e: Multi-agent rooms now take turns properly with full-duplex realtime models, and the Live Room doubles as an agent test bed.
+  - **Model-side addressing.** `IAddressedMatcher` gains a model-judged implementation next to the name-matching one. Full-duplex sessions get two host tools, `i_am_addressed` and `yield_turn`, because neither vendor offers a native signal. `TurnAddressing` (`Auto` | `ModelSide` | `Regex`) is selectable per session; `Auto` uses the model's judgement when the model reports the new `FullDuplex` capability (GPT-Live, Gemini 3.8 Live with always-on proactive audio) and name matching otherwise.
+  - **Floor discipline.** `MultiAgentRoomCoordinator` now grants hand-offs with a TTL (a third agent cannot jump in), keeps backchannels (short "mm-hm" acknowledgements) off the floor, lets a person's speech preempt the holder through the existing barge-in flush path while delegated work keeps running, and caps consecutive agent-to-agent turns (default 8, configurable). A new `FullDuplexTurnGate` enforces it on models that decide for themselves when to speak, so two agents never speak at once even if neither asks first.
+  - **Test bed.** New `GetLiveKitRoomTurnState` query and typed `GraphQLLiveKitClient.GetRoomTurnState`; new `mj-livekit-turn-state` widget; the Live Room gets per-agent turn mode and addressing pickers, roster badges and a live Turns panel (floor holder, hand-offs, backchannels, loop cap, event feed) that also works for a person who joins an existing room.
+  - **Tests.** A deterministic replay harness with twelve recorded room timelines asserts no overlapping agent speech, no run beyond the loop cap, humans always preempt and backchannels never take the floor.
+
+  No schema, metadata or CodeGen changes. Live-model behaviour of the host tools is not yet verified; see the "Multi-agent rooms" section of `plans/realtime/bridges-and-widget/LIVE-CALL-CHECKLIST.md`.
+
+- bea2386: A run can now be restricted to the credentials its caller supplied, so a customer's work never silently runs on the platform's AI keys.
+
+  Key resolution matched per driver class and fell back to the platform for any class the run did not key. A host running work on a customer's own key had no way to say "only these keys": when the customer's Google key was rejected, failover moved to Vertex, found no customer key, and finished the run on the platform's account — reporting success. Internal prompts that dropped `apiKeys` (AI JSON repair, the parallel result selector) reached the platform key the same way with no failover at all.
+  - **`CredentialScope: 'Any' | 'RuntimeOnly'`** (`AICredentialScope` in `@memberjunction/ai`) on `ExecuteAgentParams` and `AIModelRunParams` (so `AIPromptParams`). Omitting the parameter means `'Any'`, which resolves keys as before (the fixes below change some defaults regardless). `'RuntimeOnly'` allows only `apiKeys` and a prompt's per-request `credentialId`: every platform source — `AICredentialBinding`s, the vendor's default credential and `AI_VENDOR_API_KEY__*` — is skipped.
+  - Every scope decision goes through `CredentialScopeAllows(scope, source)` in `@memberjunction/ai`, where `source` is an `AICredentialSource` — `'Runtime'`, `'PlatformCredential'` or `'Environment'`. Its exhaustive switch makes a new scope value a compile error until it is answered, and an unknown value at runtime throws rather than falling back to the platform.
+  - Enforced in `BaseModelRunner.HasCredentialsAvailable` and `ResolveCredentialForExecution`, which every runner shares. Because candidate selection uses the first, failover stays on vendors the caller keyed; a run they do not cover fails with "No suitable model found … credential scope is RuntimeOnly" instead of running on the platform's key.
+  - `BaseAgent` carries the scope to every prompt, sub-agent, action, realtime delegate and realtime session in the run. `GetAIAPIKey` and `MakeAIAPIKeyResolver` take an optional `scope`; `RealtimeClientSessionService` drops its `getAPIKeyForDriver` seam under `'RuntimeOnly'`; image and media runner params gain `CredentialScope`.
+  - `@memberjunction/actions-base`: `RunActionParams.CredentialScope` (`RuntimeCredentialScope`). Under `'RuntimeOnly'` the `RuntimeAPIKeyResolver`'s answer is final. `Generate Image` honours it, and Summarize Content, Run Ad-hoc Query, Execute AI Prompt and Execute Agent forward it to the prompt or agent they run — they are not handed the run's keys, so under `'RuntimeOnly'` they fail rather than spend the platform's.
+  - Decision calls (FinishIf, decision requests, discovery, catalog narrowing, the payload change check) carry the run's execution scope through `AgentDecisionService` (`AgentDecisionAskParams.ExecutionScope`) to `AIDecisionRunner`, and `LLMDecision`'s own chat prompt runs under it (`LLMDecision.ExecutionScope`). Self-check rubrics do too: `ProviderRubricEngine`, `ProviderPromptService` and `ProviderDecisionService` take an optional execution scope, and the rubric evaluation agent runs under it.
+  - A model driver is never constructed without a key under a scope that rules out environment keys: the OpenAI and Anthropic SDKs read `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` themselves when handed none, which parallel prompt tasks could reach.
+  - Not covered by the scope: retrieval reranking and embeddings outside a prompt run (platform infrastructure), and agent-harness credential grants.
+  - **Prompts started on a run's behalf now run under its scope** — user, provider, configuration, `apiKeys`, `credentialId`, `CredentialScope` — via the new `PickPromptExecutionScope` / `AIPromptExecutionScope`: AI JSON repair, the parallel `PromptSelector` judge, `BaseAgent`'s summarize-range and message-compaction sub-calls, conversation compaction (`CompactIfNeededInput.ExecutionScope`) and conversation naming. Each forwarded `contextUser` at most, so each ran on platform keys and the default configuration inside a customer's run. This applies whatever the scope.
+  - `ErrorAnalyzer` classifies Google's invalid-key and expired-key responses ("API key not valid" / `API_KEY_INVALID`, "API key expired" / `API_KEY_EXPIRED`, HTTP 400) as `Authentication`. It fell through to `VendorValidationError`, so an invalid key failed over to another vendor instead of failing.
+  - **A failed streaming call keeps its driver's classification.** `BaseLLM` rejects a failed stream with its `ChatResult`, not an `Error`. The prompt runner analyzed that object afresh, so an invalid key the driver classified `Authentication`/`Fatal` became `Unknown`/`Transient` with no message: failover continued onto the same dead key, agents retried the step up to their consecutive-failure limit, and every run recorded "Unknown error". `ErrorAnalyzer` now returns an `errorInfo` the value already carries, and the runner records a rejected `ChatResult` as an `Error` with its real message; any other rejected value is classified as itself before it is wrapped. Affects any streamed prompt with a non-retryable error, whatever the credential scope.
+
+- Updated dependencies [dfe40a4]
+  - @memberjunction/global@6.2.0-edge.3
+
 ## 6.2.0-edge.2
 
 ### Minor Changes

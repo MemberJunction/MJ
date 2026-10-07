@@ -2,9 +2,11 @@ import { Resolver, Mutation, Query, Subscription, Arg, Ctx, Root, ObjectType, Fi
 import { IMetadataProvider, LogError, UserInfo } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { NotificationEngine } from '@memberjunction/notifications';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import {
   LiveKitSipService,
   RoomHandoffEngine,
+  HandoffOfferRegistry,
   type HandoffOfferEvent,
   type HandoffOfferView,
   type IHandoffNotifier,
@@ -63,6 +65,10 @@ export class HandoffOffer {
   /** After this the offer can no longer be accepted. */
   @Field(() => String)
   ExpiresAt: string;
+
+  /** The MJ interaction ID associated with this conversation/room, if known. */
+  @Field(() => String, { nullable: true })
+  InteractionID?: string | null;
 }
 
 /** One change to an offer, pushed to the person it belongs to. */
@@ -203,6 +209,12 @@ export class NotificationHandoffNotifier implements IHandoffNotifier {
   }
 }
 
+// The registry's background sweep and list queries run outside any request, so they need a server identity. Resolve the
+// system user lazily: the user cache may not have loaded when this module does.
+HandoffOfferRegistry.Instance.Configure({
+  ResolveContextUser: () => UserCache.Instance.GetSystemUser(),
+});
+
 /**
  * Binds the handoff engine's collaborators that only the server host can supply (same module-load rationale as the other
  * realtime bindings): the pub/sub publisher, the notification sender, and a room-presence check over the LiveKit credentials
@@ -295,5 +307,6 @@ function toGraphQLOffer(offer: HandoffOfferView): HandoffOffer {
     Status: offer.Status,
     CreatedAt: offer.CreatedAt,
     ExpiresAt: offer.ExpiresAt,
+    InteractionID: offer.InteractionID ?? null,
   };
 }

@@ -246,6 +246,12 @@ migrations/v*/*__RSU_*.sql
 # source of truth; committing 300 copies would let them drift from it.
 packages/**/LICENSE
 
+# Terraform working directories and state (infrastructure/terraform/**)
+.terraform/
+*.tfstate
+*.tfstate.*
+tfplan
+
 # Standards gate finding dump (CI artifact / local --json output)
 standards-findings.json
 

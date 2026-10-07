@@ -1239,6 +1239,21 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT104 - Form Contributions",
+            "Sequence": 48,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "BE0B5BAB-E7AB-4074-815D-EDE0151ADBEA"
+          },
+          "sync": {
+            "lastModified": "2026-09-17T20:05:32.183Z",
+            "checksum": "2e35f7ba0e03b46059e6aa28590909692b9e7f0d6b340ebd264a335c5e402c0c"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT93 - Prompt Eval Harness",
             "Sequence": 48,
             "Status": "Active"
@@ -1276,12 +1291,56 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT105 - Work Queue Runtime (native host, operators, REST)",
+            "Sequence": 48,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "B88AFB7E-06E4-47D4-BC45-8DDE8FF215A8"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT103 - RunQuery Rendering over GraphQL",
             "Sequence": 72,
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "F010EDA8-2094-41BA-8E25-0D5EFB0C13FE"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT101 - Binary Fields and Vector Columns",
+            "Sequence": 73,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "80642370-A10B-405B-89CC-536AAAA00397"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT106 - Self-Service Avatar (client transport)",
+            "Sequence": 74,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "7364BCB7-A3AA-41D7-B77A-910F0A372E13"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT107 - Cache Architecture Invariants",
+            "Sequence": 48,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "3DA009D7-6777-438C-B45A-66BE07808056"
           }
         }
       ]
