@@ -2672,11 +2672,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     CreateFormContributionAction,
     CreateInteractiveFormAction,
     CreateListAction,
-    CreateMermaidDiagramAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    CreateMermaidDiagramAction,
     CreateRecordAction,
     CreateRuntimeActionAction,
     CreateSVGChartAction,
