@@ -132,7 +132,7 @@ describe('LiveKitRoomComponent (DOM, fake controller)', () => {
     makeFakeController(makeState({ Status: 'connected', Local: person('you', { Local: true }), Remote: remote, ...over }));
 
   /** The named participant's tile, wherever it is. */
-  const tileOf = (f: ReturnType<typeof render>, name: string): HTMLElement | undefined =>
+  const tileOf = (f: ReturnType<typeof render>, name: string): Element | undefined =>
     queryAll(f, 'mj-media-tile, mj-self-view').find((t) => t.querySelector('.tile__name')?.textContent?.trim().split(/\s+/)[0] === name);
 
   /** Clicks the pin on the named participant's tile. */
@@ -511,7 +511,7 @@ describe('LiveKitRoomComponent (DOM, fake controller)', () => {
 
     it("puts the user's own menu before their Hide button", () => {
       const f = render(twoAndAgent(), { Layout: 'spotlight' });
-      const corner = [...(tileOf(f, 'you')?.querySelectorAll('.tile__actions-slot > *') ?? [])];
+      const corner = Array.from(tileOf(f, 'you')?.querySelectorAll('.tile__actions-slot > *') ?? []);
       expect(corner.map((el) => (el.tagName.toLowerCase() === 'mj-media-move-menu' ? 'menu' : el.className.split(' ')[0]))).toEqual(['menu', 'self__hide']);
     });
 
@@ -550,7 +550,7 @@ describe('LiveKitRoomComponent (DOM, fake controller)', () => {
       f.detectChanges();
     };
     /** The named participant's box. */
-    const boxOf = (f: ReturnType<typeof render>, name: string): HTMLElement | undefined =>
+    const boxOf = (f: ReturnType<typeof render>, name: string): Element | undefined =>
       queryAll(f, '.lk-room__pips .stage-surface--pip').find((box) => box.querySelector('.stage-pip-title')?.textContent?.trim() === name);
     /** Opens the "Move to…" menu on the named participant's box bar and lists its items. */
     const openBarMenu = (f: ReturnType<typeof render>, name: string): HTMLElement[] => {
