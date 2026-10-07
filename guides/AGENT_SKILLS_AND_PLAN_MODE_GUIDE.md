@@ -442,7 +442,7 @@ Additive: `AISkill.ActivationScope` (`'Run'`/`'Conversation'`, default `'Run'`) 
 `ConversationSkill` table (`MJ: Conversation Skills`: ConversationID, SkillID, Status
 `Active`/`Ended`, ActivatedByRunID, EndedAt; UNIQUE per conversation+skill). See §1.6c.
 
-**v6.2.x** — Migration [`V202610061800__v6.2.x__AISkill_External_Sources_And_Files.sql`](../migrations/v6).
+**v6.2.x** — Migration [`V202610070956__v6.2.x__AISkill_External_Sources_And_Files.sql`](../migrations/v6).
 Additive: `AISkill.SourceType` (`'URL'`/`'GitHub'`, NULL = no upstream), `SourceURL`, `SourceRef`,
 `SourceVersion`, `SourceContentHash`, `LastSyncedAt`, `Frontmatter` (JSON of unmodelled SKILL.md keys),
 and the `AISkillFile` table (`MJ: AI Skill Files`: SkillID, Path, Content; UNIQUE per skill+path). See

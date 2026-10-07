@@ -183,7 +183,7 @@ This makes any *instruction-only* Anthropic skill importable and trackable. Skil
 (archify included) still need the vendored-code route of Phases 1–3, because the server does not run
 a skill's scripts.
 
-**As built (Phase 4).** Migration `V202610061800__v6.2.x__AISkill_External_Sources_And_Files`, with its CodeGen output.
+**As built (Phase 4).** Migration `V202610070956__v6.2.x__AISkill_External_Sources_And_Files`, with its CodeGen output.
 - **Source fields as planned,** with `SourceType` limited by a CHECK to `URL` | `GitHub` (NULL means authored here). One addition: `Frontmatter`, which stores unknown SKILL.md keys so they survive an import followed by an export, not just a pass through the converter.
 - **`AISkillFile`** (`SkillID`, `Path`, `Content`, unique per skill and path).
   - The "read skill file" step is a `Read Skill File` action. It is offered automatically, with the file list, when a skill that has files activates. The action reads only files of skills active in the run.

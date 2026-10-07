@@ -32,7 +32,7 @@ Also adds `plans/archify-diagram-skill.md`, a plan for an architecture-diagram s
 - **Research Report Writer** is granted both actions and told to use them when the diagram is the deliverable, embedding the returned SVG.
 - **Query Builder** draws a data-lineage `dataflow` diagram on request and puts it in the Data artifact's Plan tab inside an `svg` fence. The Mermaid ER diagram stays.
 - **Monthly archify sync job** (`.github/workflows/archify-sync.yml`). It opens or updates one review PR when archify publishes a new release, and does nothing otherwise.
-- **First-class external skills** (migration `V202610061800__v6.2.x__AISkill_External_Sources_And_Files`):
+- **First-class external skills** (migration `V202610070956__v6.2.x__AISkill_External_Sources_And_Files`):
   - `AISkill` gains source tracking (`SourceType`, `SourceURL`, `SourceRef`, `SourceVersion`, `SourceContentHash`, `LastSyncedAt`) and `Frontmatter`.
   - New `AISkillFile` table for multi-file skills. The new `Read Skill File` action is offered when a skill that has files activates.
   - SKILL.md frontmatter is now real YAML (`yaml`) and keeps unknown keys on a round trip.
