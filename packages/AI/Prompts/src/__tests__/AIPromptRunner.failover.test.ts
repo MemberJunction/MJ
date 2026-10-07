@@ -30,7 +30,7 @@
  * limits, or provider outages. The `ChatResult{success:false}` tests below execute the real
  * fix at AIPromptRunner.executeModelWithFailover and fail if that check ever regresses.
  */
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 // ---------------------------------------------------------------------------
 // Mock AIEngine catalog + credential gate (same harness as the model-selection
@@ -551,6 +551,71 @@ describe('executeModelWithFailover — vendor-level error filtering', () => {
     expect(['api-b1', 'api-b2']).toContain(testLLM.CalledModels[1]);
     expect(testLLM.CalledModels).not.toContain('api-a2');
     expect(pr.FailoverAttempts).toBe(1);
+  });
+});
+
+// ===========================================================================
+// (f) The failover banner is logged only after a real failed attempt. A candidate skipped for
+// missing credentials makes no request, so it is not a failover.
+// ===========================================================================
+describe('executeModelWithFailover — failover banner', () => {
+  // Not in the configured-driver set, so the credential gate skips it without a request.
+  const uncredentialed = (): TestCandidate => candidate('m-mistral', 'MistralLLM', 'v-mistral', 'Mistral', 'api-mistral', 110);
+
+  function captureStatusLog(): () => string[] {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    return () => log.mock.calls.map(args => String(args[0]));
+  }
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('logs no failover banner when the first call succeeds after candidates skipped for missing credentials', async () => {
+    vi.stubEnv('MJ_VERBOSE', 'false');
+    const c1 = candidate('m-claude', 'AnthropicLLM', 'v-anthropic', 'Anthropic', 'api-claude', 100);
+    testLLM.Script({ kind: 'succeed', content: 'first call answered' });
+    const messages = captureStatusLog();
+
+    const result = await runFailover(runner, [uncredentialed(), c1]);
+
+    expect(result.success).toBe(true);
+    expect(testLLM.CalledModels).toEqual(['api-claude']);
+    expect(messages().filter(m => m.includes('🔄'))).toEqual([]);
+    expect(messages().filter(m => m.includes('Using candidate'))).toEqual([]); // verbose-only
+  });
+
+  it('notes the skipped candidates in verbose mode, without a failover banner', async () => {
+    vi.stubEnv('MJ_VERBOSE', 'true');
+    const c1 = candidate('m-claude', 'AnthropicLLM', 'v-anthropic', 'Anthropic', 'api-claude', 100);
+    testLLM.Script({ kind: 'succeed', content: 'first call answered' });
+    const messages = captureStatusLog();
+
+    await runFailover(runner, [uncredentialed(), c1]);
+
+    expect(messages().filter(m => m.includes('🔄'))).toEqual([]);
+    const notes = messages().filter(m => m.includes('Using candidate'));
+    expect(notes).toHaveLength(1);
+    expect(notes[0]).toContain('Using candidate 2/2');
+    expect(notes[0]).toContain('skipped 1 higher-priority candidate(s)');
+  });
+
+  it('logs the failover banner once an attempt has failed', async () => {
+    vi.stubEnv('MJ_VERBOSE', 'false');
+    const c1 = candidate('m-claude', 'AnthropicLLM', 'v-anthropic', 'Anthropic', 'api-claude', 100);
+    const c2 = candidate('m-gpt', 'OpenAILLM', 'v-openai', 'OpenAI', 'api-gpt', 90);
+    testLLM.Script(
+      { kind: 'fail', error: new Error('fetch failed: network socket disconnected') },
+      { kind: 'succeed', content: 'answered by the second candidate' },
+    );
+    const messages = captureStatusLog();
+
+    const result = await runFailover(runner, [c1, c2]);
+
+    expect(result.success).toBe(true);
+    const banners = messages().filter(m => m.includes('🔄'));
+    expect(banners).toHaveLength(1);
+    expect(banners[0]).toContain('Failover after 1 failed attempt(s) — trying candidate 2/2');
   });
 });
 
