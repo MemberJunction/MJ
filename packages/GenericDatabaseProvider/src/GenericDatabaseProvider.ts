@@ -37,6 +37,7 @@ import {
     IsMaterializedDataSource,
     RunViewResult,
     RunViewWithCacheCheckParams,
+    RunViewDatabaseStatus,
     RunViewsWithCacheCheckResponse,
     RunViewWithCacheCheckResult,
     RunQueryParams,
@@ -55,6 +56,7 @@ import {
     DatasetStatusResultType,
     DatasetStatusEntityUpdateDateType,
     IMetadataProvider,
+    ProviderConfigDataBase,
     UserInfo,
     LocalCacheManager,
     CachedRunViewResult,
@@ -230,6 +232,20 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      */
     public SetLocalStorageProvider(provider: ILocalStorageProvider): void {
         this._localStorageProvider = provider;
+    }
+
+    /**
+     * Installs {@link ProviderConfigDataBase.LocalStorageProvider}, when the configuration carries
+     * one, before the base configuration loads metadata. A server fleet passes its shared (Redis)
+     * store this way so the metadata load and the engines loaded at startup use it from the first
+     * read: the first server to start fills the shared cache, and the others read it instead of
+     * each querying the database and broadcasting what they loaded.
+     */
+    public override async Config(data: ProviderConfigDataBase, providerToUse?: IMetadataProvider): Promise<boolean> {
+        if (data?.LocalStorageProvider) {
+            this.SetLocalStorageProvider(data.LocalStorageProvider);
+        }
+        return super.Config(data, providerToUse);
     }
 
     /**************************************************************************/
@@ -2773,6 +2789,55 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     /**************************************************************************/
 
     /**
+     * Row count and newest `__mj_UpdatedAt` for each view, read from the database and never from
+     * a cache. Uses the same WHERE clause (filter, user search, row-level security, pre-run hooks)
+     * and the same batched status query as {@link RunViewsWithCacheCheck}. One entry per param,
+     * in order; a failure is reported per entry.
+     */
+    public async GetRunViewsDatabaseStatus(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewDatabaseStatus[]> {
+        const user = contextUser || this.CurrentUser;
+        const statuses: RunViewDatabaseStatus[] = params.map(() => ({ Success: false, ErrorMessage: 'not checked' }));
+        if (!user) {
+            return statuses.map(() => ({ Success: false, ErrorMessage: 'No user context available' }));
+        }
+        const items = await this.buildDatabaseStatusItems(params, user, statuses);
+        const results = await this.getBatchedServerCacheStatus(items, contextUser);
+        for (const { index } of items) {
+            const status = results.get(index);
+            statuses[index] = status?.success
+                ? { Success: true, RowCount: status.rowCount ?? 0, MaxUpdatedAt: status.maxUpdatedAt }
+                : { Success: false, ErrorMessage: status?.errorMessage ?? 'no status returned' };
+        }
+        return statuses;
+    }
+
+    /** Status-query inputs for {@link GetRunViewsDatabaseStatus}; entries that cannot be built record their error. */
+    private async buildDatabaseStatusItems(
+        params: RunViewParams[],
+        user: UserInfo,
+        statuses: RunViewDatabaseStatus[],
+    ): Promise<Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; whereSQL: string }>> {
+        const items: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; whereSQL: string }> = [];
+        for (let index = 0; index < params.length; index++) {
+            try {
+                const viewParams: RunViewParams = { ...params[index] };
+                this.ResolvePlatformSQLInParams(viewParams);
+                const hooked = await this.RunPreRunViewHooks(viewParams, user);
+                const entityInfo = hooked.EntityName ? this.EntityByName(hooked.EntityName) : undefined;
+                if (!entityInfo) {
+                    statuses[index] = { Success: false, ErrorMessage: `Entity ${hooked.EntityName ?? '(none)'} not found` };
+                    continue;
+                }
+                const whereSQL = await this.buildWhereClauseForCacheCheck(hooked, entityInfo, user);
+                items.push({ index, item: { params: hooked }, entityInfo, whereSQL });
+            } catch (e) {
+                statuses[index] = { Success: false, ErrorMessage: e instanceof Error ? e.message : String(e) };
+            }
+        }
+        return items;
+    }
+
+    /**
      * Smart cache validation for batch RunViews.
      * For each view request, if cacheStatus is provided, checks if the cache is current
      * by comparing MAX(__mj_UpdatedAt) and COUNT(*) with client's values.
@@ -2977,6 +3042,18 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const noCacheStatusNeedsDB: Array<{ index: number; item: RunViewWithCacheCheckParams }> = [];
 
             for (const entry of itemsWithoutCacheCheck) {
+                // A param carrying BypassCache lands here because it is ineligible for a cache status,
+                // NOT because the caller has nothing cached — and those two must not be treated alike.
+                // Serving it from the server cache is precisely what it asked not to happen: its
+                // documented contract is "the query always hits the database", and it is the only way a
+                // client can escape a server slot that a missed invalidation left stale. The write side
+                // already refuses to store such a result (runViewCacheEligible starts with
+                // !param.BypassCache); this is the matching read-side gate.
+                if (entry.item.params.BypassCache) {
+                    LogStatusEx({ message: `    🚫 [SmartCache BYPASS] "${entry.item.params.EntityName || 'unknown'}" — BypassCache requested, going to the database`, verboseOnly: true });
+                    noCacheStatusNeedsDB.push(entry);
+                    continue;
+                }
                 if (LocalCacheManager.Instance.IsInitialized) {
                     const rlsWhereClause = this.ComputeRunViewRLSWhereClause(entry.item.params, contextUser);
                     const flsFieldsKey = this.ComputeRunViewFLSFingerprintKey(entry.item.params);
@@ -3148,6 +3225,23 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /**
+     * The freshness probe for one view: a row count, plus the newest `__mj_UpdatedAt` **when the
+     * entity has that column**. Selecting it unconditionally made the probe fail outright for an
+     * entity whose view does not carry it, instead of comparing by count alone the way
+     * `BaseEngine.SweepAgainstDatabase` documents.
+     */
+    protected BuildCacheStatusSQL(entityInfo: EntityInfo, effectiveView: string, whereSQL: string): string {
+        const from = `FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, effectiveView)}${whereSQL ? ' WHERE ' + whereSQL : ''}`;
+        const count = `COUNT(*) AS ${this.QuoteIdentifier('TotalRows')}`;
+        // `Fields` absent (a partial EntityInfo) degrades to the count-only probe rather than
+        // throwing: a freshness check must not be the thing that breaks a sweep.
+        if (!entityInfo.Fields?.some(f => f.IsUpdatedAtField)) {
+            return `SELECT ${count} ${from}`;
+        }
+        return `SELECT ${count}, MAX(${this.QuoteIdentifier('__mj_UpdatedAt')}) AS ${this.QuoteIdentifier('MaxUpdatedAt')} ${from}`;
+    }
+
+    /**
      * Executes cache status checks for multiple views.
      * Default: parallel individual queries (works on all platforms).
      * SQL Server overrides to use ExecuteSQLBatch for multi-result-set efficiency.
@@ -3168,7 +3262,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 // (Materialized reads are normally kept out of the client cache by runViewCacheEligible; this
                 // matches the SQL Server override and is defense-in-depth on the PG/default path.)
                 const effectiveView = await this.resolveEffectiveBaseView(entityInfo, item.params, contextUser);
-                const statusSQL = `SELECT COUNT(*) AS ${this.QuoteIdentifier('TotalRows')}, MAX(${this.QuoteIdentifier('__mj_UpdatedAt')}) AS ${this.QuoteIdentifier('MaxUpdatedAt')} FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, effectiveView)}${whereSQL ? ' WHERE ' + whereSQL : ''}`;
+                const statusSQL = this.BuildCacheStatusSQL(entityInfo, effectiveView, whereSQL);
                 const rows = await this.ExecuteSQL<Record<string, unknown>>(statusSQL, undefined, undefined, contextUser);
                 if (rows && rows.length > 0) {
                     const row = rows[0];
@@ -6321,19 +6415,70 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     public async ResetTransactionState(): Promise<void> {
         await this.WithTransactionLock(() => this.abandonDoomedTransaction());
         await this.drainIdlePostCommitTasks();
+        // The frames are gone, so no settle will ever close this instance's batch. Drop it here or
+        // its entities count as pending forever and every cached read of them misses.
+        this._openBatchLevels = 0;
+        await LocalCacheManager.Instance.AbandonEntityEventBatch(this);
     }
 
+    /**
+     * Cache maintenance for the saves inside a transaction waits for the outermost settle: one
+     * rewrite per cached slot on commit instead of one per save, and nothing written for work that
+     * is rolled back.
+     *
+     * The batch is opened HERE, on the raw primitive, not only in
+     * `DatabaseProviderBase.BeginEntityTransaction` — 41 call sites across the repo use
+     * `BeginTransaction()` directly, including new-user creation on first login, the magic-link
+     * service, the roles/users sync resolver, `MergeRecords` and every generated cascade-delete
+     * override. Those saves each published their own cache write, and a rollback left rows in the
+     * shared cache that were never committed. `BeginEntityTransaction` still opens
+     * its own level on top; the levels are depth-counted, so the batch applies once, at the
+     * outermost settle, either way.
+     */
     public async BeginTransaction(): Promise<void> {
-        return this.WithTransactionLock(() => this.beginTransactionCore());
+        await this.WithTransactionLock(() => this.beginTransactionCore());
+        LocalCacheManager.Instance.BeginEntityEventBatch(this);
+        this._openBatchLevels++;
+    }
+
+    /**
+     * Batch levels this provider has opened and not yet closed.
+     *
+     * The open happens only after a begin SUCCEEDS, while a commit or rollback closes in a
+     * `finally` — so a rollback issued for a begin that threw would close a level it never opened.
+     * That happens for real: a nested begin whose savepoint creation fails leaves the caller's
+     * catch to roll back, and the seventeen generated cascade-delete overrides are written exactly
+     * that way. Closing an outer unit of work's batch early un-batches the rest of its saves, which
+     * then write to the shared cache one by one — the uncommitted-rows-in-the-fleet failure the
+     * batch exists to prevent.
+     */
+    private _openBatchLevels = 0;
+
+    /** Closes one batch level, but only if this provider opened one. @internal */
+    private async endBatchLevelIfOpen(succeeded: boolean): Promise<void> {
+        if (this._openBatchLevels <= 0) {
+            return;
+        }
+        this._openBatchLevels--;
+        await LocalCacheManager.Instance.EndEntityEventBatch(this, succeeded);
     }
 
     public async CommitTransaction(): Promise<void> {
         // null = not the outermost commit, so nothing drains and the subclass hook does not run.
-        const committedTasks = await this.WithTransactionLock(async (): Promise<PostCommitEntry[] | null> => {
-            const outermost = this._transactionDepth === 1;
-            const tasks = await this.commitTransactionCore();
-            return outermost ? tasks : null;
-        });
+        let committedTasks: PostCommitEntry[] | null;
+        try {
+            committedTasks = await this.WithTransactionLock(async (): Promise<PostCommitEntry[] | null> => {
+                const outermost = this._transactionDepth === 1;
+                const tasks = await this.commitTransactionCore();
+                return outermost ? tasks : null;
+            });
+        } catch (e) {
+            // The commit failed: the rows may not be in the database, so the batch settles as a
+            // failure (its slots are invalidated) rather than being left open.
+            await this.endBatchLevelIfOpen(false);
+            throw e;
+        }
+        await this.endBatchLevelIfOpen(true);
         if (committedTasks) {
             await this.runPostCommitTasks(committedTasks);
             await this.AfterPhysicalCommit();
@@ -6342,7 +6487,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     public async RollbackTransaction(): Promise<void> {
-        await this.WithTransactionLock(() => this.rollbackTransactionCore());
+        try {
+            await this.WithTransactionLock(() => this.rollbackTransactionCore());
+        } finally {
+            await this.endBatchLevelIfOpen(false);
+        }
         await this.drainIdlePostCommitTasks();
     }
 
