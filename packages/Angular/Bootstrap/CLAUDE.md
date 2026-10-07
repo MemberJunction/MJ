@@ -19,6 +19,7 @@ So one transitive edge into a server package cascades: the walk pulls it in, rec
 - `@memberjunction/aiengine` → use **`@memberjunction/ai-engine-base`** instead (browser-safe metadata: `.Config()`, `.Prompts`, `.Models`, …)
 - `@memberjunction/ai-provider-bundle` (bundles **all** LLM provider SDKs) and the individual `@memberjunction/ai-<provider>` packages (`ai-openai`, `ai-anthropic`, `ai-gemini`, `ai-vertex`, …)
 - `@memberjunction/ai-vectors-pinecone` (and other server vector-DB providers) → browser-safe: **`@memberjunction/ai-vectors-memory`**
+- `@memberjunction/ai-vectors-memory-server` (worker threads + native vector search) → browser-safe: **`@memberjunction/ai-vectors-memory`**, which runs in-process when the server package is absent
 - `@memberjunction/storage` (Box/S3/etc. file-storage drivers — Node `stream`/`fs`)
 - `@memberjunction/templates` ⚠️ **looks innocent but is server-only** — it depends on `aiengine` + `ai-provider-bundle`. This was the real culprit in the June 2026 incident: a transitive `ng-bootstrap → templates → aiengine/ai-provider-bundle` edge flooded the browser manifest with 27 server packages.
 - `@memberjunction/server`, `@memberjunction/communication-engine`, `@memberjunction/content-autotagging`, `@memberjunction/ai-agents`, `@memberjunction/ai-prompts`, and anything else that runs prompts / hits the DB / uses Node APIs.

@@ -14,7 +14,7 @@ import { LiveKitTokenService, type LiveKitServerConfig } from './livekit-token-s
 import { WsToHttpUrl } from './livekit-egress-service';
 
 /** The subset of {@link RoomServiceClient} the service drives — an injectable seam for unit testing. */
-export type RoomServiceClientLike = Pick<RoomServiceClient, 'updateParticipant'>;
+export type ParticipantUpdateClientLike = Pick<RoomServiceClient, 'updateParticipant'>;
 
 /** The outcome of changing a participant. */
 export interface ParticipantUpdateResult {
@@ -29,7 +29,7 @@ export interface ParticipantUpdateResult {
 /** Changes participants in live LiveKit rooms, on the server's authority. */
 export class LiveKitParticipantService {
   private readonly configured: boolean;
-  private readonly client: RoomServiceClientLike;
+  private readonly client: ParticipantUpdateClientLike;
 
   /**
    * @param config Explicit credentials; omitted fields fall back to environment variables (via
@@ -37,7 +37,7 @@ export class LiveKitParticipantService {
    * @param client An injectable room service client (primarily for unit testing); defaults to a real
    *   `RoomServiceClient` built from the resolved credentials.
    */
-  constructor(config?: Partial<LiveKitServerConfig>, client?: RoomServiceClientLike) {
+  constructor(config?: Partial<LiveKitServerConfig>, client?: ParticipantUpdateClientLike) {
     const token = new LiveKitTokenService(config);
     this.configured = token.IsConfigured;
     this.client =
