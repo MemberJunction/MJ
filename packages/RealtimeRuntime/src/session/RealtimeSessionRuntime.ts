@@ -1,6 +1,6 @@
 import { BehaviorSubject, Observable, Subject, Subscription } from 'rxjs';
 import { Metadata, IMetadataProvider } from '@memberjunction/core';
-import { UserInfoEngine, type MJAIAgentChannelEntity } from '@memberjunction/core-entities';
+import { UserInfoEngine, type MJAIAgentChannelEntity, type MJAIAgentChannelEntity_IChannelUIConfig } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { GraphQLDataProvider, GraphQLRealtimeSessionClient } from '@memberjunction/graphql-dataprovider';
 import { MJGlobal } from '@memberjunction/global';
@@ -218,6 +218,22 @@ function readRowSurfacePlacement(row: MJAIAgentChannelEntity): ChannelSurfacePla
     return DEFAULT_CHANNEL_SURFACE_PLACEMENT;
   }
 }
+
+/** The same, for a row read over GraphQL, whose `UIConfig` arrives as the column's JSON text. */
+function readUIConfigTextSurfacePlacement(name: string, uiConfig: string | null | undefined): ChannelSurfacePlacement {
+  if (!uiConfig) {
+    return ReadChannelSurfacePlacement(null);
+  }
+  try {
+    return ReadChannelSurfacePlacement(JSON.parse(uiConfig) as MJAIAgentChannelEntity_IChannelUIConfig);
+  } catch {
+    console.warn(`[RealtimeSession] Channel '${name}' has a UIConfig that is not valid JSON; its surface starts on its tab.`);
+    return DEFAULT_CHANNEL_SURFACE_PLACEMENT;
+  }
+}
+
+/** A registry row as the connect-only path's dynamic view returns it. */
+type ChannelRegistryViewRow = Pick<RealtimeChannelDefinitionRow, 'ID' | 'Name' | 'ClientPluginClass'> & { IsActive?: boolean; UIConfig?: string | null };
 
 /**
  * One EPHEMERAL spoken narration of delegated-run progress, emitted on
@@ -2432,7 +2448,7 @@ export class RealtimeSessionRuntime {
     }`;
     try {
       const result = (await this.gql().ExecuteGQL(query, {
-        input: { EntityName: 'MJ: AI Agent Channels', Fields: ['ID', 'Name', 'ClientPluginClass', 'IsActive'] },
+        input: { EntityName: 'MJ: AI Agent Channels', Fields: ['ID', 'Name', 'ClientPluginClass', 'IsActive', 'UIConfig'] },
       })) as { RunDynamicView?: { Success: boolean; ErrorMessage?: string; Results?: { Data: string }[] } } | null;
       const view = result?.RunDynamicView;
       if (!view?.Success) {
@@ -2440,8 +2456,14 @@ export class RealtimeSessionRuntime {
         return [];
       }
       return (view.Results ?? [])
-        .map((r) => JSON.parse(r.Data) as Partial<RealtimeChannelDefinitionRow> & Pick<RealtimeChannelDefinitionRow, 'ID' | 'Name' | 'ClientPluginClass'>)
-        .map<RealtimeChannelDefinitionRow>((row) => ({ ID: row.ID, Name: row.Name, ClientPluginClass: row.ClientPluginClass, IsActive: row.IsActive === true }));
+        .map((r) => JSON.parse(r.Data) as ChannelRegistryViewRow)
+        .map<RealtimeChannelDefinitionRow>((row) => ({
+          ID: row.ID,
+          Name: row.Name,
+          ClientPluginClass: row.ClientPluginClass,
+          IsActive: row.IsActive === true,
+          SurfacePlacement: readUIConfigTextSurfacePlacement(row.Name, row.UIConfig),
+        }));
     } catch (error) {
       console.warn('[RealtimeSession] Channel registry unavailable — starting with no channels:', error instanceof Error ? error.message : String(error));
       return [];
