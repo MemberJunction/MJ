@@ -1,6 +1,7 @@
 import {
     ClientRealtimeSessionConfig,
     DEFAULT_REALTIME_AUDIO_TRACKS,
+    JSONObject,
     RealtimeTrack,
     RealtimeTrackDescriptor,
     RealtimeTrackDirection,
@@ -10,6 +11,25 @@ import {
 } from '@memberjunction/ai';
 import { IRealtimeAudioMeter, REALTIME_AUDIO_BIN_COUNT } from '../audio/audioMeter';
 import type { MediaVideoSource } from '../media/model';
+
+/**
+ * Session-config key under which the realtime runtime hands a driver the tracks to negotiate
+ * (`RealtimeSessionRuntime.BuildClientConfig` aggregates them from the active channels). It is a
+ * CLIENT-side negotiation hint, never a provider field: a driver reads it (Gemini) or ignores it.
+ */
+export const REQUESTED_TRACKS_SESSION_KEY = 'requestedTracks';
+
+/**
+ * The session config as the PROVIDER must receive it: the server-built config minus the
+ * client-only hints the runtime adds. Drivers that send the config on the wire go through this —
+ * OpenAI's Realtime API rejects the WHOLE `session.update` on an unknown key
+ * (`unknown_parameter: 'session.requestedTracks'`), so one stray hint costs the session its
+ * instructions and every tool.
+ */
+export function ToProviderSessionConfig(sessionConfig: JSONObject): JSONObject {
+    const { [REQUESTED_TRACKS_SESSION_KEY]: _clientOnly, ...providerConfig } = sessionConfig;
+    return providerConfig;
+}
 
 /**
  * A point-in-time snapshot of the session's audible activity, sampled by the host
@@ -480,27 +500,73 @@ export abstract class BaseRealtimeClient {
      */
     public abstract Connect(config: ClientRealtimeSessionConfig, micStream: MediaStream, cameraStream?: MediaStream): Promise<void>;
 
-    /**
-     * Returns the AGENT's remote-audio {@link MediaStream} when this driver owns a tappable
-     * remote-audio plane (e.g. a WebRTC peer-connection driver routes the model's audio track
-     * here), or `null` otherwise. Hosts use it to MIX the agent's voice into a browser-side
-     * recording alongside the mic; a `null` return (the default, and what every non-WebRTC
-     * driver gives) degrades gracefully to mic-only capture.
-     *
-     * **Optional capability:** the method itself is optional — call sites must use
-     * `client.GetRemoteMediaStream?.() ?? null`. Drivers that can't expose a remote stream
-     * simply don't implement it (or return `null`).
-     */
-    public GetRemoteMediaStream?(): MediaStream | null;
+    // ── Remote (agent) audio slot ──────────────────────────────────────────────
+    // Lives here, not in each driver, so every driver that owns a tappable agent-audio plane
+    // (a WebRTC remote track, or a PCM playout engine's output node) shares ONE lifecycle:
+    // current stream + late-subscriber replay + isolated fan-out + reset on Disconnect.
+
+    /** The agent's current remote-audio stream, or `null` until a driver publishes one. */
+    private remoteMediaStream: MediaStream | null = null;
+    /** Host handlers notified when the agent's stream lands (or immediately, if already present). */
+    private remoteMediaStreamHandlers: Array<(stream: MediaStream) => void> = [];
 
     /**
-     * **Optional capability:** registers a handler invoked when the agent's remote-audio stream
-     * becomes available — immediately if it has already landed, otherwise when the WebRTC track
-     * arrives (typically AFTER {@link Connect} resolves). Lets a host attach the agent voice to a
-     * recording that began before the track landed. Call as `client.OnRemoteMediaStream?.(cb)`;
-     * drivers without a remote stream simply don't implement it.
+     * Returns the AGENT's remote-audio {@link MediaStream} when this driver owns a tappable
+     * agent-audio plane (a WebRTC driver's remote track, or a PCM driver's playout output),
+     * or `null` otherwise. Hosts use it to MIX the agent's voice into a browser-side recording
+     * alongside the mic; `null` (drivers with no tappable plane, or before the stream lands)
+     * degrades gracefully to mic-only capture. Hosts may still call it as `client.GetRemoteMediaStream?.()`.
+     * Pure read — never mutates.
      */
-    public OnRemoteMediaStream?(handler: (stream: MediaStream) => void): void;
+    public GetRemoteMediaStream(): MediaStream | null {
+        return this.remoteMediaStream;
+    }
+
+    /**
+     * Registers a handler invoked when the agent's remote-audio stream becomes available —
+     * IMMEDIATELY (synchronously) if it has already landed, otherwise when the driver publishes
+     * it (a WebRTC track typically lands AFTER {@link Connect} resolves). Lets a host attach the
+     * agent voice to a recording that began before the stream landed. Handler errors are
+     * isolated (logged) so a host bug never disturbs the call. Handlers are session-scoped:
+     * {@link clearRemoteMediaStream} (called from `Disconnect`) drops them.
+     */
+    public OnRemoteMediaStream(handler: (stream: MediaStream) => void): void {
+        this.remoteMediaStreamHandlers.push(handler);
+        if (this.remoteMediaStream) {
+            this.invokeRemoteMediaStreamHandler(handler, this.remoteMediaStream);
+        }
+    }
+
+    /**
+     * Driver hook: records the agent's remote-audio stream and fans it out to every registered
+     * handler. Passing `null` (a driver with no tappable plane) just records `null` and
+     * notifies nobody.
+     */
+    protected publishRemoteMediaStream(stream: MediaStream | null): void {
+        this.remoteMediaStream = stream;
+        if (!stream) return;
+        for (const handler of this.remoteMediaStreamHandlers) {
+            this.invokeRemoteMediaStreamHandler(handler, stream);
+        }
+    }
+
+    /**
+     * Driver hook for `Disconnect`: drops the stream AND the handlers. Handlers must not survive
+     * into a later `Connect` on a reused instance, or a stale host callback would receive the
+     * next session's stream.
+     */
+    protected clearRemoteMediaStream(): void {
+        this.remoteMediaStream = null;
+        this.remoteMediaStreamHandlers = [];
+    }
+
+    private invokeRemoteMediaStreamHandler(handler: (stream: MediaStream) => void, stream: MediaStream): void {
+        try {
+            handler(stream);
+        } catch (error) {
+            console.warn(`[${this.constructor.name}] remote-stream handler threw:`, error);
+        }
+    }
 
     /**
      * Injects typed text into the live session as a USER turn and asks the model to respond.

@@ -802,6 +802,54 @@ describe('GeminiRealtimeClient', () => {
             ]);
         });
 
+        it('should still emit the fatal error on an abnormal close when there is no global process (browser)', async () => {
+            const { states, errors } = collect(client);
+            await connect(client);
+            // A browser has no `process`. The close handler's diagnostics used to read process.env
+            // first and throw, so the fatal error never surfaced and the call sat in 'listening'.
+            const nodeProcess = globalThis.process;
+            Reflect.deleteProperty(globalThis, 'process');
+            try {
+                expect(typeof globalThis.process).toBe('undefined');
+                client.LastConnectArgs?.OnClose(new CloseEvent('close', { code: 1011, reason: 'Internal error' }));
+            } finally {
+                globalThis.process = nodeProcess;
+            }
+            expect(errors).toEqual([{ Message: 'Gemini Live connection closed (1011): Internal error', Fatal: true }]);
+            expect(states[states.length - 1]).toBe('error');
+        });
+
+        it('should keep a resumed call live when the session it replaced closes cleanly', async () => {
+            /** Opens a DISTINCT session per connect, as the real SDK does, and keeps each one's args. */
+            class ResumingClient extends TestGeminiClient {
+                public Sessions: FakeGeminiSession[] = [];
+                public ArgsPerSession: GeminiClientConnectArgs[] = [];
+                protected override async connectLiveSession(args: GeminiClientConnectArgs): Promise<GeminiLiveClientSession> {
+                    this.LastConnectArgs = args;
+                    this.ArgsPerSession.push(args);
+                    const session = new FakeGeminiSession();
+                    this.Sessions.push(session);
+                    return session;
+                }
+            }
+            const resuming = new ResumingClient();
+            const { states, errors } = collect(resuming);
+            await connect(resuming);
+            resuming.Emit({ sessionResumptionUpdate: { newHandle: 'handle-1' } } as LiveServerMessage);
+            resuming.Emit({ goAway: {} } as LiveServerMessage);
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            expect(resuming.Sessions).toHaveLength(2);
+            expect(resuming.Sessions[0].Closed).toBe(true);
+
+            // A browser fires the old socket's close AFTER resumeSession swapped in the new session.
+            resuming.ArgsPerSession[0].OnClose(new CloseEvent('close', { code: 1000 }));
+            expect(errors).toEqual([]);
+            expect(states[states.length - 1]).toBe('listening');
+
+            resuming.OnPcmChunk?.('UENNMTY=');
+            expect(resuming.Sessions[1].RealtimeInputs).toHaveLength(1);
+        });
+
         it('should send mic chunks in both listening and speaking states (full duplex / barge-in)', async () => {
             const { states } = collect(client);
             await connect(client);
@@ -842,3 +890,69 @@ DescribePcmMicrophoneReplacement(
     },
     () => new TestGeminiClient()
 );
+
+describe('GeminiRealtimeClient remote media stream (issue #5153)', () => {
+    /** Playback fake that exposes an output stream, like the production Web Audio engine. */
+    class StreamPlayback extends FakePlayback {
+        constructor(public readonly Stream: MediaStream) {
+            super();
+        }
+        public GetOutputStream(): MediaStream | null {
+            return this.Stream;
+        }
+    }
+
+    class StreamClient extends TestGeminiClient {
+        public readonly AgentStream: MediaStream = new FakeMediaStream([]);
+        constructor() {
+            super();
+            this.Playback = new StreamPlayback(this.AgentStream);
+        }
+    }
+
+    it('is null before Connect and the playback stream after Connect', async () => {
+        const client = new StreamClient();
+        expect(client.GetRemoteMediaStream()).toBeNull();
+        await connect(client);
+        expect(client.GetRemoteMediaStream()).toBe(client.AgentStream);
+    });
+
+    it('fires a handler registered before Connect exactly once, on Connect', async () => {
+        const client = new StreamClient();
+        const received: MediaStream[] = [];
+        client.OnRemoteMediaStream((s) => received.push(s));
+        expect(received).toHaveLength(0);
+        await connect(client);
+        expect(received).toEqual([client.AgentStream]);
+    });
+
+    it('fires a handler registered after Connect immediately, once', async () => {
+        const client = new StreamClient();
+        await connect(client);
+        const received: MediaStream[] = [];
+        client.OnRemoteMediaStream((s) => received.push(s));
+        expect(received).toEqual([client.AgentStream]);
+    });
+
+    it('clears the stream on Disconnect and does not re-fire stale handlers on reconnect', async () => {
+        const client = new StreamClient();
+        const received: MediaStream[] = [];
+        client.OnRemoteMediaStream((s) => received.push(s));
+        await connect(client);
+        await client.Disconnect();
+        expect(client.GetRemoteMediaStream()).toBeNull();
+
+        await connect(client);
+        expect(client.GetRemoteMediaStream()).toBe(client.AgentStream);
+        expect(received).toHaveLength(1);
+    });
+
+    it('stays null and never fires when the playback has no GetOutputStream', async () => {
+        const client = new TestGeminiClient();
+        const received: MediaStream[] = [];
+        client.OnRemoteMediaStream((s) => received.push(s));
+        await connect(client);
+        expect(client.GetRemoteMediaStream()).toBeNull();
+        expect(received).toHaveLength(0);
+    });
+});

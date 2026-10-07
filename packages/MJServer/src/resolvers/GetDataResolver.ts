@@ -1,4 +1,5 @@
 import { Arg, Ctx, Field, InputType, ObjectType, Query } from 'type-graphql';
+import { SQLExpressionValidator } from '@memberjunction/global';
 import { AppContext } from '../types.js';
 import { LogError, LogStatus, LogStatusEx, Metadata } from '@memberjunction/core';
 import { QueryCompositionEngine } from '@memberjunction/generic-database-provider';
@@ -152,6 +153,15 @@ export class GetDataResolver {
                         if (compositionEngine.HasCompositionTokens(query)) {
                             const compositionResult = compositionEngine.ResolveComposition(query, platform, systemUser);
                             resolvedSQL = compositionResult.ResolvedSQL;
+                        }
+
+                        // Defense-in-depth: even system-token holders get SELECT-only SQL here.
+                        // The read-only pool is the primary control, but if it is ever
+                        // misconfigured to a read-write login this validator still refuses DML/DDL
+                        // (mirrors AdhocQueryResolver).
+                        const validation = SQLExpressionValidator.Instance.validateFullQuery(resolvedSQL);
+                        if (!validation.valid) {
+                            return { result: null, error: validation.error || 'SQL validation failed' };
                         }
 
                         const request = new sql.Request(readOnlyDataSource);

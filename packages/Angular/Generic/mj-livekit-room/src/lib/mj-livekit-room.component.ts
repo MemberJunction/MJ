@@ -1,9 +1,9 @@
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, Input, OnInit, Output, ViewChild, inject } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, DestroyRef, EventEmitter, Input, OnInit, Output, ViewChild, inject } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UUIDsEqual } from '@memberjunction/global';
 import { RunView } from '@memberjunction/core';
-import { GraphQLDataProvider, GraphQLLiveKitClient, RealtimeModelVoices, RealtimeVoiceOption } from '@memberjunction/graphql-dataprovider';
-import { LIVEKIT_ROOM_CONTROLLER_FACTORY, LiveKitRoomComponent, type LiveKitRoomLayout } from '@memberjunction/ng-livekit-room';
+import { GraphQLDataProvider, GraphQLLiveKitClient, LiveKitRoomTurnState, RealtimeModelVoices, RealtimeVoiceOption } from '@memberjunction/graphql-dataprovider';
+import { LIVEKIT_ROOM_CONTROLLER_FACTORY, LiveKitRoomComponent, LiveKitTurnStateComponent, SummarizeFloor, type LiveKitRoomLayout } from '@memberjunction/ng-livekit-room';
 import { LOCAL_MEDIA_CONTROLLER_FACTORY } from '@memberjunction/ng-realtime-media';
 import { MJStorageMediaPlayerComponent } from '@memberjunction/ng-media-player';
 import { UserInfoEngine } from '@memberjunction/core-entities';
@@ -18,6 +18,19 @@ import {
   type LiveKitRoomError,
   type LiveKitRoomState,
 } from '@memberjunction/livekit-room-core';
+import { TURN_POLL_DEFAULT_INTERVAL_MS, TurnStatePoller } from './turn-state-poller';
+import {
+  BuildRosterTurnBadge,
+  ParseTurnAddressing,
+  ParseTurnMode,
+  ShouldPollTurnState,
+  TURN_ADDRESSING_OPTIONS,
+  TURN_MODE_OPTIONS,
+  type RosterTurnBadge,
+  type TurnAddressingChoice,
+  type TurnModeChoice,
+} from './turn-taking-options';
+import type { RoomOptions } from 'livekit-client';
 
 /**
  * The `MJ: User Settings` keys under which the meeting room's layout is saved, per user and for every room: where the
@@ -79,7 +92,7 @@ export interface AgentInRoom {
   selector: 'mj-livekit-agent-room',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [LiveKitRoomComponent, MJStorageMediaPlayerComponent],
+  imports: [LiveKitRoomComponent, LiveKitTurnStateComponent, MJStorageMediaPlayerComponent],
   providers: [{ provide: LIVEKIT_ROOM_CONTROLLER_FACTORY, useFactory: roomControllerFactory }],
   template: `
     @if (recordingFileId && showRecordingPanel) {
@@ -135,6 +148,7 @@ export interface AgentInRoom {
         [IsRecording]="isRecording"
         [E2EEPassphrase]="E2EEPassphrase"
         [E2EEWorker]="E2EEWorker"
+        [RoomOptions]="RoomOptions"
         [AgentAvatarUrl]="AgentAvatarUrl"
         [CanEndForAll]="EnableEndForAll && !!resolvedRoomName"
         [TileMoves]="TileMoves"
@@ -159,6 +173,11 @@ export interface AgentInRoom {
               @for (a of agentsInRoom; track a.SessionBridgeID) {
                 <div class="mj-lk-agents__row">
                   <span class="mj-lk-agents__name"><i class="fa-solid fa-robot"></i> {{ a.Name }}</span>
+                  @if (RosterBadges.get(a.SessionBridgeID.toLowerCase()); as badge) {
+                    <span class="mj-lk-agents__turn" [class.mj-lk-agents__turn--floor]="badge.HasFloor" [title]="badge.Label + (badge.HasFloor ? ' - has the floor' : '')">
+                      <i class="fa-solid" [class.fa-microphone-lines]="badge.HasFloor" [class.fa-microphone-lines-slash]="!badge.HasFloor" aria-hidden="true"></i>
+                    </span>
+                  }
                   <button type="button" class="mj-lk-agents__remove" title="Remove agent"
                     [disabled]="a.Removing" (click)="RemoveAgent(a)">
                     <i class="fa-solid" [class.fa-xmark]="!a.Removing" [class.fa-spinner]="a.Removing" [class.fa-spin]="a.Removing"></i>
@@ -195,6 +214,22 @@ export interface AgentInRoom {
                     }
                   </div>
                 }
+                @if (EnableTurnTaking) {
+                  <div class="mj-lk-agents__overrides">
+                    <select class="mj-input mj-lk-agents__select mj-lk-agents__select--sm" (change)="OnAddTurnModeChange($event)" title="Turn-taking mode">
+                      <option value="">Default turn mode</option>
+                      @for (o of TurnModeOptions; track o.Value) {
+                        <option [value]="o.Value" [title]="o.Hint" [selected]="o.Value === AddTurnMode">{{ o.Label }}</option>
+                      }
+                    </select>
+                    <select class="mj-input mj-lk-agents__select mj-lk-agents__select--sm" (change)="OnAddTurnAddressingChange($event)" title="How the agent decides it was addressed">
+                      <option value="">Default addressing</option>
+                      @for (o of TurnAddressingOptions; track o.Value) {
+                        <option [value]="o.Value" [title]="o.Hint" [selected]="o.Value === AddTurnAddressing">{{ o.Label }}</option>
+                      }
+                    </select>
+                  </div>
+                }
               }
               @if (addError) {
                 <div class="mj-lk-agents__error">{{ addError }}</div>
@@ -217,6 +252,29 @@ export interface AgentInRoom {
               </button>
             }
           </div>
+        </div>
+      }
+
+      @if (EnableTurnTaking && resolvedRoomName) {
+        <div class="mj-lk-turn">
+          @if (ShowTurnPanel) {
+            <div class="mj-lk-turn__panel">
+              <div class="mj-lk-agents__head mj-lk-turn__head">
+                <span>Turn-taking</span>
+                <button type="button" class="mj-lk-recording__close" title="Close" (click)="ToggleTurnPanel()">
+                  <i class="fa-solid fa-xmark"></i>
+                </button>
+              </div>
+              <mj-livekit-turn-state [State]="TurnState"></mj-livekit-turn-state>
+              @if (TurnError) {
+                <div class="mj-lk-agents__error">{{ TurnError }}</div>
+              }
+            </div>
+          }
+          <button type="button" class="mj-lk-agents__toggle" [class.mj-lk-turn__pill--active]="ShowTurnPanel"
+            title="Who has the floor, hand-offs, backchannels and the agent turn cap" (click)="ToggleTurnPanel()">
+            <i class="fa-solid fa-people-arrows"></i> {{ TurnPillLabel }}
+          </button>
         </div>
       }
       </div>
@@ -375,6 +433,41 @@ export interface AgentInRoom {
         font-size: 0.75rem;
         color: var(--mj-status-error-text, var(--mj-status-error));
       }
+      .mj-lk-agents__turn {
+        flex: none;
+        color: var(--mj-text-muted);
+      }
+      .mj-lk-agents__turn--floor {
+        color: var(--mj-brand-primary);
+      }
+      .mj-lk-turn {
+        position: absolute;
+        right: 16px;
+        bottom: 84px;
+        z-index: 40;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 8px;
+      }
+      .mj-lk-turn__panel {
+        width: 300px;
+        max-height: 60vh;
+        overflow-y: auto;
+        padding: 10px;
+        border: 1px solid var(--mj-border-default);
+        border-radius: 10px;
+        background: var(--mj-bg-surface-elevated, var(--mj-bg-surface));
+        box-shadow: var(--mj-shadow-md, 0 6px 20px rgba(0, 0, 0, 0.25));
+      }
+      .mj-lk-turn__head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .mj-lk-turn__pill--active {
+        border-color: var(--mj-brand-primary);
+      }
       .mj-lk-recording {
         margin-bottom: 12px;
         padding: 12px;
@@ -438,7 +531,16 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
   /** The display name the local user joins as. Defaults to the authenticated user server-side. */
   @Input() public DisplayName: string | null = null;
   /** Turn-taking mode for the agent. */
-  @Input() public TurnMode: 'Passive' | 'Active' | 'Hybrid' | null = null;
+  @Input() public TurnMode: TurnModeChoice | null = null;
+  /**
+   * How the agent decides it was addressed: `Auto` (the default: the model's own judgement when it can give it,
+   * name matching otherwise), `ModelSide`, or `Regex`. Applies to the INITIAL agent; agents added in-room pick their own.
+   */
+  @Input() public TurnAddressing: TurnAddressingChoice | null = null;
+  /** Show the turn-taking panel (floor holder, hand-offs, backchannels, loop cap) and per-agent mode pickers. */
+  @Input() public EnableTurnTaking = true;
+  /** How often the turn-taking panel refreshes, in ms (clamped to a sensible minimum). */
+  @Input() public TurnPollIntervalMs = TURN_POLL_DEFAULT_INTERVAL_MS;
   /** Resolve the connection automatically on init. */
   @Input() public AutoStart = true;
 
@@ -460,6 +562,11 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
   @Input() public RealtimeModelID: string | null = null;
   /** Per-session VOICE override for the INITIAL agent (from the host's pre-join picker). */
   @Input() public RealtimeVoice: string | null = null;
+  /**
+   * Start the initial agent able to bring a person, a phone number or another agent into this same room (a "transfer to a human"
+   * that the visitor never leaves the room for). Honoured only when the server has handoff configured; otherwise ignored.
+   */
+  @Input() public EnableHandoff = false;
   /**
    * Whether the dev model/voice pickers are shown in the in-room "Add an agent" control. The HOST
    * computes this (the `Realtime: Advanced Session Controls` authorization) and passes it down — this
@@ -572,6 +679,29 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
     this.EndingMeeting = value;
   }
 
+  // ── Turn-taking ────────────────────────────────────────────────────────────────────
+  /** The turn-mode choices for the add-agent picker. */
+  public readonly TurnModeOptions = TURN_MODE_OPTIONS;
+  /** The addressing choices for the add-agent picker. */
+  public readonly TurnAddressingOptions = TURN_ADDRESSING_OPTIONS;
+  /** The turn mode chosen in the "Add an agent" picker (null = the room's default). */
+  public AddTurnMode: TurnModeChoice | null = null;
+  /** The addressing mode chosen in the "Add an agent" picker (null = Auto). */
+  public AddTurnAddressing: TurnAddressingChoice | null = null;
+  /** Whether the turn-taking panel is open. */
+  public ShowTurnPanel = false;
+  /** The room's latest turn-taking state (`null` until the first poll of a room with agents answers). */
+  public TurnState: LiveKitRoomTurnState | null = null;
+  /** The latest turn-taking poll error, shown in the panel. */
+  public TurnError: string | null = null;
+  /** The label on the turn-taking pill; names the floor holder when there is one. */
+  public TurnPillLabel = 'Turns';
+  /** Each seated agent's turn-taking badge, keyed by lowercase bridge-session id. */
+  public RosterBadges = new Map<string, RosterTurnBadge>();
+
+  private readonly destroyRef = inject(DestroyRef);
+  private turnPoller: TurnStatePoller | null = null;
+
   /** The inner Generic room — used to trigger the local disconnect when ending/leaving the meeting. */
   @ViewChild(LiveKitRoomComponent) private roomComponent?: LiveKitRoomComponent;
 
@@ -667,6 +797,8 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
   @Input() public E2EEPassphrase: string | null = null;
   /** @see LiveKitRoomComponent.E2EEWorker */
   @Input() public E2EEWorker: Worker | null = null;
+  /** Advanced livekit-client room options merged into the constructed Room (overrides speech defaults). */
+  @Input() public RoomOptions?: RoomOptions;
 
   // ── Outputs ────────────────────────────────────────────────────────────────────
   /** Emitted once the agent room session is started (agent mode). */
@@ -835,6 +967,7 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
   public ngOnInit(): void {
     this.TileMoves = this.layoutPrefs.LoadMoves();
     this.PipRects = this.layoutPrefs.LoadPipRects();
+    this.destroyRef.onDestroy(() => this.turnPoller?.Dispose());
     if (this.AutoStart) {
       void this.Start();
     }
@@ -915,6 +1048,8 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
       RealtimeVoice: this.RealtimeVoice ?? undefined,
       RoomName: this.RoomName ?? undefined,
       TurnMode: this.TurnMode ?? undefined,
+      EnableHandoff: this.EnableHandoff || undefined,
+      TurnAddressing: this.TurnAddressing ?? undefined,
     });
     if (!result.Success) {
       this.fail(result.ErrorMessage ?? 'Failed to start the agent session.');
@@ -930,6 +1065,7 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
       { SessionBridgeID: result.SessionBridgeID, TargetAgentID: this.TargetAgentID, Name: this.AgentName ?? 'Agent' },
     ];
     this.SessionStarted.emit({ SessionBridgeID: result.SessionBridgeID, RoomName: result.RoomName });
+    this.syncTurnPolling();
   }
 
   /** Picker selection handler for the in-room "Add an agent" control (native select; no FormsModule dep). */
@@ -964,7 +1100,8 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
         RealtimeModelID: this.AddModelId ?? undefined,
         RealtimeVoice: this.AddVoice ?? undefined,
         RoomName: this.ResolvedRoomName,
-        TurnMode: this.TurnMode ?? undefined,
+        TurnMode: this.AddTurnMode ?? this.TurnMode ?? undefined,
+        TurnAddressing: this.AddTurnAddressing ?? this.TurnAddressing ?? undefined,
       });
       if (!result.Success) {
         this.AddError = result.ErrorMessage ?? 'Failed to add the agent.';
@@ -977,6 +1114,9 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
       this.AddTargetId = null;
       this.AddModelId = null;
       this.AddVoice = null;
+      this.AddTurnMode = null;
+      this.AddTurnAddressing = null;
+      this.syncTurnPolling();
     } catch (err) {
       this.AddError = err instanceof Error ? err.message : String(err);
     } finally {
@@ -997,6 +1137,7 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
       const ok = await client.StopAgentRoomSession(agent.SessionBridgeID);
       if (ok) {
         this.AgentsInRoom = this.AgentsInRoom.filter((a) => a.SessionBridgeID !== agent.SessionBridgeID);
+        this.syncTurnPolling();
       } else {
         agent.Removing = false;
       }
@@ -1027,6 +1168,7 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
         await client.EndRoom(this.ResolvedRoomName);
       }
       this.AgentsInRoom = [];
+      this.syncTurnPolling();
     } catch {
       /* best-effort — fall through and still disconnect the local user */
     } finally {
@@ -1093,6 +1235,65 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
     this.ServerUrl = result.ServerUrl;
     this.Token = result.Token;
     this.ResolvedRoomName = this.RoomName;
+    this.syncTurnPolling();
+  }
+
+  /** Records the add-agent turn-mode choice. */
+  public OnAddTurnModeChange(event: Event): void {
+    this.AddTurnMode = ParseTurnMode((event.target as HTMLSelectElement).value);
+  }
+
+  /** Records the add-agent addressing choice. */
+  public OnAddTurnAddressingChange(event: Event): void {
+    this.AddTurnAddressing = ParseTurnAddressing((event.target as HTMLSelectElement).value);
+  }
+
+  /** Opens or closes the turn-taking panel, starting or stopping the live refresh to match. */
+  public ToggleTurnPanel(): void {
+    this.ShowTurnPanel = !this.ShowTurnPanel;
+    this.syncTurnPolling();
+    this.cdr.markForCheck();
+  }
+
+  /** Starts or stops polling the room's turn-taking state to match what is on screen and who is seated. */
+  private syncTurnPolling(): void {
+    const room = this.ResolvedRoomName;
+    if (!room || !ShouldPollTurnState(this.EnableTurnTaking, room, this.AgentsInRoom.length, this.ShowTurnPanel)) {
+      this.turnPoller?.Stop();
+      return;
+    }
+    this.ensureTurnPoller().Start(room);
+  }
+
+  private ensureTurnPoller(): TurnStatePoller {
+    if (!this.turnPoller) {
+      const client = new GraphQLLiveKitClient(this.ProviderToUse as unknown as GraphQLDataProvider);
+      this.turnPoller = new TurnStatePoller((room) => client.GetRoomTurnState(room), this.TurnPollIntervalMs);
+      this.turnPoller.State$.subscribe((state) => this.onTurnState(state));
+      this.turnPoller.Error$.subscribe((error) => {
+        this.TurnError = error;
+        this.cdr.markForCheck();
+      });
+    }
+    return this.turnPoller;
+  }
+
+  private onTurnState(state: LiveKitRoomTurnState | null): void {
+    this.TurnState = state;
+    this.TurnPillLabel = state && state.Agents.length > 0 ? SummarizeFloor(state).Label : 'Turns';
+    this.RosterBadges = this.buildRosterBadges(state);
+    this.cdr.markForCheck();
+  }
+
+  private buildRosterBadges(state: LiveKitRoomTurnState | null): Map<string, RosterTurnBadge> {
+    const badges = new Map<string, RosterTurnBadge>();
+    for (const agent of this.AgentsInRoom) {
+      const badge = BuildRosterTurnBadge(state, agent.SessionBridgeID);
+      if (badge) {
+        badges.set(agent.SessionBridgeID.toLowerCase(), badge);
+      }
+    }
+    return badges;
   }
 
   /** Toggles room recording via the RealtimeBridge GraphQL surface (server-authorized egress). */

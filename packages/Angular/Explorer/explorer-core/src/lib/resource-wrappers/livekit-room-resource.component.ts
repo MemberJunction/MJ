@@ -6,7 +6,15 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { RunView } from '@memberjunction/core';
 import { GraphQLLiveKitClient, GraphQLDataProvider, RealtimeModelVoices, RealtimeVoiceOption } from '@memberjunction/graphql-dataprovider';
 import { UserHoldsAuthorization, REALTIME_ADVANCED_SESSION_CONTROLS } from '@memberjunction/ng-conversations';
-import type { MJLiveKitConnectionMode } from '@memberjunction/ng-mj-livekit-room';
+import {
+  ParseTurnAddressing,
+  ParseTurnMode,
+  TURN_ADDRESSING_OPTIONS,
+  TURN_MODE_OPTIONS,
+  type MJLiveKitConnectionMode,
+  type TurnAddressingChoice,
+  type TurnModeChoice,
+} from '@memberjunction/ng-mj-livekit-room';
 
 /** A selectable target agent for the pre-join picker. */
 interface TargetAgentChoice {
@@ -52,6 +60,8 @@ interface InviteeChoice {
           [RealtimeVoice]="selectedVoice"
           [CanPickModelVoice]="canPickModelVoice"
           [AvailableModels]="realtimeModels"
+          [TurnMode]="SelectedTurnMode"
+          [TurnAddressing]="SelectedTurnAddressing"
           [Provider]="ProviderToUse"
           [ShowAgentState]="true"
           [ShowWhiteboard]="true"
@@ -100,6 +110,20 @@ interface InviteeChoice {
                 </select>
               }
             }
+            <label class="mj-lk-prejoin__label" for="mj-lk-turn-mode">Turn-taking</label>
+            <select id="mj-lk-turn-mode" class="mj-input mj-lk-prejoin__select" (change)="OnTurnModeChange($event)">
+              <option value="">Default turn mode</option>
+              @for (o of TurnModeOptions; track o.Value) {
+                <option [value]="o.Value" [title]="o.Hint" [selected]="o.Value === SelectedTurnMode">{{ o.Label }}</option>
+              }
+            </select>
+            <select id="mj-lk-turn-addressing" class="mj-input mj-lk-prejoin__select" aria-label="How the agent decides it was addressed"
+              (change)="OnTurnAddressingChange($event)">
+              <option value="">Default addressing</option>
+              @for (o of TurnAddressingOptions; track o.Value) {
+                <option [value]="o.Value" [title]="o.Hint" [selected]="o.Value === SelectedTurnAddressing">{{ o.Label }}</option>
+              }
+            </select>
             <button type="button" class="mj-lk-prejoin__start" [disabled]="!selectedTargetId" (click)="startCall()">
               <i class="fa-solid fa-phone"></i> Start call
             </button>
@@ -864,6 +888,26 @@ export class LiveKitRoomResource extends BaseResourceComponent implements OnInit
   /** @deprecated Use {@link OnVoiceChange}. */
   public onVoiceChange(event: Event): void {
     return this.OnVoiceChange(event);
+  }
+
+  // ── Turn-taking choices for the FIRST agent (agents added in-room pick their own) ─────────────────────
+  /** The turn-mode choices. */
+  public readonly TurnModeOptions = TURN_MODE_OPTIONS;
+  /** The addressing choices. */
+  public readonly TurnAddressingOptions = TURN_ADDRESSING_OPTIONS;
+  /** The turn mode chosen for the first agent (null = the room's default). */
+  public SelectedTurnMode: TurnModeChoice | null = null;
+  /** The addressing mode chosen for the first agent (null = Auto). */
+  public SelectedTurnAddressing: TurnAddressingChoice | null = null;
+
+  /** Records the pre-join turn-mode choice. */
+  public OnTurnModeChange(event: Event): void {
+    this.SelectedTurnMode = ParseTurnMode((event.target as HTMLSelectElement).value);
+  }
+
+  /** Records the pre-join addressing choice. */
+  public OnTurnAddressingChange(event: Event): void {
+    this.SelectedTurnAddressing = ParseTurnAddressing((event.target as HTMLSelectElement).value);
   }
 
   /** Exposed for template use — platform-safe UUID equality (SQL upper vs PG lower). */
