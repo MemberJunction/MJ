@@ -335,6 +335,53 @@ describe('session lifecycle, driven end to end with fakes', () => {
         expect(runtime.LastStartError).toBeNull();
         await runtime.EndRealtimeSession();
     });
+
+    describe('recording mixes the agent stream (#5153)', () => {
+        const agentStream = { getAudioTracks: () => [{}], getTracks: () => [] } as unknown as MediaStream;
+
+        /** A PCM-playback driver: publishes its playout output during Connect, as Gemini/ElevenLabs/xAI do. */
+        @RegisterClass(BaseRealtimeClient, 'fake-pcm-provider')
+        class FakePcmClient extends FakeRealtimeClient {
+            public override async Connect(): Promise<void> {
+                this.publishRemoteMediaStream(agentStream);
+            }
+        }
+
+        /** A WebRTC driver: the agent track lands after Connect resolves, as OpenAI's does. */
+        @RegisterClass(BaseRealtimeClient, 'fake-webrtc-provider')
+        class FakeWebRtcClient extends FakeRealtimeClient {
+            public static Last: FakeWebRtcClient | null = null;
+            public override async Connect(): Promise<void> {
+                FakeWebRtcClient.Last = this;
+            }
+            public LandTrack(stream: MediaStream): void {
+                this.publishRemoteMediaStream(stream);
+            }
+        }
+
+        it('hands a stream published at Connect to the recorder at Start', async () => {
+            expect(FakePcmClient).toBeDefined();
+            const host = new FakeMediaHost();
+            const { runtime } = build(host);
+            await runtime.StartRealtimeSessionFromResult(mintedSession('fake-pcm-provider'), { recordingConsent: true });
+
+            expect(host.recorder?.Start).toHaveBeenCalledTimes(1);
+            expect(host.recorder?.Start.mock.calls[0][1]).toBe(agentStream);
+            await runtime.EndRealtimeSession();
+        });
+
+        it('attaches a stream that lands after Connect to the recorder already running', async () => {
+            const host = new FakeMediaHost();
+            const { runtime } = build(host);
+            await runtime.StartRealtimeSessionFromResult(mintedSession('fake-webrtc-provider'), { recordingConsent: true });
+            expect(host.recorder?.Start.mock.calls[0][1]).toBeNull();
+
+            FakeWebRtcClient.Last?.LandTrack(agentStream);
+
+            expect(host.recorder?.AttachRemoteStream).toHaveBeenCalledWith(agentStream);
+            await runtime.EndRealtimeSession();
+        });
+    });
 });
 
 describe('channel registry on a connect-only provider (#4887)', () => {
