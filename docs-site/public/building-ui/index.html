@@ -1,0 +1,892 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="How to build UI on MemberJunction: the layers, the decision ladder, and why a framework matters more when code is free.">
+<meta property="og:title" content="Building UI on MemberJunction">
+<meta property="og:image" content="images/elevator.jpg">
+<link rel="icon" href="../../favicon.svg" type="image/svg+xml">
+<title>Building UI on MemberJunction</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
+<style>
+/* Layout: a building cross-section. A sticky floor-indicator rail on the left like an elevator panel,
+   a ~68ch reading column, and figures, tables and the floor stack that break wider. */
+:root {
+  --paper: #f5f7fa;
+  --surface: #ffffff;
+  --ink: #15213a;
+  --muted: #56627a;
+  --rule: #dbe0e8;
+  --teal: #2a857f;
+  --amber: #c97a1c;
+  --chip: #e9eef5;
+  --panel: #15213a;
+  --panel-ink: #e8edf5;
+  --panel-muted: #a8b4c8;
+  --panel-rule: #2c3a57;
+  --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Source Serif 4", "Iowan Old Style", Georgia, serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --measure: 42rem;
+  --wide: 60rem;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0d1320; --surface: #141c2c; --ink: #e5eaf3; --muted: #9ba7bc; --rule: #26314a;
+    --teal: #5ec4bc; --amber: #f0a64c; --chip: #1c2638;
+    --panel: #060a12; --panel-ink: #e5eaf3; --panel-muted: #94a1b8; --panel-rule: #1f2a40;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0d1320; --surface: #141c2c; --ink: #e5eaf3; --muted: #9ba7bc; --rule: #26314a;
+  --teal: #5ec4bc; --amber: #f0a64c; --chip: #1c2638;
+  --panel: #060a12; --panel-ink: #e5eaf3; --panel-muted: #94a1b8; --panel-rule: #1f2a40;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body {
+  margin: 0; background: var(--paper); color: var(--ink);
+  font-family: var(--font-body); font-size: 1.125rem; line-height: 1.65;
+  font-optical-sizing: auto; -webkit-font-smoothing: antialiased;
+}
+a { color: inherit; text-decoration-color: color-mix(in oklab, var(--teal) 60%, transparent); text-underline-offset: 0.18em; }
+a:hover { color: var(--teal); }
+:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; border-radius: 3px; }
+
+.page { padding-inline: clamp(16px, 4vw, 48px); padding-block: 0 4rem; }
+
+/* ---------- hero ---------- */
+.hero {
+  max-width: 76rem; margin: 0 auto; padding-block: clamp(3rem, 8vw, 6rem) 2.5rem;
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2rem 3rem; align-items: end;
+  border-bottom: 1px solid var(--rule);
+}
+.eyebrow {
+  font-family: var(--font-mono); font-size: 0.78rem; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--muted); margin: 0 0 1.25rem;
+}
+.eyebrow b { color: var(--teal); font-weight: 500; }
+.hero h1 {
+  font-family: var(--font-display); font-weight: 800; letter-spacing: -0.025em;
+  font-size: clamp(2.6rem, 7vw, 5.4rem); line-height: 0.98; margin: 0; text-wrap: balance;
+}
+.tagline {
+  font-family: var(--font-display); font-weight: 500; font-size: clamp(1.25rem, 2.6vw, 1.75rem);
+  color: var(--muted); margin: 1rem 0 0; letter-spacing: -0.01em;
+}
+.tagline em { font-style: normal; color: var(--amber); }
+.hero .intro { max-width: var(--measure); margin: 1.75rem 0 0; font-size: 1.2rem; }
+
+/* elevator call panel */
+.callpanel {
+  display: grid; justify-items: center; gap: 0.5rem; padding: 1rem 0.9rem 0.85rem;
+  background: var(--surface); border: 1px solid var(--rule); border-radius: 14px;
+  box-shadow: 0 1px 0 var(--rule), 0 18px 40px -28px color-mix(in oklab, var(--ink) 55%, transparent);
+}
+.callpanel-k { font-family: var(--font-mono); font-size: 0.68rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+.callpanel ol { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, 2.7rem); gap: 0.5rem; }
+.callpanel a {
+  display: grid; place-items: center; width: 2.7rem; height: 2.7rem; border-radius: 50%;
+  font-family: var(--font-mono); font-weight: 500; font-size: 0.85rem; text-decoration: none;
+  border: 1.5px solid var(--rule); background: var(--paper);
+  transition: border-color .15s, color .15s, box-shadow .15s;
+}
+.callpanel a:hover { border-color: var(--amber); color: var(--amber); box-shadow: 0 0 0 4px color-mix(in oklab, var(--amber) 16%, transparent); }
+
+/* ---------- body grid ---------- */
+.layout {
+  max-width: 76rem; margin: 0 auto; display: grid;
+  grid-template-columns: 13.5rem minmax(0, 1fr); gap: 3.5rem; padding-top: 3rem;
+}
+.rail { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 2rem); align-self: start; }
+.rail-k { font-family: var(--font-mono); font-size: 0.68rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin: 0 0 0.9rem 1.6rem; }
+.rail ol { list-style: none; margin: 0; padding: 0; position: relative; }
+.rail ol::before {
+  content: ""; position: absolute; left: 0.45rem; top: 0.5rem; bottom: 0.5rem; width: 2px;
+  background: linear-gradient(to top, var(--teal), var(--amber)); border-radius: 2px; opacity: 0.55;
+}
+.rail a {
+  position: relative; display: grid; grid-template-columns: 2rem 1fr; align-items: baseline;
+  padding: 0.38rem 0 0.38rem 1.6rem; text-decoration: none; color: var(--muted);
+  font-family: var(--font-display); font-weight: 500; font-size: 0.95rem; line-height: 1.3;
+}
+.rail a::before {
+  content: ""; position: absolute; left: 0.18rem; top: 0.72rem; width: 0.65rem; height: 0.65rem; border-radius: 50%;
+  background: var(--paper); border: 2px solid var(--rule); transition: background .2s, border-color .2s, transform .2s;
+}
+.rail-num { font-family: var(--font-mono); font-size: 0.75rem; color: var(--muted); }
+.rail a:hover { color: var(--ink); }
+.rail a[aria-current="true"] { color: var(--ink); }
+.rail a[aria-current="true"]::before { background: var(--amber); border-color: var(--amber); transform: scale(1.25); }
+.rail a[aria-current="true"] .rail-num { color: var(--amber); }
+
+/* ---------- chapters ---------- */
+article { min-width: 0; }
+.chapter { padding-block: 1rem 3.5rem; border-bottom: 1px solid var(--rule); margin-bottom: 3rem; scroll-margin-top: 1.5rem; }
+.chapter:last-child { border-bottom: 0; }
+.chapter > * { max-width: var(--measure); }
+.chapter > figure, .chapter > .building, .chapter > .table-wrap, .chapter > pre { max-width: var(--wide); }
+.chapter h2 {
+  font-family: var(--font-display); font-weight: 800; letter-spacing: -0.02em;
+  font-size: clamp(1.9rem, 3.6vw, 2.75rem); line-height: 1.05; margin: 0 0 1.75rem; text-wrap: balance;
+  display: grid; gap: 0.35rem;
+}
+.ch-num { font-family: var(--font-mono); font-weight: 500; font-size: 0.9rem; letter-spacing: 0.08em; color: var(--amber); }
+.chapter h3 {
+  font-family: var(--font-display); font-weight: 700; font-size: 1.4rem; letter-spacing: -0.01em;
+  line-height: 1.2; margin: 2.6rem 0 0.75rem; text-wrap: balance;
+}
+.chapter h4 {
+  font-family: var(--font-mono); font-weight: 500; font-size: 0.82rem; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--teal); margin: 2.2rem 0 0.6rem;
+}
+p { margin: 0 0 1.1rem; }
+strong { font-weight: 600; }
+ul, ol { padding-left: 1.3rem; margin: 0 0 1.25rem; }
+li { margin: 0.3rem 0; }
+li::marker { color: var(--muted); }
+li > ul, li > ol { margin: 0.35rem 0 0.4rem; }
+
+code {
+  font-family: var(--font-mono); font-size: 0.82em; background: var(--chip); color: var(--ink);
+  padding: 0.12em 0.38em; border-radius: 5px; overflow-wrap: anywhere;
+}
+a.ref { text-decoration: none; }
+a.ref code { box-shadow: inset 0 -1.5px 0 color-mix(in oklab, var(--teal) 55%, transparent); transition: background .15s, color .15s; }
+a.ref:hover code { background: color-mix(in oklab, var(--teal) 16%, var(--chip)); color: var(--teal); }
+pre {
+  background: var(--panel); color: var(--panel-ink); border-radius: 12px; padding: 1.2rem 1.4rem;
+  overflow-x: auto; margin: 0 0 1.4rem; font-size: 0.95rem; line-height: 1.6;
+}
+pre code { background: none; padding: 0; color: inherit; font-size: 0.85em; overflow-wrap: normal; }
+
+/* ---------- figures ---------- */
+.fig { margin: 2rem 0 2.25rem; }
+.fig-link { display: block; border-radius: 14px; overflow: hidden; border: 1px solid var(--rule); background: var(--surface); }
+.fig img { display: block; width: 100%; height: auto; max-width: 100%; }
+.fig-elevator .fig-link { background: #fdfdfb; }
+.fig figcaption {
+  font-family: var(--font-display); font-weight: 500; font-size: 0.95rem; color: var(--muted);
+  margin-top: 0.8rem; max-width: var(--measure); line-height: 1.45;
+}
+
+/* ---------- the building ---------- */
+.building {
+  list-style: none; padding: 0; margin: 1.5rem 0 2.25rem; position: relative;
+  border: 1px solid var(--rule); border-radius: 14px; overflow: hidden; background: var(--surface);
+}
+.floor {
+  --floor: var(--teal);
+  display: grid; grid-template-columns: 4.25rem minmax(0, 1fr) 12.5rem; gap: 0 1.25rem;
+  padding: 1.1rem 1.25rem 1.1rem 0; margin: 0; border-top: 1px solid var(--rule); scroll-margin-top: 2rem;
+  position: relative;
+}
+.floor:first-child { border-top: 0; }
+.floor.f6 { --floor: var(--amber); }
+.floor.f5 { --floor: color-mix(in oklab, var(--amber) 80%, var(--teal)); }
+.floor.f4 { --floor: color-mix(in oklab, var(--amber) 60%, var(--teal)); }
+.floor.f3 { --floor: color-mix(in oklab, var(--amber) 40%, var(--teal)); }
+.floor.f2 { --floor: color-mix(in oklab, var(--amber) 20%, var(--teal)); }
+.floor.f1 { --floor: var(--teal); background: color-mix(in oklab, var(--ink) 3%, var(--surface)); }
+.floor:target { background: color-mix(in oklab, var(--floor) 10%, var(--surface)); }
+.floor-btn {
+  align-self: start; justify-self: center; margin-top: 0.1rem;
+  display: grid; place-items: center; width: 2.6rem; height: 2.6rem; border-radius: 50%;
+  font-family: var(--font-mono); font-weight: 500; font-size: 0.85rem;
+  border: 2px solid var(--floor); color: var(--floor); background: var(--surface);
+}
+.floor-main { min-width: 0; }
+.floor-name { font-family: var(--font-display); font-weight: 700; font-size: 1.15rem; margin: 0 0 0.3rem; line-height: 1.25; }
+.floor-label { font-family: var(--font-mono); font-weight: 500; font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--floor); margin-right: 0.35rem; vertical-align: 0.15em; }
+.floor-what { margin: 0; font-size: 1rem; line-height: 1.55; }
+.floor-where {
+  font-family: var(--font-display); font-size: 0.92rem; line-height: 1.4; color: var(--ink);
+  border-left: 1px dashed var(--rule); padding-left: 1rem; align-self: start;
+}
+.where-k { display: block; font-family: var(--font-mono); font-size: 0.66rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-bottom: 0.25rem; }
+
+/* ---------- tables ---------- */
+.table-wrap { overflow-x: auto; margin: 1.4rem 0 2rem; border: 1px solid var(--rule); border-radius: 12px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 0.97rem; line-height: 1.5; }
+th, td { text-align: left; vertical-align: top; padding: 0.75rem 1rem; border-top: 1px solid var(--rule); }
+thead th {
+  border-top: 0; font-family: var(--font-mono); font-weight: 500; font-size: 0.72rem; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--muted); background: color-mix(in oklab, var(--ink) 3%, var(--surface));
+}
+td:first-child { font-family: var(--font-display); font-weight: 500; }
+td strong { color: var(--ink); }
+
+/* ---------- appendix: the fence ---------- */
+.appendix {
+  background: var(--panel); color: var(--panel-ink); border-radius: 18px; border-bottom: 0;
+  padding: clamp(1.5rem, 4vw, 3rem); margin-top: 1rem;
+}
+.appendix > * { max-width: 48rem; }
+.appendix .ch-num { color: var(--amber); }
+.appendix h2 { color: var(--panel-ink); }
+.appendix p > strong:only-child {
+  display: block; font-family: var(--font-mono); font-weight: 500; font-size: 0.74rem; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--amber); margin-top: 1.8rem; padding-top: 1.2rem; border-top: 1px solid var(--panel-rule);
+}
+.appendix ol { padding-left: 2.2rem; }
+.appendix li { margin: 0.45rem 0; }
+.appendix li::marker { font-family: var(--font-mono); font-size: 0.85em; color: var(--panel-muted); }
+.appendix code { background: color-mix(in oklab, var(--panel-ink) 10%, transparent); color: var(--panel-ink); }
+.appendix a.ref:hover code { color: var(--amber); background: color-mix(in oklab, var(--amber) 16%, transparent); }
+.appendix a:hover { color: var(--amber); }
+
+.foot {
+  max-width: 76rem; margin: 2rem auto 0; padding-top: 1.5rem; border-top: 1px solid var(--rule);
+  font-family: var(--font-display); font-size: 0.9rem; color: var(--muted);
+  display: flex; flex-wrap: wrap; gap: 0.5rem 2rem; justify-content: space-between;
+}
+
+/* ---------- narrow screens ---------- */
+@media (max-width: 64rem) {
+  .layout { grid-template-columns: minmax(0, 1fr); gap: 0; padding-top: 0; }
+  .rail {
+    position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; margin-inline: calc(-1 * clamp(16px, 4vw, 48px));
+    background: color-mix(in oklab, var(--paper) 92%, transparent); backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--rule); overflow-x: auto;
+  }
+  .rail-k { display: none; }
+  .rail ol { display: flex; gap: 0.25rem; padding: 0.6rem clamp(16px, 4vw, 48px); width: max-content; }
+  .rail ol::before { display: none; }
+  .rail a { display: flex; gap: 0.4rem; padding: 0.35rem 0.75rem; border-radius: 999px; font-size: 0.88rem; white-space: nowrap; }
+  .rail a::before { display: none; }
+  .rail a[aria-current="true"] { background: var(--chip); }
+  .chapter { padding-top: 2.5rem; scroll-margin-top: 3.5rem; }
+}
+@media (max-width: 44rem) {
+  body { font-size: 1.05rem; }
+  .hero { grid-template-columns: minmax(0, 1fr); }
+  .callpanel { justify-self: start; grid-template-columns: auto auto; align-items: center; }
+  .callpanel ol { grid-template-columns: repeat(6, 2.5rem); }
+  .callpanel a { width: 2.5rem; height: 2.5rem; }
+  .floor { grid-template-columns: 3.4rem minmax(0, 1fr); padding-right: 1rem; }
+  .floor-where { grid-column: 2; border-left: 0; padding-left: 0; margin-top: 0.75rem; }
+  .floor-btn { width: 2.3rem; height: 2.3rem; font-size: 0.78rem; }
+}
+</style>
+</head>
+<body>
+
+
+<div class="page">
+  <header class="hero">
+    <div>
+      <p class="eyebrow"><b>MemberJunction</b> · UI architecture guide</p>
+      <h1>Building UI on MemberJunction</h1>
+      <p class="tagline">Solve it once. <em>Get off at any floor.</em></p>
+      <p class="intro">This guide makes an argument and then draws a map. The argument is that building UI on MemberJunction's layers beats building beside them, including an honest account of when you don't need MJ at all. The map shows where everything lives once you've decided. If you're an AI agent writing code, the <a href="#appendix-for-agents--the-fence">appendix</a> has the rules in condensed form.</p>
+    </div>
+    <nav class="callpanel" aria-label="Jump to a floor">
+      <span class="callpanel-k">Floors</span>
+      <ol>
+        <li><a href="#floor-l3" title="L3: Explorer surface">L3</a></li>
+        <li><a href="#floor-l2" title="L2: Composite widgets">L2</a></li>
+        <li><a href="#floor-l1" title="L1: Presentational widgets">L1</a></li>
+        <li><a href="#floor-l0" title="L0: Domain runtime">L0</a></li>
+        <li><a href="#floor-g" title="Ground floor: the core">G</a></li>
+        <li><a href="#floor-b" title="Basement: the wire">B</a></li>
+      </ol>
+    </nav>
+  </header>
+
+  <div class="layout">
+    <nav class="rail" aria-label="Contents">
+      <p class="rail-k">Contents</p>
+      <ol><li><a href="#1-the-thesis-solve-ui-once" data-sec="1-the-thesis-solve-ui-once"><span class="rail-num">01</span><span class="rail-label">Solve UI once</span></a></li><li><a href="#2-why-a-framework-matters-more-when-code-is-free" data-sec="2-why-a-framework-matters-more-when-code-is-free"><span class="rail-num">02</span><span class="rail-label">Code is free</span></a></li><li><a href="#3-the-elevator-the-whole-stack-floor-by-floor" data-sec="3-the-elevator-the-whole-stack-floor-by-floor"><span class="rail-num">03</span><span class="rail-label">The elevator</span></a></li><li><a href="#4-the-decision-ladder-which-floor-is-yours" data-sec="4-the-decision-ladder-which-floor-is-yours"><span class="rail-num">04</span><span class="rail-label">The decision ladder</span></a></li><li><a href="#5-the-layers-l0-to-l3-rules-that-double-as-escape-hatches" data-sec="5-the-layers-l0-to-l3-rules-that-double-as-escape-hatches"><span class="rail-num">05</span><span class="rail-label">The layers</span></a></li><li><a href="#6-the-honest-case-for-explorer-as-the-default" data-sec="6-the-honest-case-for-explorer-as-the-default"><span class="rail-num">06</span><span class="rail-label">Explorer as default</span></a></li><li><a href="#7-three-ways-to-ship-with-worked-examples" data-sec="7-three-ways-to-ship-with-worked-examples"><span class="rail-num">07</span><span class="rail-label">Three ways to ship</span></a></li><li><a href="#8-rules-and-enforcement" data-sec="8-rules-and-enforcement"><span class="rail-num">08</span><span class="rail-label">Rules and enforcement</span></a></li><li><a href="#appendix-for-agents-the-fence" data-sec="appendix-for-agents-the-fence"><span class="rail-num">A</span><span class="rail-label">The fence</span></a></li></ol>
+    </nav>
+    <article>
+
+
+
+
+
+
+
+<section class="chapter" id="1-the-thesis-solve-ui-once"><h2><span class="ch-num">01</span><span class="ch-title">The thesis: solve UI once</span></h2>
+<p>Everything in MemberJunction rests on one instinct: <strong>solve an architectural problem once, in the right layer, and let everything above inherit the answer.</strong></p>
+<ul>
+<li>The entity layer is metadata-driven, so a table becomes a typed, validated, permissioned object without anyone writing that code by hand.</li>
+<li>Providers are pluggable, so the same object runs against GraphQL in a browser and against SQL on a server.</li>
+<li>Forms are generated, then extended in slots rather than rewritten.</li>
+</ul>
+<p>The UI follows the same instinct. It is <strong>layered, pluggable and extensible</strong>, and each layer is defined by what it is <em>allowed to touch</em>, not by what it looks like. That one choice is what lets a component built once:</p>
+<ul>
+<li>render in an MJ Explorer tab,</li>
+<li>embed in a plain Angular app,</li>
+<li>ship as an HTML element on someone else's website,</li>
+<li>and run in a test with no network at all,</li>
+</ul>
+<p>without a fork and without a copy.</p>
+<p>MJ is not a typical framework. Most frameworks are a set of conventions wrapped around somebody's first app. MJ is a metadata-driven application architecture, and the view tier is simply one more place that architecture applies. The result is a framework more concerned with <strong>getting out of your way</strong> than with holding on to you, as the next sections show.</p>
+<p>Every component ever written got asked, eventually, to appear somewhere it wasn't built for:</p>
+<ul>
+<li>an order editor built inside an Explorer tab gets wanted on a record form;</li>
+<li>a checkout built for an admin gets wanted on a public website;</li>
+<li>a chat pane built for Explorer gets wanted in a React host.</li>
+</ul>
+<p>There are exactly two ways to answer that request. Either the component knows about its host, so the second surface gets a <em>copy</em> and the copies drift forever. Or the component knows only its inputs and its events, so it gets <em>embedded</em>, and there is one implementation and one place to fix a bug. MJ is built so that the second answer is the default one.</p>
+
+</section><section class="chapter" id="2-why-a-framework-matters-more-when-code-is-free"><h2><span class="ch-num">02</span><span class="ch-title">Why a framework matters more when code is free</span></h2>
+<p>There is a popular argument that goes like this: <em>AI can now write code instantly, so frameworks matter less. Why learn someone's conventions when an agent can generate whatever you need?</em></p>
+<p>That argument has it exactly backwards.</p>
+<p>When code was expensive, the scarce resource was the <strong>ability to produce code</strong>, and a framework's job was to save keystrokes. That job has largely evaporated. An agent will happily produce a bespoke screen, a bespoke data-access service and a bespoke modal in thirty seconds.</p>
+<p>But when code is nearly free, the scarce resource becomes <strong>coherence</strong>: the property that ten thousand lines written by forty people and two hundred agent sessions still read as one system, grow in one direction, and can be fixed in one place. Free code does not produce coherence. It produces volume.</p>
+<figure class="fig fig-garden"><a class="fig-link" href="images/gardens.jpg" rel="noopener" target="_blank"><img alt='Split illustration: on the left, a Japanese garden with raked gravel, flowing water and koi, labeled "Free code, with a framework"; on the right, the same plot overgrown and stagnant, labeled "Free code, without one". Caption: Which one do you want?' height="1438" loading="lazy" src="images/gardens.jpg" width="2576"/></a><figcaption>The same plot of land, twice. Free code grows either way; the framework decides whether it grows into something.</figcaption></figure>
+<p>Think of it as a garden. Without a framework, free code is a plot left to grow: everything sprouts, nothing connects, and every new plant competes with the last. A framework is the difference between that and a well-made garden, where the water flows where it should, the paths go somewhere, and new planting extends the design instead of fighting it. Making that kind of garden takes engineering and artistry together, and so does a coherent codebase.</p>
+<p>Here is the problem in UI terms. When an agent can regenerate a screen in seconds, the temptation to <em>not</em> reuse goes <strong>up</strong>, not down. Why find the existing <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/entity-viewer/src/lib/entity-data-grid/entity-data-grid.component.ts" rel="noopener" target="_blank"><code>mj-entity-data-grid</code></a> when you can generate a new table? Why extend the generated form when you can generate a whole new one? Each regenerated one-off is individually fine. Collectively they are a thousand screens that look slightly different, validate slightly differently, and each need their own bug fixed. The usual symptom is a large global stylesheet that quietly rebuilds banners, chips, tabs and panels the shared library already ships as components, because nobody found the components.</p>
+<p>So in the AI era, a framework's job shifts <strong>from saving effort to imposing a shape</strong>. In MemberJunction, that shape is:</p>
+<ul>
+<li><strong>the layers</strong> (section 5),</li>
+<li><strong>the boundaries</strong> between them, which are machine-checked (section 8),</li>
+<li><strong>the shared component library and design tokens</strong>, so there's one button and not forty.</li>
+</ul>
+<p>That shape is what keeps cheap code coherent. <strong>A great framework matters more when code is free, not less.</strong></p>
+
+</section><section class="chapter" id="3-the-elevator-the-whole-stack-floor-by-floor"><h2><span class="ch-num">03</span><span class="ch-title">The elevator: the whole stack, floor by floor</span></h2>
+<figure class="fig fig-elevator"><a class="fig-link" href="images/elevator.jpg" rel="noopener" target="_blank"><img alt='Cutaway of a building with a glass elevator. Floors from bottom: Basement, the wire (raw GraphQL API); Ground floor, the core (BaseEntity, RunView, providers); L0 domain runtime; L1 presentational widgets; L2 composite widgets; L3 Explorer surface. A figure steps out on every floor. The shaft is labeled "More is done for you." Beside the basement, a figure hauls lumber up the stairs: "Taking the stairs = rebuilding the elevator."' height="1438" loading="lazy" src="images/elevator.jpg" width="2576"/></a><figcaption>Every floor is an exit. The higher you ride, the more is done for you, and the stairs are always there for anyone who wants to rebuild the elevator.</figcaption></figure>
+<p>Most people picture MJ as "a UI framework with an API underneath." It is closer to the opposite: <strong>a layered system in which UI is only the top few floors.</strong> You can get off at any floor. The higher you ride, the more is done for you.</p>
+<p>The numbered floors, <strong>L0 to L3</strong>, are MJ's established layers, defined in <a href="https://github.com/MemberJunction/MJ/blob/next/guides/UI_LAYERING_GUIDE.md" rel="noopener" target="_blank"><code>UI_LAYERING_GUIDE.md</code></a>, which remains the source of truth. This guide doesn't renumber them. It adds the two foundation floors they stand on, so you can see the whole building.</p>
+<ol aria-label="The floors, top to bottom" class="building"><li class="floor f6" id="floor-l3"><div aria-hidden="true" class="floor-btn">L3</div><div class="floor-main"><p class="floor-name">Explorer surface</p><p class="floor-what">Resources and dashboards (<a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Explorer/shared/src/lib/base-resource-component.ts" rel="noopener" target="_blank"><code>BaseResourceComponent</code></a>, <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Explorer/shared/src/lib/base-dashboard.ts" rel="noopener" target="_blank"><code>BaseDashboard</code></a>), forms opened as Explorer tabs, navigation via <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Explorer/shared/src/lib/navigation.service.ts" rel="noopener" target="_blank"><code>NavigationService</code></a></p></div><div class="floor-where"><span class="where-k">You can be</span>Inside MJ Explorer, the branded, authenticated chassis</div></li><li class="floor f5" id="floor-l2"><div aria-hidden="true" class="floor-btn">L2</div><div class="floor-main"><p class="floor-name">Composite widget</p><p class="floor-what">Angular widgets that assemble L1 parts and <em>may read data</em>, but only through <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/base-types/src/base-angular-component.ts" rel="noopener" target="_blank"><code>ProviderToUse</code></a>. They never navigate. The entire forms architecture (<a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/base-forms/src/lib/base-form-component.ts" rel="noopener" target="_blank"><code>BaseFormComponent</code></a>, <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/base-forms/src/lib/host/entity-form-host.component.ts" rel="noopener" target="_blank"><code>mj-entity-form-host</code></a>, form dialogs and slide-ins, panel slots) lives here.</p></div><div class="floor-where"><span class="where-k">You can be</span>Any Angular app</div></li><li class="floor f4" id="floor-l1"><div aria-hidden="true" class="floor-btn">L1</div><div class="floor-main"><p class="floor-name">Presentational widget</p><p class="floor-what">Angular parts: inputs in, events out, zero data access. <a class="ref" href="https://github.com/MemberJunction/MJ/tree/next/packages/Angular/Generic/ui-components" rel="noopener" target="_blank"><code>@memberjunction/ng-ui-components</code></a> lives here.</p></div><div class="floor-where"><span class="where-k">You can be</span>Any Angular app</div></li><li class="floor f3" id="floor-l0"><div aria-hidden="true" class="floor-btn">L0</div><div class="floor-main"><p class="floor-name">Domain runtime</p><p class="floor-what">Pure TypeScript with no Angular at all. Your app's generated entity subclasses and shared rules, its engines, its Remote Operation clients, its validation and state machines. MJ's framework-neutral runtimes also live here: <a class="ref" href="https://github.com/MemberJunction/MJ/tree/next/packages/ThemeEngine" rel="noopener" target="_blank"><code>@memberjunction/theme-engine</code></a>, <a class="ref" href="https://github.com/MemberJunction/MJ/tree/next/packages/MarkdownCore" rel="noopener" target="_blank"><code>markdown-core</code></a>, <a class="ref" href="https://github.com/MemberJunction/MJ/tree/next/packages/ConversationsRuntime" rel="noopener" target="_blank"><code>conversations-runtime</code></a>, <a class="ref" href="https://github.com/MemberJunction/MJ/tree/next/packages/RealtimeRuntime" rel="noopener" target="_blank"><code>realtime-runtime</code></a>.</p></div><div class="floor-where"><span class="where-k">You can be</span>Any TypeScript runtime and any framework: browser, Node, a worker, React</div></li><li class="floor f2" id="floor-g"><div aria-hidden="true" class="floor-btn">G</div><div class="floor-main"><p class="floor-name"><span class="floor-label">Ground floor</span> The core</p><p class="floor-what"><a class="ref" href="https://github.com/MemberJunction/MJ/tree/next/packages/MJCore" rel="noopener" target="_blank"><code>MJCore</code></a>, <a class="ref" href="https://github.com/MemberJunction/MJ/tree/next/packages/MJGlobal" rel="noopener" target="_blank"><code>MJGlobal</code></a> and the provider architecture: <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/MJCore/src/generic/baseEntity.ts" rel="noopener" target="_blank"><code>BaseEntity</code></a>, <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/MJCore/src/views/runView.ts" rel="noopener" target="_blank"><code>RunView</code></a>, <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/MJCore/src/generic/runQuery.ts" rel="noopener" target="_blank"><code>RunQuery</code></a>, <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/MJCore/src/generic/metadata.ts" rel="noopener" target="_blank"><code>Metadata</code></a>, <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/MJCore/src/generic/baseEngine.ts" rel="noopener" target="_blank"><code>BaseEngine</code></a>. Everything on L0 is built from these.</p></div><div class="floor-where"><span class="where-k">You can be</span>Any TypeScript or JavaScript runtime</div></li><li class="floor f1" id="floor-b"><div aria-hidden="true" class="floor-btn">B</div><div class="floor-main"><p class="floor-name"><span class="floor-label">Basement</span> The wire</p><p class="floor-what">The GraphQL API. Raw requests and raw JSON, with no objects.</p></div><div class="floor-where"><span class="where-k">You can be</span>Anything that can make an HTTP call</div></li></ol>
+<p><strong>The ground floor and L0 are the floors most people don't know exist, and they may be the most important ones.</strong> They are where the <em>typed entity layer</em> lives, and they sit <strong>below any UI decision at all</strong>.</p>
+<ul>
+<li><code>OrderEntity</code> knows that <code>Status</code> is a closed union and that <code>LineTotalGross</code> is <code>DECIMAL(18,2)</code>, because CodeGen generated it from the schema.</li>
+<li><code>order.Validate()</code> runs the <em>same rules</em> in the browser that the server runs on save.</li>
+<li><code>order.Save()</code> works identically whether the code is running in a browser over GraphQL or on a server against SQL. <strong>The code doesn't know which tier it's on, and doesn't need to.</strong></li>
+</ul>
+<p>That last point is the provider architecture's quiet superpower: tier transparency. Write <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/MJCore/src/views/runView.ts" rel="noopener" target="_blank"><code>RunView.FromMetadataProvider(this.ProviderToUse)</code></a> once and it works on either tier.</p>
+<h3 id="getting-off-at-any-floor">Getting off at any floor</h3>
+<p>Every floor is a legitimate exit, and saying so plainly is the point of the metaphor:</p>
+<ul>
+<li><strong>Building in React, Vue or Svelte?</strong> Ride to <strong>L0</strong>. You keep typed entities, tier-transparent data access, cached engines, the theme engine and the conversation runtime, and you bring your own components.</li>
+<li><strong>Building a Node job, an integration or an agent tool?</strong> Ride to <strong>L0</strong>. You keep the full entity layer with validation, and no UI at all.</li>
+<li><strong>Building your own Angular app?</strong> Ride to <strong>L1</strong> or <strong>L2</strong> and use MJ's widgets as parts.</li>
+<li><strong>Building an authenticated experience people come back to?</strong> Ride to <strong>L3</strong>. It is the whole building.</li>
+</ul>
+<p>What the elevator makes visible is what each choice <strong>costs</strong>. Consider the developer who says <em>"I'll just build my own app and call the API."</em> They believe they are opting out of a framework. They are actually getting off in the <strong>basement</strong> and taking the stairs, which means rebuilding by hand everything the ground floor and L0 already provide:</p>
+<ul>
+<li>the typed objects,</li>
+<li>validation that matches the server,</li>
+<li>caching that invalidates itself when a record is saved,</li>
+<li>tier transparency,</li>
+<li>related-record graphs that save in one transaction.</li>
+</ul>
+<p>That is not freedom from a framework. It is writing a worse one, one reinvented wheel at a time, with the bill arriving later.</p>
+
+</section><section class="chapter" id="4-the-decision-ladder-which-floor-is-yours"><h2><span class="ch-num">04</span><span class="ch-title">The decision ladder: which floor is yours?</span></h2>
+<p>Before writing a line of UI, answer three questions in order. They are ordered by how much they change the answer.</p>
+<h3 id="rung-1-do-you-need-memberjunctions-data-at-all">Rung 1: Do you need MemberJunction's data at all?</h3>
+<p>If the page is a marketing site, a static landing page, or anything that never reads or writes an MJ record, <strong>none of this applies</strong>. Build it however you like. MJ makes no claim on UI that doesn't touch MJ.</p>
+<h3 id="rung-2-is-the-user-authenticated-and-returning">Rung 2: Is the user authenticated and returning?</h3>
+<p>This is the real architectural fork, and it is a better first question than "how heavy can we go."</p>
+<ul>
+<li><strong>Authenticated and returning:</strong> a member portal, a committee workspace, a client portal, an admin console, a SaaS product's back office. The user signs in, comes back next week, and has preferences, permissions and history. → <strong>Explorer is your default chassis</strong> (section 6).</li>
+<li><strong>Anonymous, or a single transaction:</strong> a public checkout, a registration form, an embedded donation widget, a lookup tool on a public website. → <strong>Don't haul Explorer along.</strong> Build with the widget layers and ship lightweight (section 7.3).</li>
+</ul>
+<p>Why this cut? Explorer's weight is real, and authentication is exactly where that weight stops being a cost and becomes leverage. Pluggable auth, user-preference persistence, permission-aware everything and caching tuned for long sessions are pure overhead for a guest buying one ticket. For a member who logs in fifty times a year, they are hundreds of hours of work you didn't have to do. <strong>Explorer's cost is amortized over a relationship, not paid on a single transaction.</strong></p>
+<h3 id="rung-3-where-does-the-ui-need-to-live">Rung 3: Where does the UI need to live?</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>It needs to live…</th>
+<th>Your chassis</th>
+<th>Highest floor you'll use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>In an authenticated, branded app</td>
+<td><strong>MJ Explorer</strong> (your brand, your theme)</td>
+<td>L3</td>
+</tr>
+<tr>
+<td>Inside an existing Angular application you control</td>
+<td><strong>Your Angular app</strong> consuming MJ widgets</td>
+<td>L2</td>
+</tr>
+<tr>
+<td>On <em>someone else's</em> page (any CMS, any framework, plain HTML)</td>
+<td><strong>An Angular Element</strong>: a custom HTML tag</td>
+<td>L2, packaged</td>
+</tr>
+<tr>
+<td>In a non-Angular framework you've committed to</td>
+<td><strong>Your framework</strong> on MJ's TypeScript core</td>
+<td>L0</td>
+</tr>
+<tr>
+<td>In a script, a job, or an agent tool</td>
+<td><strong>No UI</strong></td>
+<td>L0</td>
+</tr>
+</tbody>
+</table></div>
+<p>Most real systems use several rows at once. Orders is the clearest example: its back office is an Explorer app, its checkout is an Angular Element, and its server jobs live on L0. <strong>That's the design working, not a compromise.</strong></p>
+
+</section><section class="chapter" id="5-the-layers-l0-to-l3-rules-that-double-as-escape-hatches"><h2><span class="ch-num">05</span><span class="ch-title">The layers, L0 to L3: rules that double as escape hatches</span></h2>
+<p>Each layer has rules, and each rule is there for a reason. Read them as guarantees rather than restrictions: <strong>every rule on a lower floor is a promise that the code there can leave the building.</strong></p>
+<h3 id="l0-domain-runtime">L0: domain runtime</h3>
+<p>Pure TypeScript with no Angular at all. This is your app's business logic, built on MJ's core: generated entity subclasses with their shared rules, engines, Remote Operation clients, validation, state machines. MJ's framework-neutral runtimes live here too.</p>
+<ul>
+<li><strong>Rule:</strong> no Angular, no React, no DOM assumptions in domain code. Importable from Node, a test, a worker, or any framework.</li>
+<li><strong>Escape hatch:</strong> this is what lets a React host, a Node job, a vanilla page, or Skip-generated components use your app's rules and MJ's runtimes without adopting Angular. Anything decidable from the record and its children belongs here, so the browser and the server refuse a bad record for the same reason.</li>
+<li><strong>Examples:</strong></li>
+<li>Orders' <a class="ref" href="https://github.com/MemberJunction/bizapps-orders/blob/next/packages/Entities/src/OrderHeaderEntity.ts" rel="noopener" target="_blank"><code>OrderHeaderEntity</code></a> holds the shared order rules; Collaboration's <a class="ref" href="https://github.com/MemberJunction/bizapps-collaboration/tree/next/packages/Core" rel="noopener" target="_blank"><code>collaboration-core</code></a> holds its membership and audience rules as pure functions.</li>
+<li><a class="ref" href="https://github.com/MemberJunction/MJ/tree/next/packages/ThemeEngine" rel="noopener" target="_blank"><code>@memberjunction/theme-engine</code></a> derives the entire <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/shared/src/lib/_tokens.scss" rel="noopener" target="_blank"><code>--mj-*</code></a> token set from about eight brand seeds, using OKLCH color ramps.</li>
+<li><a class="ref" href="https://github.com/MemberJunction/MJ/tree/next/packages/MarkdownCore" rel="noopener" target="_blank"><code>@memberjunction/markdown-core</code></a> emits HTML or a token AST for any renderer.</li>
+<li><a class="ref" href="https://github.com/MemberJunction/MJ/tree/next/packages/ConversationsRuntime" rel="noopener" target="_blank"><code>@memberjunction/conversations-runtime</code></a> and <a class="ref" href="https://github.com/MemberJunction/MJ/tree/next/packages/RealtimeRuntime" rel="noopener" target="_blank"><code>@memberjunction/realtime-runtime</code></a> orchestrate chat and live agent sessions with no view attached.</li>
+</ul>
+<h3 id="l1-presentational-widgets">L1: presentational widgets</h3>
+<p>Angular components that render what they are given.</p>
+<ul>
+<li><strong>Rule:</strong> inputs in, events out, <strong>zero data access</strong>, and no injected services beyond Angular's own.</li>
+<li><strong>Escape hatch:</strong> you can render an L1 widget from a hand-written object literal, with no network and no MJ session. That makes it testable, storybook-able, and usable in <em>any</em> Angular app.</li>
+<li><strong>The library:</strong> <a class="ref" href="https://github.com/MemberJunction/MJ/tree/next/packages/Angular/Generic/ui-components" rel="noopener" target="_blank"><code>@memberjunction/ng-ui-components</code></a> provides the foundation set:</li>
+<li>buttons via <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/ui-components/src/lib/button/button.directive.ts" rel="noopener" target="_blank"><code>button[mjButton]</code></a>, <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/ui-components/src/lib/dropdown/dropdown.component.ts" rel="noopener" target="_blank"><code>mj-dropdown</code></a>, <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/ui-components/src/lib/combobox/combobox.component.ts" rel="noopener" target="_blank"><code>mj-combobox</code></a>, <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/ui-components/src/lib/datepicker/datepicker.component.ts" rel="noopener" target="_blank"><code>mj-datepicker</code></a>;</li>
+<li><a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/ui-components/src/lib/dialog/dialog.component.ts" rel="noopener" target="_blank"><code>mj-dialog</code></a> with <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/ui-components/src/lib/dialog/dialog.service.ts" rel="noopener" target="_blank"><code>MJDialogService</code></a>, <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/ui-components/src/lib/confirm-dialog/confirm-dialog.service.ts" rel="noopener" target="_blank"><code>MJConfirmService</code></a>, <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/ui-components/src/lib/slide-panel/slide-panel.component.ts" rel="noopener" target="_blank"><code>mj-slide-panel</code></a>;</li>
+<li><a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/ui-components/src/lib/alert/alert.component.ts" rel="noopener" target="_blank"><code>mj-alert</code></a>, <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/ui-components/src/lib/empty-state/empty-state.component.ts" rel="noopener" target="_blank"><code>mj-empty-state</code></a>, <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/ui-components/src/lib/stat-badge/stat-badge.component.ts" rel="noopener" target="_blank"><code>mj-stat-badge</code></a>, <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/ui-components/src/lib/tab-nav/tab-nav.component.ts" rel="noopener" target="_blank"><code>mj-tab-nav</code></a>.</li>
+</ul>
+<p><a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/shared/src/lib/loading/loading.component.ts" rel="noopener" target="_blank"><code>&lt;mj-loading&gt;</code></a> (from <a class="ref" href="https://github.com/MemberJunction/MJ/tree/next/packages/Angular/Generic/shared" rel="noopener" target="_blank"><code>ng-shared-generic</code></a>) is the only spinner. These replaced Kendo entirely. Use them; never hand-roll a feature-specific equivalent.</p>
+<h3 id="l2-composite-widgets">L2: composite widgets</h3>
+<p>Angular components that assemble L1 parts into working things, and may read data to do it.</p>
+<ul>
+<li><strong>Rule:</strong> data access <em>only</em> through <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/base-types/src/base-angular-component.ts" rel="noopener" target="_blank"><code>ProviderToUse</code></a>, as in <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/MJCore/src/views/runView.ts" rel="noopener" target="_blank"><code>RunView.FromMetadataProvider(this.ProviderToUse)</code></a> and <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/base-types/src/base-angular-component.ts" rel="noopener" target="_blank"><code>this.ProviderToUse.GetEntityObject(...)</code></a>. Never <code>new RunView()</code> or <code>new Metadata()</code>. <strong>Never navigate.</strong> Emit intent instead, as <code>RecordOpenRequested</code> or <code>SaveRequested</code>, and let the host decide what happens.</li>
+<li><strong>Escape hatch:</strong> because an L2 widget doesn't know where it lives, the same widget can appear in an Explorer tab, on a record form, in a standalone app, or inside an Angular Element. The provider it's handed decides which server and which credentials it uses.</li>
+<li><strong>Examples:</strong></li>
+<li><a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/entity-viewer/src/lib/entity-data-grid/entity-data-grid.component.ts" rel="noopener" target="_blank"><code>mj-entity-data-grid</code></a> (the AG Grid-based entity grid) and <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/record-selector/src/lib/record-selector.component.ts" rel="noopener" target="_blank"><code>mj-record-selector</code></a>;</li>
+<li>Collaboration's <a class="ref" href="https://github.com/MemberJunction/bizapps-collaboration/blob/next/packages/AngularWidgets/src/lib/space-library.component.ts" rel="noopener" target="_blank"><code>mjc-space-library</code></a> and <a class="ref" href="https://github.com/MemberJunction/bizapps-collaboration/blob/next/packages/AngularWidgets/src/lib/space-chat.component.ts" rel="noopener" target="_blank"><code>mjc-space-chat</code></a>;</li>
+<li>the conversations components in <a class="ref" href="https://github.com/MemberJunction/MJ/tree/next/packages/Angular/Generic/conversations" rel="noopener" target="_blank"><code>ng-conversations</code></a>.</li>
+</ul>
+<h4 id="forms-anywhere">Forms anywhere</h4>
+<p>MJ's forms architecture lives in <a href="https://github.com/MemberJunction/MJ/tree/next/packages/Angular/Generic/base-forms" rel="noopener" target="_blank"><code>@memberjunction/ng-base-forms</code></a>, under <a class="ref" href="https://github.com/MemberJunction/MJ/tree/next/packages/Angular/Generic" rel="noopener" target="_blank"><code>packages/Angular/Generic</code></a>. It is a <code>widgets</code> package, not an Explorer one, so <strong>the whole forms stack works in any Angular app</strong> and should be used there. This is one of the most powerful pieces of the platform, and one of the least appreciated.</p>
+<ul>
+<li><strong>The form classes.</strong> CodeGen generates a form for every entity as a <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/base-forms/src/lib/base-form-component.ts" rel="noopener" target="_blank"><code>BaseFormComponent</code></a> subclass, with sections, field categories and related-record grids derived from metadata. Extend it before you replace it:</li>
+<li><strong>Preferred:</strong> contribute a <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/base-forms/src/lib/panel-slot/base-form-panel.ts" rel="noopener" target="_blank"><code>BaseFormPanel</code></a> into a slot (<code>top-area</code>, <code>before-fields</code>, <code>after-fields</code>, <code>after-related</code>, <code>after-everything</code>) with <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/MJGlobal/src/RegisterClass.ts" rel="noopener" target="_blank"><code>@RegisterClassEx</code></a>. Panels can replace a generated section or grid, and other apps can contribute into the same slots.</li>
+<li><strong>When necessary:</strong> subclass the <em>generated</em> form as <code>*Extended</code> and register it with <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/MJGlobal/src/RegisterClass.ts" rel="noopener" target="_blank"><code>@RegisterClass(BaseFormComponent, '&lt;Entity Name&gt;')</code></a>. Always keep <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/base-forms/src/lib/container/record-form-container.component.ts" rel="noopener" target="_blank"><code>&lt;mj-record-form-container&gt;</code></a>, which brings history, tags, lists and attachments with it.</li>
+<li><strong>Variants:</strong> runtime form overrides built in Form Builder or by an agent take precedence over both, with no redeploy.</li>
+<li><strong>The host.</strong> <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/base-forms/src/lib/host/entity-form-host.component.ts" rel="noopener" target="_blank"><code>&lt;mj-entity-form-host&gt;</code></a> resolves the right form for an entity through <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/base-forms/src/lib/resolver/form-resolver.service.ts" rel="noopener" target="_blank"><code>FormResolverService</code></a> (interactive override, then registered class) and renders it. It doesn't care where it lives.</li>
+<li><strong>The presentations.</strong> The same form opens inline, in <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/base-forms/src/lib/overlays/form-dialog.component.ts" rel="noopener" target="_blank"><code>&lt;mj-form-dialog&gt;</code></a>, in <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/base-forms/src/lib/overlays/form-slide-in.component.ts" rel="noopener" target="_blank"><code>&lt;mj-form-slide-in&gt;</code></a>, or in <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/base-forms/src/lib/overlays/form-window.component.ts" rel="noopener" target="_blank"><code>&lt;mj-form-window&gt;</code></a>, or programmatically through <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/base-forms/src/lib/overlays/form-presenter.service.ts" rel="noopener" target="_blank"><code>MJFormPresenterService</code></a>. Per-instance behavior is set with <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/base-forms/src/lib/types/entity-form-config.ts" rel="noopener" target="_blank"><code>EntityFormConfig</code></a>, with no regeneration.</li>
+</ul>
+<p>So a member portal built as its own Angular app, or an authenticated Angular Element, gets generated, extensible, metadata-driven forms for every entity it touches without Explorer. Explorer's contribution is only the L3 part: opening a form as a tab and navigating between records.</p>
+<p><strong>Bind to entities, not to a service layer.</strong> This is the most common mistake made by experienced Angular developers, because "put data access in a service" is good <em>ordinary</em> Angular advice. In MJ it is wrong. <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/MJCore/src/generic/baseEntity.ts" rel="noopener" target="_blank"><code>BaseEntity</code></a> already <em>is</em> the data-access layer, already strongly typed from the schema, and already network-transparent.</p>
+<ul>
+<li>A service that wraps it re-types the same data as hand-written DTOs, and the boundary degrades to <code>any</code> one method signature at a time.</li>
+<li>For cached, shared lookup data, use a <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/MJCore/src/generic/baseEngine.ts" rel="noopener" target="_blank"><code>BaseEngine</code></a> subclass. It caches, observes, and invalidates itself when a record is saved.</li>
+<li>Angular services remain fine for <em>Angular-shaped</em> state that has no table behind it: wizard step, selection, panel state. If a method on a service loads, saves, validates or maps entity data, it is in the wrong place.</li>
+</ul>
+<p>The review test is: <em>"Could a non-Angular host do this same work with the same objects?"</em> If yes, the logic belongs on the entity, its shared subclass, or a Remote Operation.</p>
+<h3 id="l3-explorer-surfaces">L3: Explorer surfaces</h3>
+<p>The thin shells that plug into MJ Explorer: resources, dashboards, and forms opened as tabs.</p>
+<ul>
+<li><strong>Rule:</strong> L3 is <strong>the only floor that may navigate</strong>, and only through <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Explorer/shared/src/lib/navigation.service.ts" rel="noopener" target="_blank"><code>NavigationService</code></a>. Even here, <code>Router</code> is banned. Explorer is a tabbed workspace, not a set of URLs, and <code>Router.navigate()</code> desynchronizes the tabs from the address bar.</li>
+<li><strong>Rule:</strong> L3 holds <strong>no domain logic and no markup a widget should own.</strong> The smell to watch for is an L3 class you'd have to edit to change how something looks.</li>
+<li><strong>Escape hatch:</strong> because the shells are thin, everything valuable underneath can still be reached from elsewhere. What you lose by leaving L3 is the chassis, not the product.</li>
+</ul>
+<p>The L3 building blocks:</p>
+<ul>
+<li><strong>Forms as tabs.</strong> Explorer opens any form from the forms architecture (L2, above) as a workspace tab, with record navigation and deep links. The form itself is not Explorer code.</li>
+<li><strong>Resources and dashboards.</strong> Extend <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Explorer/shared/src/lib/base-resource-component.ts" rel="noopener" target="_blank"><code>BaseResourceComponent</code></a> or <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Explorer/shared/src/lib/base-dashboard.ts" rel="noopener" target="_blank"><code>BaseDashboard</code></a>, register with <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/MJGlobal/src/RegisterClass.ts" rel="noopener" target="_blank"><code>@RegisterClass</code></a>, and wire them into an Application's nav items through metadata. Call <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Explorer/shared/src/lib/base-resource-component.ts" rel="noopener" target="_blank"><code>NotifyLoadComplete()</code></a>, which <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Explorer/shared/src/lib/base-dashboard.ts" rel="noopener" target="_blank"><code>BaseDashboard</code></a> does for you. Round-trip URL state through <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Explorer/shared/src/lib/base-resource-component.ts" rel="noopener" target="_blank"><code>UpdateQueryParams</code></a> and <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Explorer/shared/src/lib/base-resource-component.ts" rel="noopener" target="_blank"><code>OnQueryParamsChanged</code></a>.</li>
+<li><strong>Page chrome.</strong> Use <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/ui-components/src/lib/page-layout/page-layout.component.ts" rel="noopener" target="_blank"><code>&lt;mj-page-layout&gt;</code></a>, <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/ui-components/src/lib/page-header/page-header.component.ts" rel="noopener" target="_blank"><code>&lt;mj-page-header&gt;</code></a> and <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/ui-components/src/lib/page-body/page-body.component.ts" rel="noopener" target="_blank"><code>&lt;mj-page-body&gt;</code></a>, and <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/ui-components/src/lib/left-nav/left-nav.component.ts" rel="noopener" target="_blank"><code>mj-left-nav</code></a> inside an app. Don't roll bespoke headers.</li>
+<li><strong>Agent-awareness.</strong> Every dashboard tells the platform's agents what it is showing with <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Explorer/shared/src/lib/navigation.service.ts" rel="noopener" target="_blank"><code>SetAgentContext</code></a> and <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Explorer/shared/src/lib/navigation.service.ts" rel="noopener" target="_blank"><code>SetAgentClientTools</code></a>. That is how an MJ screen becomes something an AI assistant can see and act on, for free.</li>
+</ul>
+<h3 id="how-the-floors-talk">How the floors talk</h3>
+<p>Downward with <code>@Input()</code>, upward with <code>@Output()</code>. Use the cancelable <code>Before&lt;Verb&gt;</code> / <code>After&lt;Verb&gt;</code> event pairs where a host may need to veto an action. A widget emits <em>intent</em> and the host decides what it means. That is the whole contract, and it is why moving a component never means rewriting it.</p>
+<h3 id="a-sentence-for-the-skeptic">A sentence for the skeptic</h3>
+<p>If you read the rules above as "MJ telling you what to do," read them again as a list of exits. <strong>L1 and L2 never import Explorer, so you can take them and leave.</strong> L0 never imports Angular, so you can take it to React, to Node, or to a script. The layering is not lock-in. It is the most detailed set of exit signs any framework has ever handed you.</p>
+
+</section><section class="chapter" id="6-the-honest-case-for-explorer-as-the-default"><h2><span class="ch-num">06</span><span class="ch-title">The honest case for Explorer as the default</span></h2>
+<h3 id="first-the-concession">First, the concession</h3>
+<p>Skepticism about frameworks is reasonable. Frameworks have a learning curve. They can be heavy. They make decisions you might have made differently, and wanting to own your app's destiny is a perfectly good instinct. Explorer is a large application, even with aggressive dynamic loading, and nobody should pretend otherwise.</p>
+<p>So here is the precise claim, and no more: <strong>for authenticated, returning users, Explorer should be your default chassis</strong>, because what it gives you is enormous, and what it costs you shrinks every month.</p>
+<h3 id="what-you-get-on-day-one">What you get on day one</h3>
+<p>Picture building a member portal "from scratch, on the API." Before your first feature, you will need to build or integrate:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>You'd need to build</th>
+<th>Explorer already has</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Sign-in for whatever your client uses</td>
+<td>Pluggable auth providers: MSAL (Entra ID), Auth0, Okta, Cognito, WorkOS and magic links, chosen by configuration</td>
+</tr>
+<tr>
+<td>Permission-aware reads everywhere</td>
+<td>The provider and entity layer enforce the user's permissions on every read and save</td>
+</tr>
+<tr>
+<td>Caching that doesn't serve stale data</td>
+<td><a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/MJCore/src/generic/baseEngine.ts" rel="noopener" target="_blank"><code>BaseEngine</code></a> caches with observable change and automatic invalidation on save</td>
+</tr>
+<tr>
+<td>Fast first paint on a big app</td>
+<td>Dynamic loading, component caching, and first-paint work tuned in the shell</td>
+</tr>
+<tr>
+<td>Theming, dark mode, brand skins</td>
+<td><a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/shared/src/lib/_tokens.scss" rel="noopener" target="_blank"><code>--mj-*</code></a> semantic tokens, ThemeService, and Theme Studio deriving a full brand from a few seeds</td>
+</tr>
+<tr>
+<td>A form for every table, kept in sync with the schema</td>
+<td>Generated forms for every entity, extended by slots and panels (this one also works outside Explorer, in any Angular app)</td>
+</tr>
+<tr>
+<td>Grids, filtering, saved views, export</td>
+<td><a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/entity-viewer/src/lib/entity-data-grid/entity-data-grid.component.ts" rel="noopener" target="_blank"><code>mj-entity-data-grid</code></a>, user views, the filter builder</td>
+</tr>
+<tr>
+<td>Lists, tags, record history, version comparison</td>
+<td>Built into every record form's container</td>
+</tr>
+<tr>
+<td>User preferences that follow the user across devices</td>
+<td><a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/MJCoreEntities/src/engines/UserInfoEngine.ts" rel="noopener" target="_blank"><code>UserInfoEngine</code></a></td>
+</tr>
+<tr>
+<td>An AI assistant that understands what's on screen</td>
+<td>Agent context and client tools on every dashboard</td>
+</tr>
+</tbody>
+</table></div>
+<p>Each row is weeks of work done once, by people who've done it many times, and maintained for you. Each row is also something a framework-free app must maintain <em>forever</em>.</p>
+<h3 id="but-itll-look-like-mj-explorer">"But it'll look like MJ Explorer"</h3>
+<p>It won't. Explorer is a <strong>chassis, not a look.</strong> The proof is in production:</p>
+<ul>
+<li><strong>Commercial SaaS products such as Izzy, Skip and Betty</strong> run their admin portals on MJ Explorer, branded and themed so thoroughly that people who use them every day have no idea.</li>
+<li><strong>BizApps Collaboration</strong>'s client portals, committee spaces and cohorts run on it too (section 7.1).</li>
+</ul>
+<p>When was the last time a user complained that their portal was "too obviously built on a framework"? It doesn't happen, because the framework isn't what they see.</p>
+<h3 id="when-explorer-falls-short-improve-the-shell">When Explorer falls short, improve the shell</h3>
+<p>Defaults stay honest only if they keep improving. MJ's rule: <strong>when Explorer genuinely lacks the flexibility or performance a product needs, improve the shell.</strong> Push the improvement <em>down</em> into Explorer instead of building around it.</p>
+<ul>
+<li>Every improvement to the shell lands in every product built on it.</li>
+<li>Every gap forked around becomes a private, permanent maintenance bill, and a reason the next team escapes Explorer too.</li>
+</ul>
+<p>This feedback loop is how "default to Explorer" avoids decaying into "Explorer is bloated so everyone builds their own." The chassis absorbs the lessons.</p>
+<h3 id="the-bill-for-ill-just-use-the-api">The bill for "I'll just use the API"</h3>
+<p>Put plainly, in the language of section 3: going straight to the API means <strong>getting off in the basement</strong>. You will rebuild the ground floor and L0 (typed objects, validation, caching, tier transparency), then pieces of L1 and L2 (grids, dialogs, forms), then pieces of L3 (auth, preferences, theming), and you'll do it once per product. The bill doesn't arrive on day one. It arrives in month six, one reinvented wheel at a time, and it never stops arriving.</p>
+<p>The elevator is right there.</p>
+
+</section><section class="chapter" id="7-three-ways-to-ship-with-worked-examples"><h2><span class="ch-num">07</span><span class="ch-title">Three ways to ship, with worked examples</span></h2>
+<p>The same layers support three shipping surfaces. Two real apps sit at either end of the range, and the middle path is where Angular Elements quietly shine.</p>
+<h3 id="71-inside-explorer-bizapps-collaboration">7.1 Inside Explorer: BizApps Collaboration</h3>
+<p><strong>What it is.</strong> <a href="https://github.com/MemberJunction/bizapps-collaboration" rel="noopener" target="_blank">BizApps Collaboration</a> is a free MJ Open App built around one object, the <strong>space</strong>: a bounded group of people, some from outside the organization, working on a bounded set of material, with an AI assistant bounded by the same rules. It covers client portals, boards and committees, chapters and cohorts, sponsors and outside reviewers. <strong>A committee is just a space type.</strong> Space types are metadata, and BizApps Committees will be rebuilt as one.</p>
+<p><strong>Why it's on Explorer.</strong> It is the textbook rung-2 answer: authenticated, long-running relationships. Collaboration ships <em>no Explorer and no API of its own</em>. <code>mj app install</code> drops it into your existing MJ host, and it inherits:</p>
+<ul>
+<li>the auth providers, including magic-link sign-in for outside participants;</li>
+<li>the theming;</li>
+<li>the caching;</li>
+<li>the chat area.</li>
+</ul>
+<p><strong>How it's layered.</strong> Collaboration is the cleanest reference implementation of the floors:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Package</th>
+<th>Floor</th>
+<th>What it holds</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a class="ref" href="https://github.com/MemberJunction/bizapps-collaboration/tree/next/packages/Core" rel="noopener" target="_blank"><code>@mj-biz-apps/collaboration-core</code></a></td>
+<td>L0</td>
+<td>The rules as pure functions: invitation ceiling, membership reach, bands, agent retrieval. No data access.</td>
+</tr>
+<tr>
+<td><a class="ref" href="https://github.com/MemberJunction/bizapps-collaboration/tree/next/packages/Entities" rel="noopener" target="_blank"><code>@mj-biz-apps/collaboration-entities</code></a></td>
+<td>L0</td>
+<td>Generated entity classes and the shared rules</td>
+</tr>
+<tr>
+<td><a class="ref" href="https://github.com/MemberJunction/bizapps-collaboration/tree/next/packages/EngineBase" rel="noopener" target="_blank"><code>@mj-biz-apps/collaboration-engine-base</code></a></td>
+<td>L0</td>
+<td>Browser-safe metadata caches (space types, role types)</td>
+</tr>
+<tr>
+<td><a class="ref" href="https://github.com/MemberJunction/bizapps-collaboration/tree/next/packages/AngularWidgets" rel="noopener" target="_blank"><code>@mj-biz-apps/collaboration-ng-widgets</code></a></td>
+<td>L1 + L2</td>
+<td><a class="ref" href="https://github.com/MemberJunction/bizapps-collaboration/tree/next/packages/AngularWidgets" rel="noopener" target="_blank"><code>mjc-*</code></a> widgets that "take plain values, emit events, and work in any Angular app"</td>
+</tr>
+<tr>
+<td><a class="ref" href="https://github.com/MemberJunction/bizapps-collaboration/tree/next/packages/Angular" rel="noopener" target="_blank"><code>@mj-biz-apps/collaboration-ng</code></a></td>
+<td>L3</td>
+<td>The Explorer surface and client bootstrap</td>
+</tr>
+</tbody>
+</table></div>
+<p>The widget package never imports <code>@angular/router</code> or <a class="ref" href="https://github.com/MemberJunction/MJ/tree/next/packages/Angular/Explorer/shared" rel="noopener" target="_blank"><code>@memberjunction/ng-shared</code></a> and never navigates. Its events are named <code>…Requested</code>, as in <code>SpaceOpenRequested</code> and <code>TabSelectRequested</code>, and the host decides what happens.</p>
+<p><strong>The proof that it works.</strong> Collaboration has a private <strong>UX Gallery</strong> package: a small standalone Angular app that renders the real <a class="ref" href="https://github.com/MemberJunction/bizapps-collaboration/tree/next/packages/AngularWidgets" rel="noopener" target="_blank"><code>mjc-*</code></a> widgets from fixtures, <strong>with no Explorer at all</strong>, and runs Playwright checks against them (light and dark). The same widgets that power the Explorer surface render in a bare Angular shell from hand-written data. That is L1/L2 portability demonstrated in CI, not just claimed.</p>
+<p><strong>Extensibility, the MJ way.</strong> A new kind of space is:</p>
+<ol>
+<li>metadata (its vocabulary, bands and allowed children);</li>
+<li>optionally a server driver and a UI driver (<a class="ref" href="https://github.com/MemberJunction/bizapps-collaboration/blob/next/packages/AngularWidgets/src/lib/base-space-type-ui-driver.ts" rel="noopener" target="_blank"><code>BaseSpaceTypeUIDriver</code></a>) contributing tabs, Overview cards and settings sections;</li>
+<li>optionally its own table extending Space through IsA.</li>
+</ol>
+<p>Nothing is forked. Other apps contribute into the same slots.</p>
+<h3 id="72-in-your-own-angular-app-the-widgets-as-parts">7.2 In your own Angular app: the widgets as parts</h3>
+<p>If you already run an Angular application and don't want Explorer's chassis, you can still ride to <strong>L2</strong>. Import the widget packages (<a class="ref" href="https://github.com/MemberJunction/MJ/tree/next/packages/Angular/Generic/ui-components" rel="noopener" target="_blank"><code>@memberjunction/ng-ui-components</code></a>, <a class="ref" href="https://github.com/MemberJunction/MJ/tree/next/packages/Angular/Generic/entity-viewer" rel="noopener" target="_blank"><code>ng-entity-viewer</code></a>, <a class="ref" href="https://github.com/MemberJunction/MJ/tree/next/packages/Angular/Generic/conversations" rel="noopener" target="_blank"><code>ng-conversations</code></a>, or an app's <code>*-ng-widgets</code> package), give them a provider, and handle their events in your own router. The Collaboration UX Gallery above is a working example of exactly this shape.</p>
+<p>What you keep: every widget, the typed entities underneath, tokens and theming. What you own: authentication, the shell, navigation and preferences, which are the things Explorer would have given you. That trade is often right for an <em>existing</em> app and rarely right for a <em>new</em> authenticated one (see rung 2).</p>
+<h3 id="73-anywhere-on-the-web-the-orders-checkout-an-angular-element">7.3 Anywhere on the web: the Orders checkout, an Angular Element</h3>
+<p><strong>The problem.</strong> BizApps Orders needs to sell things to people who have no MJ account: a conference registration, a membership, a course seat. The buyer is anonymous, the experience must be consumer-grade, and it has to drop into <em>any</em> website, whether a WordPress page, an association's CMS, or a chat or voice agent's panel. That is rung 2's other branch: <strong>no Explorer.</strong></p>
+<p><strong>The tempting wrong answer</strong> is a bespoke JavaScript widget that calls some endpoints. It's light, and it would be one more thing to build, style, secure and keep in sync with Orders' pricing rules forever.</p>
+<p><strong>What Orders did instead.</strong> It built the checkout entirely in Angular, on MJ's layers, and packaged it as an <strong>Angular Element</strong>, a standard HTML custom element:</p>
+<pre><code class="language-html">&lt;mj-orders-checkout slug="summit-2027" api-root="https://api.example.org/checkout"&gt;&lt;/mj-orders-checkout&gt;
+&lt;script src=".../checkout-element/main.js"&gt;&lt;/script&gt;
+</code></pre>
+<p>That's the whole integration. Any page that can hold an HTML tag can sell an Orders product.</p>
+<p><strong>How it's built:</strong></p>
+<ul>
+<li><strong>The widget.</strong> <a class="ref" href="https://github.com/MemberJunction/bizapps-orders/blob/next/packages/Angular/src/lib/checkout-widget/checkout-widget.component.ts" rel="noopener" target="_blank"><code>MJCheckoutWidgetComponent</code></a> (<a class="ref" href="https://github.com/MemberJunction/bizapps-orders/blob/next/packages/Angular/src/lib/checkout-widget/checkout-widget.component.ts" rel="noopener" target="_blank"><code>&lt;mj-checkout-widget&gt;</code></a>) is a reusable Angular component. It renders the form, extension fields discovered from metadata, quantities and attendees, and emits events like <code>submitted</code>. It works as a normal Angular component in Explorer or any Angular host.</li>
+<li><strong>The host.</strong> <a class="ref" href="https://github.com/MemberJunction/bizapps-orders/blob/next/packages/Angular/src/lib/checkout-widget/checkout-public-host.component.ts" rel="noopener" target="_blank"><code>CheckoutPublicHostComponent</code></a> wraps the widget for the public case. It loads configuration, mounts payment (Stripe) when the product is paid, and drives the session: initialize → draft → payment intent → complete.</li>
+<li><strong>The packaging.</strong> About 30 lines in <a class="ref" href="https://github.com/MemberJunction/bizapps-orders/blob/next/packages/Angular/scripts/checkout-element-entry.ts" rel="noopener" target="_blank"><code>packages/Angular/scripts/checkout-element-entry.ts</code></a> call Angular's <a class="ref" href="https://angular.dev/guide/elements" rel="noopener" target="_blank"><code>createCustomElement</code></a> and register <a class="ref" href="https://github.com/MemberJunction/bizapps-orders/blob/next/packages/Angular/scripts/checkout-element-entry.ts" rel="noopener" target="_blank"><code>&lt;mj-orders-checkout&gt;</code></a>. The bundle is built ahead of time with the Angular linker, so the payment page needs no <code>unsafe-eval</code>, and it honors a CSP nonce. It ships as the package export <a class="ref" href="https://github.com/MemberJunction/bizapps-orders/tree/next/packages/Angular" rel="noopener" target="_blank"><code>@mj-biz-apps/orders-ng/checkout-element</code></a>.</li>
+<li><strong>The host-page contract</strong> is plain DOM, so anything can integrate with it:</li>
+<li>HTML attributes in: <code>slug</code>, <code>api-root</code>, <code>email</code>, <code>source</code>;</li>
+<li>bubbling <code>CustomEvent</code>s out: <code>checkout-state-change</code>, <code>checkout-complete</code>, <code>checkout-error</code>, <code>checkout-cancel</code>, <code>checkout-close</code>;</li>
+<li>a <code>checkout-reset</code> event in.</li>
+</ul>
+<p>A Google Tag Manager tag can listen for <code>checkout-complete</code>; a chat agent can reset the element between callers. No event carries personal data, because every script on the host page can hear them.</p>
+<p><strong>The honest note on data.</strong> An anonymous buyer has no MJ session, so the public element does <em>not</em> talk to GraphQL through <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/base-types/src/base-angular-component.ts" rel="noopener" target="_blank"><code>ProviderToUse</code></a>. It talks to a narrow, purpose-built <strong>checkout edge</strong> (<a class="ref" href="https://github.com/MemberJunction/bizapps-orders/blob/next/packages/Server/src/CheckoutServerExtension.ts" rel="noopener" target="_blank"><code>OrdersCheckoutEdge</code></a>, served by MJAPI) with an origin allowlist and optional Turnstile. Behind that edge, the full stack runs: real entities, the real <a class="ref" href="https://github.com/MemberJunction/bizapps-orders/blob/next/packages/Entities/src/pricing/OrderPricingService.ts" rel="noopener" target="_blank"><code>OrderPricingService</code></a>, and <code>order.Confirm()</code> posting double-entry journal entries. That is the right pattern for unauthenticated surfaces: <strong>a small, explicit public door in front of the same typed core</strong>, rather than exposing the general API to guests.</p>
+<p><strong>Packaging is not the same as access.</strong> An Angular Element can sit on either side of the trust line, and the two cases are architecturally opposite:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th></th>
+<th><strong>Unauthenticated element</strong> (the Orders checkout)</th>
+<th><strong>Authenticated element</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Who is using it</td>
+<td>An anonymous guest with no MJ session</td>
+<td>A signed-in user the system already trusts</td>
+</tr>
+<tr>
+<td>How it reaches the stack</td>
+<td>Through a deliberately narrow public edge, built for one job</td>
+<td>Directly, through <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/base-types/src/base-angular-component.ts" rel="noopener" target="_blank"><code>ProviderToUse</code></a>, like any L2 widget</td>
+</tr>
+<tr>
+<td>What it can touch</td>
+<td>Only what the edge allows: a session, a draft, a payment, a confirmation</td>
+<td>Everything the user's permissions allow</td>
+</tr>
+<tr>
+<td>The safety model</td>
+<td>Safety by constraint: rate limits, origin allowlist, session keys re-verified on every call</td>
+<td>The user's identity and MJ's permission model, the same as in Explorer</td>
+</tr>
+</tbody>
+</table></div>
+<p>Supporting the first case is a feature, not a workaround. You <em>want</em> people who have no account to be able to use the full stack, as long as they come through an extremely narrow, secure door. The second case is simply an L2 widget shipped as an HTML tag instead of an Explorer tab. Same packaging format, completely different trust posture. Never read "packaged as an element" as "has restricted access," or the reverse.</p>
+<p><strong>Why this is the sweet spot for public, transactional UI:</strong></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th></th>
+<th>Bare custom widget calling APIs</th>
+<th><strong>Angular Element on MJ layers</strong></th>
+<th>Full MJ Explorer</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Page weight</td>
+<td>Lightest</td>
+<td><strong>Light</strong>: one bundle, one component tree</td>
+<td>Heaviest</td>
+</tr>
+<tr>
+<td>Uses MJ's widgets, tokens, typed models</td>
+<td>No</td>
+<td><strong>Yes</strong></td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>Same component reusable inside Explorer</td>
+<td>No</td>
+<td><strong>Yes</strong>: <a class="ref" href="https://github.com/MemberJunction/bizapps-orders/blob/next/packages/Angular/src/lib/checkout-widget/checkout-widget.component.ts" rel="noopener" target="_blank"><code>&lt;mj-checkout-widget&gt;</code></a></td>
+<td>n/a</td>
+</tr>
+<tr>
+<td>Drops into any HTML page</td>
+<td>Yes</td>
+<td><strong>Yes</strong></td>
+<td>No</td>
+</tr>
+<tr>
+<td>Needs an MJ login</td>
+<td>Usually not</td>
+<td><strong>No</strong></td>
+<td>Yes</td>
+</tr>
+</tbody>
+</table></div>
+<p>It is heavier than a hand-rolled widget, but for nearly everything it is plenty fast, and in exchange you get full-stack power encapsulated behind one HTML tag. <strong>Angular Elements are the easiest way to take the power of Angular, and of MJ's layers, to any page on the web.</strong></p>
+
+</section><section class="chapter" id="8-rules-and-enforcement"><h2><span class="ch-num">08</span><span class="ch-title">Rules and enforcement</span></h2>
+<p>MJ doesn't rely on good intentions. The fence around the garden is mechanical.</p>
+<h3 id="layers-are-declared-then-checked">Layers are declared, then checked</h3>
+<p>Every Angular package declares its layer in <code>package.json</code> with <code>"mjUILayer"</code>:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Value</th>
+<th>Floors</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>runtime</code></td>
+<td>L0</td>
+<td>No Angular at all</td>
+</tr>
+<tr>
+<td><code>widgets</code></td>
+<td>L1, L2</td>
+<td>No <code>@angular/router</code>, no <a class="ref" href="https://github.com/MemberJunction/MJ/tree/next/packages/Angular/Explorer/shared" rel="noopener" target="_blank"><code>@memberjunction/ng-shared</code></a>, no Explorer packages</td>
+</tr>
+<tr>
+<td><code>surface</code></td>
+<td>L3</td>
+<td>Explorer resources, dashboards, and Explorer-specific form registrations</td>
+</tr>
+<tr>
+<td><code>shell</code></td>
+<td>—</td>
+<td>An application (Explorer itself, a UX gallery, a standalone app)</td>
+</tr>
+</tbody>
+</table></div>
+<p><a class="ref" href="https://github.com/MemberJunction/MJ/tree/next/packages/Standards" rel="noopener" target="_blank"><code>mj standards check</code></a> (<a class="ref" href="https://github.com/MemberJunction/MJ/tree/next/packages/Standards" rel="noopener" target="_blank"><code>@memberjunction/standards</code></a>, whose <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Standards/src/checks/ui-layers.ts" rel="noopener" target="_blank"><code>ui-layers</code></a> check enforces this) fails the build when a widgets package imports the router or an Explorer package. The guard covers dependencies in <code>package.json</code> too: a widgets package that merely <em>declares</em> <code>@angular/router</code> has already lost the property.</p>
+<h3 id="design-is-tokenized-then-checked">Design is tokenized, then checked</h3>
+<ul>
+<li><strong>Colors</strong> come from semantic <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/shared/src/lib/_tokens.scss" rel="noopener" target="_blank"><code>--mj-*</code></a> tokens (<code>--mj-text-primary</code>, <code>--mj-bg-surface</code>, <code>--mj-brand-primary</code>…). Never hardcoded hex. Never primitive tokens like <code>--mj-color-neutral-500</code>, which don't adapt to dark mode. Use <code>color-mix()</code> for translucency.</li>
+<li><strong>App-specific tokens</strong> are expressions of MJ's semantic tokens, never new raw colors. Collaboration's <a class="ref" href="https://github.com/MemberJunction/bizapps-collaboration/blob/next/packages/AngularWidgets/src/lib/_tokens.scss" rel="noopener" target="_blank"><code>--mjc-*</code></a> set is the model.</li>
+<li><strong>Controls</strong> come from <a class="ref" href="https://github.com/MemberJunction/MJ/tree/next/packages/Angular/Generic/ui-components" rel="noopener" target="_blank"><code>ng-ui-components</code></a>. Never Kendo, PrimeNG or Material. Never a component-scoped restyle of <code>.mj-btn</code>.</li>
+<li><strong>Icons</strong> are Font Awesome.</li>
+<li><strong>Global CSS kits are an anti-pattern.</strong> Style in the component. A global sheet ends up duplicating components MJ already ships, and if it reuses MJ's <code>mj-</code> class prefix it collides with MJ's own classes in ways that depend on stylesheet load order.</li>
+<li><strong>Enforced by:</strong> <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/package.json" rel="noopener" target="_blank"><code>npm run check:ui</code></a> (tokens, buttons, SCSS compilation, focus rings) on every PR to <code>next</code>.</li>
+</ul>
+<h3 id="code-conventions-that-keep-widgets-portable">Code conventions that keep widgets portable</h3>
+<ul>
+<li>Extend <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/base-types/src/base-angular-component.ts" rel="noopener" target="_blank"><code>BaseAngularComponent</code></a> and use <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/base-types/src/base-angular-component.ts" rel="noopener" target="_blank"><code>ProviderToUse</code></a>. Forward <code>[Provider]</code> to children.</li>
+<li><a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/MJCore/src/views/runView.ts" rel="noopener" target="_blank"><code>RunView</code></a> doesn't throw, so check <code>.Success</code>. Batch with <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/MJCore/src/views/runView.ts" rel="noopener" target="_blank"><code>RunViews</code></a>. Ask for <code>ResultType: 'entity_object'</code> when you want entity types; <code>'simple'</code> returns raw rows, so a date column arrives as a string.</li>
+<li>Persist user preferences through <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/MJCoreEntities/src/engines/UserInfoEngine.ts" rel="noopener" target="_blank"><code>UserInfoEngine</code></a> (<code>mj.&lt;feature&gt;.&lt;pref&gt;</code>), never <code>localStorage</code>.</li>
+<li>Use <code>@Input</code> setters, not <code>ngOnChanges</code>. Use the modern control flow (<code>@if</code>, <code>@for</code> with <code>track</code>).</li>
+<li>PascalCase for public members, inputs and outputs.</li>
+</ul>
+<h3 id="the-guides-behind-this-one">The guides behind this one</h3>
+<p>This guide is the <em>why</em> and the <em>map</em>. The detailed <em>how</em> lives in MJ's <a class="ref" href="https://github.com/MemberJunction/MJ/tree/next/guides" rel="noopener" target="_blank"><code>guides/</code></a>:</p>
+<ul>
+<li><a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/guides/UI_LAYERING_GUIDE.md" rel="noopener" target="_blank"><code>UI_LAYERING_GUIDE.md</code></a></li>
+<li><a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/guides/FORMS_ARCHITECTURE_GUIDE.md" rel="noopener" target="_blank"><code>FORMS_ARCHITECTURE_GUIDE.md</code></a></li>
+<li><a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/guides/DASHBOARD_BEST_PRACTICES.md" rel="noopener" target="_blank"><code>DASHBOARD_BEST_PRACTICES.md</code></a></li>
+<li><a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/guides/NAVIGATION_AND_ROUTING_GUIDE.md" rel="noopener" target="_blank"><code>NAVIGATION_AND_ROUTING_GUIDE.md</code></a></li>
+<li><a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/guides/APP_COLOR_ARCHITECTURE.md" rel="noopener" target="_blank"><code>APP_COLOR_ARCHITECTURE.md</code></a></li>
+</ul>
+<p>Alongside those are <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/CLAUDE.md" rel="noopener" target="_blank"><code>packages/Angular/CLAUDE.md</code></a> and <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/ui-components/README.md" rel="noopener" target="_blank"><code>packages/Angular/Generic/ui-components/README.md</code></a>.</p>
+
+</section><section class="chapter appendix" id="appendix-for-agents-the-fence"><h2><span class="ch-num">A</span><span class="ch-title">Appendix for agents: the fence</span></h2>
+<p>The rules above without the argument. Treat each one as a hard constraint.</p>
+<p><strong>Choosing a floor</strong></p>
+<ol>
+<li>The UI doesn't touch MJ data → this guide doesn't apply.</li>
+<li>The user is authenticated and returning → build an Explorer surface (L3) over widgets (L1/L2) over the domain runtime (L0).</li>
+<li>The user is anonymous → build widgets, package them as an Angular Element, and reach the stack only through a narrow, purpose-built server edge. Never expose the general API to guests. Don't depend on Explorer.<ul>
+<li>The user is authenticated but the UI must live outside Explorer → the same Angular Element packaging, but the widget reads through <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/base-types/src/base-angular-component.ts" rel="noopener" target="_blank"><code>ProviderToUse</code></a> with the user's own permissions. Packaging does not decide access; authentication does.</li>
+</ul>
+</li>
+<li>The consumer is non-Angular → stop at L0.</li>
+</ol>
+<p><strong>Layer boundaries</strong></p>
+<ol start="5">
+<li>L0 imports no Angular. L1 has zero data access. L2 reads only through <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/base-types/src/base-angular-component.ts" rel="noopener" target="_blank"><code>ProviderToUse</code></a>.</li>
+<li>Nothing below L3 imports <code>@angular/router</code>, <code>Location</code> (for navigation), <a class="ref" href="https://github.com/MemberJunction/MJ/tree/next/packages/Angular/Explorer/shared" rel="noopener" target="_blank"><code>@memberjunction/ng-shared</code></a>, or any Explorer package. This applies in source <em>and</em> in <code>package.json</code>.</li>
+<li>L3 navigates only via <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Explorer/shared/src/lib/navigation.service.ts" rel="noopener" target="_blank"><code>NavigationService</code></a>, never <code>Router</code>. L3 contains no domain logic.</li>
+<li>Widgets emit intent (<code>…Requested</code>) through <code>@Output()</code>. Hosts decide.</li>
+</ol>
+<p><strong>Data</strong></p>
+<ol start="9">
+<li>No data-access service layer. Bind to <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/MJCore/src/generic/baseEntity.ts" rel="noopener" target="_blank"><code>BaseEntity</code></a> subclasses, Remote Operations and <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/MJCore/src/generic/baseEngine.ts" rel="noopener" target="_blank"><code>BaseEngine</code></a> caches. Services hold only Angular-shaped UI state.</li>
+<li>Never <code>new RunView()</code> or <code>new Metadata()</code> in Angular. Use <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/MJCore/src/views/runView.ts" rel="noopener" target="_blank"><code>RunView.FromMetadataProvider(this.ProviderToUse)</code></a> and <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/base-types/src/base-angular-component.ts" rel="noopener" target="_blank"><code>this.ProviderToUse.GetEntityObject(...)</code></a>.</li>
+<li>Check <code>.Success</code> on every <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/MJCore/src/views/runView.ts" rel="noopener" target="_blank"><code>RunView</code></a>. Use <code>ResultType: 'entity_object'</code> when typing results as entities. Never loop children (that's the N+1); use <code>IncludeRelatedRecords</code> or <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/MJCore/src/views/runView.ts" rel="noopener" target="_blank"><code>RunViews</code></a>.</li>
+<li>Rules decidable from the record belong on the shared entity subclass (both tiers). Rules needing the database belong on the server subclass or a Remote Operation.</li>
+</ol>
+<p><strong>Forms and surfaces</strong></p>
+<ol start="13">
+<li>Forms come from <a class="ref" href="https://github.com/MemberJunction/MJ/tree/next/packages/Angular/Generic/base-forms" rel="noopener" target="_blank"><code>@memberjunction/ng-base-forms</code></a>, which is L2 and works in any Angular app. Don't build a bespoke editor. Extend generated forms with <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/base-forms/src/lib/panel-slot/base-form-panel.ts" rel="noopener" target="_blank"><code>BaseFormPanel</code></a> slot contributions first. Full overrides subclass the generated form, register it with <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/MJGlobal/src/RegisterClass.ts" rel="noopener" target="_blank"><code>@RegisterClass(BaseFormComponent, '&lt;Entity Name&gt;')</code></a>, and keep <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/base-forms/src/lib/container/record-form-container.component.ts" rel="noopener" target="_blank"><code>&lt;mj-record-form-container&gt;</code></a>.</li>
+<li>Resources extend <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Explorer/shared/src/lib/base-resource-component.ts" rel="noopener" target="_blank"><code>BaseResourceComponent</code></a> or <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Explorer/shared/src/lib/base-dashboard.ts" rel="noopener" target="_blank"><code>BaseDashboard</code></a>, call <code>super.ngOnInit()</code> and <code>super.ngOnDestroy()</code>, call <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Explorer/shared/src/lib/base-resource-component.ts" rel="noopener" target="_blank"><code>NotifyLoadComplete()</code></a>, and round-trip URL state via <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Explorer/shared/src/lib/base-resource-component.ts" rel="noopener" target="_blank"><code>UpdateQueryParams</code></a> + <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Explorer/shared/src/lib/base-resource-component.ts" rel="noopener" target="_blank"><code>OnQueryParamsChanged</code></a>.</li>
+<li>Every dashboard sets <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Explorer/shared/src/lib/navigation.service.ts" rel="noopener" target="_blank"><code>SetAgentContext</code></a> and <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Explorer/shared/src/lib/navigation.service.ts" rel="noopener" target="_blank"><code>SetAgentClientTools</code></a>.</li>
+<li>Use <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/ui-components/src/lib/page-layout/page-layout.component.ts" rel="noopener" target="_blank"><code>&lt;mj-page-layout&gt;</code></a>, <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/ui-components/src/lib/page-header/page-header.component.ts" rel="noopener" target="_blank"><code>&lt;mj-page-header&gt;</code></a> and <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/ui-components/src/lib/page-body/page-body.component.ts" rel="noopener" target="_blank"><code>&lt;mj-page-body&gt;</code></a>. No bespoke headers.</li>
+</ol>
+<p><strong>Look and feel</strong></p>
+<ol start="17">
+<li>Controls come from <a class="ref" href="https://github.com/MemberJunction/MJ/tree/next/packages/Angular/Generic/ui-components" rel="noopener" target="_blank"><code>@memberjunction/ng-ui-components</code></a>. <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/shared/src/lib/loading/loading.component.ts" rel="noopener" target="_blank"><code>&lt;mj-loading&gt;</code></a> is the only spinner. <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/ui-components/src/lib/button/button.directive.ts" rel="noopener" target="_blank"><code>button[mjButton]</code></a> is the only button. Confirm goes on the left, Cancel on the right.</li>
+<li>Colors come from semantic <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/Angular/Generic/shared/src/lib/_tokens.scss" rel="noopener" target="_blank"><code>--mj-*</code></a> tokens only. No hex, no primitives. App tokens derive from MJ semantic tokens.</li>
+<li>Style in the component. No global stylesheets. Never use the <code>mj-</code> class prefix for app classes.</li>
+<li>Font Awesome icons. Preferences go in <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/packages/MJCoreEntities/src/engines/UserInfoEngine.ts" rel="noopener" target="_blank"><code>UserInfoEngine</code></a>, never <code>localStorage</code>.</li>
+</ol>
+<p><strong>Before you regenerate</strong></p>
+<ol start="21">
+<li>Search for an existing widget, panel slot or engine <strong>before</strong> generating a new one. Regenerating a one-off is the failure this framework exists to prevent.</li>
+<li>If Explorer or a shared widget falls short, propose an improvement to the shell or the library. Don't fork around it.</li>
+<li>Run <a class="ref" href="https://github.com/MemberJunction/MJ/tree/next/packages/Standards" rel="noopener" target="_blank"><code>mj standards check</code></a> and <a class="ref" href="https://github.com/MemberJunction/MJ/blob/next/package.json" rel="noopener" target="_blank"><code>npm run check:ui</code></a> before declaring UI work done.</li>
+</ol></section>
+    </article>
+  </div>
+
+  <footer class="foot">
+    <span>MemberJunction UI architecture guide. Code references link to the <code>next</code> branch on GitHub.</span>
+    <a href="https://github.com/MemberJunction/MJ/blob/next/guides/UI_LAYERING_GUIDE.md" target="_blank" rel="noopener">The detailed layering rules →</a>
+  </footer>
+</div>
+
+<script>
+(function () {
+  var links = Array.prototype.slice.call(document.querySelectorAll('.rail a[data-sec]'));
+  if (!('IntersectionObserver' in window) || !links.length) return;
+  var byId = {};
+  links.forEach(function (a) { byId[a.getAttribute('data-sec')] = a; });
+  var visible = {};
+  function update() {
+    var best = null, bestTop = Infinity;
+    Object.keys(visible).forEach(function (id) {
+      if (visible[id] && visible[id] < bestTop) { bestTop = visible[id]; best = id; }
+    });
+    if (!best) return;
+    links.forEach(function (a) { a.removeAttribute('aria-current'); });
+    var cur = byId[best];
+    cur.setAttribute('aria-current', 'true');
+    var rail = document.querySelector('.rail');
+    if (rail && rail.scrollWidth > rail.clientWidth) {
+      rail.scrollTo({ left: cur.offsetLeft - 24, behavior: 'auto' });
+    }
+  }
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      visible[e.target.id] = e.isIntersecting ? (e.boundingClientRect.top + 100000) : 0;
+    });
+    update();
+  }, { rootMargin: '-15% 0px -70% 0px' });
+  document.querySelectorAll('section.chapter').forEach(function (s) { io.observe(s); });
+  links[0].setAttribute('aria-current', 'true');
+})();
+</script>
+
+</body>
+</html>
