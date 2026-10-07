@@ -1,5 +1,26 @@
 # @memberjunction/code-execution
 
+## 6.2.0-edge.3
+
+### Patch Changes
+
+- fe39606: Memory-leak audit round 17 fixes.
+  - **Core entity forms:** twelve custom form components (Lists, Tests, Entities, Templates, AI Agent Runs, Search Scopes, AI Agents, AI Prompt Runs, Queries) overrode `ngOnDestroy` without calling `super.ngOnDestroy()`, so every opened form stayed subscribed to the root-singleton form-state stream. They now call `super`.
+  - **Testing engine:** the per-suite rubric version pins and labels grew on every run on a process-lifetime driver. They are now bounded LRU caches with a TTL.
+  - **CodeGen:** `RunCommand` now clears its timeout timer when the command finishes first, so it no longer kills a recycled PID later or holds the event loop open.
+  - **Code execution:** a sandbox worker that fails to start is now killed instead of orphaned, and `Shutdown()` decides whether a worker has exited from `exitCode`/`signalCode` rather than `killed`.
+
+- Updated dependencies [dfe40a4]
+- Updated dependencies [0f04590]
+- Updated dependencies [41c2c08]
+- Updated dependencies [66fd011]
+- Updated dependencies [196160a]
+- Updated dependencies [60bd774]
+- Updated dependencies [35da130]
+- Updated dependencies [28c92e0]
+  - @memberjunction/global@6.2.0-edge.3
+  - @memberjunction/core@6.2.0-edge.3
+
 ## 6.2.0-edge.2
 
 ### Patch Changes
