@@ -86,6 +86,7 @@ export abstract class BaseHierarchyFormPanel<TRecord extends BaseEntity> extends
     template: `
         <mj-collapsible-panel
             SectionKey="agentCategoryHierarchy"
+            [Order]="DisplayOrder"
             SectionName="Hierarchy"
             Icon="fa-solid fa-sitemap"
             Variant="related-entity"
@@ -143,6 +144,7 @@ export class AIAgentCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJAIAg
     template: `
         <mj-collapsible-panel
             SectionKey="promptCategoryHierarchy"
+            [Order]="DisplayOrder"
             SectionName="Hierarchy"
             Icon="fa-solid fa-sitemap"
             Variant="related-entity"
@@ -200,6 +202,7 @@ export class AIPromptCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJAIP
     template: `
         <mj-collapsible-panel
             SectionKey="actionCategoryHierarchy"
+            [Order]="DisplayOrder"
             SectionName="Hierarchy"
             Icon="fa-solid fa-sitemap"
             Variant="related-entity"
@@ -257,6 +260,7 @@ export class ActionCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJActio
     template: `
         <mj-collapsible-panel
             SectionKey="dashboardCategoryHierarchy"
+            [Order]="DisplayOrder"
             SectionName="Hierarchy"
             Icon="fa-solid fa-sitemap"
             Variant="related-entity"
@@ -314,6 +318,7 @@ export class DashboardCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJDa
     template: `
         <mj-collapsible-panel
             SectionKey="queryCategoryHierarchy"
+            [Order]="DisplayOrder"
             SectionName="Hierarchy"
             Icon="fa-solid fa-sitemap"
             Variant="related-entity"
@@ -371,6 +376,7 @@ export class QueryCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJQueryC
     template: `
         <mj-collapsible-panel
             SectionKey="tagHierarchy"
+            [Order]="DisplayOrder"
             SectionName="Hierarchy"
             Icon="fa-solid fa-sitemap"
             Variant="related-entity"
@@ -428,6 +434,7 @@ export class TagHierarchyPanel extends BaseHierarchyFormPanel<MJTagEntity> {
     template: `
         <mj-collapsible-panel
             SectionKey="projectHierarchy"
+            [Order]="DisplayOrder"
             SectionName="Hierarchy"
             Icon="fa-solid fa-sitemap"
             Variant="related-entity"
@@ -485,6 +492,7 @@ export class ProjectHierarchyPanel extends BaseHierarchyFormPanel<MJProjectEntit
     template: `
         <mj-collapsible-panel
             SectionKey="contentItemHierarchy"
+            [Order]="DisplayOrder"
             SectionName="Hierarchy"
             Icon="fa-solid fa-sitemap"
             Variant="related-entity"
@@ -542,6 +550,7 @@ export class ContentItemHierarchyPanel extends BaseHierarchyFormPanel<MJContentI
     template: `
         <mj-collapsible-panel
             SectionKey="fileCategoryHierarchy"
+            [Order]="DisplayOrder"
             SectionName="Hierarchy"
             Icon="fa-solid fa-sitemap"
             Variant="related-entity"
@@ -599,6 +608,7 @@ export class FileCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJFileCat
     template: `
         <mj-collapsible-panel
             SectionKey="listCategoryHierarchy"
+            [Order]="DisplayOrder"
             SectionName="Hierarchy"
             Icon="fa-solid fa-sitemap"
             Variant="related-entity"
@@ -656,6 +666,7 @@ export class ListCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJListCat
     template: `
         <mj-collapsible-panel
             SectionKey="recordProcessCategoryHierarchy"
+            [Order]="DisplayOrder"
             SectionName="Hierarchy"
             Icon="fa-solid fa-sitemap"
             Variant="related-entity"
@@ -713,6 +724,7 @@ export class RecordProcessCategoryHierarchyPanel extends BaseHierarchyFormPanel<
     template: `
         <mj-collapsible-panel
             SectionKey="skillHierarchy"
+            [Order]="DisplayOrder"
             SectionName="Hierarchy"
             Icon="fa-solid fa-sitemap"
             Variant="related-entity"
@@ -770,6 +782,7 @@ export class SkillHierarchyPanel extends BaseHierarchyFormPanel<MJSkillEntity> {
     template: `
         <mj-collapsible-panel
             SectionKey="templateCategoryHierarchy"
+            [Order]="DisplayOrder"
             SectionName="Hierarchy"
             Icon="fa-solid fa-sitemap"
             Variant="related-entity"
@@ -827,6 +840,7 @@ export class TemplateCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJTem
     template: `
         <mj-collapsible-panel
             SectionKey="testSuiteHierarchy"
+            [Order]="DisplayOrder"
             SectionName="Hierarchy"
             Icon="fa-solid fa-sitemap"
             Variant="related-entity"
@@ -884,6 +898,7 @@ export class TestSuiteHierarchyPanel extends BaseHierarchyFormPanel<MJTestSuiteE
     template: `
         <mj-collapsible-panel
             SectionKey="userViewCategoryHierarchy"
+            [Order]="DisplayOrder"
             SectionName="Hierarchy"
             Icon="fa-solid fa-sitemap"
             Variant="related-entity"

@@ -209,6 +209,14 @@ describe('xAIRealtimeClient', () => {
             expect(client.Fake.SentFrames().at(-1)).toEqual({ type: 'input_audio_buffer.append', audio: 'UENNMTY=' });
         });
 
+        it('should keep the client-side requestedTracks hint out of session.update', async () => {
+            await connect(client, { type: 'realtime', instructions: 'be the session voice', requestedTracks: [{ Direction: 'Inbound', Modality: 'Video' }] });
+            expect(client.Fake.SentFrames()[0]).toEqual({
+                type: 'session.update',
+                session: { type: 'realtime', instructions: 'be the session voice' },
+            });
+        });
+
         it('should NOT send a session.update when the session config is empty', async () => {
             await connect(client, {});
             expect(client.Fake.SentFrames().some((f) => f.type === 'session.update')).toBe(false);

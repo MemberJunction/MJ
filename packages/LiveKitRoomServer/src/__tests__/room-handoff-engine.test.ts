@@ -287,6 +287,18 @@ describe('RoomHandoffEngine', () => {
       expect(state.left).toBe(true);
     });
 
+    it('passes FromNumber to Dialer when specified on destination', async () => {
+      const { agent } = makeAgent();
+      const req: HandoffRequest = {
+        Mode: 'blind',
+        Summary: 'Billing question',
+        Destination: { Kind: 'number', Number: '+14155550123', DisplayName: 'Front desk', FromNumber: '+18005559999' },
+      };
+      await engine.RequestHandoff(agent, req);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(dialed[0]).toMatchObject({ Number: '+14155550123', RoomName: 'call-1', FromNumber: '+18005559999' });
+    });
+
     it('tells the AI when the number does not pick up', async () => {
       const { agent, notes, state } = makeAgent();
       await engine.RequestHandoff(agent, numberRequest);

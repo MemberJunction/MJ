@@ -38,6 +38,8 @@ export type HandoffDestination =
           /** E.164 number the room dials. The caller of the engine has already checked it against the outbound policy. */
           Number: string;
           DisplayName: string;
+          /** Optional outbound caller ID to present when dialing. */
+          FromNumber?: string;
       }
     | {
           Kind: 'agent';
@@ -73,6 +75,8 @@ export interface HandoffOfferView {
     CreatedAt: string;
     /** ISO-8601 UTC; after this the offer can no longer be accepted. */
     ExpiresAt: string;
+    /** The MJ interaction ID associated with this conversation/room, if known. */
+    InteractionID?: string | null;
 }
 
 /** One change to an offer, as published to the person it was offered to. */
@@ -127,6 +131,8 @@ export interface DialIntoRoomRequest {
     Number: string;
     ParticipantIdentity: string;
     DisplayName?: string;
+    /** Caller ID / outbound from number (overrides default outbound from number). */
+    FromNumber?: string;
     /** Seconds to let the number ring. */
     RingTimeoutSeconds?: number;
 }
