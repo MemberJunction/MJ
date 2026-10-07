@@ -1,0 +1,51 @@
+{
+  "name": "@memberjunction/ng-realtime-channels",
+  "version": "6.2.0-edge.3",
+  "description": "MemberJunction: build realtime-agent channels in Angular. Wrap an EXISTING Angular component as a channel surface with AngularComponentChannel (a descriptor plus a few binding functions), and let channels show the model pictures of DOM surfaces through an opt-in rasterizer. No overlay, no Explorer, no router.",
+  "main": "./dist/public-api.js",
+  "typings": "./dist/public-api.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "test:types": "tsc --noEmit -p tsconfig.spec.json",
+    "build": "ngc",
+    "test:watch": "vitest"
+  },
+  "keywords": [
+    "angular",
+    "realtime",
+    "channel",
+    "ai-agent",
+    "memberjunction"
+  ],
+  "author": "MemberJunction",
+  "license": "BUSL-1.1",
+  "devDependencies": {
+    "@angular/compiler": "21.2.22",
+    "@angular/compiler-cli": "21.2.22",
+    "@memberjunction/ng-test-utils": "6.2.0-edge.3",
+    "vitest": "^4.0.18"
+  },
+  "peerDependencies": {
+    "@angular/common": "^21.2.22",
+    "@angular/core": "^21.2.22"
+  },
+  "dependencies": {
+    "@memberjunction/ai": "6.2.0-edge.3",
+    "@memberjunction/ai-core-plus": "6.2.0-edge.3",
+    "@memberjunction/core": "6.2.0-edge.3",
+    "@memberjunction/global": "6.2.0-edge.3",
+    "@memberjunction/realtime-runtime": "6.2.0-edge.3",
+    "html-to-image": "^1.11.11",
+    "rxjs": "^7.8.2",
+    "tslib": "^2.8.1"
+  },
+  "sideEffects": false,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  },
+  "mjUILayer": "widgets"
+}

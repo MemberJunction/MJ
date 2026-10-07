@@ -395,7 +395,7 @@ describe('channel registry on a connect-only provider (#4887)', () => {
         Data: JSON.stringify({ ID: `id-${Name}`, Name, ClientPluginClass: `${Name}Channel`, IsActive }),
     });
 
-    it('reads the ACTIVE registry rows over GraphQL, without touching AIEngineBase, when the provider has no entity metadata', async () => {
+    it('reads the registry rows over GraphQL, active and inactive (an inactive row is the kill switch), without touching AIEngineBase, when the provider has no entity metadata', async () => {
         const spy = vi.spyOn(AIEngineBase, 'GetProviderInstance');
         const ExecuteGQL = vi.fn().mockResolvedValue({
             RunDynamicView: { Success: true, Results: [registryRow('Whiteboard', true), registryRow('Retired', false)] },
@@ -405,10 +405,12 @@ describe('channel registry on a connect-only provider (#4887)', () => {
             runtime.Provider = { Entities: [], ExecuteGQL } as never; // Entities + ExecuteGQL are all it reads
 
             await expect(fetchChannelDefinitions(runtime)).resolves.toEqual([
-                { ID: 'id-Whiteboard', Name: 'Whiteboard', ClientPluginClass: 'WhiteboardChannel' },
+                { ID: 'id-Whiteboard', Name: 'Whiteboard', ClientPluginClass: 'WhiteboardChannel', IsActive: true },
+                { ID: 'id-Retired', Name: 'Retired', ClientPluginClass: 'RetiredChannel', IsActive: false },
             ]);
             expect(ExecuteGQL).toHaveBeenCalledTimes(1);
             expect(ExecuteGQL.mock.calls[0][1]).toMatchObject({ input: { EntityName: 'MJ: AI Agent Channels' } });
+            expect(ExecuteGQL.mock.calls[0][1].input.ExtraFilter).toBeUndefined();
             expect(spy).not.toHaveBeenCalled();
         } finally {
             spy.mockRestore();

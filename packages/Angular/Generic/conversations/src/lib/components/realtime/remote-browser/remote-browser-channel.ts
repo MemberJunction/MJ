@@ -3,7 +3,8 @@ import type { Subscription } from 'rxjs';
 import { RegisterClass } from '@memberjunction/global';
 import { CHANNEL_INBOUND_VIDEO_TRACK, JSONValue, RealtimeToolDefinition, RealtimeTrack, RealtimeTrackDescriptor } from '@memberjunction/ai';
 import { ChannelInboundVideoBridge, IChannelFrameProvider } from '@memberjunction/ai-realtime-client';
-import { BaseRealtimeChannelClient, ChannelOnboardingDetails } from '@memberjunction/realtime-runtime';
+import { REALTIME_CHANNEL_CONTRACT_VERSION, type RealtimeChannelDescriptor } from '@memberjunction/ai-core-plus';
+import { BaseRealtimeChannelClient, BuildToolBackedVerbs, ChannelOnboardingDetails } from '@memberjunction/realtime-runtime';
 import { RemoteBrowserHumanInputEvent, RemoteBrowserSnapshotView, RemoteBrowserSurfaceComponent } from './remote-browser-surface.component';
 import {
   MapToolToAction,
@@ -398,6 +399,41 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
 
   public override GetSurfaceComponent(): Type<RemoteBrowserSurfaceComponent> {
     return RemoteBrowserSurfaceComponent;
+  }
+
+  /**
+   * The remote browser's self-description: a real, server-hosted web browser the user can watch, with
+   * every `browser_*` tool as a verb (so a tool a subclass adds shows up here too). The model is shown
+   * its pixels (page frames), so the exposure ceiling is `pixels`.
+   */
+  public override GetDescriptor(): RealtimeChannelDescriptor {
+    return {
+      Key: this.ChannelName,
+      Version: REALTIME_CHANNEL_CONTRACT_VERSION,
+      DisplayName: this.TabTitle,
+      OwningPackage: '@memberjunction/ng-conversations',
+      Instructions:
+        'A live web browser you can drive while the user watches: open pages, click, type, scroll and ' +
+        'read what is on screen. Narrate what you are doing; do not announce each tiny step.',
+      Nouns: [
+        {
+          Name: 'page',
+          Description: 'The page the browser is currently showing (its URL and title).',
+          Schema: { type: 'object' }
+        }
+      ],
+      // Reading the page is what exposure limits: its text is the page's state, and what the vision model makes of the
+      // screenshot (or where it finds an element) is derived from its pixels. A goal's result reports what the browser found.
+      Verbs: BuildToolBackedVerbs(this.GetToolDefinitions(), this.ToolNamePrefix, 'agent', {
+        [REMOTE_BROWSER_TOOL_NAMES.GetPageText]: 'state',
+        [REMOTE_BROWSER_TOOL_NAMES.DescribePage]: 'pixels',
+        [REMOTE_BROWSER_TOOL_NAMES.LocateElement]: 'pixels',
+        [REMOTE_BROWSER_TOOL_NAMES.AchieveGoal]: 'state',
+      }),
+      DisplayPolicy: 'open-on-start',
+      DefaultAvailability: 'all-sessions',
+      MaxExposure: 'pixels'
+    };
   }
 
   /** First-run intro shown the first time the user opens the Browser tab (once per user). */

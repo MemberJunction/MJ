@@ -1209,6 +1209,28 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT108 - Realtime Session Config Guard",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C6B1B073-56CC-4F28-B50E-9783D55FE494"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT109 - Realtime Session Identity Verification",
+            "Sequence": 50,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "7696BECA-B4E1-4531-8348-B6D440F0D27C"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT95 - Trailing Runtime State",
             "Sequence": 48,
             "Status": "Active"

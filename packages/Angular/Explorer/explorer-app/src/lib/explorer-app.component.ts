@@ -30,6 +30,7 @@ import { AgentClientService } from '@memberjunction/ng-agent-client';
 import { ClientToolResultEvent } from '@memberjunction/ai-agent-client';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ConversationBridgeService, RealtimeSessionService } from '@memberjunction/ng-conversations';
+import { EnableChannelFrameCapture } from '@memberjunction/ng-realtime-channels';
 import { ApplicationManager, WorkspaceStateManager } from '@memberjunction/ng-base-application';
 import { AppContextSnapshot, ClientToolMetadata } from '@memberjunction/ai-core-plus';
 import { InstanceConfigEngine } from '@memberjunction/core-entities';
@@ -38,6 +39,12 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJ_PRE_SHELL_GUARD, PreShellGuard } from './pre-shell-guard';
 import { MJLoginSlotDirective, type MJLoginSlotName } from './login-slot.directive';
 import type { MJLoginCard, MJLoginLayout } from './login-screen.types';
+/** Owner key of Explorer's always-available client tools in the realtime ContextTool registry. */
+const REALTIME_GLOBAL_TOOL_OWNER = 'explorer.global';
+
+/** Owner key of the active surface's client tools in the realtime ContextTool registry (replaced on every surface change, cleared on an app switch). */
+const REALTIME_SURFACE_TOOL_OWNER = 'explorer.surface';
+
 @Component({
   standalone: false,
   selector: 'mj-explorer-app',
@@ -589,6 +596,11 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
   ngOnInit() {
     SetProductionStatus(this.environment.production);
 
+    // Explorer opts in to letting a realtime agent SEE interactive components (a picture of the component, sent only while
+    // the user allows pixels and the model has a video track). Registered before any session is minted: whether the
+    // channel can source video is decided at mint. Hosts that do not call this keep state-only perception.
+    EnableChannelFrameCapture();
+
     // Check if this is the OAuth callback route - used for conditional rendering in template
     // Note: We still run setupAuth() to restore the user's session
     this.IsOAuthCallback = window.location.pathname.startsWith('/oauth/callback');
@@ -626,7 +638,10 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
     // Track active app changes for AI agent context awareness
     this.appManager.ActiveApp
       .pipe(takeUntil(this.destroy$))
-      .subscribe(() => this.updateAppContext());
+      .subscribe(() => {
+        this.clearStaleSurfaceTools();
+        void this.updateAppContext();
+      });
 
     // Track tab changes for active nav item context
     this.workspaceState.Configuration
@@ -844,12 +859,19 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
       }
 
       // Mirror the surface tools into the realtime session so the co-agent's ContextTool proxy can
-      // execute them client-side — MERGED with the always-available global tools (NavigateToApp,
-      // NavigateToRecord, …) so the co-agent can navigate AND drive the current surface.
-      this.realtimeSession.RegisterAppClientTools([
-        ...this.globalAgentTools,
-        ...update.AgentClientTools.map(t => ({ Name: t.Name, Handler: t.Handler })),
-      ]);
+      // execute them client-side. They are registered under THEIR OWN owner key, so this replaces only
+      // the surface's tools — the always-available globals (NavigateToApp, NavigateToRecord, …) live
+      // under another owner and stay put, with no merge to forget — and an empty set clears just the surface.
+      this.activeDashboardToolsAppId = this.appManager.GetActiveApp()?.ID ?? null;
+      this.realtimeSession.RegisterAppClientTools(
+        update.AgentClientTools.map(t => ({
+          Name: t.Name,
+          Handler: t.Handler,
+          Description: t.Description,
+          InputSchema: t.ParameterSchema,
+        })),
+        REALTIME_SURFACE_TOOL_OWNER
+      );
 
       // PERSIST the active surface's capability manifest (names + schemas, no handlers) so EVERY
       // snapshot (re)build merges it on top of the globals — not just this immediate update. Without
@@ -877,6 +899,34 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
 
   /** Names of currently registered dashboard-specific tools (for cleanup on switch) */
   private activeDashboardToolNames: string[] = [];
+
+  /** The app that was active when the current surface registered its tools — the key to telling a
+   *  surface's tools from a previous app's once the user switches apps. */
+  private activeDashboardToolsAppId: string | null = null;
+
+  /**
+   * Drops the previous app's surface tools when the user switches apps.
+   *
+   * A surface registers its tools when it loads and nothing unregistered them when the user left it, so
+   * after an app switch the co-agent was still offered (and could run) tools of a screen that is no
+   * longer there — until the new surface happened to register its own. They are cleared from the async
+   * agent client, the realtime ContextTool registry and the streamed capability manifest alike. A
+   * surface that already registered for the NEW app is left alone (its recorded app id matches).
+   */
+  private clearStaleSurfaceTools(): void {
+    const activeAppId = this.appManager.GetActiveApp()?.ID ?? null;
+    const hasSurfaceTools = this.activeDashboardToolNames.length > 0 || this.activeDashboardToolManifest.length > 0;
+    if (!hasSurfaceTools || this.activeDashboardToolsAppId === activeAppId) {
+      return;
+    }
+    for (const toolName of this.activeDashboardToolNames) {
+      this.agentClient.UnregisterTool(toolName);
+    }
+    this.activeDashboardToolNames = [];
+    this.activeDashboardToolManifest = [];
+    this.activeDashboardToolsAppId = null;
+    this.realtimeSession.UnregisterAppClientTools(REALTIME_SURFACE_TOOL_OWNER);
+  }
 
   /** Capability manifest (names + schemas) of the active surface's tools, persisted so it can be
    *  merged into every snapshot (re)build — see handleAgentContextUpdate for why. */
@@ -1138,9 +1188,9 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
       }
     });
 
-    // Make the global tools available to the realtime co-agent's ContextTool from the start
-    // (handleAgentContextUpdate later merges in the active surface's tools).
-    this.realtimeSession.RegisterAppClientTools(this.globalAgentTools);
+    // Make the global tools available to the realtime co-agent's ContextTool from the start, under their
+    // own owner key (handleAgentContextUpdate registers the active surface's tools under another).
+    this.realtimeSession.RegisterAppClientTools(this.globalAgentTools, REALTIME_GLOBAL_TOOL_OWNER);
   }
 
   /**

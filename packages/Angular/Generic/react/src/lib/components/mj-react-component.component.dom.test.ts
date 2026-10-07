@@ -105,4 +105,47 @@ describe('MJReactComponent (DOM)', () => {
     const container = fixture.nativeElement.querySelector('.react-component-container');
     expect(container!.classList.contains('loading')).toBe(true);
   });
+
+  describe('Refresh()', () => {
+    /** The private members Refresh() reads; named here so the test does not reach for `any`. */
+    interface RefreshInternals {
+      compiledComponent: { refresh?: () => void } | null;
+      renderComponent: () => void;
+    }
+
+    it("calls the component's own refresh() when it registered one", () => {
+      const fixture = createFixture();
+      const internals = fixture.componentInstance as unknown as RefreshInternals;
+      const refresh = vi.fn();
+      const render = vi.fn();
+      internals.compiledComponent = { refresh };
+      internals.renderComponent = render;
+
+      fixture.componentInstance.Refresh();
+
+      expect(refresh).toHaveBeenCalledTimes(1);
+      expect(render).not.toHaveBeenCalled();
+    });
+
+    it('re-renders when the component has no refresh() of its own', () => {
+      const fixture = createFixture();
+      const internals = fixture.componentInstance as unknown as RefreshInternals;
+      const render = vi.fn();
+      internals.compiledComponent = {};
+      internals.renderComponent = render;
+
+      fixture.componentInstance.Refresh();
+
+      expect(render).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the deprecated lowercase refresh() working by delegating to Refresh()', () => {
+      const fixture = createFixture();
+      const spy = vi.spyOn(fixture.componentInstance, 'Refresh').mockImplementation(() => undefined);
+
+      fixture.componentInstance.refresh();
+
+      expect(spy).toHaveBeenCalledTimes(1);
+    });
+  });
 });

@@ -27,6 +27,7 @@ import { IRealtimePcmPlayback, RealtimePcmPlayback } from '../audio/pcmPlayback'
 import { RealtimeAudioMeter } from '../audio/audioMeter';
 import { CreatePcmMicCapture, IPcmMicCapture } from '../audio/micCapture';
 import { CreateStreamFrameCapture, IFrameCapture } from '../media/frameCapture';
+import { MinVideoFrameSpacingMs } from '../media/videoPacing';
 import type { RealtimeUsageModalityDetail } from '@memberjunction/ai';
 
 // ── Audio constants (Gemini Live wire formats) ─────────────────────────────────
@@ -297,8 +298,10 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.lastVideoSendTimestamp = 0;
         this.videoFramesSent = 0;
         this.setState('connecting');
-        const { model, liveConfig, idleSignal, supportsScheduling, supportsBlocking, supportsInboundVideo, maxInboundVideoRate, requestedTracks } =
-            this.parseSessionConfig(config);
+        const {
+            model, liveConfig, idleSignal, supportsScheduling, supportsBlocking, supportsInboundVideo, maxInboundVideoRate,
+            maxInboundVideoStreams, requestedTracks
+        } = this.parseSessionConfig(config);
         this.idleSignal = idleSignal;
         this.supportsScheduling = supportsScheduling;
         this.supportsBlocking = supportsBlocking;
@@ -326,7 +329,10 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
                 RequiresConsent: true,
             });
         }
-        this.negotiateTracks(requestedTracks, supportedTracks);
+        // How many inbound video streams the model takes, minted from the profile like the rate. A mint
+        // that predates the field falls back to one stream for a video model (every model that had video
+        // took exactly one) and none otherwise.
+        this.negotiateTracks(requestedTracks, supportedTracks, isVideoModel ? (maxInboundVideoStreams ?? 1) : 0);
 
         this.playback = this.createPlayback();
         // The agent voice plays through Web Audio only; publish it so a host recorder can mix
@@ -419,25 +425,30 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     /**
      * Streams one base64 image frame over the established inbound video track.
      *
-     * Enforces a 750ms minimum inter-frame spacing to serve as a backstop with deliberate jitter
-     * headroom for 1 fps (1000ms) pacers (such as `ChannelInboundVideoBridge`'s `setInterval`,
-     * `frameCapture`, and channel-level gates like `OnScreencastFrame`'s 1000ms pacer). Upstream
-     * cadence generators and channel gates are the primary enforcers of the nominal 1 fps ceiling,
-     * while this 750ms gate absorbs event loop and async dispatch jitter without dropping intended
-     * 1Hz frames, while preventing any unpaced callers from bursting above 1.33 fps.
+     * Enforces a minimum inter-frame spacing as a backstop with deliberate jitter headroom for the
+     * upstream pacers (the source arbiter, `ChannelInboundVideoBridge`, `frameCapture`, channel-level
+     * gates such as `OnScreencastFrame`). The spacing is derived from the rate the track NEGOTIATED
+     * ({@link MinVideoFrameSpacingMs} of {@link BaseRealtimeClient.InboundVideoRate}), so it follows the
+     * model's profile rather than a constant: at the 1 fps every Live model accepts today it is the
+     * 750 ms gate this driver has always applied, and a faster model needs no change here. Upstream
+     * generators are the primary enforcers of the nominal rate; this gate absorbs event-loop and async
+     * dispatch jitter without dropping intended frames, while preventing an unpaced caller from bursting.
+     *
+     * Gemini accepts ONE inbound video stream, so `sourceId` is ignored: choosing which source feeds that
+     * stream is the arbiter's job, and by the time a frame arrives here the choice is made.
      *
      * If inbound video is not established, returns `false` without error or frame sends (fallback).
      *
      * @returns `true` if the frame was dispatched to the session; `false` if dropped (throttled
      *   or track unestablished).
      */
-    public override SendVideoFrame(base64Image: string, mimeType: string = 'image/jpeg'): boolean {
+    public override SendVideoFrame(base64Image: string, mimeType: string = 'image/jpeg', _sourceId?: string): boolean {
         if (!this.IsTrackEstablished('video', 'inbound')) {
             return false;
         }
         const now = Date.now();
-        if (this.lastVideoSendTimestamp > 0 && now - this.lastVideoSendTimestamp < 750) {
-            return false; // Throttled: 750ms jitter headroom backstop for upstream 1 fps pacers (Reviewer Items 25, 30, 33)
+        if (this.lastVideoSendTimestamp > 0 && now - this.lastVideoSendTimestamp < MinVideoFrameSpacingMs(this.InboundVideoRate)) {
+            return false; // Throttled: jitter-headroom backstop for upstream pacers (Reviewer Items 25, 30, 33)
         }
         this.lastVideoSendTimestamp = now;
         if (this.firstVideoSendTimestamp === 0) {
@@ -659,6 +670,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         supportsBlocking: boolean;
         supportsInboundVideo?: boolean;
         maxInboundVideoRate?: number;
+        maxInboundVideoStreams?: number;
         requestedTracks?: readonly RealtimeTrackDescriptor[];
     } {
         const sessionConfig: JSONObject = config.SessionConfig ?? {};
@@ -678,6 +690,9 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         const rawMaxVideoRate = sessionConfig['maxInboundVideoRate'];
         const maxInboundVideoRate =
             typeof rawMaxVideoRate === 'number' && rawMaxVideoRate > 0 ? rawMaxVideoRate : undefined;
+        const rawMaxStreams = sessionConfig['maxInboundVideoStreams'];
+        const maxInboundVideoStreams =
+            typeof rawMaxStreams === 'number' && Number.isInteger(rawMaxStreams) && rawMaxStreams >= 0 ? rawMaxStreams : undefined;
         const rawRequestedTracks = sessionConfig[REQUESTED_TRACKS_SESSION_KEY];
         let requestedTracks: readonly RealtimeTrackDescriptor[] | undefined = undefined;
         if (Array.isArray(rawRequestedTracks)) {
@@ -694,13 +709,18 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
                             Rate: typeof item['Rate'] === 'number' ? item['Rate'] : undefined,
                             RequiresConsent:
                                 typeof item['RequiresConsent'] === 'boolean' ? item['RequiresConsent'] : undefined,
+                            SourceID: typeof item['SourceID'] === 'string' ? item['SourceID'] : undefined,
+                            Label: typeof item['Label'] === 'string' ? item['Label'] : undefined,
                         });
                     }
                 }
             }
             requestedTracks = list;
         }
-        return { model, liveConfig, idleSignal, supportsScheduling, supportsBlocking, supportsInboundVideo, maxInboundVideoRate, requestedTracks };
+        return {
+            model, liveConfig, idleSignal, supportsScheduling, supportsBlocking, supportsInboundVideo, maxInboundVideoRate,
+            maxInboundVideoStreams, requestedTracks
+        };
     }
 
     /** Streams one base64 PCM16 mic chunk to the model (no-op once the session is gone, closed, or in error). */

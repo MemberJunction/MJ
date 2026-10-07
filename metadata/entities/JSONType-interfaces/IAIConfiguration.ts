@@ -4,7 +4,8 @@
  * Two kinds of type live here, and the distinction is the whole point of the file:
  *
  * 1. **Shared modality sections** (`LLMConfigurationSettings`, `RealtimeConfigurationSettings`,
- *    `VisionConfigurationSettings`, `AudioConfigurationSettings`, `DecisionConfigurationSettings`) —
+ *    `VisionConfigurationSettings`, `AudioConfigurationSettings`, `DecisionConfigurationSettings`,
+ *    `PrivacyConfigurationSettings`) —
  *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`IAIModelConfiguration`, `IAIPromptConfiguration`,
@@ -204,6 +205,23 @@ export interface AudioConfigurationSettings {
 }
 
 /**
+ * Privacy posture of the model deployment this configuration describes. Set it on the catalog layers
+ * (`MJ: AI Models`, `MJ: AI Model Vendors`, a vendor's `ModelDefaults`): data retention is a property of
+ * how a model is SERVED, so the vendor row is usually where it is true.
+ */
+export interface PrivacyConfigurationSettings {
+    /**
+     * Whether this model is served under a zero-data-retention agreement: the provider does not store
+     * prompts, audio, images or outputs beyond serving the request. `true` is a positive claim that
+     * somebody verified; absent, `null` and `false` all mean "not declared", never "retained", because
+     * an undeclared model is not known to be bad. It is read by realtime channel exposure policy:
+     * an agent that requires zero data retention for a channel's `'state'` or `'pixels'` exposure has
+     * that exposure lowered on any model that does not declare `true` here.
+     */
+    ZeroDataRetention?: boolean | null;
+}
+
+/**
  * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
  * model accepts, so an oversized request can be refused with a clear message before the call,
  * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
@@ -242,6 +260,8 @@ export interface IAIModelConfiguration {
     Audio?: AudioConfigurationSettings | null;
     /** Typed-decision limits. Honored at the catalog layers. */
     Decision?: DecisionConfigurationSettings | null;
+    /** Privacy posture of the model deployment. Honored at the catalog layers. */
+    Privacy?: PrivacyConfigurationSettings | null;
 }
 
 /**
@@ -262,6 +282,8 @@ export interface IAIPromptConfiguration {
     Audio?: AudioConfigurationSettings | null;
     /** Typed-decision limits. Reserved at this layer. */
     Decision?: DecisionConfigurationSettings | null;
+    /** Privacy posture. Reserved at this layer. */
+    Privacy?: PrivacyConfigurationSettings | null;
 }
 
 /**
@@ -279,6 +301,8 @@ export interface IAIPromptModelConfiguration {
     Audio?: AudioConfigurationSettings | null;
     /** Typed-decision limits. Reserved at this layer. */
     Decision?: DecisionConfigurationSettings | null;
+    /** Privacy posture. Reserved at this layer. */
+    Privacy?: PrivacyConfigurationSettings | null;
 }
 
 /**

@@ -114,3 +114,83 @@ describe('ClientContextChannel — context streaming', () => {
     expect(sendNote).not.toHaveBeenCalled();
   });
 });
+
+describe('ClientContextChannel — channel-addressed ContextTool calls (target)', () => {
+  it('declares `target` on the proxy tool schema, with `channel` required inside it', () => {
+    const schema = new ClientContextChannel().GetToolDefinitions()[0].ParametersSchema as {
+      properties: { target: { required: string[]; properties: Record<string, unknown> } };
+      required: string[];
+    };
+    expect(schema.required).toEqual(['action']); // target stays optional: app actions are unchanged
+    expect(schema.properties.target.required).toEqual(['channel']);
+    expect(Object.keys(schema.properties.target.properties)).toEqual(['channel', 'instance']);
+  });
+
+  it('hands a targeted call to the runtime dispatcher, NOT to the app client-tool executor', async () => {
+    const dispatch = vi.fn(async () => ({ Success: true as const, Result: { opened: true } }));
+    const exec = vi.fn();
+    const ch = new ClientContextChannel();
+    ch.Initialize(makeContext({ ExecuteClientTool: exec, DispatchContextAction: dispatch }));
+
+    const out = await ch.ApplyAgentTool('ContextTool', JSON.stringify({ action: 'open', params: { title: 'x' }, target: { channel: ' Form ', instance: '2' } }));
+
+    expect(dispatch).toHaveBeenCalledWith({ Target: { Channel: 'Form', Instance: '2' }, Action: 'open', Params: { title: 'x' } });
+    expect(exec).not.toHaveBeenCalled();
+    expect(JSON.parse(out)).toEqual({ success: true, output: { opened: true } });
+  });
+
+  it('omits the instance when none was given', async () => {
+    const dispatch = vi.fn(async () => ({ Success: true as const }));
+    const ch = new ClientContextChannel();
+    ch.Initialize(makeContext({ DispatchContextAction: dispatch }));
+    await ch.ApplyAgentTool('ContextTool', JSON.stringify({ action: 'SetField', target: { channel: 'Form' } }));
+    expect(dispatch).toHaveBeenCalledWith({ Target: { Channel: 'Form', Instance: undefined }, Action: 'SetField', Params: {} });
+  });
+
+  it('returns a refusal as a structured, model-recoverable error with what would have been valid', async () => {
+    const dispatch = vi.fn(async () => ({
+      Success: false as const,
+      ErrorCode: 'invalid_params' as const,
+      ErrorMessage: 'The parameters for SetField are invalid. Expected SetField(name:string). Fix them and call it again.',
+      Details: ['$.name: expected type string, got integer'],
+      Available: ['SetField'],
+    }));
+    const ch = new ClientContextChannel();
+    ch.Initialize(makeContext({ DispatchContextAction: dispatch }));
+    const out = JSON.parse(await ch.ApplyAgentTool('ContextTool', JSON.stringify({ action: 'SetField', params: { name: 5 }, target: { channel: 'Form' } })));
+    expect(out).toEqual({
+      success: false,
+      output: 'The parameters for SetField are invalid. Expected SetField(name:string). Fix them and call it again.',
+      errorCode: 'invalid_params',
+      details: ['$.name: expected type string, got integer'],
+      available: ['SetField'],
+    });
+  });
+
+  it('says channel actions are unavailable when the host has no dispatcher, instead of running an app tool by accident', async () => {
+    const exec = vi.fn();
+    const ch = new ClientContextChannel();
+    ch.Initialize(makeContext({ ExecuteClientTool: exec }));
+    const out = JSON.parse(await ch.ApplyAgentTool('ContextTool', JSON.stringify({ action: 'SetField', target: { channel: 'Form' } })));
+    expect(out.success).toBe(false);
+    expect(out.output).toContain('not available');
+    expect(exec).not.toHaveBeenCalled();
+  });
+
+  it('treats a target with no usable channel as no target (an app action)', async () => {
+    const exec = vi.fn(async () => ({ Success: true, Result: 'ok' }));
+    const ch = new ClientContextChannel();
+    ch.Initialize(makeContext({ ExecuteClientTool: exec }));
+    for (const target of [{}, { channel: '   ' }, 'Form', null, ['Form']]) {
+      await ch.ApplyAgentTool('ContextTool', JSON.stringify({ action: 'Go', target }));
+    }
+    expect(exec).toHaveBeenCalledTimes(5);
+  });
+
+  it('describes itself as a headless door with no verbs, so it is never addressed as a channel', () => {
+    const d = new ClientContextChannel().GetDescriptor();
+    expect(d).toMatchObject({ Key: 'ClientContextChannel', Version: '2.0.0', DisplayPolicy: 'headless', DefaultAvailability: 'all-sessions' });
+    expect(d.Verbs).toEqual([]);
+    expect(d.Nouns).toEqual([]);
+  });
+});
