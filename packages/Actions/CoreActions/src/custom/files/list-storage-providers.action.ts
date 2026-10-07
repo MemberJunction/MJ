@@ -19,13 +19,13 @@ import { FileStorageEngine, StorageAccessEvaluator } from "@memberjunction/stora
  * ```typescript
  * // Get all available storage accounts
  * await runAction({
- *   ActionName: 'List Storage Accounts',
+ *   ActionName: 'List Storage Providers',
  *   Params: []
  * });
  *
  * // Get only accounts that support search
  * await runAction({
- *   ActionName: 'List Storage Accounts',
+ *   ActionName: 'List Storage Providers',
  *   Params: [{
  *     Name: 'SearchSupportedOnly',
  *     Value: true
@@ -33,7 +33,9 @@ import { FileStorageEngine, StorageAccessEvaluator } from "@memberjunction/stora
  * });
  * ```
  */
-@RegisterClass(BaseAction, "List Storage Accounts")
+// Registered under the shipped action's DriverClass ("List Storage Providers" in metadata/actions/.list-storage-providers.json).
+// It was registered as "List Storage Accounts", which no metadata row names, so the action could not be run.
+@RegisterClass(BaseAction, "List Storage Providers")
 export class ListStorageAccountsAction extends BaseFileStorageAction {
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {

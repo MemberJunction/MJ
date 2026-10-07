@@ -45,7 +45,7 @@
  *          take): on a role-restricted fixture account the seeded no-grant user gets `ACCESS_DENIED`
  *          with the access-denied message from `File Storage: Get Download URL`, an unknown account
  *          name gets the identical result, the role holder passes the gate (whatever the driver then
- *          does with the fixture credential), and `List Storage Providers` (driver `List Storage Accounts`) omits the account for the
+ *          does with the fixture credential), and `List Storage Providers` omits the account for the
  *          no-grant user while listing it for the role holder.
  *
  * Read-only except ST4's single self-cleaning `MJ: Files` row and ST8/ST9's fixtures (a credential
@@ -304,10 +304,10 @@ async function runStorageAction(action: MJActionEntityExtended, user: UserInfo, 
     return ActionEngineServer.Instance.RunAction(params);
 }
 
-/** The names `List Storage Accounts` returns for `user`. */
+/** The names `List Storage Providers` returns for `user`. */
 async function listedAccountNames(action: MJActionEntityExtended, user: UserInfo): Promise<string[]> {
     const result = await runStorageAction(action, user, {});
-    Assert(result.Success, `List Storage Accounts failed for ${user.Email}: ${result.Message ?? 'no message'}`);
+    Assert(result.Success, `List Storage Providers failed for ${user.Email}: ${result.Message ?? 'no message'}`);
     const accounts = (result.Params ?? []).find(p => p.Name === 'Accounts' && p.Type === 'Output')?.Value as Array<{ Name: string }> | undefined;
     return (accounts ?? []).map(a => a.Name);
 }
@@ -335,10 +335,10 @@ async function assertActionGate(
     Assert(permitted.ResultCode !== ACTION_ACCESS_DENIED,
         `the role holder must pass the gate (the driver may then fail on the fixture credential); got ${permitted.ResultCode}: ${permitted.Message}`);
 
-    Assert(!(await listedAccountNames(actions.List, noGrant)).includes(name), 'List Storage Accounts must omit an account the no-grant user cannot read');
-    Assert((await listedAccountNames(actions.List, contextUser)).includes(name), 'List Storage Accounts must list the account for the role holder');
+    Assert(!(await listedAccountNames(actions.List, noGrant)).includes(name), 'List Storage Providers must omit an account the no-grant user cannot read');
+    Assert((await listedAccountNames(actions.List, contextUser)).includes(name), 'List Storage Providers must list the account for the role holder');
     console.log(`      → Get Download URL: no-grant refused (${ACTION_ACCESS_DENIED}), unknown account refused identically, role holder passed `
-        + `(${permitted.ResultCode}); List Storage Accounts filtered per caller`);
+        + `(${permitted.ResultCode}); List Storage Providers filtered per caller`);
 }
 
 /** The active core action named `name`, or null (with the engine configured for `user`). */
@@ -567,7 +567,6 @@ export const StorageChecks: NamedCheck[] = [
             }
             const roleID = ctx.User.UserRoles?.[0]?.RoleID;
             const download = await coreAction('File Storage: Get Download URL', ctx.User);
-            // The shipped action is named 'List Storage Providers'; 'List Storage Accounts' is only its driver class key.
             const list = await coreAction('List Storage Providers', ctx.User);
             if (!roleID || !download || !list) {
                 console.warn(`  ⚠ storage.ST9 SKIPPED — ${!roleID ? 'the context user has no role to restrict the fixture account to'

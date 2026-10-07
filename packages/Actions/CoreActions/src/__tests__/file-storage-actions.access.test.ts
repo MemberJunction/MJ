@@ -256,7 +256,7 @@ describe('File Storage actions — the storage gate', () => {
             expect(outputOf(params, 'TotalMatches', result)).toBeUndefined();
         });
 
-        it('List Storage Accounts lists only the accounts the caller may read', async () => {
+        it('List Storage Providers lists only the accounts the caller may read', async () => {
             const namesFor = async (user: UserInfo): Promise<string[]> => {
                 const params = paramsFor(user, {});
                 const result = await run(new ListStorageAccountsAction(), params);
