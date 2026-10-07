@@ -3,8 +3,9 @@
  *
  * These routes used to check only entity-level permission on an empty `MJ: Files` object and then act on a
  * client-supplied account through `FileStorageEngine.GetDriver` (a process-wide cache with no user check). They now run
- * the shared `StorageAccessEvaluator` first. The evaluator here is the REAL one from `@memberjunction/storage`; only the
- * data layer behind it (the provider's RunView/RunViews), the system-user lookup, the storage engine and the driver
+ * the shared `StorageAccessEvaluator` first. The evaluator here is the REAL one from `@memberjunction/storage`, and so is
+ * `FileStorageEngine.ResolveFileObject` (the gate for routes that go from a file ID to an object); only the data layer
+ * behind them (the provider's RunView/RunViews), the system-user lookup, the engine's cache and drivers and the driver
  * utilities are faked — so "denied", "zero rows → open" and "tracked object" are decided by production code.
  */
 import 'reflect-metadata';
@@ -18,6 +19,8 @@ const mocks = vi.hoisted(() => ({
         GetAccountWithProvider: vi.fn(),
         ResolveStorageAccount: vi.fn(),
         UploadFile: vi.fn(),
+        /** Shadows the engine's `Base` getter: the metadata cache behind the REAL ResolveFileObject. */
+        Base: { GetAccountsByProviderID: vi.fn() },
     },
     listObjects: vi.fn(async () => ({ objects: [], prefixes: [] })),
     deleteObject: vi.fn(async () => true),
@@ -55,6 +58,8 @@ vi.mock('../rest/MediaAccessKeys.js', () => ({ MediaAccessKeyManager: { Instance
 vi.mock('../rest/UploadTokenManager.js', () => ({ UploadTokenManager: { Instance: { Consume: mocks.consumeUploadToken } } }));
 vi.mock('@memberjunction/storage', async () => {
     const actual = await vi.importActual<typeof import('@memberjunction/storage')>('@memberjunction/storage');
+    // The engine's cache and drivers are faked (own properties above); its ResolveFileObject is the real one.
+    Object.setPrototypeOf(mocks.engine, actual.FileStorageEngine.prototype);
     return {
         ...actual,
         FileStorageEngine: { Instance: mocks.engine },
@@ -70,14 +75,17 @@ vi.mock('@memberjunction/storage', async () => {
 import { WellKnownUserSource } from '@memberjunction/core';
 import type { RunViewParams, RunViewResult, UserInfo } from '@memberjunction/core';
 import {
+    NormalizeStorageObjectKey,
     STORAGE_ACCOUNT_ACCESS_DENIED_MESSAGE,
     TRACKED_FILE_ACCESS_DENIED_MESSAGE,
     type StorageAccountPermissionRow,
 } from '@memberjunction/storage';
+import { DeleteOptionsInput, type PubSubEngine } from '@memberjunction/server';
 import { FileResolver } from '../resolvers/FileResolver.js';
 import type { AppContext } from '../types.js';
 
 const PROVIDER_S3 = 'AAAAAAAA-0000-4000-8000-000000000001';
+const PROVIDER_FINANCE = 'AAAAAAAA-0000-4000-8000-0000000000F1';  // the provider whose only account is ACCOUNT_FINANCE
 const ACCOUNT_OPEN = 'BBBBBBBB-0000-4000-8000-000000000002';      // no permission rows → open (current rule)
 const ACCOUNT_FINANCE = 'CCCCCCCC-0000-4000-8000-000000000003';   // Read+Write for the Finance role only
 const ACCOUNT_READONLY = 'DDDDDDDD-0000-4000-8000-000000000004';  // Read (no Write) for Everyone
@@ -85,6 +93,8 @@ const ACCOUNT_MISSING = 'EEEEEEEE-0000-4000-8000-000000000005';   // does not ex
 const ROLE_FINANCE = 'FFFFFFFF-0000-4000-8000-000000000006';
 const FILE_SECRET = '99999999-0000-4000-8000-000000000007';
 const FILE_MINE = '88888888-0000-4000-8000-000000000008';
+const FILE_ALIAS = '77777777-0000-4000-8000-000000000009';      // plainUser's own row, pointed at HR's object
+const FILE_Q3 = '66666666-0000-4000-8000-00000000000A';         // plainUser's row on the Finance-only provider
 
 function makeUser(id: string, roleIDs: string[]): UserInfo {
     return { ID: id, Name: id, Email: `${id}@example.com`, UserRoles: roleIDs.map(RoleID => ({ RoleID })) } as unknown as UserInfo;
@@ -100,10 +110,17 @@ const PERMISSIONS: StorageAccountPermissionRow[] = [
 ];
 /** MJ: Files rows on the S3 provider; plainUser may read only FILE_MINE. */
 const FILES = [
-    { ID: FILE_SECRET, Name: 'secret.pdf', ProviderKey: 'hr/secret.pdf', ProviderID: PROVIDER_S3 },
-    { ID: FILE_MINE, Name: 'mine.pdf', ProviderKey: 'me/mine.pdf', ProviderID: PROVIDER_S3 },
+    { ID: FILE_SECRET, Name: 'secret.pdf', ProviderKey: 'hr/secret.pdf', ProviderID: PROVIDER_S3, Status: 'Uploaded' },
+    { ID: FILE_MINE, Name: 'mine.pdf', ProviderKey: 'me/mine.pdf', ProviderID: PROVIDER_S3, Status: 'Uploaded' },
+    { ID: FILE_ALIAS, Name: 'innocent.pdf', ProviderKey: '/HR/secret.pdf', ProviderID: PROVIDER_S3, Status: 'Uploaded' },
+    { ID: FILE_Q3, Name: 'q3.xlsx', ProviderKey: 'q3.xlsx', ProviderID: PROVIDER_FINANCE, Status: 'Uploaded' },
 ];
-const READABLE_FILES: Record<string, string[]> = { [plainUser.ID]: [FILE_MINE], [financeUser.ID]: [FILE_SECRET, FILE_MINE] };
+const READABLE_FILES: Record<string, string[]> = {
+    [plainUser.ID]: [FILE_MINE, FILE_ALIAS, FILE_Q3],
+    [financeUser.ID]: [FILE_SECRET, FILE_MINE, FILE_ALIAS, FILE_Q3],
+};
+/** The accounts on each provider, first one first — what ResolveFileObject resolves a row's provider to. */
+const ACCOUNTS_BY_PROVIDER: Record<string, string[]> = { [PROVIDER_S3]: [ACCOUNT_OPEN], [PROVIDER_FINANCE]: [ACCOUNT_FINANCE] };
 
 function namedIn(params: RunViewParams, value: string): boolean {
     return (params.ExtraFilter ?? '').toLowerCase().includes(value.toLowerCase());
@@ -119,7 +136,7 @@ function answerView(params: RunViewParams, user: UserInfo | undefined): RunViewR
             return ok(PERMISSIONS.filter(p => namedIn(params, p.FileStorageAccountID)));
         case 'MJ: Files':
             if (user?.ID === systemUser.ID) {
-                return ok(FILES.filter(f => namedIn(params, f.ProviderID) && namedIn(params, `'${f.ProviderKey}'`)));
+                return ok(FILES.filter(f => namedIn(params, f.ProviderID) && namedIn(params, `'${f.ProviderKey.toLowerCase()}'`)));
             }
             return ok(FILES.filter(f => namedIn(params, f.ID) && (READABLE_FILES[user?.ID ?? ''] ?? []).includes(f.ID)).map(f => ({ ID: f.ID })));
         default:
@@ -142,7 +159,22 @@ function fakeEntity(entityName: string): object {
     if (entityName === 'MJ: File Storage Providers') {
         return { ID: PROVIDER_S3, Name: 'AWS S3 Storage', ServerDriverKey: 'AWS S3 Storage', Load: vi.fn(async () => true), Get: () => null };
     }
-    return { CheckPermissions: vi.fn(), Load: vi.fn(async () => true), GetAll: () => ({}) };
+    return fakeFileEntity();
+}
+
+/** An `MJ: Files` entity whose Load reads the fake table — as the caller's own row-level view would. */
+function fakeFileEntity(): object {
+    const entity = {
+        ID: '', Name: '', ProviderKey: null as string | null, ProviderID: '', Status: '', ContentType: 'application/pdf',
+        CheckPermissions: vi.fn(),
+        GetAll: () => ({}),
+        Load: vi.fn(async (id: string) => {
+            const row = FILES.find(f => f.ID === id);
+            if (row) Object.assign(entity, row);
+            return !!row;
+        }),
+    };
+    return entity;
 }
 
 const fakeProvider = {
@@ -163,6 +195,8 @@ function accountEntity(id: string): object {
 }
 
 const fakeDriver = {
+    NormalizeObjectKey: (key: string) => NormalizeStorageObjectKey(key),
+    GetObject: vi.fn(async () => Buffer.from('bytes')),
     CreatePreAuthDownloadUrl: vi.fn(async (key: string) => `https://signed.example/${key}`),
     CreatePreAuthUploadUrl: vi.fn(async (key: string) => ({ UploadUrl: `https://upload.example/${key}` })),
     CreateDirectory: vi.fn(async () => true),
@@ -178,6 +212,7 @@ describe('FileResolver — storage routes honour account permissions', () => {
         accountLoads.length = 0;
         systemUserSpy = vi.spyOn(WellKnownUserSource.Instance, 'GetSystemUser').mockResolvedValue(systemUser);
         mocks.engine.GetDriver.mockResolvedValue(fakeDriver);
+        mocks.engine.Base.GetAccountsByProviderID.mockImplementation((pid: string) => (ACCOUNTS_BY_PROVIDER[pid] ?? []).map(accountEntity));
         mocks.engine.GetAccountById.mockImplementation((id: string) => (ACCOUNTS.includes(id) ? accountEntity(id) : undefined));
         mocks.engine.GetAccountWithProvider.mockImplementation((id: string) =>
             ACCOUNTS.some(a => a.toLowerCase() === id.toLowerCase())
@@ -210,7 +245,15 @@ describe('FileResolver — storage routes honour account permissions', () => {
         it('refuses a tracked object whose MJ: Files row the caller cannot read, with GetFileContents\' message', async () => {
             await expect(resolver.CreatePreAuthDownloadUrl({ AccountID: ACCOUNT_OPEN, ObjectName: 'hr/secret.pdf' }, contextFor(plainUser)))
                 .rejects.toThrow(TRACKED_FILE_ACCESS_DENIED_MESSAGE);
-            expect(mocks.engine.GetDriver).not.toHaveBeenCalled();
+            expect(fakeDriver.CreatePreAuthDownloadUrl).not.toHaveBeenCalled();
+        });
+
+        it('refuses the tracked object however the key is spelled (leading/trailing slash, case) — and refuses traversal', async () => {
+            for (const spelling of ['/hr/secret.pdf', 'hr/secret.pdf/', 'HR/SECRET.PDF', 'me/../hr/secret.pdf', 'hr%2Fsecret.pdf']) {
+                await expect(resolver.CreatePreAuthDownloadUrl({ AccountID: ACCOUNT_OPEN, ObjectName: spelling }, contextFor(plainUser)))
+                    .rejects.toThrow(TRACKED_FILE_ACCESS_DENIED_MESSAGE);
+            }
+            expect(fakeDriver.CreatePreAuthDownloadUrl).not.toHaveBeenCalled();
         });
 
         it('allows a tracked object whose MJ: Files row the caller can read', async () => {
@@ -338,6 +381,118 @@ describe('FileResolver — storage routes honour account permissions', () => {
             expect(mocks.searchAcrossAccounts).not.toHaveBeenCalled();
             expect(payload.failedAccounts).toBe(1);
             expect(payload.totalResultsReturned).toBe(0);
+        });
+
+        it('reports accounts in the order requested — a refused account sits where the caller put it', async () => {
+            const payload = await resolver.SearchAcrossAccounts(
+                { AccountIDs: [ACCOUNT_FINANCE, ACCOUNT_OPEN, ACCOUNT_MISSING], Query: 'q' }, contextFor(plainUser));
+            expect(payload.accountResults.map(r => r.accountID)).toEqual([ACCOUNT_FINANCE, ACCOUNT_OPEN, ACCOUNT_MISSING]);
+        });
+
+        it('withholds the provider total and page token once a hit was dropped (they counted it)', async () => {
+            mocks.searchAcrossAccounts.mockImplementationOnce(async (accounts: Array<{ accountEntity: { ID: string; Name: string } }>) => ({
+                accountResults: accounts.map(a => ({
+                    accountID: a.accountEntity.ID, accountName: a.accountEntity.Name, providerID: PROVIDER_S3, providerName: 'AWS S3 Storage',
+                    success: true, hasMore: true, totalMatches: 40, nextPageToken: 'page-2',
+                    results: ['hr/secret.pdf', 'open/notes.md'].map(path => ({
+                        path, name: path, size: 1, contentType: 'text/plain', lastModified: new Date(0),
+                    })),
+                })),
+                totalResultsReturned: 2, successfulAccounts: 1, failedAccounts: 0,
+            }));
+            const payload = await resolver.SearchAcrossAccounts({ AccountIDs: [ACCOUNT_OPEN], Query: 'q' }, contextFor(plainUser));
+            const account = payload.accountResults[0];
+            expect(account.results.map(r => r.path)).toEqual(['open/notes.md']);
+            expect(account.totalMatches).toBeUndefined();
+            expect(account.nextPageToken).toBeUndefined();
+        });
+    });
+
+    describe('routes that go from a file ID to an object gate the account the row resolves to, and its object', () => {
+        const fileRoot = (id: string) => {
+            const row = FILES.find(f => f.ID === id)!;
+            const root = { ID: row.ID, Name: row.Name, ProviderKey: row.ProviderKey, ProviderID: row.ProviderID };
+            return root as unknown as Parameters<FileResolver['DownloadUrl']>[0];
+        };
+
+        it('DownloadUrl refuses a row whose provider resolves to an account the caller may not read', async () => {
+            await expect(resolver.DownloadUrl(fileRoot(FILE_Q3), contextFor(plainUser))).rejects.toThrow(STORAGE_ACCOUNT_ACCESS_DENIED_MESSAGE);
+            expect(fakeDriver.CreatePreAuthDownloadUrl).not.toHaveBeenCalled();
+        });
+
+        it('DownloadUrl refuses a readable row that aliases another row\'s object the caller cannot read', async () => {
+            await expect(resolver.DownloadUrl(fileRoot(FILE_ALIAS), contextFor(plainUser))).rejects.toThrow(TRACKED_FILE_ACCESS_DENIED_MESSAGE);
+            expect(fakeDriver.CreatePreAuthDownloadUrl).not.toHaveBeenCalled();
+        });
+
+        it('DownloadUrl signs a readable row on a readable account; the Finance role reads its own provider', async () => {
+            await expect(resolver.DownloadUrl(fileRoot(FILE_MINE), contextFor(plainUser))).resolves.toBe('https://signed.example/me/mine.pdf');
+            await expect(resolver.DownloadUrl(fileRoot(FILE_Q3), contextFor(financeUser))).resolves.toBe('https://signed.example/q3.xlsx');
+        });
+
+        it('GetFileContents refuses an aliasing row and a refused account, and returns a readable file\'s bytes', async () => {
+            const alias = await resolver.GetFileContents(FILE_ALIAS, contextFor(plainUser));
+            expect(alias).toEqual({ Success: false, ErrorMessage: TRACKED_FILE_ACCESS_DENIED_MESSAGE });
+            const q3 = await resolver.GetFileContents(FILE_Q3, contextFor(plainUser));
+            expect(q3).toEqual({ Success: false, ErrorMessage: STORAGE_ACCOUNT_ACCESS_DENIED_MESSAGE });
+            expect(fakeDriver.GetObject).not.toHaveBeenCalled();
+
+            const mine = await resolver.GetFileContents(FILE_MINE, contextFor(plainUser));
+            expect(mine.Success).toBe(true);
+            expect(mine.Base64).toBe(Buffer.from('bytes').toString('base64'));
+        });
+
+        it('CreateMediaAccessToken mints nothing for an aliasing row', async () => {
+            const result = await resolver.CreateMediaAccessToken(FILE_ALIAS, contextFor(plainUser));
+            expect(result).toEqual({ Success: false, ErrorMessage: TRACKED_FILE_ACCESS_DENIED_MESSAGE });
+        });
+
+        it('DeleteFile refuses to delete the object behind an aliasing row', async () => {
+            await expect(resolver.DeleteFile(FILE_ALIAS, new DeleteOptionsInput(), contextFor(plainUser), {} as unknown as PubSubEngine))
+                .rejects.toThrow(TRACKED_FILE_ACCESS_DENIED_MESSAGE);
+            expect(mocks.deleteObject).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('account-keyed writes apply the tracked-file rule to what they read, replace or remove', () => {
+        const ctx = () => contextFor(plainUser);
+        const cases: Array<[string, () => Promise<unknown>, () => void]> = [
+            ['DeleteStorageObject', () => resolver.DeleteStorageObject({ AccountID: ACCOUNT_OPEN, ObjectName: '/hr/secret.pdf' }, ctx()),
+                () => expect(mocks.deleteObject).not.toHaveBeenCalled()],
+            ['MoveStorageObject (tracked source)',
+                () => resolver.MoveStorageObject({ AccountID: ACCOUNT_OPEN, OldName: 'hr/secret.pdf', NewName: 'mine/x.pdf' }, ctx()),
+                () => expect(mocks.moveObject).not.toHaveBeenCalled()],
+            ['MoveStorageObject (tracked destination)',
+                () => resolver.MoveStorageObject({ AccountID: ACCOUNT_OPEN, OldName: 'scratch/x.pdf', NewName: 'HR/secret.pdf' }, ctx()),
+                () => expect(mocks.moveObject).not.toHaveBeenCalled()],
+            ['CopyStorageObject (tracked source)',
+                () => resolver.CopyStorageObject({ AccountID: ACCOUNT_OPEN, SourceName: 'hr/secret.pdf/', DestinationName: 'mine/copy.pdf' }, ctx()),
+                () => expect(mocks.copyObject).not.toHaveBeenCalled()],
+            ['CopyObjectBetweenAccounts (tracked source)', () => resolver.CopyObjectBetweenAccounts(
+                { SourceAccountID: ACCOUNT_OPEN, DestinationAccountID: ACCOUNT_OPEN, SourcePath: 'hr/secret.pdf', DestinationPath: 'mine/copy.pdf' }, ctx()),
+                () => expect(mocks.copyObjectBetweenProviders).not.toHaveBeenCalled()],
+            ['CreatePreAuthUploadUrl (overwrite)', () => resolver.CreatePreAuthUploadUrl({ AccountID: ACCOUNT_OPEN, ObjectName: 'hr/secret.pdf' }, ctx()),
+                () => expect(fakeDriver.CreatePreAuthUploadUrl).not.toHaveBeenCalled()],
+        ];
+        for (const [name, call, assertNoSideEffect] of cases) {
+            it(`${name} refuses an object behind an MJ: Files row the caller cannot read`, async () => {
+                await expect(call()).rejects.toThrow(TRACKED_FILE_ACCESS_DENIED_MESSAGE);
+                assertNoSideEffect();
+            });
+        }
+
+        it('ListStorageObjects drops the tracked object the caller cannot read and keeps the rest', async () => {
+            mocks.listObjects.mockResolvedValueOnce({
+                objects: [
+                    { name: 'secret.pdf', path: 'hr', fullPath: 'hr/secret.pdf', size: 1, contentType: 'application/pdf',
+                        lastModified: new Date(0), isDirectory: false },
+                    { name: 'notes.md', path: 'hr', fullPath: 'hr/notes.md', size: 1, contentType: 'text/plain',
+                        lastModified: new Date(0), isDirectory: false },
+                ],
+                prefixes: [],
+            });
+            const result = await resolver.ListStorageObjects({ AccountID: ACCOUNT_OPEN, Prefix: 'hr/' }, contextFor(plainUser));
+            expect(result.objects.map(o => o.fullPath)).toEqual(['hr/notes.md']);
         });
     });
 });

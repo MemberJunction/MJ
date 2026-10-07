@@ -332,7 +332,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'server-cache': 32,
         'shipped-agents-live': 4,
         'startup-mode': 3,
-        'storage': 8,
+        'storage': 9,
         'subscription-isolation': 2,
         'task-graph-execution': 27,
         'task-graph-orchestration': 18,

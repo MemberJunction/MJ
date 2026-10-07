@@ -47,15 +47,19 @@ export class ListObjectsAction extends BaseFileStorageAction {
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
             // Get and initialize storage driver
-            const { driver, error } = await this.getDriverFromParams(params);
+            const { driver, account, error } = await this.getDriverFromParams(params);
             if (error) return error;
 
             // Get optional parameters with defaults
             const path = this.getStringParamWithDefault(params, 'path', '/');
             const delimiter = this.getStringParamWithDefault(params, 'delimiter', '/');
 
-            // Execute the list operation
-            const result: StorageListResult = await driver!.ListObjects(path, delimiter);
+            // Execute the list operation, then drop objects behind an MJ: Files row the caller cannot read — a listing never
+            // names a tracked object the caller is refused (directories are prefixes, not tracked objects)
+            const listed: StorageListResult = await driver!.ListObjects(path, delimiter);
+            const fileKeys = listed.objects.filter(o => !o.isDirectory).map(o => o.fullPath);
+            const unreadable = await this.UnreadableObjectKeys(account!, driver!, fileKeys, params.ContextUser);
+            const result: StorageListResult = { ...listed, objects: listed.objects.filter(o => o.isDirectory || !unreadable.has(o.fullPath)) };
 
             // Add output parameters
             this.addOutputParam(params, 'Objects', result.objects);

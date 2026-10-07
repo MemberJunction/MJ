@@ -69,7 +69,7 @@ export class GetFileContentAction extends BaseFileStorageAction {
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
             // Get and initialize storage driver
-            const { driver, error } = await this.getDriverFromParams(params);
+            const { driver, account, error } = await this.getDriverFromParams(params);
             if (error) return error;
 
             // Get identifier (prefer ObjectID for performance)
@@ -82,6 +82,10 @@ export class GetFileContentAction extends BaseFileStorageAction {
                     "MISSING_IDENTIFIER"
                 );
             }
+
+            // Tracked-file rule: never return the content of an object behind an MJ: Files row the caller cannot read
+            const refused = await this.CheckObjectsReadable(account!, driver!, [objectName, objectId], params.ContextUser);
+            if (refused) return refused;
 
             // Get file metadata to determine content type
             const metadata = await driver!.GetObjectMetadata({

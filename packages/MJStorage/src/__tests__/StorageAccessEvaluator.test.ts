@@ -14,8 +14,11 @@ import {
     StorageAccessEvaluator,
     StorageAccountAccessDeniedError,
     StorageAccountPermissionRow,
-    STORAGE_ACCOUNT_ACCESS_DENIED_MESSAGE
+    STORAGE_ACCOUNT_ACCESS_DENIED_MESSAGE,
+    TRACKED_FILE_ACCESS_DENIED_MESSAGE,
+    TrackedFileAccessDeniedError
 } from '../StorageAccessEvaluator';
+import { AWSFileStorage } from '../drivers/AWSFileStorage';
 
 const ACCOUNT_A = 'AAAAAAAA-0000-4000-8000-00000000000A';
 const ACCOUNT_B = 'BBBBBBBB-0000-4000-8000-00000000000B';
@@ -49,6 +52,11 @@ interface FakeDb {
     ReadableFiles: Record<string, string[]>;
     FailPermissionRead: boolean;
     FailFileRead: boolean;
+    /**
+     * The entity's default row cap, applied to any view that does not set `IgnoreMaxRows` (MJ applies the entity's
+     * `UserViewMaxRows`, 1,000 by default). Undefined means no cap.
+     */
+    DefaultMaxRows?: number;
 }
 
 interface ViewCall {
@@ -66,7 +74,9 @@ function filterNames(params: RunViewParams, value: string): boolean {
 }
 
 function runFakeView(db: FakeDb, params: RunViewParams, user: UserInfo | undefined): RunViewResult<object> {
-    const ok = (Results: object[]): RunViewResult<object> => ({ Success: true, Results } as RunViewResult<object>);
+    const cap = params.IgnoreMaxRows ? undefined : db.DefaultMaxRows;
+    const ok = (Results: object[]): RunViewResult<object> =>
+        ({ Success: true, Results: cap === undefined ? Results : Results.slice(0, cap) } as RunViewResult<object>);
     const fail: RunViewResult<object> = { Success: false, Results: [], ErrorMessage: 'simulated failure' } as RunViewResult<object>;
     switch (params.EntityName) {
         case 'MJ: File Storage Accounts':
@@ -312,6 +322,80 @@ describe('StorageAccessEvaluator', () => {
             systemUserSpy.mockResolvedValue(null);
             const unreadable = await evaluator.UnreadableTrackedObjectKeys(PROVIDER_S3, ['me/mine.pdf'], bob, provider);
             expect([...unreadable]).toEqual(['me/mine.pdf']);
+        });
+
+        it('matches a tracked key however the client spells it: leading or trailing slash, repeated slashes, other case', async () => {
+            const spellings = ['/hr/secret.pdf', 'hr/secret.pdf/', '//hr//secret.pdf', 'HR/Secret.PDF', '  hr/secret.pdf '];
+            const unreadable = await evaluator.UnreadableTrackedObjectKeys(PROVIDER_S3, spellings, bob, provider);
+            expect([...unreadable].sort()).toEqual([...spellings].sort());
+        });
+
+        it('matches a row stored with a leading slash or in another case against the bare client key', async () => {
+            db.Files.push({ ID: 'F0000000-0000-4000-8000-000000000004', Name: 'q3.xlsx', ProviderKey: '/Finance/Q3.xlsx', ProviderID: PROVIDER_S3 });
+            const unreadable = await evaluator.UnreadableTrackedObjectKeys(PROVIDER_S3, ['finance/q3.xlsx'], bob, provider);
+            expect([...unreadable]).toEqual(['finance/q3.xlsx']);
+        });
+
+        it('canonicalizes through the account\'s driver: S3\'s prefixed spelling is the tracked object', async () => {
+            const previousPrefix = process.env.STORAGE_AWS_KEY_PREFIX;
+            Object.assign(process.env, {
+                STORAGE_AWS_REGION: 'us-east-1', STORAGE_AWS_BUCKET_NAME: 'unit-test-bucket',
+                STORAGE_AWS_ACCESS_KEY_ID: 'AKIA_TEST', STORAGE_AWS_SECRET_ACCESS_KEY: 'secret_test', STORAGE_AWS_KEY_PREFIX: 'tenant1/'
+            });
+            try {
+                const s3 = new AWSFileStorage();
+                const viaDriver = await evaluator.UnreadableTrackedObjectKeys(PROVIDER_S3, ['tenant1/hr/secret.pdf'], bob, provider, s3);
+                expect([...viaDriver]).toEqual(['tenant1/hr/secret.pdf']);
+                // The default canonicalizer cannot know the prefix — which is why callers pass the driver.
+                const viaDefault = await evaluator.UnreadableTrackedObjectKeys(PROVIDER_S3, ['tenant1/hr/secret.pdf'], bob, provider);
+                expect(viaDefault.size).toBe(0);
+                s3.Dispose();
+            } finally {
+                process.env.STORAGE_AWS_KEY_PREFIX = previousPrefix;
+            }
+        });
+
+        it('refuses keys whose meaning depends on the provider — without comparing them', async () => {
+            const hostile = ['hr/../hr/secret.pdf', 'hr\\secret.pdf', 'hr%2Fsecret.pdf', 'hr/%2e%2e/secret.pdf', './hr/secret.pdf', 'hr/secret.pdf\u0000'];
+            const unreadable = await evaluator.UnreadableTrackedObjectKeys(PROVIDER_S3, hostile, bob, provider);
+            expect([...unreadable].sort()).toEqual([...hostile].sort());
+            expect(calls).toHaveLength(0);
+        });
+
+        it('lets an ordinary literal percent sign through as an untracked key', async () => {
+            const unreadable = await evaluator.UnreadableTrackedObjectKeys(PROVIDER_S3, ['offers/50% off.pdf', 'a%20b.txt'], bob, provider);
+            expect(unreadable.size).toBe(0);
+        });
+
+        it('AssertTrackedObjectsReadable throws the tracked-file refusal, and resolves for readable or untracked keys', async () => {
+            const refusal = evaluator.AssertTrackedObjectsReadable(PROVIDER_S3, ['me/mine.pdf', '/HR/secret.pdf'], bob, provider);
+            await expect(refusal).rejects.toBeInstanceOf(TrackedFileAccessDeniedError);
+            await expect(evaluator.AssertTrackedObjectsReadable(PROVIDER_S3, ['hr/secret.pdf'], bob, provider))
+                .rejects.toThrow(TRACKED_FILE_ACCESS_DENIED_MESSAGE);
+            await expect(evaluator.AssertTrackedObjectsReadable(PROVIDER_S3, ['me/mine.pdf', 'untracked.txt'], bob, provider))
+                .resolves.toBeUndefined();
+        });
+    });
+
+    describe('reads are never truncated by the entity row cap', () => {
+        it('an account whose permission rows fall past the cap is still restricted (not "zero rows → open")', async () => {
+            db.DefaultMaxRows = 1;
+            db.Permissions = [
+                perm(ACCOUNT_B, { Type: 'Everyone', CanRead: true }),
+                perm(ACCOUNT_A, { Type: 'Role', RoleID: ROLE_FINANCE })
+            ];
+            const readable = await evaluator.AccessibleAccountIDs([ACCOUNT_A, ACCOUNT_B], bob, 'Read', provider);
+            expect([...readable]).toEqual([ACCOUNT_B.toLowerCase()]);
+        });
+
+        it('a tracked key whose row falls past the cap is still tracked', async () => {
+            db.DefaultMaxRows = 1;
+            db.Files = [
+                { ID: 'F0000000-0000-4000-8000-000000000011', Name: 'a.pdf', ProviderKey: 'hr/a.pdf', ProviderID: PROVIDER_S3 },
+                { ID: 'F0000000-0000-4000-8000-000000000012', Name: 'b.pdf', ProviderKey: 'hr/b.pdf', ProviderID: PROVIDER_S3 },
+            ];
+            const unreadable = await evaluator.UnreadableTrackedObjectKeys(PROVIDER_S3, ['hr/a.pdf', 'hr/b.pdf'], bob, provider);
+            expect([...unreadable].sort()).toEqual(['hr/a.pdf', 'hr/b.pdf']);
         });
     });
 });
