@@ -93,6 +93,27 @@
           }
         }
 
+        <!-- Participants moved into picture-in-picture boxes float over the stage, the whiteboard included, keyed by
+             identity. Each box's bar carries the participant's "Move to…" menu. -->
+        <mj-media-stage class="lk-room__pips" [Surfaces]="PipSurfaces">
+          <ng-template mjMediaStageSurface let-key>
+            <div class="lk-room__pip-tile">
+              <ng-container [ngTemplateOutlet]="participantTile" [ngTemplateOutletContext]="{ $implicit: PipParticipant(key), Place: 'pip' }"></ng-container>
+            </div>
+          </ng-template>
+          <ng-template mjMediaStagePipActions let-key>
+            <mj-media-move-menu
+              [Key]="key"
+              [Title]="PipParticipant(key).DisplayName"
+              Placement="pip"
+              [Allowed]="PipMoves"
+              [Labels]="TileMoveLabels"
+              (MoveRequested)="MoveTile($event.Key, $event.Placement)"
+              (ResetLayoutRequested)="OnResetLayout()"
+            ></mj-media-move-menu>
+          </ng-template>
+        </mj-media-stage>
+
         @if (ShowSelfViewChip) {
           <div class="lk-room__self-hidden">
             <span>Self-view hidden</span>
@@ -231,7 +252,7 @@
       [ShowMeter]="place !== 'split-share' && ShowAudioMeters"
       [ShowConnectionQuality]="ShowConnectionQuality"
       [ShowName]="ShowNameBadges"
-      [Pinnable]="place !== 'split-share' && EnablePinning"
+      [Pinnable]="place !== 'split-share' && place !== 'pip' && EnablePinning"
       [IsPinned]="PinnedIdentity === p.Identity"
       [AvatarUrl]="avatarFor(p)"
       (TogglePin)="onTogglePin(p.Identity)"

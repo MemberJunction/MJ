@@ -42,9 +42,13 @@ import {
   MediaConnectionOverlayComponent,
   MediaDeviceMenuComponent,
   MediaMoveMenuComponent,
+  MediaStageComponent,
+  MediaStagePipActionsDirective,
+  MediaStageSurfaceDirective,
   MediaTileComponent,
   SelfViewComponent,
   SharePreviewComponent,
+  type MediaStageSurface,
 } from '@memberjunction/ng-realtime-media';
 import {
   LayoutMediaStage,
@@ -135,6 +139,9 @@ export interface LiveKitLayoutOption {
     NgTemplateOutlet,
     MediaTileComponent,
     MediaMoveMenuComponent,
+    MediaStageComponent,
+    MediaStageSurfaceDirective,
+    MediaStagePipActionsDirective,
     SelfViewComponent,
     SharePreviewComponent,
     LiveKitRoomTileDirective,
@@ -641,14 +648,34 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
 
   /**
    * Where a participant's tile may go from where it shows, for its "Move to…" menu, or `null` for no menu. The participant
-   * the call put in the spotlight may be pinned there but not sent to the strip, where the call would not keep them while
-   * they speak. Without pinning the strip is the only place, so there is no menu; the screen-share pane has none either.
+   * the call put in the spotlight may be pinned there or boxed, but not sent to the strip, where the call would not keep
+   * them while they speak. Without pinning the spotlight is not offered. The screen-share pane has no menu, and a
+   * picture-in-picture box has its menu on its bar ({@link PipMoves}).
    */
   public TileMovesFor(identity: string, place: LiveKitTilePlace): readonly MediaPlacement[] | null {
-    if (place === 'split-share' || !this.EnablePinning) {
+    if (place === 'split-share' || place === 'pip') {
       return null;
     }
-    return place === 'spotlight' && this.PinnedIdentity !== identity ? CALLS_PICK_MOVES : TILE_PLACEMENTS;
+    const callsPick = place === 'spotlight' && this.PinnedIdentity !== identity;
+    if (this.EnablePinning) {
+      return callsPick ? CALLS_PICK_MOVES : TILE_PLACEMENTS;
+    }
+    return callsPick ? UNPINNED_CALLS_PICK_MOVES : UNPINNED_TILE_MOVES;
+  }
+
+  /** Where a picture-in-picture box's participant may go, for the "Move to…" menu on its bar. */
+  public get PipMoves(): readonly MediaPlacement[] {
+    return this.EnablePinning ? TILE_PLACEMENTS : UNPINNED_TILE_MOVES;
+  }
+
+  /** The participants the user moved into picture-in-picture boxes, for `mj-media-stage`, keyed by identity. */
+  public get PipSurfaces(): readonly MediaStageSurface[] {
+    return this.stage.PipSurfaces;
+  }
+
+  /** The participant in a picture-in-picture box, by the box's key (their identity). */
+  public PipParticipant(identity: string): LiveKitParticipantView {
+    return this.stage.ViewOf(identity);
   }
 
   /** Where a participant's tile is, for its "Move to…" menu: the spotlight when the user put it there, else the strip. */
@@ -1047,6 +1074,8 @@ interface RoomStage {
   Sharer: MediaParticipant | null;
   /** Split view's speaker pane, which shows a speaker even while nobody shares. */
   SplitSpeaker: MediaParticipant | null;
+  /** The participants in picture-in-picture boxes, newest first, as `mj-media-stage` surfaces keyed by identity. */
+  PipSurfaces: MediaStageSurface[];
   /** The LiveKit view of a participant in the room, by identity. */
   ViewOf(identity: string): LiveKitParticipantView;
 }
@@ -1054,11 +1083,15 @@ interface RoomStage {
 /** Where a participant's tile is when nobody moved it: among the others, in the filmstrip or the grid. */
 const ROOM_STRIP: MediaPlacement = 'tab';
 
-/** Where the user may move a participant's tile: the spotlight, or back among the others. */
-const TILE_PLACEMENTS: readonly MediaPlacement[] = ['stage', ROOM_STRIP];
+/** Where the user may move a participant's tile: the spotlight, back among the others, or a picture-in-picture box. */
+const TILE_PLACEMENTS: readonly MediaPlacement[] = ['stage', ROOM_STRIP, 'pip'];
 
-/** Where the user may move the participant the call put in the spotlight: pin them there. */
-const CALLS_PICK_MOVES: readonly MediaPlacement[] = ['stage'];
+/** Where the user may move the participant the call put in the spotlight: pin them there, or box them. */
+const CALLS_PICK_MOVES: readonly MediaPlacement[] = ['stage', 'pip'];
+
+/** The same two while pinning is off: everything but the spotlight. */
+const UNPINNED_TILE_MOVES: readonly MediaPlacement[] = [ROOM_STRIP, 'pip'];
+const UNPINNED_CALLS_PICK_MOVES: readonly MediaPlacement[] = ['pip'];
 
 /** The room's names for its places in the "Move to…" menu, in Gallery and in the other layouts. */
 const GALLERY_LABELS: Partial<Readonly<Record<MediaPlacement, string>>> = { stage: 'Spotlight', [ROOM_STRIP]: 'Gallery' };
@@ -1109,17 +1142,29 @@ function layOutRoom(
   const byIdentity = new Map(views.map((view) => [view.Identity, view]));
   const participants = views.map(toMedia);
   const activeSpeakers = state.ActiveSpeakerIdentities;
+  const layout = LayoutMediaStage({
+    Participants: participants,
+    ActiveSpeakers: activeSpeakers,
+    // The user's own tile is no surface while their self-view is off, so it cannot stay in a box.
+    Surfaces: views.filter((view) => showSelf || !view.IsLocal).map(tileSurface),
+    Moves: moves,
+    ShowSelfView: showSelf,
+  });
+  const boxes = layout.Pips.flatMap(pipBox);
+  // Someone in a box is not shown again in the grid or the speaker pane; their shared screen still shows.
+  const boxed = new Set(boxes.map((box) => box.Key));
+  const free = participants.filter((p) => !boxed.has(p.Identity));
   return {
-    Layout: LayoutMediaStage({
-      Participants: participants,
-      ActiveSpeakers: activeSpeakers,
-      Surfaces: views.map(tileSurface),
-      Moves: moves,
-      ShowSelfView: showSelf,
-    }),
-    Shown: SelectDisplayParticipants(participants, showSelf),
+    Layout: layout,
+    Shown: SelectDisplayParticipants(free, showSelf),
     Sharer: SelectScreenSharer(participants),
-    SplitSpeaker: SelectSplitSpeaker(participants, activeSpeakers),
+    SplitSpeaker: SelectSplitSpeaker(free, activeSpeakers),
+    PipSurfaces: boxes,
     ViewOf: (identity) => byIdentity.get(identity)!,
   };
+}
+
+/** A participant's tile in a picture-in-picture box, as an `mj-media-stage` surface keyed by their identity. */
+function pipBox(surface: MediaSurface, index: number): MediaStageSurface[] {
+  return surface.Video ? [{ Key: surface.Video.ParticipantIdentity, Placement: 'pip', Label: surface.Label, PipIndex: index }] : [];
 }

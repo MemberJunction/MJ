@@ -455,20 +455,20 @@ describe('LiveKitRoomComponent (DOM, fake controller)', () => {
     };
     const twoAndAgent = () => room([person('ada'), person('bo'), person('sage', { Agent: true })]).controller;
 
-    it("offers a filmstrip tile the spotlight, its own place disabled, then Reset layout, in the tile's corner", () => {
+    it("offers a filmstrip tile the spotlight and a box, its own place disabled, then Reset layout, in the tile's corner", () => {
       const f = render(twoAndAgent(), { Layout: 'spotlight' });
       const menu = tileOf(f, 'ada')?.querySelector('.tile__actions-slot mj-media-move-menu');
       expect(menu?.classList.contains('media-move--over-video')).toBe(true);
       expect(menu?.querySelector('button')?.getAttribute('aria-label')).toBe('Move ada');
       const items = openMenu(f, 'ada');
-      expect(labels(items)).toEqual(['Spotlight', 'Filmstrip', 'Reset layout']);
-      expect(disabled(items)).toEqual([false, true, false]);
+      expect(labels(items)).toEqual(['Spotlight', 'Picture-in-picture', 'Filmstrip', 'Reset layout']);
+      expect(disabled(items)).toEqual([false, false, true, false]);
     });
 
-    it("offers the call's own spotlight pick the spotlight alone, which pins them there", () => {
+    it("offers the call's own spotlight pick the spotlight and a box, not the filmstrip; Spotlight pins them", () => {
       const f = render(twoAndAgent(), { Layout: 'spotlight' });
       const items = openMenu(f, 'sage');
-      expect(labels(items)).toEqual(['Spotlight', 'Reset layout']);
+      expect(labels(items)).toEqual(['Spotlight', 'Picture-in-picture', 'Reset layout']);
       items[0].click();
       f.detectChanges();
       expect(f.componentInstance.PinnedIdentity).toBe('sage');
@@ -479,8 +479,8 @@ describe('LiveKitRoomComponent (DOM, fake controller)', () => {
       pick(f, 'ada', 'Spotlight');
       expect(names(f, '.lk-room__spotlight')).toEqual(['ada']);
       const items = openMenu(f, 'ada');
-      expect(labels(items)).toEqual(['Spotlight', 'Filmstrip', 'Reset layout']);
-      expect(disabled(items)).toEqual([true, false, false]);
+      expect(labels(items)).toEqual(['Spotlight', 'Picture-in-picture', 'Filmstrip', 'Reset layout']);
+      expect(disabled(items)).toEqual([true, false, false, false]);
       items.find((el) => el.textContent?.trim() === 'Filmstrip')?.click();
       f.detectChanges();
       expect(names(f, '.lk-room__spotlight')).toEqual(['sage']);
@@ -491,7 +491,7 @@ describe('LiveKitRoomComponent (DOM, fake controller)', () => {
       const layouts: string[] = [];
       f.componentInstance.LayoutChange.subscribe((layout: string) => layouts.push(layout));
       const items = openMenu(f, 'ada');
-      expect(labels(items)).toEqual(['Spotlight', 'Gallery', 'Reset layout']);
+      expect(labels(items)).toEqual(['Spotlight', 'Picture-in-picture', 'Gallery', 'Reset layout']);
       items[0].click();
       f.detectChanges();
       expect(layouts).toEqual(['spotlight']);
@@ -518,8 +518,14 @@ describe('LiveKitRoomComponent (DOM, fake controller)', () => {
       expect(query(f, 'mj-share-preview .share__corner mj-media-move-menu')).not.toBeNull();
     });
 
-    it('has no menu while pinning is off', () => {
-      expect(query(render(twoAndAgent(), { Layout: 'spotlight', EnablePinning: false }), 'mj-media-move-menu')).toBeNull();
+    it('without pinning, offers a tile the strip and a box', () => {
+      const f = render(twoAndAgent(), { Layout: 'spotlight', EnablePinning: false });
+      expect(labels(openMenu(f, 'ada'))).toEqual(['Picture-in-picture', 'Filmstrip', 'Reset layout']);
+    });
+
+    it("without pinning, offers the call's own pick a box alone", () => {
+      const f = render(twoAndAgent(), { Layout: 'spotlight', EnablePinning: false });
+      expect(labels(openMenu(f, 'sage'))).toEqual(['Picture-in-picture', 'Reset layout']);
     });
 
     it('has no menu on the shared screen in split view, and one on the speaker', () => {
@@ -528,6 +534,117 @@ describe('LiveKitRoomComponent (DOM, fake controller)', () => {
       const [sharePane, speakerPane] = queryAll(f, '.lk-room__split-pane');
       expect(sharePane.querySelector('mj-media-move-menu')).toBeNull();
       expect(speakerPane.querySelector('mj-media-move-menu')).not.toBeNull();
+    });
+  });
+
+  describe('picture-in-picture', () => {
+    const twoAndAgent = () => room([person('ada'), person('bo'), person('sage', { Agent: true })]).controller;
+    /** Picks an item from the "Move to…" menu in the named participant's tile corner. */
+    const pickInTile = (f: ReturnType<typeof render>, name: string, item: string) => {
+      (tileOf(f, name)?.querySelector('mj-media-move-menu button') as HTMLButtonElement).click();
+      f.detectChanges();
+      (overlayQueryAll('mj-menu-item') as HTMLElement[]).find((el) => el.textContent?.trim() === item)?.click();
+      f.detectChanges();
+    };
+    /** The named participant's box. */
+    const boxOf = (f: ReturnType<typeof render>, name: string): HTMLElement | undefined =>
+      queryAll(f, '.lk-room__pips .stage-surface--pip').find((box) => box.querySelector('.stage-pip-title')?.textContent?.trim() === name);
+    /** Opens the "Move to…" menu on the named participant's box bar and lists its items. */
+    const openBarMenu = (f: ReturnType<typeof render>, name: string): HTMLElement[] => {
+      (boxOf(f, name)?.querySelector('.stage-pip-bar mj-media-move-menu button') as HTMLButtonElement).click();
+      f.detectChanges();
+      return overlayQueryAll('mj-menu-item') as HTMLElement[];
+    };
+    const boxed = (f: ReturnType<typeof render>) => names(f, '.lk-room__pip-tile');
+
+    it('moves a tile into a box, out of the filmstrip', () => {
+      const f = render(twoAndAgent(), { Layout: 'spotlight' });
+      pickInTile(f, 'ada', 'Picture-in-picture');
+      expect(boxed(f)).toEqual(['ada']);
+      expect(names(f, '.lk-room__filmstrip-tile')).toEqual(['you', 'bo']);
+    });
+
+    it("gives the box's tile no pin or corner menu, and puts the menu on the box's bar, the box disabled", () => {
+      const f = render(twoAndAgent(), { Layout: 'spotlight' });
+      pickInTile(f, 'ada', 'Picture-in-picture');
+      expect(query(f, '.lk-room__pip-tile .tile__pin')).toBeNull();
+      expect(query(f, '.lk-room__pip-tile mj-media-move-menu')).toBeNull();
+      const items = openBarMenu(f, 'ada');
+      expect(items.map((item) => item.textContent?.trim())).toEqual(['Spotlight', 'Picture-in-picture', 'Filmstrip', 'Reset layout']);
+      expect(items.map((item) => item.getAttribute('aria-disabled') === 'true')).toEqual([false, true, false, false]);
+    });
+
+    it("without pinning, offers on the box's bar the strip and the box alone", () => {
+      const f = render(twoAndAgent(), { Layout: 'spotlight', EnablePinning: false });
+      pickInTile(f, 'ada', 'Picture-in-picture');
+      expect(openBarMenu(f, 'ada').map((item) => item.textContent?.trim())).toEqual(['Picture-in-picture', 'Filmstrip', 'Reset layout']);
+    });
+
+    it("brings a boxed participant back to the filmstrip from the box's bar", () => {
+      const f = render(twoAndAgent(), { Layout: 'spotlight' });
+      pickInTile(f, 'ada', 'Picture-in-picture');
+      openBarMenu(f, 'ada').find((item) => item.textContent?.trim() === 'Filmstrip')?.click();
+      f.detectChanges();
+      expect(boxed(f)).toEqual([]);
+      expect(names(f, '.lk-room__filmstrip-tile')).toEqual(['you', 'ada', 'bo']);
+    });
+
+    it("pins a boxed participant from the box's bar", () => {
+      const f = render(twoAndAgent(), { Layout: 'spotlight' });
+      pickInTile(f, 'ada', 'Picture-in-picture');
+      openBarMenu(f, 'ada').find((item) => item.textContent?.trim() === 'Spotlight')?.click();
+      f.detectChanges();
+      expect(boxed(f)).toEqual([]);
+      expect(names(f, '.lk-room__spotlight')).toEqual(['ada']);
+    });
+
+    it("gives the spotlight to the next in line when the call's pick is boxed", () => {
+      const f = render(twoAndAgent(), { Layout: 'spotlight' });
+      pickInTile(f, 'sage', 'Picture-in-picture');
+      expect(boxed(f)).toEqual(['sage']);
+      expect(names(f, '.lk-room__spotlight')).toEqual(['ada']);
+      expect(names(f, '.lk-room__filmstrip-tile')).toEqual(['you', 'bo']);
+    });
+
+    it('leaves a boxed participant out of the grid in Gallery', () => {
+      const f = render(twoAndAgent(), { Layout: 'grid' });
+      pickInTile(f, 'bo', 'Picture-in-picture');
+      expect(boxed(f)).toEqual(['bo']);
+      expect(names(f, '.lk-room__grid-tile')).toEqual(['you', 'ada', 'sage']);
+    });
+
+    it("in split view, does not make a boxed participant the speaker, and still shows their shared screen", () => {
+      const fc = room([person('ada', { Sharing: true }), person('sage', { Agent: true })]);
+      const f = render(fc.controller, { Layout: 'split' });
+      f.componentInstance.MoveTile('ada', 'pip');
+      f.componentInstance.MoveTile('sage', 'pip');
+      f.componentRef.injector.get(ChangeDetectorRef).markForCheck();
+      f.detectChanges();
+      const [sharePane, speakerPane] = queryAll(f, '.lk-room__split-pane');
+      expect(sharePane.querySelector('.tile__name')?.textContent).toContain('ada');
+      expect(speakerPane.querySelector('.tile__name')?.textContent).toContain('you');
+    });
+
+    it("takes the user's box away while a host turns their self-view off, and gives it back after", () => {
+      const f = render(twoAndAgent(), { Layout: 'spotlight' });
+      pickInTile(f, 'you', 'Picture-in-picture');
+      expect(boxed(f)).toEqual(['you']);
+      f.componentRef.setInput('ShowSelfView', false);
+      f.detectChanges();
+      expect(boxed(f)).toEqual([]);
+      f.componentRef.setInput('ShowSelfView', true);
+      f.detectChanges();
+      expect(boxed(f)).toEqual(['you']);
+    });
+
+    it('empties every box on Reset layout', () => {
+      const f = render(twoAndAgent(), { Layout: 'spotlight' });
+      pickInTile(f, 'ada', 'Picture-in-picture');
+      pickInTile(f, 'bo', 'Picture-in-picture');
+      expect(boxed(f)).toEqual(['bo', 'ada']);
+      openBarMenu(f, 'ada').find((item) => item.textContent?.trim() === 'Reset layout')?.click();
+      f.detectChanges();
+      expect(boxed(f)).toEqual([]);
     });
   });
 

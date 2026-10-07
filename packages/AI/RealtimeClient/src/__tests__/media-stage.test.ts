@@ -206,6 +206,15 @@ describe('surface placement', () => {
         expect(keys(layout.Tabs)).toEqual(['whiteboard']);
     });
 
+    it('the spotlight is never a participant already shown in a PiP: the next in line takes it', () => {
+        const speaking = person('bot', { Role: 'agent', IsSpeaking: true });
+        const box = surface('bot-box', 'pip', { Video: { ParticipantIdentity: 'bot', Kind: 'camera' } });
+        const layout = LayoutMediaStage({ Participants: [ME, speaking, person('guest')], ActiveSpeakers: ['bot'], Surfaces: [box] });
+        expect(layout.Stage).toEqual({ Kind: 'participant', Participant: expect.objectContaining({ Identity: 'guest' }) });
+        expect(keys(layout.Pips)).toEqual(['bot-box']);
+        expect(ids(layout.Others)).toEqual(['me']);
+    });
+
     it('reports a split while someone shares a screen', () => {
         const sharer = person('sharer', { Video: { screen: STREAM } });
         const layout = LayoutMediaStage({ Participants: [ME, sharer, person('bot', { Role: 'agent' })] });

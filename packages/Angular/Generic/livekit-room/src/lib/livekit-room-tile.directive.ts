@@ -1,8 +1,11 @@
 import { Directive } from '@angular/core';
 import type { LiveKitParticipantView } from '@memberjunction/livekit-room-core';
 
-/** Where the room shows a participant. The place decides a tile's extras: the screen-share pane is plain. */
-export type LiveKitTilePlace = 'grid' | 'filmstrip' | 'spotlight' | 'split-share' | 'split-speaker';
+/**
+ * Where the room shows a participant. The place decides a tile's extras: the screen-share pane is plain, and a tile in a
+ * picture-in-picture box has no pin or corner menu (its menu is on the box's bar).
+ */
+export type LiveKitTilePlace = 'grid' | 'filmstrip' | 'spotlight' | 'split-share' | 'split-speaker' | 'pip';
 
 /** What the room's participant template receives. */
 export interface LiveKitTileContext {

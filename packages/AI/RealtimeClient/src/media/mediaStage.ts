@@ -13,7 +13,7 @@
  * - When no surface holds the stage, the spotlight participant does: a pin, then the active speaker, then a
  *   speaking participant, then the agent, then the first other participant, then the user.
  * - A participant already shown through a surface on the stage or in a PiP (the avatar, the user's camera) is not
- *   repeated among the others.
+ *   repeated among the others, and one shown in a PiP does not take the spotlight: the next in line does.
  *
  * @module @memberjunction/ai-realtime-client/media
  */
@@ -59,7 +59,9 @@ export interface MediaStageLayout {
 /** Lays out the stage. Pure: the same input always gives the same layout. */
 export function LayoutMediaStage(input: MediaStageInput): MediaStageLayout {
     const placed = ResolveSurfacePlacements(input.Surfaces ?? [], input.Moves ?? []);
-    const spotlight = placed.Stage ? null : SelectSpotlight(input.Participants, input.ActiveSpeakers ?? [], input.PinnedIdentity ?? null);
+    const inPips = new Set(placed.Pips.flatMap((s) => (s.Video ? [s.Video.ParticipantIdentity] : [])));
+    const candidates = input.Participants.filter((p) => !inPips.has(p.Identity));
+    const spotlight = placed.Stage ? null : SelectSpotlight(candidates, input.ActiveSpeakers ?? [], input.PinnedIdentity ?? null);
     const onScreen = new Set([placed.Stage, ...placed.Pips].flatMap((s) => (s?.Video ? [s.Video.ParticipantIdentity] : [])));
     if (spotlight) {
         onScreen.add(spotlight.Identity);
