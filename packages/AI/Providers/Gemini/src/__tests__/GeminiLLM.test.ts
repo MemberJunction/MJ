@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 
 /* ------------------------------------------------------------------ */
 /*  Hoisted mocks                                                     */
@@ -140,92 +140,6 @@ describe('GeminiLLM', () => {
   describe('GeminiClient', () => {
     it('should throw if client is not yet initialized', () => {
       expect(() => llm.GeminiClient).toThrow('Gemini client not initialized');
-    });
-  });
-
-  /* ---- getThinkingBudget (private) ---- */
-  describe('getThinkingBudget', () => {
-    const callGetThinkingBudget = (effortLevel: string | number | undefined, modelName: string) => {
-      const fn = (llm as unknown as Record<string, (...args: unknown[]) => unknown>)['getThinkingBudget']
-        .bind(llm);
-      return fn(effortLevel, modelName) as number | undefined;
-    };
-
-    it('should return undefined for undefined effort level', () => {
-      expect(callGetThinkingBudget(undefined, 'gemini-2.5-flash')).toBeUndefined();
-    });
-
-    it('should return undefined for empty string effort level', () => {
-      expect(callGetThinkingBudget('', 'gemini-2.5-flash')).toBeUndefined();
-    });
-
-    it('should return undefined for NaN effort level', () => {
-      expect(callGetThinkingBudget('abc', 'gemini-2.5-flash')).toBeUndefined();
-    });
-
-    it('should return 0 only for effort 1 on Flash models (minimal)', () => {
-      expect(callGetThinkingBudget(1, 'gemini-2.5-flash')).toBe(0);
-      // effort 2 falls into the LOW band (1024-4096) — no longer disabled
-      const lowBudget = callGetThinkingBudget(2, 'gemini-2.5-flash');
-      expect(lowBudget).toBeGreaterThanOrEqual(1024);
-      expect(lowBudget).toBeLessThanOrEqual(4096);
-    });
-
-    it('should return low budget for effort level 20', () => {
-      const budget = callGetThinkingBudget(20, 'gemini-2.5-pro');
-      expect(budget).toBeGreaterThanOrEqual(1024);
-      expect(budget).toBeLessThanOrEqual(4096);
-    });
-
-    it('should return medium budget for effort level 50', () => {
-      const budget = callGetThinkingBudget(50, 'gemini-2.5-pro');
-      expect(budget).toBeGreaterThanOrEqual(4097);
-      expect(budget).toBeLessThanOrEqual(12288);
-    });
-
-    it('should return high budget for effort level 90', () => {
-      const budget = callGetThinkingBudget(90, 'gemini-2.5-pro');
-      expect(budget).toBeGreaterThanOrEqual(12289);
-      expect(budget).toBeLessThanOrEqual(24576);
-    });
-
-    it('should clamp effort level to 1-100', () => {
-      const low = callGetThinkingBudget(-10, 'gemini-2.5-pro');
-      const high = callGetThinkingBudget(200, 'gemini-2.5-pro');
-      expect(low).toBeGreaterThanOrEqual(0);
-      expect(high).toBeLessThanOrEqual(24576);
-    });
-
-    it('should parse string effort level', () => {
-      const budget = callGetThinkingBudget('50', 'gemini-2.5-pro');
-      expect(budget).toBeGreaterThanOrEqual(4097);
-    });
-  });
-
-  /* ---- supportsThinking (private) ---- */
-  describe('supportsThinking', () => {
-    const callSupportsThinking = (modelName: string) => {
-      const fn = (llm as unknown as Record<string, (...args: unknown[]) => boolean>)['supportsThinking']
-        .bind(llm);
-      return fn(modelName);
-    };
-
-    it('should return true for 2.5 models', () => {
-      expect(callSupportsThinking('gemini-2.5-pro')).toBe(true);
-      expect(callSupportsThinking('gemini-2.5-flash')).toBe(true);
-    });
-
-    it('should return true for gemini-3 models', () => {
-      expect(callSupportsThinking('gemini-3-pro')).toBe(true);
-    });
-
-    it('should return true for experimental models', () => {
-      expect(callSupportsThinking('gemini-exp-001')).toBe(true);
-    });
-
-    it('should return false for older models', () => {
-      expect(callSupportsThinking('gemini-pro')).toBe(false);
-      expect(callSupportsThinking('gemini-1.5-pro')).toBe(false);
     });
   });
 
@@ -892,6 +806,125 @@ describe('GeminiLLM — native tool calling', () => {
 
       expect(result.data.choices[0].message.toolCalls).toBeUndefined();
       expect(result.data.choices[0].finish_reason).toBe('STOP');
+    });
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  Generation config by model version                                */
+/*  Google is retiring temperature/topP/topK (ignored since Gemini    */
+/*  3.6, rejected by upcoming models) and thinkingBudget.             */
+/* ------------------------------------------------------------------ */
+describe('GeminiLLM — generation config by model version', () => {
+  let llm: GeminiLLM;
+  let sendMessage: Mock;
+  let sendMessageStream: Mock;
+  let create: Mock;
+  let warn: ReturnType<typeof vi.spyOn>;
+
+  const run = async (params: Record<string, unknown>): Promise<void> => {
+    const fn = (llm as unknown as Record<string, (p: unknown) => Promise<unknown>>)['nonStreamingChatCompletion'].bind(llm);
+    await fn({ messages: [{ role: 'user', content: 'hi' }], ...params });
+  };
+
+  const runStreaming = async (params: Record<string, unknown>): Promise<void> => {
+    const fn = (llm as unknown as Record<string, (p: unknown) => Promise<unknown>>)['createStreamingRequest'].bind(llm);
+    await fn({ messages: [{ role: 'user', content: 'hi' }], ...params });
+  };
+
+  /**
+   * The per-request config handed to sendMessage. @google/genai uses it INSTEAD of the session
+   * config (`params.config ?? this.config`), so this is exactly what goes on the wire.
+   */
+  const requestConfig = (): Record<string, unknown> => sendMessage.mock.calls[0][0].config as Record<string, unknown>;
+
+  beforeEach(() => {
+    llm = new GeminiLLM('test-gemini-key');
+    sendMessage = vi.fn().mockResolvedValue({
+      candidates: [{ content: { parts: [{ text: 'hi' }] }, finishReason: 'STOP' }],
+      usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 2 }
+    });
+    sendMessageStream = vi.fn().mockResolvedValue({});
+    create = vi.fn().mockReturnValue({ sendMessage, sendMessageStream });
+    (llm as unknown as Record<string, unknown>)['_gemini'] = { chats: { create } };
+    warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    warn.mockRestore();
+  });
+
+  describe('models before Gemini 3.6 — sampling unchanged', () => {
+    it.each(['gemini-2.5-flash', 'gemini-3-pro-preview', 'gemini-3.1-pro-preview', 'gemini-3.5-flash'])(
+      '%s keeps the 0.5 default temperature', async (model) => {
+        await run({ model });
+        expect(requestConfig().temperature).toBe(0.5);
+      });
+
+    it('keeps sampling for non-Gemini models served by this driver (Gemma on Vertex)', async () => {
+      await run({ model: 'gemma-4-31b-it', temperature: 0.2, topP: 0.9 });
+      expect(requestConfig()).toMatchObject({ temperature: 0.2, topP: 0.9 });
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('sends an explicit temperature of 0 as 0 (not the 0.5 default)', async () => {
+      await run({ model: 'gemini-2.5-flash', temperature: 0 });
+      expect(requestConfig().temperature).toBe(0);
+    });
+
+    it('sends caller temperature / topP / topK under the SDK camelCase keys, without warning', async () => {
+      await run({ model: 'gemini-3.5-flash', temperature: 0.2, topP: 0.9, topK: 40 });
+      expect(requestConfig()).toMatchObject({ temperature: 0.2, topP: 0.9, topK: 40 });
+      expect(requestConfig()).not.toHaveProperty('top_p');
+      expect(requestConfig()).not.toHaveProperty('top_k');
+      expect(warn).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Gemini 3.6+ and unversioned ids — no sampling fields', () => {
+    it('omits temperature / topP / topK and warns once per model and field', async () => {
+      await run({ model: 'gemini-3.8-flash', temperature: 0.2, topP: 0.9, topK: 40 });
+      await run({ model: 'gemini-3.8-flash', temperature: 0.2, topP: 0.9, topK: 40 });
+
+      for (const field of ['temperature', 'topP', 'topK', 'top_p', 'top_k']) {
+        expect(requestConfig()).not.toHaveProperty(field);
+      }
+      const samplingWarnings = warn.mock.calls.filter(c => String(c[0]).includes('gemini-3.8-flash'));
+      expect(samplingWarnings).toHaveLength(3);
+    });
+
+    it.each(['gemini-3.6-flash', 'gemini-4-pro', 'gemini-flash-latest'])(
+      '%s gets no default temperature', async (model) => {
+        await run({ model });
+        expect(requestConfig()).not.toHaveProperty('temperature');
+      });
+
+    it('omits sampling fields on the streaming path too', async () => {
+      await runStreaming({ model: 'gemini-3.8-flash', temperature: 0.2, topP: 0.9, topK: 40 });
+      const config = sendMessageStream.mock.calls[0][0].config as Record<string, unknown>;
+      expect(config).not.toHaveProperty('temperature');
+      expect(config).not.toHaveProperty('topP');
+      expect(config).not.toHaveProperty('topK');
+    });
+  });
+
+  describe('thinking stays off the wire', () => {
+    it.each(['gemini-2.5-pro', 'gemini-3-pro-preview', 'gemini-3.8-flash', 'gemini-flash-latest'])(
+      '%s sends no thinkingConfig, with or without an effort level', async (model) => {
+        await run({ model, effortLevel: '90' });
+        await run({ model });
+        for (const call of sendMessage.mock.calls) {
+          expect(call[0].config).not.toHaveProperty('thinkingConfig');
+        }
+        for (const call of create.mock.calls) {
+          expect(call[0].config).toBeUndefined();
+        }
+      });
+
+    it('sends no thinkingConfig on the streaming path', async () => {
+      await runStreaming({ model: 'gemini-2.5-pro', effortLevel: '90' });
+      expect(sendMessageStream.mock.calls[0][0].config).not.toHaveProperty('thinkingConfig');
+      expect(create.mock.calls[0][0].config).toBeUndefined();
     });
   });
 });
