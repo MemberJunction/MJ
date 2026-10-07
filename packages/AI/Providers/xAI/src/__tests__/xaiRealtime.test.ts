@@ -39,6 +39,8 @@ vi.mock('@memberjunction/ai', async () => {
     class BaseTextToSpeech extends BaseModel {}
     class BaseSpeechToText extends BaseModel {}
     class BaseImageGenerator extends BaseModel {}
+    // The OpenAI decision driver extends BaseDecision.
+    class BaseDecision extends BaseModel {}
     // Static-method error helper referenced by those modules' method bodies.
     class ErrorAnalyzer {
         public static analyzeError(): Record<string, never> {
@@ -57,7 +59,7 @@ vi.mock('@memberjunction/ai', async () => {
     // and drift from reality, which is how the xAI top-level-usage bug survived here in the first
     // place — so the real implementation is the thing under test.
     const { ResolveResponseDoneUsage } = await import('../../../../Core/src/generic/realtimeUsage');
-    return { BaseModel, BaseRealtimeModel, BaseLLM, BaseEmbeddings, BaseAudioGenerator, BaseTextToSpeech, BaseSpeechToText, BaseImageGenerator, ErrorAnalyzer, RealtimeDiagLog, IsTranscriptContinuation, ResolveResponseDoneUsage };
+    return { BaseModel, BaseRealtimeModel, BaseLLM, BaseEmbeddings, BaseAudioGenerator, BaseTextToSpeech, BaseSpeechToText, BaseImageGenerator, BaseDecision, ErrorAnalyzer, RealtimeDiagLog, IsTranscriptContinuation, ResolveResponseDoneUsage };
 });
 
 // Mock the SDK WebSocket so importing the driver never touches the network. The driver's
