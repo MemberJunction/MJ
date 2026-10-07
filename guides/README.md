@@ -98,6 +98,7 @@ If you're about to start work in one of the areas below, **read the guide first*
 
 ## Angular / MJExplorer
 
+- **[Building UI on MemberJunction](BUILDING_UI_ON_MJ.md)** ([illustrated edition](https://docs.memberjunction.org/v6/building-ui/)) — Start here for any UI work. The argument and the map: why a framework matters more when code is free, the full stack as an elevator (Basement wire → Ground floor core → L0–L3) where you can get off at any floor, the decision ladder (need MJ data? authenticated and returning? where does the UI live?), Explorer as the default chassis, and three worked shipping surfaces (Explorer, your own Angular app, an Angular Element). Builds on the [UI Layering Guide](UI_LAYERING_GUIDE.md), which stays the source of truth for the layer rules.
 - **[Dashboard Best Practices](DASHBOARD_BEST_PRACTICES.md)** — Comprehensive patterns for building MJ dashboards including:
   - Architecture and naming conventions
   - State management with getter/setters

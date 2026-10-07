@@ -1,5 +1,7 @@
 # Design Token Adoption & App Color Strategy
 
+> **Part of the UI guide set.** This guide covers the design-token rules every MJ UI layer follows. For the big picture (the layers, choosing where UI lives, and why), start with [Building UI on MemberJunction](BUILDING_UI_ON_MJ.md) ([illustrated edition](https://docs.memberjunction.org/v6/building-ui/)).
+
 ## Context
 
 Dashboard components across MemberJunction Explorer hardcode hex colors — over 60 files with 100+ unique hex values. This creates visual inconsistency (different blues, different grays across apps) and breaks theming (hardcoded colors don't respond to light/dark mode).

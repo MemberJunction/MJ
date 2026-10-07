@@ -1,5 +1,7 @@
 # MJ Explorer Navigation and Routing Guide
 
+> **Part of the UI guide set.** Navigation belongs to L3 only; this guide covers how Explorer's shell owns it. For the big picture (the layers, choosing where UI lives, and why), start with [Building UI on MemberJunction](BUILDING_UI_ON_MJ.md) ([illustrated edition](https://docs.memberjunction.org/v6/building-ui/)).
+
 This guide documents the navigation and URL management architecture in MJ Explorer. It is a developer reference for the implemented system — covering how the shell owns URL state, how back/forward navigation works, and how to add URL-synced sub-navigation to a new component.
 
 ## Table of Contents
