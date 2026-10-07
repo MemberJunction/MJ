@@ -1,4 +1,4 @@
-import { ActionResultSimple, RunActionParams, RuntimeAPIKeyResolver } from "@memberjunction/actions-base";
+import { ActionResultSimple, RunActionParams, RuntimeAPIKeyResolver, RuntimeCredentialScope } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { UUIDsEqual } from "@memberjunction/global";
@@ -8,6 +8,7 @@ import {
     ImageGenerationResult,
     GeneratedImage,
     GetAIAPIKey,
+    CredentialScopeAllows,
 } from "@memberjunction/ai";
 import { MJAIModelEntityExtended, MediaOutput } from "@memberjunction/ai-core-plus";
 import { AIEngineBase } from "@memberjunction/ai-engine-base";
@@ -96,11 +97,15 @@ export function ResolveImageGenerationAPIKey(driverClass: string, vendorName: st
     throw new Error(`No API key found for ${driverClass} or vendor ${vendorName || 'unknown'}`);
 }
 
-/** {@link ResolveImageGenerationAPIKey}'s lookup, answering undefined rather than throwing when nothing resolves. */
-function findImageGenerationAPIKey(driverClass: string, vendorName: string | undefined, resolve?: RuntimeAPIKeyResolver): string | undefined {
-    const byDriver = resolve?.(driverClass) || GetAIAPIKey(driverClass);
+/**
+ * {@link ResolveImageGenerationAPIKey}'s lookup, answering undefined rather than throwing when nothing
+ * resolves. Under a `'RuntimeOnly'` scope only `resolve` answers: the platform key is never a fallback.
+ */
+function findImageGenerationAPIKey(driverClass: string, vendorName: string | undefined, resolve?: RuntimeAPIKeyResolver, scope: RuntimeCredentialScope = 'Any'): string | undefined {
+    const platformKey = (name: string): string | undefined => CredentialScopeAllows(scope, 'Environment') ? GetAIAPIKey(name) : undefined;
+    const byDriver = resolve?.(driverClass) || platformKey(driverClass);
     if (byDriver) return byDriver;
-    const byVendor = vendorName ? resolve?.(vendorName) || GetAIAPIKey(vendorName) : '';
+    const byVendor = vendorName ? resolve?.(vendorName) || platformKey(vendorName) : '';
     return byVendor || undefined;
 }
 
@@ -122,12 +127,15 @@ export interface ImageGenerationKeySource {
  * class, the first whose key resolves wins, so the key a class carries is the one for the vendor the
  * runner reaches first. A class with no key anywhere is left out: the runner may still resolve a
  * credential binding for it, and otherwise skips it.
+ *
+ * Under a `'RuntimeOnly'` `scope` only the run's own keys are collected, and the runner (given the
+ * same scope) skips every class without one rather than resolving a platform credential for it.
  */
-export function BuildImageGenerationAPIKeys(sources: ImageGenerationKeySource[], resolve?: RuntimeAPIKeyResolver): AIAPIKey[] {
+export function BuildImageGenerationAPIKeys(sources: ImageGenerationKeySource[], resolve?: RuntimeAPIKeyResolver, scope: RuntimeCredentialScope = 'Any'): AIAPIKey[] {
     const keys: AIAPIKey[] = [];
     for (const source of sources) {
         if (keys.some(k => k.driverClass === source.DriverClass)) continue;
-        const apiKey = findImageGenerationAPIKey(source.DriverClass, source.VendorName, resolve);
+        const apiKey = findImageGenerationAPIKey(source.DriverClass, source.VendorName, resolve, scope);
         if (apiKey) keys.push({ driverClass: source.DriverClass, apiKey });
     }
     return keys;
@@ -212,8 +220,11 @@ export class GenerateImageAction extends BaseAction {
         const sources = pinned ? this.pinnedKeySources(pinned) : imageModels.flatMap(m => this.keySources(m));
         const runOptions: AIImageRunOptions = {
             ContextUser: params.ContextUser,
-            APIKeys: BuildImageGenerationAPIKeys(sources, params.RuntimeAPIKeyResolver)
+            APIKeys: BuildImageGenerationAPIKeys(sources, params.RuntimeAPIKeyResolver, params.CredentialScope)
         };
+        if (params.CredentialScope) {
+            runOptions.CredentialScope = params.CredentialScope;
+        }
         if (pinned) {
             runOptions.ModelID = pinned.ID;
         }

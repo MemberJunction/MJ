@@ -1,14 +1,15 @@
 import { BaseEntity, BaseEntityEvent } from "./baseEntity";
 import { EntityDependency, EntityDocumentTypeInfo, EntityFieldTSType, EntityInfo, EntityPermissionType, FieldSecurityDenialMessage, FieldSecurityError, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
-import { IEntityDataProvider, IMetadataProvider, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, IFileSystemProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse, EntityMergeOptions, AllMetadata, IRunViewProvider, RunViewResult, IRunQueryProvider, RunQueryResult, RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewCacheStatus, RunViewWithCacheCheckResult, FullTextSearchParams, FullTextSearchResult, FullTextSearchResultItem, SearchEntityParams, SearchEntitiesOptions, EntitySearchResult, IRemoteOperationProvider, RemoteOpInvokeOptions, RemoteOpResult } from "./interfaces";
+import { IEntityDataProvider, IMetadataProvider, MetadataSweepResult, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, IFileSystemProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse, EntityMergeOptions, AllMetadata, IRunViewProvider, RunViewResult, IRunQueryProvider, RunQueryResult, RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewCacheStatus, RunViewWithCacheCheckResult, FullTextSearchParams, FullTextSearchResult, FullTextSearchResultItem, SearchEntityParams, SearchEntitiesOptions, EntitySearchResult, IRemoteOperationProvider, RemoteOpInvokeOptions, RemoteOpResult } from "./interfaces";
 import { RecordChangeFieldSecurityProjector } from "./recordChangeFieldSecurity";
 import { ComputeRRF, ScoredCandidate } from "./scoring/ReciprocalRankFusion";
 import { RunQueryParams } from "./runQuery";
-import { LocalCacheManager, CachedRunViewResult } from "./localCacheManager";
+import { LocalCacheManager, CachedRunViewResult, CacheCategory } from "./localCacheManager";
+import type { CacheChangedEvent } from "./localCacheManager";
 import { ApplicationInfo } from "../generic/applicationInfo";
 import { AuditLogTypeInfo, AuthorizationInfo, AuthorizationRoleInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
-import { MJGlobal, MJEvent, MJEventType, NormalizeUUID, SafeJSONParse, UUIDsEqual, MJLruCache, EscapeSQLString, ordinalCompare } from "@memberjunction/global";
+import { MJGlobal, MJEvent, MJEventType, NormalizeUUID, SafeJSONParse, UUIDsEqual, EscapeSQLString, ordinalCompare } from "@memberjunction/global";
 import { FindReferencedIdentifiers } from "@memberjunction/sql-dialect";
 import { TelemetryManager } from "./telemetryManager";
 import { LogDebug, LogError, LogStatus, LogStatusEx } from "./logging";
@@ -284,12 +285,14 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     private _latestLocalMetadataTimestamps: MetadataInfo[];
     private _latestRemoteMetadataTimestamps: MetadataInfo[];
     private _localMetadata: AllMetadata = new AllMetadata();
+    /**
+     * The stored timestamps value (raw string) that describes the snapshot this process last
+     * loaded from or saved to local storage; null when that load found none. Undefined until a load
+     * or save has happened. See {@link syncLocalMetadataFromStorage}.
+     */
+    private _storedTimestampsRaw: string | null | undefined = undefined;
     private _entityMapByName = new Map<string, EntityInfo>();
     private _entityMapByID = new Map<string, EntityInfo>();
-    // Bounded LRU (unlike its siblings above, this cache holds one entry per distinct
-    // *record* touched via Load()/Save()/LoadFromData() — not per entity definition — so
-    // it can't be reset on metadata refresh; it needs its own eviction policy.
-    private _entityRecordNameCache = new MJLruCache<string, string>({ maxSize: 10000, ttlMs: 60 * 60 * 1000 });
 
     private _refresh = false;
 
@@ -604,6 +607,66 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     }
 
     /**
+     * Result of {@link SweepMetadataAgainstDatabase}.
+     */
+    public static readonly MetadataSweepSkipped: Readonly<MetadataSweepResult> = { Declared: [], Checked: false, Refreshed: false };
+
+    /**
+     * Compares this provider's metadata with the database — but only for metadata whose entities
+     * have **declared** that their rows can change without firing an event.
+     *
+     * Metadata staleness is otherwise event-driven: a `BaseEntity` write to one of the entities the
+     * metadata is built from schedules a refresh, another process saving its snapshot publishes a
+     * notice, and a tool that changed the database clears the shared cache. None of those fire for a
+     * change made with raw SQL, so metadata edited directly in the database is never noticed by a
+     * running process. This is the backstop for that case.
+     *
+     * It is **not** an unconditional poll. `Entity.TrustServerCacheCompletely = true`
+     * (the default) states that every mutation flows through `BaseEntity`, which the event paths
+     * already hear; polling such an entity cannot discover anything, and a recurring query prevents a
+     * serverless database from pausing. So the check reads the database only when at least one
+     * metadata member entity declares `false` — typically because an operator writes that table
+     * directly. On a stock installation no metadata entity declares it, and this costs one in-memory
+     * pass over the membership set.
+     *
+     * @param providerToUse Provider to compare against, for multi-provider clients.
+     * @returns Which entities declared drift, whether the database was consulted, and whether
+     *          metadata was actually reloaded.
+     */
+    public async SweepMetadataAgainstDatabase(providerToUse?: IMetadataProvider): Promise<MetadataSweepResult> {
+        const declared = this.MetadataMembersDeclaringDrift();
+        if (declared.length === 0) {
+            return { Declared: [], Checked: false, Refreshed: false };
+        }
+        // bypassMinCheckInterval: the sweep interval is the throttle, and this caller holds positive
+        // evidence that an entity can change without telling anyone.
+        const refreshed = await this.RefreshIfNeeded(providerToUse, true);
+        return { Declared: declared, Checked: true, Refreshed: refreshed };
+    }
+
+    /**
+     * The entities this provider's metadata is built from that declare they can change without
+     * firing an event (`Entity.TrustServerCacheCompletely === false`).
+     *
+     * Empty — the usual case — means a metadata sweep has nothing to look for, so a caller can skip
+     * the work (and any lease) without asking the database anything.
+     */
+    public MetadataMembersDeclaringDrift(): string[] {
+        const names = this._metadataDatasetEntityNames;
+        if (!names || names.size === 0) {
+            return [];
+        }
+        const declared: string[] = [];
+        for (const lowerName of names) {
+            const entity = this.Entities.find(e => e.Name.trim().toLowerCase() === lowerName);
+            if (entity && entity.TrustServerCacheCompletely === false) {
+                declared.push(entity.Name);
+            }
+        }
+        return declared;
+    }
+
+    /**
      * Whether `entityName` is one of the entities this provider's metadata is built from.
      * False when the membership set has not been loaded yet — a caller must not treat "unknown"
      * as "reload". Names are compared case-insensitively, matching the set recorded by
@@ -726,6 +789,134 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         }, this.MetadataMemberRefreshDelayMs);
     }
 
+    // ── Metadata change notices from other servers ─────────────────────
+    /** When the current run of undebounced peer notices began; caps how long the check is deferred. */
+    private _peerMetadataNoticeFirstAt: number | null = null;
+
+    /** Windows the pending peer-notice check has waited for an ambient transaction to settle. */
+    private _peerMetadataNoticeRetries: number = 0;
+
+    /** Debounce timer for {@link HandlePeerMetadataNotice}. */
+    private _peerMetadataNoticeTimer: ReturnType<typeof setTimeout> | null = null;
+
+    /**
+     * Upper bound, in milliseconds, of the random delay added to {@link HandlePeerMetadataNotice}'s
+     * debounce. A tool that changes the schema removes the shared snapshot, which reaches every
+     * server at once; the spread lets the first server reload and republish, so the others adopt
+     * its snapshot instead of all querying the database together.
+     */
+    public static PeerMetadataNoticeJitterMs: number = 2000;
+
+    /**
+     * How long a peer notice may be deferred by later notices before the check runs anyway. The
+     * debounce timer is reset by each arrival, so a fleet publishing steadily — exactly what a bulk
+     * import looks like — could postpone the check indefinitely.
+     */
+    public static PeerMetadataNoticeMaxDeferralMs: number = 15000;
+
+    /**
+     * True when a shared-cache event says the metadata snapshot changed: another process saved one
+     * (`set`), or a tool that changed the database removed it (`removed`, e.g. `mj migrate`). Only
+     * the timestamps key counts — it is written last (see {@link SaveLocalMetadataToStorage}) and
+     * removed last — so each save or removal is one notice.
+     */
+    public IsMetadataChangeNotice(event: CacheChangedEvent): boolean {
+        return (event.Action === 'set' || event.Action === 'removed')
+            && (event.Category || CacheCategory.Default) === CacheCategory.Default
+            && event.CacheKey === this.LocalStoragePrefix + ProviderBase.localStorageTimestampsKey;
+    }
+
+    /**
+     * Reacts to another server saving its metadata snapshot: after a short debounce, runs the
+     * normal staleness check ({@link RefreshIfNeeded}, bypassing the check throttle). The check
+     * compares this process's timestamps with the database and adopts the shared snapshot, so a
+     * metadata change made on one server reaches the others in seconds instead of at the next
+     * poll. A server that is already current does no refresh and saves nothing, so notices do not
+     * echo around the fleet.
+     *
+     * @returns true when the event was a metadata notice (and a check was scheduled)
+     */
+    public HandlePeerMetadataNotice(event: CacheChangedEvent): boolean {
+        if (!this.IsMetadataChangeNotice(event)) {
+            return false;
+        }
+        const now = Date.now();
+        this._peerMetadataNoticeFirstAt ??= now;
+        if (now - this._peerMetadataNoticeFirstAt >= ProviderBase.PeerMetadataNoticeMaxDeferralMs) {
+            // Notices have been arriving without a pause for longer than the deferral budget: stop
+            // resetting the timer and let the pending check run now.
+            return true;
+        }
+        if (this._peerMetadataNoticeTimer) {
+            clearTimeout(this._peerMetadataNoticeTimer);
+        }
+        const timer = setTimeout(() => {
+            this._peerMetadataNoticeTimer = null;
+            // A provider inside a transaction cannot run the check now (its reads would see the
+            // transaction's own uncommitted world, and SQL Server's RefreshIfNeeded refuses
+            // outright). Re-arm instead of dropping the notice, which used to lose it entirely.
+            // The deferral budget is deliberately NOT cleared here: it bounds how long one check
+            // may be put off, and the check has not run yet. Clearing it as the timer fires ended
+            // the budget exactly when deferral began, leaving the retry count as the only real
+            // bound.
+            if (this.MetadataMemberRefreshMustWait) {
+                this.handlePeerMetadataNoticeRetry();
+                return;
+            }
+            this.runPeerMetadataCheck();
+        }, ProviderBase.MetadataDatasetRefreshDebounceMs + Math.floor(Math.random() * ProviderBase.PeerMetadataNoticeJitterMs));
+        if (typeof timer === 'object' && timer !== null && 'unref' in timer) {
+            (timer as { unref(): void }).unref();
+        }
+        this._peerMetadataNoticeTimer = timer;
+        return true;
+    }
+
+    /**
+     * Runs the deferred metadata check and closes out both budgets.
+     *
+     * Both are reset HERE rather than at any earlier point, because both measure deferral of a
+     * check that has now happened. The retry count in particular used to be cleared only on the
+     * re-armed path, so a check that ran on the direct path — which is what happens when a fresh
+     * notice arrives after the transaction closed — left its count behind for the next deferral to
+     * inherit.
+     */
+    private runPeerMetadataCheck(): void {
+        this._peerMetadataNoticeRetries = 0;
+        this._peerMetadataNoticeFirstAt = null;
+        this.RefreshIfNeeded(undefined, true).catch((e: unknown) => {
+            LogError(`Metadata check after another server's change failed: ${e instanceof Error ? e.message : String(e)}`);
+        });
+    }
+
+    /**
+     * Re-arms the peer-notice check when the provider was inside a transaction at the moment it
+     * came due. Bounded by the same budget as the debounce, so a provider that never leaves its
+     * transaction (a leaked handle) stops re-arming rather than holding a timer open forever; the
+     * next notice, or the periodic poll, picks the change up.
+     */
+    private handlePeerMetadataNoticeRetry(): void {
+        this._peerMetadataNoticeRetries++;
+        if (this._peerMetadataNoticeRetries > ProviderBase.MaxMetadataMemberRefreshWaits) {
+            LogError(`Metadata check after another server's change was dropped: this provider has been inside a transaction for ${this._peerMetadataNoticeRetries} windows. The next notice or the periodic check will pick the change up.`);
+            this._peerMetadataNoticeRetries = 0;
+            this._peerMetadataNoticeFirstAt = null; // the next notice starts a fresh budget
+            return;
+        }
+        const timer = setTimeout(() => {
+            this._peerMetadataNoticeTimer = null;
+            if (this.MetadataMemberRefreshMustWait) {
+                this.handlePeerMetadataNoticeRetry();
+                return;
+            }
+            this.runPeerMetadataCheck();
+        }, this.MetadataMemberRefreshDelayMs);
+        if (typeof timer === 'object' && timer !== null && 'unref' in timer) {
+            (timer as { unref(): void }).unref();
+        }
+        this._peerMetadataNoticeTimer = timer;
+    }
+
     /**
      * How this provider refreshes after a metadata member entity changed. The base behavior is a
      * hard {@link Refresh} — correct for database providers, where the process that PERFORMED the
@@ -823,157 +1014,68 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     public abstract get DatabaseConnection(): any;
 
     /**
-     * Helper to generate cache key for entity record names
-     */
-    private getCacheKey(entityName: string, compositeKey: CompositeKey): string {
-        return `${entityName}|${compositeKey.ToString()}`;
-    }
-
-    /**
-     * Asynchronous lookup of a cached entity record name. Returns the cached name if available, or undefined if not cached.
-     * Use this for synchronous contexts (like template rendering) where you can't await GetEntityRecordName().
+     * Returns a record's name for synchronous display code, or `undefined` when it is not at hand.
+     *
+     * This provider keeps no record names, so without `loadIfNeeded` the answer is always
+     * `undefined`. A provider that serves a single user (`GraphQLDataProvider`) overrides the
+     * record-name methods with a cache; one shared by several users must not, since a name can be
+     * withheld from some of them.
+     *
      * @param entityName - The name of the entity
      * @param compositeKey - The primary key value(s) for the record
-     * @param loadIfNeeded - If set to true, will load from database if not already cached
-     * @returns The cached display name, or undefined if not in cache
+     * @param loadIfNeeded - Look the name up when it is not cached
+     * @returns The display name, or undefined if not cached and not looked up
      */
     public async GetCachedRecordName(entityName: string, compositeKey: CompositeKey, loadIfNeeded?: boolean): Promise<string | undefined> {
-        let cachedEntry = this._entityRecordNameCache.Get(this.getCacheKey(entityName, compositeKey));
-        if (!cachedEntry && loadIfNeeded) {
-            cachedEntry = await this.GetEntityRecordName(entityName, compositeKey);
-        }
-        return cachedEntry
+        return loadIfNeeded ? this.GetEntityRecordName(entityName, compositeKey) : undefined;
     }
 
     /**
-     * Checks whether an entity record name is currently available in the in-memory LRU cache.
-     * @param entityName - The name of the entity
-     * @param compositeKey - The primary key value(s) for the record
-     * @returns True if the record name is cached in memory, false otherwise
+     * Whether a record's name is cached for synchronous retrieval. Always false here; see
+     * {@link GetCachedRecordName}.
      */
     public HasCachedRecordName(entityName: string, compositeKey: CompositeKey): boolean {
-        return this._entityRecordNameCache.Get(this.getCacheKey(entityName, compositeKey)) !== undefined;
+        return false;
     }
 
     /**
-     * Retrieves an entity record name from the in-memory LRU cache if already cached.
-     * Returns undefined immediately when not cached and will NEVER initiate a database lookup.
-     * @param entityName - The name of the entity
-     * @param compositeKey - The primary key value(s) for the record
-     * @returns The cached display name, or undefined if not in cache
+     * A record's cached name, without ever starting a lookup. Always undefined here; see
+     * {@link GetCachedRecordName}.
      */
     public GetCachedRecordNameOnlyIfCached(entityName: string, compositeKey: CompositeKey): string | undefined {
-        return this._entityRecordNameCache.Get(this.getCacheKey(entityName, compositeKey));
+        return undefined;
     }
 
     /**
-     * Stores a record name in the cache for later synchronous retrieval via GetCachedRecordName().
-     * Called automatically by BaseEntity after Load(), LoadFromData(), and Save() operations.
-     * @param entityName - The name of the entity
-     * @param compositeKey - The primary key value(s) for the record
-     * @param recordName - The display name to cache
+     * Offers a record's name for later synchronous retrieval. `BaseEntity` calls it after every
+     * Load(), LoadFromData() and Save(). Ignored here; see {@link GetCachedRecordName}.
      */
     public SetCachedRecordName(entityName: string, compositeKey: CompositeKey, recordName: string): void {
-        this._entityRecordNameCache.Set(this.getCacheKey(entityName, compositeKey), recordName);
+        // Intentionally empty: this provider keeps no record names.
     }
 
     /**
-     * Gets the display name for a single entity record with caching.
+     * Gets the display name for a single entity record.
      * Uses the entity's IsNameField or falls back to 'Name' field if available.
      * @param entityName - The name of the entity
      * @param compositeKey - The primary key value(s) for the record
-     * @param contextUser - Optional user context for permissions
-     * @param forceRefresh - If true, bypasses cache and queries database
-     * @returns The display name of the record or null if not found
+     * @param contextUser - The acting user; field- and row-level security are applied for them
+     * @param forceRefresh - Bypass any cache. This provider has none, so it always looks up.
+     * @returns The display name of the record, or an empty string if not found or not readable
      */
     public async GetEntityRecordName(entityName: string, compositeKey: CompositeKey, contextUser?: UserInfo, forceRefresh: boolean = false): Promise<string> {
-        const cacheKey = this.getCacheKey(entityName, compositeKey);
-
-        // Check cache unless forceRefresh
-        if (!forceRefresh) {
-            const cached = this._entityRecordNameCache.Get(cacheKey);
-            if (cached !== undefined) {
-                return cached;
-            }
-        }
-
-        // Fetch from database via provider-specific implementation
-        const name = await this.InternalGetEntityRecordName(entityName, compositeKey, contextUser);
-        if (name) {
-            this._entityRecordNameCache.Set(cacheKey, name);
-        }
-        return name;
+        return this.InternalGetEntityRecordName(entityName, compositeKey, contextUser);
     }
 
     /**
-     * Gets display names for multiple entity records in a single operation with caching.
-     * More efficient than multiple GetEntityRecordName calls.
+     * Gets display names for multiple entity records in a single operation.
      * @param info - Array of entity/key pairs to lookup
-     * @param contextUser - Optional user context for permissions
-     * @param forceRefresh - If true, bypasses cache and queries database for all records
+     * @param contextUser - The acting user; field- and row-level security are applied for them
+     * @param forceRefresh - Bypass any cache. This provider has none, so it always looks up.
      * @returns Array of results with names and status for each requested record
      */
     public async GetEntityRecordNames(info: EntityRecordNameInput[], contextUser?: UserInfo, forceRefresh: boolean = false): Promise<EntityRecordNameResult[]> {
-        if (!forceRefresh) {
-            // Check cache for each item, collect uncached items
-            const results: EntityRecordNameResult[] = [];
-            const uncachedInfo: EntityRecordNameInput[] = [];
-            const uncachedIndexes: number[] = [];
-
-            for (let i = 0; i < info.length; i++) {
-                const item = info[i];
-                const cacheKey = this.getCacheKey(item.EntityName, item.CompositeKey);
-                const cached = this._entityRecordNameCache.Get(cacheKey);
-
-                if (cached !== undefined) {
-                    // Cache hit
-                    results[i] = {
-                        EntityName: item.EntityName,
-                        CompositeKey: item.CompositeKey,
-                        Status: 'cached',
-                        Success: true,
-                        RecordName: cached
-                    };
-                } else {
-                    // Cache miss - need to fetch
-                    uncachedInfo.push(item);
-                    uncachedIndexes.push(i);
-                }
-            }
-
-            // Fetch uncached items from database
-            if (uncachedInfo.length > 0) {
-                const uncachedResults = await this.InternalGetEntityRecordNames(uncachedInfo, contextUser);
-
-                // Merge results and update cache
-                for (let i = 0; i < uncachedResults.length; i++) {
-                    const result = uncachedResults[i];
-                    const originalIndex = uncachedIndexes[i];
-                    results[originalIndex] = result;
-
-                    // Cache successful results
-                    if (result.Success && result.RecordName) {
-                        const cacheKey = this.getCacheKey(result.EntityName, result.CompositeKey);
-                        this._entityRecordNameCache.Set(cacheKey, result.RecordName);
-                    }
-                }
-            }
-
-            return results;
-        } else {
-            // Force refresh - bypass cache entirely
-            const results = await this.InternalGetEntityRecordNames(info, contextUser);
-
-            // Update cache with fresh results
-            for (const result of results) {
-                if (result.Success && result.RecordName) {
-                    const cacheKey = this.getCacheKey(result.EntityName, result.CompositeKey);
-                    this._entityRecordNameCache.Set(cacheKey, result.RecordName);
-                }
-            }
-
-            return results;
-        }
+        return this.InternalGetEntityRecordNames(info, contextUser);
     }
 
     /**
@@ -1805,14 +1907,16 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         if (memoized) {
             return memoized;
         }
-        // The fls: segment participates in CLIENT slot identity too, keyed on the ALLOWED list
-        // (see ComputeClientFLSAllowedKey). Without it, a user whose field access is TIGHTENED
-        // keeps being served their persisted IndexedDB slot: the currency check compares only
-        // maxUpdatedAt and rowCount, neither of which notices a column, so the server answers
-        // "current" and the browser shows a column that was just taken away — until the rows
-        // change. Empty for unrestricted users, whose fingerprints are unchanged.
+        // The signed-in user's row filter (rls:) and allowed field list (fls:, see
+        // ComputeClientFLSAllowedKey) are part of client slot identity, as they are on the server.
+        // The browser cache outlives a session — one IndexedDB store per server URL — and the
+        // currency check compares only maxUpdatedAt and rowCount, which cannot tell one user's
+        // rows from another's, nor notice a column. Without these segments, a different user on
+        // the same browser could be served the previous user's rows, and a user whose field
+        // access is tightened would keep seeing a column just taken away. Both are empty for an
+        // unrestricted user, whose fingerprints are unchanged.
         const base = LocalCacheManager.Instance.GenerateRunViewFingerprint(
-            param, this.InstanceConnectionString, undefined, this.ComputeClientFLSAllowedKey(param)
+            param, this.InstanceConnectionString, this.ComputeRunViewRLSWhereClause(param), undefined, this.ComputeClientFLSAllowedKey(param)
         );
         // Normalize a FULL-COVERAGE field list to '*' — in the FINGERPRINT only (B44).
         //
@@ -2733,8 +2837,44 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * they asked for, and field security narrows per request at read time via
      * {@link ApplyFieldSecurityProjection}.
      */
-    protected ComputeRunViewFetchFields(entity: EntityInfo): string[] {
-        return entity.Fields.map(f => f.Name);
+    protected ComputeRunViewFetchFields(entity: EntityInfo, params?: RunViewParams): string[] {
+        const includeBinary = params?.IncludeBinaryFields === true;
+        return entity.Fields.filter(f => includeBinary || !f.IsBinaryFieldType).map(f => f.Name);
+    }
+
+    /**
+     * True when `fieldNames` names at least one of the entity's binary fields (case-insensitive,
+     * whitespace-trimmed).
+     *
+     * @param entity - The entity being queried.
+     * @param fieldNames - Field names as a caller supplied them, e.g. `RunViewParams.Fields`.
+     */
+    protected static NamesAnyBinaryField(entity: EntityInfo, fieldNames: readonly string[] | null | undefined): boolean {
+        if (!fieldNames || fieldNames.length === 0) return false;
+        const binaryNames = new Set(entity.Fields.filter(f => f.IsBinaryFieldType).map(f => f.Name.toLowerCase()));
+        if (binaryNames.size === 0) return false;
+        return fieldNames.some(name => typeof name === 'string' && binaryNames.has(name.trim().toLowerCase()));
+    }
+
+    /**
+     * Decides whether a RunView returns the entity's binary fields, and records the decision on
+     * `params.IncludeBinaryFields` so every later step (field widening, cache fingerprint,
+     * transport) sees one answer.
+     *
+     * Binary fields are returned when the caller sets `IncludeBinaryFields`, or names a binary
+     * field in `Fields` — asking for a column by name is asking for it. Otherwise they are left
+     * out, which keeps result sets, engine caches and the RunView caches free of large values
+     * nobody reads. Must run before `Fields` is widened, since widening replaces the caller's list.
+     *
+     * @param params - The view parameters; `IncludeBinaryFields` is set to true when applicable.
+     * @param entity - The entity being queried.
+     * @returns True when binary fields will be returned.
+     */
+    protected ResolveIncludeBinaryFields(params: RunViewParams, entity: EntityInfo): boolean {
+        if (params.IncludeBinaryFields !== true && ProviderBase.NamesAnyBinaryField(entity, params.Fields)) {
+            params.IncludeBinaryFields = true;
+        }
+        return params.IncludeBinaryFields === true;
     }
 
     /**
@@ -3031,8 +3171,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // field-restricted user RECEIVES is still their allowed set: the server strips denied
         // columns on the wire, and the missing keys mark those fields not-loaded.
         const widenForEntityObject = params.ResultType === 'entity_object';
+        if (entity) this.ResolveIncludeBinaryFields(params, entity);
         if (entity && (willCache || widenForEntityObject)) {
-            params.Fields = this.ComputeRunViewFetchFields(entity);
+            params.Fields = this.ComputeRunViewFetchFields(entity, params);
             // Platform contract: explicit Fields always include the primary key(s) —
             // project back down to requested ∪ PK, matching the direct SQL path.
             if (callerRequestedFields) {
@@ -3228,8 +3369,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             const batchWillCache = this.runViewCacheEligible(param);
             // Same entity_object-always-widens rule as the single-view path above.
             const batchWidenForEntityObject = param.ResultType === 'entity_object';
+            if (batchEntity) this.ResolveIncludeBinaryFields(param, batchEntity);
             if (batchEntity && (batchWillCache || batchWidenForEntityObject)) {
-                param.Fields = this.ComputeRunViewFetchFields(batchEntity);
+                param.Fields = this.ComputeRunViewFetchFields(batchEntity, param);
                 // Platform contract: explicit Fields always include the primary key(s)
                 if (callerFields) {
                     callerFields = ProviderBase.UnionFieldsWithPrimaryKeys(callerFields, batchEntity);
@@ -3351,7 +3493,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 // provider FETCHES, not just how the slot is keyed, and I could not verify the
                 // downstream fetch behavior tonight. The safe fix is to normalize a full-coverage
                 // field list to `*` in the FINGERPRINT only, which cannot affect fetching.
-                param.Fields = entity.Fields.map(f => f.Name);
+                this.ResolveIncludeBinaryFields(param, entity);
+                param.Fields = this.ComputeRunViewFetchFields(entity, param);
             }
 
             // Gate on runViewCacheEligible (NOT raw param.CacheLocal): the smart-cache-check path is a
@@ -4205,35 +4348,14 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     }
 
     protected extractMaxUpdatedAt(results: unknown[]): string {
-        let maxDate: Date | null = null;
-
-        // Early exit: SQL result rows are uniform — if the first row carries neither
-        // timestamp column, none do, and the full O(rows) scan is pointless.
-        if (results.length > 0 && results[0] && typeof results[0] === 'object') {
-            const probe = results[0] as Record<string, unknown>;
-            if (probe['__mj_UpdatedAt'] === undefined && probe['UpdatedAt'] === undefined) {
-                return '';
-            }
-        }
-
-        for (const item of results) {
-            if (item && typeof item === 'object') {
-                const record = item as Record<string, unknown>;
-                // Check for __mj_UpdatedAt field (standard MJ timestamp field)
-                const updatedAt = record['__mj_UpdatedAt'] || record['UpdatedAt'];
-                if (updatedAt) {
-                    const date = updatedAt instanceof Date ? updatedAt : new Date(updatedAt as string);
-                    if (!isNaN(date.getTime()) && (!maxDate || date > maxDate)) {
-                        maxDate = date;
-                    }
-                }
-            }
-        }
-
-        // Return empty string for empty/timestamp-less results instead of current server time.
-        // Using current time would make empty result sets perpetually "stale" — each smart-cache-check
-        // would see a different timestamp and force an unnecessary DB refresh.
-        return maxDate ? maxDate.toISOString() : '';
+        // Delegates so the RunView write path and the engine/slot path cannot drift apart: they
+        // used to be two implementations with different fallback columns and different answers for
+        // timestamp-less rows, which stamped the same rows differently depending on which funnel
+        // wrote the slot.
+        //
+        // Empty string, never the current time, for empty or timestamp-less results: a clock value
+        // would make such a slot perpetually "stale", since every check would see a new timestamp.
+        return LocalCacheManager.MaxUpdatedAtOfRows(results) ?? '';
     }
 
     /**
@@ -4337,7 +4459,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             const entity = this.EntityByName(params.EntityName);
             if (!entity)
                 throw new Error(`Entity ${params.EntityName} not found in metadata`);
-            params.Fields = entity.Fields.map(f => f.Name); // just override whatever was passed in with all the fields - or if nothing was passed in, we set it. For loading the entity object, we need ALL the fields.
+            // Override whatever was passed in with every field the entity object hydrates from.
+            // Binary fields are included only when requested (ResolveIncludeBinaryFields); a
+            // missing binary field hydrates as not-loaded and is never written back on Save.
+            this.ResolveIncludeBinaryFields(params, entity);
+            params.Fields = this.ComputeRunViewFetchFields(entity, params);
         }
     }
 
@@ -4411,7 +4537,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     if (!entity) {
                         throw new Error(`Entity ${param.EntityName} not found in metadata`);
                     }
-                    param.Fields = entity.Fields.map(f => f.Name); // just override whatever was passed in with all the fields - or if nothing was passed in, we set it. For loading the entity object, we need ALL the fields.
+                    // Same rule as PreProcessRunView: every field, binary fields only on request.
+                    this.ResolveIncludeBinaryFields(param, entity);
+                    param.Fields = this.ComputeRunViewFetchFields(entity, param);
                 }
             }
         }
@@ -4666,8 +4794,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // pre-validation that follows a Config which loaded nothing skip its check.
         this._configLoadedFromServer = false;
 
-        // Initialize LocalCacheManager early so dataset loading can use the cache.
-        // Initialize() is idempotent — subsequent calls (e.g. from StartupManager) are no-ops.
+        // Initialize LocalCacheManager early so dataset loading can use the cache. This call has no
+        // settings to give it, so a LATER caller that does (StartupManager, passing the host's
+        // cacheSettings) is not a no-op: Initialize applies that configuration to the already
+        // initialized manager rather than discarding it, which is what made cacheSettings inert
+        // before.
         if (!LocalCacheManager.Instance.IsInitialized) {
             const storageProvider = this.LocalStorageProvider;
             await LocalCacheManager.Instance.Initialize(storageProvider);
@@ -5476,14 +5607,46 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         }
     }
 
-    /** One refresh check: fetch remote timestamps, arm the throttle only on success, compare. */
+    /**
+     * One refresh check: fetch the remote timestamps, arm the throttle only on success, bring the
+     * in-memory snapshot up to the stored one, then compare. The third step is what makes the
+     * answer correct in a fleet — a peer may have written a newer snapshot to the shared store
+     * since this process last loaded — and {@link syncLocalMetadataFromStorage} keeps it cheap by
+     * reading the whole snapshot only when the stored timestamps say it could have changed.
+     */
     private async runRefreshCheck(providerToUse?: IMetadataProvider): Promise<boolean> {
         const gotTimestamps = await this.RefreshRemoteMetadataTimestamps(providerToUse);
         if (gotTimestamps) {
             this._lastRefreshCheckAt = Date.now();
         }
-        await this.LoadLocalMetadataFromStorage();
+        await this.syncLocalMetadataFromStorage();
         return this.LocalMetadataObsolete();
+    }
+
+    /**
+     * Brings the in-memory metadata up to the stored snapshot before a staleness check.
+     *
+     * The full snapshot (several MB compressed) is read only when it may differ from what this
+     * process holds: nothing is held yet, or the stored timestamps are not the ones this process
+     * last loaded or saved — another process sharing the store wrote a newer snapshot, or the
+     * store was cleared. Otherwise only the small timestamps key is read. Reading and parsing the
+     * whole snapshot on every periodic check cost each server ~230 ms per poll on a shared cache
+     *.
+     */
+    private async syncLocalMetadataFromStorage(): Promise<void> {
+        const ls = this.LocalStorageProvider;
+        if (ls && this._storedTimestampsRaw !== undefined && this._localMetadata?.AllEntities?.length) {
+            try {
+                const tsKey = this.LocalStoragePrefix + ProviderBase.localStorageTimestampsKey;
+                const stored = (await ls.GetItems<string>([tsKey])).get(tsKey) ?? null;
+                if (stored === this._storedTimestampsRaw) {
+                    return;
+                }
+            } catch (e) {
+                LogError(`[Metadata Cache] Reading stored metadata timestamps failed, loading the full snapshot: ${e instanceof Error ? e.message : String(e)}`);
+            }
+        }
+        await this.LoadLocalMetadataFromStorage();
     }
 
     /**
@@ -5717,7 +5880,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         let cachedDataset: DatasetResultType | null = null;
         let cachedDateStr: string | null = null;
         if (ls && key && dateKey) {
-            const both = await ls.GetItems<DatasetResultType | string>([key, dateKey], 'DatasetCache');
+            const both = await ls.GetItems<DatasetResultType | string>([key, dateKey], ProviderBase.DatasetCacheCategory);
             const rawData = both.get(key);
             const rawDate = both.get(dateKey);
             // Type guards — entries can be either depending on which key matched.
@@ -5734,15 +5897,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             if (status && localDate.getTime() >= status.LatestUpdateDate.getTime()) {
                 // Timestamps suggest cache is fresh; verify per-entity row counts to
                 // catch deleted rows (timestamp comparison alone misses pure deletes).
-                let allCountsMatch = true;
-                for (const eu of status.EntityUpdateDates) {
-                    const localEntity = cachedDataset.Results.find(e => UUIDsEqual(e.EntityID, eu.EntityID));
-                    if (!localEntity || localEntity.Results.length !== eu.RowCount) {
-                        allCountsMatch = false;
-                        break;
-                    }
-                }
-                if (allCountsMatch) {
+                // Shared with IsDatasetCacheUpToDate so the two cannot drift again.
+                if (this.DatasetRowCountsMatch(cachedDataset, status)) {
                     return cachedDataset;
                 }
             }
@@ -5766,7 +5922,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         if (ls) {
             const key = this.GetDatasetCacheKey(datasetName, itemFilters);
             const dateKey = key + '_date';
-            const val = await ls.GetItem<string>(dateKey);
+            const val = await ls.GetItem<string>(dateKey, ProviderBase.DatasetCacheCategory);
             if (val) {
                 return new Date(val);
             }
@@ -5791,17 +5947,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     // in this situation, the last thing we check is for each entity, if the rowcount is the same as the server, if it is, we're good
                     // iterate through all of the entities and check the row counts
                     const localDataset = await this.GetCachedDataset(datasetName, itemFilters);
-                    for (const eu of status.EntityUpdateDates) {
-                        const localEntity = localDataset.Results.find(e => UUIDsEqual(e.EntityID, eu.EntityID));
-                        if (!localEntity || localEntity.Results.length !== eu.RowCount) {
-                            // we either couldn't find the entity in the local cache or the row count is different, so we're out of date
-                            // the RowCount being different picks up on DELETED rows. The UpdatedAt check which is handled above would pick up 
-                            // on any new rows or updated rows. This approach makes sure we detect deleted rows and refresh the cache.
-                            return false;
-                        }
-                    }
-                    // if we get here that means that the row counts are the same for all entities and we're up to date
-                    return true;
+                    return this.DatasetRowCountsMatch(localDataset, status);
                 }
                 else {
                     // our local cache timestamp is < the server timestamp, so we're out of date
@@ -5820,6 +5966,41 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     }
 
     /**
+     * Compares the per-entity row counts of a cached dataset against the server's status.
+     *
+     * The timestamp comparison its callers run first catches new and updated rows; it cannot catch a
+     * pure DELETE, which leaves `LatestUpdateDate` untouched while the count drops. This is the
+     * check that catches those, and it is shared by `GetAndCacheDatasetByName` (which already holds
+     * the blob) and `IsDatasetCacheUpToDate` (which reads it) so the two cannot drift apart again —
+     * they had, and the differences were only ever masked by the warm path not running.
+     *
+     * Two cases decide the shape of this, both load-bearing:
+     *
+     * - **No counts to compare.** A status reporting no `EntityUpdateDates` never touches the blob
+     *   and is judged on its timestamp alone, so it answers `true`. Returning `false` here instead
+     *   looks strictly safer and is not: it makes such a dataset permanently stale, reloading on
+     *   every check (plan — the `dataset-cache.DS2` regression).
+     * - **A count to compare but no blob.** The blob and its `_date` proxy expire independently and
+     *   a clear removes them in order, so the date can outlive the blob. Counts then cannot be
+     *   compared, which is `false` — refetch. A blob present but missing `Results`
+     *   answers `false` for the same reason rather than throwing, which is what the pre-unification
+     *   copy in the warm path would have done the moment that path started running.
+     *
+     * @param cachedDataset the cached dataset, which may be absent or incomplete
+     * @param status the server's status for the same dataset/filters combination
+     * @returns true when every entity the server reports matches the cache's row count for it
+     */
+    protected DatasetRowCountsMatch(cachedDataset: DatasetResultType | null | undefined, status: DatasetStatusResultType): boolean {
+        for (const eu of status.EntityUpdateDates) {
+            const localEntity = cachedDataset?.Results?.find(e => UUIDsEqual(e.EntityID, eu.EntityID));
+            if (!localEntity || localEntity.Results.length !== eu.RowCount) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
      * This routine gets the local cached version of a given datasetName/itemFilters combination, it does NOT check the server status first and does not fall back on the server if there isn't a local cache version of this dataset/itemFilters combination
      * @param datasetName 
      * @param itemFilters 
@@ -5830,7 +6011,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         if (ls) {
             const key = this.GetDatasetCacheKey(datasetName, itemFilters);
             // Native object read — IDB structured-clones, localStorage / Redis JSON-decode internally.
-            const dataset = await ls.GetItem<DatasetResultType>(key);
+            const dataset = await ls.GetItem<DatasetResultType>(key, ProviderBase.DatasetCacheCategory);
             if (dataset) {
                 return dataset;
             }
@@ -5843,15 +6024,17 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @param itemFilters 
      * @param dataset 
      */
-    public async CacheDataset(datasetName: string, itemFilters: DatasetItemFilterType[], dataset: DatasetResultType): Promise<void> {
+    public async CacheDataset(datasetName: string, itemFilters: DatasetItemFilterType[] | undefined, dataset: DatasetResultType): Promise<void> {
         const ls = this.LocalStorageProvider;
         if (ls) {
             const key = this.GetDatasetCacheKey(datasetName, itemFilters);
             // Native object storage — no JSON.stringify on the hot path.
-            await ls.SetItem<DatasetResultType>(key, dataset);
+            await ls.SetItem<DatasetResultType>(key, dataset, ProviderBase.DatasetCacheCategory,
+                { TTLSeconds: ProviderBase.DatasetCacheTTLSeconds });
             // Date is stored as ISO string for forward-compatibility across providers
             // (Redis can't natively round-trip Date; localStorage requires string).
-            await ls.SetItem<string>(key + '_date', dataset.LatestUpdateDate.toISOString());
+            await ls.SetItem<string>(key + '_date', dataset.LatestUpdateDate.toISOString(),
+                ProviderBase.DatasetCacheCategory, { TTLSeconds: ProviderBase.DatasetDateCacheTTLSeconds });
         }
     }
 
@@ -5869,10 +6052,45 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // CacheDataset, so the date's presence is a faithful proxy for the
             // data's presence.
             const key = this.GetDatasetCacheKey(datasetName, itemFilters);
-            const val = await ls.GetItem<string>(key + '_date');
+            const val = await ls.GetItem<string>(key + '_date', ProviderBase.DatasetCacheCategory);
             return val !== null && val !== undefined;
         }
     }
+
+    /**
+     * The cache category every dataset read and write uses.
+     *
+     * Every storage provider isolates by category — Redis keys are `{prefix}:{category}:{key}`,
+     * browser localStorage `[mj]:[category]:[key]`, IndexedDB a dedicated object store, the
+     * in-memory providers a nested map — so a read and a write that disagree about the category can
+     * never meet. When the batched warm read in `GetAndCacheDatasetByName` named `'DatasetCache'`
+     * while every write and every other reader landed in `default`, the warm-serve path missed on
+     * every transport and silently refetched from the server. Naming the category once is what keeps
+     * all six call sites in agreement.
+     */
+    public static readonly DatasetCacheCategory = 'DatasetCache';
+
+    /**
+     * How long a cached dataset lives.
+     *
+     * Datasets have a category to themselves and it carries no category-wide expiry, so without a
+     * per-write TTL every distinct filter set (`GetDatasetCacheKey` includes the filters) would
+     * leave behind a blob nothing removes. An explicit TTL bounds that growth, and the store
+     * prefers a per-write value over any category or global setting — which is also why giving
+     * datasets their own category did not change how long one lives. Providers that do not
+     * implement expiry ignore it.
+     */
+    public static readonly DatasetCacheTTLSeconds = 3600;
+
+    /**
+     * How long the `_date` key lives — deliberately SHORTER than the blob it vouches for.
+     *
+     * It is written second, so with equal lifetimes it would usually be the one to survive, leaving
+     * a freshness claim with nothing behind it: `IsDatasetCached` answers true and the blob is gone.
+     * Expiring the claim first makes the pair fail in the safe direction — the cache reads as
+     * absent and is refetched.
+     */
+    public static readonly DatasetDateCacheTTLSeconds = ProviderBase.DatasetCacheTTLSeconds - 300;
 
     /**
      * Creates a unique key for the given datasetName and itemFilters combination coupled with the instance connection string to ensure uniqueness when 2+ connections exist
@@ -5914,9 +6132,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         const ls = this.LocalStorageProvider;
         if (ls) {
             const key = this.GetDatasetCacheKey(datasetName, itemFilters);
-            await ls.Remove(key);
+            await ls.Remove(key, ProviderBase.DatasetCacheCategory);
             const dateKey = key + '_date';
-            await ls.Remove(dateKey);
+            await ls.Remove(dateKey, ProviderBase.DatasetCacheCategory);
         }
     }
 
@@ -6093,6 +6311,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             const ls = this.LocalStorageProvider;
             if (!ls) return;
 
+            // Symmetrical with the save: an in-process store can only hand back a copy of the
+            // metadata this heap already holds, at the cost of rebuilding every metadata object.
+            if (!this.MetadataSnapshotPersistenceEnabled) {
+                this.logMetadataSnapshotDisabledOnce();
+                return;
+            }
+
             const overallStart = Date.now();
 
             // The metadata snapshot uses three keys (timestamps, format, AllMetadata).
@@ -6113,7 +6338,26 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             const raw = all.get(dataKey) ?? null;
             const membershipRaw = all.get(membershipKey) ?? null;
 
-            this._latestLocalMetadataTimestamps = tsRaw ? JSON.parse(tsRaw) : null;
+            // The timestamps are a freshness claim FOR THE PAYLOAD, so they are only adopted when the
+            // payload is there to adopt with them. Timestamps without a payload happen whenever the
+            // two keys do not disappear together: the timestamps key is written last (and removed
+            // last by a cache clear), so it outlives the payload under any per-key expiry. Adopting
+            // them alone left this process claiming to be current while holding no metadata at all
+            // — the staleness check then confirms "current" and nothing ever reloads.
+            const claimUsable = !!tsRaw && !!raw;
+            if (claimUsable) {
+                this._latestLocalMetadataTimestamps = JSON.parse(tsRaw as string);
+            } else if (!this._localMetadata?.AllEntities?.length) {
+                // Nothing usable stored and nothing held: fall back to asking the database.
+                this._latestLocalMetadataTimestamps = null;
+            }
+            // A store without timestamps says nothing about the metadata this process already holds
+            // (another process may have just cleared it), so held timestamps survive: the staleness
+            // check then compares what is held with the database instead of assuming it is stale.
+            this._storedTimestampsRaw = claimUsable ? tsRaw : null;
+            if (tsRaw && !raw) {
+                LogStatusEx({ message: '[Metadata Cache] stored timestamps have no payload behind them (the payload expired or was cleared first) — ignoring the claim and checking the database', verboseOnly: true });
+            }
 
             // Restore the metadata-member entity set so the event-driven refresh works on a warm
             // boot that never calls GetAllMetadata (the stale-while-revalidate fast start). The
@@ -6191,6 +6435,18 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * Used for compressed metadata storage/retrieval.
      */
     protected static base64ToArrayBuffer(base64: string): ArrayBuffer {
+        // Node decodes natively; the atob path below allocates an intermediate string and fills the
+        // array a byte at a time.
+        if (typeof Buffer !== 'undefined') {
+            const buf = Buffer.from(base64, 'base64');
+            // Copy into an exact-size buffer: `buf.buffer` is a view into a shared pool, usually
+            // larger than the payload, so returning it directly would carry unrelated bytes and a
+            // wrong byteLength. It is also typed ArrayBufferLike and will not assign to the
+            // declared return type.
+            const exact = new ArrayBuffer(buf.byteLength);
+            new Uint8Array(exact).set(buf);
+            return exact;
+        }
         const binaryString = atob(base64);
         const bytes = new Uint8Array(binaryString.length);
         for (let i = 0; i < binaryString.length; i++) {
@@ -6204,6 +6460,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * Used for compressed metadata storage/retrieval.
      */
     protected static arrayBufferToBase64(buffer: ArrayBuffer): string {
+        // Node encodes natively. The loop below concatenates one character per byte, building a rope
+        // the size of the payload that then has to be flattened.
+        if (typeof Buffer !== 'undefined') {
+            return Buffer.from(buffer).toString('base64');
+        }
         const bytes = new Uint8Array(buffer);
         let binary = '';
         for (let i = 0; i < bytes.byteLength; i++) {
@@ -6222,6 +6483,47 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     }
 
     /**
+     * Whether anything could read the metadata snapshot back, and therefore whether saving it is
+     * worth the cost.
+     *
+     * The snapshot lets a cold process start from a cached copy of the metadata instead of querying
+     * for it, which only works if the store outlives the writer. Where it does not, both halves of
+     * the round trip are pure cost: the save serializes, gzips and base64-encodes the entire
+     * metadata graph, and the load parses it and rebuilds every `EntityInfo` and `EntityFieldInfo`
+     * from a copy of objects the heap already holds. On a large tenant that is expensive enough to
+     * exhaust the heap.
+     *
+     * A provider that does not declare {@link ILocalStorageProvider.SupportsCrossProcessPersistence}
+     * is treated as persistent, which fails in the safer direction.
+     */
+    public get MetadataSnapshotPersistenceEnabled(): boolean {
+        const ls = this.LocalStorageProvider;
+        if (!ls) {
+            return false;
+        }
+        return ls.SupportsCrossProcessPersistence !== false;
+    }
+
+    /**
+     * Explains the skip once per process. The refresh path runs every 30 seconds on a busy server,
+     * so logging per call would bury the one line that matters.
+     */
+    private logMetadataSnapshotDisabledOnce(): void {
+        if (this._metadataSnapshotSkipLogged) {
+            return;
+        }
+        this._metadataSnapshotSkipLogged = true;
+        const name = this.LocalStorageProvider?.constructor?.name ?? 'the local storage provider';
+        LogStatusEx({
+            message: `[Metadata Cache] Snapshot persistence disabled: ${name} is in-process only, so a saved snapshot could never be read back. Skipping the metadata snapshot save and load.`,
+            verboseOnly: false
+        });
+    }
+
+    /** Guard for {@link logMetadataSnapshotDisabledOnce}. */
+    private _metadataSnapshotSkipLogged = false;
+
+    /**
      * Saves current metadata to local storage for caching.
      * Serializes both timestamps and full metadata collections.
      */
@@ -6229,6 +6531,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         try {
             const ls = this.LocalStorageProvider;
             if (!ls) return;
+
+            // Nothing could ever read this snapshot back, so the entire serialize/compress/encode
+            // pass buys nothing. See MetadataSnapshotPersistenceEnabled.
+            if (!this.MetadataSnapshotPersistenceEnabled) {
+                this.logMetadataSnapshotDisabledOnce();
+                return;
+            }
 
             const start = Date.now();
 
@@ -6249,7 +6558,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
             // Timestamps LAST: they are the freshness claim for everything written above, so they
             // must be the final thing to land.
-            await ls.SetItem<string>(this.LocalStoragePrefix + ProviderBase.localStorageTimestampsKey, JSON.stringify(this._latestLocalMetadataTimestamps));
+            const timestampsRaw = JSON.stringify(this._latestLocalMetadataTimestamps);
+            await ls.SetItem<string>(this.LocalStoragePrefix + ProviderBase.localStorageTimestampsKey, timestampsRaw);
+            this._storedTimestampsRaw = timestampsRaw;
 
             this.logMetadataSaveComplete(Date.now() - start, jsonString.length, snapshot);
         }

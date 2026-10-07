@@ -17,6 +17,7 @@
  *
  * @see plans/regression-testing/dom-selection-and-replay-design.md
  */
+import { ToPlainJSON } from '@memberjunction/core';
 import { MJTestEntity, MJTestEntity_ITestConfiguration } from '@memberjunction/core-entities';
 import { ComputerUseTrace } from '@memberjunction/computer-use';
 
@@ -44,13 +45,14 @@ export function LoadScript(test: MJTestEntity): ComputerUseTrace | null {
     if (!script || typeof script.TestId !== 'string' || !Array.isArray(script.Steps)) {
         return null;
     }
-    // Deep-copy before handing it out. `ConfigurationObject` caches its parsed value
-    // and returns the SAME reference until the raw column changes, so this object is
-    // the test row's own state. Replay heals by rewriting `Target.Selector` in place,
-    // and `saveScript` later spreads that same cached configuration — so without a
-    // copy a healed selector rode into the promoted `ReplayScript`, bypassing the
-    // review gate and leaving `mj test scripts` diffing against a mutated baseline.
-    return structuredClone(script);
+    // Deep-copy before handing it out. `ConfigurationObject` is a LIVE view of the test row:
+    // edits made through it — at any depth — are written back to the raw column and would be
+    // saved. Replay heals by rewriting `Target.Selector` in place, and `saveScript` later spreads
+    // that same configuration — so without a copy a healed selector rode into the promoted
+    // `ReplayScript`, bypassing the review gate and leaving `mj test scripts` diffing against a
+    // mutated baseline. `ToPlainJSON` (not `structuredClone`, which throws on the live view's
+    // Proxy) yields an independent plain copy.
+    return ToPlainJSON(script);
 }
 
 /** @deprecated Use {@link LoadScript}. */
