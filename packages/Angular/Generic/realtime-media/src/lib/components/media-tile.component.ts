@@ -67,13 +67,16 @@ export class MediaTilePlaceholderDirective {}
         </div>
       }
 
-      @if (IsAvatarVideo || IsSharingScreen) {
+      @if (IsAvatarVideo || IsSharingScreen || Status) {
         <div class="tile__chips">
           @if (IsAvatarVideo) {
             <span class="tile__chip"><i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> AI-generated video</span>
           }
           @if (IsSharingScreen) {
             <span class="tile__chip"><i class="fa-solid fa-display" aria-hidden="true"></i> Sharing</span>
+          }
+          @if (Status) {
+            <span class="tile__chip tile__chip--status">{{ Status }}</span>
           }
         </div>
       }
@@ -153,6 +156,8 @@ export class MediaTileComponent implements AfterViewInit, OnDestroy {
   @Input() public MeterSettings: MediaAudioMeterSettings = {};
   /** Mirror the camera, as a self-view does. A shared screen or an avatar is never mirrored. */
   @Input() public Mirror = false;
+  /** A short status the tile shows as a chip after its own labels, such as what an agent is doing; `null` for none. */
+  @Input() public Status: string | null = null;
   /**
    * After this many milliseconds without a new frame, the video cross-fades to the picture or initials until its frames
    * come back; until its first frame, too. `null` (the default): the video always shows. Read when a video is attached.

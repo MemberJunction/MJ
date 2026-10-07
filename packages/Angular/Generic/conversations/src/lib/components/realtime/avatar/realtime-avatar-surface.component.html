@@ -1,9 +1,12 @@
-<mj-media-tile
-  class="avatar"
-  [Participant]="Agent"
-  [ShowMeter]="false"
-  [ShowConnectionQuality]="false"
-  [ShowActiveSpeakerRing]="false"
-  [StallAfterMs]="StallAfterMs">
-  <mj-realtime-agent-orb mjMediaTilePlaceholder class="avatar__orb" [State]="OrbState"></mj-realtime-agent-orb>
-</mj-media-tile>
+<div class="avatar" [class.avatar--speaking]="OrbState === 'speaking'">
+  <mj-media-tile
+    class="avatar__tile"
+    [Participant]="Agent"
+    [ShowMeter]="false"
+    [ShowConnectionQuality]="false"
+    [ShowActiveSpeakerRing]="false"
+    [StallAfterMs]="StallAfterMs"
+    [Status]="StatusLabel">
+    <mj-realtime-agent-orb mjMediaTilePlaceholder class="avatar__orb" [State]="OrbState"></mj-realtime-agent-orb>
+  </mj-media-tile>
+</div>

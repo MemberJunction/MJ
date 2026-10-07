@@ -10,8 +10,10 @@ export const AGENT_VIDEO_STALL_MS = 1000;
 
 /**
  * `mj-realtime-avatar-surface`: the Avatar channel's surface. The agent's video (an avatar) in a media tile, with the
- * agent's name and the "AI-generated video" label the tile shows while it plays an avatar. Until the video's first frame,
- * and after {@link AGENT_VIDEO_STALL_MS} without one, the call's orb takes its place, following the agent's turn.
+ * agent's name and the "AI-generated video" label the tile shows while it plays an avatar, and a chip that says what the
+ * agent is doing. A ring frames the tile while the agent speaks, following its voice where the call overlay meters it.
+ * Until the video's first frame, and after {@link AGENT_VIDEO_STALL_MS} without one, the call's orb takes its place,
+ * following the agent's turn.
  */
 @Component({
   standalone: true,
@@ -32,6 +34,9 @@ export class RealtimeAvatarSurfaceComponent implements OnDestroy {
 
   /** The agent's turn, as the orb shows it. */
   public OrbState: RealtimeAgentOrbState = 'listening';
+
+  /** What the tile's chip says the agent is doing, or `null` before the call's state is known. */
+  public StatusLabel: string | null = null;
 
   /** The agent as the tile shows it. */
   public Agent: MediaParticipant = agentParticipant(this.agentName, null);
@@ -79,6 +84,7 @@ export class RealtimeAvatarSurfaceComponent implements OnDestroy {
     this.stateSub =
       value?.subscribe((state) => {
         this.OrbState = AgentOrbStateFor(state);
+        this.StatusLabel = statusLabelFor(state);
         this.cdr.markForCheck();
       }) ?? null;
   }
@@ -91,6 +97,24 @@ export class RealtimeAvatarSurfaceComponent implements OnDestroy {
     this.videoSub = null;
     this.stateSub?.unsubscribe();
     this.stateSub = null;
+  }
+}
+
+/** What the tile's chip says for a state of the call, or `null` for none (the call has ended). */
+function statusLabelFor(state: RealtimeConnectionState): string | null {
+  switch (state) {
+    case 'speaking':
+      return 'Speaking';
+    case 'thinking':
+      return 'Thinking';
+    case 'listening':
+      return 'Listening';
+    case 'connecting':
+      return 'Connecting';
+    case 'error':
+      return 'Connection error';
+    default:
+      return null;
   }
 }
 

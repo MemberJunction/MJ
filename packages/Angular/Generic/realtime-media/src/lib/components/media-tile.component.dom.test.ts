@@ -86,6 +86,14 @@ describe('MediaTileComponent (DOM)', () => {
       expect(query(render(participant()), '.tile__chip')).toBeNull();
     });
 
+    it("shows the host's status as a chip after its own labels, with or without video", () => {
+      const chips = (value: MediaParticipant, status: string | null) =>
+        queryAll(render(value, { Status: status }), '.tile__chip').map((c) => c.textContent?.trim());
+      expect(chips(participant({ Role: 'agent', Video: { avatar: elementSource() } }), 'Speaking')).toEqual(['AI-generated video', 'Speaking']);
+      expect(chips(participant({ Role: 'agent' }), 'Listening')).toEqual(['Listening']);
+      expect(chips(participant({ Role: 'agent' }), null)).toEqual([]);
+    });
+
     it('says the video is AI-generated for as long as it shows an avatar', () => {
       const chips = (value: MediaParticipant) => queryAll(render(value), '.tile__chip').map((c) => c.textContent?.trim());
       expect(chips(participant({ Role: 'agent', Video: { avatar: elementSource() } }))).toEqual(['AI-generated video']);

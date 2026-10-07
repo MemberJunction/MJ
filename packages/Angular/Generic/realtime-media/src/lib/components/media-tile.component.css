@@ -123,6 +123,18 @@
   background: rgba(0, 0, 0, 0.55);
 }
 
+/* A status the host gives (what an agent is doing): marked by a dot in the brand color. */
+.tile__chip--status::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 5px;
+  border-radius: var(--mj-radius-full);
+  background: var(--mj-brand-primary);
+  vertical-align: middle;
+}
+
 .tile__pin {
   position: absolute;
   top: 8px;

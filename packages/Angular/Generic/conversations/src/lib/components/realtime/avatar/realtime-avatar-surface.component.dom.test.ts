@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { BehaviorSubject, Observable } from 'rxjs';
-import { renderComponentFixture, query, text, ExpectNoAxeViolations } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, queryAll, text, ExpectNoAxeViolations } from '@memberjunction/ng-test-utils';
 import type { MediaVideoSource } from '@memberjunction/ai-realtime-client/media';
 import type { RealtimeConnectionState } from '@memberjunction/realtime-runtime';
 import { RealtimeAvatarSurfaceComponent } from './realtime-avatar-surface.component';
@@ -66,7 +66,7 @@ describe('RealtimeAvatarSurfaceComponent (DOM)', () => {
     const { fixture } = render();
     expect(orbState(fixture)).toBe('listening');
     expect(query(fixture, '.tile__initials')).toBeNull();
-    expect(query(fixture, '.tile__chip')).toBeNull();
+    expect(queryAll(fixture, '.tile__chip').map((c) => c.textContent?.trim())).toEqual(['Listening']);
   });
 
   it("shows the agent's video, named, with the AI badge and the AI-generated label", () => {
@@ -101,6 +101,22 @@ describe('RealtimeAvatarSurfaceComponent (DOM)', () => {
     state$.next('connecting');
     fixture.detectChanges();
     expect(orbState(fixture)).toBe('listening');
+  });
+
+  it("says what the agent is doing on the tile's chip, and frames the tile while it speaks", () => {
+    const { fixture, state$ } = render(player(), 'speaking');
+    frame();
+    fixture.detectChanges();
+    const chips = () => queryAll(fixture, '.tile__chip').map((c) => c.textContent?.trim());
+    expect(chips()).toEqual(['AI-generated video', 'Speaking']);
+    expect(query(fixture, '.avatar')?.classList.contains('avatar--speaking')).toBe(true);
+    state$.next('thinking');
+    fixture.detectChanges();
+    expect(chips()).toEqual(['AI-generated video', 'Thinking']);
+    expect(query(fixture, '.avatar')?.classList.contains('avatar--speaking')).toBe(false);
+    state$.next('closed');
+    fixture.detectChanges();
+    expect(chips()).toEqual(['AI-generated video']);
   });
 
   it("lets go of the call's state when it is destroyed", () => {

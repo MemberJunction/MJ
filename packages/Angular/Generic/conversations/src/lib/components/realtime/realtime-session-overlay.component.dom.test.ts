@@ -15,7 +15,7 @@ import {
   type RealtimeChannelFocusEvent,
   type RealtimeConnectionState,
 } from '@memberjunction/realtime-runtime';
-import { renderComponentFixture, query, click, overlayQueryAll, clearOverlayContainers } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, queryAll, click, overlayQueryAll, clearOverlayContainers } from '@memberjunction/ng-test-utils';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import type { MediaPlacement, MediaVideoSource } from '@memberjunction/ai-realtime-client/media';
 import { RealtimeSessionOverlayComponent } from './realtime-session-overlay.component';
@@ -509,6 +509,7 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
         AgentSessionID: 'session-1',
         ExecuteServerAction: async () => null,
         AgentVideo$: video$.asObservable(),
+        ConnectionState$: session.service.ConnectionState$,
       });
       const f = renderComponentFixture(RealtimeSessionOverlayComponent, {
         providers: [
@@ -562,7 +563,10 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
       expect(query(f, '.hero__orb')).not.toBeNull();
       await sendVideo();
       expect(query(f, '.hero__orb')).toBeNull();
-      expect(query(f, '.hero__name')?.textContent?.trim()).toBe(f.componentInstance.AgentName);
+      expect(query(f, '.hero__name')).toBeNull();
+      expect(query(f, '.hero__sub')).toBeNull();
+      expect(query(f, '.hero[role="status"] .hero__sr')?.textContent?.trim()).toBe('Listening');
+      expect(queryAll(f, 'mj-realtime-avatar-surface .tile__chip').map((c) => c.textContent?.trim())).toEqual(['AI-generated video', 'Listening']);
       expect(place(avatarBox(f))).toEqual(['300px', '80px', '300px', '400px']);
       expect(f.componentInstance.ChannelFocusMode).toBe(false);
     });

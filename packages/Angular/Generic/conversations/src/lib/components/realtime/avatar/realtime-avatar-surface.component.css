@@ -6,6 +6,40 @@
   container-type: size;
 }
 
+.avatar {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 12px;
+}
+
+/* The ring that frames the agent's tile while it speaks: inside the tile's edge, so the box the stage gives the surface
+   never clips it. */
+.avatar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  transition: box-shadow 140ms ease;
+}
+
+.avatar--speaking::after {
+  box-shadow: inset 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 70%, transparent);
+}
+
+/* Where the call overlay meters the agent's voice, the ring follows it (--voice-out, inherited). */
+:host-context(.call-overlay[data-audio-live='true']) .avatar--speaking::after {
+  box-shadow: inset 0 0 0 calc(2px + var(--voice-out, 0) * 6px) color-mix(in srgb, var(--mj-brand-primary) 70%, transparent);
+  transition: box-shadow 70ms linear;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .avatar::after {
+    transition: none;
+  }
+}
+
 /* The orb's diameter: about a third of the surface's shorter side, so its rings fit. */
 .avatar__orb {
   --mj-realtime-orb-size: 30cqmin;

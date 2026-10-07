@@ -71,8 +71,13 @@
             }
             <!-- The agent's place in the hero: the agent's video (the Avatar) lies over it while it presents. -->
             <div class="hero__presenter" [class.hero__presenter--on]="PresenterOnStage" #presenterSlot></div>
-            <div class="hero__name">{{ AgentName }}</div>
-            <div class="hero__sub">{{ HeroStateLabel(state) }}</div>
+            @if (!PresenterOnStage) {
+              <div class="hero__name">{{ AgentName }}</div>
+              <div class="hero__sub">{{ HeroStateLabel(state) }}</div>
+            } @else {
+              <!-- The agent's tile names it and says what it is doing; this live region still says it for screen readers. -->
+              <span class="hero__sr">{{ HeroStateLabel(state) }}</span>
+            }
             <button type="button" class="hero__reveal" (click)="OnTextReveal()"
                     title="Show the conversation as text">
               <i class="fa-solid fa-closed-captioning" aria-hidden="true"></i>
