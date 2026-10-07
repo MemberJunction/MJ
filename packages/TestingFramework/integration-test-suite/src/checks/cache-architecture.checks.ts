@@ -500,7 +500,15 @@ export const CacheArchitectureChecks: NamedCheck[] = [
                 AssertEqual(JSON.stringify(await waitForSlotIds(ctx, fingerprint, ids)), JSON.stringify(ids),
                     'after the group commits the slot holds every note it saved');
                 AssertEqual(writesSince(fingerprint), 1, `the slot is written once for the whole group of ${GROUP_NOTES} rows`);
-                AssertEqual(writesSince(engineFingerprint), 1, `the engine's slot is written once for the whole group of ${GROUP_NOTES} rows`);
+                // On the server the engine loads the notes' binary vector column, so its slot is keyed
+                // with the binary-width segment. A slot with a segment the cache cannot prove safe is
+                // invalidated on save rather than updated in place, so the batch may drop it instead
+                // of rewriting it. Either way the engine must not rewrite it once per row. Because the
+                // engine does not rewrite such a slot at all, this assertion is a guard here; CA8 and
+                // CA11, whose engine slots carry no binary columns, pin the engine leaving its slot to
+                // the batch.
+                const engineWrites = writesSince(engineFingerprint);
+                Assert(engineWrites <= 1, `the engine's slot is written at most once for the whole group of ${GROUP_NOTES} rows, got ${engineWrites}`);
                 const rewritten = [...writesBefore.keys()].filter(key => writesSince(key) > 1).map(key => `${writesSince(key)}× ${key}`);
                 AssertEqual(rewritten.join('; '), '', 'no slot of the entity is written more than once for the group');
             } finally {
