@@ -189,10 +189,10 @@ a skill's scripts.
   - The "read skill file" step is a `Read Skill File` action. It is offered automatically, with the file list, when a skill that has files activates. The action reads only files of skills active in the run.
   - Files are not cached in `AIEngineBase`, which would ship their content to every browser.
 - **YAML frontmatter** uses `yaml`, which was already in the workspace. `license` and `metadata.version` are exposed, and unknown keys are preserved.
-- **URL / GitHub import:** `SkillImportExportService.ImportSkillFromSource`, https only. It makes one tree-listing call for a GitHub folder and skips binaries and files over 512 KB. It is service-only for now: anything that exposes it to users needs an SSRF guard.
-- **Update check:** a daily `Skill Update Check` scheduled job (shipped Active). A changed `SourceContentHash` sets the skill to `Pending`, which already existed in `AISkill.Status`, and leaves its content untouched. Re-importing with `updateSkillId` approves the change. A Pending skill can't be activated, so an upstream change takes it offline until an admin reviews it, as the plan intends.
+- **URL / GitHub import:** `SkillImportExportService.ImportSkillFromSource`, https only. It resolves a GitHub ref to a commit, makes one tree-listing call, and skips binaries and files over 512 KB. Every fetch, the update check's included, goes through `SafeFetch` with `RequireHttps` (no private or link-local hop, redirects included), a timeout and a size cap. The skill, its bundle and its files are written in one transaction.
+- **Update check:** a daily `Skill Update Check` scheduled job (shipped Active). A changed `SourceContentHash` sets the skill to `Pending`, which already existed in `AISkill.Status`, and leaves its content untouched. Re-importing with `updateSkillId` approves the change, keeping the local Name and bundles. To keep the current version, pin `SourceRef` to the imported commit (shown in `SourceURL`) or clear `SourceType`; setting the skill Active alone is undone by the next run while an unpinned source still differs. A Pending skill can't be activated, so an upstream change takes it offline until an admin reviews it, as the plan intends.
 - **Known limits:**
-  - GitHub's unauthenticated limit is 60 calls an hour, and the check makes one per sourced skill.
+  - GitHub's unauthenticated limit is 60 calls an hour. The check makes one per sourced skill; an import makes two.
   - Export is still a single SKILL.md.
   - Realtime agents don't get the file list.
 

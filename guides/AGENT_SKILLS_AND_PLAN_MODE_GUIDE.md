@@ -283,14 +283,29 @@ prompt when the skill is activated.
 
 `codeOnlyActions` (optional) names the `actions` bundled with `ExposeToModel = 0` — see §1.3. Absent key: no
 opinion, surviving rows keep their flag. Present but empty (`codeOnlyActions:` with no items, or `[]`): nothing is
-code-only — delete the last name and keep the key to put that action back into the run.
+code-only — delete the last name and keep the key to put that action back into the run. One line is a
+comma-separated list (`codeOnlyActions: Generate PDF, Send Email`). Every name must also appear under `actions`;
+if one does not (a typo), the list is **not applied and fails closed**: no action is made model-callable, a newly
+bundled action is code-only, and the import warns.
+
+**Updating an existing skill** (`updateSkillId`): a key the file leaves out keeps what the skill has. No `actions`
+key keeps the bundled Actions (and their flags), no `subAgents` keeps the sub-agents, no `category` keeps the
+Category. A present key replaces, so `actions:` with no items removes every bundled Action.
+
+**How the frontmatter is read.** MJ's six keys, written the way MJ has always written them, are read literally:
+a value on the key's own line is its text verbatim (one pair of surrounding quotes removed, unescaping only `\"`
+inside double quotes and `''` inside single), and a list is `- item` lines or one comma-separated line. So
+`Triage issues #123`, `1.10`, `null`, `[Draft] report` and `C:\temp` mean what they say, exactly as in a file
+MJ exported before it used YAML. Everything else is YAML: `license`, `metadata`, `allowed-tools`, unknown keys,
+and an MJ key written in a multi-line form (`description: >-` and an indented block). Export quotes with single
+quotes, which both readings agree on.
 
 **Why names, not IDs**: Action/sub-agent references in the frontmatter are **names**, because names are the only stable cross-instance reference. On import, names are resolved against the target instance's catalog; anything that doesn't resolve becomes a **non-fatal warning** (the skill still imports with whatever did resolve) — a skill authored elsewhere may reference actions this instance doesn't have.
 
 Two layers, in `@memberjunction/ai-agents`:
 
-- **`SkillMarkdownConverter`** — pure `Parse` / `Serialize`, fully unit-tested in isolation. The frontmatter is real YAML (the `yaml` package), so an Anthropic-style SKILL.md parses as written. MJ models `name`, `description`, `category`, `actions`, `codeOnlyActions`, `subAgents`; every other key (`license`, `metadata`, `allowed-tools`, …) is kept verbatim in `frontmatter.extra`, stored on import in `AISkill.Frontmatter` (JSON), and written back on export, so a round trip loses nothing. `license` and `metadata.version` are also surfaced as `frontmatter.license` / `frontmatter.version`.
-- **`SkillImportExportService`** — orchestrates against the DB: `Config()`s the AI + Action engines (idempotent) for name↔ID resolution, creates/updates the `MJ: AI Skills` row, and resyncs the two junction sets. `AISkillAction.ExposeToModel` round-trips through the optional `codeOnlyActions` frontmatter list (names, a subset of `actions`): export writes it only when the skill has rows with the flag off, so older files are byte-identical; import applies it when present. A file without the key expresses no opinion, and the resync — which is delete-and-recreate — then carries each surviving row's flag across, so re-saving a skill's SKILL.md never turns a code-only action model-callable; only a genuinely new row takes the column default.
+- **`SkillMarkdownConverter`** — pure `Parse` / `Serialize`, fully unit-tested in isolation. The frontmatter is real YAML (the `yaml` package) apart from the literal reading of MJ's own keys above, so an Anthropic-style SKILL.md parses as written. MJ models `name`, `description`, `category`, `actions`, `codeOnlyActions`, `subAgents`; every other key (`license`, `metadata`, `allowed-tools`, …) is kept verbatim in `frontmatter.extra`, stored on import in `AISkill.Frontmatter` (JSON), and written back on export, so a round trip loses nothing. `license` and `metadata.version` are also surfaced as `frontmatter.license` / `frontmatter.version`.
+- **`SkillImportExportService`** — orchestrates against the DB: `Config()`s the AI + Action engines (idempotent) for name↔ID resolution, then creates/updates the `MJ: AI Skills` row and resyncs the two junction sets (and a sourced skill's files) in **one transaction**, on the caller's provider, or on an independent instance when there is none, never on the shared global provider. `AISkillAction.ExposeToModel` round-trips through the optional `codeOnlyActions` frontmatter list (names, a subset of `actions`): export writes it only when the skill has rows with the flag off, so older files are byte-identical; import applies it when present. A file without the key expresses no opinion, and the resync — which is delete-and-recreate — then carries each surviving row's flag across, so re-saving a skill's SKILL.md never turns a code-only action model-callable; only a genuinely new row takes the column default.
 
 Both are exposed as typed, provider-routed **Remote Operations** — `AISkill.ExportMarkdown` / `AISkill.ImportMarkdown` (see [REMOTE_OPERATIONS_GUIDE](REMOTE_OPERATIONS_GUIDE.md)) — so the browser calls `new AISkillExportMarkdownOperation().Execute(input, { provider })` with no bespoke resolver/GraphQL client.
 
@@ -300,27 +315,50 @@ Both are exposed as typed, provider-routed **Remote Operations** — `AISkill.Ex
 upstream: any https URL serving a SKILL.md, or a GitHub folder —
 `https://github.com/<owner>/<repo>[/tree/<ref>/<path>]`, a `/blob/<ref>/<path>/SKILL.md` link, or a
 structured `SkillSource` (`ParseSkillSource` / `GitHubSkillSource` in `SkillSources.ts`). A ref with
-slashes goes in `options.ref`; no ref means `HEAD`. For GitHub it makes one tree-listing API call and
-downloads SKILL.md plus every other text file in the folder as `MJ: AI Skill Files` rows (binary files
-and files over 512 KB are skipped with a warning; at most 100 files). It records the source on the
-skill:
+slashes goes in `options.ref`; no ref means `HEAD`. For GitHub it resolves the ref to a commit (one
+small API call, skipped when the ref already is a SHA), lists the tree once, and downloads SKILL.md plus
+every other text file in the folder at that commit as `MJ: AI Skill Files` rows (binary files and files
+over 512 KB are skipped with a warning; at most 100 files). Paths that differ only by case, or are over
+500 characters, fail the import before anything is written. It records the source on the skill:
 
 | Column | Meaning |
 |---|---|
-| `SourceType` | `URL` / `GitHub`; NULL = authored or uploaded here |
-| `SourceURL` | the SKILL.md URL, or the GitHub folder link |
-| `SourceRef` | the git ref (GitHub only) — pin a tag or SHA for a reviewable supply chain |
+| `SourceType` | `URL` / `GitHub`; NULL = authored or uploaded here, or no longer tracked |
+| `SourceURL` | the SKILL.md URL; for GitHub, the folder **at the imported commit** (`…/tree/<commit-sha>/<path>`) |
+| `SourceRef` | the git ref the update check follows (GitHub only), as asked for: a branch, tag or SHA |
 | `SourceVersion` | frontmatter `metadata.version` |
 | `SourceContentHash` | SHA-256 over SKILL.md + files, sorted by path |
 | `LastSyncedAt` | when the content was last imported |
 
+**Every fetch is SSRF-guarded**, for an import and for the update check alike: it goes through
+`SafeFetch` (`@memberjunction/network-utils`) with `RequireHttps`, so the URL and every redirect hop
+must be https and must not resolve to a private, loopback or link-local address, with a 30-second
+timeout and a size cap (512 KB per file, 10 MB for the GitHub tree listing). A source stored on a
+skill row is re-validated with the same parser before the check fetches it, so editing a row's
+`SourceURL` cannot point the job somewhere an import would refuse.
+
 The **Skill Update Check** scheduled job (`SkillUpdateCheckScheduledJobDriver`, shipped Active daily at
 05:00 UTC) re-fetches every Active sourced skill. When the hash differs it sets the skill to
 **`Pending`** — the content is not overwritten, and a Pending skill is not activatable, so upstream
-instruction text never reaches an agent's prompt unreviewed. An admin accepts the change by
-re-importing from the source with `updateSkillId` (which makes the skill Active again), or keeps the
-current version by setting it back to Active. Only instruction-only skills are fully importable this
-way: the server never runs a skill's scripts.
+instruction text never reaches an agent's prompt unreviewed. (It re-reads the row before saving, so an
+import that landed during the fetch is neither overwritten nor flagged.) An admin then either:
+
+- **accepts the change** — re-import from the source with `updateSkillId`. The skill becomes Active
+  with the new content and hash. The re-import keeps the skill's local **Name** (upstream's `name` is
+  upstream's identifier, and an admin may have renamed the skill here) and, since an Anthropic-style
+  SKILL.md has no MJ keys, its bundled Actions, sub-agents and Category; or
+- **keeps the current version** — first stop following the moving ref, then set the skill Active:
+  - **pin it**: copy the commit SHA from `SourceURL` into `SourceRef` (or a tag that points at that
+    commit). The check then compares against exactly what was imported and stays quiet; or
+  - **stop tracking it**: clear `SourceType`. The check skips the skill from then on. This is the only
+    option for a URL source, which has no ref (or point `SourceURL` at an immutable URL, such as a raw
+    file at a commit).
+
+Setting a Pending skill back to Active **without** pinning does not keep it: every run decides afresh,
+and a skill whose unpinned source still differs from what was imported is flagged again on the next run.
+That is the intended behavior, not a bug.
+
+Only instruction-only skills are fully importable this way: the server never runs a skill's scripts.
 
 ---
 

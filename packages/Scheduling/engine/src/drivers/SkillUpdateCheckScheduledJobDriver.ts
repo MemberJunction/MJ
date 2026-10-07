@@ -23,6 +23,11 @@ export interface SkillUpdateCheckTally {
  * content hash no longer matches `SourceContentHash` is set to `Pending` for admin review, never
  * overwritten — upstream instruction text becomes prompt content in agents, so it is reviewed first.
  *
+ * Every run decides afresh. An admin accepts a change by re-importing from the source. To keep the
+ * current version instead, they pin `SourceRef` to the commit in `SourceURL` (or a tag at it) or clear
+ * `SourceType`, then set the skill Active. Setting it Active alone is undone by the next run while an
+ * unpinned source still differs, and that is intended.
+ *
  * One skill's failure (a 404, a rate limit) is counted and logged, not fatal: the rest still get
  * checked. An instance with no sourced skills costs one empty query per run.
  */

@@ -131,8 +131,8 @@ Second line.
             expect(() => SkillMarkdownConverter.Parse(md)).toThrow(/Invalid SKILL\.md frontmatter: expected "key: value"/);
         });
 
-        it('throws on YAML that does not parse', () => {
-            const md = `---\nname: [unclosed\n---\n\nBody.\n`;
+        it('throws on YAML that does not parse and has no literal reading', () => {
+            const md = `---\nname: X\nmetadata:\n  version: [unclosed\n---\n\nBody.\n`;
             expect(() => SkillMarkdownConverter.Parse(md)).toThrow(/Invalid SKILL\.md frontmatter/);
         });
 
@@ -163,8 +163,8 @@ Second line.
             });
         });
 
-        it('rejects a modelled scalar given as a list', () => {
-            const md = `---\nname: [a, b]\n---\n\nBody.\n`;
+        it('rejects a modelled scalar given as a block list', () => {
+            const md = `---\nname:\n  - a\n  - b\n---\n\nBody.\n`;
             expect(() => SkillMarkdownConverter.Parse(md)).toThrow(/"name" must be a single value/);
         });
     });
@@ -263,13 +263,13 @@ Second line.
             expect(result).not.toContain('subAgents:');
         });
 
-        it('quotes scalars containing a colon', () => {
+        it('quotes scalars containing a colon, with single quotes', () => {
             const result = SkillMarkdownConverter.Serialize({
                 name: 'Skill: With Colon',
                 instructions: 'Body.'
             });
 
-            expect(result).toContain('name: "Skill: With Colon"');
+            expect(result).toContain("name: 'Skill: With Colon'");
         });
 
         it('round-trips through Parse after Serialize', () => {

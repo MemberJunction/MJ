@@ -534,6 +534,9 @@ importers:
       '@memberjunction/global':
         specifier: 6.2.0-edge.2
         version: link:../../MJGlobal
+      '@memberjunction/network-utils':
+        specifier: 6.2.0-edge.2
+        version: link:../../NetworkUtils
       '@memberjunction/rubrics':
         specifier: 6.2.0-edge.2
         version: link:../../Rubrics/Engine

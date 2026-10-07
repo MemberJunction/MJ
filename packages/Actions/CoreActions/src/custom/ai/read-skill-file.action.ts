@@ -20,7 +20,8 @@ type SkillFileRow = Pick<MJAISkillFileEntity, 'Path' | 'Content'>;
  * cannot read another skill's files by naming it. Outside a run (no ActiveSkillIDs) the read is an
  * ordinary RunView under the caller's entity permissions.
  *
- * Inputs: `Skill` (skill name), `Path` (as listed). Output: `Content`; the content is also the Message.
+ * Inputs: `Skill` (skill name), `Path` (as listed). Output: `Content`, the file's text. The Message only
+ * says what was read: an agent sees both, so repeating the content there would put it in the context twice.
  * An unknown path fails with `FILE_NOT_FOUND` and lists the skill's paths so the agent can retry.
  */
 @RegisterClass(BaseAction, "__ReadSkillFile")
@@ -32,8 +33,9 @@ export class ReadSkillFileAction extends BaseAction {
             return { Success: false, ResultCode: 'MISSING_PARAMETERS', Message: 'Skill and Path are both required' };
         }
         const scope = this.activeSkillFilter(params);
-        const skillFilter = `Skill='${EscapeSQLString(skill)}'${scope}`;
-        const [file] = await this.readFiles(`${skillFilter} AND Path='${EscapeSQLString(path)}'`, ['Path', 'Content'], params);
+        // N'...' literals: Skill and Path are NVARCHAR, and a non-Latin name or path must match as written.
+        const skillFilter = `Skill=N'${EscapeSQLString(skill)}'${scope}`;
+        const [file] = await this.readFiles(`${skillFilter} AND Path=N'${EscapeSQLString(path)}'`, ['Path', 'Content'], params);
         if (!file) {
             const listed = (await this.readFiles(skillFilter, ['Path'], params)).map(r => r.Path).join(', ');
             return {
@@ -45,7 +47,7 @@ export class ReadSkillFileAction extends BaseAction {
             };
         }
         params.Params.push({ Name: 'Content', Type: 'Output', Value: file.Content });
-        return { Success: true, ResultCode: 'SUCCESS', Message: file.Content };
+        return { Success: true, ResultCode: 'SUCCESS', Message: `Read "${file.Path}" of skill "${skill}" (${file.Content.length} characters); its text is the Content output.` };
     }
 
     /**

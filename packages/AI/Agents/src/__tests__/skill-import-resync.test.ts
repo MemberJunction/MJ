@@ -68,7 +68,7 @@ describe('SkillImportExportService.resyncJunction carries ExposeToModel across a
 
     it('applies the SKILL.md intent when the file carries codeOnlyActions, even for a surviving row', async () => {
         // The file says A is exposed and C is code-only — that outranks A's previous hidden flag.
-        const intent = new Map<string, boolean>([[ACTION_A, true], [ACTION_C, false]]);
+        const intent = { Stated: new Map<string, boolean>([[ACTION_A, true], [ACTION_C, false]]) };
         const resync = (SkillImportExportService as unknown as { resyncJunction: (...a: unknown[]) => Promise<void> }).resyncJunction;
         await resync(SKILL, 'MJ: AI Skill Actions', [ACTION_A, ACTION_C], 'ActionID', user, provider, intent);
         const [a, c] = created;

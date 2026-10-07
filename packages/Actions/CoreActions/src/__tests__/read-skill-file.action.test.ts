@@ -48,13 +48,15 @@ describe('ReadSkillFileAction', () => {
         views.results = [];
     });
 
-    it('returns the file content as the Message and the Content output', async () => {
+    it('returns the file content once, as the Content output; the Message only says what was read', async () => {
         views.results = [[{ Path: 'references/forms.md', Content: '# Forms' }]];
         const { result, params } = await run({ Skill: "O'Brien Skill", Path: './references/forms.md' }, { ActiveSkillIDs: [ACTIVE] });
 
-        expect(result).toMatchObject({ Success: true, ResultCode: 'SUCCESS', Message: '# Forms' });
+        expect(result).toMatchObject({ Success: true, ResultCode: 'SUCCESS' });
+        expect(result.Message).not.toContain('# Forms');
+        expect(result.Message).toContain('references/forms.md');
         expect(params.Params).toContainEqual({ Name: 'Content', Type: 'Output', Value: '# Forms' });
-        expect(views.calls[0].ExtraFilter).toBe(`Skill='O''Brien Skill' AND SkillID IN ('${ACTIVE}') AND Path='references/forms.md'`);
+        expect(views.calls[0].ExtraFilter).toBe(`Skill=N'O''Brien Skill' AND SkillID IN ('${ACTIVE}') AND Path=N'references/forms.md'`);
         expect(views.calls[0].Fields).toEqual(['Path', 'Content']);
     });
 
@@ -67,7 +69,13 @@ describe('ReadSkillFileAction', () => {
     it('outside a run (no ActiveSkillIDs) reads by name and path alone', async () => {
         views.results = [[{ Path: 'a.md', Content: 'A' }]];
         await run({ Skill: 'Diagrams', Path: 'a.md' });
-        expect(views.calls[0].ExtraFilter).toBe(`Skill='Diagrams' AND Path='a.md'`);
+        expect(views.calls[0].ExtraFilter).toBe(`Skill=N'Diagrams' AND Path=N'a.md'`);
+    });
+
+    it('matches a non-Latin skill name and path as Unicode (N literals)', async () => {
+        views.results = [[{ Path: 'références/日本語.md', Content: 'x' }]];
+        await run({ Skill: 'Отчёты', Path: 'références/日本語.md' });
+        expect(views.calls[0].ExtraFilter).toBe(`Skill=N'Отчёты' AND Path=N'références/日本語.md'`);
     });
 
     it('drops a malformed ActiveSkillIDs entry rather than binding it into the filter', async () => {

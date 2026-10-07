@@ -31,6 +31,7 @@
     "@memberjunction/core": "6.2.0-edge.2",
     "@memberjunction/core-entities": "6.2.0-edge.2",
     "@memberjunction/global": "6.2.0-edge.2",
+    "@memberjunction/network-utils": "6.2.0-edge.2",
     "@memberjunction/rubrics": "6.2.0-edge.2",
     "@memberjunction/search-engine": "6.2.0-edge.2",
     "@memberjunction/storage": "6.2.0-edge.2",

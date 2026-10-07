@@ -4,6 +4,7 @@
 "@memberjunction/core-actions": minor
 "@memberjunction/core-entities": minor
 "@memberjunction/ng-core-entity-forms": minor
+"@memberjunction/network-utils": minor
 "@memberjunction/scheduling-engine": minor
 "@memberjunction/server": minor
 "@memberjunction/server-bootstrap": minor
@@ -36,4 +37,6 @@ Also adds `plans/archify-diagram-skill.md`, a plan for an architecture-diagram s
   - New `AISkillFile` table for multi-file skills. The new `Read Skill File` action is offered when a skill that has files activates.
   - SKILL.md frontmatter is now real YAML (`yaml`) and keeps unknown keys on a round trip.
   - Skills can be imported from an https URL or a GitHub folder (`SkillImportExportService.ImportSkillFromSource`).
-  - A daily **Skill Update Check** job sets a skill whose upstream changed to `Pending` for review, instead of overwriting it.
+  - A daily **Skill Update Check** job sets a skill whose upstream changed to `Pending` for review, instead of overwriting it. To keep the current version, pin `SourceRef` to the imported commit (shown in `SourceURL`) or clear `SourceType`; re-importing accepts the change and keeps the skill's local Name and bundled Actions and sub-agents.
+  - Every skill fetch goes through `SafeFetch` with the new `RequireHttps` option (`@memberjunction/network-utils`): https on every hop, no private or link-local address, a timeout and a size cap.
+  - SKILL.md files MJ exported before the YAML parser still read as they did: MJ's own keys are read literally (`#`, `1.10`, `null`, `C:\temp` and a comma-separated `codeOnlyActions` line keep their meaning), and a `codeOnlyActions` list naming anything not under `actions` fails closed instead of making every bundled action model-callable.

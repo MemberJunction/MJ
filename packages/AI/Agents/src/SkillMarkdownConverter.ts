@@ -25,10 +25,28 @@
  * prompt when the skill is activated.
  * ```
  *
- * The frontmatter is real YAML (the `yaml` package), so an Anthropic-style SKILL.md parses as
- * written. MJ models six keys; every other key (`license`, `metadata`, `allowed-tools`, a key a
- * newer MJ or another tool adds) is kept verbatim in {@link SkillMarkdownFrontmatter.extra} and
- * written back by {@link SkillMarkdownConverter.Serialize}, so a round trip loses nothing.
+ * ## How the frontmatter is read
+ *
+ * MJ models six keys: `name`, `description`, `category`, `actions`, `subAgents`, `codeOnlyActions`.
+ * Written the way MJ has always written them, they are read **literally**, exactly as MJ's parser
+ * read them before it used YAML:
+ * - a value on the key's own line is its text, verbatim. Surrounding quotes are removed, unescaping
+ *   only `\"` inside double quotes and `''` inside single quotes. So `Triage issues #123`, `1.10`,
+ *   `null`, `[Draft] report`, `@team` and `C:\temp` all mean what they say;
+ * - a list is `- item` lines, each read the same way, or a single comma-separated line
+ *   (`codeOnlyActions: Generate PDF, Send Email`, optionally in `[...]`).
+ *
+ * Everything else is YAML (the `yaml` package): every other key (`license`, `metadata`, `allowed-tools`,
+ * a key a newer MJ or another tool adds), and one of MJ's keys written in a multi-line form (a
+ * `description: >-` block, an indented continuation line). That keeps an Anthropic-style SKILL.md
+ * parsing as written, while a file MJ exported before it used YAML, or that someone wrote to the old
+ * rules, still means what it meant. If YAML rejects the other keys and each of them is a flat
+ * `key: value` or `- item` list, they are read literally too (the old parser's semantics).
+ *
+ * Unmodelled keys are kept verbatim in {@link SkillMarkdownFrontmatter.extra} and written back by
+ * {@link SkillMarkdownConverter.Serialize}, so a round trip loses nothing. Serialize quotes with single
+ * quotes, which both readers agree on. (A C0 control character in one of MJ's values can only be written
+ * as a YAML double-quoted escape, which the literal reading keeps as text.)
  *
  * `codeOnlyActions` (optional) names the subset of `actions` bundled with `AISkillAction.ExposeToModel = 0`:
  * kept with the skill for export and tooling, but left out of the agent's run — not described to the
@@ -40,7 +58,7 @@
  *
  * @module @memberjunction/ai-agents
  */
-import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
+import { isScalar, parseDocument, stringify as stringifyYaml } from 'yaml';
 import type { JSONObject, JSONValue } from '@memberjunction/ai';
 
 /**
@@ -56,9 +74,9 @@ export interface SkillMarkdownFrontmatter {
     subAgents?: string[];
     /** Names within `actions` whose `AISkillAction.ExposeToModel` is 0. Absent = the file expresses no opinion. */
     codeOnlyActions?: string[];
-    /** The `license` key, when it is a scalar. Also kept verbatim in {@link extra}. */
+    /** The `license` key, when it is a string. Kept verbatim in {@link extra} whatever its shape. */
     license?: string;
-    /** `metadata.version` — the version the skill's author declares. Also kept verbatim in {@link extra}. */
+    /** `metadata.version` as written — the version the skill's author declares. Also kept verbatim in {@link extra}. */
     version?: string;
     /** Every key MJ does not model, verbatim, so {@link SkillMarkdownConverter.Serialize} can write it back. */
     extra?: JSONObject;
@@ -94,8 +112,32 @@ const FRONTMATTER_DELIMITER = '---';
 /** The frontmatter keys whose value is a list of names. */
 type SkillListKey = 'actions' | 'subAgents' | 'codeOnlyActions';
 const LIST_KEYS: readonly SkillListKey[] = ['actions', 'subAgents', 'codeOnlyActions'];
+const LIST_KEY_SET: ReadonlySet<string> = new Set<string>(LIST_KEYS);
 /** The keys MJ models; everything else lands in `extra`. */
 const MODELLED_KEYS: ReadonlySet<string> = new Set<string>(['name', 'description', 'category', ...LIST_KEYS]);
+
+/** A top-level `key: value` line. Column 0 only: the key must start the line. */
+const KEY_LINE_RE = /^([A-Za-z_][\w-]*)\s*:(.*)$/;
+/** A `- item` line, at any indentation. */
+const LIST_ITEM_RE = /^\s*-\s+(.*)$/;
+
+/** One top-level key and the lines under it (indented, `- item` and blank lines). */
+interface FrontmatterEntry {
+    /** The key, or null for a top-level line that is not `key: ...` (left to YAML). */
+    Key: string | null;
+    /** The text after the colon, trimmed. */
+    Inline: string;
+    /** The lines below the key line that belong to it. */
+    Under: string[];
+    /** Every source line of the entry, in order, for YAML. */
+    Lines: string[];
+}
+
+/** The frontmatter as plain data, plus `metadata.version` exactly as written. */
+interface FrontmatterData {
+    data: JSONObject;
+    version?: string;
+}
 
 export class SkillMarkdownConverter {
     /**
@@ -105,7 +147,8 @@ export class SkillMarkdownConverter {
      */
     public static Parse(markdownText: string): ParsedSkillMarkdown {
         const { yamlText, instructions } = this.splitDocument(markdownText);
-        const frontmatter = this.toFrontmatter(this.parseMapping(yamlText));
+        const { data, version } = this.readFrontmatter(yamlText);
+        const frontmatter = this.toFrontmatter(data, version);
         if (!frontmatter.name) {
             throw new Error('Invalid SKILL.md: frontmatter is missing the required "name" field');
         }
@@ -116,7 +159,9 @@ export class SkillMarkdownConverter {
     }
 
     /**
-     * Serializes skill data into a SKILL.md document. The inverse of {@link Parse}.
+     * Serializes skill data into a SKILL.md document. The inverse of {@link Parse}. Values are written
+     * with the `yaml` library, quoting with single quotes where a value needs quoting, so any YAML
+     * reader and {@link Parse}'s literal reading of MJ's keys agree on every value.
      */
     public static Serialize(params: SerializeSkillMarkdownParams): string {
         const doc: JSONObject = { name: params.name };
@@ -129,17 +174,20 @@ export class SkillMarkdownConverter {
             if (!MODELLED_KEYS.has(key)) doc[key] = value; // a modelled key always comes from its column
         }
         // lineWidth 0: never fold a long description across lines.
-        const yamlText = stringifyYaml(doc, { lineWidth: 0 }).trimEnd();
+        const yamlText = stringifyYaml(doc, { lineWidth: 0, singleQuote: true }).trimEnd();
         return [FRONTMATTER_DELIMITER, yamlText, FRONTMATTER_DELIMITER, '', params.instructions.trim(), ''].join('\n');
     }
 
-    /** Splits a document into the text between the two `---` lines and the trimmed body after them. */
+    /**
+     * Splits a document into the text between the two `---` lines and the trimmed body after them. Only
+     * a `---` at column 0 closes the frontmatter; an indented one is content (inside a block scalar).
+     */
     private static splitDocument(markdownText: string): { yamlText: string; instructions: string } {
         const lines = markdownText.replace(/\r\n/g, '\n').trim().split('\n');
-        if (lines[0]?.trim() !== FRONTMATTER_DELIMITER) {
+        if (lines[0]?.trimEnd() !== FRONTMATTER_DELIMITER) {
             throw new Error('Invalid SKILL.md: expected a frontmatter block starting with "---"');
         }
-        const closingIndex = lines.findIndex((line, idx) => idx > 0 && line.trim() === FRONTMATTER_DELIMITER);
+        const closingIndex = lines.findIndex((line, idx) => idx > 0 && line.trimEnd() === FRONTMATTER_DELIMITER);
         if (closingIndex === -1) {
             throw new Error('Invalid SKILL.md: frontmatter block is not terminated with a closing "---"');
         }
@@ -149,26 +197,109 @@ export class SkillMarkdownConverter {
         };
     }
 
-    /** YAML-parses the frontmatter and insists on a key/value mapping (an empty block is an empty one). */
-    private static parseMapping(yamlText: string): JSONObject {
-        let parsed: JSONValue;
-        try {
-            parsed = parseYaml(yamlText) ?? {};
-        } catch (e) {
-            throw new Error(`Invalid SKILL.md frontmatter: ${e instanceof Error ? e.message : String(e)}`);
+    /** MJ's keys from the literal reading where it applies, everything else from YAML (see the file overview). */
+    private static readFrontmatter(yamlText: string): FrontmatterData {
+        const literal: JSONObject = {};
+        const rest: FrontmatterEntry[] = [];
+        for (const entry of this.groupEntries(yamlText.split('\n'))) {
+            const value = entry.Key !== null && MODELLED_KEYS.has(entry.Key)
+                ? this.readLiteral(entry, LIST_KEY_SET.has(entry.Key))
+                : undefined;
+            if (entry.Key !== null && value !== undefined) {
+                literal[entry.Key] = value;
+            } else {
+                rest.push(entry);
+            }
         }
-        if (!this.isMapping(parsed)) {
-            throw new Error('Invalid SKILL.md frontmatter: expected "key: value" lines (a YAML mapping)');
-        }
-        return parsed;
+        const parsed = this.parseYamlEntries(rest);
+        return { data: { ...parsed.data, ...literal }, version: parsed.version };
     }
 
-    /** Maps the parsed YAML onto the modelled fields and keeps the rest in `extra`. */
-    private static toFrontmatter(data: JSONObject): SkillMarkdownFrontmatter {
+    /** Groups lines into top-level entries. A column-0 `#` line is a comment and carries no data. */
+    private static groupEntries(lines: string[]): FrontmatterEntry[] {
+        const entries: FrontmatterEntry[] = [];
+        for (const line of lines) {
+            if (line.startsWith('#')) continue;
+            const key = KEY_LINE_RE.exec(line);
+            const last = entries[entries.length - 1];
+            if (key) {
+                entries.push({ Key: key[1], Inline: key[2].trim(), Under: [], Lines: [line] });
+            } else if (last && (line.trim() === '' || /^\s/.test(line) || LIST_ITEM_RE.test(line))) {
+                last.Under.push(line);
+                last.Lines.push(line);
+            } else {
+                entries.push({ Key: null, Inline: '', Under: [], Lines: [line] });
+            }
+        }
+        return entries;
+    }
+
+    /**
+     * The literal reading of an entry: its inline value, or its `- item` lines when `isList`. Undefined
+     * when the entry uses a form only YAML reads (a block scalar, continuation lines, nested content, or
+     * a scalar key with nothing on its line).
+     */
+    private static readLiteral(entry: FrontmatterEntry, isList: boolean): string | string[] | undefined {
+        const under = entry.Under.filter(line => line.trim() !== '');
+        if (entry.Inline !== '') {
+            if (under.length > 0) return undefined;
+            return isList ? splitInlineList(entry.Inline) : unquote(entry.Inline);
+        }
+        if (!isList) return undefined;
+        const items: string[] = [];
+        for (const line of under) {
+            const item = LIST_ITEM_RE.exec(line);
+            if (!item) return undefined;
+            items.push(unquote(item[1]));
+        }
+        return items.filter(item => item.length > 0);
+    }
+
+    /** YAML for the entries the literal reading left; if YAML rejects them, their literal reading when every one has one. */
+    private static parseYamlEntries(entries: FrontmatterEntry[]): FrontmatterData {
+        const doc = parseDocument(entries.flatMap(entry => entry.Lines).join('\n'));
+        if (doc.errors.length > 0) {
+            const fallback = this.readLiteralExtras(entries);
+            if (fallback) return { data: fallback };
+            throw new Error(`Invalid SKILL.md frontmatter: ${doc.errors[0].message}`);
+        }
+        const data: JSONValue = doc.toJS() ?? {};
+        if (!this.isMapping(data)) {
+            throw new Error('Invalid SKILL.md frontmatter: expected "key: value" lines (a YAML mapping)');
+        }
+        // As written, so `version: 1.10` stays `1.10` rather than YAML's number 1.1.
+        const node = doc.getIn(['metadata', 'version'], true);
+        let version: string | undefined;
+        if (isScalar(node) && node.value !== null) {
+            version = (node.type === 'PLAIN' && node.source ? node.source : String(node.value)).trim() || undefined;
+        }
+        return { data, version };
+    }
+
+    /** The literal reading of every entry, or null when one has none. A key with nothing under it is absent. */
+    private static readLiteralExtras(entries: FrontmatterEntry[]): JSONObject | null {
+        const data: JSONObject = {};
+        for (const entry of entries) {
+            const blank = entry.Inline === '' && entry.Under.every(line => line.trim() === '');
+            if (entry.Key === null) {
+                if (entry.Lines.every(line => line.trim() === '')) continue;
+                return null;
+            }
+            if (blank) continue;
+            const value = this.readLiteral(entry, entry.Inline === '');
+            if (value === undefined) return null;
+            data[entry.Key] = value;
+        }
+        return data;
+    }
+
+    /** Maps the frontmatter data onto the modelled fields and keeps the rest in `extra`. */
+    private static toFrontmatter(data: JSONObject, version: string | undefined): SkillMarkdownFrontmatter {
         const result: SkillMarkdownFrontmatter = {
             name: this.scalar(data, 'name') ?? '',
             description: this.scalar(data, 'description'),
-            category: this.scalar(data, 'category')
+            category: this.scalar(data, 'category'),
+            version
         };
         for (const key of LIST_KEYS) {
             // A present key is a list even with nothing under it: for `codeOnlyActions`, absent means
@@ -178,9 +309,8 @@ export class SkillMarkdownConverter {
         const extra = Object.fromEntries(Object.entries(data).filter(([key]) => !MODELLED_KEYS.has(key)));
         if (Object.keys(extra).length > 0) {
             result.extra = extra;
-            result.license = this.scalar(extra, 'license');
-            const metadata = extra.metadata;
-            result.version = this.isMapping(metadata) ? this.scalar(metadata, 'version') : undefined;
+            // A list- or mapping-valued license (SPDX expressions are sometimes written as a list) stays in `extra` only.
+            result.license = typeof extra.license === 'string' ? extra.license.trim() || undefined : undefined;
         }
         return this.dropUndefined(result);
     }
@@ -196,10 +326,14 @@ export class SkillMarkdownConverter {
         return text.length > 0 ? text : undefined;
     }
 
-    /** A list of names. `key:` with nothing under it is an empty list; a lone scalar is a one-item list. */
+    /**
+     * A list of names. `key:` with nothing under it is an empty list. A string is one comma-separated
+     * list — `codeOnlyActions: Generate PDF, Send Email` names two actions, as it always has.
+     */
     private static list(data: JSONObject, key: string): string[] {
         const value = data[key];
         if (value === null || value === undefined) return [];
+        if (typeof value === 'string') return splitInlineList(value);
         const items = Array.isArray(value) ? value : [value];
         if (items.some(item => typeof item === 'object' && item !== null)) {
             throw new Error(`Invalid SKILL.md frontmatter: "${key}" must be a list of names`);
@@ -218,4 +352,21 @@ export class SkillMarkdownConverter {
         }
         return fm;
     }
+}
+
+/**
+ * One pair of surrounding quotes removed: `\"` is unescaped inside double quotes (what MJ's writer
+ * produced before YAML), `''` inside single quotes (what it produces now). Nothing else is unescaped.
+ */
+function unquote(raw: string): string {
+    const text = raw.trim();
+    if (text.length >= 2 && text.startsWith('"') && text.endsWith('"')) return text.slice(1, -1).replace(/\\"/g, '"');
+    if (text.length >= 2 && text.startsWith("'") && text.endsWith("'")) return text.slice(1, -1).replace(/''/g, "'");
+    return text;
+}
+
+/** A one-line list: optional `[...]`, comma-separated, each item unquoted. */
+function splitInlineList(text: string): string[] {
+    const inner = text.trim().replace(/^\[/, '').replace(/\]$/, '');
+    return inner.split(',').map(unquote).filter(item => item.length > 0);
 }
