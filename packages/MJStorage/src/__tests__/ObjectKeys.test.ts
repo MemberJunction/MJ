@@ -18,6 +18,19 @@ describe('NormalizeStorageObjectKey', () => {
         expect(NormalizeStorageObjectKey('/')).toBe('');
         expect(NormalizeStorageObjectKey('')).toBe('');
     });
+
+    it('keeps whitespace-only and interior segments exactly as the regex form did', () => {
+        expect(NormalizeStorageObjectKey('/ /a')).toBe(' /a');
+        expect(NormalizeStorageObjectKey('a/ b /c')).toBe('a/ b /c');
+        expect(NormalizeStorageObjectKey('/')).toBe('');
+    });
+
+    it('handles a key made of long runs of slashes quickly', () => {
+        const hostile = '/'.repeat(200_000) + 'x' + '/'.repeat(200_000) + 'y';
+        const started = Date.now();
+        expect(NormalizeStorageObjectKey(hostile)).toBe('x/y');
+        expect(Date.now() - started).toBeLessThan(1_000);
+    });
 });
 
 describe('IsSafeStorageObjectKey', () => {

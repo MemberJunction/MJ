@@ -33,11 +33,14 @@ export interface StorageObjectKeyNormalizer {
  * canonical form never has to guess what a driver would make of it.
  */
 export function NormalizeStorageObjectKey(objectKey: string): string {
+    // Split and join rather than regex trimming: dropping empty segments collapses runs of `/` and strips leading and
+    // trailing `/` in one linear pass with no backtracking. CodeQL flags a trailing-anchor pattern such as `/\/+$/` on
+    // caller input as polynomial (js/polynomial-redos), so this form keeps every pattern out of the path.
     return (objectKey ?? '')
         .trim()
-        .replace(/\/{2,}/g, '/')
-        .replace(/^\/+/, '')
-        .replace(/\/+$/, '');
+        .split('/')
+        .filter(segment => segment.length > 0)
+        .join('/');
 }
 
 /** The default {@link StorageObjectKeyNormalizer}: {@link NormalizeStorageObjectKey}. */
