@@ -103,6 +103,11 @@ export interface MediaParticipant {
     ConnectionQuality?: MediaConnectionQuality;
     /** Reads the participant's current audio level, 0..1, for a meter. Called on every animation frame. */
     GetAudioLevel?: () => number;
+    /**
+     * Whether an agent can see this participant's camera and shared screen: they allowed it, and an agent is there to
+     * watch. A tile shows "Agent can see". Absent means no.
+     */
+    AgentCanSee?: boolean;
 }
 
 /** A participant's connection quality. */

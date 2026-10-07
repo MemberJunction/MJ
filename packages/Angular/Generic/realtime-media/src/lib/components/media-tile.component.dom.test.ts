@@ -96,6 +96,14 @@ describe('MediaTileComponent (DOM)', () => {
       expect(query(render(participant()), '.tile__chip')).toBeNull();
     });
 
+    it('says "Agent can see" when the host reports that an agent can see the participant', () => {
+      const chips = (value: MediaParticipant) => queryAll(render(value), '.tile__chip').map((c) => c.textContent?.trim());
+      expect(chips(participant({ AgentCanSee: true }))).toEqual(['Agent can see']);
+      expect(chips(participant({ AgentCanSee: true, Video: { screen: elementSource() } }))).toEqual(['Sharing', 'Agent can see']);
+      expect(chips(participant({ AgentCanSee: false }))).toEqual([]);
+      expect(chips(participant())).toEqual([]);
+    });
+
     it("shows the host's status as a chip after its own labels, with or without video", () => {
       const chips = (value: MediaParticipant, status: string | null) =>
         queryAll(render(value, { Status: status }), '.tile__chip').map((c) => c.textContent?.trim());

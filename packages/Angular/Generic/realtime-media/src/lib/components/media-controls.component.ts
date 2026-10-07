@@ -43,8 +43,9 @@ const SHARE_SURFACES: readonly ShareSurfaceOption[] = [
 ];
 
 /**
- * `mj-media-controls`: a call's microphone, camera and Share buttons. Presentational: it shows what is on and emits
- * what the user asks for, and the host starts or stops the media.
+ * `mj-media-controls`: a call's microphone, camera and Share buttons, and, when the host shows it, the button that lets
+ * an agent see the user's camera and shared screen. Presentational: it shows what is on and emits what the user asks
+ * for, and the host starts or stops the media.
  *
  * Share is a split button. Its main part asks the browser's picker with no preference, or stops sharing while the
  * user shares. Its arrow opens a menu that asks for an entire screen, a window or a browser tab first and, when the
@@ -134,6 +135,25 @@ const SHARE_SURFACES: readonly ShareSurfaceOption[] = [
       </span>
     }
 
+    @if (ShowAgentVision) {
+      <span class="control">
+        <button
+          type="button"
+          mjButton
+          Shape="circle"
+          [Size]="Size"
+          [Variant]="AgentVisionOn ? 'primary' : 'secondary'"
+          [AriaLabel]="AgentVisionLabel"
+          [title]="AgentVisionLabel"
+          (click)="AgentVisionToggled.emit(!AgentVisionOn)"
+        >
+          <i class="fa-solid" [class.fa-eye]="AgentVisionOn" [class.fa-eye-slash]="!AgentVisionOn" aria-hidden="true"></i>
+        </button>
+        @if (ShowLabels) {
+          <span class="control__label" aria-hidden="true">{{ AgentVisionOn ? 'Hide from agent' : 'Show agent' }}</span>
+        }
+      </span>
+    }
     <ng-template #shareMenu>
       <mj-menu AriaLabel="Share">
         @for (option of ShareSurfaces; track option.Surface) {
@@ -185,6 +205,13 @@ export class MediaControlsComponent {
    * the normal state: the camera button is neutral while off and filled while on, like a toggle, instead of red while off.
    */
   @Input() public CameraOptional = false;
+  /**
+   * Show the button that lets an agent see the user's camera and shared screen. Off by default: a host shows it while an
+   * agent is there to watch, and does what the user asks (the button only reports it).
+   */
+  @Input() public ShowAgentVision = false;
+  /** Whether the user lets an agent see their camera and shared screen. */
+  @Input() public AgentVisionOn = false;
 
   /** The user asked to turn the microphone on (`true`) or off (`false`). */
   @Output() public MicrophoneToggled = new EventEmitter<boolean>();
@@ -194,6 +221,8 @@ export class MediaControlsComponent {
   @Output() public ShareRequested = new EventEmitter<MediaShareRequest>();
   /** The user asked to stop sharing. */
   @Output() public StopShareRequested = new EventEmitter<void>();
+  /** The user turned the agent's view of their camera and shared screen on (`true`) or off (`false`). */
+  @Output() public AgentVisionToggled = new EventEmitter<boolean>();
 
   /** The microphone button's name. */
   public get MicrophoneLabel(): string {
@@ -211,6 +240,11 @@ export class MediaControlsComponent {
   /** The camera button's name. */
   public get CameraLabel(): string {
     return this.CameraOn ? 'Turn off camera' : 'Turn on camera';
+  }
+
+  /** The agent-vision button's name. */
+  public get AgentVisionLabel(): string {
+    return this.AgentVisionOn ? 'Stop letting the agent see your camera and screen' : 'Let the agent see your camera and screen';
   }
 
   /** The Share button's name. */

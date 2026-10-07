@@ -154,6 +154,51 @@ describe('MediaControlsComponent (DOM)', () => {
     expect(camera()?.classList.contains('mj-btn--primary')).toBe(true);
   });
 
+  describe('the agent-vision button', () => {
+    const LET = 'Let the agent see your camera and screen';
+    const STOP = 'Stop letting the agent see your camera and screen';
+
+    it('is there only when the host shows it', () => {
+      expect(button(render(), LET)).toBeNull();
+      expect(button(render({ ShowAgentVision: true }), LET)).not.toBeNull();
+    });
+
+    it('is off by default: neutral, an eye with a slash', () => {
+      const vision = button(render({ ShowAgentVision: true }), LET);
+      expect(vision?.classList.contains('mj-btn--secondary')).toBe(true);
+      expect(vision?.querySelector('i')?.classList.contains('fa-eye-slash')).toBe(true);
+    });
+
+    it('is filled while on, and named by what a click does', () => {
+      const vision = button(render({ ShowAgentVision: true, AgentVisionOn: true }), STOP);
+      expect(vision?.classList.contains('mj-btn--primary')).toBe(true);
+      expect(vision?.querySelector('i')?.classList.contains('fa-eye')).toBe(true);
+    });
+
+    it('asks for the opposite state when clicked', () => {
+      const f = render({ ShowAgentVision: true });
+      const asked: boolean[] = [];
+      f.componentInstance.AgentVisionToggled.subscribe((on: boolean) => asked.push(on));
+      button(f, LET)?.click();
+      f.componentRef.setInput('AgentVisionOn', true);
+      f.detectChanges();
+      button(f, STOP)?.click();
+      expect(asked).toEqual([true, false]);
+    });
+
+    it('is labelled after Share when labels are on', () => {
+      const f = render({ ShowLabels: true, ShowAgentVision: true });
+      expect(queryAll(f, '.control__label').map((l) => l.textContent?.trim())).toEqual(['Unmute', 'Video', 'Share', 'Show agent']);
+      f.componentRef.setInput('AgentVisionOn', true);
+      f.detectChanges();
+      expect(queryAll(f, '.control__label').map((l) => l.textContent?.trim()).at(-1)).toBe('Hide from agent');
+    });
+
+    it('has no axe violations', async () => {
+      await ExpectNoAxeViolations(render({ ShowAgentVision: true, AgentVisionOn: true, ShowLabels: true }));
+    });
+  });
+
   it('shows no labels by default', () => {
     expect(queryAll(render(), '.control__label')).toEqual([]);
   });

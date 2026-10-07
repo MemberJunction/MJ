@@ -69,13 +69,16 @@ export class MediaTilePlaceholderDirective {}
         </div>
       }
 
-      @if (IsAvatarVideo || IsSharingScreen || Status) {
+      @if (IsAvatarVideo || IsSharingScreen || AgentCanSee || Status) {
         <div class="tile__chips">
           @if (IsAvatarVideo) {
             <span class="tile__chip"><i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> AI-generated video</span>
           }
           @if (IsSharingScreen) {
             <span class="tile__chip"><i class="fa-solid fa-display" aria-hidden="true"></i> Sharing</span>
+          }
+          @if (AgentCanSee) {
+            <span class="tile__chip"><i class="fa-solid fa-eye" aria-hidden="true"></i> Agent can see</span>
           }
           @if (Status) {
             <span class="tile__chip tile__chip--status">{{ Status }}</span>
@@ -215,6 +218,11 @@ export class MediaTileComponent implements AfterViewInit, OnDestroy {
   /** Whether the participant is sharing a screen. */
   public get IsSharingScreen(): boolean {
     return this.Participant?.Video.screen !== undefined;
+  }
+
+  /** Whether an agent can see this participant's camera and shared screen, as the host reports it. */
+  public get AgentCanSee(): boolean {
+    return this.Participant?.AgentCanSee === true;
   }
 
   /**
