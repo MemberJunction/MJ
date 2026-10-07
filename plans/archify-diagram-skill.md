@@ -153,8 +153,11 @@ the job.
    - If a sync PR from an earlier month is still open, update that PR rather than opening a second.
 
 **As built (Phase 3).**
-- `.github/workflows/archify-sync.yml` plus `.github/scripts/archify-sync.mjs`, with 36 tests. Cron: the 1st of each month, plus `workflow_dispatch`.
-- **Two jobs.** The job that runs the freshly downloaded upstream code (shims, lite template, the example re-render tests) holds no write token. The job that opens or updates the PR holds the bot token, never runs upstream code, and refuses a patch outside the vendored paths.
+- `.github/workflows/archify-sync.yml` plus `.github/scripts/archify-sync.mjs`, with 51 tests. Cron: the 1st of each month, plus `workflow_dispatch`.
+- **Two jobs.** The job that runs the freshly downloaded upstream code (shims, lite template, the example re-render tests) holds no write token and no secret, and saves no cache: it sets up pnpm and node itself, with caching off, rather than through `mj-setup`, whose `cache: 'pnpm'` would save a store the upstream code could have tampered with.
+- **The publishing job trusts nothing the first job hands it.** That job ran unreviewed code, so it could have rewritten its own output. The publishing job never runs upstream code. It re-validates the tags and the manifest. It recomputes the changeset path from the tags. It keeps check results only under the names the sync uses. It refuses a patch that touches, deletes or renames anything outside the vendored paths, `UPSTREAM.json`, the lite template and that changeset.
+- **No PAT, so CI does not run on the sync PR by itself.** The PR is opened and updated with `GITHUB_TOKEN` (`contents: write` and `pull-requests: write`, nothing more), and GitHub starts no workflows for that. This is on purpose: CI would run the vendored upstream code with the turbo remote-cache secrets in reach before anyone had read it. The PR body says so. A maintainer reviews the vendored diff, then starts CI by closing and reopening the PR. Pushing a commit also starts CI, but then the monthly job stops instead of updating the branch.
+- **The PR body is assembled and capped at GitHub's size limit before anything is pushed.** Every piece of upstream text in it is inside a code fence or a single code span.
 - **When a sync can't be applied cleanly** (the shims no longer apply, or the tests fail), it still opens the PR, as a draft with a CAUTION banner, and the run fails. A SHA mismatch aborts with no PR.
 - **The PR body** carries every release between the pinned tag and the new one, not only the newest.
 - **Severity values:** archify uses `normal | security`, not `critical`, so read "severity: critical" above as `security`.

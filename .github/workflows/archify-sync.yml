@@ -11,8 +11,16 @@ name: Sync vendored archify
 # Never merges. It opens (or force-updates) one PR from chore/archify-sync into next.
 #
 # TWO JOBS, ON PURPOSE: `prepare` builds and runs freshly downloaded, not-yet-reviewed upstream
-# code (the example regression tests), so it holds no write token and no secret. `publish` holds
-# the bot PAT and never runs upstream code: it applies prepare's patch, commits and pushes.
+# code (the example regression tests), so it holds no write token and no secret, and saves no
+# cache: a pnpm store saved from here would be restored, possibly tampered with, into later runs.
+# `publish` never runs upstream code and trusts nothing prepare hands it: it applies prepare's
+# patch, commits and pushes.
+#
+# NO PAT, AND SO NO CI ON THE SYNC PR UNTIL A MAINTAINER STARTS IT. publish uses GITHUB_TOKEN, and a
+# push or PR made with GITHUB_TOKEN starts no workflows. That is deliberate: test.yml would run the
+# vendored, unreviewed upstream code (upstream-examples.test.ts imports the vendored renderers) with
+# the turbo remote-cache token and signing key in its env. The PR body says CI has not run; a
+# maintainer reviews the vendored diff, then closes and reopens the PR to start it.
 
 on:
   schedule:
@@ -43,10 +51,19 @@ jobs:
           ref: next
           persist-credentials: false
 
-      - name: Set up pnpm and node
-        uses: ./.github/actions/mj-setup
+      # Not ./.github/actions/mj-setup: its setup-node has `cache: 'pnpm'`, whose post step would
+      # save this job's pnpm store (which the upstream code below can write to) into next's cache
+      # scope. Nothing in this job may save a cache, so both are spelled out as off.
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
         with:
-          install: 'false'
+          cache: 'false'
+
+      - name: Set up node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
 
       # noop | create | update; exits non-zero (blocked) when the open sync PR has someone else's
       # commits. Cheap and install-free, so a month with no release costs seconds.
@@ -79,10 +96,11 @@ jobs:
     if: needs.prepare.outputs.action == 'create' || needs.prepare.outputs.action == 'update'
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    # Every write goes through MJ_GH_BOT_GITHUB_TOKEN (as in generate-release-notes.yml): a PR or a
-    # push made with GITHUB_TOKEN triggers no CI, and this PR's CI is its review.
+    # GITHUB_TOKEN with exactly the two writes it makes: push chore/archify-sync, open or edit the
+    # PR. Not a PAT, so the push starts no CI on unreviewed upstream code (see the header).
     permissions:
-      contents: read
+      contents: write
+      pull-requests: write
     steps:
       - name: Checkout next
         uses: actions/checkout@v4
@@ -104,5 +122,5 @@ jobs:
       # Fails the run AFTER opening a draft PR when the shims or tests failed; see the script header.
       - name: Commit, push, and open or update the PR
         env:
-          GH_TOKEN: ${{ secrets.MJ_GH_BOT_GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: node .github/scripts/archify-sync.mjs publish --in "$RUNNER_TEMP/archify-sync"

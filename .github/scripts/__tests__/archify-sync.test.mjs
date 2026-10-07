@@ -3,10 +3,12 @@
 import { describe, it, expect } from 'vitest';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
     BOT,
     BODY_LIMIT,
+    CHECKS,
     SYNC_BRANCH,
     buildPrBody,
     changesetFor,
@@ -222,6 +224,28 @@ describe('PR body', () => {
         expect(body).toContain('truncated');
     });
 
+    it('stays under the limit when the release notes alone overflow it, keeping the marker', () => {
+        const releases = Array.from({ length: 20 }, (_, i) => REL(`v3.0.${i + 1}`, { body: 'n'.repeat(5900) }));
+        const body = buildPrBody({ ...base, releases });
+        expect(body.length).toBeLessThanOrEqual(BODY_LIMIT);
+        expect(body).toMatch(/^<!-- archify-sync tag=v3\.0\.1 -->/);
+        expect(body).toContain("hit GitHub's size limit");
+    });
+
+    it('says plainly that CI has not run, and how a maintainer starts it', () => {
+        const body = buildPrBody(base);
+        expect(body).toContain('CI has not run on this PR');
+        expect(body).toContain('closing and reopening this PR');
+    });
+
+    it('keeps upstream manifest text inert: publishedAt in one code span, no releaseNotes string', () => {
+        const manifest = { ...MANIFEST, publishedAt: '2026 | @evil [x](https://e.example) `y`', releaseNotes: '@evil https://e.example' };
+        const body = buildPrBody({ ...base, manifest, releases: [], releasesError: 'HTTP 403' });
+        expect(body).toContain('(published `2026   @evil [x](https://e.example)  y `)');
+        expect(body).not.toContain('@evil https://e.example');
+        expect(body).toContain('https://github.com/tt-a1i/archify/releases/tag/v3.0.1');
+    });
+
     it('says so when release notes could not be fetched', () => {
         expect(buildPrBody({ ...base, releases: [], releasesError: 'HTTP 403' })).toContain('Could not fetch them (HTTP 403)');
     });
@@ -240,29 +264,34 @@ describe('publish', () => {
     const META = {
         from: 'v3.0.0',
         to: 'v3.1.0',
-        manifest: MANIFEST,
-        checks: [{ name: 'Shim patch', status: 'passed' }],
+        manifest: { ...MANIFEST, version: '3.1.0', source: { ...MANIFEST.source, ref: 'v3.1.0' } },
+        checks: [{ name: CHECKS.shims, status: 'passed' }],
         diff: '',
         changeset: '.changeset/archify-sync-v3-1-0.md',
         needsWork: false,
     };
     const ok = (stdout = '') => ({ status: 0, stdout, stderr: '' });
 
-    /** Records every command; answers gh and the staged-files query. */
-    function setup({ meta = META, openPrs = [], staged = ['packages/AI/Diagrams/UPSTREAM.json', META.changeset] } = {}) {
+    /**
+     * Records every command; answers gh and the staged-files query (`git diff --name-status`, so a
+     * plain path is reported as modified). At the push it records what body.md held at that moment.
+     */
+    function setup({ meta = META, openPrs = [], releases = [], staged = ['packages/AI/Diagrams/UPSTREAM.json', META.changeset] } = {}) {
         const inDir = mkdtempSync(join(tmpdir(), 'archify-sync-pub-'));
         writeFileSync(join(inDir, 'meta.json'), JSON.stringify(meta));
         const calls = [];
+        const atPush = {};
         const run = (cmd, args) => {
             calls.push(`${cmd} ${args.join(' ')}`);
             if (cmd === 'gh' && args[1] === 'list') return ok(JSON.stringify(openPrs));
-            if (cmd === 'gh' && args[0] === 'api') return ok('[]');
+            if (cmd === 'gh' && args[0] === 'api') return ok(JSON.stringify(releases));
             if (cmd === 'gh' && args[1] === 'create') return ok('https://github.com/o/r/pull/8\n');
-            if (cmd === 'git' && args[0] === 'diff') return ok(staged.join('\n'));
+            if (cmd === 'git' && args[0] === 'diff') return ok(staged.map((p) => (p.includes('\t') ? p : `M\t${p}`)).join('\n'));
+            if (cmd === 'git' && args[0] === 'push') atPush.body = existsSync(join(inDir, 'body.md')) ? readFileSync(join(inDir, 'body.md'), 'utf8') : null;
             return ok();
         };
         const go = () => publish({ root: '/repo', inDir, run, repo: 'o/r', token: 't' });
-        return { go, calls, inDir };
+        return { go, calls, inDir, atPush };
     }
     const openPr = (over = {}) => ({
         number: 5, url: 'https://github.com/o/r/pull/5', isDraft: false, headRefOid: 'oldhead',
@@ -281,7 +310,7 @@ describe('publish', () => {
     });
 
     it('opens it as a draft and fails the run when a check failed', () => {
-        const { go, calls } = setup({ meta: { ...META, needsWork: true, checks: [{ name: 'Shim patch', status: 'FAILED' }] } });
+        const { go, calls } = setup({ meta: { ...META, needsWork: true, checks: [{ name: CHECKS.shims, status: 'FAILED' }] } });
         expect(go()).toBe(1);
         expect(calls.find((c) => c.startsWith('gh pr create'))).toContain('--draft');
     });
@@ -319,5 +348,74 @@ describe('publish', () => {
         expect(go).toThrow(`touches files a sync never writes: ${path}`);
         expect(calls.some((c) => c.startsWith('git commit') || c.includes(' commit '))).toBe(false);
         expect(calls.some((c) => c.startsWith('git push'))).toBe(false);
+    });
+
+    it('ignores a changeset path in meta.json and allows only the one recomputed from the tags', () => {
+        const action = '.github/actions/mj-setup/action.yml';
+        const tampered = setup({ meta: { ...META, changeset: action }, staged: ['packages/AI/Diagrams/UPSTREAM.json', action] });
+        expect(tampered.go).toThrow(`touches files a sync never writes: ${action}`);
+        expect(tampered.calls.some((c) => c.startsWith('git push'))).toBe(false);
+        // The real changeset still passes, whatever meta.json claimed.
+        expect(setup({ meta: { ...META, changeset: action } }).go()).toBe(0);
+    });
+
+    it.each([
+        ['as a delete plus an add (--no-renames)', ['D\t.github/CODEOWNERS', 'A\tpackages/AI/Diagrams/vendor/archify/x']],
+        ['as a rename line', ['R100\t.github/CODEOWNERS\tpackages/AI/Diagrams/vendor/archify/x']],
+        ['as a plain delete', ['D\t.github/CODEOWNERS']],
+    ])('refuses a rename from outside the allow-list, reported %s', (_, staged) => {
+        const { go, calls } = setup({ staged });
+        expect(go).toThrow('touches files a sync never writes: .github/CODEOWNERS');
+        expect(calls).toContain('git diff --cached --name-status --no-renames');
+        expect(calls.some((c) => c.startsWith('git push'))).toBe(false);
+    });
+
+    it.each([
+        ['a path in a tag', { to: 'v3.1.0/../../x' }],
+        ['a non-string tag', { from: ['v3.0.0'] }],
+        ['a manifest for another release', { manifest: MANIFEST }],
+        ['a manifest that fails validation', { manifest: { ...META.manifest, severity: '@evil' } }],
+    ])('refuses meta.json with %s before any git command', (_, over) => {
+        const { go, calls } = setup({ meta: { ...META, ...over } });
+        expect(go).toThrow(/refusing/);
+        expect(calls.filter((c) => c.startsWith('git'))).toEqual([]);
+    });
+
+    it('builds the body, fenced and sized, before the push', () => {
+        const releases = Array.from({ length: 20 }, (_, i) => ({
+            tag_name: `v3.0.${i + 1}`, html_url: `h/${i}`, published_at: '2026-09-28T00:00:00Z', body: `@someone <img src=x> ${'n'.repeat(5900)}`,
+        }));
+        const meta = { ...META, checks: [...META.checks, { name: '@evil [click](https://e.example)', status: 'FAILED', output: 'x' }] };
+        const { go, atPush } = setup({ meta, releases });
+        expect(go()).toBe(0);
+        expect(atPush.body).toMatch(/^<!-- archify-sync tag=v3\.1\.0 -->/);
+        expect(atPush.body.length).toBeLessThanOrEqual(BODY_LIMIT);
+        expect(atPush.body).toContain('```\n@someone <img src=x> nnn');
+        expect(atPush.body).not.toContain('@evil');
+    });
+});
+
+describe('archify-sync.yml', () => {
+    const wf = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../../workflows/archify-sync.yml'), 'utf8');
+    const job = (name) => wf.slice(wf.indexOf(`  ${name}:\n`)).split(/\n {2}(?=\S)/)[0];
+
+    it('uses no PAT or other secret: publish writes with GITHUB_TOKEN', () => {
+        expect(wf).not.toMatch(/secrets\./);
+        expect(wf).not.toContain('MJ_GH_BOT');
+        expect(job('publish')).toContain('GH_TOKEN: ${{ github.token }}');
+    });
+
+    it('grants publish exactly contents and pull-requests write', () => {
+        expect(job('publish')).toMatch(/permissions:\n {6}contents: write\n {6}pull-requests: write\n(?! {6}\S)/);
+    });
+
+    it('never saves a cache from prepare, which runs upstream code', () => {
+        const prepare = job('prepare').split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
+        expect(prepare).toMatch(/run: node \.github\/scripts\/archify-sync\.mjs prepare/);
+        expect(prepare).not.toContain('mj-setup');
+        expect(prepare).not.toContain('actions/cache');
+        expect(prepare).toContain("cache: 'false'");
+        expect(prepare).toContain('package-manager-cache: false');
+        expect(prepare.match(/cache:/g)).toHaveLength(2);
     });
 });

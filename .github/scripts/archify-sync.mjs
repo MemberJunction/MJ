@@ -14,10 +14,16 @@
  *    already open. Never merge.
  *
  * WHY TWO CI JOBS (`prepare`, then `publish`): step 3 executes code we downloaded minutes ago and
- * nobody has reviewed yet — that review is what the PR is for. So `prepare` holds no write token
- * and no secret, and `publish`, which holds MJ_GH_BOT_GITHUB_TOKEN, never runs upstream code: it
- * applies prepare's patch, refuses one that touches anything outside the package and the changeset,
- * then commits and pushes.
+ * nobody has reviewed yet — that review is what the PR is for. So `prepare` holds no write token,
+ * no secret, and saves no cache. `publish` never runs upstream code, and treats everything prepare
+ * hands it as untrusted (readMeta): it applies prepare's patch, refuses one that touches anything
+ * outside the package and the changeset, then commits and pushes.
+ *
+ * WHY GITHUB_TOKEN, NOT A PAT: a push or PR made with GITHUB_TOKEN starts no workflows, and here that
+ * is the point. CI on this PR runs the vendored upstream code (the example tests import the vendored
+ * renderers) with the turbo remote-cache secrets in its env, so it must not run before a human has
+ * read that code. The PR body says CI has not run; a maintainer starts it after the review by closing
+ * and reopening the PR.
  *
  * WHEN THE SHIMS OR TESTS FAIL the PR still opens, as a DRAFT with a banner, and the run then
  * fails. The PR is where the fix happens: it already carries the new upstream files, the release
@@ -31,7 +37,7 @@
  * Usage:
  *   node .github/scripts/archify-sync.mjs check                 # decision → $GITHUB_OUTPUT `action`
  *   node .github/scripts/archify-sync.mjs prepare --out DIR     # steps 2–4 in this checkout
- *   node .github/scripts/archify-sync.mjs publish --in DIR      # step 5 (needs GH_TOKEN)
+ *   node .github/scripts/archify-sync.mjs publish --in DIR      # step 5 (needs GH_TOKEN; CI passes GITHUB_TOKEN)
  *   node .github/scripts/archify-sync.mjs --dry-run [--root DIR]
  *       Rehearses all five steps against the live manifest. Writes only to a temp copy of the
  *       package, skips the build/test and every GitHub write, and prints the PR it would open.
@@ -59,6 +65,9 @@ export const BODY_LIMIT = 60000;
 
 const MARKER = /<!-- archify-sync tag=(v\d+\.\d+\.\d+) -->/;
 const TAG = /^v\d+\.\d+\.\d+$/;
+const isTag = (t) => typeof t === 'string' && TAG.test(t);
+/** The checks prepare reports. publish keeps only these names, so meta.json can't add text of its own to the PR body. */
+export const CHECKS = { shims: 'Shim patch (`archify-shims.patch`)', lite: 'Lite template', tests: 'Package build and upstream example tests' };
 
 // ─── Pure logic (unit-tested) ────────────────────────────────────────────────────────────────
 
@@ -200,9 +209,13 @@ export function clip(text, max, where) {
     return `${text.slice(0, Math.max(0, max))}\n… truncated ${text.length - max} characters; ${where}\n`;
 }
 
+/** Upstream text that has to sit inline (a table cell): one code span nothing can close or split, so markup and @-mentions stay inert. */
+export const inline = (text) => `\`${String(text).replace(/[`|\r\n]/g, ' ')}\``;
+
 /**
- * The PR description. Upstream text (release notes, the diff) goes inside code fences so its
- * markup, links and @-mentions stay inert in our repository.
+ * The PR description. Upstream text (release notes, the diff) goes inside code fences, and the
+ * little that must sit inline goes through inline(), so its markup, links and @-mentions stay inert
+ * in our repository. Never longer than BODY_LIMIT, so GitHub can't reject it after the push.
  */
 export function buildPrBody({ from, to, manifest, checks, diff, releases, releasesError }) {
     const failed = checks.filter((c) => c.status === 'FAILED');
@@ -220,6 +233,9 @@ export function buildPrBody({ from, to, manifest, checks, diff, releases, releas
         lines.push('> [!IMPORTANT]', `> Upstream marks this release \`${manifest.severity}\`. Review it promptly.`, '');
     }
     lines.push(
+        '> [!IMPORTANT]',
+        "> **CI has not run on this PR, on purpose.** The sync opens and updates it with `GITHUB_TOKEN`, which starts no workflows, because CI would run the vendored upstream code with this repository's secrets in reach before anyone has read it. Review the diff under `vendor/archify/` first, then start CI by closing and reopening this PR. (Pushing a commit also starts CI, but then the monthly job stops instead of updating this branch.)",
+        '',
         '> [!WARNING]',
         "> **The upstream instruction text below is prompt content headed for customers' agents.** Whatever we carry from `SKILL.md` and `references/` into the Architecture & Flow Diagrams skill's `Instructions` runs inside every customer's agents, so it is a supply-chain and prompt-injection surface. Read every changed line before folding any of it in. The vendored renderer under `vendor/archify/` is third-party code and gets normal code review.",
         '',
@@ -227,7 +243,7 @@ export function buildPrBody({ from, to, manifest, checks, diff, releases, releas
         '',
         '| | |',
         '|---|---|',
-        `| Version | \`${from}\` → \`${to}\` (published ${manifest.publishedAt}) |`,
+        `| Version | \`${from}\` → \`${to}\` (published ${inline(manifest.publishedAt)}) |`,
         `| Severity | \`${manifest.severity}\` |`,
         `| Zip SHA-256 | \`${manifest.artifact.sha256}\`, verified against [stable.json](https://tt-a1i.github.io/archify/skill-updates/archify/stable.json) |`,
         `| Tree SHA | \`${manifest.source.treeSha}\` |`,
@@ -254,8 +270,10 @@ export function buildPrBody({ from, to, manifest, checks, diff, releases, releas
         'Shown verbatim in code blocks so upstream markup and @-mentions stay inert.',
         '',
     );
-    if (releasesError) lines.push(`Could not fetch them (${releasesError}). Read them at ${manifest.releaseNotes} and ${compare}.`, '');
-    else if (!releases.length) lines.push(`None found between \`${from}\` and \`${to}\`. See ${manifest.releaseNotes}.`, '');
+    // Built from the validated tag rather than stable.json's own `releaseNotes` string.
+    const notesUrl = `${UPSTREAM_REPO}/releases/tag/${to}`;
+    if (releasesError) lines.push(`Could not fetch them (${releasesError}). Read them at ${notesUrl} and ${compare}.`, '');
+    else if (!releases.length) lines.push(`None found between \`${from}\` and \`${to}\`. See ${notesUrl}.`, '');
     for (const r of releases) {
         lines.push(`#### [${r.tag_name}](${r.html_url}) (${(r.published_at || '').slice(0, 10)})`, '', fence(clip(r.body || '(no release notes)', 6000, `see ${r.html_url}`)), '');
     }
@@ -270,7 +288,12 @@ export function buildPrBody({ from, to, manifest, checks, diff, releases, releas
     const diffText = diff.trim()
         ? fence(clip(diff, BODY_LIMIT - fixed - 200, "the full diff is in this PR's Files tab under vendor/archify/"), 'diff')
         : 'No changes to `SKILL.md` or `references/`.';
-    return [...lines, ...diffHead, diffText, ...footer].join('\n');
+    const body = [...lines, ...diffHead, diffText, ...footer].join('\n');
+    // The diff is clipped to fit above; this catches the rest (many releases, long check output).
+    // A cut inside a fence leaves it open to the end, which only makes more of the text inert.
+    if (body.length <= BODY_LIMIT) return body;
+    const note = `\n… truncated: this description hit GitHub's size limit. Release notes: ${compare}. Full diff: the Files tab.\n`;
+    return body.slice(0, BODY_LIMIT - note.length) + note;
 }
 
 // ─── I/O ─────────────────────────────────────────────────────────────────────────────────────
@@ -341,12 +364,12 @@ export async function prepare({ root, run = exec, dryRun = false }) {
     writeFileSync(join(root, changeset.path), changeset.text);
 
     const checks = [
-        check('Shim patch (`archify-shims.patch`)', shims.ok, shims.output),
-        check('Lite template', lite.status === 0, `${lite.stdout}${lite.stderr}`),
+        check(CHECKS.shims, shims.ok, shims.output),
+        check(CHECKS.lite, lite.status === 0, `${lite.stdout}${lite.stderr}`),
     ];
 
     // Step 3: re-render every upstream example (the package's own test suite does it).
-    const testName = 'Package build and upstream example tests';
+    const testName = CHECKS.tests;
     if (dryRun) {
         checks.push({ name: testName, status: 'not run (dry run)' });
     } else {
@@ -380,10 +403,36 @@ export function assembleBody(meta, run) {
     return buildPrBody({ ...meta, releases, releasesError });
 }
 
+/**
+ * meta.json comes from the job that just ran unreviewed upstream code, which could have rewritten it.
+ * So nothing in it passes straight through: the tags must be strict tags, the manifest is validated
+ * again and must name `to`, checks survive only under names prepare uses, and the changeset path is
+ * recomputed from the tags.
+ */
+export function readMeta(inDir) {
+    const m = JSON.parse(readFileSync(join(inDir, 'meta.json'), 'utf8'));
+    if (!isTag(m?.from) || !isTag(m.to)) throw new Error(`meta.json names tags ${JSON.stringify([m?.from, m?.to]).slice(0, 200)}; refusing it`);
+    const manifest = validateManifest(m.manifest);
+    if (manifest.source.ref !== m.to) throw new Error(`meta.json's manifest is for ${manifest.source.ref}, not ${m.to}; refusing it`);
+    const names = Object.values(CHECKS);
+    const checks = (Array.isArray(m.checks) ? m.checks : [])
+        .filter((c) => names.includes(c?.name) && ['passed', 'FAILED'].includes(c.status))
+        .map((c) => ({ name: c.name, status: c.status, output: typeof c.output === 'string' ? c.output : '' }));
+    return {
+        from: m.from,
+        to: m.to,
+        manifest,
+        checks,
+        diff: typeof m.diff === 'string' ? m.diff : '',
+        changeset: changesetFor(m.from, m.to).path,
+        needsWork: m.needsWork !== false || checks.some((c) => c.status === 'FAILED'),
+    };
+}
+
 /** Step 5: commit prepare's patch onto a fresh `next`, push, open or update the PR. Returns the exit code. */
 export function publish({ root, inDir, run = exec, repo = repoSlug(), token = process.env.GH_TOKEN }) {
     if (!token) throw new Error('GH_TOKEN is required to publish');
-    const meta = JSON.parse(readFileSync(join(inDir, 'meta.json'), 'utf8'));
+    const meta = readMeta(inDir);
     // Asked again here, immediately before the force-push, rather than trusted from `check`.
     const d = decide({ pinnedTag: meta.from, stableRef: meta.to, openPr: readOpenPr(run, repo) });
     if (d.action === 'noop') return console.log(d.reason), 0;
@@ -392,24 +441,30 @@ export function publish({ root, inDir, run = exec, repo = repoSlug(), token = pr
     const git = (...args) => must(run, 'git', args, { cwd: root });
     git('checkout', '-B', SYNC_BRANCH);
     git('apply', '--index', join(inDir, 'changes.patch'));
-    // prepare ran upstream code, so its patch may only touch what a sync writes.
+    // prepare ran upstream code, so its patch may only touch what a sync writes. Every path on every
+    // line is checked, deletions included; --no-renames lists a rename as its delete plus its add,
+    // so a rename can't remove a file unseen. A path git quotes (odd characters) fails closed.
     const allowed = [`${PKG_DIR}/UPSTREAM.json`, LITE_TEMPLATE, meta.changeset];
-    const stray = git('diff', '--cached', '--name-only').stdout.split('\n')
-        .filter((p) => p && !p.startsWith(`${VENDOR_DIR}/`) && !allowed.includes(p));
+    const stray = git('diff', '--cached', '--name-status', '--no-renames').stdout.split('\n')
+        .flatMap((line) => line.split('\t').slice(1))
+        .filter((p) => !p.startsWith(`${VENDOR_DIR}/`) && !allowed.includes(p));
     if (stray.length) throw new Error(`the prepared patch touches files a sync never writes: ${stray.join(', ')}. Refusing to commit it.`);
 
+    // The body is built (and capped at BODY_LIMIT) before the push, so GitHub rejecting it can't
+    // leave a pushed branch with no PR.
     const title = prTitle(meta.from, meta.to);
+    const bodyFile = join(inDir, 'body.md');
+    writeFileSync(bodyFile, assembleBody(meta, run));
+
     git('-c', `user.name=${BOT.name}`, '-c', `user.email=${BOT.email}`, 'commit', '-q', '-m', title,
         '-m', `Automated by .github/workflows/archify-sync.yml from ${UPSTREAM_REPO}/releases/tag/${meta.to}.`);
-    // Pushed with the bot PAT, not GITHUB_TOKEN: a GITHUB_TOKEN push to an open PR triggers no CI.
+    // GITHUB_TOKEN on purpose (see the header): this push starts no CI on unreviewed upstream code.
     git('remote', 'set-url', 'origin', `https://x-access-token:${token}@github.com/${repo}.git`);
     // The lease pins the head we just inspected, so a commit pushed since then is never overwritten.
     // No open PR means anything on the branch is debris from a dead run or a closed PR.
     const lease = d.action === 'update' ? `--force-with-lease=refs/heads/${SYNC_BRANCH}:${d.pr.headRefOid}` : '--force';
     git('push', lease, 'origin', `HEAD:refs/heads/${SYNC_BRANCH}`);
 
-    const bodyFile = join(inDir, 'body.md');
-    writeFileSync(bodyFile, assembleBody(meta, run));
     const gh = (...args) => must(run, 'gh', [...args, '--repo', repo]);
     if (d.action === 'create') {
         const r = gh('pr', 'create', '--base', BASE_BRANCH, '--head', SYNC_BRANCH, '--title', title, '--body-file', bodyFile, ...(meta.needsWork ? ['--draft'] : []));
