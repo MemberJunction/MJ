@@ -133,6 +133,8 @@ describe('CreateMermaidDiagramAction', () => {
         [{ Code: 'x'.repeat(100_001) }, 'CODE_TOO_LARGE'],
         [{ Code: 'flowchart TD\nA["<script>"]-->B' }, 'INVALID_CODE'],
         [{ Code: 'flowchart TD\nA["<img src=x onerror=alert(1)>"]-->B' }, 'INVALID_CODE'],
+        [{ Code: 'flowchart TD\nA["<img src=\'<\' onerror=alert(1)>"]-->B' }, 'INVALID_CODE'],
+        [{ Code: 'flowchart TD\nA["<img alt=\'>\' onerror=alert(1)>"]-->B' }, 'INVALID_CODE'],
     ])('rejects bad input %# without rendering', async (inputs, resultCode) => {
         const result = await run(inputs);
 

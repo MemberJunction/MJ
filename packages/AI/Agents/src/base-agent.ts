@@ -1251,7 +1251,10 @@ export class BaseAgent {
             // in, a base64 document or page (hundreds of KB) would land verbatim in the next prompt.
             const fileRef = ParseFileOutputRef(param.Value);
             if (fileRef?.fileData && fileRef.fileData.length > BaseAgent.LARGE_BINARY_THRESHOLD) {
-                const { fileData: _inlineBytes, ...withoutBytes } = param.Value as Record<string, unknown>;
+                // From the parsed ref when the action sent it as a JSON string; spreading the string itself would
+                // explode into one key per character.
+                const source = typeof param.Value === 'object' && param.Value !== null ? param.Value as Record<string, unknown> : { ...fileRef };
+                const { fileData: _inlineBytes, ...withoutBytes } = source;
                 sanitizedParams.push({
                     Name: param.Name,
                     Type: param.Type,

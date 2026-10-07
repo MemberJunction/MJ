@@ -120,7 +120,8 @@ describe('MermaidRenderer', () => {
 
         const config = MermaidRenderer.EffectiveConfig(hostile, 'default');
 
-        expect(config).toEqual({
+        const { secure, ...rest } = config as { secure: string[] } & Record<string, unknown>;
+        expect(rest).toEqual({
             fontSize: 14,
             flowchart: { curve: 'linear', htmlLabels: false },
             theme: 'default',
@@ -128,6 +129,8 @@ describe('MermaidRenderer', () => {
             securityLevel: 'strict',
             htmlLabels: false,
         });
+        // Diagram code (%%{init}%% directives, a config: header) may not override what was pinned here.
+        expect(secure).toEqual(expect.arrayContaining(['htmlLabels', 'flowchart', 'dompurifyConfig', 'themeCSS']));
     });
 
     it('locks every new page down: no network from its context, and a crashed page is dropped', async () => {

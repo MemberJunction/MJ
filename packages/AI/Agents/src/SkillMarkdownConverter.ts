@@ -365,8 +365,65 @@ function unquote(raw: string): string {
     return text;
 }
 
-/** A one-line list: optional `[...]`, comma-separated, each item unquoted. */
+/**
+ * A one-line list: optional `[...]`, comma-separated, each item unquoted. Commas inside a quoted item
+ * belong to it (`["Get, Set Var", Other]` is two names). A value quoted as a whole (`"A, B"`) is unwrapped
+ * first and then split, which is how MJ's earlier parser read it.
+ */
 function splitInlineList(text: string): string[] {
-    const inner = text.trim().replace(/^\[/, '').replace(/\]$/, '');
-    return inner.split(',').map(unquote).filter(item => item.length > 0);
+    const trimmed = text.trim();
+    const bracketed = trimmed.startsWith('[') && trimmed.endsWith(']');
+    if (!bracketed && isWhollyQuoted(trimmed)) {
+        return unquote(trimmed).split(',').map(item => item.trim()).filter(item => item.length > 0);
+    }
+    return splitOutsideQuotes(bracketed ? trimmed.slice(1, -1) : trimmed).map(unquote).filter(item => item.length > 0);
+}
+
+/** One quoted string with no unescaped matching quote inside it. */
+function isWhollyQuoted(text: string): boolean {
+    const quote = text[0];
+    if (text.length < 2 || (quote !== '"' && quote !== "'") || text[text.length - 1] !== quote) {
+        return false;
+    }
+    return splitOutsideQuotes(text).length === 1 && closingQuoteIndex(text, 0) === text.length - 1;
+}
+
+/** Splits on commas that are not inside a quoted item; quotes are kept for `unquote`. */
+function splitOutsideQuotes(text: string): string[] {
+    const items: string[] = [];
+    let start = 0;
+    let index = 0;
+    while (index < text.length) {
+        const ch = text[index];
+        if (ch === '"' || ch === "'") {
+            index = closingQuoteIndex(text, index) + 1;
+        } else if (ch === ',') {
+            items.push(text.slice(start, index));
+            start = ++index;
+        } else {
+            index++;
+        }
+    }
+    items.push(text.slice(start));
+    return items;
+}
+
+/** Index of the quote closing the one at `open` (`\"` escapes in double quotes, `''` in single); end of text if none. */
+function closingQuoteIndex(text: string, open: number): number {
+    const quote = text[open];
+    let index = open + 1;
+    while (index < text.length) {
+        if (quote === '"' && text[index] === '\\') {
+            index += 2;
+        } else if (text[index] === quote) {
+            if (quote === "'" && text[index + 1] === "'") {
+                index += 2;
+            } else {
+                return index;
+            }
+        } else {
+            index++;
+        }
+    }
+    return text.length - 1;
 }

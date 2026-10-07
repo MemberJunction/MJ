@@ -60,6 +60,18 @@ const ALLOWED_CONFIG_SECTIONS: Readonly<Record<string, readonly string[]>> = {
 };
 const ALLOWED_CONFIG_TOP_LEVEL: readonly string[] = ['fontFamily', 'fontSize', 'logLevel'];
 
+/**
+ * Keys diagram code may not override. Mermaid also reads config from the code itself (`%%{init: ...}%%`
+ * directives and a `---\nconfig:` header) and lets those override everything except the keys in its
+ * `secure` list. Adding these closes that route around the allow-list: label HTML, the sanitizer's
+ * config, page CSS and fonts, and every diagram section (where per-diagram `htmlLabels` lives). Mermaid
+ * merges this list into its own defaults (securityLevel, startOnLoad, maxTextSize, ...), it never replaces them.
+ */
+const SECURE_CONFIG_KEYS: readonly string[] = [
+    'htmlLabels', 'dompurifyConfig', 'themeCSS', 'themeVariables', 'fontFamily',
+    'flowchart', 'sequence', 'er', 'class', 'state', 'gantt', 'mindmap',
+];
+
 /** A string option may carry names and numbers, never CSS or markup syntax. */
 const SAFE_CONFIG_STRING = /^[\w .,'"-]{1,200}$/;
 
@@ -162,7 +174,10 @@ export class MermaidRenderer extends BaseSingleton<MermaidRenderer> implements I
             if (Object.keys(kept).length > 0) allowed[section] = kept;
         }
         const flowchart = (allowed.flowchart ?? {}) as Record<string, unknown>;
-        return { ...allowed, theme, startOnLoad: false, securityLevel: 'strict', htmlLabels: false, flowchart: { ...flowchart, htmlLabels: false } };
+        return {
+            ...allowed, theme, startOnLoad: false, securityLevel: 'strict', htmlLabels: false,
+            flowchart: { ...flowchart, htmlLabels: false }, secure: [...SECURE_CONFIG_KEYS],
+        };
     }
 
     /**

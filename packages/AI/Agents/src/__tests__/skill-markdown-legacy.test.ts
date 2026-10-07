@@ -169,3 +169,16 @@ describe('Serialize -> Parse is exact for awkward values', () => {
         expect(SkillMarkdownConverter.Parse(md).frontmatter.description).toBe(description);
     });
 });
+
+describe('inline lists with quoted items', () => {
+    it.each([
+        ['actions: ["Get, Set Var", Other]', 'actions', ['Get, Set Var', 'Other']],
+        ["actions: ['It''s, fine', Next]", 'actions', ["It's, fine", 'Next']],
+        ['codeOnlyActions: "Send Email, Fast"', 'codeOnlyActions', ['Send Email', 'Fast']],
+        ['codeOnlyActions: Generate PDF, Send Email', 'codeOnlyActions', ['Generate PDF', 'Send Email']],
+    ])('%s', (line, key, expected) => {
+        const md = `---\nname: S\ndescription: D\n${line}\n---\nBody`;
+        const parsed = SkillMarkdownConverter.Parse(md);
+        expect((parsed.frontmatter as unknown as Record<string, unknown>)[key]).toEqual(expected);
+    });
+});

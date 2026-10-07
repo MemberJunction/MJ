@@ -48,14 +48,13 @@ describe('ReadSkillFileAction', () => {
         views.results = [];
     });
 
-    it('returns the file content once, as the Content output; the Message only says what was read', async () => {
+    it('returns the file content once, as the Message (realtime and MCP callers forward only the Message)', async () => {
         views.results = [[{ Path: 'references/forms.md', Content: '# Forms' }]];
         const { result, params } = await run({ Skill: "O'Brien Skill", Path: './references/forms.md' }, { ActiveSkillIDs: [ACTIVE] });
 
         expect(result).toMatchObject({ Success: true, ResultCode: 'SUCCESS' });
-        expect(result.Message).not.toContain('# Forms');
-        expect(result.Message).toContain('references/forms.md');
-        expect(params.Params).toContainEqual({ Name: 'Content', Type: 'Output', Value: '# Forms' });
+        expect(result.Message).toBe('# Forms');
+        expect(params.Params.filter((p) => p.Type === 'Output')).toEqual([]);
         expect(views.calls[0].ExtraFilter).toBe(`Skill=N'O''Brien Skill' AND SkillID IN ('${ACTIVE}') AND Path=N'references/forms.md'`);
         expect(views.calls[0].Fields).toEqual(['Path', 'Content']);
     });

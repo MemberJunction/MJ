@@ -21,7 +21,7 @@ const MAX_SPEC_CHARS = 500_000;
  * A spec that fails comes back as `VALIDATION_FAILED` with archify's diagnostics (code, subject, evidence,
  * supported fixes) so a Loop agent can repair it and call again; the agent's iteration limits cap that loop.
  *
- * On success it returns a self-contained SVG (in the `SVG` output param) for embedding in
+ * On success it returns a self-contained SVG (as the Message, like Create Mermaid Diagram) for embedding in
  * reports and markdown, and the standalone interactive page as a file output with visibility `Always`, so
  * it surfaces as a normal artifact even from an agent whose own artifacts are `System Only`.
  */
@@ -49,16 +49,15 @@ export class RenderArchitectureDiagramAction extends BaseAction {
             }
         }
         const svg = SVGUtils.SanitizeSVG(rendered.Svg);
-        if (input.Output !== 'html') {
-            params.Params.push({ Name: 'SVG', Type: 'Output', Value: svg });
-        }
         if (input.Output !== 'svg') {
             params.Params.push({ Name: 'FileOutput', Type: 'Output', Value: this.htmlFile(rendered.Html, rendered.Title ?? input.DiagramType) });
         }
-        // The SVG goes out once, in its output param; repeating it in the Message doubled it in the prompt.
-        const delivered = [input.Output !== 'html' ? 'the SVG is in the SVG output parameter' : null,
-                           input.Output !== 'svg' ? 'the interactive page is attached as a file' : null].filter(Boolean).join('; ');
-        return { Success: true, ResultCode: 'SUCCESS', Message: `Rendered the ${input.DiagramType} diagram: ${delivered}.` };
+        // The SVG is the Message, once (realtime and MCP callers forward only the Message); the page is a file.
+        return {
+            Success: true,
+            ResultCode: 'SUCCESS',
+            Message: input.Output === 'html' ? `Rendered the ${input.DiagramType} diagram; the interactive page is attached as a file.` : svg,
+        };
     }
 
     private readInput(params: RunActionParams):

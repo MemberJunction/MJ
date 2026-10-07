@@ -57,9 +57,9 @@ describe('RenderArchitectureDiagramAction', () => {
         const { result, outputs } = await run({ DiagramType: 'Architecture', SpecJSON: JSON.stringify(SPEC) });
 
         expect(renderMock).toHaveBeenCalledWith('architecture', SPEC);
-        expect(result).toMatchObject({ Success: true, ResultCode: 'SUCCESS' });
-        expect(result.Message).not.toContain('<svg');
-        expect(outputs.find((p) => p.Name === 'SVG')?.Value).toBe(RENDERED.Svg);
+        // The SVG is the Message, once: realtime and MCP callers forward only the Message.
+        expect(result).toMatchObject({ Success: true, ResultCode: 'SUCCESS', Message: RENDERED.Svg });
+        expect(outputs.find((p) => p.Name === 'SVG')).toBeUndefined();
         const file = outputs.find((p) => p.Name === 'FileOutput')?.Value as Record<string, unknown>;
         expect(file).toMatchObject({ fileName: 'order-flow.html', mimeType: 'text/html', visibility: 'Always' });
         expect(Buffer.from(String(file.fileData), 'base64').toString('utf8')).toBe(RENDERED.Html);
@@ -74,7 +74,7 @@ describe('RenderArchitectureDiagramAction', () => {
     });
 
     it.each([
-        ['svg', ['SVG']],
+        ['svg', []],
         ['html', ['FileOutput']],
     ])('returns only what Output=%s asks for', async (output, names) => {
         renderMock.mockResolvedValue(RENDERED);
@@ -82,7 +82,7 @@ describe('RenderArchitectureDiagramAction', () => {
         const { result, outputs } = await run({ DiagramType: 'architecture', SpecJSON: SPEC, Output: output });
 
         expect(outputs.map((p) => p.Name)).toEqual(names);
-        expect(result.Message).toContain(output === 'svg' ? 'SVG output parameter' : 'attached as a file');
+        expect(result.Message === RENDERED.Svg).toBe(output === 'svg');
     });
 
     it('hands archify diagnostics back verbatim so the agent can repair the spec', async () => {

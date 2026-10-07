@@ -38,20 +38,6 @@
           "primaryKey": {
             "ID": "23626ACF-0890-4BD5-85AF-D8DBA0926227"
           }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "Content",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "The file's text content.",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "5DC7567E-A606-414D-B3D0-8F6E2659EF40"
-          }
         }
       ]
     },

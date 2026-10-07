@@ -19,7 +19,7 @@ This skill costs more than Mermaid: a spec of a few kilobytes, plus a repair rou
   - `brand-marks`: the product-logo catalog.
 - **Render Architecture Diagram**: `DiagramType`, `SpecJSON`, optional `Output` (`svg`, `html` or `both`; default `both`), and optional `BrowserCheck` (`true` also loads the page in a headless browser and fails if the diagram does not lay out).
   - Result codes are `SUCCESS`, `VALIDATION_FAILED`, `INVALID_INPUT`, `RENDER_FAILED`, `TIMEOUT` and `BROWSER_CHECK_FAILED`.
-  - On success the `SVG` output parameter holds the inline SVG, and the interactive HTML comes back as a file output.
+  - On success the result Message is the inline SVG, and the interactive HTML comes back as a file output.
 
 ## Step 1: Choose the Type
 
@@ -188,7 +188,7 @@ Do not keep making blind coordinate changes. Never claim a diagram rendered when
 
 ## Step 5: Deliver
 
-- **The SVG is for embedding.** Paste the `SVG` output exactly as returned. Do not edit it or regenerate it by hand.
+- **The SVG is for embedding.** Paste the SVG (the result Message) exactly as returned. Do not edit it or regenerate it by hand.
   - **In an HTML document:** wrap it in a scrollable container such as `<div class="svg-scroll-wrapper">…</div>`.
   - **In markdown** (a chat message, or a Data artifact's `plan`): put it in a fenced block that opens with a line containing only ```` ```svg ````, so the markdown renderer draws it intact.
     - A raw `<svg>` pasted into markdown is fragile: blank lines and inline styles can break it.

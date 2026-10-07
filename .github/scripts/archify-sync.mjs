@@ -245,7 +245,7 @@ export function buildPrBody({ from, to, manifest, checks, diff, releases, releas
         '|---|---|',
         `| Version | \`${from}\` → \`${to}\` (published ${inline(manifest.publishedAt)}) |`,
         `| Severity | \`${manifest.severity}\` |`,
-        `| Zip SHA-256 | \`${manifest.artifact.sha256}\`, verified against [stable.json](https://tt-a1i.github.io/archify/skill-updates/archify/stable.json) |`,
+        `| Zip SHA-256 | \`${manifest.artifact.sha256}\`, as listed in [stable.json](https://tt-a1i.github.io/archify/skill-updates/archify/stable.json), re-fetched when this PR was published. Review the vendored diff itself; publishing does not re-check the files against the zip. |`,
         `| Tree SHA | \`${manifest.source.treeSha}\` |`,
         `| Upstream changes | ${compare} |`,
         '',
@@ -429,10 +429,31 @@ export function readMeta(inDir) {
     };
 }
 
+/**
+ * meta.json is shaped correctly but still untrusted (readMeta). Its two load-bearing claims are checked
+ * against sources the upstream code never touched: the pinned tag must be what UPSTREAM.json on the
+ * checked-out base says, and the manifest must equal stable.json fetched again now.
+ */
+export function verifyAgainstTrustedSources(meta, root, run) {
+    const upstream = readUpstream(root);
+    if (meta.from !== upstream.tag) {
+        throw new Error(`meta.json says the pinned tag is ${meta.from}, but UPSTREAM.json on ${BASE_BRANCH} pins ${upstream.tag}; refusing it`);
+    }
+    const fresh = validateManifest(JSON.parse(must(run, 'curl', ['-fsSL', '--max-time', '30', upstream.manifest]).stdout));
+    const same = fresh.source.ref === meta.manifest.source.ref
+        && fresh.source.treeSha === meta.manifest.source.treeSha
+        && fresh.artifact.sha256 === meta.manifest.artifact.sha256
+        && fresh.version === meta.manifest.version;
+    if (!same) {
+        throw new Error(`meta.json's manifest (${meta.manifest.source.ref}, ${meta.manifest.artifact.sha256}) does not match stable.json fetched now (${fresh.source.ref}, ${fresh.artifact.sha256}); refusing it`);
+    }
+}
+
 /** Step 5: commit prepare's patch onto a fresh `next`, push, open or update the PR. Returns the exit code. */
 export function publish({ root, inDir, run = exec, repo = repoSlug(), token = process.env.GH_TOKEN }) {
     if (!token) throw new Error('GH_TOKEN is required to publish');
     const meta = readMeta(inDir);
+    verifyAgainstTrustedSources(meta, root, run);
     // Asked again here, immediately before the force-push, rather than trusted from `check`.
     const d = decide({ pinnedTag: meta.from, stableRef: meta.to, openPr: readOpenPr(run, repo) });
     if (d.action === 'noop') return console.log(d.reason), 0;
@@ -467,7 +488,14 @@ export function publish({ root, inDir, run = exec, repo = repoSlug(), token = pr
 
     const gh = (...args) => must(run, 'gh', [...args, '--repo', repo]);
     if (d.action === 'create') {
-        const r = gh('pr', 'create', '--base', BASE_BRANCH, '--head', SYNC_BRANCH, '--title', title, '--body-file', bodyFile, ...(meta.needsWork ? ['--draft'] : []));
+        let r;
+        try {
+            r = gh('pr', 'create', '--base', BASE_BRANCH, '--head', SYNC_BRANCH, '--title', title, '--body-file', bodyFile, ...(meta.needsWork ? ['--draft'] : []));
+        } catch (error) {
+            // GITHUB_TOKEN can open a PR only when the repo (or org) allows it. Say so, since the branch is pushed.
+            throw new Error(`${error.message}\nThe ${SYNC_BRANCH} branch is pushed but no PR was opened. If this is a permissions error, enable `
+                + '"Allow GitHub Actions to create and approve pull requests" (Settings → Actions → General), then re-run the workflow.');
+        }
         console.log(`Opened ${r.stdout.trim()}`);
     } else {
         const n = String(d.pr.number);

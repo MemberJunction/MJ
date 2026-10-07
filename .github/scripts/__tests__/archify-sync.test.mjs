@@ -276,23 +276,45 @@ describe('publish', () => {
      * Records every command; answers gh and the staged-files query (`git diff --name-status`, so a
      * plain path is reported as modified). At the push it records what body.md held at that moment.
      */
-    function setup({ meta = META, openPrs = [], releases = [], staged = ['packages/AI/Diagrams/UPSTREAM.json', META.changeset] } = {}) {
+    function setup({ meta = META, openPrs = [], releases = [], staged = ['packages/AI/Diagrams/UPSTREAM.json', META.changeset], pinned = META.from, stable = META.manifest, prCreate = null } = {}) {
         const inDir = mkdtempSync(join(tmpdir(), 'archify-sync-pub-'));
         writeFileSync(join(inDir, 'meta.json'), JSON.stringify(meta));
+        // The trusted side: the checked-out base's UPSTREAM.json, and stable.json as fetched at publish.
+        const root = mkdtempSync(join(tmpdir(), 'archify-sync-root-'));
+        mkdirSync(join(root, 'packages/AI/Diagrams'), { recursive: true });
+        writeFileSync(join(root, 'packages/AI/Diagrams/UPSTREAM.json'), JSON.stringify({ tag: pinned, manifest: 'https://example.test/stable.json' }));
         const calls = [];
         const atPush = {};
         const run = (cmd, args) => {
             calls.push(`${cmd} ${args.join(' ')}`);
             if (cmd === 'gh' && args[1] === 'list') return ok(JSON.stringify(openPrs));
             if (cmd === 'gh' && args[0] === 'api') return ok(JSON.stringify(releases));
-            if (cmd === 'gh' && args[1] === 'create') return ok('https://github.com/o/r/pull/8\n');
+            if (cmd === 'curl') return ok(JSON.stringify(stable));
+            if (cmd === 'gh' && args[1] === 'create') return prCreate ?? ok('https://github.com/o/r/pull/8\n');
             if (cmd === 'git' && args[0] === 'diff') return ok(staged.map((p) => (p.includes('\t') ? p : `M\t${p}`)).join('\n'));
             if (cmd === 'git' && args[0] === 'push') atPush.body = existsSync(join(inDir, 'body.md')) ? readFileSync(join(inDir, 'body.md'), 'utf8') : null;
             return ok();
         };
-        const go = () => publish({ root: '/repo', inDir, run, repo: 'o/r', token: 't' });
+        const go = () => publish({ root, inDir, run, repo: 'o/r', token: 't' });
         return { go, calls, inDir, atPush };
     }
+    it('refuses a meta.json whose pinned tag differs from UPSTREAM.json on the base', () => {
+        const { go, calls } = setup({ pinned: 'v2.9.0' });
+        expect(go).toThrow(/UPSTREAM\.json on .* pins v2\.9\.0/);
+        expect(calls.some((c) => c.startsWith('git push'))).toBe(false);
+    });
+
+    it('refuses a meta.json whose manifest differs from stable.json fetched at publish', () => {
+        const { go, calls } = setup({ stable: { ...META.manifest, artifact: { ...META.manifest.artifact, sha256: 'f'.repeat(64) } } });
+        expect(go).toThrow(/does not match stable\.json/);
+        expect(calls.some((c) => c.startsWith('git push'))).toBe(false);
+    });
+
+    it('names the repo setting when GitHub refuses to open the PR', () => {
+        const { go } = setup({ prCreate: { status: 1, stdout: '', stderr: 'GraphQL: GitHub Actions is not permitted to create or approve pull requests' } });
+        expect(go).toThrow(/Allow GitHub Actions to create and approve pull requests/);
+    });
+
     const openPr = (over = {}) => ({
         number: 5, url: 'https://github.com/o/r/pull/5', isDraft: false, headRefOid: 'oldhead',
         body: '<!-- archify-sync tag=v3.0.1 -->', commits: [{ authors: [{ email: BOT.email }] }], ...over,

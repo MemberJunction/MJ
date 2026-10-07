@@ -1218,7 +1218,7 @@ One or two archify diagrams per report is plenty. Each costs a spec and possibly
    - Keep every node, edge, and label.
    - Call the action again.
    - Stop after three repair rounds. If the spec still fails, use `Create Mermaid Diagram` for that figure instead.
-5. **Embed the returned SVG** (the `SVG` output) in the report inside `<div class="svg-scroll-wrapper">`, exactly as it was returned.
+5. **Embed the returned SVG** (the action's result Message) in the report inside `<div class="svg-scroll-wrapper">`, exactly as it was returned.
    - Never put the spec JSON, or Mermaid source, in the report.
    - Never hand-write or edit the SVG.
 6. **Mention the interactive version.** The action also returns an interactive HTML version of the diagram as its own artifact, with themes, trace animation, search, and export. Say so in the report's caption, for example "An interactive version of this diagram accompanies the report." Do not paste that HTML into your report.

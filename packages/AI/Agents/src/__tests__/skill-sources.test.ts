@@ -248,3 +248,11 @@ describe('ResolveGitHubCommit', () => {
         await expect(ResolveGitHubCommit(main)).rejects.toThrow(/did not return a commit SHA/);
     });
 });
+
+describe('ParseSkillSource with an explicit ref', () => {
+    it('follows the given ref, not the commit a stored SourceURL names', () => {
+        const source = ParseSkillSource('https://github.com/acme/skills/tree/0123456789abcdef0123456789abcdef01234567/skills/pdf', 'main');
+
+        expect(source).toMatchObject({ SourceType: 'GitHub', Owner: 'acme', Repo: 'skills', Path: 'skills/pdf', Ref: 'main' });
+    });
+});

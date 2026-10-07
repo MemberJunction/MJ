@@ -92,7 +92,9 @@ function parseGitHubPath(segments: string[], ref?: string): SkillSource {
     }
     const split = splitRefAndPath(rest, ref);
     const path = kind === 'blob' ? split.path.split('/').slice(0, -1).join('/') : split.path;
-    return GitHubSkillSource(owner, repo, path, split.ref);
+    // An explicit ref wins over the one in the URL. A stored SourceURL names the imported commit, so
+    // re-importing it with the tracked ref (SourceRef) must follow that ref, not re-fetch the old commit.
+    return GitHubSkillSource(owner, repo, path, ref ?? split.ref);
 }
 
 /** `<ref>/<path>` from a URL. A known `ref` that prefixes the segments wins, so a ref may contain slashes. */
@@ -156,7 +158,7 @@ export function SkillSourceFromSkill(skill: Pick<MJAISkillEntity, 'SourceType' |
     if (source.SourceType !== 'GitHub') {
         throw new Error(`Skill source "${skill.SourceURL}" is recorded as GitHub but is not a github.com URL`);
     }
-    return ref ? GitHubSkillSource(source.Owner, source.Repo, source.Path, ref) : source;
+    return source;
 }
 
 /** SHA-256 (lowercase hex) over the SKILL.md and every file, sorted by path, NUL-delimited. */

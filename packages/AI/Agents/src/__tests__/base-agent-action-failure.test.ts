@@ -1059,6 +1059,17 @@ describe('BaseAgent keeps inline file-output bytes out of the model context', ()
         expect((original.Value as typeof file).fileData).toHaveLength(800_000);
     });
 
+    it('handles a file output sent as a JSON string', () => {
+        const agent = new BaseAgent();
+        const value = JSON.stringify({ fileName: 'r.pdf', mimeType: 'application/pdf', fileData: 'B'.repeat(300_000) });
+
+        const [seen] = (agent as unknown as Intercept).interceptLargeBinaryContent([{ Name: 'FileOutput', Type: 'Output', Value: value }]);
+
+        expect(seen.Value).toMatchObject({ fileName: 'r.pdf', mimeType: 'application/pdf' });
+        expect(Object.keys(seen.Value as object).length).toBeLessThan(10);
+        expect(seen.Value).not.toHaveProperty('fileData');
+    });
+
     it('leaves a small inline file and a stored-file reference untouched', () => {
         const agent = new BaseAgent();
         const small: ActionParam = { Name: 'FileOutput', Type: 'Output', Value: { fileName: 'a.txt', mimeType: 'text/plain', fileData: 'aGk=' } };

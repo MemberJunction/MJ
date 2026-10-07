@@ -73,20 +73,6 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "SVG",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "The self-contained SVG: styles scoped to its own id, a solid background, safe to embed in report HTML or in a markdown svg fence.",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "253B78A1-A5F7-4CAF-A71B-020924E1E1FA"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
             "Name": "FileOutput",
             "Type": "Output",
             "ValueType": "Simple Object",
@@ -105,7 +91,7 @@
             "ActionID": "@parent:ID",
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
-            "Description": "The diagram rendered. The Message holds the SVG unless Output is html."
+            "Description": "The diagram rendered. The Message is the self-contained SVG, unless Output is html."
           },
           "primaryKey": {
             "ID": "2E1AC8E3-9D93-4B63-8DCC-DAEA91AF184F"

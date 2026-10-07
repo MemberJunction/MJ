@@ -46,8 +46,8 @@ export class ReadSkillFileAction extends BaseAction {
                     : `No files found for skill "${skill}"${scope ? ' among the skills active in this run' : ''}`
             };
         }
-        params.Params.push({ Name: 'Content', Type: 'Output', Value: file.Content });
-        return { Success: true, ResultCode: 'SUCCESS', Message: `Read "${file.Path}" of skill "${skill}" (${file.Content.length} characters); its text is the Content output.` };
+        // The text is the Message, once: realtime and MCP callers forward only the Message.
+        return { Success: true, ResultCode: 'SUCCESS', Message: file.Content };
     }
 
     /**

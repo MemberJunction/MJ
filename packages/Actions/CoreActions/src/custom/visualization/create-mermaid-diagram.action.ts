@@ -161,14 +161,35 @@ export class CreateMermaidDiagramAction extends BaseAction {
      * Helper to get parameter value by name (case-insensitive)
      */
     /**
-     * Whether an HTML tag in the code carries an event handler (`<img onerror=...>`). Only text after a `<`
-     * that starts a tag name, up to its `>`, is checked, so labels like `online = true` and class-diagram
-     * arrows like `<|--` pass. Linear in the input: a regex such as /<[^>]*on\w+=/ backtracks quadratically
-     * on a run of `<` with no `>`, and this runs on the server's main thread.
+     * Whether an HTML tag in the code carries an event handler (`<img onerror=...>`). Each tag is read from
+     * `<name` to its closing `>`, skipping quoted attribute values, so a `<` or `>` inside a value cannot end
+     * it early and hide a handler after it. Text that doesn't start a tag (labels like `online = true`,
+     * class-diagram arrows like `<|--`) is not checked. One pass, never revisiting a character: a regex such
+     * as /<[^>]*on\w+=/ backtracks quadratically on a run of `<`, and this runs on the server's main thread.
      */
     private hasTagEventHandler(code: string): boolean {
-        return code.split('<').slice(1)
-            .some((segment) => /^\/?[a-z]/i.test(segment) && /\bon\w+\s*=/i.test(segment.split('>', 1)[0]));
+        let index = code.indexOf('<');
+        while (index !== -1) {
+            if (!/[a-z/]/i.test(code[index + 1] ?? '')) {
+                index = code.indexOf('<', index + 1);
+                continue;
+            }
+            let end = index + 1;
+            while (end < code.length && code[end] !== '>') {
+                const quote = code[end];
+                if (quote === '"' || quote === "'") {
+                    const close = code.indexOf(quote, end + 1);
+                    end = close === -1 ? code.length : close + 1;
+                } else {
+                    end++;
+                }
+            }
+            if (/\bon\w+\s*=/i.test(code.slice(index, end))) {
+                return true;
+            }
+            index = code.indexOf('<', end);
+        }
+        return false;
     }
 
     private getParamValue(params: RunActionParams, paramName: string): string | null {
