@@ -1,5 +1,47 @@
 # @memberjunction/metadata-sync
 
+## 6.2.0-edge.3
+
+### Patch Changes
+
+- e4654c8: `mj sync push --dry-run` now reports the same counts a real push would (#4529). The dry run used to report every existing record as "Would update". It now runs the same change detection as a real push (dirty fields, `alwaysPush`, checksum) before stopping, so an in-sync record counts as unchanged, and a changed record's field diff appears in the changes recap.
+- e4654c8: `mj sync push` straight after `mj sync pull` no longer reports every record as updated (#4530). Pull hashed a record's `sync.checksum` over `{ fields }` while push hashed the bare fields object, so the first push saw a mismatch on every record and rewrote it. Both now build the payload with `SyncEngine.BuildRecordChecksumPayload`: bare fields for a record with no composition axes, `{ fields, ...axes }` otherwise, with empty collections, embeds and extension omitted on both sides. Checksums in committed metadata already use this shape and do not change.
+- Updated dependencies [25bb295]
+- Updated dependencies [dfe40a4]
+- Updated dependencies [131f3c4]
+- Updated dependencies [0f04590]
+- Updated dependencies [41c2c08]
+- Updated dependencies [29b6ec3]
+- Updated dependencies [b545842]
+- Updated dependencies [279b93e]
+- Updated dependencies [66fd011]
+- Updated dependencies [196160a]
+- Updated dependencies [801036d]
+- Updated dependencies [d046715]
+- Updated dependencies [60bd774]
+- Updated dependencies [35da130]
+- Updated dependencies [28c92e0]
+- Updated dependencies [3204a32]
+- Updated dependencies [d0a8dbf]
+- Updated dependencies [ec97ad4]
+- Updated dependencies [b1b6d3d]
+- Updated dependencies [28df136]
+- Updated dependencies [49e0bd8]
+  - @memberjunction/core-entities@6.2.0-edge.3
+  - @memberjunction/global@6.2.0-edge.3
+  - @memberjunction/core@6.2.0-edge.3
+  - @memberjunction/core-entities-server@6.2.0-edge.3
+  - @memberjunction/generic-database-provider@6.2.0-edge.3
+  - @memberjunction/sqlserver-dataprovider@6.2.0-edge.3
+  - @memberjunction/postgresql-dataprovider@6.2.0-edge.3
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.3
+  - @memberjunction/server-bootstrap-lite@6.2.0-edge.3
+  - @memberjunction/sql-dialect@6.2.0-edge.3
+  - @memberjunction/cli-core@6.2.0-edge.3
+  - @memberjunction/record-graph@6.2.0-edge.3
+  - @memberjunction/config@6.2.0-edge.3
+  - @memberjunction/network-utils@6.2.0-edge.3
+
 ## 6.2.0-edge.2
 
 ### Minor Changes

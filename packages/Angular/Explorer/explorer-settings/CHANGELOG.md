@@ -1,5 +1,46 @@
 # Change Log - @memberjunction/ng-explorer-settings
 
+## 6.2.0-edge.3
+
+### Patch Changes
+
+- Updated dependencies [25bb295]
+- Updated dependencies [dfe40a4]
+- Updated dependencies [131f3c4]
+- Updated dependencies [0f04590]
+- Updated dependencies [41c2c08]
+- Updated dependencies [29b6ec3]
+- Updated dependencies [279b93e]
+- Updated dependencies [66fd011]
+- Updated dependencies [f41442f]
+- Updated dependencies [196160a]
+- Updated dependencies [d046715]
+- Updated dependencies [60bd774]
+- Updated dependencies [35da130]
+- Updated dependencies [28c92e0]
+- Updated dependencies [d0a8dbf]
+- Updated dependencies [ec97ad4]
+- Updated dependencies [b1b6d3d]
+- Updated dependencies [49e0bd8]
+  - @memberjunction/core-entities@6.2.0-edge.3
+  - @memberjunction/global@6.2.0-edge.3
+  - @memberjunction/core@6.2.0-edge.3
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.3
+  - @memberjunction/ng-base-forms@6.2.0-edge.3
+  - @memberjunction/ng-shared@6.2.0-edge.3
+  - @memberjunction/ng-base-application@6.2.0-edge.3
+  - @memberjunction/ng-ui-components@6.2.0-edge.3
+  - @memberjunction/ng-entity-form-dialog@6.2.0-edge.3
+  - @memberjunction/ng-entity-permissions@6.2.0-edge.3
+  - @memberjunction/ng-simple-record-list@6.2.0-edge.3
+  - @memberjunction/ng-base-types@6.2.0-edge.3
+  - @memberjunction/ng-code-editor@6.2.0-edge.3
+  - @memberjunction/ng-join-grid@6.2.0-edge.3
+  - @memberjunction/ng-notifications@6.2.0-edge.3
+  - @memberjunction/ng-shared-generic@6.2.0-edge.3
+  - @memberjunction/ng-user-avatar@6.2.0-edge.3
+  - @memberjunction/ng-tabstrip@6.2.0-edge.3
+
 ## 6.2.0-edge.2
 
 ### Patch Changes
