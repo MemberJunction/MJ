@@ -40,8 +40,8 @@ jobs:
     # get_pull_request with no PR context and burns an agent run to fail.
     if: >-
       (github.event_name == 'workflow_dispatch' && github.event.inputs.version == '')
-      || github.head_ref == 'next'
-      || startsWith(github.head_ref, 'release/')
+      || ((github.head_ref == 'next' || startsWith(github.head_ref, 'release/'))
+          && github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -75,7 +75,7 @@ jobs:
       - name: Generate Release Notes with Gemini
         id: gemini-release-notes
         if: github.event_name == 'workflow_dispatch' || steps.cs.outputs.count != '0'
-        uses: google-github-actions/run-gemini-cli@v0.1.22
+        uses: google-github-actions/run-gemini-cli@f77273f4c914e4bf38440cf36a0369cb64a37489 # v0.1.22, SHA-pinned
         env:
           # REQUIRED — without it the CLI exits 1 without running anything:
           # "Gemini CLI is not running in a trusted directory." It refuses to start
@@ -346,7 +346,7 @@ jobs:
 
       - name: Write the notes with Gemini
         if: steps.pre.outputs.skip == 'false'
-        uses: google-github-actions/run-gemini-cli@v0.1.22
+        uses: google-github-actions/run-gemini-cli@f77273f4c914e4bf38440cf36a0369cb64a37489 # v0.1.22, SHA-pinned
         env:
           # See the Edge job above — the CLI refuses to start without this.
           GEMINI_CLI_TRUST_WORKSPACE: 'true'

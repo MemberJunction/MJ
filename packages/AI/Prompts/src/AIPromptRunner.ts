@@ -1,4 +1,4 @@
-import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, ErrorAnalyzer, AIErrorInfo, ResolveFileInputStrategy, AIPromptConfiguration, EncodeToolTurnsAsText } from '@memberjunction/ai';
+import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, ErrorAnalyzer, AIErrorInfo, ResolveFileInputStrategy, AIPromptConfiguration, EncodeToolTurnsAsText, AIModelConfiguration, CredentialScopeAllows, type AICredentialScope } from '@memberjunction/ai';
 import {
   BaseModelRunner,
   type ExecutionBound,
@@ -6,9 +6,9 @@ import {
   type FailoverConfiguration,
   type FailoverAttempt,
 } from './BaseModelRunner';
-import { GetToolCallingDecision, GetToolCallingMode, NativeToolCallingDecision, RecordToolCallingDecision, RecordToolCallingMode, ResolveNativeToolCalling } from './nativeToolCallingGate';
+import { GetToolCallingDecision, GetToolCallingMode, NativeToolCallingDecision, RecordToolCallingDecision, RecordToolCallingMode, ResolveNativeToolCalling, ResolveToolChoiceForRequest } from './nativeToolCallingGate';
 import { AIModelRunner } from './AIModelRunner';
-import { ValidationAttempt, AIPromptRunResult, AIModelSelectionInfo } from '@memberjunction/ai-core-plus';
+import { ValidationAttempt, AIPromptRunResult, AIModelSelectionInfo, PickPromptExecutionScope } from '@memberjunction/ai-core-plus';
 import { LogStatus, IsVerboseLoggingEnabled, Metadata, UserInfo } from '@memberjunction/core';
 import { CleanJSON, RepairJSONEscaping, MJGlobal, JSONValidator, ValidationResult, ValidationErrorInfo, ValidationErrorType, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { MJAIConfigurationEntity, MJAIVendorEntity, MJTemplateEntityExtended } from '@memberjunction/core-entities';
@@ -326,7 +326,7 @@ export class AIPromptRunner extends BaseModelRunner {
         // Select model using the appropriate prompt — capture the FULL result
         selection = await this.selectModel(modelSelectionPrompt, params.override?.modelId, params.contextUser, params.configurationId, params.override?.vendorId, params);
         if (!selection.model) {
-          throw new Error(this.buildNoModelFoundMessage(modelSelectionPrompt.Name, selection.selectionInfo));
+          throw new Error(this.buildNoModelFoundMessage(modelSelectionPrompt.Name, selection.selectionInfo, params.CredentialScope));
         }
 
         // Tell the template which path this run is actually taking, BEFORE it renders. The loop
@@ -343,18 +343,13 @@ export class AIPromptRunner extends BaseModelRunner {
         // actually selected — not merely the caller's override, which is usually absent — and the
         // selected candidate's AIPromptModel bag. Resolving without those skips the two layers the
         // capability is normally declared on and silently inverts the decision.
-        if (params.tools?.length) {
-          const nativeDecision = this.ResolveNativeToolCallingDecision(
-            prompt, params, selection.model,
-            selection.selectionInfo?.vendorSelected?.ID ?? params.override?.vendorId ?? null,
-            selection.promptModelConfiguration);
-          params.data = {
-            ...(params.data ?? {}),
-            _NATIVE_TOOL_CALLING: nativeDecision.useNativeTools,
-            // The template renders the implicit-mode section only when this is the gate's REAL answer.
-            _NATIVE_CONTROL_FLOW: nativeDecision.controlFlow
-          };
-        }
+        const nativeDecision = params.tools?.length
+          ? this.ResolveNativeToolCallingDecision(
+              prompt, params, selection.model,
+              selection.selectionInfo?.vendorSelected?.ID ?? params.override?.vendorId ?? null,
+              selection.promptModelConfiguration)
+          : null;
+        params.data = this.ApplyNativeTemplateFlags(params.data, nativeDecision);
 
         // Check if we have a system prompt override
         if (params.systemPromptOverride) {
@@ -414,7 +409,7 @@ export class AIPromptRunner extends BaseModelRunner {
 
         selection = await this.selectModel(modelSelectionPrompt, params.override?.modelId, params.contextUser, params.configurationId, params.override?.vendorId, params);
         if (!selection.model) {
-          throw new Error(this.buildNoModelFoundMessage(modelSelectionPrompt.Name, selection.selectionInfo));
+          throw new Error(this.buildNoModelFoundMessage(modelSelectionPrompt.Name, selection.selectionInfo, params.CredentialScope));
         }
       }
 
@@ -552,7 +547,7 @@ export class AIPromptRunner extends BaseModelRunner {
       allCandidates = modelResult.allCandidates || [];
       credentialAvailability = modelResult.credentialAvailability;
       if (!selectedModel) {
-        throw new Error(this.buildNoModelFoundMessage(modelSelectionPrompt.Name, modelSelectionInfo));
+        throw new Error(this.buildNoModelFoundMessage(modelSelectionPrompt.Name, modelSelectionInfo, params.CredentialScope));
       }
     }
 
@@ -790,6 +785,7 @@ export class AIPromptRunner extends BaseModelRunner {
         consolidatedPromptRun.ID,
         params.cancellationToken,
         params.contextUser,
+        PickPromptExecutionScope(params),
       );
       if (aiSelectedResult) {
         selectedResult = aiSelectedResult;
@@ -1683,7 +1679,7 @@ export class AIPromptRunner extends BaseModelRunner {
    * Includes details about which models were considered and why they were unavailable
    * so the error message is actionable for end users (e.g., missing API credentials).
    */
-  private buildNoModelFoundMessage(promptName: string, selectionInfo?: AIModelSelectionInfo): string {
+  private buildNoModelFoundMessage(promptName: string, selectionInfo?: AIModelSelectionInfo, credentialScope?: AICredentialScope): string {
     const base = `No suitable model found for prompt ${promptName}`;
 
     // A selection step that threw (for example the model-type floor) records its error here; show it
@@ -1705,9 +1701,14 @@ export class AIPromptRunner extends BaseModelRunner {
       }).join(', ');
 
       const suffix = unavailableModels.length > 5 ? ` (${unavailableModels.length} total)` : '';
+      // When the scope rules out the platform's credentials, "configure them" would point the reader
+      // at exactly the fallback the caller ruled out.
+      const platformAllowed = CredentialScopeAllows(credentialScope, 'Environment') || CredentialScopeAllows(credentialScope, 'PlatformCredential');
+      const remedy = platformAllowed
+        ? `Please configure API credentials in your environment or AI Credential settings.`
+        : `The credential scope is ${credentialScope}, so only the API keys supplied with this run count; supply a key for one of these vendors.`;
       return `${base}. No valid API credentials/keys are configured for any of the candidate model-vendor combinations. ` +
-        `Tried: ${triedSummary}${suffix}. ` +
-        `Please configure API credentials in your environment or AI Credential settings.`;
+        `Tried: ${triedSummary}${suffix}. ${remedy}`;
     }
 
     return `${base}. ${selectionInfo.selectionReason || 'Unknown reason'}`;
@@ -1918,17 +1919,7 @@ export class AIPromptRunner extends BaseModelRunner {
   ): NativeToolCallingDecision {
     try {
       return ResolveNativeToolCalling({
-        catalogConfiguration: AIEngine.Instance.GetEffectiveModelConfiguration(
-          model.ID,
-          vendorId
-            // Must be the INFERENCE PROVIDER row, not the Model Developer row: most models carry
-            // two AIModelVendor rows for the same VendorID, and ModelVendors has no guaranteed
-            // order. Picking the developer row merges an empty config layer and silently drops any
-            // per-serving-path LLM.* knob (notably the SupportsNativeToolCalling kill switch).
-            ? model.ModelVendors?.find(mv => UUIDsEqual(mv.VendorID, vendorId)
-                && mv.Status === 'Active' && this.IsInferenceProvider(mv))?.ID
-            : undefined
-        ),
+        catalogConfiguration: this.catalogConfigurationFor(model, vendorId),
         promptConfiguration: prompt.PromptConfigurationObject,
         promptModelConfiguration,
         // Action tools and control-flow tools are counted separately: under the hybrid the control
@@ -1947,6 +1938,37 @@ export class AIPromptRunner extends BaseModelRunner {
   }
 
 
+  /**
+   * Returns the template data with `_NATIVE_TOOL_CALLING` and `_NATIVE_CONTROL_FLOW` set.
+   *
+   * With a decision, both carry the gate's real answer. Without one (a run that declares no tools),
+   * they are set to the envelope path's values unless the caller already supplied them. The Loop
+   * system prompt reads both unconditionally, so template parameter extraction marks them required,
+   * and a run that left them unset failed to render.
+   *
+   * @param data The caller's template data, if any
+   * @param decision The resolved native tool-calling decision, or null when no tools were declared
+   */
+  protected ApplyNativeTemplateFlags(
+    data: Record<string, unknown> | undefined,
+    decision: NativeToolCallingDecision | null
+  ): Record<string, unknown> {
+    const current = data ?? {};
+    if (decision) {
+      return {
+        ...current,
+        _NATIVE_TOOL_CALLING: decision.useNativeTools,
+        // The template renders the implicit-mode section only when this is the gate's REAL answer.
+        _NATIVE_CONTROL_FLOW: decision.controlFlow
+      };
+    }
+    return {
+      ...current,
+      _NATIVE_TOOL_CALLING: current._NATIVE_TOOL_CALLING ?? false,
+      _NATIVE_CONTROL_FLOW: current._NATIVE_CONTROL_FLOW ?? 'envelope'
+    };
+  }
+
   /** @deprecated Use {@link ResolveNativeToolCallingDecision}. */
   public resolveNativeToolCallingDecision(
     prompt: MJAIPromptEntityExtended,
@@ -1956,6 +1978,24 @@ export class AIPromptRunner extends BaseModelRunner {
     promptModelConfiguration?: AIPromptConfiguration | null
   ): NativeToolCallingDecision {
     return this.ResolveNativeToolCallingDecision(prompt, params, model, vendorId, promptModelConfiguration);
+  }
+
+  /**
+   * The merged catalog configuration for the selected model on the selected vendor.
+   *
+   * Must resolve the INFERENCE PROVIDER row, not the Model Developer row: most models carry two
+   * AIModelVendor rows for the same VendorID, and ModelVendors has no guaranteed order. Picking the
+   * developer row merges an empty config layer and silently drops any per-serving-path LLM.* knob
+   * (notably the SupportsNativeToolCalling kill switch).
+   */
+  private catalogConfigurationFor(model: MJAIModelEntityExtended, vendorId: string | null): AIModelConfiguration | null {
+    return AIEngine.Instance.GetEffectiveModelConfiguration(
+      model.ID,
+      vendorId
+        ? model.ModelVendors?.find(mv => UUIDsEqual(mv.VendorID, vendorId)
+            && mv.Status === 'Active' && this.IsInferenceProvider(mv))?.ID
+        : undefined
+    );
   }
 
   private applyNativeToolCalling(
@@ -1983,7 +2023,7 @@ export class AIPromptRunner extends BaseModelRunner {
       chatParams.tools = decision.controlFlow === 'implicit'
         ? params.tools
         : params.tools?.filter((t) => !control.has(t.name));
-      chatParams.toolChoice = params.toolChoice;
+      chatParams.toolChoice = ResolveToolChoiceForRequest(params.toolChoice, chatParams.tools, this.catalogConfigurationFor(model, vendorId));
       chatParams.parallelToolCalls = params.parallelToolCalls;
     }
 
@@ -2134,6 +2174,16 @@ export class AIPromptRunner extends BaseModelRunner {
         vendorId ?? undefined,
         params
       );
+
+      // No key under a scope that rules out the environment must not reach a driver: the OpenAI and
+      // Anthropic SDKs read OPENAI_API_KEY / ANTHROPIC_API_KEY themselves when handed none. Selection
+      // and failover already skip unkeyed candidates; parallel tasks are planned without the scope.
+      if (!apiKey?.trim() && !CredentialScopeAllows(params.CredentialScope, 'Environment')) {
+        throw new Error(
+          `No credentials found for driver class '${driverClass}': the credential scope is ${params.CredentialScope}, ` +
+          `and this run carries no API key for it.`
+        );
+      }
 
       // Create LLM instance with vendor-specific driver class
       llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, driverClass, apiKey);
@@ -3622,9 +3672,11 @@ export class AIPromptRunner extends BaseModelRunner {
         }
         
         // Run the repair prompt
+        // The repair runs inside the caller's run, so it runs on the caller's user, configuration and
+        // credentials — under RuntimeOnly it must not reach a key the caller's prompt could not.
         const repairResult = await this.ExecutePrompt({
+          ...PickPromptExecutionScope(params),
           parentPromptRunId: currentPromptRun.ID,
-          contextUser: params.contextUser,
           prompt: repairPrompt,
           data: {
             ERROR_MESSAGE: trueError,
