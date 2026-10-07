@@ -16,7 +16,6 @@ import { BuildBoundaryLogPayload } from './logging/boundaryLogPayload.js';
 import { StartupLogger } from './logging/StartupLogger.js';
 import { DataSourceInfo, UserPayload } from './types.js';
 import { GetReadOnlyDataSource, GetReadWriteDataSource } from './util.js';
-import { CreateIsolatedProvider } from './isolatedProvider.js';
 import { v4 as uuidv4 } from 'uuid';
 import e from 'express';
 import type { RequestHandler, Request, Response, NextFunction } from 'express';
@@ -798,7 +797,15 @@ async function createPerRequestProviders(
 ): Promise<Array<{ provider: DatabaseProviderBase; type: 'Read-Write' | 'Read-Only' }>> {
   const isPostgres = resolveDbPlatformFromEnv() === 'postgresql';
 
-  const p = await CreateIsolatedProvider(dataSource);
+  let p: DatabaseProviderBase;
+  if (isPostgres) {
+    p = await createPostgresProvider();
+  } else {
+    const config = new SQLServerProviderConfigData(dataSource, mj_core_schema, 0, undefined, undefined, false);
+    const sqlProvider = new SQLServerDataProvider();
+    await sqlProvider.Config(config);
+    p = sqlProvider as unknown as DatabaseProviderBase;
+  }
 
   const providers: Array<{ provider: DatabaseProviderBase; type: 'Read-Write' | 'Read-Only' }> = [
     { provider: p, type: 'Read-Write' }
@@ -817,6 +824,34 @@ async function createPerRequestProviders(
   }
 
   return providers;
+}
+
+/**
+ * Creates a PostgreSQL per-request provider, sharing the connection pool
+ * from the primary provider to avoid pool exhaustion.
+ */
+async function createPostgresProvider(): Promise<DatabaseProviderBase> {
+  const { PostgreSQLDataProvider, PostgreSQLProviderConfigData } = await import('@memberjunction/postgresql-dataprovider');
+
+  const pgProvider = new PostgreSQLDataProvider();
+  const pgConfig = new PostgreSQLProviderConfigData(
+    BuildPostgreSQLConnectionConfig(ResolvePostgreSQLEndpoint(), configInfo.databaseSettings, 'api'),
+    mj_core_schema,
+    0,
+    undefined,
+    undefined,
+    false, // use existing metadata from global provider
+  );
+
+  // Share the connection pool from the primary provider to avoid pool exhaustion
+  const primaryProvider = Metadata.Provider as unknown as { DatabaseConnection?: import('pg').Pool }; // global-provider-ok: bootstrap (per-connection PG pool sharing)
+  if (primaryProvider?.DatabaseConnection) {
+    await pgProvider.ConfigWithSharedPool(pgConfig, primaryProvider.DatabaseConnection);
+  } else {
+    await pgProvider.Config(pgConfig);
+  }
+
+  return pgProvider;
 }
 
 /**
