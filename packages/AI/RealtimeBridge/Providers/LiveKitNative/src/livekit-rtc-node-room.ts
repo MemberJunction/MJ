@@ -43,6 +43,8 @@ import type {
     NativeRoomAudioFrame,
     NativeRoomParticipant,
 } from '@memberjunction/ai-bridge-livekit';
+import { LiveKitWorkerRoomClient } from './livekit-worker-room-client';
+import type { IMediaWorker } from './media-worker-types';
 
 /** Inbound inter-frame gap histogram per participant. */
 export interface InboundFrameGapHistogram {
@@ -256,6 +258,15 @@ export interface CreateLiveKitRtcNodeModuleOptions {
     Channels?: number;
     /** Loader override (tests inject a fake `@livekit/rtc-node`). */
     Loader?: RtcNodeLoader;
+    /**
+     * Whether to isolate media-plane processing in a dedicated worker thread (default: false
+     * unless process.env.MJ_LIVEKIT_WORKER_MEDIA is set to 'true' or 'on').
+     */
+    UseWorker?: boolean;
+    /** Outbound pre-buffer duration in milliseconds when worker mode is enabled (default: 150ms). */
+    PreBufferMs?: number;
+    /** Optional factory for custom IMediaWorker instances (useful for testing). */
+    WorkerFactory?: () => IMediaWorker;
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -735,15 +746,30 @@ export function CreateLiveKitRtcNodeModule(opts: CreateLiveKitRtcNodeModuleOptio
     const inbound = opts.InboundSampleRate ?? DEFAULT_SAMPLE_RATE;
     const channels = opts.Channels ?? DEFAULT_CHANNELS;
     const loader = opts.Loader ?? DefaultRtcNodeLoader;
+    const useWorker = opts.UseWorker ?? (process.env.MJ_LIVEKIT_WORKER_MEDIA === 'true' || process.env.MJ_LIVEKIT_WORKER_MEDIA === 'on');
+    const preBufferMs = opts.PreBufferMs ?? 150;
+    const workerFactory = opts.WorkerFactory;
+
     return {
         createRoomClient(options: NativeRoomClientOptions): NativeRoomClient {
             // Credentials (Url/ApiKey/ApiSecret) are not needed here — the bridge hands a pre-signed access
             // token to client.connect(args). The PER-SESSION sample rates ARE used: the agent's realtime
             // model dictates them (OpenAI 24 kHz; Gemini Live 16 kHz IN), threaded down from the engine, so
             // inbound room audio is resampled to what THIS model consumes. Fall back to the module defaults.
+            const outRate = options.OutboundSampleRate ?? outbound;
+            const inRate = options.InboundSampleRate ?? inbound;
+            if (useWorker) {
+                return new LiveKitWorkerRoomClient({
+                    sampleRate: outRate,
+                    inboundSampleRate: inRate,
+                    channels,
+                    preBufferMs,
+                    workerFactory,
+                });
+            }
             return new LiveKitRtcNodeRoomClient(
-                options.OutboundSampleRate ?? outbound,
-                options.InboundSampleRate ?? inbound,
+                outRate,
+                inRate,
                 channels,
                 loader,
             );
