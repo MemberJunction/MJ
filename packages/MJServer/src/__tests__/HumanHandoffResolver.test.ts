@@ -28,7 +28,7 @@ vi.mock('@memberjunction/livekit-room-server', () => ({
   HandoffOfferRegistry: { Instance: { Configure: h.registryConfigure } },
   LiveKitSipService: class {},
 }));
-vi.mock('@memberjunction/sqlserver-dataprovider', () => ({
+vi.mock('@memberjunction/generic-database-provider', () => ({
   UserCache: { Instance: { GetSystemUser: h.getSystemUser } },
 }));
 vi.mock('@memberjunction/notifications', () => ({

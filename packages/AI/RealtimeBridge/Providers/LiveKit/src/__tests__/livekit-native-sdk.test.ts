@@ -39,7 +39,7 @@ class FakeNativeClient implements NativeRoomClient {
     private audioCb?: (frame: NativeRoomAudioFrame) => void;
     private joinCb?: (p: NativeRoomParticipant) => void;
     private leaveCb?: (id: string) => void;
-    private disconnectedCb?: () => void;
+    private disconnectedCb?: (reason?: string) => void;
 
     async connect(args: NativeConnectArgs) {
         this.connected = args;
@@ -72,7 +72,7 @@ class FakeNativeClient implements NativeRoomClient {
     async publishData(text: string) {
         this.data.push(text);
     }
-    onDisconnected(cb: () => void) {
+    onDisconnected(cb: (reason?: string) => void) {
         this.disconnectedCb = cb;
     }
 
@@ -86,8 +86,8 @@ class FakeNativeClient implements NativeRoomClient {
     driveLeave(id: string) {
         this.leaveCb?.(id);
     }
-    driveDisconnected() {
-        this.disconnectedCb?.();
+    driveDisconnected(reason?: string) {
+        this.disconnectedCb?.(reason);
     }
 }
 
@@ -237,6 +237,8 @@ describe('LiveKitNativeMeetingSdk — roster, signals, data channel', () => {
         await sdk.connect(baseArgs);
         client.driveDisconnected();
         expect(onDc).toHaveBeenCalledOnce();
+        client.driveDisconnected('PARTICIPANT_REMOVED');
+        expect(onDc).toHaveBeenLastCalledWith('PARTICIPANT_REMOVED');
         await sdk.disconnect();
         expect(client.disconnectedFlag).toBe(true);
     });

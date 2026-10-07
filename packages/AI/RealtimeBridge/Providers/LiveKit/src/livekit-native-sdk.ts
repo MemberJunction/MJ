@@ -295,11 +295,12 @@ function nativeModuleRegistry(): Map<string, NativeRoomModule> {
     if (!store) {
         return fallbackRegistry;
     }
-    let registry: Map<string, NativeRoomModule> | undefined = store[NATIVE_MODULE_REGISTRY_KEY];
-    if (!registry) {
-        registry = new Map<string, NativeRoomModule>();
-        store[NATIVE_MODULE_REGISTRY_KEY] = registry;
+    const existing: unknown = store[NATIVE_MODULE_REGISTRY_KEY];
+    if (existing instanceof Map) {
+        return existing as Map<string, NativeRoomModule>;
     }
+    const registry = new Map<string, NativeRoomModule>();
+    store[NATIVE_MODULE_REGISTRY_KEY] = registry;
     return registry;
 }
 
@@ -389,7 +390,7 @@ export class LiveKitNativeMeetingSdk implements ILiveKitRoomSdk {
     private leaveHandler?: (participantIdentity: string) => void;
 
     /** The room-disconnected handler. */
-    private disconnectedHandler?: () => void;
+    private disconnectedHandler?: (reason?: string) => void;
 
     /**
      * @param config Resolved credentials + the native module specifier.
@@ -523,7 +524,7 @@ export class LiveKitNativeMeetingSdk implements ILiveKitRoomSdk {
     }
 
     /** Registers the room-disconnected handler. */
-    public onDisconnected(cb: () => void): void {
+    public onDisconnected(cb: (reason?: string) => void): void {
         this.disconnectedHandler = cb;
     }
 
@@ -546,7 +547,7 @@ export class LiveKitNativeMeetingSdk implements ILiveKitRoomSdk {
         client.onAudioFrame((frame) => this.audioHandler?.(MapNativeAudioFrame(frame)));
         client.onParticipantConnected((p) => this.joinHandler?.(MapNativeParticipant(p)));
         client.onParticipantDisconnected((id) => this.leaveHandler?.(String(id)));
-        client.onDisconnected(() => this.disconnectedHandler?.());
+        client.onDisconnected((reason) => this.disconnectedHandler?.(reason));
     }
 }
 

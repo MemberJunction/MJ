@@ -2,7 +2,7 @@ import { Resolver, Mutation, Query, Subscription, Arg, Ctx, Root, ObjectType, Fi
 import { IMetadataProvider, LogError, UserInfo } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { NotificationEngine } from '@memberjunction/notifications';
-import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import {
   LiveKitSipService,
   RoomHandoffEngine,
@@ -209,18 +209,18 @@ export class NotificationHandoffNotifier implements IHandoffNotifier {
   }
 }
 
-/**
- * Binds the handoff engine's collaborators that only the server host can supply (same module-load rationale as the other
- * realtime bindings): the pub/sub publisher, the notification sender, and a room-presence check over the LiveKit credentials
- * the Meet room already uses. Idempotent (latest-wins). The telephony extension adds the collaborators that need a carrier
- * (dialing a number into a room, starting another agent).
- */
 // The registry's background sweep and list queries run outside any request, so they need a server identity. Resolve the
 // system user lazily: the user cache may not have loaded when this module does.
 HandoffOfferRegistry.Instance.Configure({
   ResolveContextUser: () => UserCache.Instance.GetSystemUser(),
 });
 
+/**
+ * Binds the handoff engine's collaborators that only the server host can supply (same module-load rationale as the other
+ * realtime bindings): the pub/sub publisher, the notification sender, and a room-presence check over the LiveKit credentials
+ * the Meet room already uses. Idempotent (latest-wins). The telephony extension adds the collaborators that need a carrier
+ * (dialing a number into a room, starting another agent).
+ */
 RoomHandoffEngine.Instance.Configure({
   Presence: new LiveKitSipService(),
   Publisher: new PubSubHandoffPublisher(),
