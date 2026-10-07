@@ -808,6 +808,54 @@ describe('GeminiRealtimeClient', () => {
             ]);
         });
 
+        it('should still emit the fatal error on an abnormal close when there is no global process (browser)', async () => {
+            const { states, errors } = collect(client);
+            await connect(client);
+            // A browser has no `process`. The close handler's diagnostics used to read process.env
+            // first and throw, so the fatal error never surfaced and the call sat in 'listening'.
+            const nodeProcess = globalThis.process;
+            Reflect.deleteProperty(globalThis, 'process');
+            try {
+                expect(typeof globalThis.process).toBe('undefined');
+                client.LastConnectArgs?.OnClose(new CloseEvent('close', { code: 1011, reason: 'Internal error' }));
+            } finally {
+                globalThis.process = nodeProcess;
+            }
+            expect(errors).toEqual([{ Message: 'Gemini Live connection closed (1011): Internal error', Fatal: true }]);
+            expect(states[states.length - 1]).toBe('error');
+        });
+
+        it('should keep a resumed call live when the session it replaced closes cleanly', async () => {
+            /** Opens a DISTINCT session per connect, as the real SDK does, and keeps each one's args. */
+            class ResumingClient extends TestGeminiClient {
+                public Sessions: FakeGeminiSession[] = [];
+                public ArgsPerSession: GeminiClientConnectArgs[] = [];
+                protected override async connectLiveSession(args: GeminiClientConnectArgs): Promise<GeminiLiveClientSession> {
+                    this.LastConnectArgs = args;
+                    this.ArgsPerSession.push(args);
+                    const session = new FakeGeminiSession();
+                    this.Sessions.push(session);
+                    return session;
+                }
+            }
+            const resuming = new ResumingClient();
+            const { states, errors } = collect(resuming);
+            await connect(resuming);
+            resuming.Emit({ sessionResumptionUpdate: { newHandle: 'handle-1' } } as LiveServerMessage);
+            resuming.Emit({ goAway: {} } as LiveServerMessage);
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            expect(resuming.Sessions).toHaveLength(2);
+            expect(resuming.Sessions[0].Closed).toBe(true);
+
+            // A browser fires the old socket's close AFTER resumeSession swapped in the new session.
+            resuming.ArgsPerSession[0].OnClose(new CloseEvent('close', { code: 1000 }));
+            expect(errors).toEqual([]);
+            expect(states[states.length - 1]).toBe('listening');
+
+            resuming.OnPcmChunk?.('UENNMTY=');
+            expect(resuming.Sessions[1].RealtimeInputs).toHaveLength(1);
+        });
+
         it('should send mic chunks in both listening and speaking states (full duplex / barge-in)', async () => {
             const { states } = collect(client);
             await connect(client);
