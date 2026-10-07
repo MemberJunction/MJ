@@ -27,6 +27,7 @@ The realtime co-agent stack (1:1 voice + server-bridged meetings) is shipped and
 | [`realtime-bridges-architecture.md`](realtime-bridges-architecture.md) | Master bridge architecture (Zoom/Teams/Webex/telephony). Phase 0/1 shipped, Phase 2+ planned. |
 | [`multi-party-and-meeting-bridge.md`](multi-party-and-meeting-bridge.md) | Proposal: meeting platforms as the shared media plane (future). |
 | [`native-marketplace-apps.md`](native-marketplace-apps.md) | Phase 9 design — per-platform marketplace shims (future, no engine code). |
+| [`livekit-worker-model-transport.md`](livekit-worker-model-transport.md) | Deferred Phase 2 design: model WebSocket transport in the media worker. Build only if Meet telemetry shows inbound gaps over 30 ms. |
 | [`livekit-recording-governance.md`](livekit-recording-governance.md) | Governed recording roadmap (basic control shipped; governance future). |
 | [`gemini-meeting-live-test-runbook.md`](gemini-meeting-live-test-runbook.md) | Runbook for the pending Gemini meeting-mode live validation (Next steps → 2). |
 | [`channels-v2/`](channels-v2/) | Build plan: the full channel (widget) contract, channel scoping, unified `ContextTool` dispatch, the Interactive Component (ComponentSpec) channel, multi-source visual perception with an "agent can see" chip, generic session events + mid-session identity verification, and the embeddable `<mj-realtime-widget>` element. |

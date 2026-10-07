@@ -1,5 +1,74 @@
 # @memberjunction/ng-base-application
 
+## 6.2.0-edge.3
+
+### Patch Changes
+
+- f41442f: Records preview tabs are promoted on first edit (#4345).
+
+  The edit protection #4154 shipped was transient: a record left the records region's
+  temp-tab pool only while its form was in edit mode, so the moment the user saved, the
+  tab silently rejoined the pool and the next plain row click replaced it. While editing,
+  the tab also stayed unpinned and therefore italic — the shell's vocabulary for
+  "replaceable" — on a tab that was in fact protected.
+
+  A records preview tab is now **pinned the moment its form enters edit mode**, matching
+  VS Code's promote-on-modify: it is neither replaceable nor italic from then on, and
+  promotion is sticky across save and cancel.
+  - `BaseFormComponent.EditModeChanged` (`EventEmitter<boolean>`) fires from
+    `StartEditMode` / `EndEditMode`; `MjEntityFormHostComponent` relays it and emits
+    `true` after mount when a form starts in edit mode (`StartInEditMode`, new records).
+  - `BaseResourceComponent.ResourceEditModeChangedEvent` is the shell-side callback;
+    `EntityRecordResource` forwards the form's edge to it. `IsEditing()` stays as the
+    fallback the pool predicate consults.
+  - `WorkspaceStateManager.PinTab(tabId)` pins idempotently (no configuration write when
+    already pinned, so born-pinned new-record tabs stay quiet).
+  - `TabContainerComponent.PromoteRecordTabOnEdit` pins on the `true` edge, scoped to the
+    records region: docked records and classic-style tabs keep user-owned pin state.
+  - A component reattached from the cache while still in edit mode is promoted on reattach
+    (the reattach never re-runs `StartEditMode`, so `IsEditing()` is read at that seam).
+
+- Updated dependencies [25bb295]
+- Updated dependencies [dfe40a4]
+- Updated dependencies [131f3c4]
+- Updated dependencies [0f04590]
+- Updated dependencies [41c2c08]
+- Updated dependencies [29b6ec3]
+- Updated dependencies [66fd011]
+- Updated dependencies [196160a]
+- Updated dependencies [60bd774]
+- Updated dependencies [35da130]
+- Updated dependencies [28c92e0]
+- Updated dependencies [ec97ad4]
+- Updated dependencies [49e0bd8]
+  - @memberjunction/core-entities@6.2.0-edge.3
+  - @memberjunction/global@6.2.0-edge.3
+  - @memberjunction/core@6.2.0-edge.3
+
+## 6.2.0-edge.2
+
+### Patch Changes
+
+- Updated dependencies [e97d95c]
+- Updated dependencies [2552b1e]
+- Updated dependencies [21f9e15]
+- Updated dependencies [4248fb3]
+- Updated dependencies [0adaf76]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [705ab4e]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [5986939]
+- Updated dependencies [4d647e6]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [369e229]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [2854a2e]
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/core-entities@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+
 ## 6.2.0-edge.1
 
 ### Patch Changes
