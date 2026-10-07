@@ -39,7 +39,7 @@ describe('MediaMoveMenuComponent (DOM)', () => {
   it("names places the host's way, each keeping its icon, and the rest the call's way", () => {
     const items = open(render({ Allowed: ['stage', 'tab', 'pip'], Labels: { stage: 'Spotlight', tab: 'Filmstrip' } }));
     expect(labels(items)).toEqual(['Spotlight', 'Picture-in-picture', 'Filmstrip', 'Reset layout']);
-    const icon = (item: HTMLElement) => [...(item.querySelector('i')?.classList ?? [])].find((c) => !['mj-menu-item-icon', 'fa-solid', 'fa-regular'].includes(c));
+    const icon = (item: HTMLElement) => Array.from(item.querySelector('i')?.classList ?? []).find((c) => !['mj-menu-item-icon', 'fa-solid', 'fa-regular'].includes(c));
     expect(items.map(icon)).toEqual(['fa-expand', 'fa-window-restore', 'fa-table-columns', 'fa-rotate-left']);
   });
 
