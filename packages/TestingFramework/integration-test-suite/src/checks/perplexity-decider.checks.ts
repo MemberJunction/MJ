@@ -465,6 +465,7 @@ const UNAVAILABLE_DRIVER_CLASSES: readonly string[] = ['OpenRouterDecision', 'LL
  */
 async function assertFailoverReachesBoundDecider(ctx: IntegrationCheckContext, probe: DecisionRunnerProbe, fixtures: DecisionFixtures, prompt: MJAIPromptEntityExtended, params: AIDecisionParams): Promise<void> {
     const label = 'PX5 failover';
+    AssertEqual(prompt.FailoverStrategy, 'SameModelDifferentVendor', `${label}: Default Decision's FailoverStrategy`);
     const candidates = probe.Candidates(prompt, params);
     const decider = requireDeciderBehindBoundModels(candidates, label);
     const credentialedAhead = candidates.slice(0, candidates.indexOf(decider)).filter(c => probe.HasCredentials(c, prompt, params));

@@ -299,12 +299,12 @@ describe('PerplexityDecision', () => {
       expect(result.errorInfo).toMatchObject({ errorType: 'Unknown', severity: 'Transient', httpStatusCode: 413, canFailover: true });
     });
 
-    it("names a 400's message", async () => {
+    it("names a 400's message, and an unknown model stops the failover loop", async () => {
       const message = "Invalid model 'pplx-decider-v1-27b-latest'. Permitted models can be found in the documentation at https://docs.perplexity.ai/docs/getting-started/models.";
       const result = await run({ error: { message, type: 'invalid_request_error', param: null, code: null } }, 400);
 
       expect(result.errorMessage).toBe(`Perplexity Decisions API returned HTTP 400: ${message}`);
-      expect(result.errorInfo?.httpStatusCode).toBe(400);
+      expect(result.errorInfo).toMatchObject({ errorType: 'InvalidRequest', httpStatusCode: 400, canFailover: false });
     });
   });
 });

@@ -18,9 +18,9 @@ import { RegisterClass, SafeJSONParse } from '@memberjunction/global';
  * **Key.** A Perplexity API key, sent as `Authorization: Bearer <key>` (the API does not read
  * `x-api-key`). A raw key or an `API Key` AI Credential's values in JSON (`{"apiKey":"…"}`).
  *
- * **Endpoint.** The constructor's URL, else the credential's `endpoint`, else
- * {@link PerplexityDecision.DEFAULT_ENDPOINT}. Trailing slashes are removed: the API answers `404` to a
- * path with one.
+ * **Endpoint.** The constructor's URL, else the credential's `endpoint` (an `API Key with Endpoint`
+ * credential), else {@link PerplexityDecision.DEFAULT_ENDPOINT}. Each is the full request URL, unlike
+ * `SystemOneDecision`'s base URL. Trailing slashes are removed: the API answers `404` to a path with one.
  *
  * **Model.** `DecisionParams.Model`, the model-vendor row's `APIName`, defaulting to
  * `pplx-decider-v1-27b`, the only model the API serves.

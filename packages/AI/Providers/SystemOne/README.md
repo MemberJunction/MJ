@@ -105,7 +105,7 @@ The API speaks the System One format and returns the response bare, so the drive
 
 | | |
 |---|---|
-| **Endpoint** | `https://api.perplexity.ai/v1/decisions`. A URL passed to the constructor wins, then a credential's `endpoint`. Trailing slashes are removed, because the API answers a path with one with `404`. |
+| **Endpoint** | `https://api.perplexity.ai/v1/decisions`. A URL passed to the constructor wins, then a credential's `endpoint` (an `API Key with Endpoint` credential; the vendor's `API Key` type has no endpoint field). Either is the full request URL, not a base URL as for `SystemOneDecision`. Trailing slashes are removed, because the API answers a path with one with `404`. |
 | **Key** | A Perplexity API key, sent as `Authorization: Bearer <key>`. The API does not read `x-api-key`. |
 | **Model** | `pplx-decider-v1-27b`, the only model the API serves. It is the row's `APIName` and the driver's default. |
 | **Limits** | 1 to 128 questions per call, up to 255 options per Choice, up to 10 levels per Score, under 262,144 input tokens (the state and every question), and a 32 MiB body. 10 requests per second per organization. |
