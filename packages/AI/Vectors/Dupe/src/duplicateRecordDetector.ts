@@ -69,6 +69,21 @@ const DEFAULT_BATCH_SIZE = 500;
  */
 const VECTOR_QUERY_BATCH_SIZE = 100;
 
+/**
+ * Upper bound on how many per-record results {@link DuplicateRecordDetector.GetDuplicateRecords}
+ * keeps in memory for the returned response.
+ *
+ * The run itself is batched, but the RESULTS were previously accumulated for its whole duration —
+ * O(records), not O(batch). On a 61,671-record entity that alone exhausted an 8 GB heap and the
+ * process died before the run could finish, so whole-entity detection could not complete at all.
+ *
+ * Retaining them was never load-bearing: every result is already persisted per batch as
+ * `Duplicate Run Detail` / `Duplicate Run Detail Match` rows, so the array is a second copy of
+ * durable data. It is capped rather than removed so small runs keep returning what they always
+ * did; past the cap, `ResultsTruncated` says so and the database is the source of truth.
+ */
+const MAX_RETAINED_RESULTS = 1000;
+
 /** Default batch size for parallel database saves */
 const SAVE_BATCH_SIZE = 20;
 
@@ -134,6 +149,14 @@ export class DuplicateRecordDetector extends VectorBase {
     private embeddingModelAPIName: string | null = null;
     /** The Pinecone/pgvector/Qdrant index name resolved from the entity document's VectorIndex */
     private indexName: string;
+    /**
+     * The width of the vectors in that index (`MJ: Vector Indexes.Dimensions`), passed as
+     * `dimensions` to every `EmbedTexts` call. Entity vector sync embeds at this width when it
+     * fills the index, so the probe must match it: a 512-wide index probed with 1,536-wide vectors rejects every query,
+     * and the run completes with no matches. Undefined when the index sets no width; the model's
+     * default then applies on both paths.
+     */
+    private embeddingDimensions: number | undefined = undefined;
     /**
      * The EntityDocumentID for this run. Passed as the vector query `id` for providers that key
      * by EntityDocumentID (the in-process SimpleVectorServiceProvider — see
@@ -235,6 +258,12 @@ export class DuplicateRecordDetector extends VectorBase {
             LogStatus(`Duplicate detection: resuming from offset ${resumeOffset}`);
         }
 
+        // Carried across batches instead of the full result set. The queue holds only candidates
+        // that can actually auto-merge; the counter keeps the response's total honest once
+        // PotentialDuplicateResult is capped.
+        const autoMergeQueue: PotentialDuplicateResult[] = [];
+        let totalRecordsWithDuplicates = 0;
+
         for (let offset = resumeOffset; offset < recordIDs.length; offset += batchSize) {
             // Check for cancellation between batches
             await duplicateRun.Load(duplicateRun.ID);
@@ -252,7 +281,25 @@ export class DuplicateRecordDetector extends VectorBase {
                 batchIDs, entityInfo, entityDocument, templateParser, duplicateRun.ID,
                 topK, concurrency, options, startTime, recordIDs.length, offset, totalMatchesFound, contextUser
             );
-            response.PotentialDuplicateResult.push(...batchResults.Results);
+            // Retain a bounded sample for the response, and collect the auto-merge queue.
+            // Everything in batchResults.Results is already persisted (ProcessBatch writes the
+            // Detail and Detail Match rows), so dropping the overflow loses no data — only the
+            // in-memory copy that used to grow for the whole run.
+            totalRecordsWithDuplicates += batchResults.Results.length;
+            for (const result of batchResults.Results) {
+                if (response.PotentialDuplicateResult.length < MAX_RETAINED_RESULTS) {
+                    response.PotentialDuplicateResult.push(result);
+                } else {
+                    response.ResultsTruncated = true;
+                }
+                // Auto-merge still runs AFTER the full pass (below), so detection continues to
+                // see the pre-merge dataset exactly as before. Only the eligible candidates are
+                // carried, which is a small fraction of results by definition — they must clear
+                // the absolute threshold.
+                if (this.resultHasAutoMergeCandidate(result, entityDocument, options)) {
+                    autoMergeQueue.push(result);
+                }
+            }
             totalMatchesFound += batchResults.MatchesFound;
 
             // Update cursor for resume support
@@ -271,7 +318,8 @@ export class DuplicateRecordDetector extends VectorBase {
 
         // Step 8: Auto-merge high-confidence matches
         this.reportProgress(options, 'Merging', recordIDs.length, recordIDs.length, totalMatchesFound, startTime);
-        await this.ProcessAutoMerges(response, entityDocument, options);
+        response.TotalRecordsWithDuplicates = totalRecordsWithDuplicates;
+        await this.ProcessAutoMerges(autoMergeQueue, entityDocument, options);
 
         response.Status = 'Success';
         LogStatus(`Duplicate detection complete: ${recordIDs.length} records checked, ${totalMatchesFound} matches found`);
@@ -317,7 +365,7 @@ export class DuplicateRecordDetector extends VectorBase {
         const record = records.Results[0];
         const templateParser = EntityDocumentTemplateParser.CreateInstance();
         const templateTexts = await this.GenerateTemplateTexts(templateParser, entityDocument, [record], ContextUser);
-        const embedResult = await this.embedding.EmbedTexts({ texts: templateTexts, model: this.embeddingModelAPIName });
+        const embedResult = await this.embedding.EmbedTexts({ texts: templateTexts, model: this.embeddingModelAPIName, dimensions: this.embeddingDimensions });
 
         const topK = options.TopK ?? DEFAULT_TOP_K;
         const queryResults = await this.QueryDuplicatesForRecords(
@@ -414,7 +462,7 @@ export class DuplicateRecordDetector extends VectorBase {
             // Embed this sub-batch
             this.reportProgress(options, 'Embedding', totalRecords, processedSoFar, matchesSoFar, startTime);
             const subTemplateTexts = await this.GenerateTemplateTexts(templateParser, entityDocument, subRecords, contextUser);
-            const subEmbedResult = await this.embedding.EmbedTexts({ texts: subTemplateTexts, model: this.embeddingModelAPIName });
+            const subEmbedResult = await this.embedding.EmbedTexts({ texts: subTemplateTexts, model: this.embeddingModelAPIName, dimensions: this.embeddingDimensions });
 
             // Query vector DB for each record in the sub-batch with concurrency control
             this.reportProgress(options, 'Querying', totalRecords, processedSoFar, matchesSoFar, startTime);
@@ -446,6 +494,11 @@ export class DuplicateRecordDetector extends VectorBase {
     /**
      * Load the IDs of records to check, using the appropriate strategy based on the request.
      * Returns an array of primary key value strings.
+     *
+     * Every loader reads with `IgnoreMaxRows`. Without it RunView falls back to the entity's
+     * `UserViewMaxRows` (1,000 by default) and returns only the first page of ids. The run then sets
+     * `TotalItemCount` from that page, so it checks a fraction of the records and still reports
+     * itself complete: "1000 of 1000" on a 61,671-record entity.
      */
     protected async LoadRecordIDsToCheck(params: PotentialDuplicateRequest, entityInfo: EntityInfo): Promise<string[]> {
         if (params.ListID) {
@@ -468,6 +521,7 @@ export class DuplicateRecordDetector extends VectorBase {
             ExtraFilter: `ListID = '${sanitizedListID}'`,
             Fields: ['RecordID'],
             ResultType: 'simple',
+            IgnoreMaxRows: true, // every member, not the first UserViewMaxRows (see LoadRecordIDsToCheck)
         }, this.CurrentUser);
 
         if (!viewResults.Success) {
@@ -496,6 +550,7 @@ export class DuplicateRecordDetector extends VectorBase {
             ViewID: viewID,
             Fields: [pkField],
             ResultType: 'simple',
+            IgnoreMaxRows: true, // every row of the view, not the first UserViewMaxRows (see LoadRecordIDsToCheck)
         }, this.CurrentUser);
 
         if (!viewResults.Success) {
@@ -515,6 +570,7 @@ export class DuplicateRecordDetector extends VectorBase {
             ExtraFilter: extraFilter,
             Fields: [pkField],
             ResultType: 'simple',
+            IgnoreMaxRows: true, // every matching row, not the first UserViewMaxRows (see LoadRecordIDsToCheck)
         }, this.CurrentUser);
 
         if (!viewResults.Success) {
@@ -594,6 +650,7 @@ export class DuplicateRecordDetector extends VectorBase {
             const vectorIndex = KnowledgeHubMetadataEngine.Instance.GetVectorIndexByID(entityDocument.VectorIndexID);
             if (vectorIndex) {
                 this.indexName = vectorIndex.Name;
+                this.embeddingDimensions = vectorIndex.Dimensions ?? undefined;
             }
         }
         if (!this.indexName) {
@@ -1595,7 +1652,7 @@ export class DuplicateRecordDetector extends VectorBase {
      * Automatically merge records that meet the absolute match threshold.
      */
     protected async ProcessAutoMerges(
-        response: PotentialDuplicateResponse,
+        results: PotentialDuplicateResult[],
         entityDocument: MJEntityDocumentEntity,
         options: DuplicateDetectionOptions = {}
     ): Promise<void> {
@@ -1610,7 +1667,7 @@ export class DuplicateRecordDetector extends VectorBase {
         }
 
         const absoluteThreshold = options.AbsoluteMatchThreshold ?? entityDocument.AbsoluteMatchThreshold;
-        for (const dupeResult of response.PotentialDuplicateResult) {
+        for (const dupeResult of results) {
             for (const [index, dupe] of dupeResult.Duplicates.entries()) {
                 if (!this.IsAutoMergeEligible(dupe, dupeResult, entityDocument, absoluteThreshold)) {
                     continue;
@@ -1618,6 +1675,29 @@ export class DuplicateRecordDetector extends VectorBase {
                 await this.executeAutoMerge(dupe, dupeResult, entityDocument, index);
             }
         }
+    }
+
+    /**
+     * True when a result carries at least one candidate that {@link ProcessAutoMerges} could act
+     * on. Used to decide what the run must carry across batches: results with no eligible
+     * candidate are already persisted and are never read again, so holding them only grows the
+     * heap.
+     *
+     * Deliberately reuses {@link IsAutoMergeEligible}, so a subclass that narrows eligibility
+     * narrows what is retained too, and the two can never disagree.
+     */
+    protected resultHasAutoMergeCandidate(
+        result: PotentialDuplicateResult,
+        entityDocument: MJEntityDocumentEntity,
+        options: DuplicateDetectionOptions = {}
+    ): boolean {
+        const entityInfo = this.Metadata.EntityByName(entityDocument.Entity);
+        if (entityInfo && !entityInfo.AllowRecordMerge) {
+            return false;
+        }
+        const absoluteThreshold = options.AbsoluteMatchThreshold ?? entityDocument.AbsoluteMatchThreshold;
+        return result.Duplicates.some((dupe) =>
+            this.IsAutoMergeEligible(dupe, result, entityDocument, absoluteThreshold));
     }
 
     /**

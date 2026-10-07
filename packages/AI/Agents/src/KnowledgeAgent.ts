@@ -405,7 +405,12 @@ export class KnowledgeAgent {
                 Success: result.Status === 'Success',
                 Data: {
                     Status: result.Status,
-                    DuplicateCount: result.PotentialDuplicateResult?.length || 0,
+                    // PotentialDuplicateResult is capped for large runs (the array used to grow
+                    // for the whole run and exhaust the heap); TotalRecordsWithDuplicates is the
+                    // uncapped count, so the number reported here stays correct at any scale.
+                    DuplicateCount: result.TotalRecordsWithDuplicates
+                        ?? result.PotentialDuplicateResult?.length
+                        ?? 0,
                 },
                 ErrorMessage: result.ErrorMessage || undefined,
             };
