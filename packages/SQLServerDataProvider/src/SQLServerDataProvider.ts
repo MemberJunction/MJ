@@ -1475,8 +1475,9 @@ export class SQLServerDataProvider
    * parameter is not passed (`ISNULL(@p, [Col])`), so replaying the recording applies exactly
    * the change that was made and leaves the target's other columns — including settings a
    * consumer tuned on an MJ-owned row — alone. A field changed to NULL still carries its
-   * `_Clear` companion (derived from the same map). A save that changed nothing (a forced
-   * push) has nothing to replay, so it is logged as a comment.
+   * `_Clear` companion (derived from the same map). A save whose changes touch no proc
+   * parameter has nothing to replay, so it is logged as a comment. A hand-written update proc
+   * (spUpdateGenerated off) makes no ISNULL promise, so it keeps the full-row form.
    */
   protected override RenderReplayUpdateSQL(
     binding: SaveCallBinding,
@@ -1487,6 +1488,9 @@ export class SQLServerDataProvider
       throw new Error(`SQLServerDataProvider.RenderReplayUpdateSQL: unexpected binding kind '${binding.kind}'`);
     }
     const info = entity.EntityInfo;
+    if (!info.spUpdateGenerated) {
+      return undefined;
+    }
     if (changedFieldValues.size === 0) {
       const key = entity.PrimaryKey.ToString().replace(/[\r\n]+/g, ' ');
       return `-- ${info.Name} (${key}): saved with no field changes; nothing to replay`;

@@ -81,8 +81,8 @@ class SaveDeleteTestProvider extends SQLServerDataProvider {
   }
 
   /** Exposes the save SQL pair (executed fullSQL, logged simpleSQL) for the replay-guard tests. */
-  public async SaveSQLForTest(entity: BaseEntity, isNew: boolean, user: UserInfo) {
-    return this.GenerateSaveSQL(entity, isNew, user, new EntitySaveOptions());
+  public async SaveSQLForTest(entity: BaseEntity, isNew: boolean, user: UserInfo, options = new EntitySaveOptions()) {
+    return this.GenerateSaveSQL(entity, isNew, user, options);
   }
 }
 
@@ -344,7 +344,7 @@ describe('SQLServerDataProvider replay form of a create (Metadata_Sync recording
     expect(simpleSQL).not.toContain('@ExternalID_Clear=1');
   });
 
-  it('UPDATE that changed nothing (a forced save): logged as a comment, so a replay writes nothing', async () => {
+  it('UPDATE that changed no proc parameter: logged as a comment, so a replay writes nothing', async () => {
     const provider = makeProvider();
     const entity = makeSavedWidgetEntity(makeWidgetEntityInfo(), TEST_USER);
 
@@ -355,15 +355,40 @@ describe('SQLServerDataProvider replay form of a create (Metadata_Sync recording
     expect(simpleSQL).not.toContain('EXEC');
   });
 
+  it('forced UPDATE (IgnoreDirtyState, e.g. alwaysPush): logs the full row, which is what the caller asked to re-impose', async () => {
+    const provider = makeProvider();
+    const entity = makeSavedWidgetEntity(makeWidgetEntityInfo(), TEST_USER);
+    entity.Set('Name', 'Renamed');
+    const options = Object.assign(new EntitySaveOptions(), { IgnoreDirtyState: true });
+
+    const { fullSQL, simpleSQL } = await provider.SaveSQLForTest(entity, false, TEST_USER, options);
+
+    expect(simpleSQL).toBe(fullSQL);
+    expect(simpleSQL).toContain('@Description=@Description');
+  });
+
+  it('UPDATE through a hand-written update proc (spUpdateGenerated off): logs the full row, since no ISNULL merge is promised', async () => {
+    const provider = makeProvider();
+    const info = makeWidgetEntityInfo();
+    info.spUpdateGenerated = false;
+    const entity = makeSavedWidgetEntity(info, TEST_USER);
+    entity.Set('Name', 'Renamed');
+
+    const { fullSQL, simpleSQL } = await provider.SaveSQLForTest(entity, false, TEST_USER);
+
+    expect(simpleSQL).toBe(fullSQL);
+    expect(simpleSQL).toContain('@Description=@Description');
+  });
+
   it('UPDATE inside a TransactionGroup: the replay form reuses the save\'s suffix instead of allocating another ordinal', async () => {
     const provider = makeProvider();
-    const group = {};
+    const group = new SQLServerTransactionGroup();
     const first = makeSavedWidgetEntity(makeWidgetEntityInfo(), TEST_USER);
     first.Set('Name', 'One');
-    (first as unknown as { TransactionGroup: object }).TransactionGroup = group;
+    first.TransactionGroup = group;
     const second = makeSavedWidgetEntity(makeWidgetEntityInfo(), TEST_USER);
     second.Set('Name', 'Two');
-    (second as unknown as { TransactionGroup: object }).TransactionGroup = group;
+    second.TransactionGroup = group;
 
     const a = await provider.SaveSQLForTest(first, false, TEST_USER);
     const b = await provider.SaveSQLForTest(second, false, TEST_USER);

@@ -11,7 +11,9 @@ Metadata_Sync migrations are SQL logs of `mj sync push`. The logged form of an u
 - **SQL Server overrides it.** The logged update is `EXEC spUpdate<Entity>` with the changed fields plus the primary key. The update procs keep any column whose parameter is not passed (`ISNULL(@p, [Col])`), which is the same contract not-loaded fields already rely on.
   - A field changed to NULL keeps its `_Clear` companion.
   - The replay form reuses the save's variable suffix, so it never consumes an extra `TransactionGroup` ordinal.
-  - A save that changed nothing (a forced push) is logged as a SQL comment, because there is nothing to replay.
+  - A save whose changes touch no proc parameter is logged as a SQL comment, because there is nothing to replay.
+  - An entity with a hand-written update proc (`spUpdateGenerated` off) keeps the full-row form, because nothing promises that proc keeps unpassed columns.
+- **A forced save keeps the full-row form.** A save with `IgnoreDirtyState` (MetadataSync's `alwaysPush`) asked to re-impose the whole row, so its recording still does.
 - **The executed SQL is unchanged.** Execution still passes every column. Only the log form changed, and only for loggers that write the record-change-free form (`logRecordChangeMetadata` not `true`).
 
 Behaviour note: a recording now re-imposes only the values that MJ changed. A value MJ did not change, even one that differs on a consumer, is no longer written by the replay. Migrations published before this change still contain full-row updates, so consumers that tune MJ-owned rows should keep re-applying those settings after migrating.

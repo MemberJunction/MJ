@@ -1446,10 +1446,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         // A CREATE's logged form is guarded on the primary key so a migration replay of
         // the recording converges on a database that already holds the row (#4503). An
         // UPDATE's logged form carries only the fields this save changed, so a replay never
-        // resets the target's other columns. Dialects without a replay form log the plain save SQL.
+        // resets the target's other columns. A forced save (IgnoreDirtyState, e.g. MetadataSync's
+        // `alwaysPush`) asked to re-impose the whole row, so it keeps the full-row form. Dialects
+        // without a replay form log the plain save SQL.
         const replaySQL = isNew
             ? this.RenderReplaySaveSQL(binding, entity, fieldValueMap)
-            : this.RenderReplayUpdateSQL(binding, entity, this.changedFieldValues(entity, fieldValueMap));
+            : options?.IgnoreDirtyState
+              ? undefined
+              : this.RenderReplayUpdateSQL(binding, entity, this.changedFieldValues(entity, fieldValueMap));
         const simpleSQL = replaySQL ?? baseSaveSQL.sql;
 
         // 5. Optionally wrap with record-change emission.
