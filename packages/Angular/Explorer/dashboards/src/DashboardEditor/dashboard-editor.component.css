@@ -34,11 +34,9 @@
 
 .dashboard-editor-main { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .dashboard-editor-body { position: relative; flex: 1; min-height: 0; overflow: hidden; }
-.dashboard-editor-note { margin: 0; padding: var(--mj-space-2) var(--mj-space-8) 0; font-size: var(--mj-text-xs); color: var(--mj-text-muted); }
 
 /* Card style: a padded body with the dashboard in a card. Golden Layout sizes itself from the body, so it needs a definite height. */
 .dashboard-editor-main.is-card { padding: var(--mj-space-4) var(--mj-space-8) var(--mj-space-8); }
-.dashboard-editor-main.is-card .dashboard-editor-note { padding: 0 0 var(--mj-space-3); }
 .dashboard-editor-main.is-card .dashboard-editor-body {
   flex: none; height: max(480px, calc(100vh - 230px));
   background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default);

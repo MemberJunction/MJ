@@ -8,6 +8,7 @@ import { fromEvent, BehaviorSubject, Subject, Subscription, Observable, combineL
 import type { AppContextSnapshot } from '@memberjunction/ai-core-plus';
 import { map, distinctUntilChanged, filter } from 'rxjs/operators';
 import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
+import type { ResourceData } from '@memberjunction/core-entities';
 import { BaseResourceComponent } from './base-resource-component';
 import { ResolveMovedNavItem } from './moved-nav-items';
 
@@ -1684,15 +1685,53 @@ export class NavigationService implements OnDestroy {
    * component that mounts from workspace restoration can subscribe here and still
    * pick up its initial deep-link state regardless of whether the params landed in
    * the tab config before or after it mounted.
+   *
+   * With `owner`, the params arrive only while the tab shows that resource (see
+   * {@link IsTabShowingResource}). A tab can be reused for another resource while the
+   * owner stays alive in the component cache, still bound to the tab's ID.
    */
-  public ObserveTabQueryParams(tabId: string): Observable<Record<string, string>> {
+  public ObserveTabQueryParams(tabId: string, owner?: ResourceData): Observable<Record<string, string>> {
     return this.workspaceManager.Configuration.pipe(
       map(config => {
         const tab = config?.tabs?.find(t => t.id === tabId);
-        return (tab?.configuration?.['queryParams'] || {}) as Record<string, string>;
+        return { tab, params: (tab?.configuration?.['queryParams'] || {}) as Record<string, string> };
       }),
-      distinctUntilChanged((a, b) => this.shallowParamsEqual(a, b))
+      distinctUntilChanged((a, b) => this.shallowParamsEqual(a.params, b.params)),
+      filter(({ tab }) => !owner || (!!tab && this.tabShowsResource(tab, owner))),
+      map(({ params }) => params)
     );
+  }
+
+  /**
+   * True while the tab shows `owner`: the same app, resource type, driver class, entity and record as the
+   * resource data the tab container gave the owner. The app, resource type, driver class and entity are
+   * compared only when the owner has them; the record is always compared.
+   */
+  public IsTabShowingResource(tabId: string, owner: ResourceData): boolean {
+    const tab = this.workspaceManager.GetTab(tabId);
+    return !!tab && this.tabShowsResource(tab, owner);
+  }
+
+  /** The fields the tab container compares to decide that a tab's content changed. */
+  private tabShowsResource(tab: WorkspaceTab, owner: ResourceData): boolean {
+    const ownerConfig = (owner.Configuration ?? {}) as Record<string, unknown>;
+    const tabConfig = tab.configuration ?? {};
+    const sameText = (expected: unknown, actual: unknown, ignoreCase: boolean): boolean => {
+      if (expected === undefined || expected === null || expected === '') {
+        return true;
+      }
+      const expectedText = String(expected).trim();
+      const actualText = actual == null ? '' : String(actual).trim();
+      return ignoreCase ? expectedText.toLowerCase() === actualText.toLowerCase() : expectedText === actualText;
+    };
+    const ownerAppId = ownerConfig['applicationId'] as string | undefined;
+    // Same precedence as the tab container uses for the owner's ResourceRecordID
+    const tabRecordId = (tabConfig['recordId'] as string | undefined) || tab.resourceRecordId || '';
+    return (!ownerAppId || UUIDsEqual(ownerAppId, tab.applicationId)) &&
+      sameText(ownerConfig['resourceType'], tabConfig['resourceType'], true) &&
+      sameText(ownerConfig['driverClass'], tabConfig['driverClass'], false) &&
+      sameText(ownerConfig['Entity'], tabConfig['Entity'], true) &&
+      String(owner.ResourceRecordID ?? '') === String(tabRecordId);
   }
 
   private shallowParamsEqual(a: Record<string, string>, b: Record<string, string>): boolean {

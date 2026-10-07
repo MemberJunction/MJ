@@ -67,9 +67,6 @@
 }
 
 <div class="dashboard-editor-main" [class.is-card]="BodyStyle === 'card'">
-  @if (IsEditing) {
-    <p class="dashboard-editor-note">Parts are tabs in one panel. Drag a tab to the left, right, top or bottom edge of the panel to put it side by side.</p>
-  }
   <div #body class="dashboard-editor-body">
     <ng-container #viewerHost></ng-container>
   </div>

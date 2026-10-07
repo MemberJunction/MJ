@@ -91,9 +91,10 @@ function isInside(container: Element | undefined, target: EventTarget | null): b
   styles: [`
     :host { display: inline-flex; min-width: 0; max-width: 100%; }
     .switcher-heading { display: flex; min-width: 0; max-width: 100%; margin: 0; font: inherit; }
+    /* Shifted with left, not a negative margin: a negative margin makes the heading narrower than the name */
     .switcher-title {
       display: inline-flex; align-items: center; gap: var(--mj-space-3); max-width: 100%;
-      margin-left: calc(-1 * var(--mj-space-2)); padding: var(--mj-space-1) var(--mj-space-2);
+      position: relative; left: calc(-1 * var(--mj-space-2)); padding: var(--mj-space-1) var(--mj-space-2);
       border: 0; border-radius: var(--mj-radius-md); background: transparent; color: var(--mj-text-primary);
       font: inherit; font-size: var(--mj-text-lg); font-weight: var(--mj-font-bold); letter-spacing: var(--mj-tracking-tight);
       cursor: pointer;

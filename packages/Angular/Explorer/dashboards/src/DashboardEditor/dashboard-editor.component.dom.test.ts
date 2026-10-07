@@ -58,9 +58,6 @@ const SAVED_SCREENSHOT = 'data:image/jpeg;base64,c2F2ZWQ=';
 /** A new screenshot of the dashboard's layout. */
 const NEW_SCREENSHOT = 'data:image/jpeg;base64,bmV3';
 
-/** The text of the note the editor shows above the dashboard while editing. */
-const EDIT_NOTE = 'Parts are tabs in one panel. Drag a tab to the left, right, top or bottom edge of the panel to put it side by side.';
-
 const EDIT = '.dashboard-editor-edit';
 const ADD_PART = '.dashboard-editor-add-part';
 const SAVE = '.dashboard-editor-save';
@@ -782,18 +779,6 @@ describe('DashboardEditorComponent parts (DOM)', () => {
     await settle(fixture);
 
     expect(partDialog(fixture).Provider).toBe(editor.Provider);
-  });
-
-  it('shows the edit note only while editing', async () => {
-    const { fixture } = await renderEditor();
-    expect(Query(fixture, '.dashboard-editor-note')).toBeNull();
-
-    await startEditing(fixture);
-    expect(Text(fixture, '.dashboard-editor-note')).toBe(EDIT_NOTE);
-
-    Click(fixture, CANCEL);
-    await settle(fixture);
-    expect(Query(fixture, '.dashboard-editor-note')).toBeNull();
   });
 });
 
