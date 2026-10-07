@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT110 - Search Scope Bound",
+    "Description": "A scoped search is bounded by its scope's rows, against a live database, with no model, embedding, index or network: a SearchEngine test subclass injects one stub provider entry (returning hand-built 'fulltext' hits) under the ID of a borrowed MJ: Search Providers row. Setup creates, as the run user, a non-global Active MJ: Search Scopes row (its save auto-grants the creator a Manage permission) with one MJ: Search Scope Entities lane on MJ: AI Agents whose ExtraFilter is ID='<agent A>', and reloads SearchEngineBase. SSB1: with NO provider rows the scoped search runs no provider and returns nothing, although a provider is configured; the logged scope decision and ExplainScope are both Reachable:false with the no-provider-rows diagnostic. SSB2: after an enabled MJ: Search Scope Providers row is added, the stub's full-text hits for agents A and B (both readable by the run user) are held to the lane ExtraFilter, so only A survives. SSB3: the search-log rows, the auto-granted permission, the provider row, the lane and the scope are deleted and confirmed gone; Teardown removes anything a failed check left behind.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "A non-global scope with no provider rows runs no provider and is Reachable:false; a lane ExtraFilter holds a non-entity provider's hits to the filter; the fixture rows are removed."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "search-scope-bound"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "C1F25DE5-7F17-40F4-9F7C-8D4B6E7484D9"
+  }
+}

@@ -36,9 +36,22 @@ A `MJ: Search Scope` is a named, reusable search boundary. Each scope owns 4 chi
 Search Scope
 ├─ Search Scope Providers          → which providers participate (+ per-provider query transforms)
 ├─ Search Scope External Indexes   → which vector / 3rd-party indexes
-├─ Search Scope Entities           → which entities for entity + full-text search
+├─ Search Scope Entities           → which entities for entity + full-text + tag search (+ an ExtraFilter bound)
 └─ Search Scope Storage Accounts   → which file storage accounts / folders
 ```
+
+### How a scope bounds a search (empty means nothing)
+
+A **non-global** scope is bounded by its rows. Nothing it leaves out is searched — an empty child table never means "everything":
+
+- **It runs only its enabled provider rows.** A scope with no enabled `MJ: Search Scope Providers` row runs **no provider** and returns nothing; its scope decision is `Reachable: false` with a diagnostic saying so, and `ExplainScope` reports the same before you run anything. (Previously a scope with no provider rows ran *every* provider, so disabling a scope's last provider row widened it to all of them.)
+- **Each provider searches only the lanes of its own kind.** An empty lane list means that provider returns no results, without querying: no entity rows → the entity, full-text and tag providers return nothing; no external-index rows of a provider's `IndexType` → that vector or 3rd-party provider returns nothing (it never falls back to its configured default index); no storage rows → the storage provider returns nothing. A scope with **no lanes at all** reaches nothing (`Reachable: false`).
+- **A lane `ExtraFilter` bounds that entity for every provider.** The entity provider applies it in SQL. Every other provider's hits for that entity — full-text, tag, vector, 3rd-party — are kept only when the record satisfies the same rendered filter, checked as the searching user (`PK IN (...) AND (<ExtraFilter>)`, one read per filtered entity per scope). A failed check drops those hits. Several lanes on one entity are ORed; a lane on the entity with no `ExtraFilter` leaves it unbounded.
+- **A storage lane's `FolderPath` restricts.** If it renders empty, renders a path with an empty segment (`clients/{{ context.SecondaryScopes.Client }}` with the dimension absent renders `clients/` — every client's folder), contains a `..` segment, or interpolates a value containing `..`, `/` or `\`, the scope is **refused** (the search fails with an error naming the lane) and `ExplainScope` marks the lane `Skipped` with the reason. A storage row with no `FolderPath` still covers the whole account.
+
+A **global** scope (`IsGlobal = true`) is unconstrained: it runs every available provider with no scope constraints, as an unscoped search does.
+
+To give a non-global scope its old breadth, add the rows explicitly — one enabled `MJ: Search Scope Providers` row per provider it should run, and lanes for what each provider should search.
 
 ### Creating a scope (metadata sync)
 
@@ -238,10 +251,12 @@ No scope duplication needed.
 
 | Provider | Mechanism |
 |---|---|
-| `EntitySearchProvider` / `FullTextSearchProvider` | RunView already evaluates `UserRowLevelSecurity` for `ContextCurrentUser`. The providers thread `contextUser` through to RunView — nothing extra required. |
-| `VectorSearchProvider` | Each embedded record must carry permission metadata (role IDs, owner ID, tenant ID) at ingest time. At query time, translate `contextUser`'s roles into a native metadata filter and merge it with the scope's rendered `MetadataFilter` via `$and`. |
+| `EntitySearchProvider` / `FullTextSearchProvider` | RunView already evaluates `UserRowLevelSecurity` for `ContextCurrentUser`. The providers thread `contextUser` through to RunView — nothing extra required. In a scoped search both search only the scope's entity lanes; an empty entity list returns nothing. The entity provider applies each lane's `ExtraFilter` in its RunView; full-text hits are held to the same filter by the engine (below). |
+| `TagSearchProvider` | Restricted to the scope's entity lanes (none → nothing); its hits are held to each lane's `ExtraFilter` by the engine. |
+| `VectorSearchProvider` | Each embedded record must carry permission metadata (role IDs, owner ID, tenant ID) at ingest time. At query time, translate `contextUser`'s roles into a native metadata filter and merge it with the scope's rendered `MetadataFilter` via `$and`. In a scoped search it queries only the scope's `Vector` index rows — none means no query, never every index. |
 | `StorageSearchProvider` | Folder-path bounded by the scope, and account-permission bounded by `MJ: File Storage Account Permissions`, **evaluated per call** for the searching user by `StorageAccessEvaluator` (`@memberjunction/storage`): nothing is snapshotted at startup, so a grant or revocation applies to the next search. The rows are read as the MJ system user and decided for the caller (Everyone, Role or User rows; `CanRead`); an account with no rows is open (the current product rule); a failed evaluation searches nothing. The searchable accounts themselves are read per search from `FileStorageEngine`'s live cache. **Storage hits are then re-checked in the late filter**: `SearchEngine.filterByPermissions` keeps a `storage-file` result only when its engine-stamped `ProviderId` is a `StorageSearchProvider` entry and its `RawMetadata.accountId` is readable by the user now — a `storage-file` hit from any other provider is dropped. The storage GraphQL routes (`FileResolver`) run the same evaluator before any driver call. |
-| 3rd-party index providers | Use the engine's native permission/ACL filter. Documented in the "how to add a provider" guide. |
+| 3rd-party index providers | Use the engine's native permission/ACL filter. Documented in the "how to add a provider" guide. In a scoped search each queries only the scope's rows of its own `IndexType`; with none it queries nothing. The configured `defaultIndex` / `defaultCollection` is used **only** by an unscoped search. |
+| **Every provider, lane `ExtraFilter`** | After the providers return and before per-scope fusion, `SearchEngine` keeps a hit for an entity that has a lane `ExtraFilter` in the scope only when its record satisfies that filter: one RunView per filtered entity per scope, as the user, with the lane's rendered filter ANDed to `PK IN (...)`. Only hits whose engine-stamped `ProviderId` is an `EntitySearchProvider` entry are exempt (that provider applied the filter itself) — the declared `SourceType` is not trusted. Storage files pass. A failed read drops that entity's hits. |
 
 ### The origin-record gate for derived content
 
@@ -419,7 +434,7 @@ The engine renders these fields at search time with `context.PrimaryScopeRecordI
 - `SearchScopeExternalIndex.MetadataFilter` (rendered + JSON-parsed → native vector/ES filter)
 - `SearchScopeEntity.ExtraFilter` (rendered → RunView `ExtraFilter`)
 - `SearchScopeEntity.UserSearchString` (rendered → RunView `UserSearchString`)
-- `SearchScopeStorageAccount.FolderPath` (rendered → path prefix filter)
+- `SearchScopeStorageAccount.FolderPath` (rendered → path prefix filter). It **restricts**, so it is guarded like a filter: a render that is empty, has an empty segment, contains a `..` segment, or interpolates a value containing `..`, `/` or `\` refuses the scope rather than widening it. The `path` escaper refuses such a value outright — it used to strip it, which turned `..` into nothing and `../other` into `other`.
 
 Available filters in scope templates (matching `@memberjunction/templates`): `json`, `jsoninline`, `jsonparse`.
 
@@ -648,7 +663,9 @@ Four external providers ship today:
 | `OpenSearchSearchProvider` | OpenSearch (incl. Amazon OpenSearch Service) | username+password OR pre-signed AWS SigV4 header | OS query DSL = ES 7.x compatible |
 
 Each consumes `SearchScope.ExternalIndexes` rows with the matching
-`IndexType`. The scope's rendered `MetadataFilter` (a JSON object or string in
+`IndexType` — and in a scoped search, only those: a scope with no row of the
+provider's type gets nothing from it (the configured default index or collection
+serves unscoped searches only). The scope's rendered `MetadataFilter` (a JSON object or string in
 the engine's native filter DSL — already-rendered with SearchContext via
 Nunjucks) composes into the engine's filter clause for permission / tenant
 push-down. Per-engine connection options live on `SearchProvider.ProviderConfig`.
@@ -674,7 +691,9 @@ export class MySearchProvider extends BaseSearchProvider {
     }
 
     public async Search(query, topK, filters, contextUser, scopeConstraints?): Promise<SearchResultItem[]> {
-        // 1. If scopeConstraints?.ExternalIndexes is set, filter to your IndexType
+        // 1. If scopeConstraints?.ExternalIndexes is set, filter to your IndexType — this.ScopedExternalIndexRows(scopeConstraints, 'MyIndexType').
+        //    A DEFINED but empty result means the scope gives you nothing: return [] without querying.
+        //    Fall back to a configured default index only when it is undefined (an unscoped search).
         // 2. If scopeConstraints?.QueryTransforms?.[this.SourceType] is set, use that as the query
         // 3. Push permission predicate (scope.MetadataFilter / equivalent) into your engine's WHERE clause
         // 4. Map results to SearchResultItem[]

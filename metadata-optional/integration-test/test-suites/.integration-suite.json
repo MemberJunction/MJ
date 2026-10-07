@@ -1324,6 +1324,17 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT110 - Search Scope Bound",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "4CF85E49-88E4-4441-A919-2A3FECD4906D"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT103 - RunQuery Rendering over GraphQL",
             "Sequence": 72,
             "Status": "Active"

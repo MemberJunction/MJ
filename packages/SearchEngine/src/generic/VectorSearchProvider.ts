@@ -97,11 +97,6 @@ export class VectorSearchProvider extends BaseSearchProvider {
         scopeConstraints?: ScopeConstraints
     ): Promise<SearchResultItem[]> {
         try {
-            await AIEngine.Instance.Config(false, contextUser);
-
-            // Honor per-provider query transform
-            const effectiveQuery = scopeConstraints?.QueryTransforms?.[this.SourceType] ?? query;
-
             // Determine the scoped vector-index subset. When scopeConstraints.ExternalIndexes
             // is provided, filter to rows where IndexType='Vector' (3rd-party rows are for
             // other providers) and match the listed VectorIndexIDs. When absent, fall back
@@ -109,6 +104,15 @@ export class VectorSearchProvider extends BaseSearchProvider {
             const scopedVectorRows = scopeConstraints?.ExternalIndexes
                 ? scopeConstraints.ExternalIndexes.filter(r => r.IndexType === 'Vector' && r.VectorIndexID)
                 : undefined;
+            if (scopedVectorRows?.length === 0) {
+                // The scope names no vector index: nothing for this provider, and nothing to query.
+                return [];
+            }
+
+            await AIEngine.Instance.Config(false, contextUser);
+
+            // Honor per-provider query transform
+            const effectiveQuery = scopeConstraints?.QueryTransforms?.[this.SourceType] ?? query;
 
             const rv = new RunView();
             const indexResult = await rv.RunView<MJVectorIndexEntity>({

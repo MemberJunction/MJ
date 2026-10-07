@@ -109,6 +109,10 @@ export class StorageSearchProvider extends BaseSearchProvider {
         if (!this._available) {
             return [];
         }
+        if (scopeConstraints?.StorageAccounts?.length === 0) {
+            // A scoped search whose scope names no storage account: nothing for this provider.
+            return [];
+        }
         const startTime = Date.now();
 
         // Honor per-provider query transform
@@ -163,14 +167,14 @@ export class StorageSearchProvider extends BaseSearchProvider {
     }
 
     /**
-     * Restrict the searchable account list to the scope's allowed set. When the scope
-     * does not restrict (or the list is empty), returns the accounts unchanged.
+     * Restrict the searchable account list to the scope's allowed set. Only an UNSCOPED search
+     * (`scopeRows` undefined) returns the accounts unchanged; an empty list allows none.
      */
     private applyScopeAccountFilter(
         accounts: SearchableAccount[],
         scopeRows: ScopeStorageConstraint[] | undefined
     ): SearchableAccount[] {
-        if (!scopeRows || scopeRows.length === 0) return accounts;
+        if (!scopeRows) return accounts;
         const allowedIDs = new Set(scopeRows.map(r => NormalizeUUID(r.FileStorageAccountID)));
         return accounts.filter(a => allowedIDs.has(NormalizeUUID(a.account.ID)));
     }
@@ -179,6 +183,8 @@ export class StorageSearchProvider extends BaseSearchProvider {
      * Search a single storage account using the provider's native SearchFiles API.
      * If `folderPath` is supplied (from a scope), results are filtered to that prefix
      * after the driver returns — most drivers do not natively support a path filter.
+     * A supplied but BLANK folderPath restricts to nothing rather than to the whole account
+     * (the engine refuses such a path before it gets here; this keeps a direct caller closed too).
      */
     private async searchOneAccount(
         entry: SearchableAccount,
@@ -187,6 +193,9 @@ export class StorageSearchProvider extends BaseSearchProvider {
         contextUser: UserInfo,
         folderPath?: string
     ): Promise<SearchResultItem[]> {
+        if (folderPath !== undefined && !folderPath.trim()) {
+            return [];
+        }
         try {
             const driver = await FileStorageEngine.Instance.GetDriver(entry.account.ID, contextUser);
 
@@ -205,7 +214,7 @@ export class StorageSearchProvider extends BaseSearchProvider {
 
             const resultSet = await driver.SearchFiles(query, searchOptions);
             let files = resultSet.results;
-            if (folderPath && folderPath.trim()) {
+            if (folderPath !== undefined) {
                 const prefix = folderPath.endsWith('/') ? folderPath : folderPath + '/';
                 files = files.filter(f => (f.path ?? '').startsWith(prefix));
             }

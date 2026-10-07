@@ -92,7 +92,7 @@ interface ElasticsearchProviderConfig {
     password?: string;
     cloudId?: string;
     defaultField?: string;
-    /** Optional default index name when a scope doesn't list ExternalIndexes. */
+    /** Optional index an UNSCOPED search queries. A scoped search queries only its own Elasticsearch rows. */
     defaultIndex?: string;
 }
 
@@ -161,14 +161,13 @@ export class ElasticsearchSearchProvider extends BaseSearchProvider {
     ): Promise<SearchResultItem[]> {
         if (!this.client || !this.parsedConfig) return [];
 
-        // Determine target indexes: prefer scope-supplied, else providerConfig.defaultIndex
-        const scopedIndexes = scopeConstraints?.ExternalIndexes
-            ?.filter(r => r.IndexType === 'Elasticsearch' && r.ExternalIndexName)
-            .map(r => r.ExternalIndexName as string) ?? [];
+        // Determine target indexes: a scoped search queries only the scope's Elasticsearch rows (none
+        // means nothing); providerConfig.defaultIndex is for an UNSCOPED search alone.
+        const scopedIndexes = this.ScopedExternalIndexRows(scopeConstraints, 'Elasticsearch')
+            ?.map(r => r.ExternalIndexName as string);
 
-        const target: string[] = scopedIndexes.length > 0
-            ? scopedIndexes
-            : (this.parsedConfig.defaultIndex ? [this.parsedConfig.defaultIndex] : []);
+        const target: string[] = scopedIndexes
+            ?? (this.parsedConfig.defaultIndex ? [this.parsedConfig.defaultIndex] : []);
 
         if (target.length === 0) {
             // No index to query — fail closed (silently empty), matching VectorSearchProvider's pattern.

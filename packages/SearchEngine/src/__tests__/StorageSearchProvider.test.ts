@@ -162,6 +162,36 @@ describe('StorageSearchProvider — accounts and permissions are evaluated per s
         expect(scoped).toHaveLength(0);
     });
 
+    it('a scope that names no storage account searches nothing — no account lookup, no permission read, no driver', async () => {
+        fakeEngine.Config.mockClear(); // CheckAvailability in beforeEach loaded it once
+        const permissionReads = vi.fn();
+        provider.Provider = { RunViews: permissionReads } as unknown as IMetadataProvider;
+        const results = await provider.Search('report', 10, undefined, financeUser, { StorageAccounts: [] });
+        expect(results).toHaveLength(0);
+        expect(fakeEngine.Config).not.toHaveBeenCalled();
+        expect(permissionReads).not.toHaveBeenCalled();
+        expect(fakeEngine.GetDriver).not.toHaveBeenCalled();
+    });
+
+    it('a defined but blank FolderPath restricts to nothing, never to the whole account', async () => {
+        const results = await provider.Search('report', 10, undefined, financeUser, {
+            StorageAccounts: [{ FileStorageAccountID: ACCOUNT_OPEN, FolderPath: '  ' }],
+        });
+        expect(results).toHaveLength(0);
+        expect(fakeEngine.GetDriver).not.toHaveBeenCalled();
+    });
+
+    it('a FolderPath keeps only files under that folder', async () => {
+        const inside = await provider.Search('report', 10, undefined, financeUser, {
+            StorageAccounts: [{ FileStorageAccountID: ACCOUNT_OPEN, FolderPath: 'docs' }],
+        });
+        expect(searchedAccounts(inside)).toEqual([ACCOUNT_OPEN]);
+        const elsewhere = await provider.Search('report', 10, undefined, financeUser, {
+            StorageAccounts: [{ FileStorageAccountID: ACCOUNT_OPEN, FolderPath: 'clients/acme' }],
+        });
+        expect(elsewhere).toHaveLength(0);
+    });
+
     it('stamps the account on every hit, for the engine\'s late re-check', async () => {
         const results = await provider.Search('report', 10, undefined, financeUser);
         expect(results.every(r => r.ResultType === 'storage-file')).toBe(true);

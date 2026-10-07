@@ -14,7 +14,8 @@
  *   - `awsAuthHeader` — pre-signed AWS SigV4 Authorization header for
  *     Amazon OpenSearch Service deployments (caller responsible for
  *     refreshing before expiry)
- *   - `defaultIndex`, `defaultField` — fallbacks when scope is silent
+ *   - `defaultIndex`, `defaultField` — the index an UNSCOPED search queries (a scoped search queries
+ *     only its own OpenSearch rows) and the default query field
  *
  * @module @memberjunction/search-engine
  */
@@ -100,15 +101,16 @@ export class OpenSearchSearchProvider extends BaseSearchProvider {
         const defaultField = this.parsedConfig.defaultField ?? 'content';
         const node = this.parsedConfig.node.replace(/\/$/, '');
 
-        const scopedRows = scopeConstraints?.ExternalIndexes
-            ?.filter(r => r.IndexType === 'OpenSearch' && r.ExternalIndexName) ?? [];
-        const indexNames = scopedRows.length > 0
+        // A scoped search queries only the scope's OpenSearch rows (none means nothing); the default
+        // index is for an UNSCOPED search alone.
+        const scopedRows = this.ScopedExternalIndexRows(scopeConstraints, 'OpenSearch');
+        const indexNames = scopedRows
             ? scopedRows.map(r => r.ExternalIndexName as string)
             : (this.parsedConfig.defaultIndex ? [this.parsedConfig.defaultIndex] : []);
         if (indexNames.length === 0) return [];
 
         const filterClauses: unknown[] = [];
-        for (const idx of scopedRows) {
+        for (const idx of scopedRows ?? []) {
             const filterCheck = CheckScopeObjectFilter(idx.MetadataFilter);
             if (filterCheck.Status === 'unusable') {
                 // One request spans all target indexes, so an inapplicable filter would
