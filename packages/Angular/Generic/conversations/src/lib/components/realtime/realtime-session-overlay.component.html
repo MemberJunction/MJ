@@ -118,7 +118,8 @@
         <!-- "Agent can see": what the agent is looking at, with a switch per source. Always shown while any
              video source exists (a privacy indicator is never gated behind the disclosure ladder). -->
         <mj-realtime-perception-chip [Sources]="VideoSources"
-                                     (SourceToggled)="OnVideoSourceToggled($event)">
+                                     (SourceToggled)="OnVideoSourceToggled($event)"
+                                     (SourcePicked)="OnVideoSourcePicked($event)">
         </mj-realtime-perception-chip>
 
         <!-- Active channels (earned with the console at level 2+, host-gated via [ShowChannels]).

@@ -100,6 +100,60 @@ describe('RealtimePerceptionChipComponent (DOM)', () => {
     expect(toggles).toEqual([]);
   });
 
+  describe('picking the source the agent sees', () => {
+    /** The camera the agent sees, and a shared screen that is on but not seen: Gemini sees one source. */
+    const twoOn = (over: Partial<VideoSourceState> = {}) => [
+      source({ SourceID: 'capture:camera', Label: 'Camera', Kind: 'camera', ChannelKey: 'Camera', ...over }),
+      source({ SourceID: 'capture:screen', Label: 'Shared screen', Kind: 'screen', ChannelKey: 'ScreenShare', Active: false }),
+    ];
+
+    it('names the source the agent sees when more are on than it sees', () => {
+      expect(text(render(twoOn()), '.perception-chip__trigger')).toContain('Agent sees: Camera');
+      const three = render([...twoOn(), source({ SourceID: 'wb#1', Active: true })]);
+      expect(text(three, '.perception-chip__trigger')).toContain('Agent sees 2 of 3 sources');
+    });
+
+    it('offers to show the agent a source it does not see, and raises the pick', async () => {
+      const f = render(twoOn());
+      const picks = capture<string | null>(f.componentInstance.SourcePicked);
+      await press(f, '.perception-chip__trigger');
+      expect(text(f, '.perception-chip__hint')).toContain('Pick the one it sees');
+      const pick = queryAll(f, '.perception-chip__pick');
+      expect(pick.map((b) => b.getAttribute('aria-label'))).toEqual(['Show the agent Shared screen']);
+      await press(f, '.perception-chip__pick');
+      expect(picks).toEqual(['capture:screen']);
+    });
+
+    it('marks the pick, and lets the call choose again', async () => {
+      const f = render(twoOn({ Picked: true }));
+      const picks = capture<string | null>(f.componentInstance.SourcePicked);
+      await press(f, '.perception-chip__trigger');
+      expect(queryAll(f, '.perception-chip__row')[0].textContent).toContain('Viewing now, your pick');
+      await press(f, '.perception-chip__auto');
+      expect(picks).toEqual([null]);
+    });
+
+    it('offers no pick while the agent sees every source that is on, nor a return to the call without a pick', async () => {
+      const f = render([source(), source({ SourceID: 'rb#1', Label: 'Browser' })]);
+      await press(f, '.perception-chip__trigger');
+      expect(query(f, '.perception-chip__pick')).toBeNull();
+      expect(query(f, '.perception-chip__auto')).toBeNull();
+      expect(text(f, '.perception-chip__hint')).toContain('Turn a source off');
+    });
+
+    it('offers no pick for a source that is off', async () => {
+      const f = render([...twoOn(), source({ SourceID: 'rb#1', Label: 'Browser', Enabled: false, Active: false })]);
+      await press(f, '.perception-chip__trigger');
+      expect(queryAll(f, '.perception-chip__pick').map((b) => b.getAttribute('aria-label'))).toEqual(['Show the agent Shared screen']);
+    });
+
+    it('has no axe violations with the pick offered', async () => {
+      const f = render(twoOn({ Picked: true }));
+      await press(f, '.perception-chip__trigger');
+      await ExpectNoAxeViolations(f);
+    });
+  });
+
   it('closes the panel on Escape', async () => {
     const f = render([source()]);
     await press(f, '.perception-chip__trigger');

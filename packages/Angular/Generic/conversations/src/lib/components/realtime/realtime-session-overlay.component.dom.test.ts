@@ -74,6 +74,8 @@ function fakeSession() {
   const activity$ = new Subject<BaseRealtimeChannelClient>();
   const captures$ = new BehaviorSubject<RealtimeCaptureStates>(REALTIME_CAPTURES_OFF);
   const offers$ = new BehaviorSubject<RealtimeCaptureOffers>(REALTIME_CAPTURE_OFFERS_NONE);
+  /** The video sources the agent can or could see, as the runtime's arbiter lists them. */
+  const sources$ = new BehaviorSubject<readonly VideoSourceState[]>([]);
   /** The call's captions, as the runtime grows them. */
   const captions$ = new BehaviorSubject<RealtimeCaption[]>([]);
   /** The capture calls the overlay made, in order. */
@@ -91,7 +93,7 @@ function fakeSession() {
     get ActiveChannels(): readonly BaseRealtimeChannelClient[] { return channels$.value; },
     ChannelFocus$: focus$.asObservable(),
     ChannelActivity$: activity$.asObservable(),
-    VideoSources$: new BehaviorSubject<readonly VideoSourceState[]>([]).asObservable(),
+    VideoSources$: sources$.asObservable(),
     Captures$: captures$.asObservable(),
     CaptureOffers$: offers$.asObservable(),
     StartCamera: async (): Promise<RealtimeCaptureState> => {
@@ -122,13 +124,17 @@ function fakeSession() {
     SetFocusedChannel: (): void => undefined,
     GetAudioActivity: () => null,
     SetVideoSourceEnabled: (): boolean => true,
+    SelectVideoSource: (sourceId: string | null): boolean => {
+      calls.push(`SelectVideoSource:${sourceId}`);
+      return true;
+    },
     ToggleMute: (): boolean => false,
     SendText: (): void => undefined,
     SetMinimized: (): void => undefined,
     EndRealtimeSession: async (): Promise<void> => undefined,
     CancelDelegation: async (): Promise<boolean> => true,
   } satisfies Partial<RealtimeSessionService>;
-  return { service, channels$, focus$, activity$, captures$, offers$, captions$, calls };
+  return { service, channels$, focus$, activity$, captures$, offers$, captions$, sources$, calls };
 }
 
 /**
@@ -428,6 +434,30 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
       await settle();
       composerButton(f, 'Stop sharing')?.click();
       expect(calls).toEqual(['StartScreenShare:any', 'StartScreenShare:tab', 'StopScreenShare']);
+    });
+  });
+
+  describe('the "Agent can see" chip', () => {
+    it("passes the user's pick of the source the agent sees, and the return to the call's choice, to the session", async () => {
+      const { f, sources$, calls } = await renderWithBoard();
+      const state = (id: string, label: string, active: boolean, picked = false): VideoSourceState => ({
+        SourceID: id,
+        Label: label,
+        Kind: 'camera',
+        Enabled: true,
+        Active: active,
+        FramesSent: 0,
+        ...(picked ? { Picked: true } : {}),
+      });
+      sources$.next([state('capture:camera', 'Camera', true), state('capture:screen', 'Shared screen', false)]);
+      await settle();
+      (query(f, '.perception-chip__trigger') as HTMLButtonElement).click();
+      await settle();
+      (query(f, '.perception-chip__pick') as HTMLButtonElement).click();
+      sources$.next([state('capture:camera', 'Camera', false), state('capture:screen', 'Shared screen', true, true)]);
+      await settle();
+      (query(f, '.perception-chip__auto') as HTMLButtonElement).click();
+      expect(calls).toEqual(['SelectVideoSource:capture:screen', 'SelectVideoSource:null']);
     });
   });
 

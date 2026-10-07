@@ -817,6 +817,14 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   }
 
   /**
+   * The user picked the video source the agent sees in the "agent can see" chip, or let the call choose again (`null`).
+   * The session's arbiter applies it and tells the agent.
+   */
+  public OnVideoSourcePicked(sourceId: string | null): void {
+    this.realtime.SelectVideoSource(sourceId);
+  }
+
+  /**
    * The user moved to another channel's tab (or to a tab that is not a channel). When the model can watch only one
    * video source, the channel the user is looking at is the one it sees.
    */
