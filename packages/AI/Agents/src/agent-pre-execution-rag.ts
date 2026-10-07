@@ -415,7 +415,8 @@ export class AgentPreExecutionRAG {
             AISkillID: input.skill?.ID,
         }, input.params.contextUser)) {
             if (ev.phase === 'provider') {
-                traces.push(`### Provider \`${ev.providerName}\` returned ${ev.results.length} rows in ${ev.durationMs}ms`);
+                // Progress only: a provider event carries a count, never the rows (they precede the permission pass).
+                traces.push(`### Provider \`${ev.providerName}\` returned ${ev.resultCount} rows in ${ev.durationMs}ms`);
             } else if (ev.phase === 'final') {
                 finalResults = ev.results;
                 sourceCounts = ev.sourceCounts;

@@ -698,9 +698,9 @@ export class SearchResultsResource extends BaseResourceComponent {
     }
 
     /**
-     * Phase 2C streaming variant. Subscribes to `streamScopedSearch` and progressively
-     * populates the result list as each provider reports back. The 'final' event carries
-     * the canonical fused/reranked list, which replaces any partials the user already saw.
+     * Phase 2C streaming variant. Subscribes to `streamScopedSearch`, shows each provider's
+     * count in the chip strip as it reports back, and renders the result list from the 'final'
+     * event. A 'provider' event carries no rows: they arrive before the server's permission pass.
      *
      * Cancellation: a new query starts by tearing down the in-flight stream so events
      * from a stale search do not bleed into the current view.
@@ -722,21 +722,16 @@ export class SearchResultsResource extends BaseResourceComponent {
         this.currentStream = this.searchService.StreamSearch(request).subscribe({
             next: (event) => {
                 if (event.Phase === 'provider' && event.ProviderName) {
-                    const count = event.Results?.length ?? 0;
+                    // Progress only: the count, never the rows (they precede the permission pass).
                     this.StreamingProviders = [
                         ...this.StreamingProviders,
                         {
                             Name: event.ProviderName,
-                            Count: count,
+                            Count: event.ResultCount ?? 0,
                             ElapsedMs: event.ElapsedMs ?? 0,
                             State: 'Completed',
                         },
                     ];
-                    if (event.Results && event.Results.length > 0) {
-                        this.allResults = [...this.allResults, ...event.Results].sort((a, b) => b.Score - a.Score);
-                        this.ServerResultCount = this.allResults.length;
-                        this.applyClientFilters();
-                    }
                 } else if (event.Phase === 'final' && event.Results) {
                     this.allResults = [...event.Results].sort((a, b) => b.Score - a.Score);
                     this.ServerResultCount = this.allResults.length;

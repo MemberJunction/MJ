@@ -91,6 +91,8 @@ Set `StartAt` / `EndAt` to auto-activate a scope for a specific window:
 - Seasonal: "Q4 financial reports are searchable Oct 1 – Jan 31"
 - Onboarding: "new-hire documents are scoped for the first 30 days of employment"
 
+**A search that names a scope it cannot resolve is refused.** If any ID in `SearchParams.ScopeIDs` is inactive, outside its `StartAt`/`EndAt` window, or not found, `Search()` returns `Success: false` with an error naming the scope, writes a `Failure` row to `MJ: Search Execution Logs`, and runs no provider. Before, such a scope was skipped, and a search whose only scopes were skipped ran with no scope at all — a global search. One dead scope among several refuses the whole search: dropping it silently would change what the caller asked for. The check runs before the result cache, so a scope that expired seconds ago is not served from its old entry. `ExplainScope` agrees: an inactive or expired scope is reported unreachable, and when one of several requested scopes cannot be resolved, every scope in that dry run is reported unreachable with the reason.
+
 ### Advanced `ScopeConfig` JSON
 
 ```json
@@ -236,12 +238,22 @@ No scope duplication needed.
 
 ### Per-provider push-down mechanisms
 
-| Provider | Mechanism |
-|---|---|
-| `EntitySearchProvider` / `FullTextSearchProvider` | RunView already evaluates `UserRowLevelSecurity` for `ContextCurrentUser`. The providers thread `contextUser` through to RunView — nothing extra required. |
-| `VectorSearchProvider` | Each embedded record must carry permission metadata (role IDs, owner ID, tenant ID) at ingest time. At query time, translate `contextUser`'s roles into a native metadata filter and merge it with the scope's rendered `MetadataFilter` via `$and`. |
-| `StorageSearchProvider` | Folder-path bounded by the scope, and account-permission bounded by `MJ: File Storage Account Permissions`, **evaluated per call** for the searching user by `StorageAccessEvaluator` (`@memberjunction/storage`): nothing is snapshotted at startup, so a grant or revocation applies to the next search. The rows are read as the MJ system user and decided for the caller (Everyone, Role or User rows; `CanRead`); an account with no rows is open (the current product rule); a failed evaluation searches nothing. The searchable accounts themselves are read per search from `FileStorageEngine`'s live cache. **Storage hits are then re-checked in the late filter**: `SearchEngine.filterByPermissions` keeps a `storage-file` result only when its engine-stamped `ProviderId` is a `StorageSearchProvider` entry and its `RawMetadata.accountId` is readable by the user now — a `storage-file` hit from any other provider is dropped. The storage GraphQL routes (`FileResolver`) run the same evaluator before any driver call. |
-| 3rd-party index providers | Use the engine's native permission/ACL filter. Documented in the "how to add a provider" guide. |
+| Provider | Mechanism | Late ownership check (no row filter) |
+|---|---|---|
+| `EntitySearchProvider` / `FullTextSearchProvider` | RunView already evaluates `UserRowLevelSecurity` for `ContextCurrentUser`. The providers thread `contextUser` through to RunView — nothing extra required. | None: the hits are rows read from the labelled entity (`ResultsAreRowsOfLabelledEntity`). |
+| `VectorSearchProvider` | Each embedded record must carry permission metadata (role IDs, owner ID, tenant ID) at ingest time. At query time, translate `contextUser`'s roles into a native metadata filter and merge it with the scope's rendered `MetadataFilter` via `$and`. | One `PK IN (...)` read per labelled entity. |
+| `StorageSearchProvider` | Folder-path bounded by the scope, and account-permission bounded by `MJ: File Storage Account Permissions`, **evaluated per call** for the searching user by `StorageAccessEvaluator` (`@memberjunction/storage`): nothing is snapshotted at startup, so a grant or revocation applies to the next search. The rows are read as the MJ system user and decided for the caller (Everyone, Role or User rows; `CanRead`); an account with no rows is open (the current product rule); a failed evaluation searches nothing. The searchable accounts themselves are read per search from `FileStorageEngine`'s live cache. **Storage hits are then re-checked in the late filter**: `SearchEngine.filterByPermissions` keeps a `storage-file` result only when its engine-stamped `ProviderId` is a `StorageSearchProvider` entry and its `RawMetadata.accountId` is readable by the user now — a `storage-file` hit from any other provider is dropped. The storage GraphQL routes (`FileResolver`) run the same evaluator before any driver call. | Not an entity row: re-checked against the account instead (above). |
+| 3rd-party index providers (Azure AI Search, Typesense, Elasticsearch, OpenSearch, custom) | Use the engine's native permission/ACL filter, through the scope's `MetadataFilter`. | One `PK IN (...)` read per labelled entity. A hit whose document id is not the entity's primary key is dropped. |
+
+### Which results are verified as rows of the entity they name
+
+`EntityName` and `RecordID` are provider output. For the vector and external-index lanes they come from the index: vector metadata's `Entity` key, or the index name, and the document's own id. Admitting a hit on its label alone would let whoever writes an index choose which entity's permissions are evaluated — a document in an index named after an entity the user can read would pass as that entity's row.
+
+So the late check (`filterByPermissions`) verifies a result with one `PK IN (...)` RunView per labelled entity, as the user, unless the result came from a provider that reads the labelled entity through `RunView` itself. That is decided by the provider the engine **stamped** on the result (`ProviderId`, overwritten on every hit before fusion) and its `BaseSearchProvider.ResultsAreRowsOfLabelledEntity` flag — set only by `EntitySearchProvider` and `FullTextSearchProvider` — and never by the `SourceType` label. Every shipped external-index provider labels its hits `'fulltext'`, and `SearchSource` is a closed union, so a third-party provider must pick one of its values and can pick `'entity'`; neither is trusted for it. A result with no `ProviderId` (a fusion fallback) or one naming no configured provider is verified. Fusion and dedup never move a `ProviderId` off the item it was stamped on: a merged result is one provider's item, with only scores, tags and a generic snippet borrowed from a duplicate of the same `EntityName` + `RecordID`.
+
+When a row filter applies to the user, every result is verified regardless — ownership is checked as a side effect of filtering.
+
+**Cost and consequence for external indexes.** Each search that returns external-index hits pays one `PK IN (...)` read per labelled entity. Hits are kept only when their document id **is** the MJ primary key of the entity the index is named after (bare value, or a `Field|value` segment for a composite key); an index keyed by anything else returns nothing through this lane. The entity and full-text lanes cost nothing extra.
 
 ### The origin-record gate for derived content
 
@@ -268,11 +280,11 @@ Everything above is about one person: the caller. When the results will be shown
 Four rules for callers:
 1. **Pass hydrated `UserInfo` objects** (e.g. from `UserCache`): every reader needs a non-empty `ID` and a `UserRoles` array. A malformed audience — `Readers` not an array, a `null` reader, a reader with no `ID` or with no `UserRoles` array — fails the search (`Success: false`, an error starting "SearchEngine: invalid Audience"); the engine never skips a reader it cannot check, because a skipped reader would restrict nothing. `UserRoles: []` is legitimate: that reader reads nothing, and the room gets an empty result.
 2. **Expect no storage hits.** `MJ: File Storage Account Permissions` are re-checked for the caller in the late filter, but the audience pass does not yet combine per-reader storage answers, so a `storage-file` result is dropped rather than shown on the caller's permission alone. Per-reader storage checks are a follow-up.
-3. **Show the room `fused`/`final` results.** Under an audience, `streamSearch`'s `provider` events carry `results: []` — they keep `providerName` and `durationMs`, so a UI can still show progress — because partials arrive before any permission pass.
+3. **Show the room `fused`/`final` results.** `streamSearch`'s `provider` events never carry results — only `providerName`, `durationMs` and `resultCount`, for progress — because they arrive before any permission pass. This is true with or without an audience.
 4. **Check each reader's scope entitlement yourself.** Scope entitlement (`SearchScopePermission`), `ServerDerived` dimensions, scope `ExtraFilter`/`MetadataFilter` templates and vector push-down are all evaluated for the **caller only**. Before passing `ScopeIDs` for a room, confirm every reader may use those scopes, and don't rely on dimension-only bounds to keep a room inside its reach.
 
 Two further limits:
-- **`SourceCounts` are counted before the permission and audience passes**, so they reveal the caller's unfiltered reach to anyone shown them. Don't show them to a room.
+- **`SourceCounts`, and a streamed `provider` event's `resultCount`, are counted before the permission and audience passes**, so they reveal the caller's unfiltered reach to anyone shown them. Don't show them to a room.
 - **The result cache keys on reader IDs.** Within the 30 s TTL, a reader object with the same `ID` but different hydration (roles changed, say) gets the cached verdict.
 
 Audience filtering raises the residual-filter rate, so a host serving rooms should raise the over-fetch factor (below). Carrying the audience into push-down is achievable today only through an expansion query keyed on the conversation's `PrimaryScopeRecordID`; a resolver that sees the audience is a follow-up. The audience pass is the truth; push-down is the recall.
@@ -281,7 +293,7 @@ Audience filtering raises the residual-filter rate, so a host serving rooms shou
 
 `effectiveTopK = userTopK * permissionOverfetchFactor` compensates for residual filtering. Default 2. Tune higher for corpora where permission sparsity is high (>50% of matches filtered).
 
-The factor is resolved per search, in this order: the caller's `SearchParams.PermissionOverfetchFactor`; else the **largest** `permissionOverfetchFactor` declared by any resolved scope's `ScopeConfig`; else the engine default (`SearchEngineConfig.DefaultPermissionOverfetchFactor`, 2). Whatever the source, the value is held to **1–20** (a value below 1 means no over-fetch; above 20 is clamped and logged, since one metadata edit would otherwise multiply every provider call for every caller of the scope). The largest wins across scopes because a lane trimmed heavily by late permission checks needs the extra candidates whichever scope it belongs to; a scope that declares nothing counts as the default, so one scope's low factor never lowers a neighbour's. A larger factor never changes which results a caller gets (the final list is still trimmed to `MaxResults`), but it costs more than provider work: dedup, the content exclusion and the permission passes handle more candidates, a re-ranker is fed up to its `inputTopN` from a bigger pool, and `streamSearch`'s per-provider partial events draw from the larger pool (each event is capped to the caller's `MaxResults`). Declare it on the scope when its author knows the lanes are sparse after permissions — for example a scope whose hits are re-checked per participant of a shared conversation — so every caller doesn't have to know to pass it.
+The factor is resolved per search, in this order: the caller's `SearchParams.PermissionOverfetchFactor`; else the **largest** `permissionOverfetchFactor` declared by any resolved scope's `ScopeConfig`; else the engine default (`SearchEngineConfig.DefaultPermissionOverfetchFactor`, 2). Whatever the source, the value is held to **1–20** (a value below 1 means no over-fetch; above 20 is clamped and logged, since one metadata edit would otherwise multiply every provider call for every caller of the scope). The largest wins across scopes because a lane trimmed heavily by late permission checks needs the extra candidates whichever scope it belongs to; a scope that declares nothing counts as the default, so one scope's low factor never lowers a neighbour's. A larger factor never changes which results a caller gets (the final list is still trimmed to `MaxResults`), but it costs more than provider work: dedup, the content exclusion and the permission passes handle more candidates, a re-ranker is fed up to its `inputTopN` from a bigger pool, and `streamSearch`'s per-provider `resultCount` is counted from the larger pool (each count is capped to the caller's `MaxResults`). Declare it on the scope when its author knows the lanes are sparse after permissions — for example a scope whose hits are re-checked per participant of a shared conversation — so every caller doesn't have to know to pass it.
 
 ### Observability
 
@@ -452,6 +464,7 @@ The engine logs at key points (check `LogStatus` / `LogError` output):
 - `SearchEngine: Residual permission filter removed X result(s)` — non-zero values indicate incomplete provider push-down.
 - `SearchEngine: origin-record gate removed X result(s) …` — content derived from records the user may not read. Expected, and not counted in the residual figure above.
 - `SearchEngine: Re-ranker "DriverClass" returned N result(s) (input=I, outputTopN=O)` — re-rank stage telemetry.
+- `SearchEngine: search refused — scope "ID" could not be resolved …` (LogError) — a named scope is inactive, expired, or missing; the search returned `Success: false` and a `Failure` row was logged.
 - `AgentPreExecutionRAG: Exception searching scope "NAME"` — per-scope search failures.
 - `AgentPreExecutionRAG: Template "ID" render failed` — template-rendering failures fall back to `lastUserMessage`.
 - `AgentPreExecutionRAG: permission for scope "NAME" could not be resolved` — the resolver threw; that scope was skipped. Refused scopes log only at verbose level; read them from the `Forbidden` rows in `MJ: Search Execution Logs`.
@@ -471,7 +484,7 @@ Phase-2-onward delivery log. Quick status here:
 - **Phase 1** (entities, runtime, providers, RAG hook, ScopedSearchAction, GraphQL, Angular, dashboards) — shipped.
 - **Phase 2A** (per-user permissions) — `SearchScopePermission` table, `SearchScopePermissionResolver`, GraphQL + Action enforcement, child-grid UIs, RLS safety-net test (PM-01–PM-10) — shipped.
 - **Phase 2B** (`SearchResultSetToolLibrary`) — re-parented onto Data Snapshot, 5 search-specific tools (`filterByScore`, `groupBySourceProvider`, `getMatchingChunks`, `followSourceLink`, `rerankInline`) — shipped.
-- **Phase 2C** (streaming) — `SearchEngine.streamSearch` async iterable, `StreamScopedSearch` mutation + `SearchStreamEvents` subscription, `AgentPreExecutionRAG` partials, `ScopedSearchAction.streamingMode`, Angular UI with per-provider chip strip (opt-in via `?stream=1`) — shipped.
+- **Phase 2C** (streaming) — `SearchEngine.streamSearch` async iterable, `StreamScopedSearch` mutation + `SearchStreamEvents` subscription, `AgentPreExecutionRAG` per-provider progress, `ScopedSearchAction.streamingMode`, Angular UI with per-provider chip strip (opt-in via `?stream=1`) — shipped.
 - **Phase 2D** (reranker catalog) — `BaseReRanker` contract additions (Name, Version, GetMaxResultCount, EstimateCostCents, CostReporter), CohereReRanker, VoyageReRanker, OpenAIReRanker (chat-judge), BGEReRanker, `RerankerBudgetGuard` + `SearchScope.RerankerBudgetCents` — shipped (server). Form dropdown + budget field UI owed.
 - **Phase 3** (observability) — `SearchExecutionLog` entity + logging hook in `SearchEngine.Search` — shipped (server). Analytics dashboard tab + per-scope CSV export owed.
 - **Phase 4** (tuning UI) — fully owed (Angular session): live preview side-panel, fusion weight sliders, reranker A/B comparison with Kendall-tau / RBO, `SearchScopeTestQuery` per-scope canonical queries.
@@ -529,9 +542,17 @@ if (!result.Allowed) {
 ## 14. Streaming Search (Phase 2C)
 
 The synchronous `SearchEngine.Search()` call blocks until every provider has
-returned and fusion + reranking complete. `streamSearch()` yields events as
-each provider reports, letting agents reason about partials and the UI render
-progressively.
+returned and fusion + reranking complete. `streamSearch()` yields a progress
+event as each provider reports, so agents and the UI can show progress before
+the result set is ready.
+
+**Progress events carry counts, not results.** A `provider` event arrives
+before the permission pass, so it carries `providerName`, `durationMs` and
+`resultCount` (that provider's hit count, capped at `MaxResults`) — and
+`results: []`, always. Results arrive in `fused` and `final`, which carry
+exactly what `Search()` returns. Before, a `provider` event carried the
+provider's hits, including rows the caller's row filters would drop and
+unverified external-index hits.
 
 ### GraphQL surface
 
@@ -541,7 +562,8 @@ Two-step protocol:
    `{ Success, StreamID, ErrorMessage }`. The server starts the search in
    the background, keyed by StreamID.
 2. **`SearchStreamEvents(streamID)` subscription** — delivers events:
-   `{ phase: 'provider', providerName, results, durationMs }`,
+   `{ phase: 'provider', providerName, resultCount, durationMs }` (wire fields
+   `ProviderName`, `ResultCount`, `DurationMs`; `Results` is always empty),
    `{ phase: 'fused', results }`, `{ phase: 'reranked', results }`,
    `{ phase: 'final', results }`, `{ phase: 'error', errorMessage }`.
 
@@ -553,10 +575,10 @@ that wraps the two steps so component code only sees a single subscribe point.
 `SearchOverlayComponent` and `SearchResultsResource` both opt in via
 `EnableStreaming` (Input on the overlay; URL query param `?stream=1` on the
 resource page during rollout). On opt-in, both components subscribe to
-`SearchService.StreamSearch(request)`, append per-provider results to the
-list as 'provider' events arrive, and replace partials with the canonical
-fused list on 'final'. A small status chip strip above the results renders
-each provider's name + count + latency (or error message).
+`SearchService.StreamSearch(request)`, add each provider's name and
+`ResultCount` to a status chip strip as 'provider' events arrive, and render
+the result list from 'final'. The chip strip shows each provider's name +
+count + latency (or error message).
 
 Defaulting `EnableStreaming` to `false` preserves Phase 1 request-response UX.
 When the team is ready to flip the default, change the `false` to `true`
@@ -564,8 +586,8 @@ in the consuming component.
 
 ### Agent consumer
 
-`AgentPreExecutionRAG` consumes `streamSearch` and appends partials to the
-agent's scratchpad as markdown (not JSON — markdown's lower token cost +
+`AgentPreExecutionRAG` consumes `streamSearch` and appends each provider's
+count (`resultCount`) and latency to the agent's scratchpad as markdown (not JSON — markdown's lower token cost +
 better LLM accuracy is the standing convention). The `'reranked'` and
 `'final'` events are flushed into the prompt at logical boundaries.
 
@@ -653,6 +675,13 @@ the engine's native filter DSL — already-rendered with SearchContext via
 Nunjucks) composes into the engine's filter clause for permission / tenant
 push-down. Per-engine connection options live on `SearchProvider.ProviderConfig`.
 
+Each hit is labelled with the index name as `EntityName` and the document's
+own id as `RecordID`, and the engine verifies it as a row of that entity (one
+`PK IN (...)` read per labelled entity, as the user) — see [Which results are
+verified](#which-results-are-verified-as-rows-of-the-entity-they-name). Name
+the index after the MJ entity it mirrors and key its documents by that
+entity's primary key, or its hits are dropped.
+
 ---
 
 ## 18. How-to Templates
@@ -682,6 +711,10 @@ export class MySearchProvider extends BaseSearchProvider {
     }
 }
 ```
+
+Leave `ResultsAreRowsOfLabelledEntity` at its default (`false`) unless every
+hit is a row you read from the labelled entity through `RunView` as
+`contextUser`; with `false`, the engine verifies your hits against that entity.
 
 Then seed a `MJ: Search Provider` row with `DriverClass = 'MySearchProvider'`.
 The provider auto-appears in the discovery dropdown via

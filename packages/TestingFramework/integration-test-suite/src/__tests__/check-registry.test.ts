@@ -65,6 +65,7 @@ import { FlsClientChecks } from '../checks/fls-client.checks';
 import { MetadataSyncPushChecks } from '../checks/metadata-sync-push.checks';
 import { TaskGraphExecutionChecks } from '../checks/task-graph-execution.checks';
 import { SearchOriginGateChecks } from '../checks/search-origin-gate.checks';
+import { SearchProviderTrustChecks } from '../checks/search-provider-trust.checks';
 
 const makeCheck = (id: string): NamedCheck => ({ Id: id, Name: id, Fn: async () => { /* pass */ } });
 
@@ -182,6 +183,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['record-cloning', RecordCloningChecks, 13], // RC1-RC9 plan §13.2 + RC10-RC13 real-database dry runs, client transport (IT96)
         ['binary-fields', BinaryFieldsChecks, 6], // BF1-BF6 binary fields end to end + binary vector columns, client transport (IT101)
         ['search-origin-gate', SearchOriginGateChecks, 4], // SOG1-SOG4 the search origin-record gate against the live views (IT106)
+        ['search-provider-trust', SearchProviderTrustChecks, 2], // SPT1 external-index hits verified, SPT2 unresolvable scope refused (IT108)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
@@ -320,6 +322,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'scoped-anon-elevation': 6,
         'search': 8,
         'search-origin-gate': 4,
+        'search-provider-trust': 2,
         'server-cache': 32,
         'shipped-agents-live': 4,
         'startup-mode': 3,
@@ -359,7 +362,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(107);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(108);
     });
 });
 

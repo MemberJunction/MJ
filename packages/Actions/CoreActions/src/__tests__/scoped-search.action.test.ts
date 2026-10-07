@@ -12,6 +12,7 @@ vi.mock('@memberjunction/global', async () => {
 });
 
 const searchSpy = vi.fn();
+const streamSearchSpy = vi.fn();
 const permissionResolveSpy = vi.fn();
 const logForbiddenSpy = vi.fn();
 
@@ -43,6 +44,7 @@ vi.mock('@memberjunction/search-engine', () => ({
     SearchEngine: {
         Instance: {
             Search: (...args: unknown[]) => searchSpy(...args),
+            streamSearch: (...args: unknown[]) => streamSearchSpy(...args),
             LogForbiddenSearch: (...args: unknown[]) => logForbiddenSpy(...args),
         }
     },
@@ -217,6 +219,24 @@ describe('ScopedSearchAction', () => {
         expect(result.Success).toBe(false);
         expect(result.ResultCode).toBe('ACCESS_DENIED');
         expect(searchSpy).not.toHaveBeenCalled();
+    });
+
+    it('streamingMode=partials reports each provider\'s count from resultCount — a progress event carries no rows', async () => {
+        loadedAgentStub.SearchScopeAccess = 'All';
+        streamSearchSpy.mockImplementation(async function* () {
+            yield { phase: 'provider', providerName: 'FullText', results: [], resultCount: 3, durationMs: 11 };
+            yield { phase: 'fused', results: [] };
+            yield { phase: 'final', results: [], sourceCounts: { Vector: 0, FullText: 3, Entity: 0, Storage: 0 }, elapsedMs: 14 };
+        });
+        const action = new ScopedSearchAction();
+        const result = await run(action, mkParams([
+            { Name: 'Query', Value: 'q' },
+            { Name: 'AgentID', Value: 'agent-1' },
+            { Name: 'StreamingMode', Value: 'partials' }
+        ]));
+        expect(result.Success).toBe(true);
+        const progress = result.Params?.find((p: { Name: string }) => p.Name === 'ProgressEvents')?.Value as Array<Record<string, unknown>>;
+        expect(progress[0]).toEqual({ phase: 'provider', providerName: 'FullText', count: 3, durationMs: 11 });
     });
 
     it('enforces Assigned scope rows — uses IsDefault when no scopeID supplied', async () => {

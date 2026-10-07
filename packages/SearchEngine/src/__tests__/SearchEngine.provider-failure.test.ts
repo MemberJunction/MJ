@@ -277,7 +277,8 @@ describe('SearchEngine provider mid-flight failure handling', () => {
         for await (const ev of engine.streamSearch(params, user)) {
             phases.push(ev.phase);
             if (ev.phase === 'provider') {
-                providerEvents.push({ name: ev.providerName, count: ev.results.length });
+                providerEvents.push({ name: ev.providerName, count: ev.resultCount });
+                expect(ev.results).toEqual([]);
             }
         }
 

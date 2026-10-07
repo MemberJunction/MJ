@@ -23,6 +23,9 @@ import { EnvIntOverride } from './env-config';
 export class EntitySearchProvider extends BaseSearchProvider {
     public readonly SourceType: SearchSource = 'entity';
 
+    /** Every hit is a row of the entity it names, read through `RunView` as the user (see the base class). */
+    public override readonly ResultsAreRowsOfLabelledEntity: boolean = true;
+
     /**
      * Minimum trimmed term length we accept. A single-character substring against a
      * `LIKE '%term%'` pattern across every searchable entity is essentially a

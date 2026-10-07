@@ -252,6 +252,16 @@ describe('AgentPreExecutionRAG', () => {
             expect(mockStreamSearch.mock.calls[0][0]).toMatchObject({ AISkillID: 'skill-1' });
         });
 
+        it('writes each provider\'s count to the streaming trace from resultCount — a progress event carries no rows', async () => {
+            mockStreamSearch.mockImplementation(async function* () {
+                yield { phase: 'provider' as const, providerName: 'FullText', results: [], resultCount: 4, durationMs: 12 };
+                yield { phase: 'final' as const, results: [], sourceCounts: { Vector: 0, FullText: 4, Entity: 0, Storage: 0 }, elapsedMs: 15 };
+            });
+            const streamingTrace: string[] = [];
+            await run({ streamingEnabled: true, streamingTrace });
+            expect(streamingTrace).toEqual(['### Provider `FullText` returned 4 rows in 12ms']);
+        });
+
         it('passes no skill principal when several skills are active (the action\'s rule)', async () => {
             cachedSkills.push(skillFor('skill-1'), skillFor('skill-2'));
             await run({ activeSkillIDs: ['skill-1', 'skill-2'] });

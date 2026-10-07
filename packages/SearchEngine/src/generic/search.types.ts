@@ -83,6 +83,10 @@ export interface SearchParams {
      * cross-scope RRF fusion. When omitted/empty, behaves as if the Global scope was used
      * (backward compatible). A single scope marked `IsGlobal=true` is also treated as no
      * filter.
+     *
+     * Every ID must name a scope that is active right now. If any is inactive, expired, or not
+     * found, the search is refused (`Success: false`, an error naming the scope) — it is never
+     * run without that scope, and never widened to a global search.
      */
     ScopeIDs?: string[];
     /**
@@ -140,17 +144,16 @@ export interface SearchParams {
      *    nothing, which empties the result.
      * 2. **Expect no storage hits.** `storage-file` results are refused under an audience: their permissions
      *    are evaluated by the storage lane for the caller only and cannot be re-checked per reader.
-     * 3. **Show the room `fused`/`final` results.** Under an audience, `streamSearch`'s `provider` events carry
-     *    `results: []` (with `providerName` and `durationMs`, for progress): partials arrive before any
-     *    permission pass.
+     * 3. **Show the room `fused`/`final` results.** `streamSearch`'s `provider` events never carry results
+     *    (only `providerName`, `durationMs` and `resultCount`, for progress): they arrive before any permission pass.
      * 4. **Check each reader's scope entitlement yourself.** Scope entitlement (`SearchScopePermission`),
      *    `ServerDerived` dimensions, scope `ExtraFilter`/`MetadataFilter` templates and vector push-down are
      *    evaluated for the caller only. A host must check that every reader may use the scopes it passes, and
      *    must not rely on dimension-only bounds to keep a room inside its reach.
      *
      * Two further limits:
-     * - **`SourceCounts` are counted before the permission and audience passes**, so they reveal the caller's
-     *   unfiltered reach to anyone shown them. Don't show them to a room.
+     * - **`SourceCounts`, and a streamed `provider` event's `resultCount`, are counted before the permission and
+     *   audience passes**, so they reveal the caller's unfiltered reach to anyone shown them. Don't show them to a room.
      * - **The result cache keys on reader IDs.** Within its 30 s TTL, a reader object with the same `ID` but
      *   different hydration (roles changed, say) gets the cached verdict.
      */
@@ -531,14 +534,23 @@ export interface SearchResultItem {
  */
 export type SearchStreamEvent =
     | {
+        /**
+         * Progress: one provider has returned. Carries no record content — the provider's hits have not been
+         * through the permission pass yet. Results arrive in `fused` and `final`.
+         */
         phase: 'provider';
         /** Friendly provider name that just returned (Vector / FullText / Entity / Storage / external). */
         providerName: string;
         /**
-         * This provider's contribution before fusion — and before any permission pass. Always empty when
-         * `SearchParams.Audience` adds a reader: partials are withheld from a room (see that field).
+         * @deprecated Always empty: a provider's hits arrive before the permission pass, so the stream never
+         * carries them. Use {@link resultCount} for progress and the `final` event for results.
          */
         results: SearchResultItem[];
+        /**
+         * How many hits this provider returned, capped at the caller's `MaxResults`. Counted before fusion, the
+         * permission pass and any audience pass, like `SearchResult.SourceCounts` — so don't show it to a room.
+         */
+        resultCount: number; // case-violation-ok-legacy-back-compat: matches the camelCase fields of the shipped SearchStreamEvent union
         /** Provider wall-clock duration in ms. */
         durationMs: number;
     }
