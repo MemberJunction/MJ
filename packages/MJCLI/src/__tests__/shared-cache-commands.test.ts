@@ -80,6 +80,15 @@ describe('shared cache clear in CLI commands', () => {
     expect(clearAfterWrite).toHaveBeenCalledWith('mj sync push', undefined);
   });
 
+  it.each([
+    ['only created rows', { created: 3, updated: 0, deleted: 0 }],
+    ['only deleted rows', { created: 0, updated: 0, deleted: 3 }],
+  ])('sync push clears after a successful push that %s', async (_label, counts) => {
+    state.result = { success: true, command: 'x', durationSeconds: 0, data: { ...counts, unchanged: 40 } };
+    await run(SyncPush);
+    expect(clearAfterWrite).toHaveBeenCalledWith('mj sync push', undefined);
+  });
+
   it('sync push does NOT clear after a successful push that wrote nothing', async () => {
     // A no-op push runs in every deploy; clearing after it would drop every server's cache for nothing.
     state.result = { success: true, command: 'x', durationSeconds: 0, data: { created: 0, updated: 0, unchanged: 40, deleted: 0, skipped: 3 } };
