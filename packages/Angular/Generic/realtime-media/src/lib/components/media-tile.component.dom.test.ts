@@ -140,7 +140,7 @@ describe('MediaTileComponent (DOM)', () => {
 
     it("puts a host's actions in the top corner, before the pin", () => {
       const f = renderComponentFixture(ActionsHostComponent, { inputs: { Participant: participant() } });
-      const corner = [...(query(f, '.tile__actions')?.querySelectorAll('.own-action, .tile__pin') ?? [])];
+      const corner = Array.from(query(f, '.tile__actions')?.querySelectorAll('.own-action, .tile__pin') ?? []);
       expect(corner.map((el) => el.className.split(' ')[0])).toEqual(['own-action', 'tile__pin']);
       expect(query(f, '.tile__actions-slot .own-action')).not.toBeNull();
     });
