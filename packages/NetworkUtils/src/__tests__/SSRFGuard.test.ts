@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // ---------------------------------------------------------------------------
 // Mock node:dns so we control what a hostname resolves to, without real DNS.
@@ -28,7 +28,7 @@ vi.mock('node:dns', () => {
   };
 });
 
-import { AssertPublicUrl, IsBlockedIPAddress, SSRFError } from '../SSRFGuard.js';
+import { AssertPublicUrl, IsBlockedIPAddress, SafeFetch, SSRFError } from '../SSRFGuard.js';
 
 beforeEach(() => {
   resolutions.clear();
@@ -142,5 +142,44 @@ describe('AssertPublicUrl', () => {
 
   it('fails closed when a hostname does not resolve', async () => {
     await expect(AssertPublicUrl('https://nxdomain.example.com/')).rejects.toBeInstanceOf(SSRFError);
+  });
+});
+
+// =====================================================================
+// SafeFetch — RequireHttps
+// =====================================================================
+describe('SafeFetch RequireHttps', () => {
+  /** A fetch that answers each URL from a fixed table of responses. */
+  function stubFetch(routes: Record<string, () => Response>) {
+    const calls: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      calls.push(url);
+      return routes[url]?.() ?? new Response('not found', { status: 404 });
+    }));
+    return calls;
+  }
+
+  beforeEach(() => {
+    resolutions.set('public.example.com', ['93.184.216.34']);
+    resolutions.set('mirror.example.com', ['93.184.216.35']);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('refuses an https URL that redirects to http, before requesting the http hop', async () => {
+    const calls = stubFetch({
+      'https://public.example.com/a': () => new Response(null, { status: 302, headers: { location: 'http://mirror.example.com/a' } }),
+    });
+    await expect(SafeFetch('https://public.example.com/a', { RequireHttps: true })).rejects.toBeInstanceOf(SSRFError);
+    expect(calls).toEqual(['https://public.example.com/a']);
+  });
+
+  it('refuses an http URL outright, and still follows an http hop when the option is off', async () => {
+    const calls = stubFetch({
+      'https://public.example.com/a': () => new Response(null, { status: 302, headers: { location: 'http://mirror.example.com/a' } }),
+      'http://mirror.example.com/a': () => new Response('ok'),
+    });
+    await expect(SafeFetch('http://public.example.com/a', { RequireHttps: true })).rejects.toBeInstanceOf(SSRFError);
+    expect(calls).toEqual([]);
+    expect(await (await SafeFetch('https://public.example.com/a')).text()).toBe('ok');
   });
 });

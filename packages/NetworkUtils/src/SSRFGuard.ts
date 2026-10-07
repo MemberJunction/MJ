@@ -362,6 +362,12 @@ const REDIRECT_STATUS_CODES: ReadonlySet<number> = new Set([301, 302, 303, 307, 
 export type SafeFetchInit = RequestInit & {
     /** Maximum number of redirect hops to follow (each re-validated). Default: 5. */
     MaxRedirects?: number;
+    /**
+     * When true, the URL and every redirect hop must be `https:`; an `http:` hop throws {@link SSRFError}
+     * before it is requested. Use it when you will trust the response, such as instructions or code: a
+     * single cleartext hop lets anyone on the path redirect you to content of their choosing. Default: false.
+     */
+    RequireHttps?: boolean;
 };
 
 /**
@@ -380,12 +386,12 @@ export type SafeFetchInit = RequestInit & {
  * sockets.
  *
  * @param rawUrl - the caller-controlled URL to fetch.
- * @param init - standard `fetch` init, plus an optional `MaxRedirects` (default 5). Any `redirect`
- *   value is ignored; redirects are always driven manually.
+ * @param init - standard `fetch` init, plus an optional `MaxRedirects` (default 5) and `RequireHttps`.
+ *   Any `redirect` value is ignored; redirects are always driven manually.
  * @returns the final {@link Response}, after following any redirects that passed validation. The
  *   body is unread, so the caller chooses `.json()`, `.text()`, `.arrayBuffer()`, and so on.
- * @throws {SSRFError} when the initial URL — or any hop — is malformed, uses a non-http(s) scheme,
- *   fails to resolve, or resolves to a private or reserved address.
+ * @throws {SSRFError} when the initial URL — or any hop — is malformed, uses a non-http(s) scheme
+ *   (or `http:` with `RequireHttps`), fails to resolve, or resolves to a private or reserved address.
  * @throws {Error} when the redirect limit is exceeded.
  *
  * @example Fetching an untrusted URL
@@ -414,7 +420,7 @@ export type SafeFetchInit = RequestInit & {
  */
 export async function SafeFetch(rawUrl: string, init?: SafeFetchInit): Promise<Response> {
     const maxRedirects = init?.MaxRedirects ?? 5;
-    const { MaxRedirects: _ignored, ...fetchInit } = init ?? {};
+    const { MaxRedirects: _ignored, RequireHttps: requireHttps, ...fetchInit } = init ?? {};
 
     let currentUrl = rawUrl;
     let redirectCount = 0;
@@ -422,6 +428,9 @@ export async function SafeFetch(rawUrl: string, init?: SafeFetchInit): Promise<R
     // eslint-disable-next-line no-constant-condition
     while (true) {
         const validated = await AssertPublicUrl(currentUrl);
+        if (requireHttps && validated.protocol !== "https:") {
+            throw new SSRFError(`Only https URLs are allowed; refusing ${validated.href}`);
+        }
         const response = await fetch(validated.href, { ...fetchInit, redirect: "manual" });
 
         if (!REDIRECT_STATUS_CODES.has(response.status)) {
