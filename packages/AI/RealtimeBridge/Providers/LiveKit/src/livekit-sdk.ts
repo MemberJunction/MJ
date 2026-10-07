@@ -188,7 +188,7 @@ export interface ILiveKitRoomSdk {
      *
      * @param cb Invoked when the room has disconnected.
      */
-    onDisconnected(cb: () => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    onDisconnected(cb: (reason?: string) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**

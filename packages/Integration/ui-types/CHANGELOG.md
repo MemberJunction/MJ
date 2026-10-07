@@ -1,5 +1,9 @@
 # @memberjunction/integration-ui-types
 
+## 6.2.0-edge.3
+
+## 6.2.0-edge.2
+
 ## 6.2.0-edge.1
 
 ## 6.2.0-edge.0

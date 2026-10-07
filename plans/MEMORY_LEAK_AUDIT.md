@@ -1,5 +1,368 @@
 # MemberJunction Memory & Resource Leak Audit
 
+**Generated:** 2026-10-03 (Round 17)
+**Prior Runs:** Rounds 1–16 retained below under "Prior rounds (history)". Round 16 was 2026-09-26.
+**Scope:** Full monorepo `packages/` tree, 10 parallel `Explore` subagents in two waves (5 broad + 5 deep-subtree) plus repo-wide static cross-check greps. This round concentrated on the **885 commits / 583 changed non-test source files** since Round 16, and re-verified every Round 16 finding at its cited location.
+**Re-run command:** `/audit-memory-leaks`
+
+This document is organised as: Round 17 (this round) first, then Rounds 16 and earlier unchanged as history. Raw per-agent output lives in `plans/.memory-leak-snapshots/2026-10-03/` (git-ignored).
+
+## Round 17 Executive Summary
+
+| Status | Critical | High | Medium | Low | Total |
+|---|---:|---:|---:|---:|---:|
+| **New in Round 17** (de-duplicated across agents) | 1 | 1 | 5 | 18 | **25** |
+| **Fixed in this round's PR** | 1 | 1 | 2 | 1 | **5** |
+| **Deferred (new, not fixed)** | 0 | 0 | 3 | 17 | **20** |
+| **Resolved since Round 16** (genuine) | 0 | 0 | 0 | 2 | **2** |
+
+Persisted Round 16 findings are unchanged except where noted (about 14 High, 25 Medium, 40+ Low in total across categories; see each Subagent section). **Static cross-check counts** (non-test, non-generated): 35 `MJGlobal…GetEventListener` sites, 119 `setInterval`, 247 `.addEventListener(`, 362 private `Map` fields, 91 `BaseSingleton` subclasses.
+
+> As in every prior round this is directional, not an exact line-by-line reconciliation. Severity counts are tallied from the ten subagent reports; where two agents reported the same item (e.g. `AgentEvalDriver` pins, `entity-viewer` listeners) it is counted once.
+
+### Fixed this round (via this PR)
+
+1. **CRITICAL — twelve `*FormComponentExtended` classes override `ngOnDestroy` without `super.ngOnDestroy()`** (`packages/Angular/Explorer/core-entity-forms/src/lib/custom/`: Lists, Tests ×4, Entities, Templates, ai-agent-run, SearchScopes, AIAgents, AIPromptRuns, Queries). `BaseFormComponent.ngOnDestroy` (`packages/Angular/Generic/base-forms/src/lib/base-form-component.ts:316-324`) unsubscribes the `FormStateService` subscription (a root-singleton `BehaviorSubject`) and disposes the duplicate-entry check. Skipping it left one subscriber — pinning the whole destroyed form — per form open, with no bound. Round 16 had treated `ai-agent-run` as correct; it was not. **Fixed** by calling `super.ngOnDestroy()` first in each override.
+2. **HIGH — `PublishedVersionPin.pinned` and `AgentEvalDriver.versionLabels`** (`packages/TestingFramework/Engine/src/oracles/rubric-resolution.ts`, `drivers/AgentEvalDriver.ts`) grew per suite run / standalone test run (`suiteRunId = TestSuiteRunID || testRun.ID`) on a driver cached for the process lifetime in `TestEngine._driverCache`. **Fixed** by converting both to `MJLruCache` (5,000 entries / 6h TTL). `TeardownSuite` cleanup alone would not have covered standalone runs, which have no suite teardown.
+3. **MEDIUM — `packages/CodeGenLib/src/Misc/runCommand.ts`**: the timeout `setTimeout` was never cleared after a normal exit, so it later fired, logged "TIMED OUT" and `treeKill`'d a dead (possibly recycled) PID, and pinned the event loop. **Fixed** with `try/finally { clearTimeout }` around the race.
+4. **MEDIUM — `packages/Actions/CodeExecution/src/WorkerPool.ts` `createWorker()`**: a worker that never reported ready (5s timeout) or failed to spawn was never killed, because the crash handler attaches only after the ready-wait. **Fixed**: `SIGKILL` + clear the slot on startup failure.
+5. **LOW (latent) — `WorkerPool.Shutdown()` early-out keyed off `ChildProcess.killed`** (the same flaw Round 16 fixed one block lower). **Fixed** to use `exitCode`/`signalCode`.
+
+Tests: see "Round 17 Fix Summary" near the end of Round 17.
+
+### Key trends since Round 16
+
+- **A "verified clean" reference can be wrong in a shape that prose review cannot see — again.** Round 16's lesson (`WorkerPool` escalation) repeated: `ai-agent-run.component.ts` was recorded as a correct `destroy$` pattern, yet its override omitted `super.ngOnDestroy()`. The RxJS category's "zero new" streak ended only because this round grepped *every* `ngOnDestroy` override in `core-entity-forms/custom` for `super.ngOnDestroy` rather than sampling. Recommendation: make "override of `ngOnDestroy`/`ngOnInit` in a `BaseFormComponent`/`BaseResourceComponent` subclass must call `super`" an ESLint rule (tracked since Round 9) — it is now proven to be worth the investment.
+- **New engines follow the established patterns well.** `Rubrics`, `RecordCloning`, `RecordGraph`, `RecordSetProcessor`, `TaskGraphDispatcher`, `RealtimeSessionRuntime` and `ConversationsRuntime` use `finally`-cleared timers, `unref`, `ShutdownRegistry` and per-run state. The single High (`TestingFramework`) was a process-lifetime driver holding per-run keyed state — the same "orchestrator holds state keyed by a per-run id with no end hook" shape as Rounds 15–16.
+- **Round 16's own fixes held**: `RealtimeClientSessionService` wire-action maps, `bridge-room-transcript-sink`, `ChildProcessExecutor`/`WorkerPool` escalation were re-verified in current source.
+- **Telephony media registries remain the main per-event growth class** outside the fixed items: `vonage|twilio|teamsAcs MediaRegistry.channels` have no TTL, and (new) `vonageMediaRegistry.SendAudio` resurrects a channel after `EndCall`. Deferred — recommended next-round fix: shared base with last-activity TTL sweep and a non-creating lookup in the send path.
+
+## Round 17 Cross-Cutting Recommendations
+
+1. **ESLint: `super.ngOnDestroy()`/`super.ngOnInit()` in `BaseFormComponent`/`BaseResourceComponent` subclasses** (see above).
+2. **Tests that force the *failure* branch**: a startup-failure test (`WorkerPool`) and a normal-exit-with-timeout test (`runCommand`) are the shapes that expose these leaks; happy-path mocks hide them.
+3. **Registry/`Map` fields on process-lifetime singletons:** default to `MJLruCache` with a TTL matched to the entity's lifetime (done for `PublishedVersionPin`); the telephony registries, `AIPromptRunner._outputExampleCache`, `ClientToolRequestManager.sessionTools` and `IntegrationEngine._rateLimiters/_fetchGates` are the open candidates.
+4. **`realtime` session classes**: add `clearHandlers()` to `OpenAILiveSession.Close()` (3 rounds open, cheapest fix on the list) and cap `contextNotes`/PCM buffers.
+
+## Subagent A — RxJS / Angular OnDestroy
+
+**Date:** 2026-10-03 (Round 17). **Baseline:** Round 16 Subagent A (19 findings, 27 locations). **Scope:** `packages/Angular|MJExplorer|InteractiveComponents|AngularElements/**/*.ts` (excl. node_modules/dist/generated/tests). **Method:** read plan lines 1-130 + Subagent A section; enumerated all `GetEventListener(` sites (24, up from 21 per the R16 note: 3 more are `takeUntil`/stored-sub sites); scanned the 177 in-scope changed files (new packages rubrics, record-clone, query-viewer, dashboards, core-entity-forms, conversations) for `.subscribe(`, document/window listeners, intervals, and OnDestroy shape; repo-wide scripted check of every class extending `BaseResourceComponent`/`BaseFormComponent`/`BaseDashboard` that overrides `ngOnDestroy` without `super.ngOnDestroy()`; checked every `destroy$ = new Subject` for a matching `.complete()`.
+
+### NEW findings
+
+**N1 [Critical] 12 `*FormComponentExtended` classes override `ngOnDestroy()` without `super.ngOnDestroy()`, skipping `BaseFormComponent` teardown.**
+`BaseFormComponent.ngOnDestroy` (`packages/Angular/Generic/base-forms/src/lib/base-form-component.ts:316-324`) unsubscribes `formStateSubscription` (subscribed at `:287` to a per-entity `BehaviorSubject` cached forever in the `providedIn:'root'` `FormStateService.stateCache`, `form-state.service.ts:19`), unsubscribes `filterSubscription` (`:301`), and calls `_duplicateEntryCheck?.Dispose()` (`:323`, the new entry-time duplicate check controller). All 12 overrides below replace it and never call super, while their own `ngOnInit` DOES call `super.ngOnInit()` (so the subscription is created):
+- `packages/Angular/Explorer/core-entity-forms/src/lib/custom/Lists/list-form.component.ts:477`
+- `.../Tests/test-suite-form.component.ts:591`, `.../Tests/test-run-form.component.ts:344`, `.../Tests/test-suite-run-form.component.ts:356`, `.../Tests/test-form.component.ts:393`
+- `.../Entities/entity-form.component.ts:530`
+- `.../Templates/templates-form.component.ts:220`
+- `.../ai-agent-run/ai-agent-run.component.ts:333` (R16 listed this as correctly calling super; no `super.ngOnDestroy` exists in the file)
+- `.../SearchScopes/searchscope-form.component.ts:102` (`override` keyword, no super)
+- `.../AIAgents/ai-agent-form.component.ts:4051`
+- `.../AIPromptRuns/ai-prompt-run-form.component.ts:355` (empty body)
+- `.../Queries/query-form.component.ts:374`
+Impact: every open/close of one of these forms leaves one subscriber (closure -> component -> record, cdr, all fields) on the root-singleton `BehaviorSubject` for that entity name; grows without bound with repeated user activity (opening Lists/Tests/Agents/Queries/Entities/Templates records). Also leaks a `DuplicateEntryCheckController` per new-record form. Verified by reading each file's `ngOnDestroy` body. Fix: add `super.ngOnDestroy()` to each; consider making the base `ngOnDestroy` non-overridable via a lint rule (same approach as the `GetEventListener` rule). R16's prose said this class was "fine / delegating to super" for forms; that held only for forms that do not override.
+(Note: prior audit text at plan line ~7563 says the base cleanup mechanism is valid when subclasses call super; these 12 do not.)
+
+**N2 [Medium] `view-config-panel.component.ts` has no `ngOnDestroy`.** `packages/Angular/Generic/entity-viewer/src/lib/view-config-panel/view-config-panel.component.ts:312-313` adds `document` `mousemove`/`mouseup` listeners (arrow-function fields holding `this`) on resize start; they are removed only in `onResizeEnd`. If the panel is destroyed mid-drag (e.g. view switch, tab close) the listeners and `body.style.cursor/userSelect` persist and pin the component. Edge case, but not self-healing until the next mouseup anywhere (then `IsResizing` guard returns; actually `onResizeEnd` does still run once and removes - so it self-heals on next mouseup; downgrade to Low if confirmed). Severity: Low-Medium.
+
+**N3 [Medium] `entity-data-grid.component.ts:5304` overflow-menu outside-click listener not removed on destroy.** `document.addEventListener('click', this.handleOutsideClick)` is registered (in a `setTimeout`) when the overflow menu opens; `ngOnDestroy` (`:1859-1864`) only flushes state and completes `destroy$`. Destroying the grid while the menu is open leaves a document click listener that retains the grid until the next click anywhere (handler removes itself on click, so bounded; Medium for edge case). Fix: `document.removeEventListener('click', this.handleOutsideClick)` in `ngOnDestroy`.
+
+**N4 [Low] `live-execution-widget.component.ts:418` has an empty `ngOnDestroy() {}`** (`packages/Angular/Explorer/dashboards/src/AI/components/widgets/live-execution-widget.component.ts`). No subscriptions or timers exist in the class (verified: inputs/outputs only), so no leak; dead code only. Informational.
+
+### Verified clean in new/changed packages (no findings)
+- **Generic/rubrics** (`comparison-matrix`, `form-hosts`, `publish-dialog`, `record-editors`, `rubric-builder`, `rubric-result`, `rubric-scoring-form`, `version-board`, `version-diff`): zero `.subscribe(`, zero timers/listeners in non-test source; presentational `@Output`/`@Input` only. Clean.
+- **Explorer/core-entity-forms Rubrics forms**: `rubric-form.component.ts:131-135` clears `nodeSaveTimer` and calls `super.ngOnDestroy()`. `QueueNodeSave` (rubrics/model.ts:491) returns the handle that the form stores. Clean.
+- **Generic/record-clone** (all `.ts` incl. `record-clone-panel`, `record-clone-slide-in`, `clone-progress`, `record-clone.service`): no subscriptions, no timers, no listeners in non-test source. Clean.
+- **Generic/query-viewer**: `query-data-grid.component.ts:387-412`, `query-info-panel`, `query-pivot`, `query-row-detail:146-159` all use `takeUntil(this.destroy$)` with `destroy$` completed in `ngOnDestroy`. The `setTimeout` autoSize at `query-data-grid:442` is a one-shot 100ms. Clean.
+- **Explorer/dashboards**: `data-explorer-dashboard.component.ts` (4 state subscribes `takeUntil(destroy$)`, `recentTimeRefreshTimer` cleared at `:1807-1810`, calls `super.ngOnDestroy()`); `connections.component.ts:239-249` (document click removed, super called); `chat-conversations-resource.component.ts:572-610` (takeUntil, listeners removed, super called); `query-browser-resource.component.ts:743-751`; AI analytics family (`agent-run-analysis`, `cost-budget`, `error-analysis`, `executive-summary`, `model-performance`, `prompt-run-analysis`, `usage-patterns`: `destroy$` declared + next/complete); `execution-monitoring.component.ts:1984-1987` (re-declares `protected override destroy$` but calls super and completes). Scheduling dashboard family (R16-verified) still has no new subscribes. Realtime/usage-explorer/filter-bar components have no subscribes.
+- **Generic/conversations**: `conversation-chat-area:2962` (destroy$ + listener removal), `conversation-workspace:1095` (destroy$ + 4 window listeners removed), `message-input:1145` (stored `realtimeActiveSub` unsubscribed), `message-item:876` (interval stopped), `conversation-liveness-dom.service:70` (Stop removes both listeners), `conversation-list:1538`. `project-selector.component.ts:319,347` and `conversation-list:2357` discarded `modalInstance.projectSaved.subscribe` are the dialog-ComponentRef false-positive shape.
+- **Explorer/explorer-core**: `shell.component.ts:2430-2437` drains `this.subscriptions` + completes `destroy$`; `view-resource.component.ts:266-280` new remote-invalidate `GetEventListener()` uses `.pipe(debounceTime, takeUntil(destroy$))` (new site, correct, base `destroy$`); `profile-dialog:910-919` stored `themeSub` unsubscribed; `server-connectivity.service.ts:79-91` stored socket subscription cleaned in `ngOnDestroy`.
+- **base-forms**: `form-field.component.ts:913-915` listeners paired with `_scrollCleanup`, called from `ngOnDestroy:2684-2691`; `record-form-container:1447-1454` interval cleared via `destroy$` (called once at `:698`), `destroy$` completed in `ngOnDestroy:733`.
+- **`destroy$` never completed (check 4):** repo-wide scan for `destroy$ = new Subject` without `destroy$.complete` in the same file: **0 hits**. `takeUntil(this.destroy$)` with no local declaration (5 files: single-dashboard, chat-collections-resource, chat-conversations-resource, view-resource, scheduling-dashboard) all inherit base `destroy$`; fine.
+- **Check 5 (EventBroker in singletons):** no EventBroker use found in the in-scope trees; singleton self-subscribes remain the documented persisted items below.
+
+### PERSISTED (re-verified at file:line, none resolved)
+High:
+1. `packages/Angular/Explorer/explorer-core/src/lib/shell/shell.component.ts:802` (moved from :798) discarded `GetEventListener(true).subscribe(async loginEvent ...)`; siblings `:1079`/`:1095` remain... NOTE: `:1079`/`:1095` are `GetEventListener(false).subscribe(...)` wrapped in `this.subscriptions.push(...)` and drained at `:2432` (correct).
+2. `packages/Angular/Generic/search/src/lib/search-suggest.component.ts:380` no `OnDestroy`, discarded subscribe (still true).
+3. `packages/Angular/Generic/join-grid/src/lib/join-grid/join-grid.component.ts:668` no `OnDestroy`, discarded (still true).
+4. `packages/Angular/Generic/container-directives/src/lib/ng-fill-container-directive.ts:154` discarded subscribe (still true).
+Medium:
+5. `packages/Angular/Explorer/base-application/src/lib/application-manager.ts:152` (unchanged).
+6. `packages/Angular/Generic/search/src/lib/search.service.ts:373` (unchanged).
+Low (re-verified by grep at cited sites): `notifications.service.ts:147`, `shared.service.ts:57`, AngularElements demos (`listener-demo:54`, `hello-mj:74`, `entity-list-demo:90`), `dashboard-viewer.component.ts` discarded `ConfigureRequested` subscribes (`:1262` region, destroyed with ComponentRef), `workspace-state-manager.ts` self-subscribes, `conversations/notification.service.ts:621` `fromEvent(window,'storage')`, `conversations/search.service.ts` self-subscribe, auth0/okta provider subscribes, `event-monitor.component.ts` (no super in ngOnInit/ngOnDestroy; own sub stored), DevTools `ngOnInit` without `super.ngOnInit()` (8 locations; same 8 files). Also persisted: `tags-resource.component.ts:~2695` and `vector-management-resource.component.ts:~829` closure-local idle `setTimeout` not cleared on destroy (Low; `takeUntil(destroy$)` stops the stream but the 30s/5s idle timer still fires `finishPipeline` once on a destroyed component).
+Cross-ref (event listener category, not re-scored here): `mention-editor.component.ts:1400` still registers a `document` click listener cleaned only via a MutationObserver on chip removal.
+
+### RESOLVED
+None. (All R16 locations present at same or shifted lines; `shell.component.ts:798 -> 802`.)
+
+### Counts by severity
+- NEW: Critical 1 (N1, 12 locations) | High 0 | Medium 1 (N3) + 1 Low-Medium (N2) | Low 1 (N4, informational)
+- PERSISTED: High 4 | Medium 2 | Low ~21 locations
+- Resolved: 0
+- Total tracked after this round: 1 Critical (12 loc), 4 High, 3-4 Medium, ~22 Low.
+
+### Recommendation
+Add an ESLint/unit-test guard: any class that `extends` `BaseFormComponent`/`BaseResourceComponent` and defines `ngOnDestroy` must call `super.ngOnDestroy()` (AST rule, same pattern as the existing `no-restricted-syntax` for bare `GetEventListener().subscribe()`). The scripted check used here is a 10-line grep and found all 12 instances.
+## Subagent B — Timers (Round 17, 2026-10-03)
+
+**Scope:** Of the 583 non-test `.ts` files changed since Round 16, 62 reference `setInterval`/`setTimeout`; every site was read. RecordCloning, RecordGraph and Rubrics (non-Angular) have no timers.
+
+**NEW findings: 0.** Persisted counts: Critical 0, High 6, Medium 3, Low 2.
+
+### Persisted findings (re-verified by reading)
+
+- **High** — `packages/AI/MCPServer/src/Server.ts:1249-1274`: SSE keepalive interval cleared only on `res.on('close')` (1257-1258); the `res.on('error')` / `req.on('error')` handlers (1262, 1269) only log. `packages/AI/A2AServer/src/Server.ts:648-682` has the same shape, but its 500ms interval is also cleared on a terminal task status.
+- **High** — `packages/AI/RealtimeBridge/Server/src/ai-bridge-engine.ts:1975-1991`: `staleSweepTimer` is unref'd, but `StopStaleSessionSweep()` (line 1988) has zero callers; class is not `IShutdownable`.
+- **High** — `packages/MJCore/src/generic/localCacheManager.ts:3330-3361`: same gap — `stopEvictionSweep` (3358) is private and only self-called; not registered with `ShutdownRegistry`.
+- **High** — `packages/SQLServerDataProvider/src/config.ts:34`: module-init `setInterval` for `RefreshIfNeeded` with no handle and no clear.
+- **High** — `packages/Actions/CoreActions/src/custom/utilities/artifact-builder-service.ts:445-456`: singleton `cleanupTimer` with no stop method (unref'd).
+- **Medium** — `packages/MJServer/src/resolvers/SqlLoggingConfigResolver.ts:472-480`: `catch` branch never calls `sessionTimeouts.delete` (the delete at 475 is inside the `try`).
+- **Medium** — `packages/GraphQLDataProvider/src/graphQLDataProvider.ts:3488` (`_subscriptionCleanupTimer`): `disposeWebSocketResources` (3971) has zero callers.
+- **Medium** — `packages/AI/MCPServer/src/auth/AuthorizationStateManager.ts:387,501` and `ClientRegistry.ts:285,382`: `shutdown()` is called only from the Reset* test helpers.
+- **Low** — `packages/AI/RealtimeClient/src/drivers/elevenLabsRealtimeClient.ts:732-751`: nudge timer not cancelled in `Disconnect()`.
+- **Low** — `packages/Angular/Explorer/dashboards/src/AI/components/tags/tags-resource.component.ts` (`idleTimer`; not re-verified this round).
+
+### Resolved
+- `calendar-scheduler.ts` (resolved in R16; not re-verified this round).
+
+### Newly changed files checked — clean
+- Timeouts cleared in `finally`: `AI/Agents/src/base-agent.ts` (2023/2374, 4109/4120, 9320/9338), `PayloadFeedbackManager.ts:359-373`, `realtime/realtime-client-session-service.ts:2960-2975`, `AI/Reranker/src/DecisionReranker.ts:246-258`, `AI/Prompts/src/ParallelExecutionCoordinator.ts:592-609`, `BaseModelRunner.ts:1881-1893` (`Dispose()` clears timer + abort listener), `TestingFramework/Engine/src/drivers/AgentEvalDriver.ts:577-641`, `AI/Vectors/Dupe/src/entryCheckDeadline.ts`.
+- Bounded/terminating: `TestEngine.ts:446,519,1135`; retry delays in `AIPromptRunner.ts:3048`, `BaseModelRunner.ts:1940`.
+- Per-request/connection: `MJServer/src/index.ts:1191-1224` (WS token-expiry, unref'd, cleared in `onClose`), `index.ts:1680-1683` (orphan sweep registered with `ShutdownRegistry`), `FireAndForgetHeartbeat.ts:81-103` (all callers `Stop()` in `.finally`).
+- `IShutdownable` + `ShutdownRegistry`: `TaskGraph/src/TaskGraphDispatcher.ts` (registered at 807; heartbeats cleared 1156/1244).
+- Other: `RealtimeSessionRuntime.ts` timers all paired with clears; `ConversationStreaming.ts:769` capped/jittered reconnect; `baseEngine.ts:1443`, `providerBase.ts:1243/1590`; `rubric-form.component.ts:38,131-135`; `server-connectivity.service.ts:79,203,211`.
+
+## Subagent C — Event listeners (Round 17, 2026-10-03)
+
+**Baseline:** Round 16 Subagent C. **Scope:** all 583 changed files plus re-read of every Round 16 finding. Round 16: 11 open → 0 resolved, 11 persisted. **New: 3.**
+
+### Persisted
+
+| # | Sev | Location | Notes |
+|---|---|---|---|
+| 1 | High | `packages/AI/Prompts/src/AIPromptRunner.ts:2355` (`runChatCompletionBounded`) / `BaseModelRunner.ts:1858-1863` | With no prompt timeout, `createExecutionBound` returns the caller's raw token; `signal.addEventListener('abort', fail, {once:true})` is never removed when `ChatCompletion` wins the race. The `controller` branch (:1866-1894) is correct (`Dispose()`). |
+| 2 | Medium | `packages/AI/Providers/OpenAI/src/models/openAIRealtime.ts:883` | Anonymous `socket.addEventListener('close', ...)` never removed. |
+| 3 | High | `packages/Angular/Generic/composer/src/lib/components/mention/mention-editor.component.ts:1400` | Removal only at :1407 inside a MutationObserver; class has no `OnDestroy` (:73). |
+| 4 | Medium-High | `packages/MJServer/src/resolvers/MCPResolver.ts:637/643/646` | `removeEventListener` not in try/finally; a failed sync leaks one closure per call into the singleton MCPClientManager's listener Set. |
+| 5 | Medium | `packages/TelephonyAdapters/src/telephony/vonageMediaRegistry.ts` (+ twilio, teamsAcs siblings) | Unchanged. |
+| 6 | Low | `packages/MJGlobal/src/Global.ts:25,59-61,67` (`_components`) | No unregister path. |
+| 7 | Low | `packages/AI/RemoteBrowser/Server/src/remote-browser-engine.ts:545` | Dormant, `{once:true}`. |
+| 8 | Low | `packages/AI/RealtimeBridge/Providers/LiveKitNative/src/livekit-rtc-node-room.ts:318-340, 343-358, 484-498` | `disconnect()` only calls `room.disconnect()`; no `removeAllListeners`. |
+| 9 | Low | `packages/Angular/Explorer/explorer-core/src/lib/shell/shell.component.ts:2748-2753` | `ngOnDestroy` (:2430-2439) does not remove the document click listener. |
+| 10 | Low | `packages/MJCore/src/generic/dataHooks.ts:119` | Only test-only `ClearAllDataHooks`. |
+| 11 | Medium | `packages/AI/Providers/OpenAI/src/models/openAILiveRealtime.ts:271-296` (`wireSocket`), `:844-874` (`Close`) | `Close()` does not clear the 7 handler arrays or remove the 4 socket listeners. Unchanged 3 rounds; cheapest fix: port `clearHandlers()` from `openAIRealtime.ts`. |
+
+### NEW
+
+**N1 — Medium (High if the caller signal is session-lived): `combineSignals` leaks `{once:true}` abort listeners on the caller signal.**
+`packages/AI/Agents/src/realtime/realtime-client-session-service.ts:3058-3059`; call sites `:1462` (`ExecuteRelayedTool`) and `:2669` (delegated `RunAgent` cancellationToken). Each tool call adds a listener to `brokerSignal` and `callerSignal` and never removes either; the listener closes over a fresh AbortController that stays reachable as long as `callerSignal` lives. `input.AbortSignal` is optional (:324); who supplies it and its lifetime is unconfirmed. Fix: return `{signal, dispose}` and call `dispose()` in the `finally` of `ExecuteRelayedTool` and after `RunAgent` (same shape as `createExecutionBound`).
+
+**N2 — Low:** `packages/Angular/Generic/entity-viewer/src/lib/view-config-panel/view-config-panel.component.ts:312-313` (add), `:340-341` (remove in `onResizeEnd`). No `OnDestroy`; destroyed mid-drag leaves document `mousemove`/`mouseup` listeners until next mouseup.
+
+**N3 — Low:** `packages/Angular/Generic/entity-viewer/src/lib/entity-data-grid/entity-data-grid.component.ts:5304` (add, deferred via `setTimeout`), `:5307/:5318` (removes). `ngOnDestroy` (:1859-1865) does not remove it.
+
+### Verified clean (do not re-flag)
+Abort-listener pairs with removal in `finally`/`Dispose`: `PayloadFeedbackManager.ts:357/374`, `base-agent.ts:2020/2376, 4106/4121, 9317/9339`, `BaseMediaRunner.ts:397/404`, `entryCheckDeadline.ts`. Own-controller listeners `base-agent.ts:4097, 9308`. Symmetric Angular add/remove: `source-type-form.dialog`, `connections.component`, `query-browser-resource`, `chat-conversations-resource`, `form-field.component`, `conversation-chat-area`, `conversation-workspace`, `message-list`, `dialog.component`, `server-connectivity.service`, `conversation-liveness-dom.service`. d3 resize handlers cleared. `GraphQLDataProvider.ts:3420-3459` ws handlers bounded by client lifetime. `RedisLocalStorageProvider` unsubscribe closures + `removeAllListeners`. `MJServer/src/index.ts` boot-time listeners. Anthropic per-request `.on('text')`. `GetGlobalObjectStore` users are keyed singleton slots. No new `new WebSocket` / `new EventSource`.
+
+### Counts (open after Round 17)
+Critical 0 · High 2 (+N1 conditional) · Medium 5 · Low 7 · Total 14. New 3, resolved 0, persisted 11/11.
+
+## Subagent D — Unbounded caches / singletons (Round 17, 2026-10-03)
+
+**Method:** re-read all 13 Round 16 open findings at current lines; swept new packages for field-level Map/Set/WeakMap/Record and singleton state.
+
+### NEW
+- **D1 (High):** `AgentEvalDriver.versionPins` / `versionLabels` grow one entry per suite run on a driver cached for process life. `packages/TestingFramework/Engine/src/drivers/AgentEvalDriver.ts:863-864`, `.set` ~916. `PublishedVersionPin` (`oracles/rubric-resolution.ts:75-87`) has `Remember` only, no delete. `TestEngine._driverCache` (`engine/TestEngine.ts:83,677-693`) keeps the driver forever. `SetupSuite` is overridden (:867) but there is no `TeardownSuite` cleanup. Fix: add `Forget(suiteRunId)` and call it from a `TeardownSuite` override.
+- **D2 (Medium, error path):** `TestEngine._suiteFixtures.set` (`engine/TestEngine.ts:362`) runs before `await resolveSuiteDrivers` (:363), which is outside the `try/finally`; the only `.delete` is at :385 inside the `finally`. If `resolveSuiteDrivers` throws the entry leaks.
+- **D3 (Low):** `ConversationCompactionManager.warnedAgentPercentConfigs` static Set (`packages/AI/Agents/src/ConversationCompactionManager.ts:154,214-215`), bounded by agent metadata.
+- **D4 (Low):** `AIDecisionRunner.warnedMissingCredentials` (`packages/AI/Prompts/src/decision/AIDecisionRunner.ts:216,258`), bounded by credential metadata.
+- **D5 (Low):** `AIEmbeddingRunner.keyRequirementByDriver` (`packages/AI/Prompts/src/embedding/AIEmbeddingRunner.ts:85,366-369`), keyed by driver class.
+- **D6 (Low):** `RerankerService._rerankerCache` (`packages/AI/Reranker/src/RerankerService.ts:165,211,275`), bounded by metadata; `.clear()` at :583.
+
+### PERSISTED (none fixed)
+- **High:** `AIBridgeEngine.diagInbound`/`diagOutbound` (`packages/AI/RealtimeBridge/Server/src/ai-bridge-engine.ts:564-565`, adds 1014/1025, no delete). `ComponentRegistryService.compiledComponentCache` (`packages/React/runtime/src/registry/component-registry-service.ts:65`; reference add/remove have zero production callers). `ArtifactMetadataEngine` caches (`packages/MJCoreEntities/src/engines/artifacts.ts:60-62`, no delete/clear). `ClientToolRequestManager.sessionTools` (`packages/AI/Agents/src/ClientToolRequestManager.ts:44,134,143`; `ClearSession` never called in production).
+- **Medium:** `ConversationCompactionManager.warnedConversationBudgets` (`ConversationCompactionManager.ts:151,358-361`, keyed by conversation ID). `ComponentManager.fetchCache` (`packages/React/runtime/src/component-manager/component-manager.ts:52`, `maxCacheSize` unenforced). `TelemetryManager._patterns` (`packages/MJCore/src/generic/telemetryManager.ts:878,1252`). `TeamsAcsMediaRegistry.channels` (`packages/TelephonyAdapters/src/telephony/teamsAcsMediaRegistry.ts:30`, carried forward). `AIPromptRunner._outputExampleCache` (`AIPromptRunner.ts:185,3687-3697`).
+- **Low:** MCP OAuth stores (`ClientRegistry`, `AuthorizationStateManager`: TTL sweep, no hard cap). `TokenValidator.azureAdV1JwksClients` (`packages/AI/MCPServer/src/auth/TokenValidator.ts:140`). `EntityActionInvocationBase._scriptCache` (`EntityActionInvocationTypes.ts:139`). `ObjectCache` (`packages/MJGlobal/src/ObjectCache.ts`; not re-read).
+
+### RESOLVED
+None.
+
+### Clean (new surface)
+Rubrics `RubricContentRegistry`; RecordSetProcessor `RecordProcessorRegistry` and per-run `WriteBackProcessor._lookupCache`; RecordGraph `DependencyGraphWalker` (`.clear()` at 127-128); RecordCloning `RecordCloningStartup`; MJCoreEntitiesServer `template-extraction/parser.ts` (per parse); AI/Agents per-run `BaseAgent` maps, `AgentDataPreloader` (`clearRunCache`), `AgentRunWatchdog._trackedRuns`, `RealtimeChannelServerHost.sessions`.
+
+### Counts
+Critical 0 · High 5 (4 persisted + 1 new) · Medium 6 · Low ~7 · Total ~18 (13 persisted, 6 new, 0 resolved).
+
+## Subagent E — Connections / streams / processes (Round 17, 2026-10-03)
+
+**Counts (open):** Critical 0, High 2, Medium 4 (+1 new), Low 6 — 7 persisted, 1 resolved, 4 new.
+
+### NEW
+- **Medium:** `packages/CodeGenLib/src/Misc/runCommand.ts:199` — the timeout `setTimeout` is never cleared. After a non-daemon command with a timeout exits normally the timer fires, logs "TIMED OUT" and calls `treeKill(cp.pid)` on a dead (possibly reused) PID; the `!cp.killed` guard at :205 does not help because `.killed` is only set by `cp.kill()`. Timer also pins the event loop. Fix: clear in close/error handlers.
+- **Low:** `packages/GraphQLDataProvider/src/graphQLDataProvider.ts:3882-3942` (`TaskGraphFrames`) subscribes eagerly; if the returned Observable is never subscribed the WebSocket subscription lingers until dispose.
+- **Low:** `packages/MJServer/src/index.ts:591,613,647` DB pools not registered with `ShutdownRegistry`; CodeGen pool leaks if `connect()` throws.
+- **Low:** `packages/TestingFramework/CLI/.../mj-provider.ts:143` pool not closed on init failure.
+
+### PERSISTED
+- **High:** `packages/AI/RemoteBrowser/Cdp/src/base-cdp-remote-browser-provider.ts:99-105` — `Connect()` leaks the acquired backend when `adapter.Launch()` throws.
+- **High:** `packages/TelephonyAdapters/src/telephony/{teams,twilio,vonage}*MediaRegistry.ts` — orphan `channels` entries, no sweep.
+- **Medium:** `packages/MJInstaller/src/adapters/ProcessRunner.ts:132,267` — `spawn` lacks `detached: true`, so `process.kill(-pid)` throws ESRCH, is swallowed, child never killed.
+- **Medium:** `packages/AI/A2AServer/src/Server.ts:260` and `packages/AI/MCPServer/src/Server.ts:950` — pools without `.on('error')`.
+- **Low:** `GitHubReleaseProvider.ts:269` no body drain on `!ok`; `streamToFile` (:296-317) never cancels reader on pipeline failure. `combineSignals` at `realtime-client-session-service.ts:3049` (see Subagent C N1).
+
+### RESOLVED
+- Round 16 #8: missing SIGKILL escalation in `packages/AI/AgentHarness/src/sandbox/ChildProcessExecutor.ts:27-50` — fixed correctly (timer cleared on `exit`, not keyed off `.killed`); `WorkerPool.Shutdown` escalation (:634-658) also verified. A residual `.killed` early-return at :28 is cosmetic.
+
+### Verified clean
+graphql-ws lifecycle and pong watchdog; ConversationsRuntime streaming; `TaskGraphDispatcher` timers/heartbeats; RealtimeSessionRuntime timers; SQL Server, PG and CodeGen transactions; fetch drains in OpenRouter, Business Central, QuickBooks; Redis; per-instance SDK clients.
+
+## Subagent F — AI Providers deep scan (Round 17, 2026-10-03)
+
+Scope `packages/AI/Providers/**`. No Critical. Betty/DeepInfra/SiliconFlow/HeyGen/Cohere reranker/Groq+OpenAI audio were checked by grep (client construction, timers, listeners, fetch, signal, Buffer fields), not end to end.
+
+### RESOLVED / verified clean
+- Anthropic streaming cancellation: `Anthropic/src/models/anthropic.ts:~783` now passes `{ signal: params.cancellationToken }`; `.on('text')` at :786 is on a function-local stream.
+- BlackForestLabs error-path drain: `BlackForestLabs/src/index.ts:355,385` call `response.body?.cancel()` (missing-AbortSignal part still open, M3).
+- Realtime teardown correct in `Inworld/src/inworldRealtime.ts:504-516,990-997` and `AssemblyAI/src/assemblyAIRealtime.ts:640-652,812-818`.
+- Bedrock abortSignal, ElevenLabs chunks (function-local), Betty `HttpPost` signal, OpenRouter decision signal, Cohere/Groq/Mistral/Fireworks/Gemini/Vertex clients built once in constructors: clean.
+
+### PERSISTED
+- **High (known):** `OpenAI/src/models/openAILiveRealtime.ts` handler arrays (~207-213) never emptied; `Close()` (~844-874) has no `clearHandlers`. Also `openAIRealtime.ts:883` (Medium).
+- **Medium M1:** `Ollama/src/models/ollama-llm.ts:107-111` `clientForRequest()` builds a new client per cancellable request; `combineSignals` (:129-143).
+- **Medium M2:** `LocalEmbeddings/src/models/localEmbedding.ts:109-110` static `pipelines`/`loadingPromises` no eviction (bounded by distinct models; ONNX pipelines are large); `ClearSharedCache()` (:459) never auto-called.
+- **Medium M3:** `BlackForestLabs/src/index.ts:327,351,382` fetches take no `AbortSignal`; poll loop outlives a cancelled caller up to `maxWaitTime`.
+- **Low:** L1 `openAILiveRealtime.ts:203,613-616` `_countedResponseIds` never cleared; L2 `Close()` ~861-870 5s safety timer not cleared; L3 `:1236` raw fetch without signal; L4 `:271-294` four `addEventListener` without removal; L5 `rawRealtimeWebSocketConnection.ts:139-143` `close()` leaves listener arrays (:39-41); L6 `LMStudio/src/models/lm-studio.ts:65` replaces `_client` w/o dispose; L7 `Azure/src/models/azure.ts:63-70` and `azureEmbedding.ts:~47` rebuild client on every `SetAdditionalSettings`; L8 `Gemini/src/index.ts:117-121` `_geminiPromise` caches a rejected promise permanently.
+
+### NEW (all Low)
+- N1 `Ollama/src/models/ollama-embeddings.ts:17,56` rebuilds `new Ollama(...)` in `SetAdditionalSettings` without disposing the old one (same as L6/L7).
+- N2 `Inworld/src/inworldRealtime.ts:324,476` and `AssemblyAI/src/assemblyAIRealtime.ts:446,616` push every background update onto `contextNotes` and rebuild the system prompt from the full list; `clearHandlers()` doesn't reset it. Bounded by session life; prompt size unbounded.
+- N3 (informational) `OpenAI/src/models/tts.ts:70-74`, `BlackForestLabs/src/index.ts:389-392`, `ElevenLabs/src/index.ts:56-57` hold Buffer + base64 on the result (request-scoped).
+
+Fix pattern: `clearHandlers()` called from `Close()` (as Inworld/AssemblyAI do); "only rebuild if settings changed" guard covers L6, L7, N1.
+
+## Subagent G — Integration / ExternalDataSources / new engines deep scan (Round 17, 2026-10-03)
+
+Scope: `Integration/engine`, `Integration/engine-base`, `ExternalDataSources/**`, `RecordCloning/**`, `RecordGraph`, `RecordSetProcessor/**`, `Rubrics/**`, `TestingFramework/{Engine,EngineBase,CLI}`. No Round 16 item resolved.
+
+### NEW
+- **TF1 — High (tiny entries, unbounded count):** `PublishedVersionPin.pinned` (`TestingFramework/Engine/src/oracles/rubric-resolution.ts:75`; `Remember()` :77-85, no delete/clear) and `AgentEvalDriver.versionLabels` (`drivers/AgentEvalDriver.ts:863-864`, set :916, never deleted). `TestEngine` is a `BaseSingleton` caching drivers in `_driverCache` (`TestEngine.ts:83`, set :693), so the driver lives for the process. `WithResolvedRubric` (~:895-920) falls back to the test run ID when no suite run (`suiteRunId = TestSuiteRunID || testRun.ID`), so every standalone eval adds entries permanently. Fix: drop the maps (SetupSuite already pins into `context.fixtures.PinnedRubricVersions`), or `Forget(suiteRunId)` from `TeardownSuite`, or `MJLruCache`.
+- **TF2 — Low:** `TestEngine._driverCache`/`_oracleRegistry` (:83-84; sets :621,:693) bounded by type count; relevant only as it pins TF1's driver.
+- **ED1 — Low:** `ExternalDataSourceRouter.ts:137` MJGlobal subscription never unsubscribed (once, bounded; same root cause as N3).
+
+### PERSISTED
+- G1 `IntegrationEngine._rateLimiters`/`_fetchGates` (`IntegrationEngine.ts:2263/2287`) — deferred, still open.
+- N1 High: `ExternalDataSourceRouter.ts:123-135` cross-instance stale driver/pool (no server-side `remote-invalidate` events).
+- N2 Medium: per-driver pool Maps with no cap (`Postgres:62`, `MySQL:70`, `Oracle:69`, `SQLServer:88`, `Snowflake:90`, `Databricks:97`, `Mongo:67`); bounded by distinct EDS rows.
+- N3 Medium: no shutdown hook in `ExternalDataSources` (compare `DiscoveryWatchdog.ts:103`).
+- N4 Low: `Close()` unwired (Databricks :396, Mongo :271, Snowflake :349).
+
+### Clean
+`activeSyncs`/`maintenanceLocks` deleted in `finally`; per-run AbortControllers; `WriteSerializer` self-cleaning; timeout races clear timers (`BaseIntegrationConnector.ts:306-321`, `IntegrationConnectorCreationPipeline.ts:367-390`, `AgentEvalDriver.ts:576-642`); `RecordMapBatch.pending` cleared on flush; `RateLimiter`s retain no timers; `DependencyGraphWalker` caches bounded + cleared; `RubricEngineBase` rebuilt wholesale; no streams/webhooks/token timers in scope.
+
+Counts (new): Critical 0 · High 1 · Medium 0 · Low 2.
+
+## Subagent H — Communication, Storage, Auth providers deep scan (Round 17, 2026-10-03)
+
+Scope: `Communication/**/src`, `MJStorage/src`, `AuthProviders/src`, `TelephonyAdapters/src`, `MessagingAdapters/src`. Read-only review; no builds run. Changed files in scope (`slack-block-builder.ts`, `teams-card-builder.ts`) clean (`fullResponseStore` TTL-swept on write).
+
+### RESOLVED (verified holding)
+`CommunicationEngine._providerInstanceCache` (`Engine.ts:58`); `FileStorageEngine.disposeCachedDrivers()` (`FileStorageEngine.ts:238-246`); `AuthProviderFactory`/`BaseAuthProvider.Dispose` (`BaseAuthProvider.ts:72`); `SlackAdapter.thinkingMessageIds` TTL sweep; `TeamsMeetingsExtension` scheduler handle stopped in `Shutdown()` (:38,100,110-113).
+
+### Ruled out
+No SMTP/nodemailer; no webhook subscription registries or renewal timers; no signed-URL caches; no JWKS caches/refresh timers (only retry delay `BaseAuthProvider.ts:133`); `issuerCache` is an `MJLruCache` (50); Box/SharePoint multipart OK; `TeamsAdapter.recentFormActivityIds` TTL-swept; Twilio/Vonage routers use `noServer` and `EndCall` on close.
+
+### Open
+- **High 1 (persisted):** media-registry `channels` Maps have no TTL/sweep — `vonageMediaRegistry.ts:42` (`EndCall` :119-129), `twilioMediaRegistry.ts:50` (:114-124), `teamsAcsMediaRegistry.ts:31` (:90-100). Entry created at bridge-session start, removed only on socket close/error; calls that never connect leave audio buffers + handler arrays for process life. `TeamsMeetingsService.ts:183` `graphClientsByCall` same shape if the hangup notification never arrives.
+- **Medium-High 2 (NEW):** `vonageMediaRegistry.ts:44-47,136-143` — `SendAudio` (:49) calls `ensureChannel` unconditionally, so outbound audio after `EndCall` resurrects the deleted channel permanently. Check `twilioMediaRegistry.ts:111` and `teamsAcsMediaRegistry.ts:136`. Fix: non-creating lookup in send path + tombstone + last-activity TTL sweep (see `TeamsAdapter.storeConversationRef`).
+- **Medium 3:** non-AWS storage drivers overwrite SDK client with no `Dispose()` — Google (:76,90,130,142), Dropbox (:202,216,286,300), Box (:369,1072), Azure (:111,156), SharePoint (:439,556), GoogleDrive; only `AWSFileStorage.ts:195` overrides.
+- **Medium 4:** `FileStorageEngine._driverCache` (:112, `GetDriver` ~317-359) no eviction for deleted/deactivated accounts (slow growth).
+- **Medium 5:** module singleton clients `MSGraph/src/auth.ts:6,41-62`, `gmail/src/auth.ts:6-21` never invalidated on credential rotation.
+- **Medium 6:** `DropboxFileStorage.ts:1339-1377` chunked upload abandons session on mid-transfer failure.
+- **Medium 7:** `SendToAudience.ts:126-159` buffers whole audience + results (transient).
+- **Low 8:** `NotificationEngine` fire-and-forget unbounded concurrency; `SendGridProvider` global `sgMail.setApiKey`; Azure/GCS `DeleteDirectory` uncapped `Promise.all` (not re-verified). **Low 9:** `AuthProviderFactory.providers` plain Map bounded by admin count.
+
+Counts: Critical 0 · High 1 · Medium 6 (1 new) · Low 2 · Resolved 5 (re-verified).
+
+## Subagent I — Actions / MetadataSync / React runtime / misc deep scan (Round 17, 2026-10-03)
+
+Checked 41 in-scope changed files plus repo-wide greps for spawn/fork/exec/setInterval/chokidar/`.killed`/SIGKILL and unbounded collections.
+
+### RESOLVED
+- R16 #4 `WorkerPool.Shutdown()` force-kill: `packages/Actions/CodeExecution/src/WorkerPool.ts:634-658` — timer cleared from `once('exit')` (:635-640), `unref()`'d, unconditional SIGKILL on fire.
+
+### PERSISTED
+- High: `packages/React/runtime/src/utilities/resource-manager.ts:218-241` `AddEventListener` entry never self-removes; `library-loader.ts:668-680` `ClearCache()` never called.
+- Medium: isolated-vm `Reference` handles never `.release()`'d (`packages/Actions/CodeExecution/src/worker.ts:166,237,323`; finally only does `context.release()` :454); `Encryption/src/EncryptionEngine.ts:696-699,774-781` per-call plaintext Buffers never zeroed; `ComponentManager.registryNotifications` (`component-manager.ts:34,744`) no per-entry eviction; `MetadataSync/src/lib/file-backup-manager.ts:75` orphaned backup temp dirs (unchanged).
+- Low: `component-compiler.ts:681-729` bare setTimeout polling.
+
+### NEW
+1. **Medium** — `WorkerPool.ts:130,165-168,176-179`: `createWorker()` forks the child and stores it in `this.workers[id]` (:162), then awaits `ready` under a 5s timer; on timeout or spawn `'error'` the promise rejects with no `kill()`, and the `'exit'` handler (`handleWorkerCrash`) is attached only at :188 after the await. A worker that never reports ready is orphaned (full Node process + IPC + possible isolated-vm heap). Fix: kill on both failure paths, clear the slot, attach `exit` listener before the ready-wait.
+2. **Low (latent)** — `WorkerPool.ts:629-632` `Shutdown()` early-out `if (worker.process.killed)` is keyed off `ChildProcess.killed` (same flaw fixed one block lower). Use `exitCode !== null || signalCode !== null`.
+3. **Low** — `MJCLI/src/lib/regression/docker-helpers.ts:127-136,159-173`: `SpawnInherit`/`SpawnCapture` have no signal forwarding/timeout; piped stdout uncapped (dev tooling).
+4. **Low** — `MJCLI/src/lib/dev-workspace/pnpm.ts:61-69` `GetPnpmVersion` accumulates stdout; `'error'` handler resolves null without killing child (bounded by timeout).
+
+### Clean
+`FieldPathResolver` per-pass cache; WorkerPool crash-restart loop capped (`:340-376`); `ArtifactBuilderService` TTL timer unref'd; React `cache-manager` has `Destroy()`; MetadataSync `WatchService.stop()` closes watchers; `PushService` maps per-run; other changed files clean.
+
+Summary: High 0 new/2 persisted · Medium 1 new/4 persisted/1 resolved · Low 3 new/1 persisted.
+
+## Subagent J — MJServer / AI Agents / MCP / A2A deep scan (Round 17, 2026-10-03)
+
+Scope: MJServer/src, MJAPI/src, MJCoreEntitiesServer/src, AI/{MCPServer,A2AServer,Agents,Engine,Prompts,Reranker,Core}, QueryGen, QueryProcessor, SQLConverter (AgentManager, RealtimeBridge, AgentHarness not covered). **No new Critical/High.**
+
+### RESOLVED (verified in source)
+- R16 N-1 `RealtimeClientSessionService` wire-action maps — `packages/AI/Agents/src/realtime/realtime-client-session-service.ts:515,521,527` are now `MJLruCache` (5,000 / 4h); writes `.Set()` at :2802-2807, reads `.Get()` at :2911,2924.
+- R16 N-2 `bridge-room-transcript-sink.ts:89,93` now `MJLruCache` (10,000 / 24h); `ensureInFlight` cleaned in `.finally`.
+
+### OPEN (persisted)
+- **P-1 Medium:** `AIPromptRunner._outputExampleCache` static Map, no TTL/cap (`AIPromptRunner.ts:185,3687-3697`). Convert to `MJLruCache` like `AIEngine._embeddingCache` (`AIEngine.ts:113`).
+- **P-2 Medium:** `ConversationCompactionManager.warnedConversationBudgets` static Set never cleared (`ConversationCompactionManager.ts:151,358-361`).
+- **P-3 Low-Medium:** MCP OAuth stores have TTL sweep but no entry cap — `ClientRegistry.ts:67` (sweep :325), `AuthorizationStateManager.ts:84-86` (sweep :419).
+- **P-4 Low:** `TokenValidator.azureAdV1JwksClients` never evicted (`TokenValidator.ts:140,246-257`; bounded by tenant count).
+- **N-3 Low-Medium:** `RealtimeRecordingController` has no cap on accumulated PCM (`realtime-recording-capture.ts:65-66,133`); ~350MB/hour per recorded session; per-session ceiling only.
+
+### NEW (Low)
+- **L-1** `AIDecisionRunner.warnedMissingCredentials` static Set (`AIDecisionRunner.ts:216,258-259`), bounded by model/vendor combos.
+- **L-2** `AgentDataPreloader._perAgentCache` expires only on read (`AgentDataPreloader.ts:82,463-475`); bounded by PerAgent sources. PerRun cache released at `base-agent.ts:2399`.
+- **L-3** `AIPromptRunner.runChatCompletionBounded` (`AIPromptRunner.ts:2355`) leaves abort listener when model call wins (see Subagent C #1); mirror `BaseMediaRunner.ts:397-410`.
+
+### Clean
+All abort-listener pairs in `base-agent.ts`, `PayloadFeedbackManager.ts`, `BaseModelRunner.ts:1877`, `BaseMediaRunner.ts:397`, `realtime-session-runner.ts`; `StartLivenessPulse` stopped in `.finally` at all call sites; orphan reconciler registered with `ShutdownRegistry` (`index.ts:1680`); MCP/A2A SSE intervals; `realtimeProxyRegistry`, `RealtimeProxyTunnel`, `UploadTokenManager`, `RemoteBrowserGoalRegistry`, `sessionAuditSeen`, `redeemAttempts`, `SqlLoggingConfigResolver.sessionTimeouts`; per-run BaseAgent maps; GraphQL subscription resolvers hold no per-subscriber Maps; QueryGen/QueryProcessor/SQLConverter/MJAPI no findings.
+
+Summary: Critical 0 · High 0 · Medium 2 · Low-Medium 2 · Low 4 · Resolved 2.
+
+
+## Round 17 Fix Summary
+
+| # | Package | Fix | Tests |
+|---|---|---|---|
+| 1 | `@memberjunction/ng-core-entity-forms` | `super.ngOnDestroy()` in 12 form overrides | New `src/__tests__/form-ngondestroy-super.test.ts` (32 cases; fails 12/32 without the fix). Package suite: 45 files / 395 tests pass. Package builds (`ngc`) clean. |
+| 2 | `@memberjunction/testing-engine` | `PublishedVersionPin.pinned` and `AgentEvalDriver.versionLabels` → `MJLruCache` (5,000 / 6h) | Existing `rubric-resolution.test.ts` pin semantics still pass. Package suite: 35 files / 602 tests pass. |
+| 3 | `@memberjunction/codegen-lib` | `RunCommand` clears timeout timer in `finally` | New test "clears the timeout timer when the command finishes before the timeout"; `runCommand.test.ts` 19/19 pass. |
+| 4–5 | `@memberjunction/code-execution` | Kill worker on startup failure; `Shutdown()` early-out uses `exitCode`/`signalCode` | New "worker startup failure" test; mock process gained `exitCode`/`signalCode`. 79 pass, 7 fail — **the 7 failures are in `bridge.test.ts`, are identical with these changes stashed (7 fail / 78 pass), and are caused by the native `isolated-vm` module not being built in this sandbox (`pnpm install --ignore-scripts`)**. |
+
+Not run: the deterministic integration tier (`pnpm run test:integration`) needs a provisioned database that this sandbox does not have. None of the changed code paths touch database schema, migrations, or metadata.
+
+## Deferred findings — recommended next fixes (ordered)
+
+1. Telephony media registries (`channels` TTL sweep + non-creating `SendAudio` lookup) — Subagent H #1/#2.
+2. `OpenAILiveSession.Close()` → `clearHandlers()` (3 rounds open) — Subagent C #11 / F H1.
+3. `combineSignals` returns `{signal, dispose}` — Subagent C N1.
+4. `AIPromptRunner._outputExampleCache` → `MJLruCache`; `ConversationCompactionManager.warnedConversationBudgets` — Subagent J P-1/P-2.
+5. `TestEngine` `_suiteFixtures.set` before `resolveSuiteDrivers` outside `try/finally` — Subagent D D2.
+6. `ClientToolRequestManager.sessionTools` `ClearSession` never called — Subagent D.
+7. `entity-viewer` `ViewConfigPanel` / `EntityDataGrid` document listeners lacking `ngOnDestroy` cleanup — Subagent C N2/N3.
+8. Lint rules: `super` in lifecycle overrides; `Map` field on singleton with no `.delete`.
+
+
+---
+
+# Prior rounds (history — Rounds 16 and earlier, unchanged)
+
+# MemberJunction Memory & Resource Leak Audit
+
 **Generated:** 2026-09-26
 **Prior Runs:** 2026-05-03 (Round 1+2 baseline — 158 findings), 2026-06-20 (Round 3 — 77 new, 30 resolved), 2026-06-27 (Round 4 — 127 new, 10 agents), 2026-07-04 (Round 5 — 67 new, 7 resolved), 2026-07-11 (Round 6 — 61 new, ~3-4 resolved, 2 severity reclassifications), 2026-07-18 (Round 7 — ~63 new, 6 resolved, 2 new Criticals), 2026-07-25 (Round 8 — ~23 new, 7 resolved, 1 new Critical), 2026-08-01 (Round 9 — ~31 new, 1 resolved, 0 new Criticals), 2026-08-08 (Round 10 — ~13 new, 1 Critical fixed same-day, connector layer removed from repo), 2026-08-22 (Round 11 — 5 new, 1 High fixed same-day, 2 other genuine resolutions), 2026-08-29 (Round 12 — 16 new [axios→fetch migration body-drain gap], 12 fixed same-day via `DrainResponseBody`), 2026-09-05 (Round 13 — 14 new, 10 fixed same-day), 2026-09-12 (Round 14 — 7 new, 7 fixed same-day, 10 resolved re-verified holding), 2026-09-19 (Round 15 — 43 new [2 Critical, 3 High, 16 Medium, 22 Low], 3 fixed same-day [2 Critical + 1 High], 6 resolved re-verified holding)
 **Scope:** Full monorepo — `packages/` tree (234+ `package.json` files), swept via 10 parallel `Explore`-style subagents in two waves, plus exhaustive repo-wide static cross-check greps.

@@ -205,6 +205,7 @@ params.forceFullModelEvaluation = true;
 | `attemptJSONRepair` | `boolean` | Repair malformed JSON object output via JSON5 then LLM repair. |
 | `credentialId` | `string` | Per-request credential override (highest credential precedence). |
 | `apiKeys` | `AIAPIKey[]` | Legacy per-request API keys (used only if no credential bindings resolve). |
+| `CredentialScope` | `'Any' \| 'RuntimeOnly'` | Which credentials the run may spend. `'RuntimeOnly'` allows only `credentialId` and `apiKeys` — no credential bindings, vendor default or environment keys. Also on `ExecuteAgentParams`, where BaseAgent carries it through the run. |
 | `nativeFileInputs` | `NativeFileInput[]` | Files attached natively when the driver supports the modality (else text fallback). |
 | `cancellationToken` | `AbortSignal` | Cooperative cancellation, checked at each phase. |
 | `onProgress` / `onStreaming` | callbacks | Progress updates / streamed output chunks. |
