@@ -1,5 +1,42 @@
 # @memberjunction/record-set-processor-base
 
+## 6.2.0-edge.3
+
+### Patch Changes
+
+- Updated dependencies [dfe40a4]
+- Updated dependencies [0f04590]
+- Updated dependencies [41c2c08]
+- Updated dependencies [66fd011]
+- Updated dependencies [196160a]
+- Updated dependencies [60bd774]
+- Updated dependencies [35da130]
+- Updated dependencies [28c92e0]
+  - @memberjunction/global@6.2.0-edge.3
+  - @memberjunction/core@6.2.0-edge.3
+
+## 6.2.0-edge.2
+
+### Minor Changes
+
+- 4248fb3: Add `DecisionFeaturePipelineDriver`, an infer processor driver that evaluates structured decisions through `AIDecisionRunner` for feature pipelines. Supports Likelihood (boolean with configurable constraint threshold), Choice (enum), and Score (numeric with 2-10 level rubrics) outputs, confidence tracking, and metadata catalog integration.
+
+### Patch Changes
+
+- 664baea: A Decision Feature Pipeline can now escalate its borderline records to an LLM Feature Pipeline: set `Escalation` (the LLM pipeline's ID and a confidence floor) in its spec, and only the records whose confidence falls below the floor are re-run through the LLM pipeline, whose answers replace the decision's.
+- Updated dependencies [e97d95c]
+- Updated dependencies [21f9e15]
+- Updated dependencies [4248fb3]
+- Updated dependencies [0adaf76]
+- Updated dependencies [705ab4e]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [5986939]
+- Updated dependencies [4d647e6]
+- Updated dependencies [369e229]
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+
 ## 6.2.0-edge.1
 
 ### Patch Changes

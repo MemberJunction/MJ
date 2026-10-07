@@ -11,6 +11,27 @@ import { NormalizeSmartFieldResultShape } from "../Database/search-guardrails";
 export type EntityNameResult = { entityName: string, tableName: string }  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 export type EntityDescriptionResult = { entityDescription: string, tableName: string }  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 export type CheckConstraintParserResult = { Description: string, Code: string, MethodName: string, ModelID: string }
+/**
+ * Result of translating a SQL `@CHECK` on a JSONType into TypeScript. `Code` is a function BODY taking
+ * `value` and `row` that returns true when the value is valid (not a full method, unlike
+ * {@link CheckConstraintParserResult}).
+ */
+export type JSONCheckParserResult = {
+    Description: string, Code: string, MethodName: string, ModelID: string,
+    /** Self-checks the model supplies; CodeGen executes them against `Code` before accepting it. */
+    TestCases?: Array<{ Value: unknown, Row?: unknown, Expected: boolean }>,
+}
+/** Where a JSONType `@CHECK` is scoped, spelled out for the prompt. */
+export type JSONCheckScopeInfo = {
+    /** Declared name of the interface the rule is on (or the interface owning the property). */
+    TypeName: string,
+    /** Property the rule is written on; undefined for an interface-level rule. */
+    Property?: string,
+    /** True when the property is array-typed and the rule runs against each element. */
+    PerElement: boolean,
+    /** TypeScript type of the `value` parameter (original, un-prefixed names). */
+    ValueType: string,
+}
 
 /** Width of `Entity.Name`; a candidate longer than this cannot be inserted. */
 const MAX_ENTITY_NAME_LENGTH = 255;
@@ -815,6 +836,68 @@ export class AdvancedGeneration {
             }
         } catch (error) {
             LogError(`AdvancedGeneration:Error in parseCheckConstraint: ${error}`);
+            return null;
+        }
+    }
+
+    /**
+     * Translates a SQL `@CHECK` written on a JSONType interface or member into a TypeScript rule
+     * body, using the `CodeGen: JSON Check Parser` prompt. Gated by the same `ParseCheckConstraints`
+     * feature flag as table CHECK constraints.
+     *
+     * @param checkText - the SQL boolean expression as written in the tag
+     * @param scope - where the rule applies (drives what `value` is)
+     * @param propertyList - the properties of the object `value` refers to, with types and nullability
+     * @param definition - the JSONTypeDefinition source, so the model sees every referenced type
+     * @param rowFieldList - columns of the owning entity available as `row.<Column>`, one per line
+     * @param existingMethodName - a name already used for this rule, when regenerating
+     * @returns the translation, or null when the feature is off or the call failed
+     */
+    public async ParseJSONCheck(
+        checkText: string,
+        scope: JSONCheckScopeInfo,
+        propertyList: string,
+        definition: string,
+        rowFieldList: string,
+        existingMethodName: string | null,
+        contextUser: UserInfo
+    ): Promise<JSONCheckParserResult | null> {
+        if (!this.featureEnabled('ParseCheckConstraints')) {
+            return null;
+        }
+
+        try {
+            const prompt = await this.getPromptEntity('CodeGen: JSON Check Parser', contextUser);
+
+            const params = new AIPromptParams();
+            params.prompt = prompt;
+            params.data = {
+                checkText,
+                typeName: scope.TypeName,
+                property: scope.Property ?? '',
+                perElement: scope.PerElement,
+                valueType: scope.ValueType,
+                propertyList,
+                definition,
+                rowFieldList,
+                existingMethodName: existingMethodName || 'None - this is a new rule'
+            };
+            params.contextUser = contextUser;
+
+            const result = await this.executePrompt<JSONCheckParserResult>(params);
+
+            if (result.success && result.result) {
+                const modelId = result.modelInfo?.modelId || result.modelSelectionInfo?.modelSelected?.ID;
+                if (!modelId) {
+                    LogError('AdvancedGeneration: Model ID not found');
+                    return null;
+                }
+                return { ...result.result, ModelID: modelId };
+            }
+            LogError(`AdvancedGeneration:JSON @CHECK parsing failed: ${result.errorMessage}`);
+            return null;
+        } catch (error) {
+            LogError(`AdvancedGeneration:Error in ParseJSONCheck: ${error}`);
             return null;
         }
     }
