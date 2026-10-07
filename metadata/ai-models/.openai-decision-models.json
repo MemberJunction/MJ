@@ -1,0 +1,109 @@
+[
+  {
+    "fields": {
+      "Name": "GPT-6 Luna Decisions",
+      "Description": "OpenAI's decision model: gpt-6-luna served by OpenAI's Decisions API (POST /v1/decisions), announced at DevDay on September 29, 2026 and in public beta. It answers Likelihood, Choice and Score questions about text or image input, in one call, with a probability for every allowed option, and writes no text. OpenAI may decline any question; MJ then fails the attempt and fails over. OpenAI reports a latency of about 150 ms and charges $0.10 per million input tokens, with no output or cache charge. OpenAI does not yet document per-request limits (questions, options or context). MJ reaches it directly through the OpenAIDecision driver, or through OpenRouter's Decisions API as openai/gpt-6-luna-decisions (pinned to the dated openai/gpt-6-luna-decisions-20261006, served by OpenAI with a 1,050,000-token context) through the OpenRouterDecision driver. MJ sends the state as text; image input is not used yet. Its raw probabilities are not calibrated to MJ's data, so set thresholds on calibrated values. This is a Decision model, separate from the GPT-6 Luna LLM.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Decision",
+      "PowerRank": 57,
+      "IsActive": true,
+      "SpeedRank": 1,
+      "CostRank": 1,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "07866C26-32DE-4117-8F5C-4DBA50B34FFC"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 2,
+            "Status": "Active",
+            "DriverClass": "OpenAIDecision",
+            "APIName": "gpt-6-luna",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "18755357-57EE-47B8-99DD-8BF1A1AE39CB"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "OpenRouterDecision",
+            "APIName": "openai/gpt-6-luna-decisions-20261006",
+            "MaxInputTokens": 1050000,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "44FECD5C-63EA-44F6-95CC-E46F6A3D12A0"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "StartedAt": "2026-10-07T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.1,
+            "OutputPricePerUnit": 0,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "gpt-6-luna on OpenAI's Decisions API (public beta), as checked on October 7, 2026: $0.10 per million input tokens; no output or cache charge. Source: https://developers.openai.com/api/docs/guides/decisions"
+          },
+          "primaryKey": {
+            "ID": "9910FCFF-8957-42A9-A2EA-B5EFCDE64594"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "StartedAt": "2026-10-06T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.1,
+            "OutputPricePerUnit": 0,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "openai/gpt-6-luna-decisions-20261006 through OpenRouter's Decisions API, served by OpenAI, as listed by OpenRouter on October 7, 2026: $0.10 per million input tokens; output is free. A live call that day reported $0.0000406 for 406 input tokens. Source: https://openrouter.ai/openai/gpt-6-luna-decisions"
+          },
+          "primaryKey": {
+            "ID": "2C0E5E43-8CF2-49DF-A229-E3E8BEFB5D6E"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "843DCA3D-EA98-4F46-9EC8-F5CF8A05A068"
+    }
+  }
+]
