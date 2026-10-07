@@ -226,4 +226,34 @@ SELECT TOP 100 a.Name FROM dbo.vwAIAgents a`;
             expect(SQLParser.StripComments(sql, tsql)).toBe(sql);
         });
     });
+
+    // ────────────────────────────────────────────────────────────
+    // Literal forms that contain comment markers, and token separation
+    // ────────────────────────────────────────────────────────────
+
+    describe('literals and token separation', () => {
+        it('keeps a PostgreSQL E-string containing -- whole, escaped quote and all', () => {
+            const sql = `SELECT E'it\\'s -- not a comment' AS s FROM t -- a real comment`;
+            const out = SQLParser.StripComments(sql, pg);
+            expect(out).toContain(`E'it\\'s -- not a comment'`);
+            expect(out).toContain('FROM t');
+            expect(out).not.toContain('a real comment');
+        });
+
+        it('keeps a dollar-quoted string containing a block-comment opener', () => {
+            const out = SQLParser.StripComments(`SELECT $q$ /* not a comment $q$ AS s, 1 /* real */ AS n`, pg);
+            expect(out).toContain('$q$ /* not a comment $q$');
+            expect(out).not.toContain('real');
+            expect(out).toContain('AS n');
+        });
+
+        it('leaves a space where a block comment separated two tokens', () => {
+            expect(SQLParser.StripComments('SELECT a/*c*/FROM t', tsql)).toBe('SELECT a FROM t');
+            expect(SQLParser.StripComments('SELECT a/*c*/FROM t', pg)).toBe('SELECT a FROM t');
+        });
+
+        it('keeps the newline that ends a line comment', () => {
+            expect(SQLParser.StripComments('SELECT a -- c\nFROM t', tsql)).toBe('SELECT a \nFROM t');
+        });
+    });
 });

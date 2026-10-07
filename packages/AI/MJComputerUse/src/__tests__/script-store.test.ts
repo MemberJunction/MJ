@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import { JSONFieldBinding } from '@memberjunction/core';
 import { MJTestEntity, MJTestEntity_ITestConfiguration } from '@memberjunction/core-entities';
 import { ComputerUseTrace, TraceStep } from '@memberjunction/computer-use';
 import { AllowsLLMFallback, LoadScript, SaveScript } from '../test-driver/script-store.js';
@@ -7,33 +8,33 @@ import { AllowsLLMFallback, LoadScript, SaveScript } from '../test-driver/script
  * A stand-in for the generated `MJTestEntity`, reproducing the behaviours the store
  * depends on: `Save()` returning a boolean rather than throwing,
  * `LatestResult.CompleteMessage` carrying the reason when it returns false, and —
- * critically — the `ConfigurationObject` accessor's **caching**.
+ * critically — the `ConfigurationObject` accessor's **live view**.
  *
- * The generated accessor parses once and returns the SAME object reference until the
- * raw `Configuration` string changes (`_ConfigurationObject_lastRaw`). An earlier
- * version of this fake re-parsed on every get, handing out a fresh copy each time,
- * which made it impossible to observe a caller mutating the cached script in place.
- * That is exactly the defect this file now guards, so the fake has to cache too.
+ * The accessor is a `JSONFieldBinding`, exactly what the generated accessor delegates to: it
+ * hands out a Proxy over the parsed document whose in-place edits are written back to the raw
+ * `Configuration` column. An earlier version of this fake re-parsed on every get (a fresh copy
+ * each time), and the one before it cached a bare object; neither could show a caller editing the
+ * test row's own state through the returned script, which is the defect these tests guard.
  */
 function fakeTest(configuration: string | null, save?: { ok: boolean; message?: string }): MJTestEntity {
     const entity = {
         ID: 'test-1',
         Configuration: configuration,
         LatestResult: save?.message ? { CompleteMessage: save.message } : undefined,
-        _cached: undefined as MJTestEntity_ITestConfiguration | null | undefined,
-        _lastRaw: undefined as string | null | undefined,
+        _binding: undefined as JSONFieldBinding<MJTestEntity_ITestConfiguration> | undefined,
+        binding(): JSONFieldBinding<MJTestEntity_ITestConfiguration> {
+            this._binding ??= new JSONFieldBinding<MJTestEntity_ITestConfiguration>(
+                'Configuration',
+                () => this.Configuration,
+                (raw) => { this.Configuration = raw; },
+            );
+            return this._binding;
+        },
         get ConfigurationObject(): MJTestEntity_ITestConfiguration | null {
-            if (this.Configuration !== this._lastRaw) {
-                this._cached = this.Configuration ? JSON.parse(this.Configuration) : null;
-                this._lastRaw = this.Configuration;
-            }
-            return this._cached!;
+            return this.binding().GetValue();
         },
         set ConfigurationObject(value: MJTestEntity_ITestConfiguration | null) {
-            const raw = value ? JSON.stringify(value) : null;
-            this.Configuration = raw;
-            this._cached = value;
-            this._lastRaw = raw;
+            this.binding().SetValue(value);
         },
         Save: vi.fn(async () => save?.ok ?? true),
     };
@@ -69,6 +70,24 @@ describe('loadScript', () => {
 
     it('returns null rather than throwing on malformed configuration JSON', () => {
         expect(LoadScript(fakeTest('{ not json'))).toBeNull();
+    });
+
+    it('hands out an independent plain copy: healing it in place never reaches the test row', () => {
+        const raw = JSON.stringify({ ReplayScript: sampleScript(), headless: true });
+        const test = fakeTest(raw);
+        const script = LoadScript(test)!;
+        script.Steps[0].Instruction = 'HEALED';
+        script.Steps.push(script.Steps[0]);
+        expect(test.Configuration).toBe(raw); // raw column unchanged
+        expect(LoadScript(test)!.Steps).toHaveLength(1); // a later load still sees the promoted script
+        expect(LoadScript(test)!.Steps[0].Instruction).toBe('click Save');
+    });
+
+    it('returns a copy that survives structuredClone (a live view would throw DataCloneError)', () => {
+        const test = fakeTest(JSON.stringify({ ReplayScript: sampleScript() }));
+        expect(() => structuredClone(test.ConfigurationObject)).toThrow();
+        const script = LoadScript(test)!;
+        expect(() => structuredClone(script)).not.toThrow();
     });
 
     it('rejects a stored value that is not shaped like a script', () => {
