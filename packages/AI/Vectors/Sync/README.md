@@ -269,6 +269,16 @@ type VectorizeEntityParams = {
 };
 ```
 
+### Record filter
+
+`Configuration.recordFilter.extraFilter` on an entity document is a RunView `ExtraFilter` predicate a record must satisfy to be vectorized. It is ANDed into the filter on every page sync reads, together with a list run's membership filter. Duplicate detection applies the same filter to the records it checks and the candidates it returns; read it with `GetEntityDocumentRecordFilter(entityDocument)`.
+
+```json
+{ "recordFilter": { "extraFilter": "Status = 'Active'" } }
+```
+
+Records the filter excludes keep any vectors already stored for them; sync does not remove those.
+
 ### EntitySyncConfig
 
 ```typescript

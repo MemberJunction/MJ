@@ -143,6 +143,8 @@ vi.mock('@memberjunction/ai-vector-sync', () => ({
     EntityDocumentTemplateParser: { CreateInstance: vi.fn() },
     EntityVectorSyncer: class {},
     VectorizeEntityParams: class {},
+    // No record filter: the filter's own behavior is covered by duplicateRecordDetectorRecordFilter.test.ts.
+    GetEntityDocumentRecordFilter: vi.fn().mockReturnValue(null),
 }));
 
 vi.mock('@memberjunction/templates', () => ({

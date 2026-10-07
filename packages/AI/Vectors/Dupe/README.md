@@ -375,6 +375,23 @@ interface ScoredCandidate {
 
 ---
 
+## Excluding Records: the Record Filter
+
+An entity document can name the records that take part in duplicate detection with `recordFilter.extraFilter` in its `Configuration` JSON, a RunView `ExtraFilter` predicate on the document's entity:
+
+```json
+{ "recordFilter": { "extraFilter": "ind_delete_flag <> '1'" } }
+```
+
+A record that fails the filter is never checked and never offered as a candidate, yet stays readable everywhere else. Typical uses are records a source system has flagged deleted or merged, and inactive records.
+
+- **Records checked.** A whole-entity run ANDs the filter into its own `ExtraFilter`; a list or view run is narrowed to the members that pass it.
+- **Candidates.** Vector sync skips filtered records too, but their vectors can already be in the index, so every match is checked against the filter with the existence check that drops orphaned vectors. This applies to batch runs, `CheckSingleRecord` and the entry-time check.
+- **TopK.** With a filter set, the query asks for three times TopK and the result is trimmed back to TopK after filtering, so excluded records don't take a genuine duplicate's slot.
+- **Errors.** If the filter can't be applied (a typo in a column name, say), the run fails instead of letting excluded records through.
+
+Vector sync applies the same filter to the records it vectorizes; see the [Sync README](../Sync/README.md#record-filter). Vectors already stored for records the filter now excludes are not removed by sync.
+
 ## Inverse Match Deduplication
 
 The detector maintains a `_seenPairs` set across the entire run to suppress inverse duplicates. If record A is identified as a duplicate of record B (A->B), the reverse match (B->A) is automatically suppressed. Pair keys use canonical ordering (`smallerID::largerID`) for consistent deduplication regardless of query direction.
