@@ -1986,7 +1986,7 @@ function likeNarrowingPattern(query: string): string {
     const ascii = query
         .trim()
         .replace(/[\\%_[\]'()]/g, '_')
-        .replace(/[\u0080-\u{10FFFF}]/gu, nonAsciiWildcard);
+        .replace(/[\u0080-\u{10FFFF}]/gu, char => nonAsciiWildcard(char));
     return EscapeSQLString(ascii.toLowerCase());
 }
 

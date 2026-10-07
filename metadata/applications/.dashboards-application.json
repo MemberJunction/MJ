@@ -23,7 +23,18 @@
         "DriverClass": "DashboardsCategoriesResource",
         "isDefault": false
       }
-    ]
+    ],
+    "AgentSettings": {
+      "DefaultAgentID": "@lookup:MJ: AI Agents.Name=Dashboards Expert",
+      "Realtime": {
+        "ModelPreference": "Gemini 3.8 Live",
+        "Disclosure": "mention",
+        "Persona": {
+          "Tone": "direct and helpful",
+          "SpeakingStyle": "short sentences, names panels by title"
+        }
+      }
+    }
   },
   "relatedEntities": {
     "MJ: Application Entities": []
