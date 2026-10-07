@@ -3,17 +3,20 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UUIDsEqual } from '@memberjunction/global';
 import { RunView } from '@memberjunction/core';
 import { GraphQLDataProvider, GraphQLLiveKitClient, RealtimeModelVoices, RealtimeVoiceOption } from '@memberjunction/graphql-dataprovider';
-import { LiveKitRoomComponent, type LiveKitRoomLayout } from '@memberjunction/ng-livekit-room';
+import { LIVEKIT_ROOM_CONTROLLER_FACTORY, LiveKitRoomComponent, type LiveKitRoomLayout } from '@memberjunction/ng-livekit-room';
+import { LOCAL_MEDIA_CONTROLLER_FACTORY } from '@memberjunction/ng-realtime-media';
 import { MJStorageMediaPlayerComponent } from '@memberjunction/ng-media-player';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { MediaLayoutPrefs, type MediaPipRect, type MediaPlacementMove } from '@memberjunction/ai-realtime-client/media';
-import type {
-  LiveKitDataMessage,
-  LiveKitDisconnectedEvent,
-  LiveKitParticipantJoinedEvent,
-  LiveKitParticipantLeftEvent,
-  LiveKitRoomError,
-  LiveKitRoomState,
+import {
+  LiveKitPreviewRoomController,
+  type ILiveKitRoomController,
+  type LiveKitDataMessage,
+  type LiveKitDisconnectedEvent,
+  type LiveKitParticipantJoinedEvent,
+  type LiveKitParticipantLeftEvent,
+  type LiveKitRoomError,
+  type LiveKitRoomState,
 } from '@memberjunction/livekit-room-core';
 
 /**
@@ -24,8 +27,25 @@ import type {
 export const LIVEKIT_PLACEMENT_PREF_KEY = 'mj.livekit.placement.v1';
 export const LIVEKIT_PIP_PREF_KEY = 'mj.livekit.pip.v1';
 
-/** How the MJ binding obtains its room: start an agent in a room, or just join an existing room. */
-export type MJLiveKitConnectionMode = 'agent' | 'join';
+/**
+ * The keys the preview room saves its layout under: it remembers its layout as a meeting does, but apart, so moving the
+ * simulated people (or resetting the layout) there never changes the layout saved for meetings.
+ */
+export const LIVEKIT_PREVIEW_PLACEMENT_PREF_KEY = 'mj.livekit.preview.placement.v1';
+export const LIVEKIT_PREVIEW_PIP_PREF_KEY = 'mj.livekit.preview.pip.v1';
+
+/**
+ * How the MJ binding obtains its room: start an agent in a room (`'agent'`), join an existing room (`'join'`), or open
+ * the preview room (`'preview'`): your camera and microphone with simulated people, and no server.
+ */
+export type MJLiveKitConnectionMode = 'agent' | 'join' | 'preview';
+
+/**
+ * What the room is given in preview mode, where nothing is minted: the room connects once both are set, and the preview
+ * controller ignores them.
+ */
+const PREVIEW_SERVER_URL = 'preview://local';
+const PREVIEW_TOKEN = 'preview';
 
 /** Emitted when an agent room session has been started server-side. */
 export interface MJLiveKitSessionStartedEvent {
@@ -60,6 +80,7 @@ export interface AgentInRoom {
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [LiveKitRoomComponent, MJStorageMediaPlayerComponent],
+  providers: [{ provide: LIVEKIT_ROOM_CONTROLLER_FACTORY, useFactory: roomControllerFactory }],
   template: `
     @if (recordingFileId && showRecordingPanel) {
       <div class="mj-lk-recording">
@@ -110,7 +131,7 @@ export interface AgentInRoom {
         [ShowAgentState]="ShowAgentState"
         [ShowWhiteboard]="ShowWhiteboard"
         [ShowPreJoin]="ShowPreJoin"
-        [ShowRecordingControl]="EnableRecording"
+        [ShowRecordingControl]="EnableRecording && Mode !== 'preview'"
         [IsRecording]="isRecording"
         [E2EEPassphrase]="E2EEPassphrase"
         [E2EEWorker]="E2EEWorker"
@@ -398,7 +419,10 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
   private readonly cdr = inject(ChangeDetectorRef);
 
   // ── MJ connection inputs ───────────────────────────────────────────────────────
-  /** Whether to start an agent in the room (`'agent'`) or just join an existing room (`'join'`). */
+  /**
+   * Whether to start an agent in the room (`'agent'`), just join an existing room (`'join'`), or open the preview room
+   * (`'preview'`: no token, no agent session, no recording). Read when the room is created.
+   */
   @Input() public Mode: MJLiveKitConnectionMode = 'agent';
   /** The agent to voice (agent mode) — the Realtime Co-Agent / voice front-end. */
   @Input() public AgentID: string | null = null;
@@ -771,10 +795,20 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
   public PipRects: ReadonlyMap<string, MediaPipRect> = new Map();
 
   /** The user's meeting layout, saved per user under the room's keys in the provider's settings. */
-  private readonly layoutPrefs = new MediaLayoutPrefs(() => this.userInfoEngine(), {
+  private readonly meetingLayoutPrefs = new MediaLayoutPrefs(() => this.userInfoEngine(), {
     Moves: LIVEKIT_PLACEMENT_PREF_KEY,
     PipRects: LIVEKIT_PIP_PREF_KEY,
   });
+  /** The preview room's layout, saved the same way under its own keys. */
+  private readonly previewLayoutPrefs = new MediaLayoutPrefs(() => this.userInfoEngine(), {
+    Moves: LIVEKIT_PREVIEW_PLACEMENT_PREF_KEY,
+    PipRects: LIVEKIT_PREVIEW_PIP_PREF_KEY,
+  });
+
+  /** Where this room's layout is saved: the preview room's own keys in preview mode, the meeting room's otherwise. */
+  private get layoutPrefs(): MediaLayoutPrefs {
+    return this.Mode === 'preview' ? this.previewLayoutPrefs : this.meetingLayoutPrefs;
+  }
 
   /** The user moved a tile or reset the layout: keep the room's moves and save them. */
   public OnTileMovesChange(moves: readonly MediaPlacementMove[]): void {
@@ -823,6 +857,10 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
     this.errorMessage = null;
     this.cdr.markForCheck();
     try {
+      if (this.Mode === 'preview') {
+        this.openPreview();
+        return;
+      }
       const client = new GraphQLLiveKitClient(this.ProviderToUse as unknown as GraphQLDataProvider);
       this.ResolvedDisplayName = this.DisplayName;
       const connect = this.Mode === 'agent' ? this.startAgentSession(client) : this.joinRoom(client);
@@ -1031,6 +1069,16 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
     }
   }
 
+  /**
+   * Opens the preview room: nothing is minted and no agent session starts. You join as the signed-in user unless
+   * {@link DisplayName} names someone else.
+   */
+  private openPreview(): void {
+    this.ResolvedDisplayName = this.DisplayName ?? this.ProviderToUse?.CurrentUser?.Name ?? null;
+    this.ServerUrl = PREVIEW_SERVER_URL;
+    this.Token = PREVIEW_TOKEN;
+  }
+
   /** Joins an existing room by minting a client token. */
   private async joinRoom(client: GraphQLLiveKitClient): Promise<void> {
     if (!this.RoomName) {
@@ -1116,4 +1164,16 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
     this.errorMessage = message;
     this.ErrorOccurred.emit({ Kind: 'connect', Message: message });
   }
+}
+
+/**
+ * The room's controller, by the host's mode: in `'preview'` mode the preview room's, on the camera and microphone that
+ * `LOCAL_MEDIA_CONTROLLER_FACTORY` provides; otherwise whatever is provided above the host (LiveKit's by default). The
+ * room calls it once, when it is created, after the host's inputs are set.
+ */
+function roomControllerFactory(): () => ILiveKitRoomController {
+  const host = inject(MJLiveKitRoomComponent);
+  const localMedia = inject(LOCAL_MEDIA_CONTROLLER_FACTORY);
+  const outer = inject(LIVEKIT_ROOM_CONTROLLER_FACTORY, { skipSelf: true });
+  return () => (host.Mode === 'preview' ? new LiveKitPreviewRoomController({ LocalMedia: localMedia }) : outer());
 }

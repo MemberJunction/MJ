@@ -8120,6 +8120,9 @@ importers:
       '@memberjunction/ng-media-player':
         specifier: 6.2.0-edge.1
         version: link:../media-player
+      '@memberjunction/ng-realtime-media':
+        specifier: 6.2.0-edge.1
+        version: link:../realtime-media
       rxjs:
         specifier: ^7.8.2
         version: 7.8.2

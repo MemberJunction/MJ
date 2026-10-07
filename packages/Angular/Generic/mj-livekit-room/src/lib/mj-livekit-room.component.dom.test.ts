@@ -1,20 +1,40 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { of } from 'rxjs';
+import { BehaviorSubject, of, type Observable } from 'rxjs';
 import { ChangeDetectorRef } from '@angular/core';
 import { By } from '@angular/platform-browser';
 import { renderComponentFixture, clearOverlayContainers } from '@memberjunction/ng-test-utils';
 import type { IMetadataProvider } from '@memberjunction/core';
 import { UserInfoEngine } from '@memberjunction/core-entities';
+import { GraphQLLiveKitClient } from '@memberjunction/graphql-dataprovider';
 import { LiveKitRoomComponent, LIVEKIT_ROOM_CONTROLLER_FACTORY } from '@memberjunction/ng-livekit-room';
-import { LiveKitRoomEventBus, type ILiveKitRoomController, type LiveKitParticipantView, type LiveKitRoomState } from '@memberjunction/livekit-room-core';
+import { LOCAL_MEDIA_CONTROLLER_FACTORY } from '@memberjunction/ng-realtime-media';
+import {
+  LIVEKIT_PREVIEW_PEOPLE,
+  LiveKitPreviewRoomController,
+  LiveKitRoomEventBus,
+  type ILiveKitRoomController,
+  type LiveKitParticipantView,
+  type LiveKitRoomState,
+} from '@memberjunction/livekit-room-core';
 import {
   ParsePipRects,
   ParsePlacementMoves,
   SerializePipRects,
   SerializePlacementMoves,
+  type ILocalMediaController,
+  type LocalMediaKind,
+  type LocalMediaResult,
+  type LocalMediaState,
+  type LocalTrackState,
+  type MediaDevice,
   type MediaPipRect,
 } from '@memberjunction/ai-realtime-client/media';
-import { MJLiveKitRoomComponent, LIVEKIT_PIP_PREF_KEY, LIVEKIT_PLACEMENT_PREF_KEY } from './mj-livekit-room.component';
+import {
+  MJLiveKitRoomComponent,
+  LIVEKIT_PIP_PREF_KEY,
+  LIVEKIT_PLACEMENT_PREF_KEY,
+  LIVEKIT_PREVIEW_PLACEMENT_PREF_KEY,
+} from './mj-livekit-room.component';
 
 /** A participant without media: the room lays them out, and nothing is attached. */
 function person(identity: string, over: { Local?: boolean; Agent?: boolean } = {}): LiveKitParticipantView {
@@ -180,5 +200,129 @@ describe('MJLiveKitRoomComponent: the saved layout (DOM)', () => {
     const f = render({ Provider: PROVIDER });
     expect(f.componentInstance.TileMoves).toEqual([{ SurfaceKey: 'participant:bo', Placement: 'pip' }]);
     expect(engine.GetSetting).not.toHaveBeenCalled();
+  });
+});
+
+/** A camera and microphone that start at once and record whether they were released. */
+class FakeMedia implements ILocalMediaController {
+  public Released = false;
+  private readonly state = new BehaviorSubject<LocalMediaState>({ Camera: { Status: 'off' }, Microphone: { Status: 'off' }, Devices: [] });
+  public get State(): LocalMediaState {
+    return this.state.value;
+  }
+  public get State$(): Observable<LocalMediaState> {
+    return this.state.asObservable();
+  }
+  public GetStream(): MediaStream | null {
+    return null;
+  }
+  public async RefreshDevices(): Promise<MediaDevice[]> {
+    return [];
+  }
+  public async Start(kind: LocalMediaKind): Promise<LocalMediaResult> {
+    this.set(kind, { Status: 'on' });
+    // A stand-in stream without audio tracks: nothing to meter or play.
+    return { Status: 'started', Stream: { id: kind, getTracks: () => [], getAudioTracks: () => [] } as unknown as MediaStream };
+  }
+  public async SwitchDevice(kind: LocalMediaKind): Promise<LocalMediaResult> {
+    return this.Start(kind);
+  }
+  public Stop(kind: LocalMediaKind): void {
+    this.set(kind, { Status: 'off' });
+  }
+  public Dispose(): void {
+    this.Released = true;
+  }
+  private set(kind: LocalMediaKind, track: LocalTrackState): void {
+    this.state.next(kind === 'camera' ? { ...this.state.value, Camera: track } : { ...this.state.value, Microphone: track });
+  }
+}
+
+/**
+ * DOM spec for preview mode: the binding opens the real room on the preview controller (your camera and microphone,
+ * here a fake, and simulated people) with nothing minted, and keeps the preview's layout apart from meetings'.
+ */
+describe('MJLiveKitRoomComponent: the preview room (DOM)', () => {
+  let saved: Map<string, string>;
+  let writes: string[];
+  let media: FakeMedia[];
+
+  beforeEach(() => {
+    saved = new Map();
+    writes = [];
+    media = [];
+    vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockImplementation((key: string) => saved.get(key));
+    vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation((key: string) => {
+      writes.push(key);
+    });
+    // jsdom does not play media: a stream source's <video> calls play(), and pause() when it lets go.
+    vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
+    vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => undefined);
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    clearOverlayContainers();
+  });
+
+  /** The binding in preview mode, started as on init, with fake devices; rendered once the preview has joined. */
+  const render = async (inputs: Record<string, unknown> = {}) => {
+    const f = renderComponentFixture(MJLiveKitRoomComponent, {
+      providers: [
+        {
+          provide: LOCAL_MEDIA_CONTROLLER_FACTORY,
+          useValue: () => {
+            const made = new FakeMedia();
+            media.push(made);
+            return made;
+          },
+        },
+      ],
+      inputs: { Mode: 'preview', ShowPreJoin: false, EnableRecording: true, ...inputs },
+    });
+    for (let i = 0; i < 6; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      f.detectChanges();
+    }
+    return f;
+  };
+  const roomOf = (f: Awaited<ReturnType<typeof render>>) => f.debugElement.query(By.directive(LiveKitRoomComponent)).componentInstance as LiveKitRoomComponent;
+
+  it('opens the room on the preview controller with nothing minted: you, with the simulated people', async () => {
+    const mint = vi.spyOn(GraphQLLiveKitClient.prototype, 'MintClientToken');
+    const session = vi.spyOn(GraphQLLiveKitClient.prototype, 'StartAgentRoomSession');
+    const room = roomOf(await render({ DisplayName: 'Grace' }));
+    expect(room.Controller).toBeInstanceOf(LiveKitPreviewRoomController);
+    expect(room.State.Status).toBe('connected');
+    expect(room.State.Local?.DisplayName).toBe('Grace');
+    expect(room.State.Remote.map((p) => p.DisplayName)).toEqual(LIVEKIT_PREVIEW_PEOPLE.map((p) => p.DisplayName));
+    expect(media).toHaveLength(1);
+    expect(mint).not.toHaveBeenCalled();
+    expect(session).not.toHaveBeenCalled();
+  });
+
+  it('joins as the signed-in user when no name is given', async () => {
+    vi.spyOn(UserInfoEngine, 'GetProviderInstance').mockReturnValue(UserInfoEngine.Instance);
+    const provider = { CurrentUser: { Name: 'Grace Hopper' }, InstanceConnectionString: 'test://preview' } as unknown as IMetadataProvider;
+    const room = roomOf(await render({ Provider: provider }));
+    expect(room.State.Local?.DisplayName).toBe('Grace Hopper');
+  });
+
+  it('offers no recording, which needs a server', async () => {
+    expect(roomOf(await render()).ShowRecordingControl).toBe(false);
+  });
+
+  it("keeps the preview's layout under its own keys, apart from meetings'", async () => {
+    saved.set(LIVEKIT_PLACEMENT_PREF_KEY, SerializePlacementMoves([{ SurfaceKey: 'participant:ada', Placement: 'stage' }]));
+    saved.set(LIVEKIT_PREVIEW_PLACEMENT_PREF_KEY, SerializePlacementMoves([{ SurfaceKey: 'participant:preview-bo', Placement: 'pip' }]));
+    const f = await render();
+    expect(f.componentInstance.TileMoves).toEqual([{ SurfaceKey: 'participant:preview-bo', Placement: 'pip' }]);
+    roomOf(f).MoveTile('preview-ada', 'pip');
+    expect(writes).toEqual([LIVEKIT_PREVIEW_PLACEMENT_PREF_KEY]);
+  });
+
+  it('frees your devices when it goes away', async () => {
+    const f = await render();
+    f.destroy();
+    expect(media[0].Released).toBe(true);
   });
 });
