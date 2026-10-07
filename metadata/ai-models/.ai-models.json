@@ -15464,12 +15464,12 @@
             "Status": "Active",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
-            "InputPricePerUnit": 0.08,
-            "OutputPricePerUnit": 0.35,
+            "InputPricePerUnit": 0.15,
+            "OutputPricePerUnit": 0.6,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Gemma 4 26B A4B Instruct pricing on Vertex AI as of April 2026. 26B total / 4B active MoE, optimized for speed and cost. 256K context, multilingual (140+). Open-weights under Gemma Terms of Use.",
-            "CacheReadPricePerUnit": null,
+            "Comments": "Gemma 4 26B (MaaS, gemma-4-26b-a4b-it-maas) pricing on Vertex AI / Gemini Enterprise Agent Platform as of 2026-10-06: $0.15/M input, $0.60/M output, $0.015/M cache hit. Corrected from $0.08/$0.35, which was never verified. 26B total / 4B active MoE, 256K context, multilingual (140+). Open-weights under Gemma Terms of Use. Source: https://cloud.google.com/gemini-enterprise-agent-platform/generative-ai/pricing",
+            "CacheReadPricePerUnit": 0.015,
             "CacheWritePricePerUnit": null
           },
           "primaryKey": {
