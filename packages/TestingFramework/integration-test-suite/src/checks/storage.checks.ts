@@ -335,10 +335,20 @@ async function assertActionGate(
     Assert(permitted.ResultCode !== ACTION_ACCESS_DENIED,
         `the role holder must pass the gate (the driver may then fail on the fixture credential); got ${permitted.ResultCode}: ${permitted.Message}`);
 
-    Assert(!(await listedAccountNames(actions.List, noGrant)).includes(name), 'List Storage Providers must omit an account the no-grant user cannot read');
-    Assert((await listedAccountNames(actions.List, contextUser)).includes(name), 'List Storage Providers must list the account for the role holder');
+    // List Storage Providers lists only accounts on ACTIVE providers (existing behaviour), so the listing legs prove
+    // something only when the fixture's provider is active. A clean database ships every provider inactive; there the
+    // listing filter is covered by the action's unit tests (file-storage-actions.access.test.ts), not here.
+    const providerActive = FileStorageEngine.Instance.AccountsWithProviders
+        .find(a => UUIDsEqual(a.account.ID, fixture.Account.ID))?.provider.IsActive !== false;
+    if (!providerActive) {
+        console.warn('  ⚠ storage.ST9 NOTE — the fixture account\'s provider is inactive in this database, so List Storage Providers '
+            + 'cannot list it for anyone; the listing legs were not exercised (the Get Download URL legs were).');
+    } else {
+        Assert(!(await listedAccountNames(actions.List, noGrant)).includes(name), 'List Storage Providers must omit an account the no-grant user cannot read');
+        Assert((await listedAccountNames(actions.List, contextUser)).includes(name), 'List Storage Providers must list the account for the role holder');
+    }
     console.log(`      → Get Download URL: no-grant refused (${ACTION_ACCESS_DENIED}), unknown account refused identically, role holder passed `
-        + `(${permitted.ResultCode}); List Storage Providers filtered per caller`);
+        + `(${permitted.ResultCode}); List Storage Providers ${providerActive ? 'filtered per caller' : 'legs skipped (inactive provider)'}`);
 }
 
 /** The active core action named `name`, or null (with the engine configured for `user`). */
