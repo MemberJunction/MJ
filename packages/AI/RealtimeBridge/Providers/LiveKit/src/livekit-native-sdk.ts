@@ -36,6 +36,7 @@
  */
 
 import { LogError } from '@memberjunction/core';
+import { GetGlobalObjectStore } from '@memberjunction/global';
 import {
     ILiveKitRoomSdk,
     LiveKitAudioFrame,
@@ -121,8 +122,8 @@ export interface NativeRoomClient {
     getParticipants(): Promise<NativeRoomParticipant[]>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Publishes a reliable message on the room data channel (the room-native "chat"). */
     publishData(text: string): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
-    /** Registers the room-disconnected callback (SFU closed / the bot was removed). */
-    onDisconnected(cb: () => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    /** Registers the room-disconnected callback (SFU closed / the bot was removed); `reason` is the disconnect reason when known. */
+    onDisconnected(cb: (reason?: string) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /** The native room module surface — a factory that constructs a {@link NativeRoomClient}. */
@@ -282,6 +283,50 @@ function unwrapDefault(mod: unknown): unknown {
     return mod;
 }
 
+/** Global-object-store key for the process-wide native room module registry. */
+const NATIVE_MODULE_REGISTRY_KEY = '__MJ_LIVEKIT_NATIVE_ROOM_MODULES__';
+
+/**
+ * Returns the process-wide registry (specifier to module). Held in the global object store so duplicate copies
+ * of this package in one process (common in monorepos) still share one registry.
+ */
+function nativeModuleRegistry(): Map<string, NativeRoomModule> {
+    const store = GetGlobalObjectStore();
+    if (!store) {
+        return fallbackRegistry;
+    }
+    let registry: Map<string, NativeRoomModule> | undefined = store[NATIVE_MODULE_REGISTRY_KEY];
+    if (!registry) {
+        registry = new Map<string, NativeRoomModule>();
+        store[NATIVE_MODULE_REGISTRY_KEY] = registry;
+    }
+    return registry;
+}
+
+const fallbackRegistry = new Map<string, NativeRoomModule>();
+
+/**
+ * Registers an already-imported native room module under `specifier`, so {@link DefaultNativeLoader} returns it
+ * without a dynamic `import()`. A package that declares the native wrapper as a dependency (e.g.
+ * `@memberjunction/livekit-room-server`) imports it statically and registers it here; this package cannot import
+ * the wrapper itself (that would be a dependency cycle) and a bare specifier does not resolve from here under
+ * pnpm's strict layout.
+ */
+export function RegisterNativeRoomModule(specifier: string, mod: NativeRoomModule): void {
+    nativeModuleRegistry().set(specifier, unwrapDefaultModule(mod));
+}
+
+/** Returns the module registered under `specifier`, if any. */
+export function GetRegisteredNativeRoomModule(specifier: string): NativeRoomModule | undefined {
+    return nativeModuleRegistry().get(specifier);
+}
+
+/** Resolves a namespace-import or `{ default }` wrapper to the object that has `createRoomClient`. */
+function unwrapDefaultModule(mod: NativeRoomModule): NativeRoomModule {
+    const resolved = unwrapDefault(mod);
+    return isNativeModule(resolved) ? resolved : mod;
+}
+
 /**
  * Lazily loads the native LiveKit room module at the given specifier (category: runtime plugin discovery
  * from config — the wrapper path is deployment-supplied and not known at build time, hence the
@@ -292,6 +337,10 @@ function unwrapDefault(mod: unknown): unknown {
  * exposes `createRoomClient`.
  */
 export const DefaultNativeLoader: NativeModuleLoader = async (specifier: string): Promise<NativeRoomModule> => {
+    const registered = GetRegisteredNativeRoomModule(specifier);
+    if (registered) {
+        return registered;
+    }
     try {
         const mod: unknown = await import(/* @vite-ignore */ specifier);
         const resolved = unwrapDefault(mod);

@@ -2,9 +2,11 @@ import { Resolver, Mutation, Query, Subscription, Arg, Ctx, Root, ObjectType, Fi
 import { IMetadataProvider, LogError, UserInfo } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { NotificationEngine } from '@memberjunction/notifications';
+import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import {
   LiveKitSipService,
   RoomHandoffEngine,
+  HandoffOfferRegistry,
   type HandoffOfferEvent,
   type HandoffOfferView,
   type IHandoffNotifier,
@@ -213,6 +215,12 @@ export class NotificationHandoffNotifier implements IHandoffNotifier {
  * the Meet room already uses. Idempotent (latest-wins). The telephony extension adds the collaborators that need a carrier
  * (dialing a number into a room, starting another agent).
  */
+// The registry's background sweep and list queries run outside any request, so they need a server identity. Resolve the
+// system user lazily: the user cache may not have loaded when this module does.
+HandoffOfferRegistry.Instance.Configure({
+  ResolveContextUser: () => UserCache.Instance.GetSystemUser(),
+});
+
 RoomHandoffEngine.Instance.Configure({
   Presence: new LiveKitSipService(),
   Publisher: new PubSubHandoffPublisher(),

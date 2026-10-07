@@ -16,6 +16,8 @@ import {
     MapNativeRole,
     ToArrayBuffer,
     DefaultNativeLoader,
+    RegisterNativeRoomModule,
+    GetRegisteredNativeRoomModule,
     NativeRoomModule,
     NativeRoomClient,
     NativeRoomAudioFrame,
@@ -277,6 +279,24 @@ describe('LiveKitNativeMeetingSdk — config + errors', () => {
         await expect(DefaultNativeLoader('@nonexistent/livekit-room-xyz')).rejects.toThrow(
             /could not load the native LiveKit room module/,
         );
+    });
+
+    it('DefaultNativeLoader returns a registered module without import(), unwrapping a { default } wrapper', async () => {
+        const mod = fakeModule(new FakeNativeClient());
+        const specifier = '@test/registered-livekit-room-module';
+        // The specifier is unresolvable, so a pass proves the registry (not import()) served it.
+        RegisterNativeRoomModule(specifier, mod);
+        await expect(DefaultNativeLoader(specifier)).resolves.toBe(mod);
+        expect(GetRegisteredNativeRoomModule(specifier)).toBe(mod);
+
+        const wrapped = { default: mod } as unknown as NativeRoomModule;
+        RegisterNativeRoomModule('@test/wrapped-livekit-room-module', wrapped);
+        await expect(DefaultNativeLoader('@test/wrapped-livekit-room-module')).resolves.toBe(mod);
+    });
+
+    it('DefaultNativeLoader falls back to import() for an unregistered specifier', async () => {
+        expect(GetRegisteredNativeRoomModule('@nonexistent/unregistered-xyz')).toBeUndefined();
+        await expect(DefaultNativeLoader('@nonexistent/unregistered-xyz')).rejects.toThrow(/Underlying error/);
     });
 
     it('BindLiveKitNative builds a working factory from a loose Configuration map', async () => {
