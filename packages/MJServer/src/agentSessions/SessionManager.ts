@@ -305,6 +305,19 @@ export class SessionManager {
         }
     }
 
+    /** The session's co-agent run id from its `Config_`, when it is a run of the session. */
+    private async verifiedCoAgentRunID(
+        session: MJAIAgentSessionEntity,
+        runUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<string | undefined> {
+        const { CoAgentRunID } = this.parseSessionRunConfig(session.Config_);
+        if (!CoAgentRunID) {
+            return undefined;
+        }
+        return (await this.runIDVerifier.Verify(session.ID, { CoAgentRunID }, runUser, provider)).CoAgentRunID;
+    }
+
     /**
      * Record activity on a session. Coalesces persisted writes so at most one `LastActiveAt` update
      * lands per session per {@link HEARTBEAT_MIN_WRITE_INTERVAL_MS}; intervening calls return `true`
@@ -563,6 +576,14 @@ export class SessionManager {
         const saved = await this.saveOrLog(session, 'Heartbeat');
         if (saved) {
             this.heartbeatLastWrite.Set(agentSessionID.toLowerCase(), Date.now());
+            // A live session keeps its co-agent run live too — on whichever instance gets its heartbeats —
+            // or the agent-run watchdog force-fails the run mid-call. Same elevation as the finalize path.
+            const runUser = ResolveScopedAnonymousRunUser(contextUser);
+            this.realtimeClientSessionService.KeepCoAgentRunAlive(
+                await this.verifiedCoAgentRunID(session, runUser, provider),
+                provider,
+                runUser,
+            );
         }
         return saved;
     }
