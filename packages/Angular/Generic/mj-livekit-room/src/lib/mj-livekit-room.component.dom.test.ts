@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { of } from 'rxjs';
 import { ChangeDetectorRef } from '@angular/core';
 import { By } from '@angular/platform-browser';
 import { renderComponentFixture, clearOverlayContainers } from '@memberjunction/ng-test-utils';
 import type { IMetadataProvider } from '@memberjunction/core';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { LiveKitRoomComponent, LIVEKIT_ROOM_CONTROLLER_FACTORY } from '@memberjunction/ng-livekit-room';
-import type { LiveKitParticipantView, LiveKitRoomController, LiveKitRoomState } from '@memberjunction/livekit-room-core';
+import { LiveKitRoomEventBus, type ILiveKitRoomController, type LiveKitParticipantView, type LiveKitRoomState } from '@memberjunction/livekit-room-core';
 import {
   ParsePipRects,
   ParsePlacementMoves,
@@ -33,8 +34,8 @@ function person(identity: string, over: { Local?: boolean; Agent?: boolean } = {
 }
 
 /** A connected room with the user, Ada, Bo and the agent, and a controller that does nothing. */
-function fakeController(): LiveKitRoomController {
-  const state = {
+function fakeController(): ILiveKitRoomController {
+  const state: LiveKitRoomState = {
     Status: 'connected',
     Local: person('you', { Local: true }),
     Remote: [person('ada'), person('bo'), person('sage', { Agent: true })],
@@ -44,26 +45,30 @@ function fakeController(): LiveKitRoomController {
     NoiseFilterEnabled: false,
     BackgroundEffect: { Kind: 'none' },
     E2EEEnabled: false,
-  } as unknown as LiveKitRoomState;
+  };
   return {
+    Events: new LiveKitRoomEventBus(),
+    State$: of(state),
     State: state,
-    Events: { On: () => () => undefined },
-    ToggleMicrophone: vi.fn(),
-    ToggleCamera: vi.fn(),
-    ToggleScreenShare: vi.fn(),
+    Status: state.Status,
+    ToggleMicrophone: vi.fn(() => Promise.resolve(true)),
+    ToggleCamera: vi.fn(() => Promise.resolve(true)),
+    ToggleScreenShare: vi.fn(() => Promise.resolve(true)),
+    SetMicrophoneEnabled: vi.fn(() => Promise.resolve()),
+    SetCameraEnabled: vi.fn(() => Promise.resolve()),
     SetScreenShareEnabled: vi.fn(() => Promise.resolve()),
     ChangeScreenShare: vi.fn(() => Promise.resolve()),
     Connect: vi.fn(() => Promise.resolve()),
-    Disconnect: vi.fn(() => Promise.resolve()),
+    Disconnect: vi.fn(() => Promise.resolve(true)),
     Dispose: vi.fn(),
     StartAudio: vi.fn(() => Promise.resolve()),
     SwitchDevice: vi.fn(() => Promise.resolve()),
-    SetNoiseFilterEnabled: vi.fn(),
-    SetBackgroundEffect: vi.fn(),
+    SetNoiseFilterEnabled: vi.fn(() => Promise.resolve(true)),
+    SetBackgroundEffect: vi.fn(() => Promise.resolve(true)),
     SendData: vi.fn(() => Promise.resolve()),
     ListDevices: vi.fn(() => Promise.resolve([])),
     GetActiveDeviceId: vi.fn(() => null),
-  } as unknown as LiveKitRoomController;
+  };
 }
 
 const BOX: MediaPipRect = { X: 0.6, Y: 0.6, W: 0.3, H: 0.25 };

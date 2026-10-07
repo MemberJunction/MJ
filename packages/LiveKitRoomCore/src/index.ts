@@ -14,6 +14,7 @@ export {
   type LiveKitRoomFactory,
   type LiveKitRoleResolver,
   type LiveKitRoomControllerOptions,
+  type ILiveKitRoomController,
 } from './livekit-room-controller';
 
 export {

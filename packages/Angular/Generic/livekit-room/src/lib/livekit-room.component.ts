@@ -17,6 +17,7 @@ import {
 } from '@angular/core';
 import {
   LiveKitRoomController,
+  type ILiveKitRoomController,
   type LiveKitActiveSpeakersEvent,
   type LiveKitBeforeConnectEvent,
   type LiveKitBeforeDeviceSwitchEvent,
@@ -100,14 +101,13 @@ import {
 } from './models';
 
 /**
- * Factory token for the room's {@link LiveKitRoomController}. Each `LiveKitRoomComponent`
- * resolves this factory and invokes it to obtain its **own** controller instance (the room is
- * stateful per-instance, so this is a factory, not a shared singleton). The default factory
- * returns `new LiveKitRoomController()` — production behavior is identical to the previous
- * inline `new`. Tests override the token to inject a fake controller and drive the container's
- * DOM, e.g. `{ provide: LIVEKIT_ROOM_CONTROLLER_FACTORY, useValue: () => fakeController }`.
+ * Factory token for the room's controller. Each `LiveKitRoomComponent` resolves this factory and invokes it to obtain
+ * its **own** controller instance (the room is stateful per-instance, so this is a factory, not a shared singleton).
+ * The default factory returns `new LiveKitRoomController()`. A host can return any {@link ILiveKitRoomController}
+ * instead, and tests inject a fake one to drive the container's DOM, e.g.
+ * `{ provide: LIVEKIT_ROOM_CONTROLLER_FACTORY, useValue: () => fakeController }`.
  */
-export const LIVEKIT_ROOM_CONTROLLER_FACTORY = new InjectionToken<() => LiveKitRoomController>('LIVEKIT_ROOM_CONTROLLER_FACTORY', {
+export const LIVEKIT_ROOM_CONTROLLER_FACTORY = new InjectionToken<() => ILiveKitRoomController>('LIVEKIT_ROOM_CONTROLLER_FACTORY', {
   providedIn: 'root',
   factory: () => () => new LiveKitRoomController(),
 });
@@ -135,9 +135,9 @@ export interface LiveKitLayoutOption {
 }
 
 /**
- * `mj-livekit-room` — a full-featured, framework-portable LiveKit room UI. Owns a
- * {@link LiveKitRoomController}, renders a participant grid/spotlight, control bar, chat, device picker,
- * and participants roster, and re-surfaces the core's cancelable event model as `@Output()`s.
+ * `mj-livekit-room` — a full-featured, framework-portable LiveKit room UI. Owns a room controller
+ * ({@link ILiveKitRoomController}; LiveKit's by default), renders a participant grid/spotlight, control bar, chat,
+ * device picker, and participants roster, and re-surfaces the core's cancelable event model as `@Output()`s.
  *
  * Every feature is gated by an `@Input` so a host can compose exactly the experience it wants (voice-only
  * widget, full conferencing surface, embedded co-agent panel, …) without forking the component.
@@ -176,7 +176,7 @@ export interface LiveKitLayoutOption {
 export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, AfterViewChecked {
   private readonly zone = inject(NgZone);
   private readonly cdr = inject(ChangeDetectorRef);
-  private readonly controller: LiveKitRoomController = inject(LIVEKIT_ROOM_CONTROLLER_FACTORY)();
+  private readonly controller: ILiveKitRoomController = inject(LIVEKIT_ROOM_CONTROLLER_FACTORY)();
   private readonly mediaControllerFactory = inject(LOCAL_MEDIA_CONTROLLER_FACTORY);
   private unsubscribers: Array<() => void> = [];
   private serverUrl: string | null = null;
@@ -432,7 +432,7 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
   private agentStateTimer: ReturnType<typeof setTimeout> | null = null;
 
   /** The underlying controller — exposed for advanced/imperative host scenarios. */
-  public get Controller(): LiveKitRoomController {
+  public get Controller(): ILiveKitRoomController {
     return this.controller;
   }
 

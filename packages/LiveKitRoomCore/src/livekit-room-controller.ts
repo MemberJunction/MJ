@@ -96,10 +96,60 @@ export interface LiveKitRoomControllerOptions {
 }
 
 /**
+ * What a meeting room UI drives: the connection, the local microphone, camera and screen share, the data channel,
+ * effects, devices, and the room's state and events. {@link LiveKitRoomController} is the LiveKit implementation;
+ * another implementation (a test fake, a simulated room) runs the same UI without a LiveKit server.
+ */
+export interface ILiveKitRoomController {
+  /** The room's cancelable event bus (Before-events + notifications). */
+  readonly Events: LiveKitRoomEventBus;
+  /** The room-state snapshot: the current value on subscribe, then every change. */
+  readonly State$: Observable<LiveKitRoomState>;
+  /** The current room-state snapshot. */
+  readonly State: LiveKitRoomState;
+  /** The current connection status. */
+  readonly Status: LiveKitConnectionStatus;
+  /** Joins the room and brings the local participant online with the requested media. */
+  Connect(serverUrl: string, token: string, options?: LiveKitRoomConnectOptions): Promise<void>;
+  /** Leaves the room. Resolves `false` when a `beforeDisconnect` handler canceled it. */
+  Disconnect(userInitiated?: boolean): Promise<boolean>;
+  /** Leaves the room and releases everything; the controller is not used again. */
+  Dispose(): void;
+  /** Turns the local microphone on or off. */
+  SetMicrophoneEnabled(enabled: boolean): Promise<void>;
+  /** Turns the local camera on or off. */
+  SetCameraEnabled(enabled: boolean): Promise<void>;
+  /** Starts or stops sharing the screen; `preferredSurface` is what the browser's picker offers first. */
+  SetScreenShareEnabled(enabled: boolean, preferredSurface?: DisplayCaptureSurface): Promise<void>;
+  /** Toggles the microphone and resolves the new state. */
+  ToggleMicrophone(): Promise<boolean>;
+  /** Toggles the camera and resolves the new state. */
+  ToggleCamera(): Promise<boolean>;
+  /** Toggles screen sharing and resolves the new state. */
+  ToggleScreenShare(): Promise<boolean>;
+  /** Shares something else: stops the current share, then asks the browser's picker again. */
+  ChangeScreenShare(preferredSurface?: DisplayCaptureSurface): Promise<void>;
+  /** Sends a text message to the room on the data channel. */
+  SendData(text: string, topic?: string): Promise<void>;
+  /** Resumes audio playback after a browser autoplay block (call from a user gesture). */
+  StartAudio(): Promise<void>;
+  /** Turns the noise filter on or off; resolves `false` when it cannot be applied. */
+  SetNoiseFilterEnabled(enabled: boolean): Promise<boolean>;
+  /** Applies a camera background effect; resolves `false` when it cannot be applied. */
+  SetBackgroundEffect(effect: LiveKitBackgroundEffect): Promise<boolean>;
+  /** Lists the devices of a kind. */
+  ListDevices(kind: LiveKitDevice['Kind']): Promise<LiveKitDevice[]>;
+  /** The device in use for a kind, or `null` when unknown or not connected. */
+  GetActiveDeviceId(kind: LiveKitDevice['Kind']): string | null;
+  /** Moves a kind to another device. */
+  SwitchDevice(kind: LiveKitDevice['Kind'], deviceId: string): Promise<void>;
+}
+
+/**
  * Controls a single LiveKit room: connect/disconnect, local-media toggles, data messages, device
  * switching, and a normalized observable state snapshot. One controller == one room connection.
  */
-export class LiveKitRoomController {
+export class LiveKitRoomController implements ILiveKitRoomController {
   private room: Room | null = null;
   private readonly roomFactory: LiveKitRoomFactory;
   private readonly roleResolver: LiveKitRoleResolver;

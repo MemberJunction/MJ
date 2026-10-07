@@ -14,7 +14,13 @@ import type {
   MediaPlacementMove,
 } from '@memberjunction/ai-realtime-client/media';
 import { renderComponentFixture, query, queryAll, text, overlayQueryAll, clearOverlayContainers } from '@memberjunction/ng-test-utils';
-import type { LiveKitParticipantView, LiveKitRoomController, LiveKitRoomState } from '@memberjunction/livekit-room-core';
+import {
+  LiveKitRoomController,
+  LiveKitRoomEventBus,
+  type ILiveKitRoomController,
+  type LiveKitParticipantView,
+  type LiveKitRoomState,
+} from '@memberjunction/livekit-room-core';
 import { LiveKitRoomComponent, LIVEKIT_ROOM_CONTROLLER_FACTORY } from './livekit-room.component';
 
 /**
@@ -46,49 +52,52 @@ describe('LiveKitRoomComponent (DOM, fake controller)', () => {
       ...over,
     }) as LiveKitRoomState;
 
-  // A fake LiveKitRoomController: a controllable State + an event bus that captures handlers
-  // (so the test can fire `stateChanged`), with vi.fn() no-ops for every method the component calls.
+  // A fake room controller: a controllable State on a real event bus (so the test can fire `stateChanged`), with
+  // vi.fn() no-ops for every method the component calls.
   const makeFakeController = (initial: LiveKitRoomState) => {
-    let state = initial;
-    const handlers = new Map<string, (arg: LiveKitRoomState) => void>();
-    const toggleMicrophone = vi.fn();
+    const state = new BehaviorSubject(initial);
+    const events = new LiveKitRoomEventBus();
+    const toggleMicrophone = vi.fn(() => Promise.resolve(true));
     const setScreenShareEnabled = vi.fn(() => Promise.resolve());
     const changeScreenShare = vi.fn(() => Promise.resolve());
-    const fake = {
+    const connect = vi.fn(() => Promise.resolve());
+    const controller: ILiveKitRoomController = {
+      Events: events,
+      State$: state.asObservable(),
       get State() {
-        return state;
+        return state.value;
       },
-      Events: {
-        On: (event: string, handler: (arg: LiveKitRoomState) => void) => {
-          handlers.set(event, handler);
-          return () => handlers.delete(event);
-        },
+      get Status() {
+        return state.value.Status;
       },
       ToggleMicrophone: toggleMicrophone,
-      ToggleCamera: vi.fn(),
-      ToggleScreenShare: vi.fn(),
+      ToggleCamera: vi.fn(() => Promise.resolve(true)),
+      ToggleScreenShare: vi.fn(() => Promise.resolve(true)),
+      SetMicrophoneEnabled: vi.fn(() => Promise.resolve()),
+      SetCameraEnabled: vi.fn(() => Promise.resolve()),
       SetScreenShareEnabled: setScreenShareEnabled,
       ChangeScreenShare: changeScreenShare,
-      Connect: vi.fn(() => Promise.resolve()),
-      Disconnect: vi.fn(() => Promise.resolve()),
+      Connect: connect,
+      Disconnect: vi.fn(() => Promise.resolve(true)),
       Dispose: vi.fn(),
       StartAudio: vi.fn(() => Promise.resolve()),
       SwitchDevice: vi.fn(() => Promise.resolve()),
-      SetNoiseFilterEnabled: vi.fn(),
-      SetBackgroundEffect: vi.fn(),
+      SetNoiseFilterEnabled: vi.fn(() => Promise.resolve(true)),
+      SetBackgroundEffect: vi.fn(() => Promise.resolve(true)),
       SendData: vi.fn(() => Promise.resolve()),
       ListDevices: vi.fn(() => Promise.resolve([])),
       GetActiveDeviceId: vi.fn(() => null),
     };
     return {
-      controller: fake as unknown as LiveKitRoomController,
+      controller,
       toggleMicrophone,
       setScreenShareEnabled,
       changeScreenShare,
+      connect,
       /** Mutate State and fire the controller's `stateChanged` event, as the real controller would. */
       emitState(next: LiveKitRoomState): void {
-        state = next;
-        handlers.get('stateChanged')?.(next);
+        state.next(next);
+        events.Emit('stateChanged', next);
       },
     };
   };
@@ -120,7 +129,7 @@ describe('LiveKitRoomComponent (DOM, fake controller)', () => {
     } as unknown as LiveKitParticipantView;
   };
 
-  const render = (fakeController: LiveKitRoomController, inputs: Record<string, unknown> = {}) =>
+  const render = (fakeController: ILiveKitRoomController, inputs: Record<string, unknown> = {}) =>
     renderComponentFixture(LiveKitRoomComponent, {
       providers: [{ provide: LIVEKIT_ROOM_CONTROLLER_FACTORY, useValue: () => fakeController }],
       inputs: { AutoConnect: false, ...inputs },
@@ -164,6 +173,20 @@ describe('LiveKitRoomComponent (DOM, fake controller)', () => {
     const f = render(fc.controller);
     expect(query(f, 'mj-connection-overlay')).toBeNull();
     expect(text(f, '.lk-room__grid')).toContain('Waiting for participants');
+  });
+
+  describe('the controller', () => {
+    it("runs on LiveKit's controller unless the host provides another", () => {
+      const f = renderComponentFixture(LiveKitRoomComponent, { inputs: { AutoConnect: false, ShowPreJoin: false } });
+      expect(f.componentInstance.Controller).toBeInstanceOf(LiveKitRoomController);
+    });
+
+    it('runs on the controller the host provides, and renders from its state', () => {
+      const fc = makeFakeController(makeState({ Status: 'connected', RoomName: 'Standup' }));
+      const f = render(fc.controller);
+      expect(f.componentInstance.Controller).toBe(fc.controller);
+      expect(f.componentInstance.State.RoomName).toBe('Standup');
+    });
   });
 
   it('plays every remote voice, whatever the layout shows', () => {
@@ -784,7 +807,7 @@ describe('LiveKitRoomComponent (DOM, fake controller)', () => {
       log = [];
       made = 0;
       const fc = makeFakeController(makeState({ Status: 'idle' }));
-      (fc.controller.Connect as ReturnType<typeof vi.fn>).mockImplementation(() => {
+      fc.connect.mockImplementation(() => {
         log.push('connect');
         return Promise.resolve();
       });
