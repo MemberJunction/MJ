@@ -12,6 +12,16 @@ export interface IAIPersonaStyleDescriptors {
     interruptionPolicy?: string;
     /** Prose for GPT-Live's `Backchannel policy:` prompt block. */
     backchannelPolicy?: string;
+    /**
+     * How the agent's video shows in the call, whatever the vendor. The agent's own persona override wins over the
+     * persona's.
+     */
+    Visual?: {
+        /** How much of the avatar the tile frames. */
+        Framing?: 'head' | 'shoulders' | 'waist';
+        /** The accent of the ring that frames the tile while the agent speaks: a design-token name, never a color value. */
+        AccentToken?: string;
+    };
     /** Open extension point for additional fine-grained style descriptors. */
     [key: string]: unknown;
 }

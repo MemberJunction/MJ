@@ -41166,6 +41166,17 @@ export interface MJAIAgentPersonaEntity_IAIAgentPersonaStyleOverride {
     /** Optional override for the persona's SpeakingStyle. */
     SpeakingStyle?: string;
 
+    /**
+     * Optional override for the persona's Visual: how the agent's video shows in the call. A member set here wins over
+     * the persona's.
+     */
+    Visual?: {
+        /** How much of the avatar the tile frames. */
+        Framing?: 'head' | 'shoulders' | 'waist';
+        /** The accent of the ring that frames the tile while the agent speaks: a design-token name, never a color value. */
+        AccentToken?: string;
+    };
+
     /** Open extension point for additional descriptor overrides. */
     [key: string]: unknown;
 }
@@ -54247,6 +54258,9 @@ export class MJAIModelEntity extends BaseEntity<MJAIModelEntityType> {
  *
  * Contains vendor-native voice/avatar tuning parameters (e.g., ElevenLabs voice settings)
  * moved out of generic base classes into their concrete vendor binding.
+ *
+ * A binding whose Modality is Video is the persona's avatar on that vendor: its `APIName` is the vendor's avatar id,
+ * and {@link MJAIPersonaVendorEntity_IAIPersonaVendorSettings.Avatar} tunes it.
  */
 
 export interface MJAIPersonaVendorEntity_IAIPersonaVendorSettings {
@@ -54257,6 +54271,24 @@ export interface MJAIPersonaVendorEntity_IAIPersonaVendorSettings {
     style?: number;
     useSpeakerBoost?: boolean;
     speed?: number;
+    /**
+     * The avatar's settings, on a binding whose Modality is Video. Vendor-neutral names: each realtime driver maps what
+     * its vendor supports and ignores the rest.
+     */
+    Avatar?: {
+        /**
+         * 'preset': the binding's APIName is an avatar from the vendor's catalog. 'custom': an avatar made from a
+         * reference image, which some vendors allow only to approved accounts. Custom likenesses stay behind a feature
+         * flag until who may create one, and with what consent, is decided.
+         */
+        Kind?: 'preset' | 'custom';
+        /** The MJ Storage file id of the reference image, when Kind is 'custom'. */
+        ReferenceImageFileID?: string;
+        /** The preferred video resolution; a driver uses the nearest its vendor offers. */
+        Resolution?: 'low' | 'standard' | 'high';
+        /** What shows behind the avatar, when the vendor can change it: a named treatment, or an image from MJ Storage. */
+        Background?: 'default' | 'transparent' | 'blur' | { ImageFileID: string };
+    };
     [key: string]: unknown;
 }
 
@@ -54487,6 +54519,16 @@ export interface MJAIPersonaEntity_IAIPersonaStyleDescriptors {
     interruptionPolicy?: string;
     /** Prose for GPT-Live's `Backchannel policy:` prompt block. */
     backchannelPolicy?: string;
+    /**
+     * How the agent's video shows in the call, whatever the vendor. The agent's own persona override wins over the
+     * persona's.
+     */
+    Visual?: {
+        /** How much of the avatar the tile frames. */
+        Framing?: 'head' | 'shoulders' | 'waist';
+        /** The accent of the ring that frames the tile while the agent speaks: a design-token name, never a color value. */
+        AccentToken?: string;
+    };
     /** Open extension point for additional fine-grained style descriptors. */
     [key: string]: unknown;
 }
