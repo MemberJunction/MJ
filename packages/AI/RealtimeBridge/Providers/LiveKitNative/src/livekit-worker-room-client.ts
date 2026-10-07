@@ -338,8 +338,13 @@ export class LiveKitWorkerRoomClient implements NativeRoomClient {
         });
     }
 
-    public onData(cb: (text: string, senderIdentity: string) => void): void {
+    public OnData(cb: (text: string, senderIdentity: string) => void): void {
         this.dataCallback = cb;
+    }
+
+    /** @deprecated Use {@link OnData} instead. */
+    public onData(cb: (text: string, senderIdentity: string) => void): void {
+        this.OnData(cb);
     }
 
     public onDisconnected(cb: (reason?: string) => void): void {

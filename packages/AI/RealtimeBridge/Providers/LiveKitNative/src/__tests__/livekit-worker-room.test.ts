@@ -200,7 +200,6 @@ describe('MediaWorkerSession', () => {
         const session = new MediaWorkerSession(port);
 
         // Flush outbound should clear queue cleanly without throwing
-        await session.handleCommand({ type: 'flushOutbound' });
-        expect(true).toBe(true);
+        await expect(session.HandleCommand({ type: 'flushOutbound' })).resolves.toBeUndefined();
     });
 });

@@ -56,7 +56,16 @@ export class MediaWorkerSession {
     /**
      * Dispatches an incoming command from the main thread.
      */
+    public async HandleCommand(command: MediaWorkerCommand): Promise<void> {
+        return this.internalHandleCommand(command);
+    }
+
+    /** @deprecated Use {@link HandleCommand} instead. */
     public async handleCommand(command: MediaWorkerCommand): Promise<void> {
+        return this.HandleCommand(command);
+    }
+
+    private async internalHandleCommand(command: MediaWorkerCommand): Promise<void> {
         try {
             switch (command.type) {
                 case 'connect':
@@ -277,7 +286,7 @@ export class MediaWorkerSession {
 export function RunMediaWorker(port: MediaWorkerPort): MediaWorkerSession {
     const session = new MediaWorkerSession(port);
     port.on('message', (command: MediaWorkerCommand) => {
-        void session.handleCommand(command);
+        void session.HandleCommand(command);
     });
     port.postMessage({ type: 'ready' });
     return session;
