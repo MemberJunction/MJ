@@ -168,7 +168,7 @@ async function resolveUserId(ctx: IntegrationCheckContext, email: string): Promi
 
 async function provisionLeg(ctx: IntegrationCheckContext, fx: SelfAvatarFixture, email: string, userId: string): Promise<AvatarUserLeg> {
     const snapshot = await readRow(ctx, userId);
-    const rawKey = await MintFullAccessUserKey(ctx, fx, userId, `IT105 avatar ${email} (mj-integration-test)`);
+    const rawKey = await MintFullAccessUserKey(ctx, fx, userId, `IT106 avatar ${email} (mj-integration-test)`);
     const provider = (await BuildUserKeyProviderWithRetry(rawKey)) as GraphQLDataProvider;
     return { Email: email, UserID: userId, Provider: provider, Snapshot: snapshot };
 }

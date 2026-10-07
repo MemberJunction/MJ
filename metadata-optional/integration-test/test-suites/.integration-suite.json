@@ -1324,7 +1324,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT105 - Self-Service Avatar (client transport)",
+            "TestID": "@lookup:MJ: Tests.Name=IT106 - Self-Service Avatar (client transport)",
             "Sequence": 74,
             "Status": "Active"
           },

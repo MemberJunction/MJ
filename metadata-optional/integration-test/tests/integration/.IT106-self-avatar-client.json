@@ -1,7 +1,7 @@
 {
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
-    "Name": "IT105 - Self-Service Avatar (client transport)",
+    "Name": "IT106 - Self-Service Avatar (client transport)",
     "Description": "The self-service avatar mutation UpdateMyAvatar(ImageURL, IconClass) over the GraphQL wire, as two seeded users authenticated by their own minted API keys. It exists because a locked-down deployment cannot grant users Update on MJ: Users (an own-row filter restricts rows, not columns), so the old plain entity save of the avatar failed there. AV1: a user WITHOUT Update on MJ: Users sets their own image through the mutation and nothing else on the row moves. AV2: an icon with a null image replaces the image. AV3: for that user the generated UpdateMJUser mutation is refused for permission and a client entity Save() is refused, so the mutation is the only door. AV4: unknown arguments (Email, UserID, Name) are rejected by the schema, the user's other columns still match the Setup snapshot, and another user's row is untouched. AV5: bad input (javascript:, SVG and other data: types, oversize or malformed base64, bad icon classes) is refused with a message and writes nothing. AV6: a user WITH Update on MJ: Users can set and clear their avatar through the mutation too. Every check is mutation-gated (RUN_MUTATION_TESTS); the only writes are the seeded it-avatar-* users' avatar columns, restored in teardown, and the minted keys, deleted in teardown. Needs MJAPI + MJ_API_KEY and the seeded it-avatar-* users.",
     "InputDefinition": {},
     "ExpectedOutcomes": {
