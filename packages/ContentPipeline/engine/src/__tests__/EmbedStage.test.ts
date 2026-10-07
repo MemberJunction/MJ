@@ -30,6 +30,7 @@ function contextWith(configuration: Record<string, unknown> = {}): StageContext 
         Signal: new AbortController().signal,
         ReportProgress: () => {},
         Log: { Info: () => {}, Warning: () => {}, Error: () => {} },
+        ResolveAccess: async () => null,
     };
 }
 

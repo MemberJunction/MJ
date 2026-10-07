@@ -55,7 +55,7 @@ export interface SelectedExtractor {
  *
  * @returns The selected extractor, or null when no rung produced an applicable one.
  */
-export function SelectReader(inputs: ExtractorCascadeInputs): SelectedExtractor | null {
+export function SelectExtractor(inputs: ExtractorCascadeInputs): SelectedExtractor | null {
     const fileType = inputs.FileType.toLowerCase();
 
     const override = applicable(inputs.ExtractorKeyOverride, fileType);

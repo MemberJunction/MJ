@@ -14,6 +14,7 @@
 import { CompositeKey, LogError, LogStatus } from '@memberjunction/core';
 import { MJFileEntity } from '@memberjunction/core-entities';
 import { FileStorageEngine } from '@memberjunction/storage';
+import { DetectionCatalog } from '../DetectionCatalog.js';
 import { RegisterClass } from '@memberjunction/global';
 import {
     BasePipelineStage,
@@ -41,9 +42,12 @@ import {
     ObjectKeyResolutionError,
     ResolveObjectKey,
 } from '@memberjunction/content-pipeline-base';
-import { ContentSourceConfigurationResolver } from '../ContentSourceConfigurationResolver.js';
+import {
+    ContentSourceConfigurationResolver,
+    ResolvedSourceConfiguration,
+} from '../ContentSourceConfigurationResolver.js';
 import { ContentFetcher } from '../ContentFetcher.js';
-import { SelectReader, SourceExtractorCandidate } from '../ExtractorCascade.js';
+import { SelectExtractor, SourceExtractorCandidate } from '../ExtractorCascade.js';
 
 /** The registered name. */
 export const EXTRACT_STAGE = 'Extract';
@@ -87,10 +91,11 @@ export class ExtractStage extends BasePipelineStage {
         const keptFileID = record.GetExtension<string>('Pipeline', 'fileID');
         const fetched = keptFileID
             ? await this.readKeptFile(keptFileID, context)
-            : await this.fetch(url, resolved.ContentSourceID, resolved.Parameters, context);
+            : await this.fetch(url, resolved, context);
 
         const confidence = ResolveConfidence(context.Configuration);
-        const signature = DetectByteSignature(fetched.Content);
+        const rules = await this.detection(context).Rules();
+        const signature = DetectByteSignature(fetched.Content, rules.Signatures);
         const fileType = ResolveFileType({
             Declared: record.Get('FileType') as string | null,
             Signature: signature?.FileType ?? null,
@@ -153,18 +158,32 @@ export class ExtractStage extends BasePipelineStage {
         };
     }
 
+    /**
+     * This run's detection rules.
+     *
+     * Held per run for the same reason the access resolver is: the rows behind it do not change
+     * while a page of records is processed, and reading them per record would turn one lookup into
+     * one per file.
+     */
+    private detection(context: StageContext): DetectionCatalog {
+        this._detection ??= new DetectionCatalog(context.Provider, context.ContextUser);
+        return this._detection;
+    }
+    private _detection?: DetectionCatalog;
+
     /** Fetch, distinguishing a transport failure that might recover from one that will not. */
-    private async fetch(
-        url: string,
-        contentSourceID: string,
-        parameters: Readonly<Record<string, string>>,
-        context: StageContext,
-    ) {
+    private async fetch(url: string, resolved: ResolvedSource, context: StageContext) {
         try {
+            // Access opens the session; the fetcher moves the bytes. A source that needs no session
+            // gets null and the fetch is exactly what it always was.
+            // No resolved source means no source configuration, so there is nothing to open a
+            // session against — the fetch is the plain one it has always been.
+            const access = resolved.Resolved ? await context.ResolveAccess(resolved.ContentSourceID) : null;
             return await ContentFetcher.Resolve().Fetch({
                 URL: url,
-                ContentSourceID: contentSourceID,
-                Parameters: parameters,
+                ContentSourceID: resolved.ContentSourceID,
+                Parameters: resolved.Parameters,
+                Access: access ?? undefined,
                 Signal: context.Signal,
             });
         } catch (error) {
@@ -187,15 +206,7 @@ export class ExtractStage extends BasePipelineStage {
         resolved: ResolvedSource,
         confidence: ResolvedConfidenceScale,
     ): Promise<StageOutcome> {
-        const selected = SelectReader({
-            FileType: fileType,
-            ExtractorKeyOverride: record.GetExtension<string>(EXTRACT_STAGE, 'keyOverride') ?? null,
-            SourceCandidates: resolved.Extractors,
-            SourceExtractorKey: resolved.SourceExtractorKey,
-            ContentTypeExtractorKey: resolved.ContentTypeExtractorKey,
-            FallbackExtractorKey: resolved.FallbackExtractorKey,
-        });
-
+        const selected = this.selectExtractor(record, fileType, resolved);
         if (!selected) {
             return this.plainTextFallback(record, content, fileType, context, confidence);
         }
@@ -213,6 +224,11 @@ export class ExtractStage extends BasePipelineStage {
         }
 
         record.SetExtension(EXTRACT_STAGE, 'extractorKey', selected.Key);
+        // The receipt of what actually ran, so a misrouted item can be found and corrected later.
+        record.SetExtension('Pipeline', 'columns', {
+            ...(record.GetExtension<Record<string, unknown>>('Pipeline', 'columns') ?? {}),
+            ExtractorKey: selected.Key,
+        });
         record.SetExtension(EXTRACT_STAGE, 'isFallback', result.IsFallback === true);
 
         if (result.Blocks.length === 1) {
@@ -263,6 +279,27 @@ export class ExtractStage extends BasePipelineStage {
                     `${error instanceof Error ? error.message : String(error)}`,
             );
         }
+    }
+
+    /**
+     * Walk the cascade to the extractor that should read these bytes.
+     *
+     * The stored override comes first — it outlives the run that set it, which is what lets an
+     * operator correct a misrouted item — then one stamped by a splitting extractor earlier in this
+     * same run, then the source's own choice, its content type's, and finally the fallback.
+     */
+    private selectExtractor(record: WorkingRecord, fileType: string, resolved: ResolvedSource) {
+        return SelectExtractor({
+            FileType: fileType,
+            ExtractorKeyOverride:
+                record.GetExtension<string>('Pipeline', 'extractorKeyOverride') ??
+                record.GetExtension<string>(EXTRACT_STAGE, 'keyOverride') ??
+                null,
+            SourceCandidates: resolved.Extractors,
+            SourceExtractorKey: resolved.SourceExtractorKey,
+            ContentTypeExtractorKey: resolved.ContentTypeExtractorKey,
+            FallbackExtractorKey: resolved.FallbackExtractorKey,
+        });
     }
 
     /**
@@ -338,22 +375,7 @@ export class ExtractStage extends BasePipelineStage {
             return null;
         }
 
-        let objectKey: string;
-        try {
-            objectKey = ResolveObjectKey(resolved.ObjectKeyTemplate, {
-                ...resolved.ObjectKeyValues,
-                ContentSourceID: resolved.ContentSourceID,
-                RecordID: record.Identity.RecordID ?? record.Identity.EphemeralID,
-                Name: (record.Get('Title') as string | null) ?? 'content',
-            });
-        } catch (error) {
-            // Failing closed: writing a tenant's bytes to an unnamespaced path is worse than not
-            // writing them.
-            if (error instanceof ObjectKeyResolutionError) {
-                throw new FatalStageError(error.message);
-            }
-            throw error;
-        }
+        const objectKey = this.objectKeyFor(record, resolved);
 
         // Straight to MJ Files — no driver contract in between. FileStorageBase is already the
         // registry of places a file can go, and a MJ: Files row is how every other part of MJ finds
@@ -389,6 +411,29 @@ export class ExtractStage extends BasePipelineStage {
             FileID: file.ID,
         });
         return objectKey;
+    }
+
+    /**
+     * Resolve the key these bytes are written under.
+     *
+     * Fails closed. Where several tenants share infrastructure the isolation is in the key itself,
+     * so a placeholder that cannot be resolved stops the write rather than producing a path that is
+     * missing part of its namespace.
+     */
+    private objectKeyFor(record: WorkingRecord, resolved: ResolvedSource): string {
+        try {
+            return ResolveObjectKey(resolved.ObjectKeyTemplate!, {
+                ...resolved.ObjectKeyValues,
+                ContentSourceID: resolved.ContentSourceID,
+                RecordID: record.Identity.RecordID ?? record.Identity.EphemeralID,
+                Name: (record.Get('Title') as string | null) ?? 'content',
+            });
+        } catch (error) {
+            if (error instanceof ObjectKeyResolutionError) {
+                throw new FatalStageError(error.message);
+            }
+            throw error;
+        }
     }
 
     /**
@@ -437,9 +482,9 @@ export class ExtractStage extends BasePipelineStage {
         confidence: ResolvedConfidenceScale,
     ): void {
         const setBy = `${EXTRACT_STAGE}${isFallback ? '.Fallback' : ''}`;
-        record.Propose('Text', block.Text, isFallback ? confidence.FallbackText : confidence.ReaderText, setBy);
+        record.Propose('Text', block.Text, isFallback ? confidence.FallbackText : confidence.ExtractorText, setBy);
         if (block.Title) {
-            record.Propose('Title', block.Title, block.TitleConfidence ?? confidence.ReaderTitle, setBy);
+            record.Propose('Title', block.Title, block.TitleConfidence ?? confidence.ExtractorTitle, setBy);
         }
     }
 
@@ -466,7 +511,7 @@ export class ExtractStage extends BasePipelineStage {
         const url = block.Key ? `${parentURL}#${block.Key}` : `${parentURL}#block-${Date.now()}`;
         const child = new WorkingRecord(new WorkingRecordIdentity('Content Item', url));
         if (block.Text) {
-            child.Propose('Text', block.Text, confidence.ReaderText, EXTRACT_STAGE);
+            child.Propose('Text', block.Text, confidence.ExtractorText, EXTRACT_STAGE);
         } else if (block.Content) {
             // A member that is not text — a PDF or an image inside an archive. It gets the modality
             // its bytes imply and stays Pending for Extract rather than being committed as a
@@ -480,7 +525,7 @@ export class ExtractStage extends BasePipelineStage {
             child.SetExtension(EXTRACT_STAGE, 'content', block.Content);
         }
         if (block.Title) {
-            child.Propose('Title', block.Title, block.TitleConfidence ?? confidence.ReaderTitle, EXTRACT_STAGE);
+            child.Propose('Title', block.Title, block.TitleConfidence ?? confidence.ExtractorTitle, EXTRACT_STAGE);
         }
         const parentDate = parent.Get('Date');
         if (parentDate) {
@@ -493,6 +538,12 @@ export class ExtractStage extends BasePipelineStage {
             // A extractor that knows what one of its own children is does not make the cascade work it
             // out again.
             child.SetExtension(EXTRACT_STAGE, 'keyOverride', block.ExtractorKeyOverride);
+            // Committed as a column too: the child is created Pending, and Extract reaches it in a
+            // later run where nothing from this one survives.
+            child.SetExtension('Pipeline', 'columns', {
+                ...(child.GetExtension<Record<string, unknown>>('Pipeline', 'columns') ?? {}),
+                ExtractorKeyOverride: block.ExtractorKeyOverride,
+            });
         }
         return child;
     }
@@ -505,6 +556,7 @@ export class ExtractStage extends BasePipelineStage {
         const settings = resolved?.Settings ?? {};
         return {
             ContentSourceID: contentSourceID,
+            Resolved: resolved,
             Parameters: resolved?.Parameters ?? {},
             Extractors: Array.isArray(settings.Extractors) ? (settings.Extractors as SourceExtractorCandidate[]) : [],
             SourceExtractorKey: (settings.ExtractorKey as string | undefined) ?? null,
@@ -539,6 +591,11 @@ export class ExtractStage extends BasePipelineStage {
 /** What Extract needs to know about the source behind a record. */
 interface ResolvedSource {
     ContentSourceID: string;
+    /**
+     * The source's full resolved configuration, carried so anything needing more than the fields
+     * below — Access, when deciding whether this source needs a session — does not re-read it.
+     */
+    Resolved: ResolvedSourceConfiguration | null;
     Parameters: Readonly<Record<string, string>>;
     Extractors: readonly SourceExtractorCandidate[];
     SourceExtractorKey: string | null;

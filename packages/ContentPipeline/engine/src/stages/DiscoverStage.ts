@@ -18,6 +18,7 @@ import {
     DiscoveredItem,
     FatalStageError,
     Outcome,
+    ResolveConfidence,
     StageContext,
     StageDeclaration,
     StageOutcome,
@@ -126,6 +127,11 @@ export class DiscoverStage extends BasePipelineStage {
             URL: resolved.URL,
             Parameters: resolved.Parameters,
             Configuration: resolved.Configuration,
+            Confidence: ResolveConfidence(context.Configuration),
+            // Walking a source can need credentials just as fetching from it does — an intranet
+            // site, an authenticated feed, a tenant-scoped API. Null when the source needs none,
+            // which is the ordinary case and not worth remarking on.
+            Access: await context.ResolveAccess(contentSourceID),
             ContextUser: context.ContextUser,
             Provider: context.Provider,
             Signal: context.Signal,

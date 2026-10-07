@@ -84,6 +84,7 @@ function contextWith(configuration: Record<string, unknown> = {}, signal?: Abort
         Signal: signal ?? new AbortController().signal,
         ReportProgress: () => {},
         Log: { Info: () => {}, Warning: () => {}, Error: () => {} },
+        ResolveAccess: async () => null,
     };
 }
 
@@ -165,8 +166,15 @@ describe('TagStage', () => {
         expect(outcome.Status).toBe('Skipped');
     });
 
-    it('is fatal when no classifier is configured', async () => {
-        await expect(new TagStage().Run(item('text'), contextWith())).rejects.toThrow(/No classifier is configured/);
+    it('falls back to the managed autotagging classifier when none is configured', async () => {
+        // A Tag stage that refuses to run until told which classifier to use is a stage nobody turns
+        // on. With no ClassifierKey it reaches for MJ's managed prompt — which here is unregistered
+        // in the test process, so it fails naming THAT rather than complaining about configuration.
+        // It reaches for MJ's managed prompt and genuinely tries to run it — which fails here only
+        // because the test provider is a stub. The point is which classifier it chose.
+        await expect(new TagStage().Run(item('text'), contextWith())).rejects.toThrow(
+            /Classifying with 'ContentAutotagging'/,
+        );
     });
 
     it('is fatal when the configured classifier is not registered', async () => {

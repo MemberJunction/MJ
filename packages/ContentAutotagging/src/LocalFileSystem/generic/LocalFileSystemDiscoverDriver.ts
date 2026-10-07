@@ -59,10 +59,10 @@ export class LocalFileSystemDiscoverDriver extends BaseDiscoverDriver {
                 // autotagger compares both against a last-run date — keeps it without re-stat'ing.
                 Extensions: { CreatedAt: stats.ctime, ModifiedAt: stats.mtime },
                 Fields: [
-                    { Field: 'Title', Value: entry, Confidence: 2 },
-                    { Field: 'Date', Value: stats.mtime, Confidence: 2 },
+                    { Field: 'Title', Value: entry, Confidence: request.Confidence.DiscoveredTitle },
+                    { Field: 'Date', Value: stats.mtime, Confidence: request.Confidence.DiscoveredDate },
                     ...(path.extname(entry)
-                        ? [{ Field: 'FileType' as const, Value: path.extname(entry).slice(1).toLowerCase(), Confidence: 4 }]
+                        ? [{ Field: 'FileType' as const, Value: path.extname(entry).slice(1).toLowerCase(), Confidence: request.Confidence.DiscoveredFileType }]
                         : []),
                 ],
             };

@@ -9,6 +9,9 @@
  */
 
 import { CompositeKey, LogError, RunView } from '@memberjunction/core';
+import { EscapeSQLString } from '@memberjunction/global';
+import { AutotagBaseEngine } from '@memberjunction/content-autotagging';
+import { MANAGED_PROMPT_CLASSIFIER } from '../ManagedPromptClassifier.js';
 import { MJContentItemTagEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import {
@@ -118,22 +121,7 @@ export class TagStage extends BasePipelineStage {
             return 0;
         }
 
-        const rv = RunView.FromMetadataProvider(context.Provider);
-        const existing = await rv.RunView<{ ID: string }>(
-            { EntityName: 'MJ: Content Item Tags', ExtraFilter: `ItemID='${itemID}'` },
-            context.ContextUser,
-        );
-        if (existing.Success) {
-            for (const row of existing.Results) {
-                const entity = await context.Provider.GetEntityObject<MJContentItemTagEntity>(
-                    'MJ: Content Item Tags',
-                    context.ContextUser,
-                );
-                if (await entity.InnerLoad(CompositeKey.FromID(row.ID))) { // first-pk-ok: MJ core content entity, single-column ID
-                    await entity.Delete();
-                }
-            }
-        }
+        await this.clearExistingTags(itemID, context);
 
         let saved = 0;
         for (const tag of tags) {
@@ -149,6 +137,7 @@ export class TagStage extends BasePipelineStage {
             }
             if (await entity.Save()) {
                 saved++;
+                await this.bridgeToTaxonomy(entity, context);
             } else {
                 LogError(
                     `TagStage: could not save tag '${tag.Name}' for content item '${itemID}': ` +
@@ -159,14 +148,66 @@ export class TagStage extends BasePipelineStage {
         return saved;
     }
 
-    /** The classifier this run uses. */
-    private resolveClassifier(context: StageContext): BaseContentClassifier {
-        const key = context.Configuration.ClassifierKey;
-        if (typeof key !== 'string' || key.length === 0) {
-            throw new FatalStageError(
-                "No classifier is configured. Set ClassifierKey in the Record Process's Options.",
+    /**
+     * Remove the tags a previous classification left.
+     *
+     * Replace rather than append: a re-tagged item should end up with what the classifier just
+     * concluded, not that plus everything it ever concluded before.
+     */
+    private async clearExistingTags(itemID: string, context: StageContext): Promise<void> {
+        const rv = RunView.FromMetadataProvider(context.Provider);
+        const existing = await rv.RunView<{ ID: string }>(
+            { EntityName: 'MJ: Content Item Tags', ExtraFilter: `ItemID='${EscapeSQLString(itemID)}'` },
+            context.ContextUser,
+        );
+        if (!existing.Success) {
+            return;
+        }
+        for (const row of existing.Results) {
+            const entity = await context.Provider.GetEntityObject<MJContentItemTagEntity>(
+                'MJ: Content Item Tags',
+                context.ContextUser,
+            );
+            if (await entity.InnerLoad(CompositeKey.FromID(row.ID))) { // first-pk-ok: MJ core content entity, single-column ID
+                await entity.Delete();
+            }
+        }
+    }
+
+    /**
+     * Hand a saved tag to the taxonomy bridge.
+     *
+     * Writing the `MJ: Content Item Tags` row is only half of tagging: the other half is promoting
+     * the keyword into a governed `MJ: Tags` row and linking the item to it, with whatever auto-grow
+     * rules the deployment set. That bridge already exists on the autotagging engine, so it is
+     * reused rather than reimplemented — a second implementation would be a second set of governance
+     * rules, which is exactly the outcome governance exists to prevent.
+     *
+     * Best-effort: a tag that could not be promoted is still a tag that was saved, and failing the
+     * record would throw away the rest of the classification over taxonomy bookkeeping.
+     */
+    private async bridgeToTaxonomy(tag: MJContentItemTagEntity, context: StageContext): Promise<void> {
+        const bridge = AutotagBaseEngine.Instance?.OnContentItemTagSaved;
+        if (!bridge) {
+            return;
+        }
+        try {
+            await bridge(tag, null, context.ContextUser);
+        } catch (error) {
+            LogError(
+                `TagStage: the taxonomy bridge failed for '${tag.Tag}': ` +
+                    `${error instanceof Error ? error.message : String(error)}`,
             );
         }
+    }
+
+    /** The classifier this run uses. */
+    private resolveClassifier(context: StageContext): BaseContentClassifier {
+        // Defaults to MJ's managed autotagging prompt rather than refusing. A Tag stage that has to
+        // be told which classifier to use before it will do anything is a stage nobody turns on.
+        const configured = context.Configuration.ClassifierKey;
+        const key =
+            typeof configured === 'string' && configured.length > 0 ? configured : MANAGED_PROMPT_CLASSIFIER;
         const classifier = BaseContentClassifier.Resolve(key);
         if (!classifier) {
             throw new FatalStageError(

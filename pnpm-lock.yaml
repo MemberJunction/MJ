@@ -3814,6 +3814,9 @@ importers:
       '@memberjunction/core-entities-server':
         specifier: 6.2.0-edge.2
         version: link:../../MJCoreEntitiesServer
+      '@memberjunction/document-parsing':
+        specifier: 6.2.0-edge.2
+        version: link:../../DocumentParsing
       '@memberjunction/esignature':
         specifier: 6.2.0-edge.2
         version: link:../../eSignature/Base
@@ -3928,9 +3931,6 @@ importers:
       docx:
         specifier: ^9.5.1
         version: 9.6.1
-      exceljs:
-        specifier: ^4.4.0
-        version: 4.4.0
       html-encoding-sniffer:
         specifier: ^6.0.0
         version: 6.0.0
@@ -3955,9 +3955,6 @@ importers:
       jsonpath-plus:
         specifier: ^10.3.0
         version: 10.3.0
-      mammoth:
-        specifier: ^1.11.0
-        version: 1.11.0
       marked:
         specifier: ^17.0.1
         version: 17.0.1
@@ -3976,9 +3973,6 @@ importers:
       parse5:
         specifier: ^8.0.0
         version: 8.0.0
-      pdf-parse:
-        specifier: ^1.1.1
-        version: 1.1.4
       pdfjs-dist:
         specifier: ^4.10.38
         version: 4.10.38
@@ -10405,6 +10399,9 @@ importers:
 
   packages/ContentPipeline/engine:
     dependencies:
+      '@memberjunction/ai-core-plus':
+        specifier: 6.2.0-edge.2
+        version: link:../../AI/CorePlus
       '@memberjunction/ai-prompts':
         specifier: 6.2.0-edge.2
         version: link:../../AI/Prompts
@@ -10417,6 +10414,12 @@ importers:
       '@memberjunction/ai-vectors':
         specifier: 6.2.0-edge.2
         version: link:../../AI/Vectors/Core
+      '@memberjunction/aiengine':
+        specifier: 6.2.0-edge.2
+        version: link:../../AI/Engine
+      '@memberjunction/content-autotagging':
+        specifier: 6.2.0-edge.2
+        version: link:../../ContentAutotagging
       '@memberjunction/content-pipeline-base':
         specifier: 6.2.0-edge.2
         version: link:../base
@@ -10426,6 +10429,12 @@ importers:
       '@memberjunction/core-entities':
         specifier: 6.2.0-edge.2
         version: link:../../MJCoreEntities
+      '@memberjunction/credentials':
+        specifier: 6.2.0-edge.2
+        version: link:../../Credentials/Engine
+      '@memberjunction/document-parsing':
+        specifier: 6.2.0-edge.2
+        version: link:../../DocumentParsing
       '@memberjunction/global':
         specifier: 6.2.0-edge.2
         version: link:../../MJGlobal
@@ -10441,6 +10450,9 @@ importers:
       '@memberjunction/storage':
         specifier: 6.2.0-edge.2
         version: link:../../MJStorage
+      '@memberjunction/tag-engine':
+        specifier: 6.2.0-edge.2
+        version: link:../../AI/Knowledge/TagEngine
     devDependencies:
       '@types/node':
         specifier: 24.10.11
@@ -10698,6 +10710,31 @@ importers:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
+
+  packages/DocumentParsing:
+    dependencies:
+      exceljs:
+        specifier: ^4.4.0
+        version: 4.4.0
+      mammoth:
+        specifier: ^1.11.0
+        version: 1.11.0
+      pdf-parse:
+        specifier: ^1.1.1
+        version: 1.1.4
+    devDependencies:
+      '@types/node':
+        specifier: 24.10.11
+        version: 24.10.11
+      '@types/pdf-parse':
+        specifier: ^1.1.4
+        version: 1.1.5
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.1.1
+        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/DynamicPackages:
     dependencies:

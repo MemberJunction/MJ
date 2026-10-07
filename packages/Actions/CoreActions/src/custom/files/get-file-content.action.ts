@@ -2,9 +2,16 @@ import { ActionResultSimple, RunActionParams, ActionParam } from "@memberjunctio
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { BaseFileStorageAction } from "./base-file-storage.action";
-import pdfParse from 'pdf-parse';
-import mammoth from 'mammoth';
-import ExcelJS from 'exceljs';
+import {
+    IsImageContentType,
+    IsPdfContentType,
+    IsSpreadsheetContentType,
+    IsTextContentType,
+    IsWordContentType,
+    ParsePdf,
+    ParseSpreadsheet,
+    ParseWord,
+} from '@memberjunction/document-parsing';
 
 /**
  * Smart file content retrieval action that automatically handles content extraction
@@ -103,52 +110,39 @@ export class GetFileContentAction extends BaseFileStorageAction {
             let warning: string | undefined;
 
             // Check file type and extract accordingly
-            if (this.isImage(contentType)) {
+            if (IsImageContentType(contentType)) {
                 // Images: Return base64 for LLM vision
                 format = "image";
                 content = buffer.toString('base64');
                 extractionMethod = "none";
 
-            } else if (this.isTextFormat(contentType)) {
+            } else if (IsTextContentType(contentType)) {
                 // Text formats: Return decoded text
                 format = "text";
                 content = buffer.toString('utf8');
                 extractionMethod = "none";
 
-            } else if (this.isPDF(contentType)) {
+            } else if (IsPdfContentType(contentType)) {
                 // PDF: Extract text
-                const pdfData = await pdfParse(buffer);
                 format = "text";
-                content = pdfData.text;
+                content = (await ParsePdf(buffer)).Text;
                 extractionMethod = "pdf-parse";
 
-            } else if (this.isExcel(contentType)) {
-                // Excel: Parse to structured text
-                const workbook = new ExcelJS.Workbook();
-                await workbook.xlsx.load(buffer as unknown as ExcelJS.Buffer);
-
+            } else if (IsSpreadsheetContentType(contentType)) {
+                // Excel: Parse to structured text. The shape is preserved — a map of sheet name to
+                // its rows — because that is what this action has always returned.
                 const sheets: Record<string, unknown[]> = {};
-                workbook.eachSheet((worksheet, sheetId) => {
-                    const rows: unknown[] = [];
-                    worksheet.eachRow((row, rowNumber) => {
-                        const rowData: unknown[] = [];
-                        row.eachCell((cell, colNumber) => {
-                            rowData.push(cell.value);
-                        });
-                        rows.push(rowData);
-                    });
-                    sheets[worksheet.name] = rows;
-                });
-
+                for (const sheet of await ParseSpreadsheet(buffer)) {
+                    sheets[sheet.Name] = sheet.Rows;
+                }
                 format = "structured";
                 content = JSON.stringify(sheets, null, 2);
                 extractionMethod = "excel-parse";
 
-            } else if (this.isWord(contentType)) {
+            } else if (IsWordContentType(contentType)) {
                 // Word: Extract text
-                const result = await mammoth.extractRawText({ buffer });
                 format = "text";
-                content = result.value;
+                content = (await ParseWord(buffer)).Text;
                 extractionMethod = "word-extract";
 
             } else {
@@ -187,47 +181,4 @@ export class GetFileContentAction extends BaseFileStorageAction {
         }
     }
 
-    /**
-     * Check if content type is an image format
-     */
-    private isImage(contentType: string): boolean {
-        return contentType.startsWith('image/');
-    }
-
-    /**
-     * Check if content type is a text-based format
-     */
-    private isTextFormat(contentType: string): boolean {
-        const textTypes = [
-            'text/',
-            'application/json',
-            'application/xml',
-            'application/javascript',
-            'application/typescript'
-        ];
-        return textTypes.some(type => contentType.startsWith(type));
-    }
-
-    /**
-     * Check if content type is PDF
-     */
-    private isPDF(contentType: string): boolean {
-        return contentType === 'application/pdf';
-    }
-
-    /**
-     * Check if content type is Excel
-     */
-    private isExcel(contentType: string): boolean {
-        return contentType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || // xlsx
-               contentType === 'application/vnd.ms-excel'; // xls
-    }
-
-    /**
-     * Check if content type is Word
-     */
-    private isWord(contentType: string): boolean {
-        return contentType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || // docx
-               contentType === 'application/msword'; // doc
-    }
 }

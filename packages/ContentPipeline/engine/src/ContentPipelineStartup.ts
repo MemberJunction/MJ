@@ -17,7 +17,7 @@ import { IMetadataProvider, IStartupSink, LogStatusEx, RegisterForStartup, UserI
 import { BaseSingleton } from '@memberjunction/global';
 import { RegisterPipelineWorkType } from './PipelineStageRegistration.js';
 import { LoadContentPipelineStages } from './stages/index.js';
-import { LoadContentPipelineReaders } from './extractors/index.js';
+import { LoadContentPipelineExtractors } from './extractors/index.js';
 
 @RegisterForStartup({
     description: 'Content pipeline: Pipeline Stage work type, built-in stages and extractors',
@@ -33,7 +33,7 @@ export class ContentPipelineStartup extends BaseSingleton<ContentPipelineStartup
      */
     public async HandleStartup(_contextUser?: UserInfo, _provider?: IMetadataProvider): Promise<void> {
         LoadContentPipelineStages();
-        LoadContentPipelineReaders();
+        LoadContentPipelineExtractors();
         RegisterPipelineWorkType();
         LogStatusEx({
             message: '[ContentPipelineStartup] Registered the Pipeline Stage work type and the built-in stages.',

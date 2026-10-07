@@ -53,6 +53,14 @@ export interface ResolvedSourceConfiguration {
     /** The whole parsed `Configuration`, for framework-level settings. */
     Configuration: Readonly<Record<string, unknown>>;
     /**
+     * The source TYPE's parsed `Configuration`.
+     *
+     * Where a default belongs to the kind of source rather than to one instance of it: which access
+     * driver this kind needs, whether it supports multi-modal content, and the `RequiredFields`
+     * declaration the source's own settings are validated against.
+     */
+    TypeConfiguration: Readonly<Record<string, unknown>>;
+    /**
      * `ContentSourceType.DriverClass` — the registered class that knows how to walk this kind of
      * source. This column already exists and is already seeded, so a source whose type is set needs
      * no further configuration to be discoverable.
@@ -143,6 +151,7 @@ export class ContentSourceConfigurationResolver {
             Settings: settings,
             Parameters: this.flatten(settings),
             Configuration: sourceConfig,
+            TypeConfiguration: typeConfig,
             DriverClass: sourceType?.DriverClass ?? null,
             DeclaredFields: declared,
             Problems: problems,

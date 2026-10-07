@@ -53,8 +53,21 @@ const ContentItemMap: EntityFieldMap = {
 /** Content Source carries only what a Discover driver can meaningfully resolve about a source. */
 const ContentSourceMap: EntityFieldMap = {
     Title: { Column: 'Name', Kind: 'Text' },
-    FileType: { Column: 'ContentFileTypeID', Kind: 'Lookup' },
-    ContentType: { Column: 'ContentTypeID', Kind: 'Lookup' },
+    // The lookup entity and the denormalized name column are not optional decoration: without them
+    // a proposed name has nothing to resolve against, so the commit either wrote a name into a
+    // foreign-key column or silently wrote nothing.
+    FileType: {
+        Column: 'ContentFileTypeID',
+        Kind: 'Lookup',
+        ReadColumn: 'ContentFileType',
+        LookupEntity: 'MJ: Content File Types',
+    },
+    ContentType: {
+        Column: 'ContentTypeID',
+        Kind: 'Lookup',
+        ReadColumn: 'ContentType',
+        LookupEntity: 'MJ: Content Types',
+    },
 };
 
 /** Content Item Chunk carries the text a segmenter produced and the modality it is in. */

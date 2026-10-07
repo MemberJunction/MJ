@@ -15,6 +15,8 @@
 import { MJGlobal } from '@memberjunction/global';
 import { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { WellKnownField, WellKnownFieldValue } from '../WorkingRecord.types.js';
+import { ResolvedConfidenceScale } from '../ConfidenceScale.js';
+import { AccessArtifact } from '../access/BaseAccessDriver.js';
 
 /** One field a driver determined directly, with how much it trusts it. */
 export interface DiscoveredField {
@@ -66,6 +68,21 @@ export interface DiscoverRequest {
     Parameters: Readonly<Record<string, string>>;
     /** The source's full parsed `Configuration`, for a driver needing a typed sub-object. */
     Configuration: Readonly<Record<string, unknown>>;
+    /**
+     * The run's resolved confidence scale.
+     *
+     * A driver proposes fields, so it has to say how much to trust each one — and those numbers have
+     * to come from the same scale everything else uses, or a deployment's override silently stops at
+     * the stages and never reaches discovery.
+     */
+    Confidence: ResolvedConfidenceScale;
+    /**
+     * The open session, when this source needs one.
+     *
+     * Opened once for the run and shared with every other stage reading the same source as the same
+     * principal, so a driver should apply it rather than authenticate again on its own terms.
+     */
+    Access?: AccessArtifact | null;
     /** The acting user. */
     ContextUser: UserInfo;
     /** The provider to read through. */

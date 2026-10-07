@@ -11,6 +11,7 @@
  * @module @memberjunction/content-pipeline
  */
 
+import { KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { ResolveSegmenter } from '@memberjunction/ai-segmentation';
 import {
@@ -62,7 +63,7 @@ export class SegmentStage extends BasePipelineStage {
             return Outcome.Skipped('no text to segment');
         }
 
-        const requestedKey = this.segmenterKey(record, context);
+        const requestedKey = await this.segmenterKey(record, context);
         // ResolveSegmenter never returns null — an unresolvable key degrades to a safe default and
         // says so through the key it reports, which is why the key that actually ran is recorded.
         const segmenter = ResolveSegmenter(requestedKey ?? undefined);
@@ -127,12 +128,29 @@ export class SegmentStage extends BasePipelineStage {
     }
 
     /** The segmenter to use: the run's configuration, then the record's own modality default. */
-    private segmenterKey(record: WorkingRecord, context: StageContext): string | null {
+    private async segmenterKey(record: WorkingRecord, context: StageContext): Promise<string | null> {
+        // A run's Options pin a segmenter for this run only, which is what makes an experiment
+        // possible without editing the source.
         const configured = context.Configuration.SegmenterKey;
         if (typeof configured === 'string' && configured.length > 0) {
             return configured;
         }
-        const modality = record.Get('Modality');
-        return typeof modality === 'string' && modality.length > 0 ? null : null;
+        // Otherwise the stored cascade: the source's own choice, then its content type's. These are
+        // real columns that already existed beside CleanerKey, and reading only run Options meant a
+        // source configured for a particular segmenter was silently ignored on every scheduled run.
+        const contentSourceID = record.GetExtension<string>('Pipeline', 'contentSourceID');
+        if (!contentSourceID) {
+            return null;
+        }
+        const knowledge = KnowledgeHubMetadataEngine.Instance;
+        await knowledge.Config(false, context.ContextUser, context.Provider);
+        const source = knowledge.ContentSources.find((c) => c.ID === contentSourceID);
+        if (source?.SegmenterKey) {
+            return source.SegmenterKey;
+        }
+        const contentType = source?.ContentTypeID
+            ? knowledge.ContentTypes.find((t) => t.ID === source.ContentTypeID)
+            : undefined;
+        return contentType?.SegmenterKey ?? null;
     }
 }

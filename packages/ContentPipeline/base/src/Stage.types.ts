@@ -11,6 +11,7 @@
  */
 
 import { UserInfo, IMetadataProvider } from '@memberjunction/core';
+import { AccessArtifact } from './access/BaseAccessDriver.js';
 
 /** How a stage finished with one record. */
 export type StageOutcomeStatus = 'Complete' | 'Failed' | 'Skipped' | 'Retry';
@@ -152,6 +153,18 @@ export interface StageContext {
     /** Structured logging bound to this record's run. */
     Log: StageLogger;
 
+    /**
+     * Open — or reuse — a session against a Content Source.
+     *
+     * On the context rather than built by each stage because a session belongs to the RUN, not to
+     * one step of it: Discover walking a source and Extract fetching an item from it are the same
+     * principal against the same source, and opening two sessions would pay twice for one
+     * credential exchange and double whatever rate limit the source applies.
+     *
+     * Returns null when the source needs no session, which is the ordinary case for a public site
+     * or a local directory — not an error and not worth logging.
+     */
+    ResolveAccess(contentSourceID: string, role?: string): Promise<AccessArtifact | null>;
 }
 
 /** The logging surface a stage is given. Mirrors the queue's `WorkContext.Log`. */

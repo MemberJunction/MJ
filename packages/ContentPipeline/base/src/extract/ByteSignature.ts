@@ -9,7 +9,7 @@
  */
 
 /** One recognizable file signature. */
-interface Signature {
+export interface Signature {
     /** The file type key it identifies. */
     FileType: string;
     /** Bytes that must match at {@link Offset}. */
@@ -58,8 +58,14 @@ export interface ByteSignatureMatch {
  * @returns The match, or `null` when nothing is recognized — which is the common case for text
  *   formats, and is why an extension remains a useful last resort.
  */
-export function DetectByteSignature(content: Uint8Array): ByteSignatureMatch | null {
-    for (const signature of SIGNATURES) {
+export function DetectByteSignature(
+    content: Uint8Array,
+    configured: readonly Signature[] = [],
+): ByteSignatureMatch | null {
+    // Configured signatures are consulted first, so a deployment can recognise a format the built-in
+    // table does not — and can correct one it gets wrong — without editing this file. The built-ins
+    // remain the answer for everything else, which is what makes a fresh database recognise a PDF.
+    for (const signature of [...configured, ...SIGNATURES]) {
         if (matches(content, signature)) {
             return { FileType: signature.FileType, Unambiguous: signature.Unambiguous };
         }

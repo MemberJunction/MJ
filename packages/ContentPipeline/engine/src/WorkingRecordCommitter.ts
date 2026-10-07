@@ -8,6 +8,8 @@
 
 import { BaseEntity, CompositeKey, IMetadataProvider, RunView, UserInfo } from '@memberjunction/core';
 import { WorkingRecord, WorkingRecordEntity } from '@memberjunction/content-pipeline-base';
+import { EscapeSQLString } from '@memberjunction/global';
+import { HasContentChanged } from './ChildReconciliation.js';
 import { GetEntityFieldMap, GetEntityName, GetStatusFields } from './EntityFieldMap.js';
 import { LookupResolver, UnresolvedLookupPolicy } from './LookupResolver.js';
 
@@ -143,7 +145,9 @@ export class WorkingRecordCommitter {
         const recordID = entityObject.Get('ID') as string;
         child.Identity.RecordID = recordID;
         child.ClearChanged();
-        return { RecordID: recordID, ColumnsWritten: written, Created: true };
+        // `created` was decided before the write, by whether matchExisting found a row. Reporting a
+        // constant true made every re-discovery look like a brand-new item to anything counting.
+        return { RecordID: recordID, ColumnsWritten: written, Created: created };
     }
 
     /**
@@ -161,7 +165,9 @@ export class WorkingRecordCommitter {
         const proposedChecksum = this.proposedChecksum(child);
         if (proposedChecksum !== null) {
             const stored = entityObject.Get('Checksum');
-            return typeof stored !== 'string' || stored.length === 0 || stored !== proposedChecksum;
+            // The shared helper, so the committer and the reconciler cannot drift on what
+            // "unchanged" means — it was written for this and never called.
+            return HasContentChanged(typeof stored === 'string' ? stored : null, proposedChecksum);
         }
         const proposedText = child.Get('Text');
         if (typeof proposedText !== 'string' || proposedText.length === 0) {
@@ -259,7 +265,7 @@ export class WorkingRecordCommitter {
         if (typeof sourceID !== 'string' || !child.Identity.EphemeralID) {
             return null;
         }
-        return `ContentSourceID='${sourceID}' AND URL='${child.Identity.EphemeralID.replace(/'/g, "''")}'`;
+        return `ContentSourceID='${EscapeSQLString(sourceID)}' AND URL='${EscapeSQLString(child.Identity.EphemeralID)}'`;
     }
 
     /**

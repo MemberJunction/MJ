@@ -23,12 +23,16 @@ import {
     StageScope,
     TransientStageError,
     WorkingRecord,
+    WorkingRecordEntity,
 } from '@memberjunction/content-pipeline-base';
+import { EscapeSQLString } from '@memberjunction/global';
+import { GetEntityName } from './EntityFieldMap.js';
 import { IMetadataProvider, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
 import { ChildCommitDefaults, WorkingRecordCommitter } from './WorkingRecordCommitter.js';
 import { WorkingRecordHydrator } from './WorkingRecordHydrator.js';
 import { ContentPipelineDeleteMarker } from './ContentPipelineDeleteMarker.js';
 import { ReconcileChildren } from './ChildReconciliation.js';
+import { AccessResolver } from './AccessResolver.js';
 
 /** How a {@link PipelineProcessor} was configured for this run. */
 export interface PipelineProcessorConfig {
@@ -107,7 +111,12 @@ export interface ProgressReporter {
      * items, a splitting extractor's blocks. Each gets its own detail row, which is what lets a
      * Discover-into-Extract test show per-item results.
      */
-    RecordChildOutcome?(parentRecord: RecordRef, childKey: string, result: RecordResult): Promise<void>;
+    RecordChildOutcome?(
+        parentRecord: RecordRef,
+        childKey: string,
+        result: RecordResult,
+        childEntityID?: string,
+    ): Promise<void>;
 }
 
 /**
@@ -164,11 +173,24 @@ export class PipelineProcessor implements IRecordProcessor {
             const started = Date.now();
             try {
                 const hydrated = await hydrator.Hydrate(this.stages[0].Entity, record.RecordID);
+                if (this.isPendingDelete(hydrated)) {
+                    // The same gate the per-record path applies. Without it the batch path embedded
+                    // records that were marked for deletion while they sat in the queue.
+                    results.set(
+                        record.RecordID,
+                        this.toRecordResult(Outcome.Skipped('record is pending delete'), started, hints, null),
+                    );
+                    continue;
+                }
                 const outcome = await this.runStages(hydrated, context, hints, record.RecordID);
                 if (outcome.Status === 'Complete') {
                     working.set(record.RecordID, hydrated);
                 } else {
-                    results.set(record.RecordID, this.toRecordResult(outcome, started, hints, null));
+                    // Commit the outcome. Reporting it without writing a status left the record
+                    // Pending, so the next pass selected it again, and the one after that — a record
+                    // that always fails or is always skipped was reprocessed forever.
+                    const committed = await this.persistFinalized(hydrated, outcome, context);
+                    results.set(record.RecordID, this.toRecordResult(outcome, started, hints, committed));
                 }
             } catch (error) {
                 results.set(record.RecordID, this.toRecordResult(this.classify(error), started, hints, null));
@@ -271,7 +293,19 @@ export class PipelineProcessor implements IRecordProcessor {
         }
     }
 
-    /** Run each configured stage on the same working record, stopping at the first non-Complete. */
+    /**
+     * Run each configured stage, stopping at the first non-Complete.
+     *
+     * A chain does not always stay on the same record. Discover runs over a Content Source and
+     * produces Content Items; Extract runs over a Content Item. So when the next stage works on a
+     * different entity, it runs over what the previous stage just produced rather than over the
+     * record that produced them — otherwise a `[Discover, Extract]` test extracts the SOURCE's own
+     * URL, which is the one thing it is certainly not meant to do, and the chained scenario proves
+     * nothing.
+     *
+     * In a test run the children exist only in memory, which is exactly the case this matters for:
+     * nothing has been committed for a later stage to pick up by querying.
+     */
     private async runStages(
         working: WorkingRecord,
         context: RecordProcessorContext,
@@ -279,7 +313,22 @@ export class PipelineProcessor implements IRecordProcessor {
         key: string,
     ): Promise<StageOutcome> {
         let last: StageOutcome = Outcome.Complete();
+        let current: WorkingRecord[] = [working];
         for (const stage of this.stages) {
+            const targets = this.targetsFor(stage, current);
+            if (targets.length === 0) {
+                // The previous stage produced nothing of this stage's entity. Not a failure — a
+                // source that discovered no new items has nothing to extract.
+                return last;
+            }
+            if (targets.length > 1 || targets[0] !== working) {
+                last = await this.runStageOver(stage, targets, context, hints, key);
+                if (last.Status !== 'Complete') {
+                    return last;
+                }
+                current = targets.flatMap((t) => [...t.Children]);
+                continue;
+            }
             await this.openStatus(key, stage.Name);
             const budget = this.startBudget(hints.Signal);
             const stageContext = this.buildContext(stage, context, hints, key, budget.Signal);
@@ -301,8 +350,61 @@ export class PipelineProcessor implements IRecordProcessor {
             if (last.Status !== 'Complete') {
                 return last;
             }
+            current = [...working.Children];
         }
         return last;
+    }
+
+    /**
+     * Which records this stage runs over.
+     *
+     * The ones matching its entity. The first stage always gets the record the run selected; a later
+     * stage on the same entity continues with it, and a later stage on a different entity picks up
+     * what was produced.
+     */
+    private targetsFor(stage: BasePipelineStage, candidates: readonly WorkingRecord[]): WorkingRecord[] {
+        return candidates.filter((c) => c.Entity === stage.Entity);
+    }
+
+    /**
+     * Run one stage over several produced records.
+     *
+     * One failure does not fail the others: a zip with one unreadable member should still yield the
+     * rest. The reported outcome is the worst of them, so the parent is not marked Complete when
+     * something below it was not.
+     */
+    private async runStageOver(
+        stage: BasePipelineStage,
+        targets: readonly WorkingRecord[],
+        context: RecordProcessorContext,
+        hints: PipelineRecordHints,
+        key: string,
+    ): Promise<StageOutcome> {
+        let worst: StageOutcome = Outcome.Complete();
+        for (const target of targets) {
+            const budget = this.startBudget(hints.Signal);
+            try {
+                if (budget.Signal.aborted) {
+                    return Outcome.Retry('cancelled before the stage started');
+                }
+                const outcome = await stage.Run(
+                    target,
+                    this.buildContext(stage, context, hints, target.Identity.Key, budget.Signal),
+                );
+                if (outcome.Status !== 'Complete' && worst.Status === 'Complete') {
+                    worst = outcome;
+                }
+            } catch (error) {
+                const classified = this.classify(error);
+                if (worst.Status === 'Complete') {
+                    worst = classified;
+                }
+            } finally {
+                budget.Dispose();
+            }
+        }
+        await this.openStatus(key, stage.Name);
+        return worst;
     }
 
     /**
@@ -414,11 +516,32 @@ export class PipelineProcessor implements IRecordProcessor {
             if (outcome.Status === 'Succeeded' && !this.config.IsTest) {
                 committed++;
             }
-            await this.progress?.RecordChildOutcome?.(record, child.Identity.Key, outcome);
+            await this.progress?.RecordChildOutcome?.(
+                record,
+                child.Identity.Key,
+                outcome,
+                this.entityIDFor(child.Entity, context),
+            );
         }
 
         await this.sweepOrphans(working, context);
         return committed;
+    }
+
+    /**
+     * The MJ entity id for a working-record entity, so a child's detail row is filed correctly.
+     *
+     * Undefined when it cannot be resolved, and the caller falls back to the parent's. Failing a
+     * record because a telemetry row would carry the wrong entity id would be a worse trade than
+     * the mis-filing it is trying to avoid.
+     */
+    private entityIDFor(entity: WorkingRecordEntity, context: RecordProcessorContext): string | undefined {
+        try {
+            const name = GetEntityName(entity);
+            return context.provider.Entities?.find((e) => e.Name === name)?.ID;
+        } catch {
+            return undefined;
+        }
     }
 
     /** Commit one child and describe how it went, so a failure fails that child and not the batch. */
@@ -484,9 +607,15 @@ export class PipelineProcessor implements IRecordProcessor {
         if (this.config.IsTest || !working.Identity.RecordID || working.Children.length === 0) {
             return;
         }
-        // Only a stage that produces child ITEMS reconciles them. Chunk producers are handled by
-        // position, and a Discover run over a source is adding, not replacing.
-        if (working.Entity !== 'Content Item' || working.Children[0].Entity !== 'Content Item') {
+        // A Discover run over a source is adding, not replacing, so it reconciles nothing.
+        if (working.Entity !== 'Content Item') {
+            return;
+        }
+        if (working.Children[0].Entity === 'Content Item Chunk') {
+            await this.removeSupersededChunks(working, context);
+            return;
+        }
+        if (working.Children[0].Entity !== 'Content Item') {
             return;
         }
 
@@ -516,6 +645,49 @@ export class PipelineProcessor implements IRecordProcessor {
             } catch (error) {
                 LogError(
                     `PipelineProcessor: could not mark orphaned child '${orphan.RecordID}': ` +
+                        `${error instanceof Error ? error.message : String(error)}`,
+                );
+            }
+        }
+    }
+
+    /**
+     * Mark chunks a shrinking re-segmentation left behind.
+     *
+     * Chunks are identified by position, so re-segmenting text that now yields five chunks where it
+     * yielded eight updates the first five in place and leaves three orphans. They are not visibly
+     * wrong — they hold real text from the previous version of the document — which is exactly why
+     * this is easy to miss: they stay searchable, and they answer questions about content that no
+     * longer says what they say. The autotagger superseded them; nothing here did.
+     *
+     * Marked rather than deleted, so removal goes through the Delete stage like everything else and
+     * takes their vectors with it.
+     */
+    private async removeSupersededChunks(
+        working: WorkingRecord,
+        context: RecordProcessorContext,
+    ): Promise<void> {
+        const produced = working.Children.length;
+        const rv = RunView.FromMetadataProvider(context.provider);
+        const leftover = await rv.RunView<{ ID: string }>(
+            {
+                EntityName: 'MJ: Content Item Chunks',
+                ExtraFilter:
+                    `ContentItemID='${EscapeSQLString(working.Identity.RecordID!)}' AND Sequence >= ${produced} ` +
+                    `AND (DeleteStatus IS NULL OR DeleteStatus <> 'Deleted')`,
+            },
+            context.contextUser,
+        );
+        if (!leftover.Success || leftover.Results.length === 0) {
+            return;
+        }
+        const marker = new ContentPipelineDeleteMarker(context.provider, context.contextUser);
+        for (const chunk of leftover.Results) {
+            try {
+                await marker.MarkForDeletion('MJ: Content Item Chunks', chunk.ID);
+            } catch (error) {
+                LogError(
+                    `PipelineProcessor: could not mark superseded chunk '${chunk.ID}': ` +
                         `${error instanceof Error ? error.message : String(error)}`,
                 );
             }
@@ -604,6 +776,19 @@ export class PipelineProcessor implements IRecordProcessor {
         }
     }
 
+    /**
+     * This run's access resolver.
+     *
+     * Lazily built and held for the life of the processor, which is the life of the run. The
+     * sessions it caches are keyed per source AND per role, so two stages reading the same source as
+     * the same principal share one credential exchange.
+     */
+    private access(context: RecordProcessorContext): AccessResolver {
+        this._access ??= new AccessResolver(context.provider, context.contextUser);
+        return this._access;
+    }
+    private _access?: AccessResolver;
+
     /** Build the per-record context a stage sees. */
     private buildContext(
         stage: BasePipelineStage,
@@ -630,6 +815,10 @@ export class PipelineProcessor implements IRecordProcessor {
             Signal: signal,
             ReportProgress: (message: string) => progress?.ReportProgress(key, message),
             Log: logger,
+            // One resolver for the whole run, so every stage touching the same source shares its
+            // session rather than each opening its own.
+            ResolveAccess: (contentSourceID: string, role?: string) =>
+                this.access(context).Artifact(contentSourceID, role),
         };
     }
 

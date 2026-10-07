@@ -172,13 +172,20 @@ export class PipelineProcessRunTracker extends GenericProcessRunTracker implemen
         parentRecord: RecordRef,
         childKey: string,
         result: RecordResult,
+        childEntityID?: string,
     ): Promise<void> {
         if (!this.handle || !this.contextUser) {
             return;
         }
         await super.RecordResult(
             this.handle,
-            { EntityID: parentRecord.EntityID, RecordID: childKey },
+            {
+                // The CHILD's entity, not the parent's. A Content Item produced by walking a Content
+                // Source is a Content Item; filing its detail row under the source's entity makes it
+                // unjoinable to the row it actually describes.
+                EntityID: childEntityID ?? parentRecord.EntityID,
+                RecordID: childKey,
+            },
             result,
             this.contextUser,
             this.provider ?? undefined,

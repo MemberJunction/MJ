@@ -13,9 +13,12 @@
  * what really happened. Overriding changes which proposal wins; it does not change the record of
  * which one did.
  *
- * Only the ORDERING is load-bearing. The absolute numbers are arbitrary, which is also why
- * overriding one in isolation is usually a mistake — raise a extractor's text confidence above a
- * declaration's and you have changed a precedence rule, not a dial.
+ * Only the ORDERING is load-bearing; the absolute numbers are arbitrary. That is what an override
+ * is really editing — not a dial but a precedence rule. Raising an extractor's text confidence above
+ * a declaration's does not make extracted text "more trusted" in general, it decides which one wins
+ * when both have an opinion, for every record in the run. So override deliberately and in full
+ * knowledge of the neighbours, which is why the whole scale is listed here rather than scattered
+ * across the stages that use it.
  *
  * @module @memberjunction/content-pipeline-base
  */
@@ -40,9 +43,9 @@ export const ConfidenceScale = {
     ContentTypeStructural: 7,
 
     /** Text produced by a extractor that understands the format. */
-    ReaderText: 6,
+    ExtractorText: 6,
     /** A title a extractor found in the document's own structure. */
-    ReaderTitle: 6,
+    ExtractorTitle: 6,
     /** Text from the last-resort plain-text read — loses to any real extractor that runs later. */
     FallbackText: 2,
 
@@ -50,6 +53,19 @@ export const ConfidenceScale = {
     SegmentText: 6,
     /** A modality detected from a recognised non-text signature. */
     Modality: 6,
+
+    // Discovery. A listing is evidence, but weak evidence: it describes what a source SAYS it has,
+    // not what the artifact turns out to be, so each of these loses to the extractor that opens it.
+    // They are named entries rather than literals at the call sites because a driver that hardcodes
+    // its numbers cannot be overridden at all, which made the override above a half-truth.
+    /** A title from a source listing — a filename, a feed entry's title. */
+    DiscoveredTitle: 4,
+    /** A date a source listing carried — a publication date, a modified time. */
+    DiscoveredDate: 4,
+    /** A file type a source listing declared, before any bytes were seen. */
+    DiscoveredFileType: 3,
+    /** A content type a source listing declared. */
+    DiscoveredContentType: 3,
 } as const;
 
 /** The name of one entry on the scale. */
@@ -63,7 +79,7 @@ export type ResolvedConfidenceScale = Record<ConfidenceScaleKey, number>;
  *
  * @example
  * ```json
- * { "Confidence": { "ReaderTitle": 9, "FileTypeDeclared": 4 } }
+ * { "Confidence": { "ExtractorTitle": 9, "FileTypeDeclared": 4 } }
  * ```
  *
  * An override that is not a finite number is ignored in favour of the default: a typo should not

@@ -7,7 +7,7 @@ import { HtmlExtractor } from '../extractors/HtmlExtractor.js';
 
 /** A extractor standing in for a real archive format. */
 @RegisterClass(ArchiveExtractor, 'TestArchive')
-class TestArchiveReader extends ArchiveExtractor {
+class TestArchiveExtractor extends ArchiveExtractor {
     public Members: ArchiveMember[] = [];
     protected async Unpack(): Promise<ArchiveMember[]> {
         return this.Members;
@@ -31,7 +31,7 @@ function member(path: string, text: string): ArchiveMember {
 
 describe('ArchiveExtractor', () => {
     it('returns one block per member', async () => {
-        const extractor = new TestArchiveReader();
+        const extractor = new TestArchiveExtractor();
         extractor.Members = [member('a.txt', 'alpha'), member('b.txt', 'beta')];
         const result = await extractor.Extract(request());
         expect(result.Blocks).toHaveLength(2);
@@ -39,28 +39,28 @@ describe('ArchiveExtractor', () => {
     });
 
     it("keys each block by the member's path, so identity survives re-extraction", async () => {
-        const extractor = new TestArchiveReader();
+        const extractor = new TestArchiveExtractor();
         extractor.Members = [member('docs/intro.md', '# Intro')];
         const result = await extractor.Extract(request());
         expect(result.Blocks[0].Key).toBe('docs/intro.md');
     });
 
     it("names each member's own file type, so the cascade routes it correctly", async () => {
-        const extractor = new TestArchiveReader();
+        const extractor = new TestArchiveExtractor();
         extractor.Members = [member('sheet.xlsx', 'data'), member('page.html', '<p>x</p>')];
         const result = await extractor.Extract(request());
         expect(result.Blocks.map((b) => b.FileType)).toEqual(['xlsx', 'html']);
     });
 
     it('derives a readable title from the member path', async () => {
-        const extractor = new TestArchiveReader();
+        const extractor = new TestArchiveExtractor();
         extractor.Members = [member('deep/folder/Quarterly Report.pdf', 'x')];
         const result = await extractor.Extract(request());
         expect(result.Blocks[0].Title).toBe('Quarterly Report');
     });
 
     it('stops unpacking when the signal fires', async () => {
-        const extractor = new TestArchiveReader();
+        const extractor = new TestArchiveExtractor();
         extractor.Members = [member('a.txt', 'a'), member('b.txt', 'b')];
         const controller = new AbortController();
         controller.abort();
@@ -113,7 +113,7 @@ describe('members that are not text', () => {
     it('does NOT decode a PDF member as UTF-8', async () => {
         // The defect: every member was decoded as UTF-8, so a PDF inside a zip became mojibake that
         // looked like a successful extraction and was then chunked, embedded and served.
-        const extractor = new TestArchiveReader();
+        const extractor = new TestArchiveExtractor();
         const pdf = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x37, 0x00, 0x01, 0x02, 0xff, 0xfe]);
         extractor.Members = [{ Path: 'report.pdf', Content: pdf }];
         const result = await extractor.Extract(request());
@@ -123,7 +123,7 @@ describe('members that are not text', () => {
     });
 
     it('still decodes a genuinely textual member', async () => {
-        const extractor = new TestArchiveReader();
+        const extractor = new TestArchiveExtractor();
         extractor.Members = [member('notes.txt', 'plain readable text')];
         const result = await extractor.Extract(request());
         expect(result.Blocks[0].Text).toBe('plain readable text');
@@ -131,7 +131,7 @@ describe('members that are not text', () => {
     });
 
     it('treats a member with a null byte as binary whatever its extension claims', async () => {
-        const extractor = new TestArchiveReader();
+        const extractor = new TestArchiveExtractor();
         extractor.Members = [{ Path: 'lies.txt', Content: new Uint8Array([0x68, 0x69, 0x00, 0x68, 0x69]) }];
         const result = await extractor.Extract(request());
         expect(result.Blocks[0].Text).toBe('');

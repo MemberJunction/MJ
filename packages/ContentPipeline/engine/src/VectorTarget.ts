@@ -160,7 +160,7 @@ export class VectorTargetResolver {
         const resolved = await CredentialEngine.Instance.getCredential(credential.Name, {
             credentialId: entity.CredentialID,
         });
-        const apiKey = (resolved as { apiKey?: string } | undefined)?.apiKey;
+        const apiKey = resolved?.values?.apiKey;
         return typeof apiKey === 'string' ? apiKey : '';
     }
 

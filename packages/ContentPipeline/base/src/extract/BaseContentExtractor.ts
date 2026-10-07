@@ -92,7 +92,7 @@ export interface ExtractResult {
  * @example
  * ```ts
  * @RegisterClass(BaseContentExtractor, 'pdf')
- * export class PdfContentReader extends BaseContentExtractor {
+ * export class PdfContentExtractor extends BaseContentExtractor {
  *     public readonly Key = 'pdf';
  *     public readonly SupportedFileTypes = ['pdf'];
  *     public async Extract(request: ExtractRequest): Promise<ExtractResult> { ... }

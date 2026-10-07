@@ -14,6 +14,7 @@
 
 import { MJGlobal, RegisterClass } from '@memberjunction/global';
 import { SafeFetch } from '@memberjunction/network-utils';
+import { AccessArtifact } from '@memberjunction/content-pipeline-base';
 
 /** What to fetch, and under what constraints. */
 export interface FetchRequest {
@@ -23,6 +24,14 @@ export interface FetchRequest {
     ContentSourceID: string;
     /** The source's type-specific settings, already defaulted and validated. */
     Parameters: Readonly<Record<string, string>>;
+    /**
+     * The open session, when this source needs one.
+     *
+     * Produced by the Access driver and handed down rather than obtained here: the fetcher moves
+     * bytes and knows nothing about credentials, which is what lets one fetcher serve a public site
+     * and an authenticated API without caring which it is.
+     */
+    Access?: AccessArtifact;
     /** Fires when the run is asked to stop. */
     Signal: AbortSignal;
 }
@@ -50,9 +59,25 @@ export interface FetchResponse {
  */
 @RegisterClass(ContentFetcher, 'ContentFetcher')
 export class ContentFetcher {
+    /** The URL to fetch, with any session query parameters applied. */
+    protected applyAccess(request: FetchRequest): string {
+        const parameters = request.Access?.QueryParameters;
+        if (!parameters || Object.keys(parameters).length === 0) {
+            return request.URL;
+        }
+        const url = new URL(request.URL);
+        for (const [name, value] of Object.entries(parameters)) {
+            url.searchParams.set(name, value);
+        }
+        return url.toString();
+    }
+
     /** Fetch the bytes at a URL. */
     public async Fetch(request: FetchRequest): Promise<FetchResponse> {
-        const response = await SafeFetch(request.URL, { signal: request.Signal });
+        const response = await SafeFetch(this.applyAccess(request), {
+            signal: request.Signal,
+            ...(request.Access?.Headers ? { headers: { ...request.Access.Headers } } : {}),
+        });
         if (!response.ok) {
             throw new Error(`Fetching '${request.URL}' failed: HTTP ${response.status} ${response.statusText}`);
         }

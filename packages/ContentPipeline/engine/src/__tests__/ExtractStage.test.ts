@@ -15,7 +15,7 @@ import { ContentSourceConfigurationResolver } from '../ContentSourceConfiguratio
 let blocks: ExtractResult = { Blocks: [{ Text: 'read by the html extractor', Title: 'Document title' }] };
 
 @RegisterClass(BaseContentExtractor, 'extract-html')
-class HtmlTestReader extends BaseContentExtractor {
+class HtmlTestExtractor extends BaseContentExtractor {
     public readonly Key = 'extract-html';
     public readonly SupportedFileTypes = ['html'];
     public async Extract(_request: ExtractRequest): Promise<ExtractResult> {
@@ -36,6 +36,7 @@ function contextWith(configuration: Record<string, unknown> = {}, signal?: Abort
         Signal: signal ?? new AbortController().signal,
         ReportProgress: () => {},
         Log: { Info: () => {}, Warning: () => {}, Error: () => {} },
+        ResolveAccess: async () => null,
     };
 }
 

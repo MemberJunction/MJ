@@ -26,7 +26,14 @@ export class RSSFeedDiscoverDriver extends BaseDiscoverDriver {
     public async *Discover(request: DiscoverRequest): AsyncIterable<DiscoveredItem> {
         let feed: Parser.Output<Record<string, unknown>>;
         try {
-            feed = await new Parser().parseURL(request.URL);
+            // A feed behind a login or an API gateway needs the run's session; a public one has none
+            // and the parser is given nothing extra.
+            const parser = new Parser(
+                request.Access?.Headers
+                    ? { headers: { ...request.Access.Headers } }
+                    : {},
+            );
+            feed = await parser.parseURL(this.withAccessParameters(request));
         } catch (error) {
             throw new Error(
                 `Could not parse RSS feed '${request.URL}': ${error instanceof Error ? error.message : String(error)}`,
@@ -52,9 +59,9 @@ export class RSSFeedDiscoverDriver extends BaseDiscoverDriver {
                 // when a feed does not set one. Either way, no article fetch.
                 Checksum: (entry.guid as string | undefined) || entry.pubDate || undefined,
                 Fields: [
-                    ...(entry.title ? [{ Field: 'Title' as const, Value: entry.title, Confidence: 4 }] : []),
+                    ...(entry.title ? [{ Field: 'Title' as const, Value: entry.title, Confidence: request.Confidence.DiscoveredTitle }] : []),
                     ...(published && !Number.isNaN(published.getTime())
-                        ? [{ Field: 'Date' as const, Value: published, Confidence: 4 }]
+                        ? [{ Field: 'Date' as const, Value: published, Confidence: request.Confidence.DiscoveredDate }]
                         : []),
                 ],
                 Extensions: {
@@ -68,5 +75,23 @@ export class RSSFeedDiscoverDriver extends BaseDiscoverDriver {
                 request.ReportProgress(`read ${reported} feed entries`);
             }
         }
+    }
+
+    /**
+     * The feed URL with any session query parameters applied.
+     *
+     * Some feeds authenticate in the URL rather than a header — a signed token, an API key — so a
+     * driver that only applied headers would still be refused.
+     */
+    private withAccessParameters(request: DiscoverRequest): string {
+        const parameters = request.Access?.QueryParameters;
+        if (!parameters || Object.keys(parameters).length === 0) {
+            return request.URL;
+        }
+        const url = new URL(request.URL);
+        for (const [name, value] of Object.entries(parameters)) {
+            url.searchParams.set(name, value);
+        }
+        return url.toString();
     }
 }

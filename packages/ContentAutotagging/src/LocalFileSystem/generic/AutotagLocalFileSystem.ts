@@ -6,6 +6,7 @@ import { IMetadataProvider, UserInfo, Metadata, RunView } from "@memberjunction/
 import { MJContentSourceEntity, MJContentItemEntity } from "@memberjunction/core-entities";
 import { OpenAI } from "openai";
 import path from 'path';
+import { ResolveConfidence } from '@memberjunction/content-pipeline-base';
 import { LocalFileSystemDiscoverDriver } from './LocalFileSystemDiscoverDriver';
 import dotenv from 'dotenv';
 dotenv.config({ quiet: true })
@@ -132,6 +133,9 @@ export class AutotagLocalFileSystem extends AutotagBase {
             URL: contentSourceParams.URL,
             Parameters: {},
             Configuration: {},
+            // The autotagger does not resolve fields on confidence, but the walk is shared, so it
+            // passes the defaults rather than making the driver cope with their absence.
+            Confidence: ResolveConfidence(undefined),
             ContextUser: contextUser,
             Provider: this.ProviderToUse,
             Signal: new AbortController().signal,

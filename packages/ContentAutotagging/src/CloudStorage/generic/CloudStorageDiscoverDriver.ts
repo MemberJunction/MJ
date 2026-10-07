@@ -45,10 +45,10 @@ export class CloudStorageDiscoverDriver extends BaseDiscoverDriver {
                 // the fallback for a provider that does not.
                 Checksum: object.etag || `${object.size}:${object.lastModified?.getTime() ?? 0}`,
                 Fields: [
-                    { Field: 'Title', Value: object.name, Confidence: 2 },
-                    ...(object.lastModified ? [{ Field: 'Date' as const, Value: object.lastModified, Confidence: 2 }] : []),
+                    { Field: 'Title', Value: object.name, Confidence: request.Confidence.DiscoveredTitle },
+                    ...(object.lastModified ? [{ Field: 'Date' as const, Value: object.lastModified, Confidence: request.Confidence.DiscoveredDate }] : []),
                     ...(object.contentType
-                        ? [{ Field: 'FileType' as const, Value: object.contentType, Confidence: 3 }]
+                        ? [{ Field: 'FileType' as const, Value: object.contentType, Confidence: request.Confidence.DiscoveredFileType }]
                         : []),
                 ],
                 Extensions: { Size: object.size, ContentType: object.contentType },

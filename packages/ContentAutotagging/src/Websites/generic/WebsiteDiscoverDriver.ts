@@ -13,7 +13,13 @@
  */
 
 import { RegisterClass } from '@memberjunction/global';
-import { BaseDiscoverDriver, DiscoverRequest, DiscoveredItem } from '@memberjunction/content-pipeline-base';
+import { HttpGet } from '@memberjunction/network-utils';
+import {
+    AccessArtifact,
+    BaseDiscoverDriver,
+    DiscoverRequest,
+    DiscoveredItem,
+} from '@memberjunction/content-pipeline-base';
 import { AutotagWebsite } from './AutotagWebsite';
 
 /**
@@ -29,6 +35,38 @@ class WebsiteCrawl extends AutotagWebsite {
 
     public BasePath(url: string): string {
         return this.getBasePath(url);
+    }
+
+    /**
+     * The session this crawl runs under, when the source needs one.
+     *
+     * Applied by overriding the page fetch rather than by changing {@link AutotagWebsite}: the
+     * crawl logic is identical, only the credentials it carries differ.
+     */
+    public Access?: AccessArtifact | null;
+
+    public override async FetchPageContent(url: string): Promise<string> {
+        if (!this.Access?.Headers) {
+            return super.FetchPageContent(url);
+        }
+        const { Data } = await HttpGet<string>(this.withAccessParameters(url), {
+            ResponseType: 'text',
+            Headers: { ...this.Access.Headers },
+        });
+        return Data;
+    }
+
+    /** A URL with any session query parameters applied, for sources that authenticate in the URL. */
+    private withAccessParameters(url: string): string {
+        const parameters = this.Access?.QueryParameters;
+        if (!parameters || Object.keys(parameters).length === 0) {
+            return url;
+        }
+        const resolved = new URL(url);
+        for (const [name, value] of Object.entries(parameters)) {
+            resolved.searchParams.set(name, value);
+        }
+        return resolved.toString();
     }
 
     /** The crawl settings a Content Source declares, applied to this instance. */
@@ -52,6 +90,9 @@ export class WebsiteDiscoverDriver extends BaseDiscoverDriver {
     public async *Discover(request: DiscoverRequest): AsyncIterable<DiscoveredItem> {
         const crawl = new WebsiteCrawl();
         crawl.Configure(request.Parameters);
+        // An intranet or members-only site cannot even be enumerated without credentials, so the
+        // session has to reach the crawl, not just the later fetch of each page.
+        crawl.Access = request.Access;
         const rootURL = request.Parameters.RootURL || crawl.BasePath(request.URL);
         const pattern = request.Parameters.URLPattern ? new RegExp(request.Parameters.URLPattern) : /.*/;
 

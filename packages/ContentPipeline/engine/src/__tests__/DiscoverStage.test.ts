@@ -8,6 +8,7 @@ import {
     WorkingRecord,
     WorkingRecordIdentity,
 } from '@memberjunction/content-pipeline-base';
+import type { AccessArtifact } from '@memberjunction/content-pipeline-base';
 import { DiscoverStage } from '../stages/DiscoverStage.js';
 import { ContentSourceConfigurationResolver } from '../ContentSourceConfigurationResolver.js';
 
@@ -16,11 +17,14 @@ let items: DiscoveredItem[] = [];
 let sawSignalAbortedAt: number | null = null;
 /** Lets a test cancel the run from inside the walk, deterministically. */
 let abortAfterItem: { Index: number; Controller: AbortController } | null = null;
+/** Every request the driver was handed, so a test can assert what reached it. */
+const seenRequests: DiscoverRequest[] = [];
 
 @RegisterClass(BaseDiscoverDriver, 'TestDiscover')
 class TestDiscoverDriver extends BaseDiscoverDriver {
     public readonly Key = 'TestDiscover';
     public async *Discover(request: DiscoverRequest): AsyncIterable<DiscoveredItem> {
+        seenRequests.push(request);
         let index = 0;
         for (const item of items) {
             if (request.Signal.aborted) {
@@ -38,7 +42,10 @@ class TestDiscoverDriver extends BaseDiscoverDriver {
 
 const progress: string[] = [];
 
-function contextWith(signal?: AbortSignal): StageContext {
+/** Sessions the stage asked for, so a test can assert it asked at all. */
+export const accessRequests: { ContentSourceID: string; Role?: string }[] = [];
+
+function contextWith(signal?: AbortSignal, access: AccessArtifact | null = null): StageContext {
     return {
         ContextUser: {} as never,
         Provider: {} as never,
@@ -51,6 +58,10 @@ function contextWith(signal?: AbortSignal): StageContext {
         Signal: signal ?? new AbortController().signal,
         ReportProgress: (m: string) => progress.push(m),
         Log: { Info: () => {}, Warning: () => {}, Error: () => {} },
+        ResolveAccess: async (contentSourceID: string, role?: string) => {
+            accessRequests.push({ ContentSourceID: contentSourceID, Role: role });
+            return access;
+        },
     };
 }
 
@@ -187,5 +198,32 @@ describe('DiscoverStage — configuration failures are fatal', () => {
         stubResolver();
         const unsaved = new WorkingRecord(new WorkingRecordIdentity('Content Source', 'https://example.com'));
         await expect(new DiscoverStage().Run(unsaved, contextWith())).rejects.toThrow(/not been persisted/);
+    });
+});
+
+describe('discovery can need credentials too', () => {
+    beforeEach(() => {
+        stubResolver();
+        seenRequests.length = 0;
+    });
+
+    it('asks for a session for the source it is about to walk', async () => {
+        // An intranet site or an authenticated feed cannot even be ENUMERATED anonymously, so the
+        // session has to reach the walk and not only the later fetch of each item.
+        accessRequests.length = 0;
+        await new DiscoverStage().Run(sourceRecord(), contextWith());
+        expect(accessRequests).toEqual([{ ContentSourceID: 'SRC-1', Role: undefined }]);
+    });
+
+    it('hands the artifact to the driver', async () => {
+        accessRequests.length = 0;
+        const artifact = { Headers: { Authorization: 'Bearer token' } };
+        await new DiscoverStage().Run(sourceRecord(), contextWith(undefined, artifact));
+        expect(seenRequests.at(-1)?.Access).toBe(artifact);
+    });
+
+    it('passes null through for a source that needs none, which is the ordinary case', async () => {
+        await new DiscoverStage().Run(sourceRecord(), contextWith());
+        expect(seenRequests.at(-1)?.Access).toBeNull();
     });
 });

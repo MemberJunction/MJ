@@ -85,7 +85,7 @@ export type UnresolvedStrategy =
     /** A recognized non-text signature: go down the multi-modal path, extractor or not. */
     | 'MultiModal'
     /** A recognized text format: use its matching extractor. */
-    | 'TextReader'
+    | 'TextExtractor'
     /** Nothing recognized it: attempt a sanity-checked plain-text read. */
     | 'PlainTextFallback';
 
@@ -96,12 +96,23 @@ export type UnresolvedStrategy =
  * extractor exists for it** — "this is an image, not a document" is Extract doing its job, not Extract
  * failing.
  */
-export function ClassifyUnresolved(fileType: string | null): UnresolvedStrategy {
+export function ClassifyUnresolved(
+    fileType: string | null,
+    configured?: { TextFileTypes: ReadonlySet<string>; NonTextFileTypes: ReadonlySet<string> },
+): UnresolvedStrategy {
+    // What metadata says about a file type outranks the built-in lists: a deployment that marks a
+    // format as text has said something the framework could not know.
+    if (fileType && configured?.NonTextFileTypes.has(fileType)) {
+        return 'MultiModal';
+    }
+    if (fileType && configured?.TextFileTypes.has(fileType)) {
+        return 'TextExtractor';
+    }
     if (fileType && NON_TEXT_FORMATS.has(fileType)) {
         return 'MultiModal';
     }
     if (fileType && TEXT_FORMATS.has(fileType)) {
-        return 'TextReader';
+        return 'TextExtractor';
     }
     return 'PlainTextFallback';
 }

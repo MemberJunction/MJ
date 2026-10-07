@@ -47,7 +47,7 @@ describe('ConfidenceScale', () => {
     });
 
     it('ranks a real extractor above the last-resort plain-text read', () => {
-        expect(ConfidenceScale.ReaderText).toBeGreaterThan(ConfidenceScale.FallbackText);
+        expect(ConfidenceScale.ExtractorText).toBeGreaterThan(ConfidenceScale.FallbackText);
     });
 });
 
@@ -57,25 +57,25 @@ describe('ResolveConfidence', () => {
     });
 
     it('applies an override', () => {
-        const c = ResolveConfidence({ Confidence: { ReaderTitle: 9 } });
-        expect(c.ReaderTitle).toBe(9);
+        const c = ResolveConfidence({ Confidence: { ExtractorTitle: 9 } });
+        expect(c.ExtractorTitle).toBe(9);
     });
 
     it('leaves every other entry at its default', () => {
-        const c = ResolveConfidence({ Confidence: { ReaderTitle: 9 } });
-        expect(c.ReaderText).toBe(ConfidenceScale.ReaderText);
+        const c = ResolveConfidence({ Confidence: { ExtractorTitle: 9 } });
+        expect(c.ExtractorText).toBe(ConfidenceScale.ExtractorText);
         expect(c.FileTypeDeclared).toBe(ConfidenceScale.FileTypeDeclared);
     });
 
     it('can invert a precedence rule, which is the point and the risk', () => {
         // A deployment whose extractors find better titles than its listing pages do.
-        const c = ResolveConfidence({ Confidence: { ReaderTitle: 1 } });
-        expect(c.ReaderTitle).toBeLessThan(ConfidenceScale.FileTypeExtension + 2);
+        const c = ResolveConfidence({ Confidence: { ExtractorTitle: 1 } });
+        expect(c.ExtractorTitle).toBeLessThan(ConfidenceScale.FileTypeExtension + 2);
     });
 
     it('ignores a non-numeric override rather than reordering precedence on a typo', () => {
-        const c = ResolveConfidence({ Confidence: { ReaderText: 'high' } } as never);
-        expect(c.ReaderText).toBe(ConfidenceScale.ReaderText);
+        const c = ResolveConfidence({ Confidence: { ExtractorText: 'high' } } as never);
+        expect(c.ExtractorText).toBe(ConfidenceScale.ExtractorText);
     });
 
     it('ignores an unknown key', () => {
@@ -84,7 +84,7 @@ describe('ResolveConfidence', () => {
     });
 
     it('ignores a non-finite override', () => {
-        const c = ResolveConfidence({ Confidence: { ReaderText: Number.POSITIVE_INFINITY } });
-        expect(c.ReaderText).toBe(ConfidenceScale.ReaderText);
+        const c = ResolveConfidence({ Confidence: { ExtractorText: Number.POSITIVE_INFINITY } });
+        expect(c.ExtractorText).toBe(ConfidenceScale.ExtractorText);
     });
 });

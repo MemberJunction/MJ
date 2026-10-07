@@ -35,6 +35,11 @@ const PIPELINE_STATUS_EXTENSIONS: readonly (readonly [string, string])[] = [
     // Where this record's bytes were kept, for a record whose URL no longer yields them — an
     // archive member whose URL would re-fetch the archive.
     ['FileID', 'fileID'],
+    // The extractor this record was routed to last, and any override forced on it. Columns rather
+    // than run state: an override stamped on a child that is still Pending has to survive until
+    // Extract reaches it, which it did not when this lived only in the extension space.
+    ['ExtractorKey', 'extractorKey'],
+    ['ExtractorKeyOverride', 'extractorKeyOverride'],
 ];
 
 export class WorkingRecordHydrator {

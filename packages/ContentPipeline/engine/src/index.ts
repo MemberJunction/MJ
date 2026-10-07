@@ -19,3 +19,6 @@ export * from './ContentPipelineStartup.js';
 export * from './PipelineProcessRunTracker.js';
 export * from './extractors/index.js';
 export * from './stages/index.js';
+export * from './AccessResolver.js';
+export * from './DetectionCatalog.js';
+export * from './ManagedPromptClassifier.js';

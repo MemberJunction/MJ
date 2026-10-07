@@ -65,7 +65,7 @@ describe('ClassifyUnresolved — the three-way fallback', () => {
     });
 
     it('routes a recognized text format to its extractor', () => {
-        expect(ClassifyUnresolved('html')).toBe('TextReader');
+        expect(ClassifyUnresolved('html')).toBe('TextExtractor');
     });
 
     it('routes anything unrecognized to the sanity-checked plain-text read', () => {
