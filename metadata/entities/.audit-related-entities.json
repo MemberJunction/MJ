@@ -24,6 +24,7 @@
       "BaseView": "vwAuditLogs",
       "TrackRecordChanges": false,
       "TrustServerCacheCompletely": false,
+      "AllowCaching": false,
       "AllowUserSearchAPI": false,
       "AutoUpdateAllowUserSearchAPI": false
     },
@@ -40,6 +41,7 @@
       "BaseView": "vwCommunicationLogs",
       "TrackRecordChanges": false,
       "TrustServerCacheCompletely": false,
+      "AllowCaching": false,
       "AllowUserSearchAPI": false,
       "AutoUpdateAllowUserSearchAPI": false
     },
@@ -56,6 +58,7 @@
       "BaseView": "vwCommunicationRuns",
       "TrackRecordChanges": false,
       "TrustServerCacheCompletely": false,
+      "AllowCaching": false,
       "AllowUserSearchAPI": false,
       "AutoUpdateAllowUserSearchAPI": false
     },
@@ -96,6 +99,7 @@
       "BaseView": "vwCompanyIntegrationRunAPILogs",
       "TrackRecordChanges": false,
       "TrustServerCacheCompletely": false,
+      "AllowCaching": false,
       "AllowUserSearchAPI": false,
       "AutoUpdateAllowUserSearchAPI": false
     },
@@ -112,6 +116,7 @@
       "BaseView": "vwCompanyIntegrationRunDetails",
       "TrackRecordChanges": false,
       "TrustServerCacheCompletely": false,
+      "AllowCaching": false,
       "AllowUserSearchAPI": false,
       "AutoUpdateAllowUserSearchAPI": false
     },
@@ -128,6 +133,7 @@
       "BaseView": "vwCompanyIntegrationRuns",
       "TrackRecordChanges": false,
       "TrustServerCacheCompletely": false,
+      "AllowCaching": false,
       "AllowUserSearchAPI": false,
       "AutoUpdateAllowUserSearchAPI": false
     },
@@ -144,6 +150,7 @@
       "BaseView": "vwContentProcessRuns",
       "TrackRecordChanges": false,
       "TrustServerCacheCompletely": false,
+      "AllowCaching": false,
       "AllowUserSearchAPI": false,
       "AutoUpdateAllowUserSearchAPI": false
     },
@@ -159,6 +166,7 @@
       "Name": "MJ: Content Process Run Details",
       "TrackRecordChanges": false,
       "TrustServerCacheCompletely": false,
+      "AllowCaching": false,
       "AllowUserSearchAPI": false,
       "AutoUpdateAllowUserSearchAPI": false
     },
@@ -178,6 +186,7 @@
       "Name": "MJ: Content Process Run Prompt Runs",
       "TrackRecordChanges": false,
       "TrustServerCacheCompletely": false,
+      "AllowCaching": false,
       "AllowUserSearchAPI": false,
       "AutoUpdateAllowUserSearchAPI": false
     },
@@ -224,6 +233,7 @@
       "BaseView": "vwDuplicateRunDetailMatches",
       "TrackRecordChanges": false,
       "TrustServerCacheCompletely": false,
+      "AllowCaching": false,
       "AllowUserSearchAPI": false,
       "AutoUpdateAllowUserSearchAPI": false
     },
@@ -285,6 +295,7 @@
       "BaseView": "vwErrorLogs",
       "TrackRecordChanges": false,
       "TrustServerCacheCompletely": false,
+      "AllowCaching": false,
       "AllowUserSearchAPI": false,
       "AutoUpdateAllowUserSearchAPI": false
     },
@@ -376,6 +387,7 @@
       "BaseView": "vwAPIKeyUsageLogs",
       "TrackRecordChanges": false,
       "TrustServerCacheCompletely": false,
+      "AllowCaching": false,
       "AllowUserSearchAPI": false,
       "AutoUpdateAllowUserSearchAPI": false
     },
@@ -391,6 +403,7 @@
       "Name": "MJ: Archive Run Details",
       "TrackRecordChanges": false,
       "TrustServerCacheCompletely": false,
+      "AllowCaching": false,
       "AllowUserSearchAPI": false,
       "AutoUpdateAllowUserSearchAPI": false
     },
@@ -410,6 +423,7 @@
       "Name": "MJ: Archive Runs",
       "TrackRecordChanges": false,
       "TrustServerCacheCompletely": false,
+      "AllowCaching": false,
       "AllowUserSearchAPI": false,
       "AutoUpdateAllowUserSearchAPI": false
     },
@@ -468,6 +482,7 @@
       "Name": "MJ: MCP Tool Execution Logs",
       "TrackRecordChanges": false,
       "TrustServerCacheCompletely": false,
+      "AllowCaching": false,
       "AllowUserSearchAPI": false,
       "AutoUpdateAllowUserSearchAPI": false
     },
@@ -502,6 +517,7 @@
       "Name": "MJ: Tag Audit Logs",
       "TrackRecordChanges": false,
       "TrustServerCacheCompletely": false,
+      "AllowCaching": false,
       "AllowUserSearchAPI": false,
       "AutoUpdateAllowUserSearchAPI": false
     },
@@ -536,6 +552,7 @@
       "Name": "MJ: Test Run Outputs",
       "TrackRecordChanges": false,
       "TrustServerCacheCompletely": false,
+      "AllowCaching": false,
       "AllowUserSearchAPI": false,
       "AutoUpdateAllowUserSearchAPI": false
     },
@@ -645,6 +662,7 @@
       "BaseView": "vwRecordMergeDeletionLogs",
       "TrackRecordChanges": false,
       "TrustServerCacheCompletely": false,
+      "AllowCaching": false,
       "AllowUserSearchAPI": false,
       "AutoUpdateAllowUserSearchAPI": false
     },
@@ -661,6 +679,7 @@
       "BaseView": "vwRecordMergeLogs",
       "TrackRecordChanges": false,
       "TrustServerCacheCompletely": false,
+      "AllowCaching": false,
       "AllowUserSearchAPI": false,
       "AutoUpdateAllowUserSearchAPI": false
     },
@@ -677,6 +696,7 @@
       "BaseView": "vwUserRecordLogs",
       "TrackRecordChanges": false,
       "TrustServerCacheCompletely": false,
+      "AllowCaching": false,
       "AllowUserSearchAPI": false,
       "AutoUpdateAllowUserSearchAPI": false
     },
@@ -693,6 +713,7 @@
       "BaseView": "vwUserViewRunDetails",
       "TrackRecordChanges": false,
       "TrustServerCacheCompletely": false,
+      "AllowCaching": false,
       "AllowUserSearchAPI": false,
       "AutoUpdateAllowUserSearchAPI": false
     },
@@ -709,6 +730,7 @@
       "BaseView": "vwUserViewRuns",
       "TrackRecordChanges": false,
       "TrustServerCacheCompletely": false,
+      "AllowCaching": false,
       "AllowUserSearchAPI": false,
       "AutoUpdateAllowUserSearchAPI": false
     },

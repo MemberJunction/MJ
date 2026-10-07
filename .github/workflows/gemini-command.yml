@@ -68,7 +68,7 @@ jobs:
 
       - name: Run Gemini
         id: gemini
-        uses: google-github-actions/run-gemini-cli@v0.1.22
+        uses: google-github-actions/run-gemini-cli@f77273f4c914e4bf38440cf36a0369cb64a37489 # v0.1.22, SHA-pinned
         env:
           # REQUIRED — without it the CLI exits 1 without running anything:
           #   "Gemini CLI is not running in a trusted directory."

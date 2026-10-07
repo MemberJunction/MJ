@@ -112,12 +112,12 @@ Reference: [`../realtime-session-lifecycle-and-followups.md`](../realtime-sessio
 
 ## 8. Definition of done (program level)
 
-> **Status (2026-06-28):** Telephony (Twilio live-proven) + widget (localhost) are the demoable core. Vonage/RingCentral, Teams, and calendar auto-join are code-complete + unit-tested but gated on a vendor account / entitled tenant to verify live. Slack is formally parked. Per-work-stream detail: each doc's **Status** banner.
+> **Status (2026-10-03):** Telephony (Twilio proven live in June 2026 on the pre-2026-09-12 ingress — **not re-verified on current code**, see `LIVE-CALL-CHECKLIST.md`) + widget (localhost) are the demoable core. Vonage/RingCentral, Teams, and calendar auto-join are code-complete + unit-tested but gated on a vendor account / entitled tenant to verify live. Slack is formally parked. Per-work-stream detail: each doc's **Status** banner.
 
 - [x] Public widget renders on a blank third-party HTML page via a single `<script>` tag and a mount element, isolated in shadow DOM (no CSS bleed).
 - [x] A guest visitor can hold a text **and** voice support conversation with a pinned agent, with no MJ login. — _Demo-grade; not public-safe until the guest run-entity grants are scoped (see widget doc Status)._
 - [x] A guest can optionally upgrade to a magic-link-verified session that resolves their account.
-- [ ] Twilio, Vonage, RingCentral place/receive a real call end-to-end through the agent, with passing integration tests (credential-gated). — _Twilio ✅ live-proven; Vonage/RingCentral code-complete + unit-tested, blocked on a vendor account each._
+- [ ] Twilio, Vonage, RingCentral place/receive a real call end-to-end through the agent, with passing integration tests (credential-gated). — _Twilio proven live in June 2026 (pre-move ingress; re-verify on current code); Vonage/RingCentral code-complete + unit-tested, never run live, blocked on a vendor account each._
 - [ ] Teams bridge joins a real meeting with two-way audio + roster (entitlement permitting). — _Blocked on a live ACS media-socket adapter (code) **and** an entitled Azure tenant (procurement). Control plane + ingress + unit tests done._
 - [x] Slack: either bound (if media access verified) or formally parked with the blocker documented. — _Formally parked (NO-GO); row `Disabled`._
 - [x] Every touched package builds and its unit tests pass.
