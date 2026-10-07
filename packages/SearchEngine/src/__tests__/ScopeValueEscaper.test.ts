@@ -79,14 +79,25 @@ describe('each escaper neutralises its own dialect', () => {
     it('path: REFUSES traversal and separators instead of stripping them into a wider path', () => {
         // Stripping turned '..' into '' and '../other' into 'other', so `clients/{{ X }}` named every
         // client's folder, or another client's. A refused value fails the lane closed instead.
-        expect(() => EscapePathSegment('../../etc/passwd')).toThrow(/path traversal/);
         expect(() => EscapePathSegment('..')).toThrow(/path traversal/);
+        expect(() => EscapePathSegment('.')).toThrow(/enclosing folder/); // `clients/.` is `clients`: every client
+        expect(() => EscapePathSegment(' .. ')).toThrow(/path traversal/); // the FolderPath guard trims segments too
+        expect(() => EscapePathSegment('.\u0000.')).toThrow(/path traversal/); // judged after control characters go
+        expect(() => EscapePathSegment('../../etc/passwd')).toThrow(/separator/);
         expect(() => EscapePathSegment('a\\b')).toThrow(/separator/);
         expect(() => EscapePathSegment('a/b')).toThrow(/separator/);
         // Legitimate segment values are unchanged; control characters are still removed.
         expect(EscapePathSegment('tenant-a')).toBe('tenant-a');
         expect(EscapePathSegment('meta.OrgID')).toBe('meta.OrgID');
         expect(EscapePathSegment('a\nb')).toBe('ab');
+    });
+
+    it('path: a value that only CONTAINS ".." is one ordinary segment — without a separator it cannot climb out', () => {
+        expect(EscapePathSegment('Acme..Inc')).toBe('Acme..Inc');
+        expect(EscapePathSegment('...')).toBe('...');
+        expect(EscapePathSegment('v1..2')).toBe('v1..2');
+        const context: SearchContext = { SecondaryScopes: { Client: 'Acme..Inc' } };
+        expect(RenderScopeTemplate('clients/{{ context.SecondaryScopes.Client }}', context, undefined, 'path')).toBe('clients/Acme..Inc');
     });
 });
 
@@ -161,6 +172,7 @@ describe('the renderer applies it automatically, with a greppable opt-out', () =
     it('refuses a storage path that interpolates a traversal or separator value', () => {
         const t = `clients/{{ context.SecondaryScopes.Client }}`;
         expect(() => RenderScopeTemplate(t, ctx({ Client: '..' }), undefined, 'path')).toThrow(/refused/);
+        expect(() => RenderScopeTemplate(t, ctx({ Client: '.' }), undefined, 'path')).toThrow(/refused/);
         expect(() => RenderScopeTemplate(t, ctx({ Client: '../other' }), undefined, 'path')).toThrow(/refused/);
         expect(() => RenderScopeTemplate(t, ctx({ Client: 'a/b' }), undefined, 'path')).toThrow(/refused/);
     });

@@ -22,6 +22,7 @@
 import { LogError, UserInfo } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseSearchProvider, SearchProviderConfig } from '../generic/ISearchProvider';
+import type { LaneKind } from '../generic/ScopeExplanation';
 import { CheckScopeStringFilter } from '../generic/ScopeFilterGuard';
 import {
     SearchSource,
@@ -52,6 +53,9 @@ interface AzureProviderConfig {
 @RegisterClass(BaseSearchProvider, 'AzureAISearchProvider')
 export class AzureAISearchProvider extends BaseSearchProvider {
     public readonly SourceType: SearchSource = 'fulltext';
+
+    /** Reads the scope's `AzureAISearch` external-index rows (see `BaseSearchProvider.ConsumesLaneKinds`). */
+    public override readonly ConsumesLaneKinds: readonly LaneKind[] = ['ExternalIndex'];
 
     private parsedConfig: AzureProviderConfig | null = null;
     private available = false;

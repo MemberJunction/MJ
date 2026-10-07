@@ -416,11 +416,25 @@ export interface ScopeConstraints {
      * For vector and 3rd-party index providers (Elasticsearch, Typesense, AzureAISearch,
      * OpenSearch): only query these external indexes. Each entry carries its IndexType,
      * native identifier, rendered MetadataFilter, and any ExternalIndexConfig.
+     *
+     * **`[]` and `undefined` mean opposite things.** `undefined` means unscoped (no scope, or a global
+     * scope): search everything available, including a configured default index. `[]` means the scope
+     * gives this lane nothing: return no results without querying, and never fall back to a default
+     * index. Test `=== undefined`, never `?.length` — `[]?.length` is falsy, so the old
+     * `ExternalIndexes?.length ? scoped : defaultIndex` pattern widens an empty scope to the default
+     * index. `BaseSearchProvider.ScopedExternalIndexRows` applies the rule for one `IndexType`.
      */
     ExternalIndexes?: ScopeExternalIndexConstraint[];
-    /** For `EntitySearchProvider` / `FullTextSearchProvider`: only search these entities. */
+    /**
+     * For `EntitySearchProvider` / `FullTextSearchProvider` / `TagSearchProvider`: only search these
+     * entities. Same contract as {@link ExternalIndexes}: `undefined` is unscoped (every searchable
+     * entity), `[]` is no entity at all — never every entity.
+     */
     Entities?: ScopeEntityConstraint[];
-    /** For `StorageSearchProvider`: only search these accounts/folders. */
+    /**
+     * For `StorageSearchProvider`: only search these accounts/folders. Same contract as
+     * {@link ExternalIndexes}: `undefined` is unscoped (every searchable account), `[]` is no account.
+     */
     StorageAccounts?: ScopeStorageConstraint[];
     /** Multi-tenant runtime context — filters results to a specific tenant/dimension. */
     Context?: SearchContext;
@@ -520,6 +534,14 @@ export interface SearchResultItem {
     ResultType: SearchResultType;
     /** ID of the SearchProvider metadata record that produced this result */
     ProviderId?: string;
+    /**
+     * Set by the engine when it promoted a `MJ: Content Items` hit to the record the content was derived
+     * from: the content item's `RecordID`. `EntityName` / `RecordID` then name the origin record, which the
+     * provider in `ProviderId` never read — so none of that provider's guarantees carry over: the permission
+     * pass verifies the origin row (`PK IN (...)`), and the origin entity's lane `ExtraFilter` is re-checked.
+     * `ProviderId`, `ProviderLabel` and `ProviderIcon` still attribute the hit to the provider that found it.
+     */
+    PromotedFromContentItemID?: string;
     /** Display label from the SearchProvider metadata (e.g., "Database", "Semantic Search") */
     ProviderLabel?: string;
     /** Font Awesome icon class from the SearchProvider metadata (e.g., "fa-solid fa-brain") */

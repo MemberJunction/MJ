@@ -1,5 +1,6 @@
 ---
 "@memberjunction/search-engine": patch
+"@memberjunction/integration-test-suite": patch
 ---
 
 A scoped search is now bounded by its scope's rows. An empty configuration means "nothing", never "everything". These are behaviour changes.
@@ -13,13 +14,13 @@ A scoped search is now bounded by its scope's rows. An empty configuration means
 - The storage provider searches nothing without storage lanes. It used to search every account.
 - `BaseSearchProvider.ScopedExternalIndexRows()` gives custom providers the same rule.
 
-**A lane `ExtraFilter` now applies to every provider's hits for that entity.** Before, only the entity provider applied it. Full-text, tag, vector and 3rd-party hits for the entity are now kept only when the record satisfies the same rendered filter. The engine checks this as the user, with one `PK IN (...) AND (<ExtraFilter>)` RunView per filtered entity per scope, and drops those hits if the check fails. Hits from an `EntitySearchProvider` entry are exempt because that provider already applied the filter. The engine identifies them by the `ProviderId` it stamps on each result, not by the declared `SourceType`. **Scopes that configured only an entity lane now return less from other providers.**
+**A lane `ExtraFilter` now applies to every provider's hits for that entity.** Before, only the entity provider applied it. Full-text, tag, vector and 3rd-party hits for the entity are now kept only when the record satisfies the same rendered filter. The engine checks this as the user, with one `PK IN (...) AND (<ExtraFilter>)` RunView per filtered entity per scope, and drops those hits if the check fails. Hits from a provider declaring the new `BaseSearchProvider.AppliesLaneExtraFilter` (only `EntitySearchProvider`) are exempt because that provider already applied the filter. The engine identifies the provider by the `ProviderId` it stamps on each result, not by the declared `SourceType`. **Scopes that configured only an entity lane now return less from other providers.** For a scoped search, `SearchResult.SourceCounts` and the log row's `ProvidersJSON` are counted after this step, while a streamed `provider` event's `resultCount` is counted before it, so the two can differ.
 
-**A storage lane's `FolderPath` now restricts, and refuses rather than widens.** The search is refused with an error, and `ExplainScope` marks the lane `Skipped`, when the FolderPath:
+**A storage lane's `FolderPath` now restricts, and refuses rather than widens.** The search is refused with an error, and `ExplainScope` marks the lane `Skipped` and the scope unreachable, when the FolderPath:
 - renders empty (before, the whole account was searched);
 - renders an empty segment, e.g. `clients/{{ context.X }}` with X absent renders `clients/`, every client's folder;
 - contains a `..` segment.
 
-The `path` escaper (`EscapePathSegment`) now refuses a value containing `..`, `/` or `\`. It used to strip these, so `..` became nothing and `../other` became `other`. The renderer throws only when such a value is actually interpolated into the path. **FolderPath templates that render empty now fail loudly instead of widening.**
+The `path` escaper (`EscapePathSegment`) now refuses a value that is `..` or `.`, or contains `/` or `\`. It used to strip `..` and separators, so `..` became nothing and `../other` became `other`. A value that only contains `..`, such as `Acme..Inc`, is an ordinary segment and is kept. The renderer throws only when such a value is actually interpolated into the path. **FolderPath templates that render empty now fail loudly instead of widening.**
 
 **Restoring the old breadth (optional data step).** A non-global scope that should keep its old reach needs the rows added explicitly: one enabled `MJ: Search Scope Providers` row per provider it should run, and the external-index and storage lanes those providers should search. No migration is needed.

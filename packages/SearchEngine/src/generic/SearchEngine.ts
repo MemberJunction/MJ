@@ -57,7 +57,6 @@ import { BaseSearchProvider, SearchProviderConfig } from './ISearchProvider';
 import { SearchFusion, LabeledResultList } from './SearchFusion';
 import { SearchEnricher } from './SearchEnricher';
 import { FullTextSearchProvider } from './FullTextSearchProvider';
-import { EntitySearchProvider } from './EntitySearchProvider';
 import { StorageSearchProvider } from './StorageSearchProvider';
 import { BaseReRanker } from './BaseReRanker';
 import { NoopReRanker, LoadNoopReRanker } from './NoopReRanker';
@@ -71,9 +70,9 @@ import {
     ExplainScopeInput,
     LaneExplanation,
     EntitlementExplanation,
+    EntitlementSource,
 } from './ScopeExplanation';
 import { GetSearchScopePermissionResolver } from '../permissions/SearchScopePermissionResolver';
-import type { SearchScopePermissionSource } from '../permissions/SearchScopePermissionResolver';
 
 /**
  * Collects lane problems keyed by the lane's **row ID** instead of throwing.
@@ -90,12 +89,22 @@ type LaneProblemCollector = Map<string, string>;
 
 /** What a scope's configuration lets it reach — see `SearchEngine.judgeScopeBound`. */
 interface ScopeBoundJudgement {
-    /** False when the scope can retrieve nothing: no enabled provider row, or no active lane. */
+    /**
+     * False when the scope can retrieve nothing: no enabled provider row naming a configured, available
+     * provider; no active lane; no listed provider that reads a lane kind the scope configures; or (in a
+     * dry run) a lane skipped for a problem the real search refuses on.
+     */
     CanRetrieve: boolean;
     /** True only for a global scope with no lanes, which runs every provider unfiltered. */
     Unbounded: boolean;
     /** Why, in the shared wording both the dry run and the search path record. */
     Diagnostics: string[];
+    /**
+     * The providers a search of this scope calls — the search path runs exactly these, so it cannot call a
+     * provider the dry run did not count. Empty when `CanRetrieve` is false. For a global scope (which the
+     * search path runs unconstrained), every available provider.
+     */
+    Providers: ProviderEntry[];
 }
 
 /** One lane row of a scope bundle, by lane kind. */
@@ -134,6 +143,33 @@ const NO_LANES_DIAGNOSTIC =
 const NO_PROVIDER_ROWS_DIAGNOSTIC =
     'this scope has no enabled provider rows (MJ: Search Scope Providers), so it runs no provider and returns nothing: ' +
     'a non-global scope runs only the providers it lists. Add an enabled provider row to make it retrieve.';
+
+/** Emitted when a NON-global scope's provider rows name no provider this engine can run. */
+function noRunnableProviderDiagnostic(isPreview: boolean): string {
+    const which = isPreview ? 'configured, available provider that supports preview searches' : 'configured, available provider';
+    return `this scope's enabled provider rows name no ${which}, so it runs no provider and returns nothing. ` +
+        'Check that each provider row names an active MJ: Search Providers row whose provider initialised.';
+}
+
+/**
+ * Emitted when a NON-global scope's runnable providers read no lane kind the scope configures
+ * (`BaseSearchProvider.ConsumesLaneKinds`) — e.g. a Vector provider row over entity lanes only. Each provider
+ * would get an empty list for every lane it reads, so none is called and the scope reaches nothing.
+ */
+function noProviderReadsALaneDiagnostic(providers: ProviderEntry[], lanes: LaneExplanation[]): string {
+    const listed = providers.map(p => `${p.DisplayName} (reads ${p.Provider.ConsumesLaneKinds.join(', ') || 'no lane'})`).join('; ');
+    const configured = Array.from(new Set(lanes.filter(l => l.Status === 'Active').map(l => l.Kind))).join(', ');
+    return `none of this scope's providers reads a lane kind it configures — providers: ${listed}; active lanes: ${configured}. ` +
+        'It reaches nothing: add a lane each provider reads (e.g. a Vector external-index row for a vector provider), ' +
+        'or a provider row for a provider that reads these lanes.';
+}
+
+/** Emitted (dry run only) when a lane is skipped: the real search refuses on the first such lane. */
+function refusedLanesDiagnostic(skipped: LaneExplanation[]): string {
+    const named = skipped.map(l => `${l.Kind} "${l.Target}"`).join(', ');
+    return `a real search would be refused: ${skipped.length === 1 ? 'a lane is' : `${skipped.length} lanes are`} unusable (${named}). ` +
+        'A search refuses a scope with any unusable lane rather than search the others; fix the lane(s) to make it retrieve.';
+}
 
 // Keep the default re-ranker registration alive under tree-shaking
 LoadNoopReRanker();
@@ -591,8 +627,13 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             // Dedup → content-item promotion/exclusion → merge promoted entities → permission safety net → score threshold → enrich
             // ──────────────────────────────────────────────────────────
             let results = this._fusion.Deduplicate(fusedResults);
-            results = await this._enricher.ExcludeEntitySourcedContentItems(results, contextUser);
-            results = this._fusion.Deduplicate(results);
+            if (isUnconstrained) {
+                // Scoped results were promoted per scope, before their lane bounds were applied (boundScopeHits):
+                // promoting here, after fusion, would let a promoted hit skip its origin entity's lane ExtraFilter.
+                this._enricher.Provider = this.ProviderToUse;
+                results = await this._enricher.ExcludeEntitySourcedContentItems(results, contextUser);
+                results = this._fusion.Deduplicate(results);
+            }
 
             const beforePermCount = results.length;
             const permissionStats = { OriginGateRemoved: 0 };
@@ -1224,12 +1265,12 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             // principal-side — the principal IS the reason — yet their ids were still bound into the
             // expansion query. This is the same set the Scoped Search action classifies as
             // ACCESS_DENIED rather than PERMISSION_DENIED, for the same reason.
-            // A TOTAL MAP, NOT A LIST: `SearchScopePermissionSource` is a closed union, so writing
+            // A TOTAL MAP, NOT A LIST: `EntitlementSource` is a closed union, so writing
             // this as `Record<Source, boolean>` makes the compiler demand an answer for any source
             // added later. As a `string[]` a new principal-side source would silently default to
             // "bind it" — which is the exact defect this block exists to fix, re-openable by an
             // unrelated edit.
-            const IS_PRINCIPAL_SIDE: Record<SearchScopePermissionSource, boolean> = {
+            const IS_PRINCIPAL_SIDE: Record<EntitlementSource, boolean> = {
                 PrincipalNotActivatable: true,
                 AgentNone: true,
                 AgentAssignedNotListed: true,
@@ -1244,6 +1285,8 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                 DirectGrant: false,
                 RoleGrant: false,
                 NoGrant: false,
+                // Scope-side, and unreachable here: an unresolvable scope is explained before entitlement.
+                ScopeUnresolvable: false,
             };
             const principalsJudged =
                 entitlement.Allowed || !IS_PRINCIPAL_SIDE[entitlement.Source];
@@ -1274,9 +1317,11 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             ? this.buildAllLanesSkipped(bundle, `dimension resolution failed: ${dimensionFailure}`)
             : this.explainLanes(bundle, effectiveContext);
 
-        // What the scope's rows let it reach (provider rows, lanes), judged exactly as the search
-        // path judges it, so the dry run cannot promise what the search refuses.
-        const bound = this.judgeScopeBound(bundle, lanes);
+        // What the scope's rows let it reach — which providers run (listed, configured, available, and reading
+        // a lane kind the scope configures) over which lanes — by the same judgement the search path makes, for
+        // a full (non-preview) search. A lane skipped here is one the real search would refuse on, so a skipped
+        // lane makes the scope unreachable rather than "reachable through the others".
+        const bound = this.judgeScopeBound(bundle, lanes, false);
         diagnostics.push(...bound.Diagnostics);
 
         return {
@@ -1293,27 +1338,66 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
     }
 
     /**
-     * What a scope's configuration lets it reach. One judgement, used by the dry run and the search path.
+     * What a scope's configuration lets it reach. One judgement, used by the dry run and the search path — and
+     * the search path calls exactly the `Providers` it returns, so the two cannot disagree about who runs.
      *
      * A GLOBAL scope runs unconstrained (the search path never builds constraints for it), so with no
-     * lanes it is unbounded. A NON-global scope is bounded by its rows: it runs only its enabled provider
-     * rows and searches only its lanes. With no enabled provider row, or no lane, it reaches nothing —
-     * an empty configuration never means "everything".
+     * lanes it is unbounded. A NON-global scope is bounded by its rows: it runs only the providers its enabled
+     * rows name that are configured and available (and support preview, for a preview search), and of those
+     * only the ones that read a lane kind the scope has an active lane of (`BaseSearchProvider.ConsumesLaneKinds`).
+     * With none of those, it reaches nothing — an empty configuration never means "everything". A skipped lane
+     * (only a dry run has one) is a problem the real search refuses on, so it makes the scope unreachable too.
      */
-    private judgeScopeBound(bundle: ScopeBundle, lanes: LaneExplanation[]): ScopeBoundJudgement {
-        const hasActiveLane = lanes.some((l) => l.Status === 'Active');
-        if (bundle.Scope.IsGlobal) {
-            const hasLanes = lanes.length > 0;
-            return {
-                CanRetrieve: hasLanes ? hasActiveLane : true,
-                Unbounded: !hasLanes,
-                Diagnostics: hasLanes ? [] : [UNBOUNDED_SCOPE_DIAGNOSTIC],
-            };
-        }
+    private judgeScopeBound(bundle: ScopeBundle, lanes: LaneExplanation[], isPreview: boolean): ScopeBoundJudgement {
+        if (bundle.Scope.IsGlobal) return this.judgeGlobalScopeBound(lanes, isPreview);
+        const runnable = this.runnableScopeProviders(bundle, isPreview);
+        const serving = this.providersWithAnActiveLane(runnable, lanes);
+        const skipped = lanes.filter((l) => l.Status === 'Skipped');
         const diagnostics: string[] = [];
         if (bundle.Providers.length === 0) diagnostics.push(NO_PROVIDER_ROWS_DIAGNOSTIC);
+        else if (runnable.length === 0) diagnostics.push(noRunnableProviderDiagnostic(isPreview));
         if (lanes.length === 0) diagnostics.push(NO_LANES_DIAGNOSTIC);
-        return { CanRetrieve: bundle.Providers.length > 0 && hasActiveLane, Unbounded: false, Diagnostics: diagnostics };
+        if (skipped.length > 0) diagnostics.push(refusedLanesDiagnostic(skipped));
+        const hasActiveLane = lanes.some((l) => l.Status === 'Active');
+        if (runnable.length > 0 && hasActiveLane && serving.length === 0) diagnostics.push(noProviderReadsALaneDiagnostic(runnable, lanes));
+        const canRetrieve = serving.length > 0 && skipped.length === 0;
+        return { CanRetrieve: canRetrieve, Unbounded: false, Diagnostics: diagnostics, Providers: canRetrieve ? serving : [] };
+    }
+
+    /** {@link judgeScopeBound} for a global scope, which runs every available provider unconstrained. */
+    private judgeGlobalScopeBound(lanes: LaneExplanation[], isPreview: boolean): ScopeBoundJudgement {
+        const hasLanes = lanes.length > 0;
+        return {
+            CanRetrieve: hasLanes ? lanes.some((l) => l.Status === 'Active') : true,
+            Unbounded: !hasLanes,
+            Diagnostics: hasLanes ? [] : [UNBOUNDED_SCOPE_DIAGNOSTIC],
+            Providers: this.availableProviders(isPreview),
+        };
+    }
+
+    /** The configured entries a search may call: available now, and preview-capable for a preview search. */
+    private availableProviders(isPreview: boolean): ProviderEntry[] {
+        return this._providerEntries.filter(entry => entry.Provider.IsAvailable() && (!isPreview || entry.SupportsPreview));
+    }
+
+    /**
+     * The available entries a NON-global scope's enabled provider rows name. A non-global scope runs ONLY the
+     * providers it lists: no enabled row means no provider, never every provider (disabling a scope's last row
+     * used to widen it to all of them).
+     */
+    private runnableScopeProviders(bundle: ScopeBundle, isPreview: boolean): ProviderEntry[] {
+        const listed = new Set(bundle.Providers.map(p => NormalizeUUID(p.SearchProviderID)));
+        return this.availableProviders(isPreview).filter(entry => listed.has(NormalizeUUID(entry.ID)));
+    }
+
+    /**
+     * Of `entries`, the ones with at least one ACTIVE lane of a kind they read (`ConsumesLaneKinds`). A provider
+     * whose lane kinds are all empty in the scope is never called: it could only search nothing, or — written with
+     * the old `?.length` pattern — fall back to its unscoped default.
+     */
+    private providersWithAnActiveLane(entries: ProviderEntry[], lanes: LaneExplanation[]): ProviderEntry[] {
+        const activeKinds = new Set(lanes.filter((l) => l.Status === 'Active').map((l) => l.Kind));
+        return entries.filter(entry => entry.Provider.ConsumesLaneKinds.some(kind => activeKinds.has(kind)));
     }
 
     /** Resolve entitlement for the dry run, including the skill and tenant principals.
@@ -1540,7 +1624,8 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             Entitlement: {
                 Allowed: false,
                 Level: 'None',
-                Source: 'NoGrant',
+                // Not 'NoGrant': nothing about the caller's grants was judged — the scope's status refused it.
+                Source: 'ScopeUnresolvable',
                 Reason: 'the scope is inactive, expired, or does not exist, so no search can use it',
                 Principals: {
                     UserID: contextUser.ID ?? null,
@@ -1620,8 +1705,10 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             Status: 'Failure',
             FailureReason: message,
             Query: params.Query,
-            // The log row's SearchScopeID is a foreign key, so it names a scope row that exists, or none.
-            ScopeIDs: (params.ScopeIDs ?? []).filter(id => this.Base.GetScopeByID(id) !== undefined),
+            // The log row's SearchScopeID is a foreign key, so it names a scope row that exists, or none — and it
+            // must name a scope that was REFUSED: the first unresolved scope that has a row (inactive or expired),
+            // never a valid scope searched beside a missing one, which would attribute the refusal to it.
+            ScopeIDs: unresolved.filter(id => this.Base.GetScopeByID(id) !== undefined).slice(0, 1),
             StartTime: startTime,
             ResultCount: 0,
             RerankerName: null,
@@ -1696,8 +1783,10 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         // and every lane is Active.
         const lanes = this.buildLaneExplanations(bundle, constraints, new Map());
         // The same judgement the dry run makes, so both produce the same verdict and the same prose —
-        // an auditor reading a log row should not have to know which path wrote it.
-        const bound = this.judgeScopeBound(bundle, lanes);
+        // an auditor reading a log row should not have to know which path wrote it. Its `Providers` are the ones
+        // this search calls: listed by an enabled row, configured, available (preview-capable for a preview), and
+        // reading a lane kind this scope configures.
+        const bound = this.judgeScopeBound(bundle, lanes, isPreview);
         const decision: ScopeExplanation = {
             ScopeID: scope.ID,
             ScopeName: scope.Name,
@@ -1705,34 +1794,15 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             Dimensions: dimensionResult.Provenance,
             Lanes: lanes,
             Diagnostics: [...dimensionResult.Diagnostics, ...bound.Diagnostics],
-            Reachable: true,
+            Reachable: bound.CanRetrieve,
             Unbounded: bound.Unbounded,
             ResolvedContext: effectiveContext,
         };
 
-        // Determine which providers this scope participates in (SearchScopeProvider rows). A non-global
-        // scope runs ONLY the providers it lists: no enabled row means no provider, never every provider
-        // (disabling a scope's last row used to widen it to all of them). A scope that cannot retrieve
-        // (no provider row, or no lane) runs nothing.
-        const scopeProviderIDs = new Set(bundle.Providers.map(p => NormalizeUUID(p.SearchProviderID)));
-        const allowAllProviders = bundle.Scope.IsGlobal && scopeProviderIDs.size === 0;
-
-        const applicableProviders = !bound.CanRetrieve ? [] : this._providerEntries.filter(entry => {
-            if (!entry.Provider.IsAvailable()) return false;
-            if (isPreview && !entry.SupportsPreview) return false;
-            if (allowAllProviders) return true;
-            return scopeProviderIDs.has(NormalizeUUID(entry.ID));
-        });
-
+        const applicableProviders = bound.Providers;
         if (applicableProviders.length === 0) {
-            const why = bound.CanRetrieve ? ['no applicable providers for this scope'] : [];
-            LogStatus(`SearchEngine: Scope "${scope.Name}" has no applicable providers — skipping. ${[...bound.Diagnostics, ...why].join(' ')}`);
-            return {
-                scopeID: scope.ID,
-                fused: [],
-                sourceCounts: { Vector: 0, FullText: 0, Entity: 0, Storage: 0 },
-                decision: { ...decision, Reachable: false, Diagnostics: [...decision.Diagnostics, ...why] },
-            };
+            LogStatus(`SearchEngine: Scope "${scope.Name}" runs no provider — skipping. ${bound.Diagnostics.join(' ')}`);
+            return { scopeID: scope.ID, fused: [], sourceCounts: { Vector: 0, FullText: 0, Entity: 0, Storage: 0 }, decision };
         }
 
         // Resolve per-provider `SearchScopeProvider.MaxResultsOverride` if present
@@ -1796,8 +1866,9 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             }
         });
 
-        // A lane's ExtraFilter bounds its entity for EVERY provider, not only the entity lane that applies it in SQL.
-        const labeled = await this.enforceLaneExtraFilters(await Promise.all(promises), constraints, contextUser, scope.Name);
+        // A lane's ExtraFilter bounds its entity for EVERY provider, not only the entity lane that applies it in SQL —
+        // including a content-item hit promoted to its origin record, which is promoted here, per scope, for that reason.
+        const labeled = await this.boundScopeHits(await Promise.all(promises), constraints, contextUser, scope.Name);
         const sourceCounts = this.countSources(labeled);
 
         // Per-scope fusion with weight resolution:
@@ -1816,6 +1887,38 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
     // ────────────────────────────────────────────────────────────────
 
     /**
+     * Hold one scope's hits to its lane bounds, before fusion, in three steps:
+     *  1. every hit, against the lane `ExtraFilter` of the entity it names ({@link enforceLaneExtraFilters});
+     *  2. content-item promotion: a `MJ: Content Items` hit derived from an entity record becomes that record,
+     *     marked `PromotedFromContentItemID` (`SearchEnricher.ExcludeEntitySourcedContentItems`);
+     *  3. every PROMOTED hit, against the lane `ExtraFilter` of the origin entity it now names.
+     *
+     * Step 1 holds a content-item hit to a Content Items lane; step 3 holds the record it became to that
+     * record's lane. Promotion used to run once, after cross-scope fusion, so a promoted hit met no lane bound:
+     * a vector hit on a content item became a row of a bounded entity from outside the bound. `searchInternal`
+     * promotes only unconstrained results (which have no lane bounds), so nothing is promoted twice.
+     */
+    private async boundScopeHits(
+        lists: LabeledResultList[],
+        constraints: ScopeConstraints,
+        contextUser: UserInfo,
+        scopeName: string
+    ): Promise<LabeledResultList[]> {
+        const bounded = await this.enforceLaneExtraFilters(lists, constraints, contextUser, scopeName, 'all');
+        const promoted = await this.promoteContentItems(bounded, contextUser);
+        return this.enforceLaneExtraFilters(promoted, constraints, contextUser, scopeName, 'promoted');
+    }
+
+    /** Content-item promotion, per provider list. A list with no `MJ: Content Items` hit comes back unchanged, unread. */
+    private async promoteContentItems(lists: LabeledResultList[], contextUser: UserInfo): Promise<LabeledResultList[]> {
+        this._enricher.Provider = this.ProviderToUse;
+        return Promise.all(lists.map(async (list) => ({
+            ...list,
+            Results: await this._enricher.ExcludeEntitySourcedContentItems(list.Results, contextUser),
+        })));
+    }
+
+    /**
      * Enforce each entity lane's rendered `ExtraFilter` on the hits of every OTHER provider.
      *
      * The entity lane applies its ExtraFilter in SQL. The full-text and tag lanes take only the lanes'
@@ -1826,24 +1929,23 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
      * permission pass's readability check, with the lane's filter as the clause). The filter is the exact
      * string the entity lane runs: same template, same context, same escaping.
      *
-     * Exemption is decided by the ENGINE-stamped `ProviderId`: only an entry whose provider is an
-     * {@link EntitySearchProvider} applied the filter already. `SourceType` is provider-declared and proves
-     * nothing. Storage files are not entity records and pass. Fails closed: a failed read drops that
-     * entity's hits from the other providers.
+     * Exemption follows the provider the ENGINE stamped on the hit (`ProviderId`, through
+     * {@link ProviderForResult}): only a provider declaring `BaseSearchProvider.AppliesLaneExtraFilter` (the entity
+     * provider) applied the filter already. `SourceType` is provider-declared and proves nothing, and a promoted
+     * content-item hit is never exempt (the filter it met, if any, was the Content Items lane's). Storage files are
+     * not entity records and pass. `pass` is `'promoted'` to check only promoted hits ({@link boundScopeHits}).
+     * Fails closed: a failed read drops that entity's hits from the other providers.
      */
     private async enforceLaneExtraFilters(
         lists: LabeledResultList[],
         constraints: ScopeConstraints,
         contextUser: UserInfo,
-        scopeName: string
+        scopeName: string,
+        pass: 'all' | 'promoted'
     ): Promise<LabeledResultList[]> {
         const bounds = this.laneEntityBounds(constraints.Entities);
         if (bounds.size === 0) return lists;
-        const exempt = this.entityProviderIDs();
-        const boundOf = (item: SearchResultItem): LaneEntityBound | undefined =>
-            item.ResultType === 'storage-file' || (item.ProviderId && exempt.has(NormalizeUUID(item.ProviderId)))
-                ? undefined
-                : bounds.get(this.laneEntityKey(item.EntityName));
+        const boundOf = (item: SearchResultItem): LaneEntityBound | undefined => this.laneBoundFor(item, bounds, pass);
         const candidates = new Map<LaneEntityBound, SearchResultItem[]>();
         for (const item of lists.flatMap(l => l.Results)) {
             const bound = boundOf(item);
@@ -1890,9 +1992,16 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         return (entityName ?? '').trim().toLowerCase();
     }
 
-    /** The configured entries whose provider is an {@link EntitySearchProvider}, by normalised ID. */
-    private entityProviderIDs(): Set<string> {
-        return new Set(this._providerEntries.filter(e => e.Provider instanceof EntitySearchProvider).map(e => NormalizeUUID(e.ID)));
+    /**
+     * The lane bound `item` must satisfy in this `pass`, or `undefined` when it has none: a storage file, a hit
+     * from a provider that applied the lane filter itself, a hit for an entity with no filtered lane — or, in the
+     * `'promoted'` pass, a hit that was not promoted (step 1 of {@link boundScopeHits} already checked it).
+     */
+    private laneBoundFor(item: SearchResultItem, bounds: Map<string, LaneEntityBound>, pass: 'all' | 'promoted'): LaneEntityBound | undefined {
+        if (item.ResultType === 'storage-file') return undefined;
+        if (pass === 'promoted' && !item.PromotedFromContentItemID) return undefined;
+        if (this.providerThatReadRow(item)?.AppliesLaneExtraFilter === true) return undefined;
+        return bounds.get(this.laneEntityKey(item.EntityName));
     }
 
     /** The candidate hits whose record satisfies its entity's lane bound — one read per entity, in parallel. */
@@ -2149,8 +2258,8 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
 
     /**
      * Render a storage lane's FolderPath on the `path` lane. The renderer throws when an interpolated value
-     * contains `..` or a separator; that is reported as the lane's problem (undefined is returned only in a
-     * dry run, where the problem is collected instead of thrown).
+     * is `..` or `.`, or contains a separator; that is reported as the lane's problem (undefined is returned
+     * only in a dry run, where the problem is collected instead of thrown).
      */
     private renderFolderPath(
         source: string,
@@ -2407,11 +2516,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         scopeConstraints: ScopeConstraints | undefined,
         onProviderResolved?: OnProviderResolved,
     ): Promise<LabeledResultList[]> {
-        const entries = this._providerEntries.filter(e => {
-            if (!e.Provider.IsAvailable()) return false;
-            if (isPreview && !e.SupportsPreview) return false;
-            return true;
-        });
+        const entries = this.availableProviders(isPreview);
 
         if (entries.length === 0) {
             LogStatus('SearchEngine: No providers available');
@@ -2729,13 +2834,30 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
      * closed union, so every shipped external-index provider (Azure AI Search, Typesense, Elasticsearch,
      * OpenSearch) stamps `'fulltext'` with the index name as `EntityName`, and a third-party provider may stamp
      * `'entity'`. A result with no `ProviderId` (a fusion fallback, a hand-built hit) or one naming no configured
-     * provider is verified. Fusion and dedup never move a `ProviderId` off the result it was stamped on: each
-     * merged result is one provider's item, with only scores, tags and a generic snippet borrowed from a
-     * duplicate of the same `EntityName` + `RecordID` — a key a trusted hit has already proved readable.
+     * provider is verified, and so is a hit promoted from a content item to its origin record
+     * (`PromotedFromContentItemID`): its provider read the content item, never the origin row.
+     *
+     * Fusion and dedup never move a `ProviderId` onto another item's `EntityName`/`RecordID`/`SourceType`: each
+     * merged result is one provider's item, whole, and only scores, `ScoreBreakdown`, tags and (dedup) a snippet
+     * replacing a generic one are taken from the items it absorbed. Those may be from rows nothing verified:
+     * `Deduplicate` merges items sharing `EntityName` + `RecordID`, but per-scope RRF (`SearchFusion.applyRRF`)
+     * merges `ScoreBreakdown` across items sharing only a `RecordID` — of any entity — keeping the first. So a
+     * merge can lend a trusted item another item's scores, never its trust: trust is the surviving item's own.
      */
     private isSelfEvidentRow(item: SearchResultItem): boolean {
         if (!SearchEngine.lanesWithSelfEvidentOwnership.has(item.SourceType)) return false;
-        return this.ProviderForResult(item)?.ResultsAreRowsOfLabelledEntity === true;
+        return this.providerThatReadRow(item)?.ResultsAreRowsOfLabelledEntity === true;
+    }
+
+    /**
+     * The configured provider that read the row `item` names — {@link ProviderForResult}, except for a hit the
+     * engine promoted from a content item to its origin record (`PromotedFromContentItemID`), whose row no
+     * provider read. Both per-provider trust decisions resolve through here: ownership
+     * (`ResultsAreRowsOfLabelledEntity`, {@link isSelfEvidentRow}) and the lane `ExtraFilter` exemption
+     * (`AppliesLaneExtraFilter`, {@link laneBoundFor}).
+     */
+    private providerThatReadRow(item: SearchResultItem): BaseSearchProvider | undefined {
+        return item.PromotedFromContentItemID ? undefined : this.ProviderForResult(item);
     }
 
     /**
@@ -2744,8 +2866,8 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
      * returns, before fusion.
      *
      * Protected so a probe can map a hand-built hit to a provider instance without configuring the engine. It
-     * decides which results skip ownership verification, so an override must only ever return the provider
-     * that actually produced the result.
+     * decides which results skip ownership verification and which skip the lane `ExtraFilter` re-check, so an
+     * override must only ever return the provider that actually produced the result.
      */
     protected ProviderForResult(item: SearchResultItem): BaseSearchProvider | undefined {
         if (!item.ProviderId) return undefined;
