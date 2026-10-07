@@ -156,7 +156,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['agent-note-cache-types', AgentNoteCacheTypeChecks, 3], // NC1-NC3 entity_object cache-event invariant (IT84)
         ['agent-rag-search', AgentRagSearchChecks, 7], // extended-agents suite (live-model, IT53-62)
         ['agent-rag-gate', AgentRagGateChecks, 2], // RG1-RG2 pre-execution RAG permission gate, run directly with no model (IT107)
-        ['agent-run-audience', AgentRunAudienceChecks, 6], // AU1-AU6 a run bounded by an audience: RAG, search actions, action gate, refusal (IT109)
+        ['agent-run-audience', AgentRunAudienceChecks, 7], // AU1-AU6 a run's audience; AU7 its tenant binds Scoped Search (IT109)
         ['agent-wire-callback', AgentWireCallbackChecks, 2], // over-the-wire fire-and-forget callback (IT63)
         ['view-security', ViewSecurityChecks, 4], // two-identity V14/V15/V16 + RV17 (IT64)
         ['ai-providers', AiProvidersChecks, 3], // AI7/AI13/AI15 model-resolution seams (IT65)
@@ -250,7 +250,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'agent-plan-mode': 6,
         'agent-rag-search': 7,
         'agent-rag-gate': 2,
-        'agent-run-audience': 6,
+        'agent-run-audience': 7,
         'agent-runner': 1,
         'agent-skills-live': 5,
         'agent-wire-callback': 2,

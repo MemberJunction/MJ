@@ -18,10 +18,10 @@ vi.mock('@memberjunction/core', async (importOriginal) => ({
     LogStatus: hoisted.logStatus,
 }));
 
+import { RESERVED_AGENT_RUN_DATA_KEYS } from '@memberjunction/ai-core-plus';
 import {
     GuardClientAgentRunDataArg,
     IsTrustedAgentRunCaller,
-    RESERVED_AGENT_RUN_DATA_KEYS,
     SanitizeClientAgentRunData,
     type ClientAgentRunCaller,
 } from '../resolvers/agent-run-data-guard.js';

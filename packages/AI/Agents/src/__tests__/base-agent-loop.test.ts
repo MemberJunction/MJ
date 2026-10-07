@@ -290,6 +290,8 @@ class LoopHarness {
     public steps: MockStepEntity[] = [];
     public runActionCalls: RunActionCall[] = [];
     public runActionParamsJSON: string[] = [];
+    /** `RunActionParams.RunScope` per dispatch — kept off the call record so the toEqual assertions over it stay exact. */
+    public runScopes: unknown[] = [];
     /** Scripted RunAction responder — override per test. */
     public runAction: (call: RunActionCall) => ScriptedActionResult = () => ({
         Success: true,
@@ -379,7 +381,9 @@ class LoopHarness {
                 RuntimeAPIKeyResolver?: unknown;
                 CredentialScope?: unknown;
                 Audience?: unknown;
+                RunScope?: unknown;
             }): Promise<ScriptedActionResult> => {
+                this.runScopes.push(input.RunScope);
                 const call: RunActionCall = { actionName: input.Action.Name, params: input.Params, activeSkillIDs: input.Context?.ActiveSkillIDs };
                 if (input.RuntimeAPIKeyResolver !== undefined) call.resolveAPIKey = input.RuntimeAPIKeyResolver;
                 if (input.CredentialScope !== undefined) call.credentialScope = input.CredentialScope;
@@ -2269,5 +2273,53 @@ describe('BaseAgent.Execute — a run with an audience (ExecuteAgentParams.Audie
         expect(result.success).toBe(false);
         expect(agent.SessionsOpened).toBe(0);
         expect(harness.run.ErrorMessage).toMatch(/session-driven/);
+    });
+});
+
+describe('BaseAgent.Execute — the run scope on every action dispatch (RunActionParams.RunScope)', () => {
+    const TENANT = 'aaaaaaaa-0000-4000-8000-0000000000a7';
+    const scopedRun = (): FakeAgentRun & { PrimaryScopeRecordID?: string; SecondaryScopes?: string } =>
+        harness.run as FakeAgentRun & { PrimaryScopeRecordID?: string; SecondaryScopes?: string };
+
+    it('hands every dispatch the scope initializeAgentRun validated and wrote to the run row (defaults applied)', async () => {
+        harness.agent = makeAgentRow({ ScopeConfig: JSON.stringify({ dimensions: [{ name: 'Region', defaultValue: 'EMEA' }] }) });
+        const { agent } = makeAgent([
+            () => llmEnvelope(actionsEnvelope()),
+            () => llmEnvelope(actionsEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        const result = await agent.Execute(makeParams({ PrimaryScopeRecordID: TENANT, SecondaryScopes: { Team: 'alpha' } }));
+
+        expect(result.success).toBe(true);
+        const expected = { PrimaryScopeEntityName: null, PrimaryScopeRecordID: TENANT, SecondaryScopes: { Team: 'alpha', Region: 'EMEA' } };
+        expect(harness.runScopes).toEqual([expected, expected]);
+        expect(scopedRun().PrimaryScopeRecordID).toBe(TENANT);
+        expect(JSON.parse(scopedRun().SecondaryScopes ?? '{}')).toEqual(expected.SecondaryScopes);
+    });
+
+    it('an unscoped run hands every dispatch a RunScope of nulls — "inside a run, no tenant"', async () => {
+        const { agent } = makeAgent([
+            () => llmEnvelope(actionsEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        await agent.Execute(makeParams());
+
+        expect(harness.runScopes).toEqual([{ PrimaryScopeEntityName: null, PrimaryScopeRecordID: null, SecondaryScopes: null }]);
+    });
+
+    it('forgets the run scope once the run is over, so a later direct dispatch resolves its own', async () => {
+        const { agent } = makeAgent([
+            () => llmEnvelope(actionsEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        await agent.Execute(makeParams({ PrimaryScopeRecordID: TENANT }));
+
+        const action = (harness.actionEngineInstance.Actions as MJActionEntityExtended[])[0];
+        await agent.ExecuteSingleAction(makeParams(), { name: ACTION_NAME, params: {} }, action, TEST_USER as unknown as UserInfo);
+
+        expect(harness.runScopes[0]).toMatchObject({ PrimaryScopeRecordID: TENANT });
+        expect(harness.runScopes[1]).toMatchObject({ PrimaryScopeRecordID: null });
     });
 });

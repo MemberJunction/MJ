@@ -17,24 +17,16 @@
  * server principal. Everything else in `data` (template data, `conversationId`, `appContext`,
  * `clientTools`, ...) passes through untouched.
  *
+ * The key list (`RESERVED_AGENT_RUN_DATA_KEYS`) and the removal itself live in `@memberjunction/ai-core-plus`,
+ * shared with `BaseAgent`, which strips the same keys from a sub-agent request's model-authored
+ * `templateParameters`.
+ *
  * @module @memberjunction/server/resolvers
  */
 import { LogStatus } from '@memberjunction/core';
 import { IsPlainObject, SafeJSONParse } from '@memberjunction/global';
+import { WithoutReservedAgentRunDataKeys } from '@memberjunction/ai-core-plus';
 import type { UserPayload } from '../types.js';
-
-/**
- * The `ExecuteAgentParams.data` keys only a trusted server-side caller may set. `PrimaryScopeEntityID` has
- * no `data` reader today; it is reserved with the rest of the scope family so a future fallback for it
- * cannot reopen this.
- */
-export const RESERVED_AGENT_RUN_DATA_KEYS: readonly string[] = [
-    'PrimaryScopeEntityName',
-    'PrimaryScopeEntityID',
-    'PrimaryScopeRecordID',
-    'SecondaryScopes',
-    '__agentTypePromptParams',
-];
 
 /** Who sent a run's `data`, as far as {@link SanitizeClientAgentRunData} needs to know. */
 export interface ClientAgentRunCaller {
@@ -52,7 +44,7 @@ export interface ClientAgentRunCaller {
 export interface SanitizedAgentRunData {
     /** The data to hand the run: a copy without the reserved keys, or the input itself when nothing was stripped. */
     Data: Record<string, unknown>;
-    /** The reserved keys that were removed, in {@link RESERVED_AGENT_RUN_DATA_KEYS} order. Empty when none were. */
+    /** The reserved keys that were removed, in `RESERVED_AGENT_RUN_DATA_KEYS` order. Empty when none were. */
     StrippedKeys: string[];
 }
 
@@ -71,7 +63,7 @@ export function IsTrustedAgentRunCaller(caller: ClientAgentRunCaller): boolean {
 }
 
 /**
- * Removes the reserved scope and agent-type keys ({@link RESERVED_AGENT_RUN_DATA_KEYS}) from a client's
+ * Removes the reserved scope and agent-type keys (`RESERVED_AGENT_RUN_DATA_KEYS` in `@memberjunction/ai-core-plus`) from a client's
  * agent-run `data` unless the caller is a trusted server-to-server principal (see
  * {@link IsTrustedAgentRunCaller}). A run's scope must be set by server code — a host's own server
  * operation, an API-key integration or the system user — never by a browser.
@@ -87,12 +79,7 @@ export function SanitizeClientAgentRunData(data: Record<string, unknown>, caller
     if (IsTrustedAgentRunCaller(caller)) {
         return { Data: data, StrippedKeys: [] };
     }
-    const strippedKeys = RESERVED_AGENT_RUN_DATA_KEYS.filter((key) => Object.prototype.hasOwnProperty.call(data, key));
-    if (strippedKeys.length === 0) {
-        return { Data: data, StrippedKeys: [] };
-    }
-    const kept = Object.entries(data).filter(([key]) => !strippedKeys.includes(key));
-    return { Data: Object.fromEntries(kept), StrippedKeys: strippedKeys };
+    return WithoutReservedAgentRunDataKeys(data);
 }
 
 /**

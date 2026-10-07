@@ -120,11 +120,13 @@ import {
     AgentFinishIf,
     SummarizeDecisionAnswers,
     SystemPlaceholderManager,
+    WithoutReservedAgentRunDataKeys,
     type AIPromptExecutionScope,
     type AgentRunAudience
 } from '@memberjunction/ai-core-plus';
 import {
-    MJActionEntityExtended, ActionResult, ActionParam, AIDirective, RuntimeAPIKeyResolver, RunActionParams, AUDIENCE_UNSUPPORTED_RESULT_CODE
+    MJActionEntityExtended, ActionResult, ActionParam, AIDirective, RuntimeAPIKeyResolver, RunActionParams, AUDIENCE_UNSUPPORTED_RESULT_CODE,
+    type ActionRunScope
 } from '@memberjunction/actions-base';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { AgentAudienceAddsReader, AgentAudienceProblem, AgentAudienceReaderIDs, MatchAudienceUsers } from './agent-audience';
@@ -666,6 +668,15 @@ export class BaseAgent {
 
     /** The `ExecuteAgentParams.Audience` that {@link _audienceReaders} was hydrated from, so a different one re-hydrates. */
     private _audienceSource: AgentRunAudience | undefined;
+
+    /**
+     * The scope of the run in progress, exactly as {@link initializeAgentRun} validated and wrote it to the run row
+     * (nulls when the run is unscoped) — what every action dispatch is handed as `RunActionParams.RunScope`.
+     * `undefined` outside {@link Execute}: {@link ExecuteSingleAction}, which is also called directly, then
+     * resolves the scope from its params the same way.
+     * @private
+     */
+    private _runScope: ActionRunScope | undefined;
 
     /**
      * Parameter-aware failure tracking per action name for the current agent run.
@@ -2118,6 +2129,7 @@ export class BaseAgent {
             this._lastVolatileStateMessage = undefined;
             this._resolvedTrailingStateMode = undefined;
             this._turn1InsertionIndex = -1;
+            this._runScope = undefined; // set again by initializeAgentRun, in Phase 1
             this._fatalActionFailures.clear();
             this._actionFailureHistory.clear();
 
@@ -2437,6 +2449,8 @@ export class BaseAgent {
             this.skipHeldDecisions(params, this.runEndForHeldDecisions());
             this.releasePerRunDataCache();
             await this.finalizeRun(this.deriveRunOutcome());
+            // The run is over: a later direct ExecuteSingleAction resolves the scope from its own params.
+            this._runScope = undefined;
         }
     }
 
@@ -10510,7 +10524,7 @@ The context is now within limits. Please retry your request with the recovered c
         params: ExecuteAgentParams,
         actionEntity: MJActionEntityExtended,
         audienceReaders: UserInfo[]
-    ): Pick<RunActionParams, 'RuntimeAPIKeyResolver' | 'CredentialScope' | 'Audience'> {
+    ): Pick<RunActionParams, 'RuntimeAPIKeyResolver' | 'CredentialScope' | 'Audience' | 'RunScope'> {
         return {
             // The run's RUNTIME API KEYS, as a RESOLVER bound to this one action — see buildRuntimeAPIKeyResolver().
             // Absent when the run has no keys, so the action uses GetAIAPIKey(driverClass) exactly as before —
@@ -10523,7 +10537,24 @@ The context is now within limits. Please retry your request with the recovered c
             // that cannot honour it (AUDIENCE_UNSUPPORTED — see recordDispatchOutcome); one that can returns only
             // what every reader may see.
             Audience: audienceReaders.length > 0 ? { Readers: audienceReaders } : undefined,
+            // The run's scope (tenant + secondary dimensions), always present inside a run — nulls when it is
+            // unscoped — so an action that scopes by tenant defaults to the run's and refuses one the model names.
+            RunScope: this.runScopeFor(params),
         };
+    }
+
+    /**
+     * The scope an action dispatch is handed: the run's, as {@link initializeAgentRun} validated and recorded it,
+     * or — when {@link ExecuteSingleAction} is called outside {@link Execute} (the realtime tool path, tests,
+     * harnesses) — resolved from these params the same way ({@link validatedRunScope}). A copy each time, so an
+     * action cannot change what the next one sees.
+     */
+    private runScopeFor(params: ExecuteAgentParams): ActionRunScope {
+        const scope = this._runScope ?? this.validatedRunScope(params);
+        const secondary = scope.SecondaryScopes
+            ? Object.fromEntries(Object.entries(scope.SecondaryScopes).map(([key, value]) => [key, Array.isArray(value) ? [...value] : value]))
+            : null;
+        return { ...scope, SecondaryScopes: secondary };
     }
 
     /**
@@ -10847,8 +10878,9 @@ The context is now within limits. Please retry your request with the recovered c
             // For now, we execute normally and the sub-agent will track its parent relationship
             
             this.logStatus(`📨 Sub-agent message: "${subAgentRequest.message}"`, true, params);
-            if (subAgentRequest.templateParameters) {
-                this.logStatus(`📎 Template parameters: ${JSON.stringify(subAgentRequest.templateParameters)}`, true, params);
+            const templateParameters = this.subAgentTemplateParameters(params, subAgentRequest);
+            if (templateParameters) {
+                this.logStatus(`📎 Template parameters: ${JSON.stringify(templateParameters)}`, true, params);
             }
             if (params.effortLevel !== undefined && params.effortLevel !== null) {
                 this.logStatus(`🎯 Propagating effort level ${params.effortLevel} to sub-agent '${subAgentRequest.name}'`, true, params);
@@ -10886,8 +10918,8 @@ The context is now within limits. Please retry your request with the recovered c
                 inputArtifacts: params.inputArtifacts, // propagate input artifacts so sub-agents inherit the parent's artifact manifest + tools (e.g. a Codesmith delegate can read a Data Snapshot the parent references)
                 data: {
                         ...params.data,
-                        ...subAgentRequest.templateParameters,
-                      }, // merge parent data first, then override with template parameters so loop agents can dynamically override parent data
+                        ...templateParameters,
+                      }, // parent data first, then the template parameters (never the reserved scope keys) so loop agents can override parent data
                 context: subAgentContext, // use subAgentRequest.context if provided, otherwise params.context
                 verbose: params.verbose, // pass verbose flag to sub-agent
                 actionChanges: subAgentActionChanges, // propagate filtered action changes to sub-agent
@@ -10925,6 +10957,31 @@ The context is now within limits. Please retry your request with the recovered c
             });
             throw new Error(`Error executing sub-agent: ${error.message}`);
         }
+    }
+
+    /**
+     * A sub-agent request's template parameters without the reserved run-data keys
+     * (`RESERVED_AGENT_RUN_DATA_KEYS` in `@memberjunction/ai-core-plus`: the scope family and
+     * `__agentTypePromptParams`). They are merged into the child's `data`, which `BaseAgent` reads as the fallback
+     * for the child's scope and agent-type parameters, and inside a Loop agent they are written by the model — so
+     * left in, a model could set a sub-agent's tenant whenever the parent's scope arrived through `data`. The child
+     * inherits the parent's scope instead (its own params, and the parent's `data` as is). What was removed is
+     * logged once, by key only — never the values.
+     */
+    private subAgentTemplateParameters(params: ExecuteAgentParams, subAgentRequest: AgentSubAgentRequest): Record<string, unknown> | undefined {
+        if (!subAgentRequest.templateParameters) {
+            return undefined;
+        }
+        const { Data, StrippedKeys } = WithoutReservedAgentRunDataKeys(subAgentRequest.templateParameters);
+        if (StrippedKeys.length > 0) {
+            this.logStatus(
+                `🔒 Ignored reserved key(s) ${StrippedKeys.join(', ')} in the template parameters for sub-agent '${subAgentRequest.name}': ` +
+                `a sub-agent inherits its parent run's scope and agent-type parameters; the model cannot set them.`,
+                false,
+                params
+            );
+        }
+        return Data;
     }
 
     /**
@@ -11752,53 +11809,12 @@ The context is now within limits. Please retry your request with the recovered c
             this._agentRun.TestRunID = params.testRunId;
         }
 
-        // Set scope for multi-tenant deployments
-        // Resolve from top-level params or data fallback (for GraphQL callers)
-        const primaryScopeEntityName = params.PrimaryScopeEntityName ?? (params.data?.PrimaryScopeEntityName as string | undefined);
-        const primaryScopeRecordID = params.PrimaryScopeRecordID ?? (params.data?.PrimaryScopeRecordID as string | undefined);
-        const secondaryScopes = params.SecondaryScopes ?? (params.data?.SecondaryScopes as Record<string, SecondaryScopeValue> | undefined);
-
-        if (primaryScopeEntityName || primaryScopeRecordID || secondaryScopes) {
-            // Parse agent's SecondaryScopeConfig from the ScopeConfig field
-            const scopeConfig = this.parseSecondaryScopeConfig(params.agent);
-
-            // Validate and apply secondary scopes with defaults
-            const validatedSecondary = this.validateAndApplySecondaryScopes(
-                secondaryScopes,
-                scopeConfig,
-                params.agent.Name
-            );
-
-            // Check if secondary-only is allowed
-            const hasSecondary = validatedSecondary && Object.keys(validatedSecondary).length > 0;
-            const hasPrimary = !!primaryScopeRecordID;
-            const allowSecondaryOnly = scopeConfig?.allowSecondaryOnly ?? false;
-
-            if (hasSecondary && !hasPrimary && !allowSecondaryOnly) {
-                LogError(
-                    `Scoping: Agent "${params.agent.Name}" requires primary scope when using secondary scopes. ` +
-                    `Set allowSecondaryOnly=true in ScopeConfig to allow secondary-only scoping.`
-                );
-            }
-
-            // Resolve primary entity ID from entity name
-            if (primaryScopeEntityName) {
-                const primaryEntity = this.ProviderToUse.EntityByName(primaryScopeEntityName);
-                if (primaryEntity) {
-                    this._agentRun.PrimaryScopeEntityID = primaryEntity.ID;
-                } else {
-                    LogError(`Scoping: Entity "${primaryScopeEntityName}" not found in metadata`);
-                }
-            }
-            // Set primary scope record ID
-            if (primaryScopeRecordID) {
-                this._agentRun.PrimaryScopeRecordID = primaryScopeRecordID;
-            }
-            // Set secondary scopes as JSON (with defaults applied)
-            if (validatedSecondary && Object.keys(validatedSecondary).length > 0) {
-                this._agentRun.SecondaryScopes = JSON.stringify(validatedSecondary);
-            }
-        }
+        // Set scope for multi-tenant deployments: resolved once (the explicit params, else the `data` fallbacks
+        // GraphQL callers use) and validated against the agent's SecondaryScopeConfig, written to the run row, and
+        // kept as the scope every action dispatch is handed (RunActionParams.RunScope). Inside the run, that scope
+        // — not a model-written action parameter — is the authority on the tenant.
+        this._runScope = this.validatedRunScope(params);
+        this.writeRunScope(params, this._runScope);
 
         // Save the agent run
         if (!await this._agentRun.Save()) {
@@ -18905,6 +18921,75 @@ The context is now within limits. Please retry your request with the recovered c
      */
     protected getValueFromPath(obj: unknown, path: string): unknown {
         return GetValueFromPath(obj, path);
+    }
+
+    /**
+     * The run's scope inputs: the explicit `ExecuteAgentParams` fields, else their `data` fallbacks (GraphQL callers
+     * pass the scope in `data`; the server strips those keys from an untrusted caller's `data`, and
+     * {@link ExecuteSubAgent} from the model's template parameters).
+     */
+    private runScopeInputs(params: ExecuteAgentParams): {
+        EntityName: string | undefined; RecordID: string | undefined; Secondary: Record<string, SecondaryScopeValue> | undefined
+    } {
+        return {
+            EntityName: this.scopeText(params.PrimaryScopeEntityName ?? params.data?.PrimaryScopeEntityName),
+            RecordID: this.scopeText(params.PrimaryScopeRecordID ?? params.data?.PrimaryScopeRecordID),
+            Secondary: params.SecondaryScopes ?? (params.data?.SecondaryScopes as Record<string, SecondaryScopeValue> | undefined),
+        };
+    }
+
+    /** A scope identifier as text: a non-blank string (trimmed) or a number; anything else is no value. */
+    private scopeText(value: unknown): string | undefined {
+        if (typeof value === 'number') {
+            return String(value);
+        }
+        return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+    }
+
+    /**
+     * The run's scope as the run row records it and every action dispatch is handed it: the inputs from
+     * {@link runScopeInputs}, the secondary dimensions validated with the agent's configured defaults applied
+     * ({@link validateAndApplySecondaryScopes}), and `null` for whatever the run does not carry.
+     */
+    private validatedRunScope(params: ExecuteAgentParams): ActionRunScope {
+        const inputs = this.runScopeInputs(params);
+        if (!inputs.EntityName && !inputs.RecordID && !inputs.Secondary) {
+            return { PrimaryScopeEntityName: null, PrimaryScopeRecordID: null, SecondaryScopes: null };
+        }
+        const secondary = this.validateAndApplySecondaryScopes(inputs.Secondary, this.parseSecondaryScopeConfig(params.agent), params.agent.Name);
+        return {
+            PrimaryScopeEntityName: inputs.EntityName ?? null,
+            PrimaryScopeRecordID: inputs.RecordID ?? null,
+            SecondaryScopes: secondary && Object.keys(secondary).length > 0 ? secondary : null,
+        };
+    }
+
+    /**
+     * Writes the validated run scope onto the run row: the primary entity resolved to its ID (logged when it is
+     * not in metadata), the tenant record ID and the secondary dimensions as JSON. A secondary-only scope on an
+     * agent whose ScopeConfig does not allow one is logged, and still recorded.
+     */
+    private writeRunScope(params: ExecuteAgentParams, scope: ActionRunScope): void {
+        if (scope.PrimaryScopeEntityName) {
+            const primaryEntity = this.ProviderToUse.EntityByName(scope.PrimaryScopeEntityName);
+            if (primaryEntity) {
+                this._agentRun.PrimaryScopeEntityID = primaryEntity.ID;
+            } else {
+                LogError(`Scoping: Entity "${scope.PrimaryScopeEntityName}" not found in metadata`);
+            }
+        }
+        if (scope.PrimaryScopeRecordID) {
+            this._agentRun.PrimaryScopeRecordID = scope.PrimaryScopeRecordID;
+        }
+        if (scope.SecondaryScopes) {
+            this._agentRun.SecondaryScopes = JSON.stringify(scope.SecondaryScopes);
+            if (!scope.PrimaryScopeRecordID && !(this.parseSecondaryScopeConfig(params.agent)?.allowSecondaryOnly ?? false)) {
+                LogError(
+                    `Scoping: Agent "${params.agent.Name}" requires primary scope when using secondary scopes. ` +
+                    `Set allowSecondaryOnly=true in ScopeConfig to allow secondary-only scoping.`
+                );
+            }
+        }
     }
 
     /**
