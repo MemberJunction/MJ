@@ -314,8 +314,9 @@ Both are exposed as typed, provider-routed **Remote Operations** — `AISkill.Ex
 `SkillImportExportService.ImportSkillFromSource(source, user, options?)` imports a skill from its
 upstream: any https URL serving a SKILL.md, or a GitHub folder —
 `https://github.com/<owner>/<repo>[/tree/<ref>/<path>]`, a `/blob/<ref>/<path>/SKILL.md` link, or a
-structured `SkillSource` (`ParseSkillSource` / `GitHubSkillSource` in `SkillSources.ts`). A ref with
-slashes goes in `options.ref`; no ref means `HEAD`. For GitHub it resolves the ref to a commit (one
+structured `SkillSource` (`ParseSkillSource` / `GitHubSkillSource` in `SkillSources.ts`). `options.ref`,
+when given, overrides the ref in the URL (use it for a ref with slashes); without it the URL's ref is used,
+or `HEAD` for a bare repository URL. For GitHub it resolves the ref to a commit (one
 small API call, skipped when the ref already is a SHA), lists the tree once, and downloads SKILL.md plus
 every other text file in the folder at that commit as `MJ: AI Skill Files` rows (binary files and files
 over 512 KB are skipped with a warning; at most 100 files). Paths that differ only by case, or are over
@@ -343,7 +344,9 @@ The **Skill Update Check** scheduled job (`SkillUpdateCheckScheduledJobDriver`, 
 instruction text never reaches an agent's prompt unreviewed. (It re-reads the row before saving, so an
 import that landed during the fetch is neither overwritten nor flagged.) An admin then either:
 
-- **accepts the change** — re-import from the source with `updateSkillId`. The skill becomes Active
+- **accepts the change** — re-import with `updateSkillId`, passing the skill's `SourceURL` and its
+  `SourceRef` as `options.ref` (the stored URL names the previously imported commit; the ref makes the
+  re-import follow the tracked branch or tag instead). The skill becomes Active
   with the new content and hash. The re-import keeps the skill's local **Name** (upstream's `name` is
   upstream's identifier, and an admin may have renamed the skill here) and, since an Anthropic-style
   SKILL.md has no MJ keys, its bundled Actions, sub-agents and Category; or

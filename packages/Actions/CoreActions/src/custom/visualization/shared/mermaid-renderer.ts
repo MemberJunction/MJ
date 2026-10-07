@@ -62,15 +62,13 @@ const ALLOWED_CONFIG_TOP_LEVEL: readonly string[] = ['fontFamily', 'fontSize', '
 
 /**
  * Keys diagram code may not override. Mermaid also reads config from the code itself (`%%{init: ...}%%`
- * directives and a `---\nconfig:` header) and lets those override everything except the keys in its
- * `secure` list. Adding these closes that route around the allow-list: label HTML, the sanitizer's
- * config, page CSS and fonts, and every diagram section (where per-diagram `htmlLabels` lives). Mermaid
- * merges this list into its own defaults (securityLevel, startOnLoad, maxTextSize, ...), it never replaces them.
+ * directives and a `---\nconfig:` header) and lets those override everything outside its `secure` list.
+ * Its sanitizer drops a secure key at every nesting depth, so `htmlLabels` also covers `flowchart.htmlLabels`
+ * and the other per-diagram copies; benign layout options (`flowchart.curve`, `sequence.mirrorActors`, ...)
+ * and theme colours (whose values Mermaid already restricts) stay settable from the code. Mermaid merges this
+ * list into its own defaults (securityLevel, startOnLoad, maxTextSize, ...); it never replaces them.
  */
-const SECURE_CONFIG_KEYS: readonly string[] = [
-    'htmlLabels', 'dompurifyConfig', 'themeCSS', 'themeVariables', 'fontFamily',
-    'flowchart', 'sequence', 'er', 'class', 'state', 'gantt', 'mindmap',
-];
+const SECURE_CONFIG_KEYS: readonly string[] = ['htmlLabels', 'dompurifyConfig', 'themeCSS', 'fontFamily', 'theme'];
 
 /** A string option may carry names and numbers, never CSS or markup syntax. */
 const SAFE_CONFIG_STRING = /^[\w .,'"-]{1,200}$/;
@@ -185,6 +183,8 @@ export class MermaidRenderer extends BaseSingleton<MermaidRenderer> implements I
      * cap, with every network request blocked and the same {@link RENDER_TIMEOUT_MS} cap. For other
      * server-side checks that need a real browser, such as the archify diagram readability gate. Content
      * `work` loads should carry {@link DIAGRAM_PAGE_CSP}. The page is always closed. Never throws.
+     * A failure says whose it was: `RENDER_FAILED` when the browser is still up afterwards (the page itself
+     * failed, so its content is to blame), `BROWSER_UNAVAILABLE` when the browser is not, `TIMEOUT` on the cap.
      */
     public async WithIsolatedPage<T>(work: (page: Page) => Promise<T>): Promise<{ Success: true; Value: T } | MermaidRenderFailure> {
         await this.acquireSlot();
@@ -201,7 +201,10 @@ export class MermaidRenderer extends BaseSingleton<MermaidRenderer> implements I
             }), RENDER_TIMEOUT_MS);
             return { Success: true, Value: value };
         } catch (error) {
-            return this.classifyFailure(error);
+            const failure = this.classifyFailure(error);
+            return failure.ErrorCode === 'BROWSER_UNAVAILABLE' && browser.Browser.isConnected()
+                ? { Success: false, ErrorCode: 'RENDER_FAILED', Message: failure.Message }
+                : failure;
         } finally {
             this.releaseSlot();
             void this.closeQuietly(page);

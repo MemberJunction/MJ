@@ -56,8 +56,10 @@ const COMMIT_SHA_RE = /^[0-9a-f]{40}$/i;
 /**
  * Parses a source location. `https://github.com/<owner>/<repo>` (optionally `/tree/<ref>/<path>` for a
  * folder or `/blob/<ref>/<path>/SKILL.md` for the file) is a GitHub source; any other https URL is a
- * plain URL source whose body is the SKILL.md. `ref` names the ref when the URL has none (default
- * `HEAD`, the repository's default branch) or when it contains slashes, which a URL cannot delimit.
+ * plain URL source whose body is the SKILL.md. A given `ref` always wins over the ref in the URL (so a
+ * stored SourceURL, which names the imported commit, re-imports at the tracked ref); without one, the URL's
+ * ref is used, or `HEAD` (the default branch) for a bare repository URL. When `ref` differs from the URL's,
+ * the URL's ref must be one path segment (a commit SHA or a tag without slashes) for the path to split right.
  */
 export function ParseSkillSource(location: string, ref?: string): SkillSource {
     const url = parseHttpsURL(location);

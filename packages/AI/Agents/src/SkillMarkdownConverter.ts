@@ -388,20 +388,30 @@ function isWhollyQuoted(text: string): boolean {
     return splitOutsideQuotes(text).length === 1 && closingQuoteIndex(text, 0) === text.length - 1;
 }
 
-/** Splits on commas that are not inside a quoted item; quotes are kept for `unquote`. */
+/**
+ * Splits on commas that are not inside a quoted item; quotes are kept for `unquote`. A quote opens a quoted
+ * item only at the item's start (after optional spaces), as in YAML: a mid-word apostrophe or inch mark
+ * (`Get Today's Date`, `Send 5" Label`) is ordinary text and must not swallow the commas after it.
+ */
 function splitOutsideQuotes(text: string): string[] {
     const items: string[] = [];
     let start = 0;
     let index = 0;
+    let atItemStart = true;
     while (index < text.length) {
         const ch = text[index];
-        if (ch === '"' || ch === "'") {
+        if (atItemStart && (ch === ' ' || ch === '\t')) {
+            index++;
+        } else if (atItemStart && (ch === '"' || ch === "'")) {
             index = closingQuoteIndex(text, index) + 1;
+            atItemStart = false;
         } else if (ch === ',') {
             items.push(text.slice(start, index));
             start = ++index;
+            atItemStart = true;
         } else {
             index++;
+            atItemStart = false;
         }
     }
     items.push(text.slice(start));

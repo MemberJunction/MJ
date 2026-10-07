@@ -176,6 +176,9 @@ describe('inline lists with quoted items', () => {
         ["actions: ['It''s, fine', Next]", 'actions', ["It's, fine", 'Next']],
         ['codeOnlyActions: "Send Email, Fast"', 'codeOnlyActions', ['Send Email', 'Fast']],
         ['codeOnlyActions: Generate PDF, Send Email', 'codeOnlyActions', ['Generate PDF', 'Send Email']],
+        ["actions: Get Today's Date, Send Email", 'actions', ["Get Today's Date", 'Send Email']],
+        ["actions: [Bob's Report, Today's Date, X]", 'actions', ["Bob's Report", "Today's Date", 'X']],
+        ['actions: Send 5" Label, Other', 'actions', ['Send 5" Label', 'Other']],
     ])('%s', (line, key, expected) => {
         const md = `---\nname: S\ndescription: D\n${line}\n---\nBody`;
         const parsed = SkillMarkdownConverter.Parse(md);

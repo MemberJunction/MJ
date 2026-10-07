@@ -130,7 +130,21 @@ describe('MermaidRenderer', () => {
             htmlLabels: false,
         });
         // Diagram code (%%{init}%% directives, a config: header) may not override what was pinned here.
-        expect(secure).toEqual(expect.arrayContaining(['htmlLabels', 'flowchart', 'dompurifyConfig', 'themeCSS']));
+        expect(secure).toEqual(expect.arrayContaining(['htmlLabels', 'dompurifyConfig', 'themeCSS', 'fontFamily', 'theme']));
+        // Benign per-diagram layout stays settable from the code; Mermaid strips secure keys at any depth.
+        expect(secure).not.toContain('flowchart');
+    });
+
+    it('blames the page when work fails with the browser still up, and the browser when it is gone', async () => {
+        const browser = makeBrowser(makePage({ ok: true, svg: '<svg/>' }));
+        launchMock.mockResolvedValue(browser);
+
+        const pageFault = await MermaidRenderer.Instance.WithIsolatedPage(async () => { throw new Error('Target crashed'); });
+        browser.isConnected.mockReturnValue(false);
+        const browserGone = await MermaidRenderer.Instance.WithIsolatedPage(async () => { throw new Error('Browser closed'); });
+
+        expect(pageFault).toMatchObject({ Success: false, ErrorCode: 'RENDER_FAILED' });
+        expect(browserGone).toMatchObject({ Success: false, ErrorCode: 'BROWSER_UNAVAILABLE' });
     });
 
     it('locks every new page down: no network from its context, and a crashed page is dropped', async () => {

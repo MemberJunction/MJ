@@ -162,8 +162,9 @@ export class CreateMermaidDiagramAction extends BaseAction {
      */
     /**
      * Whether an HTML tag in the code carries an event handler (`<img onerror=...>`). Each tag is read from
-     * `<name` to its closing `>`, skipping quoted attribute values, so a `<` or `>` inside a value cannot end
-     * it early and hide a handler after it. Text that doesn't start a tag (labels like `online = true`,
+     * `<name` to its closing `>`, skipping quoted attribute VALUES (a quote right after `=`), so a `<` or `>`
+     * inside a value cannot end it early and hide a handler after it. Any other quote is ordinary text: in
+     * Mermaid, label quotes (`A["x<y"] --> B["online = true"]`) are not tag syntax. Text that doesn't start a tag (labels like `online = true`,
      * class-diagram arrows like `<|--`) is not checked. One pass, never revisiting a character: a regex such
      * as /<[^>]*on\w+=/ backtracks quadratically on a run of `<`, and this runs on the server's main thread.
      */
@@ -176,10 +177,14 @@ export class CreateMermaidDiagramAction extends BaseAction {
             }
             let end = index + 1;
             while (end < code.length && code[end] !== '>') {
-                const quote = code[end];
-                if (quote === '"' || quote === "'") {
-                    const close = code.indexOf(quote, end + 1);
-                    end = close === -1 ? code.length : close + 1;
+                if (code[end] === '=') {
+                    end++;
+                    while (code[end] === ' ' || code[end] === '\t') end++;
+                    const quote = code[end];
+                    if (quote === '"' || quote === "'") {
+                        const close = code.indexOf(quote, end + 1);
+                        end = close === -1 ? code.length : close + 1;
+                    }
                 } else {
                     end++;
                 }

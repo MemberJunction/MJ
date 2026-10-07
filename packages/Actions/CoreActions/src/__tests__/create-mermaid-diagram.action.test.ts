@@ -101,6 +101,15 @@ describe('CreateMermaidDiagramAction', () => {
         expect(result.Message).toContain('details');
     });
 
+    it.each([
+        'flowchart TD\nA["x<y"] --> B["online = true"]',
+        "flowchart TD\nA[a<b's] --> B[onClick = save]",
+    ])('accepts label quotes and apostrophes around comparisons: %s', async (code) => {
+        renderMock.mockResolvedValue({ Success: true, Svg: '<svg xmlns="http://www.w3.org/2000/svg"/>' });
+
+        expect((await run({ Code: code })).ResultCode).toBe('SUCCESS');
+    });
+
     it('accepts class-diagram arrows that precede an on...= word', async () => {
         renderMock.mockResolvedValue({ Success: true, Svg: '<svg xmlns="http://www.w3.org/2000/svg"/>' });
 

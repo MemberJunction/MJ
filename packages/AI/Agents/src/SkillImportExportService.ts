@@ -57,7 +57,10 @@ export interface ImportSkillOptions {
  * Options for {@link SkillImportExportService.ImportSkillFromSource}.
  */
 export interface ImportSkillFromSourceOptions extends ImportSkillOptions {
-    /** The git ref when the source is a GitHub URL without one, or with a ref that contains slashes. */
+    /**
+     * The git ref for a GitHub source. When given it overrides the ref in the URL (re-importing a stored
+     * SourceURL with the skill's SourceRef follows that ref); when omitted the URL's ref, or `HEAD`, is used.
+     */
     ref?: string;
 }
 

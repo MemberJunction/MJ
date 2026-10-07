@@ -25,7 +25,9 @@
  * read that code. The PR body says CI has not run; a maintainer starts it after the review by closing
  * and reopening the PR.
  *
- * WHEN THE SHIMS OR TESTS FAIL the PR still opens, as a DRAFT with a banner, and the run then
+ * EVERY SYNC PR IS A DRAFT, and publish never marks one ready: whether the shims applied and the
+ * tests passed is reported by prepare, which ran the upstream code, so it is a claim until CI (started
+ * by a maintainer) agrees. WHEN THE SHIMS OR TESTS FAIL the PR also gets a banner and the run then
  * fails. The PR is where the fix happens: it already carries the new upstream files, the release
  * notes and the instruction diff, so failing without one would leave a human to redo the whole
  * sync by hand. Draft keeps unpatched upstream code from being merged; the red run keeps "green"
@@ -254,7 +256,8 @@ export function buildPrBody({ from, to, manifest, checks, diff, releases, releas
         `- Replaced the \`vendoredPaths\` listed in \`${PKG_DIR}/UPSTREAM.json\` under \`vendor/archify/\` with the release zip's, minus \`exclude\`.`,
         '- Updated `UPSTREAM.json` (tag, version, treeSha, zipSha256) and added a patch changeset.',
     );
-    for (const c of checks) lines.push(`- ${c.name}: **${c.status}**`);
+    lines.push('- Checks, as reported by the prepare job (which ran the upstream code, so treat these as claims; CI re-runs the tests once a maintainer starts it):');
+    for (const c of checks) lines.push(`  - ${c.name}: **${c.status}**`);
     for (const c of checks.filter((x) => x.status === 'FAILED' && x.output)) {
         const tail = clip(c.output.trim().split('\n').slice(-80).join('\n'), 8000, 'see the workflow run log');
         lines.push('', `<details><summary>${c.name}: output</summary>`, '', fence(tail), '', '</details>');
@@ -447,13 +450,16 @@ export function verifyAgainstTrustedSources(meta, root, run) {
     if (!same) {
         throw new Error(`meta.json's manifest (${meta.manifest.source.ref}, ${meta.manifest.artifact.sha256}) does not match stable.json fetched now (${fresh.source.ref}, ${fresh.artifact.sha256}); refusing it`);
     }
+    return { upstream, fresh };
 }
 
 /** Step 5: commit prepare's patch onto a fresh `next`, push, open or update the PR. Returns the exit code. */
 export function publish({ root, inDir, run = exec, repo = repoSlug(), token = process.env.GH_TOKEN }) {
     if (!token) throw new Error('GH_TOKEN is required to publish');
     const meta = readMeta(inDir);
-    verifyAgainstTrustedSources(meta, root, run);
+    const trusted = verifyAgainstTrustedSources(meta, root, run);
+    // From here on the PR shows the manifest fetched now, never meta.json's copy (publishedAt, severity).
+    meta.manifest = trusted.fresh;
     // Asked again here, immediately before the force-push, rather than trusted from `check`.
     const d = decide({ pinnedTag: meta.from, stableRef: meta.to, openPr: readOpenPr(run, repo) });
     if (d.action === 'noop') return console.log(d.reason), 0;
@@ -470,6 +476,11 @@ export function publish({ root, inDir, run = exec, repo = repoSlug(), token = pr
         .flatMap((line) => line.split('\t').slice(1))
         .filter((p) => !p.startsWith(`${VENDOR_DIR}/`) && !allowed.includes(p));
     if (stray.length) throw new Error(`the prepared patch touches files a sync never writes: ${stray.join(', ')}. Refusing to commit it.`);
+    // UPSTREAM.json is the next sync's trust anchor, so the patch must write exactly what publish computes.
+    const expectedUpstream = `${JSON.stringify(nextUpstream(trusted.upstream, trusted.fresh), null, 2)}\n`;
+    if (git('show', `:${PKG_DIR}/UPSTREAM.json`).stdout !== expectedUpstream) {
+        throw new Error(`the prepared patch writes an UPSTREAM.json that differs from the one computed from ${BASE_BRANCH} and stable.json. Refusing to commit it.`);
+    }
 
     // The body is built (and capped at BODY_LIMIT) before the push, so GitHub rejecting it can't
     // leave a pushed branch with no PR.
@@ -490,7 +501,9 @@ export function publish({ root, inDir, run = exec, repo = repoSlug(), token = pr
     if (d.action === 'create') {
         let r;
         try {
-            r = gh('pr', 'create', '--base', BASE_BRANCH, '--head', SYNC_BRANCH, '--title', title, '--body-file', bodyFile, ...(meta.needsWork ? ['--draft'] : []));
+            // Always a draft: whether its checks passed is the untrusted prepare job's claim. A maintainer
+            // marks it ready after reviewing the vendored diff and seeing CI pass.
+            r = gh('pr', 'create', '--base', BASE_BRANCH, '--head', SYNC_BRANCH, '--title', title, '--body-file', bodyFile, '--draft');
         } catch (error) {
             // GITHUB_TOKEN can open a PR only when the repo (or org) allows it. Say so, since the branch is pushed.
             throw new Error(`${error.message}\nThe ${SYNC_BRANCH} branch is pushed but no PR was opened. If this is a permissions error, enable `
@@ -500,8 +513,8 @@ export function publish({ root, inDir, run = exec, repo = repoSlug(), token = pr
     } else {
         const n = String(d.pr.number);
         gh('pr', 'edit', n, '--title', title, '--body-file', bodyFile);
-        if (meta.needsWork && !d.pr.isDraft) gh('pr', 'ready', n, '--undo');
-        if (!meta.needsWork && d.pr.isDraft) gh('pr', 'ready', n);
+        // New upstream content goes back to draft until a maintainer reviews it again; never auto-ready.
+        if (!d.pr.isDraft) gh('pr', 'ready', n, '--undo');
         console.log(`Updated ${d.pr.url}`);
     }
     if (meta.needsWork) {

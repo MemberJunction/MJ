@@ -276,13 +276,16 @@ describe('publish', () => {
      * Records every command; answers gh and the staged-files query (`git diff --name-status`, so a
      * plain path is reported as modified). At the push it records what body.md held at that moment.
      */
-    function setup({ meta = META, openPrs = [], releases = [], staged = ['packages/AI/Diagrams/UPSTREAM.json', META.changeset], pinned = META.from, stable = META.manifest, prCreate = null } = {}) {
+    function setup({ meta = META, openPrs = [], releases = [], staged = ['packages/AI/Diagrams/UPSTREAM.json', META.changeset], pinned = META.from, stable = META.manifest, prCreate = null, stagedUpstream = null } = {}) {
         const inDir = mkdtempSync(join(tmpdir(), 'archify-sync-pub-'));
         writeFileSync(join(inDir, 'meta.json'), JSON.stringify(meta));
         // The trusted side: the checked-out base's UPSTREAM.json, and stable.json as fetched at publish.
         const root = mkdtempSync(join(tmpdir(), 'archify-sync-root-'));
         mkdirSync(join(root, 'packages/AI/Diagrams'), { recursive: true });
-        writeFileSync(join(root, 'packages/AI/Diagrams/UPSTREAM.json'), JSON.stringify({ tag: pinned, manifest: 'https://example.test/stable.json' }));
+        const baseUpstream = { tag: pinned, manifest: 'https://example.test/stable.json' };
+        writeFileSync(join(root, 'packages/AI/Diagrams/UPSTREAM.json'), JSON.stringify(baseUpstream));
+        // What the patch stages for UPSTREAM.json: by default exactly what publish computes.
+        const staged_upstream = stagedUpstream ?? `${JSON.stringify(nextUpstream(baseUpstream, stable), null, 2)}\n`;
         const calls = [];
         const atPush = {};
         const run = (cmd, args) => {
@@ -290,6 +293,7 @@ describe('publish', () => {
             if (cmd === 'gh' && args[1] === 'list') return ok(JSON.stringify(openPrs));
             if (cmd === 'gh' && args[0] === 'api') return ok(JSON.stringify(releases));
             if (cmd === 'curl') return ok(JSON.stringify(stable));
+            if (cmd === 'git' && args[0] === 'show') return ok(staged_upstream);
             if (cmd === 'gh' && args[1] === 'create') return prCreate ?? ok('https://github.com/o/r/pull/8\n');
             if (cmd === 'git' && args[0] === 'diff') return ok(staged.map((p) => (p.includes('\t') ? p : `M\t${p}`)).join('\n'));
             if (cmd === 'git' && args[0] === 'push') atPush.body = existsSync(join(inDir, 'body.md')) ? readFileSync(join(inDir, 'body.md'), 'utf8') : null;
@@ -310,6 +314,26 @@ describe('publish', () => {
         expect(calls.some((c) => c.startsWith('git push'))).toBe(false);
     });
 
+    it('refuses a patch whose UPSTREAM.json differs from the one publish computes', () => {
+        const { go, calls } = setup({ stagedUpstream: JSON.stringify({ tag: 'v3.1.0', manifest: 'https://evil.test/stable.json' }) });
+        expect(go).toThrow(/UPSTREAM\.json that differs/);
+        expect(calls.some((c) => c.startsWith('git push'))).toBe(false);
+    });
+
+    it('puts a non-draft open PR back to draft when new upstream content lands', () => {
+        const { go, calls } = setup({ openPrs: [openPr({ isDraft: false })] });
+        expect(go()).toBe(0);
+        expect(calls).toContain('gh pr ready 5 --undo --repo o/r');
+    });
+
+    it('shows the manifest fetched at publish and labels the checks as prepare-reported', () => {
+        const { go, inDir } = setup({ meta: { ...META, manifest: { ...META.manifest, publishedAt: 'forged' } } });
+        go();
+        const body = readFileSync(join(inDir, 'body.md'), 'utf8');
+        expect(body).not.toContain('forged');
+        expect(body).toContain('as reported by the prepare job');
+    });
+
     it('names the repo setting when GitHub refuses to open the PR', () => {
         const { go } = setup({ prCreate: { status: 1, stdout: '', stderr: 'GraphQL: GitHub Actions is not permitted to create or approve pull requests' } });
         expect(go).toThrow(/Allow GitHub Actions to create and approve pull requests/);
@@ -327,7 +351,8 @@ describe('publish', () => {
         expect(calls).toContain(`git push --force origin HEAD:refs/heads/${SYNC_BRANCH}`);
         const create = calls.find((c) => c.startsWith('gh pr create'));
         expect(create).toContain(`--base next --head ${SYNC_BRANCH}`);
-        expect(create).not.toContain('--draft');
+        // Always a draft: the checks are the untrusted prepare job's claim until CI and a maintainer agree.
+        expect(create).toContain('--draft');
         expect(calls.some((c) => c.startsWith('gh pr edit'))).toBe(false);
     });
 
@@ -342,7 +367,7 @@ describe('publish', () => {
         expect(go()).toBe(0);
         expect(calls).toContain(`git push --force-with-lease=refs/heads/${SYNC_BRANCH}:oldhead origin HEAD:refs/heads/${SYNC_BRANCH}`);
         expect(calls).toContain(`gh pr edit 5 --title chore(ai-diagrams): sync vendored archify v3.0.0 to v3.1.0 --body-file ${join(inDir, 'body.md')} --repo o/r`);
-        expect(calls).toContain('gh pr ready 5 --repo o/r');
+        expect(calls.some((c) => c.startsWith('gh pr ready 5 --repo'))).toBe(false); // never auto-marked ready
         expect(calls.some((c) => c.startsWith('gh pr create'))).toBe(false);
         expect(readFileSync(join(inDir, 'body.md'), 'utf8')).toMatch(/^<!-- archify-sync tag=v3\.1\.0 -->/);
     });

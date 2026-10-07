@@ -25,9 +25,7 @@ interface DiagramLayout {
 /** Loads `html` in headless Chromium and lists readability problems; `Checked: false` when no browser is available. */
 export async function CheckDiagramReadability(html: string): Promise<DiagramReadabilityResult> {
     const errors: string[] = [];
-    let opened = false;
     const run = await MermaidRenderer.Instance.WithIsolatedPage(async (page) => {
-        opened = true;
         page.on('pageerror', (error) => errors.push(error.message));
         // The page carries model-authored labels; it gets the same no-network policy as Mermaid's pages.
         const locked = html.replace(/<head([^>]*)>/i, (_m, attributes: string) => `<head${attributes}><meta http-equiv="Content-Security-Policy" content="${DIAGRAM_PAGE_CSP}">`);
@@ -49,9 +47,9 @@ export async function CheckDiagramReadability(html: string): Promise<DiagramRead
         });
     });
     if (run.Success === false) {
-        // Once a page was open, any failure (a timeout, a renderer crash the page caused) fails the check;
-        // only having no browser at all means the check couldn't run.
-        return opened || run.ErrorCode === 'TIMEOUT'
+        // The page's own failure (a timeout, or a crash that left the browser up) fails the check. A browser
+        // that is gone (none installed, killed, shutting down) means the check couldn't run: not the spec's fault.
+        return run.ErrorCode === 'TIMEOUT' || run.ErrorCode === 'RENDER_FAILED'
             ? { Checked: true, Problems: [`The page did not finish laying out the diagram: ${run.Message}`] }
             : { Checked: false, Reason: run.Message };
     }
