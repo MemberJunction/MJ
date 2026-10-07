@@ -2211,7 +2211,7 @@ export class AgentRunner {
 
                         let content: string | Buffer = '';
                         if (row.ContentMode === 'File' && row.FileID) {
-                            const downloaded = await this.downloadArtifactFileContent(row.FileID, contextUser);
+                            const downloaded = await this.DownloadArtifactFileContent(row.FileID, contextUser);
                             if (downloaded) {
                                 content = downloaded;
                             } else {
@@ -2345,22 +2345,27 @@ export class AgentRunner {
 
     /**
      * Downloads binary content for a file-backed artifact from MJStorage.
-     * Uses FileStorageEngine to resolve the storage account and driver,
-     * then fetches the file by its ProviderKey.
+     * Reads the `MJ: Files` row as the user, then resolves it through
+     * `FileStorageEngine.ResolveFileObject`, which applies the storage-account gate and the
+     * tracked-file rule before any driver call — the same path every other file-ID route uses.
      *
      * @param fileId - The MJ: Files entity ID referenced by ArtifactVersion.FileID
      * @param contextUser - User context for storage driver authentication
      * @returns Buffer of file content, or null if download fails
      */
-    private async downloadArtifactFileContent(fileId: string, contextUser: UserInfo): Promise<Buffer | null> {
+    protected async DownloadArtifactFileContent(fileId: string, contextUser: UserInfo): Promise<Buffer | null> {
+        if (!IsValidUUID(fileId)) {
+            LogError(`[AgentRunner] Refusing to read artifact file content: '${fileId}' is not a file ID`);
+            return null;
+        }
         try {
             await FileStorageEngine.Instance.Config(false, contextUser);
 
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this._provider);
             const fileResult = await rv.RunView<{ ID: string; Name: string; ContentType: string; ProviderID: string; ProviderKey: string }>(
                 {
                     EntityName: 'MJ: Files',
-                    ExtraFilter: `ID = '${fileId}'`,
+                    ExtraFilter: `ID = '${EscapeSQLString(fileId.trim())}'`,
                     Fields: ['ID', 'Name', 'ContentType', 'ProviderID', 'ProviderKey'],
                     ResultType: 'simple',
                 },
@@ -2372,16 +2377,13 @@ export class AgentRunner {
                 return null;
             }
 
-            const file = fileResult.Results[0];
-            const accounts = FileStorageEngine.Instance.GetAccountsByProviderID(file.ProviderID);
-            if (accounts.length === 0) {
-                LogError(`[AgentRunner] No FileStorageAccount found for ProviderID: ${file.ProviderID}`);
+            // Account gate and tracked-file rule first; a refusal throws and is logged below.
+            const resolved = await FileStorageEngine.Instance.ResolveFileObject(fileResult.Results[0], contextUser, 'Read', this._provider);
+            if (!resolved) {
+                LogError(`[AgentRunner] No FileStorageAccount found for ProviderID: ${fileResult.Results[0].ProviderID}`);
                 return null;
             }
-
-            const driver = await FileStorageEngine.Instance.GetDriver(accounts[0].ID, contextUser);
-            const objectName = file.ProviderKey ?? file.Name;
-            const content = await driver.GetObject({ fullPath: objectName });
+            const content = await resolved.Driver.GetObject({ fullPath: resolved.ObjectKey });
 
             // GetObject returns string or Buffer depending on provider
             if (Buffer.isBuffer(content)) {
