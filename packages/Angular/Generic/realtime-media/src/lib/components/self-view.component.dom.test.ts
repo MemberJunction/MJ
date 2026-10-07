@@ -59,7 +59,7 @@ describe('SelfViewComponent (DOM)', () => {
 
   it("puts a host's actions in the tile's corner, before Hide", () => {
     const f = renderComponentFixture(ActionsHostComponent, { inputs: { Participant: me() } });
-    const corner = [...(query(f, 'mj-media-tile .tile__actions-slot')?.querySelectorAll('button') ?? [])];
+    const corner = Array.from(query(f, 'mj-media-tile .tile__actions-slot')?.querySelectorAll('button') ?? []);
     expect(corner.map((button) => button.className.split(' ')[0])).toEqual(['own-action', 'self__hide']);
   });
 
