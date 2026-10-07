@@ -31,7 +31,8 @@ export class MJCredentialFormComponent extends BaseFormComponent {
             { sectionKey: 'mJExternalDataSources', sectionName: 'External Data Sources', isExpanded: false },
             { sectionKey: 'mJAIAgentCredentials', sectionName: 'AI Agent Credentials', isExpanded: false },
             { sectionKey: 'mJAuthenticationProviders', sectionName: 'Authentication Providers', isExpanded: false },
-            { sectionKey: 'mJWebSearchProviders', sectionName: 'Web Search Providers', isExpanded: false }
+            { sectionKey: 'mJWebSearchProviders', sectionName: 'Web Search Providers', isExpanded: false },
+            { sectionKey: 'mJWorkQueueTransports', sectionName: 'Work Queue Transports', isExpanded: false }
         ]);
     }
 }

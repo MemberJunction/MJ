@@ -14,6 +14,7 @@
  */
 
 import {
+  AudioPresets,
   ConnectionQuality,
   ConnectionState,
   DisconnectReason,
@@ -146,6 +147,24 @@ export interface ILiveKitRoomController {
   /** Moves a kind to another device. */
   SwitchDevice(kind: LiveKitDevice['Kind'], deviceId: string): Promise<void>;
 }
+
+/**
+ * Speech-tuned room options for LiveKit connections in MJ Meet and agent interactions.
+ * Prioritizes low latency, natural interruptions, packet loss resilience (RED), and voice quality.
+ */
+export const DEFAULT_SPEECH_ROOM_OPTIONS: RoomOptions = {
+  publishDefaults: {
+    dtx: false,
+    red: true,
+    audioPreset: AudioPresets.speech,
+  },
+  audioCaptureDefaults: {
+    voiceIsolation: false,
+    echoCancellation: true,
+    noiseSuppression: true,
+    autoGainControl: true,
+  },
+};
 
 /**
  * Controls a single LiveKit room: connect/disconnect, local-media toggles, data messages, device
@@ -742,15 +761,27 @@ export class LiveKitRoomController implements ILiveKitRoomController {
     }
   }
 
-  /** Merges E2EE into the livekit-client room options when requested. */
-  private buildRoomOptions(options: LiveKitRoomConnectOptions): RoomOptions | undefined {
+  /** Merges speech defaults and E2EE into the livekit-client room options. */
+  private buildRoomOptions(options: LiveKitRoomConnectOptions): RoomOptions {
+    const merged: RoomOptions = {
+      ...DEFAULT_SPEECH_ROOM_OPTIONS,
+      ...options.RoomOptions,
+      publishDefaults: {
+        ...DEFAULT_SPEECH_ROOM_OPTIONS.publishDefaults,
+        ...options.RoomOptions?.publishDefaults,
+      },
+      audioCaptureDefaults: {
+        ...(typeof DEFAULT_SPEECH_ROOM_OPTIONS.audioCaptureDefaults === 'object' ? DEFAULT_SPEECH_ROOM_OPTIONS.audioCaptureDefaults : {}),
+        ...(typeof options.RoomOptions?.audioCaptureDefaults === 'object' ? options.RoomOptions?.audioCaptureDefaults : {}),
+      },
+    };
     this.e2eeKeyProvider = null;
     if (!options.E2EE) {
-      return options.RoomOptions;
+      return merged;
     }
     this.e2eeKeyProvider = new ExternalE2EEKeyProvider();
     return {
-      ...options.RoomOptions,
+      ...merged,
       e2ee: { keyProvider: this.e2eeKeyProvider, worker: options.E2EE.Worker },
     };
   }
@@ -815,7 +846,7 @@ export class LiveKitRoomController implements ILiveKitRoomController {
       case DisconnectReason.CONNECTION_TIMEOUT:
         return 'connection-lost';
       default:
-        return reason == null ? 'client-initiated' : 'unknown';
+        return reason == null ? 'connection-lost' : 'unknown';
     }
   }
 

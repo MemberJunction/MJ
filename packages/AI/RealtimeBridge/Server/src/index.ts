@@ -1,5 +1,6 @@
 export * from './ai-bridge-engine';
 export * from './multi-agent-room-coordinator';
+export * from './full-duplex-turn-gate';
 export * from './loopback-bridge';
 export * from './openai-sip-bridge';
 export * from './join-url-resolver';
@@ -8,3 +9,5 @@ export * from './calendar-clients';
 export * from './calendar-watcher';
 export * from './scheduled-bridge-runner';
 export * from './identity-provisioner';
+export * from './dtmf-coalescer';
+export * from './bridge-prior-transcript';

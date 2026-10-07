@@ -167,8 +167,64 @@ describe('MJRecordChangeEntityServer.CheckPermissions', () => {
     });
 
     it('delegates other permission types (Read, Delete, Create) to super.CheckPermissions', () => {
+        Object.assign(entity, { Source: 'External', Type: 'Create' });
         expect(entity.CheckPermissions(EntityPermissionType.Read, false)).toBe(true);
         expect(entity.CheckPermissions(EntityPermissionType.Create, false)).toBe(true);
         expect(entity.CheckPermissions(EntityPermissionType.Delete, false)).toBe(true);
+    });
+});
+
+/**
+ * An Internal `Create` record change is the platform's own record of who created a record, written
+ * in SQL alongside each insert. Code trusts it (the form component guard reads who created a
+ * component from one), so a caller may not create one through the API.
+ */
+describe('MJRecordChangeEntityServer — creating a record change', () => {
+    function newChange(caller: unknown, source: string | null | undefined, type: string | null | undefined): MJRecordChangeEntityServer {
+        const change = new MJRecordChangeEntityServer();
+        Object.assign(change, { ContextCurrentUser: caller, IsSaved: false, Source: source, Type: type });
+        return change;
+    }
+
+    const uiUser = { ID: 'u-ui', Name: 'Plain user', Type: 'User' };
+    const owner = { ID: 'u-owner', Name: 'Owner', Type: 'Owner' };
+
+    it('refuses an Internal Create record change created by a caller, a UI user or an Owner alike', () => {
+        for (const caller of [uiUser, owner]) {
+            const change = newChange(caller, 'Internal', 'Create');
+            expect(change.CheckPermissions(EntityPermissionType.Create, false)).toBe(false);
+            expect(() => change.CheckPermissions(EntityPermissionType.Create, true)).toThrow(/Source 'Internal' and Type 'Create'/);
+        }
+    });
+
+    it('refuses an Internal Create record change written with other padding or casing', () => {
+        for (const [source, type] of [['internal', 'Create'], ['Internal ', 'Create'], ['Internal', 'create'], ['Internal', 'Create '], [' INTERNAL', ' CREATE']]) {
+            expect(newChange(uiUser, source, type).CheckPermissions(EntityPermissionType.Create, false)).toBe(false);
+        }
+    });
+
+    it('refuses a missing Source or Type, which the database stores as Internal and Create', () => {
+        const pairs: Array<[string | null | undefined, string | null | undefined]> = [
+            [null, null], ['Internal', null], [null, 'Create'], [undefined, undefined],
+        ];
+        const allowed = pairs.map(([source, type]) => newChange(uiUser, source, type).CheckPermissions(EntityPermissionType.Create, false));
+        expect(allowed).toEqual([false, false, false, false]);
+    });
+
+    it('leaves a missing Source or Type paired with a non-matching value to the role permission', () => {
+        expect(newChange(uiUser, null, 'Snapshot').CheckPermissions(EntityPermissionType.Create, false)).toBe(true);
+        expect(newChange(uiUser, 'External', null).CheckPermissions(EntityPermissionType.Create, false)).toBe(true);
+    });
+
+    it('leaves an Internal Snapshot record change, as version labels write, to the role permission', () => {
+        expect(newChange(uiUser, 'Internal', 'Snapshot').CheckPermissions(EntityPermissionType.Create, false)).toBe(true);
+    });
+
+    it('leaves an External record change to the role permission', () => {
+        expect(newChange(uiUser, 'External', 'Create').CheckPermissions(EntityPermissionType.Create, false)).toBe(true);
+    });
+
+    it('allows an Internal Create record change with no caller, a trusted server context', () => {
+        expect(newChange(null, 'Internal', 'Create').CheckPermissions(EntityPermissionType.Create, false)).toBe(true);
     });
 });

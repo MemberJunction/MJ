@@ -174,11 +174,11 @@ Optional per-list `weights`. Omitting them gives canonical unweighted RRF (the p
 
 ### `SimpleVectorServiceProvider` — in-process VectorDBBase
 
-**In:** `@memberjunction/ai-vectors-memory`. **For:** semantic ranking when you don't want to stand up a remote vector DB. Loads `EntityRecordDocument.VectorJSON` lazily per `EntityDocumentID`, ranks via in-memory cosine. Out-of-box for the entity-catalog use case; for high-scale corpora, swap to Pinecone / Qdrant / pgvector at the `EntityDocument.VectorDatabaseID` level — `SearchEntity`'s orchestration is provider-agnostic.
+**In:** `@memberjunction/ai-vectors-memory`. **For:** semantic ranking when you don't want to stand up a remote vector DB. Loads `EntityRecordDocument` vectors lazily per `EntityDocumentID` — the binary `VectorBinary` column when valid, `VectorJSON` as fallback ([Binary Fields Guide](BINARY_FIELDS_GUIDE.md)) — ranks via in-memory cosine. Out-of-box for the entity-catalog use case; for high-scale corpora, swap to Pinecone / Qdrant / pgvector at the `EntityDocument.VectorDatabaseID` level — `SearchEntity`'s orchestration is provider-agnostic.
 
 ### `EntityDocument` / `EntityRecordDocument`
 
-**In:** MJ core schema. **What:** per-entity template + per-record rendered text + persisted embedding (`VectorJSON`). Drives both this guide's `SearchEntity` semantic pass and the wider vector-sync pipeline used by `SearchEngine` vector providers, dupe detection, knowledge pipelines, etc. The same pipeline powers all of them.
+**In:** MJ core schema. **What:** per-entity template + per-record rendered text + persisted embedding (`VectorJSON`, plus the float32 `VectorBinary` companion that readers prefer). Drives both this guide's `SearchEntity` semantic pass and the wider vector-sync pipeline used by `SearchEngine` vector providers, dupe detection, knowledge pipelines, etc. The same pipeline powers all of them.
 
 ## Pointers to the deep docs
 
