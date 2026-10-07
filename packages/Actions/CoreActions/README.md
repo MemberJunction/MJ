@@ -299,6 +299,8 @@ Generate SVG charts, diagrams, and infographics using D3 and Rough.js. All produ
 | `__CreateSVGSketchDiagram` | `CreateSVGSketchDiagramAction` | Hand-drawn style diagrams via Rough.js |
 | `__CreateMermaidDiagram` | `CreateMermaidDiagramAction` | Render Mermaid diagram definitions to SVG |
 
+`Create Mermaid Diagram` renders in headless Chromium, which the `playwright` dependency does not install. Install one on the host with `npx playwright install chromium`, or set `MJ_CHROMIUM_EXECUTABLE_PATH` to an existing binary. Without one the action returns `BROWSER_UNAVAILABLE`.
+
 ### Web (6 actions)
 
 Search the web, extract page content, and validate URLs.
@@ -540,7 +542,7 @@ sequenceDiagram
 |---|---|
 | `d3-scale`, `d3-shape`, `d3-cloud`, `d3-force`, `d3-hierarchy` | Visualization actions (SVG charts, word clouds, networks) |
 | `roughjs` | Sketch-style diagram rendering |
-| `mermaid` | Mermaid diagram rendering |
+| `mermaid`, `playwright` | Mermaid diagram rendering (in headless Chromium) |
 | `pdfkit` | PDF generation |
 | `pdf-parse` | PDF text extraction |
 | `exceljs` | Excel read/write |

@@ -4023,6 +4023,9 @@ importers:
       pdfkit:
         specifier: ^0.17.2
         version: 0.17.2
+      playwright:
+        specifier: ^1.58.1
+        version: 1.58.1
       psl:
         specifier: ^1.15.0
         version: 1.15.0
@@ -11679,6 +11682,9 @@ importers:
       '@memberjunction/query-gen':
         specifier: 6.2.0-edge.3
         version: link:../QueryGen
+      '@memberjunction/redis-provider':
+        specifier: 6.2.0-edge.3
+        version: link:../RedisProvider
       '@memberjunction/server-bootstrap-lite':
         specifier: 6.2.0-edge.3
         version: link:../ServerBootstrapLite
@@ -15722,6 +15728,9 @@ importers:
       '@memberjunction/open-app-engine':
         specifier: 6.2.0-edge.3
         version: link:../../OpenApp/Engine
+      '@memberjunction/postgresql-dataprovider':
+        specifier: 6.2.0-edge.3
+        version: link:../../PostgreSQLDataProvider
       '@memberjunction/predictive-studio':
         specifier: 6.2.0-edge.3
         version: link:../../AI/PredictiveStudio/Engine
