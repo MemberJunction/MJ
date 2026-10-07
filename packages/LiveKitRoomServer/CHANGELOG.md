@@ -1,5 +1,80 @@
 # @memberjunction/livekit-room-server
 
+## 6.2.0-edge.3
+
+### Patch Changes
+
+- 54f4bc1: Wire `@memberjunction/ai-bridge-livekit-native` dependency so the native LiveKit room wrapper resolves cleanly in LiveKit providers, room servers, and runtime hosts.
+- 0618369: Adds `RoomAudioPlayer`, a server-side primitive that joins a LiveKit room as a publish-only bot and plays hold music into it.
+  - **Sources:** an `MJ: Files` row, an https URL (SSRF-safe fetch, 20 s timeout, 25 MB cap; http is refused), caller PCM, or a built-in procedurally generated comfort tone.
+  - **Formats:** WAV (integer PCM 8/16/24/32-bit, float 32/64-bit, any channel count, downmixed) and MP3 (via the WebAssembly `mpg123-decoder`), up to 15 minutes. Other formats are refused by name.
+  - **Playback:** resampled to 48 kHz and paced in 20 ms frames about 150 ms ahead of real time, so the native client's queue stays bounded. Supports loop, pause/resume, and `Announce`, which ducks the music under a clip.
+  - **Lifecycle:** a registry (`GetActive`, `StopAllInRoom`). A playback stops itself when the server drops its bot, and a verified `room_finished` webhook stops a room's playbacks.
+  - **Text announcements** go through the `IRoomSpeechSynthesizer` port. No synthesizer is installed by default; a host opts in with `SetSpeechSynthesizer(new MJRoomSpeechSynthesizer({ Voice }))`, which uses `AITextToSpeechRunner`.
+  - **Native module specifier:** the agent coordinator and the player now resolve it through one shared function, `ResolveLiveKitNativeModuleSpecifier`. The coordinator's behavior is unchanged.
+  - **New dependencies:** `@memberjunction/storage`, `@memberjunction/network-utils`, `@memberjunction/ai-prompts` and `mpg123-decoder`.
+
+- 279b93e: Multi-agent rooms now take turns properly with full-duplex realtime models, and the Live Room doubles as an agent test bed.
+  - **Model-side addressing.** `IAddressedMatcher` gains a model-judged implementation next to the name-matching one. Full-duplex sessions get two host tools, `i_am_addressed` and `yield_turn`, because neither vendor offers a native signal. `TurnAddressing` (`Auto` | `ModelSide` | `Regex`) is selectable per session; `Auto` uses the model's judgement when the model reports the new `FullDuplex` capability (GPT-Live, Gemini 3.8 Live with always-on proactive audio) and name matching otherwise.
+  - **Floor discipline.** `MultiAgentRoomCoordinator` now grants hand-offs with a TTL (a third agent cannot jump in), keeps backchannels (short "mm-hm" acknowledgements) off the floor, lets a person's speech preempt the holder through the existing barge-in flush path while delegated work keeps running, and caps consecutive agent-to-agent turns (default 8, configurable). A new `FullDuplexTurnGate` enforces it on models that decide for themselves when to speak, so two agents never speak at once even if neither asks first.
+  - **Test bed.** New `GetLiveKitRoomTurnState` query and typed `GraphQLLiveKitClient.GetRoomTurnState`; new `mj-livekit-turn-state` widget; the Live Room gets per-agent turn mode and addressing pickers, roster badges and a live Turns panel (floor holder, hand-offs, backchannels, loop cap, event feed) that also works for a person who joins an existing room.
+  - **Tests.** A deterministic replay harness with twelve recorded room timelines asserts no overlapping agent speech, no run beyond the loop cap, humans always preempt and backchannels never take the floor.
+
+  No schema, metadata or CodeGen changes. Live-model behaviour of the host tools is not yet verified; see the "Multi-agent rooms" section of `plans/realtime/bridges-and-widget/LIVE-CALL-CHECKLIST.md`.
+
+- be15f39: `RoomAudioHandle` gains `Ended: Promise<RoomAudioEndReason>` and `EndReason`, so callers can tell a clip that played in full (`'Completed'`) from one that was stopped, failed, or disconnected — e.g. start a call recording only after the recording disclosure has been heard. A non-looping playback now waits for the audio already sent ahead of real time to play out before its bot leaves, so the clip's tail is no longer cut off.
+- d046715: Add optional FromNumber to DialIntoRoomRequest (honoured in LiveKitSipTelephonyService with fallback to outboundFromNumber) and expose InteractionID on HandoffOfferInfo, the GraphQL HandoffOffer type, and OFFER_FIELDS.
+- 3204a32: Add Interaction lifecycle tracking, append-only InteractionEvent enforcement, caller linking, and outbound number pool selection.
+  - **Append-only InteractionEvent**: `MJInteractionEventEntityServer` blocks update and delete operations on `MJ: Interaction Events`.
+  - **Interaction lifecycle**: `InteractionLifecycleService` manages creation, state transitions, caller linking, event logging, and duration/cost computation across phone and room calls.
+  - **Outbound number pool selection**: `NumberPoolSelector` supports `RoundRobin`, `LocalPresence`, and `Random` selection policies, respecting `MaxConcurrentPerNumber` limits.
+  - **Inbound routing**: Resolves dialed numbers to active agent identities and associated `PhoneNumber` records.
+
+- a8e162d: Durable hand-off offers backed by MJ: Interaction Offers with compare-and-set and cluster pubsub fan-out
+- b1b6d3d: Phone calls can now arrive in a LiveKit room, and an agent can bring a person, a phone number or another agent into that same room.
+
+  No database, entity or metadata change. Handoff offers are held in memory per process, so use a single MJAPI instance for human handoff until a database-backed registry exists (see `plans/realtime/bridges-and-widget/LOCAL-HANDOFF-PR3.md`). None of this has been run against a real LiveKit SIP project or Twilio trunk.
+  - **`@memberjunction/livekit-room-server`** — `LiveKitSipService` (list, dial, remove and provision SIP participants and trunks through the LiveKit SIP client), `LiveKitWebhookParser` (signed LiveKit webhooks), and the room handoff engine: `RoomHandoffEngine`, `HandoffOfferRegistry` and the handoff types. `LiveKitAgentRoomCoordinator.StartAgentRoomSession` takes optional host options (tools, framing, conversation, transcript sink, barge-in and recovery hooks), and an ended agent leaves the room roster. `LiveKitUserIdentity` is shared by the token minter and the handoff engine.
+  - **`@memberjunction/telephony-adapters`** — `telephony.livekitSip` configuration and the `LiveKitSipTelephonyService` server extension (webhook at `/telephony/livekit-sip/webhook`, inbound admission by dialed number, capacity gate, run-as user, outbound through the shared gate), `ISipTrunkCarrier` with a Twilio Elastic SIP implementation that validates configuration only, `RoomCallSessionStarter`, and `PlaceLiveKitSipCall`. Transfer targets gain `kind: 'user' | 'agent'` (`userEmail`, `fallbackNumber`, `agentName`); a `number` target and a call on a carrier media stream behave as before.
+  - **`@memberjunction/server`** — the `telephony.livekitSip` config block; `HumanHandoffResolver` (`MyHandoffOffers`, `AcceptHandoffOffer`, `DeclineHandoffOffer`, subscription `HandoffOfferChanges`, all scoped to the signed-in user, failing closed); `StartLiveKitAgentRoomSession` accepts `EnableHandoff` for web-room escalation.
+  - **`@memberjunction/graphql-dataprovider`** — `GraphQLHandoffClient`; `EnableHandoff` on the agent room input.
+  - **`@memberjunction/ng-conversation-offers`** (new) — `mj-conversation-offers`, a generic widget listing offered conversations with a countdown and Accept / Decline.
+  - **`@memberjunction/ng-mj-livekit-room`** — `EnableHandoff` input.
+  - **`@memberjunction/ng-explorer-core`** — the Conversation Console resource (`HumanHandoffConsoleResource`), opened by a `handoff-offer` notification.
+
+- eeee8d4: Telephony Step 6 Integration Verification: add RD10, RD11, and RD12 deterministic integration checks, relocate RoomAuthorizationService to LiveKitRoomServer for reuse, fix virtual PhoneNumber sequence in MJ: Interactions and base view alignment, and update live call checklist.
+- Updated dependencies [25bb295]
+- Updated dependencies [dfe40a4]
+- Updated dependencies [131f3c4]
+- Updated dependencies [0f04590]
+- Updated dependencies [54f4bc1]
+- Updated dependencies [0a75bb2]
+- Updated dependencies [41c2c08]
+- Updated dependencies [29b6ec3]
+- Updated dependencies [279b93e]
+- Updated dependencies [66fd011]
+- Updated dependencies [196160a]
+- Updated dependencies [bea2386]
+- Updated dependencies [60bd774]
+- Updated dependencies [35da130]
+- Updated dependencies [28c92e0]
+- Updated dependencies [1595b7d]
+- Updated dependencies [4840fff]
+- Updated dependencies [ec97ad4]
+- Updated dependencies [8db8973]
+- Updated dependencies [49e0bd8]
+  - @memberjunction/ai@6.2.0-edge.3
+  - @memberjunction/core-entities@6.2.0-edge.3
+  - @memberjunction/global@6.2.0-edge.3
+  - @memberjunction/core@6.2.0-edge.3
+  - @memberjunction/ai-bridge-livekit@6.2.0-edge.3
+  - @memberjunction/ai-bridge-livekit-native@6.2.0-edge.3
+  - @memberjunction/ai-prompts@6.2.0-edge.3
+  - @memberjunction/ai-bridge-base@6.2.0-edge.3
+  - @memberjunction/ai-bridge-server@6.2.0-edge.3
+  - @memberjunction/storage@6.2.0-edge.3
+  - @memberjunction/network-utils@6.2.0-edge.3
+
 ## 6.2.0-edge.2
 
 ### Patch Changes
