@@ -1,0 +1,16 @@
+[
+  {
+    "fields": {
+      "Name": "Work Queue",
+      "Description": "Operator actions over the durable work queue: subscription stats, dead letters, replay and discard, partition conditions, the autoscaler backlog and cloud binding validation.",
+      "ParentID": null
+    },
+    "primaryKey": {
+      "ID": "826B85CB-BE74-4716-94A3-1126DBED59AD"
+    },
+    "sync": {
+      "lastModified": "2026-10-06T20:22:01.920Z",
+      "checksum": "e5d81b0bdd20338c9be2fe991618e0e11beda1696f8d9926dae10d583a8b884b"
+    }
+  }
+]
