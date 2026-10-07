@@ -17,13 +17,14 @@
 }
 
 /* ── Header ───────────────────────────────────────────── */
+/* Text on the header's surface uses the text tokens; inverse text is for colored backgrounds. */
 .lk-room__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 10px 16px;
   background: var(--mj-bg-surface, #111a2b);
-  color: var(--mj-text-inverse, #fff);
+  color: var(--mj-text-primary, #fff);
   border-bottom: 1px solid var(--mj-border-subtle, rgba(255, 255, 255, 0.08));
 }
 .lk-room__title {
@@ -57,7 +58,7 @@
   align-items: center;
   gap: 6px;
   font-size: 0.82rem;
-  color: var(--mj-text-inverse, #fff);
+  color: var(--mj-text-secondary, #fff);
   opacity: 0.85;
 }
 .lk-room__e2ee {
