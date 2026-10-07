@@ -1,3 +1,4 @@
+import { PermissionConstrainedError } from '@memberjunction/core';
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from "@memberjunction/core";
 import { UUIDsEqual, NormalizeUUID, MJGlobal } from "@memberjunction/global";
 import { AIModelConfiguration, ModelUsage, ModelUsageUnitKind, ParseModelConfiguration, ParseVendorConfiguration, ResolveEffectiveModelConfiguration } from "@memberjunction/ai";
@@ -918,6 +919,21 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
 
     public get Agents(): MJAIAgentEntityExtended[] {
         return this.GetConfigData<MJAIAgentEntityExtended>('_agents');
+    }
+
+    /**
+     * The agents this user may read, or none: `Agents` throws {@link PermissionConstrainedError} when the engine could not
+     * load them for the current user, which is right for code that needs them and wrong for a screen that must keep rendering
+     * (a conversation, a mention picker, a task's agent name) for a user who holds no read on MJ: AI Agents. Such code reads
+     * this instead and gets an empty list, the same way `IsPermissionConstrained` tells it to.
+     */
+    public get ReadableAgents(): MJAIAgentEntityExtended[] {
+        try {
+            return this.Agents;
+        } catch (error) {
+            if (error instanceof PermissionConstrainedError) return [];
+            throw error;
+        }
     }
 
     public get AgentRelationships(): MJAIAgentRelationshipEntity[] {

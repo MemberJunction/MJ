@@ -87,7 +87,7 @@ export class MentionAutocomplete extends BaseSingleton<MentionAutocomplete> {
       // Load agents from AIEngineBase
       await AIEngineBase.Instance.Config(false);
 
-      const allAgents = AIEngineBase.Instance.Agents || [];
+      const allAgents = AIEngineBase.Instance.ReadableAgents; // none for a user with no read on MJ: AI Agents, not a throw (MJ#5240)
 
       // Filter by status, hierarchy, and invocation mode first
       const candidateAgents = allAgents.filter(

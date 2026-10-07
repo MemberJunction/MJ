@@ -949,7 +949,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
         ArtifactMetadataEngine.Instance.Config(false)
       ]);
 
-      console.log('✅ AI Engine initialized with', AIEngineBase.Instance.Agents?.length || 0, 'agents');
+      console.log('✅ AI Engine initialized with', AIEngineBase.Instance.ReadableAgents.length, 'agents');
       console.log('✅ Artifact Metadata Engine initialized with',
         ArtifactMetadataEngine.Instance.ArtifactTypes?.length || 0, 'artifact types');
 
@@ -1404,7 +1404,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
       // Refresh the mention autocomplete service to pick up new agents
       await this.mentionAutocompleteService.refresh(this.CurrentUser);
 
-      const agentCount = AIEngineBase.Instance.Agents?.length || 0;
+      const agentCount = AIEngineBase.Instance.ReadableAgents.length;
       this.notificationService.CreateSimpleNotification(`Agent cache refreshed (${agentCount} agents)`, 'success', 3000);
       this.cdr.detectChanges();
     } catch (error) {

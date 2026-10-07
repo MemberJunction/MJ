@@ -7,6 +7,8 @@ vi.mock('@memberjunction/ai-engine-base', () => ({
   AIEngineBase: {
     Instance: {
       Agents: [{ ID: 'a1', Name: 'Sage', IconClass: 'fa-brain', Description: 'Conversation manager' }],
+      // What the component reads (MJ#5240): the agents when this user may read them, else none
+      ReadableAgents: [{ ID: 'a1', Name: 'Sage', IconClass: 'fa-brain', Description: 'Conversation manager' }],
     },
   },
 }));
