@@ -66,6 +66,12 @@ class FakePlayback implements IRealtimePcmPlayback {
     public Closed = false;
     /** Controllable stand-in for "playhead is ahead of the context clock". */
     public IsPlaying = false;
+    /** Stand-in for the Web Audio output stream the real playback exposes (issue #5153). */
+    public OutputStream: MediaStream | null = null;
+
+    public GetOutputStream(): MediaStream | null {
+        return this.OutputStream;
+    }
 
     public Enqueue(pcm16: ArrayBuffer): void {
         this.Enqueued.push(pcm16);
@@ -200,6 +206,14 @@ describe('xAIRealtimeClient', () => {
             await connect(client);
             client.OnPcmChunk?.('UENNMTY=');
             expect(client.Fake.SentFrames().at(-1)).toEqual({ type: 'input_audio_buffer.append', audio: 'UENNMTY=' });
+        });
+
+        it('should keep the client-side requestedTracks hint out of session.update', async () => {
+            await connect(client, { type: 'realtime', instructions: 'be the session voice', requestedTracks: [{ Direction: 'Inbound', Modality: 'Video' }] });
+            expect(client.Fake.SentFrames()[0]).toEqual({
+                type: 'session.update',
+                session: { type: 'realtime', instructions: 'be the session voice' },
+            });
         });
 
         it('should NOT send a session.update when the session config is empty', async () => {
@@ -596,9 +610,13 @@ describe('xAIRealtimeClient', () => {
         it('should send the instructions and tag the resulting turn as narration, then reset to normal', () => {
             const { transcripts } = collect(client);
             client.RequestSpokenUpdate('Say one short first-person sentence.');
+            // The session prompt rides AHEAD of the direction: `response.instructions` is a full
+            // override of the session prompt, so sending the direction alone would leave the model
+            // with no identity for exactly this one turn (#4591). `makeConfig` mints the session
+            // with `instructions: 'be the session voice'`.
             expect(client.Fake.SentFrames().at(-1)).toEqual({
                 type: 'response.create',
-                response: { instructions: 'Say one short first-person sentence.' },
+                response: { instructions: 'be the session voice\n\nSay one short first-person sentence.' },
             });
             expect(client.IsBusy).toBe(true);
 
@@ -703,6 +721,22 @@ describe('xAIRealtimeClient', () => {
             expect(track.enabled).toBe(false);
             client.SetMuted(false);
             expect(track.enabled).toBe(true);
+        });
+
+        it('should publish the playback output stream on Connect and clear it on Disconnect (#5153)', async () => {
+            const agentStream = new FakeMediaStream([]);
+            client.Playback.OutputStream = agentStream;
+            const delivered: (MediaStream | null)[] = [];
+            client.OnRemoteMediaStream((s) => delivered.push(s));
+
+            await connect(client);
+
+            expect(client.GetRemoteMediaStream()).toBe(agentStream);
+            expect(delivered).toEqual([agentStream]);
+
+            await client.Disconnect();
+
+            expect(client.GetRemoteMediaStream()).toBeNull();
         });
 
         it('should tear everything down and emit closed on Disconnect', async () => {

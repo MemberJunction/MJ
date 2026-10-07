@@ -12,6 +12,7 @@ import {
     ClientRealtimeSessionConfig,
     REALTIME_SHARED_CONFIG_KEYS,
     ExtractToolSchedulingHint,
+    RealtimeDiagLog,
 } from '../generic/baseRealtime';
 import { IsTranscriptContinuation } from '../generic/transcriptContinuation';
 
@@ -498,3 +499,33 @@ describe('ExtractToolSchedulingHint', () => {
     });
 });
 
+
+describe('RealtimeDiagLog', () => {
+    it('is a silent no-op when there is no global process (browser client drivers call it)', () => {
+        const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+        const nodeProcess = globalThis.process;
+        Reflect.deleteProperty(globalThis, 'process');
+        try {
+            expect(typeof globalThis.process).toBe('undefined');
+            expect(() => RealtimeDiagLog('[GeminiRealtimeClient] Transport closed: code=1011')).not.toThrow();
+        } finally {
+            globalThis.process = nodeProcess;
+        }
+        expect(log).not.toHaveBeenCalled();
+        log.mockRestore();
+    });
+
+    it('still logs when MJ_VERBOSE is on in Node', () => {
+        const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+        const previous = process.env.MJ_VERBOSE;
+        process.env.MJ_VERBOSE = 'true';
+        try {
+            RealtimeDiagLog('[diag] turn boundary');
+        } finally {
+            if (previous === undefined) delete process.env.MJ_VERBOSE;
+            else process.env.MJ_VERBOSE = previous;
+        }
+        expect(log).toHaveBeenCalledWith('[diag] turn boundary');
+        log.mockRestore();
+    });
+});

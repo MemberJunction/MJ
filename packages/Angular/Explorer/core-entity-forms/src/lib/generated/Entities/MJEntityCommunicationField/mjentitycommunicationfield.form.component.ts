@@ -15,7 +15,6 @@ export class MJEntityCommunicationFieldFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'identification', sectionName: 'Identification', isExpanded: true },
             { sectionKey: 'mappingConfiguration', sectionName: 'Mapping Configuration', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);

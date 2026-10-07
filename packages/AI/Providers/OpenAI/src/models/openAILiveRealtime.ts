@@ -228,6 +228,7 @@ export class OpenAILiveSession implements IRealtimeSession {
             CanReconfigureTurnMode: false,
             SupportedReasoningPlanes: ['local', 'remote'],
             CanReconfigureDelegationMode: false,
+            FullDuplex: true,
             EmitsUserInterruptionSignal: false,
             EmitsProviderCutoffSignal: true,
             EmitsResponseComplete: false,
