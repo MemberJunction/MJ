@@ -41,9 +41,11 @@ import {
 } from '@memberjunction/ai-core-plus';
 import {
   BaseResult,
+  ChatResult,
   ErrorAnalyzer,
   AIErrorInfo,
   GetAIAPIKey,
+  CredentialScopeAllows,
   AIPromptConfiguration,
   ModelUsage
 } from '@memberjunction/ai';
@@ -302,6 +304,11 @@ export abstract class BaseModelRunner {
    * IMPORTANT: When ANY credential ID is found (priorities 1-4), the system uses
    * the Credentials path and ignores legacy methods (priorities 5-6).
    *
+   * Each tier is consulted only if {@link CredentialScopeAllows} the run's
+   * {@link AIPromptParams.CredentialScope} to use its source. Under `'RuntimeOnly'` that leaves
+   * priority 1 and the `apiKeys` entry for this driver class; bindings, the vendor default and the
+   * environment are skipped.
+   *
    * @param driverClass - The driver class name (e.g., 'OpenAILLM')
    * @param promptId - The prompt ID for looking up AIPromptModel credentials
    * @param modelId - The model ID for looking up AIPromptModel and AIModelVendor credentials
@@ -323,6 +330,34 @@ export abstract class BaseModelRunner {
       return await this.resolveCredentialById(params.credentialId, 'per-request override', params, verbose);
     }
 
+    // Priorities 2-5 are the platform's MJ Credentials; a scope that rules them out skips straight
+    // to the caller's keys (and, if the scope allows it, the environment).
+    if (CredentialScopeAllows(params.CredentialScope, 'PlatformCredential')) {
+      const platformCredential = await this.resolvePlatformCredential(promptId, modelId, vendorId, params, verbose);
+      if (platformCredential) return platformCredential;
+    }
+
+    // No credential bindings found - fall back to legacy methods
+    if (verbose) {
+      this.logStatus(`   Using legacy API key resolution for driver ${driverClass}`, true, params);
+    }
+
+    // Priority 6 & 7: Legacy apiKeys array and environment variables (the latter only if the scope allows)
+    return GetAIAPIKey(driverClass, params.apiKeys, verbose, params.CredentialScope);
+  }
+
+  /**
+   * Priorities 2-5 of {@link ResolveCredentialForExecution}: the platform's MJ Credentials —
+   * `AICredentialBinding`s on the prompt-model, the model-vendor and the vendor, then the vendor's
+   * default credential. `undefined` when none resolves.
+   */
+  private async resolvePlatformCredential(
+    promptId: string | undefined,
+    modelId: string | undefined,
+    vendorId: string | undefined,
+    params: AIPromptParams,
+    verbose: boolean
+  ): Promise<string | undefined> {
     // Ensure CredentialEngine is configured for binding lookups
     await CredentialEngine.Instance.Config(false, params.contextUser);
 
@@ -369,13 +404,7 @@ export abstract class BaseModelRunner {
       }
     }
 
-    // No credential bindings found - fall back to legacy methods
-    if (verbose) {
-      this.logStatus(`   Using legacy API key resolution for driver ${driverClass}`, true, params);
-    }
-
-    // Priority 6 & 7: Legacy apiKeys array and environment variables
-    return GetAIAPIKey(driverClass, params.apiKeys, verbose);
+    return undefined;
   }
 
   /**
@@ -535,6 +564,10 @@ export abstract class BaseModelRunner {
    * 6. Legacy: params.apiKeys[] array
    * 7. Legacy: AI_VENDOR_API_KEY__<DRIVER> environment variables
    *
+   * Each tier counts only if {@link CredentialScopeAllows} the run's scope to use its source: under
+   * `'RuntimeOnly'` only 1 and 6 count, so a candidate the caller has no key for is unavailable —
+   * which is what keeps failover on the caller's keys.
+   *
    * @param driverClass - The driver class name (e.g., 'OpenAILLM')
    * @param promptId - The prompt ID for looking up AIPromptModel bindings
    * @param modelId - The model ID for looking up AIPromptModel and AIModelVendor bindings
@@ -555,6 +588,18 @@ export abstract class BaseModelRunner {
       return true;
     }
 
+    // Priorities 2-5: the platform's MJ Credentials, when the scope allows them
+    if (CredentialScopeAllows(params?.CredentialScope, 'PlatformCredential') && this.hasPlatformCredential(promptId, modelId, vendorId)) {
+      return true;
+    }
+
+    // Priority 6 & 7: Legacy methods - check if API key is available (the environment only if the scope allows)
+    const apiKey = GetAIAPIKey(driverClass, params?.apiKeys, params?.verbose, params?.CredentialScope);
+    return this.isValidAPIKey(apiKey);
+  }
+
+  /** Priorities 2-5 of {@link HasCredentialsAvailable}: whether a platform MJ Credential applies. */
+  private hasPlatformCredential(promptId: string | undefined, modelId: string | undefined, vendorId: string | undefined): boolean {
     // Priority 2: PromptModel bindings
     if (promptId && modelId) {
       const promptModel = AIEngine.Instance.PromptModels.find(
@@ -592,9 +637,7 @@ export abstract class BaseModelRunner {
       }
     }
 
-    // Priority 6 & 7: Legacy methods - check if API key is available
-    const apiKey = GetAIAPIKey(driverClass, params?.apiKeys, params?.verbose);
-    return this.isValidAPIKey(apiKey);
+    return false;
   }
 
   /**
@@ -1761,7 +1804,7 @@ export abstract class BaseModelRunner {
         return result;
 
       } catch (error) {
-        lastError = error as Error;
+        lastError = this.asModelError(error as Error | ChatResult);
 
         // Analyze error to get error info
         const errorInfo = ErrorAnalyzer.analyzeError(lastError);
@@ -1938,6 +1981,23 @@ export abstract class BaseModelRunner {
     const delaySeconds = (delay / 1000).toFixed(1);
     LogStatus(`   Waiting ${delaySeconds}s before retry (strategy: ${prompt.RetryStrategy || 'Fixed'})...`);
     await new Promise(resolve => setTimeout(resolve, delay));
+  }
+
+  /**
+   * The Error a failover attempt records for a caught value. A streaming call rejects with its failed
+   * ChatResult (BaseLLM) rather than an Error, so its `.message` was undefined and every such failure
+   * reached the prompt run and the agent run as "Unknown error". Keeps the driver's classification on
+   * it, which ErrorAnalyzer then honours. Any other rejected value is classified as itself, with its
+   * `errorMessage` read as the message ErrorAnalyzer looks for — so a bare `{ status: 429 }` stays a
+   * RateLimit and `{ errorMessage: 'Invalid API key provided' }` stays an Authentication error.
+   */
+  private asModelError(caught: Error | ChatResult): Error {
+    if (caught instanceof Error) {
+      return caught;
+    }
+    const wrapped: Error & { errorInfo?: AIErrorInfo } = new Error(caught?.errorMessage || caught?.statusText || 'Model execution failed');
+    wrapped.errorInfo = caught?.errorInfo ?? ErrorAnalyzer.analyzeError({ ...caught, message: caught?.errorMessage });
+    return wrapped;
   }
 
   /**

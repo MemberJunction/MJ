@@ -13,7 +13,7 @@ import { BuildFormAgentContext, type FormAgentContext, type FormCompositionSnaps
   standalone: false,
     selector: 'mj-record-resource',
     styles: [`:host { display: block; height: 100%; width: 100%; }`],
-    template: `<mj-single-record [PrimaryKey]="this.PrimaryKey" [entityName]="Data.Configuration.Entity" [newRecordValues]="Data.Configuration.NewRecordValues" (loadComplete)="NotifyLoadComplete()" (recordSaved)="ResourceRecordSaved($event)" (recordDismissed)="NotifyCloseRequested()" (CompositionChanged)="OnCompositionChanged($event)"></mj-single-record>`
+    template: `<mj-single-record [PrimaryKey]="this.PrimaryKey" [entityName]="Data.Configuration.Entity" [newRecordValues]="Data.Configuration.NewRecordValues" (loadComplete)="NotifyLoadComplete()" (recordSaved)="ResourceRecordSaved($event)" (recordDismissed)="NotifyCloseRequested()" (EditModeChanged)="ResourceEditModeChanged($event)" (CompositionChanged)="OnCompositionChanged($event)"></mj-single-record>`
 })
 export class EntityRecordResource extends BaseResourceComponent implements OnInit {
     @ViewChild(SingleRecordComponent) private singleRecord?: SingleRecordComponent;
@@ -23,9 +23,14 @@ export class EntityRecordResource extends BaseResourceComponent implements OnIni
     /** The form context this tab last reported, kept so it can be published again. */
     private agentContext: { Form: FormAgentContext } | null = null;
 
-    /** A record being edited must never be consumed as the region's temp tab. */
+    /** Fallback read for the pool predicate; promotion via ResourceEditModeChanged is the primary guard. */
     public override IsEditing(): boolean {
         return this.singleRecord?.IsEditing() === true;
+    }
+
+    /** The hosted form entered or left edit mode; the shell promotes the tab on `true`. */
+    public ResourceEditModeChanged(editing: boolean): void {
+        this.NotifyEditModeChanged(editing);
     }
 
     public override ngOnInit(): void {

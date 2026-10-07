@@ -30,6 +30,7 @@ import { AgentDecisionsSwitchChecks } from '../checks/agent-decisions-switch.che
 import { ListsChecks } from '../checks/lists.checks';
 import { OpenAppTeardownChecks } from '../checks/open-app-teardown.checks';
 import { UserRoutinesChecks } from '../checks/user-routines.checks';
+import { WorkQueueRuntimeChecks } from '../checks/work-queue-runtime.checks';
 import { AgentLoopLiveChecks } from '../checks/agent-loop-live.checks';
 import { ShippedAgentsLiveChecks } from '../checks/shipped-agents-live.checks';
 import { AgentCarryForwardChecks } from '../checks/agent-carry-forward.checks';
@@ -55,6 +56,7 @@ import { EntityEmbeddedChecks } from '../checks/entity-embedded.checks';
 import { EntityGraphClientChecks } from '../checks/entity-graph-client.checks';
 import { JSONTypeLiveSyncChecks, JSONTypeLiveSyncClientChecks } from '../checks/jsontype-live-sync.checks';
 import { RecordCloningChecks } from '../checks/record-cloning.checks';
+import { BinaryFieldsChecks } from '../checks/binary-fields.checks';
 import { TaskGraphOrchestrationChecks } from '../checks/task-graph-orchestration.checks';
 import { EntityActionChecks } from '../checks/entity-actions.checks';
 import { FlsEnforcementChecks } from '../checks/fls-enforcement.checks';
@@ -134,6 +136,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['lists', ListsChecks, 3],
         ['open-app-teardown', OpenAppTeardownChecks, 2],
         ['user-routines', UserRoutinesChecks, 16],
+        ['work-queue-runtime', WorkQueueRuntimeChecks, 19], // WR1-WR19 host, RunOnce, partitions, cancel, operators, sweeper, REST (IT105)
         ['conversation-compaction', ConversationCompactionChecks, 18], // CC1-CC18
         ['trailing-runtime-state', TrailingRuntimeStateChecks, 6], // TRS1-TRS6
         ['agent-decisions-switch', AgentDecisionsSwitchChecks, 9], // DS1-DS9 the decisionsEnabled master switch, scripted chat and decision drivers (IT97)
@@ -175,6 +178,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['fls-enforcement-client', FlsClientChecks, 6], // FC1-FC6 FLS over the wire via per-user API keys (IT92)
         ['metadata-sync-push', MetadataSyncPushChecks, 10], // MSP1-MSP10 sync push atomicity, in-transaction metadata reload, and one row-level security filter, mutation tier (IT94)
         ['record-cloning', RecordCloningChecks, 13], // RC1-RC9 plan §13.2 + RC10-RC13 real-database dry runs, client transport (IT96)
+        ['binary-fields', BinaryFieldsChecks, 6], // BF1-BF6 binary fields end to end + binary vector columns, client transport (IT101)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
@@ -249,6 +253,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'app-behavioral': 3,
         'app-wiring': 10,
         'auth-validation': 7,
+        'binary-fields': 6,
         'cache-gauntlet': 8,
         'cache-immutability': 15,
         'class-resolution': 5,
@@ -324,6 +329,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'user-routines': 16,
         'view-execution': 12,
         'view-security': 4,
+        'work-queue-runtime': 19,
         'workflow-demo-agents': 5,
     };
 
@@ -348,7 +354,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(103);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(105);
     });
 });
 
@@ -389,6 +395,8 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'actions-pipeline.AP2',
         'app-behavioral.AB1',
         'app-behavioral.AB2',
+        'binary-fields.BF4',
+        'binary-fields.BF6',
         'cache-gauntlet.CG1',
         'cache-gauntlet.CG2',
         'cache-gauntlet.CG3',

@@ -108,4 +108,18 @@ describe('ExecuteAgentAction output params', () => {
         expect(params.Params.find((p) => p.Name === 'AgentRunID')?.Value).toBe('RUN-1');
         expect(params.Params.find((p) => p.Name === 'Payload')?.Value).toEqual({ done: true });
     });
+
+    it("forwards the calling run's CredentialScope to the nested agent run", async () => {
+        runAgentMock.mockResolvedValue({ success: true, payload: { done: true }, agentRun: circularAgentRun() });
+        const params = {
+            Params: [{ Name: 'AgentName', Type: 'Input', Value: 'Person Lifecycle Changed' }] as Param[],
+            ContextUser: { ID: 'u-1' },
+            CredentialScope: 'RuntimeOnly',
+        };
+
+        await run(new ExecuteAgentAction(), params);
+
+        expect(runAgentMock).toHaveBeenCalledTimes(1);
+        expect(runAgentMock.mock.calls[0][0]).toMatchObject({ CredentialScope: 'RuntimeOnly' });
+    });
 });

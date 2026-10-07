@@ -42,7 +42,7 @@ import { CallLifecycleTracker, type TrackedSession } from './callLifecycleTracke
 import { CreateCallerIdentityResolver, type ICallerIdentityResolver } from './callerIdentity.js';
 import { TelephonyCapacity, type CallCapacityLease, type ICallCapacity } from './telephonyCapacity.js';
 import { AuthorizeOutboundCallOrRelease } from './telephonyCallSession.js';
-import { OutboundCallRefusedError, OutboundRateLimiter, ResolveOutboundPolicy, ResolveTransferDirectory, MaskNumber, type OutboundGuardDeps } from './outboundCallPolicy.js';
+import { OutboundCallRefusedError, OutboundRateLimiter, ResolveOutboundPolicy, ResolveTransferDirectory, MaskNumber, IsValidE164, type OutboundGuardDeps } from './outboundCallPolicy.js';
 import { CreateSipTrunkCarrier } from './sipTrunkCarrier.js';
 import { FindInboundRoute, FindPhoneAgentIdentity, LoadActiveAgentIdentity } from './agentIdentityLookup.js';
 import { RoomCallSessionStarter } from './roomCallSession.js';
@@ -393,9 +393,78 @@ export class LiveKitSipTelephonyService {
 
     // ── wiring and startup checks ────────────────────────────────────────────────
 
+    private cachedTrunkNumbers?: Set<string>;
+    private lastMissRefresh = 0;
+    private static readonly TRUNK_CACHE_REFRESH_MIN_INTERVAL_MS = 60_000;
+
+    private async loadTrunkNumbers(trunkID?: string): Promise<Set<string>> {
+        if (this.cachedTrunkNumbers) {
+            return this.cachedTrunkNumbers;
+        }
+        try {
+            const trunks = await this.sip.ListOutboundTrunks();
+            const trunk = trunkID ? trunks.find((t) => t.TrunkID === trunkID) : undefined;
+            const numbers = trunk?.Numbers ?? [];
+            this.cachedTrunkNumbers = new Set(numbers);
+        } catch (e) {
+            LogError(`[Telephony][LiveKitSip] could not load outbound trunk numbers: ${e instanceof Error ? e.message : String(e)}`);
+            this.cachedTrunkNumbers = new Set();
+        }
+        return this.cachedTrunkNumbers;
+    }
+
+    private async refreshTrunkNumbersOnMiss(trunkID?: string): Promise<Set<string>> {
+        const now = Date.now();
+        if (now - this.lastMissRefresh < LiveKitSipTelephonyService.TRUNK_CACHE_REFRESH_MIN_INTERVAL_MS && this.cachedTrunkNumbers) {
+            return this.cachedTrunkNumbers;
+        }
+        this.lastMissRefresh = now;
+        try {
+            const trunks = await this.sip.ListOutboundTrunks();
+            const trunk = trunkID ? trunks.find((t) => t.TrunkID === trunkID) : undefined;
+            const numbers = trunk?.Numbers ?? [];
+            this.cachedTrunkNumbers = new Set(numbers);
+        } catch (e) {
+            LogError(`[Telephony][LiveKitSip] could not refresh outbound trunk numbers: ${e instanceof Error ? e.message : String(e)}`);
+        }
+        return this.cachedTrunkNumbers ?? new Set();
+    }
+
+    private async validateFromNumber(fromNumber: string | undefined, trunkID: string): Promise<string | undefined> {
+        const trimmed = typeof fromNumber === 'string' ? fromNumber.trim() : undefined;
+        if (!trimmed) {
+            return this.config.outboundFromNumber;
+        }
+
+        if (!IsValidE164(trimmed)) {
+            throw new Error(`FromNumber '${trimmed}' is not a valid E.164 phone number.`);
+        }
+
+        let ownedTrunkNumbers = await this.loadTrunkNumbers(trunkID);
+        if (ownedTrunkNumbers.has(trimmed)) {
+            return trimmed;
+        }
+
+        if (this.config.numbers && this.config.numbers.includes(trimmed)) {
+            return trimmed;
+        }
+
+        // On cache miss, refresh the trunk-numbers cache (throttled to at most once per interval)
+        // so a newly added trunk number doesn't require a service restart.
+        ownedTrunkNumbers = await this.refreshTrunkNumbersOnMiss(trunkID);
+        if (ownedTrunkNumbers.has(trimmed)) {
+            return trimmed;
+        }
+
+        throw new Error(`FromNumber '${trimmed}' is not owned by this organization.`);
+    }
+
     /** Gives the handoff engine what only the LiveKit SIP path can: dialing a number into a room, and starting another agent in one. */
     private wireHandoffEngine(): void {
         const trunkID = this.config.outboundTrunkId;
+        if (trunkID) {
+            void this.loadTrunkNumbers(trunkID);
+        }
         this.handoff.Configure({
             Presence: this.sip,
             Observer: {
@@ -415,8 +484,15 @@ export class LiveKitSipTelephonyService {
             },
             Dialer: trunkID
                 ? {
-                      DialIntoRoom: (request: DialIntoRoomRequest) =>
-                          this.sip.DialIntoRoom({ ...request, TrunkID: trunkID, FromNumber: this.config.outboundFromNumber, WaitUntilAnswered: true }),
+                      DialIntoRoom: async (request: DialIntoRoomRequest): Promise<void> => {
+                          const validatedFrom = await this.validateFromNumber(request.FromNumber, trunkID);
+                          return this.sip.DialIntoRoom({
+                              ...request,
+                              TrunkID: trunkID,
+                              FromNumber: validatedFrom,
+                              WaitUntilAnswered: true,
+                          });
+                      },
                   }
                 : undefined,
             AgentStarter: (request: StartRoomAgentRequest) => this.starter.StartRoomAgent(request),

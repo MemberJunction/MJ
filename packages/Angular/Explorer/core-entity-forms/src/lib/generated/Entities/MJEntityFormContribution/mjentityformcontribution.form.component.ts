@@ -15,7 +15,6 @@ export class MJEntityFormContributionFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'targetConfiguration', sectionName: 'Target Configuration', isExpanded: true },
             { sectionKey: 'generalInformation', sectionName: 'General Information', isExpanded: true },
             { sectionKey: 'overrideLogic', sectionName: 'Override Logic', isExpanded: true },

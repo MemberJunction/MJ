@@ -1291,12 +1291,34 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT105 - Work Queue Runtime (native host, operators, REST)",
+            "Sequence": 48,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "B88AFB7E-06E4-47D4-BC45-8DDE8FF215A8"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT103 - RunQuery Rendering over GraphQL",
             "Sequence": 72,
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "F010EDA8-2094-41BA-8E25-0D5EFB0C13FE"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT101 - Binary Fields and Vector Columns",
+            "Sequence": 73,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "80642370-A10B-405B-89CC-536AAAA00397"
           }
         }
       ]

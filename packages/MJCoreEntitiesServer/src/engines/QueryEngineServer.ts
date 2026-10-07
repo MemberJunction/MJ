@@ -1,7 +1,7 @@
 import { BaseSingleton } from '@memberjunction/global';
 import { LogError, LogStatus, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { QueryEngine } from '@memberjunction/core-entities';
-import { SimpleVectorService, VectorEntry } from '@memberjunction/ai-vectors-memory';
+import { ReadStoredVector, SimpleVectorService, VectorInputEntry } from '@memberjunction/ai-vectors-memory';
 import { EmbedTextResult } from '@memberjunction/ai';
 import { MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
 import {
@@ -198,24 +198,25 @@ export class QueryEngineServer extends BaseSingleton<QueryEngineServer> {
      */
     public RefreshQueryEmbeddings(): void {
         const queries = this.Base.Queries;
-        const entries: VectorEntry<QueryEmbeddingMetadata>[] = [];
+        const entries: VectorInputEntry<QueryEmbeddingMetadata>[] = [];
 
         for (const query of queries) {
-            if (!query.EmbeddingVector) continue;
-            try {
-                const vector = JSON.parse(query.EmbeddingVector);
-                if (!Array.isArray(vector) || vector.length === 0) continue;
-                entries.push({
-                    key: query.ID,
-                    vector,
-                    metadata: this.PackageQueryMetadata(query)
-                });
-            } catch {
-                LogError(`QueryEngineServer: Failed to parse embedding for query ${query.Name}`);
+            if (!query.EmbeddingVector && !query.EmbeddingVectorBinary) continue; // not embedded yet
+            // Binary column first (a copy), JSON as the fallback (a parse) — see ReadStoredVector.
+            const vector = ReadStoredVector(query.EmbeddingVectorBinary, query.EmbeddingVector);
+            if (!vector) {
+                LogError(`QueryEngineServer: Failed to read the embedding for query ${query.Name}`);
+                continue;
             }
+            entries.push({
+                key: query.ID,
+                vector,
+                metadata: this.PackageQueryMetadata(query)
+            });
         }
 
-        this._queryVectorService = new SimpleVectorService<QueryEmbeddingMetadata>();
+        // float32: embeddings are float32 at the source, and it halves the pool's memory
+        this._queryVectorService = new SimpleVectorService<QueryEmbeddingMetadata>({ Precision: 'float32' });
         if (entries.length > 0) {
             this._queryVectorService.LoadVectors(entries);
         }
@@ -296,7 +297,7 @@ export class QueryEngineServer extends BaseSingleton<QueryEngineServer> {
             throw new Error('Failed to generate embedding for search text');
         }
 
-        const results = this._queryVectorService.FindNearest(
+        const results = await this._queryVectorService.FindNearestAsync(
             embedding.result.vector,
             topK,
             minSimilarity,

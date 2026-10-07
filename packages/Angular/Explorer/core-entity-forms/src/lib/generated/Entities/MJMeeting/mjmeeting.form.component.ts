@@ -16,7 +16,6 @@ export class MJMeetingFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'meetingDetails', sectionName: 'Meeting Details', isExpanded: true },
             { sectionKey: 'meetingStatusAndTimeline', sectionName: 'Meeting Status and Timeline', isExpanded: true },
             { sectionKey: 'accessAndRecording', sectionName: 'Access and Recording', isExpanded: true },

@@ -37,6 +37,10 @@
       "types": "./dist/archiving-dashboards.module.d.ts",
       "default": "./dist/archiving-dashboards.module.js"
     },
+    "./work-queue-dashboards.module": {
+      "types": "./dist/work-queue-dashboards.module.d.ts",
+      "default": "./dist/work-queue-dashboards.module.js"
+    },
     "./communication-dashboards.module": {
       "types": "./dist/communication-dashboards.module.d.ts",
       "default": "./dist/communication-dashboards.module.js"
@@ -180,6 +184,8 @@
     "@memberjunction/templates-base-types": "6.2.0-edge.2",
     "@memberjunction/testing-engine-base": "6.2.0-edge.2",
     "@memberjunction/theme-engine": "6.2.0-edge.2",
+    "@memberjunction/work-queue-base": "6.2.0-edge.2",
+    "@memberjunction/work-queue-core": "6.2.0-edge.2",
     "ag-grid-angular": "^35.0.1",
     "ag-grid-community": "^35.0.1",
     "angular-split": "^20.0.0",
