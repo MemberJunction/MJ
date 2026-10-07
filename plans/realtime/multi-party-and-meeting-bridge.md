@@ -10,6 +10,8 @@
 > build; the conferencing platform *is* the shared media plane. **Read
 > [realtime-bridges-architecture.md](realtime-bridges-architecture.md) instead** — this file is kept
 > only for historical context.
+>
+> Multi-agent turn-taking, including full-duplex models, now lives in **§6a** of that document.
 
 ---
 

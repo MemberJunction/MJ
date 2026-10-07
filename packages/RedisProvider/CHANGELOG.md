@@ -1,5 +1,159 @@
 # @memberjunction/redis-provider
 
+## 6.2.0-edge.3
+
+### Patch Changes
+
+- 41c2c08: Stop serializing the whole metadata graph into a store nothing can read it back from
+
+  `ProviderBase.SaveLocalMetadataToStorage()` ran `JSON.stringify` over the entire metadata graph on
+  every metadata reload, then copied it into a `Blob`, gzipped it, and base64-encoded it one byte at a
+  time. The snapshot exists so a cold process can start from a cached copy instead of querying — which
+  only works if the store outlives the writer. On a server with no `REDIS_URL` the store is an
+  in-process `Map`, so the only possible reader is the heap that already holds the live objects, and
+  the whole round trip buys nothing.
+
+  Measured on a 791-entity tenant: 131.5M characters per stringify, ~10s and ~1.2GB of transient heap
+  per refresh against a 2.2GB steady state, and the final flatten of that string needs one contiguous
+  ~500MB allocation. Saved queries are metadata members, so an agent writing them marks metadata stale
+  and triggers a refresh roughly every 30 seconds; two overlapping refreshes exhausted the heap and
+  MJAPI died with `Reached heap limit Allocation failed` inside `String::SlowFlatten`.
+
+  `ILocalStorageProvider` gains an optional `SupportsCrossProcessPersistence`. `ProviderBase` skips
+  both the save and the load when it is `false`, logging the reason once per process. A provider that
+  does not declare it is treated as persistent, so Redis and browser behaviour is unchanged — the
+  conservative direction, since a pointless save only wastes work while wrongly skipping a necessary
+  one would leave a cache that never populates. Every in-repo provider now declares it, including the
+  instrumented test wrapper, which delegates to the store it wraps.
+
+  `arrayBufferToBase64` / `base64ToArrayBuffer` use Node's native codec when `Buffer` exists, falling
+  back to the existing loops in the browser. The byte-at-a-time encoder built a rope the size of the
+  payload and then forced a flatten, measured at 3702ms for an 8.6MB buffer under heap pressure
+  against 191ms cold.
+
+  `TelemetryManager.trimIfNeeded()` only ever trimmed `_events`. Three collections derived from it were
+  never released for the life of the process: `_insights` grew by one entry per emitted warning,
+  `_patterns` by one per distinct fingerprint (every new filter combination is a new fingerprint, so it
+  grew with query variety), and `_insightDedupeWindow` by one per dedupe key. All three are now bound
+  on the same schedule as the events they come from — `maxInsights` defaults to 1000, and the two map
+  sweeps are O(n) so they run at most once a minute rather than on every recorded event.
+
+  After the equivalent patch on a live tenant: the refresh cycle went from 10019/9372/8994 ms to
+  330/214/298 ms, heap peak from 3597/3171/3171 MB to 1576/1575/1575 MB, the per-refresh transient
+  spike from +1.0-1.2 GB to 0, and the retained baseline from 2204 MB to 1575 MB.
+
+- 196160a: Survive a Redis outage: reconnect without giving up, fail fast, say so, and come back correct
+
+  `RedisLocalStorageProvider` could not survive an outage longer than ~11 seconds, and if it could it
+  would have come back with a cache it believed was valid and wasn't. Found operationally: an Azure
+  Cache for Redis instance was unreachable for ~25 minutes and every server already running went
+  permanently cache-blind without saying so.
+
+  **Reconnection no longer surrenders.** `retryStrategy` returned `null` past `maxRetries` (default 10),
+  and `null` tells ioredis to stop reconnecting for the life of the client — no recovery short of a
+  process restart. The backoff was `times * 200`, linear despite a comment claiming otherwise, so ten
+  attempts was ~11 seconds of tolerance: shorter than a Redis restart, an ElastiCache failover or a pod
+  reschedule. The ceiling now sits on the delay between attempts (`maxRetryDelayMs`, default 30s) rather
+  than on the attempt count, and `maxRetries` becomes an opt-in for short-lived scripts that genuinely
+  should fail rather than wait.
+
+  **Reconnecting is no longer mistaken for being correct.** Pub/sub has no replay, so a subscriber that
+  was away receives nothing published during the gap — it resumes holding entries its siblings
+  invalidated minutes ago. The failure is symmetric: invalidations this process published while
+  disconnected never reached its siblings either. A fleet-wide epoch counter, incremented once per
+  mutation and carried on every `CacheChangedEvent`, is compared on reconnect: unchanged means nothing
+  was invalidated anywhere and the local cache is **kept**; advanced means everything local is dropped;
+  a process that mutated while disconnected bumps the epoch so its siblings flush too; and a counter
+  that cannot be read flushes, because an unestablished correctness claim should cost the expensive
+  answer. Keeping the cache when nothing changed is the point — a blind flush-on-reconnect is also
+  correct but discards a valid cache on every connection blip.
+
+  **Commands fail fast instead of accumulating.** With `maxRetriesPerRequest: null` and ioredis's
+  default offline queue, a multi-minute outage queued commands whose promises never settled — unbounded
+  memory plus awaits that hung for the duration. Once a connection has been established and then lost,
+  reads return a miss and writes no-op, both of which are correct and merely slower. Startup is
+  deliberately exempt: before the first connection a brief queue is the difference between a warm cache
+  and a cold one, and nothing can be stale because nothing is cached.
+
+  **The failure is now observable.** Every lifecycle handler was gated behind `enableLogging` and logged
+  via `LogStatus`, which is suppressed when `GetProductionStatus()` is true — so a dead cache client
+  produced no output at all in production. Connection loss and recovery are now public events
+  (`OnConnectionLost`, `OnConnectionRestored`, `OnReconciliationRequired`) so a consumer can degrade
+  deliberately and report health, with error-channel logging as the production-visible fallback.
+
+  `CacheChangedEvent` gains an optional `Epoch`. Transports that do not implement the counter omit it
+  and consumers that do not care about recovery can ignore it. The post-reconnect guarantee is
+  documented in `guides/CACHING_AND_PUBSUB_GUIDE.md`.
+
+- Updated dependencies [dfe40a4]
+- Updated dependencies [0f04590]
+- Updated dependencies [41c2c08]
+- Updated dependencies [66fd011]
+- Updated dependencies [196160a]
+- Updated dependencies [60bd774]
+- Updated dependencies [35da130]
+- Updated dependencies [28c92e0]
+  - @memberjunction/global@6.2.0-edge.3
+  - @memberjunction/core@6.2.0-edge.3
+
+## 6.2.0-edge.2
+
+### Patch Changes
+
+- e9bdb16: CI now runs RedisProvider's integration suites against a real Redis, and fails when they skip.
+
+  Those files are gated `describe.skipIf(!REDIS_URL)`, which in CI did not report a gap — it reported
+  success: every test skipped, the file passed, and the summary looked identical to a real run. The
+  shared-cache behaviour they pin (index-group pruning, per-category TTL, the key lock, leases) had no
+  CI coverage as a result.
+
+  The unit shards now start a `redis:7-alpine` service with a health check and a per-run key prefix, and
+  the shard that draws this package runs `.github/scripts/check-redis-suites-ran.mjs`, which re-runs the
+  gated files and requires a non-zero passed count and zero skipped. The guard discovers the files by
+  naming convention rather than listing them, so it neither breaks on a file that has not landed yet nor
+  silently ignores one that has.
+
+  No runtime behaviour changes.
+
+- ea4080e: fix: an agent completion reaches the conversation even when the WebSocket dies without closing (MJ#4222)
+
+  On an unstable connection, sending a message to an agent left the message spinning forever: status updates stopped, the elapsed timer counted up with no ceiling, and no error appeared. The agent ran fine and its answer persisted; only a refresh revealed it.
+
+  The cause was not a missing timeout but a single point of failure. Five recovery mechanisms — graphql-ws `retryAttempts`, `GraphQLDataProvider._socketStateSubject`, Explorer's `ServerConnectivityService`, `ConversationStreaming.scheduleReconnection()` and `FireAndForgetHelper.onStreamEnd` — were all triggered by the socket `closed` event, and the failure mode is precisely "the socket never closes". They failed together. graphql-ws re-arms its keepalive only on pong receipt, so a half-open socket gets one ping and then permanent silence; its own JSDoc says nothing happens automatically if the server never responds.
+
+  **Transport.** `getOrCreateWSClient()` now arms a pong watchdog on each ping it sends and calls `client.terminate()` if no pong returns, producing a real `4499` close that the existing retry apparatus can act on. Each client owns its own pong timer, and a close from a client that has already been replaced is ignored, so one socket can never terminate or disarm its replacement. `connectionAckWaitTimeout` is set, and `keepAlive` drops to 10s, making detection ~14s in practice instead of never. MJServer passes its `useServer` keepAlive explicitly rather than relying on an invisible library default.
+
+  **Recovery triggers.** New `ConversationLiveness` (L0, no Angular) aggregates socket reconnect, stream re-subscribe, tab-visible and browser-online into one coalesced reconciliation request, throttled leading-edge at 500ms. `ng-conversations` adds a root-provided DOM bridge and `ReconcileNow()`, which refreshes agent runs **before** comparing status — without that the comparison reads the stale in-memory map the outage froze and silently no-ops. The reconciliation path runs over HTTP, so it repairs a message while the socket is still dead.
+
+  **Durable read model.** New `TailConversationEvents` query over existing `AIAgentRunStep` rows — no table, no migration. The cursor never rewinds, events are capped at 200, authorization is delegated to `RunView` as the calling user through the request's read-only provider, and not-found and not-authorized are indistinguishable. Only the columns an event carries are read, never the step's input, output or payload columns. A run `Paused` on a still-running workflow reports `IsInFlight: true`, and a failed call does too, because it knows nothing about the run. `FinalPayload` falls back to the conversation detail's message because `AIAgentRun.Result` is agent-dependent and null on many successful runs; callers must decide terminality from `IsInFlight`/`DetailStatus`, never from its presence. `GraphQLConversationClient` and `ConversationTail` hold a per-message cursor that advances only on a successful read. When the tail call fails, for example a new client against an older server, the client completes a message from its run list as it did before.
+
+  **Cross-instance delivery.** Push-status updates now carry `SourceServerId` and fan out over Redis through a generic `PublishMessage`/`SubscribeToChannel` pair on `RedisLocalStorageProvider`, closing the case where the mutation lands on one replica and the browser's socket on another. Inbound messages are type-checked, then republish onto the local topic and still pass the identity filter, so a replica never decides who sees what. Streaming deltas are deliberately not replicated. Measured: 5 push frames delivered cross-replica with Redis, 0 without — and the message still completed without it, so fan-out is a latency optimization rather than a requirement.
+
+  **Deployment order.** A client deployed before the server gets a failed tail call on every reconcile and falls back to the run list, which cannot see the conversation detail's own status. The liveness pulse (`DEFAULT_PULSE_INTERVAL_MS`, 5 min → 60 s in MJServer) and the client's idle window (`DEFAULT_IDLE_TIMEOUT_MS`, 12 min → 3 min in GraphQLDataProvider) are a matched pair in separate packages. Ship the server first or with the client: a client on the 3-minute window against a server still pulsing every 5 minutes times out on every pulse gap. `DEFAULT_MAX_STALL_RECONCILES` stays at 6, so the give-up horizon moves from roughly 72 minutes to roughly 18.
+
+  **Honest UI.** The message time pill degrades `live → checking → stalled`, with thresholds anchored to the agent watchdog's own 30s heartbeat and 5-minute stale threshold rather than invented values. Silence is measured from the last push frame the browser received for the run or the message, including the server's 60s liveness pulse, and from the run's database timestamps when the run was re-read. Progress frames carry the server's in-memory run, whose timestamps do not move until the run ends, so they cannot be the only signal. A row with no MJ agent run, such as one written by a host's own turn handler, stays live while frames that name it arrive. The database timestamp is bounded by how long the component has been watching, so browser-versus-database clock skew cannot invent a stall. While HTTP works, a dead socket alone does not degrade the pill: each reconcile re-reads the run and its fresh heartbeat. The connectivity banner reports the socket. The pill's one-second timer stops whenever nothing is in flight.
+
+  A quiet pill's request for a re-check goes through the same 500ms coalescing trigger as the transport signals, and only one reconcile pass runs at a time. A request that arrives during a pass shares it and schedules one follow-up, so no request is lost and no message is completed twice.
+
+  Also fixes three defects found by manual testing that unit tests missed, each an instance of the same pattern as the original bug — a mechanism wired to a signal the failure mode suppresses: liveness was computed only in `ngDoCheck`, which `detectChanges()` does not re-invoke; `agentRunMap` was absent from `message-list`'s `ngOnChanges`, so a refreshed heartbeat never reached the rendered bubble; and the reconnection backoff reset on every re-subscribe, which succeeds against a dead socket, pinning the delay at its base value and leaving the escalation inert. The backoff escalates to a 60s ceiling and retries for the life of the page; it has no attempt cap, because no host calls `initialize()` outside `ngOnInit`, so a stream that stopped retrying would stay stopped until a reload. Up to 20% is taken off each delay at random so tabs do not retry in lockstep, and the backoff clears when the socket reports `connected`, which follows the server's acknowledgement, so a quiet healthy stream does not start its next outage at the ceiling.
+
+  Two further defects this surfaced, both fixed here. Explorer's connectivity warning cleared on an HTTP 200 from `/healthcheck`, before the socket was back — reachable over HTTP and able to carry frames are different properties, and a half-open socket satisfies the first while dropping every push. The warning now clears when the socket itself reports `connected`, and a `degraded` flag makes that sticky so the transient `unknown` emitted by the service's own `ForceSocketReconnect()` cannot read as recovery. The one exception is a screen with no active subscription: no socket exists there, so no `connected` can arrive, and an HTTP 200 clears the warning. A subscription opened later against a socket that is still down raises it again.
+
+  And a new `OrphanedConversationDetailReconciler` closes conversation details left `In-Progress` by a run that is already over. `AgentRunner` closes the detail as a run's final step, so a process that dies mid-run never reaches it; the agent-run watchdog repairs the run but nothing repaired the detail, which is the row the chat renders from. It runs at boot and every five minutes, asks only for details that have a finished run so stuck rows cannot fill its 200-row window, waits a grace period so it cannot race a normal completion, skips a detail that something else closed after it was listed, and writes as the conversation's OWNER — `MJConversationDetailEntityExtended.Save()` refuses a non-owner without a resource grant, so a maintenance pass running as the system user is silently rejected, returning false with no `LatestResult` to read. Verified against five real orphaned details aged 42 to 246 minutes: all five closed, none left.
+
+- Updated dependencies [e97d95c]
+- Updated dependencies [21f9e15]
+- Updated dependencies [4248fb3]
+- Updated dependencies [0adaf76]
+- Updated dependencies [705ab4e]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [5986939]
+- Updated dependencies [4d647e6]
+- Updated dependencies [369e229]
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+
 ## 6.2.0-edge.1
 
 ### Patch Changes
