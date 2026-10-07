@@ -375,6 +375,18 @@ export class RunActionParams<TContext = any> {
    public Audience?: ActionRunAudience;
 
    /**
+    * The agent run's scope — its tenant (`PrimaryScopeRecordID`) and secondary dimensions — set by BaseAgent on
+    * every dispatch inside an agent run, from the run's validated scope (`ExecuteAgentParams.PrimaryScope*` /
+    * `SecondaryScopes`, as written to the `MJ: AI Agent Runs` row). Fields are `null` when the run is unscoped;
+    * the object itself is ABSENT outside an agent run. Per dispatch and not on {@link Context}, for the reason
+    * {@link Audience} is not: the context is the agent's own object. The model cannot set it.
+    *
+    * An action that scopes by tenant must treat it as authoritative over its own parameters, which inside a Loop
+    * agent are model-written: default a missing tenant to the run's, and refuse one the run does not carry.
+    */
+   public RunScope?: ActionRunScope;
+
+   /**
     * Optional AbortSignal that is aborted when the action exceeds its wall-clock
     * time budget (set via `Action.MaxExecutionTimeMS` or the engine default). Set
     * automatically by `ActionEngine.RunAction()` — callers should not populate it
@@ -636,3 +648,23 @@ export type RuntimeAPIKeyResolver = (driverClass: string) => string | undefined;
  * does not depend on that one.
  */
 export type RuntimeCredentialScope = 'Any' | 'RuntimeOnly';
+
+/**
+ * One secondary scope dimension's value. The same union as `SecondaryScopeValue` in
+ * `@memberjunction/ai-core-plus`, declared here because that package depends on this one: BaseAgent assigns
+ * the one to the other, so a value added to either and not both fails to compile there.
+ */
+export type ActionRunScopeValue = string | number | boolean | string[];
+
+/**
+ * An agent run's scope, as BaseAgent hands it to each action dispatch ({@link RunActionParams.RunScope}).
+ * `null` fields mean the run carries no such scope; the whole object is absent outside an agent run.
+ */
+export interface ActionRunScope {
+   /** The primary scope entity's name (e.g. `'Organizations'`), or `null` when the run names none. */
+   PrimaryScopeEntityName?: string | null;
+   /** The run's tenant: the record ID within the primary scope entity, or `null` when the run has none. */
+   PrimaryScopeRecordID: string | null;
+   /** The run's secondary dimensions (with the agent's configured defaults applied), or `null` when it has none. */
+   SecondaryScopes?: Record<string, ActionRunScopeValue> | null;
+}

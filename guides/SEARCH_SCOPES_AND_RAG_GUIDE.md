@@ -161,7 +161,7 @@ Assign `__Scoped_Search` to an agent's action set. When the agent calls it, the 
 1. Resolves the agent identity from `params.Context.AgentID` (or explicit `AgentID` param).
 2. Enforces `SearchScopeAccess`.
 3. Resolves the target scope (explicit `ScopeID`, agent's default, or Global).
-4. Reads the optional `PrimaryScopeRecordID` (string UUID) and `SecondaryScopes` (JSON string) inputs, assembling a `SearchContext` when at least one is supplied. See [§10](#10-multi-tenant-search-context) for the runtime context model.
+4. Resolves the tenant (`PrimaryScopeRecordID`) and secondary dimensions (`SecondaryScopes`). **Inside an agent run the run's scope is authoritative** (see [below](#inside-an-agent-run-the-runs-scope-is-authoritative)); outside one the optional inputs are used as given. A `SearchContext` is assembled when a tenant or a dimension applies, and the same tenant goes into the permission decision (`ResolveEffectivePermission`), so tenant-scoped grants and denies judge exactly the search that runs. See [§10](#10-multi-tenant-search-context) for the runtime context model.
 5. Runs `SearchEngine.Search()` with `ScopeIDs: [resolvedScopeID]` and `SearchContext: <assembled>`.
 6. Returns ranked results + `ScopeID_Resolved` / `ScopeName_Resolved` output params.
 
@@ -171,8 +171,24 @@ The action accepts two optional inputs whose values flow into `SearchParams.Sear
 
 | Input | Type | Purpose |
 |---|---|---|
-| `PrimaryScopeRecordID` | string (UUID) | Primary tenant key (e.g. `OrganizationID`). Available in templates as `{{ context.PrimaryScopeRecordID }}`. |
-| `SecondaryScopes` | JSON string | Flat object of additional dimensions as `{ "<key>": <value> }`. Each value must be `string \| number \| boolean \| string[]`. Available in templates as `{{ context.SecondaryScopes.<key> }}`. Incompatible value types are dropped at parse time with a log; malformed JSON falls back to `undefined` rather than failing the call. |
+| `PrimaryScopeRecordID` | string (UUID) | Primary tenant key (e.g. `OrganizationID`). Available in templates as `{{ context.PrimaryScopeRecordID }}`. Inside an agent run it may only restate the run's tenant — see below. |
+| `SecondaryScopes` | JSON object string, or an object | Flat object of additional dimensions as `{ "<key>": <value> }`. Each value must be `string \| number \| boolean \| string[]`. Available in templates as `{{ context.SecondaryScopes.<key> }}`. Input that is not valid JSON, is not an object, or holds a value of another type is **refused** (`INVALID_PARAM`) — never dropped, which would run the search without that dimension. |
+
+#### Inside an agent run, the run's scope is authoritative
+
+Inside a Loop agent the action's inputs are written by the model, so they are bound to the run exactly as `AgentID` and `AISkillID` are. `BaseAgent.ExecuteSingleAction` stamps every dispatch with `RunActionParams.RunScope` — the run's tenant and secondary dimensions as `initializeAgentRun` validated them and wrote them to the `MJ: AI Agent Runs` row (the agent's `ScopeConfig` defaults applied; `null` fields for an unscoped run). It is a typed field beside `Audience`, not a `Context` key, and the model cannot set it. The action then:
+
+| Model input | Run has tenant `A` | Run has no tenant |
+|---|---|---|
+| `PrimaryScopeRecordID` omitted | searches `A` | searches with no tenant |
+| `PrimaryScopeRecordID` = `A` (any case) | searches `A` | — |
+| `PrimaryScopeRecordID` = anything else | **refused**: `INVALID_PARAM` and a `Forbidden` search-log row (attributed to the run's tenant; the reason names both) | **refused**, the same way |
+
+`SecondaryScopes` follows the same rule per key: a key the run sets may only be restated with an equal value (text compared case-insensitively, arrays as sets; the run's value is the one used) — a different value is refused like a tenant; a key the run does not set is added, as outside a run, and stays bounded by the scope's own dimension trust rules ([§10](#10-multi-tenant-search-context)).
+
+**The host sets a run's tenant, never the model**: pass `ExecuteAgentParams.PrimaryScopeEntityName` / `PrimaryScopeRecordID` / `SecondaryScopes` (or, from a trusted server caller, the same keys in `data`). Sub-agents inherit the parent's scope; `BaseAgent` strips those keys (and `__agentTypePromptParams`) from a sub-agent request's model-authored `templateParameters` before they reach the child's `data` — the same reserved list (`RESERVED_AGENT_RUN_DATA_KEYS` in `@memberjunction/ai-core-plus`) the server strips from a browser's agent-run `data`. Outside an agent run (no `RunScope` — a direct action call, a workflow, an external orchestrator) the inputs are used as given.
+
+One consequence: a single agent run can no longer search several tenants (e.g. compare orgs in one turn) by passing different `PrimaryScopeRecordID` values. Run one agent run per tenant instead.
 
 #### The skill principal
 
@@ -200,7 +216,7 @@ Four consequences worth being explicit about, because a skill is a principal tha
 
 Omit the input and the principal is null, which is the behaviour for every caller that does not pass it.
 
-Example agent tool call selecting only Finance-department content for Org `O1`:
+Example call **outside an agent run** (a direct invocation) selecting only Finance-department content for Org `O1`. Inside a run scoped to `O1` the same call would omit `PrimaryScopeRecordID` — the run's tenant applies:
 
 ```json
 {
@@ -457,9 +473,9 @@ Two distinct paths populate `SearchContext` at runtime. They use the same `Secon
 | Path | How context arrives | Where it's read |
 |---|---|---|
 | **Pre-execution RAG** (auto) | `ExecuteAgentParams.primaryScopeRecordId` + `secondaryScopes` flow directly from the agent run config | `AgentPreExecutionRAG` constructs `SearchContext` and calls `SearchEngine.Search()` before the agent's first LLM turn |
-| **Agent-invoked Scoped Search** (explicit) | `PrimaryScopeRecordID` and `SecondaryScopes` (JSON string) supplied as action params on each `__Scoped_Search` call | `ScopedSearchAction` parses and validates the inputs, builds `SearchContext`, and passes it via `SearchParams.SearchContext` to `SearchEngine.Search()` |
+| **Agent-invoked Scoped Search** | Inside an agent run, the run's own scope, stamped by `BaseAgent` on every dispatch as `RunActionParams.RunScope`; the action's `PrimaryScopeRecordID` / `SecondaryScopes` inputs may only restate it (or add a secondary key the run does not set). Outside a run, the inputs as supplied on each `__Scoped_Search` call | `ScopedSearchAction` resolves the tenant ([§3](#inside-an-agent-run-the-runs-scope-is-authoritative)), builds `SearchContext`, and passes it via `SearchParams.SearchContext` to `SearchEngine.Search()` — and the same tenant to the permission decision |
 
-The explicit-input path lets a single agent run multiple scoped queries with different tenant contexts (e.g. comparison across orgs in one turn) and lets callers other than `BaseAgent` — manual GraphQL invocations, external orchestrators — drive the action with per-call tenant info. Use `ActionInputMapping` on the agent step to wire `ExecuteAgentParams`-style values into the action's `PrimaryScopeRecordID` / `SecondaryScopes` inputs when you want a single agent payload to drive both paths consistently.
+Inside an agent run the two paths therefore search the same tenant: the one the host gave the run. The explicit inputs remain for callers other than `BaseAgent` — manual GraphQL invocations, workflows, external orchestrators — which drive the action with per-call tenant info. A run that must cover several tenants is several runs.
 
 ### Nunjucks rendering of scope config
 

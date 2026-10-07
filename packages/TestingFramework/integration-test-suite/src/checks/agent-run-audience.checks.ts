@@ -1,6 +1,6 @@
 /**
- * agent-run-audience.checks.ts — the 'agent-run-audience' bundle (AU1–AU6, IT109, deterministic tier): an agent run
- * bounded by an audience (`ExecuteAgentParams.Audience`), against the real search engine, permission resolver,
+ * agent-run-audience.checks.ts — the 'agent-run-audience' bundle (AU1–AU7, IT109, deterministic tier): an agent run
+ * bounded by an audience (`ExecuteAgentParams.Audience`) and by its tenant (AU7), against the real search engine, permission resolver,
  * action engine and user cache. No model is called: pre-execution RAG runs directly, actions go through
  * `BaseAgent.ExecuteSingleAction` (the seam every action call in a run passes), and AU6's run is refused before Phase 2.
  *
@@ -16,6 +16,9 @@
  *   `AUDIENCE_UNSUPPORTED`, never runs (no Action Execution Log row — control: without the audience it writes one)
  *   and is locked out for the run.
  * - AU6 `Execute` with an audience naming an unknown user fails the run before any prompt.
+ * - AU7 the run's scope is authoritative for the Scoped Search tenant (A12.14): dispatched through `ExecuteSingleAction`
+ *   on a run whose `PrimaryScopeRecordID` is A, a model-supplied tenant B is refused (`INVALID_PARAM`, one Forbidden
+ *   row, no search), and with no model tenant the search runs under A (a Success row recording tenant A).
  *
  * FIXTURES. Like 'agent-rag-gate' this bundle seeds NO `MJ: AI Agent Notes` (a note save embeds, which the
  * deterministic lane cannot rely on), so the scope's corpus may be empty: the proofs are the search and action
@@ -55,6 +58,9 @@ const SCOPED_SEARCH_ACTION = 'Scoped Search';
 const UNSUPPORTED_ACTION = 'Calculate Expression';
 /** An MJ: Users ID no user has (uuidgen). */
 const UNKNOWN_USER_ID = '75F8CF59-11B7-4D1A-BF0D-99419F70BFF6';
+/** AU7's run tenant and the tenant the "model" names instead (uuidgen; neither is a real record — no grant is tenant-scoped). */
+const RUN_TENANT_ID = '3E0B6F0A-6C1D-4E57-9B2A-7D4C1F8E2A61';
+const OTHER_TENANT_ID = 'C9A4D2E7-15B8-4F3C-A06E-5B7E9D2C4F18';
 
 /** What Setup resolves and creates; module-level, like agent-loop-standin (no context slot is added for it). */
 interface AudienceFixture {
@@ -94,7 +100,7 @@ async function runRAG(ctx: IntegrationCheckContext, fx: AudienceFixture, query: 
   return new AgentPreExecutionRAG().Execute({ agent: fx.Agent, lastUserMessage: query, contextUser: ctx.User, audienceReaders: readers });
 }
 
-type LogRow = Pick<MJSearchExecutionLogEntity, 'ID' | 'Status' | 'ResultCount' | 'FailureReason' | 'SearchScopeID'>;
+type LogRow = Pick<MJSearchExecutionLogEntity, 'ID' | 'Status' | 'ResultCount' | 'FailureReason' | 'SearchScopeID' | 'PrimaryScopeRecordID'>;
 
 /** This user's search-log rows for exactly this query and status, re-polled briefly: a Success write is fire-and-forget. */
 async function searchLogRows(ctx: IntegrationCheckContext, query: string, status: LogRow['Status'], expectSome: boolean): Promise<LogRow[]> {
@@ -103,7 +109,7 @@ async function searchLogRows(ctx: IntegrationCheckContext, query: string, status
       {
         EntityName: 'MJ: Search Execution Logs',
         ExtraFilter: `Status='${status}' AND UserID='${EscapeSQLString(ctx.User.ID)}' AND Query='${EscapeSQLString(query)}'`,
-        Fields: ['ID', 'Status', 'ResultCount', 'FailureReason', 'SearchScopeID'],
+        Fields: ['ID', 'Status', 'ResultCount', 'FailureReason', 'SearchScopeID', 'PrimaryScopeRecordID'],
         ResultType: 'simple',
         BypassCache: true,
       },
@@ -115,11 +121,14 @@ async function searchLogRows(ctx: IntegrationCheckContext, query: string, status
   }
 }
 
-/** A BaseAgent driven straight at ExecuteSingleAction for the IT search agent, as agent-loop-standin does. */
-function actionHarness(ctx: IntegrationCheckContext, fx: AudienceFixture, audience?: AgentRunAudience) {
+/**
+ * A BaseAgent driven straight at ExecuteSingleAction for the IT search agent, as agent-loop-standin does. `run` adds
+ * run-level params (AU7's scope), which ExecuteSingleAction stamps on every dispatch as `RunActionParams.RunScope`.
+ */
+function actionHarness(ctx: IntegrationCheckContext, fx: AudienceFixture, audience?: AgentRunAudience, run: Partial<ExecuteAgentParams> = {}) {
   const agent = new BaseAgent();
   (agent as unknown as { _activeProvider: unknown })._activeProvider = ctx.Provider;
-  const params: ExecuteAgentParams = { agent: fx.Agent, conversationMessages: [], contextUser: ctx.User, provider: ctx.Provider, Audience: audience };
+  const params: ExecuteAgentParams = { agent: fx.Agent, conversationMessages: [], contextUser: ctx.User, provider: ctx.Provider, Audience: audience, ...run };
   return {
     agent,
     call: async (action: MJActionEntityExtended, actionParams: Record<string, unknown>): Promise<ActionResult> => {
@@ -296,7 +305,52 @@ export const AgentRunAudienceChecks: NamedCheck[] = [
       console.log(`      → run ${run!.ID} Failed before any prompt: ${run!.ErrorMessage}`);
     },
   },
+  {
+    Id: 'agent-run-audience.AU7',
+    Name: 'AU7: (deterministic) Scoped Search in a run scoped to tenant A refuses a model tenant B (INVALID_PARAM, no search) and searches A',
+    Fn: async (ctx): Promise<void> => {
+      const fx = fixtureFor('AU7');
+      if (!fx) return;
+      const scopedSearch = await activeAction(ctx, SCOPED_SEARCH_ACTION);
+      if (!scopedSearch) {
+        skipNote('AU7', `the '${SCOPED_SEARCH_ACTION}' action is not Active in this database`);
+        return;
+      }
+      const harness = actionHarness(ctx, fx, undefined, { PrimaryScopeRecordID: RUN_TENANT_ID });
+      await assertOtherTenantRefused(ctx, fx, scopedSearch, harness.call);
+      await assertRunTenantSearched(ctx, fx, scopedSearch, harness.call);
+      console.log("      → run tenant A: a model tenant B refused (INVALID_PARAM, one Forbidden row, no search); no model tenant searched under A");
+    },
+  },
 ];
+
+type ActionCall = (action: MJActionEntityExtended, actionParams: Record<string, unknown>) => Promise<ActionResult>;
+
+/** AU7, first half: the model names tenant B inside a run scoped to A — refused before any search, one Forbidden row. */
+async function assertOtherTenantRefused(ctx: IntegrationCheckContext, fx: AudienceFixture, action: MJActionEntityExtended, call: ActionCall): Promise<void> {
+  const query = `${LOG_QUERY_PREFIX} ${fx.Marker} run scope other tenant`;
+  const refused = await call(action, { Query: query, PrimaryScopeRecordID: OTHER_TENANT_ID });
+  AssertEqual(refused.Success, false, 'a tenant the run does not carry must be refused');
+  AssertEqual(refused.ResultCode, 'INVALID_PARAM', `unexpected result code: ${refused.ResultCode ?? ''} — ${refused.Message ?? ''}`);
+  const forbidden = await searchLogRows(ctx, query, 'Forbidden', true);
+  AssertEqual(forbidden.length, 1, 'exactly one Forbidden row for the refused tenant');
+  const reason = (forbidden[0].FailureReason ?? '').toLowerCase();
+  Assert(reason.includes(OTHER_TENANT_ID.toLowerCase()), `the Forbidden row must name the refused tenant: ${forbidden[0].FailureReason ?? ''}`);
+  Assert(UUIDsEqual(forbidden[0].PrimaryScopeRecordID, RUN_TENANT_ID), "the Forbidden row belongs to the run's tenant");
+  AssertEqual((await searchLogRows(ctx, query, 'Success', false)).length, 0, 'no search may run for a refused tenant');
+}
+
+/** AU7, second half: no model tenant — the search runs, and its Success row records the run's tenant. */
+async function assertRunTenantSearched(ctx: IntegrationCheckContext, fx: AudienceFixture, action: MJActionEntityExtended, call: ActionCall): Promise<void> {
+  const query = `${LOG_QUERY_PREFIX} ${fx.Marker} run scope own tenant`;
+  const ran = await call(action, { Query: query });
+  AssertEqual(ran.Success, true, `the run's own tenant must search: ${ran.Message ?? ''}`);
+  const rows = await searchLogRows(ctx, query, 'Success', true);
+  Assert(rows.length >= 1, 'the search must have run (a Success search-log row)');
+  const tenants = rows.map((r) => r.PrimaryScopeRecordID);
+  Assert(tenants.every((t) => UUIDsEqual(t, RUN_TENANT_ID)), `the search must run under the run's tenant, got ${tenants.join(', ')}`);
+  AssertEqual((await searchLogRows(ctx, query, 'Forbidden', false)).length, 0, "the run's own tenant writes no Forbidden row");
+}
 
 for (const check of AgentRunAudienceChecks) {
   IntegrationCheckRegistry.Instance.Register(check);
