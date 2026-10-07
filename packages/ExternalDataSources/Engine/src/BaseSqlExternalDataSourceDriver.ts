@@ -2,7 +2,7 @@ import { ExternalObjectType, ExternalSchemaRelationship, EntityInfo } from "@mem
 import { MJExternalDataSourceEntity } from "@memberjunction/core-entities";
 import { BaseExternalDataSourceDriver } from "./BaseExternalDataSourceDriver";
 import { ExternalFkRow, ExternalViewParams, ExternalQueryParameter } from "./types";
-import { assertReadOnlyNativeQuery, assertReadOnlyClause, type SqlDialectKey } from "./sqlReadOnlyScreen";
+import { AssertReadOnlyNativeQuery, AssertReadOnlyClause, type SqlDialectKey } from "./sqlReadOnlyScreen";
 
 /**
  * Intermediate base for the relational (SQL) external data source drivers
@@ -41,7 +41,7 @@ export abstract class BaseSqlExternalDataSourceDriver<TConnection = unknown> ext
    * write/DDL. See {@link assertReadOnlyNativeQuery}.
    */
   protected screenReadOnlyNativeQuery(sql: string): void {
-    assertReadOnlyNativeQuery(this.normalizeForReadOnlyParse(sql), this.sqlDialectKey());
+    AssertReadOnlyNativeQuery(this.normalizeForReadOnlyParse(sql), this.sqlDialectKey());
   }
 
   /**
@@ -87,7 +87,7 @@ export abstract class BaseSqlExternalDataSourceDriver<TConnection = unknown> ext
    * screened it. Fail-closed; see {@link assertReadOnlyClause}.
    */
   protected screenReadOnlyClause(clause: string, kind: "where" | "orderby"): void {
-    assertReadOnlyClause(clause, this.sqlDialectKey(), kind);
+    AssertReadOnlyClause(clause, this.sqlDialectKey(), kind);
   }
 
   /**

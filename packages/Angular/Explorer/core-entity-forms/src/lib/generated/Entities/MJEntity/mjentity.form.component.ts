@@ -101,7 +101,15 @@ export class MJEntityFormComponent extends BaseFormComponent {
             { sectionKey: 'mJMaterializedResultsGeneratedEntityID', sectionName: 'Materialized Results (Generated Entity ID)', isExpanded: false },
             { sectionKey: 'mJFormChromeRulesEntityID', sectionName: 'Form Chrome Rules (Parent Entity)', isExpanded: false },
             { sectionKey: 'mJFormChromeRulesRelatedEntityID', sectionName: 'Form Chrome Rules (Related Entity)', isExpanded: false },
-            { sectionKey: 'mJIdentityClaims', sectionName: 'Identity Claims', isExpanded: false }
+            { sectionKey: 'mJIdentityClaims', sectionName: 'Identity Claims', isExpanded: false },
+            { sectionKey: 'mJRecordCloneLogItems', sectionName: 'Record Clone Log Items', isExpanded: false },
+            { sectionKey: 'mJEntityFormContributionsEntityID', sectionName: 'Entity Form Contributions (Parent Entity)', isExpanded: false },
+            { sectionKey: 'mJRecordCloneLogs', sectionName: 'Record Clone Logs', isExpanded: false },
+            { sectionKey: 'mJRubricEvaluationsSubjectEntityID', sectionName: 'Rubric Evaluations (Subject Entity ID)', isExpanded: false },
+            { sectionKey: 'mJEntityFormContributionsRelatedEntityID', sectionName: 'Entity Form Contributions (Related Entity)', isExpanded: false },
+            { sectionKey: 'mJRubricEvaluationsContextEntityID', sectionName: 'Rubric Evaluations (Context Entity ID)', isExpanded: false },
+            { sectionKey: 'mJInteractionLinks', sectionName: 'Interaction Links', isExpanded: false },
+            { sectionKey: 'mJFeatureValues', sectionName: 'Feature Values', isExpanded: false }
         ]);
     }
 }

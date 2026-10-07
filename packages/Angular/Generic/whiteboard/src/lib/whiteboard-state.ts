@@ -755,8 +755,8 @@ interface PageRecord {
  * {@link Changed$} as `'replace'` ops.
  */
 export class WhiteboardState {
-  private static readonly UndoMax = 100;
-  private static readonly JournalMax = 1000;
+  private static readonly undoMax = 100;
+  private static readonly journalMax = 1000;
 
   /**
    * The ordered page list. A fresh board has one page named "Page 1". Every item
@@ -1946,7 +1946,7 @@ export class WhiteboardState {
   /** Push the current scene onto the undo stack (bounded) and drop the redo branch. */
   protected pushUndo(): void {
     this.undoStack.push(this.snapshot());
-    if (this.undoStack.length > WhiteboardState.UndoMax) {
+    if (this.undoStack.length > WhiteboardState.undoMax) {
       this.undoStack.shift();
     }
     this.redoStack = [];
@@ -2010,8 +2010,8 @@ export class WhiteboardState {
   protected record(op: WhiteboardChangeOp, itemId: string, author: WhiteboardAuthor, summaryFragment: string): void {
     this.seq++;
     this.journal.push({ Seq: this.seq, Op: op, ItemID: itemId });
-    if (this.journal.length > WhiteboardState.JournalMax) {
-      const dropped = this.journal.splice(0, this.journal.length - WhiteboardState.JournalMax);
+    if (this.journal.length > WhiteboardState.journalMax) {
+      const dropped = this.journal.splice(0, this.journal.length - WhiteboardState.journalMax);
       this.journalTrimmedBeforeSeq = dropped[dropped.length - 1].Seq;
     }
     this.changed.next({ Op: op, ItemID: itemId, Author: author, SummaryFragment: summaryFragment, Seq: this.seq });

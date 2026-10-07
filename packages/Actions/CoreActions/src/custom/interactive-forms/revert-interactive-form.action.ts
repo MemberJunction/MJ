@@ -3,7 +3,7 @@ import { BaseAction } from "@memberjunction/actions";
 import { Metadata, LogError, RunView } from "@memberjunction/core";
 import { RegisterClass, UUIDsEqual } from "@memberjunction/global";
 import {
-    addOutput, checkOverrideOwnership, failure, getNumberParam, getStringParam, loadComponent, loadOverride, mapToComponentStatus,
+    AddOutput, CheckPersonalWrite, Failure, GetNumberParam, GetStringParam, LoadComponent, LoadOverride, MapToComponentStatus,
 } from "./_shared";
 
 /**
@@ -21,8 +21,20 @@ import {
  *   - Flip the previously-pointed Component to Status='Inactive', target
  *     Component to Status='Active'.
  *
+ * The override is saved first. Both Component status saves are then tried, even
+ * when the first fails. If either fails, or the target Component cannot be loaded
+ * for its status save, the action returns `PERSIST_FAILED` that names every
+ * Component whose status was not updated; the override stays re-pointed. The
+ * override then already points at the target, so a retry with the same target
+ * returns SUCCESS from the no-op path and the Component statuses stay as they are.
+ *
  * Old Component rows are never deleted — they remain as immutable history.
  * A subsequent revert can move forward again to any version.
+ *
+ * Only the caller's own User-scope overrides can be reverted. A Role or Global
+ * override, or another user's, returns FORBIDDEN for every caller (see
+ * `CheckPersonalWrite` in `_shared.ts`): shared forms are managed from Form
+ * Builder or the form's Manage drawer.
  *
  * Inputs:
  *   - `ActiveOverrideID` (required, string) — the Active override to re-point
@@ -42,50 +54,50 @@ export class RevertInteractiveFormAction extends BaseAction {
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
-            const activeOverrideID = getStringParam(params, "ActiveOverrideID");
+            const activeOverrideID = GetStringParam(params, "ActiveOverrideID");
             if (!activeOverrideID) {
-                return failure("MISSING_PARAMETER", "Parameter 'ActiveOverrideID' is required.");
+                return Failure("MISSING_PARAMETER", "Parameter 'ActiveOverrideID' is required.");
             }
-            const targetComponentID = getStringParam(params, "TargetComponentID");
-            const targetVersionSequence = getNumberParam(params, "TargetVersionSequence");
+            const targetComponentID = GetStringParam(params, "TargetComponentID");
+            const targetVersionSequence = GetNumberParam(params, "TargetVersionSequence");
             if (!targetComponentID && targetVersionSequence == null) {
-                return failure("MISSING_PARAMETER",
+                return Failure("MISSING_PARAMETER",
                     "Either 'TargetComponentID' or 'TargetVersionSequence' is required.");
             }
 
             const provider = params.Provider ?? Metadata.Provider;
-            if (!provider) return failure("NO_PROVIDER", "No metadata provider available.");
+            if (!provider) return Failure("NO_PROVIDER", "No metadata provider available.");
             const user = params.ContextUser;
-            if (!user) return failure("NO_USER", "Action requires a ContextUser.");
+            if (!user) return Failure("NO_USER", "Action requires a ContextUser.");
 
-            const override = await loadOverride(provider, user, activeOverrideID);
+            const override = await LoadOverride(provider, user, activeOverrideID);
             if (!override) {
-                return failure("OVERRIDE_NOT_FOUND", `EntityFormOverride '${activeOverrideID}' not found.`);
+                return Failure("OVERRIDE_NOT_FOUND", `EntityFormOverride '${activeOverrideID}' not found.`);
             }
-            const ownershipFail = checkOverrideOwnership(override, user);
+            const ownershipFail = CheckPersonalWrite(override, user);
             if (ownershipFail) return ownershipFail;
             if (override.Status !== 'Active') {
-                return failure("NOT_ACTIVE",
+                return Failure("NOT_ACTIVE",
                     `Override ${activeOverrideID} is not Active (current Status=${override.Status}). Reverting only operates on the Active override row.`);
             }
 
-            const currentComponent = await loadComponent(provider, user, override.ComponentID);
+            const currentComponent = await LoadComponent(provider, user, override.ComponentID);
             if (!currentComponent) {
-                return failure("COMPONENT_NOT_FOUND",
+                return Failure("COMPONENT_NOT_FOUND",
                     `Active override points at Component ${override.ComponentID} which no longer exists.`);
             }
 
             // Resolve target Component
             let target: { ID: string; Version: string } | null = null;
             if (targetComponentID) {
-                const c = await loadComponent(provider, user, targetComponentID);
+                const c = await LoadComponent(provider, user, targetComponentID);
                 if (!c) {
-                    return failure("COMPONENT_NOT_FOUND",
+                    return Failure("COMPONENT_NOT_FOUND",
                         `TargetComponentID '${targetComponentID}' not found.`);
                 }
                 // Confirm same lineage (same Name).
                 if ((c.Name ?? '') !== (currentComponent.Name ?? '')) {
-                    return failure("LINEAGE_MISMATCH",
+                    return Failure("LINEAGE_MISMATCH",
                         `Target Component name '${c.Name}' differs from current '${currentComponent.Name}'. Revert is restricted to the same Name lineage.`);
                 }
                 target = { ID: c.ID, Version: c.Version };
@@ -99,19 +111,19 @@ export class RevertInteractiveFormAction extends BaseAction {
                     MaxRows: 1,
                 }, user);
                 if (!r.Success || (r.Results ?? []).length === 0) {
-                    return failure("COMPONENT_NOT_FOUND",
+                    return Failure("COMPONENT_NOT_FOUND",
                         `No Component with VersionSequence=${targetVersionSequence} in lineage '${currentComponent.Name}'.`);
                 }
                 target = { ID: r.Results[0].ID, Version: r.Results[0].Version };
             }
             if (!target) {
-                return failure("COMPONENT_NOT_FOUND", "Could not resolve target Component.");
+                return Failure("COMPONENT_NOT_FOUND", "Could not resolve target Component.");
             }
             if (UUIDsEqual(target.ID, currentComponent.ID)) {
-                addOutput(params, "OverrideID", override.ID);
-                addOutput(params, "ComponentID", target.ID);
-                addOutput(params, "PreviousComponentID", null);
-                addOutput(params, "Version", target.Version);
+                AddOutput(params, "OverrideID", override.ID);
+                AddOutput(params, "ComponentID", target.ID);
+                AddOutput(params, "PreviousComponentID", null);
+                AddOutput(params, "Version", target.Version);
                 return { Success: true, ResultCode: "SUCCESS",
                     Message: JSON.stringify({ noop: true, reason: 'TargetComponent is already the Active component.' }) };
             }
@@ -120,23 +132,36 @@ export class RevertInteractiveFormAction extends BaseAction {
             override.ComponentID = target.ID;
             const oSaved = await override.Save();
             if (!oSaved) {
-                return failure("PERSIST_FAILED",
+                return Failure("PERSIST_FAILED",
                     `Could not re-point Override: ${override.LatestResult?.CompleteMessage ?? 'unknown error'}`);
             }
 
             // Flip Component statuses to reflect the new active selection.
-            const newActive = await loadComponent(provider, user, target.ID);
+            const notUpdated: string[] = [];
+            const newActive = await LoadComponent(provider, user, target.ID);
             if (newActive) {
-                newActive.Status = mapToComponentStatus('Active');
-                await newActive.Save();
+                newActive.Status = MapToComponentStatus('Active');
+                if (!(await newActive.Save())) {
+                    notUpdated.push(`the status of Component ${target.ID} was not updated ` +
+                        `(${newActive.LatestResult?.CompleteMessage ?? 'unknown error'})`);
+                }
+            } else {
+                notUpdated.push(`Component ${target.ID} could not be loaded, so its status was not updated`);
             }
-            currentComponent.Status = mapToComponentStatus('Inactive');
-            await currentComponent.Save();
+            currentComponent.Status = MapToComponentStatus('Inactive');
+            if (!(await currentComponent.Save())) {
+                notUpdated.push(`the status of Component ${currentComponent.ID} was not updated ` +
+                    `(${currentComponent.LatestResult?.CompleteMessage ?? 'unknown error'})`);
+            }
+            if (notUpdated.length > 0) {
+                return Failure("PERSIST_FAILED",
+                    `Override ${override.ID} was re-pointed to Component ${target.ID}, but ${notUpdated.join('; ')}.`);
+            }
 
-            addOutput(params, "OverrideID", override.ID);
-            addOutput(params, "ComponentID", target.ID);
-            addOutput(params, "PreviousComponentID", currentComponent.ID);
-            addOutput(params, "Version", target.Version);
+            AddOutput(params, "OverrideID", override.ID);
+            AddOutput(params, "ComponentID", target.ID);
+            AddOutput(params, "PreviousComponentID", currentComponent.ID);
+            AddOutput(params, "Version", target.Version);
             return { Success: true, ResultCode: "SUCCESS",
                 Message: JSON.stringify({
                     OverrideID: override.ID,
@@ -147,7 +172,7 @@ export class RevertInteractiveFormAction extends BaseAction {
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
             LogError(`RevertInteractiveFormAction: ${message}`);
-            return failure("UNEXPECTED_ERROR", message);
+            return Failure("UNEXPECTED_ERROR", message);
         }
     }
 }

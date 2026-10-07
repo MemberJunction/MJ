@@ -2,20 +2,20 @@
  * Unit tests for the pure Process Run Detail parsing/display helpers the run-history audit view relies on.
  */
 import { describe, it, expect } from 'vitest';
-import { parseAppliedRunDetailChanges, displayRunValue } from '../lib/run-detail';
+import { ParseAppliedRunDetailChanges, DisplayRunValue } from '../lib/run-detail';
 
 describe('parseAppliedRunDetailChanges', () => {
     const payload = (changes: unknown[]) => JSON.stringify({ DryRun: false, Changes: changes, ChangedFields: [] });
 
     it('returns [] for null / empty / invalid JSON', () => {
-        expect(parseAppliedRunDetailChanges(null)).toEqual([]);
-        expect(parseAppliedRunDetailChanges(undefined)).toEqual([]);
-        expect(parseAppliedRunDetailChanges('')).toEqual([]);
-        expect(parseAppliedRunDetailChanges('{not json')).toEqual([]);
+        expect(ParseAppliedRunDetailChanges(null)).toEqual([]);
+        expect(ParseAppliedRunDetailChanges(undefined)).toEqual([]);
+        expect(ParseAppliedRunDetailChanges('')).toEqual([]);
+        expect(ParseAppliedRunDetailChanges('{not json')).toEqual([]);
     });
 
     it('keeps only applied + changed + error-free changes', () => {
-        const result = parseAppliedRunDetailChanges(payload([
+        const result = ParseAppliedRunDetailChanges(payload([
             { Field: 'A', OldValue: 1, NewValue: 2, Applied: true, Changed: true },               // keep
             { Field: 'B', OldValue: 'x', NewValue: 'x', Applied: true, Changed: false },           // drop: unchanged
             { Field: 'C', OldValue: null, NewValue: 'y', Applied: false, Changed: true },          // drop: not applied
@@ -26,19 +26,19 @@ describe('parseAppliedRunDetailChanges', () => {
     });
 
     it('tolerates a payload with no Changes array', () => {
-        expect(parseAppliedRunDetailChanges('{"DryRun":true}')).toEqual([]);
+        expect(ParseAppliedRunDetailChanges('{"DryRun":true}')).toEqual([]);
     });
 });
 
 describe('displayRunValue', () => {
     it('renders empties as (empty)', () => {
-        expect(displayRunValue(null)).toBe('(empty)');
-        expect(displayRunValue(undefined)).toBe('(empty)');
-        expect(displayRunValue('')).toBe('(empty)');
+        expect(DisplayRunValue(null)).toBe('(empty)');
+        expect(DisplayRunValue(undefined)).toBe('(empty)');
+        expect(DisplayRunValue('')).toBe('(empty)');
     });
     it('stringifies primitives + objects', () => {
-        expect(displayRunValue(0)).toBe('0');
-        expect(displayRunValue(true)).toBe('true');
-        expect(displayRunValue({ a: 1 })).toBe('{"a":1}');
+        expect(DisplayRunValue(0)).toBe('0');
+        expect(DisplayRunValue(true)).toBe('true');
+        expect(DisplayRunValue({ a: 1 })).toBe('{"a":1}');
     });
 });

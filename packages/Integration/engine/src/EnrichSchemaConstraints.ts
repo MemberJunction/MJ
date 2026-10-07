@@ -46,7 +46,7 @@ export class EnrichSchemaConstraints {
         const inferredForeignKeys = this.InferForeignKeys(objects);
         let descriptionsAdded = 0;
         if (options.describeFn) {
-            descriptionsAdded = await this.FillDescriptions(objects, options.describeFn);
+            descriptionsAdded = await this.fillDescriptions(objects, options.describeFn);
         }
         return { inferredForeignKeys, descriptionsAdded };
     }
@@ -94,7 +94,7 @@ export class EnrichSchemaConstraints {
     }
 
     /** Fills missing Descriptions via a single describeFn call each. Best-effort, never throws. */
-    private static async FillDescriptions(objects: SourceObjectInfo[], describe: DescribeFn): Promise<number> {
+    private static async fillDescriptions(objects: SourceObjectInfo[], describe: DescribeFn): Promise<number> {
         let added = 0;
         for (const obj of objects) {
             if (!obj.Description) {

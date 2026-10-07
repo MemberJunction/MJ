@@ -30,6 +30,14 @@ export class BrowserStorageProviderBase implements ILocalStorageProvider {
         return true;
     }
 
+    /**
+     * `false` — the base tier is a `Map` on the heap, which dies with the page. Subclasses with a
+     * real backend override this. See {@link ILocalStorageProvider.SupportsCrossProcessPersistence}.
+     */
+    public get SupportsCrossProcessPersistence(): boolean {
+        return false;
+    }
+
     private _storage: Map<string, Map<string, unknown>> = new Map();
 
     /**
@@ -109,6 +117,16 @@ class BrowserLocalStorageProvider extends BrowserStorageProviderBase {
      */
     public override get SharesReferences(): boolean {
         return typeof localStorage === 'undefined';
+    }
+
+    /**
+     * `true` only while localStorage is reachable — what it holds survives a page reload. Without
+     * it every method defers to the in-memory base tier, which does not, so this reports the
+     * inverse of the fallback condition rather than a constant.
+     * See {@link ILocalStorageProvider.SupportsCrossProcessPersistence}.
+     */
+    public override get SupportsCrossProcessPersistence(): boolean {
+        return typeof localStorage !== 'undefined';
     }
 
     /**
@@ -302,13 +320,16 @@ type KnownStoreName = typeof KNOWN_OBJECT_STORES[number];
  * The `unknown` value type reflects that callers control the runtime shape via the
  * generic `SetItem<T>` / `GetItem<T>` typing on the provider.
  */
-export interface MJ_MetadataDB extends DBSchema {
+export interface MJMetadataDB extends DBSchema {
     'mj:default':       { key: string; value: unknown };
     'mj:Metadata':      { key: string; value: unknown };
     'mj:RunViewCache':  { key: string; value: unknown };
     'mj:RunQueryCache': { key: string; value: unknown };
     'mj:DatasetCache':  { key: string; value: unknown };
 }
+
+/** @deprecated Use {@link MJMetadataDB} instead. */
+export type MJ_MetadataDB = MJMetadataDB;
 
 /**
  * IndexedDB storage provider with category support via separate object stores.
@@ -341,12 +362,22 @@ export class BrowserIndexedDBStorageProvider extends BrowserStorageProviderBase 
         return false;
     }
 
-    private dbPromise: Promise<IDBPDatabase<MJ_MetadataDB>>;
+    /**
+     * `true` — IndexedDB outlives the page. Unlike the localStorage provider this class never
+     * defers to the in-memory base tier, so there is no fallback that would make a stored
+     * snapshot unreadable on the next load.
+     * See {@link ILocalStorageProvider.SupportsCrossProcessPersistence}.
+     */
+    public override get SupportsCrossProcessPersistence(): boolean {
+        return true;
+    }
+
+    private dbPromise: Promise<IDBPDatabase<MJMetadataDB>>;
     private _dbReady: boolean = false;
 
     constructor() {
         super();
-        this.dbPromise = openDB<MJ_MetadataDB>(IDB_DB_NAME, IDB_DB_VERSION, {
+        this.dbPromise = openDB<MJMetadataDB>(IDB_DB_NAME, IDB_DB_VERSION, {
             upgrade: (db, oldVersion, newVersion) => {
                 try {
                     LogStatus(

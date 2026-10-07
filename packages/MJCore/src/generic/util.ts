@@ -18,6 +18,38 @@ import {
 } from "@memberjunction/sql-dialect";
 
 /**
+ * Whether a SQL type is the date-only `date` type: a calendar day with no time and no zone, as
+ * opposed to any of the timestamp types, which name an instant. The distinction decides which
+ * zone a value may be rendered in, and getting it wrong moves the day (see FormatDateOnly).
+ * The same spelling covers SQL Server and PostgreSQL.
+ */
+export function IsDateOnlySQLType(sqlType: string | null | undefined): boolean {
+    return (sqlType ?? '').trim().toLowerCase() === 'date';
+}
+
+/**
+ * Formats a date-only value as the calendar day it stores, in the reader's locale format.
+ *
+ * A `date` column arrives as a Date at UTC midnight. Passing that through a local-time formatter
+ * subtracts the reader's offset and lands on the previous day for everyone west of Greenwich: a
+ * stored 2026-11-20 renders as 11/19/2026 in America/New_York, and 2026-01-01 as 12/31/2025, the
+ * wrong year. Pinning the zone to UTC rather than switching to toISOString() keeps the reader's
+ * locale format (a US reader still sees 11/20/2026, a UK reader 20/11/2026) and changes only the
+ * zone the day is computed in. Any `options` the caller passes are honoured except the zone.
+ *
+ * @param value A Date, an epoch number, or a date string; an unparseable value is returned as-is
+ * @param options Intl date options (month/day/year styles, dateStyle, weekday); timeZone is always UTC
+ * @param locale Locale for the format; defaults to the runtime's locale
+ */
+export function FormatDateOnly(value: Date | string | number, options?: Intl.DateTimeFormatOptions, locale?: string | string[]): string {
+    const date = value instanceof Date ? value : new Date(value);
+    if (isNaN(date.getTime())) {
+        return String(value);
+    }
+    return date.toLocaleDateString(locale, { ...options, timeZone: 'UTC' });
+}
+
+/**
  * Minimal structural shape consulted by `RunMaybeSerial`. Anything that exposes
  * a boolean `IsInTransaction` (e.g. a `DatabaseProviderBase` subclass) qualifies.
  * The check is purely structural and tolerates objects that don't expose the
@@ -114,6 +146,10 @@ function FormatValueInternal(sqlType: string,
         }).format(value);
     }
 
+    if (IsDateOnlySQLType(sqlType)) {
+        return FormatDateOnly(value);
+    }
+
     if (IsDateSQLType(sqlType) || IsIntervalSQLType(sqlType)) {
         return new Intl.DateTimeFormat().format(new Date(value));
     }
@@ -162,6 +198,12 @@ export function SQLFullType(baseType: string, length: number, precision: number,
         sOutput += `(${length > 0 ? length / 2 : 'MAX'})`; // nvarchar divide the system length by 2 to get the actual length for the output
     else if (type === 'char')
         sOutput += `(${length})`;
+    else if (type === 'varbinary')
+        // A bare `varbinary` parameter or variable means varbinary(1) in T-SQL, which silently
+        // truncates every value to one byte — so always emit the length, MAX when unbounded (-1).
+        sOutput += `(${length > 0 ? length : 'MAX'})`;
+    else if (type === 'binary')
+        sOutput += `(${length > 0 ? length : 1})`;
     else if (type === 'nchar')
         sOutput += `(${length / 2})`; // nchar divide the system length by 2 to get the actual length for the output
     else if (type === 'decimal' || type === 'numeric')
@@ -197,6 +239,21 @@ export function SQLMaxLength(sqlBaseType: string, sqlLength: number): number {
             return 36; // UUID string representation: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
         default:
             return 0;
+    }
+}
+
+/**
+ * Byte cap of a binary column, or 0 when it has none. `varbinary(MAX)` reports -1 and PostgreSQL
+ * `bytea` reports no length. SQL Server `image` reports 16 in `sys.columns.max_length`, which is the
+ * size of its text pointer rather than a limit, so it is unbounded here too.
+ */
+export function SQLMaxByteLength(sqlBaseType: string, sqlLength: number): number {
+    switch (sqlBaseType.trim().toLowerCase()) {
+        case 'binary':
+        case 'varbinary':
+            return sqlLength > 0 ? sqlLength : 0; // -1 means MAX
+        default:
+            return 0; // image, bytea and anything else: no byte cap
     }
 }
 

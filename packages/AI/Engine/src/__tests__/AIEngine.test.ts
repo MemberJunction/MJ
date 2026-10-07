@@ -12,7 +12,7 @@
  * - Config concurrency and loading state
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // ---------------------------------------------------------------------------
 // Mock external dependencies BEFORE importing source
@@ -118,7 +118,7 @@ vi.mock('@memberjunction/core', () => ({
 }));
 
 vi.mock('@memberjunction/global', async (importOriginal) => {
-    const { ToEpochMs } = await importOriginal<typeof import('@memberjunction/global')>();
+    const { ToEpochMs, Float32VectorToBase64, Base64ToFloat32Vector } = await importOriginal<typeof import('@memberjunction/global')>();
     // Minimal in-memory LRU stand-in — the real MJLruCache is in @memberjunction/global
     // but the mock above replaces the entire module export, so we re-implement just
     // the surface AIEngine uses.
@@ -194,6 +194,10 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
         // util.toEpochMs.test.ts pins. importOriginal only evaluates the module; the
         // singletons this mock replaces are created lazily, so none are instantiated.
         ToEpochMs,
+        // Real binary-vector codecs — the stored-vector tests encode with one and
+        // ReadStoredVector (real, below) decodes with the other.
+        Float32VectorToBase64,
+        Base64ToFloat32Vector,
     };
 });
 
@@ -294,17 +298,35 @@ vi.mock('@memberjunction/ai-engine-base', () => ({
     EffectiveAgentPermissions: class EffectiveAgentPermissions {},
 }));
 
-vi.mock('@memberjunction/ai-vectors-memory', () => ({
-    SimpleVectorService: class SimpleVectorService<T = unknown> {
-        LoadVectors = vi.fn();
-        AddOrUpdateVector = vi.fn();
-        FindNearest = vi.fn().mockReturnValue([]);
-        FindSimilar = vi.fn().mockReturnValue([]);
-        Similarity = vi.fn().mockReturnValue(0);
-        Has = vi.fn().mockReturnValue(false);
-    },
-    VectorEntry: class VectorEntry {},
+// Every SimpleVectorService the engine constructs is recorded here so tests can assert
+// on what RefreshNoteEmbeddings / RefreshExampleEmbeddings handed to LoadVectors.
+const { createdVectorServices } = vi.hoisted(() => ({
+    createdVectorServices: [] as Array<{
+        LoadVectors: ReturnType<typeof vi.fn>;
+        AddOrUpdateVector: ReturnType<typeof vi.fn>;
+        RemoveVector: ReturnType<typeof vi.fn>;
+    }>,
 }));
+
+vi.mock('@memberjunction/ai-vectors-memory', async (importOriginal) => {
+    // ReadStoredVector is the real implementation: the point of the stored-vector tests is
+    // the engine's binary-first / JSON-fallback behaviour, which a stub would not exercise.
+    const { ReadStoredVector } = await importOriginal<typeof import('@memberjunction/ai-vectors-memory')>();
+    return {
+        ReadStoredVector,
+        SimpleVectorService: class SimpleVectorService<T = unknown> {
+            LoadVectors = vi.fn();
+            AddOrUpdateVector = vi.fn();
+            RemoveVector = vi.fn().mockReturnValue(true);
+            FindNearest = vi.fn().mockReturnValue([]);
+            FindSimilar = vi.fn().mockReturnValue([]);
+            Similarity = vi.fn().mockReturnValue(0);
+            Has = vi.fn().mockReturnValue(false);
+            constructor() { createdVectorServices.push(this); }
+        },
+        VectorEntry: class VectorEntry {},
+    };
+});
 
 vi.mock('@memberjunction/actions-base', () => ({
     ActionEngineBase: {
@@ -313,10 +335,6 @@ vi.mock('@memberjunction/actions-base', () => ({
             get Actions() { return actionEngineBaseState.actions; },
         }
     }
-}));
-
-vi.mock('@memberjunction/storage', () => ({
-    FileStorageBase: class FileStorageBase {},
 }));
 
 vi.mock('@memberjunction/templates-base-types', () => ({
@@ -332,7 +350,7 @@ vi.mock('@memberjunction/templates-base-types', () => ({
 // ---------------------------------------------------------------------------
 
 import { AIEngine, AIActionParams, EntityAIActionParams } from '../AIEngine';
-import { MJGlobal } from '@memberjunction/global';
+import { MJGlobal, Float32VectorToBase64 } from '@memberjunction/global';
 // Test-only handles exported from the @memberjunction/global mock above (see vi.mock).
 // Typed locally so we avoid `any` while reaching into the mocked module surface.
 import * as MockGlobal from '@memberjunction/global';
@@ -365,6 +383,7 @@ import { ChatMessageRole } from '@memberjunction/ai';
 // so we don't couple to SimpleVectorService's full generic signature.
 interface TestVectorService {
     RemoveVector(key: string): boolean;
+    AddOrUpdateVector?(key: string, vector: ArrayLike<number>, metadata: unknown): void;
 }
 
 // Subclass that exposes the protected filter composition methods for testing.
@@ -391,6 +410,11 @@ class TestableAIEngine extends AIEngine {
     // Test-only setters for the private vector service fields. Declared as `unknown`
     // assignment targets through a typed bracket access into `this` so unit tests can
     // inject a minimal mock without casting via `as unknown as`.
+    /** Builds an instance from inside the class, where the inherited protected constructor is accessible. */
+    public static CreateForTest(): TestableAIEngine {
+        return new TestableAIEngine();
+    }
+
     public setNoteVectorServiceForTest(service: TestVectorService | null): void {
         (this as unknown as { _noteVectorService: TestVectorService | null })._noteVectorService = service;
     }
@@ -1649,6 +1673,162 @@ describe('AIEngine', () => {
             const results = callFallback('fallbackGetNotesFromCache');
 
             expect(results.map((r) => (r.note as { ID: string }).ID)).toEqual(['date-new', 'string-old']);
+        });
+    });
+
+    // ======================================================================
+    // Stored vectors: binary column first, JSON column as the fallback
+    // ======================================================================
+
+    describe('stored embedding vectors (binary + JSON columns)', () => {
+        // Values chosen to be exact in float32, so a binary round-trip compares equal.
+        const BINARY_VEC = [0.5, 0.25, -1];
+        const JSON_VEC = [0.125, 2, 4];
+
+        interface StoredVectorRow {
+            ID: string;
+            Status: string;
+            EmbeddingVector: string | null;
+            EmbeddingVectorBinary: string | null;
+            AgentID: string;
+            UserID: string | null;
+            CompanyID: string | null;
+            Type: string;
+            Note?: string;
+            ExampleInput?: string;
+            ExampleOutput?: string;
+            SuccessScore?: number;
+        }
+
+        const baseState = mockBaseInstance as unknown as { AgentNotes: StoredVectorRow[]; AgentExamples: StoredVectorRow[] };
+
+        function row(id: string, binary: string | null, json: string | null): StoredVectorRow {
+            return {
+                ID: id, Status: 'Active', EmbeddingVector: json, EmbeddingVectorBinary: binary,
+                AgentID: 'a1', UserID: null, CompanyID: null, Type: 'Preference',
+                Note: `note ${id}`, ExampleInput: 'in', ExampleOutput: 'out', SuccessScore: 1,
+            };
+        }
+
+        /** The entries the engine handed to the most recently constructed vector service. */
+        function loadedEntries(): Array<{ key: string; vector: ArrayLike<number> }> {
+            const service = createdVectorServices[createdVectorServices.length - 1];
+            expect(service).toBeDefined();
+            expect(service.LoadVectors).toHaveBeenCalledTimes(1);
+            return service.LoadVectors.mock.calls[0][0] as Array<{ key: string; vector: ArrayLike<number> }>;
+        }
+
+        function vectorOf(entries: Array<{ key: string; vector: ArrayLike<number> }>, key: string): number[] | undefined {
+            const entry = entries.find(e => e.key === key);
+            return entry ? Array.from(entry.vector) : undefined;
+        }
+
+        beforeEach(() => {
+            createdVectorServices.length = 0;
+        });
+
+        afterEach(() => {
+            baseState.AgentNotes = [];
+            baseState.AgentExamples = [];
+        });
+
+        const cases = [
+            { label: 'notes', set: (rows: StoredVectorRow[]) => { baseState.AgentNotes = rows; }, refresh: (e: AIEngine) => e.RefreshNoteEmbeddings() },
+            { label: 'examples', set: (rows: StoredVectorRow[]) => { baseState.AgentExamples = rows; }, refresh: (e: AIEngine) => e.RefreshExampleEmbeddings() },
+        ];
+
+        for (const c of cases) {
+            describe(`Refresh (${c.label})`, () => {
+                it('loads a record that has only the binary column', async () => {
+                    c.set([row('bin-only', Float32VectorToBase64(BINARY_VEC), null)]);
+                    await c.refresh(engine);
+                    expect(vectorOf(loadedEntries(), 'bin-only')).toEqual(BINARY_VEC);
+                });
+
+                it('prefers the binary column over a disagreeing JSON column', async () => {
+                    c.set([row('both', Float32VectorToBase64(BINARY_VEC), JSON.stringify(JSON_VEC))]);
+                    await c.refresh(engine);
+                    const entries = loadedEntries();
+                    expect(entries[0].vector).toBeInstanceOf(Float32Array);
+                    expect(vectorOf(entries, 'both')).toEqual(BINARY_VEC);
+                });
+
+                it('falls back to JSON when the binary column is invalid', async () => {
+                    // 3 bytes — not a whole number of float32 values
+                    const partialFloat = Buffer.from([1, 2, 3]).toString('base64');
+                    // a NaN — whole floats but not finite
+                    const nonFinite = Float32VectorToBase64([1, Number.NaN]);
+                    c.set([
+                        row('partial', partialFloat, JSON.stringify(JSON_VEC)),
+                        row('nan', nonFinite, JSON.stringify(JSON_VEC)),
+                        row('empty', '', JSON.stringify(JSON_VEC)),
+                    ]);
+                    await c.refresh(engine);
+                    const entries = loadedEntries();
+                    expect(vectorOf(entries, 'partial')).toEqual(JSON_VEC);
+                    expect(vectorOf(entries, 'nan')).toEqual(JSON_VEC);
+                    expect(vectorOf(entries, 'empty')).toEqual(JSON_VEC);
+                });
+
+                it('skips a record with neither column, and malformed JSON does not abort the refresh', async () => {
+                    c.set([
+                        row('none', null, null),
+                        row('bad-json', null, '{not json'),
+                        row('good', null, JSON.stringify(JSON_VEC)),
+                        row('good-bin', Float32VectorToBase64(BINARY_VEC), null),
+                    ]);
+                    await expect(c.refresh(engine)).resolves.toBeUndefined();
+                    const entries = loadedEntries();
+                    expect(entries.map(e => e.key).sort()).toEqual(['good', 'good-bin']);
+                    expect(vectorOf(entries, 'good')).toEqual(JSON_VEC);
+                    expect(vectorOf(entries, 'good-bin')).toEqual(BINARY_VEC);
+                });
+            });
+        }
+
+        describe('AddOrUpdateSingleNoteEmbedding', () => {
+            it('adds the binary vector in preference to the JSON one', () => {
+                const engine2 = TestableAIEngine.CreateForTest();
+                const service = { RemoveVector: vi.fn().mockReturnValue(true), AddOrUpdateVector: vi.fn() };
+                engine2.setNoteVectorServiceForTest(service);
+                engine2.AddOrUpdateSingleNoteEmbedding(row('n1', Float32VectorToBase64(BINARY_VEC), JSON.stringify(JSON_VEC)) as never);
+                expect(service.AddOrUpdateVector).toHaveBeenCalledTimes(1);
+                const [key, vector] = service.AddOrUpdateVector.mock.calls[0] as [string, ArrayLike<number>];
+                expect(key).toBe('n1');
+                expect(Array.from(vector)).toEqual(BINARY_VEC);
+                expect(service.RemoveVector).not.toHaveBeenCalled();
+            });
+
+            it('removes the note when it has no usable vector, instead of throwing', () => {
+                const engine2 = TestableAIEngine.CreateForTest();
+                const service = { RemoveVector: vi.fn().mockReturnValue(true), AddOrUpdateVector: vi.fn() };
+                engine2.setNoteVectorServiceForTest(service);
+                expect(() => engine2.AddOrUpdateSingleNoteEmbedding(row('n2', null, '{not json') as never)).not.toThrow();
+                engine2.AddOrUpdateSingleNoteEmbedding(row('n3', null, null) as never);
+                expect(service.AddOrUpdateVector).not.toHaveBeenCalled();
+                expect(service.RemoveVector.mock.calls).toEqual([['n2'], ['n3']]);
+            });
+        });
+
+        describe('AddOrUpdateSingleExampleEmbedding', () => {
+            it('falls back to JSON when the binary column is invalid', () => {
+                const engine2 = TestableAIEngine.CreateForTest();
+                const service = { RemoveVector: vi.fn().mockReturnValue(true), AddOrUpdateVector: vi.fn() };
+                engine2.setExampleVectorServiceForTest(service);
+                engine2.AddOrUpdateSingleExampleEmbedding(row('e1', Buffer.from([9]).toString('base64'), JSON.stringify(JSON_VEC)) as never);
+                const [key, vector] = service.AddOrUpdateVector.mock.calls[0] as [string, ArrayLike<number>];
+                expect(key).toBe('e1');
+                expect(Array.from(vector)).toEqual(JSON_VEC);
+            });
+
+            it('removes the example when it has no usable vector, instead of throwing', () => {
+                const engine2 = TestableAIEngine.CreateForTest();
+                const service = { RemoveVector: vi.fn().mockReturnValue(true), AddOrUpdateVector: vi.fn() };
+                engine2.setExampleVectorServiceForTest(service);
+                expect(() => engine2.AddOrUpdateSingleExampleEmbedding(row('e2', null, '[1, "x"]') as never)).not.toThrow();
+                expect(service.AddOrUpdateVector).not.toHaveBeenCalled();
+                expect(service.RemoveVector).toHaveBeenCalledWith('e2');
+            });
         });
     });
 

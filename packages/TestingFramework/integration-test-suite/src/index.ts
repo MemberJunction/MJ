@@ -1,3 +1,5 @@
+import 'reflect-metadata';
+
 /**
  * @memberjunction/integration-test-suite — MemberJunction's OWN integration-test content.
  *
@@ -27,6 +29,7 @@ export * from './checks/open-app-teardown.checks';
 export * from './checks/permission-engine.checks';
 export * from './checks/predictive-studio.checks';
 export * from './checks/prompt-eval-harness.checks';
+export * from './checks/agent-decisions-switch.checks';
 export * from './checks/prompt-runner.checks';
 export * from './checks/record-process-facade.checks';
 export * from './checks/entity-actions.checks';
@@ -41,6 +44,7 @@ export * from './checks/rls-isolation.checks';
 export * from './checks/fls-enforcement.checks';
 export * from './checks/fls-lifecycle.checks';
 export * from './checks/fls-client.checks';
+export * from './checks/self-avatar-client.checks';
 export * from './checks/keyrowfilter.checks'; // KF1–KF6: registers into the 'rls-isolation' bundle AFTER RLS1–RLS10 (order matters for GetBundle parity)
 export * from './checks/runquery-cache.checks';
 export * from './checks/scheduled-jobs.checks';
@@ -55,6 +59,8 @@ export * from './checks/runview-features.checks';
 export * from './checks/runquery-catalog.checks';
 export * from './checks/runquery-params.checks';
 export * from './checks/runquery-features.checks';
+export * from './checks/runquery-rendering.checks';
+export * from './checks/runquery-rendering-client.checks';
 export * from './checks/scope-enforcement.checks';
 export * from './checks/subscription-isolation.checks';
 export * from './checks/templates.checks';
@@ -63,24 +69,31 @@ export * from './checks/entity-server-invariants.checks';
 export * from './checks/entity-graph.checks';
 export * from './checks/entity-embedded.checks';
 export * from './checks/entity-graph-client.checks';
+export * from './checks/jsontype-live-sync.checks';
+export * from './checks/record-cloning.checks';
+export * from './checks/binary-fields.checks';
 export * from './checks/scheduling-concurrency.checks';
 export * from './checks/communication.checks';
 export * from './checks/ai-cost.checks';
 export * from './checks/ai-permissions.checks';
 export * from './checks/ai-embeddings.checks';
 export * from './checks/agent-loop-standin.checks';
+export * from './checks/trailing-runtime-state.checks';
 export * from './checks/transaction-groups.checks';
 export * from './checks/transaction-groups-batched.checks';
 export * from './checks/nested-transactions.checks';
 export * from './checks/class-resolution.checks';
 export * from './checks/metadata-sync.checks';
+export * from './checks/metadata-sync-push.checks';
 export * from './checks/codegen-determinism.checks';
 export * from './checks/layered-base-views.checks';
+export * from './checks/rubrics.checks';
 export * from './checks/realtime-deterministic.checks';
 export * from './checks/scoped-anon-elevation.checks';
 export * from './checks/search.checks';
 export * from './checks/storage.checks';
 export * from './checks/queue.checks';
+export * from './checks/work-queue-runtime.checks';
 export * from './checks/auth-validation.checks';
 export * from './checks/agent-loop-live.checks';
 export * from './checks/shipped-agents-live.checks';
@@ -100,3 +113,4 @@ export * from './checks/app-behavioral.checks';
 export * from './checks/content-vectorization.checks';
 export * from './checks/materialized-read.checks';
 export * from './checks/materialized-entity-read.checks';
+export * from './checks/form-contributions.checks';

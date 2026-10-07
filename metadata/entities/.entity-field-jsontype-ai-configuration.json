@@ -22,6 +22,10 @@
           ],
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Model Types&Name=ModelConfiguration"
+          },
+          "sync": {
+            "lastModified": "2026-10-06T20:21:58.172Z",
+            "checksum": "caaf958219485be0498799d42542bca4d1a53863ed2c96e5db5ba89c6e1b9764"
           }
         }
       ]
@@ -52,6 +56,10 @@
           ],
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Models&Name=ModelConfiguration"
+          },
+          "sync": {
+            "lastModified": "2026-10-06T20:21:58.198Z",
+            "checksum": "caaf958219485be0498799d42542bca4d1a53863ed2c96e5db5ba89c6e1b9764"
           }
         }
       ]
@@ -81,6 +89,10 @@
           ],
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Model Vendors&Name=ModelConfiguration"
+          },
+          "sync": {
+            "lastModified": "2026-10-06T20:21:58.225Z",
+            "checksum": "caaf958219485be0498799d42542bca4d1a53863ed2c96e5db5ba89c6e1b9764"
           }
         }
       ]
@@ -110,6 +122,10 @@
           ],
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Prompts&Name=PromptConfiguration"
+          },
+          "sync": {
+            "lastModified": "2026-10-06T20:21:58.250Z",
+            "checksum": "3baed8399d53a13d519f746370ea0fbfc97d849635e19147dbace4b3b5c62286"
           }
         }
       ]
@@ -139,12 +155,51 @@
           ],
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Prompt Models&Name=PromptConfiguration"
+          },
+          "sync": {
+            "lastModified": "2026-10-06T20:21:58.276Z",
+            "checksum": "b94a553a4933883cf140165ecb18e503f78d1584c96becc1bc26fa42bc263559"
           }
         }
       ]
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: AI Prompt Models"
+    }
+  },
+  {
+    "_comments": [
+      "Sets JSONType metadata on Configuration (MJ: AI Vendors entity) — the vendor's own",
+      "configuration bag (IAIVendorConfiguration). Its ModelDefaults key is the vendor layer of the",
+      "model-configuration cascade (above AI Models, below AI Model Vendors). Column added by",
+      "V202609281000__v6.2.x__AIVendor_Configuration."
+    ],
+    "fields": {
+      "Name": "MJ: AI Vendors"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IAIVendorConfiguration",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IAIConfiguration.ts"
+          },
+          "_comments": [
+            "Configuration field — vendor bag whose ModelDefaults key forms the vendor layer of the cascade"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Vendors&Name=Configuration"
+          },
+          "sync": {
+            "lastModified": "2026-10-06T20:21:58.302Z",
+            "checksum": "2f766019a032a6a405740afd619a44e100ecc181b3c14121c2f8039d02e2c0f9"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Vendors"
     }
   }
 ]

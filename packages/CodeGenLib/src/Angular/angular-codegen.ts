@@ -1,11 +1,11 @@
 import { EntityInfo, EntityFieldInfo, GeneratedFormSectionType, EntityFieldTSType, EntityFieldValueListType, Metadata, UserInfo, EntityRelationshipInfo, EntityOrganicKeyInfo, EntityOrganicKeyRelatedEntityInfo, FieldCategoryInfo } from '@memberjunction/core';
-import { logError, logStatus, logWarning } from '../Misc/status_logging';
+import { logError, logStatus, LogWarning } from '../Misc/status_logging';
 import { UUIDsEqual, ordinalCompare } from '@memberjunction/global';
 import fs from 'fs';
 import path from 'path';
 
 /** FNV-1a 32-bit over UTF-16 code units — stable across Node versions and machines. */
-export function stableHash32(s: string): number {
+export function StableHash32(s: string): number {
     let h = 0x811c9dc5;
     for (let i = 0; i < s.length; i++) {
         h ^= s.charCodeAt(i);
@@ -14,12 +14,22 @@ export function stableHash32(s: string): number {
     return h >>> 0;
 }
 
-export function assignSubModule(componentClassName: string, submoduleCount: number): number {
-    return stableHash32(componentClassName) % submoduleCount;
+/** @deprecated Use {@link StableHash32}. */
+export function stableHash32(s: string): number {
+    return StableHash32(s);
 }
-import { mjCoreSchema, outputOptionValue, configInfo, resolveEntityPackageName } from '../Config/config';
+
+export function AssignSubModule(componentClassName: string, submoduleCount: number): number {
+    return StableHash32(componentClassName) % submoduleCount;
+}
+
+/** @deprecated Use {@link AssignSubModule}. */
+export function assignSubModule(componentClassName: string, submoduleCount: number): number {
+    return AssignSubModule(componentClassName, submoduleCount);
+}
+import { mjCoreSchema, OutputOptionValue, configInfo, ResolveEntityPackageName } from '../Config/config';
 import { GenerationResult, RelatedEntityDisplayComponentGeneratorBase } from './related-entity-components';
-import { sortBySequenceAndCreatedAt, sortRelatedEntities } from '../Misc/util';
+import { SortBySequenceAndCreatedAt, SortRelatedEntities } from '../Misc/util';
 
 /**
  * Schemas whose entities should not appear as related-entity form tabs.
@@ -193,7 +203,7 @@ export class AngularClientGeneratorBase {
      * @param contextUser The user context for permission checking and personalization
      * @returns Promise<boolean> True if generation was successful, false otherwise
      */
-    public async generateAngularCode(entities: EntityInfo[], directory: string, modulePrefix: string, contextUser: UserInfo, outputType: 'Angular' | 'AngularCoreEntities' = 'Angular'): Promise<boolean> {
+    public async GenerateAngularCode(entities: EntityInfo[], directory: string, modulePrefix: string, contextUser: UserInfo, outputType: 'Angular' | 'AngularCoreEntities' = 'Angular'): Promise<boolean> {
         try {
           const entityPath = path.join(directory, 'Entities');
 
@@ -267,8 +277,8 @@ export class AngularClientGeneratorBase {
               }
           }
       
-          const maxComponentsPerModule = outputOptionValue(outputType, 'maxComponentsPerModule', 25);
-          const submoduleCount = outputOptionValue(outputType, 'submoduleCount', 32);
+          const maxComponentsPerModule = OutputOptionValue(outputType, 'maxComponentsPerModule', 25);
+          const submoduleCount = OutputOptionValue(outputType, 'submoduleCount', 32);
       
           const moduleCode = this.generateAngularModule(componentImports, componentNames, relatedEntityModuleImports, sections, modulePrefix, maxComponentsPerModule, submoduleCount);
           fs.writeFileSync(path.join(directory, 'generated-forms.module.ts'), moduleCode);
@@ -280,6 +290,11 @@ export class AngularClientGeneratorBase {
           return false;
         }
       }
+
+    /** @deprecated Use {@link GenerateAngularCode}. */
+    public async generateAngularCode(entities: EntityInfo[], directory: string, modulePrefix: string, contextUser: UserInfo, outputType: 'Angular' | 'AngularCoreEntities' = 'Angular'): Promise<boolean> {
+        return this.GenerateAngularCode(entities, directory, modulePrefix, contextUser, outputType);
+    }
        
       
       /**
@@ -365,7 +380,7 @@ ${moduleCode}
           }[]>();
 
           for (const item of componentNames) {
-              const bucketIndex = assignSubModule(item.componentName, submoduleCount);
+              const bucketIndex = AssignSubModule(item.componentName, submoduleCount);
               let bucket = buckets.get(bucketIndex);
               if (!bucket) {
                    bucket = [];
@@ -385,7 +400,7 @@ ${moduleCode}
 
               // Soft limit warning if a bucket exceeds maxComponentsPerModule
               if (itemsInBucket.length > maxComponentsPerModule) {
-                   logWarning(
+                   LogWarning(
                        `Angular submodule ${this.SubModuleBaseName}${bucketIndex} has ${itemsInBucket.length} components, ` +
                        `exceeding maxComponentsPerModule (${maxComponentsPerModule}). Consider increasing submoduleCount.`
                    );
@@ -566,7 +581,7 @@ export class ${this.SubModuleBaseName}${moduleNumber} { }
 
         const entityPkg = entity.SchemaName === mjCoreSchema
             ? '@memberjunction/core-entities'
-            : resolveEntityPackageName(entity.SchemaName);
+            : ResolveEntityPackageName(entity.SchemaName);
         return `import { Component } from '@angular/core';
 import { ${entityObjectClass}Entity } from '${entityPkg}';
 import { RegisterClass } from '@memberjunction/global';
@@ -644,15 +659,32 @@ export class ${entity.ClassName}FormComponent extends BaseFormComponent {
       protected generateAngularAdditionalSections(entity: EntityInfo, startIndex: number, fieldCategories?: Record<string, FieldCategoryInfo> | null): AngularFormSectionInfo[] {
           const sections: AngularFormSectionInfo[] = [];
           let index = startIndex;
-          const sortedFields = sortBySequenceAndCreatedAt(entity.Fields);
+          const sortedFields = SortBySequenceAndCreatedAt(entity.Fields);
           for (const field of sortedFields) {
-              if (field.IncludeInGeneratedForm) {
-                  if (field.GeneratedFormSectionType === GeneratedFormSectionType.Category && field.Category && field.Category !== ''  && field.IncludeInGeneratedForm)
+              // A section exists because a RENDERED field lands in it. Use the same predicate the
+              // HTML walk uses, so a section whose only members are skipped (a binary column, an
+              // FK's virtual name field) is never created — the HTML and the component's section
+              // list both come from this array, so an empty panel here would also be a dangling key.
+              if (this.isFieldRenderedInForm(entity, field)) {
+                  if (field.GeneratedFormSectionType === GeneratedFormSectionType.Category && field.Category && field.Category !== '')
                       this.AddSectionIfNeeded(entity, sections, GeneratedFormSectionType.Category, field.Category, field.Sequence);
                   else if (field.GeneratedFormSectionType === GeneratedFormSectionType.Details)
                       this.AddSectionIfNeeded(entity, sections, GeneratedFormSectionType.Details, "Details", field.Sequence);
                   else if (field.GeneratedFormSectionType === GeneratedFormSectionType.Top)
                       this.AddSectionIfNeeded(entity, sections, GeneratedFormSectionType.Top, "Top", field.Sequence);
+              }
+          }
+          // Section ORDER is unchanged by the rule above: a skipped field still contributes its
+          // sequence to a section that exists (it always did), so an FK's virtual name field or a
+          // binary column that happens to be first in its section keeps that section where it was.
+          for (const field of sortedFields) {
+              if (!field.IncludeInGeneratedForm || this.isFieldRenderedInForm(entity, field)) continue;
+              const type = field.GeneratedFormSectionType;
+              const name = type === GeneratedFormSectionType.Category ? field.Category : type === GeneratedFormSectionType.Details ? 'Details' : type === GeneratedFormSectionType.Top ? 'Top' : null;
+              if (!name) continue;
+              const section = sections.find(s => s.Name === name && s.Type === type);
+              if (section && field.Sequence != null && (section.MinSequence == null || field.Sequence < section.MinSequence)) {
+                  section.MinSequence = field.Sequence;
               }
           }
 
@@ -752,9 +784,9 @@ ${indentedFormHTML}
       
           // figure out which fields will be in this section first
           section.Fields = [];
-          const sortedFields = sortBySequenceAndCreatedAt(entity.Fields);
+          const sortedFields = SortBySequenceAndCreatedAt(entity.Fields);
           for (const field of sortedFields) {
-              if (field.IncludeInGeneratedForm) {
+              if (this.isFieldRenderedInForm(entity, field)) {
                   let bMatch: boolean = false;
                   if (field.GeneratedFormSectionType === GeneratedFormSectionType.Top && section.Type === GeneratedFormSectionType.Top) {
                       // match, include the field in the output
@@ -768,13 +800,7 @@ ${indentedFormHTML}
                       // match, include the field in the output
                       bMatch = true;
                   }
-                  if (bMatch && field.Name.toLowerCase() !== 'id') {
-                      // Skip virtual fields that are the name-field-map of an FK field.
-                      // The FK field itself will display the name via RelatedEntityNameFieldMap
-                      // at runtime, so emitting the virtual field would be redundant.
-                      if (field.IsVirtual && this.isVirtualNameFieldForFK(entity, field)) {
-                          continue;
-                      }
+                  if (bMatch) {
                       section.Fields.push(field) // add the field to the section fields array
                   }
               }
@@ -844,6 +870,28 @@ ${indentedFormHTML}
           }
       
           return html;
+      }
+
+      /**
+       * Whether a field is rendered on the generated form at all. This is the single rule behind
+       * both section derivation ({@link generateAngularAdditionalSections}) and field placement
+       * ({@link generateSectionHTMLForAngular}): a section is created only for fields that pass,
+       * so no section is ever emitted empty.
+       *
+       * Excluded:
+       *  - fields not flagged `IncludeInGeneratedForm`, and the `ID` column;
+       *  - virtual fields that are the name-field-map of an FK on the same entity — the FK field
+       *    shows the name at runtime via `RelatedEntityNameFieldMap`, so this would be redundant;
+       *  - binary fields (varbinary / bytea / binary / image). Their value is base64-encoded data —
+       *    an embedding, a file — that a form can neither display nor edit meaningfully, and
+       *    rendering it would put kilobytes of base64 in a textarea.
+       */
+      protected isFieldRenderedInForm(entity: EntityInfo, field: EntityFieldInfo): boolean {
+          if (!field.IncludeInGeneratedForm) return false;
+          if (field.Name.toLowerCase() === 'id') return false;
+          if (field.IsVirtual && this.isVirtualNameFieldForFK(entity, field)) return false;
+          if (field.IsBinaryFieldType) return false;
+          return true;
       }
 
       /**
@@ -922,7 +970,7 @@ ${indentedFormHTML}
         const excludedSchemas = schemasExcludedFromGeneratedForms();
 
         // Sort related entities deterministically using the shared sort with cascading tiebreakers
-        const sortedRelatedEntities = sortRelatedEntities(
+        const sortedRelatedEntities = SortRelatedEntities(
             entity.RelatedEntities.filter(re => {
                 if (!re.DisplayInForm || isaChildIDs.has(re.RelatedEntityID)) {
                     return false;
@@ -1340,9 +1388,12 @@ ${this.innerCollapsiblePanelsHTML(additionalSections, relatedEntitySections)}
 
         // Slot markers — dynamic injection points for BaseFormPanel registrations.
         // See @memberjunction/ng-base-forms PANELS.md for the authoring guide.
-        // Every generated form gets all four slots so registered panels can target
-        // any position WITHOUT requiring CodeGen to know about the panel ahead of
-        // time. Empty slots have zero rendering cost (anchor only).
+        // Every generated form gets these three slots so registered panels can target a
+        // position WITHOUT requiring CodeGen to know about the panel ahead of time. Empty
+        // slots have zero rendering cost (anchor only). `after-everything` is not emitted
+        // here — the container always terminates the fallback chain with it — and
+        // `top-area` is not emitted at all, so a panel registered there falls through to
+        // the bottom of the form.
         const slot = (slotKey: string): string =>
             `    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="${slotKey}" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>`;
 

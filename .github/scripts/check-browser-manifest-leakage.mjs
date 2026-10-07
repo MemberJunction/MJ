@@ -101,12 +101,13 @@ const BUNDLE_PACKAGE_JSON = 'packages/AI/Providers/Bundle/package.json';
  * Tier 1 — named verbatim as forbidden by `packages/Angular/Bootstrap/CLAUDE.md` and
  * `packages/Angular/BootstrapLite/CLAUDE.md`. Each has a browser-safe counterpart where one
  * is needed: aiengine → ai-engine-base, ai-vectors-pinecone → ai-vectors-memory,
- * templates → templates-base-types.
+ * ai-vectors-memory-server → ai-vectors-memory, templates → templates-base-types.
  */
 const TIER_1 = [
     '@memberjunction/aiengine',
     '@memberjunction/ai-provider-bundle',
     '@memberjunction/ai-vectors-pinecone',
+    '@memberjunction/ai-vectors-memory-server',
     '@memberjunction/storage',
     '@memberjunction/templates',
     '@memberjunction/server',
@@ -125,12 +126,14 @@ const TIER_1 = [
 const TIER_2 = [
     '@memberjunction/ai-anthropic', '@memberjunction/ai-assemblyai', '@memberjunction/ai-azure',
     '@memberjunction/ai-bedrock', '@memberjunction/ai-betty-bot', '@memberjunction/ai-blackforestlabs',
-    '@memberjunction/ai-cerebras', '@memberjunction/ai-cohere', '@memberjunction/ai-elevenlabs',
+    '@memberjunction/ai-cerebras', '@memberjunction/ai-cohere', '@memberjunction/ai-deepinfra',
+    '@memberjunction/ai-elevenlabs',
     '@memberjunction/ai-fireworks', '@memberjunction/ai-gemini', '@memberjunction/ai-groq',
     '@memberjunction/ai-heygen', '@memberjunction/ai-inception', '@memberjunction/ai-inworld',
     '@memberjunction/ai-llamacpp', '@memberjunction/ai-lmstudio', '@memberjunction/ai-local-embeddings',
     '@memberjunction/ai-minimax', '@memberjunction/ai-mistral', '@memberjunction/ai-ollama',
     '@memberjunction/ai-openai', '@memberjunction/ai-openrouter', '@memberjunction/ai-recommendations-rex',
+    '@memberjunction/ai-siliconflow',
     '@memberjunction/ai-vertex', '@memberjunction/ai-xai', '@memberjunction/ai-zhipu',
 ];
 

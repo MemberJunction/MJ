@@ -39,16 +39,26 @@ let proxyTokenConfig: ProxyTokenConfig | undefined;
  *
  * @param config - Proxy token configuration
  */
-export function setProxyTokenConfig(config: ProxyTokenConfig): void {
+export function SetProxyTokenConfig(config: ProxyTokenConfig): void {
   proxyTokenConfig = config;
   console.log(`[TokenValidator] Proxy token validation configured (issuer: ${config.issuer})`);
+}
+
+/** @deprecated Use {@link SetProxyTokenConfig}. */
+export function setProxyTokenConfig(config: ProxyTokenConfig): void {
+  return SetProxyTokenConfig(config);
 }
 
 /**
  * Clears the proxy token configuration (for testing).
  */
-export function clearProxyTokenConfig(): void {
+export function ClearProxyTokenConfig(): void {
   proxyTokenConfig = undefined;
+}
+
+/** @deprecated Use {@link ClearProxyTokenConfig}. */
+export function clearProxyTokenConfig(): void {
+  return ClearProxyTokenConfig();
 }
 
 /**
@@ -58,7 +68,7 @@ export function clearProxyTokenConfig(): void {
  * @param token - The JWT to check
  * @returns true if this appears to be a proxy-issued token
  */
-export function isProxyToken(token: string): boolean {
+export function IsProxyToken(token: string): boolean {
   if (!proxyTokenConfig) {
     return false;
   }
@@ -70,13 +80,18 @@ export function isProxyToken(token: string): boolean {
   }
 }
 
+/** @deprecated Use {@link IsProxyToken}. */
+export function isProxyToken(token: string): boolean {
+  return IsProxyToken(token);
+}
+
 /**
  * Validates a proxy-issued JWT token.
  *
  * @param token - The proxy JWT to validate
  * @returns Validation result with payload and user info if valid
  */
-export async function validateProxyToken(token: string): Promise<OAuthValidationResult> {
+export async function ValidateProxyToken(token: string): Promise<OAuthValidationResult> {
   if (!proxyTokenConfig) {
     return createError('invalid_token', 'Proxy token validation not configured');
   }
@@ -114,6 +129,11 @@ export async function validateProxyToken(token: string): Promise<OAuthValidation
     }
     return createError('invalid_token', error instanceof Error ? error.message : 'Token validation failed');
   }
+}
+
+/** @deprecated Use {@link ValidateProxyToken}. */
+export async function validateProxyToken(token: string): Promise<OAuthValidationResult> {
+  return ValidateProxyToken(token);
 }
 
 // Cache for Azure AD v1 JWKS clients (by tenant ID)
@@ -306,10 +326,10 @@ function isTokenExpired(token: string): { expired: boolean; exp?: number } {
  * @param token - The Bearer token (without "Bearer " prefix)
  * @returns Validation result with payload and user info if valid
  */
-export async function validateBearerToken(token: string): Promise<OAuthValidationResult> {
+export async function ValidateBearerToken(token: string): Promise<OAuthValidationResult> {
   // Check if this is a proxy-issued token (fast path)
-  if (isProxyToken(token)) {
-    return validateProxyToken(token);
+  if (IsProxyToken(token)) {
+    return ValidateProxyToken(token);
   }
 
   await ensureMJServerImported();
@@ -414,6 +434,11 @@ export async function validateBearerToken(token: string): Promise<OAuthValidatio
     payload: verifiedPayload,
     userInfo,
   };
+}
+
+/** @deprecated Use {@link ValidateBearerToken}. */
+export async function validateBearerToken(token: string): Promise<OAuthValidationResult> {
+  return ValidateBearerToken(token);
 }
 
 /**
@@ -533,7 +558,7 @@ function isNetworkError(error: unknown): boolean {
  * @param userInfo - User information extracted from token claims
  * @returns The MemberJunction UserInfo if found and active
  */
-export async function resolveOAuthUser(
+export async function ResolveOAuthUser(
   userInfo: { email?: string; firstName?: string; lastName?: string }
 ): Promise<{ user?: UserInfo; error?: { code: OAuthErrorCode; message: string } }> {
   await ensureMJServerImported();
@@ -587,12 +612,24 @@ export async function resolveOAuthUser(
   }
 }
 
+/** @deprecated Use {@link ResolveOAuthUser}. */
+export async function resolveOAuthUser(
+  userInfo: { email?: string; firstName?: string; lastName?: string }
+): Promise<{ user?: UserInfo; error?: { code: OAuthErrorCode; message: string } }> {
+  return ResolveOAuthUser(userInfo);
+}
+
 /**
  * Checks if auth providers are configured.
  *
  * @returns true if at least one auth provider is configured
  */
-export async function hasAuthProviders(): Promise<boolean> {
+export async function HasAuthProviders(): Promise<boolean> {
   await ensureMJServerImported();
   return AuthProviderFactory.Instance.hasProviders();
+}
+
+/** @deprecated Use {@link HasAuthProviders}. */
+export async function hasAuthProviders(): Promise<boolean> {
+  return HasAuthProviders();
 }

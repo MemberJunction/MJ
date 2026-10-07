@@ -18,6 +18,7 @@
 
 import {
     BaseEntity,
+    SerializeCloneChangeContext,
     DatabaseProviderBase,
     EntityInfo,
     EntityFieldInfo,
@@ -60,6 +61,8 @@ import {
     LogError,
     LogStatus,
     LogStatusEx,
+    PostCommitTask,
+    PostCommitToken,
     StripStopWords,
     DatabasePlatform,
     QueryExecutionSpec,
@@ -73,7 +76,7 @@ import {
     QueryInfo,
 } from '@memberjunction/core';
 
-import { MJGlobal, NormalizeUUID, SQLExpressionValidator, UUIDsEqual } from '@memberjunction/global';
+import { BytesToBase64, IsByteArray, MJGlobal, NormalizeUUID, SQLExpressionValidator, UUIDsEqual } from '@memberjunction/global';
 import { QueryPagingEngine } from './queryPagingEngine.js';
 // QueryParameterProcessor is now called internally by RenderPipeline
 import { createHash } from 'node:crypto';
@@ -81,10 +84,10 @@ import { v4 as uuidv4 } from 'uuid';
 import { SqlLoggingSessionImpl } from './SqlLogger.js';
 import { SqlLoggingOptions, SqlLoggingSession } from './types.js';
 import { SQLDialect, GetDialect } from '@memberjunction/sql-dialect';
-import { SQLParser } from '@memberjunction/sql-parser';
+import { SQLParser, IsReadOnlyQuery } from '@memberjunction/sql-parser';
 // QueryCompositionEngine is now owned by RenderPipeline
 import { RenderPipeline, type RenderResult } from './renderPipeline.js';
-import { CRUDSprocType, useJsonArgShape } from './crudSprocFieldRules.js';
+import { CRUDSprocType, UseJsonArgShape } from './crudSprocFieldRules.js';
 import { SaveCoercedValue, SaveCallBinding, SaveSQLFragment } from './saveTypes.js';
 import type { RecordChangePayload } from '@memberjunction/core';
 
@@ -103,6 +106,8 @@ import { ScoredCandidate } from '@memberjunction/core';
 import { QueueManager } from '@memberjunction/queue';
 import { BuildEntityActionDispatchKey, EntityActionDispatchGuard, EntityActionEngineServer } from '@memberjunction/actions';
 import { ActionResult, BuildEntityChangeContext } from '@memberjunction/actions-base';
+import { TransactionFrameTracker } from './TransactionFrameTracker';
+import { CountOnlyBatchCoalescer, CountOnlyRow, IsCoalescibleCountBatch } from './countOnlyBatch';
 import { EncryptionEngine } from '@memberjunction/encryption';
 import { GeoCodeSyncService, GeocodeResult } from '@memberjunction/geo-core';
 
@@ -117,6 +122,22 @@ export interface ExecuteSQLBatchOptions {
     ignoreLogging?: boolean;
     /** Whether this batch contains data mutation operations */
     isMutation?: boolean;
+    /** Run on the pool even while an ambient transaction is open — see ExecuteSQLOptions.ignoreAmbientTransaction (#4514). */
+    ignoreAmbientTransaction?: boolean;
+}
+
+/**
+ * Execution options for SQL a caller supplied rather than a saved query (ad-hoc SQL, transient test
+ * queries): run it read-only and roll back, so it can neither write nor leave session state behind.
+ */
+const CALLER_SQL_OPTIONS: ExecuteSQLOptions = { readOnlyTransaction: true, description: 'caller-supplied query' };
+
+/** A {@link GenericDatabaseProvider.RunAfterCommit} task waiting for the outermost commit. */
+interface PostCommitEntry {
+    Task: PostCommitTask;
+    Description: string;
+    /** Transaction frame that owns the entry (1 = outermost). */
+    Depth: number;
 }
 
 /**
@@ -491,6 +512,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         // built any later would report that nothing changed. Everything below this line may yield;
         // nothing above it does.
         const entityChange = BuildEntityChangeContext(entity);
+        // Same reason: by the first `await` the save's transaction may already have committed or
+        // rolled back. The token ties a Durable After* run to the transaction that caused it, so a
+        // rolled-back save never fires it (see RunAfterCommit).
+        const postCommitToken = this.CapturePostCommitToken();
         try {
             const engine = EntityActionEngineServer.Instance;
             await engine.Config(false, user);
@@ -526,6 +551,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                         InvocationType: invocationTypeEntity,
                         ContextUser: user,
                         EntityChange: entityChange,
+                        PostCommitToken: postCommitToken,
                     });
                     // null means the binding is scoped (ScopeEntityID/ScopeRecordID) and this record falls
                     // outside it — the action never ran, so there is no result to report.
@@ -565,6 +591,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         before: boolean,
         user: UserInfo,
     ): Promise<void> {
+        // Before the first `await`: after-save dispatch is fire-and-forget, so by the time the task
+        // is enqueued the save's transaction may already have settled. See RunAfterCommit.
+        const postCommitToken = this.CapturePostCommitToken();
         try {
             if (baseType === 'delete') return; // delete not yet supported for AI actions
 
@@ -586,7 +615,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                             await ai.ExecuteEntityAIAction(p);
                         } else {
                             try {
-                                this.EnqueueAfterSaveAIAction(p, user);
+                                this.EnqueueAfterSaveAIAction(p, user, postCommitToken);
                             } catch (e) {
                                 LogError(e instanceof Error ? e.message : String(e));
                             }
@@ -603,8 +632,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * Enqueues an after-save AI action for execution. By default, immediately adds
      * to QueueManager. Subclasses with transaction support can override to defer
      * until after transaction commit.
+     *
+     * @param _postCommitToken The transaction frames open when the save dispatched this action,
+     *                        captured before any `await` — pass it to {@link RunAfterCommit} when deferring.
      */
-    protected EnqueueAfterSaveAIAction(params: EntityAIActionParams, user: UserInfo): void {
+    protected EnqueueAfterSaveAIAction(params: EntityAIActionParams, user: UserInfo, _postCommitToken?: PostCommitToken): void {
         QueueManager.AddTask('Entity AI Action', params, null, user);
     }
 
@@ -698,6 +730,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 entity.PrimaryKey.Values(),
                 user?.ID ?? '',
                 options.ISAActiveChildEntityName,
+                undefined,
+                entity.CloneContext ? 'Clone' : 'Internal',
+                entity.CloneContext ? SerializeCloneChangeContext(entity.CloneContext) : null,
             )
             : null;
 
@@ -792,6 +827,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     ): Promise<Record<string, unknown>[]> {
         if (!rows || rows.length === 0) return rows;
 
+        // Step 0: binary columns → base64. Drivers return varbinary/bytea as byte arrays (Node
+        // Buffers); BaseEntity, the caches and every transport hold binary values as base64
+        // strings, so the conversion happens once, here, for every row a provider returns.
+        // Applies to external entities too — their drivers return Buffers just the same.
+        this.ConvertBinaryFieldsToBase64(rows, entityInfo.BinaryFields);
+
         // Step 1: Platform-specific datetime adjustment (virtual hook).
         // SKIP for external entities: AdjustDatetimeFields applies THIS provider's platform correction
         // (e.g. SQL Server appends 'Z' to compensate for how tedious marshals datetimes from the LOCAL
@@ -834,6 +875,62 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
             return processedRow;
         }));
+    }
+
+    /**
+     * Public entry point to {@link PostProcessRows} for code that runs SQL outside the provider's
+     * own read paths but returns entity rows — the transaction groups. Every row a provider hands
+     * back must pass through here, so binary columns become base64, datetimes are adjusted and
+     * encrypted fields are decrypted no matter which path saved the record.
+     *
+     * @param rows - Raw rows for `entityInfo`.
+     * @param entityInfo - The entity the rows belong to.
+     * @param contextUser - The user the rows are processed for (decryption runs as this user).
+     * @returns The processed rows.
+     */
+    public async ProcessEntityRows(rows: Record<string, unknown>[], entityInfo: EntityInfo, contextUser?: UserInfo): Promise<Record<string, unknown>[]> {
+        if (!rows || rows.length === 0) return rows;
+        return this.PostProcessRows(rows, entityInfo, contextUser as UserInfo);
+    }
+
+    /**
+     * Converts the byte-array values of an entity's binary fields to base64 strings, in place.
+     *
+     * Database drivers return `varbinary` / `binary` / `image` (SQL Server) and `bytea`
+     * (PostgreSQL) columns as `Uint8Array`s (Node `Buffer`s). MemberJunction's representation of
+     * a binary value above the provider is a base64 string, so it is JSON-safe for dirty tracking,
+     * Record Changes, the RunView caches and every transport. Values that are already strings,
+     * null or absent are left untouched, which makes the conversion idempotent.
+     *
+     * @param rows - Rows as returned by the driver; mutated in place.
+     * @param binaryFields - The entity's binary fields (`EntityInfo.BinaryFields`).
+     */
+    protected ConvertBinaryFieldsToBase64(rows: Record<string, unknown>[], binaryFields: EntityFieldInfo[]): void {
+        if (binaryFields.length === 0) return;
+        for (const row of rows) {
+            for (const field of binaryFields) {
+                const value = row[field.Name];
+                if (IsByteArray(value)) row[field.Name] = BytesToBase64(value);
+            }
+        }
+    }
+
+    /**
+     * Converts every byte-array value in a set of rows to a base64 string, in place. For results
+     * with no entity metadata, such as RunQuery and ad-hoc SQL, where binary columns can only be
+     * recognised by value. See {@link ConvertBinaryFieldsToBase64}.
+     *
+     * @param rows - Rows as returned by the driver; mutated in place.
+     */
+    protected ConvertByteArrayValuesToBase64(rows: Record<string, unknown>[] | null | undefined): void {
+        if (!rows) return;
+        for (const row of rows) {
+            if (!row || typeof row !== 'object') continue;
+            for (const key of Object.keys(row)) {
+                const value = row[key];
+                if (IsByteArray(value)) row[key] = BytesToBase64(value);
+            }
+        }
     }
 
     /**************************************************************************/
@@ -965,6 +1062,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             description: options.description,
             ignoreLogging: options.ignoreLogging,
             isMutation: options.isMutation,
+            ignoreAmbientTransaction: options.ignoreAmbientTransaction,
         } : undefined;
 
         const promises = queries.map((query, index) => {
@@ -1053,7 +1151,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * invocation in lockstep.
      */
     public UseJsonArgShape(entity: EntityInfo, sprocType: CRUDSprocType): boolean {
-        return useJsonArgShape(entity, sprocType, this.ProcedureParamLimit);
+        return UseJsonArgShape(entity, sprocType, this.ProcedureParamLimit);
     }
 
     /**************************************************************************/
@@ -1232,6 +1330,21 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     ): SaveSQLFragment;
 
     /**
+     * Optional replay form of a CREATE for the SQL log only (never executed). Dialects that
+     * record saves for migration replay (SQL Server's Metadata_Sync migrations) override
+     * this to emit a create-or-update guarded on the primary key, so replaying the
+     * recording on a database that already holds the row converges instead of failing
+     * (MemberJunction/MJ#4503). Default: no replay form, the plain save SQL is logged.
+     */
+    protected RenderReplaySaveSQL(
+        _binding: SaveCallBinding,
+        _entity: BaseEntity,
+        _fieldValues: Map<EntityFieldInfo, unknown>,
+    ): string | undefined {
+        return undefined;
+    }
+
+    /**
      * Concrete implementation of the abstract save-SQL builder defined on
      * `DatabaseProviderBase`. Iterates fields via the single `IsSPParameter`
      * predicate, applies provider-specific value coercion, encrypts, then
@@ -1304,7 +1417,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         //    record-change-free form to fall back to.
         const baseSaveSQL = this.WrapSaveCallForResult(binding, entity, spName);
         let saveSQL = baseSaveSQL;
-        const simpleSQL = baseSaveSQL.sql;
+        // A CREATE's logged form is guarded on the primary key so a migration replay of
+        // the recording converges on a database that already holds the row (#4503).
+        // Updates and dialects without a replay form log the plain save SQL.
+        const replaySQL = isNew ? this.RenderReplaySaveSQL(binding, entity, fieldValueMap) : undefined;
+        const simpleSQL = replaySQL ?? baseSaveSQL.sql;
 
         // 5. Optionally wrap with record-change emission.
         let overlappingChangeData: { changesJSON: string; changesDescription: string } | undefined;
@@ -1335,6 +1452,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 user,
                 entity.RestoreContext,
                 "'",
+                entity.CloneContext,
             );
             if (payload) {
                 saveSQL = this.WrapSaveCallWithRecordChange(saveSQL, binding, payload, entity);
@@ -1735,6 +1853,20 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * aggregates, parallel query execution, post-processing, and audit logging.
      */
     protected override async InternalRunView<T = unknown>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>> {
+        return this.RunViewCore<T>(params, contextUser);
+    }
+
+    /**
+     * The body of {@link InternalRunView}. `countExecutor`, when supplied, replaces the
+     * direct execution of a `count_only` view's COUNT query — {@link InternalRunViews} uses
+     * it to coalesce an all-`count_only` batch into one statement (see countOnlyBatch.ts).
+     * Everything before that step — permissions, RLS, filter screening — is unchanged.
+     */
+    protected async RunViewCore<T = unknown>(
+        params: RunViewParams,
+        contextUser?: UserInfo,
+        countExecutor?: (countSQL: string) => Promise<CountOnlyRow[]>,
+    ): Promise<RunViewResult<T>> {
         if (params?.Aggregates?.length) {
             LogStatus(`[GenericDatabaseProvider] InternalRunView received aggregates: entityName=${params.EntityName}, viewID=${params.ViewID}, viewName=${params.ViewName}, aggregateCount=${params.Aggregates.length}`);
         }
@@ -2067,7 +2199,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const maxRowsUsed = params.MaxRows || entityInfo.UserViewMaxRows;
             const willNeedCount = countSQL && (usingPagination || params.ResultType === 'count_only');
             if (willNeedCount) {
-                queries.push(this.ExecuteSQL(countSQL!, undefined, undefined, contextUser));
+                queries.push(countExecutor && params.ResultType === 'count_only'
+                    ? countExecutor(countSQL!)
+                    : this.ExecuteSQL(countSQL!, undefined, undefined, contextUser));
                 queryKeys.push('count');
             }
 
@@ -2170,8 +2304,31 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     protected override async InternalRunViews<T = unknown>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
+        if (IsCoalescibleCountBatch(params)) {
+            return this.RunCoalescedCountBatch<T>(params, contextUser);
+        }
         const promises = params.map((p) => this.InternalRunView<T>(p, contextUser));
         return Promise.all(promises);
+    }
+
+    /**
+     * All-`count_only` batch: every view runs the normal per-view path (so every
+     * security gate applies per view), but their COUNT queries are executed as ONE
+     * `UNION ALL` statement — one database round trip for, e.g., every related-section
+     * badge on a form. A view that fails keeps its own `Success:false` result; a connection
+     * failure is thrown, as on the per-view path.
+     */
+    protected async RunCoalescedCountBatch<T = unknown>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
+        const batch = new CountOnlyBatchCoalescer(
+            params.length,
+            (sql) => this.ExecuteSQL<Record<string, unknown>>(sql, undefined, undefined, contextUser),
+            (name) => this.QuoteIdentifier(name),
+            (error) => this.isConnectionError(error),
+        );
+        return Promise.all(params.map((p, index) =>
+            this.RunViewCore<T>(p, contextUser, (countSQL) => batch.Execute(index, countSQL))
+                .finally(() => batch.MarkSettled(index)),
+        ));
     }
 
     /**************************************************************************/
@@ -2244,6 +2401,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 if (!entityInfo) throw new Error(`Entity ${params.EntityName} not found in metadata`);
             }
 
+            // Binary columns are omitted from every implicit field list (saved-view columns and
+            // the no-Fields wildcard) unless requested; an explicit params.Fields entry is honoured.
+            const includeBinary = params.IncludeBinaryFields === true;
             const flsUser = contextUser ?? this.CurrentUser;
             const denied: Set<string> = params.ResultType !== 'entity_object' && flsUser && entityInfo.EnableFieldLevelSecurity
                 ? entityInfo.GetDeniedReadFields(flsUser)
@@ -2264,6 +2424,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     if (!c.hidden) {
                         if (c.EntityField) {
                             if (denied.has(c.EntityField.Name.trim().toLowerCase())) return; // silent narrowing
+                            if (!includeBinary && c.EntityField.IsBinaryFieldType) return; // binary only on request
                             fieldList.push(c.EntityField);
                         } else {
                             LogError(`View Field ${c.Name} doesn't match an Entity Field in entity ${entityInfo!.Name}.`);
@@ -2273,12 +2434,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 for (const ef of entityInfo.PrimaryKeys) {
                     if (!fieldList.find((f) => f.Name?.trim().toLowerCase() === ef.Name?.toLowerCase())) fieldList.push(ef);
                 }
-            } else if (denied.size > 0) {
-                // No explicit fields and no saved view would emit `SELECT *` — for a restricted
-                // user that pulls denied columns out of the database, so emit the explicit
-                // allowed-column list instead (PKs are unrestrictable and always included).
+            } else if (denied.size > 0 || (entityInfo.HasBinaryFields && !includeBinary)) {
+                // No explicit fields and no saved view would emit `SELECT *`. For a restricted
+                // user that pulls denied columns out of the database, and for an entity with
+                // binary columns it pulls large values nobody asked for — so emit the explicit
+                // column list instead (PKs are unrestrictable and always included).
                 for (const ef of entityInfo.Fields) {
-                    if (!denied.has(ef.Name.trim().toLowerCase())) fieldList.push(ef);
+                    if (denied.has(ef.Name.trim().toLowerCase())) continue;
+                    if (!includeBinary && ef.IsBinaryFieldType && !ef.IsPrimaryKey) continue;
+                    fieldList.push(ef);
                 }
             }
         } catch (e) {
@@ -2373,7 +2537,21 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 if (sUserSearchSQL.length > 0) sUserSearchSQL += ' OR ';
                 sUserSearchSQL += `(${this.QuoteIdentifier(field.Name)} ${sParam})`;
             }
-            if (sUserSearchSQL.length > 0) sUserSearchSQL = '(' + sUserSearchSQL + ')';
+            if (sUserSearchSQL.length > 0) {
+                sUserSearchSQL = '(' + sUserSearchSQL + ')';
+            } else if (userSearchString && userSearchString.trim().length > 0 && entityInfo.HasSearchFields) {
+                // A term was supplied and this entity DOES declare searchable fields, but every one of
+                // them dropped out of the loop above — denied by field-level security, or not a sensible
+                // text-search target. Returning the whole table would imply the search ran when it did
+                // not, and in the FLS case would hand back rows the caller tried to narrow by a field
+                // they cannot see. So return an unsatisfiable predicate.
+                //
+                // An entity that declares NO searchable field at all is a DIFFERENT case and stays a
+                // no-op. The caller asked to filter by a surface the entity does not have; nothing was
+                // withheld from them, and blanking a generic grid is the wrong answer. That no-op is
+                // pinned by integration check runview-matrix.RVM9. See MJ#4581.
+                sUserSearchSQL = '(1=0)';
+            }
         }
         return sUserSearchSQL;
     }
@@ -2661,7 +2839,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     // ALL fields, for every user: server slots are full-width and shared, and
                     // field security narrows per request at read time via
                     // ApplyFieldSecurityProjection rather than at fetch time.
-                    p.Fields = this.ComputeRunViewFetchFields(widenEntity);
+                    this.ResolveIncludeBinaryFields(p, widenEntity);
+                    p.Fields = this.ComputeRunViewFetchFields(widenEntity, p);
                     if (requested) {
                         callerFieldsByIndex.set(i, ProviderBase.UnionFieldsWithPrimaryKeys(requested, widenEntity));
                     }
@@ -4064,7 +4243,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     let matTotalRowCount: number;
                     let matExecutionTime: number;
                     if (matUseSQLPaging) {
-                        const paging = QueryPagingEngine.WrapWithPaging(materializedSQL, params.StartRow!, params.MaxRows!, this.PlatformKey as DatabasePlatform);
+                        const matStartRow = QueryPagingEngine.ResolveStartRow(params.StartRow);
+                        const paging = QueryPagingEngine.WrapWithPaging(materializedSQL, matStartRow, params.MaxRows!, this.PlatformKey as DatabasePlatform);
                         const start = Date.now();
                         const [dataResult, countResult] = await Promise.all([
                             this.ExecuteSQL<Record<string, unknown>>(paging.DataSQL, matPlan.parameters, undefined, contextUser),
@@ -4072,6 +4252,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                         ]);
                         matExecutionTime = Date.now() - start;
                         rows = dataResult ?? [];
+                        this.ConvertByteArrayValuesToBase64(rows);
                         matTotalRowCount = countResult?.[0]?.TotalRowCount != null ? Number(countResult[0].TotalRowCount) : rows.length;
                     } else {
                         const timing = await this.executeQueryWithTiming(materializedSQL, contextUser, matPlan.parameters);
@@ -4091,7 +4272,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                         Results: rows,
                         RowCount: rows.length,
                         TotalRowCount: matTotalRowCount,
-                        PageNumber: matUseSQLPaging ? Math.floor(params.StartRow! / params.MaxRows!) + 1 : undefined,
+                        PageNumber: matUseSQLPaging
+                            ? Math.floor(QueryPagingEngine.ResolveStartRow(params.StartRow) / params.MaxRows!) + 1
+                            : undefined,
                         PageSize: matUseSQLPaging ? params.MaxRows! : undefined,
                         ExecutionTime: matExecutionTime,
                         ErrorMessage: '',
@@ -4142,7 +4325,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
                 const paging = QueryPagingEngine.WrapWithPaging(
                     finalSQL,
-                    params.StartRow!,
+                    QueryPagingEngine.ResolveStartRow(params.StartRow),
                     params.MaxRows!,
                     this.PlatformKey as DatabasePlatform,
                 );
@@ -4157,6 +4340,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 if (!dataResult) throw new Error('Error executing paged query SQL');
 
                 paginatedResult = dataResult;
+                this.ConvertByteArrayValuesToBase64(paginatedResult);
                 totalRowCount = countResult?.[0]?.TotalRowCount != null
                     ? Number(countResult[0].TotalRowCount)
                     : paginatedResult.length;
@@ -4200,7 +4384,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 Results: paginatedResult,
                 RowCount: paginatedResult.length,
                 TotalRowCount: totalRowCount,
-                PageNumber: useSQLPaging ? Math.floor(params.StartRow! / params.MaxRows!) + 1 : undefined,
+                PageNumber: useSQLPaging
+                    ? Math.floor(QueryPagingEngine.ResolveStartRow(params.StartRow) / params.MaxRows!) + 1
+                    : undefined,
                 PageSize: useSQLPaging ? params.MaxRows! : undefined,
                 ExecutionTime: executionTime,
                 ErrorMessage: '',
@@ -4244,7 +4430,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         try {
             const validator = SQLExpressionValidator.Instance;
             const validation = validator.validateFullQuery(params.SQL!);
-            if (!validation.valid) {
+            const statementCheck = IsReadOnlyQuery(params.SQL!, this.Dialect);
+            if (!validation.valid || !statementCheck.IsReadOnly) {
                 return {
                     Success: false,
                     QueryID: '',
@@ -4253,20 +4440,20 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     RowCount: 0,
                     TotalRowCount: 0,
                     ExecutionTime: 0,
-                    ErrorMessage: validation.error || 'SQL validation failed',
+                    ErrorMessage: !validation.valid
+                        ? validation.error || 'SQL validation failed'
+                        : `Ad-hoc SQL must be a single read query: ${statementCheck.Reason}.`,
                 };
             }
 
-            const { result, executionTime } = await this.executeQueryWithTiming(params.SQL!, contextUser);
-
-            const { paginatedResult, totalRowCount } = this.applyQueryPagination(result, params);
+            const { rows, totalRowCount, executionTime } = await this.runAdhocSQL(params, contextUser);
 
             return {
                 Success: true,
                 QueryID: '',
                 QueryName: 'Ad-Hoc Query',
-                Results: paginatedResult,
-                RowCount: paginatedResult.length,
+                Results: rows,
+                RowCount: rows.length,
                 TotalRowCount: totalRowCount,
                 ExecutionTime: executionTime,
                 ErrorMessage: '',
@@ -4285,6 +4472,64 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 ErrorMessage: `Ad-hoc query execution failed: ${errorMessage}`,
             };
         }
+    }
+
+    /**
+     * Runs validated ad-hoc SQL. It is rendered the way caller-supplied SQL always is: composition
+     * tokens resolved, comments removed, and a single read query required. With `MaxRows` the
+     * database returns that page and a count runs beside it, as for saved queries, so the server
+     * sends one page rather than every row; without it every row is returned, offset by `StartRow`
+     * when one is given. `TimeoutSeconds` limits every statement the run sends.
+     */
+    private async runAdhocSQL(
+        params: RunQueryParams,
+        contextUser?: UserInfo,
+    ): Promise<{ rows: Record<string, unknown>[]; totalRowCount: number; executionTime: number }> {
+        const usePaging = QueryPagingEngine.ShouldPage(params.StartRow, params.MaxRows);
+        const startRow = QueryPagingEngine.ResolveStartRow(params.StartRow);
+        const rendered = RenderPipeline.Run(params.SQL!, {
+            Platform: this.PlatformKey as DatabasePlatform,
+            ContextUser: contextUser,
+            RequireReadStatement: true,
+            ...(usePaging ? { Paging: { StartRow: startRow, MaxRows: params.MaxRows! } } : {}),
+        });
+        const options = this.adhocSQLOptions(params);
+        if (!usePaging) {
+            const { result, executionTime } = await this.executeQueryWithTiming(rendered.FinalSQL, contextUser, undefined, options);
+            const { paginatedResult, totalRowCount } = this.applyQueryPagination(result, params);
+            return { rows: paginatedResult, totalRowCount, executionTime };
+        }
+        const start = Date.now();
+        const [dataResult, total] = await Promise.all([
+            this.ExecuteSQL<Record<string, unknown>>(rendered.FinalSQL, undefined, options, contextUser),
+            this.countAdhocRows(rendered.PagingResult?.CountSQL ?? null, options, contextUser),
+        ]);
+        const rows = dataResult ?? [];
+        return { rows, totalRowCount: total ?? startRow + rows.length, executionTime: Date.now() - start };
+    }
+
+    /**
+     * The total row count for a page of ad-hoc SQL, or `null` when it cannot be had. A count that
+     * fails does not fail the run: some queries page fine but cannot be counted (duplicate column
+     * names are legal in a result but not inside the count's wrap), so the caller reports a lower
+     * bound instead.
+     */
+    private async countAdhocRows(countSQL: string | null, options: ExecuteSQLOptions, contextUser?: UserInfo): Promise<number | null> {
+        if (!countSQL) return null;
+        try {
+            const countResult = await this.ExecuteSQL<{ TotalRowCount: number }>(countSQL, undefined, options, contextUser);
+            const total = Number(countResult?.[0]?.TotalRowCount);
+            return Number.isFinite(total) && total >= 0 ? Math.floor(total) : null;
+        } catch (e) {
+            LogError(`Ad-hoc query row count failed; reporting a lower-bound total. ${e instanceof Error ? e.message : String(e)}`);
+            return null;
+        }
+    }
+
+    /** The options every statement of an ad-hoc run uses: caller-SQL protections, plus its timeout. */
+    private adhocSQLOptions(params: RunQueryParams): ExecuteSQLOptions {
+        const seconds = params.TimeoutSeconds;
+        return seconds && seconds > 0 ? { ...CALLER_SQL_OPTIONS, timeoutMs: seconds * 1000 } : CALLER_SQL_OPTIONS;
     }
 
     /**
@@ -4485,7 +4730,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             finalSQL = resolved.finalSQL;
 
             // Execute
-            const { result, executionTime } = await this.executeQueryWithTiming(finalSQL, contextUser);
+            const { result, executionTime } = await this.executeQueryWithTiming(finalSQL, contextUser, undefined, CALLER_SQL_OPTIONS);
 
             return {
                 Success: true,
@@ -4541,6 +4786,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 Dependencies: spec.Dependencies,
                 OriginalSQL: spec.SQL,
                 MaxRows: spec.MaxRows,
+                RequireReadStatement: true,
             }
         );
 
@@ -4585,14 +4831,17 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         sql: string,
         contextUser?: UserInfo,
         parameters?: unknown[],
+        options?: ExecuteSQLOptions,
     ): Promise<{ result: Record<string, unknown>[]; executionTime: number }> {
         const start = Date.now();
-        const result = await this.ExecuteSQL<Record<string, unknown>>(sql, parameters, undefined, contextUser);
+        const result = await this.ExecuteSQL<Record<string, unknown>>(sql, parameters, options, contextUser);
         const executionTime = Date.now() - start;
 
         if (!result) {
             throw new Error('Error executing query SQL');
         }
+        // Query results carry no entity metadata, so binary columns are found by value.
+        this.ConvertByteArrayValuesToBase64(result);
 
         return { result, executionTime };
     }
@@ -5083,6 +5332,22 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     /**************************************************************************/
 
     /**
+     * Whether a dataset's reads run on the pool regardless of the ambient transaction. The
+     * metadata dataset is read by a timer-driven refresh that is not part of any caller's unit of
+     * work, so it must never land on a transaction's connection beside its COMMIT (#4514). Every
+     * other dataset keeps joining the ambient transaction: a caller that writes and then loads a
+     * dataset inside one transaction expects to see its own rows.
+     *
+     * {@link ProviderBase.RefreshWithinTransaction} is the exception: the caller owns the
+     * transaction and is waiting for the reload, so the metadata reads join that transaction and
+     * see the caller's uncommitted rows (MJ#4836).
+     */
+    protected datasetReadsOnPool(datasetName: string): boolean {
+        return datasetName === GenericDatabaseProvider._mjMetadataDatasetName
+            && !this.MetadataReadsJoinTransaction;
+    }
+
+    /**
      * Builds a parameter placeholder for parameterized queries.
      * Default: PG-style ($1, $2, ...). SQL Server overrides to @p0, @p1, etc.
      */
@@ -5118,7 +5383,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             `INNER JOIN ${provider.QuoteSchemaAndView(schema, 'vwEntities')} e ON di.${provider.QuoteIdentifier('EntityID')} = e.${provider.QuoteIdentifier('ID')} ` +
             `WHERE d.${provider.QuoteIdentifier('Name')} = ${provider.BuildParameterPlaceholder(0)}`;
 
-        const items = await provider.ExecuteSQL<Record<string, unknown>>(sSQL, [datasetName], undefined, contextUser);
+        const readOptions: ExecuteSQLOptions = { ignoreAmbientTransaction: this.datasetReadsOnPool(datasetName) };
+        const items = await provider.ExecuteSQL<Record<string, unknown>>(sSQL, [datasetName], readOptions, contextUser);
 
         if (!items || items.length === 0) {
             return {
@@ -5242,12 +5508,22 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
         // Phase 2: Execute SQL only for cache misses
         let batchResults: Record<string, unknown>[][] = [];
+        // A batch that throws is a FAILED read, not an empty one. Falling through with empty
+        // results made every uncached item report Success with zero rows, the dataset report
+        // Success overall, and — for MJ_Metadata — GetAllMetadata replace a good metadata cache
+        // with an empty one, after which every EntityByName in the process fails until restart.
+        // One dropped connection during a background refresh did exactly that (#4486). The
+        // error is carried on each affected item and on the dataset so callers can keep what
+        // they already have.
+        let batchError: string | null = null;
         if (uncachedQueries.length > 0) {
             try {
-                batchResults = await provider.ExecuteSQLBatch(uncachedQueries, undefined, undefined, contextUser);
+                batchResults = await provider.ExecuteSQLBatch(
+                    uncachedQueries, undefined, { ignoreAmbientTransaction: readOptions.ignoreAmbientTransaction }, contextUser,
+                );
             } catch (err) {
-                LogError(`GetDatasetByName: Batch execution failed: ${err instanceof Error ? err.message : String(err)}`);
-                // Fall through with empty results
+                batchError = err instanceof Error ? err.message : String(err);
+                LogError(`GetDatasetByName("${datasetName}"): Batch execution failed: ${batchError}`);
             }
         }
 
@@ -5261,7 +5537,26 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const code = String(item['Code']);
             const dateFieldToCheck = String(item['DateFieldToCheck'] ?? '__mj_UpdatedAt');
 
+            if (batchError !== null) {
+                // Nothing is written through to the cache for a failed read: an empty slot
+                // would be served as a genuine empty result until it expired.
+                sqlResults.push({
+                    EntityID: entityID,
+                    EntityName: entityName,
+                    Code: code,
+                    Results: [],
+                    LatestUpdateDate: new Date(0),
+                    Success: false,
+                    Status: batchError,
+                });
+                continue;
+            }
+
             let itemData = batchResults[i] || [];
+            // Binary columns become base64 whether or not the entity post-processing below runs —
+            // at boot there is no context user, and a raw Buffer must never reach the metadata
+            // cache or the wire (it serializes as {"type":"Buffer","data":[...]}).
+            this.ConvertByteArrayValuesToBase64(itemData);
 
             // Post-process rows for encryption/datetime
             if (itemData.length > 0) {
@@ -5323,8 +5618,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             verboseOnly: true
         });
 
-        // Aggregate results
+        // Aggregate results. A failed item fails the dataset, and its error becomes the
+        // dataset's Status so the caller sees WHY rather than an empty success.
         const bSuccess = results.every(result => result.Success);
+        const firstFailure = results.find(result => !result.Success);
         const latestUpdateDate = results.reduce(
             (acc, result) => {
                 if (result?.LatestUpdateDate) {
@@ -5340,7 +5637,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             DatasetID: String(items[0]['DatasetID']),
             DatasetName: datasetName,
             Success: bSuccess,
-            Status: '',
+            Status: bSuccess ? '' : (firstFailure?.Status ?? 'One or more dataset items failed to load'),
             LatestUpdateDate: latestUpdateDate,
             Results: results,
         };
@@ -5375,7 +5672,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             `INNER JOIN ${provider.QuoteSchemaAndView(schema, 'vwEntities')} e ON di.${provider.QuoteIdentifier('EntityID')} = e.${provider.QuoteIdentifier('ID')} ` +
             `WHERE d.${provider.QuoteIdentifier('Name')} = ${provider.BuildParameterPlaceholder(0)}`;
 
-        const items = await provider.ExecuteSQL<Record<string, unknown>>(sSQL, [datasetName], undefined, contextUser);
+        const readOptions: ExecuteSQLOptions = { ignoreAmbientTransaction: this.datasetReadsOnPool(datasetName) };
+        const items = await provider.ExecuteSQL<Record<string, unknown>>(
+            sSQL, [datasetName], readOptions, contextUser,
+        );
 
         if (!items || items.length === 0) {
             return {
@@ -5442,7 +5742,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
         let batchResults: Record<string, unknown>[][] = [];
         try {
-            batchResults = await provider.ExecuteSQLBatch(queries, undefined, undefined, contextUser);
+            batchResults = await provider.ExecuteSQLBatch(
+                queries, undefined, { ignoreAmbientTransaction: readOptions.ignoreAmbientTransaction }, contextUser,
+            );
         } catch (err) {
             LogError(`GetDatasetStatusByName: Batch execution failed: ${err instanceof Error ? err.message : String(err)}`);
         }
@@ -5498,9 +5800,21 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     /**
      * Validates columns for a dataset item and returns the column list string.
      * Returns null if columns are invalid.
+     *
+     * An item that names no columns selects every column EXCEPT binary ones, matching RunView's
+     * default (binary columns are large and rarely wanted; see guides/BINARY_FIELDS_GUIDE.md). A
+     * binary column can still be named explicitly. When the entity's metadata is not loaded yet —
+     * the first `MJ_Metadata` read at boot — the item falls back to `*`, and the rows' byte arrays
+     * are converted to base64 by the caller.
      */
     protected getColumnsForDatasetItem(item: Record<string, unknown>, datasetName: string): string | null {
         const specifiedColumns = item['Columns'] ? String(item['Columns']).split(',').map(col => col.trim()) : [];
+        if (specifiedColumns.length === 0) {
+            const entity = this.EntityByID(item['EntityID'] as string);
+            if (entity?.HasBinaryFields) {
+                return entity.Fields.filter(f => !f.IsBinaryFieldType).map(f => this.QuoteIdentifier(f.Name)).join(',');
+            }
+        }
         if (specifiedColumns.length > 0) {
             const entity = this.EntityByID(item['EntityID'] as string);
             if (!entity && this.Entities.length > 0) {
@@ -5701,6 +6015,28 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     private _savepointStack: string[] = [];
     /** Physical handle is gone but outer frames still must settle. Queued nested begins must not become outermost. */
     private _doomed = false;
+    /**
+     * Set when an outermost commit failed and the physical handle was already abandoned (rolled
+     * back) on the way out. A caller's own rollback in its catch block then finds no transaction —
+     * which is the CORRECT state, not a second failure — so that rollback is a no-op instead of
+     * throwing 'No active transaction to rollback' on top of the real error (#4447).
+     */
+    private _abandonedByFailedCommit = false;
+    /**
+     * Work waiting for the outermost commit (see {@link RunAfterCommit}). `Depth` is the frame that
+     * currently owns the entry: a savepoint rollback drops the entries its frame owns, a savepoint
+     * release hands them to the enclosing frame.
+     */
+    private _postCommitTasks: PostCommitEntry[] = [];
+    /**
+     * Tasks whose own transaction already settled, held back because an UNRELATED transaction is
+     * open on this instance. Running them now would enlist their writes in it — on one connection,
+     * that means a rollback of work that has nothing to do with them. Drained when this provider
+     * goes idle, whichever way that transaction ends.
+     */
+    private _idlePostCommitTasks: PostCommitEntry[] = [];
+    /** Identity of each open frame and the fate of recent transactions, for {@link PostCommitToken}s. */
+    private readonly _frameTracker = new TransactionFrameTracker();
 
     protected override get CurrentTransactionDepth(): number {
         return this._transactionDepth;
@@ -5727,6 +6063,26 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * — outermost begin has depth 1 before the handle is published, and
      * concurrent reads on SQL Server legitimately use the pool in that window.
      */
+    /**
+     * A debounced metadata refresh is timer-driven, so it can fire at any point of a caller's
+     * unit of work — including the microtask window while the ambient transaction is being
+     * committed. Joining that transaction puts the metadata batch on the transaction's single
+     * connection alongside the COMMIT, which tedious rejects (EINVALIDSTATE) or drops (ECLOSE)
+     * once the handle is torn down, and a transactional query is deliberately never retried.
+     * Metadata reads are not part of anyone's unit of work, so wait for the transaction to end
+     * before starting one (#4486).
+     *
+     * This narrows the window rather than closing it: the check runs when the timer fires, and
+     * the batch is issued several round trips later, so a transaction that begins in between
+     * is still joined. That case is now harmless to the process — the batch fails, the dataset
+     * reports it, and the loaded metadata stays — but the refresh itself is lost until the next
+     * member write. Running the metadata batch on the pool regardless of the ambient
+     * transaction is #4514 (alongside #4454, the commit-side half of the same window).
+     */
+    protected override get MetadataMemberRefreshMustWait(): boolean {
+        return this.CurrentTransactionDepth > 0 || this.HasPhysicalTransaction;
+    }
+
     protected AssertAmbientTransactionUsable(): void {
         if (this._doomed) {
             throw new DoomedTransactionError(
@@ -5795,8 +6151,142 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /**
-     * After a successful outermost commit, once depth is 0 and the transaction lock is released.
-     * SQL Server drains deferred tasks here — those saves must be able to BeginTransaction.
+     * Queue `task` until the outermost commit of the ambient transaction, or start it now when
+     * there is none. See {@link DatabaseProviderBase.RunAfterCommit} for the contract.
+     *
+     * - Queued tasks run once, in registration order, after the outermost commit succeeds and the
+     *   transaction lock is released — so a task may begin its own transaction. The committer
+     *   awaits them; a failing task is logged and does not stop later tasks or reject the commit.
+     * - Outermost rollback, a failed commit, a doomed/abandoned handle, and
+     *   {@link ResetTransactionState} discard the queue.
+     * - A savepoint release keeps its tasks (they now belong to the enclosing frame); a savepoint
+     *   rollback discards only the tasks registered inside that savepoint.
+     * - With a `token`, the task follows the transaction the token was captured in: it runs once
+     *   that transaction has committed; it is dropped if that transaction, or any savepoint the
+     *   token was captured in, rolled back — including a savepoint rolled back inside a transaction
+     *   that went on to commit — or if the token matches nothing this provider knows; otherwise it
+     *   is queued at the deepest captured frame that is still open. A token captured outside any
+     *   transaction always runs. "Runs" means immediately when this provider is idle, and otherwise
+     *   once it is: a task must never have its own writes rolled back by an unrelated transaction.
+     */
+    public override RunAfterCommit(task: PostCommitTask, description: string = 'post-commit task', token?: PostCommitToken): void {
+        if (token) {
+            this.registerPostCommitTaskWithToken(task, description, token);
+            return;
+        }
+        if (this._transactionDepth === 0 && !this.HasPhysicalTransaction) {
+            super.RunAfterCommit(task, description);
+            return;
+        }
+        this._postCommitTasks.push({ Task: task, Description: description, Depth: this._transactionDepth });
+    }
+
+    /**
+     * Snapshot of the open transaction frames. Synchronous, and never `undefined` on this provider:
+     * outside a transaction it returns a token whose epoch is `null`, which says the work is already
+     * durable rather than saying nothing. See {@link DatabaseProviderBase.CapturePostCommitToken}.
+     */
+    public override CapturePostCommitToken(): PostCommitToken {
+        return this._frameTracker.Capture();
+    }
+
+    private registerPostCommitTaskWithToken(task: PostCommitTask, description: string, token: PostCommitToken): void {
+        const resolution = this._frameTracker.Resolve(token, this._doomed);
+        switch (resolution.Kind) {
+            case 'run':
+                this.runDetachedTask(task, description);
+                return;
+            case 'queue':
+                this._postCommitTasks.push({ Task: task, Description: description, Depth: resolution.Depth });
+                return;
+            case 'drop':
+                if (resolution.Unknown) {
+                    // Not a rollback: durable work is being dropped because its transaction cannot be
+                    // identified. That is data loss, so it must not read as routine housekeeping.
+                    LogError(`Dropped post-commit task '${description}': ${resolution.Reason}`);
+                } else {
+                    LogStatus(`Dropped post-commit task '${description}': ${resolution.Reason}`);
+                }
+                return;
+        }
+    }
+
+    /** Number of tasks waiting for the outermost commit. */
+    public get PendingPostCommitTaskCount(): number {
+        return this._postCommitTasks.length;
+    }
+
+    /** Number of tasks waiting only for this provider to go idle. */
+    public get PendingIdlePostCommitTaskCount(): number {
+        return this._idlePostCommitTasks.length;
+    }
+
+    /**
+     * Run work whose own transaction has already settled. Immediate when this provider is idle;
+     * otherwise held until it is, so the task's writes cannot join — and be rolled back with — a
+     * transaction it has nothing to do with.
+     */
+    private runDetachedTask(task: PostCommitTask, description: string): void {
+        if (this._transactionDepth === 0 && !this.HasPhysicalTransaction) {
+            super.RunAfterCommit(task, description);
+            return;
+        }
+        this._idlePostCommitTasks.push({ Task: task, Description: description, Depth: 0 });
+    }
+
+    /** Run everything that was waiting for this provider to go idle. Never throws. */
+    private async drainIdlePostCommitTasks(): Promise<void> {
+        if (this._idlePostCommitTasks.length === 0 || this._transactionDepth > 0 || this.HasPhysicalTransaction) {
+            return;
+        }
+        const tasks = this._idlePostCommitTasks;
+        this._idlePostCommitTasks = [];
+        LogStatus(`Running ${tasks.length} post-commit task(s) held back by an unrelated transaction`);
+        for (const entry of tasks) {
+            await this.RunPostCommitTaskSafely(entry.Task, entry.Description);
+        }
+    }
+
+    /** Run tasks detached from a committed transaction, one at a time, in order. Never throws. */
+    private async runPostCommitTasks(tasks: PostCommitEntry[]): Promise<void> {
+        if (tasks.length === 0) {
+            return;
+        }
+        LogStatus(`Running ${tasks.length} post-commit task(s) after transaction commit`);
+        for (const entry of tasks) {
+            await this.RunPostCommitTaskSafely(entry.Task, entry.Description);
+        }
+    }
+
+    /** Detach the whole queue (outermost commit succeeded). */
+    private takePostCommitTasks(): PostCommitEntry[] {
+        const tasks = this._postCommitTasks;
+        this._postCommitTasks = [];
+        return tasks;
+    }
+
+    /** Drop every task owned by `depth` or deeper; they belonged to work that will never commit. */
+    private discardPostCommitTasks(depth: number, reason: string): void {
+        const kept = this._postCommitTasks.filter((entry) => entry.Depth < depth);
+        const dropped = this._postCommitTasks.length - kept.length;
+        this._postCommitTasks = kept;
+        if (dropped > 0) {
+            LogStatus(`Cleared ${dropped} post-commit task(s): ${reason}`);
+        }
+    }
+
+    /** A released savepoint's tasks now belong to the enclosing frame. */
+    private promotePostCommitTasks(releasedDepth: number): void {
+        for (const entry of this._postCommitTasks) {
+            if (entry.Depth >= releasedDepth) {
+                entry.Depth = releasedDepth - 1;
+            }
+        }
+    }
+
+    /**
+     * After a successful outermost commit, once depth is 0, the transaction lock is released, and
+     * the {@link RunAfterCommit} queue has been drained. Subclass hook; no-op by default.
      */
     protected async AfterPhysicalCommit(): Promise<void> {
         /* no-op */
@@ -5819,6 +6309,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
     protected markDoomed(): void {
         this._doomed = true;
+        // A doomed transaction can never commit, so nothing queued for its commit may run.
+        this.discardPostCommitTasks(0, 'the ambient transaction was abandoned');
     }
 
     /**
@@ -5828,6 +6320,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      */
     public async ResetTransactionState(): Promise<void> {
         await this.WithTransactionLock(() => this.abandonDoomedTransaction());
+        await this.drainIdlePostCommitTasks();
     }
 
     public async BeginTransaction(): Promise<void> {
@@ -5835,19 +6328,22 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     public async CommitTransaction(): Promise<void> {
-        let runAfter = false;
-        await this.WithTransactionLock(async () => {
+        // null = not the outermost commit, so nothing drains and the subclass hook does not run.
+        const committedTasks = await this.WithTransactionLock(async (): Promise<PostCommitEntry[] | null> => {
             const outermost = this._transactionDepth === 1;
-            await this.commitTransactionCore();
-            runAfter = outermost;
+            const tasks = await this.commitTransactionCore();
+            return outermost ? tasks : null;
         });
-        if (runAfter) {
+        if (committedTasks) {
+            await this.runPostCommitTasks(committedTasks);
             await this.AfterPhysicalCommit();
         }
+        await this.drainIdlePostCommitTasks();
     }
 
     public async RollbackTransaction(): Promise<void> {
-        return this.WithTransactionLock(() => this.rollbackTransactionCore());
+        await this.WithTransactionLock(() => this.rollbackTransactionCore());
+        await this.drainIdlePostCommitTasks();
     }
 
     private async beginTransactionCore(): Promise<void> {
@@ -5855,8 +6351,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             throw new DoomedTransactionError();
         }
         this._transactionDepth++;
+        this._frameTracker.PushFrame();
         try {
             if (this._transactionDepth === 1) {
+                this._abandonedByFailedCommit = false;
                 await this.BeginPhysicalTransaction();
                 return;
             }
@@ -5877,6 +6375,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         } catch (e) {
             if (this._transactionDepth > 0) {
                 this._transactionDepth--;
+                // The frame never opened, so it undid nothing; any work captured in it belongs to its parent.
+                this._frameTracker.ReleaseFrame();
             }
             if (e instanceof DoomedTransactionError || this._doomed) {
                 throw e;
@@ -5935,13 +6435,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         await this.OnBeginFailedAtDepthZero();
     }
 
-    private async commitTransactionCore(): Promise<void> {
+    /**
+     * Returns the post-commit tasks detached by a successful outermost commit; empty otherwise.
+     */
+    private async commitTransactionCore(): Promise<PostCommitEntry[]> {
         if (this._doomed) {
             this.popDoomedFrame();
             if (this._transactionDepth === 0) {
                 throw new DoomedTransactionError();
             }
-            return;
+            return [];
         }
         if (!this.HasPhysicalTransaction) {
             throw new Error('No active transaction to commit');
@@ -5955,11 +6458,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             } catch (e) {
                 await this.AbandonPhysicalTransaction();
                 this.clearTransactionState();
+                this._abandonedByFailedCommit = true;
                 LogError(e);
                 throw e;
             }
+            this._frameTracker.EndEpoch('committed');
+            const tasks = this.takePostCommitTasks();
             this.clearTransactionState();
-            return;
+            return tasks;
         }
         const savepointName = this._savepointStack[this._savepointStack.length - 1];
         if (!savepointName) {
@@ -5979,13 +6485,21 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 throw new DoomedTransactionError(undefined, { cause: e });
             }
         }
+        this.promotePostCommitTasks(this._transactionDepth);
         this._savepointStack.pop();
         this._transactionDepth--;
+        this._frameTracker.ReleaseFrame();
+        return [];
     }
 
     private async rollbackTransactionCore(): Promise<void> {
         if (this._doomed) {
             this.popDoomedFrame();
+            return;
+        }
+        if (this._abandonedByFailedCommit) {
+            // The failed commit already rolled the doomed handle back; there is nothing left to undo.
+            this._abandonedByFailedCommit = false;
             return;
         }
         if (!this.HasPhysicalTransaction) {
@@ -6018,8 +6532,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     ignoreLogging: true,
                 });
             }
+            this.discardPostCommitTasks(this._transactionDepth, `savepoint ${savepointName} was rolled back`);
             this._savepointStack.pop();
             this._transactionDepth--;
+            this._frameTracker.RollBackFrame();
         } catch (savepointError) {
             await this.HandleFailedSavepointRollback(savepointName, savepointError);
             this.popDoomedFrame();
@@ -6038,6 +6554,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         }
         this._savepointStack.pop();
         this._transactionDepth--;
+        this._frameTracker.RollBackFrame();
     }
 
     private clearSavepointState(): void {
@@ -6045,9 +6562,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         this._savepointCounter = 0;
     }
 
+    /**
+     * Back to depth 0. A successful commit detaches the post-commit queue first, so anything still
+     * queued here belongs to a transaction that rolled back, failed, or was abandoned.
+     */
     private clearTransactionState(): void {
         this._transactionDepth = 0;
         this._doomed = false;
         this.clearSavepointState();
+        this._frameTracker.EndEpoch('rolledBack');
+        this.discardPostCommitTasks(0, 'the transaction ended without committing');
     }
 }

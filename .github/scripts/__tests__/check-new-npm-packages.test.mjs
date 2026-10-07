@@ -1,6 +1,7 @@
 // Tests for .github/scripts/check-new-npm-packages.mjs
 // Run with: npx vitest run --config .github/scripts/vitest.config.mts
 import { describe, it, expect } from 'vitest';
+import { existsSync } from 'node:fs';
 import {
     parseManifest,
     publishableNames,
@@ -23,8 +24,9 @@ import {
     SEED_WORKFLOW_NAME,
     SEED_DISPATCH_INPUT,
     SEED_CONFIRM_INPUT,
+    SEED_SCRIPT_PATH,
     NPM_MEMBERS_URL,
-    NPM_ESCALATION_HANDLE,
+    NPM_SETUP_GITHUB_HANDLES,
 } from '../check-new-npm-packages.mjs';
 
 // --- fixtures ---------------------------------------------------------------
@@ -325,6 +327,11 @@ describe('formatGateFailure', () => {
         expect(message).not.toContain('seed-new-package');
     });
 
+    it('offers the seed script with every blocked package, and the script exists', () => {
+        expect(message).toContain(`${SEED_SCRIPT_PATH} @memberjunction/alpha @memberjunction/beta`);
+        expect(existsSync(new URL(`../../../${SEED_SCRIPT_PATH}`, import.meta.url))).toBe(true);
+    });
+
     it('no longer asks a human to paste anything', () => {
         // The attestation check replaced the human attestation; if this string comes back,
         // the message and the verification have drifted apart.
@@ -334,14 +341,22 @@ describe('formatGateFailure', () => {
     it('includes an escalation path for authors without npm access', () => {
         expect(message).toContain('IF YOU DO NOT HAVE NPM ACCESS');
         expect(message).toContain(NPM_MEMBERS_URL);
-        expect(message).toContain(NPM_ESCALATION_HANDLE);
-        expect(message).toContain('one working day');
+        expect(message).toContain(SEED_SCRIPT_PATH);
     });
 
-    it('tags a real GitHub handle, not an invented team', () => {
-        // The @memberjunction org has exactly one GitHub team (bc-labs), so a plausible
-        // -sounding team handle here would silently notify nobody.
-        expect(message).not.toContain('npm-admins');
+    it('does not tell authors to tag a fixed person', () => {
+        // Any npm org member can do the setup; a hardcoded handle turned one person into
+        // the pager for every new package.
+        expect(message).not.toMatch(/@[A-Za-z0-9-]+ — new package/);
+        expect(message).not.toContain('@cadam11');
+    });
+
+    it('lists the members who can do the setup, without pinging them', () => {
+        for (const handle of NPM_SETUP_GITHUB_HANDLES) {
+            expect(message).toContain(handle);
+            expect(message).not.toContain(`@${handle}`);
+        }
+        expect(NPM_SETUP_GITHUB_HANDLES).not.toContain('cadam11');
     });
 
     it('warns against silencing the gate with private: true', () => {

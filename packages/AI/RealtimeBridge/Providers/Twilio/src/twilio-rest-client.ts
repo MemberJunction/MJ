@@ -78,7 +78,7 @@ export interface TwilioRestCredentials {
  * is impossible here (optional peer SDK, may be uninstalled in non-telephony deployments); the
  * `optionalDependencies` entry keeps it in the dependency graph (CLAUDE rule 8, category 2).
  */
-export const defaultTwilioRestModuleLoader: TwilioRestModuleLoader = async (): Promise<TwilioModuleFactory> => {
+export const DefaultTwilioRestModuleLoader: TwilioRestModuleLoader = async (): Promise<TwilioModuleFactory> => {
     try {
         const mod: unknown = await import('twilio');
         const factory = unwrapTwilioFactory(mod);
@@ -95,6 +95,9 @@ export const defaultTwilioRestModuleLoader: TwilioRestModuleLoader = async (): P
     }
 };
 
+/** @deprecated Use {@link DefaultTwilioRestModuleLoader}. */
+export const defaultTwilioRestModuleLoader: TwilioRestModuleLoader = DefaultTwilioRestModuleLoader;
+
 /** Unwraps the twilio factory from CJS/ESM interop (`module` or `module.default`). */
 function unwrapTwilioFactory(mod: unknown): unknown {
     if (typeof mod === 'function') {
@@ -109,7 +112,8 @@ function unwrapTwilioFactory(mod: unknown): unknown {
 /**
  * A real {@link ITwilioRestLike} over the `twilio` SDK's Programmable Voice REST API.
  *
- * - `CreateCall` → `client.calls.create({ to, from, twiml, statusCallback })`, resolving the new Call SID.
+ * - `CreateCall` → `client.calls.create({ to, from, twiml, statusCallback, statusCallbackEvent, machineDetection, asyncAmd, … })`,
+ *   resolving the new Call SID.
  * - `UpdateCall` → `client.calls(sid).update({ status, twiml })` for hangup / transfer / DTMF.
  *
  * The constructed client is built once on first use and reused for the life of the instance.
@@ -124,7 +128,7 @@ export class RealTwilioRestClient implements ITwilioRestLike {
      * @param credentials Resolved Twilio credentials (account SID + auth token or API key pair).
      * @param loadModule The `twilio` module loader (defaults to the lazy dynamic import).
      */
-    constructor(credentials: TwilioRestCredentials, loadModule: TwilioRestModuleLoader = defaultTwilioRestModuleLoader) {
+    constructor(credentials: TwilioRestCredentials, loadModule: TwilioRestModuleLoader = DefaultTwilioRestModuleLoader) {
         this.credentials = credentials;
         this.loadModule = loadModule;
     }
@@ -137,6 +141,14 @@ export class RealTwilioRestClient implements ITwilioRestLike {
             from: params.From,
             twiml: params.Twiml,
             ...(params.StatusCallback ? { statusCallback: params.StatusCallback } : {}),
+            ...(params.StatusCallbackEvents?.length ? { statusCallbackEvent: params.StatusCallbackEvents } : {}),
+            ...(params.AsyncAmd && params.AsyncAmdStatusCallback
+                ? {
+                      machineDetection: 'Enable',
+                      asyncAmd: 'true',
+                      asyncAmdStatusCallback: params.AsyncAmdStatusCallback,
+                  }
+                : {}),
         });
         if (!created?.sid) {
             throw new Error('Twilio calls.create returned no Call SID.');

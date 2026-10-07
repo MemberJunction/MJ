@@ -1,0 +1,1057 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Option A: Structured Semantic Cards — Feature Pipeline Details</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    /* =============================================================================
+       MEMBERJUNCTION DESIGN SYSTEM TOKENS (LIGHT & DARK)
+       ============================================================================= */
+    :root {
+      color-scheme: light;
+      --mj-color-brand-50: #e6f3f9;
+      --mj-color-brand-100: #b3dbed;
+      --mj-color-brand-200: #80c3e1;
+      --mj-color-brand-300: #4dabd5;
+      --mj-color-brand-350: #3395c8;
+      --mj-color-brand-400: #2699cc;
+      --mj-color-brand-500: #0076b6;
+      --mj-color-brand-600: #006aa3;
+      --mj-color-brand-700: #005a8a;
+      --mj-color-brand-800: #004a71;
+      --mj-color-brand-900: #092340;
+
+      --mj-color-neutral-0: #ffffff;
+      --mj-color-neutral-50: #f8fafc;
+      --mj-color-neutral-100: #f1f5f9;
+      --mj-color-neutral-200: #e2e8f0;
+      --mj-color-neutral-300: #cbd5e1;
+      --mj-color-neutral-400: #94a3b8;
+      --mj-color-neutral-500: #64748b;
+      --mj-color-neutral-600: #475569;
+      --mj-color-neutral-700: #334155;
+      --mj-color-neutral-800: #1e293b;
+      --mj-color-neutral-900: #0f172a;
+      --mj-color-neutral-950: #020617;
+
+      --mj-color-success-50: #f0fdf4;
+      --mj-color-success-100: #dcfce7;
+      --mj-color-success-500: #22c55e;
+      --mj-color-success-600: #16a34a;
+      --mj-color-success-700: #15803d;
+
+      --mj-color-warning-50: #fffbeb;
+      --mj-color-warning-100: #fef3c7;
+      --mj-color-warning-500: #f59e0b;
+      --mj-color-warning-700: #b45309;
+
+      --mj-color-error-50: #fef2f2;
+      --mj-color-error-100: #fee2e2;
+      --mj-color-error-500: #ef4444;
+      --mj-color-error-700: #b91c1c;
+
+      --mj-color-info-50: #eff6ff;
+      --mj-color-info-100: #dbeafe;
+      --mj-color-info-500: #3b82f6;
+      --mj-color-info-700: #1d4ed8;
+
+      --mj-color-violet-50: #f5f3ff;
+      --mj-color-violet-100: #ede9fe;
+      --mj-color-violet-500: #8b5cf6;
+      --mj-color-violet-700: #6d28d9;
+
+      --mj-bg-page: var(--mj-color-neutral-50);
+      --mj-bg-surface: var(--mj-color-neutral-0);
+      --mj-bg-surface-card: var(--mj-color-neutral-0);
+      --mj-bg-surface-sunken: var(--mj-color-neutral-100);
+      --mj-bg-surface-hover: var(--mj-color-neutral-100);
+      --mj-bg-surface-active: var(--mj-color-neutral-200);
+
+      --mj-text-primary: var(--mj-color-neutral-800);
+      --mj-text-secondary: var(--mj-color-neutral-600);
+      --mj-text-muted: var(--mj-color-neutral-500);
+      --mj-text-disabled: var(--mj-color-neutral-400);
+      --mj-text-link: var(--mj-color-brand-500);
+
+      --mj-border-default: var(--mj-color-neutral-200);
+      --mj-border-subtle: var(--mj-color-neutral-100);
+      --mj-border-strong: var(--mj-color-neutral-300);
+
+      --mj-brand-primary: var(--mj-color-brand-500);
+      --mj-brand-primary-hover: var(--mj-color-brand-600);
+      --mj-brand-primary-subtle: var(--mj-color-brand-50);
+
+      --mj-status-success-bg: var(--mj-color-success-50);
+      --mj-status-success-text: var(--mj-color-success-700);
+      --mj-status-success: var(--mj-color-success-500);
+
+      --mj-status-warning-bg: var(--mj-color-warning-50);
+      --mj-status-warning-text: var(--mj-color-warning-700);
+      --mj-status-warning: var(--mj-color-warning-500);
+
+      --mj-status-info-bg: var(--mj-color-info-50);
+      --mj-status-info-text: var(--mj-color-info-700);
+      --mj-status-info: var(--mj-color-info-500);
+
+      --mj-font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --mj-font-family-mono: 'JetBrains Mono', monospace;
+
+      --mj-radius-sm: 4px;
+      --mj-radius-md: 8px;
+      --mj-radius-lg: 12px;
+      --mj-radius-full: 9999px;
+
+      --mj-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+      --mj-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+      --mj-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08);
+
+      --mj-focus-ring: 0 0 0 2px var(--mj-bg-surface), 0 0 0 4px var(--mj-brand-primary);
+    }
+
+    [data-theme="dark"] {
+      color-scheme: dark;
+      --mj-bg-page: var(--mj-color-neutral-900);
+      --mj-bg-surface: var(--mj-color-neutral-800);
+      --mj-bg-surface-card: #253347;
+      --mj-bg-surface-sunken: var(--mj-color-neutral-950);
+      --mj-bg-surface-hover: var(--mj-color-neutral-700);
+      --mj-bg-surface-active: var(--mj-color-neutral-600);
+
+      --mj-text-primary: var(--mj-color-neutral-100);
+      --mj-text-secondary: var(--mj-color-neutral-300);
+      --mj-text-muted: var(--mj-color-neutral-400);
+      --mj-text-disabled: var(--mj-color-neutral-600);
+      --mj-text-link: var(--mj-color-brand-300);
+
+      --mj-border-default: var(--mj-color-neutral-700);
+      --mj-border-subtle: var(--mj-color-neutral-800);
+      --mj-border-strong: var(--mj-color-neutral-600);
+
+      --mj-brand-primary: var(--mj-color-brand-400);
+      --mj-brand-primary-hover: var(--mj-color-brand-300);
+      --mj-brand-primary-subtle: rgba(77, 171, 213, 0.15);
+
+      --mj-status-success-bg: rgba(34, 197, 94, 0.15);
+      --mj-status-success-text: var(--mj-color-success-300);
+      --mj-status-warning-bg: rgba(245, 158, 11, 0.15);
+      --mj-status-warning-text: var(--mj-color-warning-300);
+      --mj-status-info-bg: rgba(59, 130, 246, 0.15);
+      --mj-status-info-text: #93c5fd;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--mj-font-family);
+      background-color: var(--mj-bg-page);
+      color: var(--mj-text-primary);
+      line-height: 1.5;
+      font-size: 0.875rem;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* =============================================================================
+       TOP DESIGN THESIS & NAV BAR
+       ============================================================================= */
+    .thesis-banner {
+      background: linear-gradient(135deg, #092340 0%, #004a71 100%);
+      color: #ffffff;
+      padding: 10px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.8125rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+    }
+    .thesis-badge {
+      background: #0076b6;
+      color: #ffffff;
+      padding: 2px 8px;
+      border-radius: var(--mj-radius-sm);
+      font-weight: 700;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-right: 12px;
+    }
+    .thesis-links a {
+      color: #bae8fd;
+      text-decoration: none;
+      margin-left: 16px;
+      font-weight: 500;
+      transition: color 0.15s ease;
+    }
+    .thesis-links a:hover {
+      color: #ffffff;
+      text-decoration: underline;
+    }
+    .theme-toggle-btn {
+      background: rgba(255, 255, 255, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      color: #ffffff;
+      padding: 4px 10px;
+      border-radius: var(--mj-radius-sm);
+      cursor: pointer;
+      font-size: 0.75rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.15s;
+    }
+    .theme-toggle-btn:hover {
+      background: rgba(255, 255, 255, 0.25);
+    }
+
+    /* Shell Chrome Header */
+    .mj-chrome-header {
+      background: var(--mj-bg-surface);
+      border-bottom: 1px solid var(--mj-border-default);
+      height: 52px;
+      display: flex;
+      align-items: center;
+      padding: 0 20px;
+      gap: 16px;
+    }
+    .mj-chrome-title {
+      font-weight: 600;
+      font-size: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .mj-chrome-title i {
+      color: var(--mj-brand-primary);
+    }
+    .mj-entity-type-badge {
+      font-size: 0.75rem;
+      background: var(--mj-brand-primary-subtle);
+      color: var(--mj-brand-primary);
+      padding: 2px 8px;
+      border-radius: var(--mj-radius-full);
+      font-weight: 600;
+    }
+    .mj-header-actions {
+      margin-left: auto;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .mj-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: var(--mj-radius-sm);
+      font-size: 0.8125rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      border: 1px solid transparent;
+      text-decoration: none;
+    }
+    .mj-btn-primary {
+      background: var(--mj-brand-primary);
+      color: #ffffff;
+    }
+    .mj-btn-primary:hover {
+      background: var(--mj-brand-primary-hover);
+    }
+    .mj-btn-secondary {
+      background: var(--mj-bg-surface-sunken);
+      border-color: var(--mj-border-default);
+      color: var(--mj-text-primary);
+    }
+    .mj-btn-secondary:hover {
+      background: var(--mj-bg-surface-hover);
+    }
+
+    /* Main Container with Form Left-Nav and Content */
+    .mj-form-layout {
+      display: flex;
+      min-height: calc(100vh - 95px);
+    }
+
+    /* Left Nav Rail */
+    .mj-nav-rail {
+      width: 240px;
+      background: var(--mj-bg-surface);
+      border-right: 1px solid var(--mj-border-default);
+      padding: 16px 0;
+      flex-shrink: 0;
+    }
+    .mj-rail-group-title {
+      font-size: 0.6875rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--mj-text-muted);
+      padding: 8px 16px 4px 16px;
+    }
+    .mj-rail-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 16px;
+      color: var(--mj-text-secondary);
+      font-size: 0.8125rem;
+      cursor: pointer;
+      border-left: 3px solid transparent;
+      transition: all 0.15s ease;
+      text-decoration: none;
+    }
+    .mj-rail-item:hover {
+      background: var(--mj-bg-surface-hover);
+      color: var(--mj-text-primary);
+    }
+    .mj-rail-item.active {
+      background: var(--mj-brand-primary-subtle);
+      color: var(--mj-brand-primary);
+      font-weight: 600;
+      border-left-color: var(--mj-brand-primary);
+    }
+    .mj-rail-item i {
+      width: 16px;
+      text-align: center;
+    }
+    .mj-rail-badge {
+      margin-left: auto;
+      font-size: 0.6875rem;
+      background: var(--mj-bg-surface-sunken);
+      color: var(--mj-text-muted);
+      padding: 1px 6px;
+      border-radius: var(--mj-radius-full);
+    }
+
+    /* Form Content Body */
+    .mj-form-body {
+      flex: 1;
+      padding: 24px 32px;
+      overflow-y: auto;
+      max-width: 1200px;
+    }
+
+    /* Section Cards */
+    .mj-section-card {
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-md);
+      margin-bottom: 20px;
+      box-shadow: var(--mj-shadow-sm);
+      overflow: hidden;
+    }
+    .mj-section-header {
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--mj-border-default);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--mj-bg-surface);
+      cursor: pointer;
+      user-select: none;
+    }
+    .mj-section-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .mj-section-icon {
+      color: var(--mj-brand-primary);
+      font-size: 1rem;
+    }
+    .mj-section-title {
+      font-size: 0.9375rem;
+      font-weight: 600;
+      color: var(--mj-text-primary);
+    }
+    .mj-section-subtitle {
+      font-size: 0.75rem;
+      color: var(--mj-text-muted);
+      margin-left: 8px;
+    }
+    .mj-section-content {
+      padding: 20px;
+    }
+
+    /* Form Field Grids */
+    .form-grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .form-grid-3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 16px;
+    }
+    .form-field {
+      margin-bottom: 14px;
+    }
+    .form-label {
+      display: block;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--mj-text-secondary);
+      margin-bottom: 6px;
+    }
+    .form-label-hint {
+      font-weight: 400;
+      color: var(--mj-text-muted);
+      margin-left: 4px;
+    }
+    .form-input-text, .form-select, .form-textarea {
+      width: 100%;
+      padding: 8px 12px;
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-sm);
+      font-family: inherit;
+      font-size: 0.8125rem;
+      color: var(--mj-text-primary);
+      outline: none;
+      transition: border-color 0.15s ease;
+    }
+    .form-input-text:focus, .form-select:focus, .form-textarea:focus {
+      border-color: var(--mj-brand-primary);
+      box-shadow: 0 0 0 1px var(--mj-brand-primary);
+    }
+    .form-textarea {
+      resize: vertical;
+      min-height: 56px;
+    }
+    .form-value-readonly {
+      padding: 7px 10px;
+      background: var(--mj-bg-surface-sunken);
+      border: 1px solid var(--mj-border-subtle);
+      border-radius: var(--mj-radius-sm);
+      font-size: 0.8125rem;
+      color: var(--mj-text-primary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Badges & Chips */
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 2px 10px;
+      border-radius: var(--mj-radius-full);
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .status-active {
+      background: var(--mj-status-success-bg);
+      color: var(--mj-status-success-text);
+    }
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--mj-status-success);
+    }
+    .pill-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 8px;
+      border-radius: var(--mj-radius-sm);
+      font-size: 0.75rem;
+      background: var(--mj-bg-surface-sunken);
+      color: var(--mj-text-secondary);
+      border: 1px solid var(--mj-border-default);
+    }
+    .pill-chip-brand {
+      background: var(--mj-brand-primary-subtle);
+      color: var(--mj-brand-primary);
+      border-color: rgba(0, 118, 182, 0.2);
+      font-weight: 500;
+    }
+
+    /* Structured Code / SQL Card */
+    .code-preview-card {
+      background: var(--mj-bg-surface-sunken);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-sm);
+      padding: 12px 16px;
+      font-family: var(--mj-font-family-mono);
+      font-size: 0.8125rem;
+      color: var(--mj-text-primary);
+      overflow-x: auto;
+      line-height: 1.6;
+    }
+    .sql-keyword { color: #8b5cf6; font-weight: 600; }
+    .sql-function { color: #0284c7; font-weight: 600; }
+    .sql-param { color: #ea580c; font-weight: 600; }
+    .sql-string { color: #16a34a; }
+
+    /* Feature Schema Table */
+    .feature-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.8125rem;
+      margin-top: 8px;
+    }
+    .feature-table th {
+      text-align: left;
+      padding: 10px 14px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--mj-text-muted);
+      border-bottom: 2px solid var(--mj-border-default);
+      background: var(--mj-bg-surface-sunken);
+    }
+    .feature-table td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--mj-border-default);
+      vertical-align: middle;
+    }
+    .feature-table tr:hover td {
+      background: var(--mj-bg-surface-hover);
+    }
+    .feature-name {
+      font-weight: 600;
+      color: var(--mj-text-primary);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .feature-type-tag {
+      font-size: 0.6875rem;
+      padding: 2px 6px;
+      border-radius: var(--mj-radius-sm);
+      font-family: var(--mj-font-family-mono);
+      font-weight: 500;
+    }
+    .type-numeric { background: #fef3c7; color: #92400e; }
+    .type-tags { background: #ede9fe; color: #5b21b6; }
+    .binding-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: var(--mj-font-family-mono);
+      font-size: 0.75rem;
+      padding: 2px 8px;
+      border-radius: var(--mj-radius-sm);
+      background: var(--mj-bg-surface-sunken);
+      border: 1px solid var(--mj-border-default);
+    }
+    .binding-valid {
+      color: var(--mj-status-success);
+    }
+
+    /* Ingestion & Caching Cards */
+    .optimization-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+    .opt-metric-box {
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-sm);
+      padding: 12px;
+      background: var(--mj-bg-surface-sunken);
+    }
+    .opt-metric-title {
+      font-size: 0.6875rem;
+      color: var(--mj-text-muted);
+      text-transform: uppercase;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .opt-metric-val {
+      font-size: 1.125rem;
+      font-weight: 600;
+      color: var(--mj-text-primary);
+    }
+    .opt-metric-sub {
+      font-size: 0.6875rem;
+      color: var(--mj-text-secondary);
+      margin-top: 2px;
+    }
+
+    /* Raw JSON Accordion */
+    .raw-json-panel {
+      border: 1px dashed var(--mj-border-default);
+      border-radius: var(--mj-radius-md);
+      background: var(--mj-bg-surface-sunken);
+      margin-top: 24px;
+      padding: 16px;
+    }
+    .raw-json-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+    }
+    .raw-json-title {
+      font-size: 0.8125rem;
+      font-weight: 600;
+      color: var(--mj-text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .raw-json-content {
+      margin-top: 12px;
+      display: none;
+    }
+    .raw-json-content.open {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- =============================================================================
+       TOP THESIS BANNER
+       ============================================================================= -->
+  <div class="thesis-banner">
+    <div style="display:flex; align-items:center;">
+      <span class="thesis-badge">Option A</span>
+      <strong>Semantic Structured Cards</strong>: Zero mandatory raw JSON; replaces unformatted code boxes with typed schema cards, visual SQL scope preview, and feature constraints.
+    </div>
+    <div style="display:flex; align-items:center; gap: 12px;">
+      <button class="theme-toggle-btn" onclick="toggleTheme()">
+        <i class="fa-solid fa-moon"></i> Toggle Dark/Light
+      </button>
+      <div class="thesis-links">
+        <a href="option-b-master-detail-inspector.html"><i class="fa-solid fa-arrow-right"></i> Option B (Inspector)</a>
+        <a href="option-c-visual-dataflow-canvas.html"><i class="fa-solid fa-arrow-right"></i> Option C (Dataflow)</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- =============================================================================
+       MJ EXPLORER APP CHROME HEADER
+       ============================================================================= -->
+  <header class="mj-chrome-header">
+    <div class="mj-chrome-title">
+      <i class="fa-solid fa-wand-magic-sparkles"></i>
+      <span>Activity Tagging and Sentiment</span>
+      <span class="mj-entity-type-badge">MJ: Record Processes</span>
+      <span class="status-pill status-active"><span class="status-dot"></span> Active</span>
+    </div>
+
+    <div class="mj-header-actions">
+      <button class="mj-btn mj-btn-secondary"><i class="fa-solid fa-play"></i> Run On Demand</button>
+      <button class="mj-btn mj-btn-secondary"><i class="fa-solid fa-code"></i> Copy Config</button>
+      <button class="mj-btn mj-btn-primary"><i class="fa-solid fa-floppy-disk"></i> Save Changes</button>
+    </div>
+  </header>
+
+  <!-- =============================================================================
+       MAIN FORM LAYOUT (LEFT RAIL + BODY)
+       ============================================================================= -->
+  <div class="mj-form-layout">
+    <!-- Left Navigation Rail -->
+    <nav class="mj-nav-rail">
+      <div class="mj-rail-group-title">Navigation</div>
+      <a class="mj-rail-item" href="#overview">
+        <i class="fa-solid fa-gauge-high"></i>
+        <span>Overview & Status</span>
+      </a>
+      <a class="mj-rail-item active" href="#details">
+        <i class="fa-solid fa-sliders"></i>
+        <span>Details</span>
+      </a>
+      <a class="mj-rail-item" href="#builder">
+        <i class="fa-solid fa-wand-magic-sparkles"></i>
+        <span>Pipeline Configuration</span>
+      </a>
+      <a class="mj-rail-item" href="#runs">
+        <i class="fa-solid fa-clock-rotate-left"></i>
+        <span>Prior Runs</span>
+        <span class="mj-rail-badge">24</span>
+      </a>
+
+      <div class="mj-rail-group-title">Related Collections</div>
+      <a class="mj-rail-item" href="#watermarks">
+        <i class="fa-solid fa-water"></i>
+        <span>Watermarks</span>
+        <span class="mj-rail-badge">1</span>
+      </a>
+      <a class="mj-rail-item" href="#features">
+        <i class="fa-solid fa-table-cells"></i>
+        <span>Feature Values</span>
+        <span class="mj-rail-badge">14.8k</span>
+      </a>
+      <a class="mj-rail-item" href="#cache">
+        <i class="fa-solid fa-database"></i>
+        <span>Feature Caches</span>
+        <span class="mj-rail-badge">2</span>
+      </a>
+    </nav>
+
+    <!-- Main Details Content Body -->
+    <main class="mj-form-body">
+
+      <!-- SECTION 1: IDENTITY & TARGET DEFINITION -->
+      <div class="mj-section-card">
+        <div class="mj-section-header">
+          <div class="mj-section-title-wrap">
+            <i class="fa-solid fa-fingerprint mj-section-icon"></i>
+            <span class="mj-section-title">Process Identity & Target</span>
+            <span class="mj-section-subtitle">Basic entity metadata and high-level categorization</span>
+          </div>
+          <i class="fa-solid fa-chevron-up" style="color: var(--mj-text-muted); font-size: 0.75rem;"></i>
+        </div>
+        <div class="mj-section-content">
+          <div class="form-grid-3">
+            <div class="form-field">
+              <label class="form-label">Process Name</label>
+              <input type="text" class="form-input-text" value="Activity Tagging and Sentiment">
+            </div>
+            <div class="form-field">
+              <label class="form-label">Target Entity</label>
+              <div class="form-value-readonly">
+                <i class="fa-solid fa-database" style="color: var(--mj-brand-primary);"></i>
+                <strong>Activities</strong> <span style="color: var(--mj-text-muted);">(vwActivities)</span>
+              </div>
+            </div>
+            <div class="form-field">
+              <label class="form-label">Category</label>
+              <input type="text" class="form-input-text" value="Customer Intelligence & Enrichment">
+            </div>
+          </div>
+          <div class="form-field" style="margin-bottom: 0;">
+            <label class="form-label">Description</label>
+            <textarea class="form-textarea">Extracts topical tags against company taxonomy and calculates continuous sentiment polarity scores for Activity notes.</textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- SECTION 2: INPUT SCOPE & ROW FILTER -->
+      <div class="mj-section-card">
+        <div class="mj-section-header">
+          <div class="mj-section-title-wrap">
+            <i class="fa-solid fa-filter mj-section-icon"></i>
+            <span class="mj-section-title">Scope & Record Filter</span>
+            <span class="mj-section-subtitle">Which entity rows qualify for feature extraction</span>
+          </div>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <span class="pill-chip pill-chip-brand">
+              <i class="fa-solid fa-calculator"></i> Est. 14,820 rows in scope
+            </span>
+            <i class="fa-solid fa-chevron-up" style="color: var(--mj-text-muted); font-size: 0.75rem;"></i>
+          </div>
+        </div>
+        <div class="mj-section-content">
+          <div class="form-grid-3" style="margin-bottom: 12px;">
+            <div class="form-field">
+              <label class="form-label">Scope Type</label>
+              <select class="form-select">
+                <option selected>SQL Filter Expression</option>
+                <option>Named User View</option>
+                <option>Static Entity List</option>
+              </select>
+            </div>
+            <div class="form-field">
+              <label class="form-label">Trigger Mode</label>
+              <div class="form-value-readonly">
+                <i class="fa-solid fa-bolt" style="color: #f59e0b;"></i>
+                <span>Scheduled (Daily 02:00) + On Change</span>
+              </div>
+            </div>
+            <div class="form-field">
+              <label class="form-label">Scope Audit Verification</label>
+              <button class="mj-btn mj-btn-secondary" style="width: 100%; justify-content: center; height: 35px;">
+                <i class="fa-solid fa-magnifying-glass"></i> Test Filter (Sample 10 Rows)
+              </button>
+            </div>
+          </div>
+
+          <div class="form-field" style="margin-bottom: 0;">
+            <label class="form-label">SQL Scope Filter <span class="form-label-hint">(WHERE clause evaluated against target entity)</span></label>
+            <div class="code-preview-card">
+              <span class="sql-keyword">WHERE</span> (<span class="sql-param">Description</span> <span class="sql-keyword">IS NOT NULL</span> <span class="sql-keyword">AND</span> <span class="sql-function">LEN</span>(<span class="sql-param">Description</span>) &gt; <span class="sql-string">10</span>)<br>
+              &nbsp;&nbsp;<span class="sql-keyword">OR</span> (<span class="sql-param">Details</span> <span class="sql-keyword">IS NOT NULL</span> <span class="sql-keyword">AND</span> <span class="sql-function">LEN</span>(<span class="sql-param">Details</span>) &gt; <span class="sql-string">10</span>)
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SECTION 3: AI MODEL & CONTEXT QUERY BINDING -->
+      <div class="mj-section-card">
+        <div class="mj-section-header">
+          <div class="mj-section-title-wrap">
+            <i class="fa-solid fa-brain mj-section-icon"></i>
+            <span class="mj-section-title">AI Model & Context Query</span>
+            <span class="mj-section-subtitle">Prompt template, AI model parameters, and context retrieval query</span>
+          </div>
+          <i class="fa-solid fa-chevron-up" style="color: var(--mj-text-muted); font-size: 0.75rem;"></i>
+        </div>
+        <div class="mj-section-content">
+          <div class="form-grid-2" style="margin-bottom: 16px;">
+            <!-- Prompt Details -->
+            <div style="border: 1px solid var(--mj-border-default); border-radius: var(--mj-radius-sm); padding: 14px; background: var(--mj-bg-surface-sunken);">
+              <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                <div>
+                  <div style="font-size: 0.6875rem; text-transform: uppercase; font-weight: 700; color: var(--mj-text-muted);">Bound AI Prompt</div>
+                  <div style="font-weight: 600; font-size: 0.9375rem; color: var(--mj-text-link);">
+                    <i class="fa-solid fa-message-code"></i> Activity Sentiment &amp; Tag Extraction
+                  </div>
+                </div>
+                <span class="pill-chip pill-chip-brand">ID: a8b23f11</span>
+              </div>
+              <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px;">
+                <span class="pill-chip"><i class="fa-solid fa-microchip"></i> Model: Claude 3.5 Sonnet</span>
+                <span class="pill-chip"><i class="fa-solid fa-temperature-half"></i> Temp: 0.2</span>
+                <span class="pill-chip"><i class="fa-solid fa-coins"></i> Max Tokens: 1,500</span>
+              </div>
+            </div>
+
+            <!-- Parameters Mapping -->
+            <div style="border: 1px solid var(--mj-border-default); border-radius: var(--mj-radius-sm); padding: 14px; background: var(--mj-bg-surface-sunken);">
+              <div style="font-size: 0.6875rem; text-transform: uppercase; font-weight: 700; color: var(--mj-text-muted); margin-bottom: 8px;">
+                Prompt Parameter Resolution
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 6px;">
+                <div style="display: flex; justify-content: space-between; font-size: 0.8125rem;">
+                  <span style="font-family: var(--mj-font-family-mono); color: var(--mj-text-secondary);">@ActivityID</span>
+                  <span><i class="fa-solid fa-arrow-left" style="color: var(--mj-text-muted);"></i> Row Column: <code>ID</code></span>
+                </div>
+                <div style="display: flex; justify-content: space-between; font-size: 0.8125rem;">
+                  <span style="font-family: var(--mj-font-family-mono); color: var(--mj-text-secondary);">@Subject</span>
+                  <span><i class="fa-solid fa-arrow-left" style="color: var(--mj-text-muted);"></i> Row Column: <code>Subject</code></span>
+                </div>
+                <div style="display: flex; justify-content: space-between; font-size: 0.8125rem;">
+                  <span style="font-family: var(--mj-font-family-mono); color: var(--mj-text-secondary);">@Notes</span>
+                  <span><i class="fa-solid fa-arrow-left" style="color: var(--mj-text-muted);"></i> Row Column: <code>Description</code></span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Context Query -->
+          <div class="form-field" style="margin-bottom: 0;">
+            <label class="form-label">Context Query <span class="form-label-hint">(Executed to assemble deep context payload before prompt evaluation)</span></label>
+            <div class="code-preview-card">
+              <span class="sql-keyword">SELECT</span> a.ID, a.Subject, a.Description, a.ActivityDate, p.Name <span class="sql-keyword">AS</span> ContactName<br>
+              <span class="sql-keyword">FROM</span> vwActivities a<br>
+              <span class="sql-keyword">LEFT JOIN</span> vwPersons p <span class="sql-keyword">ON</span> a.PersonID = p.ID<br>
+              <span class="sql-keyword">WHERE</span> a.ID = <span class="sql-param">@ActivityID</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SECTION 4: FEATURE OUTPUT SCHEMA & VALIDATION CONSTRAINTS -->
+      <div class="mj-section-card">
+        <div class="mj-section-header">
+          <div class="mj-section-title-wrap">
+            <i class="fa-solid fa-table-cells mj-section-icon"></i>
+            <span class="mj-section-title">Feature Output Schema &amp; Entity Mappings</span>
+            <span class="mj-section-subtitle">Structured extraction contract, validation constraints, and physical storage targets</span>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button class="mj-btn mj-btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;">
+              <i class="fa-solid fa-plus"></i> Add Feature
+            </button>
+            <i class="fa-solid fa-chevron-up" style="color: var(--mj-text-muted); font-size: 0.75rem; margin-top: 6px;"></i>
+          </div>
+        </div>
+        <div class="mj-section-content" style="padding-top: 8px;">
+          <table class="feature-table">
+            <thead>
+              <tr>
+                <th>Feature Name</th>
+                <th>Type</th>
+                <th>Validation Constraints</th>
+                <th>Target Field Binding</th>
+                <th>Reasoning Capture</th>
+                <th style="text-align: right;">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  <div class="feature-name">
+                    <i class="fa-solid fa-chart-line" style="color: #f59e0b;"></i>
+                    <span>SentimentScore</span>
+                  </div>
+                  <div style="font-size: 0.75rem; color: var(--mj-text-muted); margin-top: 2px;">
+                    Continuous polarity score (-1.0 negative to +1.0 positive)
+                  </div>
+                </td>
+                <td>
+                  <span class="feature-type-tag type-numeric">Numeric (Float)</span>
+                </td>
+                <td>
+                  <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                    <span class="pill-chip" title="Range"><i class="fa-solid fa-arrows-left-right"></i> [-1.0, 1.0]</span>
+                    <span class="pill-chip" title="On Violation"><i class="fa-solid fa-shield"></i> Null on breach</span>
+                  </div>
+                </td>
+                <td>
+                  <div class="binding-pill">
+                    <i class="fa-solid fa-check-circle binding-valid"></i>
+                    <span>Activities.<strong>SentimentScore</strong></span>
+                    <span style="color: var(--mj-text-muted); font-size: 0.6875rem;">(decimal(3,2))</span>
+                  </div>
+                </td>
+                <td>
+                  <span class="pill-chip pill-chip-brand"><i class="fa-solid fa-brain"></i> AIReasoningNotes</span>
+                </td>
+                <td style="text-align: right;">
+                  <button class="mj-btn mj-btn-secondary" style="padding: 3px 8px; font-size: 0.75rem;"><i class="fa-solid fa-pencil"></i></button>
+                </td>
+              </tr>
+
+              <tr>
+                <td>
+                  <div class="feature-name">
+                    <i class="fa-solid fa-tags" style="color: #8b5cf6;"></i>
+                    <span>ActivityTags</span>
+                  </div>
+                  <div style="font-size: 0.75rem; color: var(--mj-text-muted); margin-top: 2px;">
+                    Topical categories extracted &amp; aligned to business taxonomy
+                  </div>
+                </td>
+                <td>
+                  <span class="feature-type-tag type-tags">Categorical (Tags)</span>
+                </td>
+                <td>
+                  <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                    <span class="pill-chip"><i class="fa-solid fa-sitemap"></i> Root: Activities</span>
+                    <span class="pill-chip"><i class="fa-solid fa-lock"></i> Constrained</span>
+                    <span class="pill-chip"><i class="fa-solid fa-bullseye"></i> Conf &ge; 0.80</span>
+                  </div>
+                </td>
+                <td>
+                  <div class="binding-pill">
+                    <i class="fa-solid fa-check-circle binding-valid"></i>
+                    <span>Activities.<strong>Tags</strong></span>
+                    <span style="color: var(--mj-text-muted); font-size: 0.6875rem;">(nvarchar(500))</span>
+                  </div>
+                </td>
+                <td>
+                  <span style="color: var(--mj-text-muted); font-size: 0.75rem;">None</span>
+                </td>
+                <td style="text-align: right;">
+                  <button class="mj-btn mj-btn-secondary" style="padding: 3px 8px; font-size: 0.75rem;"><i class="fa-solid fa-pencil"></i></button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- SECTION 5: INGESTION, WATERMARKING & OPTIMIZATION -->
+      <div class="mj-section-card">
+        <div class="mj-section-header">
+          <div class="mj-section-title-wrap">
+            <i class="fa-solid fa-gauge-high mj-section-icon"></i>
+            <span class="mj-section-title">Watermarking &amp; Execution Optimization</span>
+            <span class="mj-section-subtitle">Incremental delta tracking, batching limits, and concurrency</span>
+          </div>
+          <i class="fa-solid fa-chevron-up" style="color: var(--mj-text-muted); font-size: 0.75rem;"></i>
+        </div>
+        <div class="mj-section-content">
+          <div class="optimization-grid">
+            <div class="opt-metric-box">
+              <div class="opt-metric-title">Delta Watermark</div>
+              <div class="opt-metric-val">Checksum</div>
+              <div class="opt-metric-sub">Evaluates row state changes</div>
+            </div>
+            <div class="opt-metric-box">
+              <div class="opt-metric-title">Batch Processing</div>
+              <div class="opt-metric-val">100 records</div>
+              <div class="opt-metric-sub">Per inference chunk</div>
+            </div>
+            <div class="opt-metric-box">
+              <div class="opt-metric-title">Concurrency</div>
+              <div class="opt-metric-val">4 Parallel</div>
+              <div class="opt-metric-sub">Concurrent worker threads</div>
+            </div>
+            <div class="opt-metric-box">
+              <div class="opt-metric-title">Skip Unchanged</div>
+              <div class="opt-metric-val" style="color: var(--mj-status-success);"><i class="fa-solid fa-check"></i> Enabled</div>
+              <div class="opt-metric-sub">Zero re-inference cost</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- DEVELOPER RAW JSON DRAWER (COLLAPSIBLE ESCAPE HATCH) -->
+      <div class="raw-json-panel">
+        <div class="raw-json-header" onclick="toggleRawJson()">
+          <div class="raw-json-title">
+            <i class="fa-solid fa-code"></i>
+            <span>Power User Escape Hatch: View / Edit Raw Pipeline JSON</span>
+            <span class="pill-chip" style="font-size: 0.6875rem;">Advanced</span>
+          </div>
+          <button class="mj-btn mj-btn-secondary" style="font-size: 0.75rem; padding: 2px 8px;" onclick="event.stopPropagation(); copyRawJson()">
+            <i class="fa-regular fa-copy"></i> Copy JSON
+          </button>
+        </div>
+
+        <div id="rawJsonBody" class="raw-json-content">
+          <div class="code-preview-card" style="margin-top: 10px;">
+<pre>{
+  "promptId": "a8b23f11-92cb-4510-b530-67c4fa920101",
+  "contextQuery": "SELECT a.ID, a.Subject, a.Description, a.ActivityDate, p.Name AS ContactName FROM vwActivities a LEFT JOIN vwPersons p ON a.PersonID = p.ID WHERE a.ID = @ActivityID",
+  "queryParams": {
+    "ActivityID": "ID"
+  },
+  "outputs": [
+    {
+      "name": "SentimentScore",
+      "type": "number",
+      "targetField": "SentimentScore",
+      "constraints": {
+        "min": -1.0,
+        "max": 1.0,
+        "onViolation": "null"
+      },
+      "description": "Normalized sentiment polarity from -1.0 to +1.0"
+    },
+    {
+      "name": "ActivityTags",
+      "type": "tags",
+      "targetTaxonomy": "Activities & Engagements",
+      "taxonomyRootTag": "Activities",
+      "growthMode": "Constrained",
+      "confidenceThreshold": 0.80
+    }
+  ],
+  "reasoning": {
+    "captureReasoning": true,
+    "reasoningTargetField": "AIReasoningNotes"
+  }
+}</pre>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <script>
+    function toggleTheme() {
+      const html = document.documentElement;
+      const current = html.getAttribute('data-theme');
+      html.setAttribute('data-theme', current === 'dark' ? 'light' : 'dark');
+    }
+
+    function toggleRawJson() {
+      const el = document.getElementById('rawJsonBody');
+      el.classList.toggle('open');
+    }
+
+    function copyRawJson() {
+      alert("Raw JSON Configuration copied to clipboard!");
+    }
+  </script>
+</body>
+</html>

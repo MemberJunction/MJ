@@ -119,7 +119,7 @@ const CLIENT_CONTRACTS: Record<string, {
             'ExcludeDataFromAllPriorViewRuns',
             'OverrideExcludeFilter',
             'SaveViewResults'
-            // Conditionally sent: MaxRows, StartRow, AfterKey, AuditLogDescription, BypassCache, Aggregates
+            // Conditionally sent: MaxRows, StartRow, AfterKey, AuditLogDescription, BypassCache, Aggregates, DataSource, IncludeBinaryFields
         ]
     },
     RunViewByNameInput: {
@@ -140,7 +140,7 @@ const CLIENT_CONTRACTS: Record<string, {
             'ExcludeDataFromAllPriorViewRuns',
             'OverrideExcludeFilter',
             'SaveViewResults'
-            // Conditionally sent: MaxRows, StartRow, AfterKey, AuditLogDescription, BypassCache, Aggregates
+            // Conditionally sent: MaxRows, StartRow, AfterKey, AuditLogDescription, BypassCache, Aggregates, DataSource, IncludeBinaryFields
         ]
     },
     RunDynamicViewInput: {
@@ -157,7 +157,7 @@ const CLIENT_CONTRACTS: Record<string, {
             'IgnoreMaxRows',
             'ForceAuditLog',
             'ResultType'
-            // Conditionally sent: MaxRows, StartRow, AfterKey, AuditLogDescription, BypassCache, Aggregates
+            // Conditionally sent: MaxRows, StartRow, AfterKey, AuditLogDescription, BypassCache, Aggregates, DataSource, IncludeBinaryFields
         ]
     },
     RunViewGenericInput: {
@@ -176,7 +176,7 @@ const CLIENT_CONTRACTS: Record<string, {
             'IgnoreMaxRows',
             'ForceAuditLog',
             'ResultType'
-            // Conditionally sent: MaxRows, StartRow, AfterKey, AuditLogDescription, BypassCache, Aggregates,
+            // Conditionally sent: MaxRows, StartRow, AfterKey, AuditLogDescription, BypassCache, Aggregates, DataSource, IncludeBinaryFields,
             // and saved-view extras (ExcludeUserViewRunID, ExcludeDataFromAllPriorViewRuns, OverrideExcludeFilter, SaveViewResults)
         ]
     },
@@ -626,10 +626,14 @@ describe('GraphQL Schema Synchronization', () => {
             expect(types[0].name).toBe('DeleteOptionsInput');
             expect(types[0].fields.length).toBeGreaterThanOrEqual(4);
 
-            // All DeleteOptionsInput fields should be required
-            types[0].fields.forEach(field => {
-                expect(field.required).toBe(true);
-            });
+            // Every field a 5.51.x client already sends stays required. `SkipRecordChanges`
+            // arrived in 6.1.0 and is optional on the wire, so a 5.51-shaped `options___` that
+            // omits it still validates; the server forces it to false regardless.
+            const byName = new Map(types[0].fields.map(f => [f.name, f]));
+            for (const name of ['SkipEntityAIActions', 'SkipEntityActions', 'ReplayOnly', 'IsParentEntityDelete']) {
+                expect(byName.get(name)?.required, name).toBe(true);
+            }
+            expect(byName.get('SkipRecordChanges')?.required).toBe(false);
         });
 
         it('honors decorator nullability over TypeScript optionality and survives nested parens in descriptions', () => {
@@ -654,6 +658,25 @@ describe('GraphQL Schema Synchronization', () => {
             // No phantom fields from decorator option objects
             expect(byID!.fields.map(f => f.name)).not.toContain('nullable');
             expect(byID!.fields.map(f => f.name)).not.toContain('description');
+        });
+
+        it('defines IncludeBinaryFields as an OPTIONAL boolean on every RunView input the client sends', () => {
+            // The client forwards IncludeBinaryFields only when the caller set it, so the server
+            // must keep it nullable — a required field here would break every older client.
+            const serverPath = path.join(MJ_ROOT, 'packages/MJServer/src/generic/RunViewResolver.ts');
+            if (!fs.existsSync(serverPath)) {
+                return;
+            }
+
+            const types = extractInputTypesFromFile(serverPath);
+            for (const typeName of ['RunViewByIDInput', 'RunViewByNameInput', 'RunDynamicViewInput', 'RunViewGenericInput']) {
+                const inputType = types.find(t => t.name === typeName);
+                expect(inputType, typeName).toBeDefined();
+                const field = inputType!.fields.find(f => f.name === 'IncludeBinaryFields');
+                expect(field, `${typeName}.IncludeBinaryFields`).toBeDefined();
+                expect(field!.required, `${typeName}.IncludeBinaryFields required`).toBe(false);
+                expect(field!.type, `${typeName}.IncludeBinaryFields type`).toBe('boolean');
+            }
         });
 
         it('parses nested InputType references (RunViewWithCacheCheckInput.params)', () => {

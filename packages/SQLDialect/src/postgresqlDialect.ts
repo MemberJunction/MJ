@@ -146,6 +146,23 @@ function formatTypeString(mapped: MappedType, length?: number, precision?: numbe
 }
 
 /**
+ * PostgreSQL functions caller-supplied SQL may not call: the XML exporters that run SQL given as a
+ * string (`query_to_xml`, `cursor_to_xml`, `table_to_xml`, `schema_to_xml`, `database_to_xml` and
+ * their schema variants), the text-search functions that do the same (`ts_stat`, `ts_rewrite`),
+ * `dblink`, the server-file readers, large objects, and the administrative
+ * functions a read-only transaction does not stop.
+ */
+const POSTGRESQL_CALLER_SQL_FORBIDDEN_FUNCTIONS: readonly string[] = [
+    'query_to_xml*', 'cursor_to_xml*', 'table_to_xml*', 'schema_to_xml*', 'database_to_xml*',
+    'ts_stat', 'ts_rewrite',
+    'dblink*',
+    'pg_read_file', 'pg_read_binary_file', 'pg_ls_*', 'pg_stat_file', 'pg_file_*',
+    'lo_*',
+    'pg_terminate_backend', 'pg_cancel_backend', 'pg_reload_conf', 'pg_rotate_logfile', 'pg_promote',
+    'pg_switch_wal', 'pg_create_restore_point', 'pg_log_backend_memory_contexts'
+];
+
+/**
  * PostgreSQL dialect implementation.
  * Uses "double-quote" identifiers, LIMIT/OFFSET pagination, native BOOLEAN, PL/pgSQL functions.
  */
@@ -281,36 +298,38 @@ export class PostgreSQLDialect extends SQLDialect {
     // / short alias (`varchar`, `bpchar`) since both surface depending on
     // the metadata source.
 
-    private static readonly _BooleanTypeNames = ['bool', 'boolean'] as const;
-    private static readonly _StringTypeNames = ['text', 'varchar', 'char', 'character', 'character varying', 'bpchar', 'citext', 'name'] as const;
+    private static readonly _booleanTypeNames = ['bool', 'boolean'] as const;
+    // `tsvector` / `tsquery` (full-text search, e.g. CodeGen's `__mj_fts_vector`) serialize as
+    // text. Without them here they fall through to Int and break GraphQL serialization.
+    private static readonly _stringTypeNames = ['text', 'varchar', 'char', 'character', 'character varying', 'bpchar', 'citext', 'name', 'tsvector', 'tsquery'] as const;
     /**
      * PG fixed-width / space-padded char types. `character` (without `varying`)
      * and `bpchar` are the formal/internal names; `char` is the short alias.
      * Note: `character varying` is NOT included — it's variable-width.
      */
-    private static readonly _FixedWidthStringTypeNames = ['char', 'character', 'bpchar'] as const;
-    private static readonly _DateTypeNames = ['date', 'time', 'time without time zone', 'time with time zone', 'timestamp', 'timestamptz', 'timestamp with time zone', 'timestamp without time zone'] as const;
-    private static readonly _IntegerTypeNames = ['int', 'int2', 'int4', 'int8', 'integer', 'bigint', 'smallint', 'serial', 'bigserial', 'smallserial', 'oid'] as const;
-    private static readonly _FloatTypeNames = ['decimal', 'numeric', 'real', 'double precision', 'float4', 'float8'] as const;
-    private static readonly _UuidTypeNames = ['uuid'] as const;
-    private static readonly _BinaryTypeNames = ['bytea'] as const;
-    private static readonly _JsonTypeNames = ['json', 'jsonb', 'xml'] as const;
-    private static readonly _CurrencyTypeNames = ['money'] as const;
-    private static readonly _IntervalTypeNames = ['interval'] as const;
-    private static readonly _NetworkTypeNames = ['inet', 'cidr', 'macaddr', 'macaddr8'] as const;
+    private static readonly _fixedWidthStringTypeNames = ['char', 'character', 'bpchar'] as const;
+    private static readonly _dateTypeNames = ['date', 'time', 'time without time zone', 'time with time zone', 'timestamp', 'timestamptz', 'timestamp with time zone', 'timestamp without time zone'] as const;
+    private static readonly _integerTypeNames = ['int', 'int2', 'int4', 'int8', 'integer', 'bigint', 'smallint', 'serial', 'bigserial', 'smallserial', 'oid'] as const;
+    private static readonly _floatTypeNames = ['decimal', 'numeric', 'real', 'double precision', 'float4', 'float8'] as const;
+    private static readonly _uuidTypeNames = ['uuid'] as const;
+    private static readonly _binaryTypeNames = ['bytea'] as const;
+    private static readonly _jsonTypeNames = ['json', 'jsonb', 'xml'] as const;
+    private static readonly _currencyTypeNames = ['money'] as const;
+    private static readonly _intervalTypeNames = ['interval'] as const;
+    private static readonly _networkTypeNames = ['inet', 'cidr', 'macaddr', 'macaddr8'] as const;
 
-    get BooleanTypeNames(): readonly string[]  { return PostgreSQLDialect._BooleanTypeNames; }
-    get StringTypeNames(): readonly string[]   { return PostgreSQLDialect._StringTypeNames; }
-    get FixedWidthStringTypeNames(): readonly string[] { return PostgreSQLDialect._FixedWidthStringTypeNames; }
-    get DateTypeNames(): readonly string[]     { return PostgreSQLDialect._DateTypeNames; }
-    get IntegerTypeNames(): readonly string[]  { return PostgreSQLDialect._IntegerTypeNames; }
-    get FloatTypeNames(): readonly string[]    { return PostgreSQLDialect._FloatTypeNames; }
-    get UuidTypeNames(): readonly string[]     { return PostgreSQLDialect._UuidTypeNames; }
-    get BinaryTypeNames(): readonly string[]   { return PostgreSQLDialect._BinaryTypeNames; }
-    get JsonTypeNames(): readonly string[]     { return PostgreSQLDialect._JsonTypeNames; }
-    get CurrencyTypeNames(): readonly string[] { return PostgreSQLDialect._CurrencyTypeNames; }
-    get IntervalTypeNames(): readonly string[] { return PostgreSQLDialect._IntervalTypeNames; }
-    get NetworkTypeNames(): readonly string[]  { return PostgreSQLDialect._NetworkTypeNames; }
+    get BooleanTypeNames(): readonly string[]  { return PostgreSQLDialect._booleanTypeNames; }
+    get StringTypeNames(): readonly string[]   { return PostgreSQLDialect._stringTypeNames; }
+    get FixedWidthStringTypeNames(): readonly string[] { return PostgreSQLDialect._fixedWidthStringTypeNames; }
+    get DateTypeNames(): readonly string[]     { return PostgreSQLDialect._dateTypeNames; }
+    get IntegerTypeNames(): readonly string[]  { return PostgreSQLDialect._integerTypeNames; }
+    get FloatTypeNames(): readonly string[]    { return PostgreSQLDialect._floatTypeNames; }
+    get UuidTypeNames(): readonly string[]     { return PostgreSQLDialect._uuidTypeNames; }
+    get BinaryTypeNames(): readonly string[]   { return PostgreSQLDialect._binaryTypeNames; }
+    get JsonTypeNames(): readonly string[]     { return PostgreSQLDialect._jsonTypeNames; }
+    get CurrencyTypeNames(): readonly string[] { return PostgreSQLDialect._currencyTypeNames; }
+    get IntervalTypeNames(): readonly string[] { return PostgreSQLDialect._intervalTypeNames; }
+    get NetworkTypeNames(): readonly string[]  { return PostgreSQLDialect._networkTypeNames; }
 
     NewUUID(): string {
         return 'gen_random_uuid()';
@@ -513,6 +532,42 @@ export class PostgreSQLDialect extends SQLDialect {
 
     get DefaultPagingOrderBy(): string {
         return '1';
+    }
+
+    get SelectListPagingOrderBy(): string | null {
+        return null;
+    }
+
+    get PagingRequiresOrderBy(): boolean {
+        return false;
+    }
+
+    get SupportsEscapeStringLiterals(): boolean {
+        return true;
+    }
+
+    get SupportsDollarQuotedStrings(): boolean {
+        return true;
+    }
+
+    get QueryHintKeyword(): string | null {
+        return null;
+    }
+
+    get CallerSQLForbiddenFunctions(): readonly string[] {
+        return POSTGRESQL_CALLER_SQL_FORBIDDEN_FUNCTIONS;
+    }
+
+    StringLiteralPrefix(_text: string): string {
+        return '';
+    }
+
+    EscapeLikePattern(text: string): string {
+        return text.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+    }
+
+    BooleanParameterValue(value: boolean): boolean | number {
+        return value;
     }
 
     // ─── Data Types ──────────────────────────────────────────────────

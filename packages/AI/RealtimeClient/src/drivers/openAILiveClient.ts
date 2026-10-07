@@ -71,6 +71,17 @@ export class OpenAILiveClient extends BaseRealtimeClient {
     private playbackDrainInterval: ReturnType<typeof setInterval> | null = null;
     private assistantSafetyBackstopTimer: ReturnType<typeof setTimeout> | null = null;
     private clientDelegationCallIds = new Set<string>();
+    /**
+     * Shared lifetime rule: emittedToolCallIds lives exactly as long as the open tool batch.
+     * It tracks function call IDs emitted to the application to prevent duplicate execution
+     * (e.g. from redundant server output_item.done events).
+     * It is cleared at exactly three sites:
+     *   1. Normal batch completion (when the final tool result is recorded in SendToolResult)
+     *   2. Batch timeout flush (when toolBatchBarrier times out and synthesizes response.create)
+     *   3. Response completion if and only if the barrier is empty (no batch pending)
+     * It is intentionally NOT cleared on CancelActiveResponse, because wire cancellations
+     * do not exist on WebRTC and delayed server tool completion frames could otherwise double-emit.
+     */
     private emittedToolCallIds = new Set<string>();
     private toolBatchBarrier = new RealtimeToolBatchBarrier();
     private outboundQueue: Array<Record<string, unknown>> = [];
@@ -204,9 +215,16 @@ export class OpenAILiveClient extends BaseRealtimeClient {
             content: text,
             delegation_id: null,
         });
-        this.sendDataChannelFrame({
-            type: 'response.create',
-        });
+        // The typed text is NOT dropped when a tool batch is in flight: the commentary is appended
+        // to the session above, and when the tool batch barrier drains, the batch's own response.create
+        // triggers generation which incorporates the appended commentary into the model turn.
+        // Gating here prevents sending response.create while tools are still pending execution, which
+        // would cause OpenAI Realtime to reject with 'function_call_outputs_required'.
+        if (this.toolBatchBarrier.IsEmpty) {
+            this.sendDataChannelFrame({
+                type: 'response.create',
+            });
+        }
     }
 
     /**
@@ -293,6 +311,8 @@ export class OpenAILiveClient extends BaseRealtimeClient {
 
         const isBatchComplete = this.toolBatchBarrier.RecordResult(callID);
         if (isBatchComplete) {
+            // Lifetime rule (Site 1): clear dedupe set when the tool batch finishes
+            this.emittedToolCallIds.clear();
             this.sendDataChannelFrame({
                 type: 'response.create',
             });
@@ -585,6 +605,8 @@ export class OpenAILiveClient extends BaseRealtimeClient {
         this.responseActive = false;
         this.audioPlaying = false;
         this.toolBatchBarrier.TrackPendingCall(callId, () => {
+            // Lifetime rule (Site 2): clear dedupe set when the tool batch times out
+            this.emittedToolCallIds.clear();
             this.sendDataChannelFrame({
                 type: 'response.create',
             });
@@ -607,7 +629,10 @@ export class OpenAILiveClient extends BaseRealtimeClient {
     }
 
     private handleResponseCompleted(respOrUsage: Record<string, unknown> | undefined): void {
-        this.emittedToolCallIds.clear();
+        // Lifetime rule (Site 3): clear dedupe set on turn completion only if no tool batch is pending
+        if (this.toolBatchBarrier.IsEmpty) {
+            this.emittedToolCallIds.clear();
+        }
         this.finalizeAssistantTranscript();
         const usage = (respOrUsage?.usage as Record<string, unknown> | undefined) ?? respOrUsage;
         const seconds = typeof usage?.seconds === 'number' ? usage.seconds : undefined;

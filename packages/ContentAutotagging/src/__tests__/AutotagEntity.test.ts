@@ -109,7 +109,7 @@ vi.mock('../Core', () => ({
     AutotagProgressCallback: undefined,
 }));
 
-vi.mock('@memberjunction/ai-vector-sync', () => ({
+vi.mock('@memberjunction/entity-documents', () => ({
     EntityDocumentTemplateParser: {
         CreateInstance: vi.fn().mockReturnValue({ Parse: mockParse })
     }

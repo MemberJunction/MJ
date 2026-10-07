@@ -16,7 +16,8 @@ import {  } from '@memberjunction/core-entities';
 import { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { AgentPayloadChangeRequest } from './agent-payload-change-request';
 import { AgentScratchpad } from './agent-scratchpad';
-import { AIAPIKey } from '@memberjunction/ai';
+import { AgentDecisionRequest, AgentDecisionResult, AgentFinishIf } from './agent-decisions';
+import { AIAPIKey, AICredentialScope } from '@memberjunction/ai';
 import { AgentResponseForm } from './response-forms';
 import { ActionParam } from '@memberjunction/actions-base';
 import { ActionableCommand, AutomaticCommand } from './ui-commands';
@@ -591,6 +592,9 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      *   they are NOT part of the generated `MJAIAgentRun.FinalStep` union below. Use an explicit
      *   `'Skill' as typeof nextStep.step` / `'Plan' as typeof nextStep.step` assertion at
      *   assignment/switch sites, mirroring the existing 'ClientTools' pattern.
+     * - 'Decision': non-terminal in the same way. Runs {@link decisions} as `Decision` run steps with
+     *   no LLM turn, and returns a 'Retry' carrying {@link decisionResults}. A Flow agent's Decision
+     *   step emits it.
      *
      * Note: To expand a compacted message, set step to 'Retry', set messageIndex to the message to expand,
      * and optionally set expandReason to explain why expansion is needed. The framework will expand the message
@@ -688,6 +692,29 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      */
     scratchpad?: AgentScratchpad;
     /**
+     * Decision requests from the agent's response.
+     * Processed inline (zero turn cost) alongside payload and scratchpad changes.
+     * Results are injected into the next turn's conversation.
+     *
+     * On a `'Decision'` step these are the step's own requests instead, and their results come back
+     * on {@link decisionResults} rather than into the conversation.
+     */
+    decisions?: AgentDecisionRequest[];
+    /**
+     * The decision prompt a `'Decision'` step's {@link decisions} run on, by name. Omitted means
+     * `Default Decision`.
+     */
+    decisionPromptName?: string;
+    /**
+     * The results of a `'Decision'` step's {@link decisions}, on the `'Retry'` BaseAgent returns once
+     * it has run them.
+     *
+     * These go back to the agent type, which routes on them, rather than to a model. So each Choice's
+     * and Score's answer keeps its whole distribution in `probabilities` (the shape of
+     * `TaskGraphDecisionAnswer`), which a path condition may read.
+     */
+    decisionResults?: AgentDecisionResult[];
+    /**
      * Artifact tool calls from the agent's response.
      * Each entry identifies an artifact and the tool to execute against it.
      * Processed inline (zero turn cost) alongside payload and scratchpad changes.
@@ -766,6 +793,12 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      * to decide whether to return Success or continue to another prompt.
      */
     terminateAfterExecution?: boolean;
+    /**
+     * Conditional completion gate for Actions or Sub-Agent steps.
+     * When present, if all questions evaluate to a probability >= threshold after the step completes,
+     * the run finishes immediately with `finishIf.message` at zero extra turn cost.
+     */
+    finishIf?: AgentFinishIf;
 }
 
 /**
@@ -1215,6 +1248,22 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      */
     apiKeys?: AIAPIKey[];
     /**
+     * Which credentials the run may spend; omitted means `'Any'`. `'RuntimeOnly'` restricts the run's
+     * model calls to {@link apiKeys}: a vendor the run carries no key for is not used, rather than
+     * falling back to the platform's credentials. See `AICredentialScope` in `@memberjunction/ai`.
+     *
+     * Covered: every prompt the agent runs and the ones it starts on its own behalf (JSON repair, the
+     * result-selector judge, summarize, compaction, naming), decision calls, self-check rubrics,
+     * sub-agents, realtime sessions and actions. An action that calls a vendor directly gets the run's
+     * key through `RunActionParams.RuntimeAPIKeyResolver`; one that runs its own prompt or agent is
+     * handed only the scope, not the keys, so under `'RuntimeOnly'` it fails rather than spending the
+     * platform's.
+     *
+     * Not covered: retrieval reranking (`AIRerankerRunner`, the search rerankers) and vector
+     * embeddings outside a prompt run, which are platform infrastructure and resolve their own keys.
+     */
+    CredentialScope?: AICredentialScope;
+    /**
      * Optional ID of the last run in a run chain.
      * When provided, this links the new run to a previous run, allowing
      * agents to maintain context across multiple interactions.
@@ -1244,6 +1293,23 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      * record and gates the compaction/retrieval features.
      */
     conversationId?: string;
+
+    /**
+     * Optional history floor for a conversation run: the first moment of the conversation
+     * this run may read. Meaningful only with {@link conversationId}.
+     *
+     * The caller is responsible for `conversationMessages` starting there (the agent resolver
+     * loads them through `ConversationEngine.LoadWindowRowsFresh` with the same floor). The
+     * framework holds the floor everywhere else it reads the conversation on the run's behalf:
+     * - the conversation-history retrieval tools page only rows written at or after it;
+     * - the conversation's artifacts offered to the run are those of rows at or after it;
+     * - cross-turn compaction is skipped, since a summary folds in history from before it;
+     * - the previous turn's tool results are not carried forward, since they can quote history
+     *   from before it.
+     *
+     * Omitted (the default), the run reads the whole conversation, as before.
+     */
+    ConversationHistoryFrom?: Date;
 
     /**
      * Optional flag to automatically populate the payload from the last run.
@@ -1824,6 +1890,15 @@ export type AgentChatMessageMetadata = {
     isConversationSummary?: boolean;
     /** On the summary message: the boundary row's Sequence — the summary covers all rows below it */
     summaryBoundarySequence?: number;
+    /**
+     * True on the framework-authored trailing message that carries the loop agent's volatile
+     * per-iteration state (date/time, Scratchpad, Payload, and a relocated specialization) as the
+     * final message of each request. It is appended to a COPY of the history for a
+     * single request and never persisted. Provider adapters may use it to place prompt-cache
+     * breakpoints on the message BEFORE it, so the stable history caches and only this fragment
+     * is re-processed each iteration.
+     */
+    volatileState?: boolean;
 }
 
 /**

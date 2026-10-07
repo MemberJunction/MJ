@@ -30,7 +30,7 @@
  * limits, or provider outages. The `ChatResult{success:false}` tests below execute the real
  * fix at AIPromptRunner.executeModelWithFailover and fail if that check ever regresses.
  */
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 // ---------------------------------------------------------------------------
 // Mock AIEngine catalog + credential gate (same harness as the model-selection
@@ -108,9 +108,9 @@ vi.mock('@memberjunction/credentials', async (importOriginal) => {
 import { AIPromptRunner } from '../AIPromptRunner';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { MJGlobal } from '@memberjunction/global';
-import type { ChatResult } from '@memberjunction/ai'; // real types — the mock only replaces GetAIAPIKey
+import type { ChatResult, AIPromptConfiguration } from '@memberjunction/ai'; // real types — the mock only replaces GetAIAPIKey
 import { TestLLM, makeFailedChatResult } from '@memberjunction/unit-testing';
-import { buildRealisticCatalog, DEFAULT_CONFIGURED_DRIVERS, MODEL_TYPE, type AICatalog } from './__fixtures__/ai-metadata.fixtures';
+import { buildRealisticCatalog, DEFAULT_CONFIGURED_DRIVERS, MODEL_TYPE, VENDOR, makeModel, makeModelVendor, type AICatalog } from './__fixtures__/ai-metadata.fixtures';
 
 // ---------------------------------------------------------------------------
 // Scripted TestLLM (shared harness, extends the REAL BaseLLM) — stands in for a
@@ -131,12 +131,13 @@ interface FailoverRunner { executeModelWithFailover: (...args: ExecArgs) => Prom
 
 interface TestCandidate {
   model: { ID: string; Name: string };
-  vendorId: string;
+  vendorId?: string;
   vendorName: string;
   driverClass: string;
   apiName: string;
   supportsEffortLevel: boolean;
-  effortLevel: undefined;
+  effortLevel?: number;
+  promptModelConfiguration?: AIPromptConfiguration | null;
   isPreferredVendor: boolean;
   priority: number;
   source: string;
@@ -369,6 +370,22 @@ describe('executeModelWithFailover — non-eligible errors do not fail over', ()
     expect(pr.FailoverAttempts).toBe(0);             // not even recorded as a failover attempt
   });
 
+  // The failure must still be SURFACED. It used to fall through to the success path and come
+  // back with nothing logged — during the 6.2.0-edge.0 gate a spend-capped vendor failed every
+  // call this way and the run logs held no trace of why.
+  it('logs a failed result that cannot fail over, naming the error, instead of returning it silently', async () => {
+    const c1 = candidate('m-claude', 'AnthropicLLM', 'v-anthropic', 'Anthropic', 'api-claude', 100);
+    testLLM.Script({ kind: 'fail', error: new Error('Malformed JSON in request body') });
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const result = await runFailover(runner, [c1]);
+
+    expect(result.success).toBe(false);
+    const logged = errorLog.mock.calls.map(args => args.map(String).join(' ')).join('\n');
+    expect(logged).toContain('Malformed JSON in request body');
+    expect(logged).toContain('InvalidRequest');
+  });
+
   it('returns a failed ChatResult as-is when the driver supplies NO errorInfo (undiagnosed failure)', async () => {
     const c1 = candidate('m-claude', 'AnthropicLLM', 'v-anthropic', 'Anthropic', 'api-claude', 100);
     const c2 = candidate('m-gpt', 'OpenAILLM', 'v-openai', 'OpenAI', 'api-gpt', 90);
@@ -453,6 +470,63 @@ describe('executeModelWithFailover — candidate order and exhaustion', () => {
 });
 
 // ===========================================================================
+// (d2) Each attempt runs on THAT candidate's own fields. The failover loop hands executeModel the
+// candidate it is trying; nothing may fall back to the first candidate's (the call's) model,
+// vendor, effort level or prompt-model configuration, or credentials and settings would be
+// resolved against the wrong model on every failover attempt.
+// ===========================================================================
+describe('executeModelWithFailover — each attempt uses its own candidate', () => {
+  type ExecuteModel = (...args: ExecArgs) => Promise<ChatResult>;
+  // executeModel's arguments, in order (see AIPromptRunner.executeModel).
+  const ARG = { model: 0, vendorId: 4, driverClass: 8, apiName: 9, supportsEffortLevel: 10, effortLevel: 11, promptModelConfiguration: 12 } as const;
+
+  it('passes the failover candidate\'s model, vendor, driver, API name, effort settings and prompt-model configuration', async () => {
+    const c1 = candidate('m-claude', 'AnthropicLLM', 'v-anthropic', 'Anthropic', 'api-claude', 100);
+    const c2Configuration: AIPromptConfiguration = {};
+    // Every field differs from what the call itself was made with (c1's, see runFailover).
+    const c2: TestCandidate = {
+      ...candidate('m-gpt', 'OpenAILLM', 'v-openai', 'OpenAI', 'api-gpt', 90),
+      supportsEffortLevel: true,
+      effortLevel: 70,
+      promptModelConfiguration: c2Configuration,
+    };
+    testLLM.Script(
+      { kind: 'fail', error: new Error('fetch failed: network socket disconnected') },
+      { kind: 'succeed', content: 'answered by the second candidate' },
+    );
+    const executeModel = vi.spyOn(runner as unknown as { executeModel: ExecuteModel }, 'executeModel');
+
+    const result = await runFailover(runner, [c1, c2]);
+
+    expect(result.success).toBe(true);
+    expect(executeModel).toHaveBeenCalledTimes(2);
+    const second = executeModel.mock.calls[1];
+    expect(second[ARG.model]).toBe(c2.model);
+    expect(second[ARG.vendorId]).toBe('v-openai');
+    expect(second[ARG.driverClass]).toBe('OpenAILLM');
+    expect(second[ARG.apiName]).toBe('api-gpt');
+    expect(second[ARG.supportsEffortLevel]).toBe(true);
+    expect(second[ARG.effortLevel]).toBe(70);
+    expect(second[ARG.promptModelConfiguration]).toBe(c2Configuration);
+  });
+
+  it('passes null, not the first candidate\'s vendor, for a candidate with no vendor', async () => {
+    const c1 = candidate('m-claude', 'AnthropicLLM', 'v-anthropic', 'Anthropic', 'api-claude', 100);
+    const c2: TestCandidate = { ...candidate('m-gpt', 'OpenAILLM', 'v-openai', 'OpenAI', 'api-gpt', 90), vendorId: undefined };
+    testLLM.Script(
+      { kind: 'fail', error: new Error('fetch failed: network socket disconnected') },
+      { kind: 'succeed', content: 'answered by the second candidate' },
+    );
+    const executeModel = vi.spyOn(runner as unknown as { executeModel: ExecuteModel }, 'executeModel');
+
+    const result = await runFailover(runner, [c1, c2]);
+
+    expect(result.success).toBe(true);
+    expect(executeModel.mock.calls[1][ARG.vendorId]).toBeNull();
+  });
+});
+
+// ===========================================================================
 // (e) Vendor-level errors exclude the whole vendor from the remaining candidates
 // ===========================================================================
 describe('executeModelWithFailover — vendor-level error filtering', () => {
@@ -477,6 +551,71 @@ describe('executeModelWithFailover — vendor-level error filtering', () => {
     expect(['api-b1', 'api-b2']).toContain(testLLM.CalledModels[1]);
     expect(testLLM.CalledModels).not.toContain('api-a2');
     expect(pr.FailoverAttempts).toBe(1);
+  });
+});
+
+// ===========================================================================
+// (f) The failover banner is logged only after a real failed attempt. A candidate skipped for
+// missing credentials makes no request, so it is not a failover.
+// ===========================================================================
+describe('executeModelWithFailover — failover banner', () => {
+  // Not in the configured-driver set, so the credential gate skips it without a request.
+  const uncredentialed = (): TestCandidate => candidate('m-mistral', 'MistralLLM', 'v-mistral', 'Mistral', 'api-mistral', 110);
+
+  function captureStatusLog(): () => string[] {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    return () => log.mock.calls.map(args => String(args[0]));
+  }
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('logs no failover banner when the first call succeeds after candidates skipped for missing credentials', async () => {
+    vi.stubEnv('MJ_VERBOSE', 'false');
+    const c1 = candidate('m-claude', 'AnthropicLLM', 'v-anthropic', 'Anthropic', 'api-claude', 100);
+    testLLM.Script({ kind: 'succeed', content: 'first call answered' });
+    const messages = captureStatusLog();
+
+    const result = await runFailover(runner, [uncredentialed(), c1]);
+
+    expect(result.success).toBe(true);
+    expect(testLLM.CalledModels).toEqual(['api-claude']);
+    expect(messages().filter(m => m.includes('🔄'))).toEqual([]);
+    expect(messages().filter(m => m.includes('Using candidate'))).toEqual([]); // verbose-only
+  });
+
+  it('notes the skipped candidates in verbose mode, without a failover banner', async () => {
+    vi.stubEnv('MJ_VERBOSE', 'true');
+    const c1 = candidate('m-claude', 'AnthropicLLM', 'v-anthropic', 'Anthropic', 'api-claude', 100);
+    testLLM.Script({ kind: 'succeed', content: 'first call answered' });
+    const messages = captureStatusLog();
+
+    await runFailover(runner, [uncredentialed(), c1]);
+
+    expect(messages().filter(m => m.includes('🔄'))).toEqual([]);
+    const notes = messages().filter(m => m.includes('Using candidate'));
+    expect(notes).toHaveLength(1);
+    expect(notes[0]).toContain('Using candidate 2/2');
+    expect(notes[0]).toContain('skipped 1 higher-priority candidate(s)');
+  });
+
+  it('logs the failover banner once an attempt has failed', async () => {
+    vi.stubEnv('MJ_VERBOSE', 'false');
+    const c1 = candidate('m-claude', 'AnthropicLLM', 'v-anthropic', 'Anthropic', 'api-claude', 100);
+    const c2 = candidate('m-gpt', 'OpenAILLM', 'v-openai', 'OpenAI', 'api-gpt', 90);
+    testLLM.Script(
+      { kind: 'fail', error: new Error('fetch failed: network socket disconnected') },
+      { kind: 'succeed', content: 'answered by the second candidate' },
+    );
+    const messages = captureStatusLog();
+
+    const result = await runFailover(runner, [c1, c2]);
+
+    expect(result.success).toBe(true);
+    const banners = messages().filter(m => m.includes('🔄'));
+    expect(banners).toHaveLength(1);
+    expect(banners[0]).toContain('Failover after 1 failed attempt(s) — trying candidate 2/2');
   });
 });
 
@@ -515,5 +654,42 @@ describe('ExecutePrompt — failover through the full pipeline', () => {
     expect(result.success).toBe(false);
     expect(result.errorMessage).toContain('network socket disconnected');
     expect(testLLM.CalledModels).toHaveLength(1); // single attempt, no failover
+  });
+});
+
+// ===========================================================================
+// (f) Model type is a hard boundary for failover (plans/typed-decision-models.md, Task 0.2)
+// ===========================================================================
+describe('ExecutePrompt — failover never crosses model types', () => {
+  const EMBEDDING_MODEL_ID = 'F0000000-0000-4000-8000-0000000000E1';
+  const EMBEDDING_API_NAME = 'text-embedding-3-large';
+
+  /** A credentialed embeddings model that out-ranks every LLM — a type-blind pool would pick it first. */
+  function catalogWithTopRankedEmbeddingModel(): AICatalog {
+    const catalog = buildRealisticCatalog();
+    const vendor = makeModelVendor({
+      ModelID: EMBEDDING_MODEL_ID, VendorID: VENDOR.OpenAI, Vendor: 'OpenAI',
+      DriverClass: 'OpenAIEmbedding', APIName: EMBEDDING_API_NAME, Priority: 100,
+    });
+    catalog.models.push(makeModel({
+      ID: EMBEDDING_MODEL_ID, Name: 'Text Embedding 3 Large', Vendor: 'OpenAI',
+      AIModelTypeID: MODEL_TYPE.Embeddings, AIModelType: 'Embeddings', PowerRank: 99, ModelVendors: [vendor],
+    }));
+    catalog.modelVendors.push(vendor);
+    return catalog;
+  }
+
+  it('walks the LLM candidates on every failure but never calls a model of another type', async () => {
+    loadCatalog(catalogWithTopRankedEmbeddingModel(), [...DEFAULT_CONFIGURED_DRIVERS, ...DIRECT_DRIVE_DRIVERS, 'OpenAIEmbedding']);
+    testLLM.Script(...Array.from({ length: 40 }, () => ({
+      kind: 'fail' as const, error: new Error('fetch failed: network socket disconnected'),
+    })));
+    const prompt = makeE2EPrompt({ FailoverStrategy: 'NextBestModel', AIModelTypeID: MODEL_TYPE.LLM });
+
+    const result = await runner.ExecutePrompt(makeE2EParams(prompt) as never);
+
+    expect(result.success).toBe(false);
+    expect(testLLM.CalledModels.length).toBeGreaterThanOrEqual(2);   // failover really happened
+    expect(testLLM.CalledModels).not.toContain(EMBEDDING_API_NAME);
   });
 });

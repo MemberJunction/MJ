@@ -653,11 +653,14 @@ function resolveTypesEntryPoint(packageDir: string): string | null {
         const typesField = pkg.types || pkg.typings;
         if (typesField) {
             const resolved = path.resolve(packageDir, typesField);
-            // If the field points to a .ts source file, convert to .d.ts in dist
+            // If the field points to a .ts source file, convert to .d.ts in dist. Rewrite only the
+            // package-relative `src/` segment: replacing the first `/src/` in the ABSOLUTE path
+            // rewrites a parent directory instead when the checkout itself lives under a `src`
+            // folder, the fallback then parses the raw .ts entry (no `declare`, re-exports not
+            // followed), and the manifest silently drops every re-exported class.
             if (resolved.endsWith('.ts') && !resolved.endsWith('.d.ts')) {
-                const dtsPath = resolved
-                    .replace(/\/src\//, '/dist/')
-                    .replace(/\.ts$/, '.d.ts');
+                const relative = path.relative(packageDir, resolved);
+                const dtsPath = path.join(packageDir, relative.replace(/^src(\/|\\)/, `dist$1`).replace(/\.ts$/, '.d.ts'));
                 if (fs.existsSync(dtsPath)) return dtsPath;
             }
             if (fs.existsSync(resolved)) return resolved;
@@ -1376,13 +1379,18 @@ export interface SubpathExportInfo {
     classToFile: Map<string, string>;
 }
 
-export function resolveSubpathExports(packageDir: string): Map<string, Set<string>> {
+export function ResolveSubpathExports(packageDir: string): Map<string, Set<string>> {
     const detailed = resolveSubpathExportsDetailed(packageDir);
     const result = new Map<string, Set<string>>();
     for (const [subpath, info] of detailed.entries()) {
         result.set(subpath, info.classNames);
     }
     return result;
+}
+
+/** @deprecated Use {@link ResolveSubpathExports}. */
+export function resolveSubpathExports(packageDir: string): Map<string, Set<string>> {
+    return ResolveSubpathExports(packageDir);
 }
 
 /**
@@ -1439,7 +1447,7 @@ function countTypedSubpathExports(packageDir: string): number {
  *
  * @throws when `packageDir` declares typed subpath exports but none of them resolve.
  */
-export function resolveLazySubpathExports(packageName: string, packageDir: string): Map<string, SubpathExportInfo> {
+export function ResolveLazySubpathExports(packageName: string, packageDir: string): Map<string, SubpathExportInfo> {
     const subpaths = resolveSubpathExportsDetailed(packageDir);
     if (subpaths.size === 0) {
         const declared = countTypedSubpathExports(packageDir);
@@ -1455,6 +1463,11 @@ export function resolveLazySubpathExports(packageName: string, packageDir: strin
         }
     }
     return subpaths;
+}
+
+/** @deprecated Use {@link ResolveLazySubpathExports}. */
+export function resolveLazySubpathExports(packageName: string, packageDir: string): Map<string, SubpathExportInfo> {
+    return ResolveLazySubpathExports(packageName, packageDir);
 }
 
 /**
@@ -1705,7 +1718,7 @@ function groupClassesIntoChunks(
     const packageSubpaths = new Map<string, Map<string, SubpathExportInfo>>();
     for (const [depName, depDir] of lazyPackages.entries()) {
         const subpaths = packagesWithLazyClasses.has(depName)
-            ? resolveLazySubpathExports(depName, depDir)
+            ? ResolveLazySubpathExports(depName, depDir)
             : resolveSubpathExportsDetailed(depDir);
         if (subpaths.size > 0) {
             packageSubpaths.set(depName, subpaths);
@@ -2005,7 +2018,7 @@ function writeIfChanged(filePath: string, content: string): boolean {
  * }
  * ```
  */
-export async function generateClassRegistrationsManifest(
+export async function GenerateClassRegistrationsManifest(
     options: GenerateManifestOptions
 ): Promise<GenerateManifestResult> {
     const {
@@ -2243,4 +2256,11 @@ export async function generateClassRegistrationsManifest(
         AddedDependencies: addedDependencies,
         errors
     };
+}
+
+/** @deprecated Use {@link GenerateClassRegistrationsManifest}. */
+export async function generateClassRegistrationsManifest(
+    options: GenerateManifestOptions
+): Promise<GenerateManifestResult> {
+    return GenerateClassRegistrationsManifest(options);
 }

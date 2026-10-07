@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent Trust Trend</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --mj-bg-page: #f8f9fa;
+    --mj-bg-surface: white;
+    --mj-bg-surface-card: #f5f7fa;
+    --mj-bg-surface-sunken: #f0f2f5;
+    --mj-text-primary: #334155;
+    --mj-text-secondary: #64748b;
+    --mj-text-muted: #94a3b8;
+    --mj-brand-primary: #264FAF;
+    --mj-brand-primary-soft: #eef2fb;
+    --mj-border-default: #e2e8f0;
+    --mj-border-subtle: #f1f5f9;
+    --mj-status-success: #16a34a;
+    --mj-status-success-bg: #f0fdf4;
+    --mj-status-warning: #ea580c;
+    --mj-status-warning-bg: #fff7ed;
+    --mj-status-error: #dc2626;
+    --mj-status-error-bg: #fef2f2;
+    --mj-status-info: #0284c7;
+    --mj-status-info-bg: #f0f9ff;
+    --sidebar-width: 230px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--mj-bg-page); color: var(--mj-text-primary); line-height: 1.5; display: flex; min-height: 100vh; font-size: 14px;
+  }
+  .sidebar { width: var(--sidebar-width); min-width: var(--sidebar-width); background: var(--mj-bg-surface); border-right: 1px solid var(--mj-border-default); position: fixed; top:0; left:0; bottom:0; overflow-y:auto; }
+  .brand { padding: 18px 16px; border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--mj-brand-primary); font-size: 15px; }
+  .nav-section { padding: 14px 16px 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--mj-text-muted); }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 16px; color: var(--mj-text-secondary); font-weight: 500; border-left: 3px solid transparent; }
+  .nav-item.active { color: var(--mj-brand-primary); border-left-color: var(--mj-brand-primary); background: color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-bg-surface)); font-weight: 600; }
+  .nav-item i { width: 16px; text-align: center; font-size: 13px; }
+
+  .main { margin-left: var(--sidebar-width); flex: 1; display: flex; flex-direction: column; }
+  .topbar { background: var(--mj-bg-surface); border-bottom: 1px solid var(--mj-border-default); padding: 16px 28px; display: flex; align-items: center; justify-content: space-between; }
+  .topbar h1 { font-size: 19px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+  .topbar h1 i { color: var(--mj-brand-primary); }
+  .topbar .sub { color: var(--mj-text-secondary); font-size: 12.5px; margin-top: 3px; }
+  .btn { border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); color: var(--mj-text-secondary); padding: 7px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; cursor: default; }
+  .btn-primary { background: var(--mj-brand-primary); border-color: var(--mj-brand-primary); color: white; }
+  .pick { border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); padding: 7px 12px; border-radius: 6px; font-size: 13px; font-weight: 600; color: var(--mj-text-primary); display: inline-flex; align-items: center; gap: 8px; }
+
+  .content { padding: 22px 28px 40px; }
+
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 22px; }
+  .kpi { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; padding: 16px 18px; }
+  .kpi .label { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--mj-text-muted); margin-bottom: 8px; }
+  .kpi .value { font-size: 28px; font-weight: 800; }
+  .kpi .value.warn { color: var(--mj-status-warning); }
+  .kpi .delta { font-size: 12px; font-weight: 600; margin-top: 4px; color: var(--mj-text-muted); }
+
+  .card { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; overflow: hidden; margin-bottom: 20px; }
+  .card-header { padding: 14px 18px; border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; justify-content: space-between; }
+  .card-header h2 { font-size: 14.5px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .card-header h2 i { color: var(--mj-brand-primary); }
+
+  .alert-banner { background: var(--mj-status-warning-bg); border: 1px solid color-mix(in srgb, var(--mj-status-warning) 30%, transparent); border-radius: 10px; padding: 14px 18px; display: flex; align-items: center; gap: 12px; margin-bottom: 22px; }
+  .alert-banner i { color: var(--mj-status-warning); font-size: 18px; }
+  .alert-banner .t { font-weight: 700; font-size: 13.5px; }
+  .alert-banner .s { font-size: 12px; color: var(--mj-text-secondary); margin-top: 2px; }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
+
+  .diff-col { padding: 14px 16px; }
+  .diff-col h3 { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--mj-text-muted); margin-bottom: 8px; }
+  .diff-box { border-radius: 8px; padding: 12px 14px; font-size: 12.5px; line-height: 1.55; }
+  .diff-expected { background: var(--mj-brand-primary-soft); border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 25%, transparent); }
+  .diff-actual { background: var(--mj-status-error-bg); border: 1px solid color-mix(in srgb, var(--mj-status-error) 25%, transparent); }
+  .rubric-list { list-style: none; padding: 10px 0 0; font-size: 12px; }
+  .rubric-list li { display: flex; gap: 7px; padding: 4px 0; align-items: flex-start; }
+  .rubric-list i { margin-top: 2px; width: 12px; text-align: center; }
+  .rubric-pass i { color: var(--mj-status-success); }
+  .rubric-fail i { color: var(--mj-status-error); }
+</style>
+</head>
+<body>
+  <div class="sidebar">
+    <div class="brand"><i class="fa-solid fa-cube"></i> MJ Explorer</div>
+    <div class="nav-section">Monitoring</div>
+    <div class="nav-item"><i class="fa-solid fa-diagram-project"></i> Trace Explorer</div>
+    <div class="nav-item"><i class="fa-solid fa-shield-halved"></i> Tenant Isolation</div>
+    <div class="nav-item active"><i class="fa-solid fa-chart-line"></i> Agent Trust Trend</div>
+    <div class="nav-section">Configuration</div>
+    <div class="nav-item"><i class="fa-solid fa-robot"></i> AI Agents</div>
+    <div class="nav-item"><i class="fa-solid fa-list-check"></i> Eval Cases</div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <h1><i class="fa-solid fa-chart-line"></i> Agent Trust Trend</h1>
+        <div class="sub">Is this agent still behaving the way it did when it was approved?</div>
+      </div>
+      <div style="display:flex; gap:10px;">
+        <span class="pick"><i class="fa-solid fa-robot"></i> Member Renewal Assistant <i class="fa-solid fa-chevron-down" style="font-size:10px;"></i></span>
+        <button class="btn btn-primary"><i class="fa-solid fa-play"></i> Run eval now</button>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="alert-banner">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <div>
+          <div class="t">Drift alert — pass rate dropped from 96% baseline to 81% over the last 3 runs</div>
+          <div class="s">Detected 2 days ago, after the underlying model vendor's Sept 8 update. 4 of 22 Eval Cases now fail on the "tone" rubric criterion.</div>
+        </div>
+      </div>
+
+      <div class="kpi-row">
+        <div class="kpi"><div class="label">Current pass rate</div><div class="value warn">81%</div><div class="delta">rolling baseline: 96%</div></div>
+        <div class="kpi"><div class="label">Eval cases</div><div class="value">22</div><div class="delta">18 manual, 4 auto-suggested</div></div>
+        <div class="kpi"><div class="label">Last eval run</div><div class="value">6h ago</div><div class="delta">next scheduled in 18h</div></div>
+        <div class="kpi"><div class="label">Judge model</div><div class="value" style="font-size:18px; margin-top:4px;">claude-opus-5</div><div class="delta">pinned, independent of agent's model</div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><h2><i class="fa-solid fa-chart-area"></i> Pass rate over time</h2><span style="font-size:11.5px;color:var(--mj-text-muted)">last 30 days</span></div>
+        <div style="padding:18px;">
+          <svg width="100%" height="180" viewBox="0 0 900 180" xmlns="http://www.w3.org/2000/svg">
+            <line x1="0" y1="30" x2="900" y2="30" stroke="#e2e8f0" stroke-width="1"/>
+            <line x1="0" y1="70" x2="900" y2="70" stroke="#e2e8f0" stroke-width="1"/>
+            <line x1="0" y1="110" x2="900" y2="110" stroke="#e2e8f0" stroke-width="1"/>
+            <line x1="0" y1="150" x2="900" y2="150" stroke="#e2e8f0" stroke-width="1"/>
+            <text x="4" y="26" font-size="10" fill="#94a3b8">100%</text>
+            <text x="4" y="66" font-size="10" fill="#94a3b8">90%</text>
+            <text x="4" y="106" font-size="10" fill="#94a3b8">80%</text>
+            <text x="4" y="146" font-size="10" fill="#94a3b8">70%</text>
+            <!-- rolling baseline band -->
+            <rect x="30" y="34" width="870" height="16" fill="#264FAF" opacity="0.10"/>
+            <line x1="30" y1="34" x2="900" y2="34" stroke="#264FAF" stroke-width="1" stroke-dasharray="3,3" opacity="0.5"/>
+            <line x1="30" y1="50" x2="900" y2="50" stroke="#264FAF" stroke-width="1" stroke-dasharray="3,3" opacity="0.5"/>
+            <!-- pass rate line: steady ~96% then drops around day 24 to ~81% -->
+            <polyline fill="none" stroke="#16a34a" stroke-width="2.5"
+              points="30,40 90,38 150,42 210,36 270,40 330,38 390,42 450,39 510,41 570,37
+                      600,60 630,88 660,100 690,108 720,104 750,110 780,106 810,109 840,107 900,108"/>
+            <circle cx="900" cy="108" r="5" fill="#dc2626"/>
+            <text x="835" y="128" font-size="10.5" fill="#dc2626" font-weight="700">drift detected →</text>
+            <line x1="600" y1="20" x2="600" y2="160" stroke="#ea580c" stroke-width="1.5" stroke-dasharray="4,3"/>
+            <text x="604" y="18" font-size="10" fill="#ea580c" font-weight="700">vendor model update</text>
+          </svg>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header"><h2><i class="fa-solid fa-vial-circle-check"></i> Failing Eval Case — "Overdue renewal, sensitive tone"</h2></div>
+          <div style="padding: 4px 16px 14px;">
+            <ul class="rubric-list">
+              <li class="rubric-pass"><i class="fa-solid fa-check"></i> Response references the correct renewal date and amount</li>
+              <li class="rubric-pass"><i class="fa-solid fa-check"></i> Response calls the suppression-check tool before drafting</li>
+              <li class="rubric-fail"><i class="fa-solid fa-xmark"></i> Judge score for tone (member is 90+ days overdue): required ≥4/5, scored 2/5</li>
+            </ul>
+          </div>
+          <div class="card-header" style="border-top:1px solid var(--mj-border-default);"><h2 style="font-size:13px;">Expected vs. actual</h2></div>
+          <div class="diff-col">
+            <h3>Rubric expectation</h3>
+            <div class="diff-box diff-expected">"Acknowledge the lapse warmly, offer a grace-period option, no urgency language or late fees mentioned in the first paragraph."</div>
+          </div>
+          <div class="diff-col" style="padding-top:0;">
+            <h3>Actual output, this run</h3>
+            <div class="diff-box diff-actual">"Your membership has been <strong>expired for 94 days</strong>. A <strong>$25 late fee</strong> now applies. Please renew <strong>immediately</strong> to avoid losing your benefits."</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><h2><i class="fa-solid fa-list-check"></i> All Eval Cases</h2></div>
+          <div style="padding:4px 16px 14px; font-size:12.5px;">
+            <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px dashed var(--mj-border-subtle);"><span>Standard renewal reminder</span><span style="color:var(--mj-status-success);font-weight:700;">18/18 pass</span></div>
+            <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px dashed var(--mj-border-subtle);"><span>Overdue renewal, sensitive tone</span><span style="color:var(--mj-status-error);font-weight:700;">1/5 pass</span></div>
+            <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px dashed var(--mj-border-subtle);"><span>Suppressed member — do not contact</span><span style="color:var(--mj-status-success);font-weight:700;">4/4 pass</span></div>
+            <div style="display:flex;justify-content:space-between;padding:8px 0;"><span>Multi-language renewal notice</span><span style="color:var(--mj-status-success);font-weight:700;">3/3 pass</span></div>
+          </div>
+          <div class="card-header" style="border-top:1px solid var(--mj-border-default);"><h2 style="font-size:13px;"><i class="fa-solid fa-wand-magic-sparkles"></i> Suggested from production history</h2></div>
+          <div style="padding:12px 16px 16px; font-size:12px; color:var(--mj-text-secondary);">
+            3 new candidate Eval Cases proposed from last week's live agent runs, pending your review and approval.
+            <div style="margin-top:10px;"><button class="btn"><i class="fa-solid fa-eye"></i> Review suggestions</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

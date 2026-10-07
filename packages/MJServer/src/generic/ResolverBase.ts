@@ -4,12 +4,14 @@ import {
   BaseEntityEvent,
   CompositeKey,
   DatabaseProviderBase,
+  EntityFieldInfo,
   EntityFieldTSType,
   EntityInfo,
   EntityPermissionType,
   EntitySaveOptions,
   IMetadataProvider,
   IRunViewProvider,
+  KeyValuePair,
   LogDebug,
   LogError,
   LogStatus,
@@ -35,12 +37,12 @@ import { httpTransport, CloudEvent, emitterFor } from 'cloudevents';
 import { RunViewGenericParams, UserPayload } from '../types.js';
 import { RunDynamicViewInput, RunViewByIDInput, RunViewByNameInput } from './RunViewResolver.js';
 import { DeleteOptionsInput } from './DeleteOptionsInput.js';
-import { MJEvent, MJEventType, MJGlobal, ENCRYPTED_SENTINEL, EscapeSQLString, IsValueEncrypted, IsOnlyTimezoneShift } from '@memberjunction/global';
+import { MJEvent, MJEventType, MJGlobal, ENCRYPTED_SENTINEL, ReplaceByteArraysWithBase64, EscapeSQLString, IsValueEncrypted, IsOnlyTimezoneShift } from '@memberjunction/global';
 import { SQLParser } from '@memberjunction/sql-parser';
 import { PostgreSQLDialect, SQLServerDialect, type SQLParserDialect } from '@memberjunction/sql-dialect';
 import { EncryptionEngine } from '@memberjunction/encryption';
-import { PUSH_STATUS_UPDATES_TOPIC, publishStatusUpdate } from './PushStatusResolver.js';
-import { CACHE_INVALIDATION_TOPIC } from './CacheInvalidationResolver.js';
+import { PUSH_STATUS_UPDATES_TOPIC, PublishStatusUpdate } from './PushStatusResolver.js';
+import { CACHE_INVALIDATION_TOPIC, MayBroadcastRecordData } from './CacheInvalidationResolver.js';
 import { PubSubManager } from './PubSubManager.js';
 import { FieldMapper } from '@memberjunction/graphql-dataprovider';
 import { Subscription } from 'rxjs';
@@ -50,7 +52,7 @@ export class ResolverBase {
   private static _cloudeventsHeaders = process.env.CLOUDEVENTS_HTTP_HEADERS ? JSON.parse(process.env.CLOUDEVENTS_HTTP_HEADERS) : {};
 
   private static _eventSubscriptionKey: string = '___MJServer___ResolverBase___EventSubscriptions';
-  private get EventSubscriptions(): Map<string, Subscription> {
+  private get eventSubscriptions(): Map<string, Subscription> {
     // here we use the global object store instead of a static member becuase in some cases based on import code paths/bundling/etc, the static member
     // could actually be duplicated and we'd end up with multiple instances of the same map, which would be bad.
     const g = MJGlobal.Instance.GetGlobalObjectStore();
@@ -97,7 +99,10 @@ export class ResolverBase {
       return null;
     }
     // Shallow copy up front so every write below lands on our object, never the caller's.
-    dataObject = { ...dataObject };
+    // Binary values are base64 strings everywhere above the providers; any byte array that still
+    // reaches a resolver (custom code, an external driver) is converted here, because GraphQL's
+    // String scalar cannot serialize a Buffer and would fail the whole response.
+    dataObject = ReplaceByteArraysWithBase64({ ...dataObject });
 
     // for the given entity name provided, check to see if there are any fields
     // where the code name is different from the field name, and for just those
@@ -564,7 +569,8 @@ export class ResolverBase {
             ? CompositeKey.FromKeyValuePairs((viewInput.AfterKey as { KeyValuePairs: { FieldName: string; Value: string }[] }).KeyValuePairs)
             : undefined,
           viewInput.BypassCache,
-          viewInput.DataSource
+          viewInput.DataSource,
+          viewInput.IncludeBinaryFields
         );
       }
       else {
@@ -608,7 +614,8 @@ export class ResolverBase {
         viewInput.Aggregates,
         undefined,
         viewInput.BypassCache,
-        viewInput.DataSource
+        viewInput.DataSource,
+        viewInput.IncludeBinaryFields
       );
     } catch (err) {
       console.log(err);
@@ -655,7 +662,8 @@ export class ResolverBase {
         viewInput.Aggregates,
         undefined,
         viewInput.BypassCache,
-        viewInput.DataSource
+        viewInput.DataSource,
+        viewInput.IncludeBinaryFields
       );
     } catch (err) {
       console.log(err);
@@ -730,6 +738,7 @@ export class ResolverBase {
           aggregates: viewInput.Aggregates,
           bypassCache: viewInput.BypassCache,
           dataSource: viewInput.DataSource,
+          includeBinaryFields: viewInput.IncludeBinaryFields,
         });
       } catch (err) {
         LogError(err);
@@ -922,6 +931,7 @@ export class ResolverBase {
     clause: string | undefined | null,
     label: string,
     provider?: IMetadataProvider,
+    user?: UserInfo,
   ): void {
     if (!clause?.trim()) return;
 
@@ -950,13 +960,85 @@ export class ResolverBase {
       const table = this.stripSqlIdent(t.TableName);
       const schema = this.stripSqlIdent(t.SchemaName);
       if (table.toLowerCase() === '__mj_clause_screen') continue;
-      const qualified = `${schema}.${table}`.toLowerCase();
-      const bare = table.toLowerCase();
-      if (allowed.qualified.has(qualified) || allowed.bare.has(bare)) continue;
+      this.assertTableRefReadable(allowed, schema, table, label, user);
+    }
+  }
+
+  /**
+   * SECURITY — screen for a FULL client-supplied SQL statement (ad-hoc query path). In addition
+   * to the SELECT-only validation the caller performs, every table reference must resolve to an
+   * entity BaseView the acting user can read UNSCOPED. CTE names defined by the statement itself
+   * are excluded from the check. Fails closed: no user, or an unresolvable reference, refuses.
+   *
+   * Entity CanRead is not unscoped base-view read authority: RunView narrows a granted read with
+   * row-level security and denied-field projection, and raw SQL applies neither. Rather than try
+   * to rewrite arbitrary SQL (joins, CTEs) to compose that policy, this refuses any entity that
+   * carries a row filter or a denied field for the caller — those reads belong on RunView. For
+   * the remaining entities CanRead genuinely means "every row and field of the view".
+   */
+  protected assertFullQueryUsesReadableEntityViews(
+    sqlText: string,
+    provider: IMetadataProvider | undefined,
+    user: UserInfo | undefined,
+    label = 'SQL',
+  ): void {
+    if (!user) {
+      throw new Error(`Invalid ${label}: no acting user resolved for ad-hoc SQL — refusing`);
+    }
+    const dialect = this.dialectForProvider(provider);
+    const parser = new SQLParser(sqlText, dialect);
+    if (!parser.IsValid || parser.HasWriteStatement || parser.StatementKind !== 'select') {
+      throw new Error(`Invalid ${label}: not a safe read-only statement — refusing under uncertainty`);
+    }
+    if (this.astContainsWriteNode(parser.AST)) {
+      throw new Error(`Invalid ${label}: write/DDL nested in a subquery is not permitted`);
+    }
+    const cteNames = new Set<string>();
+    this.collectCTENames(parser.AST, cteNames);
+    const allowed = this.entityBaseViewAllowList(provider);
+    const tables = SQLParser.ExtractTableRefs(sqlText, dialect);
+    for (const t of tables) {
+      const table = this.stripSqlIdent(t.TableName);
+      const schema = this.stripSqlIdent(t.SchemaName);
+      if (this.isUnqualifiedSchema(schema) && cteNames.has(table.toLowerCase())) continue;
+      const entity = this.assertTableRefReadable(allowed, schema, table, label, user);
+      this.assertUnscopedRead(entity, user, label);
+    }
+  }
+
+  /** Refuses an entity whose read is narrowed for this user by row-level security or field-level denials. */
+  private assertUnscopedRead(entity: EntityInfo, user: UserInfo, label: string): void {
+    if (entity.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Read, '').length > 0) {
       throw new Error(
-        `Invalid ${label}: subquery must use an entity base view, not '${schema}.${table}'`,
+        `Invalid ${label}: entity '${entity.Name}' is row-level-security filtered for you — ad-hoc SQL cannot apply that filter; use RunView`,
       );
     }
+    if (entity.GetDeniedReadFields(user).size > 0) {
+      throw new Error(
+        `Invalid ${label}: entity '${entity.Name}' has fields you are not permitted to read — ad-hoc SQL cannot project them away; use RunView`,
+      );
+    }
+  }
+
+  /** Walks a parsed AST collecting the names of CTEs the statement itself defines. */
+  private collectCTENames(node: unknown, names: Set<string>): void {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) {
+      for (const n of node) this.collectCTENames(n, names);
+      return;
+    }
+    const obj = node as Record<string, unknown>;
+    const withClause = obj.with;
+    if (Array.isArray(withClause)) {
+      for (const cte of withClause) {
+        const name = (cte as Record<string, unknown>)?.name;
+        if (typeof name === 'string') names.add(name.toLowerCase());
+        else if (name && typeof name === 'object' && typeof (name as Record<string, unknown>).value === 'string') {
+          names.add(((name as Record<string, unknown>).value as string).toLowerCase());
+        }
+      }
+    }
+    for (const v of Object.values(obj)) this.collectCTENames(v, names);
   }
 
   /**
@@ -989,10 +1071,11 @@ export class ResolverBase {
       overrideExcludeFilter?: string | null;
     },
     provider?: IMetadataProvider,
+    user?: UserInfo,
   ): void {
-    this.assertClientClauseUsesEntityBaseViews(clauses.extraFilter, 'ExtraFilter', provider);
-    this.assertClientClauseUsesEntityBaseViews(clauses.orderBy, 'OrderBy', provider);
-    this.assertClientClauseUsesEntityBaseViews(clauses.overrideExcludeFilter, 'OverrideExcludeFilter', provider);
+    this.assertClientClauseUsesEntityBaseViews(clauses.extraFilter, 'ExtraFilter', provider, user);
+    this.assertClientClauseUsesEntityBaseViews(clauses.orderBy, 'OrderBy', provider, user);
+    this.assertClientClauseUsesEntityBaseViews(clauses.overrideExcludeFilter, 'OverrideExcludeFilter', provider, user);
   }
 
   /** Same write-node walk as EDS `sqlReadOnlyScreen.astContainsWriteNode`. */
@@ -1018,26 +1101,82 @@ export class ResolverBase {
     return new SQLServerDialect();
   }
 
+  /** True for a reference with no schema — which `SQLParser.ExtractTableRefs` reports as `dbo`. */
+  private isUnqualifiedSchema(schema: string): boolean {
+    return !schema || schema.toLowerCase() === 'dbo';
+  }
+
   private stripSqlIdent(name: string | null | undefined): string {
     if (!name) return '';
     return name.replace(/^\[|\]$/g, '').replace(/^"|"$/g, '').replace(/^`|`$/g, '');
   }
 
+  /**
+   * `bare` maps an unqualified view name to its entity, or to `null` when the name exists in
+   * more than one schema — the database, not this screen, would decide which one runs.
+   */
   private entityBaseViewAllowList(provider?: IMetadataProvider): {
-    qualified: Set<string>;
-    bare: Set<string>;
+    qualified: Map<string, EntityInfo>;
+    bare: Map<string, EntityInfo | null>;
   } {
-    const qualified = new Set<string>();
-    const bare = new Set<string>();
+    const qualified = new Map<string, EntityInfo>();
+    const bare = new Map<string, EntityInfo | null>();
     const entities = provider?.Entities ?? [];
     for (const e of entities) {
       const view = this.stripSqlIdent(e.BaseView);
       if (!view) continue;
       const schema = this.stripSqlIdent(e.SchemaName);
-      bare.add(view.toLowerCase());
-      if (schema) qualified.add(`${schema}.${view}`.toLowerCase());
+      const bareKey = view.toLowerCase();
+      bare.set(bareKey, bare.has(bareKey) ? null : e);
+      if (schema) qualified.set(`${schema}.${view}`.toLowerCase(), e);
     }
     return { qualified, bare };
+  }
+
+  /**
+   * SECURITY — resolves a table reference against the entity BaseView allow-list and, when an
+   * acting user is supplied, additionally requires that user to hold CanRead on the referenced
+   * entity. Base views do not embed RLS and entity permissions are otherwise checked only on
+   * the TOP entity of a request, so without this check a subquery (or ad-hoc query) could read
+   * entities the caller has no read grant on.
+   *
+   * A schema-qualified reference must match that exact schema — `secret.vwFoo` never resolves
+   * through another schema's `vwFoo`. An unqualified reference resolves only when the view name
+   * is unique across schemas; an ambiguous one must be qualified, because the database's
+   * default-schema resolution, not this screen, would pick which view actually runs.
+   *
+   * `SQLParser.ExtractTableRefs` reports an unqualified reference as schema `dbo`, so `dbo` is
+   * indistinguishable from "no schema" here and both take the unqualified path (an exact
+   * `dbo.<view>` entity wins first).
+   */
+  private assertTableRefReadable(
+    allowed: { qualified: Map<string, EntityInfo>; bare: Map<string, EntityInfo | null> },
+    schema: string,
+    table: string,
+    label: string,
+    user?: UserInfo,
+  ): EntityInfo {
+    const qualified = allowed.qualified.get(`${schema}.${table}`.toLowerCase());
+    const entity = this.isUnqualifiedSchema(schema) ? qualified ?? allowed.bare.get(table.toLowerCase()) : qualified;
+    if (entity === null) {
+      throw new Error(
+        `Invalid ${label}: '${table}' is a base view in more than one schema — qualify it with its schema`,
+      );
+    }
+    if (!entity) {
+      throw new Error(
+        `Invalid ${label}: subquery must use an entity base view, not '${schema ? schema + '.' : ''}${table}'`,
+      );
+    }
+    if (user) {
+      const perms = entity.GetUserPermisions(user);
+      if (!perms.CanRead) {
+        throw new Error(
+          `Invalid ${label}: you do not have read permission on entity '${entity.Name}' referenced by '${schema ? schema + '.' : ''}${table}'`,
+        );
+      }
+    }
+    return entity;
   }
 
   /**
@@ -1066,22 +1205,12 @@ export class ResolverBase {
     aggregates?: AggregateExpression[],
     afterKey?: CompositeKey,
     bypassCache?: boolean,
-    dataSource?: 'Live' | 'Materialized'
+    dataSource?: 'Live' | 'Materialized',
+    includeBinaryFields?: boolean
   ) {
     try {
       if (!viewInfo || !userPayload) return null;
 
-      // SECURITY: GraphQL ExtraFilter may contain IN (SELECT … FROM <base view>).
-      // Screen at this boundary: parse, reject writes, allow only entity BaseViews.
-      this.screenClientViewClauses(
-        { extraFilter, orderBy, userSearchString, overrideExcludeFilter },
-        provider as unknown as IMetadataProvider,
-      );
-
-      // Check API key scope authorization for view operations
-      await this.CheckAPIKeyScopeAuthorization('view:run', viewInfo.Entity, userPayload);
-
-      const md = provider
       // Prefer the authenticated session's payload user — it is the authoritative per-request
       // identity and (for magic-link sessions) carries the per-session resource scope / synthesized
       // roles that drive RLS. The cached lookup is a fallback for paths where the payload user
@@ -1089,6 +1218,20 @@ export class ResolverBase {
       const user = this.GetUserFromPayload(userPayload)
         ?? UserCache.Users.find((u) => u.Email.toLowerCase().trim() === userPayload?.email.toLowerCase().trim());
       if (!user) throw new Error(`User ${userPayload?.email} not found in metadata`);
+
+      // SECURITY: GraphQL ExtraFilter may contain IN (SELECT … FROM <base view>).
+      // Screen at this boundary: parse, reject writes, allow only entity BaseViews the
+      // acting user can read (subqueries do not inherit the top entity's permission check).
+      this.screenClientViewClauses(
+        { extraFilter, orderBy, userSearchString, overrideExcludeFilter },
+        provider as unknown as IMetadataProvider,
+        user,
+      );
+
+      // Check API key scope authorization for view operations
+      await this.CheckAPIKeyScopeAuthorization('view:run', viewInfo.Entity, userPayload);
+
+      const md = provider
 
       const entityInfo = md.Entities.find((e) => e.Name === viewInfo.Entity);
       if (!entityInfo) throw new Error(`Entity ${viewInfo.Entity} not found in metadata`);
@@ -1144,6 +1287,7 @@ export class ResolverBase {
           Aggregates: aggregates,
           BypassCache: bypassCache,
           DataSource: dataSource,
+          IncludeBinaryFields: includeBinaryFields,
         },
         user
       );
@@ -1248,6 +1392,7 @@ export class ResolverBase {
             overrideExcludeFilter: param.overrideExcludeFilter,
           },
           md,
+          contextUser ?? undefined,
         );
 
         if (param.viewInfo) {
@@ -1291,6 +1436,7 @@ export class ResolverBase {
           Aggregates: param.aggregates,
           BypassCache: param.bypassCache,
           DataSource: param.dataSource,
+          IncludeBinaryFields: param.includeBinaryFields,
         });
       }
 
@@ -1449,16 +1595,24 @@ export class ResolverBase {
    * Publishes a CACHE_INVALIDATION event to connected browser clients after a successful
    * entity save or delete. Includes the originSessionId so the originating browser can
    * skip redundant re-fetches (it already handled the event locally).
+   *
+   * The row itself rides along ONLY for entities opted in via
+   * `cacheSettings.recordDataBroadcastEntities` — this event reaches every connected client
+   * unfiltered, so the row would otherwise be readable by sessions that could not read the record.
    */
   protected PublishCacheInvalidation(entityObject: BaseEntity, action: 'save' | 'delete', userPayload: UserPayload): void {
+    const entityName = entityObject.EntityInfo.Name;
     PubSubManager.Instance.Publish(CACHE_INVALIDATION_TOPIC, {
-      entityName: entityObject.EntityInfo.Name,
+      entityName,
       primaryKeyValues: JSON.stringify(entityObject.PrimaryKey.KeyValuePairs),
       action,
       sourceServerId: MJGlobal.Instance.ProcessUUID,
       timestamp: new Date(),
       originSessionId: userPayload?.sessionId || null,
-      recordData: action === 'save' ? JSON.stringify(entityObject.GetAll()) : undefined,
+      recordData:
+        action === 'save' && MayBroadcastRecordData(entityName)
+          ? JSON.stringify(entityObject.GetAll())
+          : undefined,
     });
   }
 
@@ -1471,7 +1625,7 @@ export class ResolverBase {
    * `publishStatusUpdate()` function directly with an explicit `ownerUserId`.
    */
   protected PublishStatusUpdate(pubSub: PubSubEngine, sessionId: string, message: string | undefined, userPayload: UserPayload): void {
-    publishStatusUpdate(pubSub, {
+    PublishStatusUpdate(pubSub, {
       sessionId,
       ownerUserId: userPayload?.userRecord?.ID ?? '',
       message,
@@ -1484,7 +1638,7 @@ export class ResolverBase {
     // cause issues with multiple messages for the same event.
     const uniqueKey = entityObject.EntityInfo.Name;
 
-    if (!this.EventSubscriptions.has(uniqueKey)) {
+    if (!this.eventSubscriptions.has(uniqueKey)) {
       // listen for events from the entityObject in case it is a long running task and we can push messages back to the client via pubSub
       LogDebug(`ResolverBase.ListenForEntityMessages: About to call MJGlobal.Instance.GetEventListener() to get the event listener subscription for ${uniqueKey}`);
       const theSub = MJGlobal.Instance.GetEventListener(false).subscribe(async (event: MJEvent) => {
@@ -1517,8 +1671,64 @@ export class ResolverBase {
           }
         }
       });
-      this.EventSubscriptions.set(uniqueKey, theSub);
+      this.eventSubscriptions.set(uniqueKey, theSub);
     }
+  }
+
+  /**
+   * IS-A PROMOTION over the wire: an EXISTING parent record gaining a subtype — an Animal that is
+   * now also a Dog. It arrives as the CHILD's create mutation carrying the existing parent's
+   * primary key, because in IS-A the shared key is the relationship and the child has no key of
+   * its own to mint. `NewRecord()` has just reset the whole chain to "new", so left alone the
+   * parent would save as a CREATE: a second copy of a row that already exists (a unique-constraint
+   * violation at best, a silently duplicated parent at worst).
+   *
+   * When a child create carries a complete primary key, bind the new child to the existing parent
+   * row with `AttachToParent` (#3825): it loads the parent chain, so the parent saves as an UPDATE
+   * and only the child is INSERTed. A key that matches no row leaves the fresh chain exactly as
+   * `NewRecord()` built it — the ordinary whole-chain create. A non-IS-A entity, or a create with
+   * no key, never gets past the guards.
+   *
+   * @returns true when the child was attached to an existing parent row.
+   */
+  protected async attachToExistingParentIfPromotion(entityObject: BaseEntity, input: Record<string, unknown>): Promise<boolean> {
+    if (!entityObject.EntityInfo.IsChildType) {
+      return false;
+    }
+    const key = this.primaryKeyFromInput(entityObject.EntityInfo, input);
+    if (!key) {
+      return false;
+    }
+    const attached = await entityObject.AttachToParent(key);
+    if (!attached) {
+      // No parent row under that key: this is a whole-chain create on the CALLER's key (the
+      // client mints the shared key at the root and sends it, so honoring it keeps the client's
+      // in-memory chain and the stored rows on one key). AttachToParent restored the fresh chain,
+      // but the root's ReadOnly key slot is no longer writable — a later SetMany would silently
+      // keep the server-minted value — so re-seed the chain with the supplied key explicitly.
+      entityObject.NewRecord(key);
+    }
+    return attached;
+  }
+
+  /**
+   * The entity's primary key as supplied on a mutation input, or null when any part of it is
+   * missing. Composite keys are all-or-nothing: a half-specified key identifies nothing. An empty
+   * string counts as missing, the same as null — it is never a valid key value, and a GUID or
+   * string key that is "" identifies no row, so the create proceeds as a whole-chain create rather
+   * than failing the lookup. A malformed non-empty key (e.g. a non-GUID for a uniqueidentifier)
+   * is NOT swallowed: the load throws and the mutation fails loudly.
+   */
+  protected primaryKeyFromInput(entityInfo: EntityInfo, input: Record<string, unknown>): CompositeKey | null {
+    const pairs: KeyValuePair[] = [];
+    for (const pk of entityInfo.PrimaryKeys) {
+      const value = input[pk.Name] ?? input[pk.CodeName];
+      if (value === null || value === undefined || value === '') {
+        return null;
+      }
+      pairs.push(new KeyValuePair(pk.Name, value));
+    }
+    return pairs.length > 0 ? CompositeKey.FromKeyValuePairs(pairs) : null;
   }
 
   protected async CreateRecord(entityName: string, input: any, provider: DatabaseProviderBase, userPayload: UserPayload, pubSub: PubSubEngine) {
@@ -1538,6 +1748,10 @@ export class ResolverBase {
       for (const key of Object.keys(input)) {
         if (key !== 'RestoreContext___') fieldsForSet[key] = input[key];
       }
+      // IS-A promotion: bind the new child to its EXISTING parent row BEFORE the field
+      // assignments, so values the client sent for parent fields land on the loaded parent
+      // (as an update) instead of being wiped by the load.
+      await this.attachToExistingParentIfPromotion(entityObject, fieldsForSet);
       entityObject.SetMany(fieldsForSet);
 
       // Reconstruct the client-side restore context, if any, on this server
@@ -1623,7 +1837,7 @@ export class ResolverBase {
             await this.TestAndSetClientOldValuesToDBValues(input, clientNewValues, entityObject, userInfo);
           } else {
             // no OldValues, so we can just set the new values from input
-            entityObject.SetMany(input);
+            entityObject.SetMany(clientNewValues);
           }
         } else {
           // Use a generic message to avoid leaking whether a record exists — distinguishing
@@ -1635,8 +1849,11 @@ export class ResolverBase {
       } else {
         // we get here if we are NOT tracking changes and we DO have OldValues, so we can load from them
         const oldValues = {};
-        // for each item in the oldValues array, add it to the oldValues object
-        input.OldValues___?.forEach((item) => (oldValues[item.Key] = item.Value));
+        // for each item in the oldValues array, add it to the oldValues object, typed like the field
+        input.OldValues___?.forEach((item) => {
+          const field = entityObject.EntityInfo.Fields.find((f) => f.CodeName === item.Key);
+          oldValues[item.Key] = field ? this.ClientOldValueToFieldValue(field, item.Value) : item.Value;
+        });
 
         // 1) load the old values, this will be the initial state of the object
         await entityObject.LoadFromData(oldValues);
@@ -1703,6 +1920,11 @@ export class ResolverBase {
    *
    * Ordered so the boolean flag is evaluated last: the extra load lands only on entities that have
    * the feature switched on, which is almost none of them.
+   *
+   * `MJ: Record Changes` always loads from the database: its server class allows an update only when
+   * Comments is the one dirty field, and "dirty" compared against client-supplied OldValues lets a
+   * caller pin forged audit columns as both old and new values. It doesn't track its own changes, so
+   * nothing else forces the load.
    */
   protected MustLoadTruthFromDatabase(
     entityInfo: EntityInfo,
@@ -1712,6 +1934,7 @@ export class ResolverBase {
   ): boolean {
     return (
       entityInfo.TrackRecordChanges ||
+      entityInfo.Name.trim().toLowerCase() === 'mj: record changes' ||
       !input.OldValues___ ||
       hasDeniedReadFields ||
       hasNarrowedAuditPayload ||
@@ -1849,6 +2072,41 @@ export class ResolverBase {
   }
 
   /**
+   * Converts one client-sent old value (always a string on the wire; dates as epoch milliseconds,
+   * the GraphQL Timestamp form) to the field's TypeScript type, so it compares equal to the stored
+   * value. Both the OldValues comparison and the load-from-OldValues path use it: without it a date
+   * old value becomes an Invalid Date and an unchanged date field reads as edited.
+   */
+  protected ClientOldValueToFieldValue(field: EntityFieldInfo | undefined, raw: unknown): string | number | boolean | Date | null {
+    let val: unknown = raw;
+    if ((val === null || val === undefined) && field && field.DefaultValue !== null && field.DefaultValue !== undefined && !field.AllowsNull)
+      val = field.DefaultValue; // set default value as the field was never set and it does NOT allow nulls
+    if (val === undefined) val = null;
+    // A null old value stays null, except a boolean, which the comparison has always read as false.
+    if (field?.TSType === EntityFieldTSType.Boolean && val === null) return false;
+    if (val === null) return null;
+    if (!field) {
+      // No field metadata to convert by: pass scalars through, stringify anything else.
+      return typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean' || val instanceof Date ? val : String(val);
+    }
+
+    const text = String(val);
+    switch (field.TSType) {
+      case EntityFieldTSType.Number: {
+        const integer = ['int', 'smallint', 'bigint', 'tinyint'].includes((field.Type as string).toLowerCase());
+        return integer ? parseInt(text) : parseFloat(text);
+      }
+      case EntityFieldTSType.Boolean:
+        return !(text === 'false' || text === '0' || parseInt(text) === 0);
+      case EntityFieldTSType.Date:
+        // Epoch milliseconds (the GraphQL Timestamp form) arrive as a numeric string.
+        return new Date(text.trim() !== '' && !isNaN(Number(text)) ? parseInt(text) : text);
+      default:
+        return text; // already a string
+    }
+  }
+
+  /**
    * This routine compares the OldValues property in the input object to the values in the DB that we just loaded. If there are differences, we need to check to see if the client
    * is trying to update any of those fields (e.g. overlap). If there is overlap, we throw an error. If there is no overlap, we can proceed with the update even if the DB Values
    * and the ClientOldValues are not 100% the same, so long as there is no overlap in the specific FIELDS that are different.
@@ -1862,52 +2120,7 @@ export class ResolverBase {
     input.OldValues___.forEach((item) => {
       // we need to do a quick transform on the values to make sure they match the TS Type for the given field because item.Value will always be a string
       const field = entityObject.EntityInfo.Fields.find((f) => f.CodeName === item.Key);
-      let val = item.Value;
-      if ((val === null || val === undefined) && field.DefaultValue !== null && field.DefaultValue !== undefined && !field.AllowsNull)
-        val = field.DefaultValue; // set default value as the field was never set and it does NOT allow nulls
-
-      if (field) {
-        switch (field.TSType) {
-          case EntityFieldTSType.Number:
-            if (val == null && val == undefined) {
-              val = null;
-            }
-            else {
-              let typeLowered = (field.Type as string).toLowerCase();
-
-              switch (typeLowered) {
-                case 'int':
-                case 'smallint':
-                case 'bigint':
-                case 'tinyint':
-                  val = parseInt(val);
-                  break;
-                case 'money':
-                case 'smallmoney':
-                case 'decimal':
-                case 'numeric':
-                case 'float':
-                  val = parseFloat(val);
-                  break;
-                default:
-                  val = parseFloat(val);
-                  break;
-              }
-            }
-            break;
-          case EntityFieldTSType.Boolean:
-            val = val === null || val === undefined || val === 'false' || val === '0' || parseInt(val) === 0 ? false : true;
-            break;
-          case EntityFieldTSType.Date:
-            // first, if val is a string and it is actually a number (milliseconds since epoch), convert it to a number.
-            if (val !== null && val !== undefined && val.toString().trim() !== '' && !isNaN(val)) val = parseInt(val);
-
-            val = val !== null && val !== undefined ? new Date(val) : null;
-            break;
-          default:
-            break; // already a string
-        }
-      }
+      const val = this.ClientOldValueToFieldValue(field, item.Value);
       clientOldValues[item.Key] = val;
     });
 

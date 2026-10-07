@@ -7,7 +7,7 @@ import {
     DatabasePlatform,
 } from "@memberjunction/core";
 import { MJQuerySQLEntity, MJQueryEntityExtended, MJSQLDialectEntity, QueryEngine } from "@memberjunction/core-entities";
-import { RegisterClass, MJGlobal, UUIDsEqual } from "@memberjunction/global";
+import { Float32VectorToBase64, RegisterClass, MJGlobal, UUIDsEqual } from "@memberjunction/global";
 import { EmbedTextLocalHelper } from "./util";
 import {
     RunExtractionPipeline,
@@ -43,7 +43,13 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
 
     /**
      * Generates an embedding from composite text (Name + UserQuestion + Description) for richer semantic search.
-     * Stores the vector in EmbeddingVector and the model reference in EmbeddingModelID.
+     * Stores the vector in EmbeddingVector (JSON) and EmbeddingVectorBinary (float32 bytes, base64), and the
+     * model reference in EmbeddingModelID.
+     *
+     * Same contract as `MJTagEntityServer`: when no vector comes back — empty text, an empty result or an
+     * embedder error — all three columns are cleared, so a query whose text changed never keeps a vector
+     * computed from its old text. An embedder error is logged and does not fail the save; the query simply
+     * has no semantic match until its next successful embedding.
      */
     protected async GenerateCompositeEmbedding(): Promise<void> {
         const parts = [
@@ -53,17 +59,30 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
         ].filter(p => p.trim().length > 0);
 
         if (parts.length === 0) {
-            this.EmbeddingVector = null;
-            this.EmbeddingModelID = null;
+            this.clearEmbedding();
             return;
         }
 
         const compositeText = parts.join(' | ');
-        const result = await this.EmbedTextLocal(compositeText);
-        if (result && result.vector && result.vector.length > 0) {
-            this.EmbeddingVector = JSON.stringify(result.vector);
-            this.EmbeddingModelID = result.modelID;
+        try {
+            const result = await this.EmbedTextLocal(compositeText);
+            if (result?.vector && result.vector.length > 0) {
+                this.EmbeddingVector = JSON.stringify(result.vector);
+                this.EmbeddingVectorBinary = Float32VectorToBase64(result.vector);
+                this.EmbeddingModelID = result.modelID;
+                return;
+            }
+        } catch (error) {
+            LogError(`[MJQueryEntityServer] Embedding refresh failed for query "${this.Name}": ${error instanceof Error ? error.message : String(error)}`);
         }
+        this.clearEmbedding();
+    }
+
+    /** Clears the stored vector (both forms) and the model it was computed with. */
+    private clearEmbedding(): void {
+        this.EmbeddingVector = null;
+        this.EmbeddingVectorBinary = null;
+        this.EmbeddingModelID = null;
     }
 
     // ─── Save / Delete Overrides ─────────────────────────────────────────────────
@@ -82,6 +101,7 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
                 await this.GenerateCompositeEmbedding();
             } else if (!this.Description || this.Description.trim().length === 0) {
                 this.EmbeddingVector = null;
+                this.EmbeddingVectorBinary = null;
                 this.EmbeddingModelID = null;
             }
 
@@ -128,7 +148,7 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
      * Returns the database platform of the connected database.
      * Uses the DB_PLATFORM env var (same source as MJServer's provider selection).
      */
-    private get CurrentPlatform(): DatabasePlatform {
+    private get currentPlatform(): DatabasePlatform {
         return resolveDbPlatformFromEnv() ?? 'sqlserver';
     }
 
@@ -144,7 +164,7 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
      * different dialect (e.g., T-SQL bracket identifiers on a PostgreSQL database).
      */
     private resolveExtractionSQL(): string {
-        const platform = this.CurrentPlatform;
+        const platform = this.currentPlatform;
 
         // 1. Check for a dialect-specific QuerySQL record
         const platformSQL = this.GetPlatformSQL(platform);
@@ -200,7 +220,7 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
             contextUser: this.ContextCurrentUser,
             metadataProvider: this.ProviderToUse as unknown as IMetadataProvider,
             runViewProvider: this.RunViewProviderToUse,
-            platform: this.CurrentPlatform,
+            platform: this.currentPlatform,
             parameterHints: this.ParameterHints,
         };
     }
@@ -223,7 +243,7 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
         try {
             const ctx = this.buildSyncContext();
             const pipelineResult = await RunExtractionPipeline(ctx);
-            this.UsesTemplate = pipelineResult.usesTemplate;
+            this.UsesTemplate = pipelineResult.UsesTemplate;
 
             // Save the query again to persist UsesTemplate and any changes from AI processing
             const updateResult = await super.Save();

@@ -13,6 +13,8 @@ export * from "./generic/queryResultEnricher";
 export * from "./generic/interfaces";
 export * from "./generic/scoring/ReciprocalRankFusion";
 export * from "./generic/baseEntity";
+export * from "./generic/jsonFieldBinding";
+export * from "./generic/remoteEventRow";
 export * from "./generic/entityTransactionScope";
 export * from "./generic/entityCompanion";
 export * from "./generic/entitySavePlan";
@@ -24,6 +26,7 @@ export * from "./generic/BaseEntitySaveQueue";
 export * from "./generic/EntityFieldRules";
 export * from "./generic/applicationInfo";
 export * from "./generic/providerBase";
+export * from "./generic/entityRecordNameCache";
 export * from "./generic/recordChangeFieldSecurity";
 export * from "./generic/baseRemotableOperation";
 export * from "./generic/remoteOperationDispatch";
@@ -71,6 +74,7 @@ export * from "./generic/permissionInterfaces";
 export * from "./generic/entitySubtypeResolver";
 export * from "./generic/JSONType-interfaces/IFileStorageProviderConfiguration";
 export * from "./generic/JSONType-interfaces/IEntitySubtypeSelectorConfig";
+export * from "./generic/JSONType-interfaces/IQueryConfiguration";
 
 export function SetProvider(provider) {
     Metadata.Provider = provider; // global-provider-ok: this IS the global provider setter

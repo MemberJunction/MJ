@@ -1,0 +1,32 @@
+[
+  {
+    "fields": {
+      "Name": "Job Function and Seniority Derivation",
+      "Description": "Analyzes a person's current job title and extracts normalized job functions (plural child rows) and seniority level (FK field).",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateID": "FE0A363B-4EF6-4CCA-A7E3-93E3C015F3AF",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Lowest",
+      "ParallelizationMode": "None",
+      "MaxRetries": 3,
+      "RetryDelayMS": 3000,
+      "RetryStrategy": "Exponential",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
+    },
+    "primaryKey": {
+      "ID": "7C46041F-0412-4C2E-9B9E-3ED61D32210C"
+    },
+    "sync": {
+      "lastModified": "2026-09-22T16:25:00.331Z",
+      "checksum": "8a94af86fb5dbe237d3f41622bfd24d6af137273f4ae0bb90a149f6245f59a88"
+    },
+    "deleteRecord": {
+      "delete": true,
+      "deletedAt": "2026-10-02T21:42:50.820Z"
+    }
+  }
+]

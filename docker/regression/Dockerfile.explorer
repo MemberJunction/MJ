@@ -13,7 +13,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends build-essential
 
 WORKDIR /app
 
-COPY package.json package-lock.json turbo.json tsconfig.angular.json tsconfig.server.json ./
+# The monorepo is pnpm (package.json pins packageManager). corepack ships with node 24
+# and the playwright image, so this activates the pinned pnpm without a global install.
+RUN corepack enable
+
+# pnpm workspace manifests. pnpm-workspace.yaml is load-bearing (linkWorkspacePackages,
+# onlyBuiltDependencies) and patches/ carries the type-graphql patch, so both must be
+# present before install or dependencies resolve from the registry instead of the workspace.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.angular.json tsconfig.server.json ./
+COPY patches/ ./patches/
 COPY packages/ ./packages/
 COPY metadata/ ./metadata/
 
@@ -29,7 +37,7 @@ COPY docker/regression/.docker-generated/GeneratedEntities/ ./packages/Generated
 # Bake-time helpers (gen-environment-ts.cjs lives here)
 COPY docker/regression/scripts/ ./docker/regression/scripts/
 
-RUN NODE_OPTIONS=--max-old-space-size=8192 npm install
+RUN NODE_OPTIONS=--max-old-space-size=8192 pnpm install --frozen-lockfile
 
 # Generate environment.ts — GRAPHQL_URI must be an absolute URL because
 # graphql-request v7+ validates with new URL() which rejects relative paths.
@@ -37,7 +45,7 @@ RUN NODE_OPTIONS=--max-old-space-size=8192 npm install
 RUN AUTH0_DOMAIN="$AUTH0_DOMAIN" AUTH0_CLIENTID="$AUTH0_CLIENTID" \
     node docker/regression/scripts/gen-environment-ts.cjs
 
-RUN NODE_OPTIONS=--max-old-space-size=16384 npm run build:explorer
+RUN NODE_OPTIONS=--max-old-space-size=16384 pnpm run build:explorer
 
 # ─── Stage 2: nginx serves static files + proxies GraphQL to mjapi ─────────
 FROM nginx:alpine

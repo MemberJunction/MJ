@@ -5,7 +5,8 @@ import { MJEntityDocumentEntity, MJVectorIndexEntity, MJVectorDatabaseEntity } f
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetAIAPIKey } from '@memberjunction/ai';
 import { VectorDBBase } from '@memberjunction/ai-vectordb';
-import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { AIEngine } from '@memberjunction/aiengine';
+import { EscapeSQLString, MJGlobal, UUIDsEqual } from '@memberjunction/global';
 
 /* ───── GraphQL types ───── */
 
@@ -99,7 +100,7 @@ export class FetchEntityVectorsResolver extends ResolverBase {
             const metadataFilter: Record<string, unknown> = { Entity: { $eq: entityName } };
 
             const queryResponse = await vectorDBInstance.QueryIndex({
-                id: vectorIndex.Name,  // index name (stripped before Pinecone query)
+                id: AIEngine.Instance.GetProviderIndexName(vectorIndex),
                 vector: uniformVector,
                 topK: limit,
                 includeMetadata: true,
@@ -144,7 +145,7 @@ export class FetchEntityVectorsResolver extends ResolverBase {
         const rv = new RunView();
         const result = await rv.RunView<MJEntityDocumentEntity>({
             EntityName: 'MJ: Entity Documents',
-            ExtraFilter: `ID='${entityDocumentID}'`,
+            ExtraFilter: `ID='${EscapeSQLString(entityDocumentID)}'`,
             ResultType: 'entity_object',
         }, contextUser);
 

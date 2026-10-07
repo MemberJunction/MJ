@@ -20,7 +20,7 @@ import { EntityTransactionScope } from "./entityTransactionScope";
 export class ProviderConfigDataBase<D = any> {
     private _includeSchemas: string[] = [];
     private _excludeSchemas: string[] = [];
-    private _MJCoreSchemaName: string = '__mj';
+    private _mJCoreSchemaName: string = '__mj';
     private _data: D;
     private _ignoreExistingMetadata: boolean = false;
 
@@ -31,7 +31,7 @@ export class ProviderConfigDataBase<D = any> {
         return this._includeSchemas;
     }
     public get MJCoreSchemaName(): string {
-        return this._MJCoreSchemaName;
+        return this._mJCoreSchemaName;
     }
     public get ExcludeSchemas(): string[] {
         return this._excludeSchemas;
@@ -50,7 +50,7 @@ export class ProviderConfigDataBase<D = any> {
      */
     constructor(data: D, MJCoreSchemaName: string = '__mj', includeSchemas?: string[], excludeSchemas?: string[], ignoreExistingMetadata: boolean = true) {
         this._data = data;
-        this._MJCoreSchemaName = MJCoreSchemaName;
+        this._mJCoreSchemaName = MJCoreSchemaName;
         if (includeSchemas)
             this._includeSchemas = includeSchemas;
         if (excludeSchemas)
@@ -88,6 +88,14 @@ export class PotentialDuplicate extends CompositeKey {
     ProbabilityScore: number;
     /** Full vector metadata snapshot from the vector DB (Name, Description, EntityIcon, etc.) */
     VectorMetadata?: Record<string, string>;
+    /**
+     * Optional LLM verdict for THIS candidate, set alongside the set-level
+     * {@link PotentialDuplicateResult.ReasoningRecommendation} when reasoning returned a verdict
+     * for it. Auto-merge (AutoMergeAboveAbsolute) requires this to be 'Merge' too, so a candidate
+     * is never merged on the strength of another candidate's verdict. Undefined when reasoning did
+     * not run for the set, or returned no verdict for this candidate.
+     */
+    ReasoningRecommendation?: 'Merge' | 'NotDuplicate' | 'Uncertain';
 }
 
 /**
@@ -187,9 +195,10 @@ export class PotentialDuplicateResult {
     /**
      * Optional LLM recommendation for this source record's matched set, populated only
      * when the entity has LLM reasoning enabled and the set cleared the reasoning gate.
-     * Consulted by the auto-merge step (e.g. AutoMergeAboveAbsolute additionally requires
-     * 'Merge'). Undefined means reasoning did not run for this set — the vector-only path
-     * applies, byte-for-byte unchanged.
+     * Consulted by the auto-merge step (AutoMergeAboveAbsolute additionally requires 'Merge'
+     * here AND on the candidate's own {@link PotentialDuplicate.ReasoningRecommendation}).
+     * Undefined means reasoning did not run for this set — the vector-only path applies,
+     * byte-for-byte unchanged.
      */
     ReasoningRecommendation?: 'Merge' | 'NotDuplicate' | 'Uncertain';
     /**
@@ -485,6 +494,28 @@ export class EntityMergeOptions {
 }
 
 /**
+ * Options for computing a deterministic content hash of an entity's field values.
+ */
+export interface ComputeContentHashOptions {
+    /**
+     * Explicit list of field names to include in the hash basis.
+     * When omitted, all loaded fields on the entity (and parent entity chain, if IS-A) are considered.
+     */
+    Fields?: string[];
+
+    /**
+     * Explicit list of field names to exclude from the hash basis (e.g. write-back target fields).
+     */
+    ExcludeFields?: string[];
+
+    /**
+     * Whether to exclude system columns (`__mj_` prefixed, such as `__mj_CreatedAt`, `__mj_UpdatedAt`)
+     * from the hash basis. Defaults to true.
+     */
+    ExcludeSystemFields?: boolean;
+}
+
+/**
  * Input parameters for retrieving entity record names.
  * Used for batch operations to get display names for multiple records.
  */
@@ -547,6 +578,27 @@ export interface ILocalStorageProvider {
      * implementations at compile time.
      */
     readonly SharesReferences?: boolean;
+
+    /**
+     * Whether a value written here can be read back by another process, or by this one after a
+     * restart.
+     *
+     * - `true` — the store outlives the process that wrote to it (Redis, or a browser's
+     *   localStorage / IndexedDB surviving a reload).
+     * - `false` — an in-process store whose contents die with the process.
+     *
+     * `ProviderBase` reads this before saving its metadata snapshot. That save serializes, gzips and
+     * base64-encodes the whole metadata graph, which on a large tenant is expensive enough to
+     * exhaust the heap, and an in-process store can only ever hand the result back to the heap that
+     * already holds those objects — so it is skipped. Declaring `false` therefore removes real work;
+     * declaring it wrongly on a persistent store would leave the cold-start cache unpopulated.
+     *
+     * Optional, but every in-repo provider declares it. `undefined` is treated as persistent, which
+     * is the safer default of the two: a pointless save wastes work, while a skipped necessary one
+     * breaks the cache. It is optional only so that adding this contract did not break external
+     * implementations at compile time.
+     */
+    readonly SupportsCrossProcessPersistence?: boolean;
 
     /**
      * Retrieves a value from storage. The implementation is responsible for any
@@ -819,10 +871,12 @@ export interface IMetadataProvider {
     /**
      * Returns the Name of the specific recordId for a given entityName. This is done by
      * looking for the IsNameField within the EntityFields collection for a given entity.
-     * If no IsNameField is found, but a field called "Name" exists, that value is returned. Otherwise null returned
+     * If no IsNameField is found, but a field called "Name" exists, that value is returned. Otherwise null returned.
+     * When field-level security withholds a name field from the user, the answer is the same as for a
+     * record that does not exist.
      * @param entityName
      * @param CompositeKey
-     * @param contextUser - optional user context for permissions
+     * @param contextUser - the acting user; field- and row-level security are applied for them
      * @param forceRefresh - if true, bypasses cache and fetches fresh from database
      * @returns the name of the record
      */
@@ -840,6 +894,10 @@ export interface IMetadataProvider {
     /**
      * Asynchronous lookup of a cached entity record name. Returns the cached name if available, or undefined if not cached.
      * Use this for synchronous contexts (like template rendering) where you can't await GetEntityRecordName().
+     *
+     * Only a provider that serves a single user keeps record names (the browser's `GraphQLDataProvider`).
+     * A provider shared by several users, such as a server's database provider, keeps none, so its
+     * synchronous record-name methods always answer "not cached".
      * @param entityName - The name of the entity
      * @param compositeKey - The primary key value(s) for the record
      * @param loadIfNeeded - If set to true, will load from database if not already cached
@@ -848,8 +906,26 @@ export interface IMetadataProvider {
     GetCachedRecordName(entityName: string, compositeKey: CompositeKey, loadIfNeeded?: boolean): Promise<string | undefined>;
 
     /**
-     * Stores a record name in the cache for later synchronous retrieval via GetCachedRecordName().
-     * Called automatically by BaseEntity after Load(), LoadFromData(), and Save() operations.
+     * Checks whether an entity record name is currently cached. See {@link GetCachedRecordName} for which providers cache.
+     * @param entityName - The name of the entity
+     * @param compositeKey - The primary key value(s) for the record
+     * @returns True if the record name is cached in memory, false otherwise
+     */
+    HasCachedRecordName(entityName: string, compositeKey: CompositeKey): boolean;
+
+    /**
+     * Retrieves an entity record name if already cached. See {@link GetCachedRecordName} for which providers cache.
+     * Returns undefined immediately when not cached and will NEVER initiate a database lookup.
+     * @param entityName - The name of the entity
+     * @param compositeKey - The primary key value(s) for the record
+     * @returns The cached display name, or undefined if not in cache
+     */
+    GetCachedRecordNameOnlyIfCached(entityName: string, compositeKey: CompositeKey): string | undefined;
+
+    /**
+     * Stores a record name in the cache for later synchronous retrieval via GetCachedRecordName(), on a
+     * provider that caches; ignored otherwise. Called automatically by BaseEntity after Load(),
+     * LoadFromData(), and Save() operations.
      * @param entityName - The name of the entity
      * @param compositeKey - The primary key value(s) for the record
      * @param recordName - The display name to cache

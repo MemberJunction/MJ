@@ -3,12 +3,13 @@ import {
   BaseEngine,
   BaseEnginePropertyConfig,
   IMetadataProvider,
+  LogError,
   LogStatus,
   RegisterForStartup,
   RunView,
   UserInfo,
 } from '@memberjunction/core';
-import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { Observable } from 'rxjs';
 
 /**
@@ -67,7 +68,11 @@ import {
 
 /**
  * UserInfoEngine is a singleton engine that provides centralized access to user-specific data
- * including notifications, workspaces, applications, favorites, and record logs.
+ * including notifications, workspaces, applications and favorites.
+ *
+ * Record logs (`MJ: User Record Logs`) are deliberately not cached here: a row is written every time a
+ * user opens a record, so caching them would turn every record open into a cache update in every
+ * process holding the engine. Use {@link LoadRecentRecordLogs} to query them on demand.
  *
  * This engine consolidates multiple user-related RunView calls into a single batched load,
  * improving performance and enabling local caching for faster subsequent access.
@@ -97,17 +102,16 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
   }
 
   // Private storage for entity data
-  private _UserNotifications: MJUserNotificationEntity[] = [];
-  private _Workspaces: MJWorkspaceEntity[] = [];
-  private _UserApplications: MJUserApplicationEntity[] = [];
-  private _UserFavorites: MJUserFavoriteEntity[] = [];
-  private _UserRecordLogs: MJUserRecordLogEntity[] = [];
-  private _UserSettings: MJUserSettingEntity[] = [];
+  private _userNotifications: MJUserNotificationEntity[] = [];
+  private _workspaces: MJWorkspaceEntity[] = [];
+  private _userApplications: MJUserApplicationEntity[] = [];
+  private _userFavorites: MJUserFavoriteEntity[] = [];
+  private _userSettings: MJUserSettingEntity[] = [];
 
   // Notification types (global - not user-specific)
-  private _NotificationTypes: MJUserNotificationTypeEntity[] = [];
+  private _notificationTypes: MJUserNotificationTypeEntity[] = [];
   // User notification preferences (user-specific)
-  private _UserNotificationPreferences: MJUserNotificationPreferenceEntity[] = [];
+  private _userNotificationPreferences: MJUserNotificationPreferenceEntity[] = [];
   // Application role assignments (global - not user-specific)
   private _applicationRoles: MJApplicationRoleEntity[] = [];
 
@@ -180,35 +184,35 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
       {
         Type: 'entity',
         EntityName: 'MJ: User Notifications',
-        PropertyName: '_UserNotifications',
+        PropertyName: '_userNotifications',
         CacheLocal: true,
         Filter: userFilter,
       },
       {
         Type: 'entity',
         EntityName: 'MJ: User Notification Types',
-        PropertyName: '_NotificationTypes',
+        PropertyName: '_notificationTypes',
         CacheLocal: true,
         // Global reference table — no user filter
       },
       {
         Type: 'entity',
         EntityName: 'MJ: Workspaces',
-        PropertyName: '_Workspaces',
+        PropertyName: '_workspaces',
         CacheLocal: true,
         Filter: userFilter,
       },
       {
         Type: 'entity',
         EntityName: 'MJ: User Settings',
-        PropertyName: '_UserSettings',
+        PropertyName: '_userSettings',
         CacheLocal: true,
         Filter: userFilter,
       },
       {
         Type: 'entity',
         EntityName: 'MJ: User Applications',
-        PropertyName: '_UserApplications',
+        PropertyName: '_userApplications',
         CacheLocal: true,
         Filter: userFilter,
         // Short debounce (vs the 1500ms BaseEngine default). The app switcher, the
@@ -221,21 +225,14 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
       {
         Type: 'entity',
         EntityName: 'MJ: User Favorites',
-        PropertyName: '_UserFavorites',
-        CacheLocal: true,
-        Filter: userFilter,
-      },
-      {
-        Type: 'entity',
-        EntityName: 'MJ: User Record Logs',
-        PropertyName: '_UserRecordLogs',
+        PropertyName: '_userFavorites',
         CacheLocal: true,
         Filter: userFilter,
       },
       {
         Type: 'entity',
         EntityName: 'MJ: User Notification Preferences',
-        PropertyName: '_UserNotificationPreferences',
+        PropertyName: '_userNotificationPreferences',
         CacheLocal: true,
         Filter: userFilter,
       },
@@ -264,7 +261,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    * `pipe(map(...))` — the public {@link UserNotifications} getter applies the current-user filter.
    */
   public get UserNotifications$(): Observable<MJUserNotificationEntity[]> {
-    return this.ObserveProperty<MJUserNotificationEntity>('_UserNotifications');
+    return this.ObserveProperty<MJUserNotificationEntity>('_userNotifications');
   }
 
   /**
@@ -272,7 +269,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    * and re-emits whenever the cache is mutated.
    */
   public get UserFavorites$(): Observable<MJUserFavoriteEntity[]> {
-    return this.ObserveProperty<MJUserFavoriteEntity>('_UserFavorites');
+    return this.ObserveProperty<MJUserFavoriteEntity>('_userFavorites');
   }
 
   /**
@@ -280,7 +277,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    * and re-emits whenever the cache is mutated.
    */
   public get UserApplications$(): Observable<MJUserApplicationEntity[]> {
-    return this.ObserveProperty<MJUserApplicationEntity>('_UserApplications');
+    return this.ObserveProperty<MJUserApplicationEntity>('_userApplications');
   }
 
   // ========================================================================
@@ -292,7 +289,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    */
   public get UserNotifications(): MJUserNotificationEntity[] {
     if (!this._loadedForUserId) return [];
-    return this.GetConfigData<MJUserNotificationEntity>('_UserNotifications')
+    return this.GetConfigData<MJUserNotificationEntity>('_userNotifications')
       .filter((n) => UUIDsEqual(n.UserID, this._loadedForUserId))
       .sort((a, b) => new Date(b.Get('__mj_CreatedAt')).getTime() - new Date(a.Get('__mj_CreatedAt')).getTime());
   }
@@ -302,7 +299,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    */
   public get UserSettings(): MJUserSettingEntity[] {
     if (!this._loadedForUserId) return [];
-    return this.GetConfigData<MJUserSettingEntity>('_UserSettings')
+    return this.GetConfigData<MJUserSettingEntity>('_userSettings')
       .filter((s) => UUIDsEqual(s.UserID, this._loadedForUserId));
   }
 
@@ -379,7 +376,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
         // session/device, or out-of-band) — the UPDATE matched nothing. Recover by
         // recreating the setting instead of failing the write.
         console.warn(`UserInfoEngine.SetSetting: update for '${settingKey}' matched no row — recreating`);
-        this._UserSettings = this._UserSettings.filter((s) => !UUIDsEqual(s.ID, setting!.ID));
+        this._userSettings = this._userSettings.filter((s) => !UUIDsEqual(s.ID, setting!.ID));
         setting = await md.GetEntityObject<MJUserSettingEntity>('MJ: User Settings', contextUser);
         setting.NewRecord();
         setting.UserID = userId;
@@ -389,8 +386,8 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
       }
       if (saved) {
         // If it was a new record, add to cache
-        if (!this._UserSettings.some((s) => UUIDsEqual(s.ID, setting!.ID))) {
-          this._UserSettings.push(setting);
+        if (!this._userSettings.some((s) => UUIDsEqual(s.ID, setting!.ID))) {
+          this._userSettings.push(setting);
         }
         return true;
       } else {
@@ -420,9 +417,9 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
       const deleted = await setting.Delete();
       if (deleted) {
         // Remove from cache
-        const index = this._UserSettings.findIndex((s) => UUIDsEqual(s.ID, setting.ID));
+        const index = this._userSettings.findIndex((s) => UUIDsEqual(s.ID, setting.ID));
         if (index >= 0) {
-          this._UserSettings.splice(index, 1);
+          this._userSettings.splice(index, 1);
         }
         return true;
       } else {
@@ -593,7 +590,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    */
   public get Workspaces(): MJWorkspaceEntity[] {
     if (!this._loadedForUserId) return [];
-    return this.GetConfigData<MJWorkspaceEntity>('_Workspaces')
+    return this.GetConfigData<MJWorkspaceEntity>('_workspaces')
       .filter((w) => UUIDsEqual(w.UserID, this._loadedForUserId));
   }
 
@@ -611,7 +608,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    */
   public get UserApplications(): MJUserApplicationEntity[] {
     if (!this._loadedForUserId) return [];
-    return this.GetConfigData<MJUserApplicationEntity>('_UserApplications')
+    return this.GetConfigData<MJUserApplicationEntity>('_userApplications')
       .filter((ua) => UUIDsEqual(ua.UserID, this._loadedForUserId))
       .sort((a, b) => this.compareUserApplications(a, b));
   }
@@ -648,19 +645,49 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    */
   public get UserFavorites(): MJUserFavoriteEntity[] {
     if (!this._loadedForUserId) return [];
-    return this.GetConfigData<MJUserFavoriteEntity>('_UserFavorites')
+    return this.GetConfigData<MJUserFavoriteEntity>('_userFavorites')
       .filter((f) => UUIDsEqual(f.UserID, this._loadedForUserId))
       .sort((a, b) => new Date(b.Get('__mj_CreatedAt')).getTime() - new Date(a.Get('__mj_CreatedAt')).getTime());
   }
 
   /**
-   * Get all record logs for the current user (recent record access), ordered by LatestAt (most recent first)
+   * Loads a user's most recently accessed records from `MJ: User Record Logs`, newest first.
+   *
+   * This is a query, not a cache read, and it does not require {@link Config} to have run. Record
+   * logs are written on every record open, which makes them a poor fit for an engine cache.
+   *
+   * @param maxItems - Maximum number of logs to return
+   * @param contextUser - The user whose logs to load. Required on the server; on the client it
+   *   defaults to the provider's current user.
+   * @param provider - The provider to query through; defaults to the engine's provider
+   * @returns The logs, newest first; an empty array when there is no user or the query fails
    */
-  public get UserRecordLogs(): MJUserRecordLogEntity[] {
-    if (!this._loadedForUserId) return [];
-    return this.GetConfigData<MJUserRecordLogEntity>('_UserRecordLogs')
-      .filter((r) => UUIDsEqual(r.UserID, this._loadedForUserId))
-      .sort((a, b) => new Date(b.LatestAt).getTime() - new Date(a.LatestAt).getTime());
+  public async LoadRecentRecordLogs(
+    maxItems: number,
+    contextUser?: UserInfo,
+    provider?: IMetadataProvider,
+  ): Promise<MJUserRecordLogEntity[]> {
+    const md = provider ?? this.ProviderToUse;
+    const user = contextUser ?? md.CurrentUser;
+    if (!user) {
+      return [];
+    }
+    const rv = RunView.FromMetadataProvider(md);
+    const result = await rv.RunView<MJUserRecordLogEntity>(
+      {
+        EntityName: 'MJ: User Record Logs',
+        ExtraFilter: `UserID='${EscapeSQLString(user.ID)}'`,
+        OrderBy: 'LatestAt DESC',
+        MaxRows: maxItems,
+        ResultType: 'entity_object',
+      },
+      user,
+    );
+    if (!result.Success) {
+      LogError(`UserInfoEngine: failed to load recent record logs: ${result.ErrorMessage}`);
+      return [];
+    }
+    return result.Results;
   }
 
   // ========================================================================
@@ -672,7 +699,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    * Useful for server-side admin scenarios.
    */
   public get AllNotifications(): MJUserNotificationEntity[] {
-    return this.GetConfigData<MJUserNotificationEntity>('_UserNotifications');
+    return this.GetConfigData<MJUserNotificationEntity>('_userNotifications');
   }
 
   /**
@@ -680,7 +707,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    * Useful for server-side admin scenarios.
    */
   public get AllUserApplications(): MJUserApplicationEntity[] {
-    return this.GetConfigData<MJUserApplicationEntity>('_UserApplications');
+    return this.GetConfigData<MJUserApplicationEntity>('_userApplications');
   }
 
   /**
@@ -688,7 +715,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    * @param userId - The user ID to filter by
    */
   public GetNotificationsForUser(userId: string): MJUserNotificationEntity[] {
-    return (this._UserNotifications || [])
+    return (this._userNotifications || [])
       .filter((n) => UUIDsEqual(n.UserID, userId))
       .sort((a, b) => new Date(b.Get('__mj_CreatedAt')).getTime() - new Date(a.Get('__mj_CreatedAt')).getTime());
   }
@@ -698,7 +725,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    * @param userId - The user ID to filter by
    */
   public GetUserApplicationsForUser(userId: string): MJUserApplicationEntity[] {
-    return (this._UserApplications || [])
+    return (this._userApplications || [])
       .filter((ua) => UUIDsEqual(ua.UserID, userId))
       .sort((a, b) => this.compareUserApplications(a, b));
   }
@@ -729,15 +756,6 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    */
   public GetFavoritesForEntity(entityId: string): MJUserFavoriteEntity[] {
     return this.UserFavorites.filter((f) => UUIDsEqual(f.EntityID, entityId));
-  }
-
-  /**
-   * Get recent record logs for a specific entity
-   * @param entityId - The entity ID to filter by
-   * @param maxItems - Maximum number of items to return (default: 10)
-   */
-  public GetRecentRecordsForEntity(entityId: string, maxItems: number = 10): MJUserRecordLogEntity[] {
-    return this.UserRecordLogs.filter((r) => UUIDsEqual(r.EntityID, entityId)).slice(0, maxItems);
   }
 
   /**
@@ -1056,7 +1074,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
       const saved = await userApp.Save();
       if (saved) {
         // Add to cached array
-        this._UserApplications.push(userApp);
+        this._userApplications.push(userApp);
         console.log(`UserInfoEngine.InstallApplication: Installed application ${applicationId} for user ${userId}`);
         return userApp;
       } else {
@@ -1177,15 +1195,15 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
       const deleted = await userApp.Delete();
       if (deleted) {
         // Remove from cached array
-        const index = this._UserApplications.findIndex((ua) => UUIDsEqual(ua.ApplicationID, applicationId));
+        const index = this._userApplications.findIndex((ua) => UUIDsEqual(ua.ApplicationID, applicationId));
         if (index >= 0) {
-          this._UserApplications.splice(index, 1);
+          this._userApplications.splice(index, 1);
           // The debounced BaseEngine delete handler stays silent for rows already absent
           // from the array (it can't distinguish "we spliced it" from "never matched the
           // config's Filter"), so the code that spliced must notify observers itself —
           // otherwise DataChange$ consumers (ApplicationManager → app switcher / Home)
           // never learn the app was removed.
-          const config = this.Configs.find((c) => c.PropertyName === '_UserApplications');
+          const config = this.Configs.find((c) => c.PropertyName === '_userApplications');
           if (config) {
             this.notifyAlreadyAppliedMutation(config, 'delete', userApp);
           }
@@ -1247,9 +1265,9 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
       }, contextUser ?? this.ContextUser);
 
       if (dbResult.Success && dbResult.Results.length > 0) {
-        LogStatus(`UserInfoEngine: Repaired _UserApplications from database (${dbResult.Results.length} records) — in-memory cache was empty`);
-        this._UserApplications = dbResult.Results;
-        this.emitPropertyChange('_UserApplications');
+        LogStatus(`UserInfoEngine: Repaired _userApplications from database (${dbResult.Results.length} records) — in-memory cache was empty`);
+        this._userApplications = dbResult.Results;
+        this.emitPropertyChange('_userApplications');
         return dbResult.Results;
       }
     } catch (error) {
@@ -1274,7 +1292,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
     // Verify against the database before creating — if the in-memory cache is empty
     // due to a load failure (e.g., cache timestamp bug), we'd otherwise attempt to
     // create records that already exist, hitting unique constraint violations.
-    const userAppsForUser = this._UserApplications.filter((ua) => UUIDsEqual(ua.UserID, userId));
+    const userAppsForUser = this._userApplications.filter((ua) => UUIDsEqual(ua.UserID, userId));
     if (userAppsForUser.length === 0) {
       const repaired = await this.repairUserApplicationsFromDatabase(userId, contextUser);
       if (repaired.length > 0) {
@@ -1283,7 +1301,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
     }
 
     // Get existing UserApplication records for this user to prevent duplicates
-    const existingAppIds = new Set(this._UserApplications.filter((ua) => UUIDsEqual(ua.UserID, userId)).map((ua) => ua.ApplicationID));
+    const existingAppIds = new Set(this._userApplications.filter((ua) => UUIDsEqual(ua.UserID, userId)).map((ua) => ua.ApplicationID));
 
     // Active apps flagged DefaultForNewUser, in DefaultSequence order (shared source of truth),
     // then exclude apps that already have UserApplication records for this user.
@@ -1299,7 +1317,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
     const createdUserApps: MJUserApplicationEntity[] = [];
 
     // Calculate starting sequence based on existing apps
-    const maxExistingSequence = this._UserApplications.filter((ua) => UUIDsEqual(ua.UserID, userId)).reduce((max, ua) => Math.max(max, ua.Sequence), -1);
+    const maxExistingSequence = this._userApplications.filter((ua) => UUIDsEqual(ua.UserID, userId)).reduce((max, ua) => Math.max(max, ua.Sequence), -1);
 
     for (const [index, appInfo] of defaultApps.entries()) {
       try {
@@ -1312,7 +1330,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
 
         const saved = await userApp.Save();
         if (saved) {
-          this._UserApplications.push(userApp);
+          this._userApplications.push(userApp);
           createdUserApps.push(userApp);
           console.log(`UserInfoEngine.CreateDefaultApplications: Created UserApplication for ${appInfo.Name}`);
         } else {
@@ -1331,12 +1349,12 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    */
   public get NotificationPreferences(): MJUserNotificationPreferenceEntity[] {
     if (!this._loadedForUserId) return [];
-    return this.GetConfigData<MJUserNotificationPreferenceEntity>('_UserNotificationPreferences')
+    return this.GetConfigData<MJUserNotificationPreferenceEntity>('_userNotificationPreferences')
       .filter((p) => UUIDsEqual(p.UserID, this._loadedForUserId));
   }
 
   public GetUserPreferenceForType(userId: string, typeId: string): MJUserNotificationPreferenceEntity | undefined {
-    return (this._UserNotificationPreferences || []).find((p) => UUIDsEqual(p.UserID, userId) && UUIDsEqual(p.NotificationTypeID, typeId));
+    return (this._userNotificationPreferences || []).find((p) => UUIDsEqual(p.UserID, userId) && UUIDsEqual(p.NotificationTypeID, typeId));
   }
 
   /**
@@ -1352,6 +1370,6 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    * Notification types are global (not user-specific) and define the available notification categories.
    */
   public get NotificationTypes(): MJUserNotificationTypeEntity[] {
-    return this.GetConfigData<MJUserNotificationTypeEntity>('_NotificationTypes');
+    return this.GetConfigData<MJUserNotificationTypeEntity>('_notificationTypes');
   }
 }

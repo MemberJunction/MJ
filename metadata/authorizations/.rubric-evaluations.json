@@ -1,0 +1,18 @@
+[
+  {
+    "fields": {
+      "Name": "Administer Rubric Evaluations",
+      "ParentID": null,
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Read and update every rubric evaluation and its scores. The UI role's row filter limits every other user to evaluations whose EvaluatorUserID is their own. Grant this authorization to a role when that role should see the full set without a separate unfiltered entity permission."
+    },
+    "primaryKey": {
+      "ID": "C133C07A-47D1-4599-8DE8-882B60538F50"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:02.960Z",
+      "checksum": "80e6b7765b12dd835ee93387d0e75aec2fdc876f03c9ee15e3a965f6a8fbfb13"
+    }
+  }
+]

@@ -141,10 +141,10 @@ function tryNunjucksAwareAST(sql: string, dialect: SQLParserDialect): OrderByAna
         if (!stmt) return buildNoOrderByResult(sql);
 
         const stmtRecord = stmt as unknown as Record<string, unknown>;
-        const orderByStmt = findOrderByStatement(stmtRecord);
+        const orderByStmt = FindOrderByStatement(stmtRecord);
         if (!orderByStmt) return buildNoOrderByResult(sql);
 
-        const isLegal = isOrderByLegalInCTE(orderByStmt);
+        const isLegal = IsOrderByLegalInCTE(orderByStmt);
         if (isLegal) {
             // ORDER BY is legal — find positions via scanner for completeness
             const positions = findTopLevelOrderByPositions(sql);
@@ -183,10 +183,10 @@ function buildASTAnalysis(
     stmt: Record<string, unknown>,
     sql: string,
 ): OrderByAnalysis {
-    const orderByStmt = findOrderByStatement(stmt);
+    const orderByStmt = FindOrderByStatement(stmt);
     if (!orderByStmt) return buildNoOrderByResult(sql);
 
-    const isLegal = isOrderByLegalInCTE(orderByStmt);
+    const isLegal = IsOrderByLegalInCTE(orderByStmt);
 
     // Use scanner for precise character positions
     const positions = findTopLevelOrderByPositions(sql);
@@ -278,19 +278,11 @@ function findTopLevelOrderByPositions(sql: string): number[] {
 
             if (ch === "'") { inString = true; i++; continue; }
 
-            // Skip bracket-quoted identifiers: [Order By Description] etc.
+            // Skip bracket-quoted identifiers ([Order By Description]) and double-quoted ones
+            // ("Order"), where a doubled closing character is part of the name.
             // These don't carry across MJ token boundaries in practice.
-            if (ch === '[') {
-                i++;
-                while (i < text.length && text[i] !== ']') i++;
-                if (i < text.length) i++;
-                continue;
-            }
-            // Skip double-quoted identifiers: "Order" etc.
-            if (ch === '"') {
-                i++;
-                while (i < text.length && text[i] !== '"') i++;
-                if (i < text.length) i++;
+            if (ch === '[' || ch === '"') {
+                i = skipQuotedIdentifier(text, i, ch === '[' ? ']' : '"');
                 continue;
             }
 
@@ -310,7 +302,10 @@ function findTopLevelOrderByPositions(sql: string): number[] {
 
             if (parenDepth === 0 && /^ORDER\s+BY\b/i.test(text.substring(i))) {
                 const absPos = token.start + i;
-                if (absPos === 0 || /[\s,;()\n]/.test(sql[absPos - 1])) {
+                // Any character that cannot be part of an identifier ends the previous token,
+                // including the quote that closes a literal or a quoted identifier: rendered
+                // templates can leave `'2024-01-01'ORDER BY` with no space between them.
+                if (absPos === 0 || !/[A-Za-z0-9_$@#]/.test(sql[absPos - 1])) {
                     positions.push(absPos);
                 }
             }
@@ -319,6 +314,22 @@ function findTopLevelOrderByPositions(sql: string): number[] {
     }
 
     return positions;
+}
+
+/**
+ * Index just past the quoted identifier opening at `start`, treating a doubled `close`
+ * character as part of the name.
+ */
+function skipQuotedIdentifier(text: string, start: number, close: string): number {
+    let i = start + 1;
+    while (i < text.length) {
+        if (text[i] === close) {
+            if (text[i + 1] === close) { i += 2; continue; }
+            return i + 1;
+        }
+        i++;
+    }
+    return text.length;
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -330,19 +341,24 @@ function findTopLevelOrderByPositions(sql: string): number[] {
  * that carries the ORDER BY clause. This is the single shared implementation
  * replacing the duplicated versions in both engines.
  */
-export function findOrderByStatement(stmt: Record<string, unknown>): Record<string, unknown> | null {
+export function FindOrderByStatement(stmt: Record<string, unknown>): Record<string, unknown> | null {
     if (stmt.orderby) return stmt;
-    if (stmt._next) return findOrderByStatement(stmt._next as Record<string, unknown>);
+    if (stmt._next) return FindOrderByStatement(stmt._next as Record<string, unknown>);
     return null;
+}
+
+/** @deprecated Use {@link FindOrderByStatement}. */
+export function findOrderByStatement(stmt: Record<string, unknown>): Record<string, unknown> | null {
+    return FindOrderByStatement(stmt);
 }
 
 /**
  * Checks AST properties to determine if ORDER BY is legal in a CTE context.
  * TOP, OFFSET/LIMIT, or FOR XML make ORDER BY legal inside a CTE.
  */
-export function isOrderByLegalInCTE(stmt: Record<string, unknown>): boolean {
+export function IsOrderByLegalInCTE(stmt: Record<string, unknown>): boolean {
     if (stmt.top) return true;
-    if (stmt.limit) return true;
+    if (hasLimitValue(stmt.limit)) return true;
     if (stmt.offset) return true;
 
     const forClause = stmt.for as Record<string, unknown> | null | undefined;
@@ -352,6 +368,24 @@ export function isOrderByLegalInCTE(stmt: Record<string, unknown>): boolean {
     }
 
     return false;
+}
+
+/**
+ * Whether a `limit` node carries a LIMIT / OFFSET. The PostgreSQL grammar gives every SELECT a
+ * limit node, empty (`{ value: [] }`) when the query has neither.
+ */
+function hasLimitValue(limit: unknown): boolean {
+    if (!limit) return false;
+    if (typeof limit === 'object' && 'value' in limit) {
+        const value = (limit as { value: unknown }).value;
+        return !Array.isArray(value) || value.length > 0;
+    }
+    return true;
+}
+
+/** @deprecated Use {@link IsOrderByLegalInCTE}. */
+export function isOrderByLegalInCTE(stmt: Record<string, unknown>): boolean {
+    return IsOrderByLegalInCTE(stmt);
 }
 
 // ════════════════════════════════════════════════════════════════════
