@@ -290,46 +290,59 @@ export const ClientCacheChecks: NamedCheck[] = [
         Name: 'C12: Trust=0 entities — server never caches; client slots only when the result carries a validation timestamp',
         Fn: async (ctx): Promise<void> => {
             const rv = new RunView();
-            // 'MJ: Audit Logs' has TrustServerCacheCompletely=false: the server refuses to
-            // cache it (raw-SQL inserts make event invalidation untrustworthy). Because the
-            // entity is cache-INELIGIBLE, Fields are never widened — so the response only
-            // carries a maxUpdatedAt stamp when the caller requests __mj_UpdatedAt. The
+            // 'MJ: Audit Logs' ships TrustServerCacheCompletely=false, so the server refuses to
+            // cache it (event-driven invalidation is untrustworthy for it). It also ships
+            // AllowCaching=false, which would make the client refuse every slot before the
+            // behaviour under test is reached. This check therefore enables caching on the
+            // client's IN-MEMORY metadata only, for its own duration, and restores it; the
+            // server's metadata and the database are untouched. Because the entity is
+            // cache-INELIGIBLE on the server, Fields are never widened — so the response only
+            // carries a maxUpdatedAt stamp when the caller requests __mj_UpdatedAt, and the
             // client write gate correctly refuses to store unvalidatable (stamp-less) slots.
+            const info = new Metadata().EntityByName('MJ: Audit Logs'); // global-provider-ok: integration test script — single-provider process by design
+            Assert(!!info, 'MJ: Audit Logs must exist');
+            Assert(info!.TrustServerCacheCompletely === false,
+                `precondition: TrustServerCacheCompletely=false (got ${info!.TrustServerCacheCompletely})`);
+            const originalAllowCaching = info!.AllowCaching;
+            info!.AllowCaching = true;
+            try {
+                // Narrow request WITHOUT the timestamp → no slot (defensive gate)
+                ctx.Storage.ResetCounts();
+                const narrow = await rv.RunView({
+                    EntityName: 'MJ: Audit Logs',
+                    ExtraFilter: "'tag-c12a' <> 'never'",
+                    Fields: ['ID'],
+                    MaxRows: 5,
+                    ResultType: 'simple' as const,
+                    CacheLocal: true
+                });
+                Assert(narrow.Success, `narrow failed: ${narrow.ErrorMessage}`);
+                await Sleep(300);
+                AssertEqual(ctx.Storage.SetCount('RunViewCache'), 0,
+                    'a stamp-less response must NOT be cached (it could never validate later)');
 
-            // Narrow request WITHOUT the timestamp → no slot (defensive gate)
-            ctx.Storage.ResetCounts();
-            const narrow = await rv.RunView({
-                EntityName: 'MJ: Audit Logs',
-                ExtraFilter: "'tag-c12a' <> 'never'",
-                Fields: ['ID'],
-                MaxRows: 5,
-                ResultType: 'simple' as const,
-                CacheLocal: true
-            });
-            Assert(narrow.Success, `narrow failed: ${narrow.ErrorMessage}`);
-            await Sleep(300);
-            AssertEqual(ctx.Storage.SetCount('RunViewCache'), 0,
-                'a stamp-less response must NOT be cached (it could never validate later)');
+                // Request WITH the timestamp → slot written and revalidation works
+                const params = {
+                    EntityName: 'MJ: Audit Logs',
+                    ExtraFilter: "'tag-c12b' <> 'never'",
+                    Fields: ['ID', '__mj_UpdatedAt'],
+                    MaxRows: 5,
+                    ResultType: 'simple' as const,
+                    CacheLocal: true
+                };
+                const first = await rv.RunView({ ...params });
+                Assert(first.Success, `first failed: ${first.ErrorMessage}`);
+                await Sleep(300);
+                Assert(ctx.Storage.SetCount('RunViewCache') > 0,
+                    'a stamped response must be cached (client validation is DB-checked per request, independent of Trust)');
 
-            // Request WITH the timestamp → slot written and revalidation works
-            const params = {
-                EntityName: 'MJ: Audit Logs',
-                ExtraFilter: "'tag-c12b' <> 'never'",
-                Fields: ['ID', '__mj_UpdatedAt'],
-                MaxRows: 5,
-                ResultType: 'simple' as const,
-                CacheLocal: true
-            };
-            const first = await rv.RunView({ ...params });
-            Assert(first.Success, `first failed: ${first.ErrorMessage}`);
-            await Sleep(300);
-            Assert(ctx.Storage.SetCount('RunViewCache') > 0,
-                'a stamped response must be cached (client validation is DB-checked per request, independent of Trust)');
-
-            await Sleep(5200); // outlive linger so the second call truly revalidates
-            const second = await rv.RunView({ ...params });
-            Assert(second.Success, `second failed: ${second.ErrorMessage}`);
-            AssertEqual(second.Results.length, first.Results.length, 'revalidated results must match');
+                await Sleep(5200); // outlive linger so the second call truly revalidates
+                const second = await rv.RunView({ ...params });
+                Assert(second.Success, `second failed: ${second.ErrorMessage}`);
+                AssertEqual(second.Results.length, first.Results.length, 'revalidated results must match');
+            } finally {
+                info!.AllowCaching = originalAllowCaching;
+            }
         }
     },
     {
