@@ -218,6 +218,9 @@ export class ElevenLabsRealtimeClient extends BaseRealtimeClient {
         const outputRate = ElevenLabsRealtimeClient.ParsePcmRate(formats?.agent_output_audio_format, 'output');
         const inputRate = ElevenLabsRealtimeClient.ParsePcmRate(formats?.user_input_audio_format, 'input');
         this.playback = this.createPlayback(outputRate);
+        // The agent voice plays through Web Audio only; publish it so a host recorder can mix
+        // it in (issue #5153). Null for playbacks with no output stream (fakes, no WebAudio).
+        this.publishRemoteMediaStream(this.playback.GetOutputStream?.() ?? null);
         this.micCapture = await this.createMicCapture(micStream, inputRate, (base64Pcm16) =>
             this.sendMicChunk(base64Pcm16)
         );
@@ -243,6 +246,7 @@ export class ElevenLabsRealtimeClient extends BaseRealtimeClient {
         this.micCapture = null;
         this.playback?.Close();
         this.playback = null;
+        this.clearRemoteMediaStream();
         if (this.socket) {
             try {
                 this.socket.close();

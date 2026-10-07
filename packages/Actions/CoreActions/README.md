@@ -304,6 +304,8 @@ Generate SVG charts, diagrams, and infographics using D3 and Rough.js. All produ
 
 `Create Mermaid Diagram` renders in headless Chromium, which the `playwright` dependency does not install. Install one on the host with `npx playwright install chromium`, or set `MJ_CHROMIUM_EXECUTABLE_PATH` to an existing binary. Without one the action returns `BROWSER_UNAVAILABLE`.
 
+`Create Mermaid Diagram` renders in headless Chromium, which the `playwright` dependency does not install. Install one on the host with `npx playwright install chromium`, or set `MJ_CHROMIUM_EXECUTABLE_PATH` to an existing binary. Without one the action returns `BROWSER_UNAVAILABLE`.
+
 ### Web (6 actions)
 
 Search the web, extract page content, and validate URLs.

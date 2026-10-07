@@ -54182,6 +54182,16 @@ export interface MJAIModelTypeEntity_RealtimeConfigurationSettings {
      * Reasoning plane settings — dual delegation configuration. Absent defaults to `'local'`.
      */
     Reasoning?: MJAIModelTypeEntity_RealtimeReasoningSettings | null;
+
+    /**
+     * Whether this realtime model natively supports full-duplex conversational audio
+     * (simultaneous speaking and listening with natural interruptions).
+     *
+     * When true, full-duplex models do not receive turn-taking tools or an energy-VAD floor gate,
+     * allowing the provider's native full-duplex model to handle natural turn transitions.
+     * Cascades AIModelType -> Vendor ModelDefaults -> AIModel -> AIModelVendor.
+     */
+    FullDuplex?: boolean | null;
 }
 
 /** Vision knobs. Reserved — no consumers yet. */
@@ -54664,6 +54674,16 @@ export interface MJAIModelVendorEntity_RealtimeConfigurationSettings {
      * Reasoning plane settings — dual delegation configuration. Absent defaults to `'local'`.
      */
     Reasoning?: MJAIModelVendorEntity_RealtimeReasoningSettings | null;
+
+    /**
+     * Whether this realtime model natively supports full-duplex conversational audio
+     * (simultaneous speaking and listening with natural interruptions).
+     *
+     * When true, full-duplex models do not receive turn-taking tools or an energy-VAD floor gate,
+     * allowing the provider's native full-duplex model to handle natural turn transitions.
+     * Cascades AIModelType -> Vendor ModelDefaults -> AIModel -> AIModelVendor.
+     */
+    FullDuplex?: boolean | null;
 }
 
 /** Vision knobs. Reserved — no consumers yet. */
@@ -55338,6 +55358,16 @@ export interface MJAIModelEntity_RealtimeConfigurationSettings {
      * Reasoning plane settings — dual delegation configuration. Absent defaults to `'local'`.
      */
     Reasoning?: MJAIModelEntity_RealtimeReasoningSettings | null;
+
+    /**
+     * Whether this realtime model natively supports full-duplex conversational audio
+     * (simultaneous speaking and listening with natural interruptions).
+     *
+     * When true, full-duplex models do not receive turn-taking tools or an energy-VAD floor gate,
+     * allowing the provider's native full-duplex model to handle natural turn transitions.
+     * Cascades AIModelType -> Vendor ModelDefaults -> AIModel -> AIModelVendor.
+     */
+    FullDuplex?: boolean | null;
 }
 
 /** Vision knobs. Reserved — no consumers yet. */
@@ -56704,6 +56734,16 @@ export interface MJAIPromptModelEntity_RealtimeConfigurationSettings {
      * Reasoning plane settings — dual delegation configuration. Absent defaults to `'local'`.
      */
     Reasoning?: MJAIPromptModelEntity_RealtimeReasoningSettings | null;
+
+    /**
+     * Whether this realtime model natively supports full-duplex conversational audio
+     * (simultaneous speaking and listening with natural interruptions).
+     *
+     * When true, full-duplex models do not receive turn-taking tools or an energy-VAD floor gate,
+     * allowing the provider's native full-duplex model to handle natural turn transitions.
+     * Cascades AIModelType -> Vendor ModelDefaults -> AIModel -> AIModelVendor.
+     */
+    FullDuplex?: boolean | null;
 }
 
 /** Vision knobs. Reserved — no consumers yet. */
@@ -59324,6 +59364,16 @@ export interface MJAIPromptEntity_RealtimeConfigurationSettings {
      * Reasoning plane settings — dual delegation configuration. Absent defaults to `'local'`.
      */
     Reasoning?: MJAIPromptEntity_RealtimeReasoningSettings | null;
+
+    /**
+     * Whether this realtime model natively supports full-duplex conversational audio
+     * (simultaneous speaking and listening with natural interruptions).
+     *
+     * When true, full-duplex models do not receive turn-taking tools or an energy-VAD floor gate,
+     * allowing the provider's native full-duplex model to handle natural turn transitions.
+     * Cascades AIModelType -> Vendor ModelDefaults -> AIModel -> AIModelVendor.
+     */
+    FullDuplex?: boolean | null;
 }
 
 /** Vision knobs. Reserved — no consumers yet. */
@@ -62718,6 +62768,16 @@ export interface MJAIVendorEntity_RealtimeConfigurationSettings {
      * Reasoning plane settings — dual delegation configuration. Absent defaults to `'local'`.
      */
     Reasoning?: MJAIVendorEntity_RealtimeReasoningSettings | null;
+
+    /**
+     * Whether this realtime model natively supports full-duplex conversational audio
+     * (simultaneous speaking and listening with natural interruptions).
+     *
+     * When true, full-duplex models do not receive turn-taking tools or an energy-VAD floor gate,
+     * allowing the provider's native full-duplex model to handle natural turn transitions.
+     * Cascades AIModelType -> Vendor ModelDefaults -> AIModel -> AIModelVendor.
+     */
+    FullDuplex?: boolean | null;
 }
 
 /** Vision knobs. Reserved — no consumers yet. */
