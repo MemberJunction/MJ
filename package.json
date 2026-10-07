@@ -45,8 +45,10 @@
     "packages/Lists/*",
     "packages/RecordSetProcessor/*",
     "packages/RecordCloning/*",
+    "packages/Rubrics/*",
     "packages/eSignature/*",
-    "packages/eSignature/Providers/*"
+    "packages/eSignature/Providers/*",
+    "packages/WorkQueue/*"
   ],
   "scripts": {
     "prebuild": "node -e \"try { require.resolve('turbo') } catch (e) { console.error('\\n\u274c Dependencies not installed. Run: pnpm install\\n'); process.exit(1); }\"",

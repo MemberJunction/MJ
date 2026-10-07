@@ -1,0 +1,18 @@
+.catalog-grid { width: 100%; }
+.catalog-note { display: block; color: var(--mj-text-secondary); font-size: 0.85rem; }
+.catalog-cards { display: none; }
+.catalog-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mj-space-2, 0.5rem);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md, 6px);
+  padding: var(--mj-space-3, 0.75rem);
+  background: var(--mj-bg-surface-card);
+  color: var(--mj-text-primary);
+}
+
+@media (max-width: 520px) {
+  .catalog-grid { display: none; }
+  .catalog-cards { display: flex; flex-direction: column; gap: var(--mj-space-3, 0.75rem); }
+}

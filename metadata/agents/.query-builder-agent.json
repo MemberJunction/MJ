@@ -398,6 +398,28 @@
                   "checksum": "03ec54a55a9a6428d24077811896d312d4f4ef434887e67ba35fbded0073cd8d"
                 }
               }
+            ],
+            "MJ: AI Agent Rubrics": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "RubricID": "@lookup:MJ: Rubrics.Name=Query answer",
+                  "Purpose": "Evaluation",
+                  "IsDefault": true,
+                  "Status": "Active",
+                  "EvaluatorConfig": {
+                    "EvaluatorType": "AIPrompt",
+                    "PromptName": "Rubric Judge - Query Strategist"
+                  }
+                },
+                "primaryKey": {
+                  "ID": "CC9C12E6-0381-4F87-B2EE-B7CA43C42C34"
+                },
+                "sync": {
+                  "lastModified": "2026-10-06T20:21:55.435Z",
+                  "checksum": "1c14cf7f6ff243673d48af9e168a2e6b3559c135491144171444d0a53a8082c8"
+                }
+              }
             ]
           },
           "primaryKey": {
@@ -406,6 +428,49 @@
           "sync": {
             "lastModified": "2026-06-16T01:17:22.155Z",
             "checksum": "52f1b3b936097da7463a314d31b5d523d478023a6a87ceb3c68ac8bca2356d27"
+          }
+        }
+      ],
+      "MJ: AI Agent Rubrics": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "RubricID": "@lookup:MJ: Rubrics.Name=Query answer",
+            "Purpose": "Evaluation",
+            "IsDefault": true,
+            "Status": "Active",
+            "EvaluatorConfig": {
+              "EvaluatorType": "AIPrompt",
+              "PromptName": "Rubric Judge - Query Builder"
+            }
+          },
+          "primaryKey": {
+            "ID": "0072D249-FDA6-4705-AD31-B0577552DDB1"
+          },
+          "sync": {
+            "lastModified": "2026-10-06T20:21:55.410Z",
+            "checksum": "44d431567730bbf7b94deb0319802961449f4ba7beb2959212332de49f4558bc"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "RubricID": "@lookup:MJ: Rubrics.Name=Query answer",
+            "Purpose": "ProductionSampling",
+            "IsDefault": true,
+            "Status": "Active",
+            "SampleRate": 0.02,
+            "EvaluatorConfig": {
+              "EvaluatorType": "AIPrompt",
+              "PromptName": "Rubric Judge - Query Builder"
+            }
+          },
+          "primaryKey": {
+            "ID": "51D9C17C-C780-483E-87FB-7061BA88C210"
+          },
+          "sync": {
+            "lastModified": "2026-10-06T20:21:55.421Z",
+            "checksum": "99c95f2c5abf3bd137d3da1e378861375ad245cb265234d4328bef7a1137b5a0"
           }
         }
       ]
