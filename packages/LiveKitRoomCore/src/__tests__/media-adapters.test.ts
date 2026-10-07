@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { Track, type Participant } from 'livekit-client';
-import { ToLiveKitDeviceKind, ToMediaDevice, ToMediaParticipant, ToScreenShareCaptureOptions } from '../media-adapters';
+import type { MediaVideoSource } from '@memberjunction/ai-realtime-client/media';
+import { ToLiveKitDeviceKind, ToMediaDevice, ToMediaDeviceKind, ToMediaParticipant, ToScreenShareCaptureOptions } from '../media-adapters';
 import type { LiveKitParticipantView } from '../types';
 
 /** A track that records what it was attached to and detached from. */
@@ -96,6 +97,19 @@ describe('ToMediaParticipant', () => {
         live.audioLevel = 0.7;
         expect(participant.GetAudioLevel?.()).toBe(0.7);
     });
+
+    it('shows media from outside LiveKit in place of the tracks and the level it covers', () => {
+        const raw = fakeRaw({
+            [Track.Source.Camera]: { track: new FakeTrack(), isMuted: false },
+            [Track.Source.ScreenShare]: { track: new FakeTrack(), isMuted: false },
+        });
+        const camera: MediaVideoSource = { Kind: 'stream', Stream: {} as MediaStream };
+        const participant = ToMediaParticipant(view(raw, { Media: { Video: { camera }, GetAudioLevel: () => 0.6 } }));
+        expect(participant.Video.camera).toBe(camera);
+        // A kind it does not cover still comes from LiveKit.
+        expect(participant.Video.screen?.Kind).toBe('element');
+        expect(participant.GetAudioLevel?.()).toBe(0.6);
+    });
 });
 
 describe('device mapping', () => {
@@ -106,6 +120,9 @@ describe('device mapping', () => {
         expect(ToLiveKitDeviceKind('microphone')).toBe('audioinput');
         expect(ToLiveKitDeviceKind('camera')).toBe('videoinput');
         expect(ToLiveKitDeviceKind('speaker')).toBe('audiooutput');
+        expect(ToMediaDeviceKind('audioinput')).toBe('microphone');
+        expect(ToMediaDeviceKind('videoinput')).toBe('camera');
+        expect(ToMediaDeviceKind('audiooutput')).toBe('speaker');
     });
 });
 

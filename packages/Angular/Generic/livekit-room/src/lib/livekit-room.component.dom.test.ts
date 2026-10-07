@@ -15,6 +15,9 @@ import type {
 } from '@memberjunction/ai-realtime-client/media';
 import { renderComponentFixture, query, queryAll, text, overlayQueryAll, clearOverlayContainers } from '@memberjunction/ng-test-utils';
 import {
+  LIVEKIT_PREVIEW_PEOPLE,
+  LIVEKIT_PREVIEW_ROOM_NAME,
+  LiveKitPreviewRoomController,
   LiveKitRoomController,
   LiveKitRoomEventBus,
   type ILiveKitRoomController,
@@ -754,54 +757,63 @@ describe('LiveKitRoomComponent (DOM, fake controller)', () => {
     });
   });
 
+  /** A camera and microphone the test drives; its devices appear on the first listing. It records into `log`. */
+  class FakeMedia implements ILocalMediaController {
+    private readonly state = new BehaviorSubject<LocalMediaState>({ Camera: { Status: 'off' }, Microphone: { Status: 'off' }, Devices: [] });
+    private readonly stream = (id: string) => ({ id, getTracks: () => [], getAudioTracks: () => [] }) as unknown as MediaStream;
+    constructor(private readonly log: string[]) {}
+    public get State() {
+      return this.state.value;
+    }
+    public get State$() {
+      return this.state.asObservable();
+    }
+    public GetStream(): MediaStream | null {
+      return null;
+    }
+    public async RefreshDevices(): Promise<MediaDevice[]> {
+      const devices: MediaDevice[] = [
+        { DeviceID: 'mic-1', Kind: 'microphone', Label: 'Microphone', GroupID: 'g1' },
+        { DeviceID: 'cam-1', Kind: 'camera', Label: 'Camera 1', GroupID: 'g1' },
+        { DeviceID: 'cam-2', Kind: 'camera', Label: 'Camera 2', GroupID: 'g2' },
+      ];
+      this.log.push('list');
+      this.state.next({ ...this.state.value, Devices: devices });
+      return devices;
+    }
+    public async Start(kind: LocalMediaKind, deviceId?: string): Promise<LocalMediaResult> {
+      this.log.push(`start ${kind}${deviceId ? ' ' + deviceId : ''}`);
+      this.set(kind, { Status: 'on', DeviceID: deviceId ?? (kind === 'camera' ? 'cam-1' : 'mic-1') });
+      return { Status: 'started', Stream: this.stream(kind) };
+    }
+    public async SwitchDevice(kind: LocalMediaKind, deviceId: string): Promise<LocalMediaResult> {
+      this.log.push(`switch ${kind} ${deviceId}`);
+      this.set(kind, { Status: 'on', DeviceID: deviceId });
+      return { Status: 'started', Stream: this.stream(kind) };
+    }
+    public Stop(kind: LocalMediaKind): void {
+      this.log.push(`stop ${kind}`);
+      this.set(kind, { Status: 'off' });
+    }
+    public Dispose(): void {
+      this.log.push('release devices');
+    }
+    private set(kind: LocalMediaKind, track: LocalTrackState): void {
+      this.state.next(kind === 'camera' ? { ...this.state.value, Camera: track } : { ...this.state.value, Microphone: track });
+    }
+  }
+
+  /** Lets devices start (promises outside Angular's view of pending work), then renders. */
+  const settle = async (f: ReturnType<typeof render>) => {
+    for (let i = 0; i < 4; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    f.detectChanges();
+  };
+
   describe('the lobby', () => {
     /** Everything the lobby's devices and the room's connection did, in order. */
     let log: string[];
-    /** A camera and microphone the test drives; its devices appear on the first listing. */
-    class FakeMedia implements ILocalMediaController {
-      private readonly state = new BehaviorSubject<LocalMediaState>({ Camera: { Status: 'off' }, Microphone: { Status: 'off' }, Devices: [] });
-      private readonly stream = (id: string) => ({ id, getTracks: () => [], getAudioTracks: () => [] }) as unknown as MediaStream;
-      public get State() {
-        return this.state.value;
-      }
-      public get State$() {
-        return this.state.asObservable();
-      }
-      public GetStream(): MediaStream | null {
-        return null;
-      }
-      public async RefreshDevices(): Promise<MediaDevice[]> {
-        const devices: MediaDevice[] = [
-          { DeviceID: 'mic-1', Kind: 'microphone', Label: 'Microphone', GroupID: 'g1' },
-          { DeviceID: 'cam-1', Kind: 'camera', Label: 'Camera 1', GroupID: 'g1' },
-          { DeviceID: 'cam-2', Kind: 'camera', Label: 'Camera 2', GroupID: 'g2' },
-        ];
-        log.push('list');
-        this.state.next({ ...this.state.value, Devices: devices });
-        return devices;
-      }
-      public async Start(kind: LocalMediaKind, deviceId?: string): Promise<LocalMediaResult> {
-        log.push(`start ${kind}${deviceId ? ' ' + deviceId : ''}`);
-        this.set(kind, { Status: 'on', DeviceID: deviceId ?? (kind === 'camera' ? 'cam-1' : 'mic-1') });
-        return { Status: 'started', Stream: this.stream(kind) };
-      }
-      public async SwitchDevice(kind: LocalMediaKind, deviceId: string): Promise<LocalMediaResult> {
-        log.push(`switch ${kind} ${deviceId}`);
-        this.set(kind, { Status: 'on', DeviceID: deviceId });
-        return { Status: 'started', Stream: this.stream(kind) };
-      }
-      public Stop(kind: LocalMediaKind): void {
-        log.push(`stop ${kind}`);
-        this.set(kind, { Status: 'off' });
-      }
-      public Dispose(): void {
-        log.push('release devices');
-      }
-      private set(kind: LocalMediaKind, track: LocalTrackState): void {
-        this.state.next(kind === 'camera' ? { ...this.state.value, Camera: track } : { ...this.state.value, Microphone: track });
-      }
-    }
-
     let made: number;
     const renderLobby = (inputs: Record<string, unknown> = {}) => {
       log = [];
@@ -818,7 +830,7 @@ describe('LiveKitRoomComponent (DOM, fake controller)', () => {
             provide: LOCAL_MEDIA_CONTROLLER_FACTORY,
             useValue: () => {
               made++;
-              return new FakeMedia();
+              return new FakeMedia(log);
             },
           },
         ],
@@ -827,13 +839,6 @@ describe('LiveKitRoomComponent (DOM, fake controller)', () => {
       return { f, fc };
     };
     const checkOf = (f: ReturnType<typeof render>) => f.debugElement.query(By.directive(CameraCheckComponent))?.componentInstance as CameraCheckComponent | undefined;
-    /** Lets the lobby's devices start (promises outside Angular's view of pending work), then renders. */
-    const settle = async (f: ReturnType<typeof render>) => {
-      for (let i = 0; i < 4; i++) {
-        await new Promise((resolve) => setTimeout(resolve, 0));
-      }
-      f.detectChanges();
-    };
     // jsdom does not play media: a stream source's <video> calls play(), and pause() when it lets go.
     beforeEach(() => {
       vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
@@ -921,5 +926,40 @@ describe('LiveKitRoomComponent (DOM, fake controller)', () => {
 
     expect(query(f, 'mj-connection-overlay')).toBeNull();
     expect(text(f, '.lk-room__title')).toContain('Standup');
+  });
+
+  describe('on the preview controller', () => {
+    // jsdom does not play media: a stream source's <video> calls play(), and pause() when it lets go.
+    beforeEach(() => {
+      vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
+      vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => undefined);
+    });
+
+    /** The room on the preview controller with fake devices: it joins with no server, then renders. */
+    const renderPreview = async (inputs: Record<string, unknown> = {}) => {
+      const log: string[] = [];
+      const controller = new LiveKitPreviewRoomController({ LocalMedia: () => new FakeMedia(log), MeterFor: () => null });
+      const f = renderComponentFixture(LiveKitRoomComponent, {
+        providers: [{ provide: LIVEKIT_ROOM_CONTROLLER_FACTORY, useValue: () => controller }],
+        inputs: { ServerUrl: 'preview://local', Token: 'preview', ShowPreJoin: false, DisplayName: 'Grace', ...inputs },
+      });
+      await settle(f);
+      return { f, log };
+    };
+
+    it('joins with no server: you, with your own camera, and the simulated people, the first one speaking', async () => {
+      const { f, log } = await renderPreview({ StartWithCamera: true });
+      expect(log).toEqual(['start microphone', 'start camera', 'list']);
+      expect(text(f, '.lk-room__title')).toContain(LIVEKIT_PREVIEW_ROOM_NAME);
+      expect((query(f, 'mj-self-view video') as HTMLVideoElement | null)?.srcObject).toMatchObject({ id: 'camera' });
+      expect(names(f, '.lk-room__grid')).toEqual(['Grace', ...LIVEKIT_PREVIEW_PEOPLE.map((p) => p.DisplayName)]);
+      expect(names(f, '.lk-room__grid .tile--speaking')).toEqual([LIVEKIT_PREVIEW_PEOPLE[0].DisplayName]);
+    });
+
+    it('frees your devices when the room goes away', async () => {
+      const { f, log } = await renderPreview();
+      f.destroy();
+      expect(log).toContain('release devices');
+    });
   });
 });

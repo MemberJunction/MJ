@@ -11,7 +11,7 @@
  */
 
 import type { Participant, RoomOptions, Track } from 'livekit-client';
-import type { CapturedDisplaySurface } from '@memberjunction/ai-realtime-client/media';
+import type { CapturedDisplaySurface, MediaParticipant } from '@memberjunction/ai-realtime-client/media';
 
 /**
  * The connection lifecycle of a LiveKit room as the core normalizes it. Maps the livekit-client
@@ -47,6 +47,12 @@ export interface LiveKitE2EEOptions {
 }
 
 /**
+ * A participant's media from outside LiveKit, in the `/media` vocabulary: videos by kind, and a level reader. The
+ * preview room's camera, screen share and levels come this way, since nothing there passes through LiveKit.
+ */
+export type LiveKitParticipantMedia = Partial<Pick<MediaParticipant, 'Video' | 'GetAudioLevel'>>;
+
+/**
  * A normalized view of one room participant. This is what a UI grid renders — one tile per view.
  * {@link Raw} is included so the UI can attach the participant's video/audio tracks to DOM elements.
  */
@@ -74,9 +80,15 @@ export interface LiveKitParticipantView {
   /**
    * The underlying livekit-client participant, exposed ONLY so a UI layer can attach media tracks
    * (`view.Raw.getTrackPublication(...)?.track?.attach(el)`). Do not mutate it directly — drive the
-   * room through {@link import('./livekit-room-controller').LiveKitRoomController} instead.
+   * room through its controller ({@link import('./livekit-room-controller').ILiveKitRoomController}) instead.
    */
   Raw: Participant;
+  /**
+   * Media from outside LiveKit, which `ToMediaParticipant` shows in place of {@link Raw}'s tracks and level: a
+   * video of a kind here replaces that kind's track, and a level reader replaces `Raw.audioLevel`. Absent for a
+   * participant whose media comes through LiveKit.
+   */
+  Media?: LiveKitParticipantMedia;
 }
 
 /** A message received on the LiveKit data channel (the room-native "chat" / app payload). */

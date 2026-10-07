@@ -27,7 +27,15 @@ export {
 } from './audio-meter';
 
 export { LiveKitMediaPreview } from './livekit-preview';
-export { ToMediaParticipant, ToMediaDevice, ToLiveKitDeviceKind, ToScreenShareCaptureOptions } from './media-adapters';
+export { ToMediaParticipant, ToMediaDevice, ToMediaDeviceKind, ToLiveKitDeviceKind, ToScreenShareCaptureOptions } from './media-adapters';
+export {
+  LiveKitPreviewRoomController,
+  LIVEKIT_PREVIEW_PEOPLE,
+  LIVEKIT_PREVIEW_ROOM_NAME,
+  LIVEKIT_PREVIEW_LOCAL_IDENTITY,
+  type LiveKitPreviewPerson,
+  type LiveKitPreviewRoomOptions,
+} from './livekit-preview-room-controller';
 export { ApplyNoiseFilter, applyNoiseFilter, ApplyBackgroundEffect, applyBackgroundEffect } from './livekit-effects';
 
 export {
@@ -52,6 +60,7 @@ export type {
   LiveKitParticipantRole,
   LiveKitTrackKind,
   LiveKitParticipantView,
+  LiveKitParticipantMedia,
   LiveKitDataMessage,
   LiveKitRoomError,
   LiveKitLocalMediaState,

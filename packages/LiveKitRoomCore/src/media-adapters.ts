@@ -45,7 +45,8 @@ const DISPLAY_SURFACES: Record<DisplayCaptureSurface, LiveKitDisplaySurface> = {
 
 /**
  * A LiveKit participant as a `/media` participant. The camera and the shared screen become element sources,
- * absent while unpublished or muted; the tile prefers the screen while one is shared, as the LiveKit tile did.
+ * absent while unpublished or muted; the tile prefers the screen while one is shared, as the LiveKit tile did. Media
+ * the view carries from outside LiveKit (`Media`) replaces the tracks and level it covers.
  */
 export function ToMediaParticipant(view: LiveKitParticipantView): MediaParticipant {
     let participant = participants.get(view);
@@ -58,7 +59,12 @@ export function ToMediaParticipant(view: LiveKitParticipantView): MediaParticipa
 
 /** A LiveKit device as a `/media` device. LiveKit does not report device groups. */
 export function ToMediaDevice(device: LiveKitDevice): MediaDevice {
-    return { DeviceID: device.DeviceId, Kind: DEVICE_KINDS[device.Kind], Label: device.Label, GroupID: '' };
+    return { DeviceID: device.DeviceId, Kind: ToMediaDeviceKind(device.Kind), Label: device.Label, GroupID: '' };
+}
+
+/** The `/media` device kind for a LiveKit one. */
+export function ToMediaDeviceKind(kind: LiveKitDevice['Kind']): MediaDeviceKind {
+    return DEVICE_KINDS[kind];
 }
 
 /** The LiveKit device kind for a `/media` one, for handing a device-menu choice back to the controller. */
@@ -91,12 +97,12 @@ function buildMediaParticipant(view: LiveKitParticipantView): MediaParticipant {
         DisplayName: view.DisplayName,
         Role: view.IsLocal ? 'self' : view.Role,
         IsSpeaking: view.IsSpeaking,
-        Video: { ...(camera ? { camera } : {}), ...(screen ? { screen } : {}) },
+        Video: { ...(camera ? { camera } : {}), ...(screen ? { screen } : {}), ...view.Media?.Video },
         PreferredVideo: view.IsScreenSharing ? 'screen' : 'camera',
         IsMuted: !view.HasAudio,
         ConnectionQuality: view.ConnectionQuality,
         // The live level, not the view's snapshot: a meter reads it on every frame.
-        GetAudioLevel: () => raw.audioLevel,
+        GetAudioLevel: view.Media?.GetAudioLevel ?? (() => raw.audioLevel),
     };
 }
 
