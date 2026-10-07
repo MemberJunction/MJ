@@ -144,7 +144,7 @@ describe('LiveKitRoomComponent (DOM, fake controller)', () => {
         Raw: { audioLevel: 0, getTrackPublication: () => undefined },
         ...over,
       }) as unknown as LiveKitParticipantView;
-    const fc = makeFakeController(makeState({ Status: 'connected', Remote: [remote('sharer', { IsScreenSharing: true }), remote('talker'), remote('listener')] }));
+    const fc = makeFakeController(makeState({ Status: 'connected', Remote: [view('sharer', { Sharing: true }), remote('talker'), remote('listener')] }));
     const f = render(fc.controller, { Layout: 'split', ShowAudioMeters: false });
     expect(queryAll(f, 'mj-media-tile')).toHaveLength(2);
     expect(queryAll(f, 'mj-livekit-participant-audio')).toHaveLength(3);
@@ -253,6 +253,99 @@ describe('LiveKitRoomComponent (DOM, fake controller)', () => {
       const [sharePane, speakerPane] = queryAll(f, '.lk-room__split-pane');
       expect(sharePane.querySelector('mj-share-preview')).not.toBeNull();
       expect(speakerPane.querySelector('mj-media-tile')).not.toBeNull();
+    });
+  });
+
+  describe('the layouts', () => {
+    /** A participant who may be the agent, may be speaking, and may share a screen. */
+    const person = (identity: string, over: { Local?: boolean; Agent?: boolean; Speaking?: boolean; Sharing?: boolean } = {}): LiveKitParticipantView => ({
+      ...view(identity, { Local: over.Local, Sharing: over.Sharing }),
+      Role: over.Agent ? 'agent' : 'participant',
+      IsSpeaking: over.Speaking ?? false,
+    }) as LiveKitParticipantView;
+
+    /** The names on the tiles inside the matching containers, in order (an agent's "AI" badge left off). */
+    const names = (f: ReturnType<typeof render>, selector: string): string[] =>
+      queryAll(f, `${selector} .tile__name`).map((name) => (name.textContent ?? '').trim().split(/\s+/)[0]);
+
+    const room = (remote: LiveKitParticipantView[], over: Partial<LiveKitRoomState> = {}) =>
+      makeFakeController(makeState({ Status: 'connected', Local: person('you', { Local: true }), Remote: remote, ...over }));
+
+    it('Active speaker: the remote who speaks has the spotlight, and the filmstrip has everyone else, the user first', () => {
+      const fc = room([person('ada', { Speaking: true }), person('sage', { Agent: true })]);
+      const f = render(fc.controller, { Layout: 'spotlight' });
+      expect(names(f, '.lk-room__spotlight')).toEqual(['ada']);
+      expect(names(f, '.lk-room__filmstrip-tile')).toEqual(['you', 'sage']);
+    });
+
+    it("Active speaker: the platform's speaker list comes first, never the user", () => {
+      const fc = room([person('ada'), person('sage', { Agent: true })], { ActiveSpeakerIdentities: ['you', 'ada'] });
+      const f = render(fc.controller, { Layout: 'spotlight' });
+      expect(names(f, '.lk-room__spotlight')).toEqual(['ada']);
+    });
+
+    it('Active speaker: with nobody speaking the agent has the spotlight, a pin wins, and no pin without pinning', () => {
+      const fc = room([person('ada'), person('sage', { Agent: true })]);
+      const f = render(fc.controller, { Layout: 'spotlight' });
+      expect(names(f, '.lk-room__spotlight')).toEqual(['sage']);
+      const ada = queryAll(f, '.lk-room__filmstrip-tile').find((tile) => tile.querySelector('.tile__name')?.textContent?.trim() === 'ada');
+      (ada?.querySelector('.tile__pin') as HTMLButtonElement).click();
+      f.detectChanges();
+      expect(names(f, '.lk-room__spotlight')).toEqual(['ada']);
+      expect(names(f, '.lk-room__filmstrip-tile')).toEqual(['you', 'sage']);
+      f.componentRef.setInput('EnablePinning', false);
+      f.detectChanges();
+      expect(names(f, '.lk-room__spotlight')).toEqual(['sage']);
+    });
+
+    it('Active speaker: the user alone has the spotlight', () => {
+      const f = render(room([]).controller, { Layout: 'spotlight' });
+      expect(names(f, '.lk-room__spotlight')).toEqual(['you']);
+    });
+
+    it('Active speaker: the filmstrip leaves out the self-view when the host turns it off', () => {
+      const f = render(room([person('ada'), person('sage', { Agent: true })]).controller, { Layout: 'spotlight', ShowSelfView: false });
+      expect(names(f, '.lk-room__filmstrip-tile')).toEqual(['ada']);
+    });
+
+    it('Active speaker: follows the room as it changes, a new speaker taking the spotlight', () => {
+      const fc = room([person('ada'), person('sage', { Agent: true })]);
+      const f = render(fc.controller, { Layout: 'spotlight' });
+      expect(names(f, '.lk-room__spotlight')).toEqual(['sage']);
+      fc.emitState(makeState({ Status: 'connected', Local: person('you', { Local: true }), Remote: [person('ada', { Speaking: true }), person('sage', { Agent: true })] }));
+      f.detectChanges();
+      expect(names(f, '.lk-room__spotlight')).toEqual(['ada']);
+    });
+
+    it('Gallery: everyone, the user first, and the others once the user hides their self-view', () => {
+      const f = render(room([person('ada', { Speaking: true }), person('sage', { Agent: true })]).controller, { Layout: 'grid' });
+      expect(names(f, '.lk-room__grid-tile')).toEqual(['you', 'ada', 'sage']);
+      (query(f, 'mj-self-view button.self__hide') as HTMLButtonElement).click();
+      f.detectChanges();
+      expect(names(f, '.lk-room__grid-tile')).toEqual(['ada', 'sage']);
+    });
+
+    it('Split view: the shared screen beside the speaker, who is never the sharer', () => {
+      const fc = room([person('ada', { Sharing: true, Speaking: true }), person('sage', { Agent: true })], { ActiveSpeakerIdentities: ['ada'] });
+      const f = render(fc.controller, { Layout: 'split', ShowAudioMeters: false });
+      const [sharePane, speakerPane] = queryAll(f, '.lk-room__split-pane');
+      expect(sharePane.querySelector('.tile__name')?.textContent?.trim()).toBe('ada');
+      expect(speakerPane.querySelector('.tile__name')?.textContent?.trim().split(/\s+/)[0]).toBe('sage');
+    });
+
+    it("Split view: a share whose screen track has not arrived yet shows no screen, and the sharer can be the speaker", () => {
+      const announced = { ...person('ada', { Speaking: true }), IsScreenSharing: true } as LiveKitParticipantView;
+      const f = render(room([announced, person('sage', { Agent: true })], { ActiveSpeakerIdentities: ['ada'] }).controller, { Layout: 'split', ShowAudioMeters: false });
+      const [sharePane, speakerPane] = queryAll(f, '.lk-room__split-pane');
+      expect(sharePane.querySelector('mj-empty-state')).not.toBeNull();
+      expect(speakerPane.querySelector('.tile__name')?.textContent?.trim()).toBe('ada');
+    });
+
+    it('Split view: with nobody sharing, an empty screen pane beside the speaker', () => {
+      const f = render(room([person('ada'), person('sage', { Agent: true, Speaking: true })]).controller, { Layout: 'split', ShowAudioMeters: false });
+      const [sharePane, speakerPane] = queryAll(f, '.lk-room__split-pane');
+      expect(sharePane.querySelector('mj-empty-state')).not.toBeNull();
+      expect(speakerPane.querySelector('.tile__name')?.textContent?.trim().split(/\s+/)[0]).toBe('sage');
     });
   });
 

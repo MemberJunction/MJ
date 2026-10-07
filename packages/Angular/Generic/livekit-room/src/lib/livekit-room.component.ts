@@ -45,12 +45,17 @@ import {
   SelfViewComponent,
   SharePreviewComponent,
 } from '@memberjunction/ng-realtime-media';
-import type {
-  DisplayCaptureSurface,
-  MediaDevice,
-  MediaDeviceSelection,
-  MediaParticipant,
-  MediaVideoSource,
+import {
+  LayoutMediaStage,
+  SelectDisplayParticipants,
+  SelectScreenSharer,
+  SelectSplitSpeaker,
+  type DisplayCaptureSurface,
+  type MediaDevice,
+  type MediaDeviceSelection,
+  type MediaParticipant,
+  type MediaStageLayout,
+  type MediaVideoSource,
 } from '@memberjunction/ai-realtime-client/media';
 import { LiveKitControlBarComponent } from './components/livekit-control-bar.component';
 import { LiveKitChatPanelComponent } from './components/livekit-chat-panel.component';
@@ -61,16 +66,7 @@ import type { LiveKitAgentVisualState } from './components/livekit-agent-state.c
 import { LiveKitWhiteboardSurfaceComponent } from './components/livekit-whiteboard-surface.component';
 import { MJButtonDirective, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { LiveKitRoomTileDirective } from './livekit-room-tile.directive';
-import {
-  DeriveAgentState,
-  IsAgentVisualState,
-  SelectAllParticipants,
-  SelectDisplayParticipants,
-  SelectFilmstrip,
-  SelectScreenShare,
-  SelectSplitSpeaker,
-  SelectSpotlight,
-} from './livekit-room-logic';
+import { DeriveAgentState, IsAgentVisualState, SelectAllParticipants } from './livekit-room-logic';
 import {
   LIVEKIT_CHAT_TOPIC,
   LIVEKIT_AGENT_STATE_TOPIC,
@@ -712,7 +708,8 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
 
   /** The participants to render on the stage (local included unless the host or the user turned the self-view off). */
   public get DisplayParticipants(): LiveKitParticipantView[] {
-    return SelectDisplayParticipants(this.State, this.ShowSelfView && !this.SelfViewHidden);
+    const stage = this.stage;
+    return stage.Shown.map((p) => stage.ViewOf(p));
   }
 
   /** Whether the "Self-view hidden" chip shows: the host allows a self-view and the user hid theirs. */
@@ -733,7 +730,9 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
 
   /** The participant featured in spotlight layout (pinned → active speaker → agent → first remote → local). */
   public get SpotlightParticipant(): LiveKitParticipantView | null {
-    return SelectSpotlight(this.State, this.PinnedIdentity, this.EnablePinning);
+    const stage = this.stage;
+    const spotlight = stage.Layout.Stage;
+    return spotlight?.Kind === 'participant' ? stage.ViewOf(spotlight.Participant) : null;
   }
 
   /**
@@ -748,12 +747,14 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
 
   /** The participant currently sharing their screen (for split view), if any. */
   public get ScreenShareParticipant(): LiveKitParticipantView | null {
-    return SelectScreenShare(this.AllParticipants);
+    const stage = this.stage;
+    return stage.Sharer ? stage.ViewOf(stage.Sharer) : null;
   }
 
   /** The "speaker" pane participant for split view (active speaker → agent → first remote → local). */
   public get SplitSpeakerParticipant(): LiveKitParticipantView | null {
-    return SelectSplitSpeaker(this.State);
+    const stage = this.stage;
+    return stage.SplitSpeaker ? stage.ViewOf(stage.SplitSpeaker) : null;
   }
 
   /** The agent's visual state: an explicit data-channel signal wins, else derived from speaking activity. */
@@ -763,8 +764,29 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
 
   /** The non-spotlight participants for the spotlight-layout filmstrip. */
   public get FilmstripParticipants(): LiveKitParticipantView[] {
-    return SelectFilmstrip(this.DisplayParticipants, this.SpotlightParticipant);
+    const stage = this.stage;
+    return stage.Layout.Others.map((p) => stage.ViewOf(p));
   }
+
+  /**
+   * The room laid out by the shared media stage (`LayoutMediaStage`), as the realtime call is: the spotlight and
+   * the participants beside it, with what split view and the grid show. Worked out once per room state, pin and
+   * self-view setting.
+   */
+  private get stage(): RoomStage {
+    const pinned = this.EnablePinning ? this.PinnedIdentity : null;
+    const showSelf = this.ShowSelfView && !this.SelfViewHidden;
+    const memo = this.stageMemo;
+    if (memo && memo.State === this.State && memo.Pinned === pinned && memo.ShowSelf === showSelf) {
+      return memo.Stage;
+    }
+    const stage = layOutRoom(this.State, (view) => this.MediaParticipantFor(view), pinned, showSelf);
+    this.stageMemo = { State: this.State, Pinned: pinned, ShowSelf: showSelf, Stage: stage };
+    return stage;
+  }
+
+  /** The last {@link stage}, and what it was worked out from. */
+  private stageMemo: { State: LiveKitRoomState; Pinned: string | null; ShowSelf: boolean; Stage: RoomStage } | null = null;
 
   /** Whether the room is connected. */
   public get IsConnected(): boolean {
@@ -930,4 +952,38 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
       this.cdr.markForCheck();
     });
   }
+}
+
+/** A room laid out by the shared media stage, with the way back from each participant to its LiveKit view. */
+interface RoomStage {
+  /** The spotlight and the participants beside it. */
+  Layout: MediaStageLayout;
+  /** Everyone the grid shows: the user first, unless the self-view is off. */
+  Shown: MediaParticipant[];
+  /** The first participant sharing a screen. */
+  Sharer: MediaParticipant | null;
+  /** Split view's speaker pane, which shows a speaker even while nobody shares. */
+  SplitSpeaker: MediaParticipant | null;
+  /** The LiveKit view a participant came from. */
+  ViewOf(participant: MediaParticipant): LiveKitParticipantView;
+}
+
+/** Lays out a room's participants with the shared media stage. */
+function layOutRoom(
+  state: LiveKitRoomState,
+  toMedia: (view: LiveKitParticipantView) => MediaParticipant,
+  pinned: string | null,
+  showSelf: boolean
+): RoomStage {
+  const views = SelectAllParticipants(state);
+  const byIdentity = new Map(views.map((view) => [view.Identity, view]));
+  const participants = views.map(toMedia);
+  const activeSpeakers = state.ActiveSpeakerIdentities;
+  return {
+    Layout: LayoutMediaStage({ Participants: participants, ActiveSpeakers: activeSpeakers, PinnedIdentity: pinned, ShowSelfView: showSelf }),
+    Shown: SelectDisplayParticipants(participants, showSelf),
+    Sharer: SelectScreenSharer(participants),
+    SplitSpeaker: SelectSplitSpeaker(participants, activeSpeakers),
+    ViewOf: (participant) => byIdentity.get(participant.Identity)!,
+  };
 }
