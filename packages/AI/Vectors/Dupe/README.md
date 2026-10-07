@@ -140,6 +140,15 @@ for (const dupe of result.Duplicates) {
 
 ---
 
+## The Query Text Is the Stored Text
+
+Each record is matched by embedding its entity document's template text and querying the index with that vector. The text must be the text vector sync embedded for the record, or the query describes a different document than the one stored and genuine duplicates fall below the threshold. So the detector renders the template the way sync does, through the same `EntityDocumentTemplateDataBuilder` from `@memberjunction/ai-vector-sync`:
+
+- from the row `RunView` returns for the record (`ResultType: 'simple'`), not `BaseEntity.GetAll()`, which turns date fields into `Date` objects;
+- with the rows of every `Entity` template param (a person's Phones, Emails, Addresses...), loaded once per sub-batch.
+
+If a related param's rows can't be loaded, the batch fails rather than query with text that can't match. An unsaved record (the entry-time check) renders from its own values, with empty related rows.
+
 ## DuplicateDetectionOptions Reference
 
 Options are passed via the `Options` property on `PotentialDuplicateRequest`, or directly to `CheckSingleRecord`.

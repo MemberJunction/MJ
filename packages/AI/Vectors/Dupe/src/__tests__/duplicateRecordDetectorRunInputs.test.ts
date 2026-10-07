@@ -122,6 +122,7 @@ vi.mock('@memberjunction/ai-vector-sync', () => ({
     EntityDocumentTemplateParser: { CreateInstance: vi.fn() },
     EntityVectorSyncer: class { CurrentUser = null; },
     VectorizeEntityParams: class {},
+    GetEntityDocumentRecordFilter: vi.fn().mockReturnValue(null),
 }));
 
 vi.mock('@memberjunction/aiengine', () => ({
