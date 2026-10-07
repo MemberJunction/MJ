@@ -4,7 +4,7 @@ dotenv.config({ quiet: true });
 
 import { expressMiddleware } from '@as-integrations/express5';
 import { mergeSchemas } from '@graphql-tools/schema';
-import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView, DatabaseProviderBase, ResolveStartupMode } from '@memberjunction/core';
+import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView, DatabaseProviderBase, ProviderBase, ResolveStartupMode } from '@memberjunction/core';
 import { UserCache, resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
 import { MJGlobal, MJEventType, UUIDsEqual, ShutdownRegistry } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
@@ -31,6 +31,8 @@ import { WebSocketServer } from 'ws';
 import { RealtimeProxyServer } from './realtimeProxy/RealtimeProxyServer.js';
 import buildApolloServer from './apolloServer/index.js';
 import { configInfo, configFilePath, dbDatabase, dbHost, dbPort, dbUsername, graphqlPort, graphqlRootPath, mj_core_schema, websiteRunFromPackage, RESTApiOptions } from './config.js';
+import { TranslateBracketsToPG } from './postgresqlCompat.js';
+import { BuildPostgreSQLConnectionConfig, DescribeReadOnlyLoginOverreach, PostgreSQLReadOnlyPool, ResolvePostgreSQLEndpoint, ResolvePostgreSQLReadOnlyCredentials, ToPGPoolConfig } from './postgresqlPoolSettings.js';
 import { default as jwt } from 'jsonwebtoken';
 import { contextFunction, CreateUnifiedAuthMiddleware, getUserPayload } from './context.js';
 import { UserPayload } from './types.js';
@@ -66,21 +68,26 @@ import { LocalCacheManager, StartupManager, TelemetryManager, TelemetryLevel, Lo
 import { getSystemUser, validateAuthProvidersRegistered } from './auth/index.js';
 import { createAuthProviderCatalogRouter, AUTH_CATALOG_MOUNT_PATH } from './auth/AuthProviderCatalogRouter.js';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
-import { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
-import { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
+import { CacheManagerConfigFromSettings, CreateSharedCacheFromEnvironment, StartEngineSweeper, StartMetadataSweep, StartUserCacheChecks, WarmupLeaseMsFromSettings, WirePushStatusFanOut, WireSharedCacheEvents } from './sharedCache.js';
 import { PubSubManager } from './generic/PubSubManager.js';
 import { ReconcileOrphanedConversationDetails } from './generic/OrphanedConversationDetailReconciler.js';
 import {
-  PUSH_STATUS_UPDATES_TOPIC,
-  SetPushStatusPublishHook,
-  ParseReplicatedStatusUpdate,
-} from './generic/PushStatusResolver.js';
+  HANDOFF_OFFER_FANOUT_CHANNEL,
+  HANDOFF_OFFER_TOPIC,
+  SetHandoffOfferPublishHook,
+  ParseReplicatedHandoffOfferUpdate,
+} from './resolvers/HumanHandoffResolver.js';
+import { RoomHandoffEngine } from '@memberjunction/livekit-room-server';
+// Type-only: the provider is built in ./sharedCache.ts. Still needed here because the handoff-offer
+// fan-out below stays in this file — see the note at its call site.
+import type { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
 import { IntegrationProgressEmitter } from '@memberjunction/integration-progress-artifacts';
 import { PublishIntegrationProgress } from './resolvers/IntegrationProgressResolver.js';
 import { RegisterRSUProgressBridge } from './integration/RSUProgressBridge.js';
 import { ClientToolRequestManager, AgentRunWatchdog } from '@memberjunction/ai-agents';
 import { SessionJanitor } from './agentSessions/index.js';
 import { StartTaskGraphDispatcher } from './services/StartTaskGraphDispatcher.js';
+import { MJServerWorkQueueProviderSource, StartWorkQueueHost } from './services/WorkQueueHostService.js';
 import { GetAttachmentService } from '@memberjunction/aiengine';
 import { MJStorageBlobStore } from './services/MJStorageBlobStore.js';
 import { CACHE_INVALIDATION_TOPIC, MayBroadcastRecordData, ConfigureRecordDataBroadcast } from './generic/CacheInvalidationResolver.js';
@@ -194,6 +201,8 @@ export * from './resolvers/GenerateSeedTaxonomyResolver.js';
 export * from './resolvers/PipelineProgressResolver.js';
 export * from './resolvers/IntegrationProgressResolver.js';
 export * from './resolvers/IdentityClaimRedemptionResolver.js';
+export * from './resolvers/UserAvatarResolver.js';
+export * from './resolvers/avatarInputValidation.js';
 export * from './resolvers/ClientToolRequestResolver.js';
 export * from './resolvers/AutotagPipelineResolver.js';
 export * from './resolvers/TagGovernanceResolver.js';
@@ -254,6 +263,7 @@ export * from './resolvers/RealtimeClientSessionResolver.js';
 export * from './resolvers/RealtimeSessionEventsResolver.js';
 export * from './resolvers/RealtimeSessionVerificationResolver.js';
 export * from './realtimeSessions/index.js';
+export * from './resolvers/MeetingResolver.js';
 export * from './resolvers/RemoteBrowserActionResolver.js';
 export * from './agentSessions/index.js';
 export { GetReadOnlyDataSource, GetReadWriteDataSource, GetReadWriteProvider, GetReadOnlyProvider } from './util.js';
@@ -307,7 +317,8 @@ function resolveServerVersion(): string | undefined {
     const pkgPath = fileURLToPath(new URL('../package.json', import.meta.url));
     const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8')) as { version?: string };
     return pkg.version;
-  } catch {
+  } catch (err) {
+    LogError('Failed to resolve server version from package.json', undefined, err);
     return undefined;
   }
 }
@@ -315,55 +326,42 @@ function resolveServerVersion(): string | undefined {
 /** How often to re-check for conversation details left behind by finished runs. */
 const ORPHAN_DETAIL_SWEEP_INTERVAL_MS = 5 * 60_000;
 
-/** Redis channel carrying replicated push-status updates between server instances. */
-const PUSH_STATUS_FANOUT_CHANNEL = 'push-status-updates';
-
 /**
- * Replicate push-status updates across server instances over Redis (MJ #4222).
+ * Replicate handoff-offer updates across server instances over Redis.
  *
- * Outbound: every locally-published update is forwarded on a shared channel. Inbound: a message
- * from another instance is republished onto THIS instance's local topic, where the normal
- * subscription filter decides who receives it — so the identity gate (`ownerUserId` vs. the
- * connection's authenticated user) still applies to a replicated message exactly as it does to a
- * local one. The replica has no say in who sees what.
- *
- * Republishing goes straight to `PubSubManager`, never back through `publishStatusUpdate`, so an
- * inbound message cannot be re-broadcast and loop. `SourceServerId` guards the remaining case: a
- * publisher also receives its own message from Redis.
+ * Outbound: every locally-published offer change is forwarded on a shared Redis channel.
+ * Inbound: a message from another instance is republished onto THIS instance's local GraphQL
+ * topic (where the subscription filter scopes to the target user) and delivered to RoomHandoffEngine
+ * so the call-hosting instance can transition its local flow (e.g. wait for the user to join the room).
  */
-async function wirePushStatusFanOut(redisProvider: RedisLocalStorageProvider, startupLog: StartupLogger): Promise<void> {
+async function wireHandoffOfferFanOut(redisProvider: RedisLocalStorageProvider, startupLog: StartupLogger): Promise<void> {
   try {
-    await redisProvider.SubscribeToChannel(PUSH_STATUS_FANOUT_CHANNEL, (raw: string) => {
+    await redisProvider.SubscribeToChannel(HANDOFF_OFFER_FANOUT_CHANNEL, (raw: string) => {
       try {
-        const payload = ParseReplicatedStatusUpdate(raw, MJGlobal.Instance.ProcessUUID);
+        const payload = ParseReplicatedHandoffOfferUpdate(raw, MJGlobal.Instance.ProcessUUID);
         if (!payload) {
           return;
         }
-        // Rebuilt as a plain record: the topic's publish signature takes an index-signature type,
-        // and listing the fields keeps the wire shape explicit at the one place it crosses hosts.
-        PubSubManager.Instance.Publish(PUSH_STATUS_UPDATES_TOPIC, {
-          sessionId: payload.sessionId,
-          ownerUserId: payload.ownerUserId,
-          message: payload.message,
-          SourceServerId: payload.SourceServerId,
+        PubSubManager.Instance.Publish(HANDOFF_OFFER_TOPIC, {
+          UserID: payload.UserID,
+          Kind: payload.Kind,
+          Offer: payload.Offer,
         });
-      } catch {
+        RoomHandoffEngine.Instance.OnRemoteOfferChange(payload);
+      } catch (err) {
         // A malformed message on a shared channel must not take down the subscriber.
+        LogError('Error processing handoff-offer fan-out message', undefined, err);
       }
     });
 
-    SetPushStatusPublishHook((payload) => {
-      redisProvider.PublishMessage(PUSH_STATUS_FANOUT_CHANNEL, JSON.stringify(payload));
+    SetHandoffOfferPublishHook((payload) => {
+      redisProvider.PublishMessage(HANDOFF_OFFER_FANOUT_CHANNEL, JSON.stringify(payload));
     });
 
-    // Printed unconditionally, not verbose-gated. "Is fan-out actually on?" is the first question
-    // anyone debugging a hung conversation behind a load balancer asks, and a silent default left
-    // no way to answer it.
-    console.log('[MJAPI] Push-status updates: cross-instance fan-out enabled via Redis');
+    console.log('[MJAPI] Handoff-offer updates: cross-instance fan-out enabled via Redis');
+    startupLog.LogIf('verbose', 'Handoff-offer updates: cross-instance fan-out enabled via Redis');
   } catch (err) {
-    // Single-instance delivery still works, and the durable tail query covers the rest. Degraded,
-    // not broken — so this must not stop the server from starting.
-    console.warn(`Push-status fan-out unavailable: ${(err as Error).message}`);
+    console.warn(`Handoff-offer fan-out unavailable: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
@@ -446,36 +444,65 @@ const setupComplete$ = new ReplaySubject(1);
   const dbType = GetDbType();
   const dataSources: DataSourceInfo[] = [];
 
+  // Shared cache first: the database provider loads metadata and startup engines through
+  // it, so the first server to start fills it and later servers read it instead of each querying
+  // the database and broadcasting what they loaded. Subscribed before engines load so they hear
+  // other servers while they start.
+  const sharedCache = CreateSharedCacheFromEnvironment(configInfo.cacheSettings);
+  if (sharedCache) {
+    await WireSharedCacheEvents(sharedCache, () => (Metadata.Provider instanceof ProviderBase ? Metadata.Provider : undefined)); // global-provider-ok: bootstrap
+    // The cross-instance fan-outs ride this connection. Push-status moved into sharedCache.ts
+    // with the rest of the Redis wiring; the handoff and realtime-session ones stay here deliberately —
+    // they reach into RoomHandoffEngine and RealtimeSessionEventService, and the cache module should not
+    // acquire a dependency on either.
+    await WirePushStatusFanOut(sharedCache);
+    await wireHandoffOfferFanOut(sharedCache, startupLog);
+    await wireRealtimeSessionEventFanOut(sharedCache);
+    startupLog.LogIf('verbose', `Redis cache provider connected: ${process.env.REDIS_URL}`);
+  }
+  const cacheManagerConfig = CacheManagerConfigFromSettings(configInfo.cacheSettings);
+  const warmupLeaseMs = WarmupLeaseMsFromSettings(configInfo.cacheSettings);
+
   if (dbType === 'postgresql') {
     // ─── PostgreSQL Path ───────────────────────────────────────────
     startupLog.BeginPhase('Connecting to database');
     startupLog.LogIf('verbose', 'Database type: PostgreSQL');
     const pg = await import('pg');
-    const { PostgreSQLDataProvider, PostgreSQLProviderConfigData } = await import('@memberjunction/postgresql-dataprovider');
+    const { PostgreSQLDataProvider, PostgreSQLProviderConfigData, MJPostgresTypes } = await import('@memberjunction/postgresql-dataprovider');
 
-    const pgHost = process.env.PG_HOST || process.env.DB_HOST || 'localhost';
-    const pgPort = parseInt(process.env.PG_PORT || process.env.DB_PORT || '5432', 10);
-    const pgUser = process.env.PG_USERNAME || process.env.DB_USERNAME || 'postgres';
-    const pgPass = process.env.PG_PASSWORD || process.env.DB_PASSWORD || '';
-    const pgDatabase = process.env.PG_DATABASE || process.env.DB_DATABASE || '';
-
-    const pgPool = new pg.default.Pool({
-      host: pgHost,
-      port: pgPort,
-      user: pgUser,
-      password: pgPass,
-      database: pgDatabase,
-      max: configInfo.databaseSettings.connectionPool?.max ?? 50,
-      min: configInfo.databaseSettings.connectionPool?.min ?? 5,
-      idleTimeoutMillis: configInfo.databaseSettings.connectionPool?.idleTimeoutMillis ?? 30000,
-      connectionTimeoutMillis: configInfo.databaseSettings.connectionPool?.acquireTimeoutMillis ?? 30000,
-    });
+    const pgEndpoint = ResolvePostgreSQLEndpoint();
+    const { Host: pgHost, Port: pgPort, User: pgUser, Database: pgDatabase } = pgEndpoint;
+    // Every API pool carries the statement and idle-in-transaction timeouts from connection #1.
+    const pgConnectionConfig = BuildPostgreSQLConnectionConfig(pgEndpoint, configInfo.databaseSettings, 'api');
+    const pgPool = new pg.default.Pool(ToPGPoolConfig(pgConnectionConfig));
 
     // Verify connection
     const testClient = await pgPool.connect();
     await testClient.query('SELECT 1');
     testClient.release();
     startupLog.LogIf('verbose', `PostgreSQL pool connected to ${pgHost}:${pgPort}/${pgDatabase}`);
+
+    // A read-only pool opened with the read-only login, as SQL Server has. Read-only per-request
+    // providers (TestQuerySQL and other caller-supplied SQL) share it instead of the primary pool.
+    const pgReadOnlyCredentials = ResolvePostgreSQLReadOnlyCredentials(configInfo);
+    if (pgReadOnlyCredentials) {
+      // A pool a provider runs on must carry the provider's type parsers, so BIGINT and NUMERIC
+      // come back as numbers here as they do on the provider's own pool.
+      const readOnlyPgPool = new pg.default.Pool({
+        ...ToPGPoolConfig(BuildPostgreSQLConnectionConfig({ ...pgEndpoint, ...pgReadOnlyCredentials }, configInfo.databaseSettings, 'read-only')),
+        types: MJPostgresTypes,
+      });
+      const readOnlyTestClient = await readOnlyPgPool.connect();
+      try {
+        for (const warning of await DescribeReadOnlyLoginOverreach(readOnlyTestClient, mj_core_schema)) {
+          LogStatus(`WARNING: ${warning}`);
+        }
+      } finally {
+        readOnlyTestClient.release();
+      }
+      PostgreSQLReadOnlyPool.Instance.Pool = readOnlyPgPool;
+      startupLog.LogIf('verbose', 'Read-only PostgreSQL pool has been initialized.');
+    }
 
     // Create a DataSourceInfo with a MSSQL-compatible wrapper around pg.Pool
     // This allows existing code (types, util, context) to work without changes
@@ -490,20 +517,12 @@ const setupComplete$ = new ReplaySubject(1);
     }));
 
     // Set up the PostgreSQL provider
-    const pgConnectionConfig = {
-      Host: pgHost,
-      Port: pgPort,
-      Database: pgDatabase,
-      User: pgUser,
-      Password: pgPass,
-      MaxConnections: configInfo.databaseSettings.connectionPool?.max ?? 50,
-      MinConnections: configInfo.databaseSettings.connectionPool?.min ?? 5,
-    };
     const pgConfigData = new PostgreSQLProviderConfigData(
       pgConnectionConfig,
       mj_core_schema,
       cacheRefreshInterval / 1000, // convert ms to seconds
     );
+    pgConfigData.LocalStorageProvider = sharedCache ?? undefined;
     const provider = new PostgreSQLDataProvider();
     await provider.Config(pgConfigData);
     SetProvider(provider);
@@ -515,7 +534,7 @@ const setupComplete$ = new ReplaySubject(1);
     const sysUser = UserCache.Instance.GetSystemUser();
     const backupSysUser = UserCache.Instance.Users.find(u => u.IsActive && u.Type === 'Owner');
     const pgStartupMode = ResolveStartupMode({ configValue: configInfo.startup?.mode, defaultMode: 'full' });
-    await StartupManagerImport.Instance.Startup(false, sysUser || backupSysUser, provider, { mode: pgStartupMode.mode });
+    await StartupManagerImport.Instance.Startup(false, sysUser || backupSysUser, provider, { mode: pgStartupMode.mode, cacheManagerConfig, warmupLeaseMs });
 
     // Both provider sources have now had their turn — config/env at module load, metadata via
     // AuthProviderEngine's startup hook — so "no providers at all" is finally a meaningful check.
@@ -532,7 +551,7 @@ const setupComplete$ = new ReplaySubject(1);
       if (poolAny._pgPool) {
         const thePgPool = poolAny._pgPool as import('pg').Pool;
         // Translate SQL Server bracket syntax to PostgreSQL double-quote syntax
-        const pgQuery = translateBracketsToPG(query);
+        const pgQuery = TranslateBracketsToPG(query);
         const result = await thePgPool.query(pgQuery);
         return result.rows;
       }
@@ -551,21 +570,21 @@ const setupComplete$ = new ReplaySubject(1);
     const pgCodegenPass = process.env.CODEGEN_DB_PASSWORD;
     if (pgCodegenUser && pgCodegenPass) {
       try {
-        const codegenPgPool = new pg.default.Pool({
-          host: pgHost,
-          port: pgPort,
-          user: pgCodegenUser,
-          password: pgCodegenPass,
-          database: pgDatabase,
-          max: 10,
-        });
+        // CodeGen and DDL work runs long statements across every entity, so this pool gets the
+        // long CodeGen timeout rather than the API one, as the SQL Server CodeGen pool does.
+        const codegenPgConnectionConfig = BuildPostgreSQLConnectionConfig(
+          { ...pgEndpoint, User: pgCodegenUser, Password: pgCodegenPass },
+          configInfo.databaseSettings,
+          'codegen',
+        );
+        const codegenPgPool = new pg.default.Pool(ToPGPoolConfig(codegenPgConnectionConfig));
         const codegenTestClient = await codegenPgPool.connect();
         await codegenTestClient.query('SELECT 1');
         codegenTestClient.release();
 
         const { RuntimeSchemaManager } = await import('@memberjunction/schema-engine');
         const codegenPgConfigData = new PostgreSQLProviderConfigData(
-          { Host: pgHost, Port: pgPort, Database: pgDatabase, User: pgCodegenUser, Password: pgCodegenPass },
+          codegenPgConnectionConfig,
           mj_core_schema,
           cacheRefreshInterval / 1000, // ms → seconds
         );
@@ -673,10 +692,11 @@ const setupComplete$ = new ReplaySubject(1);
 
     // cacheRefreshInterval is configured in ms; checkRefreshIntervalSeconds declares seconds — see providerConfigUnits.ts
     const config = new SQLServerProviderConfigData(pool, mj_core_schema, MetadataCacheRefreshIntervalSeconds(cacheRefreshInterval));
+    config.LocalStorageProvider = sharedCache ?? undefined;
     // MJAPI is a long-running server, so entry-point default is 'full' engine pre-warm;
     // MJ_STARTUP_MODE / mj.config.cjs startup.mode can override per the shared precedence chain
     const startupMode = ResolveStartupMode({ configValue: configInfo.startup?.mode, defaultMode: 'full' });
-    await setupSQLServerClient(config, { mode: startupMode.mode });
+    await setupSQLServerClient(config, { mode: startupMode.mode, cacheManagerConfig, warmupLeaseMs });
 
     // See the note on the PostgreSQL path above: this is the first point at which both the
     // config/env providers and the metadata catalog have been registered.
@@ -801,79 +821,21 @@ const setupComplete$ = new ReplaySubject(1);
     startupLog.LogIf('verbose', 'Server telemetry disabled');
   }
 
-  // Optionally inject Redis as the shared storage provider for cross-server cache invalidation
-  if (process.env.REDIS_URL) {
-    const redisProvider = new RedisLocalStorageProvider({
-      url: process.env.REDIS_URL,
-      keyPrefix: process.env.REDIS_KEY_PREFIX || 'mj',
-      enablePubSub: true,
-      enableLogging: configInfo.cacheSettings?.verboseLogging ?? false,
-    });
-    (Metadata.Provider as GenericDatabaseProvider).SetLocalStorageProvider(redisProvider); // global-provider-ok: bootstrap (Redis cache wiring)
-    await redisProvider.StartListening();
-
-    // Connect Redis pub/sub events to LocalCacheManager callback dispatch
-    // so cross-server cache invalidation messages are routed to registered callbacks
-    redisProvider.OnCacheChanged((event) => {
-        const sourceShort = event.SourceServerId ? event.SourceServerId.substring(0, 8) : 'unknown';
-        console.log(`[MJAPI] Redis pub/sub → DispatchCacheChange: ${event.Action} for "${event.CacheKey}" from server ${sourceShort}`);
-        LocalCacheManager.Instance.DispatchCacheChange(event);
-
-        // Also broadcast to connected browser clients via GraphQL subscription
-        // Extract entity name from the cache key (format: EntityName|Filter|OrderBy|...)
-        const entityName = event.CacheKey ? event.CacheKey.split('|')[0] : '';
-        if (entityName) {
-            PubSubManager.Instance.Publish(CACHE_INVALIDATION_TOPIC, {
-                entityName,
-                primaryKeyValues: null, // entity-level invalidation
-                action: event.Action || 'save',
-                sourceServerId: event.SourceServerId || 'unknown',
-                timestamp: new Date(),
-            });
-        }
-    });
-
-    // Fan push-status updates across server instances (MJ #4222).
-    //
-    // Behind a load balancer the browser's WebSocket lives on one replica while the mutation that
-    // drives the agent can be handled by another. The push topic is an in-process PubSub, so a
-    // completion published on replica B never reaches a subscriber on replica A — the browser waits
-    // forever for an event that was delivered to nobody. Replicating progress and completion over
-    // Redis closes that, and the durable tail query remains the backstop if Redis is down.
-    await wirePushStatusFanOut(redisProvider, startupLog);
-    await wireRealtimeSessionEventFanOut(redisProvider);
-
-    startupLog.LogIf('verbose', `Redis cache provider connected: ${process.env.REDIS_URL}`);
+  // The database provider already initialized LocalCacheManager from inside its own Config(), with
+  // no settings — this call is what makes `cacheSettings` take effect (Initialize merges a config
+  // handed to it later). Unconditional on purpose: the guard that used to sit here
+  // skipped exactly the case that needed it.
+  await LocalCacheManager.Instance.Initialize(Metadata.Provider.LocalStorageProvider, cacheManagerConfig); // global-provider-ok: bootstrap
+  if (sharedCache) {
+    await LocalCacheManager.Instance.SetStorageProvider(sharedCache);
   }
-
-  // If Redis is available, swap LocalCacheManager's storage provider to Redis.
-  // LocalCacheManager may have already been initialized (with in-memory provider)
-  // during engine loading. SetStorageProvider migrates cached data to Redis.
-  if (process.env.REDIS_URL) {
-    await LocalCacheManager.Instance.SetStorageProvider(Metadata.Provider.LocalStorageProvider); // global-provider-ok: bootstrap
-    startupLog.LogIf('verbose', 'LocalCacheManager: storage provider swapped to Redis');
-  }
-  // Ensure LocalCacheManager is initialized (no-op if already done during engine loading)
-  if (!LocalCacheManager.Instance.IsInitialized) {
-    // Build cache config from mj.config.cjs cacheSettings
-    const cs = configInfo.cacheSettings;
-    const cacheConfig = {
-      maxSizeBytes: (cs.maxMemoryMB ?? 150) * 1024 * 1024,
-      maxPercentOfCachePerEntity: cs.maxPercentOfCachePerEntity ?? 50,
-      defaultTTLMs: (cs.defaultTTLSeconds ?? 0) * 1000,
-      evictionSweepIntervalMs: (cs.evictionSweepIntervalSeconds ?? 300) * 1000,
-      verboseLogging: cs.verboseLogging ?? false,
-    };
-    await LocalCacheManager.Instance.Initialize(Metadata.Provider.LocalStorageProvider, cacheConfig); // global-provider-ok: bootstrap
-    if (startupLog.IsAtLeast('verbose')) {
-      // eslint-disable-next-line no-console
-      console.log('LocalCacheManager initialized with cache config:', JSON.stringify({
-        maxMemoryMB: cs.maxMemoryMB ?? 150,
-        maxPercentOfCachePerEntity: cs.maxPercentOfCachePerEntity ?? 50,
-        evictionSweepIntervalSeconds: cs.evictionSweepIntervalSeconds ?? 300,
-      }));
-    }
-  }
+  const engineSweepMs = StartEngineSweeper(configInfo.cacheSettings);
+  startupLog.LogIf('verbose', engineSweepMs > 0 ? `Engine/database sweep every ${engineSweepMs / 1000}s` : 'Engine/database sweep disabled');
+  const userCacheCheckMs = StartUserCacheChecks(configInfo.cacheSettings);
+  startupLog.LogIf('verbose', userCacheCheckMs > 0 ? `User cache staleness check every ${userCacheCheckMs / 1000}s` : 'User cache staleness check disabled');
+  // Costs nothing unless a metadata entity declares TrustServerCacheCompletely = false.
+  const metadataSweepMs = StartMetadataSweep(configInfo.cacheSettings, () => (Metadata.Provider instanceof ProviderBase ? Metadata.Provider : undefined)); // global-provider-ok: bootstrap (this process's one provider)
+  startupLog.LogIf('verbose', metadataSweepMs > 0 ? `Metadata/database sweep every ${metadataSweepMs / 1000}s (only for entities declaring drift)` : 'Metadata/database sweep disabled');
 
   // Initialize APIKeyEngine singleton — reads apiKeyGeneration from mj.config.cjs automatically
   // This must happen before any request handler calls GetAPIKeyEngine()
@@ -1430,13 +1392,22 @@ const setupComplete$ = new ReplaySubject(1);
   // Backwards-compatibility shim: synthesize ServerExtensionConfig entries from legacy configInfo.telephony
   const telephonyExtensionConfigs: ServerExtensionConfig[] = [];
   if (configInfo.telephony?.enabled) {
+    // Settings every carrier shares (inbound run-as user, call cap, outbound policy). Each carrier's own block is
+    // spread AFTER them, so a carrier can override one explicitly.
+    const sharedTelephonySettings: Record<string, unknown> = {
+      inboundRunAsUserEmail: configInfo.telephony.inboundRunAsUserEmail,
+      maxCallSeconds: configInfo.telephony.maxCallSeconds,
+      maxConcurrentCalls: configInfo.telephony.maxConcurrentCalls,
+      transferTargets: configInfo.telephony.transferTargets,
+      outbound: configInfo.telephony.outbound,
+    };
     if (configInfo.telephony.twilio) {
       telephonyExtensionConfigs.push({
         Enabled: true,
         DriverClass: 'TwilioTelephonyExtension',
         RootPath: '/telephony/twilio',
         Phase: 'pre-auth',
-        Settings: configInfo.telephony.twilio as unknown as Record<string, unknown>,
+        Settings: { ...sharedTelephonySettings, ...configInfo.telephony.twilio },
       });
     }
     if (configInfo.telephony.vonage) {
@@ -1445,7 +1416,7 @@ const setupComplete$ = new ReplaySubject(1);
         DriverClass: 'VonageTelephonyExtension',
         RootPath: '/telephony/vonage',
         Phase: 'pre-auth',
-        Settings: configInfo.telephony.vonage as unknown as Record<string, unknown>,
+        Settings: { ...sharedTelephonySettings, ...configInfo.telephony.vonage },
       });
     }
     if (configInfo.telephony.ringcentral) {
@@ -1454,7 +1425,16 @@ const setupComplete$ = new ReplaySubject(1);
         DriverClass: 'RingCentralTelephonyExtension',
         RootPath: '/telephony/ringcentral',
         Phase: 'pre-auth',
-        Settings: configInfo.telephony.ringcentral as unknown as Record<string, unknown>,
+        Settings: { ...sharedTelephonySettings, ...configInfo.telephony.ringcentral },
+      });
+    }
+    if (configInfo.telephony.livekitSip) {
+      telephonyExtensionConfigs.push({
+        Enabled: true,
+        DriverClass: 'LiveKitSipExtension',
+        RootPath: '/telephony/livekit-sip',
+        Phase: 'pre-auth',
+        Settings: { ...sharedTelephonySettings, ...configInfo.telephony.livekitSip },
       });
     }
     if (configInfo.telephony.teams?.enabled) {
@@ -1784,6 +1764,18 @@ const setupComplete$ = new ReplaySubject(1);
   } else if (resumeUser && taskGraphPool instanceof sql.ConnectionPool) {
     StartTaskGraphDispatcher(taskGraphPool, resumeUser)
       .catch(err => console.warn(`[TaskGraphDispatcher] Startup failed: ${err}`));
+  }
+
+  // Start the durable work-queue host where enabled. It plans which subscriptions this instance runs,
+  // re-plans on a timer, and self-registers with ShutdownRegistry, so gracefulShutdown's awaited
+  // ShutdownAll() drains it (up to 2 × shutdownDrainMs) before the HTTP server closes.
+  // Not awaited: a slow engine load must not delay readiness, and a failure never stops the API.
+  const workQueueProvider = Metadata.Provider; // global-provider-ok: server startup — the work-queue host runs on the server's own provider
+  if (configInfo.workQueue?.enabled && workQueueProvider instanceof DatabaseProviderBase) {
+    const workQueuePool = dataSources[0]?.dataSource;
+    const providerSource = new MJServerWorkQueueProviderSource(workQueuePool instanceof sql.ConnectionPool ? workQueuePool : null, workQueueProvider);
+    StartWorkQueueHost(configInfo.workQueue, workQueueProvider, providerSource)
+      .catch(error => console.error('❌ Failed to start the work queue host:', error));
   }
 
 
@@ -2269,11 +2261,3 @@ function createMSSQLCompatPool(pgPool: import('pg').Pool): sql.ConnectionPool {
   return wrapper as unknown as sql.ConnectionPool;
 }
 
-/**
- * Translates SQL Server bracket-quoted identifiers to PostgreSQL double-quoted identifiers.
- * Converts [schema].[table] to "schema"."table" and handles common T-SQL patterns.
- */
-function translateBracketsToPG(sql: string): string {
-  // Replace [identifier] with "identifier"
-  return sql.replace(/\[([^\]]+)\]/g, '"$1"');
-}
