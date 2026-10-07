@@ -868,6 +868,42 @@ describe('VectorSearchProvider', () => {
         });
     });
 
+    // ────────────────────────────────────────────────────────────────
+    // One ranked list per embedding model: sorted by score WITHIN a model (comparable), tagged with
+    // the model's FusionLane so fusion merges models by rank (their cosine scales aren't comparable).
+    // ────────────────────────────────────────────────────────────────
+    describe('Search — results are ranked per embedding model', () => {
+        const hit = (id: string, score: number) => ({
+            ID: id, EntityName: 'People', RecordID: id, SourceType: 'vector', ResultType: 'entity-record',
+            Title: id, Snippet: '', Score: score, ScoreBreakdown: { Vector: score }, Tags: [], MatchedAt: new Date(),
+        });
+
+        it('sorts each model\'s results by score and tags them with that model\'s lane', async () => {
+            mockRunViewFn.mockResolvedValue({
+                Success: true,
+                Results: [
+                    { ID: 'idx-a1', Name: 'a1', VectorDatabaseID: 'db-1', EmbeddingModelID: 'model-A', Dimensions: null },
+                    { ID: 'idx-b1', Name: 'b1', VectorDatabaseID: 'db-1', EmbeddingModelID: 'model-B', Dimensions: null },
+                ],
+            });
+            // Per-model groups as the indexes return them: unsorted across a model's indexes.
+            const byModel: Record<string, ReturnType<typeof hit>[]> = {
+                'model-A': [hit('a-low', 0.60), hit('a-high', 0.62), hit('a-mid', 0.61)],
+                'model-B': [hit('b-low', 0.87), hit('b-high', 0.88)],
+            };
+            const spy = vi.spyOn(provider as unknown as { embedAndQueryGroup: (...args: unknown[]) => Promise<unknown[]> }, 'embedAndQueryGroup')
+                .mockImplementation(async (_q: unknown, modelID: unknown) => byModel[modelID as string]);
+
+            const results = await provider.Search('q', 10, undefined, contextUser) as Array<{ RecordID: string; FusionLane?: string }>;
+            spy.mockRestore();
+
+            const laneOf = (lane: string) => results.filter(r => r.FusionLane === lane).map(r => r.RecordID);
+            expect(laneOf('vector:model-A')).toEqual(['a-high', 'a-mid', 'a-low']);
+            expect(laneOf('vector:model-B')).toEqual(['b-high', 'b-low']);
+            expect(results.every(r => r.FusionLane)).toBe(true);
+        });
+    });
+
     describe('queryOneIndex — colocated routing', () => {
         type QueryOneIndex = (
             vectorIndex: { Name: string; VectorDatabaseID: string },

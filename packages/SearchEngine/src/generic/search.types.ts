@@ -473,6 +473,14 @@ export interface SearchResultItem {
     ProviderLabel?: string;
     /** Font Awesome icon class from the SearchProvider metadata (e.g., "fa-solid fa-brain") */
     ProviderIcon?: string;
+    /**
+     * Ranked-list key WITHIN a provider's results. Fusion ranks each distinct key as its own RRF
+     * list, so results whose scores are not comparable are merged by rank, never by score. The
+     * vector provider sets it to the embedding model: cosine scales differ by model (gte-small
+     * scores weak matches ~0.9, Gemini strong ones ~0.85), so one model's numbers say nothing
+     * about another's. Unset = the provider's list is a single ranked list.
+     */
+    FusionLane?: string;
 }
 
 /**

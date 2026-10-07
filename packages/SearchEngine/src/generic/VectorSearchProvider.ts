@@ -150,7 +150,16 @@ export class VectorSearchProvider extends BaseSearchProvider {
             );
 
             const groupResults = await Promise.all(modelGroupPromises);
-            return groupResults.flat();
+            // Each embedding model is its own ranked list. Scores are comparable within a model
+            // (so sort by them there, across that model's indexes) but not between models, so
+            // tag each result with its model's FusionLane and let RRF merge the models by rank.
+            const modelIDs = Array.from(indexesByModel.keys());
+            return groupResults.flatMap((results, i) => {
+                const lane = `vector:${modelIDs[i]}`;
+                return [...results]
+                    .sort((a, b) => b.Score - a.Score)
+                    .map(r => ({ ...r, FusionLane: lane }));
+            });
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
             LogError(`VectorSearchProvider: Search failed: ${msg}`);

@@ -498,6 +498,52 @@ describe('SearchFusion', () => {
         });
     });
 
+    // ────────────────────────────────────────────────────────────────
+    // Sub-lanes: each embedding model is its own RRF list
+    // ────────────────────────────────────────────────────────────────
+    describe('FusionLane sub-lanes (one RRF list per embedding model)', () => {
+        const vec = (id: string, score: number, lane?: string) => ({
+            ...makeResult({ EntityName: 'E', RecordID: id, Score: score, SourceType: 'vector', ScoreBreakdown: { Vector: score } }),
+            FusionLane: lane,
+        });
+
+        it('merges two embedding models by rank, never by comparing their raw scores', () => {
+            // Model B scores everything higher (its scale, not its quality). Glued together and
+            // sorted by score, B would take the top two places; as separate RRF lists they alternate.
+            const lane: SearchResultItem[] = [
+                vec('a1', 0.62, 'm:A'), vec('a2', 0.61, 'm:A'), vec('a3', 0.60, 'm:A'),
+                vec('b1', 0.88, 'm:B'), vec('b2', 0.87, 'm:B'),
+            ];
+            const ids = fusion.Deduplicate(fusion.Fuse([{ Source: 'vector', Results: lane }], 10)).map(r => r.RecordID);
+            expect(ids.slice(0, 2).sort()).toEqual(['a1', 'b1']);
+            expect(ids.slice(2, 4).sort()).toEqual(['a2', 'b2']);
+            expect(ids[4]).toBe('a3');
+        });
+
+        it('treats each sub-lane as a lane for the maximum', () => {
+            // Two sub-lanes, each #1 found by one of them: (1/61) / (2/61) = 0.5.
+            const fused = fusion.Fuse([{ Source: 'vector', Results: [vec('a1', 0.6, 'm:A'), vec('b1', 0.9, 'm:B')] }], 10);
+            for (const r of fused) expect(r.Score).toBeCloseTo(0.5, 10);
+        });
+
+        it('leaves a list without sub-lane tags as one lane', () => {
+            const fused = fusion.Fuse([{ Source: 'vector', Results: [vec('x1', 0.9), vec('x2', 0.8)] }], 10);
+            expect(fused.map(r => r.RecordID)).toEqual(['x1', 'x2']);
+            expect(fused[0].Score).toBeCloseTo(1, 10);
+        });
+
+        it('gives sub-lanes the weight of their source', () => {
+            const fused = fusion.Fuse([
+                { Source: 'vector', Results: [vec('a1', 0.6, 'm:A'), vec('b1', 0.9, 'm:B')] },
+                { Source: 'entity', Results: [makeResult({ EntityName: 'E', RecordID: 'k1', Score: 0.59, SourceType: 'entity', ScoreBreakdown: { Entity: 0.59 } })] },
+            ], 10, { vector: 1, entity: 2 });
+            // max = (1 + 1 + 2) / 61. The keyword #1 = 2/61 -> 0.5; each model's #1 = 1/61 -> 0.25.
+            expect(fused[0].RecordID).toBe('k1');
+            expect(fused[0].Score).toBeCloseTo(0.5, 10);
+            expect(fused.find(r => r.RecordID === 'a1')?.Score).toBeCloseTo(0.25, 10);
+        });
+    });
+
     describe('Fuse (weighted, non-uniform)', () => {
         it('honors heavy-vector weight when records differ across sources', () => {
             const vector: SearchResultItem[] = [

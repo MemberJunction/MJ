@@ -90,8 +90,9 @@ export class SearchFusion {
             ),
         }));
 
-        // Collect only lists that have (sanitized) results
-        const nonEmpty = sanitized.filter(l => l.Results.length > 0);
+        // Collect only lists that have (sanitized) results. A provider list carrying FusionLane
+        // tags is first split into one ranked list per lane (see splitByFusionLane).
+        const nonEmpty = sanitized.flatMap(l => this.splitByFusionLane(l)).filter(l => l.Results.length > 0);
         if (nonEmpty.length === 0) return [];
 
         // Single source: RRF over one list is just its rank order, so Score = 1/(k+r) divided by
@@ -298,6 +299,25 @@ export class SearchFusion {
         k: number = RRF_K
     ): ScoredCandidate[] {
         return ComputeRRF(rankedLists, k, weights);
+    }
+
+    /**
+     * Split a provider's list into one ranked list per `FusionLane`, keeping each lane's order.
+     *
+     * A provider can return results from sources whose scores aren't comparable (the vector
+     * provider: one embedding model per lane). Fusing them as separate RRF lists merges them by
+     * rank instead of by score. Each sub-list keeps the provider's `Source`, so it gets that
+     * source's fusion weight. A list with no lane tags is returned unchanged.
+     */
+    private splitByFusionLane(list: LabeledResultList): LabeledResultList[] {
+        if (!list.Results.some(r => r.FusionLane)) return [list];
+        const lanes = new Map<string, SearchResultItem[]>();
+        for (const r of list.Results) {
+            const key = r.FusionLane ?? '';
+            const lane = lanes.get(key);
+            if (lane) lane.push(r); else lanes.set(key, [r]);
+        }
+        return Array.from(lanes.values()).map(results => ({ Source: list.Source, Results: results }));
     }
 
     /**
