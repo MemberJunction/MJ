@@ -105,6 +105,13 @@ export interface LLMConfigurationSettings {
     NativeToolResults?: boolean | null;
 
     /**
+     * **Catalog layers only.** Whether this model accepts a forced tool choice — a named tool or
+     * `'required'`. Absent means it does. When `false`, the prompt runner sends `'auto'` in place of a
+     * forced choice, and the agent's prompt is what steers the model to the tool.
+     */
+    SupportsForcedToolChoice?: boolean | null;
+
+    /**
      * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
      * it reuses a prior request only when that request's entire prompt is a prefix of the new one
      * (OpenAI's automatic cache, xAI), so per-iteration framework state must be appended, never
@@ -175,6 +182,16 @@ export interface RealtimeConfigurationSettings {
      * Reasoning plane settings — dual delegation configuration. Absent defaults to `'local'`.
      */
     Reasoning?: RealtimeReasoningSettings | null;
+
+    /**
+     * Whether this realtime model natively supports full-duplex conversational audio
+     * (simultaneous speaking and listening with natural interruptions).
+     *
+     * When true, full-duplex models do not receive turn-taking tools or an energy-VAD floor gate,
+     * allowing the provider's native full-duplex model to handle natural turn transitions.
+     * Cascades AIModelType -> Vendor ModelDefaults -> AIModel -> AIModelVendor.
+     */
+    FullDuplex?: boolean | null;
 }
 
 /** Vision knobs. Reserved — no consumers yet. */

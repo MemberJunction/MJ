@@ -4,7 +4,7 @@
  */
 
 import { UserInfo, Metadata, EntityInfo, RunView } from '@memberjunction/core';
-import { RegisterClass, SafeJSONParse } from '@memberjunction/global';
+import { MJLruCache, RegisterClass, SafeJSONParse } from '@memberjunction/global';
 import { MJAIAgentEntity, MJAIAgentRunEntity, MJTestEntity, MJTestRunEntity } from '@memberjunction/core-entities';
 import { AgentRunner } from '@memberjunction/ai-agents';
 import { ChatMessage } from '@memberjunction/ai';
@@ -861,7 +861,8 @@ export class AgentEvalDriver extends BaseTestDriver {
      * @private
      */
     private readonly versionPins = new PublishedVersionPin();
-    private readonly versionLabels = new Map<string, string>();
+    // Bounded for the same reason as PublishedVersionPin: this driver is cached for the process lifetime.
+    private readonly versionLabels = new MJLruCache<string, string>({ maxSize: 5000, ttlMs: 6 * 60 * 60 * 1000 });
 
     /** Pins the suite's rubric version before any test runs. */
     public override async SetupSuite(context: SuiteFixtureContext, contextUser: UserInfo): Promise<void> {
@@ -913,10 +914,10 @@ export class AgentEvalDriver extends BaseTestDriver {
             } else {
                 versionId = await this.versionPins.Remember(suiteRunId, choice.RubricId, undefined, async () => {
                     const found = await this.LookupLatestPublished(context, choice.RubricId!);
-                    if (found) this.versionLabels.set(labelKey, found.label);
+                    if (found) this.versionLabels.Set(labelKey, found.label);
                     return found?.id;
                 });
-                versionLabel = this.versionLabels.get(labelKey);
+                versionLabel = this.versionLabels.Get(labelKey);
                 if (versionId && context.fixtures) {
                     context.fixtures.PinnedRubricVersions = {
                         ...context.fixtures.PinnedRubricVersions,

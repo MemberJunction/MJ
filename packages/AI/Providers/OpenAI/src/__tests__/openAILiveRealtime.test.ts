@@ -97,6 +97,7 @@ describe('OpenAILiveRealtime Driver & Session', () => {
         expect(session).toBeDefined();
         expect(session.Capabilities.SupportedReasoningPlanes).toEqual(['local', 'remote']);
         expect(session.Capabilities.CanReconfigureTurnMode).toBe(false);
+        expect(session.Capabilities.FullDuplex).toBe(true);
         expect(session.Capabilities.EmitsUserInterruptionSignal).toBe(false);
         expect(session.Capabilities.EmitsProviderCutoffSignal).toBe(true);
         expect(session.Capabilities.SupportsDynamicToolSet).toBe(true);

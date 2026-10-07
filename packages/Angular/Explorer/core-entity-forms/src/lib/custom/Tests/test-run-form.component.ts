@@ -342,6 +342,7 @@ export class MJTestRunFormComponentExtended extends MJTestRunFormComponent imple
   }
 
   ngOnDestroy() {
+    super.ngOnDestroy();
     this.destroy$.next();
     this.destroy$.complete();
   }
