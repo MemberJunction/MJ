@@ -1,0 +1,151 @@
+.wq-overview {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.wq-loading {
+    padding: 40px 0;
+}
+
+.wq-group {
+    background: var(--mj-bg-surface-card);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.wq-group-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--mj-border-subtle);
+    color: var(--mj-text-primary);
+}
+
+.wq-group-header i {
+    color: var(--mj-text-muted);
+}
+
+.wq-group-title {
+    font-weight: 600;
+}
+
+.wq-group-count {
+    margin-left: auto;
+    font-size: 0.8rem;
+    color: var(--mj-text-muted);
+}
+
+.wq-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+
+.wq-table th {
+    text-align: left;
+    padding: 8px 12px;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--mj-text-secondary);
+    border-bottom: 1px solid var(--mj-border-subtle);
+}
+
+.wq-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--mj-border-subtle);
+    color: var(--mj-text-primary);
+    vertical-align: middle;
+}
+
+.wq-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.wq-num {
+    text-align: right;
+    white-space: nowrap;
+}
+
+.wq-num-error {
+    color: var(--mj-status-error-text);
+    font-weight: 600;
+}
+
+.wq-row {
+    cursor: pointer;
+}
+
+.wq-row:hover td {
+    background: var(--mj-bg-surface-hover);
+}
+
+.wq-row-attention td:first-child {
+    box-shadow: inset 3px 0 0 var(--mj-status-warning);
+}
+
+.wq-row-arrow {
+    color: var(--mj-text-muted);
+    font-size: 0.75rem;
+}
+
+.wq-link {
+    color: var(--mj-text-link);
+    cursor: pointer;
+}
+
+.wq-link:hover {
+    text-decoration: underline;
+}
+
+.wq-host {
+    color: var(--mj-text-secondary);
+}
+
+.wq-handler {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--mj-text-muted);
+    font-family: var(--mj-font-family-mono);
+}
+
+.wq-chip {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    background: var(--mj-bg-surface-sunken);
+    color: var(--mj-text-secondary);
+}
+
+.wq-chip-neutral {
+    background: var(--mj-bg-surface-sunken);
+}
+
+.wq-chip-success {
+    margin-left: 0;
+    background: color-mix(in srgb, var(--mj-status-success) 14%, var(--mj-bg-surface));
+    color: var(--mj-status-success);
+}
+
+.wq-chip-warning {
+    margin-left: 0;
+    background: color-mix(in srgb, var(--mj-status-warning) 14%, var(--mj-bg-surface));
+    color: var(--mj-status-warning-text);
+}
+
+.wq-error {
+    color: var(--mj-status-error-text);
+    font-size: 0.8rem;
+}
+
+.wq-refreshed {
+    margin: 0;
+    font-size: 0.8rem;
+    color: var(--mj-text-muted);
+}

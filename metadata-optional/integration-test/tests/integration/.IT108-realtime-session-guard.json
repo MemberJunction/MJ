@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT108 - Realtime Session Config Guard",
+    "Description": "Deterministic server-side bundle, sequence 49, ahead of the client-transport tests. The one in-process exception to the client-first doctrine: server-decided session state (identityVerification, maxSessionDeadlineIso) can only be written by trusted server code. RSG1 proves the owner's direct Save cannot forge it while a trusted write and ordinary Config edits work. RSG2 seeds the two sessions the wire bundle IT109 needs and hands their ids over. Requires RUN_MUTATION_TESTS because every check writes a tagged session fixture.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "A direct Save cannot forge verification state or move the deadline; a trusted write persists; ordinary Config edits are not blocked; the wire bundle's server-decided fixtures are seeded."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "realtime-session-guard"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "A3C3AB37-2A3A-41B8-AC71-FA62A9149F09"
+  }
+}

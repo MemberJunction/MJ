@@ -11,9 +11,58 @@
   },
   "relatedEntities": {
     "MJ: Rubric Scale Levels": [
-      { "fields": { "ScaleID": "@parent:ID", "Label": "Non-compliant", "Value": 0, "NormalizedValue": 0, "Sequence": 0 }, "primaryKey": { "ID": "CB1B5212-8881-4304-AFFF-1A8F20AEC49A" } },
-      { "fields": { "ScaleID": "@parent:ID", "Label": "Partial", "Value": 1, "NormalizedValue": 0.5, "Sequence": 1 }, "primaryKey": { "ID": "72C731B0-A910-402F-A49E-2091B2763101" } },
-      { "fields": { "ScaleID": "@parent:ID", "Label": "Compliant", "Value": 2, "NormalizedValue": 1, "Sequence": 2 }, "primaryKey": { "ID": "1E3ACCC1-3E14-4161-B662-EE2FCC4A7E03" } }
+      {
+        "fields": {
+          "ScaleID": "@parent:ID",
+          "Label": "Non-compliant",
+          "Value": 0,
+          "NormalizedValue": 0,
+          "Sequence": 0
+        },
+        "primaryKey": {
+          "ID": "CB1B5212-8881-4304-AFFF-1A8F20AEC49A"
+        },
+        "sync": {
+          "lastModified": "2026-10-02T21:42:21.820Z",
+          "checksum": "b0528cacbd1f5017b02ff82f1db6b473236dfab7f3144e37f0ec2c39f38d85a3"
+        }
+      },
+      {
+        "fields": {
+          "ScaleID": "@parent:ID",
+          "Label": "Partial",
+          "Value": 1,
+          "NormalizedValue": 0.5,
+          "Sequence": 1
+        },
+        "primaryKey": {
+          "ID": "72C731B0-A910-402F-A49E-2091B2763101"
+        },
+        "sync": {
+          "lastModified": "2026-10-02T21:42:21.830Z",
+          "checksum": "3bdc07f233173a9a3a7dbc857254ef4cf4b20deb66794265f84f838fdcf02838"
+        }
+      },
+      {
+        "fields": {
+          "ScaleID": "@parent:ID",
+          "Label": "Compliant",
+          "Value": 2,
+          "NormalizedValue": 1,
+          "Sequence": 2
+        },
+        "primaryKey": {
+          "ID": "1E3ACCC1-3E14-4161-B662-EE2FCC4A7E03"
+        },
+        "sync": {
+          "lastModified": "2026-10-02T21:42:21.841Z",
+          "checksum": "6c1dc47c38ddfdc4429fb7fa3b1c473bd60ee34a96dee66cd50ebfe8c3d93738"
+        }
+      }
     ]
+  },
+  "sync": {
+    "lastModified": "2026-10-02T21:42:21.810Z",
+    "checksum": "cfd5c869310a0e3167e19c6e82b0ef1ee8ff21f6c80a9b2f826639c069702e43"
   }
 }

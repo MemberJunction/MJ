@@ -790,6 +790,39 @@ export class AIPromptParams extends AIModelRunParams {
 }
 
 /**
+ * The {@link AIPromptParams} fields that decide who a prompt runs as and which credentials it may
+ * spend: the user, the metadata provider, the AI configuration, the runtime keys, the per-request
+ * credential and the credential scope.
+ *
+ * A prompt the runner starts on a caller's behalf — AI JSON repair, the parallel result selector —
+ * must run under the caller's scope. Each one copying these fields by hand is how JSON repair came to
+ * forward `contextUser` and drop the rest, so it ran on the platform's keys inside a customer's run.
+ * Copy them with {@link PickPromptExecutionScope} instead.
+ */
+export type AIPromptExecutionScope = Pick<
+  AIPromptParams,
+  'contextUser' | 'provider' | 'configurationId' | 'apiKeys' | 'credentialId' | 'CredentialScope'
+>;
+
+/**
+ * Copies the {@link AIPromptExecutionScope} of one prompt's params, for a prompt started on its
+ * behalf. Spread it first and set the new prompt's own fields after it.
+ *
+ * Every field of the scope is listed: `satisfies` makes a field added to the type a compile error
+ * here until it is copied, so a new scope field reaches every internal prompt at once.
+ */
+export function PickPromptExecutionScope(params: AIPromptExecutionScope): AIPromptExecutionScope {
+  return {
+    contextUser: params.contextUser,
+    provider: params.provider,
+    configurationId: params.configurationId,
+    apiKeys: params.apiKeys,
+    credentialId: params.credentialId,
+    CredentialScope: params.CredentialScope,
+  } satisfies Record<keyof AIPromptExecutionScope, AIPromptExecutionScope[keyof AIPromptExecutionScope]>;
+}
+
+/**
  * Inputs for resolving which user an `AIPromptRun` is attributed to.
  *
  * Only the USER is attributed on the prompt run. Which agent run a prompt run belongs to is owned by
