@@ -9,7 +9,7 @@
  * **Connection options** (from `SearchProviderConfig.ProviderConfig`):
  *   - `nodeUrl` — Single Typesense node URL (e.g. `https://ts.example:8108`)
  *   - `apiKey` — Typesense API key (sent via `X-TYPESENSE-API-KEY`)
- *   - `defaultCollection` — Fallback when scope doesn't list ExternalIndexes
+ *   - `defaultCollection` — the collection an UNSCOPED search queries (a scoped search queries only its own rows)
  *   - `defaultQueryBy` — Comma-separated fields, default `'content,title'`
  *
  * **Scope constraints.** `ExternalIndexes` rows with `IndexType='Typesense'`
@@ -99,12 +99,11 @@ export class TypesenseSearchProvider extends BaseSearchProvider {
         const queryBy = this.parsedConfig.defaultQueryBy ?? 'content,title';
         const node = this.parsedConfig.nodeUrl.replace(/\/$/, '');
 
-        // Resolve target collections from scope ExternalIndexes; fall back to defaultCollection.
-        const scopedTypesenseRows = scopeConstraints?.ExternalIndexes
-            ?.filter(r => r.IndexType === 'Typesense' && r.ExternalIndexName) ?? [];
-        const targets = scopedTypesenseRows.length > 0
-            ? scopedTypesenseRows
-            : (this.parsedConfig.defaultCollection
+        // Resolve target collections from scope ExternalIndexes (none means nothing for a scoped
+        // search); fall back to defaultCollection only for an UNSCOPED search.
+        const scopedTypesenseRows = this.ScopedExternalIndexRows(scopeConstraints, 'Typesense');
+        const targets = scopedTypesenseRows
+            ?? (this.parsedConfig.defaultCollection
                 ? [{
                     IndexType: 'Typesense' as const,
                     ExternalIndexName: this.parsedConfig.defaultCollection,

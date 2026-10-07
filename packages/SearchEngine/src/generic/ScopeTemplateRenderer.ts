@@ -19,7 +19,7 @@
  */
 
 import nunjucks from 'nunjucks';
-import { EscapeScopeValueDeep, type ScopeLaneKind } from './ScopeValueEscaper';
+import { EscapeScopeValueDeep, RenderedPathHasRefusedValue, type ScopeLaneKind } from './ScopeValueEscaper';
 import { LogError } from '@memberjunction/core';
 import { SearchContext } from './search.types';
 
@@ -65,6 +65,9 @@ env.addFilter('jsonparse', (value: unknown): unknown => {
  * Render a scope template string with the supplied SearchContext. Returns the original
  * string unchanged when `template` is null/empty. Returns the original string on render
  * failure (logged via LogError) so a single bad template does not bring down a search.
+ *
+ * @throws {Error} on the `path` lane only, when a value interpolated into the output contains
+ *   `..` or a path separator (see `EscapePathSegment`). Such a value is refused, never stripped.
  */
 export function RenderScopeTemplate(
     template: string | null | undefined,
@@ -101,13 +104,21 @@ export function RenderScopeTemplate(
         ...(EscapeScopeValueDeep(extraData ?? {}, laneKind) as Record<string, unknown>)
     };
 
+    let rendered: string;
     try {
-        return env.renderString(template, data);
+        rendered = env.renderString(template, data);
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         LogError(`SearchEngine: Scope template render failed — returning raw template. Error: ${msg}. Template: ${template.substring(0, 200)}`);
         return template;
     }
+    if (laneKind === 'path' && RenderedPathHasRefusedValue(rendered)) {
+        throw new Error(
+            'a value interpolated into this storage path contains ".." or a path separator, ' +
+            `so the path was refused rather than stripped. Template: ${template.substring(0, 160)}`
+        );
+    }
+    return rendered;
 }
 
 /**

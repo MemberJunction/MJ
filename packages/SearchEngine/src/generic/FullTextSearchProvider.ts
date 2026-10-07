@@ -77,11 +77,11 @@ export class FullTextSearchProvider extends BaseSearchProvider {
             const effectiveQuery = scopeConstraints?.QueryTransforms?.[this.SourceType] ?? query;
 
             // Restrict entities: scopeConstraints take precedence, then filters.EntityNames,
-            // then no restriction.
+            // then no restriction. A DEFINED but empty scope list means the scope gives this
+            // provider no entity — search nothing, never every FTS entity.
             const scopedEntityNames = scopeConstraints?.Entities?.map(e => e.EntityName);
-            const restrictedEntityNames = scopedEntityNames?.length
-                ? scopedEntityNames
-                : filters?.EntityNames;
+            if (scopedEntityNames && scopedEntityNames.length === 0) return [];
+            const restrictedEntityNames = scopedEntityNames ?? filters?.EntityNames;
 
             // Multi-provider migration (v5.31+): use `this.Provider` instead of
             // `new Metadata()`. Cast to IRunViewProvider to access FullTextSearch

@@ -57,13 +57,14 @@ import { BaseSearchProvider, SearchProviderConfig } from './ISearchProvider';
 import { SearchFusion, LabeledResultList } from './SearchFusion';
 import { SearchEnricher } from './SearchEnricher';
 import { FullTextSearchProvider } from './FullTextSearchProvider';
+import { EntitySearchProvider } from './EntitySearchProvider';
 import { StorageSearchProvider } from './StorageSearchProvider';
 import { BaseReRanker } from './BaseReRanker';
 import { NoopReRanker, LoadNoopReRanker } from './NoopReRanker';
 import { RerankerBudgetGuard } from '../rerankers/RerankerBudgetGuard';
 import { RenderScopeTemplate, RenderScopeJsonTemplate } from './ScopeTemplateRenderer';
 import { LaneKindForIndexType } from './ScopeValueEscaper';
-import { CheckRenderedTemplate, CheckRequiredMetadataKeys, ParseRequiredMetadataKeys } from './ScopeFilterGuard';
+import { CheckRenderedFolderPath, CheckRenderedTemplate, CheckRequiredMetadataKeys, ParseRequiredMetadataKeys } from './ScopeFilterGuard';
 import { ScopeDimensionResolver } from './ScopeDimensionResolver';
 import {
     ScopeExplanation,
@@ -87,14 +88,52 @@ import type { SearchScopePermissionSource } from '../permissions/SearchScopePerm
  */
 type LaneProblemCollector = Map<string, string>;
 
+/** What a scope's configuration lets it reach — see `SearchEngine.judgeScopeBound`. */
+interface ScopeBoundJudgement {
+    /** False when the scope can retrieve nothing: no enabled provider row, or no active lane. */
+    CanRetrieve: boolean;
+    /** True only for a global scope with no lanes, which runs every provider unfiltered. */
+    Unbounded: boolean;
+    /** Why, in the shared wording both the dry run and the search path record. */
+    Diagnostics: string[];
+}
+
+/** One lane row of a scope bundle, by lane kind. */
+type ScopeExternalIndexRow = ScopeBundle['ExternalIndexes'][number];
+type ScopeEntityRow = ScopeBundle['Entities'][number];
+type ScopeStorageRow = ScopeBundle['StorageAccounts'][number];
+
+/** The rendered `ExtraFilter` bound one entity carries in a scope — see `SearchEngine.enforceLaneExtraFilters`. */
+interface LaneEntityBound {
+    /** The entity's name as the lane names it. */
+    EntityName: string;
+    /** The lane filters, ORed when several lanes name the entity. */
+    Clause: string;
+}
+
 /**
- * Emitted whenever a scope configures no lanes at all — which in MJ means UNSCOPED, not narrow.
- * Shared by the dry run and the search path so both produce identical wording.
+ * Emitted when a GLOBAL scope configures no lanes at all — a global scope runs unconstrained, so
+ * every provider searches everything available to it. Shared by the dry run and the search path.
  */
 const UNBOUNDED_SCOPE_DIAGNOSTIC =
-    'this scope configures NO lanes (no external indexes, entities, or storage accounts). ' +
-    'That is not a narrow scope — providers read an empty configuration as UNSCOPED, so it ' +
-    'searches everything available to them with no filter.';
+    'this global scope configures NO lanes (no external indexes, entities, or storage accounts). ' +
+    'A global scope is UNSCOPED: every provider searches everything available to it with no filter.';
+
+/**
+ * Emitted when a NON-global scope configures no lanes. Each lane list reaches the providers empty,
+ * and an empty list means "nothing for this provider", so the scope reaches nothing — never everything.
+ */
+const NO_LANES_DIAGNOSTIC =
+    'this scope configures NO lanes (no external indexes, entities, or storage accounts), so it reaches nothing: ' +
+    'a non-global scope searches only what its lanes name. Add a lane to make it retrieve.';
+
+/**
+ * Emitted when a NON-global scope has no enabled `MJ: Search Scope Providers` row. It runs no provider —
+ * a scope with no provider rows used to run every provider, which made disabling the last row widen it.
+ */
+const NO_PROVIDER_ROWS_DIAGNOSTIC =
+    'this scope has no enabled provider rows (MJ: Search Scope Providers), so it runs no provider and returns nothing: ' +
+    'a non-global scope runs only the providers it lists. Add an enabled provider row to make it retrieve.';
 
 // Keep the default re-ranker registration alive under tree-shaking
 LoadNoopReRanker();
@@ -1235,16 +1274,10 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             ? this.buildAllLanesSkipped(bundle, `dimension resolution failed: ${dimensionFailure}`)
             : this.explainLanes(bundle, effectiveContext);
 
-        // A scope with NO lanes at all is not a narrow scope — it is MJ's widest. Empty child
-        // collections are collapsed to `undefined` by buildScopeConstraints, and every provider
-        // reads that as "unscoped": all entities, all indexes, no filter. Treating zero lanes as
-        // unreachable inverted the one finding a reviewer most needs, so it is called out
-        // explicitly instead.
-        const hasLanes = lanes.length > 0;
-        if (!hasLanes) {
-            diagnostics.push(UNBOUNDED_SCOPE_DIAGNOSTIC);
-        }
-        const canRetrieve = hasLanes ? lanes.some((l) => l.Status === 'Active') : true;
+        // What the scope's rows let it reach (provider rows, lanes), judged exactly as the search
+        // path judges it, so the dry run cannot promise what the search refuses.
+        const bound = this.judgeScopeBound(bundle, lanes);
+        diagnostics.push(...bound.Diagnostics);
 
         return {
             ScopeID: scope.ID,
@@ -1253,10 +1286,34 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             Dimensions: dimensions,
             Lanes: lanes,
             Diagnostics: diagnostics,
-            Reachable: entitlement.Allowed && canRetrieve && !dimensionFailure,
-            Unbounded: !hasLanes,
+            Reachable: entitlement.Allowed && bound.CanRetrieve && !dimensionFailure,
+            Unbounded: bound.Unbounded,
             ResolvedContext: effectiveContext,
         };
+    }
+
+    /**
+     * What a scope's configuration lets it reach. One judgement, used by the dry run and the search path.
+     *
+     * A GLOBAL scope runs unconstrained (the search path never builds constraints for it), so with no
+     * lanes it is unbounded. A NON-global scope is bounded by its rows: it runs only its enabled provider
+     * rows and searches only its lanes. With no enabled provider row, or no lane, it reaches nothing —
+     * an empty configuration never means "everything".
+     */
+    private judgeScopeBound(bundle: ScopeBundle, lanes: LaneExplanation[]): ScopeBoundJudgement {
+        const hasActiveLane = lanes.some((l) => l.Status === 'Active');
+        if (bundle.Scope.IsGlobal) {
+            const hasLanes = lanes.length > 0;
+            return {
+                CanRetrieve: hasLanes ? hasActiveLane : true,
+                Unbounded: !hasLanes,
+                Diagnostics: hasLanes ? [] : [UNBOUNDED_SCOPE_DIAGNOSTIC],
+            };
+        }
+        const diagnostics: string[] = [];
+        if (bundle.Providers.length === 0) diagnostics.push(NO_PROVIDER_ROWS_DIAGNOSTIC);
+        if (lanes.length === 0) diagnostics.push(NO_LANES_DIAGNOSTIC);
+        return { CanRetrieve: bundle.Providers.length > 0 && hasActiveLane, Unbounded: false, Diagnostics: diagnostics };
     }
 
     /** Resolve entitlement for the dry run, including the skill and tenant principals.
@@ -1413,10 +1470,11 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                 Kind: 'StorageAccount',
                 Target: row.FileStorageAccountID,
                 LaneID: row.ID,
-                // FolderPath is a path prefix, not an access bound, so it is deliberately
-                // unguarded here — consistent with buildScopeConstraints.
-                Status: 'Active',
+                // FolderPath restricts the lane to one folder, so a path that rendered empty, with an
+                // empty segment, or with traversal makes the lane unusable — as buildScopeConstraints rules.
+                Status: problems.has(row.ID) ? 'Skipped' : 'Active',
                 RenderedFilter: rendered?.FolderPath ?? null,
+                Reason: problems.get(row.ID),
             });
         }
 
@@ -1636,31 +1694,30 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         // than re-rendering every template a second time. Reaching this line means every lane
         // guard passed (buildScopeConstraints throws otherwise), so the problem map is empty
         // and every lane is Active.
-        const unbounded = bundle.ExternalIndexes.length === 0
-            && bundle.Entities.length === 0
-            && bundle.StorageAccounts.length === 0;
+        const lanes = this.buildLaneExplanations(bundle, constraints, new Map());
+        // The same judgement the dry run makes, so both produce the same verdict and the same prose —
+        // an auditor reading a log row should not have to know which path wrote it.
+        const bound = this.judgeScopeBound(bundle, lanes);
         const decision: ScopeExplanation = {
             ScopeID: scope.ID,
             ScopeName: scope.Name,
             Entitlement: null,
             Dimensions: dimensionResult.Provenance,
-            Lanes: this.buildLaneExplanations(bundle, constraints, new Map()),
-            // Same warning the dry run emits. The two paths produce one shape, so they should
-            // produce the same prose too — an auditor reading a log row should not have to know
-            // it was written by the search path rather than by a preview.
-            Diagnostics: unbounded
-                ? [...dimensionResult.Diagnostics, UNBOUNDED_SCOPE_DIAGNOSTIC]
-                : dimensionResult.Diagnostics,
+            Lanes: lanes,
+            Diagnostics: [...dimensionResult.Diagnostics, ...bound.Diagnostics],
             Reachable: true,
-            Unbounded: unbounded,
+            Unbounded: bound.Unbounded,
             ResolvedContext: effectiveContext,
         };
 
-        // Determine which providers this scope participates in (SearchScopeProvider rows)
+        // Determine which providers this scope participates in (SearchScopeProvider rows). A non-global
+        // scope runs ONLY the providers it lists: no enabled row means no provider, never every provider
+        // (disabling a scope's last row used to widen it to all of them). A scope that cannot retrieve
+        // (no provider row, or no lane) runs nothing.
         const scopeProviderIDs = new Set(bundle.Providers.map(p => NormalizeUUID(p.SearchProviderID)));
-        const allowAllProviders = scopeProviderIDs.size === 0; // empty = scope is IsGlobal or all-inclusive
+        const allowAllProviders = bundle.Scope.IsGlobal && scopeProviderIDs.size === 0;
 
-        const applicableProviders = this._providerEntries.filter(entry => {
+        const applicableProviders = !bound.CanRetrieve ? [] : this._providerEntries.filter(entry => {
             if (!entry.Provider.IsAvailable()) return false;
             if (isPreview && !entry.SupportsPreview) return false;
             if (allowAllProviders) return true;
@@ -1668,13 +1725,13 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         });
 
         if (applicableProviders.length === 0) {
-            LogStatus(`SearchEngine: Scope "${scope.Name}" has no applicable providers — skipping.`);
+            const why = bound.CanRetrieve ? ['no applicable providers for this scope'] : [];
+            LogStatus(`SearchEngine: Scope "${scope.Name}" has no applicable providers — skipping. ${[...bound.Diagnostics, ...why].join(' ')}`);
             return {
                 scopeID: scope.ID,
                 fused: [],
                 sourceCounts: { Vector: 0, FullText: 0, Entity: 0, Storage: 0 },
-                decision: { ...decision, Reachable: false,
-                    Diagnostics: [...decision.Diagnostics, 'no applicable providers for this scope'] },
+                decision: { ...decision, Reachable: false, Diagnostics: [...decision.Diagnostics, ...why] },
             };
         }
 
@@ -1739,7 +1796,8 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             }
         });
 
-        const labeled = await Promise.all(promises);
+        // A lane's ExtraFilter bounds its entity for EVERY provider, not only the entity lane that applies it in SQL.
+        const labeled = await this.enforceLaneExtraFilters(await Promise.all(promises), constraints, contextUser, scope.Name);
         const sourceCounts = this.countSources(labeled);
 
         // Per-scope fusion with weight resolution:
@@ -1753,6 +1811,128 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         return { scopeID: scope.ID, fused, sourceCounts, decision };
     }
 
+    // ────────────────────────────────────────────────────────────────
+    // Lane ExtraFilter: one bound per entity, for every provider
+    // ────────────────────────────────────────────────────────────────
+
+    /**
+     * Enforce each entity lane's rendered `ExtraFilter` on the hits of every OTHER provider.
+     *
+     * The entity lane applies its ExtraFilter in SQL. The full-text and tag lanes take only the lanes'
+     * entity NAMES, and the vector and 3rd-party lanes key off their own index rows — so a scope that bounds
+     * an entity with an ExtraFilter still returned rows outside it through every lane but one. Here a hit for
+     * an entity with a lane ExtraFilter in this scope is kept only when its record satisfies that filter,
+     * read as the user: `PK IN (...) AND (<ExtraFilter>)`, one RunView per filtered entity per scope (the
+     * permission pass's readability check, with the lane's filter as the clause). The filter is the exact
+     * string the entity lane runs: same template, same context, same escaping.
+     *
+     * Exemption is decided by the ENGINE-stamped `ProviderId`: only an entry whose provider is an
+     * {@link EntitySearchProvider} applied the filter already. `SourceType` is provider-declared and proves
+     * nothing. Storage files are not entity records and pass. Fails closed: a failed read drops that
+     * entity's hits from the other providers.
+     */
+    private async enforceLaneExtraFilters(
+        lists: LabeledResultList[],
+        constraints: ScopeConstraints,
+        contextUser: UserInfo,
+        scopeName: string
+    ): Promise<LabeledResultList[]> {
+        const bounds = this.laneEntityBounds(constraints.Entities);
+        if (bounds.size === 0) return lists;
+        const exempt = this.entityProviderIDs();
+        const boundOf = (item: SearchResultItem): LaneEntityBound | undefined =>
+            item.ResultType === 'storage-file' || (item.ProviderId && exempt.has(NormalizeUUID(item.ProviderId)))
+                ? undefined
+                : bounds.get(this.laneEntityKey(item.EntityName));
+        const candidates = new Map<LaneEntityBound, SearchResultItem[]>();
+        for (const item of lists.flatMap(l => l.Results)) {
+            const bound = boundOf(item);
+            if (bound) candidates.set(bound, [...(candidates.get(bound) ?? []), item]);
+        }
+        if (candidates.size === 0) return lists;
+
+        const kept = await this.hitsInsideLaneFilters(candidates, contextUser, scopeName);
+        const bounded = lists.map(list => ({ ...list, Results: list.Results.filter(r => !boundOf(r) || kept.has(r)) }));
+        const removed = lists.reduce((n, l) => n + l.Results.length, 0) - bounded.reduce((n, l) => n + l.Results.length, 0);
+        if (removed > 0) {
+            LogStatus(`SearchEngine: scope "${scopeName}" — lane ExtraFilters removed ${removed} hit(s) ` +
+                'that other providers returned outside the entity lane\'s bound.');
+        }
+        return bounded;
+    }
+
+    /**
+     * Each entity's lane bound, keyed by {@link laneEntityKey}. Several lanes on one entity are a union (the
+     * entity lane searches each), so their filters are ORed; an entity with any UNFILTERED lane is unbounded
+     * for this scope and gets no entry. A lane whose entity could not be named is skipped.
+     */
+    private laneEntityBounds(lanes: ScopeEntityConstraint[] | undefined): Map<string, LaneEntityBound> {
+        const filters = new Map<string, { EntityName: string; Filters: string[] | null }>();
+        for (const lane of lanes ?? []) {
+            const key = this.laneEntityKey(lane.EntityName);
+            if (!key) continue;
+            const filter = lane.ExtraFilter?.trim();
+            const prior = filters.get(key);
+            const merged = !filter || prior?.Filters === null ? null : [...(prior?.Filters ?? []), filter];
+            filters.set(key, { EntityName: lane.EntityName, Filters: merged });
+        }
+        const bounds = new Map<string, LaneEntityBound>();
+        for (const [key, entry] of filters) {
+            if (!entry.Filters) continue;
+            const clause = entry.Filters.length === 1 ? entry.Filters[0] : entry.Filters.map(f => `(${f})`).join(' OR ');
+            bounds.set(key, { EntityName: entry.EntityName, Clause: clause });
+        }
+        return bounds;
+    }
+
+    /** An entity name normalised for matching a hit's `EntityName` to a lane's. */
+    private laneEntityKey(entityName: string | null | undefined): string {
+        return (entityName ?? '').trim().toLowerCase();
+    }
+
+    /** The configured entries whose provider is an {@link EntitySearchProvider}, by normalised ID. */
+    private entityProviderIDs(): Set<string> {
+        return new Set(this._providerEntries.filter(e => e.Provider instanceof EntitySearchProvider).map(e => NormalizeUUID(e.ID)));
+    }
+
+    /** The candidate hits whose record satisfies its entity's lane bound — one read per entity, in parallel. */
+    private async hitsInsideLaneFilters(
+        candidates: Map<LaneEntityBound, SearchResultItem[]>,
+        contextUser: UserInfo,
+        scopeName: string
+    ): Promise<Set<SearchResultItem>> {
+        const kept = new Set<SearchResultItem>();
+        await Promise.all(Array.from(candidates.entries()).map(async ([bound, hits]) => {
+            for (const hit of await this.hitsInsideLaneFilter(bound, hits, contextUser, scopeName)) kept.add(hit);
+        }));
+        return kept;
+    }
+
+    /** `hits` (all of `bound`'s entity) whose record satisfies the lane filter, read as the user; none when the read fails. */
+    private async hitsInsideLaneFilter(
+        bound: LaneEntityBound,
+        hits: SearchResultItem[],
+        contextUser: UserInfo,
+        scopeName: string
+    ): Promise<SearchResultItem[]> {
+        try {
+            const entity = this.ProviderToUse.EntityByName(bound.EntityName);
+            if (!entity) throw new Error('the entity is not in metadata');
+            const recordIDs = Array.from(new Set(hits.map(h => h.RecordID)));
+            const keys = await this.readableRecordKeys(entity, recordIDs, bound.Clause, contextUser);
+            if (!keys) throw new Error('the read failed');
+            return hits.filter(h => {
+                const key = this.recordMatchKey(entity, h.RecordID);
+                return key !== null && keys.has(key);
+            });
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            LogError(`SearchEngine: scope "${scopeName}" — ${hits.length} hit(s) of "${bound.EntityName}" ` +
+                `could not be checked against the lane ExtraFilter, so they were dropped: ${msg}`);
+            return [];
+        }
+    }
+
     /**
      * Assemble a `ScopeConstraints` for a single scope: Nunjucks-render each template
      * field against the `SearchContext`, then hand the rendered values to providers.
@@ -1761,12 +1941,12 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
      * Fail a search CLOSED when a scope field that RESTRICTS was authored but did not render
      * usably (see `CheckRenderedTemplate`).
      *
-     * Throwing rather than dropping the offending row is deliberate. Dropping it would empty
-     * the row collection, and `buildScopeConstraints` collapses an empty collection to
-     * `undefined` — which every provider reads as "unscoped", i.e. all entities / all indexes
-     * with no filter. So the surgical-looking fix is the one that widens; failing the search
-     * is the one that doesn't. A broken restricting template is a misconfiguration and should
-     * be loud and actionable, never silently degraded into a wider search.
+     * Throwing rather than dropping the offending row is deliberate. Dropping one lane of
+     * several would quietly change what the scope covers, and a scope's ONLY lane dropped used to
+     * collapse to `undefined` — "unscoped" to every provider. (A non-global scope now hands providers
+     * an empty list, which means "nothing", but a silently narrowed scope is still a wrong answer.)
+     * A broken restricting template is a misconfiguration and should be loud and actionable, never
+     * silently degraded.
      */
     protected assertRestrictingTemplateRendered(
         source: string | null | undefined,
@@ -1851,57 +2031,12 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
     ): ScopeConstraints {
         const scopeLabel = `${bundle.Scope.Name} (${bundle.Scope.ID})`;
 
-        const externalIndexes: ScopeExternalIndexConstraint[] = bundle.ExternalIndexes.map(row => {
-            const rowLabel = row.ExternalIndexName ?? row.ID;
-            // §5.4: values are escaped for THIS lane's dialect automatically, derived from IndexType.
-            const laneKind = LaneKindForIndexType(row.IndexType);
-            const metadataFilter = RenderScopeJsonTemplate(row.MetadataFilter, searchContext, undefined, laneKind);
-            this.assertRestrictingTemplateRendered(row.MetadataFilter, metadataFilter, 'MetadataFilter', scopeLabel, rowLabel, row.ID, collector);
-            this.assertRequiredMetadataKeys(row.RequiredMetadataKeys, row.ID, metadataFilter, scopeLabel, rowLabel, collector);
-            // ExternalIndexConfig is JSON (namespace/routing), regardless of the filter dialect.
-            const externalIndexConfig = RenderScopeTemplate(row.ExternalIndexConfig, searchContext, undefined, 'json');
-            // ExternalIndexConfig can carry tenant routing (e.g. Pinecone `namespace`), so a
-            // silent render failure here can widen retrieval just like a filter can.
-            this.assertRestrictingTemplateRendered(row.ExternalIndexConfig, externalIndexConfig, 'ExternalIndexConfig', scopeLabel, rowLabel, row.ID, collector);
-            return {
-                SearchScopeExternalIndexID: row.ID,
-                IndexType: row.IndexType,
-                VectorIndexID: row.VectorIndexID ?? undefined,
-                ExternalIndexName: row.ExternalIndexName ?? undefined,
-                ExternalIndexConfig: this.parseJson(externalIndexConfig),
-                MetadataFilter: metadataFilter
-            };
-        });
-
-        const entities: ScopeEntityConstraint[] = bundle.Entities.map(row => {
-            // The entity lane is T-SQL, so single quotes must be doubled.
-            const extraFilter = row.ExtraFilter ? RenderScopeTemplate(row.ExtraFilter, searchContext, undefined, 'sql') : undefined;
-            const entityLabel = this.lookupEntityName(row.EntityID) || row.EntityID;
-            this.assertRestrictingTemplateRendered(row.ExtraFilter, extraFilter, 'ExtraFilter', scopeLabel, entityLabel, row.ID, collector);
-            // The SQL lane loses a guarded clause exactly the way an index lane does — same
-            // renderer, same SearchContext, same optional {% if %} blocks — and it is the lane
-            // that reads the operational database, so it gets the same contract.
-            this.assertRequiredMetadataKeys(row.RequiredMetadataKeys, row.ID, extraFilter, scopeLabel, entityLabel, collector);
-            return {
-                SearchScopeEntityID: row.ID,
-                EntityID: row.EntityID,
-                EntityName: this.lookupEntityName(row.EntityID),
-                ExtraFilter: extraFilter,
-                // UserSearchString and FolderPath are NOT restrictions — they shape the query
-                // text / a path prefix — so a soft render there cannot widen an access bound
-                // and is deliberately left unguarded.
-                // 'none' deliberately: this becomes QUERY TEXT, not syntax. Escaping it would corrupt
-                // the search rather than protect it, and it cannot express a bound.
-                UserSearchString: row.UserSearchString ? RenderScopeTemplate(row.UserSearchString, searchContext, undefined, 'none') : undefined
-            };
-        });
-
-        const storage: ScopeStorageConstraint[] = bundle.StorageAccounts.map(row => ({
-            SearchScopeStorageAccountID: row.ID,
-            FileStorageAccountID: row.FileStorageAccountID,
-            // Path traversal, not quoting, is the risk on a storage lane.
-            FolderPath: row.FolderPath ? RenderScopeTemplate(row.FolderPath, searchContext, undefined, 'path') : undefined
-        }));
+        const externalIndexes: ScopeExternalIndexConstraint[] = bundle.ExternalIndexes.map(row =>
+            this.buildExternalIndexConstraint(row, searchContext, scopeLabel, collector));
+        const entities: ScopeEntityConstraint[] = bundle.Entities.map(row =>
+            this.buildEntityConstraint(row, searchContext, scopeLabel, collector));
+        const storage: ScopeStorageConstraint[] = bundle.StorageAccounts.map(row =>
+            this.buildStorageConstraint(row, searchContext, scopeLabel, collector));
 
         // Per-provider query transforms: resolved from SearchScopeProvider.QueryTransformTemplateID
         // For stored template IDs we need the TemplateEngine — that resolution happens in
@@ -1913,14 +2048,133 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             ? { ...rawTransforms as Record<string, string> }
             : undefined;
 
+        // A NON-global scope hands every provider a defined list, even an empty one: an empty list means
+        // "nothing for you", and `undefined` would read as "unscoped" — every entity, every index, no
+        // filter. Only a global scope keeps the old collapse (it runs unconstrained anyway).
+        const lanesOrUnscoped = <T>(rows: T[]): T[] | undefined => (rows.length || !bundle.Scope.IsGlobal ? rows : undefined);
         return {
-            ExternalIndexes: externalIndexes.length ? externalIndexes : undefined,
-            Entities: entities.length ? entities : undefined,
-            StorageAccounts: storage.length ? storage : undefined,
+            ExternalIndexes: lanesOrUnscoped(externalIndexes),
+            Entities: lanesOrUnscoped(entities),
+            StorageAccounts: lanesOrUnscoped(storage),
             Context: searchContext,
             QueryTransforms: queryTransforms,
             ScopeConfig: scopeConfig ?? undefined
         };
+    }
+
+    /** One external-index lane's constraint, with its restricting fields guarded. */
+    private buildExternalIndexConstraint(
+        row: ScopeExternalIndexRow,
+        searchContext: SearchContext | undefined,
+        scopeLabel: string,
+        collector?: LaneProblemCollector
+    ): ScopeExternalIndexConstraint {
+        const rowLabel = row.ExternalIndexName ?? row.ID;
+        // §5.4: values are escaped for THIS lane's dialect automatically, derived from IndexType.
+        const laneKind = LaneKindForIndexType(row.IndexType);
+        const metadataFilter = RenderScopeJsonTemplate(row.MetadataFilter, searchContext, undefined, laneKind);
+        this.assertRestrictingTemplateRendered(row.MetadataFilter, metadataFilter, 'MetadataFilter', scopeLabel, rowLabel, row.ID, collector);
+        this.assertRequiredMetadataKeys(row.RequiredMetadataKeys, row.ID, metadataFilter, scopeLabel, rowLabel, collector);
+        // ExternalIndexConfig is JSON (namespace/routing), regardless of the filter dialect.
+        const externalIndexConfig = RenderScopeTemplate(row.ExternalIndexConfig, searchContext, undefined, 'json');
+        // ExternalIndexConfig can carry tenant routing (e.g. Pinecone `namespace`), so a
+        // silent render failure here can widen retrieval just like a filter can.
+        this.assertRestrictingTemplateRendered(row.ExternalIndexConfig, externalIndexConfig, 'ExternalIndexConfig', scopeLabel, rowLabel, row.ID, collector);
+        return {
+            SearchScopeExternalIndexID: row.ID,
+            IndexType: row.IndexType,
+            VectorIndexID: row.VectorIndexID ?? undefined,
+            ExternalIndexName: row.ExternalIndexName ?? undefined,
+            ExternalIndexConfig: this.parseJson(externalIndexConfig),
+            MetadataFilter: metadataFilter
+        };
+    }
+
+    /** One entity lane's constraint: its `ExtraFilter` rendered for T-SQL and guarded. */
+    private buildEntityConstraint(
+        row: ScopeEntityRow,
+        searchContext: SearchContext | undefined,
+        scopeLabel: string,
+        collector?: LaneProblemCollector
+    ): ScopeEntityConstraint {
+        // The entity lane is T-SQL, so single quotes must be doubled.
+        const extraFilter = row.ExtraFilter ? RenderScopeTemplate(row.ExtraFilter, searchContext, undefined, 'sql') : undefined;
+        const entityLabel = this.lookupEntityName(row.EntityID) || row.EntityID;
+        this.assertRestrictingTemplateRendered(row.ExtraFilter, extraFilter, 'ExtraFilter', scopeLabel, entityLabel, row.ID, collector);
+        // The SQL lane loses a guarded clause exactly the way an index lane does — same
+        // renderer, same SearchContext, same optional {% if %} blocks — and it is the lane
+        // that reads the operational database, so it gets the same contract.
+        this.assertRequiredMetadataKeys(row.RequiredMetadataKeys, row.ID, extraFilter, scopeLabel, entityLabel, collector);
+        return {
+            SearchScopeEntityID: row.ID,
+            EntityID: row.EntityID,
+            EntityName: this.lookupEntityName(row.EntityID),
+            ExtraFilter: extraFilter,
+            // UserSearchString is NOT a restriction — it shapes the query text — so a soft
+            // render there cannot widen an access bound and is deliberately left unguarded.
+            // (FolderPath, by contrast, restricts; see buildStorageConstraint.)
+            // 'none' deliberately: this becomes QUERY TEXT, not syntax. Escaping it would corrupt
+            // the search rather than protect it, and it cannot express a bound.
+            UserSearchString: row.UserSearchString ? RenderScopeTemplate(row.UserSearchString, searchContext, undefined, 'none') : undefined
+        };
+    }
+
+    /**
+     * One storage lane's constraint. `FolderPath` RESTRICTS — it is what confines the lane to one folder
+     * of the account — so a FolderPath that was authored but renders empty, with an empty segment, with
+     * a `..` segment, or with an interpolated value the `path` escaper refuses makes the lane unusable:
+     * the search is refused (or, in a dry run, the lane is reported skipped). An absent FolderPath still
+     * means the whole account.
+     */
+    private buildStorageConstraint(
+        row: ScopeStorageRow,
+        searchContext: SearchContext | undefined,
+        scopeLabel: string,
+        collector?: LaneProblemCollector
+    ): ScopeStorageConstraint {
+        let folderPath: string | undefined;
+        if (row.FolderPath) {
+            folderPath = this.renderFolderPath(row.FolderPath, searchContext, scopeLabel, row, collector);
+            if (folderPath !== undefined) {
+                const check = CheckRenderedFolderPath(row.FolderPath, folderPath);
+                if (check.Status === 'unusable') this.reportFolderPathProblem(check.Reason, scopeLabel, row, collector);
+            }
+        }
+        return {
+            SearchScopeStorageAccountID: row.ID,
+            FileStorageAccountID: row.FileStorageAccountID,
+            FolderPath: folderPath,
+        };
+    }
+
+    /**
+     * Render a storage lane's FolderPath on the `path` lane. The renderer throws when an interpolated value
+     * contains `..` or a separator; that is reported as the lane's problem (undefined is returned only in a
+     * dry run, where the problem is collected instead of thrown).
+     */
+    private renderFolderPath(
+        source: string,
+        searchContext: SearchContext | undefined,
+        scopeLabel: string,
+        row: ScopeStorageRow,
+        collector?: LaneProblemCollector
+    ): string | undefined {
+        try {
+            return RenderScopeTemplate(source, searchContext, undefined, 'path');
+        } catch (e) {
+            this.reportFolderPathProblem(e instanceof Error ? e.message : String(e), scopeLabel, row, collector);
+            return undefined;
+        }
+    }
+
+    /** A FolderPath problem, in the wording `assertRestrictingTemplateRendered` uses for every restricting field. */
+    private reportFolderPathProblem(reason: string, scopeLabel: string, row: ScopeStorageRow, collector?: LaneProblemCollector): void {
+        this.reportLaneProblem(
+            `SearchEngine: scope ${scopeLabel} — FolderPath for storage account "${row.FileStorageAccountID}" ` +
+                `could not be rendered safely, so the search was NOT run. ${reason}`,
+            row.ID,
+            collector
+        );
     }
 
     /** Resolve the EntityID → EntityName via MJ Metadata (for passing to providers that key by name). */

@@ -312,7 +312,8 @@ export class TagSearchProvider extends BaseSearchProvider {
 
     /**
      * Resolves the set of entity names eligible to return records.
-     * Respects AllowUserSearchAPI, taxonomy exclusions, and search filters.
+     * Respects AllowUserSearchAPI, taxonomy exclusions, and search filters. A defined scope entity
+     * list restricts to those entities — an EMPTY one to none (it is never read as "unscoped").
      */
     private resolveAllowedEntities(
         md: IMetadataProvider,
@@ -321,7 +322,7 @@ export class TagSearchProvider extends BaseSearchProvider {
     ): Set<string> {
         let entities = md.Entities.filter(e => e.AllowUserSearchAPI && !TAXONOMY_ENTITIES.has(e.Name.toLowerCase()));
 
-        if (scopeConstraints?.Entities && scopeConstraints.Entities.length > 0) {
+        if (scopeConstraints?.Entities) {
             const scopedSet = new Set(scopeConstraints.Entities.map(e => e.EntityName.toLowerCase()));
             entities = entities.filter(e => scopedSet.has(e.Name.toLowerCase()));
         }

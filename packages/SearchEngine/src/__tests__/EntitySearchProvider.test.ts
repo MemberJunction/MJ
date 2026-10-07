@@ -162,6 +162,23 @@ describe('EntitySearchProvider', () => {
             expect(results).toEqual([]);
         });
 
+        it('a scoped search whose scope names no entity queries nothing — not every searchable entity', async () => {
+            mockEntities.push({
+                Name: 'People',
+                AllowUserSearchAPI: true,
+                Fields: [
+                    { Name: 'LastName', IncludeInUserSearchAPI: true, IsNameField: true, Sequence: 1 },
+                ],
+                NameField: { Name: 'LastName' },
+            });
+            mockRunViewFn.mockResolvedValue({ Success: true, Results: [{ ID: 'rec-1', LastName: 'Kligo' }] });
+
+            const results = await provider.Search('Kligo', 10, undefined, contextUser, { Entities: [] });
+
+            expect(mockRunViewFn).not.toHaveBeenCalled();
+            expect(results).toEqual([]);
+        });
+
         it('still queries entities that do declare a searchable field', async () => {
             mockEntities.push({
                 Name: 'MJ: Employees',

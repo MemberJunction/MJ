@@ -14,7 +14,7 @@
 
 import { IMetadataProvider, LogError, Metadata, UserInfo } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
-import { SearchSource, SearchFilters, SearchResultItem, ScopeConstraints } from './search.types';
+import { SearchSource, SearchFilters, SearchResultItem, ScopeConstraints, ScopeExternalIndexConstraint } from './search.types';
 
 /**
  * Lightweight catalog entry for a registered search provider, returned by
@@ -149,7 +149,10 @@ export abstract class BaseSearchProvider {
      *    of the raw `query`.
      *
      * When `scopeConstraints` is undefined, the provider runs unconstrained (backward
-     * compatible pre-scope behavior).
+     * compatible pre-scope behavior). Inside `scopeConstraints`, a lane list that is
+     * `undefined` means unscoped too, but a DEFINED, EMPTY list means the scope gives this
+     * provider nothing: return no results without querying — never fall back to "everything"
+     * or to a default index.
      *
      * @param query - The search query text
      * @param topK - Maximum number of results to retrieve
@@ -165,6 +168,22 @@ export abstract class BaseSearchProvider {
         contextUser: UserInfo,
         scopeConstraints?: ScopeConstraints
     ): Promise<SearchResultItem[]>;
+
+    /**
+     * The scope's external-index rows of `indexType` that name an index, or `undefined` when the search
+     * is unscoped (`ExternalIndexes` absent). An EMPTY array means the scope gives this provider no
+     * index: search nothing. A provider falls back to its configured default index only on `undefined`.
+     *
+     * @param scopeConstraints - The per-scope constraints passed to `Search`, if any
+     * @param indexType - The `IndexType` this provider serves (e.g. `'Elasticsearch'`)
+     */
+    protected ScopedExternalIndexRows(
+        scopeConstraints: ScopeConstraints | undefined,
+        indexType: string
+    ): ScopeExternalIndexConstraint[] | undefined {
+        if (!scopeConstraints?.ExternalIndexes) return undefined;
+        return scopeConstraints.ExternalIndexes.filter(r => r.IndexType === indexType && !!r.ExternalIndexName);
+    }
 
     /**
      * Enumerate every search provider currently registered with ClassFactory under

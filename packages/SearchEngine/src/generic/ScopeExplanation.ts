@@ -100,7 +100,9 @@ export interface ScopeExplanation {
     Diagnostics: string[];
     /**
      * True when this scope would actually contribute results: entitlement did not deny it AND
-     * at least one lane is active. When `Entitlement` is null, this reflects the lanes alone.
+     * at least one lane is active AND (for a non-global scope) it has an enabled provider row. A
+     * non-global scope with no enabled provider row, or no lane, reaches nothing. When `Entitlement`
+     * is null, this reflects the configuration alone.
      *
      * Entitled-but-zero-active-lanes is the case worth surfacing on its own. It looks like a
      * permissions problem to whoever reports it ("I have access but get nothing"), while the
@@ -109,13 +111,13 @@ export interface ScopeExplanation {
      */
     Reachable: boolean;
     /**
-     * True when this scope configures **no lanes at all**, which in MJ means UNSCOPED — every
-     * provider reads an empty child configuration as "all entities, all indexes, no filter".
+     * True when this is a **global** scope that configures no lanes at all — UNSCOPED: a global
+     * scope runs every provider with no filter.
      *
-     * Surfaced as its own flag because it is the finding a reviewer is most likely to be
-     * hunting for and least likely to spot: such a scope has no filter to inspect, so it looks
-     * innocuous in every other field. It is also the exact opposite of what an empty `Lanes`
-     * array intuitively suggests.
+     * Always false for a non-global scope. A non-global scope with no lanes is the opposite of
+     * unbounded: every provider receives an empty lane list, which means "nothing for you", so it
+     * reaches nothing (`Reachable: false`). Before that rule, a lane-less non-global scope was
+     * read as unscoped too, which is why this flag exists.
      */
     Unbounded: boolean;
     /** The effective context after resolution — what the lane templates were rendered against. */
@@ -169,7 +171,9 @@ export function SummarizeExplanation(explanation: ScopeExplanation): string[] {
 
     lines.push('  Lanes:');
     if (!explanation.Lanes.length) {
-        lines.push('    (NONE CONFIGURED — this scope is UNSCOPED: providers apply no filter)');
+        lines.push(explanation.Unbounded
+            ? '    (NONE CONFIGURED — this global scope is UNSCOPED: providers apply no filter)'
+            : '    (NONE CONFIGURED — this scope reaches nothing)');
     }
     for (const lane of explanation.Lanes) {
         lines.push(`    [${lane.Status}] ${lane.Kind}: ${lane.Target}`);

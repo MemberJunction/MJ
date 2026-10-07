@@ -94,14 +94,51 @@ export function EscapeFilterByLiteral(value: string): string {
 }
 
 /**
+ * Why a value cannot be a **storage path segment**, or null when it can: it contains `..` or a
+ * separator (`/` or a backslash). A legitimate segment value (a uuid, an enum, an int) contains neither.
+ */
+function pathSegmentProblem(value: string): string | null {
+    if (value.includes('..')) return 'it contains ".." (path traversal)';
+    if (/[/\\]/.test(value)) return 'it contains a path separator';
+    return null;
+}
+
+/**
  * Escape a value for a **storage path segment** (`FolderPath`).
  *
- * Path traversal is the risk, not quoting: `..` and both separators are removed so a dimension can
- * never climb out of the folder its scope confined it to. This is the one escaper that is NOT a
- * no-op on an otherwise-valid value — a legitimate value simply must not contain a separator.
+ * Path traversal is the risk, not quoting. A value containing `..` or a separator is REFUSED
+ * (this throws) rather than stripped: stripping turned `..` into nothing and `../other` into
+ * `other`, so `clients/{{ context.X }}` rendered `clients/` (every client's folder) or another
+ * client's folder — a wider or different bound, silently. Control characters are still removed.
+ * Every legitimate value (uuid, enum, int, iso-date, bool) is returned unchanged.
+ *
+ * @throws {Error} when the value contains `..`, `/` or a backslash
  */
 export function EscapePathSegment(value: string): string {
-    return value.replace(/\.\./g, '').replace(/[/\\]/g, '').replace(/[\0\b\n\r\t\x1a]/g, '');
+    const problem = pathSegmentProblem(value);
+    if (problem) {
+        throw new Error(`a value interpolated into a storage path was refused because ${problem}: ${JSON.stringify(value.substring(0, 80))}`);
+    }
+    return value.replace(/[\0\b\n\r\t\x1a]/g, '');
+}
+
+/**
+ * Stands in for a refused path value until the template is rendered. The renderer escapes the WHOLE
+ * context up front, including keys the template never reads, so refusing there would fail a path for
+ * a value it does not use. The marker defers the refusal: `RenderScopeTemplate` throws only when it
+ * reaches the output. It starts with NUL, which no escaped value can contain (control characters are
+ * stripped), so finding it in a rendering always means a refused value was interpolated.
+ */
+const REFUSED_PATH_VALUE_MARKER = '\u0000mj-refused-path-value\u0000';
+
+/** True when a `path`-lane rendering interpolated a value {@link EscapePathSegment} refuses. */
+export function RenderedPathHasRefusedValue(rendered: string): boolean {
+    return rendered.includes('\u0000');
+}
+
+/** {@link EscapePathSegment} for the up-front context escape: the marker instead of a throw. */
+function escapePathSegmentDeferred(value: string): string {
+    return pathSegmentProblem(value) ? REFUSED_PATH_VALUE_MARKER : EscapePathSegment(value);
 }
 
 /** Escaper for each lane kind. `none`/`esdsl` pass through — see below. */
@@ -110,7 +147,7 @@ const ESCAPERS: Record<ScopeLaneKind, (v: string) => string> = {
     odata: EscapeODataLiteral,
     json: EscapeJsonValue,
     filter_by: EscapeFilterByLiteral,
-    path: EscapePathSegment,
+    path: escapePathSegmentDeferred,
     // Elasticsearch/OpenSearch DSL is JSON, so JSON escaping is the correct rule for it.
     esdsl: EscapeJsonValue,
     // Not a filter position: the value becomes query text, and escaping would corrupt the search.

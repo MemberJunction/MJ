@@ -67,6 +67,7 @@ import { MetadataSyncPushChecks } from '../checks/metadata-sync-push.checks';
 import { TaskGraphExecutionChecks } from '../checks/task-graph-execution.checks';
 import { SearchOriginGateChecks } from '../checks/search-origin-gate.checks';
 import { SearchProviderTrustChecks } from '../checks/search-provider-trust.checks';
+import { SearchScopeBoundChecks } from '../checks/search-scope-bound.checks';
 
 const makeCheck = (id: string): NamedCheck => ({ Id: id, Name: id, Fn: async () => { /* pass */ } });
 
@@ -186,6 +187,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['binary-fields', BinaryFieldsChecks, 6], // BF1-BF6 binary fields end to end + binary vector columns, client transport (IT101)
         ['search-origin-gate', SearchOriginGateChecks, 4], // SOG1-SOG4 the search origin-record gate against the live views (IT106)
         ['search-provider-trust', SearchProviderTrustChecks, 2], // SPT1 external-index hits verified, SPT2 unresolvable scope refused (IT108)
+        ['search-scope-bound', SearchScopeBoundChecks, 3], // SSB1-SSB3 a scoped search is bounded by its scope's rows (IT110)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
@@ -326,6 +328,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'search': 8,
         'search-origin-gate': 4,
         'search-provider-trust': 2,
+        'search-scope-bound': 3,
         'server-cache': 32,
         'shipped-agents-live': 4,
         'startup-mode': 3,
@@ -365,7 +368,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(109);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(110);
     });
 });
 

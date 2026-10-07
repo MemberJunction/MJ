@@ -170,18 +170,19 @@ export class EntitySearchProvider extends BaseSearchProvider {
     /**
      * Resolve the entity list to actually search.
      *
-     * - If `scopeConstraints.Entities` is provided, use those directly (each carries its own
-     *   rendered ExtraFilter + UserSearchString) — this is the "scoped" path.
-     * - Otherwise fall back to the legacy unscoped path (`AllowUserSearchAPI=true` with
-     *   optional `filters.EntityNames` restriction) and wrap each in a trivial constraint.
+     * - If `scopeConstraints.Entities` is defined, use it verbatim (each entry carries its own
+     *   rendered ExtraFilter + UserSearchString) — this is the "scoped" path. An EMPTY list means
+     *   the scope gives this provider no entity, so nothing is searched — never every entity.
+     * - Only when it is `undefined` (an unscoped search) fall back to the legacy path
+     *   (`AllowUserSearchAPI=true` with optional `filters.EntityNames`), wrapping each in a trivial constraint.
      */
     private buildScopedEntityList(
         md: IMetadataProvider,
         scopeConstraints: ScopeConstraints | undefined,
         filters: SearchFilters | undefined
     ): ScopeEntityConstraint[] {
-        if (scopeConstraints?.Entities?.length) {
-            // Honor the scope's explicit entity list verbatim.
+        if (scopeConstraints?.Entities) {
+            // Honor the scope's explicit entity list verbatim — including an empty one.
             return scopeConstraints.Entities;
         }
 
