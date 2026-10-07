@@ -5,20 +5,12 @@
  * @module @memberjunction/telephony-adapters
  */
 
-import { RunView, UserInfo, IMetadataProvider, Metadata, LogError, LogStatus } from '@memberjunction/core';
+import { RunView, UserInfo, IMetadataProvider, LogError, LogStatus } from '@memberjunction/core';
 import { EscapeSQLString } from '@memberjunction/global';
 import type { MJAIBridgeAgentIdentityEntity, MJAIBridgeProviderEntity } from '@memberjunction/core-entities';
-import { UserCache } from '@memberjunction/generic-database-provider';
 import { AIBridgeEngine } from '@memberjunction/ai-bridge-server';
-import { CreateBridgeRealtimeSession } from '@memberjunction/ai-agents';
-import {
-    BaseTelephonyBridge,
-    type BridgeNativeSdkBinding,
-    CARRIER_SAMPLE_RATE_CONFIG_KEY,
-    DIRECTION_CONFIG_KEY,
-    FROM_NUMBER_CONFIG_KEY,
-    INBOUND_CALL_ID_CONFIG_KEY,
-} from '@memberjunction/ai-bridge-base';
+import { CreateBridgeRealtimeSession, ResolveRealtimeCoAgentID } from '@memberjunction/ai-agents';
+import { BaseTelephonyBridge, type BridgeNativeSdkBinding, CARRIER_SAMPLE_RATE_CONFIG_KEY } from '@memberjunction/ai-bridge-base';
 import {
     createRingCentralSoftphone,
     RingCentralSoftphoneCallSdk,
@@ -28,6 +20,22 @@ import {
 } from '@memberjunction/ai-bridge-ringcentral';
 import type { RingCentralTelephonyConfig } from '../types.js';
 import { IAgentSessionManager, DefaultAgentSessionManager } from '../sessionManager.js';
+import { ResolveInboundContext } from './runAsIdentity.js';
+import { CallLifecycleTracker } from './callLifecycleTracker.js';
+import { CallEndObserverSdk } from './callEndObserver.js';
+import { CreateCallerIdentityResolver, type ICallerIdentityResolver } from './callerIdentity.js';
+import { TelephonyCapacity, type ICallCapacity } from './telephonyCapacity.js';
+import { AuthorizeOutboundCallOrRelease, BuildTelephonyCallConfiguration, TelephonyCallSessionStarter } from './telephonyCallSession.js';
+import {
+    OutboundCallRefusedError,
+    OutboundRateLimiter,
+    ResolveOutboundPolicy,
+    ResolveTransferDirectory,
+    type OutboundGuardDeps,
+} from './outboundCallPolicy.js';
+
+/** The engine surface this service drives (a `Pick` so tests inject a fake). */
+type TelephonyEngine = Pick<AIBridgeEngine, 'ProviderByName' | 'ProviderByDriverClass' | 'StartBridgeSession' | 'StopBridgeSession' | 'Config'>;
 
 const RINGCENTRAL_PROVIDER_DRIVER = 'RingCentralBridge';
 const AGENT_IDENTITY_ENTITY = 'MJ: AI Bridge Agent Identities';
@@ -39,6 +47,28 @@ const CODEC_CARRIER_RATE: Record<NonNullable<RingCentralSoftphoneConfig['codec']
     'OPUS/48000/2': 48000,
     'PCMU/8000': 8000,
 };
+
+/**
+ * How long SIP registration may stay pending before the extension reports itself unhealthy. Registration is
+ * normally a one-round-trip exchange; a minute of silence means the proxy is unreachable or the credentials are
+ * being ignored, and inbound calls to this line are going nowhere.
+ */
+export const REGISTRATION_DEADLINE_MS = 60_000;
+
+/** The longest registration-failure reason exposed through health reporting. */
+const REGISTRATION_REASON_MAX_CHARS = 300;
+
+/** Where the shared SIP registration stands. */
+export type RingCentralRegistrationState = 'not-started' | 'pending' | 'registered' | 'failed';
+
+/** The registration state plus a verdict, for health reporting. */
+export interface RingCentralRegistrationStatus {
+    State: RingCentralRegistrationState;
+    /** Why it is unhealthy (the failure, or how long it has been pending); absent when healthy. */
+    Reason?: string;
+    /** Whether the line can be expected to receive calls: registered, or still within the registration deadline. */
+    Healthy: boolean;
+}
 
 /** A resolved inbound call's identifying fields (mapped from a RingCentral SIP INVITE). */
 export interface InboundCallInput {
@@ -56,13 +86,25 @@ export interface InboundCallResult {
     accepted: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Why it was rejected (no agent identity for the DID, provider missing, etc.). */
     reason?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    /** Set when the call was refused only because the server is at its concurrent-call cap. */
+    Busy?: boolean;
 }
 
 /** Injectable collaborators (production defaults wired in the constructor; fakes in tests). */
 export interface RingCentralTelephonyServiceDeps {
-    engine?: Pick<AIBridgeEngine, 'ProviderByName' | 'ProviderByDriverClass' | 'StartBridgeSession' | 'Config'>;
+    engine?: TelephonyEngine;
     sessionFactory?: typeof CreateBridgeRealtimeSession;
     sessionManager?: IAgentSessionManager;
+    /** Overrides the agent-permission check of the outbound gate (defaults to `AIAgentPermissionHelper`). */
+    canRunAgent?: OutboundGuardDeps['CanRunAgent'];
+    /** Overrides how the co-agent that voices an agent is resolved (defaults to the shared chain the browser path uses). */
+    coAgentResolver?: typeof ResolveRealtimeCoAgentID;
+    /** Overrides the caller-identity resolver (defaults to the host's registration, else anonymous). */
+    callerResolver?: ICallerIdentityResolver;
+    /** Overrides the concurrent-call gate (defaults to the process-wide {@link TelephonyCapacity}). */
+    capacity?: ICallCapacity;
+    /** Test seam: the clock used for the registration deadline. */
+    now?: () => number;
     /** Test seam: a factory that builds the softphone handle (inject a fake to avoid the real SIP SDK). */
     createHandle?: typeof createRingCentralSoftphone;
 }
@@ -71,10 +113,18 @@ export interface RingCentralTelephonyServiceDeps {
  * Starts RingCentral bridge sessions over a shared SIP-softphone registration.
  */
 export class RingCentralTelephonyService {
-    private readonly engine: Pick<AIBridgeEngine, 'ProviderByName' | 'ProviderByDriverClass' | 'StartBridgeSession' | 'Config'>;
+    private readonly engine: TelephonyEngine;
     private readonly sessionFactory: typeof CreateBridgeRealtimeSession;
     private readonly sessionManager: IAgentSessionManager;
     private readonly createHandle: typeof createRingCentralSoftphone;
+    private readonly tracker: CallLifecycleTracker;
+    private readonly outboundGuard: OutboundGuardDeps;
+    private readonly starter: TelephonyCallSessionStarter;
+    private readonly capacity: ICallCapacity;
+    private readonly now: () => number;
+
+    /** Where SIP registration stands (reported by health checks). */
+    private registration: { State: RingCentralRegistrationState; Reason?: string; SinceMs: number } = { State: 'not-started', SinceMs: 0 };
 
     /** The shared SIP registration — created + registered by {@link start}; null until then. */
     private handle: RingCentralSoftphoneHandle | null = null;
@@ -90,21 +140,68 @@ export class RingCentralTelephonyService {
         this.sessionFactory = deps.sessionFactory ?? CreateBridgeRealtimeSession;
         this.sessionManager = deps.sessionManager ?? new DefaultAgentSessionManager();
         this.createHandle = deps.createHandle ?? createRingCentralSoftphone;
+        this.tracker = new CallLifecycleTracker(
+            (session, reason) => this.engine.StopBridgeSession(session.SessionBridgeID, reason, session.ContextUser, session.Provider),
+            config.maxCallSeconds,
+        );
+        const policy = ResolveOutboundPolicy(config.outbound);
+        this.outboundGuard = { Policy: policy, Limiter: new OutboundRateLimiter(policy.MaxCallsPerUserPerHour), CanRunAgent: deps.canRunAgent };
+        if (!deps.capacity) {
+            TelephonyCapacity.Instance.Configure(config.maxConcurrentCalls);
+        }
+        this.capacity = deps.capacity ?? TelephonyCapacity.Instance;
+        this.now = deps.now ?? Date.now;
+        this.starter = new TelephonyCallSessionStarter({
+            Engine: this.engine,
+            SessionFactory: this.sessionFactory,
+            SessionManager: this.sessionManager,
+            CoAgentResolver: deps.coAgentResolver ?? ResolveRealtimeCoAgentID,
+            CallerResolver: deps.callerResolver ?? CreateCallerIdentityResolver(),
+            OutboundPolicy: policy,
+            TransferTargets: ResolveTransferDirectory(config.transferTargets, policy),
+        });
+    }
+
+    /**
+     * Whether the SIP line can be expected to receive calls. `Start()` swallows a registration failure (it only
+     * logs), so without this the extension would report healthy while every inbound call went unanswered.
+     * Pending is healthy only until {@link REGISTRATION_DEADLINE_MS}; a failure is unhealthy with its reason.
+     */
+    public GetRegistrationStatus(): RingCentralRegistrationStatus {
+        const { State, Reason, SinceMs } = this.registration;
+        switch (State) {
+            case 'registered':
+                return { State, Healthy: true };
+            case 'failed':
+                return { State, Reason, Healthy: false };
+            case 'pending': {
+                const waitedMs = this.now() - SinceMs;
+                return waitedMs > REGISTRATION_DEADLINE_MS
+                    ? { State, Reason: `SIP registration has been pending for ${Math.round(waitedMs / 1000)}s.`, Healthy: false }
+                    : { State, Healthy: true };
+            }
+            default:
+                return { State, Reason: 'SIP registration has not been started.', Healthy: false };
+        }
     }
 
     /**
      * Creates + registers the shared SIP softphone and wires inbound INVITE handling.
      */
     public async Start(): Promise<void> {
+        this.registration = { State: 'pending', SinceMs: this.now() };
         try {
             this.carrierSampleRate = CODEC_CARRIER_RATE[this.config.codec ?? 'OPUS/16000'];
             this.handle = await this.createHandle(this.toSoftphoneConfig());
             this.handle.onInvite((info) => void this.onInboundInvite(info));
             await this.handle.register();
+            this.registration = { State: 'registered', SinceMs: this.now() };
             LogStatus('[Telephony][RingCentral] softphone telephony started (inbound + outbound ready).');
         } catch (e) {
             this.handle = null;
-            LogError(`[Telephony][RingCentral] softphone start failed: ${e instanceof Error ? e.message : String(e)}`);
+            const message = e instanceof Error ? e.message : String(e);
+            this.registration = { State: 'failed', Reason: message.slice(0, REGISTRATION_REASON_MAX_CHARS), SinceMs: this.now() };
+            LogError(`[Telephony][RingCentral] softphone start failed: ${message}`);
         }
     }
 
@@ -117,6 +214,8 @@ export class RingCentralTelephonyService {
     public dispose(): void {
         this.handle?.dispose();
         this.handle = null;
+        this.registration = { State: 'not-started', SinceMs: 0 };
+        this.tracker.Dispose();
     }
 
     /**
@@ -130,14 +229,34 @@ export class RingCentralTelephonyService {
             if (!identity) {
                 return { accepted: false, reason: `No active agent identity for dialed number '${input.to}'.` };
             }
-            await this.startBridge({
-                agentID: identity.AgentID,
-                direction: 'Inbound',
-                address: input.from,
-                inboundCallId: input.sessionId,
-                contextUser,
-                provider,
-            });
+            const lease = this.capacity.TryAcquire();
+            if (!lease) {
+                LogError(`[Telephony][RingCentral] inbound call ${input.sessionId} refused: at the concurrent-call cap.`);
+                return { accepted: false, Busy: true, reason: 'All agent lines are busy.' };
+            }
+            this.tracker.Begin(input.sessionId);
+            try {
+                const session = await this.starter.Start({
+                    ResolveProvider: () => this.resolveProvider(),
+                    Identity: identity,
+                    Direction: 'Inbound',
+                    RemoteNumber: input.from,
+                    Configuration: BuildTelephonyCallConfiguration({
+                        Direction: 'Inbound',
+                        CallerNumber: input.from,
+                        InboundCallId: input.sessionId,
+                        Extra: { [CARRIER_SAMPLE_RATE_CONFIG_KEY]: this.carrierSampleRate },
+                    }),
+                    BindSdk: this.BuildBindSdk(),
+                    ContextUser: contextUser,
+                    MetadataProvider: provider,
+                    Lease: lease,
+                });
+                await this.tracker.Attach(input.sessionId, { SessionBridgeID: session.SessionBridgeID, ContextUser: contextUser, Provider: provider });
+            } catch (e) {
+                this.tracker.Fail(input.sessionId);
+                throw e;
+            }
             return { accepted: true };
         } catch (e) {
             LogError(`[Telephony][RingCentral] inbound call ${input.sessionId} failed: ${e instanceof Error ? e.message : String(e)}`);
@@ -146,78 +265,69 @@ export class RingCentralTelephonyService {
     }
 
     /**
-     * Places an OUTBOUND call from a given agent identity to a destination number.
+     * Places an OUTBOUND call from a given agent identity to a destination number, after the shared outbound
+     * gate (agent permission, destination policy, rate limit) has authorized it.
+     *
+     * @throws {OutboundCallRefusedError} when the gate refuses the call (the message is caller-safe).
      */
     public async PlaceOutboundCall(agentIdentityId: string, toNumber: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<string> {
         const identity = await this.loadAgentIdentity(agentIdentityId, contextUser, provider);
         if (!identity) {
             throw new Error(`Agent identity '${agentIdentityId}' not found or inactive.`);
         }
-        const session = await this.startBridge({
-            agentID: identity.AgentID,
-            direction: 'Outbound',
-            address: toNumber,
-            fromNumber: identity.IdentityValue,
-            contextUser,
-            provider,
+        await this.engine.Config(false, contextUser, provider);
+        const to = (toNumber ?? '').trim();
+        const lease = this.capacity.TryAcquire();
+        if (!lease) {
+            LogError(`[Telephony][RingCentral] outbound call refused: at the concurrent-call cap.`);
+            throw new OutboundCallRefusedError('All agent lines are busy right now; try again shortly.', 'at-capacity');
+        }
+        const verdict = await AuthorizeOutboundCallOrRelease(
+            { User: contextUser, AgentIdentity: identity, CarrierProviderID: this.resolveProvider().ID, ToNumber: to },
+            this.outboundGuard,
+            lease,
+        );
+        if (!verdict.Allowed) {
+            throw new OutboundCallRefusedError(verdict.Reason, verdict.Code);
+        }
+        const session = await this.starter.Start({
+            ResolveProvider: () => this.resolveProvider(),
+            Identity: identity,
+            Direction: 'Outbound',
+            RemoteNumber: to,
+            Configuration: BuildTelephonyCallConfiguration({
+                Direction: 'Outbound',
+                AgentNumber: identity.IdentityValue,
+                Extra: { [CARRIER_SAMPLE_RATE_CONFIG_KEY]: this.carrierSampleRate },
+            }),
+            BindSdk: this.BuildBindSdk(),
+            ContextUser: contextUser,
+            MetadataProvider: provider,
+            Lease: lease,
         });
-        return session.RoomKey ?? '';
+        const callId = session.RoomKey ?? '';
+        await this.tracker.Attach(callId, { SessionBridgeID: session.SessionBridgeID, ContextUser: contextUser, Provider: provider });
+        return callId;
     }
 
     // ── internals ────────────────────────────────────────────────────────────────
 
-    /** Inbound INVITE coordinator: resolve the server principal, start a bridge, decline if no agent matched. */
+    /**
+     * Inbound INVITE coordinator: resolve the configured run-as user, start a bridge, decline the INVITE when the
+     * call cannot be admitted (no run-as user, or no agent matched the dialed number).
+     */
     private async onInboundInvite(info: InboundInviteInfo): Promise<void> {
-        const context = this.resolveServerContext();
-        if (!context) {
-            LogError('[Telephony][RingCentral] no server context user available; declining inbound call.');
+        const context = ResolveInboundContext(this.config.inboundRunAsUserEmail);
+        if (!context.Ok) {
+            LogError(`[Telephony][RingCentral] rejecting inbound call ${info.callId} to ${info.to}: ${context.Reason}`);
             await this.handle?.declineCall(info.callId);
             return;
         }
-        const result = await this.HandleInboundCall({ sessionId: info.callId, from: info.from, to: info.to }, context.user, context.provider);
+        const result = await this.HandleInboundCall({ sessionId: info.callId, from: info.from, to: info.to }, context.User, context.Provider);
         if (!result.accepted) {
             LogStatus(`[Telephony][RingCentral] inbound ${info.callId} not accepted: ${result.reason ?? 'unknown'}; declining.`);
             await this.handle?.declineCall(info.callId);
         }
-    }
-
-    /** Shared inbound/outbound bridge-start: resolve provider, open the realtime session, bind the SDK, start. */
-    private async startBridge(args: {
-        agentID: string;
-        direction: 'Inbound' | 'Outbound';
-        address: string;
-        inboundCallId?: string;
-        fromNumber?: string;
-        contextUser: UserInfo;
-        provider: IMetadataProvider;
-    }): Promise<{ RoomKey?: string }> {
-        await this.engine.Config(false, args.contextUser, args.provider);
-        const ringCentralProvider = this.resolveProvider();
-
-        const agentSession = await this.sessionManager.CreateSession({ agentID: args.agentID, userID: args.contextUser.ID }, args.contextUser, args.provider);
-        const realtimeSession = await this.sessionFactory({
-            AgentID: args.agentID,
-            TargetAgentID: args.agentID,
-            ContextUser: args.contextUser,
-            MetadataProvider: args.provider,
-            AgentSessionID: agentSession.ID,
-            RoomName: args.address,
-        });
-
-        const active = await this.engine.StartBridgeSession({
-            AgentSessionID: agentSession.ID,
-            AgentID: args.agentID,
-            TargetAgentID: args.agentID,
-            Provider: ringCentralProvider,
-            RealtimeSession: realtimeSession,
-            Address: args.address,
-            Direction: args.direction,
-            Configuration: this.buildSessionConfiguration(args.direction, args.fromNumber, args.inboundCallId),
-            BindSdk: this.BuildBindSdk(),
-            ContextUser: args.contextUser,
-            MetadataProvider: args.provider,
-        });
-        return { RoomKey: active.RoomKey };
     }
 
     private resolveProvider(): MJAIBridgeProviderEntity {
@@ -231,7 +341,8 @@ export class RingCentralTelephonyService {
     public BuildBindSdk(): BridgeNativeSdkBinding {
         return (driver) => {
             const telephony = driver as BaseTelephonyBridge;
-            telephony.SetSdkFactory(() => new RingCentralSoftphoneCallSdk(this.requireHandle()));
+            // Wrapped so the tracker learns of every call end (releasing the max-duration timer).
+            telephony.SetSdkFactory(() => new CallEndObserverSdk(new RingCentralSoftphoneCallSdk(this.requireHandle()), (callId) => this.tracker.Release(callId)));
         };
     }
 
@@ -247,20 +358,6 @@ export class RingCentralTelephonyService {
         return this.handle;
     }
 
-    private buildSessionConfiguration(direction: 'Inbound' | 'Outbound', fromNumber?: string, inboundCallId?: string): Record<string, unknown> {
-        const config: Record<string, unknown> = {
-            [DIRECTION_CONFIG_KEY]: direction,
-            [CARRIER_SAMPLE_RATE_CONFIG_KEY]: this.carrierSampleRate,
-        };
-        if (fromNumber) {
-            config[FROM_NUMBER_CONFIG_KEY] = fromNumber;
-        }
-        if (inboundCallId) {
-            config[INBOUND_CALL_ID_CONFIG_KEY] = inboundCallId;
-        }
-        return config;
-    }
-
     private toSoftphoneConfig(): RingCentralSoftphoneConfig {
         return {
             domain: this.config.sipDomain,
@@ -271,15 +368,6 @@ export class RingCentralTelephonyService {
             codec: this.config.codec,
             ignoreTlsCertErrors: this.config.ignoreTlsCertErrors,
         };
-    }
-
-    private resolveServerContext(): { user: UserInfo; provider: IMetadataProvider } | null {
-        const user = UserCache.Instance.GetSystemUser() ?? UserCache.Users.find((u) => u.IsActive && u.Type?.trim().toLowerCase() === 'owner') ?? null;
-        const provider = Metadata.Provider; // global-provider-ok: inbound telephony webhook runs in server-global provider context
-        if (!user || !provider) {
-            return null;
-        }
-        return { user, provider };
     }
 
     private async resolveAgentIdentityByPhone(dialedNumber: string, providerId: string, contextUser: UserInfo): Promise<MJAIBridgeAgentIdentityEntity | null> {

@@ -1,5 +1,125 @@
 # @memberjunction/messaging-adapters
 
+## 6.2.0-edge.3
+
+### Patch Changes
+
+- Updated dependencies [25bb295]
+- Updated dependencies [dfe40a4]
+- Updated dependencies [131f3c4]
+- Updated dependencies [0f04590]
+- Updated dependencies [41c2c08]
+- Updated dependencies [29b6ec3]
+- Updated dependencies [b545842]
+- Updated dependencies [24ddecc]
+- Updated dependencies [279b93e]
+- Updated dependencies [66fd011]
+- Updated dependencies [196160a]
+- Updated dependencies [bea2386]
+- Updated dependencies [60bd774]
+- Updated dependencies [35da130]
+- Updated dependencies [28c92e0]
+- Updated dependencies [997fe44]
+- Updated dependencies [4840fff]
+- Updated dependencies [ec97ad4]
+- Updated dependencies [49e0bd8]
+  - @memberjunction/ai@6.2.0-edge.3
+  - @memberjunction/core-entities@6.2.0-edge.3
+  - @memberjunction/global@6.2.0-edge.3
+  - @memberjunction/core@6.2.0-edge.3
+  - @memberjunction/generic-database-provider@6.2.0-edge.3
+  - @memberjunction/sqlserver-dataprovider@6.2.0-edge.3
+  - @memberjunction/ai-agents@6.2.0-edge.3
+  - @memberjunction/ai-core-plus@6.2.0-edge.3
+  - @memberjunction/task-graph@6.2.0-edge.3
+  - @memberjunction/server-extensions-core@6.2.0-edge.3
+
+## 6.2.0-edge.2
+
+### Patch Changes
+
+- f555162: Add a `compose:email` actionable command so an agent can hand the user a pre-filled email draft.
+
+  The agent drafts; the user sends. Nothing in this path transmits mail — the host opens the user's
+  own compose window via a `mailto:` URL and the user decides whether to send.
+  - **ai-core-plus** — `ComposeEmailCommand` joins the `ActionableCommand` union, with `BuildMailtoURL`,
+    `MAILTO_MAX_URL_LENGTH` and `IsMailtoURLWithinLimit`. The command carries no target field: which
+    compose surface opens is the host's decision, so retargeting later is a one-handler change rather
+    than a migration across every agent that emits one.
+  - **ng-conversations** — the handler opens the mail client via a synthesized anchor click (not
+    `window.open`, which strands an `about:blank` tab on a non-http scheme). Past the length limit it
+    refuses to open, copies the body best-effort, and emits for the host to open the draft artifact
+    instead: a mail client handed an over-long URL does not error, it opens a draft with the body
+    **silently truncated**. The emitted request carries `DraftCopiedToClipboard`, so the host can say
+    the clipboard changed without ever claiming a copy that failed. compose:email is logged by type
+    only, never with its body or recipients.
+  - **ng-explorer-core** — handles the over-length fallback by opening the draft artifact (by
+    `artifactId`, else the conversation's most recent) and showing one notification that says why
+    the mail client did not open, names the artifact that opened, and says whether the text is on the
+    clipboard. A stated `artifactId` that is not loaded opens nothing rather than a different
+    artifact, and "nothing to open" is a notification rather than a console warning.
+  - **messaging-adapters** — Slack and Teams degrade to a note naming the draft, because a `mailto:`
+    URL fails both platforms' button-URL checks and the command would otherwise render as nothing.
+    The note carries the label and the route back to Explorer only — never the recipient or subject:
+    a channel is a shared, retained surface, and what is safe beside the composing user's own button
+    is not safe for every participant.
+
+  The button shows the draft's recipients next to it: it otherwise renders only the agent-authored
+  label, so an agent influenced by injected content could pair a benign label with an unexpected
+  address and the user would not see it until their own mail client was already populated. The line
+  wraps rather than truncating, so a Bcc (listed last) is never cut off.
+
+- Updated dependencies [ca853fc]
+- Updated dependencies [f555162]
+- Updated dependencies [043f418]
+- Updated dependencies [e97d95c]
+- Updated dependencies [ff3097d]
+- Updated dependencies [79279f2]
+- Updated dependencies [2552b1e]
+- Updated dependencies [21f9e15]
+- Updated dependencies [28fdf22]
+- Updated dependencies [4248fb3]
+- Updated dependencies [672b4c6]
+- Updated dependencies [f3c6161]
+- Updated dependencies [0e5ad68]
+- Updated dependencies [5148534]
+- Updated dependencies [50ba290]
+- Updated dependencies [ffb3c0f]
+- Updated dependencies [0adaf76]
+- Updated dependencies [ce1a5c3]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [b03a928]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [0d61b53]
+- Updated dependencies [26c0178]
+- Updated dependencies [594f2e0]
+- Updated dependencies [705ab4e]
+- Updated dependencies [96daca8]
+- Updated dependencies [aa912ca]
+- Updated dependencies [f3fa01e]
+- Updated dependencies [3276daa]
+- Updated dependencies [d0cea53]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [5986939]
+- Updated dependencies [200e634]
+- Updated dependencies [4d647e6]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [bb33c77]
+- Updated dependencies [369e229]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [2854a2e]
+  - @memberjunction/ai-agents@6.2.0-edge.2
+  - @memberjunction/ai-core-plus@6.2.0-edge.2
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/ai@6.2.0-edge.2
+  - @memberjunction/core-entities@6.2.0-edge.2
+  - @memberjunction/task-graph@6.2.0-edge.2
+  - @memberjunction/generic-database-provider@6.2.0-edge.2
+  - @memberjunction/sqlserver-dataprovider@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+  - @memberjunction/server-extensions-core@6.2.0-edge.2
+
 ## 6.2.0-edge.1
 
 ### Patch Changes

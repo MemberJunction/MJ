@@ -58,6 +58,7 @@ import type { MJActionEntityExtended } from '@memberjunction/actions-base';
 import type { AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import { DEFAULT_LOOP_AGENT_PROMPT_PARAMS } from '../agent-types/loop-agent-prompt-params';
 import { PayloadFeedbackManager } from '../PayloadFeedbackManager';
+import { AIAPIKeys } from '@memberjunction/ai';
 
 // ============================================================================
 // Module mocks (boundaries only)
@@ -180,6 +181,8 @@ interface RunActionCall {
     activeSkillIDs?: unknown;
     /** `RunActionParams.RuntimeAPIKeyResolver` (the run's scoped key resolver) — absent when the run has no keys. */
     resolveAPIKey?: unknown;
+    /** `RunActionParams.CredentialScope` — absent when the run sets none. */
+    credentialScope?: unknown;
 }
 
 /** Save-queue flush diagnostics (shape from AgentRunStepSaveQueue.Flush). */
@@ -363,9 +366,10 @@ class LoopHarness {
                     ResultCodes: { Items: [] },
                 },
             ],
-            RunAction: async (input: { Action: { Name: string }; Params: ScriptedActionParam[]; Context?: { ActiveSkillIDs?: unknown }; RuntimeAPIKeyResolver?: unknown }): Promise<ScriptedActionResult> => {
+            RunAction: async (input: { Action: { Name: string }; Params: ScriptedActionParam[]; Context?: { ActiveSkillIDs?: unknown }; RuntimeAPIKeyResolver?: unknown; CredentialScope?: unknown }): Promise<ScriptedActionResult> => {
                 const call: RunActionCall = { actionName: input.Action.Name, params: input.Params, activeSkillIDs: input.Context?.ActiveSkillIDs };
                 if (input.RuntimeAPIKeyResolver !== undefined) call.resolveAPIKey = input.RuntimeAPIKeyResolver;
+                if (input.CredentialScope !== undefined) call.credentialScope = input.CredentialScope;
                 // What any log of the whole RunActionParams could contain — kept off the call record so
                 // the toEqual assertions over runActionCalls stay exact.
                 this.runActionParamsJSON.push(JSON.stringify({ ...input, Action: input.Action.Name }));
@@ -789,6 +793,91 @@ describe('BaseAgent.Execute — the run\'s runtime API keys reach actions as a S
         const { agent } = makeAgent(script());
         await agent.Execute(makeParams());
         expect('resolveAPIKey' in harness.runActionCalls[0]).toBe(false);
+        expect('credentialScope' in harness.runActionCalls[0]).toBe(false);
+    });
+});
+
+describe('BaseAgent.Execute — a RuntimeOnly credential scope reaches every prompt and action in the run', () => {
+    // #601 in Skip: an org's key was rejected, failover reached a vendor the org had no key for, and
+    // the run finished on the platform's key. The scope is the caller saying "only my keys", so it
+    // has to arrive wherever a key is spent — or a path that drops it falls back silently.
+    const KEYS = [{ driverClass: 'GeminiLLM', apiKey: 'sk-gemini' }];
+    const okAction = () => { harness.runAction = () => ({ Success: true, Message: 'ok', Params: [], Result: { ResultCode: 'SUCCESS' }, LogEntry: null }); };
+    const script = () => [() => llmEnvelope(actionsEnvelope()), () => llmEnvelope(successEnvelope())];
+
+    it('every prompt the agent runs carries the scope alongside the keys', async () => {
+        okAction();
+        const { agent, runner } = makeAgent(script());
+        await agent.Execute(makeParams({ apiKeys: KEYS, CredentialScope: 'RuntimeOnly' }));
+        expect(runner.Calls.length).toBeGreaterThan(0);
+        for (const call of runner.Calls) {
+            expect(call.CredentialScope).toBe('RuntimeOnly');
+            expect(call.apiKeys).toBe(KEYS);
+        }
+    });
+
+    it('the agent\'s own prompt, run as the system prompt\'s child, carries the scope too', async () => {
+        // The Loop type has a system prompt, so the agent's prompt goes out as a child prompt — with
+        // its own params, which the runner resolves keys for separately from the parent's.
+        okAction();
+        const { agent, runner } = makeAgent(script());
+        await agent.Execute(makeParams({ apiKeys: KEYS, CredentialScope: 'RuntimeOnly' }));
+        expect(runner.Calls.length).toBeGreaterThan(0);
+        for (const call of runner.Calls) {
+            const child = call.childPrompts?.[0]?.childPrompt;
+            expect(child).toBeDefined();
+            expect(child?.CredentialScope).toBe('RuntimeOnly');
+            expect(child?.apiKeys).toBe(KEYS);
+        }
+    });
+
+    describe('with a platform key for a class the run lacks', () => {
+        // Without a platform key the resolver answers undefined under ANY scope, so a dropped scope
+        // would pass unnoticed. With one, 'Any' would hand the action the platform's key.
+        const PLATFORM_ENV = 'AI_VENDOR_API_KEY__OPENAIIMAGEGENERATOR';
+        const clearKeyCache = (): void => {
+            (AIAPIKeys as unknown as Record<string, Record<string, string>>)['_cachedAPIKeys'] = {};
+        };
+        let saved: string | undefined;
+
+        beforeEach(() => {
+            saved = process.env[PLATFORM_ENV];
+            process.env[PLATFORM_ENV] = 'sk-platform-image';
+            clearKeyCache();
+        });
+
+        afterEach(() => {
+            if (saved === undefined) delete process.env[PLATFORM_ENV];
+            else process.env[PLATFORM_ENV] = saved;
+            clearKeyCache();
+        });
+
+        it('under the default scope the action falls back to the platform key — the control for the case below', async () => {
+            okAction();
+            const { agent } = makeAgent(script());
+            await agent.Execute(makeParams({ apiKeys: KEYS }));
+            const resolve = harness.runActionCalls[0].resolveAPIKey as (driverClass: string) => string | undefined;
+            expect(resolve('OpenAIImageGenerator')).toBe('sk-platform-image');
+        });
+
+        it('an action is told the scope, and the resolver has no platform fallback for a class the run lacks', async () => {
+            okAction();
+            const { agent } = makeAgent(script());
+            await agent.Execute(makeParams({ apiKeys: KEYS, CredentialScope: 'RuntimeOnly' }));
+            const call = harness.runActionCalls[0];
+            expect(call.credentialScope).toBe('RuntimeOnly');
+            const resolve = call.resolveAPIKey as (driverClass: string) => string | undefined;
+            expect(resolve('GeminiLLM')).toBe('sk-gemini');
+            expect(resolve('OpenAIImageGenerator')).toBeUndefined();
+        });
+    });
+
+    it('an action is told the scope even when the run carries no keys, so it does not reach for GetAIAPIKey', async () => {
+        okAction();
+        const { agent } = makeAgent(script());
+        await agent.Execute(makeParams({ CredentialScope: 'RuntimeOnly' }));
+        expect(harness.runActionCalls[0].credentialScope).toBe('RuntimeOnly');
+        expect('resolveAPIKey' in harness.runActionCalls[0]).toBe(false);
     });
 });
 
@@ -1204,6 +1293,20 @@ describe('BaseAgent.Execute — the payload change check (opt-in with payloadFee
             expect(state).not.toContain(LONG_SUMMARY.slice(0, 40));
             expect(asked.ContextUser?.ID).toBe(USER_ID);
             expect(asked.AgentID).toBe(AGENT_ID);
+        });
+
+        it('asks on the run\'s execution scope, so the check spends the run\'s keys and never the platform\'s', async () => {
+            const keys = [{ driverClass: 'GeminiLLM', apiKey: 'sk-gemini' }];
+            const { agent } = makeAgent(truncatingScript([]));
+            const ask = vi.spyOn(agent.DecisionService, 'Ask').mockResolvedValueOnce(likelihood(0.9));
+
+            await agent.Execute(makeParams({ payload: { summary: LONG_SUMMARY }, apiKeys: keys, configurationId: 'config-1', CredentialScope: 'RuntimeOnly' }));
+
+            expect(ask).toHaveBeenCalledTimes(1);
+            const scope = ask.mock.calls[0][0].ExecutionScope;
+            expect(scope?.apiKeys).toBe(keys);
+            expect(scope?.configurationId).toBe('config-1');
+            expect(scope?.CredentialScope).toBe('RuntimeOnly');
         });
 
         it('uses the agent\'s decisionPromptName', async () => {
@@ -1650,6 +1753,27 @@ describe('BaseAgent.Execute — decisions on a turn', () => {
         expect(harness.steps[3].StepName).toContain('Finish check');
         expect(harness.steps[4].StepName).toContain('Decision: triage');
         expect(runner.Calls[1].conversationMessages?.map(textOf).some((c) => c.startsWith('Decision results:') && c.includes('"id":"triage"'))).toBe(true);
+    });
+
+    it('asks the finishIf gate and the turn\'s decisions on the run\'s execution scope', async () => {
+        const ask = answerDecisions(0.4);
+        const { agent } = makeAgent([
+            () => llmEnvelope(gatedActionsEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        const keys = [{ driverClass: 'GeminiLLM', apiKey: 'sk-gemini' }];
+        const params: ExecuteAgentParams = { ...gateParams('on'), apiKeys: keys, configurationId: 'config-1', CredentialScope: 'RuntimeOnly' };
+
+        await agent.Execute(params);
+
+        const gateCalls = ask.mock.calls.filter(([args]) => 'q1' in args.Questions);
+        expect(gateCalls).toHaveLength(1);
+        expect(decisionCalls(ask)).toHaveLength(1);
+        for (const [args] of [...gateCalls, ...decisionCalls(ask)]) {
+            expect(args.ExecutionScope?.apiKeys).toBe(keys);
+            expect(args.ExecutionScope?.configurationId).toBe('config-1');
+            expect(args.ExecutionScope?.CredentialScope).toBe('RuntimeOnly');
+        }
     });
 
     it('in shadow mode, records a passing gate, does not end the run, and asks the decisions for the next prompt', async () => {
