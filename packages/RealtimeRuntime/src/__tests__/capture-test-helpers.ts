@@ -64,6 +64,10 @@ export class VideoClient extends BaseRealtimeClient {
 export class FakeController implements ILocalMediaController {
     public readonly StartCalls: Array<[LocalMediaKind, string | undefined]> = [];
     public readonly StopCalls: LocalMediaKind[] = [];
+    /** The cameras each camera switch asked for. */
+    public readonly SwitchCalls: string[] = [];
+    /** How the next camera switch ends: on the new camera, back on the one in use, or with no camera. */
+    public NextSwitch: 'switched' | 'back' | 'lost' = 'switched';
     public NextFailure: { Reason: LocalMediaFailure; Message: string } | null = null;
     public readonly CameraStream = stream('camera');
     public readonly MicrophoneStream = stream('microphone');
@@ -97,8 +101,22 @@ export class FakeController implements ILocalMediaController {
         this.state.next({ ...this.state.value, Camera: { Status: 'on', DeviceID: deviceId ?? 'default' } });
         return { Status: 'started', Stream: this.CameraStream };
     }
+    /** Switches the camera as the real controller does: starting, then the new camera, the old one, or none. */
     public async SwitchDevice(kind: LocalMediaKind, deviceId: string): Promise<LocalMediaResult> {
-        return this.Start(kind, deviceId);
+        if (kind !== 'camera') {
+            return this.Start(kind, deviceId);
+        }
+        this.SwitchCalls.push(deviceId);
+        const previous = this.state.value.Camera;
+        const outcome = this.NextSwitch;
+        this.NextSwitch = 'switched';
+        this.state.next({ ...this.state.value, Camera: { Status: 'starting' } });
+        if (outcome === 'switched') {
+            this.state.next({ ...this.state.value, Camera: { Status: 'on', DeviceID: deviceId } });
+            return { Status: 'started', Stream: this.CameraStream };
+        }
+        this.state.next({ ...this.state.value, Camera: outcome === 'back' ? previous : { Status: 'off' } });
+        return { Status: 'failed', Reason: 'in-use', Message: 'Another application is using the camera.' };
     }
     public Stop(kind: LocalMediaKind): void {
         this.StopCalls.push(kind);
@@ -113,6 +131,10 @@ export class FakeController implements ILocalMediaController {
     }
     public Release(): void {
         this.release();
+    }
+    /** The devices the browser lists from now on, as after a device is plugged in or the user allows the camera. */
+    public SetDevices(devices: MediaDevice[]): void {
+        this.state.next({ ...this.state.value, Devices: devices });
     }
     /** The camera goes away, as when it is unplugged. */
     public LoseCamera(): void {

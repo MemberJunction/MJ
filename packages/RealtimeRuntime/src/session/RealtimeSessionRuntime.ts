@@ -1620,6 +1620,17 @@ export class RealtimeSessionRuntime {
   }
 
   /**
+   * Moves the user's camera to another device while it is open (being checked or on): one of the camera's `Devices` on
+   * {@link Captures$}. The stream stays the same. Resolves with the camera's state; nothing changes while the camera is
+   * off.
+   *
+   * @param deviceId The camera to move to.
+   */
+  public async SwitchCamera(deviceId: string): Promise<RealtimeCaptureState> {
+    return this.captures ? this.captures.SwitchCamera(deviceId) : this.noSessionCapture();
+  }
+
+  /**
    * The user checked the camera and turned it on: the agent sees it from now on, and later camera starts in this call
    * skip the check. Returns the camera's state; unless the camera is waiting for its check (see {@link StartCamera}),
    * nothing changes.

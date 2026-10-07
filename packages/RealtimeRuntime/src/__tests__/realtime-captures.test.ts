@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { CHANNEL_INBOUND_VIDEO_TRACK, type RealtimeTrackDescriptor } from '@memberjunction/ai';
-import { VideoSourceArbiter, type SampledFrame } from '@memberjunction/ai-realtime-client';
+import { VideoSourceArbiter, type MediaDevice, type SampledFrame } from '@memberjunction/ai-realtime-client';
 import {
     RealtimeCaptures,
     type RealtimeCaptureAdmission,
@@ -54,7 +54,7 @@ describe('RealtimeCaptures', () => {
     it('starts the camera on a model that takes video: adds the track, opens the camera, shows it at the model rate', async () => {
         const { client, controller, samplers, captures, sources } = harness();
         const state = await captures.Start('camera', { DeviceID: 'cam-2' });
-        expect(state).toEqual({ Status: 'on', Stream: controller.CameraStream });
+        expect(state).toEqual({ Status: 'on', Stream: controller.CameraStream, DeviceID: 'cam-2', Devices: [] });
         expect(controller.StartCalls).toEqual([['camera', 'cam-2']]);
         expect(client.IsTrackEstablished('video', 'inbound')).toBe(true);
         expect(sources()).toEqual([{ SourceID: 'capture:camera', Label: 'Camera', Kind: 'camera' }]);
@@ -229,7 +229,7 @@ describe('RealtimeCaptures', () => {
         it('opens the camera for the user only: starting, checking, with the stream, and nothing for the agent', async () => {
             const { client, controller, samplers, captures, sources } = checked();
             const state = await captures.Start('camera', { DeviceID: 'cam-2' });
-            expect(state).toEqual({ Status: 'starting', Checking: true, Stream: controller.CameraStream });
+            expect(state).toEqual({ Status: 'starting', Checking: true, Stream: controller.CameraStream, DeviceID: 'cam-2', Devices: [] });
             expect(captures.States.Camera).toEqual(state);
             expect(controller.StartCalls).toEqual([['camera', 'cam-2']]);
             expect(sources()).toEqual([]);
@@ -241,13 +241,13 @@ describe('RealtimeCaptures', () => {
         it('shows the camera to the agent once the user confirms, and skips the check on the next start', async () => {
             const { client, controller, samplers, captures, sources } = checked();
             await captures.Start('camera');
-            expect(captures.ConfirmCamera()).toEqual({ Status: 'on', Stream: controller.CameraStream });
+            expect(captures.ConfirmCamera()).toEqual({ Status: 'on', Stream: controller.CameraStream, DeviceID: 'default', Devices: [] });
             expect(sources()).toEqual([{ SourceID: 'capture:camera', Label: 'Camera', Kind: 'camera' }]);
             expect(samplers[0]).toMatchObject({ Stream: controller.CameraStream, Rate: 2, Running: true });
             samplers[0].Push('frame-1');
             expect(client.Frames).toEqual(['frame-1']);
             captures.Stop('camera');
-            expect(await captures.Start('camera')).toEqual({ Status: 'on', Stream: controller.CameraStream });
+            expect(await captures.Start('camera')).toEqual({ Status: 'on', Stream: controller.CameraStream, DeviceID: 'default', Devices: [] });
         });
 
         it('a stop during the check (the user said not now) lets go of the camera and the track, and the next start checks again', async () => {
@@ -312,6 +312,80 @@ describe('RealtimeCaptures', () => {
             captures.Dispose();
             expect(controller.StopCalls).toEqual(['camera']);
             expect(captures.States.Camera).toEqual({ Status: 'off' });
+        });
+    });
+
+    describe("the camera's devices", () => {
+        const CAMERAS: MediaDevice[] = [
+            { DeviceID: 'cam-1', Kind: 'camera', Label: 'Front camera', GroupID: 'laptop' },
+            { DeviceID: 'cam-2', Kind: 'camera', Label: 'Desk camera', GroupID: 'desk' },
+        ];
+        const MICROPHONE: MediaDevice = { DeviceID: 'mic-1', Kind: 'microphone', Label: 'Headset', GroupID: 'headset' };
+
+        it('an open camera names the camera in use and lists the cameras, following the names and the list as they change', async () => {
+            const { controller, captures } = harness();
+            const unnamed = CAMERAS.map((d) => ({ ...d, Label: '' }));
+            controller.SetDevices([...unnamed, MICROPHONE]);
+            expect(await captures.Start('camera', { DeviceID: 'cam-1' })).toMatchObject({ Status: 'on', DeviceID: 'cam-1', Devices: unnamed });
+            controller.SetDevices([...CAMERAS, MICROPHONE]);
+            expect(captures.States.Camera.Devices).toEqual(CAMERAS);
+            const plugged: MediaDevice = { DeviceID: 'cam-3', Kind: 'camera', Label: 'USB camera', GroupID: 'usb' };
+            controller.SetDevices([...CAMERAS, plugged, MICROPHONE]);
+            expect(captures.States.Camera).toMatchObject({ Status: 'on', DeviceID: 'cam-1', Devices: [...CAMERAS, plugged] });
+        });
+
+        it('publishes the camera only when its device or its list changes', async () => {
+            const { controller, captures } = harness();
+            controller.SetDevices(CAMERAS);
+            await captures.Start('camera', { DeviceID: 'cam-1' });
+            const published: Array<string | undefined> = [];
+            captures.States$.subscribe((s) => published.push(s.Camera.DeviceID));
+            controller.SetDevices([...CAMERAS, MICROPHONE]);
+            await captures.SwitchCamera('cam-2');
+            expect(published).toEqual(['cam-1', 'cam-2']);
+        });
+
+        it('lists the cameras during the check, and lets go of the list when the camera stops', async () => {
+            const { controller, captures } = harness(true, [], undefined, { CameraCheck: true });
+            controller.SetDevices(CAMERAS);
+            expect(await captures.Start('camera', { DeviceID: 'cam-2' })).toMatchObject({ Status: 'starting', Checking: true, DeviceID: 'cam-2', Devices: CAMERAS });
+            captures.Stop('camera');
+            expect(captures.States.Camera).toEqual({ Status: 'off' });
+        });
+
+        it('switches the open camera to another, keeping the stream and what the agent is shown', async () => {
+            const { client, controller, samplers, captures, sources } = harness();
+            controller.SetDevices(CAMERAS);
+            await captures.Start('camera', { DeviceID: 'cam-1' });
+            expect(await captures.SwitchCamera('cam-2')).toEqual({ Status: 'on', Stream: controller.CameraStream, DeviceID: 'cam-2', Devices: CAMERAS });
+            expect(controller.SwitchCalls).toEqual(['cam-2']);
+            expect(samplers).toHaveLength(1);
+            expect(sources()).toEqual([{ SourceID: 'capture:camera', Label: 'Camera', Kind: 'camera' }]);
+            samplers[0].Push('from-the-desk');
+            expect(client.Frames).toEqual(['from-the-desk']);
+        });
+
+        it('switches during the check, which goes on waiting for the confirm', async () => {
+            const { controller, captures, sources } = harness(true, [], undefined, { CameraCheck: true });
+            await captures.Start('camera', { DeviceID: 'cam-1' });
+            expect(await captures.SwitchCamera('cam-2')).toEqual({ Status: 'starting', Checking: true, Stream: controller.CameraStream, DeviceID: 'cam-2', Devices: [] });
+            expect(sources()).toEqual([]);
+        });
+
+        it('keeps the camera in use when the new one cannot open, and stops when neither can', async () => {
+            const { client, controller, captures } = harness();
+            await captures.Start('camera', { DeviceID: 'cam-1' });
+            controller.NextSwitch = 'back';
+            expect(await captures.SwitchCamera('cam-2')).toMatchObject({ Status: 'on', DeviceID: 'cam-1' });
+            controller.NextSwitch = 'lost';
+            expect(await captures.SwitchCamera('cam-2')).toEqual({ Status: 'off' });
+            expect(client.IsTrackEstablished('video', 'inbound')).toBe(false);
+        });
+
+        it('switches nothing while the camera is off', async () => {
+            const { controller, captures } = harness();
+            expect(await captures.SwitchCamera('cam-2')).toEqual({ Status: 'off' });
+            expect(controller.SwitchCalls).toEqual([]);
         });
     });
 

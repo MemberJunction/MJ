@@ -33,6 +33,8 @@ import {
     type DisplayCaptureFailure,
     type DisplayCaptureOptions,
     type ILocalMediaController,
+    type LocalMediaState,
+    type MediaDevice,
     type SampledFrame,
 } from '@memberjunction/ai-realtime-client';
 import type { IRealtimeMediaHost } from '../hosts/IRealtimeMediaHost';
@@ -74,6 +76,13 @@ export interface RealtimeCaptureState {
     Stream?: MediaStream;
     /** What a screen share shows, while on. */
     Surface?: CapturedDisplaySurface;
+    /** The camera in use, while the camera is open (being checked or on). */
+    DeviceID?: string;
+    /**
+     * The cameras the browser lists, while the camera is open: what {@link RealtimeCaptures.SwitchCamera} can move it to.
+     * A browser gives their names only once the user has allowed the camera.
+     */
+    Devices?: MediaDevice[];
     /** Why the last start failed, while failed. */
     Failure?: RealtimeCaptureFailure;
     /** What to tell the user about the failure. */
@@ -244,10 +253,15 @@ export class RealtimeCaptures {
         }
         if (kind === 'camera' && this.options.CameraCheck && !this.cameraChecked) {
             this.live.camera = { Stream: acquired.Stream, Sampler: null, Release: acquired.Release };
-            return this.setState('camera', { Status: 'starting', Checking: true, Stream: acquired.Stream });
+            return this.setState('camera', { Status: 'starting', Checking: true, Stream: acquired.Stream, ...this.cameraDevices() });
         }
         this.live[kind] = { Stream: acquired.Stream, Sampler: this.showToAgent(kind, acquired.Stream), Release: acquired.Release };
-        return this.setState(kind, { Status: 'on', Stream: acquired.Stream, ...(acquired.Surface ? { Surface: acquired.Surface } : {}) });
+        return this.setState(kind, {
+            Status: 'on',
+            Stream: acquired.Stream,
+            ...(acquired.Surface ? { Surface: acquired.Surface } : {}),
+            ...(kind === 'camera' ? this.cameraDevices() : {}),
+        });
     }
 
     /**
@@ -261,7 +275,21 @@ export class RealtimeCaptures {
         }
         this.cameraChecked = true;
         live.Sampler = this.showToAgent('camera', live.Stream);
-        return this.setState('camera', { Status: 'on', Stream: live.Stream });
+        return this.setState('camera', { Status: 'on', Stream: live.Stream, ...this.cameraDevices() });
+    }
+
+    /**
+     * Moves the open camera (being checked or on) to another of its {@link RealtimeCaptureState.Devices}. The stream stays
+     * the same, so the preview and the agent's frames carry on from the new camera. When the new camera cannot open, the
+     * host's controller goes back to the one in use; when that fails too, the camera stops. Resolves with the camera's
+     * state; nothing changes while the camera is not open.
+     */
+    public async SwitchCamera(deviceId: string): Promise<RealtimeCaptureState> {
+        const controller = this.options.LocalMedia;
+        if (this.live.camera && controller) {
+            await controller.SwitchDevice('camera', deviceId);
+        }
+        return this.States.Camera;
     }
 
     /**
@@ -317,6 +345,23 @@ export class RealtimeCaptures {
         return this.setState(kind, { Status: 'failed', Failure: failure, Message: message });
     }
 
+    /** The camera in use and the cameras to choose from, as the host's controller reports them now. */
+    private cameraDevices(): CameraDevices {
+        return cameraDevicesOf(this.options.LocalMedia?.State);
+    }
+
+    /**
+     * Keeps the open camera's device and list current as the controller reports them: a switch, a camera plugged in or
+     * removed, names that appear once the user allows the camera. While a switch is under way the device in use stays.
+     */
+    private followCamera(media: LocalMediaState): void {
+        const current = this.States.Camera;
+        const next = cameraDevicesOf(media, current.DeviceID);
+        if (next.DeviceID !== current.DeviceID || !sameDevices(next.Devices, current.Devices ?? [])) {
+            this.setState('camera', { ...current, ...next });
+        }
+    }
+
     /**
      * Makes sure an inbound video track is live: the one the session already has, or one added now.
      *
@@ -370,6 +415,8 @@ export class RealtimeCaptures {
         const watch: Subscription = controller.State$.subscribe((state) => {
             if (state.Camera.Status === 'off' || state.Camera.Status === 'failed') {
                 this.Stop('camera');
+            } else if (this.live.camera) {
+                this.followCamera(state);
             }
         });
         return {
@@ -407,6 +454,23 @@ export class RealtimeCaptures {
             },
         };
     }
+}
+
+/** What an open camera's state says about its devices. */
+type CameraDevices = { DeviceID?: string; Devices: MediaDevice[] };
+
+/**
+ * The camera in use and the cameras among the devices, as a controller reports them. The camera in use is known while
+ * the controller reports it on; otherwise it is `inUse`, the one the capture already names.
+ */
+function cameraDevicesOf(media: LocalMediaState | undefined, inUse?: string): CameraDevices {
+    const deviceId = (media?.Camera.Status === 'on' ? media.Camera.DeviceID : undefined) ?? inUse;
+    return { ...(deviceId ? { DeviceID: deviceId } : {}), Devices: media?.Devices.filter((d) => d.Kind === 'camera') ?? [] };
+}
+
+/** Whether two lists name the same devices in the same order. */
+function sameDevices(a: readonly MediaDevice[], b: readonly MediaDevice[]): boolean {
+    return a.length === b.length && a.every((d, i) => d.DeviceID === b[i].DeviceID && d.Label === b[i].Label);
 }
 
 /** A DOM frame sampler at the given rate. */

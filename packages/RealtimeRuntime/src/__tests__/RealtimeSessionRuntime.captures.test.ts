@@ -157,12 +157,22 @@ describe('RealtimeSessionRuntime camera and screen share', () => {
         await start();
         const controller = host.Controllers[0];
         const state = await runtime.StartCamera('cam-1');
-        expect(state).toEqual({ Status: 'on', Stream: controller.CameraStream });
+        expect(state).toEqual({ Status: 'on', Stream: controller.CameraStream, DeviceID: 'cam-1', Devices: [] });
         expect(captures[captures.length - 1].Camera.Status).toBe('on');
         expect(controller.StartCalls).toContainEqual(['camera', 'cam-1']);
         expect(sources().map((s) => ({ SourceID: s.SourceID, ChannelKey: s.ChannelKey, Enabled: s.Enabled }))).toEqual([
             { SourceID: 'capture:camera', ChannelKey: 'Camera', Enabled: true },
         ]);
+        await runtime.EndRealtimeSession();
+    });
+
+    it('moves the camera to another device through the host controller, and moves nothing outside a call', async () => {
+        const { host, runtime, start } = build([new CaptureChannel('Camera', 'camera')]);
+        expect(await runtime.SwitchCamera('cam-2')).toMatchObject({ Status: 'failed', Failure: 'no-session' });
+        await start();
+        await runtime.StartCamera('cam-1');
+        expect(await runtime.SwitchCamera('cam-2')).toMatchObject({ Status: 'on', DeviceID: 'cam-2' });
+        expect(host.Controllers[0].SwitchCalls).toEqual(['cam-2']);
         await runtime.EndRealtimeSession();
     });
 
@@ -345,11 +355,11 @@ describe('RealtimeSessionRuntime camera and screen share', () => {
             const { host, runtime, captures, start, sources } = build([camera]);
             await start({ CameraCheck: true });
             const controller = host.Controllers[0];
-            expect(await runtime.StartCamera('cam-1')).toEqual({ Status: 'starting', Checking: true, Stream: controller.CameraStream });
+            expect(await runtime.StartCamera('cam-1')).toEqual({ Status: 'starting', Checking: true, Stream: controller.CameraStream, DeviceID: 'cam-1', Devices: [] });
             expect(controller.StartCalls).toContainEqual(['camera', 'cam-1']);
             expect(camera.Opened).toBe(1);
             expect(sources()).toEqual([]);
-            expect(runtime.ConfirmCamera()).toEqual({ Status: 'on', Stream: controller.CameraStream });
+            expect(runtime.ConfirmCamera()).toEqual({ Status: 'on', Stream: controller.CameraStream, DeviceID: 'cam-1', Devices: [] });
             expect(captures.at(-1)?.Camera.Status).toBe('on');
             expect(sources().map((s) => s.SourceID)).toEqual(['capture:camera']);
             runtime.StopCamera();
