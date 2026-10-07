@@ -28,7 +28,12 @@ import { CompositeKey, Metadata } from '@memberjunction/core';
   template: `
     @if (Origin) {
       @if (Clickable) {
-        <i class="fa-solid fa-arrow-left crumb-lead" aria-hidden="true"></i>
+        <!-- The arrow is the obvious "back" affordance, so it must act like one:
+             same full restore as the page segment. -->
+        <button type="button" class="crumb-back" (click)="OnPageClick()"
+                title="Back to where you opened this record" aria-label="Back to where you opened this record">
+          <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
+        </button>
         @if (DisplayLabel) {
           <button type="button" class="crumb-seg" (click)="OnPageClick()" title="Back to where you opened this record">
             {{ DisplayLabel }}
@@ -67,10 +72,29 @@ import { CompositeKey, Metadata } from '@memberjunction/core';
       border-bottom: 1px solid var(--mj-border-default);
     }
     :host:not(:has(*)) { display: none; }
-    .crumb-lead {
+    .crumb-back {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      margin-right: 2px;
+      padding: 0;
+      border: none;
+      border-radius: 4px;
+      background: transparent;
       font-size: 11px;
       color: var(--mj-text-muted);
-      margin-right: 6px;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+    .crumb-back:hover {
+      background: var(--mj-bg-surface-hover);
+      color: var(--mj-text-primary);
+    }
+    .crumb-back:focus-visible {
+      outline: 2px solid var(--mj-border-focus);
+      outline-offset: -2px;
     }
     /* Each breadcrumb level is its OWN link with its own hover */
     .crumb-seg {

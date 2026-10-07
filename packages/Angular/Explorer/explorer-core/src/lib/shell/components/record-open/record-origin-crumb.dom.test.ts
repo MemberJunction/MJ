@@ -60,6 +60,35 @@ describe('RecordOriginCrumbComponent (DOM)', () => {
     expect(nav.SwitchToAppHome).toHaveBeenCalledWith('app-1');
   });
 
+  it('the back arrow is a button that returns to where the record was opened', () => {
+    const origin = {
+      sourceAppId: 'app-1', sourceAppName: 'Data Explorer',
+      sourceNavLabel: 'Entities', sourceTabId: 't-1'
+    };
+    const { fixture, nav } = render(origin);
+    const back = query(fixture, 'button.crumb-back') as HTMLButtonElement | null;
+    expect(back).not.toBeNull();
+    expect(back?.getAttribute('aria-label')).toBe('Back to where you opened this record');
+    back?.click();
+    expect(nav.ReturnToRecordSource).toHaveBeenCalledWith(origin);
+    expect(nav.SwitchToAppHome).not.toHaveBeenCalled();
+  });
+
+  it('the back arrow also works for a single-label origin', () => {
+    const origin = { sourceAppId: 'app-chat', sourceAppName: 'Chat', sourceLabel: 'Conversation', sourceTabId: 't-9' };
+    const { fixture, nav } = render(origin);
+    (query(fixture, 'button.crumb-back') as HTMLButtonElement).click();
+    expect(nav.ReturnToRecordSource).toHaveBeenCalledWith(origin);
+  });
+
+  it('shows no back arrow when the origin has no return target', () => {
+    expect(query(render({ sourceLabel: 'Agent' }).fixture, '.crumb-back')).toBeNull();
+  });
+
+  it('shows no back arrow without an origin', () => {
+    expect(query(render(null).fixture, '.crumb-back')).toBeNull();
+  });
+
   it('renders the label as a single link for overlay origins (sourceLabel wins)', () => {
     const { fixture } = render({
       sourceAppId: 'app-chat', sourceAppName: 'Chat',
