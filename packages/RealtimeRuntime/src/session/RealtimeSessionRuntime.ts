@@ -392,6 +392,7 @@ export class RealtimeSessionRuntime {
   private _agentName$ = new BehaviorSubject<string>('Sage');
   private _modelName$ = new BehaviorSubject<string | null>(null);
   private _minimized$ = new BehaviorSubject<boolean>(false);
+  private _savingRecording$ = new BehaviorSubject<boolean>(false);
   private _activeChannels$ = new BehaviorSubject<BaseRealtimeChannelClient[]>([]);
   private _channelFocus$ = new Subject<RealtimeChannelFocusEvent>();
   // ─── Generic session-lifecycle events (consumed by RealtimeSessionsAdapter to
@@ -443,6 +444,20 @@ export class RealtimeSessionRuntime {
    * pure presentation state, reset to `false` at session start and teardown.
    */
   public readonly Minimized$: Observable<boolean> = this._minimized$.asObservable();
+
+  /**
+   * True while the end-of-call recording is being saved: from the first statement of a teardown
+   * that holds a recorder until that teardown settles. False at construction and for unrecorded
+   * sessions. Exists for #5195: the page must stay open until the consolidated upload lands, or
+   * the recording is lost. The runtime is platform-free, so hosts own the reaction (a browser
+   * `beforeunload` guard, a "saving" indicator, etc.).
+   */
+  public readonly SavingRecording$: Observable<boolean> = this._savingRecording$.asObservable();
+
+  /** Synchronous read of {@link SavingRecording$}. */
+  public get IsSavingRecording(): boolean {
+    return this._savingRecording$.value;
+  }
 
   /**
    * The session's ACTIVE interactive-channel plugins, resolved from the `MJ: AI Agent
@@ -3008,6 +3023,9 @@ export class RealtimeSessionRuntime {
       return;
     }
     this.teardownInFlight = this.runTeardown(closeServerSession).finally(() => {
+      if (this._savingRecording$.value) {
+        this._savingRecording$.next(false);
+      }
       this.teardownInFlight = null;
     });
     await this.teardownInFlight;
@@ -3015,6 +3033,11 @@ export class RealtimeSessionRuntime {
 
   /** The body of {@link teardown}; never called concurrently with itself. */
   private async runTeardown(closeServerSession: boolean): Promise<void> {
+    // Arm BEFORE any await so a tab closed in the first milliseconds of teardown is still guarded.
+    if (this.recorder) {
+      this._savingRecording$.next(true);
+    }
+
     // First: stop asserting liveness. A pulse racing the close would re-stamp LastActiveAt on a
     // session we are deliberately ending, leaving an Idle row the janitor then has to age out.
     this.stopLivenessPulse();

@@ -400,6 +400,55 @@ describe('session lifecycle, driven end to end with fakes', () => {
         });
     });
 
+    describe('SavingRecording$ (#5195)', () => {
+        it('reports saving before the first teardown await', async () => {
+            const { runtime } = buildStalled();
+            await runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider'), { recordingConsent: true });
+            void runtime.EndRealtimeSession();
+            // Synchronous: no await between End and the arm.
+            expect(runtime.IsSavingRecording).toBe(true);
+        });
+
+        it('stays saving while the upload is in flight and clears once it lands', async () => {
+            const { runtime, provider } = buildStalled();
+            await runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider'), { recordingConsent: true });
+            const ending = runtime.EndRealtimeSession();
+            await provider.UploadStarted;
+            expect(runtime.IsSavingRecording).toBe(true);
+            provider.FinishUpload();
+            await ending;
+            expect(runtime.IsSavingRecording).toBe(false);
+        });
+
+        it('disarms after a failed upload', async () => {
+            const { runtime, provider } = buildStalled();
+            await runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider'), { recordingConsent: true });
+            const ending = runtime.EndRealtimeSession();
+            await provider.UploadStarted;
+            provider.FailUpload();
+            await ending; // upload failures never reject teardown
+            expect(runtime.IsSavingRecording).toBe(false);
+        });
+
+        it('never reports saving for an unrecorded session', async () => {
+            const { runtime } = build(new FakeMediaHost());
+            const seen: boolean[] = [];
+            runtime.SavingRecording$.subscribe((s) => seen.push(s));
+            await runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider')); // no consent
+            await runtime.EndRealtimeSession();
+            expect(seen).toEqual([false]);
+        });
+
+        it('coalesced teardowns arm and clear once', async () => {
+            const { runtime } = build(new FakeMediaHost());
+            await runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider'), { recordingConsent: true });
+            const seen: boolean[] = [];
+            runtime.SavingRecording$.subscribe((s) => seen.push(s));
+            await Promise.all([runtime.EndRealtimeSession(), runtime.EndRealtimeSession()]);
+            expect(seen).toEqual([false, true, false]);
+        });
+    });
+
     describe('recording mixes the agent stream (#5153)', () => {
         const agentStream = { getAudioTracks: () => [{}], getTracks: () => [] } as unknown as MediaStream;
 
