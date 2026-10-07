@@ -1280,7 +1280,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT105 - Cloudflare Clef Decision Models",
+            "TestID": "@lookup:MJ: Tests.Name=IT108 - Cloudflare Clef Decision Models",
             "Sequence": 48,
             "Status": "Active"
           },
@@ -1291,7 +1291,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT106 - Kev and System One Endpoint Decision Models",
+            "TestID": "@lookup:MJ: Tests.Name=IT109 - Kev and System One Endpoint Decision Models",
             "Sequence": 48,
             "Status": "Active"
           },
@@ -1308,6 +1308,17 @@
           },
           "primaryKey": {
             "ID": "D0A93B02-FD0F-4B47-89D0-914DC49D13B6"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT105 - Work Queue Runtime (native host, operators, REST)",
+            "Sequence": 48,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "B88AFB7E-06E4-47D4-BC45-8DDE8FF215A8"
           }
         },
         {

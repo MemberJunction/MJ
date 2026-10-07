@@ -29,8 +29,8 @@ All nine deterministic bundles honor the family's **anti-vacuity / loud-skip dis
 | `conversation-compaction` | 12 | CC1–CC12 | deterministic | server | IT30 | Deterministic |
 | `agent-decisions-switch` | 9 | DS1–DS9 | deterministic | server | IT97 | Deterministic |
 | `binary-fields` | 6 | BF1–BF6 | deterministic (BF4, BF6 mutation-gated) | client | IT101 | Deterministic |
-| `cloudflare-clef` | 6 | CF1–CF6 | deterministic | server | IT105 | Deterministic |
-| `systemone-kev` | 10 | KV1–KV10 | deterministic | server | IT106 | Deterministic |
+| `cloudflare-clef` | 6 | CF1–CF6 | deterministic | server | IT108 | Deterministic |
+| `systemone-kev` | 10 | KV1–KV10 | deterministic | server | IT109 | Deterministic |
 | `prompt-runner` | 1 | PR1 | live-model | server | IT16 | Live Model |
 | `agent-runner` | 1 | AR1 | live-model | server | IT17 | Live Model |
 | `concurrent` | 2 | CC1–CC2 (bundle-prefixed `concurrent.CC*`) | live-model | server | IT18 | Live Model |
@@ -366,7 +366,7 @@ pnpm mj test run "IT101 - Binary Fields and Vector Columns"
 | `CloudflareDecision`'s missing-account check disabled | KV7 ("requests Clef sent with no account ID — expected 0, got 1"); the guard answered, nothing left the process |
 | `CreateSystemOneHTTPError` drops the HTTP status | KV8 ("503: the attempts the runner logged — expected ServiceUnavailable:retry, got Unknown:retry") |
 | `OpenRouterDecision` always sends its default (Jev) model | KV9 (the request body's `model`) |
-| the `ModelVendor` binding looked up on only the first Active row of the model and vendor, in both `HasCredentialsAvailable` and `ResolveCredentialForExecution` (the pre-fix `BaseModelRunner`) | KV10 ("the candidate has no credential after its Inference Provider row was bound (the Model Developer row, first in the engine, was read instead)"); its precondition held, every other check passed, and IT105's CF6 still passed, because Clef's Inference Provider row sorts first by key |
+| the `ModelVendor` binding looked up on only the first Active row of the model and vendor, in both `HasCredentialsAvailable` and `ResolveCredentialForExecution` (the pre-fix `BaseModelRunner`) | KV10 ("the candidate has no credential after its Inference Provider row was bound (the Model Developer row, first in the engine, was read instead)"); its precondition held, every other check passed, and IT108's CF6 still passed, because Clef's Inference Provider row sorts first by key |
 | the same, in `ResolveCredentialForExecution` alone | KV10 ("the decision failed: System One endpoint has no base URL…": the candidate was selected but no credential resolved) |
 
 | Id | Name (abridged) | Asserted observable | Failure it catches |
