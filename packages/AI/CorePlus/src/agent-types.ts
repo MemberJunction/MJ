@@ -1193,8 +1193,35 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      * Scoped Search binding its skill principal to the run. Set by `ExecuteSubAgent`; hosts need not.
      */
     parentActivatedSkillIDs?: readonly string[];
-    /** Optional data for template rendering and prompt execution, passed to the agent's prompt as well as all sub-agents */
+    /**
+     * Optional data for template rendering and prompt execution, passed to the agent's prompt as well as all sub-agents.
+     *
+     * Its reserved keys (`RESERVED_AGENT_RUN_DATA_KEYS`: `PrimaryScopeEntityName`, `PrimaryScopeEntityID`,
+     * `PrimaryScopeRecordID`, `SecondaryScopes`, `__agentTypePromptParams`) are read only when
+     * {@link TrustReservedRunData} is set; otherwise `BaseAgent.Execute` removes them. Set a run's scope with
+     * {@link PrimaryScopeEntityName}, {@link PrimaryScopeRecordID} and {@link SecondaryScopes} instead.
+     */
     data?: Record<string, any>;
+    /**
+     * **Server-only — never set it from client input.** Lets this run read the reserved keys of {@link data}: the
+     * fallbacks for the run's scope (`PrimaryScopeEntityName`, `PrimaryScopeEntityID`, `PrimaryScopeRecordID`,
+     * `SecondaryScopes`) and its highest-precedence agent-type parameters (`__agentTypePromptParams`, which can turn
+     * on capabilities such as the Loop type's `enableTaskGraphs`).
+     *
+     * Without it, `BaseAgent.Execute` removes those keys from `data` before the run starts and logs their names
+     * (never their values). So whatever reaches `data` from a browser, an action call (Execute Agent, including one a
+     * model makes inside a run), an MCP or A2A request or a Runtime Action script cannot choose a run's tenant, the
+     * memory it reads or what it may do — whichever entry point started it.
+     *
+     * Server code sets a run's scope with the first-class fields — {@link PrimaryScopeEntityName},
+     * {@link PrimaryScopeRecordID}, {@link SecondaryScopes} — which need no marker. Set this only when `data` itself
+     * comes from a caller the server has authenticated as trusted: MJServer's agent-run resolvers set it for the
+     * system user and API-key integrations (never for a widget guest), and a sub-agent inherits its parent's value
+     * (the model-authored `templateParameters` merged into the child's `data` lose the reserved keys regardless).
+     *
+     * @since 6.2.0
+     */
+    TrustReservedRunData?: boolean;
     /**
      * Optional input artifacts for this run. Consumed by the agent's
      * ArtifactToolManager: each artifact is registered, surfaced in the

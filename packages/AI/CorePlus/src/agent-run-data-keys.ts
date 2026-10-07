@@ -1,3 +1,5 @@
+import type { ExecuteAgentParams } from './agent-types';
+
 /**
  * The `ExecuteAgentParams.data` keys that change what an agent run IS, not just what its prompt says.
  *
@@ -5,12 +7,13 @@
  *  - `PrimaryScopeEntityName`, `PrimaryScopeRecordID`, `SecondaryScopes` decide the run's scope — the notes and
  *    examples memory injects, the pre-execution RAG search context, the scope columns on the `MJ: AI Agent Runs`
  *    row, the scope handed to every action (`RunActionParams.RunScope`) and what sub-agents inherit.
- *  - `__agentTypePromptParams` is the highest-precedence agent-type parameter layer (the only source of the Loop
- *    type's `enableTaskGraphs`, and a switch for decisions).
+ *  - `__agentTypePromptParams` is the highest-precedence agent-type parameter layer (a per-run switch for the Loop
+ *    type's `enableTaskGraphs`, and for decisions).
  *
- * Only trusted server code may set them. Two places strip them from `data` that came from somewhere less trusted:
- * the server's agent-run resolvers (from a browser's `data` argument) and `BaseAgent`'s sub-agent build (from the
- * model-authored `templateParameters` merged into the child's `data`).
+ * A run reads them only when its caller set `ExecuteAgentParams.TrustReservedRunData`, which documents who may:
+ * `BaseAgent.Execute` removes them from every other run's `data` ({@link WithAgentRunDataTrustApplied}), whatever
+ * entry point started it. `BaseAgent`'s sub-agent build also removes them from the model-authored
+ * `templateParameters` it merges into a child's `data`, trusted parent or not.
  *
  * `PrimaryScopeEntityID` has no `data` reader today; it is reserved with the rest of the scope family so a future
  * fallback for it cannot reopen this.
@@ -46,4 +49,36 @@ export function WithoutReservedAgentRunDataKeys(data: Record<string, unknown>): 
     }
     const kept = Object.entries(data).filter(([key]) => !strippedKeys.includes(key));
     return { Data: Object.fromEntries(kept), StrippedKeys: strippedKeys };
+}
+
+/** The result of {@link WithAgentRunDataTrustApplied}. */
+export interface AgentRunParamsWithDataTrust<T> {
+    /** The params to run with: the input itself when nothing was removed, otherwise a shallow copy with the cleaned `data`. */
+    Params: T;
+    /** The reserved keys removed from `data`, in {@link RESERVED_AGENT_RUN_DATA_KEYS} order. Empty when none were. */
+    StrippedKeys: string[];
+}
+
+/**
+ * Applies the run-data trust rule (`ExecuteAgentParams.TrustReservedRunData`) to an agent run's params: unless the
+ * caller set `TrustReservedRunData: true`, the reserved keys are removed from `data`. Everything else in `data`, and
+ * every other param, is kept. Pure: it never mutates `params` or its `data`, and does not log.
+ *
+ * `BaseAgent.Execute` applies it to every run; anything that reads the reserved keys before a run starts (or outside
+ * one) applies it too, so it reads what the run will.
+ *
+ * @param params - The run's params (`ExecuteAgentParams`, or anything carrying its `data` and `TrustReservedRunData`).
+ * @returns The params to run with and the keys that were removed.
+ */
+export function WithAgentRunDataTrustApplied<T extends Pick<ExecuteAgentParams, 'data' | 'TrustReservedRunData'>>(
+    params: T,
+): AgentRunParamsWithDataTrust<T> {
+    if (params.TrustReservedRunData === true || !params.data) {
+        return { Params: params, StrippedKeys: [] };
+    }
+    const { Data, StrippedKeys } = WithoutReservedAgentRunDataKeys(params.data);
+    if (StrippedKeys.length === 0) {
+        return { Params: params, StrippedKeys };
+    }
+    return { Params: { ...params, data: Data }, StrippedKeys };
 }

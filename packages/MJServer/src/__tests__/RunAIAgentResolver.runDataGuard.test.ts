@@ -1,11 +1,12 @@
 /**
- * @fileoverview Every agent-run entry of `RunAIAgentResolver` drops the reserved scope and agent-type
- * keys from a browser's `data` before it reaches `ExecuteAgentParams` (A12.15).
+ * @fileoverview Every agent-run entry of `RunAIAgentResolver` tells the run whether it may read the reserved scope
+ * and agent-type keys from a client's `data` (`ExecuteAgentParams.TrustReservedRunData`, A12.15).
  *
- * The rule itself is pinned by `agent-run-data-guard.test.ts`; these tests pin the call sites: the
- * synchronous and fire-and-forget paths of `RunAIAgent` and `RunAIAgentFromConversationDetail`, the
- * widget-guest path (judged on the guest's own payload, not the system principal it is elevated to),
- * and the trusted callers that keep the keys.
+ * The decision is pinned by `agent-run-data-guard.test.ts`, and what an untrusted run loses by the ai-core-plus and
+ * ai-agents suites (`BaseAgent.Execute` drops the keys). These tests pin the call sites: the synchronous and
+ * fire-and-forget paths of `RunAIAgent` and `RunAIAgentFromConversationDetail`, the widget-guest path (judged on
+ * the guest's own payload, not the system principal it is elevated to) and the trusted callers — each through the
+ * real `executeAIAgent`, up to the params handed to `AgentRunner`. The resolver forwards `data` as sent.
  */
 import 'reflect-metadata'; // must precede any type-graphql decorator evaluation
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -70,8 +71,6 @@ interface ResolverSeams {
     CheckAPIKeyScopeAuthorization: Fn;
     GetUserFromPayload: Fn;
     loadConversationHistoryWithAttachments: Fn;
-    executeAIAgent: Fn;
-    executeAgentInBackground: Fn;
     validateAgent: Fn;
     persistInFlightAgentFailure: Fn;
 }
@@ -100,9 +99,17 @@ function makeContext(userPayload: Partial<UserPayload>): AppContext {
     } as unknown as AppContext;
 }
 
-/** The parsed `data` the run was handed (position 7 of executeAIAgent / executeAgentInBackground). */
-function dataHandedTo(fn: Fn): Record<string, unknown> {
-    return JSON.parse(fn.mock.calls[0][7] as string) as Record<string, unknown>;
+/** The params the n-th run was handed by the real executeAIAgent (what AgentRunner.RunAgentInConversation received). */
+interface HandedParams {
+    data: Record<string, unknown>;
+    TrustReservedRunData?: boolean;
+    contextUser: { ID: string };
+}
+
+/** Waits for the n-th run to start (the fire-and-forget path starts it after the resolver has returned). */
+async function handedParams(n = 0): Promise<HandedParams> {
+    await vi.waitFor(() => expect(hoisted.runAgentInConversation.mock.calls.length).toBeGreaterThan(n));
+    return hoisted.runAgentInConversation.mock.calls[n][0] as HandedParams;
 }
 
 function runAIAgent(resolver: RunAIAgentResolver, ctx: AppContext, fireAndForget?: boolean) {
@@ -133,48 +140,48 @@ afterEach(() => {
 });
 
 describe('RunAIAgent — reserved run-data keys', () => {
-    it('reach ExecuteAgentParams.data without the reserved keys for an interactive user', async () => {
+    it('marks the run untrusted for an interactive user and forwards data as sent', async () => {
         const { resolver } = makeResolver();
 
         await runAIAgent(resolver, makeContext({}));
 
-        const params = hoisted.runAgentInConversation.mock.calls[0][0] as { data: Record<string, unknown> };
-        expect(params.data).toEqual(ORDINARY);
+        const params = await handedParams();
+        expect(params.TrustReservedRunData).toBe(false);
+        expect(params.data).toEqual(JSON.parse(CLIENT_DATA));
     });
 
-    it('are dropped on the fire-and-forget path too', async () => {
-        const { resolver, seams } = makeResolver();
-        seams.executeAgentInBackground = vi.fn();
+    it('marks it untrusted on the fire-and-forget path too', async () => {
+        const { resolver } = makeResolver();
 
         await runAIAgent(resolver, makeContext({}), true);
 
-        expect(dataHandedTo(seams.executeAgentInBackground)).toEqual(ORDINARY);
+        expect((await handedParams()).TrustReservedRunData).toBe(false);
     });
 
-    it('are kept, byte for byte, for an API-key caller', async () => {
-        const { resolver, seams } = makeResolver();
-        seams.executeAIAgent = vi.fn().mockResolvedValue({ success: true, result: '{}' });
+    it('marks it trusted for an API-key caller, on both paths', async () => {
+        const { resolver } = makeResolver();
+        const ctx = makeContext({ apiKeyId: 'key-1', apiKeyHash: 'hash-1' });
 
-        await runAIAgent(resolver, makeContext({ apiKeyId: 'key-1', apiKeyHash: 'hash-1' }));
+        await runAIAgent(resolver, ctx);
+        await runAIAgent(resolver, ctx, true);
 
-        expect(seams.executeAIAgent.mock.calls[0][7]).toBe(CLIENT_DATA);
+        expect((await handedParams(0)).TrustReservedRunData).toBe(true);
+        expect((await handedParams(1)).TrustReservedRunData).toBe(true);
     });
 });
 
 describe('RunAIAgentFromConversationDetail — reserved run-data keys', () => {
-    it('are dropped for an interactive user on both paths', async () => {
-        const { resolver, seams } = makeResolver();
-        seams.executeAIAgent = vi.fn().mockResolvedValue({ success: true, result: '{}' });
-        seams.executeAgentInBackground = vi.fn();
+    it('marks the run untrusted for an interactive user on both paths', async () => {
+        const { resolver } = makeResolver();
 
         await runFromDetail(resolver, makeContext({}));
         await runFromDetail(resolver, makeContext({}), true);
 
-        expect(dataHandedTo(seams.executeAIAgent)).toEqual(ORDINARY);
-        expect(dataHandedTo(seams.executeAgentInBackground)).toEqual(ORDINARY);
+        expect((await handedParams(0)).TrustReservedRunData).toBe(false);
+        expect((await handedParams(1)).TrustReservedRunData).toBe(false);
     });
 
-    it('are dropped for a widget guest although its run executes as the system user', async () => {
+    it('marks a widget-guest run untrusted although it executes as the system user', async () => {
         const { resolver } = makeResolver();
         hoisted.resolveWidgetGuestRunContext.mockResolvedValue({
             ElevatedUser: SYSTEM_USER,
@@ -184,29 +191,32 @@ describe('RunAIAgentFromConversationDetail — reserved run-data keys', () => {
 
         await runFromDetail(resolver, makeContext({ email: GUEST.Email, userRecord: GUEST }));
 
-        const params = hoisted.runAgentInConversation.mock.calls[0][0] as { contextUser: { ID: string }; data: Record<string, unknown> };
+        const params = await handedParams();
         expect(params.contextUser.ID).toBe(SYSTEM_USER.ID); // the premise: the run is elevated
-        expect(params.data).toEqual(ORDINARY);
+        expect(params.TrustReservedRunData).toBe(false);
     });
 
-    it('are kept, byte for byte, for the system user', async () => {
-        const { resolver, seams } = makeResolver();
-        seams.executeAIAgent = vi.fn().mockResolvedValue({ success: true, result: '{}' });
+    it('marks it trusted for the system user, on both paths', async () => {
+        const { resolver } = makeResolver();
+        const ctx = makeContext({ isSystemUser: true, email: SYSTEM_USER.Email, userRecord: SYSTEM_USER });
 
-        await runFromDetail(resolver, makeContext({ isSystemUser: true, email: SYSTEM_USER.Email, userRecord: SYSTEM_USER }));
+        await runFromDetail(resolver, ctx);
+        await runFromDetail(resolver, ctx, true);
 
-        expect(seams.executeAIAgent.mock.calls[0][7]).toBe(CLIENT_DATA);
+        expect((await handedParams(0)).TrustReservedRunData).toBe(true);
+        expect((await handedParams(1)).TrustReservedRunData).toBe(true);
     });
 });
 
 describe('RunAIAgentSystemUser — reserved run-data keys', () => {
-    it('are kept for the system user it admits', async () => {
-        const { resolver, seams } = makeResolver();
-        seams.executeAIAgent = vi.fn().mockResolvedValue({ success: true, result: '{}' });
+    it('marks the run trusted for the system user it admits, and forwards data as sent', async () => {
+        const { resolver } = makeResolver();
         const ctx = makeContext({ isSystemUser: true, email: SYSTEM_USER.Email, userRecord: SYSTEM_USER });
 
         await resolver.RunAIAgentSystemUser('agent-1', ctx, '[]', 'session-1', pubSub, CLIENT_DATA);
 
-        expect(seams.executeAIAgent.mock.calls[0][7]).toBe(CLIENT_DATA);
+        const params = await handedParams();
+        expect(params.TrustReservedRunData).toBe(true);
+        expect(params.data).toEqual(JSON.parse(CLIENT_DATA));
     });
 });

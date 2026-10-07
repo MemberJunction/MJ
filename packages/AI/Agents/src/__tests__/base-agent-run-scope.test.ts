@@ -3,11 +3,12 @@
  * the sub-agent build that keeps the model from setting a child's scope through `templateParameters`.
  *
  * - `ExecuteSingleAction` called outside `Execute` (the realtime tool path, harnesses) resolves the scope from its
- *   params the way the run row does — explicit fields, else the `data` fallbacks, with the agent's configured
- *   secondary defaults — and always stamps it (nulls when unscoped). The full-run path, where the scope comes from
- *   `initializeAgentRun`, is in base-agent-loop.test.ts.
+ *   params the way the run row does — explicit fields, else the `data` fallbacks when the caller set
+ *   `TrustReservedRunData`, with the agent's configured secondary defaults — and always stamps it (nulls when
+ *   unscoped). The full-run path, where the scope comes from `initializeAgentRun`, is in base-agent-loop.test.ts.
  * - `ExecuteSubAgent` strips the reserved run-data keys from the model's template parameters before they are merged
- *   into the child's `data`, keeps everything else, leaves the parent's `data` as it is, and logs the keys once.
+ *   into the child's `data`, keeps everything else, leaves the parent's `data` as it is, logs the keys once, and
+ *   hands the child the parent's `TrustReservedRunData`.
  *
  * The BaseAgent logic and the reserved-key list are real; the action engine, the metadata engine and the sub-agent
  * runner are the boundaries.
@@ -109,9 +110,17 @@ describe('BaseAgent — the run scope on every action dispatch (RunActionParams.
         expect(lastScope()).toEqual({ PrimaryScopeEntityName: null, PrimaryScopeRecordID: null, SecondaryScopes: null });
     });
 
-    it('reads the scope from data when the host passed it there (the GraphQL fallback the run row uses)', async () => {
-        await dispatch(paramsWith({ data: { PrimaryScopeRecordID: ` ${TENANT} `, SecondaryScopes: { Region: 'US' } } }));
+    it('reads the scope from data when a trusted host passed it there (TrustReservedRunData, as the run row does)', async () => {
+        await dispatch(paramsWith({ data: { PrimaryScopeRecordID: ` ${TENANT} `, SecondaryScopes: { Region: 'US' } }, TrustReservedRunData: true }));
         expect(lastScope()).toMatchObject({ PrimaryScopeRecordID: TENANT, SecondaryScopes: { Region: 'US' } });
+    });
+
+    it('ignores a scope in data that the caller did not mark trusted, and leaves the data as it was', async () => {
+        const data = { PrimaryScopeEntityName: 'Organizations', PrimaryScopeRecordID: TENANT, SecondaryScopes: { Region: 'US' }, topic: 'refunds' };
+        const snapshot = JSON.parse(JSON.stringify(data));
+        await dispatch(paramsWith({ data }));
+        expect(lastScope()).toEqual({ PrimaryScopeEntityName: null, PrimaryScopeRecordID: null, SecondaryScopes: null });
+        expect(data).toEqual(snapshot);
     });
 
     it("the explicit params win over data, as they do for the run row", async () => {
@@ -180,6 +189,17 @@ describe('BaseAgent.ExecuteSubAgent — template parameters cannot set the child
         }));
         expect(childData()).toEqual({ PrimaryScopeRecordID: TENANT, SecondaryScopes: { Region: 'EMEA' }, conversationId: 'conv-1', topic: 'refunds' });
         expect(parentData).toEqual(snapshot);
+    });
+
+    it("hands the child the parent's TrustReservedRunData, so a trusted parent's data scope still reaches it", async () => {
+        await caller().CallSubAgent(paramsWith({ data: { PrimaryScopeRecordID: TENANT }, TrustReservedRunData: true }), request({ topic: 'refunds' }));
+        expect(h.childRuns[0].TrustReservedRunData).toBe(true);
+        expect(childData()).toEqual({ PrimaryScopeRecordID: TENANT, topic: 'refunds' });
+    });
+
+    it('does not mark the child trusted when the parent was not', async () => {
+        await caller().CallSubAgent(paramsWith({ data: { topic: 'refunds' } }), request({ step: '2' }));
+        expect(h.childRuns[0].TrustReservedRunData).toBeUndefined();
     });
 
     it('logs the stripped keys once, never their values', async () => {

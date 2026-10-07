@@ -14,7 +14,10 @@ import { createHash } from 'crypto';
 import { BaseEntity, LogError, LogStatusEx, IsVerboseLoggingEnabled, LogStatus, Metadata, RunView, RunQuery, UserInfo, IMetadataProvider, DatabaseProviderBase, ProviderType } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual, IsValidUUID, EscapeSQLString } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
-import { ExecuteAgentResult, ExecuteAgentParams, MediaOutput, FileOutputRef, InputArtifact, ArtifactDirective, ResolvePromptRunUserID } from '@memberjunction/ai-core-plus';
+import {
+    ExecuteAgentResult, ExecuteAgentParams, MediaOutput, FileOutputRef, InputArtifact, ArtifactDirective, ResolvePromptRunUserID,
+    WithAgentRunDataTrustApplied
+} from '@memberjunction/ai-core-plus';
 import { PlanArtifactTarget, IsKnownArtifactBehavior, ArtifactTargetPlan } from './artifact-target-plan';
 import { BaseAgent } from './base-agent';
 import { MJConversationEntity, MJConversationDetailEntity, MJArtifactEntity, MJArtifactVersionEntity, MJConversationDetailArtifactEntity, MJAIAgentRunMediaEntity, MJEnvironmentEntityExtended, ArtifactMetadataEngine, ConversationEngine, ExtractBase64FromDataUrl, DecideInlineStorage } from '@memberjunction/core-entities';
@@ -2045,8 +2048,10 @@ export class AgentRunner {
             if (!contextUser?.ReturningVisitorContext) {
                 return;
             }
-            // Gate 2: need a conversation to read from, and an explicit caller scope always wins.
-            if (!conversationId || params.PrimaryScopeRecordID || (params.data?.PrimaryScopeRecordID as string | undefined)) {
+            // Gate 2: need a conversation to read from, and an explicit caller scope always wins — a data scope only when
+            // the run will honour it (TrustReservedRunData; BaseAgent.Execute drops it otherwise).
+            const runData = WithAgentRunDataTrustApplied(params).Params.data;
+            if (!conversationId || params.PrimaryScopeRecordID || (runData?.PrimaryScopeRecordID as string | undefined)) {
                 return;
             }
             const convo = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', contextUser);

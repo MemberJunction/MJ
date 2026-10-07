@@ -231,9 +231,13 @@ const result = await agentRunner.executeAgent(params);
 
 Secondary scopes are arbitrary key/value pairs for external applications (Skip, Izzy, etc.). MJ's own chat infrastructure does not use them.
 
-### GraphQL Callers
+### Scope Through `data` (Trusted Callers Only)
 
-Server-to-server GraphQL callers (the system user, or a request authenticated with an API key) can pass scope info via the `data` JSON parameter. BaseAgent reads them from `params.data` as a fallback. MJServer's agent-run resolvers drop these keys, and `__agentTypePromptParams`, from every other caller's `data`, and always from a widget-guest run, so a browser cannot choose a run's scope; a host that needs one sets it in its own server operation:
+`BaseAgent` also reads `PrimaryScopeEntityName`, `PrimaryScopeRecordID` and `SecondaryScopes`, and the agent-type parameter override `__agentTypePromptParams`, from `params.data`, but only when the run's params set `TrustReservedRunData: true`. Without that marker, `BaseAgent.Execute` removes those keys (and `PrimaryScopeEntityID`) from `data` before the run starts, whatever started the run. So nothing a browser, an Execute Agent action call (including one a model makes inside a run), an MCP or A2A request, or a Runtime Action script puts in `data` can choose a run's scope or switch on a capability such as task graphs. The removed key names are logged; the values never are.
+
+Who sets the marker:
+
+- **MJServer's agent-run resolvers** (`RunAIAgent`, `RunAIAgentFromConversationDetail`, `RunAIAgentSystemUser`) set it for the system user and for API-key integrations only, never for a browser session or a widget guest. Those server-to-server callers can pass a scope in the `data` JSON argument:
 
 ```json
 {
@@ -244,6 +248,10 @@ Server-to-server GraphQL callers (the system user, or a request authenticated wi
     }
 }
 ```
+
+- **A sub-agent** inherits its parent's marker along with its parent's `data`. The template parameters a model writes for a sub-agent lose the reserved keys whether or not the parent is trusted.
+
+Any other server code that starts a run sets the first-class fields shown above, which need no marker. It sets `TrustReservedRunData` only when `data` itself comes from a caller it has authenticated as trusted, and it never copies the marker from client input.
 
 ### Secondary-Only Scoping
 
@@ -260,7 +268,7 @@ If `allowSecondaryOnly: true` in the agent's config, you can omit primary scope:
 
 ## Sub-Agent Scope Propagation
 
-Scope is inherited by sub-agent invocations by default. When a parent agent (e.g., Sage) delegates to a sub-agent (e.g., Memory Manager, or any user-defined sub-agent), `BaseAgent` propagates `PrimaryScopeEntityName`, `PrimaryScopeRecordID`, and `SecondaryScopes` from the parent's `ExecuteAgentParams` onto the sub-agent's params before its run begins (see `packages/AI/Agents/src/base-agent.ts:4378-4380`).
+Scope is inherited by sub-agent invocations by default. When a parent agent (e.g., Sage) delegates to a sub-agent (e.g., Memory Manager, or any user-defined sub-agent), `BaseAgent` propagates `PrimaryScopeEntityName`, `PrimaryScopeRecordID`, and `SecondaryScopes` from the parent's `ExecuteAgentParams` onto the sub-agent's params before its run begins (see `ExecuteSubAgent` in `packages/AI/Agents/src/base-agent.ts`). It passes the parent's `data` and `TrustReservedRunData` along too, so a scope a trusted caller put in `data` reaches the sub-agent as well.
 
 This has two consequences:
 
@@ -300,7 +308,7 @@ For the consolidation pipeline itself (clustering threshold, drift prevention, d
 
 ```
 ExecuteAgentParams.PrimaryScopeEntityName / PrimaryScopeRecordID / SecondaryScopes
-  (or params.data.* fallback for GraphQL callers)
+  (or params.data.* fallback when TrustReservedRunData is set)
         │
         ▼
 ┌─────────────────────────────────────────────────────────────────┐

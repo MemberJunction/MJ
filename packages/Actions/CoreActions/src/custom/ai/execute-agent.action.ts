@@ -24,6 +24,13 @@ import { AIEngine } from '@memberjunction/aiengine';
  * the bridge already runs in-process with `contextUser` and doesn't need the
  * action-catalog indirection.
  *
+ * **`Data` cannot change what the run is.** Whoever calls this action — a browser
+ * through `RunAction`, a user routine, or a model inside another agent's run —
+ * authors `Data`, so the run is never marked `TrustReservedRunData`: `BaseAgent`
+ * drops the reserved scope and agent-type keys from it (see
+ * `ExecuteAgentParams.TrustReservedRunData`). Everything else in `Data` reaches
+ * the agent as template data.
+ *
  * @example
  * ```typescript
  * await runAction({
@@ -108,6 +115,7 @@ export class ExecuteAgentAction extends BaseAction {
             const maxExecutionTimeMs = this.getNumericParam(params, 'maxexecutiontimems');
 
             const runner = new AgentRunner();
+            // Never TrustReservedRunData: Data is caller- or model-authored (see the class doc).
             const runResult = await runner.RunAgent({
                 agent: agent as MJAIAgentEntityExtended,
                 conversationMessages,
