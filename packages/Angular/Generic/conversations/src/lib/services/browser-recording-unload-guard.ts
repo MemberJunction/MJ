@@ -1,6 +1,8 @@
 /** The slice of `window` the guard needs; lets tests (and non-window hosts) supply a fake. */
 export interface UnloadEventTarget {
+    // case-violation-ok-legacy-back-compat: mirrors the DOM EventTarget API so `window` itself satisfies this interface
     addEventListener(type: 'beforeunload', listener: (event: BeforeUnloadEvent) => void): void;
+    // case-violation-ok-legacy-back-compat: mirrors the DOM EventTarget API so `window` itself satisfies this interface
     removeEventListener(type: 'beforeunload', listener: (event: BeforeUnloadEvent) => void): void;
 }
 
