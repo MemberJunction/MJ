@@ -10,11 +10,12 @@
  *   2. For each active scope, check that the acting user may SEARCH it, through the shared
  *      `SearchScopePermissionResolver` with the agent (and the run's lone active skill, if any) as
  *      principals and the run's tenant; the bar is above `Read`, as in the Scoped Search action.
- *      A refused scope is skipped and logged as `Forbidden`.
+ *      Under an audience (`audienceReaders`), every reader must pass the same gate. A refused scope
+ *      is skipped and logged as `Forbidden` (one row per refused reader, naming them).
  *   3. Render the `QueryTemplateID` via MJ TemplateEngineServer (or fall back to `lastUserMessage`).
  *   4. Call `SearchEngine.Search()` with `ScopeIDs: [scopeId]`, honoring per-agent overrides
- *      (MaxResults, MinScore, FusionWeightsOverride) and the agent's multi-tenant context
- *      (PrimaryScopeRecordID, SecondaryScopes).
+ *      (MaxResults, MinScore, FusionWeightsOverride), the agent's multi-tenant context
+ *      (PrimaryScopeRecordID, SecondaryScopes) and the run's audience (`SearchParams.Audience`).
  *   5. Cross-scope RRF when multiple scopes produced results.
  *   6. Format results as a `<retrieved_context>` system message and return.
  *
@@ -41,6 +42,7 @@ import {
     SearchFusion,
     GetSearchScopePermissionResolver,
     EffectivePermission,
+    SearchAudience,
 } from '@memberjunction/search-engine';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { ChatMessage } from '@memberjunction/ai';
@@ -78,6 +80,14 @@ export interface AgentPreExecutionRAGParams {
      * principal for the permission gate and the search, as in the Scoped Search action.
      */
     activeSkillIDs?: string[];  // case-violation-ok-legacy-back-compat: named to match the rest of AgentPreExecutionRAGParams (agent, lastUserMessage, contextUser), which predate the rule
+    /**
+     * The run's audience (`ExecuteAgentParams.Audience`): everyone besides `contextUser` who will see the
+     * injected context, as hydrated users. Each must pass the scope gate the caller passes — a refused reader
+     * skips the scope and writes a `Forbidden` row naming them — and each search carries them as
+     * `SearchParams.Audience`, so only results every reader may read are injected. The caller, or a reader
+     * listed twice, is checked once. Empty or omitted: no audience.
+     */
+    audienceReaders?: UserInfo[];  // case-violation-ok-legacy-back-compat: named to match the rest of AgentPreExecutionRAGParams, which predate the rule
     /**
      * Phase 2C: when true, consume SearchEngine.streamSearch() instead of
      * the synchronous Search() per scope. The final aggregate is identical
@@ -223,6 +233,8 @@ export class AgentPreExecutionRAG {
                     AIAgentID: params.agent.ID,
                     // The skill principal the gate judged, bound as Principals.SkillID (as the action does).
                     AISkillID: skill?.ID,
+                    // The readers the gate judged: the engine keeps only results every one of them may read.
+                    Audience: this.searchAudience(params),
                 }, params.contextUser);
 
             if (sr.Success && sr.Results.length > 0) {
@@ -317,7 +329,8 @@ export class AgentPreExecutionRAG {
      * action and resolver both refuse it (`scoped-search.action.ts`, `SearchKnowledgeResolver.ts`).
      *
      * The principals are the action's: the agent, and the run's lone active skill when there is one
-     * (see {@link resolveSkillPrincipal}).
+     * (see {@link resolveSkillPrincipal}). Under an audience, every reader must clear the same bar
+     * ({@link audiencePermitted}): the engine judges scope entitlement for the caller only.
      *
      * A refused scope is skipped (the others still run) and the attempt is written to the search log as
      * Forbidden, where the other denials land. A resolver failure is not a decision: that scope is
@@ -330,10 +343,56 @@ export class AgentPreExecutionRAG {
         skill: MJAISkillEntity | null,
     ): Promise<boolean> {
         const startTime = Date.now();
-        let verdict: EffectivePermission;
+        const verdict = await this.resolveVerdict(scope, params, skill, params.contextUser);
+        if (!verdict) return false;
+        if (!this.searchAllowed(verdict)) {
+            await this.logRefusal(scope, params, skill, { Who: 'the acting user', Reason: this.refusalReason(verdict), Source: verdict.Source }, startTime);
+            return false;
+        }
+        return this.audiencePermitted(scope, params, skill, startTime);
+    }
+
+    /**
+     * The scope gate for every reader of the run's audience, resolved concurrently with the caller as
+     * `ContextUser` (whose rights read the permission rows) and the reader as `User`. Every refused reader
+     * gets a Forbidden row naming them, and one refusal skips the scope: a room may see a scope's results only
+     * if each person in it may search that scope. A reader whose permission cannot be resolved skips the scope
+     * too, logged, with no Forbidden row — as for the caller.
+     */
+    private async audiencePermitted(
+        scope: MJSearchScopeEntity,
+        params: AgentPreExecutionRAGParams,
+        skill: MJAISkillEntity | null,
+        startTime: number,
+    ): Promise<boolean> {
+        const readers = this.audienceReaders(params);
+        if (readers.length === 0) return true;
+        const verdicts = await Promise.all(readers.map(reader => this.resolveVerdict(scope, params, skill, reader)));
+        let permitted = true;
+        for (let i = 0; i < readers.length; i++) {
+            const verdict = verdicts[i];
+            if (verdict === null) {
+                permitted = false;
+            } else if (!this.searchAllowed(verdict)) {
+                permitted = false;
+                const reader = `'${readers[i].Name}' (${readers[i].ID})`;
+                const reason = `Audience reader ${reader} may not search this scope: ${this.refusalReason(verdict)}`;
+                await this.logRefusal(scope, params, skill, { Who: `audience reader ${reader}`, Reason: reason, Source: verdict.Source }, startTime);
+            }
+        }
+        return permitted;
+    }
+
+    /** One user's verdict on one scope, or null when it could not be resolved (logged; no Forbidden row). */
+    private async resolveVerdict(
+        scope: MJSearchScopeEntity,
+        params: AgentPreExecutionRAGParams,
+        skill: MJAISkillEntity | null,
+        user: UserInfo,
+    ): Promise<EffectivePermission | null> {
         try {
-            verdict = await GetSearchScopePermissionResolver().ResolveEffectivePermission({
-                User: params.contextUser,
+            return await GetSearchScopePermissionResolver().ResolveEffectivePermission({
+                User: user,
                 SearchScopeID: scope.ID,
                 Agent: params.agent,
                 Skill: skill,
@@ -342,27 +401,50 @@ export class AgentPreExecutionRAG {
             });
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
-            LogError(`AgentPreExecutionRAG: permission for scope "${scope.Name}" could not be resolved; skipping the scope: ${msg}`);
-            return false;
+            const whose = user === params.contextUser ? '' : ` for audience reader ${user.ID}`;
+            LogError(`AgentPreExecutionRAG: permission for scope "${scope.Name}"${whose} could not be resolved; skipping the scope: ${msg}`);
+            return null;
         }
-        if (verdict.Allowed && verdict.Level !== 'Read') return true;
-        await this.logRefusal(scope, params, skill, verdict, startTime);
-        return false;
     }
 
-    /** Write the `Forbidden` search-log row for one refused scope; the console line is verbose-only, as in the action. */
+    /** The bar: allowed, and above `Read` (which grants seeing a scope, not searching it). */
+    private searchAllowed(verdict: EffectivePermission): boolean {
+        return verdict.Allowed && verdict.Level !== 'Read';
+    }
+
+    /** The resolver's reason, with why a `Read` grant is not enough when that is what refused it. */
+    private refusalReason(verdict: EffectivePermission): string {
+        return verdict.Allowed && verdict.Level === 'Read'
+            ? `${verdict.Reason} — Read grants visibility of the scope, not the right to search it.`
+            : verdict.Reason;
+    }
+
+    /** The audience's readers beyond the caller: each distinct ID once, the caller left out. */
+    private audienceReaders(params: AgentPreExecutionRAGParams): UserInfo[] {
+        const readers: UserInfo[] = [];
+        for (const reader of params.audienceReaders ?? []) {
+            const known = UUIDsEqual(reader.ID, params.contextUser.ID) || readers.some(r => UUIDsEqual(r.ID, reader.ID));
+            if (!known) readers.push(reader);
+        }
+        return readers;
+    }
+
+    /** `SearchParams.Audience` for this run's searches: the readers beyond the caller, or undefined when there are none. */
+    private searchAudience(params: AgentPreExecutionRAGParams): SearchAudience | undefined {
+        const readers = this.audienceReaders(params);
+        return readers.length > 0 ? { Readers: readers } : undefined;
+    }
+
+    /** Write the `Forbidden` search-log row for one refusal; the console line is verbose-only, as in the action. */
     private async logRefusal(
         scope: MJSearchScopeEntity,
         params: AgentPreExecutionRAGParams,
         skill: MJAISkillEntity | null,
-        verdict: EffectivePermission,
+        refusal: { Who: string; Reason: string; Source: EffectivePermission['Source'] },
         startTime: number,
     ): Promise<void> {
-        const reason = verdict.Allowed && verdict.Level === 'Read'
-            ? `${verdict.Reason} — Read grants visibility of the scope, not the right to search it.`
-            : verdict.Reason;
         LogStatusEx({
-            message: `AgentPreExecutionRAG: scope "${scope.Name}" refused for the acting user — ${reason} (source=${verdict.Source}). Skipping it.`,
+            message: `AgentPreExecutionRAG: scope "${scope.Name}" refused for ${refusal.Who} — ${refusal.Reason} (source=${refusal.Source}). Skipping it.`,
             verboseOnly: true,
             isVerboseEnabled: IsVerboseLoggingEnabled,
         });
@@ -370,7 +452,7 @@ export class AgentPreExecutionRAG {
             Query: params.lastUserMessage,
             ScopeIDs: [scope.ID],
             // A resolver Reason names principals and can outrun the column.
-            FailureReason: reason.substring(0, FAILURE_REASON_MAX_LENGTH),
+            FailureReason: refusal.Reason.substring(0, FAILURE_REASON_MAX_LENGTH),
             StartTime: startTime,
             ContextUser: params.contextUser,
             AIAgentID: params.agent.ID,
@@ -413,6 +495,7 @@ export class AgentPreExecutionRAG {
             Mode: 'full',
             AIAgentID: input.params.agent.ID,
             AISkillID: input.skill?.ID,
+            Audience: this.searchAudience(input.params),
         }, input.params.contextUser)) {
             if (ev.phase === 'provider') {
                 // Progress only: a provider event carries a count, never the rows (they precede the permission pass).

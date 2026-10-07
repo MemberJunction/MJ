@@ -289,6 +289,42 @@ Two further limits:
 
 Audience filtering raises the residual-filter rate, so a host serving rooms should raise the over-fetch factor (below). Carrying the audience into push-down is achievable today only through an expansion query keyed on the conversation's `PrimaryScopeRecordID`; a resolver that sees the audience is a follow-up. The audience pass is the truth; push-down is the recall.
 
+#### A whole agent run for an audience
+
+`SearchParams.Audience` bounds one search. `ExecuteAgentParams.Audience` bounds a whole agent run — every path in it that reads data on the caller's behalf — and is what a host sets when an agent answers in a shared conversation:
+
+```typescript
+const result = await new AgentRunner().RunAgent({
+    agent,
+    conversationMessages,
+    contextUser: asker,                       // the person who asked; their reach is the ceiling
+    // Everyone else in the room, from the host's own participant list — never from client input.
+    Audience: { Mode: 'Intersection', UserIDs: otherParticipantIDs },
+});
+```
+
+It is a typed, server-only field: it is never read from `data`, and the GraphQL, MCP and A2A agent runners pass named fields (client JSON lands in `data`), so no client can set or clear it. `Mode` is `'Caller'` (no readers — the same as omitting it) or `'Intersection'` (only what the caller **and** every listed user may see). Every gate below fires only when the audience adds a reader **other than the caller**, so an `'Intersection'` whose only ID is the caller behaves exactly as `'Caller'`.
+
+**The run fails before any prompt** — marked Failed like a refused permission — when the audience is malformed (an unknown `Mode`, an `'Intersection'` with no IDs or a blank one, a `'Caller'` with IDs) or names an ID no user has. `BaseAgent` hydrates the IDs from the server's `UserCache` (each reader with its roles), refreshing the cache once for an unknown ID, and refuses rather than skips one it still cannot find: a skipped reader would restrict nothing. Each sub-agent run, and a realtime delegation target, inherits the audience and hydrates it again. `BaseAgent.ResolveAudienceUsers` is the override point for a host with its own user directory.
+
+What the run then does:
+
+| Path | Under an audience |
+|---|---|
+| Pre-execution RAG | Each reader must pass the same scope gate as the caller (`ResolveEffectivePermission` with the reader as `User`, the caller as `ContextUser`, the same agent, skill and tenant; the bar is above `Read`). A refused reader skips that scope and writes a `Forbidden` search-log row naming them. The searches carry `Audience: { Readers }`. |
+| Agent notes and examples | Only shared ones (`UserID` empty) are injected, on both the cache and the semantic path; scope matching still applies. |
+| Agent data-source preload | Skipped (it loads with the caller's rights alone), logged. |
+| The previous turn's tool results | Not carried forward (they were fetched for whoever ran that turn). |
+| Actions | Each dispatch carries `RunActionParams.Audience`. The engine refuses (`AUDIENCE_UNSUPPORTED`, without running it or writing an execution log row) every action whose class does not declare `BaseAction.SupportsAudience`, and every runtime-defined or deferred action; the agent locks a refused action out for the run and the model is told it is unavailable. Only **Search** and **Scoped Search** declare support: they pass the audience to the search, Scoped Search runs the per-reader scope gate, and both leave `SourceCounts` out of their output. An agent whose work needs other actions is therefore limited to search in a shared room — by design. |
+| Task graphs | Not offered (`enableTaskGraphs` off for the run, on a copy of the cached prompt params), and a graph the model writes anyway is refused: its action nodes run outside the run's gates. |
+| Realtime / voice / bridge sessions | Refused; a live session acts outside the gates above. |
+
+**Limits, by design for now:**
+- **Per-reader scope expansion.** `ScopeDimensionResolver` binds one `UserID` (the caller's), so expansion queries and `ServerDerived` dimensions resolve for the caller only. The per-reader result filter covers scopes whose lanes carry per-user row filters; don't rely on dimension-only bounds for a room (rule 4 above).
+- **No `Union`, and no anchor or narrowing modes.** A run bounded by a shared record or tenant uses `PrimaryScopeEntityName` / `PrimaryScopeRecordID` / `SecondaryScopes`.
+- **Resume.** A run paused for a human answer and resumed (`MJAIAgentRequestEntityServer.resumeAgent`) resumes as the responder with **no** audience: the audience is not persisted on the run. Persisting it needs a column — an open design point shared with bound action parameters.
+- **Conversation history and artifacts** are what the host passes in; choosing what a room may see of them is the host's job.
+
 ### Overfetch factor tuning
 
 `effectiveTopK = userTopK * permissionOverfetchFactor` compensates for residual filtering. Default 2. Tune higher for corpora where permission sparsity is high (>50% of matches filtered).

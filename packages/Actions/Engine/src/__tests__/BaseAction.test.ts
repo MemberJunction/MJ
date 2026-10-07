@@ -23,11 +23,28 @@ class ConcreteAction extends BaseAction {
     }
 }
 
+/** An action that declares it can honour an audience. */
+class AudienceAwareAction extends ConcreteAction {
+    public override get SupportsAudience(): boolean {
+        return true;
+    }
+}
+
 describe('BaseAction', () => {
     let action: ConcreteAction;
 
     beforeEach(() => {
         action = new ConcreteAction();
+    });
+
+    describe('SupportsAudience', () => {
+        it('is false by default: an action must opt in before it may run for an audience', () => {
+            expect(action.SupportsAudience).toBe(false);
+        });
+
+        it('is true for an action that declares it', () => {
+            expect(new AudienceAwareAction().SupportsAudience).toBe(true);
+        });
     });
 
     describe('Run', () => {

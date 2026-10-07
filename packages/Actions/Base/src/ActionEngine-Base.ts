@@ -2,6 +2,7 @@ import { BaseEngine, IMetadataProvider, UserInfo, RunView, BaseEnginePropertyCon
 import { EntityChangeContext } from './EntityChangeContext';
 import { MJActionCategoryEntity, MJActionEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJEntityActionEntity, MJEntityActionParamEntity } from "@memberjunction/core-entities";
 import { MJActionEntityExtended } from "./MJActionEntityExtended";
+import type { ActionRunAudience } from "./ActionAudience";
 
 
 export class ActionLibrary {
@@ -131,6 +132,14 @@ export class ActionResult {
     * A code that indicates the outcome of the action. Will be one of the possible ResultCodes enumerated in the MJActionResultCodeEntity
     */
    public Result?: MJActionResultCodeEntity;
+
+   /**
+    * The result code as text: the action's own `ActionResultSimple.ResultCode`, or the code of a refusal the
+    * engine made without running the action ({@link AUDIENCE_UNSUPPORTED_RESULT_CODE}). Set whether or not it
+    * matches one of the action's metadata result codes — {@link Result} is that match, `undefined` when there is
+    * none. Absent when the run ended without a code (a timeout, an exception, a validation or filter refusal).
+    */
+   public ResultCode?: string;
 
    /**
     * Whenever an action is executed a log entry is created. This log entry is stored in the database and can be used to track the execution of the action. This property contains the log entry object for the action that was run.
@@ -345,6 +354,25 @@ export class RunActionParams<TContext = any> {
     * platform's keys inside a run restricted to the caller's.
     */
    public CredentialScope?: RuntimeCredentialScope;
+
+   /**
+    * Everyone besides {@link ContextUser} who will see what this action returns — set by BaseAgent, per
+    * dispatch, from the agent run's audience (`ExecuteAgentParams.Audience`) when it adds a reader. Not on
+    * {@link Context}, for the reason {@link RuntimeAPIKeyResolver} is not: the context is the agent's own
+    * object, shared by every action in the run. The model cannot set it.
+    *
+    * **The engine gates on it.** When it adds a reader beyond the caller, `ActionEngineServer.RunAction`
+    * refuses — result code {@link AUDIENCE_UNSUPPORTED_RESULT_CODE}, without running the action or writing an
+    * execution log row — any action whose class does not declare `SupportsAudience`, and every runtime-defined
+    * or deferred action. For an action it lets through, it first normalizes this to the distinct readers
+    * beyond the caller ({@link ActionAudienceReaders}), and clears it when the audience adds nobody, so an
+    * action may treat "present" as "there is a room" and `Readers` as exactly the people to check.
+    *
+    * An action that declares support must return only what every reader may see: pass the audience to the
+    * search engine (`SearchParams.Audience`), check each reader's entitlement to anything it scopes by, and
+    * leave out counts or other aggregates computed before that filtering.
+    */
+   public Audience?: ActionRunAudience;
 
    /**
     * Optional AbortSignal that is aborted when the action exceeds its wall-clock

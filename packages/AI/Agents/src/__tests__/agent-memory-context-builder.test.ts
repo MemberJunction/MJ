@@ -216,6 +216,25 @@ describe('AgentMemoryContextBuilder', () => {
             expect(getExamples.mock.calls[0][0].observability).toBeUndefined();
         });
 
+        it('forwards SharedOnly to both retrieval calls when the run has an audience', async () => {
+            await new AgentMemoryContextBuilder().InjectContextMemory(
+                'hi', makeAgent({ InjectNotes: true, InjectExamples: true }), 'u1', undefined, fakeUser, [],
+                undefined, undefined, undefined, null, undefined, undefined, true
+            );
+
+            expect(getNotes.mock.calls[0][0]).toMatchObject({ SharedOnly: true, userId: 'u1' });
+            expect(getExamples.mock.calls[0][0]).toMatchObject({ SharedOnly: true, userId: 'u1' });
+        });
+
+        it('leaves SharedOnly off by default', async () => {
+            await new AgentMemoryContextBuilder().InjectContextMemory(
+                'hi', makeAgent({ InjectNotes: true, InjectExamples: true }), 'u1', undefined, fakeUser, []
+            );
+
+            expect(getNotes.mock.calls[0][0].SharedOnly).toBeFalsy();
+            expect(getExamples.mock.calls[0][0].SharedOnly).toBeFalsy();
+        });
+
         it('injects an examples-only system message when only InjectExamples is enabled', async () => {
             getExamples.mockResolvedValueOnce([{ ID: 'e1' }, { ID: 'e2' }]);
             const messages: ChatMessage[] = [{ role: 'user', content: 'hi' }];
@@ -415,6 +434,17 @@ describe('AgentMemoryContextBuilder', () => {
             );
 
             expect(ragExecute.mock.calls[0][0].activeSkillIDs).toEqual(['skill-1']);
+        });
+
+        it('passes the run\'s audience readers through to the RAG engine', async () => {
+            ragExecute.mockResolvedValueOnce(null);
+            const reader = { ID: 'reader-1' } as unknown as UserInfo;
+
+            await new AgentMemoryContextBuilder().InjectPreExecutionRAG(
+                'hi', makeAgent({}), fakeUser, [], [], undefined, undefined, undefined, undefined, undefined, undefined, [], [reader]
+            );
+
+            expect(ragExecute.mock.calls[0][0].audienceReaders).toEqual([reader]);
         });
 
         it('returns null and calls the error logger when RAG execution throws', async () => {

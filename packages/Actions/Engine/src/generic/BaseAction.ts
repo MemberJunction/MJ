@@ -30,6 +30,20 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
  */
 export abstract class BaseAction {
    /**
+    * Whether this action can bound what it returns to an audience (`RunActionParams.Audience`): everyone
+    * besides the caller who will see its output, such as the other participants of a shared conversation.
+    *
+    * `false` by default, and the engine enforces it: when a run's audience adds a reader beyond the caller,
+    * `ActionEngineServer.RunAction` refuses the action with result code `AUDIENCE_UNSUPPORTED`, without running
+    * it. Override to return `true` only when the action honours the audience in full — every record, snippet
+    * and count it returns is something every reader may see (pass the audience to the search engine, check each
+    * reader's entitlement to anything it scopes by, and leave out aggregates computed before that filtering).
+    */
+   public get SupportsAudience(): boolean {
+      return false;
+   }
+
+   /**
     * Executes the action with the provided parameters.
     * 
     * @param params - The action execution parameters including context

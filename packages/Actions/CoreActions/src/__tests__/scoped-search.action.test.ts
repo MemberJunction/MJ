@@ -778,4 +778,91 @@ describe('ScopedSearchAction', () => {
         });
     });
 
+    describe('Audience (RunActionParams.Audience — a shared conversation)', () => {
+        const readerA = { ID: 'reader-a', Name: 'Reader A', UserRoles: [] };
+        const readerB = { ID: 'reader-b', Name: 'Reader B', UserRoles: [] };
+        const resultWithCounts = {
+            Success: true,
+            Results: [],
+            TotalCount: 0,
+            ElapsedMs: 1,
+            SourceCounts: { Vector: 3, FullText: 2, Entity: 7, Storage: 1 },
+            Providers: [],
+        };
+        const withAudience = (readers: unknown[], extra: Array<{ Name: string; Value: unknown }> = []): RunActionParams => {
+            const params = mkParams([{ Name: 'Query', Value: 'q' }, { Name: 'AgentID', Value: 'agent-1' }, { Name: 'ScopeID', Value: 'scope-1' }, ...extra]);
+            (params as unknown as { Audience: unknown }).Audience = { Readers: readers };
+            return params;
+        };
+        const userOf = (call: number): { ID: string } => (permissionResolveSpy.mock.calls[call][0] as { User: { ID: string } }).User;
+
+        beforeEach(() => {
+            loadedAgentStub.SearchScopeAccess = 'All';
+            getActiveScopeByIDSpy.mockReturnValue({ ID: 'scope-1', Name: 'HR' });
+            searchSpy.mockResolvedValue(resultWithCounts);
+        });
+
+        it('declares that it can honour an audience', () => {
+            expect(new ScopedSearchAction().SupportsAudience).toBe(true);
+        });
+
+        it('passes the audience to the search and withholds SourceCounts from the output', async () => {
+            const params = withAudience([readerA]);
+            const result = await run(new ScopedSearchAction(), params);
+            expect(result.Success).toBe(true);
+            expect(searchSpy.mock.calls[0][0].Audience).toBe((params as unknown as { Audience: unknown }).Audience);
+            expect(result.Params?.some((p: { Name: string }) => p.Name === 'SourceCounts')).toBe(false);
+            expect(result.Params?.find((p: { Name: string }) => p.Name === 'Results')?.Value).toEqual([]);
+        });
+
+        it('without an audience: no Audience on the search and SourceCounts are returned, as before', async () => {
+            const result = await run(new ScopedSearchAction(), mkParams([{ Name: 'Query', Value: 'q' }, { Name: 'AgentID', Value: 'agent-1' }]));
+            expect(searchSpy.mock.calls[0][0].Audience).toBeUndefined();
+            expect(result.Params?.find((p: { Name: string }) => p.Name === 'SourceCounts')?.Value).toEqual(resultWithCounts.SourceCounts);
+        });
+
+        it('runs the scope gate for every reader, with the caller as ContextUser and the same principals and tenant', async () => {
+            await run(new ScopedSearchAction(), withAudience([readerA, readerB], [{ Name: 'PrimaryScopeRecordID', Value: 'ORG-1' }]));
+            expect(permissionResolveSpy).toHaveBeenCalledTimes(3);
+            expect(userOf(0).ID).toBe('u1');
+            expect([userOf(1).ID, userOf(2).ID].sort()).toEqual(['reader-a', 'reader-b']);
+            for (const call of permissionResolveSpy.mock.calls.slice(1)) {
+                expect(call[0]).toMatchObject({ ContextUser: { ID: 'u1' }, SearchScopeID: 'scope-1', Agent: loadedAgentStub, PrimaryScopeRecordID: 'ORG-1' });
+            }
+            expect(searchSpy).toHaveBeenCalledOnce();
+        });
+
+        it('refuses the search when a reader may not search the scope: PERMISSION_DENIED and a Forbidden row naming the reader', async () => {
+            permissionResolveSpy.mockImplementation(async (input: { User: { ID: string } }) => input.User.ID === 'reader-b'
+                ? { Allowed: false, Level: 'None', Source: 'NoGrant', Reason: 'no grant', toSqlPredicate: () => '1=0' }
+                : { Allowed: true, Level: 'Search', Source: 'RoleGrant', Reason: 'ok', toSqlPredicate: () => '1=1' });
+            const result = await run(new ScopedSearchAction(), withAudience([readerA, readerB]));
+            expect(result.Success).toBe(false);
+            expect(result.ResultCode).toBe('PERMISSION_DENIED');
+            expect(result.Message).not.toContain('Reader B');
+            expect(searchSpy).not.toHaveBeenCalled();
+            expect(logForbiddenSpy).toHaveBeenCalledOnce();
+            expect(logForbiddenSpy.mock.calls[0][0]).toMatchObject({ ScopeIDs: ['scope-1'], ContextUser: { ID: 'u1' }, AIAgentID: 'agent-1' });
+            expect(logForbiddenSpy.mock.calls[0][0].FailureReason).toMatch(/Audience reader 'Reader B' \(reader-b\).*no grant/);
+        });
+
+        it('refuses a reader whose grant is only Read, as it does the caller', async () => {
+            permissionResolveSpy.mockImplementation(async (input: { User: { ID: string } }) => input.User.ID === 'reader-a'
+                ? { Allowed: true, Level: 'Read', Source: 'RoleGrant', Reason: 'read only', toSqlPredicate: () => '1=1' }
+                : { Allowed: true, Level: 'Search', Source: 'RoleGrant', Reason: 'ok', toSqlPredicate: () => '1=1' });
+            const result = await run(new ScopedSearchAction(), withAudience([readerA]));
+            expect(result.ResultCode).toBe('PERMISSION_DENIED');
+            expect(logForbiddenSpy.mock.calls[0][0].FailureReason).toMatch(/Read grants visibility/);
+        });
+
+        it('does not judge the readers when the caller is already refused', async () => {
+            permissionResolveSpy.mockResolvedValue({
+                Allowed: false, Level: 'None', Source: 'NoGrant', Reason: 'caller no grant', toSqlPredicate: () => '1=0',
+            });
+            await run(new ScopedSearchAction(), withAudience([readerA]));
+            expect(permissionResolveSpy).toHaveBeenCalledOnce();
+            expect(logForbiddenSpy).toHaveBeenCalledOnce();
+        });
+    });
+
 });

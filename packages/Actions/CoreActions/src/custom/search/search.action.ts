@@ -68,6 +68,15 @@ interface FormattedSearchResult {
 @RegisterClass(BaseAction, "__Internal_Search")
 export class SearchAction extends BaseAction {
 
+    /**
+     * Honours an audience (`RunActionParams.Audience`): the search keeps only results every reader may read
+     * (`SearchParams.Audience`), and `SourceCounts` — counted before that filtering — are left out of the output.
+     * The search names no scope, so there is no scope entitlement to check per reader.
+     */
+    public override get SupportsAudience(): boolean {
+        return true;
+    }
+
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
             // --- Extract and validate input parameters ---
@@ -91,6 +100,10 @@ export class SearchAction extends BaseAction {
 
             // --- Build SearchParams ---
             const searchParams = this.buildSearchParams(query, maxResults, minScore, entityNames, includeSources, tags);
+            // Everyone else who will see these results (normalized by the engine): keep only what all of them may read.
+            if (params.Audience) {
+                searchParams.Audience = params.Audience;
+            }
 
             LogStatus(`SearchAction: Searching for "${query}" (max ${maxResults}, minScore ${minScore})`);
 
@@ -111,9 +124,13 @@ export class SearchAction extends BaseAction {
             const outputParams: ActionParam[] = [
                 { Name: "Results",      Value: formattedResults,     Type: "Output" },
                 { Name: "TotalCount",   Value: result.TotalCount,    Type: "Output" },
-                { Name: "ElapsedMs",    Value: result.ElapsedMs,     Type: "Output" },
-                { Name: "SourceCounts", Value: result.SourceCounts,  Type: "Output" }
+                { Name: "ElapsedMs",    Value: result.ElapsedMs,     Type: "Output" }
             ];
+            // SourceCounts are counted before the permission and audience passes, so they reveal the caller's
+            // unfiltered reach: never shown to a room.
+            if (!params.Audience) {
+                outputParams.push({ Name: "SourceCounts", Value: result.SourceCounts, Type: "Output" });
+            }
 
             return {
                 Success: true,

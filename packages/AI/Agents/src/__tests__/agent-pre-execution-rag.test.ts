@@ -269,6 +269,87 @@ describe('AgentPreExecutionRAG', () => {
             expect(mockSearch.mock.calls[0][0].AISkillID).toBeUndefined();
         });
 
+        describe('an audience (audienceReaders)', () => {
+            const readerA = { ID: 'reader-a', Name: 'Reader A' } as unknown as UserInfo;
+            const readerB = { ID: 'reader-b', Name: 'Reader B' } as unknown as UserInfo;
+            const denyFor = (deniedID: string) => mockResolvePermission.mockImplementation(async (input: ResolvePermissionInput) =>
+                input.User.ID === deniedID ? Verdict(false, 'None', 'NoGrant', 'no grant for this reader') : PERMITTED);
+
+            it('passes the readers to Search, leaving out the caller and a reader listed twice', async () => {
+                await run({ audienceReaders: [readerA, { ID: 'U1' } as unknown as UserInfo, { ID: 'READER-A', Name: 'Reader A' } as unknown as UserInfo] });
+                expect(mockSearch).toHaveBeenCalledTimes(1);
+                expect(mockSearch.mock.calls[0][0].Audience).toEqual({ Readers: [readerA] });
+            });
+
+            it('passes the readers to streamSearch too', async () => {
+                mockStreamSearch.mockImplementation(async function* () {
+                    yield { phase: 'final' as const, results: [], sourceCounts: { Vector: 0, FullText: 0, Entity: 0, Storage: 0 }, elapsedMs: 1 };
+                });
+                await run({ audienceReaders: [readerA], streamingEnabled: true });
+                expect(mockStreamSearch.mock.calls[0][0].Audience).toEqual({ Readers: [readerA] });
+            });
+
+            it('sets no Audience on the search without readers, or when the only reader is the caller', async () => {
+                await run({ audienceReaders: [{ ID: 'u1' } as unknown as UserInfo] });
+                expect(mockSearch.mock.calls[0][0].Audience).toBeUndefined();
+                expect(mockResolvePermission).toHaveBeenCalledTimes(1);
+            });
+
+            it('runs the scope gate for every reader, the reader as User and the caller as ContextUser', async () => {
+                await run({ audienceReaders: [readerA, readerB] });
+                expect(mockResolvePermission).toHaveBeenCalledTimes(3);
+                const users = mockResolvePermission.mock.calls.map(c => c[0].User.ID);
+                expect(users[0]).toBe('u1');
+                expect(users.slice(1).sort()).toEqual(['reader-a', 'reader-b']);
+                for (const call of mockResolvePermission.mock.calls) {
+                    expect(call[0]).toMatchObject({ ContextUser: fakeUser, SearchScopeID: 's1', Agent: agent, PrimaryScopeRecordID: 'org-1' });
+                }
+            });
+
+            it('skips the scope for a refused reader and writes one Forbidden row naming them', async () => {
+                denyFor('reader-b');
+                expect(await run({ audienceReaders: [readerA, readerB] })).toBeNull();
+                expect(mockSearch).not.toHaveBeenCalled();
+                expect(mockLogForbidden).toHaveBeenCalledTimes(1);
+                expect(forbiddenRow()).toMatchObject({ ScopeIDs: ['s1'], ContextUser: fakeUser, AIAgentID: 'agent-1', PrimaryScopeRecordID: 'org-1' });
+                expect(forbiddenRow().FailureReason).toMatch(/Audience reader 'Reader B' \(reader-b\) may not search this scope: no grant for this reader/);
+            });
+
+            it('refuses a reader whose grant is only Read, as it does the caller', async () => {
+                mockResolvePermission.mockImplementation(async (input: ResolvePermissionInput) =>
+                    input.User.ID === 'reader-a' ? Verdict(true, 'Read', 'RoleGrant', 'read grant') : PERMITTED);
+                expect(await run({ audienceReaders: [readerA] })).toBeNull();
+                expect(forbiddenRow().FailureReason).toMatch(/Read grants visibility/);
+            });
+
+            it('skips only the refused scope: a scope every reader may search still runs', async () => {
+                vi.mocked(SearchEngineBase.Instance.GetAgentScopes).mockReturnValue([rowFor('s1'), rowFor('s2')]);
+                mockResolvePermission.mockImplementation(async (input: ResolvePermissionInput) =>
+                    input.SearchScopeID === 's1' && input.User.ID === 'reader-a' ? Verdict(false, 'None', 'NoGrant', 'no') : PERMITTED);
+                await run({ audienceReaders: [readerA] });
+                expect(mockSearch).toHaveBeenCalledTimes(1);
+                expect(mockSearch.mock.calls[0][0]).toMatchObject({ ScopeIDs: ['s2'], Audience: { Readers: [readerA] } });
+            });
+
+            it('skips the scope, logged with no Forbidden row, when a reader\'s permission cannot be resolved', async () => {
+                mockResolvePermission.mockImplementation(async (input: ResolvePermissionInput) => {
+                    if (input.User.ID === 'reader-a') throw new Error('permission store unavailable');
+                    return PERMITTED;
+                });
+                expect(await run({ audienceReaders: [readerA] })).toBeNull();
+                expect(mockLogForbidden).not.toHaveBeenCalled();
+                expect(mockLogError).toHaveBeenCalledWith(expect.stringMatching(/"HR" for audience reader reader-a could not be resolved/));
+            });
+
+            it('does not judge the readers when the caller is refused (one Forbidden row, for the caller)', async () => {
+                denyAll();
+                await run({ audienceReaders: [readerA] });
+                expect(mockResolvePermission).toHaveBeenCalledTimes(1);
+                expect(mockLogForbidden).toHaveBeenCalledTimes(1);
+                expect(forbiddenRow().FailureReason).toBe('no grant for this user');
+            });
+        });
+
         it('skips retrieval when the lone active skill is not in the AI metadata cache, rather than search with an unjudged principal', async () => {
             expect(await run({ activeSkillIDs: ['skill-missing'] })).toBeNull();
             expect(mockResolvePermission).not.toHaveBeenCalled();
