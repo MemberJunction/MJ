@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import { ChangeDetectorRef } from '@angular/core';
 import { renderComponentFixture, query, queryAll, text, overlayQueryAll, clearOverlayContainers } from '@memberjunction/ng-test-utils';
 import type { LiveKitParticipantView, LiveKitRoomController, LiveKitRoomState } from '@memberjunction/livekit-room-core';
 import { LiveKitRoomComponent, LIVEKIT_ROOM_CONTROLLER_FACTORY } from './livekit-room.component';
@@ -346,6 +347,100 @@ describe('LiveKitRoomComponent (DOM, fake controller)', () => {
       const [sharePane, speakerPane] = queryAll(f, '.lk-room__split-pane');
       expect(sharePane.querySelector('mj-empty-state')).not.toBeNull();
       expect(speakerPane.querySelector('.tile__name')?.textContent?.trim().split(/\s+/)[0]).toBe('sage');
+    });
+  });
+
+  describe('the spotlight, as a move', () => {
+    const person = (identity: string, over: { Local?: boolean; Agent?: boolean; Speaking?: boolean } = {}): LiveKitParticipantView => ({
+      ...view(identity, { Local: over.Local }),
+      Role: over.Agent ? 'agent' : 'participant',
+      IsSpeaking: over.Speaking ?? false,
+    }) as LiveKitParticipantView;
+    const names = (f: ReturnType<typeof render>, selector: string): string[] =>
+      queryAll(f, `${selector} .tile__name`).map((name) => (name.textContent ?? '').trim().split(/\s+/)[0]);
+    const room = (remote: LiveKitParticipantView[]) =>
+      makeFakeController(makeState({ Status: 'connected', Local: person('you', { Local: true }), Remote: remote }));
+    /** Clicks the pin on the named participant's tile, wherever it is. */
+    const pin = (f: ReturnType<typeof render>, name: string) => {
+      const tile = queryAll(f, 'mj-media-tile, mj-self-view').find((t) => t.querySelector('.tile__name')?.textContent?.trim().split(/\s+/)[0] === name);
+      (tile?.querySelector('.tile__pin') as HTMLButtonElement).click();
+      f.detectChanges();
+    };
+
+    it('pinning in Gallery switches to Active speaker with that person in the spotlight, and the room says so', () => {
+      const f = render(room([person('ada'), person('sage', { Agent: true })]).controller, { Layout: 'grid' });
+      const layouts: string[] = [];
+      f.componentInstance.LayoutChange.subscribe((layout: string) => layouts.push(layout));
+      pin(f, 'ada');
+      expect(layouts).toEqual(['spotlight']);
+      expect(names(f, '.lk-room__spotlight')).toEqual(['ada']);
+      expect(f.componentInstance.PinnedIdentity).toBe('ada');
+    });
+
+    it('a second pin sends the first back to the filmstrip, and unpinning gives the spotlight back to the call', () => {
+      const f = render(room([person('ada'), person('bo'), person('sage', { Agent: true })]).controller, { Layout: 'spotlight' });
+      pin(f, 'ada');
+      pin(f, 'bo');
+      expect(names(f, '.lk-room__spotlight')).toEqual(['bo']);
+      expect(names(f, '.lk-room__filmstrip-tile')).toEqual(['you', 'ada', 'sage']);
+      pin(f, 'bo');
+      expect(names(f, '.lk-room__spotlight')).toEqual(['sage']);
+      expect(f.componentInstance.PinnedIdentity).toBeNull();
+    });
+
+    it('gives the spotlight back to the call while the pinned participant is away, and back to them when they return', () => {
+      const fc = room([person('ada'), person('sage', { Agent: true })]);
+      const f = render(fc.controller, { Layout: 'spotlight' });
+      pin(f, 'ada');
+      fc.emitState(makeState({ Status: 'connected', Local: person('you', { Local: true }), Remote: [person('sage', { Agent: true })] }));
+      f.detectChanges();
+      expect(names(f, '.lk-room__spotlight')).toEqual(['sage']);
+      expect(f.componentInstance.PinnedIdentity).toBeNull();
+      fc.emitState(makeState({ Status: 'connected', Local: person('you', { Local: true }), Remote: [person('ada'), person('sage', { Agent: true })] }));
+      f.detectChanges();
+      expect(names(f, '.lk-room__spotlight')).toEqual(['ada']);
+    });
+
+    it("moves a tile when a host sets PinnedIdentity, and sends it back on null", () => {
+      const f = render(room([person('ada'), person('sage', { Agent: true })]).controller, { Layout: 'spotlight' });
+      const cdr = f.componentRef.injector.get(ChangeDetectorRef);
+      f.componentInstance.PinnedIdentity = 'ada';
+      cdr.markForCheck();
+      f.detectChanges();
+      expect(names(f, '.lk-room__spotlight')).toEqual(['ada']);
+      f.componentInstance.PinnedIdentity = null;
+      cdr.markForCheck();
+      f.detectChanges();
+      expect(names(f, '.lk-room__spotlight')).toEqual(['sage']);
+    });
+
+    it('keeps a pin a host cleared while pinning was off cleared when pinning comes back', () => {
+      const f = render(room([person('ada'), person('sage', { Agent: true })]).controller, { Layout: 'spotlight' });
+      pin(f, 'ada');
+      f.componentRef.setInput('EnablePinning', false);
+      f.componentInstance.PinnedIdentity = null;
+      f.componentRef.setInput('EnablePinning', true);
+      f.detectChanges();
+      expect(names(f, '.lk-room__spotlight')).toEqual(['sage']);
+    });
+
+    it('ignores a move the room does not offer: the pin stays', () => {
+      const f = render(room([person('ada'), person('sage', { Agent: true })]).controller, { Layout: 'spotlight' });
+      pin(f, 'ada');
+      f.componentInstance.MoveTile('ada', 'hidden');
+      f.componentRef.injector.get(ChangeDetectorRef).markForCheck();
+      f.detectChanges();
+      expect(names(f, '.lk-room__spotlight')).toEqual(['ada']);
+    });
+
+    it('moves nothing to the spotlight while pinning is off, and no tile offers a pin', () => {
+      const f = render(room([person('ada'), person('sage', { Agent: true })]).controller, { Layout: 'grid', EnablePinning: false });
+      const layouts: string[] = [];
+      f.componentInstance.LayoutChange.subscribe((layout: string) => layouts.push(layout));
+      f.componentInstance.MoveTile('ada', 'stage');
+      expect(layouts).toEqual([]);
+      expect(f.componentInstance.PinnedIdentity).toBeNull();
+      expect(query(f, '.tile__pin')).toBeNull();
     });
   });
 
