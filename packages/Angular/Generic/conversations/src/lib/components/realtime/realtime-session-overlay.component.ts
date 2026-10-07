@@ -50,9 +50,7 @@ import {
   MediaMoveMenuComponent, MediaStageComponent, MediaStagePipActionsDirective, MediaStageSurfaceDirective,
   type MediaMoveRequest, type MediaShareRequest, type MediaStagePipRectChange
 } from '@memberjunction/ng-realtime-media';
-import {
-  ParsePipRects, ParsePlacementMoves, SerializePipRects, SerializePlacementMoves, type MediaPipRect
-} from '@memberjunction/ai-realtime-client/media';
+import { MediaLayoutPrefs, RecordPipRect, type MediaPipRect } from '@memberjunction/ai-realtime-client/media';
 
 /**
  * A request to open an entity record, emitted by the call overlay's gear-gated developer
@@ -1666,18 +1664,24 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   public OnResetLayout(): void {
     this.SurfaceStage.ResetLayout();
     this.PipRects = new Map();
-    this.savePlacementPref();
-    this.savePipPref();
+    this.layoutPrefs.SaveMoves(this.SurfaceStage.Moves);
+    this.layoutPrefs.SavePipRects(this.PipRects);
     this.recomputeUi();
   }
 
   /** Where the user put each picture-in-picture box, by channel key, as fractions of the stage. */
   public PipRects: ReadonlyMap<string, MediaPipRect> = new Map();
 
+  /** The user's saved layout of the call's surfaces, per user, under the call's own keys. */
+  private readonly layoutPrefs = new MediaLayoutPrefs(() => UserInfoEngine.Instance, {
+    Moves: SURFACE_PLACEMENT_PREF_KEY,
+    PipRects: SURFACE_PIP_PREF_KEY,
+  });
+
   /** The user moved or resized a picture-in-picture box: keep it and save it. */
   public OnPipRectChange(change: MediaStagePipRectChange): void {
-    this.PipRects = new Map(this.PipRects).set(change.Key, change.Rect);
-    this.savePipPref();
+    this.PipRects = RecordPipRect(this.PipRects, change.Key, change.Rect);
+    this.layoutPrefs.SavePipRects(this.PipRects);
   }
 
   /** Moves a surface, saves the layout, and re-resolves the UI (a surface on the stage is the focus layout). */
@@ -1685,36 +1689,17 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     if (!this.SurfaceStage.Move(move.Key, move.Placement)) {
       return;
     }
-    this.savePlacementPref();
+    this.layoutPrefs.SaveMoves(this.SurfaceStage.Moves);
     this.recomputeUi();
   }
 
-  /** Starts from the user's saved layout and picture-in-picture boxes (no-op when the engine isn't configured). */
+  /**
+   * Starts from the user's saved layout and picture-in-picture boxes. While `UserInfoEngine` is not configured (plain
+   * node tests, early bootstrap), nothing is saved and every surface starts where its channel places it.
+   */
   private loadPlacementPref(): void {
-    try {
-      this.SurfaceStage.LoadMoves(ParsePlacementMoves(UserInfoEngine.Instance.GetSetting(SURFACE_PLACEMENT_PREF_KEY)));
-      this.PipRects = ParsePipRects(UserInfoEngine.Instance.GetSetting(SURFACE_PIP_PREF_KEY));
-    } catch {
-      // UserInfoEngine not configured (plain-node tests / early bootstrap): every surface starts on its tab.
-    }
-  }
-
-  /** Saves the picture-in-picture boxes, debounced (no-op when the engine isn't configured). */
-  private savePipPref(): void {
-    try {
-      UserInfoEngine.Instance.SetSettingDebounced(SURFACE_PIP_PREF_KEY, SerializePipRects(this.PipRects));
-    } catch {
-      // UserInfoEngine not configured: the boxes stay where they are for this overlay only.
-    }
-  }
-
-  /** Saves the layout, debounced (no-op when the engine isn't configured). */
-  private savePlacementPref(): void {
-    try {
-      UserInfoEngine.Instance.SetSettingDebounced(SURFACE_PLACEMENT_PREF_KEY, SerializePlacementMoves(this.SurfaceStage.Moves));
-    } catch {
-      // UserInfoEngine not configured: the layout lasts for this overlay only.
-    }
+    this.SurfaceStage.LoadMoves(this.layoutPrefs.LoadMoves());
+    this.PipRects = this.layoutPrefs.LoadPipRects();
   }
 
   /** Registers (or upgrades) one channel plugin's surface tab on the panel, and its surface on the stage. */

@@ -5,7 +5,8 @@
  * - **Boxes.** Where the user put each picture-in-picture box, by surface key, as fractions of the stage.
  *
  * The realtime call keeps its channels' layout this way and the meeting room its participants' tiles, so both save the
- * same form ({@link SerializePlacementMoves}, {@link SerializePipRects}) and read it back tolerantly.
+ * same form ({@link SerializePlacementMoves}, {@link SerializePipRects}) and read it back tolerantly, through
+ * {@link MediaLayoutPrefs} under each host's own keys.
  *
  * @module @memberjunction/ai-realtime-client/media
  */
@@ -47,6 +48,14 @@ export function SerializePlacementMoves(moves: readonly MediaPlacementMove[]): s
     return JSON.stringify(moves.map((move) => ({ SurfaceKey: move.SurfaceKey, Placement: move.Placement })));
 }
 
+/** Adds a box at the end, dropping the surface's earlier box, so the boxes the user moved most recently come last. */
+export function RecordPipRect(rects: ReadonlyMap<string, MediaPipRect>, key: string, rect: MediaPipRect): Map<string, MediaPipRect> {
+    const next = new Map(rects);
+    next.delete(key);
+    next.set(key, rect);
+    return next;
+}
+
 /**
  * Reads saved picture-in-picture boxes, by surface key. Tolerant: a value that is not an object reads as none, and a box
  * that is not four fractions with a size is skipped.
@@ -75,6 +84,77 @@ export function ParsePipRects(raw: string | null | undefined): Map<string, Media
 /** The saved form of picture-in-picture boxes, by surface key. */
 export function SerializePipRects(rects: ReadonlyMap<string, MediaPipRect>): string {
     return JSON.stringify(Object.fromEntries([...rects].map(([key, rect]) => [key, { X: rect.X, Y: rect.Y, W: rect.W, H: rect.H }])));
+}
+
+/** A per-user settings store: MJ's `UserInfoEngine` is one, or anything with the same two methods. */
+export interface MediaLayoutSettings {
+    /** The text saved under a key, or `undefined` when there is none. */
+    GetSetting(key: string): string | undefined;
+    /** Saves text under a key; the store may wait for a burst of changes to end. */
+    SetSettingDebounced(key: string, value: string): void;
+}
+
+/** The keys a host saves its layout under, so two hosts never overwrite each other's. */
+export interface MediaLayoutKeys {
+    /** Where the moves go. */
+    Moves: string;
+    /** Where the picture-in-picture boxes go. */
+    PipRects: string;
+}
+
+/** How many moves, and how many boxes, a saved layout keeps: the newest. The oldest go first. */
+export const MEDIA_LAYOUT_SAVED_LIMIT = 50;
+
+/**
+ * A host's saved layout: its moves and its picture-in-picture boxes, in a per-user settings store under the host's own
+ * keys. Reading treats a store that is not ready (it throws) as nothing saved; writing skips one, so the layout then
+ * lasts for this session only. Writing keeps the newest {@link MEDIA_LAYOUT_SAVED_LIMIT} moves and boxes.
+ */
+export class MediaLayoutPrefs {
+    /**
+     * @param store The settings store, looked up each time it is used, since a host's store may be ready only later.
+     * @param keys Where this host's layout goes.
+     */
+    constructor(
+        private readonly store: () => MediaLayoutSettings,
+        private readonly keys: MediaLayoutKeys
+    ) {}
+
+    /** The saved moves, oldest first; none when nothing is saved or the store is not ready. */
+    public LoadMoves(): MediaPlacementMove[] {
+        return ParsePlacementMoves(this.read(this.keys.Moves));
+    }
+
+    /** The saved boxes, by surface key; none when nothing is saved or the store is not ready. */
+    public LoadPipRects(): Map<string, MediaPipRect> {
+        return ParsePipRects(this.read(this.keys.PipRects));
+    }
+
+    /** Saves the moves, the newest {@link MEDIA_LAYOUT_SAVED_LIMIT} of them. */
+    public SaveMoves(moves: readonly MediaPlacementMove[]): void {
+        this.write(this.keys.Moves, SerializePlacementMoves(moves.slice(-MEDIA_LAYOUT_SAVED_LIMIT)));
+    }
+
+    /** Saves the boxes, the newest {@link MEDIA_LAYOUT_SAVED_LIMIT} of them (the last in the map's order). */
+    public SavePipRects(rects: ReadonlyMap<string, MediaPipRect>): void {
+        this.write(this.keys.PipRects, SerializePipRects(new Map([...rects].slice(-MEDIA_LAYOUT_SAVED_LIMIT))));
+    }
+
+    private read(key: string): string | undefined {
+        try {
+            return this.store().GetSetting(key);
+        } catch {
+            return undefined;
+        }
+    }
+
+    private write(key: string, value: string): void {
+        try {
+            this.store().SetSettingDebounced(key, value);
+        } catch {
+            // The store is not ready: the layout lasts for this session only.
+        }
+    }
 }
 
 function isMove(value: unknown): value is MediaPlacementMove {

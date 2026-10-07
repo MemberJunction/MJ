@@ -1,5 +1,16 @@
 import { describe, it, expect } from 'vitest';
-import { ParsePipRects, ParsePlacementMoves, RecordPlacementMove, SerializePipRects, SerializePlacementMoves, WithoutStageMoves } from '../media/mediaLayout';
+import {
+    MEDIA_LAYOUT_SAVED_LIMIT,
+    MediaLayoutPrefs,
+    ParsePipRects,
+    ParsePlacementMoves,
+    RecordPipRect,
+    RecordPlacementMove,
+    SerializePipRects,
+    SerializePlacementMoves,
+    WithoutStageMoves,
+    type MediaLayoutSettings,
+} from '../media/mediaLayout';
 
 /** The user's layout as a host keeps and saves it (moved from the call's own preference helpers in ng-conversations). */
 describe('placement moves', () => {
@@ -98,5 +109,92 @@ describe('saved picture-in-picture boxes', () => {
             Nothing: null,
         });
         expect([...ParsePipRects(raw)]).toEqual([['Whiteboard', { X: 0.1, Y: 0.1, W: 0.3, H: 0.3 }]]);
+    });
+});
+
+describe('recording a box', () => {
+    it("puts the box last, replacing the surface's earlier one, and leaves the map it was given alone", () => {
+        const rects = new Map([
+            ['ada', { X: 0.1, Y: 0.1, W: 0.2, H: 0.2 }],
+            ['bo', { X: 0.5, Y: 0.5, W: 0.2, H: 0.2 }],
+        ]);
+        const next = RecordPipRect(rects, 'ada', { X: 0.3, Y: 0.3, W: 0.2, H: 0.2 });
+        expect([...next]).toEqual([
+            ['bo', { X: 0.5, Y: 0.5, W: 0.2, H: 0.2 }],
+            ['ada', { X: 0.3, Y: 0.3, W: 0.2, H: 0.2 }],
+        ]);
+        expect(rects.get('ada')).toEqual({ X: 0.1, Y: 0.1, W: 0.2, H: 0.2 });
+    });
+});
+
+describe('a saved layout (MediaLayoutPrefs)', () => {
+    const KEYS = { Moves: 'host.moves', PipRects: 'host.pips' };
+    /** A store that keeps settings in memory, as UserInfoEngine keeps them for the user. */
+    const memoryStore = (saved: Record<string, string> = {}) => {
+        const settings = new Map(Object.entries(saved));
+        const store: MediaLayoutSettings = {
+            GetSetting: (key) => settings.get(key),
+            SetSettingDebounced: (key, value) => {
+                settings.set(key, value);
+            },
+        };
+        return { store, settings };
+    };
+    const notReady = (): MediaLayoutSettings => {
+        throw new Error('not configured');
+    };
+
+    it("reads the host's saved moves and boxes from its own keys", () => {
+        const { store } = memoryStore({
+            'host.moves': SerializePlacementMoves([{ SurfaceKey: 'participant:ada', Placement: 'pip' }]),
+            'host.pips': SerializePipRects(new Map([['ada', { X: 0.1, Y: 0.1, W: 0.2, H: 0.2 }]])),
+            'other.moves': SerializePlacementMoves([{ SurfaceKey: 'Whiteboard', Placement: 'stage' }]),
+        });
+        const prefs = new MediaLayoutPrefs(() => store, KEYS);
+        expect(prefs.LoadMoves()).toEqual([{ SurfaceKey: 'participant:ada', Placement: 'pip' }]);
+        expect([...prefs.LoadPipRects()]).toEqual([['ada', { X: 0.1, Y: 0.1, W: 0.2, H: 0.2 }]]);
+    });
+
+    it('saves under its own keys, in the shared form', () => {
+        const { store, settings } = memoryStore();
+        const prefs = new MediaLayoutPrefs(() => store, KEYS);
+        prefs.SaveMoves([{ SurfaceKey: 'participant:ada', Placement: 'stage' }]);
+        prefs.SavePipRects(new Map([['bo', { X: 0.5, Y: 0.5, W: 0.2, H: 0.2 }]]));
+        expect(ParsePlacementMoves(settings.get('host.moves'))).toEqual([{ SurfaceKey: 'participant:ada', Placement: 'stage' }]);
+        expect([...ParsePipRects(settings.get('host.pips'))]).toEqual([['bo', { X: 0.5, Y: 0.5, W: 0.2, H: 0.2 }]]);
+    });
+
+    it('keeps the newest moves and boxes, up to the limit', () => {
+        const { store, settings } = memoryStore();
+        const prefs = new MediaLayoutPrefs(() => store, KEYS);
+        const count = MEDIA_LAYOUT_SAVED_LIMIT + 2;
+        const ids = Array.from({ length: count }, (_, i) => `p${i}`);
+        prefs.SaveMoves(ids.map((id) => ({ SurfaceKey: id, Placement: 'pip' as const })));
+        prefs.SavePipRects(new Map(ids.map((id) => [id, { X: 0.1, Y: 0.1, W: 0.2, H: 0.2 }])));
+        const moves = ParsePlacementMoves(settings.get('host.moves'));
+        expect(moves).toHaveLength(MEDIA_LAYOUT_SAVED_LIMIT);
+        expect(moves[0].SurfaceKey).toBe('p2');
+        expect(moves[moves.length - 1].SurfaceKey).toBe(`p${count - 1}`);
+        const boxes = [...ParsePipRects(settings.get('host.pips')).keys()];
+        expect(boxes).toHaveLength(MEDIA_LAYOUT_SAVED_LIMIT);
+        expect(boxes[0]).toBe('p2');
+    });
+
+    it('reads nothing and saves nothing while the store is not ready', () => {
+        const prefs = new MediaLayoutPrefs(notReady, KEYS);
+        expect(prefs.LoadMoves()).toEqual([]);
+        expect(prefs.LoadPipRects().size).toBe(0);
+        expect(() => prefs.SaveMoves([{ SurfaceKey: 'x', Placement: 'pip' }])).not.toThrow();
+        expect(() => prefs.SavePipRects(new Map())).not.toThrow();
+    });
+
+    it('looks the store up each time, so a store that becomes ready later is used', () => {
+        let ready: MediaLayoutSettings | null = null;
+        const prefs = new MediaLayoutPrefs(() => ready ?? notReady(), KEYS);
+        expect(prefs.LoadMoves()).toEqual([]);
+        const { store, settings } = memoryStore();
+        ready = store;
+        prefs.SaveMoves([{ SurfaceKey: 'participant:ada', Placement: 'pip' }]);
+        expect(settings.has('host.moves')).toBe(true);
     });
 });
