@@ -24686,8 +24686,8 @@
       "ID": "E36C093C-7A76-4096-954E-1284394FAEF0"
     },
     "sync": {
-      "lastModified": "2026-10-07T00:07:46.780Z",
-      "checksum": "68cefaa71e012c375ca3b56c0753acd9e48381b197e2f0a8ac2246b6e24f0f0a"
+      "lastModified": "2026-09-10T17:40:33.989Z",
+      "checksum": "71760f6c3ec98270798544441d210c5fd395f5e13cee281855309a2431ccd058"
     }
   },
   {
@@ -25174,7 +25174,12 @@
             "SupportedResponseFormats": "Any",
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer",
+            "ModelConfiguration": {
+              "Realtime": {
+                "FullDuplex": true
+              }
+            }
           },
           "primaryKey": {
             "ID": "F3431AC6-C079-4866-9F46-A2F38E5A57EB"
@@ -25206,8 +25211,8 @@
             "ID": "29B5A4BC-C201-4341-B60E-C3E929E4E513"
           },
           "sync": {
-            "lastModified": "2026-10-07T00:07:46.815Z",
-            "checksum": "c3d0b34b26b211adb27295f11b168b29fd116053f61ad706b8218c56c49cd9c1"
+            "lastModified": "2026-09-11T18:26:10.530Z",
+            "checksum": "79018d295810b843d44e85aa24d229a5bc213930a7edb5dfb4fd5458e1bf523d"
           }
         }
       ],
@@ -25274,8 +25279,8 @@
       "ID": "51F8EF42-316F-41CB-81E9-A63996AD90F7"
     },
     "sync": {
-      "lastModified": "2026-10-07T00:07:46.454Z",
-      "checksum": "bc4af87f06f3e6a8924e7f6a76de601dfb2942ba417144f276994cb6dd68045b"
+      "lastModified": "2026-09-11T18:26:10.296Z",
+      "checksum": "2f15dc0b913fa23cfa395c278048ceeee97896b3541e3d6c27b0b1da7652ada5"
     }
   },
   {
@@ -25488,7 +25493,6 @@
       "InheritTypeModalities": false,
       "ModelConfiguration": {
         "Realtime": {
-          "FullDuplex": true,
           "IdleSignal": "turnComplete",
           "Tooling": {
             "SupportsBlockingExecution": true,
@@ -25496,7 +25500,8 @@
           },
           "TurnDetection": {
             "Coverage": "audioActivityAndAllVideo"
-          }
+          },
+          "FullDuplex": true
         }
       }
     },
@@ -25516,7 +25521,6 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
             "ModelConfiguration": {
               "Realtime": {
-                "FullDuplex": true,
                 "IdleSignal": "turnComplete",
                 "Tooling": {
                   "SupportsBlockingExecution": true,
@@ -25524,7 +25528,8 @@
                 },
                 "TurnDetection": {
                   "Coverage": "audioActivityAndAllVideo"
-                }
+                },
+                "FullDuplex": true
               }
             }
           },
@@ -25532,8 +25537,8 @@
             "ID": "36768861-A896-4650-9A3D-7844F305C551"
           },
           "sync": {
-            "lastModified": "2026-10-07T00:07:46.843Z",
-            "checksum": "f76a116dd620031395b7c9d85715edf6980dd24fd5aa3192d1319ad90a6cd6f9"
+            "lastModified": "2026-09-16T01:46:08.462Z",
+            "checksum": "dd069eb4871bed14cdbceb9ce69965f0b21537fa59061b6aaa1e2390d206505b"
           }
         }
       ],
@@ -25684,8 +25689,8 @@
       "ID": "C5650EB0-9394-4800-B514-462272FF4011"
     },
     "sync": {
-      "lastModified": "2026-10-07T00:07:46.474Z",
-      "checksum": "6296cb2ae9000460689cb318ec3399cc1153e51a0d1532c3fc18012d89ee215d"
+      "lastModified": "2026-09-16T01:46:08.294Z",
+      "checksum": "ad5d50d8a30f7e2ecdf59f430ed3d0691debe4b319014f2f5cb41432c26a32a7"
     }
   },
   {
@@ -25700,7 +25705,6 @@
       "InheritTypeModalities": false,
       "ModelConfiguration": {
         "Realtime": {
-          "FullDuplex": true,
           "IdleSignal": "interactionStatus",
           "Tooling": {
             "SupportsBlockingExecution": false,
@@ -25709,7 +25713,8 @@
           "Reasoning": {
             "IncludeThoughtSummaries": true,
             "Level": "medium"
-          }
+          },
+          "FullDuplex": true
         }
       }
     },
@@ -25729,7 +25734,6 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
             "ModelConfiguration": {
               "Realtime": {
-                "FullDuplex": true,
                 "IdleSignal": "interactionStatus",
                 "Tooling": {
                   "SupportsBlockingExecution": false,
@@ -25738,7 +25742,8 @@
                 "Reasoning": {
                   "IncludeThoughtSummaries": true,
                   "Level": "medium"
-                }
+                },
+                "FullDuplex": true
               }
             }
           },
@@ -25746,8 +25751,8 @@
             "ID": "9C4C6061-5E16-48FD-806F-4D441FEBECAB"
           },
           "sync": {
-            "lastModified": "2026-10-07T00:07:46.870Z",
-            "checksum": "5e1507cd718cf7c92bbfb2e7d201730e3859e212f571a13c3724476cdf65b78e"
+            "lastModified": "2026-09-16T01:46:08.460Z",
+            "checksum": "c56a71ab624693152dae987664d6bbdb65193a43b484d22a189be3060c87ffbb"
           }
         }
       ],
@@ -25898,8 +25903,8 @@
       "ID": "A49C8499-56ED-4BFB-9538-9A0472B5AB23"
     },
     "sync": {
-      "lastModified": "2026-10-07T00:07:46.491Z",
-      "checksum": "0745893f30f3a3927f42a61523d096c1ade17bb9f78f3d0598ba9035dfeca953"
+      "lastModified": "2026-09-16T01:46:08.293Z",
+      "checksum": "83bc5757be51e2f182f05d5808eec3f18d478d1f706ab1ed7f94ab3a32ccf9ab"
     }
   },
   {
@@ -26249,8 +26254,8 @@
       "ID": "82151749-3597-4C99-8D7D-F8171A7155E8"
     },
     "sync": {
-      "lastModified": "2026-10-07T00:07:46.976Z",
-      "checksum": "65c92675285c0185b4a14d9f3020b5430fa328364bb9a4e8583e77eece0de013"
+      "lastModified": "2026-09-29T19:19:10.160Z",
+      "checksum": "1cbf05427b71ac371ccf3ec0392776c01137d6611454915278d28ade4223362f"
     }
   },
   {
@@ -27470,8 +27475,8 @@
       "ID": "1B9038F1-3790-4298-B42C-8F2E7FE78E0E"
     },
     "sync": {
-      "lastModified": "2026-10-07T00:07:46.947Z",
-      "checksum": "c9118bbf3a3530a5696fa7d0ea92bf3fc6692c2eee5c30bf96c4a25607087250"
+      "lastModified": "2026-10-02T21:42:02.294Z",
+      "checksum": "4875e26176dd0e05f8e9f1536bc5d87783e8724130ffa228401990280b7f2ec8"
     }
   },
   {

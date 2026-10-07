@@ -25,8 +25,8 @@
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Entities&Name=Configuration"
           },
           "sync": {
-            "lastModified": "2026-10-07T00:07:57.726Z",
-            "checksum": "eeedb7c9bee8f7303174cfe0cad8e6ba6b14f14efc6245cb23ac9000df6d564f"
+            "lastModified": "2026-10-02T21:42:44.792Z",
+            "checksum": "7dde4aad047ac7a80814cdd79645ecee3526dbfdf14a551da604e489adc186f3"
           }
         }
       ]
@@ -60,8 +60,8 @@
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Entity Relationships&Name=Configuration"
           },
           "sync": {
-            "lastModified": "2026-10-07T00:07:57.755Z",
-            "checksum": "344571cf633ffcd90199c2ec265212b1c01e5e0486b2b1047df7f06fa4c020b3"
+            "lastModified": "2026-10-02T21:42:44.837Z",
+            "checksum": "b3d34bcc23e4ca54db1a9f3bc721c9f7c0592620bf115376ae6a073d469e30cf"
           }
         }
       ]
