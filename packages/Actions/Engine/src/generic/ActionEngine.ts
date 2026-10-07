@@ -671,7 +671,9 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
                config,
                contextUser: params.ContextUser,
                abortSignal: params.AbortSignal,
-               provider: params.Provider
+               provider: params.Provider,
+               runScope: params.RunScope,
+               audience: params.Audience
             });
             preamble = builder.GetPreamble();
          }

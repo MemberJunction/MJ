@@ -29,6 +29,7 @@ const mocks = vi.hoisted(() => ({
     copyObjectBetweenProviders: vi.fn(async () => ({ success: true, message: 'ok', sourcePath: 'a', destinationPath: 'b' })),
     searchAcrossAccounts: vi.fn(),
     consumeUploadToken: vi.fn(),
+    createUploadUrl: vi.fn(),
 }));
 
 // The resolver's import chain reaches the generated GraphQL schema and the type-graphql decorators; neither is under
@@ -69,6 +70,7 @@ vi.mock('@memberjunction/storage', async () => {
         copyObject: mocks.copyObject,
         copyObjectBetweenProviders: mocks.copyObjectBetweenProviders,
         searchAcrossAccounts: mocks.searchAcrossAccounts,
+        createUploadUrl: mocks.createUploadUrl,
     };
 });
 
@@ -451,6 +453,29 @@ describe('FileResolver — storage routes honour account permissions', () => {
             await expect(resolver.DeleteFile(FILE_ALIAS, new DeleteOptionsInput(), contextFor(plainUser), {} as unknown as PubSubEngine))
                 .rejects.toThrow(TRACKED_FILE_ACCESS_DENIED_MESSAGE);
             expect(mocks.deleteObject).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('CreateFile (legacy upload) signs an overwrite only where the caller may write it', () => {
+        const create = (input: { Name: string; ProviderID: string; ProviderKey?: string }, user: UserInfo) =>
+            resolver.CreateFile(input as unknown as Parameters<FileResolver['CreateFile']>[0], contextFor(user), {} as unknown as PubSubEngine);
+
+        it('refuses a Name that is another row\'s tracked object the caller cannot read, however it is spelled', async () => {
+            for (const Name of ['hr/secret.pdf', '/HR/secret.pdf']) {
+                await expect(create({ Name, ProviderID: PROVIDER_S3 }, plainUser)).rejects.toThrow(TRACKED_FILE_ACCESS_DENIED_MESSAGE);
+            }
+            expect(mocks.createUploadUrl).not.toHaveBeenCalled();
+        });
+
+        it('refuses a client ProviderKey that is a tracked object the caller cannot read', async () => {
+            await expect(create({ Name: 'new.pdf', ProviderID: PROVIDER_S3, ProviderKey: 'hr/secret.pdf' }, plainUser))
+                .rejects.toThrow(TRACKED_FILE_ACCESS_DENIED_MESSAGE);
+            expect(mocks.createUploadUrl).not.toHaveBeenCalled();
+        });
+
+        it('refuses a provider whose account the caller may not write', async () => {
+            await expect(create({ Name: 'new.xlsx', ProviderID: PROVIDER_FINANCE }, plainUser)).rejects.toThrow(STORAGE_ACCOUNT_ACCESS_DENIED_MESSAGE);
+            expect(mocks.createUploadUrl).not.toHaveBeenCalled();
         });
     });
 

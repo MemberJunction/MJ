@@ -172,6 +172,9 @@ vi.mock('@memberjunction/actions-base', async (importOriginal) => {
 
     return {
         ActionEngineBase: MockActionEngineBase,
+        // The real schema and builder token: RunRuntimeAction validates the configuration before building handlers.
+        RuntimeActionConfigurationSchema: actual.RuntimeActionConfigurationSchema,
+        RuntimeActionBridgeBuilder: actual.RuntimeActionBridgeBuilder,
         MJActionEntityExtended: class {
             Params: Array<Record<string, unknown>> = [];
             Name = '';
@@ -1220,5 +1223,42 @@ describe('ActionEngineServer', () => {
             // on `params` so callers don't see our internal merged signal leaked.
             expect(params.AbortSignal).toBe(upstream.signal);
         });
+    });
+});
+
+describe('ActionEngineServer.RunRuntimeAction: the bridge context carries the calling run', () => {
+    it("passes the run's RunScope and Audience to the bridge builder", async () => {
+        const engine = new ActionEngineServer();
+        const seen: Array<{ runScope?: unknown; audience?: unknown }> = [];
+        mockClassFactory.CreateInstance.mockReturnValue({
+            BuildHandlers: (ctx: { runScope?: unknown; audience?: unknown }) => {
+                seen.push(ctx);
+                throw new Error('stop after BuildHandlers');
+            },
+            GetPreamble: () => '',
+        });
+        const runScope = { PrimaryScopeEntityName: 'Tenants', PrimaryScopeRecordID: 'tenant-1', SecondaryScopes: null };
+        const audience = { Readers: [{ ID: 'reader-1' }] };
+        const params = {
+            Action: {
+                ID: 'runtime-1',
+                Name: 'Runtime Action',
+                Type: 'Runtime',
+                Code: 'return 1;',
+                RuntimeActionConfigurationObject: { permissions: { allowedActions: [], allowedAgents: [], allowedEntities: [] } },
+            },
+            ContextUser: { ID: 'user-1' },
+            Params: [],
+            Filters: [],
+            RunScope: runScope,
+            Audience: audience,
+        } as unknown as RunActionParams;
+
+        const runtime = engine as unknown as { RunRuntimeAction(p: RunActionParams): Promise<unknown> };
+        await runtime.RunRuntimeAction(params).catch(() => undefined);
+
+        expect(seen).toHaveLength(1);
+        expect(seen[0].runScope).toBe(runScope);
+        expect(seen[0].audience).toBe(audience);
     });
 });

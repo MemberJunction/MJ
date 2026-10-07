@@ -52,6 +52,9 @@ export class AgentRecordProcessor implements IRecordProcessor {
             conversationMessages: [],
             contextUser: context.contextUser,
             data: AgentRecordProcessor.buildData(this.inputMapping, record),
+            // `data` is built on the server from the Record Process's admin-configured input mapping, so its reserved
+            // keys (a per-record tenant mapped into PrimaryScopeRecordID, say) are honoured rather than stripped.
+            TrustReservedRunData: true,
         });
 
         return {

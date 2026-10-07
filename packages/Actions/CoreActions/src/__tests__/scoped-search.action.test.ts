@@ -63,7 +63,8 @@ const getActiveScopeByIDSpy = vi.fn();
 // the one where resolveScopeAll yields an undefined scopeID.
 let globalScopeStub: unknown = { ID: 'global-id', Name: 'Global', IsGlobal: true };
 
-vi.mock('@memberjunction/core-entities', () => ({
+vi.mock('@memberjunction/core-entities', async (importOriginal) => ({
+    ...(await importOriginal<Record<string, unknown>>()),
     SearchEngineBase: {
         Instance: {
             Config: vi.fn(async () => {}),
@@ -92,7 +93,9 @@ const loadedSkillStub: { ID: string; Name: string; SearchScopeAccess: string; Lo
     Load: async () => true,
 };
 
-vi.mock('@memberjunction/core', () => ({
+// importOriginal: the action calls actions-base's ActionRunScopeIsBounded at runtime, and actions-base loads core.
+vi.mock('@memberjunction/core', async (importOriginal) => ({
+    ...(await importOriginal<Record<string, unknown>>()),
     LogError: vi.fn(),
     LogStatusEx: vi.fn(),
     IsVerboseLoggingEnabled: () => false,
@@ -936,6 +939,36 @@ describe('ScopedSearchAction', () => {
             expect(result.ResultCode).toBe('INVALID_PARAM');
             expect(searchSpy).not.toHaveBeenCalled();
             expect(logForbiddenSpy).not.toHaveBeenCalled();
+        });
+
+        it('REFUSES the Global scope inside a tenant-scoped run (it would search every tenant)', async () => {
+            const params = inRun({ PrimaryScopeRecordID: TENANT });
+            params.Params = params.Params.filter(p => p.Name !== 'ScopeID'); // 'All' agent, no ScopeID → Global
+            const result = await run(new ScopedSearchAction(), params);
+            expect(result.ResultCode).toBe('INVALID_PARAM');
+            expect(result.Message).toMatch(/scoped to a tenant/);
+            expect(searchSpy).not.toHaveBeenCalled();
+            expect(logForbiddenSpy.mock.calls[0][0]).toMatchObject({ ScopeIDs: ['global-id'], PrimaryScopeRecordID: TENANT });
+        });
+
+        it('REFUSES a search with no scope at all inside a tenant-scoped run (no IsGlobal row)', async () => {
+            globalScopeStub = undefined;
+            try {
+                const params = inRun({ PrimaryScopeRecordID: null, SecondaryScopes: { Region: 'EMEA' } });
+                params.Params = params.Params.filter(p => p.Name !== 'ScopeID');
+                const result = await run(new ScopedSearchAction(), params);
+                expect(result.ResultCode).toBe('INVALID_PARAM');
+                expect(searchSpy).not.toHaveBeenCalled();
+            } finally {
+                globalScopeStub = { ID: 'global-id', Name: 'Global', IsGlobal: true };
+            }
+        });
+
+        it('an unscoped run may still use the Global scope, as before', async () => {
+            const params = inRun({ PrimaryScopeRecordID: null, SecondaryScopes: null });
+            params.Params = params.Params.filter(p => p.Name !== 'ScopeID');
+            const result = await run(new ScopedSearchAction(), params);
+            expect(result.Success).toBe(true);
         });
 
         it("judges every audience reader under the run's tenant, not a model value", async () => {

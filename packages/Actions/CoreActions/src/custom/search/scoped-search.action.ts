@@ -1,4 +1,4 @@
-import { ActionResultSimple, RunActionParams, ActionParam, type ActionRunScope } from "@memberjunction/actions-base";
+import { ActionResultSimple, RunActionParams, ActionParam, ActionRunScopeIsBounded, type ActionRunScope } from "@memberjunction/actions-base";
 import { BaseAction } from "@memberjunction/actions";
 import { IsPlainObject, NormalizeUUID, RegisterClass, UUIDsEqual } from "@memberjunction/global";
 import { LogError, LogStatusEx, IsVerboseLoggingEnabled, Metadata, UserInfo } from "@memberjunction/core";
@@ -200,6 +200,8 @@ export class ScopedSearchAction extends BaseAction {
                 agent, query, requestedScopeID, params, startTime, skill?.ID ?? undefined);
             if ('result' in scopeOutcome) return scopeOutcome.result;
             const { scope, scopeID } = scopeOutcome;
+            const unboundedDenial = await this.refuseUnboundedScopeInScopedRun(agent, skill, scope, query, params, startTime);
+            if (unboundedDenial) return unboundedDenial;
 
             // 3. User-side permission check (Phase 2A) + Read-level gate, with denial logging — then the same
             // gate for every reader of the run's audience: a room may search a scope only if each of them may.
@@ -303,6 +305,39 @@ export class ScopedSearchAction extends BaseAction {
             return { ok: false, result: this.createErrorResult(scopeResolution.errorMessage!, scopeResolution.errorCode!) };
         }
         return { ok: true, scope: scopeResolution.scope, scopeID: scopeResolution.scopeID };
+    }
+
+    /**
+     * Step 2b — inside a tenant-scoped agent run (`ActionRunScopeIsBounded(params.RunScope)`), refuse a search with
+     * no scope or the Global scope: neither renders the run's tenant, so it would reach every tenant the user can
+     * read — the reason the Search action is refused in such a run. `null` when the search may proceed. A non-global
+     * scope whose templates ignore the tenant is still the scope author's to bound.
+     */
+    private async refuseUnboundedScopeInScopedRun(
+        agent: MJAIAgentEntity,
+        skill: MJAISkillEntity | null,
+        scope: MJSearchScopeEntity | undefined,
+        query: string,
+        params: RunActionParams,
+        startTime: number,
+    ): Promise<ActionResultSimple | null> {
+        if (!ActionRunScopeIsBounded(params.RunScope) || (scope && !scope.IsGlobal)) return null;
+        const which = scope ? `the Global scope '${scope.Name}'` : 'no search scope';
+        await SearchEngine.Instance.LogForbiddenSearch({
+            Query: query,
+            ScopeIDs: scope ? [scope.ID] : undefined,
+            FailureReason: `Refused ${which} inside a tenant-scoped agent run: it would search across every tenant.`,
+            StartTime: startTime,
+            ContextUser: params.ContextUser,
+            AIAgentID: agent.ID,
+            AISkillID: skill?.ID ?? null,
+            PrimaryScopeRecordID: params.RunScope ? this.runTenantID(params.RunScope) ?? null : null,
+        });
+        return this.createErrorResult(
+            `This agent run is scoped to a tenant, and ${which} would search across every tenant. `
+                + 'Pass a ScopeID for a scope that is bounded to the tenant.',
+            'INVALID_PARAM',
+        );
     }
 
     /**

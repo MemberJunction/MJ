@@ -676,6 +676,11 @@ export class FileResolver extends FileResolverBase {
     const providerEntity = await provider.GetEntityObject<MJFileStorageProviderEntity>('MJ: File Storage Providers', user);
     fileEntity.CheckPermissions(EntityPermissionType.Create, true);
 
+    // The upload URL signs an overwrite of `Name` (and the row will point at `ProviderKey`): Write on the account the
+    // provider resolves to, and the tracked-file rule on both keys, as for every other route that writes an object.
+    const location: StorageFileLocation = { ProviderID: input.ProviderID ?? '', ProviderKey: null, Name: input.Name ?? '' };
+    await this.assertFileObjectAccess(location, 'Write', user, provider, input.ProviderKey ? [input.ProviderKey] : []);
+
     const [sameName] = await this.findBy(provider, 'MJ: Files', { Name: input.Name, ProviderID: input.ProviderID }, context.userPayload.userRecord);
     const NameExists = Boolean(sameName);
 
