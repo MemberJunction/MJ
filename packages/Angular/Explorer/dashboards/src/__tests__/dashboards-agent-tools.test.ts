@@ -1,6 +1,6 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import type { MJDashboardEntity } from '@memberjunction/core-entities';
-import { BuildOpenDashboardTool, ResolveByIdOrName } from '../DashboardBrowser/dashboards-agent-tools';
+import { ResolveByIdOrName } from '../DashboardBrowser/dashboards-agent-tools';
 
 const REVENUE = { ID: 'D0000000-0000-4000-8000-00000000000A', Name: 'Revenue' } as unknown as MJDashboardEntity;
 const CHURN = { ID: 'D0000000-0000-4000-8000-00000000000B', Name: 'Churn' } as unknown as MJDashboardEntity;
@@ -39,27 +39,5 @@ describe('ResolveByIdOrName', () => {
     const message = lookup.ok ? '' : lookup.result.ErrorMessage ?? '';
     expect(message).toContain('N24.');
     expect(message).not.toContain('N25');
-  });
-});
-
-describe('BuildOpenDashboardTool', () => {
-  it('opens the dashboard the agent names', async () => {
-    const open = vi.fn();
-    const tool = BuildOpenDashboardTool(() => [REVENUE, CHURN], open);
-
-    expect(tool.Name).toBe('OpenDashboard');
-    expect(await tool.Handler({ dashboard: 'Churn' })).toEqual({ Success: true });
-    expect(open).toHaveBeenCalledWith(CHURN);
-  });
-
-  it('opens nothing and explains why when the dashboard is unknown', async () => {
-    const open = vi.fn();
-    const tool = BuildOpenDashboardTool(() => [REVENUE], open);
-
-    expect(await tool.Handler({ dashboard: 'Churn' })).toEqual({
-      Success: false,
-      ErrorMessage: 'No dashboard named or identified by "Churn". Available: Revenue.',
-    });
-    expect(open).not.toHaveBeenCalled();
   });
 });

@@ -5,7 +5,7 @@ import { DashboardAddToMenuComponent } from './dashboard-add-to-menu.component';
 const render = (inputs: Record<string, unknown> = {}) =>
   RenderComponentFixture(DashboardAddToMenuComponent, {
     declarations: [DashboardAddToMenuComponent],
-    inputs: { IsHomeTab: false, IsPinned: false, ...inputs },
+    inputs: { IsPinned: false, ...inputs },
   });
 
 describe('DashboardAddToMenuComponent (DOM)', () => {
@@ -17,22 +17,28 @@ describe('DashboardAddToMenuComponent (DOM)', () => {
     expect(Query(f, '.atm-menu')).not.toBeNull();
   });
 
-  it('shows Added on items that are already placed', () => {
-    const f = render({ IsHomeTab: true, IsPinned: true });
+  it('offers Pin card and Share, and no Home tab item', () => {
+    const f = render();
     Click(f, '.atm-trigger');
     f.detectChanges();
-    expect(QueryAll(f, '.atm-added').length).toBe(2);
+    expect(QueryAll(f, '.atm-item b').map(b => b.textContent?.trim())).toEqual(['Pin card', 'Share with people or roles…']);
+    expect(Query(f, '.atm-home-tab')).toBeNull();
+  });
+
+  it('shows Added on items that are already placed', () => {
+    const f = render({ IsPinned: true });
+    Click(f, '.atm-trigger');
+    f.detectChanges();
+    expect(QueryAll(f, '.atm-added').length).toBe(1);
   });
 
   it('emits the intent for each item and closes', () => {
     const f = render();
-    const tabs = Capture(f.componentInstance.ToggleHomeTab);
     const pins = Capture(f.componentInstance.PinToHome);
     const shares = Capture(f.componentInstance.Share);
-    Click(f, '.atm-trigger'); f.detectChanges(); Click(f, '.atm-home-tab'); f.detectChanges();
     Click(f, '.atm-trigger'); f.detectChanges(); Click(f, '.atm-pin'); f.detectChanges();
     Click(f, '.atm-trigger'); f.detectChanges(); Click(f, '.atm-share'); f.detectChanges();
-    expect(tabs.length).toBe(1); expect(pins.length).toBe(1); expect(shares.length).toBe(1);
+    expect(pins.length).toBe(1); expect(shares.length).toBe(1);
     expect(Query(f, '.atm-menu')).toBeNull();
   });
 
@@ -45,10 +51,9 @@ describe('DashboardAddToMenuComponent (DOM)', () => {
   });
 
   it('shows a plus instead of Added on items that are not placed', () => {
-    const f = render({ IsHomeTab: true, IsPinned: false });
+    const f = render({ IsPinned: false });
     Click(f, '.atm-trigger');
     f.detectChanges();
-    expect(Query(f, '.atm-home-tab .atm-added')).not.toBeNull();
     expect(Query(f, '.atm-pin .atm-added')).toBeNull();
     expect(Query(f, '.atm-pin .atm-plus')).not.toBeNull();
   });
@@ -57,7 +62,7 @@ describe('DashboardAddToMenuComponent (DOM)', () => {
     const f = render({ CanShare: false });
     Click(f, '.atm-trigger');
     f.detectChanges();
-    expect(Query(f, '.atm-home-tab')).not.toBeNull();
+    expect(Query(f, '.atm-pin')).not.toBeNull();
     expect(Query(f, '.atm-share')).toBeNull();
     expect(Query(f, '.atm-sep')).toBeNull();
   });

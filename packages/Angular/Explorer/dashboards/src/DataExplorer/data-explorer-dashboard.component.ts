@@ -30,7 +30,7 @@ import { OpenRecordEvent, SelectRecordEvent } from './components/navigation-pane
 import { DisplaySimpleNotificationRequestData, MJEventType, MJGlobal } from '@memberjunction/global';
 import { buildDataExplorerAgentContext, isValidViewMode, isValidEntityBrowserMode, AppGroupSummary, entityDisplayName, resolveEntityByName, resolveRecordSelection, RecordSelectionRequest } from './data-explorer-agent-context';
 import { validateStringParam, validateEnumParam, validateNonNegativeNumberParam, VALID_ENTITY_BROWSER_MODES_FOR_VALIDATION } from '../shared/agent-tool-validation';
-import { EnsureDashboardsApp } from '../shared/dashboards-app.helpers';
+import { DASHBOARDS_LIBRARY_NAV_ITEM, EnsureDashboardsApp } from '../shared/dashboards-app.helpers';
 
 /**
  * Default server-side page size used by the inner entity viewer when {@link viewerConfig}
@@ -2945,13 +2945,13 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   }
 
   /**
-   * Opens the Overview page of the Dashboards app. First installs or re-enables the app for the
+   * Opens the Library page of the Dashboards app. First installs or re-enables the app for the
    * user when necessary. When the app cannot be opened, tells the user to try again or ask for access.
    */
   public async OpenDashboardsApp(): Promise<void> {
     const app = await EnsureDashboardsApp(this.appManager);
     if (app) {
-      await this.navigationService.SwitchToApp(app.ID, 'Overview');
+      await this.navigationService.SwitchToApp(app.ID, DASHBOARDS_LIBRARY_NAV_ITEM);
     } else {
       MJNotificationService.Instance.CreateSimpleNotification(
         'Could not open the Dashboards app. Try again, or ask your administrator for access.',

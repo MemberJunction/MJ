@@ -333,6 +333,83 @@ describe('session lifecycle, driven end to end with fakes', () => {
         expect(runtime.LastStartError).toBeNull();
         await runtime.EndRealtimeSession();
     });
+
+    describe('SendVideoFrame', () => {
+        /** A realtime client whose control channel opens on connect and that takes video frames, answering with `Accepts`. */
+        @RegisterClass(BaseRealtimeClient, 'fake-video-provider')
+        class FakeVideoClient extends FakeRealtimeClient {
+            public static Accepts = true;
+            public static Frames: Array<{ Base64: string; MimeType?: string }> = [];
+            public override async Connect(): Promise<void> {
+                this.emitStateChange('listening');
+            }
+            public override SendVideoFrame(base64Image: string, mimeType?: string): boolean {
+                FakeVideoClient.Frames.push({ Base64: base64Image, MimeType: mimeType });
+                return FakeVideoClient.Accepts;
+            }
+        }
+
+        it('returns false when no session is live', () => {
+            const runtime = new RealtimeSessionRuntime(new FakeMediaHost());
+            expect(runtime.SendVideoFrame('AAAA', 'image/jpeg')).toBe(false);
+        });
+
+        it('returns false when the client cannot take video frames', async () => {
+            const { runtime } = build(new FakeMediaHost());
+            await runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider'));
+            expect(runtime.SendVideoFrame('AAAA', 'image/jpeg')).toBe(false);
+            await runtime.EndRealtimeSession();
+        });
+
+        it("returns the live client's answer, and sends the frame", async () => {
+            FakeVideoClient.Frames = [];
+            const { runtime } = build(new FakeMediaHost());
+            await runtime.StartRealtimeSessionFromResult(mintedSession('fake-video-provider'));
+
+            FakeVideoClient.Accepts = true;
+            expect(runtime.SendVideoFrame('AAAA', 'image/jpeg')).toBe(true);
+            FakeVideoClient.Accepts = false;
+            expect(runtime.SendVideoFrame('BBBB', 'image/png')).toBe(false);
+
+            expect(FakeVideoClient.Frames).toEqual([{ Base64: 'AAAA', MimeType: 'image/jpeg' }, { Base64: 'BBBB', MimeType: 'image/png' }]);
+            await runtime.EndRealtimeSession();
+        });
+    });
+});
+
+describe('surface client tools run through the channel context', () => {
+    // Bracket access reaches the private method with its real return type, no cast needed.
+    const executeAppClientTool = (runtime: RealtimeSessionRuntime, name: string) => runtime['executeAppClientTool'](name, {});
+
+    /** A runtime with one registered surface tool whose handler returns `result`. */
+    function runtimeWithTool(result: unknown): RealtimeSessionRuntime {
+        const runtime = new RealtimeSessionRuntime(new FakeMediaHost());
+        runtime.RegisterAppClientTools([{ Name: 'AddPanel', Handler: async () => result }]);
+        return runtime;
+    }
+
+    it("reports a handler result with Success: false as a failure, with the handler's message and result", async () => {
+        const failed = { Success: false, ErrorMessage: 'The open dashboard changed.', Data: { panelId: 'A' } };
+
+        await expect(executeAppClientTool(runtimeWithTool(failed), 'AddPanel')).resolves.toEqual({
+            Success: false,
+            ErrorMessage: 'The open dashboard changed.',
+            Result: failed,
+        });
+    });
+
+    it('says "Tool failed" for a failed handler result without a message', async () => {
+        const failed = { Success: false, ErrorMessage: '  ' };
+
+        await expect(executeAppClientTool(runtimeWithTool(failed), 'AddPanel')).resolves.toEqual({ Success: false, ErrorMessage: 'Tool failed', Result: failed });
+    });
+
+    it('passes a succeeded handler result through unchanged', async () => {
+        const succeeded = { Success: true, Data: { panelId: 'panel-2' } };
+
+        await expect(executeAppClientTool(runtimeWithTool(succeeded), 'AddPanel')).resolves.toEqual({ Success: true, Result: succeeded });
+        await expect(executeAppClientTool(runtimeWithTool('navigated'), 'AddPanel')).resolves.toEqual({ Success: true, Result: 'navigated' });
+    });
 });
 
 describe('channel registry on a connect-only provider (#4887)', () => {

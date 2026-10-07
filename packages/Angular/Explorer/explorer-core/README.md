@@ -169,6 +169,15 @@ Booleans can only be narrowed (a `true` from the policy never re-enables what In
 
 The command palette is available globally via Ctrl+K (Cmd+K on Mac). Custom commands can be registered via `CommandPaletteService`.
 
+### Dashboard Tab
+
+`DashboardResource` shows one dashboard in a workspace tab. A Config dashboard shows in `mj-dashboard-editor` from `@memberjunction/ng-dashboards`, which owns the header, edit mode, the part dialog and saving; the Dashboard Studio AI pane sits beside it. A Code dashboard and the Data Explorer show in the tab's own container.
+
+- `ConfigDashboard`, `IsEditMode` and `DashboardPermissions` read the editor and are read-only.
+- `ToggleEditMode`, `CancelEdit`, `SaveDashboard`, `OpenAddPartDialog`, `EditingName`, `EditingDescription` and `DashboardPermissions`, and their camelCase aliases, are deprecated and call the editor. Before a dashboard loads, `DashboardPermissions` allows nothing.
+
+A link to the old Data Explorer Dashboards page (`/app/data-explorer/Dashboards`) opens the Library of the Dashboards app, with the link's query parameters, when the user's Data Explorer has no Dashboards page and the user has the Dashboards app. Otherwise the link goes to Data Explorer like any other app link.
+
 ## Exported API
 
 Key exports include:
@@ -179,6 +188,7 @@ Key exports include:
 | `ShellModule` | NgModule | Shell module with all shell-related components |
 | `ExplorerCoreModule` | NgModule | Core module with routes and common components |
 | `ResourceContainerComponent` | Component | Dynamic resource loading container |
+| `DashboardResource` | Component | The dashboard tab; see [Dashboard Tab](#dashboard-tab) |
 | `CommandPaletteComponent` | Component | Global command search |
 | `CommandPaletteService` | Service | Programmatic command palette control |
 | `AuthGuardService` | Guard | Authentication route guard |
@@ -189,6 +199,7 @@ Key exports include:
 | `BaseUserMenu` | Class | Extensible user menu base class |
 | `BaseShellChromePolicy` | Class | Host hook narrowing the shell chrome per user/tenant (`ShellChromeFlags`, `ApplyShellChromePolicy`) |
 | `UserMenuItem`, `UserMenuContext` | Interfaces | User menu type definitions |
+| `DashboardPreferencesDialogComponent` | Component | Dashboard preferences editor |
 | `SingleRecordComponent` | Component | Single record viewer/editor |
 | `SingleDashboardComponent` | Component | Single dashboard viewer |
 | `SingleQueryComponent` | Component | Single query viewer |

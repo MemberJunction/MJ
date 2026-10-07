@@ -2,8 +2,8 @@
  * @fileoverview Pure logic for the Dashboards app's Categories page: the category tree as rows,
  * the dashboard count of each category, and which categories can be deleted.
  *
- * A row's dashboard count follows the rules of the Browse page, so it equals the number of
- * dashboards Browse shows when the category is opened there.
+ * A row's dashboard count follows the rules of the Library page, so it equals the number of
+ * dashboards the Library shows when the category is opened there.
  */
 import type { MJDashboardCategoryEntity, MJDashboardCategoryLinkEntity, MJDashboardEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
@@ -17,7 +17,7 @@ export interface CategoryRow {
   Category: MJDashboardCategoryEntity;
   /** 0 for a top-level category, 1 for its sub-categories, and so on. */
   Depth: number;
-  /** The Config dashboards Browse shows in this category. */
+  /** The Config dashboards the Library shows in this category. */
   DashboardCount: number;
   /** The direct sub-categories. */
   SubCategoryCount: number;

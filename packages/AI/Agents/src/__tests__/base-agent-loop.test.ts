@@ -56,6 +56,7 @@ import { LogErrorEx, LogStatus } from '@memberjunction/core';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import type { MJActionEntityExtended } from '@memberjunction/actions-base';
 import type { AIDecisionRunResult } from '@memberjunction/ai-prompts';
+import type { AIEngine } from '@memberjunction/aiengine';
 import { DEFAULT_LOOP_AGENT_PROMPT_PARAMS } from '../agent-types/loop-agent-prompt-params';
 import { PayloadFeedbackManager } from '../PayloadFeedbackManager';
 
@@ -454,6 +455,11 @@ class HarnessAgent extends BaseAgent {
     /** The decision service this agent asks through, so a test can spy on this agent's calls alone. */
     public get DecisionService(): AgentDecisionService {
         return this._agentDecisionService;
+    }
+
+    /** Builds the agent's base catalog (sub-agents + actions) from the given engine rows. */
+    public ExposeBuildAgentBaseCatalog(agent: MJAIAgentEntityExtended, engine: AIEngine) {
+        return this.buildAgentBaseCatalog(agent, engine);
     }
 }
 
@@ -2007,5 +2013,38 @@ describe("BaseAgent.Execute — a memory rerank's cost", () => {
         expect(result.success).toBe(false);
         expect(harness.run.ErrorMessage).toContain('Maximum token limit of 100 exceeded');
         expect(harness.runActionCalls).toHaveLength(0);
+    });
+});
+
+describe('BaseAgent.buildAgentBaseCatalog — relationship targets', () => {
+    const LEAD_ID = 'aaaaaaaa-4444-4000-8000-000000000001';
+    const SKIP_ID = 'aaaaaaaa-4444-4000-8000-000000000002';
+    const RESEARCH_ID = 'aaaaaaaa-4444-4000-8000-000000000003';
+
+    it('leaves a Disabled relationship target out of the sub-agent catalog', () => {
+        const lead = makeAgentRow({ ID: LEAD_ID, Name: 'Dashboards Expert' });
+        const engine = {
+            Agents: [
+                lead,
+                makeAgentRow({ ID: SKIP_ID, Name: 'Skip', Status: 'Disabled' }),
+                makeAgentRow({ ID: RESEARCH_ID, Name: 'Research Agent' }),
+            ],
+            AgentRelationships: [
+                { AgentID: LEAD_ID, SubAgentID: SKIP_ID, Status: 'Active' },
+                { AgentID: LEAD_ID, SubAgentID: RESEARCH_ID, Status: 'Active' },
+            ],
+            AgentActions: [],
+            AgentTypes: [],
+        };
+
+        const catalog = new HarnessAgent().ExposeBuildAgentBaseCatalog(
+            lead as unknown as MJAIAgentEntityExtended,
+            engine as unknown as AIEngine,
+        );
+
+        expect(catalog.uniqueActiveSubAgents.map(a => a.Name)).toEqual(['Research Agent']);
+        expect(catalog.subAgentCount).toBe(1);
+        expect(catalog.subAgentDetails).toContain('Research Agent');
+        expect(catalog.subAgentDetails).not.toContain('Skip');
     });
 });

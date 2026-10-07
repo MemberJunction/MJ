@@ -1,5 +1,5 @@
 /**
- * @fileoverview Pure helpers for the Dashboard Browser's AI-agent integration.
+ * @fileoverview Pure helpers for the AI-agent integration of the Dashboards app's Library page.
  *
  * These functions are intentionally free of Angular / component dependencies so
  * they can be unit-tested in isolation. The resource component
@@ -27,6 +27,9 @@ export type BrowserViewMode = (typeof VALID_BROWSER_VIEW_MODES)[number];
  * used by the Data Explorer's agent context.
  */
 export const AGENT_CONTEXT_NAME_LIST_CAP = 25;
+
+/** How many recently opened dashboards the context names. */
+export const RECENTLY_OPENED_NAME_CAP = 3;
 
 /**
  * Cap an array of names to {@link AGENT_CONTEXT_NAME_LIST_CAP} entries.
@@ -80,6 +83,10 @@ export interface DashboardBrowserAgentContextInput {
     FilteredDashboardCount: number;
     /** The active Library filter in the rail (all, mine, shared, favorites, recent). */
     LibraryFilter: DashboardLibraryFilter;
+    /** How many dashboards each Library filter lists. */
+    LibraryCounts: Record<DashboardLibraryFilter, number>;
+    /** The Config dashboards the user opened last, the most recent first. */
+    RecentlyOpenedNames: string[];
     /** The current free-text search applied to the dashboard list, or '' when none. */
     SearchText: string;
     /**
@@ -99,7 +106,7 @@ export interface DashboardBrowserAgentContextInput {
 }
 
 /**
- * Build the agent-visible context object for the Dashboard Browser.
+ * Build the agent-visible context object for the Library page.
  *
  * Keeping this a pure function (no `this`) makes the context shape unit-testable
  * and decouples it from change-detection timing.
@@ -124,6 +131,8 @@ export function BuildDashboardBrowserAgentContext(
         SelectedCategoryName: input.SelectedCategoryName,
         ViewMode: input.ViewMode,
         IsLoading: input.IsLoading,
+        LibraryCounts: { ...input.LibraryCounts },
+        RecentlyOpenedNames: input.RecentlyOpenedNames.slice(0, RECENTLY_OPENED_NAME_CAP),
     };
 
     // When more dashboards/categories are visible than we publish names for, tell

@@ -1,7 +1,7 @@
 import { Component, EventEmitter, HostListener, Input, Output } from '@angular/core';
 
 /**
- * The Add to menu on a dashboard tab: Home tab, Pin card and Share. Presentational: it shows
+ * The Add to menu on a dashboard tab: Pin card and Share. Presentational: it shows
  * where the dashboard is already placed and emits the item the user picks.
  */
 @Component({
@@ -15,10 +15,6 @@ import { Component, EventEmitter, HostListener, Input, Output } from '@angular/c
       @if (Open) {
         <div class="atm-menu" role="menu" aria-label="Add to" (click)="$event.stopPropagation()">
           <div class="atm-label">Home</div>
-          <button type="button" role="menuitem" class="atm-item atm-home-tab" (click)="ChooseItem(ToggleHomeTab)">
-            <i class="fa-solid fa-house"></i><span class="atm-text"><b>Home tab</b><small>Renders inline next to Overview</small></span>
-            @if (IsHomeTab) { <span class="atm-added"><i class="fa-solid fa-check"></i> Added</span> } @else { <i class="fa-solid fa-plus atm-plus"></i> }
-          </button>
           <button type="button" role="menuitem" class="atm-item atm-pin" (click)="ChooseItem(PinToHome)">
             <i class="fa-solid fa-thumbtack"></i><span class="atm-text"><b>Pin card</b><small>A thumbnail card in Pinned</small></span>
             @if (IsPinned) { <span class="atm-added"><i class="fa-solid fa-check"></i> Added</span> } @else { <i class="fa-solid fa-plus atm-plus"></i> }
@@ -53,14 +49,10 @@ import { Component, EventEmitter, HostListener, Input, Output } from '@angular/c
   `],
 })
 export class DashboardAddToMenuComponent {
-  /** True when the dashboard is already one of the user's Home tabs. */
-  @Input() IsHomeTab = false;
   /** True when the dashboard is already pinned to Home. */
   @Input() IsPinned = false;
   /** True when the user may share the dashboard. False leaves out the Share item. */
   @Input() CanShare = true;
-  /** The user picked Home tab. The host adds or removes the tab. */
-  @Output() ToggleHomeTab = new EventEmitter<void>();
   /** The user picked Pin card. */
   @Output() PinToHome = new EventEmitter<void>();
   /** The user picked Share. */

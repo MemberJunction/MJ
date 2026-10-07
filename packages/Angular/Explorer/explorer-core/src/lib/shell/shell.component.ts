@@ -862,6 +862,10 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     // Wait for workspace initialization to complete before allowing any tab operations
     await this.workspaceManager.Initialize(user.ID);
 
+    // A saved tab of a nav item that moved to another app becomes a tab of that app's nav item: once now, before the
+    // shell syncs the URL or the active app from the saved tabs, and again each time the user's app list changes.
+    this.subscriptions.push(await this.navigationService.WatchMovedNavItemTabs());
+
     // Subscribe to tab bar visibility changes
     this.subscriptions.push(
       this.workspaceManager.TabBarVisible.subscribe(visible => {

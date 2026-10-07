@@ -32,7 +32,7 @@ import { ExplorerStateService } from './services/explorer-state.service';
 import { DEFAULT_EXPLORER_STATE } from './models/explorer-state.interface';
 import type { AppEntityGroup, DataExplorerFilter, DataExplorerState, FavoriteItem, RecentItem } from './models/explorer-state.interface';
 
-vi.mock('../shared/dashboards-app.helpers', () => ({ EnsureDashboardsApp: vi.fn() }));
+vi.mock('../shared/dashboards-app.helpers', () => ({ EnsureDashboardsApp: vi.fn(), DASHBOARDS_LIBRARY_NAV_ITEM: 'Library' }));
 
 /**
  * DOM coverage for the "Dashboards moved" banner on the Data tab of Data Explorer
@@ -349,7 +349,7 @@ describe('DataExplorerDashboardComponent: Dashboards moved banner (DOM)', () => 
     expect(settings.SetSetting).toHaveBeenCalledWith(BANNER_SETTING, 'dismissed');
   });
 
-  it('Open Dashboards installs the Dashboards app if needed, then opens its Overview page', async () => {
+  it('Open Dashboards installs the Dashboards app if needed, then opens its Library page', async () => {
     let finishInstall: (app: BaseApplication | undefined) => void = () => undefined;
     vi.mocked(EnsureDashboardsApp).mockReturnValue(new Promise((resolve) => (finishInstall = resolve)));
     const { fixture, navigation, notifications, appManager } = await renderExplorer();
@@ -364,7 +364,7 @@ describe('DataExplorerDashboardComponent: Dashboards moved banner (DOM)', () => 
     await settle();
 
     expect(navigation.SwitchToApp).toHaveBeenCalledTimes(1);
-    expect(navigation.SwitchToApp).toHaveBeenCalledWith(DASHBOARDS_APP.ID, 'Overview');
+    expect(navigation.SwitchToApp).toHaveBeenCalledWith(DASHBOARDS_APP.ID, 'Library');
     expect(notifications.CreateSimpleNotification).not.toHaveBeenCalled();
   });
 

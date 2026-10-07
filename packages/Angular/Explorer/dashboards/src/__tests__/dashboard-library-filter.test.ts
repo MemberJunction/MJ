@@ -10,21 +10,62 @@ import {
   DashboardLibraryFilter,
   EffectiveCategoryId,
   IsBrowsableDashboard,
+  IsCategoryFolderLocation,
   IsDashboardLibraryFilter,
+  LibraryEmptyState,
   LibraryFilterContext,
   LocationQueryParams,
+  OrderLibraryDashboards,
   ParseLibraryFilter,
   ParseRailItemId,
   RailActiveItemId,
   ResolveBrowseLocation,
   SameBrowseLocation,
   ToggleExpandedId,
+  UNCATEGORIZED_CATEGORY_ID,
+  VisibleLibraryDashboards,
   WithExpandedAncestors,
 } from '../DashboardBrowser/dashboard-library-filter';
 
 const d = (ID: string, UserID: string) => ({ ID, UserID, Name: ID, Type: 'Config', CategoryID: null } as unknown as MJDashboardEntity);
 const DASH = [d('a', 'me'), d('b', 'ana'), d('c', 'me')];
 const CTX: LibraryFilterContext = { CurrentUserId: 'me', FavoriteIds: ['b'], RecentIds: ['c', 'a'] };
+
+/**
+ * A library for the count and list tests: owned and shared dashboards at the root, in Sales and in
+ * Pipeline, with a Code and a Dynamic Code dashboard among them.
+ */
+const ME = 'U-ME';
+const SALES = 'CAT-SALES';
+const PIPE = 'CAT-PIPE';
+const LIBRARY_CATEGORIES = [
+  { ID: SALES, Name: 'Sales', ParentID: null },
+  { ID: PIPE, Name: 'Pipeline', ParentID: SALES },
+] as unknown as MJDashboardCategoryEntity[];
+
+const dash = (ID: string, UserID: string, CategoryID: string | null, Type = 'Config'): MJDashboardEntity =>
+  ({ ID, UserID, Name: ID, CategoryID, Type } as unknown as MJDashboardEntity);
+
+const OWNED_ROOT = dash('D-OWNED-ROOT', ME, null);
+const OWNED_SALES = dash('D-OWNED-SALES', ME, SALES);
+const OWNED_CODE = dash('D-OWNED-CODE', ME, SALES, 'Code');
+const SHARED_LINKED = dash('D-SHARED-LINKED', 'U-ANA', SALES);
+const SHARED_UNLINKED = dash('D-SHARED-UNLINKED', 'U-ANA', PIPE);
+const SHARED_DYNAMIC = dash('D-SHARED-DYNAMIC', 'U-ANA', null, 'Dynamic Code');
+const ALL = [OWNED_ROOT, OWNED_SALES, OWNED_CODE, SHARED_LINKED, SHARED_UNLINKED, SHARED_DYNAMIC];
+
+/** Shared dashboards: the viewer linked one into Pipeline; the unlinked ones sit at the root. */
+const EFFECTIVE = new Map<string, string | null>([
+  [SHARED_LINKED.ID, PIPE],
+  [SHARED_UNLINKED.ID, null],
+  [SHARED_DYNAMIC.ID, null],
+]);
+
+const CONTEXT: LibraryFilterContext = {
+  CurrentUserId: ME,
+  FavoriteIds: [OWNED_CODE.ID, SHARED_LINKED.ID, OWNED_ROOT.ID],
+  RecentIds: [SHARED_DYNAMIC.ID, OWNED_SALES.ID, SHARED_UNLINKED.ID],
+};
 
 describe('FilterDashboardsForLibrary', () => {
   it('all returns everything', () => {
@@ -58,7 +99,7 @@ describe('BuildLibraryRailSections', () => {
       { ID: 'pipe', Name: 'Pipeline', ParentID: 'sales' },
     ] as unknown as MJDashboardCategoryEntity[];
     const sections = BuildLibraryRailSections({ all: 3, mine: 2, shared: 1, favorites: 1, recent: 2 }, cats, new Map([['sales', 2], ['pipe', 1]]), 1);
-    expect(sections[0].label).toBe('Library');
+    expect(sections[0].label).toBe('Dashboards');
     expect(sections[0].items.map(i => i.id)).toEqual(['lib:all', 'lib:mine', 'lib:shared', 'lib:favorites', 'lib:recent']);
     expect(sections[0].items[0].badge).toBe(3);
     expect(sections[1].label).toBe('Categories');
@@ -90,37 +131,7 @@ describe('BuildLibraryRailSections', () => {
  * All shows its list flat; a category shows the dashboards whose effective category it is.
  */
 describe('rail counts match the cards the browser shows', () => {
-  const ME = 'U-ME';
-  const SALES = 'CAT-SALES';
-  const PIPE = 'CAT-PIPE';
-  const CATS = [
-    { ID: SALES, Name: 'Sales', ParentID: null },
-    { ID: PIPE, Name: 'Pipeline', ParentID: SALES },
-  ] as unknown as MJDashboardCategoryEntity[];
-
-  const dash = (ID: string, UserID: string, CategoryID: string | null, Type = 'Config'): MJDashboardEntity =>
-    ({ ID, UserID, Name: ID, CategoryID, Type } as unknown as MJDashboardEntity);
-
-  const OWNED_ROOT = dash('D-OWNED-ROOT', ME, null);
-  const OWNED_SALES = dash('D-OWNED-SALES', ME, SALES);
-  const OWNED_CODE = dash('D-OWNED-CODE', ME, SALES, 'Code');
-  const SHARED_LINKED = dash('D-SHARED-LINKED', 'U-ANA', SALES);
-  const SHARED_UNLINKED = dash('D-SHARED-UNLINKED', 'U-ANA', PIPE);
-  const SHARED_DYNAMIC = dash('D-SHARED-DYNAMIC', 'U-ANA', null, 'Dynamic Code');
-  const ALL = [OWNED_ROOT, OWNED_SALES, OWNED_CODE, SHARED_LINKED, SHARED_UNLINKED, SHARED_DYNAMIC];
-
-  /** Shared dashboards: the viewer linked one into Pipeline; the unlinked one sits at the root. */
-  const EFFECTIVE = new Map<string, string | null>([
-    [SHARED_LINKED.ID, PIPE],
-    [SHARED_UNLINKED.ID, null],
-    [SHARED_DYNAMIC.ID, null],
-  ]);
-
-  const CONTEXT: LibraryFilterContext = {
-    CurrentUserId: ME,
-    FavoriteIds: [OWNED_CODE.ID, SHARED_LINKED.ID, OWNED_ROOT.ID],
-    RecentIds: [SHARED_DYNAMIC.ID, OWNED_SALES.ID, SHARED_UNLINKED.ID],
-  };
+  const CATS = LIBRARY_CATEGORIES;
 
   /** The dashboards mj-dashboard-browser shows in flat mode: the Config ones it is given. */
   const shownFlat = (list: MJDashboardEntity[]): MJDashboardEntity[] => list.filter(x => x.Type === 'Config');
@@ -177,6 +188,124 @@ describe('rail counts match the cards the browser shows', () => {
   });
 });
 
+describe('OrderLibraryDashboards', () => {
+  const at = (ID: string, Name: string, updated: string | null) =>
+    ({ ID, Name, UserID: 'me', Type: 'Config', CategoryID: null, __mj_UpdatedAt: updated ? new Date(updated) : null } as unknown as MJDashboardEntity);
+  const OLD = at('old', 'Old', '2026-01-01');
+  const NEW = at('new', 'New', '2026-03-01');
+  const FAV = at('fav', 'Fav', '2026-02-01');
+  const FAV_OPENED = at('fav-opened', 'Fav opened', '2025-12-01');
+  const OPENED = at('opened', 'Opened', '2025-11-01');
+  const ctx: LibraryFilterContext = { CurrentUserId: 'me', FavoriteIds: ['FAV', 'fav-opened'], RecentIds: ['opened', 'FAV-OPENED'] };
+
+  it('puts favorites first, then the opened dashboards by last open, then the rest newest first', () => {
+    expect(OrderLibraryDashboards([OLD, NEW, FAV, FAV_OPENED, OPENED], ctx).map(x => x.ID)).toEqual(['fav-opened', 'fav', 'opened', 'new', 'old']);
+  });
+
+  it('breaks a tie of last update by name, and puts a dashboard with no date after dated ones', () => {
+    const none: LibraryFilterContext = { ...ctx, FavoriteIds: [], RecentIds: [] };
+    const beta = at('b', 'Beta', '2026-01-01');
+    const alpha = at('a', 'Alpha', '2026-01-01');
+    const undated = at('u', 'Undated', null);
+    expect(OrderLibraryDashboards([undated, beta, alpha], none).map(x => x.Name)).toEqual(['Alpha', 'Beta', 'Undated']);
+  });
+
+  it('uses the first position of a recent id that repeats', () => {
+    const order = OrderLibraryDashboards([OLD, NEW], { ...ctx, FavoriteIds: [], RecentIds: ['old', 'new', 'old'] });
+    expect(order.map(x => x.ID)).toEqual(['old', 'new']);
+  });
+
+  it('returns a new array and leaves the input order alone', () => {
+    const input = [OLD, NEW];
+    expect(OrderLibraryDashboards(input, ctx)).not.toBe(input);
+    expect(input.map(x => x.ID)).toEqual(['old', 'new']);
+  });
+});
+
+describe('VisibleLibraryDashboards', () => {
+  const location = (Filter: DashboardLibraryFilter, CategoryId: string | null = null): BrowseLocation => ({ Filter, CategoryId });
+  /** CONTEXT, with a favorite opened last of the three recents. */
+  const OPENED_FAVORITE: LibraryFilterContext = { ...CONTEXT, RecentIds: [SHARED_DYNAMIC.ID, OWNED_SALES.ID, OWNED_ROOT.ID] };
+
+  it('lists every dashboard for All: favorites first, then the opened ones, then the rest', () => {
+    expect(VisibleLibraryDashboards(ALL, location('all'), CONTEXT, EFFECTIVE).map(x => x.ID)).toEqual([
+      'D-OWNED-CODE',
+      'D-OWNED-ROOT',
+      'D-SHARED-LINKED',
+      'D-SHARED-DYNAMIC',
+      'D-OWNED-SALES',
+      'D-SHARED-UNLINKED',
+    ]);
+  });
+
+  it('keeps the order of the last opens for Recently opened, also for a favorite', () => {
+    expect(VisibleLibraryDashboards(ALL, location('recent'), OPENED_FAVORITE, EFFECTIVE).map(x => x.ID)).toEqual([
+      'D-SHARED-DYNAMIC',
+      'D-OWNED-SALES',
+      'D-OWNED-ROOT',
+    ]);
+    expect(VisibleLibraryDashboards(ALL, location('all'), OPENED_FAVORITE, EFFECTIVE)[0].ID).toBe('D-OWNED-ROOT');
+  });
+
+  it('orders the other filters like All, so Favorites lists the one opened last first', () => {
+    expect(VisibleLibraryDashboards(ALL, location('favorites'), OPENED_FAVORITE, EFFECTIVE).map(x => x.ID)).toEqual([
+      'D-OWNED-ROOT',
+      'D-OWNED-CODE',
+      'D-SHARED-LINKED',
+    ]);
+    expect(VisibleLibraryDashboards(ALL, location('shared'), CONTEXT, EFFECTIVE).map(x => x.ID)).toEqual([
+      'D-SHARED-LINKED',
+      'D-SHARED-DYNAMIC',
+      'D-SHARED-UNLINKED',
+    ]);
+  });
+
+  it('lists only the dashboards in no category for Uncategorized', () => {
+    expect(VisibleLibraryDashboards(ALL, location('all', UNCATEGORIZED_CATEGORY_ID), CONTEXT, EFFECTIVE).map(x => x.ID)).toEqual([
+      'D-OWNED-ROOT',
+      'D-SHARED-DYNAMIC',
+      'D-SHARED-UNLINKED',
+    ]);
+  });
+
+  it('gives a category folder every dashboard, in the Library order', () => {
+    expect(VisibleLibraryDashboards(ALL, location('all', SALES), CONTEXT, EFFECTIVE).map(x => x.ID)).toEqual(
+      OrderLibraryDashboards(ALL, CONTEXT).map(x => x.ID)
+    );
+  });
+});
+
+describe('IsCategoryFolderLocation', () => {
+  it('is true only when a category is open', () => {
+    expect(IsCategoryFolderLocation({ Filter: 'all', CategoryId: SALES })).toBe(true);
+    expect(IsCategoryFolderLocation({ Filter: 'all', CategoryId: null })).toBe(false);
+    expect(IsCategoryFolderLocation({ Filter: 'favorites', CategoryId: null })).toBe(false);
+    expect(IsCategoryFolderLocation({ Filter: 'all', CategoryId: UNCATEGORIZED_CATEGORY_ID })).toBe(false);
+  });
+});
+
+describe('LibraryEmptyState', () => {
+  it.each([
+    ['mine', 'You have no dashboards yet'],
+    ['shared', 'Nothing shared with you yet'],
+    ['favorites', 'No favorites yet'],
+    ['recent', 'Nothing opened yet'],
+  ] as const)('names the empty %s list', (filter, title) => {
+    expect(LibraryEmptyState({ Filter: filter, CategoryId: null })).toMatchObject({ Title: title, Welcome: false });
+  });
+
+  it('asks for the first-run welcome for the whole library', () => {
+    expect(LibraryEmptyState({ Filter: 'all', CategoryId: null }).Welcome).toBe(true);
+  });
+
+  it('names the empty Uncategorized list', () => {
+    expect(LibraryEmptyState({ Filter: 'all', CategoryId: UNCATEGORIZED_CATEGORY_ID })).toMatchObject({
+      Title: 'No uncategorized dashboards',
+      Welcome: false,
+    });
+  });
+});
+
 describe('Browse location and the URL', () => {
   it('IsDashboardLibraryFilter accepts exactly the five filters', () => {
     expect(DASHBOARD_LIBRARY_FILTERS.every(f => IsDashboardLibraryFilter(f))).toBe(true);
@@ -223,6 +352,13 @@ describe('Browse location and the URL', () => {
     const written = LocationQueryParams(location);
     expect(ResolveBrowseLocation({ lib: written.lib ?? '' })).toEqual(location);
   });
+
+  it('writes Uncategorized as ?category=uncategorized, and reads it back', () => {
+    const uncategorized: BrowseLocation = { Filter: 'all', CategoryId: UNCATEGORIZED_CATEGORY_ID };
+    expect(UNCATEGORIZED_CATEGORY_ID).toBe('uncategorized');
+    expect(LocationQueryParams(uncategorized)).toEqual({ lib: null, category: 'uncategorized' });
+    expect(ResolveBrowseLocation({ category: 'uncategorized' })).toEqual(uncategorized);
+  });
 });
 
 describe('rail item ids', () => {
@@ -235,7 +371,7 @@ describe('rail item ids', () => {
   it('ParseRailItemId maps Library, category and Uncategorized items to a location', () => {
     expect(ParseRailItemId('lib:favorites')).toEqual({ Filter: 'favorites', CategoryId: null });
     expect(ParseRailItemId('cat:CAT-PIPE')).toEqual({ Filter: 'all', CategoryId: 'CAT-PIPE' });
-    expect(ParseRailItemId('cat:unc')).toEqual({ Filter: 'all', CategoryId: null });
+    expect(ParseRailItemId('cat:unc')).toEqual({ Filter: 'all', CategoryId: UNCATEGORIZED_CATEGORY_ID });
   });
 
   it('ParseRailItemId ignores ids it does not know', () => {
@@ -248,6 +384,7 @@ describe('rail item ids', () => {
     expect(RailActiveItemId({ Filter: 'all', CategoryId: null }, CATS)).toBe('lib:all');
     expect(RailActiveItemId({ Filter: 'all', CategoryId: 'cat-pipe' }, CATS)).toBe('cat:CAT-PIPE');
     expect(RailActiveItemId({ Filter: 'all', CategoryId: 'CAT-GONE' }, CATS)).toBe('cat:CAT-GONE');
+    expect(RailActiveItemId({ Filter: 'all', CategoryId: UNCATEGORIZED_CATEGORY_ID }, CATS)).toBe('cat:unc');
   });
 
   it('ToggleExpandedId adds a missing id and removes a present one', () => {
@@ -263,6 +400,7 @@ describe('rail item ids', () => {
     const expanded = ['cat:CAT-SALES', 'cat:CAT-PIPE'];
     expect(WithExpandedAncestors(expanded, 'CAT-DEEP', CATS)).toBe(expanded);
     expect(WithExpandedAncestors(expanded, null, CATS)).toBe(expanded);
+    expect(WithExpandedAncestors(expanded, UNCATEGORIZED_CATEGORY_ID, CATS)).toBe(expanded);
     expect(WithExpandedAncestors(expanded, 'CAT-SALES', CATS)).toBe(expanded);
   });
 });

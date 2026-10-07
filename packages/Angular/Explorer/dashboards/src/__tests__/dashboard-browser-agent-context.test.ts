@@ -1,12 +1,13 @@
 /**
- * Tests for the Dashboard Browser's pure agent-context helpers
+ * Tests for the Library page's pure agent-context helpers
  * (`DashboardBrowser/dashboard-browser-agent-context.ts`).
  *
  * These pure functions back the SAFE, read-only / navigational agent integration on
- * the Dashboard Browser. `buildDashboardBrowserAgentContext` shapes a state snapshot
+ * the Library page. `buildDashboardBrowserAgentContext` shapes a state snapshot
  * into the flat context object — including the bounded name lists (visible dashboards,
- * available categories) the agent uses to pick a dashboard/category to open, and the
- * companion total-count fields surfaced when those lists are truncated.
+ * available categories, recently opened dashboards) the agent uses to pick a
+ * dashboard/category to open, the Library counts, and the companion total-count fields
+ * surfaced when those lists are truncated.
  * `isValidBrowserViewMode` keeps the `SwitchViewMode` tool tolerant of arbitrary input.
  */
 import { describe, it, expect } from 'vitest';
@@ -15,6 +16,7 @@ import {
     IsValidBrowserViewMode,
     AGENT_CONTEXT_NAME_LIST_CAP,
     DashboardBrowserAgentContextInput,
+    RECENTLY_OPENED_NAME_CAP,
 } from '../DashboardBrowser/dashboard-browser-agent-context';
 
 /** Build a list of `count` distinct placeholder names. */
@@ -34,6 +36,8 @@ describe('dashboard-browser-agent-context', () => {
         SelectedCategoryName: null,
         ViewMode: 'cards',
         IsLoading: false,
+        LibraryCounts: { all: 0, mine: 0, shared: 0, favorites: 0, recent: 0 },
+        RecentlyOpenedNames: [],
     };
 
     describe('isValidBrowserViewMode', () => {
@@ -137,6 +141,24 @@ describe('dashboard-browser-agent-context', () => {
             expect(ctx).not.toHaveProperty('AvailableCategoryCount');
         });
 
+        it('passes the Library counts and names at most three recently opened dashboards', () => {
+            const ctx = BuildDashboardBrowserAgentContext({
+                ...base,
+                LibraryCounts: { all: 5, mine: 3, shared: 2, favorites: 1, recent: 4 },
+                RecentlyOpenedNames: ['A', 'B', 'C', 'D'],
+            });
+            expect(RECENTLY_OPENED_NAME_CAP).toBe(3);
+            expect(ctx['LibraryCounts']).toEqual({ all: 5, mine: 3, shared: 2, favorites: 1, recent: 4 });
+            expect(ctx['RecentlyOpenedNames']).toEqual(['A', 'B', 'C']);
+        });
+
+        it('publishes a copy of the Library counts, not the caller object', () => {
+            const counts = { all: 1, mine: 1, shared: 0, favorites: 0, recent: 0 };
+            const ctx = BuildDashboardBrowserAgentContext({ ...base, LibraryCounts: counts });
+            expect(ctx['LibraryCounts']).toEqual(counts);
+            expect(ctx['LibraryCounts']).not.toBe(counts);
+        });
+
         it('derives HasSearch = false for empty / whitespace search text', () => {
             expect(BuildDashboardBrowserAgentContext({ ...base, SearchText: '' })['HasSearch']).toBe(false);
             expect(BuildDashboardBrowserAgentContext({ ...base, SearchText: '   ' })['HasSearch']).toBe(false);
@@ -159,7 +181,9 @@ describe('dashboard-browser-agent-context', () => {
                 'FilteredDashboardCount',
                 'HasSearch',
                 'IsLoading',
+                'LibraryCounts',
                 'LibraryFilter',
+                'RecentlyOpenedNames',
                 'SearchText',
                 'SelectedCategoryId',
                 'SelectedCategoryName',
@@ -169,7 +193,7 @@ describe('dashboard-browser-agent-context', () => {
             ]);
         });
 
-        it('publishes no mode, selected-dashboard or opened-dashboard fields (Browse never shows a dashboard; it opens in a dashboard tab)', () => {
+        it('publishes no mode, selected-dashboard or opened-dashboard fields (the Library never shows a dashboard; it opens in a dashboard tab)', () => {
             const ctx = BuildDashboardBrowserAgentContext({ ...base, VisibleDashboardNames: ['A'] });
             for (const key of [
                 'Mode',

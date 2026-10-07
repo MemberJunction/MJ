@@ -1,37 +1,48 @@
 import { describe, it, expect, vi } from 'vitest';
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { ChangeDetectorRef, Component, ElementRef, EventEmitter, InjectionToken, Input, Output, ViewChild, inject } from '@angular/core';
 import type { Provider, Type } from '@angular/core';
 import type { ComponentFixture } from '@angular/core/testing';
-import { FormsModule } from '@angular/forms';
 import { By } from '@angular/platform-browser';
-import { of, Subject } from 'rxjs';
+import { BehaviorSubject, of, Subject } from 'rxjs';
+import { AngularSplitModule, SplitAreaComponent, SplitComponent } from 'angular-split';
 import { CompositeKey } from '@memberjunction/core';
-import type { EngineDataChangeEvent } from '@memberjunction/core';
-import { DashboardEngine, ResourceData } from '@memberjunction/core-entities';
-import type { DashboardUserPermissions, MJDashboardCategoryEntity, MJDashboardEntity, MJDashboardPartTypeEntity } from '@memberjunction/core-entities';
-import { DashboardFavoritesService, HomeAppPinService, HomeDashboardTabsService, NavigationService, RecentAccessService } from '@memberjunction/ng-shared';
-import { MJNotificationService } from '@memberjunction/ng-notifications';
-import { AddPanelDialogComponent, ConfirmDialogComponent, EditPartDialogComponent } from '@memberjunction/ng-dashboard-viewer';
+import type { ApplicationInfo, EntityInfo, IMetadataProvider, RunViewParams, UserInfo } from '@memberjunction/core';
+import type { AppContextSnapshot } from '@memberjunction/ai-core-plus';
+import { DefaultAgentResolver } from '@memberjunction/conversations-runtime';
+import { ArtifactMetadataEngine, DashboardEngine, MJEnvironmentEntityExtended, QueryEngine, ResourceData, UserInfoEngine, UserViewEngine } from '@memberjunction/core-entities';
 import type {
-  DashboardConfigChangedEvent,
-  DashboardNavRequestEvent,
-  DashboardPanel,
-  PanelConfig,
-  PanelInteractionEvent,
-} from '@memberjunction/ng-dashboard-viewer';
-import type { ShareDialogResult } from '@memberjunction/ng-dashboards/core-dashboards.module';
-import { RenderComponentFixture, CreateFakeProvider, Click, Query, QueryAll, Text, TypeInto } from '@memberjunction/ng-test-utils';
+  DashboardUserPermissions,
+  MJConversationEntity,
+  MJDashboardEntity,
+  MJDashboardPartTypeEntity,
+  MJQueryEntityExtended,
+  MJUserViewEntityExtended,
+} from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
+import type { NavigationRequest } from '@memberjunction/ng-artifacts';
+import type { PendingAttachment } from '@memberjunction/ng-composer';
+import { HomeAppPinService, NavigationService, RecentAccessService, SafeDetectChanges } from '@memberjunction/ng-shared';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { ArtifactPermissionService, RealtimeSessionService } from '@memberjunction/ng-conversations';
+import { ConfirmDialogComponent } from '@memberjunction/ng-dashboard-viewer';
+import type { DashboardNavRequestEvent, DashboardPanel, PanelConfig, PanelPosition } from '@memberjunction/ng-dashboard-viewer';
+import type { DashboardEditorLoadError, DashboardSaveOverrides, ShareDialogResult } from '@memberjunction/ng-dashboards/core-dashboards.module';
+import { MJButtonDirective } from '@memberjunction/ng-ui-components';
+import { RenderComponentFixture, CreateFakeProvider, Attr, Click, HasClass, Query, QueryAll, Text } from '@memberjunction/ng-test-utils';
 import { DashboardResource } from './dashboard-resource.component';
 import { DashboardAddToMenuComponent } from './dashboard-add-to-menu.component';
+import type { DashboardTabAgentTool } from './dashboard-tab-agent';
+import type { DashboardStudioHost } from './dashboard-studio-tools';
 
 /**
- * DOM coverage for part editing in the dashboard tab (<mj-dashboard-resource>). The tab hosts the
- * real Add Part, Edit Part and confirm dialogs from @memberjunction/ng-dashboard-viewer. The viewer
- * itself (Golden Layout) is a double: it holds its parts in a Golden Layout tree, emits the same
- * PanelInteraction events the real viewer emits, and applies AddPanel / UpdatePanelConfig /
- * ConfirmRemovePanel to its parts. The share dialog (from @memberjunction/ng-dashboards) is a stub.
- * The saved-layout tests give the viewer double the real viewer's saved-layout behavior (see
- * showSavedLayout).
+ * DOM coverage for the dashboard tab (<mj-dashboard-resource>). The tab shows a Config dashboard in
+ * <mj-dashboard-editor> from @memberjunction/ng-dashboards, which is a stub here (EditorStub): it reads the
+ * dashboard from DashboardEngine, shows it in a viewer double and emits the editor's events. The tests
+ * cover the load and its edit-mode request, the tab title, the buttons the tab puts in the editor's header,
+ * the agent's context and tools (which read and edit through the editor), the confirm dialog of the
+ * Request* tools, the source search, and the AI pane in the real angular-split split. The share dialog,
+ * the chat area and the loading indicator are stubs; the voice session, the artifact permission service
+ * and the view and query engines are doubles.
  */
 
 /** Stands in for <mj-dashboard-share-dialog>, which lives in @memberjunction/ng-dashboards. */
@@ -42,77 +53,73 @@ class ShareDialogStub {
   @Output() Result = new EventEmitter<ShareDialogResult>();
 }
 
+/** What the chat area's ConversationCreated output gives. */
+interface ConversationCreatedEvent {
+  conversation: MJConversationEntity;
+  pendingMessage?: string;
+  pendingAttachments?: PendingAttachment[];
+}
+
+/** Stands in for <mj-conversation-chat-area> from @memberjunction/ng-conversations, with the inputs and outputs the AI pane binds. */
+@Component({ standalone: true, selector: 'mj-conversation-chat-area', template: '' })
+class ChatAreaStub {
+  @Input() Provider: IMetadataProvider | null = null;
+  @Input() EnvironmentId = '';
+  @Input() CurrentUser: UserInfo | null = null;
+  @Input() Conversation: MJConversationEntity | null = null;
+  @Input() ConversationId: string | null = null;
+  @Input() IsNewConversation = false;
+  @Input() PendingMessage: string | null = null;
+  @Input() PendingAttachments: PendingAttachment[] | null = null;
+  @Input() SuppressNewConversationEmptyState = false;
+  @Input() AllowMentions = true;
+  @Input() OverlayMode = false;
+  @Input() ShowExportButton = true;
+  @Input() ShowShareButton = true;
+  @Input() ShowArtifactIndicator = true;
+  @Input() ShowAgentPicker = true;
+  @Input() ShowAgentModePicker = true;
+  @Input() DefaultAgentId: string | null = null;
+  @Input() AllowedAgentIDs: readonly string[] | null = null;
+  @Input() ApplicationScope: 'Global' | 'Application' | 'Both' = 'Global';
+  @Input() ApplicationId: string | null = null;
+  @Input() AppContext: Record<string, unknown> | null = null;
+  @Input() EmptyStateGreeting = 'How can I help you?';
+  @Output() ConversationCreated = new EventEmitter<ConversationCreatedEvent>();
+  @Output() RealtimeConversationReady = new EventEmitter<{ conversationId: string; select: boolean }>();
+  @Output() PendingMessageConsumed = new EventEmitter<void>();
+  @Output() navigationRequest = new EventEmitter<NavigationRequest>();
+  @Output() OpenEntityRecord = new EventEmitter<{ entityName: string; compositeKey: CompositeKey }>();
+}
+
+/** Stands in for <mj-loading> from @memberjunction/ng-shared-generic. */
+@Component({ standalone: true, selector: 'mj-loading', template: '' })
+class LoadingStub {
+  @Input() Text = '';
+  @Input() Size: 'small' | 'medium' | 'large' | 'auto' = 'auto';
+}
+
 const USER_ID = 'user-1';
 
-/** The part of BaseEntity's LatestResult the tab reads after a failed save. */
+/** Why the editor refuses a save while a Save runs. */
+const SAVE_IN_PROGRESS = 'A save is in progress. Try again when it finishes.';
+
+/** The part of BaseEntity's LatestResult that the editor stub reads after a failed save. */
 interface SaveResultDouble {
   Success: boolean;
   CompleteMessage: string;
 }
 
-/** The screenshot (Thumbnail) the dashboard double was saved with. */
-const SAVED_SCREENSHOT = 'data:image/jpeg;base64,c2F2ZWQ=';
-
-/** A new screenshot of the dashboard's layout. */
-const NEW_SCREENSHOT = 'data:image/jpeg;base64,bmV3';
-
-/**
- * A dashboard entity double. Its saved values are the name, description, layout (UIConfigDetails,
- * with the Revenue part) and screenshot (Thumbnail) it starts with, and Revert() puts them all back,
- * like BaseEntity.Revert() puts back every field. LatestResult is set by a test that fails a save.
- */
-function createDashboard() {
-  const saved = { Name: 'Revenue Board', Description: '', UIConfigDetails: savedConfig([revenuePanel()]), Thumbnail: SAVED_SCREENSHOT as string | null };
-  const dashboard = {
-    ID: 'dash-1',
-    PrimaryKey: CompositeKey.FromID('dash-1'),
-    Type: 'Config',
-    CategoryID: null,
-    Name: saved.Name,
-    Description: saved.Description,
-    UIConfigDetails: saved.UIConfigDetails,
-    Thumbnail: saved.Thumbnail,
-    LatestResult: null as SaveResultDouble | null,
-    Revert: vi.fn((): boolean => {
-      dashboard.Name = saved.Name;
-      dashboard.Description = saved.Description;
-      dashboard.UIConfigDetails = saved.UIConfigDetails;
-      dashboard.Thumbnail = saved.Thumbnail;
-      return true;
-    }),
-  };
-  return dashboard;
-}
-
-type DashboardDouble = ReturnType<typeof createDashboard>;
-
-const QUERY_TYPE = {
-  ID: 'pt-query',
-  Name: 'Query',
-  Icon: 'fa-solid fa-database',
-  Description: 'Results of a stored query',
-  ConfigDialogClass: null,
-} as unknown as MJDashboardPartTypeEntity;
-const VIEW_TYPE = {
-  ID: 'pt-view',
-  Name: 'View',
-  Icon: 'fa-solid fa-table',
-  Description: 'Records of an entity view',
-  ConfigDialogClass: null,
-} as unknown as MJDashboardPartTypeEntity;
+const QUERY_TYPE = { ID: 'pt-query', Name: 'Query', Icon: 'fa-solid fa-database' } as unknown as MJDashboardPartTypeEntity;
+const VIEW_TYPE = { ID: 'pt-view', Name: 'View', Icon: 'fa-solid fa-table' } as unknown as MJDashboardPartTypeEntity;
 
 function revenuePanel(): DashboardPanel {
   return { id: 'panel-1', title: 'Revenue', icon: 'fa-solid fa-table', partTypeId: 'pt-view', config: { type: 'View', entityName: 'MJ: Applications' } };
 }
 
-/** The event the viewer emits when a part's Configure button is clicked. */
-function configureRequest(panelId: string): PanelInteractionEvent {
-  return { panelId, interactionType: 'custom', payload: { action: 'configure-part-requested' } };
-}
-
-/** The event the viewer emits when a part's Remove button is clicked. */
-function removeRequest(panelId: string, panelTitle: string): PanelInteractionEvent {
-  return { panelId, interactionType: 'custom', payload: { action: 'remove-part-requested', panelTitle } };
+/** A part the tests add. */
+function quotaPanel(id: string): DashboardPanel {
+  return { id, title: 'Quota', icon: 'fa-solid fa-database', partTypeId: 'pt-query', config: { type: 'Query' } };
 }
 
 /** A Golden Layout tree holding the parts, in the shape ExtractPanelsFromLayout reads. */
@@ -125,68 +132,51 @@ function savedConfig(panels: DashboardPanel[]): string {
   return JSON.stringify({ layout: layoutOf(panels), settings: {} });
 }
 
-/** Copies of the parts in a saved configuration. */
-function savedPanels(details: string): DashboardPanel[] {
-  const config = JSON.parse(details) as { layout: ReturnType<typeof layoutOf> };
-  return config.layout.root.content[0].content.map((item) => ({ ...item.componentState }));
+/** A dashboard entity double for Revenue Board, with the Revenue part in its saved layout. A test that fails a save sets LatestResult. */
+function createDashboard() {
+  return {
+    ID: 'dash-1',
+    PrimaryKey: CompositeKey.FromID('dash-1'),
+    Type: 'Config',
+    CategoryID: null,
+    Name: 'Revenue Board',
+    Description: '',
+    UIConfigDetails: savedConfig([revenuePanel()]),
+    LatestResult: null as SaveResultDouble | null,
+  };
 }
 
-/** The IDs of the parts in a saved configuration. */
-function savedPanelIds(details: string): string[] {
-  return savedPanels(details).map((panel) => panel.id);
+/** A dashboard entity double for Quota, which has no parts. */
+function createQuotaDashboard() {
+  return { ...createDashboard(), ID: 'dash-2', PrimaryKey: CompositeKey.FromID('dash-2'), Name: 'Quota', UIConfigDetails: savedConfig([]) };
 }
 
 /**
- * A viewer double with the members the tab uses. Its parts live in `panels`; the part-editing
- * methods change them the way the real viewer changes its layout.
+ * A viewer double with the members the tab and the editor stub use. Its parts live in `panels`; AddPanel
+ * adds one the way the real viewer adds a part to its layout.
  */
 function createViewer(initialPanels: DashboardPanel[]) {
   const panels = [...initialPanels];
   const partTypes = [QUERY_TYPE, VIEW_TYPE];
   const viewer = {
-    dashboard: null as MJDashboardEntity | null,
+    Dashboard: null as MJDashboardEntity | null,
     IsEditing: false,
-    showToolbar: true,
-    ShowBreadcrumb: true,
-    ShowOpenInTabButton: false,
-    showEditButton: true,
-    Categories: [] as MJDashboardCategoryEntity[],
-    navigationRequested: new EventEmitter<DashboardNavRequestEvent>(),
-    openInTab: new EventEmitter<{ dashboardId: string; dashboardName: string }>(),
-    dashboardSaved: new EventEmitter<MJDashboardEntity>(),
-    error: new EventEmitter<{ message: string; error?: Error }>(),
-    configChanged: new EventEmitter<DashboardConfigChangedEvent>(),
-    PanelInteraction: new EventEmitter<PanelInteractionEvent>(),
-    waitForLayoutReady: async (): Promise<void> => undefined,
+    HasUnsavedChanges: false,
+    WaitForLayoutReady: async (): Promise<void> => undefined,
     getConfig: () => ({ layout: layoutOf(panels) }),
     GetPartTypes: (): MJDashboardPartTypeEntity[] => partTypes,
     GetPanel: (panelId: string): DashboardPanel | null => panels.find((p) => p.id === panelId) ?? null,
-    GetPartTypeForPanel: (panelId: string): MJDashboardPartTypeEntity | null => {
-      const panel = panels.find((p) => p.id === panelId);
-      return partTypes.find((t) => t.ID === panel?.partTypeId) ?? null;
-    },
-    AddPanel: vi.fn(async (partTypeId: string, config: PanelConfig, title: string, icon?: string): Promise<void> => {
-      panels.push({ id: `panel-${panels.length + 1}`, partTypeId, config, title, icon });
-    }),
-    UpdatePanelConfig: vi.fn((panelId: string, config: PanelConfig, title?: string, icon?: string): void => {
-      const panel = panels.find((p) => p.id === panelId);
-      if (!panel) return;
-      panel.config = config;
-      if (title) panel.title = title;
-      if (icon) panel.icon = icon;
-    }),
-    ConfirmRemovePanel: vi.fn((panelId: string): void => {
+    /** The panel's address in the double's one stack, in the viewer's form. */
+    GetPanelPath: (panelId: string): string | null => {
       const index = panels.findIndex((p) => p.id === panelId);
-      if (index >= 0) panels.splice(index, 1);
+      return index >= 0 ? `row/0 › tab ${index}` : null;
+    },
+    AddPanel: vi.fn(async (partTypeId: string, config: PanelConfig, title: string, icon?: string, _position?: PanelPosition): Promise<string | null> => {
+      const id = `panel-${panels.length + 1}`;
+      panels.push({ id, partTypeId, config, title, icon });
+      return id;
     }),
     save: vi.fn(async (): Promise<boolean> => true),
-    HasNewerSavedLayout: vi.fn((_dashboard?: MJDashboardEntity | null): boolean => false),
-    ReloadFromSaved: vi.fn(async (_dashboard?: MJDashboardEntity | null): Promise<void> => undefined),
-    UseSavedCopy: vi.fn((_dashboard: MJDashboardEntity): boolean => false),
-    /** The viewer's empty-state "Add Your First Part" action: it asks its host for the Add Part dialog. */
-    OnAddPanelClick: (): void => {
-      viewer.PanelInteraction.emit({ panelId: '', interactionType: 'custom', payload: { action: 'add-panel-requested', partTypes } });
-    },
   };
   return { viewer, panels };
 }
@@ -205,667 +195,291 @@ function permissionsFor(dashboardId: string, canEdit: boolean): DashboardUserPer
   };
 }
 
+/** The permissions before a dashboard loads, as the editor has them: nothing is allowed. */
+const NO_PERMISSIONS: DashboardUserPermissions = {
+  DashboardID: '',
+  CanRead: false,
+  CanEdit: false,
+  CanDelete: false,
+  CanShare: false,
+  IsOwner: false,
+  PermissionSource: 'none',
+};
+
+/** What the editor stub needs from a test: the viewer double for each dashboard it shows. */
+interface EditorStubSetup {
+  CreateViewer(): ViewerDouble;
+}
+
+/** Hands the editor stub its setup. Each test module provides its own. */
+const EDITOR_STUB_SETUP = new InjectionToken<EditorStubSetup>('EditorStubSetup');
+
+/**
+ * Stands in for <mj-dashboard-editor> from @memberjunction/ng-dashboards, with the inputs, outputs and members
+ * the tab uses. Like the editor, it reads the dashboard its DashboardId names from DashboardEngine, shows it in a
+ * viewer double, and emits Loaded once the viewer's layout is ready, or LoadFailed when the layout fails. Its
+ * header shows the [headerTools] slot in both modes and the [viewActions] slot in view mode.
+ */
+@Component({
+  standalone: true,
+  selector: 'mj-dashboard-editor',
+  template: `
+    @if (Dashboard) {
+      <header class="stub-editor-header">
+        <div class="stub-header-tools"><ng-content select="[headerTools]"></ng-content></div>
+        @if (!IsEditing) {
+          <div class="stub-view-actions"><ng-content select="[viewActions]"></ng-content></div>
+        }
+      </header>
+    }
+    <div #body class="dashboard-editor-body"></div>
+  `,
+})
+class EditorStub {
+  private readonly cdr = inject(ChangeDetectorRef);
+  private readonly setup = inject(EDITOR_STUB_SETUP);
+  private shownId: string | null = null;
+
+  @Input() Provider: IMetadataProvider | null = null;
+  @Input() set DashboardId(id: string | null) {
+    if (UUIDsEqual(id, this.shownId)) return;
+    this.shownId = id;
+    this.drop();
+    if (id) queueMicrotask(() => void this.show(id));
+  }
+  @Output() Loaded = new EventEmitter<MJDashboardEntity>();
+  @Output() LoadFailed = new EventEmitter<DashboardEditorLoadError>();
+  @Output() EditingChange = new EventEmitter<boolean>();
+  @Output() NameChanged = new EventEmitter<string>();
+  @Output() ConfigChanged = new EventEmitter<void>();
+  @Output() ReloadedFromSaved = new EventEmitter<void>();
+  @Output() FavoriteChange = new EventEmitter<boolean>();
+  @Output() NavigationRequested = new EventEmitter<DashboardNavRequestEvent>();
+  @ViewChild('body', { static: true }) private body!: ElementRef<HTMLDivElement>;
+
+  public Dashboard: MJDashboardEntity | null = null;
+  public Viewer: ViewerDouble | null = null;
+  public IsEditing = false;
+  public IsSaving = false;
+  public IsFavorite = false;
+  public EditingName = '';
+  public EditingDescription = '';
+  public Permissions: DashboardUserPermissions = NO_PERMISSIONS;
+
+  public get BodyElement(): HTMLElement {
+    return this.body.nativeElement;
+  }
+  public get CanEdit(): boolean {
+    return this.Permissions.CanEdit;
+  }
+  public get PartTypes(): MJDashboardPartTypeEntity[] {
+    return this.Viewer?.GetPartTypes() ?? [];
+  }
+
+  public EnterEditMode(): boolean {
+    if (this.IsEditing) return true;
+    if (!this.Dashboard || !this.CanEdit) return false;
+    this.setEditing(true);
+    return true;
+  }
+
+  public ToggleEditMode(): void {
+    if (this.IsEditing) this.CancelEdit();
+    else this.EnterEditMode();
+  }
+
+  public CancelEdit(): void {
+    if (this.IsEditing && !this.IsSaving) this.setEditing(false);
+  }
+
+  public async SaveDashboard(): Promise<void> {
+    await this.Save();
+  }
+
+  /** Saves like the editor: the overrides first, one Save at a time, a renamed dashboard reports NameChanged, and a save leaves edit mode. */
+  public async Save(overrides: DashboardSaveOverrides = {}): Promise<string | null> {
+    const dashboard = this.Dashboard;
+    const viewer = this.Viewer;
+    if (!dashboard || !viewer) return 'No dashboard is open.';
+    if (this.IsSaving) return SAVE_IN_PROGRESS;
+    const savedName = dashboard.Name;
+    if (overrides.Name !== undefined) dashboard.Name = overrides.Name;
+    if (overrides.Description !== undefined) dashboard.Description = overrides.Description;
+    this.IsSaving = true;
+    try {
+      if (!(await viewer.save())) {
+        const reason = dashboard.LatestResult?.CompleteMessage;
+        return reason ? `Could not save the dashboard: ${reason}` : 'Could not save the dashboard';
+      }
+      if (dashboard.Name !== savedName) this.NameChanged.emit(dashboard.Name);
+      if (this.IsEditing) this.setEditing(false);
+      return null;
+    } finally {
+      this.IsSaving = false;
+    }
+  }
+
+  public OpenAddPartDialog(): void {
+    // The editor opens its part dialog; the stub has none.
+  }
+
+  public RefreshPermissions(): void {
+    this.Permissions = this.Dashboard ? DashboardEngine.Instance.GetDashboardPermissions(this.Dashboard.ID, USER_ID) : NO_PERMISSIONS;
+  }
+
+  private setEditing(editing: boolean): void {
+    this.IsEditing = editing;
+    if (this.Viewer) this.Viewer.IsEditing = editing;
+    SafeDetectChanges(this.cdr);
+    this.EditingChange.emit(editing);
+  }
+
+  /** Forgets the dashboard shown before. An edit in progress ends, and EditingChange says so. */
+  private drop(): void {
+    const wasEditing = this.IsEditing;
+    this.Dashboard = null;
+    this.Viewer = null;
+    this.IsEditing = false;
+    this.Permissions = NO_PERMISSIONS;
+    if (wasEditing) this.EditingChange.emit(false);
+  }
+
+  private async show(id: string): Promise<void> {
+    const dashboard = DashboardEngine.Instance.Dashboards.find((d) => UUIDsEqual(d.ID, id)) ?? null;
+    if (!dashboard) {
+      this.LoadFailed.emit({ DashboardId: id, Message: `Dashboard with ID ${id} not found.` });
+      return;
+    }
+    const viewer = this.setup.CreateViewer();
+    this.Dashboard = dashboard;
+    this.Viewer = viewer;
+    viewer.Dashboard = dashboard;
+    this.RefreshPermissions();
+    SafeDetectChanges(this.cdr);
+    try {
+      await viewer.WaitForLayoutReady();
+    } catch (error) {
+      if (UUIDsEqual(this.shownId, id)) this.LoadFailed.emit({ DashboardId: id, Message: error instanceof Error ? error.message : String(error) });
+      return;
+    }
+    if (UUIDsEqual(this.shownId, id)) this.Loaded.emit(dashboard);
+  }
+}
+
+/** The editor stub in the tab, or null while the tab shows none. */
+function editorOf(fixture: ComponentFixture<DashboardResource>): EditorStub | null {
+  return fixture.debugElement.query(By.directive(EditorStub))?.injector.get(EditorStub) ?? null;
+}
+
+/** The editor stub in the tab. Fails the test when the tab shows none. */
+function editor(fixture: ComponentFixture<DashboardResource>): EditorStub {
+  const stub = editorOf(fixture);
+  if (!stub) throw new Error('The tab shows no editor.');
+  return stub;
+}
+
 /** The context the tab last reported to the agent. */
 function lastAgentContext(navigation: { SetAgentContext: ReturnType<typeof vi.fn> }): Record<string, unknown> | undefined {
   return navigation.SetAgentContext.mock.calls.at(-1)?.[1] as Record<string, unknown> | undefined;
 }
 
-/**
- * A DashboardEngine double holding the dashboards. `DataChange$` stands for the engine's change
- * events; a test emits on it what BaseEngine emits after a save.
- */
+/** A DashboardEngine double holding the dashboards. */
 function createEngine(dashboards: object[], canEdit: boolean) {
   return {
     Config: vi.fn(async () => undefined),
     Dashboards: dashboards,
-    DashboardCategories: [] as MJDashboardCategoryEntity[],
+    DashboardCategories: [],
     DashboardPartTypes: [QUERY_TYPE, VIEW_TYPE],
     GetAccessibleDashboards: () => dashboards,
     GetDashboardPermissions: vi.fn((dashboardId: string) => permissionsFor(dashboardId, canEdit)),
-    DataChange$: new Subject<EngineDataChangeEvent>(),
   };
 }
 
 /**
  * A NavigationService double with the members the tab uses. `DashboardEditModeRequested$` stands for
- * OpenDashboard asking a tab that was already open to enter edit mode.
+ * OpenDashboard asking a tab that was already open to enter edit mode. `AppContextSnapshot$` holds the
+ * snapshot the shell publishes, by default none.
  */
 function createNavigation() {
   return {
     QueryParamChanged$: new Subject<never>(),
     ObserveTabQueryParams: () => of({}),
     OpenDashboard: vi.fn(),
+    OpenEntityRecord: vi.fn((_entityName: string, _recordPkey: CompositeKey): string => 'record-tab'),
+    OpenNavItemByName: vi.fn(
+      async (_navItemName: string, _configuration?: Record<string, unknown>, _appId?: string, _options?: { queryParams?: Record<string, string | null> }): Promise<string | null> =>
+        'nav-tab',
+    ),
     SetAgentContext: vi.fn(),
     SetAgentClientTools: vi.fn(),
     TakeDashboardEditModeRequest: vi.fn((_tabId: string, _dashboardId: string, _applicationId: string): boolean => false),
     DashboardEditModeRequested$: new Subject<string>(),
+    AppContextSnapshot$: new BehaviorSubject<AppContextSnapshot | null>(null),
   };
 }
 
-/** Takes a screenshot of an element, as HomeAppPinService.CaptureThumbnail does. */
-type CaptureScreenshot = (element: HTMLElement, timeoutMs?: number) => Promise<string | undefined>;
+/** An ArtifactPermissionService double: the user can read the artifacts they own. */
+function createArtifactPermissions() {
+  return { GetReadableArtifactsFilter: vi.fn(async (userId: string): Promise<string> => `(UserID='${userId}')`) };
+}
+
+/** A RealtimeSessionService double. A test sets IsActive while a voice session runs. */
+function createRealtimeSession() {
+  return { IsActive: false, SendVideoFrame: vi.fn() };
+}
 
 /**
- * The testing module the tab renders in: the real part dialogs, and doubles for the services it
- * injects. `capture` stands for HomeAppPinService.CaptureThumbnail; by default it takes no screenshot.
+ * The testing module the tab renders in: the editor stub, the real Add to menu, confirm dialog, mjButton and
+ * angular-split split, stubs for the share dialog, the chat area and the loading indicator, and doubles for the
+ * services the tab injects. By default no voice session runs.
  */
 function tabModule(
   navigation: object,
-  capture: CaptureScreenshot = async () => undefined,
+  setup: EditorStubSetup,
+  artifactPermissions: ReturnType<typeof createArtifactPermissions>,
+  realtimeSession: ReturnType<typeof createRealtimeSession>,
 ): { imports: Array<Type<unknown>>; declarations: Array<Type<unknown>>; providers: Provider[] } {
   return {
-    imports: [FormsModule, ShareDialogStub],
-    declarations: [DashboardResource, DashboardAddToMenuComponent, AddPanelDialogComponent, EditPartDialogComponent, ConfirmDialogComponent],
+    imports: [AngularSplitModule, MJButtonDirective, EditorStub, ShareDialogStub, ChatAreaStub, LoadingStub],
+    declarations: [DashboardResource, DashboardAddToMenuComponent, ConfirmDialogComponent],
     providers: [
+      { provide: EDITOR_STUB_SETUP, useValue: setup },
       { provide: NavigationService, useValue: navigation },
       { provide: RecentAccessService, useValue: { LogAccess: vi.fn(async () => undefined) } },
-      { provide: DashboardFavoritesService, useValue: { IsFavorite: () => false, Toggle: vi.fn(async () => true) } },
-      { provide: HomeDashboardTabsService, useValue: { HasTab: () => false } },
-      { provide: HomeAppPinService, useValue: { IsPinned: () => false, LoadPins: vi.fn(async () => undefined), CaptureThumbnail: capture } },
+      { provide: HomeAppPinService, useValue: { IsPinned: () => false, LoadPins: vi.fn(async () => undefined) } },
+      { provide: RealtimeSessionService, useValue: realtimeSession },
+      { provide: ArtifactPermissionService, useValue: artifactPermissions },
     ],
   };
 }
 
-/**
- * Renders the tab and opens the Config dashboard in it through the tab's real Config load path.
- * `canEdit` is the user's edit permission on the dashboard. `capture` stands for
- * HomeAppPinService.CaptureThumbnail.
- */
-async function renderTab(options: { canEdit?: boolean; panels?: DashboardPanel[]; capture?: CaptureScreenshot } = {}) {
-  const canEdit = options.canEdit ?? true;
-  const dashboard = createDashboard();
-  const engine = createEngine([dashboard], canEdit);
-  vi.spyOn(DashboardEngine, 'Instance', 'get').mockReturnValue(engine as unknown as DashboardEngine);
-  const notify = vi.fn();
-  vi.spyOn(MJNotificationService, 'Instance', 'get').mockReturnValue({ CreateSimpleNotification: notify } as unknown as MJNotificationService);
+/** The user view fields the agent's source search reads. */
+type ViewDouble = Pick<MJUserViewEntityExtended, 'ID' | 'Name' | 'Description' | 'Entity' | 'EntityID' | 'UserCanView'>;
 
-  const navigation = createNavigation();
-  const { viewer, panels } = createViewer(options.panels ?? [revenuePanel()]);
-  const viewerRef = { instance: viewer, hostView: { rootNodes: [document.createElement('div')] }, destroy: vi.fn() };
+/** The query fields the agent's source search reads. */
+type QueryDouble = Pick<MJQueryEntityExtended, 'ID' | 'Name' | 'Description' | 'Category' | 'UserCanRun'>;
 
-  const fixture = RenderComponentFixture(DashboardResource, {
-    ...tabModule(navigation, options.capture),
-    inputs: { Provider: CreateFakeProvider({ currentUser: { ID: USER_ID } }) },
-    setup: (tab) => {
-      // The tab creates the viewer in its own view container. Hand it the viewer double instead.
-      (tab as unknown as { viewContainer: { createComponent: () => typeof viewerRef } }).viewContainer = { createComponent: () => viewerRef };
-    },
-  });
-  await (fixture.componentInstance as unknown as { loadConfigBasedDashboard(d: MJDashboardEntity): Promise<void> }).loadConfigBasedDashboard(
-    dashboard as unknown as MJDashboardEntity,
-  );
-  fixture.detectChanges();
-  return { fixture, viewer, panels, navigation, notify, dashboard };
-}
-
-/** Clicks the tab's Edit button and renders the edit toolbar. */
-function enterEditMode(fixture: ComponentFixture<DashboardResource>): void {
-  Click(fixture, 'button[title="Edit Dashboard"]');
-  fixture.detectChanges();
-}
+/** Loads an engine, as BaseEngine subclasses' Config does. */
+type EngineConfig = (forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) => Promise<void>;
 
 /**
- * Lets the dialogs' deferred work (their setTimeout(0) config-panel loads) run, renders, and waits
- * for ngModel, which writes a changed value into its input in a microtask after rendering.
+ * Doubles for the engines the agent's source search reads, so no test loads them. Both are loaded and
+ * hold the user's own views, the shared views and the queries given, by default none.
  */
-async function settle(fixture: ComponentFixture<DashboardResource>): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  await fixture.whenStable();
-  fixture.detectChanges();
-  await fixture.whenStable();
+function stubSourceEngines(data: { ownViews?: ViewDouble[]; sharedViews?: ViewDouble[]; queries?: QueryDouble[] } = {}) {
+  const views = {
+    Config: vi.fn<EngineConfig>(async () => undefined),
+    IsPermissionConstrained: false,
+    GetViewsForCurrentUser: () => data.ownViews ?? [],
+    GetSharedViews: () => data.sharedViews ?? [],
+  };
+  const queries = { Config: vi.fn<EngineConfig>(async () => undefined), IsPermissionConstrained: false, Queries: data.queries ?? [] };
+  const artifactTypes = { Config: vi.fn<EngineConfig>(async () => undefined) };
+  vi.spyOn(UserViewEngine, 'Instance', 'get').mockReturnValue(views as unknown as UserViewEngine);
+  vi.spyOn(QueryEngine, 'Instance', 'get').mockReturnValue(queries as unknown as QueryEngine);
+  vi.spyOn(ArtifactMetadataEngine, 'Instance', 'get').mockReturnValue(artifactTypes as unknown as ArtifactMetadataEngine);
+  return { views, queries, artifactTypes };
 }
-
-function editPartDialog(fixture: ComponentFixture<DashboardResource>): EditPartDialogComponent {
-  return fixture.debugElement.query(By.directive(EditPartDialogComponent)).injector.get(EditPartDialogComponent);
-}
-
-function emitFromViewer(viewer: ViewerDouble, fixture: ComponentFixture<DashboardResource>, event: PanelInteractionEvent): void {
-  viewer.PanelInteraction.emit(event);
-  fixture.detectChanges();
-}
-
-describe('DashboardResource part editing (DOM)', () => {
-  it('opens the Add Part dialog from the edit toolbar and adds the chosen part to the viewer', async () => {
-    const { fixture, viewer, navigation } = await renderTab();
-    enterEditMode(fixture);
-
-    Click(fixture, '.btn-add-part');
-    fixture.detectChanges();
-
-    expect(Query(fixture, 'mj-add-panel-dialog .add-part-dialog-overlay')).not.toBeNull();
-    expect(QueryAll(fixture, 'mj-add-panel-dialog .part-type-card .card-title').map((e) => e.textContent?.trim())).toEqual(['Query', 'View']);
-
-    Click(fixture, 'mj-add-panel-dialog .part-type-card:nth-child(2)');
-    await settle(fixture);
-    Click(fixture, 'mj-add-panel-dialog .dialog-footer .btn-primary');
-    await settle(fixture);
-
-    // A part type without a config panel adds with its name as the title and { type: <name> } as the config.
-    expect(viewer.AddPanel).toHaveBeenCalledExactlyOnceWith('pt-view', { type: 'View' }, 'View', 'fa-solid fa-table');
-    expect(Query(fixture, 'mj-add-panel-dialog .add-part-dialog-overlay')).toBeNull();
-    expect(lastAgentContext(navigation)).toMatchObject({ OpenedDashboardPanelCount: 2 });
-  });
-
-  it('opens the Add Part dialog when the viewer asks for it from its empty state', async () => {
-    const { fixture, viewer } = await renderTab({ panels: [] });
-    enterEditMode(fixture);
-
-    viewer.OnAddPanelClick();
-    fixture.detectChanges();
-
-    expect(Query(fixture, 'mj-add-panel-dialog .add-part-dialog-overlay')).not.toBeNull();
-  });
-
-  it('tells the user when the viewer cannot add the part', async () => {
-    const { fixture, viewer, notify } = await renderTab();
-    viewer.AddPanel.mockRejectedValueOnce(new Error('layout not ready'));
-    enterEditMode(fixture);
-
-    Click(fixture, '.btn-add-part');
-    fixture.detectChanges();
-    Click(fixture, 'mj-add-panel-dialog .part-type-card:nth-child(1)');
-    await settle(fixture);
-    Click(fixture, 'mj-add-panel-dialog .dialog-footer .btn-primary');
-    await settle(fixture);
-
-    expect(notify).toHaveBeenCalledExactlyOnceWith('Could not add the part', 'error', 3000);
-    expect(Query(fixture, 'mj-add-panel-dialog .add-part-dialog-overlay')).toBeNull();
-  });
-
-  it("opens the part's settings when the viewer asks to configure it, and applies the saved settings", async () => {
-    const { fixture, viewer, navigation } = await renderTab();
-    enterEditMode(fixture);
-
-    emitFromViewer(viewer, fixture, configureRequest('panel-1'));
-
-    expect(Query(fixture, 'mj-edit-part-dialog .edit-part-dialog')).not.toBeNull();
-    expect(Text(fixture, 'mj-edit-part-dialog .dialog-header h3')).toBe('Configure View');
-    const dialog = editPartDialog(fixture);
-    expect(dialog.Panel?.id).toBe('panel-1');
-    expect(dialog.Config).toEqual({ type: 'View', entityName: 'MJ: Applications' });
-
-    await settle(fixture);
-    // The dialog's config panel reports the edited settings; the user then clicks Save Changes.
-    dialog.OnConfigChanged({ config: { type: 'View', entityName: 'MJ: Users' }, title: 'Users', icon: 'fa-solid fa-users', isValid: true, errors: [] });
-    Click(fixture, 'mj-edit-part-dialog .dialog-footer .btn-primary');
-    await settle(fixture);
-
-    expect(viewer.UpdatePanelConfig).toHaveBeenCalledExactlyOnceWith('panel-1', { type: 'View', entityName: 'MJ: Users' }, 'Users', 'fa-solid fa-users');
-    expect(Query(fixture, 'mj-edit-part-dialog .edit-part-dialog')).toBeNull();
-    expect(lastAgentContext(navigation)).toMatchObject({ OpenedDashboardPanels: [{ Title: 'Users', PartTypeName: 'View', Icon: 'fa-solid fa-users' }] });
-  });
-
-  it('does not open settings for a part the viewer cannot find', async () => {
-    const { fixture, viewer } = await renderTab();
-    enterEditMode(fixture);
-
-    emitFromViewer(viewer, fixture, configureRequest('panel-missing'));
-
-    expect(Query(fixture, 'mj-edit-part-dialog .edit-part-dialog')).toBeNull();
-  });
-
-  it('asks before removing a part and removes it when the user confirms', async () => {
-    const { fixture, viewer, navigation } = await renderTab();
-    enterEditMode(fixture);
-
-    emitFromViewer(viewer, fixture, removeRequest('panel-1', 'Revenue'));
-
-    expect(Query(fixture, 'mj-confirm-dialog .confirm-dialog')).not.toBeNull();
-    expect(Text(fixture, 'mj-confirm-dialog .confirm-title')).toBe('Remove Part');
-    expect(Text(fixture, 'mj-confirm-dialog .confirm-message')).toBe("Are you sure you want to remove 'Revenue' from this dashboard?");
-    expect(viewer.ConfirmRemovePanel).not.toHaveBeenCalled();
-
-    Click(fixture, 'mj-confirm-dialog .dialog-footer .btn-danger');
-    await settle(fixture);
-
-    expect(viewer.ConfirmRemovePanel).toHaveBeenCalledExactlyOnceWith('panel-1');
-    expect(Query(fixture, 'mj-confirm-dialog .confirm-dialog')).toBeNull();
-    expect(lastAgentContext(navigation)).toMatchObject({ OpenedDashboardPanelCount: 0 });
-  });
-
-  it('keeps the part when the user cancels the removal', async () => {
-    const { fixture, viewer } = await renderTab();
-    enterEditMode(fixture);
-
-    emitFromViewer(viewer, fixture, removeRequest('panel-1', 'Revenue'));
-    Click(fixture, 'mj-confirm-dialog .dialog-footer .btn-secondary');
-    await settle(fixture);
-
-    expect(viewer.ConfirmRemovePanel).not.toHaveBeenCalled();
-    expect(Query(fixture, 'mj-confirm-dialog .confirm-dialog')).toBeNull();
-  });
-
-  it('ignores part requests outside edit mode, also after the user starts editing', async () => {
-    const { fixture, viewer } = await renderTab();
-
-    viewer.OnAddPanelClick();
-    emitFromViewer(viewer, fixture, configureRequest('panel-1'));
-    emitFromViewer(viewer, fixture, removeRequest('panel-1', 'Revenue'));
-
-    expect(Query(fixture, '.add-part-dialog-overlay')).toBeNull();
-    expect(Query(fixture, '.edit-part-dialog')).toBeNull();
-    expect(Query(fixture, '.confirm-dialog')).toBeNull();
-
-    enterEditMode(fixture);
-
-    expect(Query(fixture, '.add-part-dialog-overlay')).toBeNull();
-    expect(Query(fixture, '.edit-part-dialog')).toBeNull();
-    expect(Query(fixture, '.confirm-dialog')).toBeNull();
-  });
-
-  it('ignores the Add Part command outside edit mode, also after the user starts editing', async () => {
-    const { fixture } = await renderTab();
-
-    fixture.componentInstance.OpenAddPartDialog();
-    fixture.detectChanges();
-
-    expect(Query(fixture, '.add-part-dialog-overlay')).toBeNull();
-
-    enterEditMode(fixture);
-
-    expect(Query(fixture, '.add-part-dialog-overlay')).toBeNull();
-  });
-
-  it('closes an open part dialog when the user saves, and does not show it again in the next edit', async () => {
-    const { fixture, viewer } = await renderTab();
-    enterEditMode(fixture);
-    Click(fixture, '.btn-add-part');
-    fixture.detectChanges();
-
-    // The overlay does not hold keyboard focus, so Save behind it stays reachable.
-    Click(fixture, '.header-right .btn-primary');
-    await settle(fixture);
-
-    expect(viewer.save).toHaveBeenCalledTimes(1);
-    expect(Query(fixture, '.btn-add-part')).toBeNull();
-    expect(Query(fixture, '.add-part-dialog-overlay')).toBeNull();
-
-    enterEditMode(fixture);
-
-    expect(Query(fixture, '.add-part-dialog-overlay')).toBeNull();
-  });
-
-  it('closes an open part dialog when the user cancels editing, and does not show it again in the next edit', async () => {
-    const { fixture, viewer } = await renderTab();
-    enterEditMode(fixture);
-    emitFromViewer(viewer, fixture, removeRequest('panel-1', 'Revenue'));
-
-    Click(fixture, '.header-right .btn-cancel');
-    fixture.detectChanges();
-
-    expect(Query(fixture, '.confirm-dialog')).toBeNull();
-
-    enterEditMode(fixture);
-
-    expect(Query(fixture, '.confirm-dialog')).toBeNull();
-    expect(viewer.ConfirmRemovePanel).not.toHaveBeenCalled();
-  });
-
-  it.each(['Save', 'Cancel'])('shows the part type list again after a type was picked and the user left edit mode with %s', async (exit) => {
-    const { fixture } = await renderTab();
-    enterEditMode(fixture);
-    Click(fixture, '.btn-add-part');
-    fixture.detectChanges();
-    Click(fixture, 'mj-add-panel-dialog .part-type-card:nth-child(2)');
-    await settle(fixture);
-    expect(Query(fixture, 'mj-add-panel-dialog .part-type-card')).toBeNull();
-
-    // The overlay does not hold keyboard focus, so Save and Cancel behind it stay reachable.
-    Click(fixture, exit === 'Save' ? '.header-right .btn-primary' : '.header-right .btn-cancel');
-    await settle(fixture);
-    enterEditMode(fixture);
-    Click(fixture, '.btn-add-part');
-    fixture.detectChanges();
-
-    expect(QueryAll(fixture, 'mj-add-panel-dialog .part-type-card .card-title').map((e) => e.textContent?.trim())).toEqual(['Query', 'View']);
-  });
-
-  it('gives a user who cannot edit the dashboard no way into edit mode or part editing', async () => {
-    const { fixture, viewer } = await renderTab({ canEdit: false });
-
-    expect(Query(fixture, 'button[title="Edit Dashboard"]')).toBeNull();
-
-    fixture.componentInstance.ToggleEditMode();
-    fixture.detectChanges();
-    viewer.OnAddPanelClick();
-    emitFromViewer(viewer, fixture, configureRequest('panel-1'));
-
-    expect(Query(fixture, '.btn-add-part')).toBeNull();
-    expect(viewer.IsEditing).toBe(false);
-    expect(Query(fixture, '.add-part-dialog-overlay')).toBeNull();
-    expect(Query(fixture, '.edit-part-dialog')).toBeNull();
-  });
-});
-
-/** The value the name field shows. */
-function nameField(fixture: ComponentFixture<DashboardResource>): string {
-  return (Query(fixture, '.dashboard-name-input') as HTMLInputElement).value;
-}
-
-/** Enters edit mode and waits until the name field shows the dashboard's name (ngModel writes it asynchronously). */
-async function startEditing(fixture: ComponentFixture<DashboardResource>): Promise<void> {
-  enterEditMode(fixture);
-  await settle(fixture);
-}
-
-describe('DashboardResource save and name (DOM)', () => {
-  type ViewerForFailure = ReturnType<typeof createViewer>['viewer'];
-  type DashboardForFailure = ReturnType<typeof createDashboard>;
-
-  it.each([
-    {
-      failure: 'the dashboard reports a failed result',
-      fail: (viewer: ViewerForFailure, dashboard: DashboardForFailure) =>
-        viewer.save.mockImplementationOnce(async () => {
-          dashboard.LatestResult = { Success: false, CompleteMessage: 'Name cannot be longer than 510 characters' };
-          return false;
-        }),
-      message: 'Could not save the dashboard: Name cannot be longer than 510 characters',
-    },
-    {
-      failure: 'the save returns false without a failed result',
-      fail: (viewer: ViewerForFailure) => viewer.save.mockResolvedValueOnce(false),
-      message: 'Could not save the dashboard',
-    },
-    {
-      failure: 'the save throws',
-      fail: (viewer: ViewerForFailure) => viewer.save.mockRejectedValueOnce(new Error('network down')),
-      message: 'Could not save the dashboard: network down',
-    },
-  ])('stays in edit mode with the changes and tells the user why when $failure', async ({ fail, message }) => {
-    const { fixture, viewer, notify, dashboard } = await renderTab();
-    const displayNameChanged = vi.fn();
-    fixture.componentInstance.DisplayNameChangedEvent = displayNameChanged;
-    fail(viewer, dashboard);
-    await startEditing(fixture);
-    TypeInto(fixture, '.dashboard-name-input', 'Renamed Board');
-    await settle(fixture);
-
-    Click(fixture, '.header-right .btn-primary');
-    await settle(fixture);
-
-    expect(notify).toHaveBeenCalledExactlyOnceWith(message, 'error', 5000);
-    expect(Query(fixture, '.btn-add-part')).not.toBeNull();
-    expect(nameField(fixture)).toBe('Renamed Board');
-    // Other pages read this cached dashboard, so it goes back to the saved name.
-    expect(dashboard.Name).toBe('Revenue Board');
-    expect(displayNameChanged).not.toHaveBeenCalled();
-
-    // The next Save saves the changes the user kept.
-    Click(fixture, '.header-right .btn-primary');
-    await settle(fixture);
-
-    expect(Query(fixture, '.btn-add-part')).toBeNull();
-    expect(dashboard.Name).toBe('Renamed Board');
-  });
-
-  it('puts the previous name back when the user empties the name and leaves the field', async () => {
-    const { fixture } = await renderTab();
-    await startEditing(fixture);
-
-    TypeInto(fixture, '.dashboard-name-input', '   ');
-    // The browser renders after each event, so the page sees the emptied name before the blur.
-    await settle(fixture);
-    Query(fixture, '.dashboard-name-input')?.dispatchEvent(new Event('blur'));
-    await settle(fixture);
-
-    expect(nameField(fixture)).toBe('Revenue Board');
-  });
-
-  it('saves the previous name when the name is empty at Save', async () => {
-    const { fixture, viewer, dashboard } = await renderTab();
-    await startEditing(fixture);
-
-    TypeInto(fixture, '.dashboard-name-input', '   ');
-    Click(fixture, '.header-right .btn-primary');
-    await settle(fixture);
-
-    expect(viewer.save).toHaveBeenCalledTimes(1);
-    expect(dashboard.Name).toBe('Revenue Board');
-  });
-});
-
-describe('DashboardResource screenshot on Save (DOM)', () => {
-  /** Records the dashboard's Thumbnail each time the viewer saves the dashboard, and returns `result`. */
-  function recordThumbnailAtSave(viewer: ViewerDouble, dashboard: DashboardDouble, result = true): Array<string | null> {
-    const atSave: Array<string | null> = [];
-    viewer.save.mockImplementation(async () => {
-      atSave.push(dashboard.Thumbnail);
-      return result;
-    });
-    return atSave;
-  }
-
-  /** Enters edit mode, clicks Save and waits for the save to finish. */
-  async function editAndSave(fixture: ComponentFixture<DashboardResource>): Promise<void> {
-    await startEditing(fixture);
-    Click(fixture, '.header-right .btn-primary');
-    await settle(fixture);
-  }
-
-  it('puts a screenshot of the dashboard on the dashboard before its one Save', async () => {
-    const capture = vi.fn<CaptureScreenshot>(async () => NEW_SCREENSHOT);
-    const { fixture, viewer, dashboard } = await renderTab({ capture });
-    const atSave = recordThumbnailAtSave(viewer, dashboard);
-
-    await editAndSave(fixture);
-
-    expect(capture).toHaveBeenCalledTimes(1);
-    expect(capture.mock.calls.at(0)?.[0]).toBe(Query(fixture, '.dashboard-resource-container'));
-    expect(atSave).toEqual([NEW_SCREENSHOT]);
-    expect(dashboard.Thumbnail).toBe(NEW_SCREENSHOT);
-  });
-
-  it('waits at most about 1.5 seconds for the screenshot, not the 4-second pin default', async () => {
-    const capture = vi.fn<CaptureScreenshot>(async () => NEW_SCREENSHOT);
-    const { fixture } = await renderTab({ capture });
-
-    await editAndSave(fixture);
-
-    expect(capture).toHaveBeenCalledTimes(1);
-    const timeoutMs = capture.mock.calls.at(0)?.[1];
-    expect(timeoutMs).toBeGreaterThan(0);
-    expect(timeoutMs).toBeLessThanOrEqual(2000);
-  });
-
-  it('keeps the saved screenshot when no screenshot can be taken', async () => {
-    const capture = vi.fn<CaptureScreenshot>(async () => undefined);
-    const { fixture, viewer, dashboard } = await renderTab({ capture });
-    const atSave = recordThumbnailAtSave(viewer, dashboard);
-
-    await editAndSave(fixture);
-
-    expect(capture).toHaveBeenCalledTimes(1);
-    expect(atSave).toEqual([SAVED_SCREENSHOT]);
-  });
-
-  it('saves without a new screenshot when taking one fails', async () => {
-    const capture = vi.fn<CaptureScreenshot>(async () => {
-      throw new Error('canvas tainted');
-    });
-    const { fixture, viewer, dashboard, notify } = await renderTab({ capture });
-    const atSave = recordThumbnailAtSave(viewer, dashboard);
-
-    await editAndSave(fixture);
-
-    expect(atSave).toEqual([SAVED_SCREENSHOT]);
-    expect(notify).not.toHaveBeenCalled();
-    expect(Query(fixture, '.btn-add-part')).toBeNull();
-  });
-
-  it('clears the screenshot of a dashboard with no panels, without taking one, so its cards show the icon', async () => {
-    const capture = vi.fn<CaptureScreenshot>(async () => NEW_SCREENSHOT);
-    const { fixture, viewer, dashboard } = await renderTab({ capture, panels: [] });
-    const atSave = recordThumbnailAtSave(viewer, dashboard);
-
-    await editAndSave(fixture);
-
-    expect(capture).not.toHaveBeenCalled();
-    expect(atSave).toEqual([null]);
-    expect(dashboard.Thumbnail).toBeNull();
-  });
-
-  it('puts the saved screenshot back when the Save fails', async () => {
-    const capture = vi.fn<CaptureScreenshot>(async () => NEW_SCREENSHOT);
-    const { fixture, viewer, dashboard } = await renderTab({ capture });
-    const atSave = recordThumbnailAtSave(viewer, dashboard, false);
-
-    await editAndSave(fixture);
-
-    expect(atSave).toEqual([NEW_SCREENSHOT]);
-    // Other pages read this cached dashboard, so it goes back to its saved screenshot.
-    expect(dashboard.Revert).toHaveBeenCalledTimes(1);
-    expect(dashboard.Thumbnail).toBe(SAVED_SCREENSHOT);
-  });
-});
-
-describe('DashboardResource one save at a time (DOM)', () => {
-  const SAVE = '.header-right .btn-primary';
-  const CANCEL = '.header-right .btn-cancel';
-  const ADD_PART = '.btn-add-part';
-
-  /** A screenshot that stays pending until the test calls finish(), which completes every pending one. */
-  function pendingCapture() {
-    const pending: Array<(value: string | undefined) => void> = [];
-    const capture = vi.fn<CaptureScreenshot>(() => new Promise<string | undefined>((resolve) => pending.push(resolve)));
-    return { capture, finish: (value: string | undefined = NEW_SCREENSHOT) => pending.splice(0).forEach((resolve) => resolve(value)) };
-  }
-
-  /** Whether Save, Cancel and Add Part are disabled, in that order. */
-  function disabledButtons(fixture: ComponentFixture<DashboardResource>): boolean[] {
-    return [SAVE, CANCEL, ADD_PART].map((selector) => (Query(fixture, selector) as HTMLButtonElement).disabled);
-  }
-
-  /** Renders the tab in edit mode and clicks Save; the screenshot stays pending. */
-  async function startSaving() {
-    const { capture, finish } = pendingCapture();
-    const tab = await renderTab({ capture });
-    await startEditing(tab.fixture);
-    Click(tab.fixture, SAVE);
-    await settle(tab.fixture);
-    return { ...tab, capture, finish };
-  }
-
-  it('makes no second Save() when Save is clicked again while the screenshot is taken', async () => {
-    const { fixture, viewer, capture, finish } = await startSaving();
-
-    Click(fixture, SAVE);
-    void fixture.componentInstance.SaveDashboard();
-    await settle(fixture);
-    finish();
-    await settle(fixture);
-
-    expect(capture).toHaveBeenCalledTimes(1);
-    expect(viewer.save).toHaveBeenCalledTimes(1);
-  });
-
-  it('ignores Cancel while the save runs; the save then completes with one Save()', async () => {
-    const { fixture, viewer, finish } = await startSaving();
-
-    Click(fixture, CANCEL);
-    fixture.componentInstance.CancelEdit();
-    await settle(fixture);
-
-    expect(Query(fixture, ADD_PART)).not.toBeNull();
-    expect(viewer.ReloadFromSaved).not.toHaveBeenCalled();
-
-    finish();
-    await settle(fixture);
-
-    expect(viewer.save).toHaveBeenCalledTimes(1);
-    expect(Query(fixture, ADD_PART)).toBeNull();
-  });
-
-  it('disables Save, Cancel and Add Part and shows Saving... while the save runs, and enables them for the next edit', async () => {
-    const { fixture, finish } = await startSaving();
-
-    expect(disabledButtons(fixture)).toEqual([true, true, true]);
-    expect(Text(fixture, SAVE)).toBe('Saving...');
-    expect(Query(fixture, `${SAVE} i.fa-spinner.fa-spin`)).not.toBeNull();
-
-    finish();
-    await settle(fixture);
-    await startEditing(fixture);
-
-    expect(disabledButtons(fixture)).toEqual([false, false, false]);
-    expect(Text(fixture, SAVE)).toBe('Save');
-  });
-
-  it('enables Save, Cancel and Add Part again after a failed save', async () => {
-    const { capture, finish } = pendingCapture();
-    const { fixture, viewer } = await renderTab({ capture });
-    viewer.save.mockResolvedValueOnce(false);
-    await startEditing(fixture);
-    Click(fixture, SAVE);
-    await settle(fixture);
-
-    expect(disabledButtons(fixture)).toEqual([true, true, true]);
-
-    finish();
-    await settle(fixture);
-
-    expect(Query(fixture, ADD_PART)).not.toBeNull();
-    expect(disabledButtons(fixture)).toEqual([false, false, false]);
-    expect(Text(fixture, SAVE)).toBe('Save');
-  });
-
-  it("ignores Add Part and the viewer's part requests while the save runs", async () => {
-    const { fixture, viewer } = await startSaving();
-
-    fixture.componentInstance.OpenAddPartDialog();
-    viewer.OnAddPanelClick();
-    emitFromViewer(viewer, fixture, configureRequest('panel-1'));
-    emitFromViewer(viewer, fixture, removeRequest('panel-1', 'Revenue'));
-    await settle(fixture);
-
-    expect(Query(fixture, '.add-part-dialog-overlay')).toBeNull();
-    expect(Query(fixture, 'mj-edit-part-dialog .edit-part-dialog')).toBeNull();
-    expect(Query(fixture, 'mj-confirm-dialog .confirm-dialog')).toBeNull();
-  });
-
-  it('does not apply a part change from a dialog that was open when the save started', async () => {
-    const { capture, finish } = pendingCapture();
-    const { fixture, viewer } = await renderTab({ capture });
-    await startEditing(fixture);
-    emitFromViewer(viewer, fixture, removeRequest('panel-1', 'Revenue'));
-    // The overlay does not hold keyboard focus, so Save behind it stays reachable.
-    Click(fixture, SAVE);
-    await settle(fixture);
-
-    Click(fixture, 'mj-confirm-dialog .dialog-footer .btn-danger');
-    await settle(fixture);
-    finish();
-    await settle(fixture);
-
-    expect(viewer.ConfirmRemovePanel).not.toHaveBeenCalled();
-    expect(viewer.save).toHaveBeenCalledTimes(1);
-  });
-
-  it('writes the name and description after the screenshot, so a name typed while it is taken is saved', async () => {
-    const { capture, finish } = pendingCapture();
-    const { fixture, viewer, dashboard } = await renderTab({ capture });
-    const namesAtSave: string[] = [];
-    viewer.save.mockImplementation(async () => {
-      namesAtSave.push(dashboard.Name);
-      return true;
-    });
-    await startEditing(fixture);
-    TypeInto(fixture, '.dashboard-name-input', 'Renamed Board');
-    await settle(fixture);
-    Click(fixture, SAVE);
-    await settle(fixture);
-
-    // Nothing is written to the dashboard while the screenshot is taken.
-    expect(dashboard.Name).toBe('Revenue Board');
-
-    TypeInto(fixture, '.dashboard-name-input', 'Renamed Again');
-    await settle(fixture);
-    finish();
-    await settle(fixture);
-
-    expect(namesAtSave).toEqual(['Renamed Again']);
-  });
-});
 
 const TAB_ID = 'tab-1';
 /** The application of the tab. */
@@ -879,30 +493,48 @@ function dashboardTabData(dashboardId: string): ResourceData {
   });
 }
 
+/** One dashboard the editor stub showed: its viewer double and the viewer's parts. */
+interface EditorLoad {
+  viewer: ViewerDouble;
+  panels: DashboardPanel[];
+}
+
+/** How the viewer doubles of the next loads get their layout ready. A test can change it between loads. */
+interface LayoutControl {
+  /** True: each new layout waits until the test calls `releaseLayout`. */
+  Hold: boolean;
+  /** When set, each new layout fails with this error. */
+  Failure: Error | null;
+}
+
 /**
- * Renders the tab and gives it its resource data through the real Data setter, which loads the
- * dashboard, as the tab container does. `editRequest` stands for a tab opened with
- * `openInEditMode` for Revenue Board: like NavigationService, the double's
- * TakeDashboardEditModeRequest returns true for the first call for that tab, dashboard and
- * application only. `holdLayout` keeps the viewer's layout from getting ready
- * until the test calls `releaseLayout`; until then the load has not finished and the tab is not
- * rendered again. The engine holds Revenue Board (dash-1) and Quota (dash-2).
+ * Renders the tab and gives it the resource data of Revenue Board (dash-1) through the real Data setter, as
+ * the tab container does; the tab shows the dashboard in the editor stub. The engine holds Revenue Board and
+ * Quota (dash-2). `canEdit` is the user's edit permission. `editRequest` stands for a tab opened with
+ * `openInEditMode` for Revenue Board: like NavigationService, the double's TakeDashboardEditModeRequest returns
+ * true for the first call for that tab, dashboard and application only. `holdLayout` keeps the first layout
+ * from getting ready until the test calls `releaseLayout`; until then the load has not finished. `panels` are
+ * the parts of each viewer double, `sources` what the source search engines hold, and `provider` the tab's
+ * metadata provider (by default a fake one whose views return no rows). `onLoadComplete` stands for the tab
+ * container's LoadCompleteEvent.
  */
-async function renderOpenedTab(options: { canEdit?: boolean; editRequest?: boolean; holdLayout?: boolean } = {}) {
-  const canEdit = options.canEdit ?? true;
-  const revenue = createDashboard();
-  const quota = {
-    ID: 'dash-2',
-    PrimaryKey: CompositeKey.FromID('dash-2'),
-    Type: 'Config',
-    CategoryID: null,
-    Name: 'Quota',
-    Description: '',
-    UIConfigDetails: savedConfig([]),
-  };
-  const engine = createEngine([revenue, quota], canEdit);
+async function renderTab(
+  options: {
+    canEdit?: boolean;
+    editRequest?: boolean;
+    holdLayout?: boolean;
+    panels?: DashboardPanel[];
+    sources?: Parameters<typeof stubSourceEngines>[0];
+    provider?: IMetadataProvider;
+    onLoadComplete?: () => void;
+  } = {},
+) {
+  const dashboard = createDashboard();
+  const engine = createEngine([dashboard, createQuotaDashboard()], options.canEdit ?? true);
   vi.spyOn(DashboardEngine, 'Instance', 'get').mockReturnValue(engine as unknown as DashboardEngine);
-  vi.spyOn(MJNotificationService, 'Instance', 'get').mockReturnValue({ CreateSimpleNotification: vi.fn() } as unknown as MJNotificationService);
+  const notify = vi.fn();
+  vi.spyOn(MJNotificationService, 'Instance', 'get').mockReturnValue({ CreateSimpleNotification: notify } as unknown as MJNotificationService);
+  const sourceEngines = stubSourceEngines(options.sources);
 
   let editRequested = options.editRequest === true;
   const navigation = createNavigation();
@@ -911,24 +543,32 @@ async function renderOpenedTab(options: { canEdit?: boolean; editRequest?: boole
     editRequested = false;
     return true;
   });
-  const viewers: ViewerDouble[] = [];
+
+  const loads: EditorLoad[] = [];
+  const layout: LayoutControl = { Hold: options.holdLayout === true, Failure: null };
   let releaseLayout = (): void => undefined;
+  const setup: EditorStubSetup = {
+    CreateViewer: () => {
+      const load = createViewer(options.panels ?? [revenuePanel()]);
+      const failure = layout.Failure;
+      if (failure) {
+        load.viewer.WaitForLayoutReady = () => Promise.reject(failure);
+      } else if (layout.Hold) {
+        const ready = new Promise<void>((resolve) => (releaseLayout = resolve));
+        load.viewer.WaitForLayoutReady = () => ready;
+      }
+      loads.push(load);
+      return load.viewer;
+    },
+  };
+  const artifactPermissions = createArtifactPermissions();
+  const realtimeSession = createRealtimeSession();
 
   const fixture = RenderComponentFixture(DashboardResource, {
-    ...tabModule(navigation),
-    inputs: { Provider: CreateFakeProvider({ currentUser: { ID: USER_ID } }) },
+    ...tabModule(navigation, setup, artifactPermissions, realtimeSession),
+    inputs: { Provider: options.provider ?? CreateFakeProvider({ currentUser: { ID: USER_ID } }) },
     setup: (tab) => {
-      // The tab creates each viewer in its own view container. Hand it a new viewer double each time.
-      (tab as unknown as { viewContainer: { createComponent: () => unknown } }).viewContainer = {
-        createComponent: () => {
-          const { viewer } = createViewer([revenuePanel()]);
-          if (options.holdLayout) {
-            viewer.waitForLayoutReady = () => new Promise<void>((resolve) => (releaseLayout = resolve));
-          }
-          viewers.push(viewer);
-          return { instance: viewer, hostView: { rootNodes: [document.createElement('div')] }, destroy: vi.fn() };
-        },
-      };
+      if (options.onLoadComplete) tab.LoadCompleteEvent = options.onLoadComplete;
       tab.Data = dashboardTabData('dash-1');
     },
   });
@@ -937,439 +577,221 @@ async function renderOpenedTab(options: { canEdit?: boolean; editRequest?: boole
   } else {
     await settle(fixture);
   }
-  return { fixture, navigation, viewers, releaseLayout: () => releaseLayout() };
+  return { fixture, navigation, loads, layout, notify, dashboard, engine, sourceEngines, artifactPermissions, realtimeSession, releaseLayout: () => releaseLayout() };
 }
 
-/** True when the tab shows its edit toolbar. */
-const showsEditToolbar = (fixture: ComponentFixture<DashboardResource>): boolean => Query(fixture, '.viewer-header.editing') !== null;
+/** Lets the tab's and the editor stub's deferred work run (the load, the agent's requests), and renders. */
+async function settle(fixture: ComponentFixture<DashboardResource>): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await fixture.whenStable();
+  fixture.detectChanges();
+  await fixture.whenStable();
+}
+
+// ---------------------------------------------------------------------------
+// The load, the tab title and the buttons the tab puts in the editor's header
+// ---------------------------------------------------------------------------
+
+/** The AI button the tab puts in the editor's header. */
+const AI_TOGGLE = '.dashboard-tab-ai-toggle';
+
+describe('DashboardResource and its editor (DOM)', () => {
+  it('notifies load complete on Loaded and on LoadFailed', async () => {
+    const loadComplete = vi.fn();
+    const { fixture, layout, releaseLayout } = await renderTab({ holdLayout: true, onLoadComplete: loadComplete });
+
+    // The editor shows the dashboard, but its layout is not ready: the load has not finished.
+    expect(editor(fixture).Dashboard?.ID).toBe('dash-1');
+    expect(loadComplete).not.toHaveBeenCalled();
+
+    releaseLayout();
+    await settle(fixture);
+
+    expect(loadComplete).toHaveBeenCalledTimes(1);
+    expect(Query(fixture, '.error-state')).toBeNull();
+
+    // The tab opens Quota, whose layout fails: the editor reports LoadFailed, and the tab shows why.
+    layout.Hold = false;
+    layout.Failure = new Error('The layout could not be built');
+    fixture.componentInstance.Data = dashboardTabData('dash-2');
+    await settle(fixture);
+
+    expect(loadComplete).toHaveBeenCalledTimes(2);
+    expect(Text(fixture, '.error-message')).toBe('The dashboard "Quota" could not be loaded. There may be an issue with the dashboard configuration.');
+    expect(Text(fixture, '.error-details pre')).toBe('The layout could not be built');
+    expect(editorOf(fixture)).toBeNull();
+  });
+
+  it('takes the openInEditMode request on Loaded and enters edit mode through the editor', async () => {
+    const { fixture, navigation, releaseLayout } = await renderTab({ editRequest: true, holdLayout: true });
+    const enterEditMode = vi.spyOn(editor(fixture), 'EnterEditMode');
+
+    // The editor has not finished loading: the request waits for it.
+    expect(navigation.TakeDashboardEditModeRequest).not.toHaveBeenCalled();
+
+    releaseLayout();
+    await settle(fixture);
+
+    expect(navigation.TakeDashboardEditModeRequest).toHaveBeenCalledExactlyOnceWith(TAB_ID, 'dash-1', APP_ID);
+    expect(enterEditMode).toHaveBeenCalledTimes(1);
+    expect(editor(fixture).IsEditing).toBe(true);
+    expect(navigation.SetAgentContext).toHaveBeenCalledTimes(1);
+    expect(lastAgentContext(navigation)).toMatchObject({ OpenedDashboardId: 'dash-1', OpenedDashboardIsEditing: true });
+  });
+
+  it('renames the tab on NameChanged and never calls ResourceRecordSaved', async () => {
+    const { fixture, navigation } = await renderTab();
+    const tab = fixture.componentInstance;
+    const displayNameChanged = vi.fn();
+    tab.DisplayNameChangedEvent = displayNameChanged;
+    const recordSaved = vi.spyOn(tab as unknown as { ResourceRecordSaved(entity: unknown): void }, 'ResourceRecordSaved');
+    const shownDashboard = editor(fixture).Dashboard;
+
+    editor(fixture).NameChanged.emit('Renamed Board');
+    await settle(fixture);
+
+    expect(displayNameChanged).toHaveBeenCalledExactlyOnceWith('Renamed Board');
+    expect(recordSaved).not.toHaveBeenCalled();
+    // ResourceRecordSaved would rewrite the record ID to the URL-segment form ('ID|dash-1'), and the tab would reload.
+    expect(tab.Data.ResourceRecordID).toBe('dash-1');
+    expect(editor(fixture).Dashboard).toBe(shownDashboard);
+    expect(navigation.TakeDashboardEditModeRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports panels on ConfigChanged but not on ReloadedFromSaved', async () => {
+    const { fixture, navigation, loads } = await renderTab();
+    const { panels } = loads[0];
+    const reports = navigation.SetAgentContext.mock.calls.length;
+
+    // A layout move or resize: the panels are the same.
+    editor(fixture).ConfigChanged.emit();
+    expect(navigation.SetAgentContext).toHaveBeenCalledTimes(reports);
+
+    panels.push(quotaPanel('panel-2'));
+    editor(fixture).ConfigChanged.emit();
+
+    expect(navigation.SetAgentContext).toHaveBeenCalledTimes(reports + 1);
+    expect(lastAgentContext(navigation)).toMatchObject({ OpenedDashboardPanelCount: 2 });
+
+    // A save elsewhere: the editor rebuilds the saved layout, says so, and then the rebuilt layout reports its change.
+    panels.push(quotaPanel('panel-3'));
+    editor(fixture).ReloadedFromSaved.emit();
+    editor(fixture).ConfigChanged.emit();
+
+    expect(navigation.SetAgentContext).toHaveBeenCalledTimes(reports + 1);
+  });
+
+  it('projects the AI toggle in both modes and Add to plus Share only in view mode', async () => {
+    const { fixture } = await renderTab();
+
+    expect(Query(fixture, `.stub-header-tools ${AI_TOGGLE}`)).not.toBeNull();
+    expect(Query(fixture, '.stub-view-actions mj-dashboard-add-to-menu')).not.toBeNull();
+    expect(Query(fixture, '.stub-view-actions .dashboard-tab-share')).not.toBeNull();
+
+    editor(fixture).EnterEditMode();
+    fixture.detectChanges();
+
+    expect(Query(fixture, `.stub-header-tools ${AI_TOGGLE}`)).not.toBeNull();
+    expect(Query(fixture, 'mj-dashboard-add-to-menu')).toBeNull();
+    expect(Query(fixture, '.dashboard-tab-share')).toBeNull();
+
+    editor(fixture).CancelEdit();
+    fixture.detectChanges();
+
+    expect(Query(fixture, '.stub-view-actions mj-dashboard-add-to-menu')).not.toBeNull();
+    expect(Query(fixture, '.stub-view-actions .dashboard-tab-share')).not.toBeNull();
+  });
+
+  it('shows Share only to a user who can share, and tells the Add to menu', async () => {
+    const { fixture } = await renderTab({ canEdit: false });
+
+    expect(Query(fixture, '.stub-view-actions mj-dashboard-add-to-menu')).not.toBeNull();
+    expect(Query(fixture, '.dashboard-tab-share')).toBeNull();
+    expect(fixture.debugElement.query(By.directive(DashboardAddToMenuComponent)).injector.get(DashboardAddToMenuComponent).CanShare).toBe(false);
+  });
+
+  it('shows a Code dashboard and the Data Explorer only in its own container, which it hides while the editor shows a dashboard', async () => {
+    const { fixture } = await renderTab();
+    const container = fixture.componentInstance.ContainerElement.nativeElement;
+
+    expect(container.classList.contains('is-hidden')).toBe(true);
+    expect(container.closest('mj-dashboard-editor')).toBeNull();
+    expect(container.children).toHaveLength(0);
+  });
+});
 
 describe('DashboardResource edit mode on first load (DOM)', () => {
   it('opens in edit mode when the tab was opened with openInEditMode and the user can edit the dashboard', async () => {
-    const { fixture, navigation, viewers } = await renderOpenedTab({ editRequest: true });
+    const { fixture, navigation, loads } = await renderTab({ editRequest: true });
 
     expect(navigation.TakeDashboardEditModeRequest).toHaveBeenCalledExactlyOnceWith(TAB_ID, 'dash-1', APP_ID);
-    expect(showsEditToolbar(fixture)).toBe(true);
-    expect(Query(fixture, '.viewer-toolbar')).toBeNull();
-    expect(Query(fixture, '.btn-add-part')).not.toBeNull();
-    expect(nameField(fixture)).toBe('Revenue Board');
-    expect(viewers[0].IsEditing).toBe(true);
+    expect(editor(fixture).IsEditing).toBe(true);
+    expect(loads[0].viewer.IsEditing).toBe(true);
     // One report to the agent for the load, already in edit mode.
     expect(navigation.SetAgentContext).toHaveBeenCalledTimes(1);
     expect(lastAgentContext(navigation)).toMatchObject({ OpenedDashboardId: 'dash-1', OpenedDashboardIsEditing: true });
   });
 
   it('opens for viewing when the tab was opened without openInEditMode', async () => {
-    const { fixture, navigation, viewers } = await renderOpenedTab();
+    const { fixture, navigation, loads } = await renderTab();
 
     expect(navigation.TakeDashboardEditModeRequest).toHaveBeenCalledExactlyOnceWith(TAB_ID, 'dash-1', APP_ID);
-    expect(showsEditToolbar(fixture)).toBe(false);
-    expect(Query(fixture, '.viewer-toolbar')).not.toBeNull();
-    expect(viewers[0].IsEditing).toBe(false);
+    expect(editor(fixture).IsEditing).toBe(false);
+    expect(loads[0].viewer.IsEditing).toBe(false);
     expect(lastAgentContext(navigation)).toMatchObject({ OpenedDashboardIsEditing: false });
   });
 
   it('opens for viewing, and uses up the request, when the user cannot edit the dashboard', async () => {
-    const { fixture, navigation, viewers } = await renderOpenedTab({ editRequest: true, canEdit: false });
+    const { fixture, navigation, loads } = await renderTab({ editRequest: true, canEdit: false });
 
     expect(navigation.TakeDashboardEditModeRequest).toHaveBeenCalledExactlyOnceWith(TAB_ID, 'dash-1', APP_ID);
     expect(navigation.TakeDashboardEditModeRequest.mock.results[0].value).toBe(true);
-    expect(showsEditToolbar(fixture)).toBe(false);
-    expect(Query(fixture, 'button[title="Edit Dashboard"]')).toBeNull();
-    expect(viewers[0].IsEditing).toBe(false);
+    expect(editor(fixture).IsEditing).toBe(false);
+    expect(loads[0].viewer.IsEditing).toBe(false);
   });
 
   it('applies the request to the first load only: after Cancel, the next dashboard in the tab opens for viewing', async () => {
-    const { fixture, navigation, viewers } = await renderOpenedTab({ editRequest: true });
-    expect(showsEditToolbar(fixture)).toBe(true);
+    const { fixture, navigation, loads } = await renderTab({ editRequest: true });
+    expect(editor(fixture).IsEditing).toBe(true);
 
-    Click(fixture, '.header-right .btn-cancel');
+    editor(fixture).CancelEdit();
     fixture.detectChanges();
-    expect(showsEditToolbar(fixture)).toBe(false);
+    expect(editor(fixture).IsEditing).toBe(false);
 
     // The tab now shows another dashboard (the tab container sets new data for a different record).
     fixture.componentInstance.Data = dashboardTabData('dash-2');
     await settle(fixture);
 
     expect(navigation.TakeDashboardEditModeRequest).toHaveBeenCalledTimes(2);
-    expect(Text(fixture, '.dashboard-title')).toBe('Quota');
-    expect(showsEditToolbar(fixture)).toBe(false);
-    expect(viewers).toHaveLength(2);
-    expect(viewers[1].IsEditing).toBe(false);
-  });
-});
-
-/**
- * Gives a viewer double the real viewer's saved-layout behavior: it shows the parts of its
- * dashboard's saved configuration when it gets the dashboard and when it reloads, its save writes
- * its parts back, HasNewerSavedLayout compares a dashboard's saved configuration with the one it
- * last showed or saved, a reload reports the rebuilt layout through configChanged afterwards, like
- * Golden Layout does, and UseSavedCopy takes another copy of the dashboard with the same saved
- * layout without a rebuild. `calls` records reloads, taken copies and edit-mode changes in order.
- */
-function showSavedLayout(viewer: ViewerDouble, panels: DashboardPanel[]): { calls: string[] } {
-  const calls: string[] = [];
-  let shown: DashboardDouble | null = null;
-  let loadedDetails: string | null = null;
-  let editing = false;
-  const load = (dashboard: DashboardDouble): void => {
-    shown = dashboard;
-    loadedDetails = dashboard.UIConfigDetails;
-    panels.splice(0, panels.length, ...savedPanels(dashboard.UIConfigDetails));
-  };
-  const asDouble = (dashboard: MJDashboardEntity | null | undefined): DashboardDouble | null =>
-    (dashboard as unknown as DashboardDouble | null | undefined) ?? shown;
-  Object.defineProperties(viewer, {
-    dashboard: {
-      get: () => shown,
-      set: (dashboard: DashboardDouble) => {
-        if (dashboard !== shown) load(dashboard);
-      },
-    },
-    IsEditing: {
-      get: () => editing,
-      set: (value: boolean) => {
-        editing = value;
-        calls.push(`editing:${value}`);
-      },
-    },
-  });
-  viewer.save.mockImplementation(async (): Promise<boolean> => {
-    if (!shown) return false;
-    shown.UIConfigDetails = savedConfig(panels);
-    loadedDetails = shown.UIConfigDetails;
-    return true;
-  });
-  viewer.HasNewerSavedLayout.mockImplementation((dashboard?: MJDashboardEntity | null): boolean => {
-    const saved = asDouble(dashboard);
-    return !!saved && saved.UIConfigDetails !== loadedDetails;
-  });
-  viewer.UseSavedCopy.mockImplementation((dashboard: MJDashboardEntity): boolean => {
-    const copy = asDouble(dashboard);
-    if (!shown || !copy || copy.ID.toLowerCase() !== shown.ID.toLowerCase() || copy.UIConfigDetails !== loadedDetails) return false;
-    shown = copy;
-    calls.push('use-copy');
-    return true;
-  });
-  viewer.ReloadFromSaved.mockImplementation(async (dashboard?: MJDashboardEntity | null): Promise<void> => {
-    const saved = asDouble(dashboard);
-    calls.push('reload');
-    if (!saved) return;
-    load(saved);
-    await Promise.resolve();
-    viewer.configChanged.emit({ config: viewer.getConfig() as unknown as DashboardConfigChangedEvent['config'], changeType: 'layout' });
-  });
-  return { calls };
-}
-
-/**
- * Renders a dashboard tab that loads `dashboard` through the tab's real Config load path, with a
- * viewer double that shows the dashboard's saved layout. Only the first tab of a test passes
- * `module`; later tabs render in the same testing module.
- */
-async function renderSavedLayoutTab(dashboard: DashboardDouble, module?: ReturnType<typeof tabModule>) {
-  const { viewer, panels } = createViewer([]);
-  const { calls } = showSavedLayout(viewer, panels);
-  const viewerRef = { instance: viewer, hostView: { rootNodes: [document.createElement('div')] }, destroy: vi.fn() };
-  const fixture = RenderComponentFixture(DashboardResource, {
-    ...(module ?? {}),
-    inputs: { Provider: CreateFakeProvider({ currentUser: { ID: USER_ID } }) },
-    setup: (tab) => {
-      (tab as unknown as { viewContainer: { createComponent: () => typeof viewerRef } }).viewContainer = { createComponent: () => viewerRef };
-    },
-  });
-  await (fixture.componentInstance as unknown as { loadConfigBasedDashboard(d: MJDashboardEntity): Promise<void> }).loadConfigBasedDashboard(
-    dashboard as unknown as MJDashboardEntity,
-  );
-  fixture.detectChanges();
-  return { fixture, viewer, panels, calls };
-}
-
-/**
- * Two tabs of Revenue Board, like its Home tab and its Dashboards app tab. They share the
- * DashboardEngine double and its cached dashboard entity; each tab has its own viewer.
- */
-async function renderTwoTabs() {
-  const dashboard = createDashboard();
-  const engine = createEngine([dashboard], true);
-  vi.spyOn(DashboardEngine, 'Instance', 'get').mockReturnValue(engine as unknown as DashboardEngine);
-  vi.spyOn(MJNotificationService, 'Instance', 'get').mockReturnValue({ CreateSimpleNotification: vi.fn() } as unknown as MJNotificationService);
-  const navigation = createNavigation();
-  const home = await renderSavedLayoutTab(dashboard, tabModule(navigation));
-  const dashboards = await renderSavedLayoutTab(dashboard);
-  return { dashboard, engine, navigation, home, dashboards };
-}
-
-/** A DashboardEngine change event, as BaseEngine emits it after a save of a dashboard. */
-function dashboardChange(dashboard: object, entityName = 'MJ: Dashboards'): EngineDataChangeEvent {
-  return {
-    config: { EntityName: entityName } as unknown as EngineDataChangeEvent['config'],
-    changeType: 'update',
-    data: [],
-    affectedEntity: dashboard as unknown as EngineDataChangeEvent['affectedEntity'],
-  };
-}
-
-/** A DashboardEngine event for a reload of all dashboards. */
-function dashboardsReloaded(): EngineDataChangeEvent {
-  return { config: { EntityName: 'MJ: Dashboards' } as unknown as EngineDataChangeEvent['config'], changeType: 'refresh', data: [] };
-}
-
-/** A part the tests add. */
-function quotaPanel(id: string): DashboardPanel {
-  return { id, title: 'Quota', icon: 'fa-solid fa-database', partTypeId: 'pt-query', config: { type: 'Query' } };
-}
-
-/** Enters edit mode in the tab, adds a part through its viewer, and saves. */
-async function addPartAndSave(tab: Awaited<ReturnType<typeof renderSavedLayoutTab>>): Promise<void> {
-  enterEditMode(tab.fixture);
-  await tab.viewer.AddPanel('pt-query', { type: 'Query' }, 'Quota', 'fa-solid fa-database');
-  Click(tab.fixture, '.header-right .btn-primary');
-  await settle(tab.fixture);
-}
-
-const partIds = (panels: DashboardPanel[]): string[] => panels.map((panel) => panel.id);
-
-describe('DashboardResource and the saved layout (DOM)', () => {
-  it("keeps the other tab's saved part when a tab that loaded earlier enters edit mode and saves", async () => {
-    const { dashboard, home, dashboards } = await renderTwoTabs();
-
-    await addPartAndSave(dashboards);
-    expect(savedPanelIds(dashboard.UIConfigDetails)).toEqual(['panel-1', 'panel-2']);
-    // No change event has reached the Home tab: it still shows the layout it loaded.
-    expect(partIds(home.panels)).toEqual(['panel-1']);
-
-    enterEditMode(home.fixture);
-
-    // The Home tab reloads the saved layout before its viewer enters edit mode.
-    expect(home.calls).toEqual(['reload', 'editing:true']);
-    expect(partIds(home.panels)).toEqual(['panel-1', 'panel-2']);
-
-    Click(home.fixture, '.header-right .btn-primary');
-    await settle(home.fixture);
-
-    expect(savedPanelIds(dashboard.UIConfigDetails)).toEqual(['panel-1', 'panel-2']);
-  });
-
-  it('edits the copy DashboardEngine now holds, without a rebuild, when the engine has another copy with the same layout', async () => {
-    const { dashboard, engine, home } = await renderTwoTabs();
-    // The engine reloaded its dashboards: it holds a new copy, renamed elsewhere.
-    const copy = createDashboard();
-    copy.Name = 'Revenue Board 2026';
-    engine.Dashboards.splice(0, 1, copy);
-
-    enterEditMode(home.fixture);
-    await settle(home.fixture);
-
-    expect(home.viewer.ReloadFromSaved).not.toHaveBeenCalled();
-    expect(home.calls).toEqual(['use-copy', 'editing:true']);
-    expect(home.viewer.dashboard).toBe(copy);
-    expect(nameField(home.fixture)).toBe('Revenue Board 2026');
-
-    await home.viewer.AddPanel('pt-query', { type: 'Query' }, 'Quota', 'fa-solid fa-database');
-    Click(home.fixture, '.header-right .btn-primary');
-    await settle(home.fixture);
-
-    expect(savedPanelIds(copy.UIConfigDetails)).toEqual(['panel-1', 'panel-2']);
-    expect(savedPanelIds(dashboard.UIConfigDetails)).toEqual(['panel-1']);
-  });
-
-  it('rebuilds from the copy DashboardEngine now holds when that copy has another layout, before editing it', async () => {
-    const { engine, home } = await renderTwoTabs();
-    const copy = createDashboard();
-    copy.UIConfigDetails = savedConfig([revenuePanel(), quotaPanel('panel-2')]);
-    engine.Dashboards.splice(0, 1, copy);
-
-    enterEditMode(home.fixture);
-
-    expect(home.viewer.ReloadFromSaved).toHaveBeenCalledExactlyOnceWith(copy);
-    expect(home.calls).toEqual(['reload', 'editing:true']);
-    expect(partIds(home.panels)).toEqual(['panel-1', 'panel-2']);
-  });
-
-  it('enters edit mode without a reload when the saved layout has not changed', async () => {
-    const { home } = await renderTwoTabs();
-
-    enterEditMode(home.fixture);
-
-    expect(home.viewer.ReloadFromSaved).not.toHaveBeenCalled();
-    expect(home.calls).toEqual(['editing:true']);
-  });
-
-  it('reloads a tab that is not editing when the dashboard is saved in another tab, and reports nothing to the agent', async () => {
-    const { dashboard, engine, navigation, home, dashboards } = await renderTwoTabs();
-    await addPartAndSave(dashboards);
-    const reports = navigation.SetAgentContext.mock.calls.length;
-
-    engine.DataChange$.next(dashboardChange(dashboard));
-    await settle(home.fixture);
-
-    expect(home.viewer.ReloadFromSaved).toHaveBeenCalledExactlyOnceWith(dashboard);
-    expect(partIds(home.panels)).toEqual(['panel-1', 'panel-2']);
-    expect(home.calls).toEqual(['reload']);
-    // The tab that saved already shows the saved layout.
-    expect(dashboards.viewer.ReloadFromSaved).not.toHaveBeenCalled();
-    // Neither the change nor the rebuilt layout reports to the agent.
-    expect(navigation.SetAgentContext).toHaveBeenCalledTimes(reports);
-  });
-
-  it('does not reload a tab that is editing: its user keeps the changes', async () => {
-    const { dashboard, engine, home, dashboards } = await renderTwoTabs();
-    enterEditMode(home.fixture);
-    await home.viewer.AddPanel('pt-view', { type: 'View' }, 'View');
-
-    await addPartAndSave(dashboards);
-    engine.DataChange$.next(dashboardChange(dashboard));
-    await settle(home.fixture);
-
-    expect(home.viewer.ReloadFromSaved).not.toHaveBeenCalled();
-    expect(partIds(home.panels)).toEqual(['panel-1', 'panel-2']);
-    expect(home.panels[1].partTypeId).toBe('pt-view');
-  });
-
-  it('reloads once, after the task, for a burst of changes, and shows the last saved layout', async () => {
-    const { dashboard, engine, home } = await renderTwoTabs();
-
-    dashboard.UIConfigDetails = savedConfig([revenuePanel(), quotaPanel('panel-2')]);
-    engine.DataChange$.next(dashboardChange(dashboard));
-    dashboard.UIConfigDetails = savedConfig([revenuePanel(), quotaPanel('panel-2'), quotaPanel('panel-3')]);
-    engine.DataChange$.next(dashboardChange(dashboard));
-    engine.DataChange$.next(dashboardsReloaded());
-
-    expect(home.viewer.ReloadFromSaved).not.toHaveBeenCalled();
-    await settle(home.fixture);
-
-    expect(home.viewer.ReloadFromSaved).toHaveBeenCalledTimes(1);
-    expect(partIds(home.panels)).toEqual(['panel-1', 'panel-2', 'panel-3']);
-  });
-
-  it('takes the new copy without a rebuild when DashboardEngine reloads its dashboards and the layout did not change', async () => {
-    const { dashboard, engine, navigation, home } = await renderTwoTabs();
-    const reports = navigation.SetAgentContext.mock.calls.length;
-    // A full reload of the dashboards (Share, New, a refresh): new copies with the same saved values.
-    const copy = createDashboard();
-    copy.Name = 'Revenue Board 2026';
-    engine.Dashboards.splice(0, 1, copy);
-
-    engine.DataChange$.next(dashboardsReloaded());
-    await settle(home.fixture);
-
-    expect(home.viewer.ReloadFromSaved).not.toHaveBeenCalled();
-    expect(home.calls).toEqual(['use-copy']);
-    expect(Text(home.fixture, '.dashboard-title')).toBe('Revenue Board 2026');
-    expect(navigation.SetAgentContext).toHaveBeenCalledTimes(reports);
-
-    // A later save writes the copy the engine holds, not the old one.
-    await addPartAndSave(home);
-
-    expect(savedPanelIds(copy.UIConfigDetails)).toEqual(['panel-1', 'panel-2']);
-    expect(savedPanelIds(dashboard.UIConfigDetails)).toEqual(['panel-1']);
-  });
-
-  it('rebuilds when DashboardEngine reloads its dashboards and the saved layout changed', async () => {
-    const { engine, home } = await renderTwoTabs();
-    const copy = createDashboard();
-    copy.UIConfigDetails = savedConfig([revenuePanel(), quotaPanel('panel-2')]);
-    engine.Dashboards.splice(0, 1, copy);
-
-    engine.DataChange$.next(dashboardsReloaded());
-    await settle(home.fixture);
-
-    expect(home.viewer.ReloadFromSaved).toHaveBeenCalledExactlyOnceWith(copy);
-    expect(partIds(home.panels)).toEqual(['panel-1', 'panel-2']);
-  });
-
-  it("keeps the layout of a tab that saved a copy DashboardEngine no longer held, and takes the engine's new copy", async () => {
-    const { dashboard, engine, dashboards, home } = await renderTwoTabs();
-    enterEditMode(dashboards.fixture);
-    // While the tab edits, the engine reloads its dashboards: both tabs now hold a copy it no longer has.
-    engine.Dashboards.splice(0, 1, createDashboard());
-    engine.DataChange$.next(dashboardsReloaded());
-    await settle(dashboards.fixture);
-    await dashboards.viewer.AddPanel('pt-query', { type: 'Query' }, 'Quota', 'fa-solid fa-database');
-    Click(dashboards.fixture, '.header-right .btn-primary');
-    await settle(dashboards.fixture);
-    // BaseEngine puts a copy of the saved entity in the array and reports the update.
-    const saved = createDashboard();
-    saved.UIConfigDetails = dashboard.UIConfigDetails;
-    engine.Dashboards.splice(0, 1, saved);
-    engine.DataChange$.next(dashboardChange(dashboard));
-    await settle(dashboards.fixture);
-
-    expect(dashboards.viewer.ReloadFromSaved).not.toHaveBeenCalled();
-    expect(dashboards.viewer.dashboard).toBe(saved);
-    // The other tab shows the new layout.
-    expect(home.viewer.ReloadFromSaved).toHaveBeenCalledExactlyOnceWith(saved);
-    expect(partIds(home.panels)).toEqual(['panel-1', 'panel-2']);
-  });
-
-  it('ignores changes to other dashboards and to other dashboard entities', async () => {
-    const { dashboard, engine, home } = await renderTwoTabs();
-    dashboard.UIConfigDetails = savedConfig([revenuePanel(), quotaPanel('panel-2')]);
-
-    engine.DataChange$.next(dashboardChange({ ID: 'dash-2', PrimaryKey: CompositeKey.FromID('dash-2') }));
-    engine.DataChange$.next(dashboardChange(dashboard, 'MJ: Dashboard Categories'));
-    await settle(home.fixture);
-
-    expect(home.viewer.ReloadFromSaved).not.toHaveBeenCalled();
-
-    // Another copy of the same dashboard, as saved from another page, counts.
-    engine.DataChange$.next(dashboardChange({ ID: 'DASH-1', PrimaryKey: CompositeKey.FromID('DASH-1') }));
-    await settle(home.fixture);
-
-    expect(home.viewer.ReloadFromSaved).toHaveBeenCalledTimes(1);
-  });
-
-  it('stops following changes when the tab is closed', async () => {
-    const { dashboard, engine, home } = await renderTwoTabs();
-    home.fixture.destroy();
-
-    dashboard.UIConfigDetails = savedConfig([revenuePanel(), quotaPanel('panel-2')]);
-    engine.DataChange$.next(dashboardChange(dashboard));
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    expect(home.viewer.ReloadFromSaved).not.toHaveBeenCalled();
-  });
-
-  it('discards an unsaved part on Cancel and shows the saved layout again', async () => {
-    const { dashboard, navigation, home } = await renderTwoTabs();
-    enterEditMode(home.fixture);
-    await home.viewer.AddPanel('pt-query', { type: 'Query' }, 'Quota', 'fa-solid fa-database');
-    expect(partIds(home.panels)).toEqual(['panel-1', 'panel-2']);
-
-    Click(home.fixture, '.header-right .btn-cancel');
-    await settle(home.fixture);
-
-    // The viewer reloads before it leaves edit mode, so it rebuilds the saved layout.
-    expect(home.calls).toEqual(['editing:true', 'reload', 'editing:false']);
-    expect(partIds(home.panels)).toEqual(['panel-1']);
-    expect(savedPanelIds(dashboard.UIConfigDetails)).toEqual(['panel-1']);
-    expect(showsEditToolbar(home.fixture)).toBe(false);
-    expect(lastAgentContext(navigation)).toMatchObject({ OpenedDashboardIsEditing: false, OpenedDashboardPanelCount: 1 });
+    expect(editor(fixture).Dashboard?.Name).toBe('Quota');
+    expect(editor(fixture).IsEditing).toBe(false);
+    expect(loads).toHaveLength(2);
+    expect(loads[1].viewer.IsEditing).toBe(false);
   });
 });
 
 describe('DashboardResource edit-mode requests for a tab that is already open (DOM)', () => {
   it('enters edit mode when OpenDashboard asks this open tab to', async () => {
-    const { fixture, navigation, viewers } = await renderOpenedTab();
+    const { fixture, navigation, loads } = await renderTab();
     navigation.TakeDashboardEditModeRequest.mockImplementation((tabId: string, dashboardId: string) => tabId === TAB_ID && dashboardId === 'dash-1');
 
     navigation.DashboardEditModeRequested$.next('tab-other');
     fixture.detectChanges();
 
     expect(navigation.TakeDashboardEditModeRequest).toHaveBeenCalledTimes(1);
-    expect(showsEditToolbar(fixture)).toBe(false);
+    expect(editor(fixture).IsEditing).toBe(false);
 
     navigation.DashboardEditModeRequested$.next(TAB_ID);
     fixture.detectChanges();
 
     expect(navigation.TakeDashboardEditModeRequest).toHaveBeenLastCalledWith(TAB_ID, 'dash-1', APP_ID);
-    expect(showsEditToolbar(fixture)).toBe(true);
-    expect(viewers[0].IsEditing).toBe(true);
+    expect(editor(fixture).IsEditing).toBe(true);
+    expect(loads[0].viewer.IsEditing).toBe(true);
     expect(lastAgentContext(navigation)).toMatchObject({ OpenedDashboardIsEditing: true });
   });
 
   it('leaves the request for the load when the tab has not finished loading', async () => {
-    const { fixture, navigation, releaseLayout } = await renderOpenedTab({ editRequest: true, holdLayout: true });
+    const { fixture, navigation, releaseLayout } = await renderTab({ editRequest: true, holdLayout: true });
 
     navigation.DashboardEditModeRequested$.next(TAB_ID);
 
@@ -1379,24 +801,42 @@ describe('DashboardResource edit-mode requests for a tab that is already open (D
     await settle(fixture);
 
     expect(navigation.TakeDashboardEditModeRequest).toHaveBeenCalledExactlyOnceWith(TAB_ID, 'dash-1', APP_ID);
-    expect(showsEditToolbar(fixture)).toBe(true);
+    expect(editor(fixture).IsEditing).toBe(true);
   });
 
   it('keeps the changes of a tab that is already editing when asked again', async () => {
-    const { fixture, navigation } = await renderOpenedTab({ editRequest: true });
-    TypeInto(fixture, '.dashboard-name-input', 'Renamed Board');
-    await settle(fixture);
+    const { fixture, navigation } = await renderTab({ editRequest: true });
+    const enterEditMode = vi.spyOn(editor(fixture), 'EnterEditMode');
+    editor(fixture).EditingName = 'Renamed Board';
     navigation.TakeDashboardEditModeRequest.mockImplementation((tabId: string, dashboardId: string) => tabId === TAB_ID && dashboardId === 'dash-1');
 
     navigation.DashboardEditModeRequested$.next(TAB_ID);
     await settle(fixture);
 
-    expect(showsEditToolbar(fixture)).toBe(true);
-    expect(nameField(fixture)).toBe('Renamed Board');
+    expect(enterEditMode).not.toHaveBeenCalled();
+    expect(editor(fixture).IsEditing).toBe(true);
+    expect(editor(fixture).EditingName).toBe('Renamed Board');
+  });
+
+  it('takes no request while the tab opens another dashboard: the load of that dashboard takes its own', async () => {
+    const { fixture, navigation } = await renderTab();
+    navigation.TakeDashboardEditModeRequest.mockImplementation((tabId: string) => tabId === TAB_ID);
+
+    // The editor still shows Revenue Board until the tab has found Quota.
+    fixture.componentInstance.Data = dashboardTabData('dash-2');
+    navigation.DashboardEditModeRequested$.next(TAB_ID);
+    await settle(fixture);
+
+    expect(navigation.TakeDashboardEditModeRequest.mock.calls).toEqual([
+      [TAB_ID, 'dash-1', APP_ID],
+      [TAB_ID, 'dash-2', APP_ID],
+    ]);
+    expect(editor(fixture).Dashboard?.Name).toBe('Quota');
+    expect(editor(fixture).IsEditing).toBe(true);
   });
 
   it('takes no request once the tab is closed', async () => {
-    const { fixture, navigation } = await renderOpenedTab();
+    const { fixture, navigation } = await renderTab();
     navigation.TakeDashboardEditModeRequest.mockImplementation((tabId: string, dashboardId: string) => tabId === TAB_ID && dashboardId === 'dash-1');
 
     fixture.destroy();
@@ -1407,7 +847,7 @@ describe('DashboardResource edit-mode requests for a tab that is already open (D
   });
 
   it('leaves a request to the dashboard its tab shows now (a temporary tab replaced in place)', async () => {
-    const { fixture, navigation, viewers } = await renderOpenedTab();
+    const { fixture, navigation, loads } = await renderTab();
     // The tab now shows Quota, which is asked to enter edit mode; this cached component shows Revenue Board.
     navigation.TakeDashboardEditModeRequest.mockImplementation((tabId: string, dashboardId: string) => tabId === TAB_ID && dashboardId === 'dash-2');
 
@@ -1420,12 +860,12 @@ describe('DashboardResource edit-mode requests for a tab that is already open (D
       ['tab-2', 'dash-1', APP_ID],
     ]);
     expect(navigation.TakeDashboardEditModeRequest.mock.results.slice(1).map((r) => r.value)).toEqual([false, false]);
-    expect(showsEditToolbar(fixture)).toBe(false);
-    expect(viewers[0].IsEditing).toBe(false);
+    expect(editor(fixture).IsEditing).toBe(false);
+    expect(loads[0].viewer.IsEditing).toBe(false);
   });
 
   it("leaves a request to its tab's application: this cached component of the dashboard, from another application, does not take it", async () => {
-    const { fixture, navigation, viewers } = await renderOpenedTab();
+    const { fixture, navigation, loads } = await renderTab();
     // OpenTab replaced the tab in place with another application's tab of Revenue Board, which is
     // asked to enter edit mode. This component still has the tab ID.
     navigation.TakeDashboardEditModeRequest.mockImplementation(
@@ -1436,31 +876,860 @@ describe('DashboardResource edit-mode requests for a tab that is already open (D
     fixture.detectChanges();
 
     expect(navigation.TakeDashboardEditModeRequest).toHaveBeenLastCalledWith(TAB_ID, 'dash-1', APP_ID);
-    expect(showsEditToolbar(fixture)).toBe(false);
-    expect(viewers[0].IsEditing).toBe(false);
+    expect(editor(fixture).IsEditing).toBe(false);
+    expect(loads[0].viewer.IsEditing).toBe(false);
   });
 
   it('enters edit mode when the tab container reattaches the cached tab to a tab opened with openInEditMode', async () => {
-    const { fixture, navigation, viewers } = await renderOpenedTab();
+    const { fixture, navigation, loads } = await renderTab();
     navigation.TakeDashboardEditModeRequest.mockImplementation((tabId: string, dashboardId: string) => tabId === 'tab-2' && dashboardId === 'dash-1');
 
     fixture.componentInstance.RebindTabId('tab-2');
     fixture.detectChanges();
 
     expect(navigation.TakeDashboardEditModeRequest).toHaveBeenLastCalledWith('tab-2', 'dash-1', APP_ID);
-    expect(showsEditToolbar(fixture)).toBe(true);
-    expect(viewers[0].IsEditing).toBe(true);
+    expect(editor(fixture).IsEditing).toBe(true);
+    expect(loads[0].viewer.IsEditing).toBe(true);
     expect(lastAgentContext(navigation)).toMatchObject({ OpenedDashboardIsEditing: true });
   });
 
   it('keeps a reattached tab for viewing when its new tab has no edit-mode request', async () => {
-    const { fixture, navigation, viewers } = await renderOpenedTab();
+    const { fixture, navigation, loads } = await renderTab();
 
     fixture.componentInstance.RebindTabId('tab-2');
     fixture.detectChanges();
 
     expect(navigation.TakeDashboardEditModeRequest).toHaveBeenLastCalledWith('tab-2', 'dash-1', APP_ID);
-    expect(showsEditToolbar(fixture)).toBe(false);
-    expect(viewers[0].IsEditing).toBe(false);
+    expect(editor(fixture).IsEditing).toBe(false);
+    expect(loads[0].viewer.IsEditing).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The agent's tools: registration, edits, requests to the user and source search
+// ---------------------------------------------------------------------------
+
+/** The confirm dialog the agent's Request* tools open. */
+const AGENT_CONFIRM = 'mj-confirm-dialog.agent-confirm';
+
+/** The tools the tab registered last. */
+function registeredTools(navigation: ReturnType<typeof createNavigation>): DashboardTabAgentTool[] {
+  return navigation.SetAgentClientTools.mock.calls.at(-1)?.[1] ?? [];
+}
+
+/** The tool with this name that the tab registered last. */
+function agentTool(navigation: ReturnType<typeof createNavigation>, name: string): DashboardTabAgentTool {
+  const tool = registeredTools(navigation).find((t) => t.Name === name);
+  if (!tool) throw new Error(`The tab registered no tool named ${name}`);
+  return tool;
+}
+
+/** A box on screen, as getBoundingClientRect gives it (jsdom has no layout of its own). */
+function screenBox(left: number, top: number, width: number, height: number): DOMRect {
+  return { x: left, y: top, left, top, width, height, right: left + width, bottom: top + height, toJSON: () => ({}) } as DOMRect;
+}
+
+/**
+ * Puts a panel's content element in the editor's body, as Golden Layout does, at a box on screen.
+ * A hidden one (a stack's inactive tab) has no offsetParent.
+ */
+function placePanelContent(body: HTMLElement, panelId: string, box: DOMRect, shown: boolean): void {
+  const content = document.createElement('div');
+  content.className = 'dashboard-panel-content';
+  content.dataset['panelId'] = panelId;
+  vi.spyOn(content, 'getBoundingClientRect').mockReturnValue(box);
+  Object.defineProperty(content, 'offsetParent', { configurable: true, get: () => (shown ? body : null) });
+  body.appendChild(content);
+}
+
+/** An entity the provider's metadata lists, which the user can or cannot read. */
+function entityInfo(id: string, name: string, canRead: boolean): Partial<EntityInfo> {
+  const permissions = { CanRead: canRead } as ReturnType<EntityInfo['GetUserPermisions']>;
+  return { ID: id, Name: name, DisplayName: name, Description: `${name} records`, GetUserPermisions: () => permissions };
+}
+
+describe('DashboardResource agent tools (DOM)', () => {
+  it('registers the studio tools after the two read-only tools, once, when the dashboard loads', async () => {
+    const { navigation } = await renderTab();
+
+    expect(navigation.SetAgentClientTools).toHaveBeenCalledTimes(1);
+    expect(registeredTools(navigation).map((t) => t.Name)).toEqual([
+      'GetDashboardPanels',
+      'GetDashboardDetail',
+      'GetDashboardState',
+      'AddPanel',
+      'RemovePanel',
+      'MovePanel',
+      'ResizePanel',
+      'UpdatePanelSettings',
+      'GetDashboardScreenshot',
+      'RequestSaveDashboard',
+      'RequestPinToHome',
+      'SearchSources',
+    ]);
+  });
+
+  it('loads the view and query engines with a Config dashboard, before it registers the tools', async () => {
+    const { navigation, sourceEngines } = await renderTab();
+
+    expect(sourceEngines.views.Config).toHaveBeenCalledExactlyOnceWith(false, expect.objectContaining({ ID: USER_ID }), expect.anything());
+    expect(sourceEngines.queries.Config).toHaveBeenCalledExactlyOnceWith(false, expect.objectContaining({ ID: USER_ID }), expect.anything());
+    expect(sourceEngines.views.Config.mock.invocationCallOrder[0]).toBeLessThan(navigation.SetAgentClientTools.mock.invocationCallOrder[0]);
+  });
+
+  it("adds a panel for the agent through the editor's viewer, entering edit mode first, and reports the new panel", async () => {
+    const { fixture, loads, navigation } = await renderTab();
+    const { viewer } = loads[0];
+
+    const result = await agentTool(navigation, 'AddPanel').Handler({
+      dashboardId: 'dash-1',
+      partType: 'View',
+      config: { entityName: 'MJ: Users' },
+      title: 'Users',
+      position: { relativeTo: 'panel-1', placement: 'right' },
+    });
+    fixture.detectChanges();
+
+    expect(result).toEqual({ Success: true, Data: { panelId: 'panel-2', path: 'row/0 › tab 1' } });
+    expect(viewer.AddPanel).toHaveBeenCalledExactlyOnceWith('pt-view', { type: 'View', entityName: 'MJ: Users' }, 'Users', undefined, {
+      relativeTo: 'panel-1',
+      placement: 'right',
+    });
+    expect(editor(fixture).IsEditing).toBe(true);
+    expect(lastAgentContext(navigation)).toMatchObject({
+      OpenedDashboardIsEditing: true,
+      OpenedDashboardPanelCount: 2,
+      OpenedDashboardPanels: [{ Id: 'panel-1', Title: 'Revenue' }, { Id: 'panel-2', Title: 'Users' }],
+    });
+  });
+
+  it("measures each shown panel from the editor's body, which the screenshot captures, adding its scroll offset, and leaves hidden panels out", async () => {
+    const { fixture } = await renderTab({ panels: [revenuePanel(), quotaPanel('panel-2'), quotaPanel('panel-3')] });
+    const body = Query(fixture, 'mj-dashboard-editor .dashboard-editor-body') as HTMLElement;
+    expect(body).toBe(editor(fixture).BodyElement);
+    vi.spyOn(body, 'getBoundingClientRect').mockReturnValue(screenBox(100, 50, 900, 600));
+    Object.defineProperty(body, 'scrollTop', { configurable: true, value: 20 });
+    placePanelContent(body, 'panel-1', screenBox(110, 70, 400.4, 299.6), true);
+    placePanelContent(body, 'panel-2', screenBox(510, 70, 300, 300), true);
+    placePanelContent(body, 'panel-3', screenBox(510, 70, 300, 300), false);
+
+    // The host the studio tools read; the screenshot tool scales these boxes to the image.
+    const host = (fixture.componentInstance as unknown as { studioHost(): DashboardStudioHost }).studioHost();
+
+    expect(host.PanelBounds()).toEqual([
+      { panelId: 'panel-1', x: 10, y: 40, width: 400, height: 300 },
+      { panelId: 'panel-2', x: 410, y: 40, width: 300, height: 300 },
+    ]);
+  });
+
+  it("gives the agent the viewer's reason when an edit fails, and tells the user", async () => {
+    const { loads, navigation, notify } = await renderTab();
+    loads[0].viewer.AddPanel.mockRejectedValueOnce(new Error('The layout did not rebuild'));
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const result = await agentTool(navigation, 'AddPanel').Handler({ dashboardId: 'dash-1', partType: 'View', config: { entityName: 'MJ: Users' }, title: 'Users' });
+
+    expect(result).toEqual({ Success: false, ErrorMessage: 'The layout did not rebuild. Call GetDashboardState to see the dashboard as it is now.' });
+    expect(notify).toHaveBeenCalledExactlyOnceWith('The assistant could not add the part', 'error', 3000);
+    expect(consoleError).toHaveBeenCalledExactlyOnceWith('Dashboard tab: The assistant could not add the part: The layout did not rebuild');
+  });
+});
+
+describe('DashboardResource requests from the agent (DOM)', () => {
+  it("Confirm('save') opens the dialog and resolves true once the user confirms and the editor saved", async () => {
+    const { fixture, loads, navigation, dashboard } = await renderTab();
+    const tab = fixture.componentInstance;
+    const displayNameChanged = vi.fn();
+    tab.DisplayNameChangedEvent = displayNameChanged;
+    editor(fixture).EnterEditMode();
+    const save = vi.spyOn(editor(fixture), 'Save');
+
+    const request = agentTool(navigation, 'RequestSaveDashboard').Handler({ dashboardId: 'dash-1', name: 'Revenue 2027' });
+    await settle(fixture);
+
+    expect(Text(fixture, `${AGENT_CONFIRM} .confirm-title`)).toBe('Save dashboard?');
+    expect(Text(fixture, `${AGENT_CONFIRM} .confirm-message`)).toBe('The assistant asks to save "Revenue Board". Its new name will be "Revenue 2027".');
+    expect(Text(fixture, `${AGENT_CONFIRM} .dialog-footer .btn-primary`)).toBe('Save');
+    expect(save).not.toHaveBeenCalled();
+
+    Click(fixture, `${AGENT_CONFIRM} .dialog-footer .btn-primary`);
+    await settle(fixture);
+
+    // RequestSaveDashboard reports Confirm's true as a confirmed request.
+    await expect(request).resolves.toEqual({ Success: true, Data: { requested: true, confirmed: true } });
+    expect(save).toHaveBeenCalledExactlyOnceWith({ Name: 'Revenue 2027', Description: undefined });
+    expect(loads[0].viewer.save).toHaveBeenCalledTimes(1);
+    expect(dashboard.Name).toBe('Revenue 2027');
+    // The editor reports the saved name; the tab takes it and stays on its dashboard.
+    expect(displayNameChanged).toHaveBeenCalledExactlyOnceWith('Revenue 2027');
+    expect(tab.Data.ResourceRecordID).toBe('dash-1');
+    expect(Query(fixture, AGENT_CONFIRM)).toBeNull();
+    expect(editor(fixture).IsEditing).toBe(false);
+  });
+
+  it("Confirm('save') resolves false and saves nothing when the user answers Not now", async () => {
+    const { fixture, loads, navigation } = await renderTab();
+    editor(fixture).EnterEditMode();
+    const save = vi.spyOn(editor(fixture), 'Save');
+
+    const request = agentTool(navigation, 'RequestSaveDashboard').Handler({ dashboardId: 'dash-1' });
+    await settle(fixture);
+    expect(Text(fixture, `${AGENT_CONFIRM} .dialog-footer .btn-secondary`)).toBe('Not now');
+
+    Click(fixture, `${AGENT_CONFIRM} .dialog-footer .btn-secondary`);
+    await settle(fixture);
+
+    // RequestSaveDashboard reports Confirm's false as a decline.
+    await expect(request).resolves.toEqual({ Success: false, ErrorMessage: 'The user declined. Do not retry unless they ask again.' });
+    expect(save).not.toHaveBeenCalled();
+    expect(loads[0].viewer.save).not.toHaveBeenCalled();
+    expect(Query(fixture, AGENT_CONFIRM)).toBeNull();
+    expect(editor(fixture).IsEditing).toBe(true);
+  });
+
+  it('Confirm rejects while another confirmation is open, and the open one still takes its answer', async () => {
+    const { fixture, navigation } = await renderTab();
+    const pin = agentTool(navigation, 'RequestPinToHome').Handler({ dashboardId: 'dash-1' });
+    await settle(fixture);
+
+    // A second request reports Confirm's rejection with its message, not as a decline.
+    const second = await agentTool(navigation, 'RequestPinToHome').Handler({ dashboardId: 'dash-1' });
+    fixture.detectChanges();
+
+    expect(second).toEqual({ Success: false, ErrorMessage: 'Another confirmation is already open. Wait for the user to answer it, then try again.' });
+    expect(QueryAll(fixture, `${AGENT_CONFIRM} .confirm-dialog`)).toHaveLength(1);
+    expect(Text(fixture, `${AGENT_CONFIRM} .confirm-title`)).toBe('Pin to Home?');
+    expect(Text(fixture, `${AGENT_CONFIRM} .confirm-message`)).toBe('The assistant asks to pin "Revenue Board" to your Home app.');
+
+    Click(fixture, `${AGENT_CONFIRM} .dialog-footer .btn-secondary`);
+    await settle(fixture);
+
+    await expect(pin).resolves.toEqual({ Success: false, ErrorMessage: 'The user declined. Do not retry unless they ask again.' });
+    expect(Query(fixture, AGENT_CONFIRM)).toBeNull();
+  });
+
+  it("Confirm rejects with the editor's reason when the confirmed save fails, and the tab stays in edit mode", async () => {
+    const { fixture, loads, navigation, dashboard } = await renderTab();
+    loads[0].viewer.save.mockImplementationOnce(async () => {
+      dashboard.LatestResult = { Success: false, CompleteMessage: 'Name cannot be longer than 510 characters' };
+      return false;
+    });
+    editor(fixture).EnterEditMode();
+    const request = agentTool(navigation, 'RequestSaveDashboard').Handler({ dashboardId: 'dash-1' });
+    await settle(fixture);
+
+    Click(fixture, `${AGENT_CONFIRM} .dialog-footer .btn-primary`);
+    await settle(fixture);
+
+    await expect(request).resolves.toEqual({ Success: false, ErrorMessage: 'Could not save the dashboard: Name cannot be longer than 510 characters' });
+    expect(Query(fixture, AGENT_CONFIRM)).toBeNull();
+    expect(editor(fixture).IsEditing).toBe(true);
+  });
+
+  it("Confirm rejects when the user's Save started while the dialog was open, with the reason the editor gives", async () => {
+    const { fixture, loads, navigation } = await renderTab();
+    editor(fixture).EnterEditMode();
+    const request = agentTool(navigation, 'RequestSaveDashboard').Handler({ dashboardId: 'dash-1', name: 'Agent name' });
+    await settle(fixture);
+    editor(fixture).IsSaving = true;
+
+    Click(fixture, `${AGENT_CONFIRM} .dialog-footer .btn-primary`);
+    await settle(fixture);
+
+    await expect(request).resolves.toEqual({ Success: false, ErrorMessage: SAVE_IN_PROGRESS });
+    expect(loads[0].viewer.save).not.toHaveBeenCalled();
+    expect(editor(fixture).Dashboard?.Name).toBe('Revenue Board');
+  });
+
+  it('ends an open request when the tab closes', async () => {
+    const { fixture, navigation } = await renderTab();
+    const pin = agentTool(navigation, 'RequestPinToHome').Handler({ dashboardId: 'dash-1' });
+    await settle(fixture);
+
+    fixture.destroy();
+
+    await expect(pin).resolves.toEqual({ Success: false, ErrorMessage: 'The dashboard tab was closed before the user answered.' });
+  });
+
+  it('ends an open request when the tab opens another dashboard, so a late answer cannot act on it', async () => {
+    const { fixture, navigation } = await renderTab();
+    const pin = agentTool(navigation, 'RequestPinToHome').Handler({ dashboardId: 'dash-1' });
+    await settle(fixture);
+    expect(Query(fixture, AGENT_CONFIRM)).not.toBeNull();
+
+    fixture.componentInstance.Data = dashboardTabData('dash-2');
+    await settle(fixture);
+
+    await expect(pin).resolves.toEqual({ Success: false, ErrorMessage: 'The tab opened another dashboard before the user answered.' });
+    expect(Query(fixture, AGENT_CONFIRM)).toBeNull();
+    expect(editor(fixture).Dashboard?.Name).toBe('Quota');
+  });
+});
+
+describe('DashboardResource source search for the agent (DOM)', () => {
+  it("finds the artifacts the user can read and pins each one's panel to its latest version", async () => {
+    const views: RunViewParams[] = [];
+    const provider = CreateFakeProvider<object>({
+      currentUser: { ID: USER_ID },
+      runViewResults: (params) => {
+        views.push(params);
+        if (params.EntityName === 'MJ: Artifacts') {
+          return [
+            { ID: 'art-1', Name: 'Revenue chart', Description: 'Monthly revenue', Type: 'Component' },
+            { ID: 'art-2', Name: 'Revenue notes', Description: null, Type: 'Markdown Document' },
+          ];
+        }
+        // Versions of art-1 only, its ID in another case once
+        return [
+          { ArtifactID: 'ART-1', VersionNumber: 1 },
+          { ArtifactID: 'art-1', VersionNumber: 3 },
+          { ArtifactID: 'art-1', VersionNumber: 2 },
+        ];
+      },
+    });
+    const { navigation, artifactPermissions } = await renderTab({ provider });
+
+    const result = await agentTool(navigation, 'SearchSources').Handler({ query: 'revenue', kinds: ['artifact'] });
+
+    expect(result).toEqual({
+      Success: true,
+      Data: {
+        count: 2,
+        results: [
+          {
+            kind: 'artifact',
+            id: 'art-1',
+            name: 'Revenue chart',
+            description: 'Monthly revenue',
+            type: 'Component',
+            fitsDashboard: true,
+            suggestedConfig: { type: 'Artifact', artifactId: 'art-1', versionNumber: 3 },
+          },
+          {
+            kind: 'artifact',
+            id: 'art-2',
+            name: 'Revenue notes',
+            description: null,
+            type: 'Markdown Document',
+            fitsDashboard: true,
+            suggestedConfig: { type: 'Artifact', artifactId: 'art-2' },
+          },
+        ],
+      },
+    });
+    expect(artifactPermissions.GetReadableArtifactsFilter).toHaveBeenCalledExactlyOnceWith(USER_ID, expect.objectContaining({ ID: USER_ID }));
+    expect(views).toEqual([
+      expect.objectContaining({
+        EntityName: 'MJ: Artifacts',
+        ExtraFilter:
+          `(UserID='${USER_ID}') AND EnvironmentID='${MJEnvironmentEntityExtended.DefaultEnvironmentID}' AND (Visibility IS NULL OR Visibility='Always')` +
+          ` AND (LOWER(Name) LIKE '%revenue%' OR LOWER(Description) LIKE '%revenue%')`,
+        Fields: ['ID', 'Name', 'Description', 'Type'],
+        MaxRows: 500,
+        ResultType: 'simple',
+      }),
+      {
+        EntityName: 'MJ: Artifact Versions',
+        ExtraFilter: "ArtifactID IN ('art-1','art-2')",
+        Fields: ['ArtifactID', 'VersionNumber'],
+        OrderBy: 'VersionNumber DESC',
+        IgnoreMaxRows: true,
+        ResultType: 'simple',
+      },
+    ]);
+  });
+
+  it('reads the versions of more than 200 artifacts with at most 200 IDs in each filter', async () => {
+    const artifacts = Array.from({ length: 201 }, (_, i) => ({ ID: `art-${i}`, Name: `Artifact ${i}`, Description: null, Type: 'Report' }));
+    const versionFilters: string[] = [];
+    const provider = CreateFakeProvider<object>({
+      currentUser: { ID: USER_ID },
+      runViewResults: (params) => {
+        if (params.EntityName === 'MJ: Artifacts') return artifacts;
+        const filter = typeof params.ExtraFilter === 'string' ? params.ExtraFilter : '';
+        versionFilters.push(filter);
+        return filter.includes("'art-200'") ? [{ ArtifactID: 'art-200', VersionNumber: 4 }] : [];
+      },
+    });
+    const { navigation } = await renderTab({ provider });
+
+    const result = await agentTool(navigation, 'SearchSources').Handler({ query: 'Artifact 200', kinds: ['artifact'] });
+
+    expect(versionFilters.map((filter) => filter.match(/'[^']+'/g)?.length)).toEqual([200, 1]);
+    expect(versionFilters[1]).toBe("ArtifactID IN ('art-200')");
+    expect(result.Data?.['results']).toEqual([expect.objectContaining({ id: 'art-200', suggestedConfig: { type: 'Artifact', artifactId: 'art-200', versionNumber: 4 } })]);
+  });
+
+  it('leaves the version out, so the panel shows the latest version, when the versions cannot be read', async () => {
+    const provider = CreateFakeProvider<object>({
+      currentUser: { ID: USER_ID },
+      runViewResults: (params) => {
+        if (params.EntityName === 'MJ: Artifacts') return [{ ID: 'art-1', Name: 'Revenue chart', Description: null, Type: 'Component' }];
+        throw new Error('The server timed out');
+      },
+    });
+    const { navigation } = await renderTab({ provider });
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const result = await agentTool(navigation, 'SearchSources').Handler({ query: 'revenue', kinds: ['artifact'] });
+
+    expect(result).toMatchObject({ Success: true, Data: { count: 1 } });
+    expect(result.Data?.['results']).toEqual([expect.objectContaining({ id: 'art-1', suggestedConfig: { type: 'Artifact', artifactId: 'art-1' } })]);
+    expect(consoleError).toHaveBeenCalledExactlyOnceWith('Dashboard tab: could not read the artifact versions: The server timed out');
+  });
+
+  it('offers only the views, queries and entities the user may use', async () => {
+    const usersView = (id: string, name: string, canView: boolean): ViewDouble => ({ ID: id, Name: name, Description: null, Entity: 'MJ: Users', EntityID: 'e-1', UserCanView: canView });
+    const runs = vi.fn((user: UserInfo) => ({ canRun: user.ID === USER_ID, deniedEntities: [] }));
+    const provider = CreateFakeProvider({ currentUser: { ID: USER_ID }, entities: [entityInfo('e-1', 'Revenue Lines', true), entityInfo('e-2', 'Revenue Audit', false)] });
+    const { navigation, sourceEngines } = await renderTab({
+      provider,
+      sources: {
+        ownViews: [usersView('v-1', 'Revenue mine', true)],
+        sharedViews: [usersView('v-2', 'Revenue shared', true), usersView('v-3', 'Revenue private', false)],
+        queries: [
+          { ID: 'q-1', Name: 'Revenue by month', Description: null, Category: 'Sales', UserCanRun: runs },
+          { ID: 'q-2', Name: 'Revenue by rep', Description: null, Category: 'Sales', UserCanRun: () => ({ canRun: false, deniedEntities: ['MJ: Employees'] }) },
+        ],
+      },
+    });
+
+    const result = await agentTool(navigation, 'SearchSources').Handler({ query: 'revenue', kinds: ['view', 'query', 'entity'] });
+
+    const found = (result.Data?.['results'] as Array<{ kind: string; id: string }>).map((r) => `${r.kind}:${r.id}`);
+    expect(found).toEqual(['view:v-1', 'view:v-2', 'query:q-1', 'entity:e-1']);
+    expect(runs).toHaveBeenCalledWith(expect.objectContaining({ ID: USER_ID }));
+    expect(sourceEngines.views.Config).toHaveBeenCalledWith(false, expect.objectContaining({ ID: USER_ID }), provider);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The AI pane
+// ---------------------------------------------------------------------------
+
+/** The Dashboards application: its default agent answers in the AI pane, and the pane's conversations belong to it. */
+const DASHBOARDS_APP_ID = '4B439111-B492-4936-9E33-A428CB5725B4';
+
+/** The AI pane. */
+const COPILOT = '[data-testid="dashboard-copilot"]';
+
+/** The dialog that asks before the AI pane closes during a voice session. */
+const CLOSE_CHAT_CONFIRM = 'mj-confirm-dialog.close-chat-confirm';
+
+/** An agent as the default-agent resolver gives it. */
+type ResolvedAgent = Awaited<ReturnType<DefaultAgentResolver['Resolve']>>;
+
+/** An agent with the ID and name the tab reads. */
+function resolvedAgent(id: string, name: string): ResolvedAgent {
+  return { ID: id, Name: name } as unknown as ResolvedAgent;
+}
+
+/** Makes the default-agent resolver give `agent`, or fail with it when it is an Error. */
+function stubAgentResolver(agent: ResolvedAgent | Error = resolvedAgent('agent-dashboards', 'Dashboards Expert')) {
+  return vi.spyOn(DefaultAgentResolver.prototype, 'Resolve').mockImplementation(async () => {
+    if (agent instanceof Error) throw agent;
+    return agent;
+  });
+}
+
+/**
+ * A UserInfoEngine double for the user's settings. It starts with `saved` as the AI pane setting, and
+ * like UserInfoEngine, GetSetting gives a value SetSettingDebounced wrote before it is saved.
+ */
+function stubUserSettings(saved?: string) {
+  let value = saved;
+  const settings = {
+    GetSetting: vi.fn((_key: string): string | undefined => value),
+    SetSettingDebounced: vi.fn((_key: string, newValue: string): void => {
+      value = newValue;
+    }),
+  };
+  vi.spyOn(UserInfoEngine, 'Instance', 'get').mockReturnValue(settings as unknown as UserInfoEngine);
+  return settings;
+}
+
+/** The chat area in the AI pane, or null when the pane shows none. */
+function chatArea(fixture: ComponentFixture<DashboardResource>): ChatAreaStub | null {
+  return fixture.debugElement.query(By.directive(ChatAreaStub))?.injector.get(ChatAreaStub) ?? null;
+}
+
+/** The split around the editor and the AI pane. */
+function split(fixture: ComponentFixture<DashboardResource>): SplitComponent {
+  return fixture.debugElement.query(By.directive(SplitComponent)).injector.get(SplitComponent);
+}
+
+/** The split's areas: the editor's, then the AI pane's while it is open. */
+function areas(fixture: ComponentFixture<DashboardResource>) {
+  return fixture.debugElement.queryAll(By.directive(SplitAreaComponent));
+}
+
+/** The widths of the split's areas, in percent: the editor's, then the AI pane's while it is open. */
+function areaSizes(fixture: ComponentFixture<DashboardResource>): Array<ReturnType<SplitAreaComponent['size']>> {
+  return areas(fixture).map((area) => area.injector.get(SplitAreaComponent).size());
+}
+
+/** A snapshot of the app the user is in, as the Explorer shell publishes it. */
+function appContextSnapshot(dashboardName: string): AppContextSnapshot {
+  return {
+    App: { Name: 'Dashboards', Description: 'Build and view dashboards' },
+    ActiveNavItem: { Name: dashboardName, ResourceType: 'Dashboards' },
+    OtherNavItems: [],
+    User: { Name: 'Test User', Roles: ['UI'] },
+    AdditionalContext: { OpenedDashboardName: dashboardName },
+  };
+}
+
+/** Opens the AI pane from the AI button in the editor's header and waits for its agent. */
+async function openPane(fixture: ComponentFixture<DashboardResource>): Promise<void> {
+  Click(fixture, AI_TOGGLE);
+  await settle(fixture);
+}
+
+describe('DashboardResource AI pane (DOM)', () => {
+  it('opens and closes the AI pane beside the whole editor from the AI button, in view mode and in edit mode', async () => {
+    stubAgentResolver();
+    stubUserSettings();
+    const { fixture } = await renderTab();
+    const editorElement = Query(fixture, 'mj-dashboard-editor');
+
+    expect(Query(fixture, COPILOT)).toBeNull();
+    expect(Attr(fixture, AI_TOGGLE, 'aria-expanded')).toBe('false');
+    expect(HasClass(fixture, AI_TOGGLE, 'is-active')).toBe(false);
+    expect(areaSizes(fixture)).toEqual([100]);
+
+    await openPane(fixture);
+
+    expect(fixture.componentInstance.ChatOpen).toBe(true);
+    expect(Query(fixture, COPILOT)).not.toBeNull();
+    expect(Attr(fixture, AI_TOGGLE, 'aria-expanded')).toBe('true');
+    expect(HasClass(fixture, AI_TOGGLE, 'is-active')).toBe(true);
+    expect(areaSizes(fixture)).toEqual([68, 32]);
+    // The editor, header included, keeps its element in the split's first area; the pane takes the second.
+    const [editorArea, paneArea] = areas(fixture).map((area) => area.nativeElement as HTMLElement);
+    expect(editorArea.querySelector('mj-dashboard-editor')).toBe(editorElement);
+    expect(editorArea.querySelector(`.stub-editor-header ${AI_TOGGLE}`)).not.toBeNull();
+    expect(paneArea.querySelector(COPILOT)).not.toBeNull();
+
+    editor(fixture).EnterEditMode();
+    fixture.detectChanges();
+    expect(Attr(fixture, AI_TOGGLE, 'aria-expanded')).toBe('true');
+    Click(fixture, AI_TOGGLE);
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.ChatOpen).toBe(false);
+    expect(Query(fixture, COPILOT)).toBeNull();
+    expect(Attr(fixture, AI_TOGGLE, 'aria-expanded')).toBe('false');
+    expect(areaSizes(fixture)).toEqual([100]);
+    expect(Query(fixture, 'mj-dashboard-editor')).toBe(editorElement);
+  });
+
+  it("shows the chat with the Dashboards app's default agent once the resolver gives it, also in a tab of another app", async () => {
+    let giveAgent = (_agent: ResolvedAgent): void => undefined;
+    const resolve = vi.spyOn(DefaultAgentResolver.prototype, 'Resolve').mockImplementation(() => new Promise<ResolvedAgent>((done) => (giveAgent = done)));
+    stubUserSettings();
+    const { fixture, navigation } = await renderTab();
+    const provider = fixture.componentInstance.ProviderToUse;
+    const snapshot = appContextSnapshot('Revenue Board');
+    navigation.AppContextSnapshot$.next(snapshot);
+
+    await openPane(fixture);
+
+    // The pane waits for the agent; the tab belongs to APP_ID, and the agent is still the Dashboards app's.
+    expect(Query(fixture, `${COPILOT} mj-loading`)).not.toBeNull();
+    expect(chatArea(fixture)).toBeNull();
+    expect(resolve).toHaveBeenCalledExactlyOnceWith({ applicationId: DASHBOARDS_APP_ID, contextUser: provider.CurrentUser, provider });
+
+    giveAgent(resolvedAgent('agent-dashboards', 'Dashboards Expert'));
+    await settle(fixture);
+
+    const chat = chatArea(fixture);
+    expect(chat).not.toBeNull();
+    expect(Query(fixture, `${COPILOT} mj-loading`)).toBeNull();
+    expect(Text(fixture, `${COPILOT} .dashboard-copilot-title`)).toBe('Dashboards Expert');
+    expect(chat?.Provider).toBe(provider);
+    expect(chat?.CurrentUser).toBe(provider.CurrentUser);
+    expect(chat).toMatchObject({
+      EnvironmentId: MJEnvironmentEntityExtended.DefaultEnvironmentID,
+      Conversation: null,
+      ConversationId: null,
+      IsNewConversation: true,
+      PendingMessage: null,
+      SuppressNewConversationEmptyState: true,
+      AllowMentions: false,
+      OverlayMode: false,
+      ShowExportButton: false,
+      ShowShareButton: false,
+      ShowArtifactIndicator: false,
+      ShowAgentPicker: false,
+      ShowAgentModePicker: false,
+      DefaultAgentId: 'agent-dashboards',
+      AllowedAgentIDs: ['agent-dashboards'],
+      ApplicationScope: 'Application',
+      ApplicationId: DASHBOARDS_APP_ID,
+      EmptyStateGreeting: 'What should this dashboard show?',
+    });
+    expect(chat?.AppContext).toEqual(snapshot);
+  });
+
+  it('says that the Dashboards app has no assistant, and shows no chat, when the resolver falls back to Sage', async () => {
+    stubAgentResolver(resolvedAgent('agent-sage', 'Sage'));
+    stubUserSettings();
+    const { fixture } = await renderTab();
+
+    await openPane(fixture);
+
+    expect(fixture.componentInstance.ChatAgentError).toBe(
+      'No dashboard assistant is configured for the Dashboards app. Ask an administrator to set its default agent.',
+    );
+    expect(Text(fixture, `${COPILOT} .dashboard-copilot-empty`)).toBe(fixture.componentInstance.ChatAgentError);
+    expect(fixture.componentInstance.ChatAgentId).toBeNull();
+    expect(chatArea(fixture)).toBeNull();
+  });
+
+  it('shows why the agent could not be resolved, and tries again the next time the pane opens', async () => {
+    const resolve = stubAgentResolver(new Error('The agents could not be loaded'));
+    stubUserSettings();
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const { fixture } = await renderTab();
+
+    await openPane(fixture);
+
+    expect(Text(fixture, `${COPILOT} .dashboard-copilot-empty`)).toBe('The dashboard assistant could not be loaded: The agents could not be loaded');
+    expect(consoleError).toHaveBeenCalledExactlyOnceWith('Dashboard tab: could not resolve the dashboard assistant: The agents could not be loaded');
+    expect(chatArea(fixture)).toBeNull();
+
+    resolve.mockResolvedValue(resolvedAgent('agent-dashboards', 'Dashboards Expert'));
+    Click(fixture, AI_TOGGLE);
+    await openPane(fixture);
+
+    expect(resolve).toHaveBeenCalledTimes(2);
+    expect(Query(fixture, `${COPILOT} .dashboard-copilot-empty`)).toBeNull();
+    expect(chatArea(fixture)?.DefaultAgentId).toBe('agent-dashboards');
+  });
+
+  it('opens with the widths the user saved, and keeps and saves the widths the user drags the split to', async () => {
+    stubAgentResolver();
+    const settings = stubUserSettings(JSON.stringify({ MainSizePct: 60, CopilotSizePct: 40 }));
+    const { fixture } = await renderTab();
+
+    await openPane(fixture);
+
+    expect(settings.GetSetting).toHaveBeenCalledWith('mj.dashboards.studio.layout');
+    expect(areaSizes(fixture)).toEqual([60, 40]);
+
+    split(fixture).dragEnd.emit({ gutterNum: 1, sizes: [55.4, 44.6] });
+    await settle(fixture);
+
+    expect(settings.SetSettingDebounced).toHaveBeenCalledExactlyOnceWith('mj.dashboards.studio.layout', JSON.stringify({ MainSizePct: 55, CopilotSizePct: 45 }));
+    expect(areaSizes(fixture)).toEqual([55, 45]);
+
+    // The next open reads the widths the user dragged to.
+    Click(fixture, AI_TOGGLE);
+    await openPane(fixture);
+
+    expect(areaSizes(fixture)).toEqual([55, 45]);
+  });
+
+  it('gives the pane its largest width and back; a drag gives it the dragged width instead', async () => {
+    stubAgentResolver();
+    const settings = stubUserSettings();
+    const { fixture } = await renderTab();
+    await openPane(fixture);
+    const expand = `${COPILOT} .copilot-expand`;
+
+    Click(fixture, expand);
+    fixture.detectChanges();
+    expect(areaSizes(fixture)).toEqual([40, 60]);
+    expect(Attr(fixture, expand, 'aria-label')).toBe('Collapse panel');
+
+    Click(fixture, expand);
+    fixture.detectChanges();
+    expect(areaSizes(fixture)).toEqual([68, 32]);
+    expect(Attr(fixture, expand, 'aria-label')).toBe('Expand panel');
+
+    Click(fixture, expand);
+    fixture.detectChanges();
+    split(fixture).dragEnd.emit({ gutterNum: 1, sizes: [45, 55] });
+    await settle(fixture);
+
+    expect(fixture.componentInstance.CopilotExpanded).toBe(false);
+    expect(areaSizes(fixture)).toEqual([45, 55]);
+    expect(settings.SetSettingDebounced).toHaveBeenCalledExactlyOnceWith('mj.dashboards.studio.layout', JSON.stringify({ MainSizePct: 45, CopilotSizePct: 55 }));
+  });
+
+  it('asks before it closes the pane during a voice session, and closes it only when the user confirms', async () => {
+    stubAgentResolver();
+    stubUserSettings();
+    const { fixture, realtimeSession } = await renderTab();
+    await openPane(fixture);
+    realtimeSession.IsActive = true;
+
+    Click(fixture, `${COPILOT} .copilot-close`);
+    fixture.detectChanges();
+
+    expect(Text(fixture, `${CLOSE_CHAT_CONFIRM} .confirm-title`)).toBe('End the voice session?');
+    expect(Text(fixture, `${CLOSE_CHAT_CONFIRM} .confirm-message`)).toBe('Closing the AI assistant ends the voice session.');
+    expect(Query(fixture, COPILOT)).not.toBeNull();
+
+    Click(fixture, `${CLOSE_CHAT_CONFIRM} .dialog-footer .btn-secondary`);
+    fixture.detectChanges();
+
+    expect(Query(fixture, CLOSE_CHAT_CONFIRM)).toBeNull();
+    expect(Query(fixture, COPILOT)).not.toBeNull();
+
+    // The AI button asks too.
+    Click(fixture, AI_TOGGLE);
+    fixture.detectChanges();
+    expect(Text(fixture, `${CLOSE_CHAT_CONFIRM} .dialog-footer .btn-primary`)).toBe('Close');
+    Click(fixture, `${CLOSE_CHAT_CONFIRM} .dialog-footer .btn-primary`);
+    fixture.detectChanges();
+
+    expect(Query(fixture, CLOSE_CHAT_CONFIRM)).toBeNull();
+    expect(Query(fixture, COPILOT)).toBeNull();
+    expect(fixture.componentInstance.ChatOpen).toBe(false);
+  });
+
+  it('closes the pane without asking when no voice session runs', async () => {
+    stubAgentResolver();
+    stubUserSettings();
+    const { fixture } = await renderTab();
+    await openPane(fixture);
+
+    Click(fixture, `${COPILOT} .copilot-close`);
+    fixture.detectChanges();
+
+    expect(Query(fixture, CLOSE_CHAT_CONFIRM)).toBeNull();
+    expect(Query(fixture, COPILOT)).toBeNull();
+  });
+
+  it('sends the first message in the conversation the chat area created, and shows that conversation again after the pane reopens', async () => {
+    stubAgentResolver();
+    stubUserSettings();
+    const { fixture } = await renderTab();
+    await openPane(fixture);
+    const conversation = { ID: 'conv-1', Name: 'New Conversation' } as unknown as MJConversationEntity;
+    const attachments: PendingAttachment[] = [];
+
+    chatArea(fixture)?.ConversationCreated.emit({ conversation, pendingMessage: 'Add a revenue chart', pendingAttachments: attachments });
+    fixture.detectChanges();
+
+    expect(chatArea(fixture)?.Conversation).toBe(conversation);
+    expect(chatArea(fixture)).toMatchObject({ ConversationId: 'conv-1', IsNewConversation: false, PendingMessage: 'Add a revenue chart' });
+    expect(chatArea(fixture)?.PendingAttachments).toBe(attachments);
+
+    chatArea(fixture)?.PendingMessageConsumed.emit();
+    fixture.detectChanges();
+
+    expect(chatArea(fixture)).toMatchObject({ PendingMessage: null, PendingAttachments: null });
+
+    Click(fixture, AI_TOGGLE);
+    await openPane(fixture);
+
+    expect(chatArea(fixture)?.Conversation).toBe(conversation);
+    expect(chatArea(fixture)).toMatchObject({ ConversationId: 'conv-1', IsNewConversation: false, PendingMessage: null });
+  });
+
+  it('adopts the conversation a voice call created when the call ends, not when it starts', async () => {
+    stubAgentResolver();
+    stubUserSettings();
+    const conversation = { ID: 'conv-voice', Name: 'Voice call' } as unknown as MJConversationEntity;
+    const provider = CreateFakeProvider<MJConversationEntity>({
+      currentUser: { ID: USER_ID },
+      runViewResults: params => (params.EntityName === 'MJ: Conversations' && params.ExtraFilter === "ID='conv-voice'" ? [conversation] : []),
+    });
+    const { fixture } = await renderTab({ provider });
+    await openPane(fixture);
+
+    chatArea(fixture)?.RealtimeConversationReady.emit({ conversationId: 'conv-voice', select: false });
+    await settle(fixture);
+
+    expect(chatArea(fixture)).toMatchObject({ Conversation: null, ConversationId: null, IsNewConversation: true });
+
+    chatArea(fixture)?.RealtimeConversationReady.emit({ conversationId: 'conv-voice', select: true });
+    await settle(fixture);
+
+    expect(chatArea(fixture)?.Conversation).toBe(conversation);
+    expect(chatArea(fixture)).toMatchObject({ ConversationId: 'conv-voice', IsNewConversation: false });
+  });
+
+  it('keeps the conversation a message created when a voice call reports its own afterwards', async () => {
+    stubAgentResolver();
+    stubUserSettings();
+    const { fixture } = await renderTab();
+    await openPane(fixture);
+    const conversation = { ID: 'conv-1', Name: 'New Conversation' } as unknown as MJConversationEntity;
+    chatArea(fixture)?.ConversationCreated.emit({ conversation, pendingMessage: 'Add a chart', pendingAttachments: [] });
+    fixture.detectChanges();
+
+    chatArea(fixture)?.RealtimeConversationReady.emit({ conversationId: 'conv-voice', select: true });
+    await settle(fixture);
+
+    expect(chatArea(fixture)?.Conversation).toBe(conversation);
+    expect(chatArea(fixture)).toMatchObject({ ConversationId: 'conv-1', IsNewConversation: false });
+  });
+
+  it('opens the records and the app pages that the chat links to', async () => {
+    stubAgentResolver();
+    stubUserSettings();
+    const applications = [{ ID: 'app-data-explorer', Name: 'Data Explorer' }] as ApplicationInfo[];
+    const provider = Object.assign(CreateFakeProvider({ currentUser: { ID: USER_ID } }), { Applications: applications });
+    const { fixture, navigation } = await renderTab({ provider });
+    await openPane(fixture);
+    const chat = chatArea(fixture);
+    const userKey = CompositeKey.FromID('user-7');
+
+    chat?.OpenEntityRecord.emit({ entityName: 'MJ: Users', compositeKey: userKey });
+    chat?.navigationRequest.emit({ appName: ' data explorer ', navItemName: 'Queries', queryParams: { queryId: 'q-1' } });
+    chat?.navigationRequest.emit({ appName: 'No Such App', navItemName: 'Collections' });
+    chat?.navigationRequest.emit({ navItemName: 'Conversations' });
+
+    expect(navigation.OpenEntityRecord).toHaveBeenCalledExactlyOnceWith('MJ: Users', userKey);
+    expect(navigation.OpenNavItemByName.mock.calls).toEqual([
+      ['Queries', undefined, 'app-data-explorer', { queryParams: { queryId: 'q-1' } }],
+      ['Collections', undefined, undefined, { queryParams: undefined }],
+      ['Conversations', undefined, undefined, { queryParams: undefined }],
+    ]);
+  });
+
+  it("gives the chat the shell's latest app context, and stops following it when the tab closes", async () => {
+    stubAgentResolver();
+    stubUserSettings();
+    const { fixture, navigation } = await renderTab();
+    const closedPaneSnapshot = appContextSnapshot('Revenue Board');
+    navigation.AppContextSnapshot$.next(closedPaneSnapshot);
+    await openPane(fixture);
+
+    expect(chatArea(fixture)?.AppContext).toEqual(closedPaneSnapshot);
+
+    const later = appContextSnapshot('Quota');
+    navigation.AppContextSnapshot$.next(later);
+
+    expect(chatArea(fixture)?.AppContext).toEqual(later);
+
+    fixture.destroy();
+
+    expect(navigation.AppContextSnapshot$.observed).toBe(false);
+  });
+
+  it("uses the tab's environment for the chat and for the agent's artifact search", async () => {
+    stubAgentResolver();
+    stubUserSettings();
+    const views: RunViewParams[] = [];
+    const provider = CreateFakeProvider<object>({
+      currentUser: { ID: USER_ID },
+      runViewResults: (params) => {
+        views.push(params);
+        return [];
+      },
+    });
+    const { fixture, navigation } = await renderTab({ provider });
+    const tabData = dashboardTabData('dash-1');
+    fixture.componentInstance.Data = new ResourceData({ ResourceRecordID: 'dash-1', Configuration: { ...tabData.Configuration, environmentId: 'env-7' } });
+
+    await openPane(fixture);
+    await agentTool(navigation, 'SearchSources').Handler({ query: 'revenue', kinds: ['artifact'] });
+
+    expect(chatArea(fixture)?.EnvironmentId).toBe('env-7');
+    expect(views[0]?.ExtraFilter).toContain("EnvironmentID='env-7'");
   });
 });

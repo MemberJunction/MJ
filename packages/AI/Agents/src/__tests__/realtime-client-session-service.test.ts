@@ -189,6 +189,11 @@ class TestableService extends RealtimeClientSessionService {
 const contextUser = { ID: 'user-1', Email: 'u@example.com' } as unknown as UserInfo;
 const provider = {} as unknown as IMetadataProvider;
 
+beforeEach(() => {
+    // The service logs each mint (`[RealtimeCoAgent] mint …`) and status line to the console; keep test output clean.
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+});
+
 function makeCoAgent(overrides: Partial<MJAIAgentEntityExtended> = {}): MJAIAgentEntityExtended {
     return { ID: 'co-1', Name: 'Realtime Co-Agent', InjectNotes: false, InjectExamples: false, ...overrides } as unknown as MJAIAgentEntityExtended;
 }
@@ -1231,6 +1236,42 @@ describe('RealtimeClientSessionService.delegateToTarget (real path)', () => {
         await svc.CallDelegate(makeDelegateInput(), makeDelegateRequest());
 
         expect(runAgentMock.mock.calls[0][0].userId).toBeUndefined();
+    });
+
+    it('threads the browser session id and app context into the delegated run', async () => {
+        runAgentMock.mockResolvedValue({ success: true, agentRun: { ID: 'r1', Status: 'Completed', Message: 'done' } });
+        const appContext: AppContextSnapshot = {
+            App: { Name: 'Dashboards', Description: '' },
+            ActiveNavItem: { Name: 'Sales Overview' },
+            OtherNavItems: [],
+            User: { Name: 'A', Roles: [] },
+            Capabilities: { Tools: [] },
+        };
+        const svc = new DelegateTestService();
+
+        await svc.ExecuteRelayedTool(
+            makeDelegateInput({ BrowserSessionID: 'browser-abc', AppContext: appContext }),
+            contextUser,
+            provider,
+        );
+
+        expect(runAgentMock).toHaveBeenCalledTimes(1);
+        const passed = runAgentMock.mock.calls[0][0];
+        // The client-tool request channel is keyed on the browser session id.
+        expect(passed.sessionID).toBe('browser-abc');
+        // `data.appContext` is where the run's prompt reads app context and surface tools.
+        expect(passed.data).toEqual({ appContext });
+    });
+
+    it('leaves sessionID and data unset when the relay carries no browser session or app context', async () => {
+        runAgentMock.mockResolvedValue({ success: true, agentRun: { ID: 'r1', Status: 'Completed', Message: 'done' } });
+        const svc = new DelegateTestService();
+
+        await svc.CallDelegate(makeDelegateInput(), makeDelegateRequest());
+
+        const passed = runAgentMock.mock.calls[0][0];
+        expect(passed.sessionID).toBeUndefined();
+        expect(passed.data).toBeUndefined();
     });
 
     it('returns the question + surfaces PausedRunID when the run is AwaitingFeedback', async () => {

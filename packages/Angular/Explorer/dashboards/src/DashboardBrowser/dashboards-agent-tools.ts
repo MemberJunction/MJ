@@ -1,14 +1,14 @@
 /**
- * @fileoverview Agent client tool parts shared by the Dashboards app pages (Overview, Shared with
- * me, Categories): the tool shape, the id-or-name lookup their handlers use, and the OpenDashboard
- * tool. Handlers never throw; a bad parameter returns a failure result the agent can act on.
+ * @fileoverview Agent tool parts for the Categories page of the Dashboards app: the tool shape and
+ * the id-or-name lookup its handlers use. Handlers never throw; a bad parameter returns a failure
+ * result the agent can act on.
  *
- * 🔒 SAFETY BOUNDARY: these pages give the AI agent ONLY read-only / navigational tools, as Browse
- * does. Mutating operations — create / delete / save / share / move a dashboard or a category — are
- * intentionally NOT exposed; the user performs them from the UI. Do NOT add a mutating tool builder
- * here without revisiting this boundary (each page's agent section lists its tools).
+ * 🔒 SAFETY BOUNDARY: the Categories page gives the AI agent ONLY read-only / navigational tools, as
+ * the Library does. Mutating operations — create / delete / save / share / move a dashboard or a
+ * category — are intentionally NOT exposed; the user performs them from the UI. Do NOT add a
+ * mutating tool builder here without revisiting this boundary (the page's agent section lists its
+ * tools).
  */
-import type { MJDashboardEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 import { BoundNameList, type AgentToolResult } from '../shared/agent-tool-validation';
 
@@ -42,28 +42,4 @@ export function ResolveByIdOrName<T extends { ID: string; Name: string }>(items:
   }
   const available = BoundNameList(items.map(i => i.Name)).join(', ') || '(none)';
   return { ok: false, result: { Success: false, ErrorMessage: `No ${kind} named or identified by "${value}". Available: ${available}.` } };
-}
-
-/** The OpenDashboard tool: opens the dashboard the agent names, found in `getDashboards()` by ID or name. */
-export function BuildOpenDashboardTool(
-  getDashboards: () => readonly MJDashboardEntity[],
-  open: (dashboard: MJDashboardEntity) => void
-): DashboardsAgentClientTool {
-  return {
-    Name: 'OpenDashboard',
-    Description: 'Open a dashboard. Accepts the dashboard name or its ID.',
-    ParameterSchema: {
-      type: 'object',
-      properties: { dashboard: { type: 'string', description: 'The dashboard name or ID.' } },
-      required: ['dashboard'],
-    },
-    Handler: async (params: Record<string, unknown>): Promise<AgentToolResult> => {
-      const lookup = ResolveByIdOrName(getDashboards(), params['dashboard'], 'dashboard');
-      if (!lookup.ok) {
-        return lookup.result;
-      }
-      open(lookup.value);
-      return { Success: true };
-    },
-  };
 }

@@ -21,7 +21,9 @@
     "@angular/compiler": "21.2.22",
     "@angular/compiler-cli": "21.2.22",
     "sass": "^1.97.3",
-    "@memberjunction/ng-test-utils": "6.2.0-edge.1"
+    "@memberjunction/ng-test-utils": "6.2.0-edge.1",
+    "@memberjunction/sql-dialect": "6.2.0-edge.1",
+    "@memberjunction/sql-parser": "6.2.0-edge.1"
   },
   "peerDependencies": {
     "@angular/animations": "^21.2.22",
@@ -37,6 +39,7 @@
     "@memberjunction/ai-core-plus": "6.2.0-edge.1",
     "@memberjunction/ai-engine-base": "6.2.0-edge.1",
     "@memberjunction/communication-types": "6.2.0-edge.1",
+    "@memberjunction/conversations-runtime": "6.2.0-edge.1",
     "@memberjunction/core": "6.2.0-edge.1",
     "@memberjunction/core-entities": "6.2.0-edge.1",
     "@memberjunction/entity-communications-client": "6.2.0-edge.1",
@@ -83,6 +86,7 @@
     "@memberjunction/ng-user-avatar": "6.2.0-edge.1",
     "@memberjunction/ng-word-cloud": "6.2.0-edge.1",
     "@memberjunction/templates-base-types": "6.2.0-edge.1",
+    "angular-split": "^20.0.0",
     "golden-layout": "^2.6.0",
     "rxjs": "^7.8.2",
     "tslib": "^2.8.1",

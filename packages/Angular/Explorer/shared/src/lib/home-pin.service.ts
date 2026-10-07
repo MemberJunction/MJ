@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject } from 'rxjs';
 import { UserInfoEngine } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 import { toJpeg } from 'html-to-image';
 import { HomeAppPinnedItem, HomeAppPinInput, HomeAppPinUpdate } from './home-pin.types';
 
@@ -250,7 +251,7 @@ export class HomeAppPinService {
     if (pin.ResourceType !== resourceType) return false;
     switch (resourceType) {
       case 'Dashboards':
-        return pin.Configuration['dashboardId'] === config['dashboardId'];
+        return UUIDsEqual(this.dashboardIdOf(pin.Configuration), this.dashboardIdOf(config));
       case 'User Views':
         return pin.Configuration['viewId'] === config['viewId'];
       case 'Queries':
@@ -289,6 +290,15 @@ export class HomeAppPinService {
       default:
         return false;
     }
+  }
+
+  /**
+   * The dashboard a Dashboards configuration names: its dashboardId, else its recordId (a pin of an app's default
+   * dashboard tab stores only recordId). Undefined when it names neither.
+   */
+  private dashboardIdOf(config: Record<string, unknown>): string | undefined {
+    const id = config['dashboardId'] ?? config['recordId'];
+    return typeof id === 'string' ? id : undefined;
   }
 
   private updateAndSave(pins: HomeAppPinnedItem[]): void {

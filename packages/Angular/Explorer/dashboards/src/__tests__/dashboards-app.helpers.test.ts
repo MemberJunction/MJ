@@ -1,7 +1,8 @@
 /**
  * Tests for the Dashboards app helpers (`shared/dashboards-app.helpers.ts`): finding the app,
- * creating a blank dashboard, and wiring the install paths to ApplicationManager and
- * UserInfoEngine. The install decisions themselves are covered in dashboards-app-install.test.ts.
+ * creating a named blank dashboard, the longest dashboard name, and wiring the install paths to
+ * ApplicationManager and UserInfoEngine. The install decisions themselves are covered in
+ * dashboards-app-install.test.ts.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { IMetadataProvider } from '@memberjunction/core';
@@ -10,6 +11,8 @@ import {
   AutoInstallDashboardsApp,
   CreateBlankDashboard,
   DASHBOARDS_APP_NAME,
+  DASHBOARDS_LIBRARY_NAV_ITEM,
+  DashboardNameMaxLength,
   DashboardsAppOpenOptions,
   EnsureDashboardsApp,
   FindDashboardsApp,
@@ -45,6 +48,7 @@ vi.mock('@memberjunction/core-entities', () => ({
 }));
 vi.mock('@memberjunction/ng-dashboard-viewer', () => ({
   CreateDefaultDashboardConfig: () => ({ layout: null, settings: { columns: 12 } }),
+  DASHBOARD_NAME_MAX_LENGTH: 255,
 }));
 
 interface FakeApp {
@@ -122,6 +126,10 @@ describe('dashboards-app.helpers', () => {
     expect(DASHBOARDS_APP_NAME).toBe('Dashboards');
   });
 
+  it('names the Library nav item Library', () => {
+    expect(DASHBOARDS_LIBRARY_NAV_ITEM).toBe('Library');
+  });
+
   describe('FindDashboardsApp', () => {
     it('returns the Dashboards app from the user active apps', () => {
       const appManager = new FakeAppManager();
@@ -163,11 +171,11 @@ describe('dashboards-app.helpers', () => {
   });
 
   describe('CreateBlankDashboard', () => {
-    it('saves an empty Config dashboard owned by the current user', async () => {
+    it('saves an empty Config dashboard with the trimmed name, owned by the current user', async () => {
       const { provider, dashboard, currentUser, getEntityObject } = makeProvider(async () => true);
-      await expect(CreateBlankDashboard(provider)).resolves.toBe(dashboard);
+      await expect(CreateBlankDashboard(provider, '  Q3 Pipeline ')).resolves.toBe(dashboard);
       expect(getEntityObject).toHaveBeenCalledWith('MJ: Dashboards', currentUser);
-      expect(dashboard.Name).toBe('New Dashboard');
+      expect(dashboard.Name).toBe('Q3 Pipeline');
       expect(dashboard.Description).toBe('');
       expect(dashboard.UserID).toBe('user-1');
       expect(JSON.parse(dashboard.UIConfigDetails)).toEqual({ layout: null, settings: { columns: 12 } });
@@ -176,13 +184,20 @@ describe('dashboards-app.helpers', () => {
 
     it('files the dashboard in the given category', async () => {
       const { provider, dashboard } = makeProvider(async () => true);
-      await CreateBlankDashboard(provider, 'cat-1');
+      await CreateBlankDashboard(provider, 'Q3 Pipeline', 'cat-1');
       expect(dashboard.CategoryID).toBe('cat-1');
+    });
+
+    it('creates nothing for a blank name', async () => {
+      const { provider, getEntityObject } = makeProvider(async () => true);
+      await expect(CreateBlankDashboard(provider, '   ')).resolves.toBeNull();
+      expect(getEntityObject).not.toHaveBeenCalled();
+      expect(hoisted.logError).toHaveBeenCalledWith(expect.stringContaining('name'));
     });
 
     it('returns null and logs the complete message when the save fails', async () => {
       const { provider } = makeProvider(async () => false);
-      await expect(CreateBlankDashboard(provider)).resolves.toBeNull();
+      await expect(CreateBlankDashboard(provider, 'Q3 Pipeline')).resolves.toBeNull();
       expect(hoisted.logError).toHaveBeenCalledWith(expect.stringContaining('Name must be unique'));
     });
 
@@ -190,8 +205,26 @@ describe('dashboards-app.helpers', () => {
       const { provider } = makeProvider(async () => {
         throw new Error('network down');
       });
-      await expect(CreateBlankDashboard(provider)).resolves.toBeNull();
+      await expect(CreateBlankDashboard(provider, 'Q3 Pipeline')).resolves.toBeNull();
       expect(hoisted.logError).toHaveBeenCalledWith(expect.stringContaining('network down'));
+    });
+  });
+
+  describe('DashboardNameMaxLength', () => {
+    const providerWithNameLength = (maxLength?: number) =>
+      ({ EntityByName: (name: string) => (name === 'MJ: Dashboards'
+          ? { FieldByName: (field: string) => (field === 'Name' && maxLength !== undefined ? { MaxLength: maxLength } : undefined) }
+          : undefined) }) as unknown as IMetadataProvider;
+
+    it('reads the MaxLength of MJ: Dashboards.Name', () => {
+      expect(DashboardNameMaxLength(providerWithNameLength(255))).toBe(255);
+      expect(DashboardNameMaxLength(providerWithNameLength(100))).toBe(100);
+    });
+
+    it('falls back to 255 when the metadata gives no length', () => {
+      expect(DashboardNameMaxLength(providerWithNameLength(0))).toBe(255);
+      expect(DashboardNameMaxLength(providerWithNameLength())).toBe(255);
+      expect(DashboardNameMaxLength({ EntityByName: () => undefined } as unknown as IMetadataProvider)).toBe(255);
     });
   });
 

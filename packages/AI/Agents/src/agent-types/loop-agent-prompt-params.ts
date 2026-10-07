@@ -576,6 +576,14 @@ export interface LoopAgentTypePromptParams {
     maxActionsInPrompt?: number;
 
     /**
+     * Character cap for one client tool result in the conversation. -1 (the default) or 0 keeps
+     * the whole result. A positive N keeps the first N characters and adds a note saying how much
+     * was cut. Compaction and expiration still apply either way.
+     * @default -1
+     */
+    clientToolResultMaxChars?: number;
+
+    /**
      * Decision discovery (plan Task 3.1): suggest the agent to delegate to before the first prompt.
      * When true, and the run answers its conversation's opening request (its messages hold one user
      * message) without @mentioning an agent, one decision call runs once per run, in parallel with the
@@ -664,5 +672,6 @@ export const DEFAULT_LOOP_AGENT_PROMPT_PARAMS: Required<LoopAgentTypePromptParam
     enableTaskGraphs: false,
     maxSubAgentsInPrompt: -1,
     maxActionsInPrompt: -1,
+    clientToolResultMaxChars: -1,
     decisionDiscovery: false
 };

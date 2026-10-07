@@ -2,6 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Subject } from 'rxjs';
 import type { ApplicationRef, ChangeDetectorRef, ElementRef, EnvironmentInjector, Injector } from '@angular/core';
 import type { MJDashboardEntity } from '@memberjunction/core-entities';
+import type { ResolvedLayoutConfig } from 'golden-layout';
+import type { DashboardPanel, PanelInteractionEvent } from '../models/dashboard-types';
+import type { StackActionEvent } from '../services/golden-layout-wrapper.service';
+import { LayoutEditError } from '../models/dashboard-layout-editor';
 
 class MockEventEmitter<T = unknown> {
   private handlers: Array<(value: T) => void> = [];
@@ -116,18 +120,28 @@ const updateSizeMock = vi.fn();
 const destroyMock = vi.fn();
 /** The layout Golden Layout reports: the layout on screen, with the user's unsaved changes. */
 const getLayoutConfigMock = vi.fn();
+/** Golden Layout's own add-panel, which adds the panel to the first stack. */
+const addPanelMock = vi.fn<(panel: DashboardPanel) => void>();
+/** Every Golden Layout wrapper the viewer created, in creation order. */
+const glServices: Array<{ OnStackAction: Subject<StackActionEvent> }> = [];
 
 vi.mock('../services/golden-layout-wrapper.service', () => ({
   GoldenLayoutWrapperService: class {
     onLayoutChanged = new Subject();
     onPanelClosed = new Subject();
     onPanelSelected = new Subject();
+    /** The Edit part and Remove buttons of the stack headers. */
+    OnStackAction = new Subject<StackActionEvent>();
     initialize = initializeMock;
     updateSize = updateSizeMock;
     destroy = destroyMock;
     getLayoutConfig = getLayoutConfigMock;
-    addPanel = vi.fn();
+    addPanel = addPanelMock;
     removePanel = vi.fn();
+
+    constructor() {
+      glServices.push(this);
+    }
   },
 }));
 
@@ -932,5 +946,314 @@ describe('DashboardViewerComponent overlapping layout builds', () => {
     expect(initializeMock).toHaveBeenCalledTimes(1);
     expect(secondTab.childElementCount).toBe(1);
     expect(partComponents.map((part) => part.destroy.mock.calls.length)).toEqual([0, 0]);
+  });
+
+  /**
+   * Has Golden Layout show each part of a layout it loads, as showEveryPart does. Returns the
+   * elements Golden Layout gives the parts, in the order the viewer created the parts.
+   */
+  function recordShownParts(): HTMLElement[] {
+    const shown: HTMLElement[] = [];
+    initializeMock.mockImplementation(
+      (_container: HTMLElement, layout: PartsLayoutDouble | null, createPart: (panel: PartStateDouble, element: HTMLElement) => void): void => {
+        for (const item of layout?.root.content ?? []) {
+          const element = document.createElement('div');
+          shown.push(element);
+          createPart(item.componentState, element);
+        }
+      },
+    );
+    return shown;
+  }
+
+  it('shows a part without a title bar in edit mode', async () => {
+    const shown = recordShownParts();
+    const viewer = await showDashboard(partsDashboard('dash-1', 'part-1'));
+
+    viewer.IsEditing = true;
+    await finishLayout();
+
+    expect(initializeMock.mock.calls.at(-1)?.[3]).toBe(true);
+    expect(shown.at(-1)?.querySelector('.dashboard-part-content')).not.toBeNull();
+    expect(shown.at(-1)?.querySelector('.dashboard-part-header')).toBeNull();
+  });
+
+  it.each([
+    ['View', 'Use Edit part to choose a view.'],
+    ['Query', 'Use Edit part to choose a query.'],
+    ['Artifact', 'Use Edit part to choose an artifact.'],
+    ['WebURL', 'Use Edit part to set a URL.'],
+  ])('asks for Edit part when a part of type %s has no source and no renderer class', async (type, prompt) => {
+    const plainPartType = { ID: 'part-type-plain', Name: type, DriverClass: '', Icon: 'fa-solid fa-cube' };
+    partTypesDouble.splice(0, partTypesDouble.length, plainPartType);
+    const part: PartStateDouble = { id: 'part-1', partTypeId: plainPartType.ID, title: 'Part 1', icon: plainPartType.Icon, config: { type } };
+    const dashboard = {
+      ID: 'dash-1',
+      Name: 'Dashboard dash-1',
+      UIConfigDetails: JSON.stringify({ layout: { root: { type: 'stack', content: [{ type: 'component', componentState: part }] } }, settings: {} }),
+    };
+    const shown = recordShownParts();
+
+    await showDashboard(dashboard as unknown as MJDashboardEntity);
+
+    expect(createPartInstanceMock).not.toHaveBeenCalled();
+    expect(shown.at(-1)?.textContent).toContain(prompt);
+  });
+});
+
+/** The ID of the View part type. */
+const VIEW_PART_TYPE_ID = '6C975185-297C-420D-BD59-F5402AF35399';
+/** The View part type, as DashboardEngine holds it. */
+const VIEW_PART_TYPE = { ID: VIEW_PART_TYPE_ID, Name: 'View', DriverClass: 'ViewPart', Icon: 'fa-solid fa-table' };
+
+// Saved Golden Layout trees in the shape Golden Layout writes, as built in dashboard-layout-editor.test.ts.
+function viewPanel(id: string, title = id): DashboardPanel {
+  return { id, title, partTypeId: VIEW_PART_TYPE_ID, config: { type: 'View', entityName: 'MJ: Users' } };
+}
+function componentItem(panel: DashboardPanel) {
+  return { type: 'component', content: [], size: 1, sizeUnit: 'fr', minSizeUnit: 'px', id: '', maximised: false, isClosable: true, reorderEnabled: true, title: panel.title, componentType: 'dashboard-panel', componentState: panel };
+}
+function stackItem(items: object[], size = 50, sizeUnit = '%') {
+  return { type: 'stack', content: items, size, sizeUnit, minSizeUnit: 'px', id: '', isClosable: true, maximised: false, activeItemIndex: 0 };
+}
+function groupItem(type: 'row' | 'column', content: object[], size = 1, sizeUnit = 'fr') {
+  return { type, content, size, sizeUnit, minSizeUnit: 'px', id: '', isClosable: true };
+}
+function savedLayout(root: object | null): ResolvedLayoutConfig {
+  return { root, openPopouts: [], settings: {}, dimensions: {}, header: {}, resolved: true } as unknown as ResolvedLayoutConfig;
+}
+/** Two stacks side by side: A (32%) | B (68%). */
+function twoAcross(): ResolvedLayoutConfig {
+  return savedLayout(groupItem('row', [stackItem([componentItem(viewPanel('A'))], 32), stackItem([componentItem(viewPanel('B'))], 68)]));
+}
+
+describe('DashboardViewerComponent layout edits', () => {
+  let DashboardViewerComponent: typeof import('./dashboard-viewer.component').DashboardViewerComponent;
+  type Viewer = InstanceType<typeof DashboardViewerComponent>;
+
+  beforeEach(async () => {
+    vi.useFakeTimers();
+    vi.clearAllMocks();
+    MockResizeObserver.instances = [];
+    updateSizeMock.mockReset();
+    initializeMock.mockReset();
+    destroyMock.mockReset();
+    addPanelMock.mockReset();
+    getLayoutConfigMock.mockReset();
+    // Golden Layout reports the layout it was last built with.
+    getLayoutConfigMock.mockImplementation(() => initializeMock.mock.calls.at(-1)?.[1] ?? null);
+    partTypesDouble.splice(0, partTypesDouble.length, VIEW_PART_TYPE);
+    glServices.length = 0;
+    vi.stubGlobal('ResizeObserver', MockResizeObserver);
+
+    ({ DashboardViewerComponent } = await import('./dashboard-viewer.component'));
+  });
+
+  afterEach(() => {
+    partTypesDouble.splice(0, partTypesDouble.length);
+  });
+
+  /** Lets a layout build finish: part types, then the delayed size update. */
+  async function finishLayout(): Promise<void> {
+    await flushPromises();
+    await vi.advanceTimersByTimeAsync(200);
+    await flushPromises();
+  }
+
+  /** A viewer showing a dashboard with the given saved layout (none by default), built in a sized container. */
+  async function makeViewer(config: { layout?: ResolvedLayoutConfig | null } = {}): Promise<Viewer> {
+    const viewer = new DashboardViewerComponent(
+      { detectChanges: vi.fn() } as unknown as ChangeDetectorRef,
+      {} as unknown as ApplicationRef,
+      {} as unknown as Injector,
+      {} as unknown as EnvironmentInjector,
+    );
+    viewer.LayoutContainer = { nativeElement: createContainer({ width: 800, height: 600 }) } as ElementRef<HTMLElement>;
+    const dashboard = {
+      ID: 'dash-1',
+      Name: 'Dashboard dash-1',
+      UIConfigDetails: JSON.stringify({ layout: config.layout ?? null, settings: {} }),
+      Save: vi.fn(async (): Promise<boolean> => true),
+    };
+    viewer.Dashboard = dashboard as unknown as MJDashboardEntity;
+    await finishLayout();
+    return viewer;
+  }
+
+  describe('ApplyLayout', () => {
+    it('stores the layout, marks the dashboard dirty, rebuilds and emits a layout change', async () => {
+      const viewer = await makeViewer();
+      const rebuild = vi.spyOn(viewer as unknown as { initializeLayout: () => Promise<void> }, 'initializeLayout').mockResolvedValue();
+      const changes: string[] = [];
+      viewer.configChanged.subscribe(e => changes.push(e.changeType));
+      const layout = twoAcross();
+      await viewer.ApplyLayout(layout);
+      expect(viewer.config?.layout).toBe(layout);
+      expect(viewer.HasUnsavedChanges).toBe(true);
+      expect(rebuild).toHaveBeenCalledTimes(1);
+      expect(changes).toEqual(['layout']);
+    });
+
+    it('saves the applied layout, not the layout it replaced, when AutoSave is on', async () => {
+      const viewer = await makeViewer({ layout: twoAcross() });
+      viewer.AutoSave = true;
+      const tabs = savedLayout(stackItem([componentItem(viewPanel('A')), componentItem(viewPanel('B'))]));
+
+      const applying = viewer.ApplyLayout(tabs);
+      await finishLayout();
+      await applying;
+
+      expect(initializeMock.mock.calls.at(-1)?.[1]).toBe(tabs);
+      expect(JSON.parse(viewer.Dashboard?.UIConfigDetails ?? '{}').layout).toEqual(tabs);
+    });
+  });
+
+  describe('AddPanel with a location', () => {
+    it('inserts relative to another panel and returns the new panel id', async () => {
+      const viewer = await makeViewer({ layout: twoAcross() });
+      vi.spyOn(viewer as unknown as { initializeLayout: () => Promise<void> }, 'initializeLayout').mockResolvedValue();
+      const id = await viewer.AddPanel(VIEW_PART_TYPE_ID, { type: 'View', entityName: 'MJ: Users' }, 'C', undefined, { relativeTo: 'A', placement: 'below' });
+      expect(id).toMatch(/^panel-/);
+      expect(viewer.GetPanelPath(id!)).toBe('row/0 › column/1 › tab 0');
+    });
+
+    it('rejects a location beside a panel that is not in the layout, and changes nothing', async () => {
+      const viewer = await makeViewer({ layout: twoAcross() });
+      const before = viewer.config?.layout;
+      const changes: string[] = [];
+      viewer.configChanged.subscribe(e => changes.push(e.changeType));
+
+      await expect(
+        viewer.AddPanel(VIEW_PART_TYPE_ID, { type: 'View', entityName: 'MJ: Users' }, 'C', undefined, { relativeTo: 'missing', placement: 'left' }),
+      ).rejects.toThrow(LayoutEditError);
+
+      expect(viewer.config?.layout).toBe(before);
+      expect(viewer.HasUnsavedChanges).toBe(false);
+      expect(changes).toEqual([]);
+      expect(initializeMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('AddPanel without a location', () => {
+    it('has Golden Layout add the panel to its first stack, without a rebuild, and returns the new panel id', async () => {
+      const viewer = await makeViewer({ layout: twoAcross() });
+      // Golden Layout adds the panel as the last tab of its first stack.
+      addPanelMock.mockImplementation((panel: DashboardPanel) => {
+        getLayoutConfigMock.mockReturnValue(
+          savedLayout(groupItem('row', [stackItem([componentItem(viewPanel('A')), componentItem(panel)], 32), stackItem([componentItem(viewPanel('B'))], 68)])),
+        );
+      });
+
+      const id = await viewer.AddPanel(VIEW_PART_TYPE_ID, { type: 'View', entityName: 'MJ: Users' }, 'C');
+
+      expect(id).toMatch(/^panel-/);
+      expect(addPanelMock).toHaveBeenCalledWith(expect.objectContaining({ id, partTypeId: VIEW_PART_TYPE_ID, title: 'C', icon: VIEW_PART_TYPE.Icon }));
+      expect(viewer.GetPanelPath(id!)).toBe('row/0 › tab 1');
+      expect(viewer.HasUnsavedChanges).toBe(true);
+      expect(initializeMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('returns null and reports an unknown part type', async () => {
+      const viewer = await makeViewer({ layout: twoAcross() });
+      const errors: string[] = [];
+      viewer.error.subscribe(e => errors.push(e.message));
+
+      await expect(viewer.AddPanel('no-such-part-type', { type: 'View' }, 'C')).resolves.toBeNull();
+
+      expect(errors).toEqual(['Unknown panel type: no-such-part-type']);
+      expect(addPanelMock).not.toHaveBeenCalled();
+      expect(viewer.HasUnsavedChanges).toBe(false);
+    });
+  });
+
+  describe('UpdatePanelConfig', () => {
+    it('changes the panel in the layout, and resolves only once the layout is rebuilt', async () => {
+      const viewer = await makeViewer({ layout: twoAcross() });
+      let finishRebuild = (): void => undefined;
+      const rebuild = vi.spyOn(viewer as unknown as { initializeLayout: () => Promise<void> }, 'initializeLayout').mockImplementation(
+        () => new Promise<void>(resolve => {
+          finishRebuild = resolve;
+        }),
+      );
+      let settled = false;
+
+      const updating = viewer.UpdatePanelConfig('A', { type: 'View', entityName: 'MJ: Companies' }, 'Companies').then(() => {
+        settled = true;
+      });
+      await flushPromises();
+
+      expect(rebuild).toHaveBeenCalledTimes(1);
+      expect(viewer.GetPanel('A')).toMatchObject({ title: 'Companies', config: { type: 'View', entityName: 'MJ: Companies' } });
+      expect(viewer.HasUnsavedChanges).toBe(true);
+      expect(settled).toBe(false);
+      finishRebuild();
+      await updating;
+      expect(settled).toBe(true);
+    });
+
+    it('rejects when the rebuild fails', async () => {
+      const viewer = await makeViewer({ layout: twoAcross() });
+      vi.spyOn(viewer as unknown as { initializeLayout: () => Promise<void> }, 'initializeLayout').mockRejectedValue(new Error('The layout container has no size.'));
+
+      await expect(viewer.UpdatePanelConfig('A', { type: 'View', entityName: 'MJ: Companies' })).rejects.toThrow('The layout container has no size.');
+    });
+  });
+
+  describe('GetPanelPath', () => {
+    it('gives the path of a panel in the layout, and null for a panel that is not in it', async () => {
+      const viewer = await makeViewer({ layout: twoAcross() });
+      expect(viewer.GetPanelPath('B')).toBe('row/1 › tab 0');
+      expect(viewer.GetPanelPath('missing')).toBeNull();
+    });
+  });
+
+  describe('stack part buttons', () => {
+    /** The Golden Layout wrapper of the layout on screen. */
+    function shownLayout(): { OnStackAction: Subject<StackActionEvent> } {
+      const service = glServices.at(-1);
+      if (!service) {
+        throw new Error('The viewer has built no layout.');
+      }
+      return service;
+    }
+
+    /** Records the part requests the viewer sends its host. */
+    function partRequests(viewer: Viewer): PanelInteractionEvent[] {
+      const requests: PanelInteractionEvent[] = [];
+      viewer.PanelInteraction.subscribe(e => requests.push(e));
+      return requests;
+    }
+
+    it('asks the host to edit the part an Edit part button acts on', async () => {
+      const viewer = await makeViewer({ layout: twoAcross() });
+      const requests = partRequests(viewer);
+
+      shownLayout().OnStackAction.next({ Action: 'edit', PanelId: 'B' });
+
+      expect(requests).toEqual([{ panelId: 'B', interactionType: 'custom', payload: { action: 'configure-part-requested' } }]);
+    });
+
+    it('asks the host to confirm the removal of the part a Remove button acts on, with its title and part type', async () => {
+      const viewer = await makeViewer({ layout: twoAcross() });
+      const requests = partRequests(viewer);
+
+      shownLayout().OnStackAction.next({ Action: 'remove', PanelId: 'A' });
+
+      expect(requests).toEqual([
+        { panelId: 'A', interactionType: 'custom', payload: { action: 'remove-part-requested', panelTitle: 'A', partTypeName: 'View' } },
+      ]);
+    });
+
+    it('sends no part type name for a part whose part type the viewer does not know', async () => {
+      const legacy: DashboardPanel = { id: 'L', title: 'Legacy', partTypeId: 'no-such-part-type', config: { type: 'Legacy' } };
+      const viewer = await makeViewer({ layout: savedLayout(stackItem([componentItem(legacy)])) });
+      const requests = partRequests(viewer);
+
+      shownLayout().OnStackAction.next({ Action: 'remove', PanelId: 'L' });
+
+      expect(requests).toEqual([
+        { panelId: 'L', interactionType: 'custom', payload: { action: 'remove-part-requested', panelTitle: 'Legacy', partTypeName: null } },
+      ]);
+    });
   });
 });

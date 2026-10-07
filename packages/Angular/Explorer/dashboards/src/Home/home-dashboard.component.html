@@ -1,357 +1,281 @@
-<div class="home-dashboard" [class.sidebar-open]="sidebarOpen && hasSidebarContent">
+<div class="home-dashboard" [class.sidebar-open]="SidebarOpen && ShowQuickAccess">
   <!-- Main Content Area -->
   <div class="main-content">
-    <!-- Header Section -->
-    <div class="home-header" [class.clear-fab]="HasSidebarContent && !SidebarOpen">
-      <div class="greeting-section">
-        <h1>{{ greeting }}, {{ currentUser?.Name }}</h1>
-        <p class="date">{{ formattedDate }}</p>
-      </div>
-      @if (!isLoading) {
-        <button type="button" class="pin-action-btn home-manage-tabs" (click)="OpenManageHomeDashboards()">
-          <i class="fa-solid fa-sliders" aria-hidden="true"></i> Manage home dashboards
-        </button>
-      }
-    </div>
-
-    <!-- Home Tabs: Overview and the Home dashboards -->
-    @if (!isLoading) {
-      <mj-home-dashboard-tabs class="home-tabs" [Tabs]="HomeTabs" [ActiveId]="HomeActiveTab"
-        (ActiveIdChange)="SetHomeTab($event)" (AddRequested)="OpenManageHomeDashboards()"></mj-home-dashboard-tabs>
-    }
-
-    <!-- Active Home Tab: its dashboard, inline. A new view Key creates a new viewer. -->
-    @if (!isLoading && ActiveHomeTabDashboard; as tabDash) {
-      <div class="home-tab-dashboard" #homeTabContainer>
-        <div class="home-tab-toolbar">
-          <h2 class="home-tab-title"><i class="fa-solid fa-gauge-high" aria-hidden="true"></i> {{ tabDash.Name }}</h2>
-          <span class="home-tab-meta">{{ tabDash.User }}</span>
-          <span class="spacer"></span>
-          <button type="button" class="pin-action-btn home-tab-open" (click)="OpenHomeTabInApp(tabDash)">
-            <i class="fa-solid fa-up-right-from-square" aria-hidden="true"></i> Open in Dashboards
-          </button>
-          <button type="button" class="pin-action-btn home-tab-remove" [disabled]="IsRemovingHomeTab" (click)="RemoveHomeTab(tabDash)">
-            <i class="fa-solid fa-xmark" aria-hidden="true"></i> Remove tab
-          </button>
-        </div>
-        @for (view of HomeTabViews; track view.Key) {
-          <mj-dashboard-viewer [Dashboard]="view.Dashboard" [IsEditing]="false" [ShowToolbar]="false" [ShowBreadcrumb]="false"
-            (NavigationRequested)="OnDashboardNavigationRequested($event)"></mj-dashboard-viewer>
-        }
-      </div>
-    }
-
-    <!-- Dashboards Strip -->
+    <!-- Overview: the greeting, Pinned and My applications in one centered column -->
     @if (ShowOverview) {
-      <mj-home-dashboards-strip
-        [Continue]="ContinueDashboard" [Favorites]="FavoriteDashboards" [FavoriteIds]="FavoriteDashboardIds"
-        [TotalCount]="DashboardTotal" [SharedCount]="DashboardSharedCount"
-        [Expanded]="DashboardsExpanded" (ExpandedChange)="OnDashboardsExpandedChange($event)"
-        [TileSizes]="DashboardTileSizes" (TileSizesChange)="OnDashboardTileSizesChange($event)"
-        (Open)="OpenDashboardFromStrip($event)" (ToggleFavorite)="ToggleDashboardFavorite($event)"
-        (NavigationRequested)="OnDashboardNavigationRequested($event)"
-        (NewDashboard)="NewDashboardFromStrip()" (SeeAll)="GoToDashboardsApp('Overview')" (BrowseAll)="GoToDashboardsApp('Browse')">
-      </mj-home-dashboards-strip>
-    }
-
-    <!-- Pinned Section: collapses to its header (title, Add Pin / Edit / Done) -->
-    @if (ShowOverview) {
-      <mj-accordion-panel class="pinned-section" [Bare]="true" [TitleIconMuted]="true" [HeadingLevel]="2"
-          [Expanded]="PinnedExpanded" (ExpandedChange)="OnPinnedExpandedChange($event)">
-        <ng-template mjAccordionTitle>
-          <span class="pinned-title"><i class="fa-solid fa-thumbtack" aria-hidden="true"></i> Pinned</span>
-        </ng-template>
-        <ng-template mjAccordionActions>
-          <div class="pinned-actions">
-            @if (EditMode) {
-              <button class="pin-action-btn done" (click)="ToggleEditMode()">
-                <i class="fa-solid fa-check" aria-hidden="true"></i> <span class="pin-action-label">Done</span>
-              </button>
-            } @else {
-              <button class="pin-action-btn primary" (click)="OpenAddPinPanel()">
-                <i class="fa-solid fa-plus" aria-hidden="true"></i> <span class="pin-action-label">Add Pin</span>
-              </button>
-              @if (PinnedItems.length > 0) {
-                <button class="pin-action-btn" (click)="ToggleEditMode()">
-                  <i class="fa-solid fa-pen" aria-hidden="true"></i> <span class="pin-action-label">Edit</span>
-                </button>
-              }
-            }
+      <div class="home-overview">
+        <!-- Header Section -->
+        <div class="home-header">
+          <div class="greeting-section">
+            <h1>{{ Greeting }}, {{ GreetingName }}</h1>
+            <p class="date">{{ FormattedDate }}</p>
           </div>
-        </ng-template>
-        <ng-template mjAccordionBody>
-          @if (EditMode) {
-            <div class="edit-mode-banner">
-              <i class="fa-solid fa-arrows-up-down-left-right"></i>
-              <span><strong>Edit mode</strong> — Drag cards to reorder. Click names to rename.</span>
-            </div>
-          }
+        </div>
 
-          <!-- Empty State -->
-          @if (PinnedItems.length === 0 && (EditMode || !HidePinEmptyState)) {
-            <div class="pin-empty-state">
-              @if (!EditMode) {
-                <button type="button" class="pin-empty-close" (click)="DismissPinEmptyState()" title="Hide this">
-                  <i class="fa-solid fa-xmark"></i>
+        <!-- Pinned Section: collapses to its header (title, Add Pin / Dashboards / Edit, or Done) -->
+        <mj-accordion-panel class="pinned-section" [Bare]="true" [TitleIconMuted]="true" [HeadingLevel]="2" [FlushBody]="true"
+            [Expanded]="PinnedExpanded" (ExpandedChange)="OnPinnedExpandedChange($event)">
+          <ng-template mjAccordionTitle>
+            <span class="pinned-title"><i class="fa-solid fa-thumbtack" aria-hidden="true"></i> Pinned</span>
+          </ng-template>
+          <ng-template mjAccordionActions>
+            <div class="pinned-actions">
+              @if (EditMode) {
+                <button type="button" mjButton Variant="success" Size="sm" (click)="ToggleEditMode()">
+                  <i class="fa-solid fa-check" aria-hidden="true"></i> <span class="pin-action-label">Done</span>
                 </button>
-              }
-              <mj-empty-state Icon="fa-solid fa-thumbtack"
-                Title="No pinned items yet"
-                Message="Pin your favorite dashboards, views, queries, and reports for quick access.">
-                <button actions mjButton variant="primary" (click)="OpenAddPinPanel()">
-                  <i class="fa-solid fa-plus"></i> Add your first pin
+              } @else {
+                <button type="button" mjButton Variant="primary" Size="sm" (click)="OpenAddPinPanel()">
+                  <i class="fa-solid fa-plus" aria-hidden="true"></i> <span class="pin-action-label">Add Pin</span>
                 </button>
-                @if (!EditMode && !HidePinEmptyState) {
-                  <button actions mjButton variant="flat" (click)="DismissPinEmptyState()">
-                    Don't show this again
+                <mj-home-dashboard-switcher Look="button" Align="right" Label="Dashboards"
+                    [Dashboards]="PinnedDashboards" [CurrentId]="null"
+                    (Pick)="OnSwitcherPick($event)" (New)="OpenNewDashboardDialog()" (ManagePins)="ManagePins()">
+                </mj-home-dashboard-switcher>
+                @if (PinnedItems.length > 0) {
+                  <button type="button" mjButton Variant="secondary" Size="sm" (click)="ToggleEditMode()">
+                    <i class="fa-solid fa-pen" aria-hidden="true"></i> <span class="pin-action-label">Edit</span>
                   </button>
                 }
-              </mj-empty-state>
+              }
             </div>
-          }
-
-          <!-- Pin Grid -->
-          @if (PinnedItems.length > 0) {
-            <div class="pin-grid">
-              <!-- Ungrouped Pins -->
-              @for (pin of UngroupedPins; track TrackByPin($index, pin)) {
-                <div class="pin-card"
-                  [class.edit-mode]="EditMode"
-                  [class.dragging]="DraggingPinId === pin.Id"
-                  [class.drag-over]="DragOverPinId === pin.Id"
-                  [draggable]="EditMode"
-                  (dragstart)="OnDragStart($event, pin)"
-                  (dragover)="OnDragOver($event, pin)"
-                  (dragleave)="OnDragLeave()"
-                  (drop)="OnDrop($event, pin)"
-                  (dragend)="OnDragEnd()"
-                  (click)="OnPinClick(pin)">
-
-                  <!-- Edit mode controls -->
-                  @if (EditMode) {
-                    <div class="edit-controls">
-                      <div class="drag-handle"><i class="fa-solid fa-grip-vertical"></i></div>
-                      <div class="edit-card-actions">
-                        <button class="edit-card-btn delete" aria-label="Remove pin" title="Remove pin" (click)="RemovePin(pin.Id); $event.stopPropagation()">
-                          <i class="fa-solid fa-xmark"></i>
-                        </button>
-                      </div>
-                    </div>
-                  }
-
-                  <!-- Thumbnail / Icon -->
-                  @if (pin.Thumbnail) {
-                    <div class="pin-thumbnail">
-                      <img [src]="pin.Thumbnail" [alt]="pin.DisplayName" />
-                      @if (!EditMode) {
-                        <div class="pin-overlay">
-                          <button class="open-btn" (click)="OnPinClick(pin); $event.stopPropagation()">Open</button>
-                        </div>
-                      }
-                    </div>
-                  } @else if (pin.ResourceType === 'Actions') {
-                    <div class="pin-thumbnail action-mode"
-                         [style.background]="'linear-gradient(135deg, ' + GetPinAccentColor(pin) + ' 0%, ' + GetPinAccentColor(pin) + 'cc 100%)'">
-                      <i [class]="GetPinIcon(pin)"></i>
-                      @if (!EditMode) {
-                        <div class="pin-overlay">
-                          <button class="open-btn" (click)="OnPinClick(pin); $event.stopPropagation()">Run</button>
-                        </div>
-                      }
-                    </div>
-                  } @else {
-                    <div class="pin-thumbnail icon-mode" [style.--pin-icon-color]="pin.Color || 'var(--mj-text-muted)'">
-                      <i [class]="GetPinIcon(pin)"></i>
-                      @if (!EditMode) {
-                        <div class="pin-overlay">
-                          <button class="open-btn" (click)="OnPinClick(pin); $event.stopPropagation()">Open</button>
-                        </div>
-                      }
-                    </div>
-                  }
-
-                  <!-- Pin Info -->
-                  <div class="pin-info">
-                    @if (EditMode && EditingPinId === pin.Id) {
-                      <input class="pin-name-input"
-                        [value]="pin.DisplayName"
-                        (blur)="SavePinName(pin.Id, GetInputValue($event))"
-                        (keydown.enter)="SavePinName(pin.Id, GetInputValue($event))"
-                        (click)="$event.stopPropagation()" />
-                    } @else {
-                      <div class="pin-name" (click)="EditMode ? StartEditingPin(pin.Id, $event) : null">
-                        {{ pin.DisplayName }}
-                        @if (!EditMode) {
-                          <button class="more-btn" aria-label="Pin options" title="Pin options" (click)="ShowPinMenu($event, pin)">
-                            <i class="fa-solid fa-ellipsis"></i>
-                          </button>
-                        }
-                      </div>
-                    }
-                    <div class="pin-meta">
-                      <i [class]="GetPinIcon(pin)"></i>
-                      {{ GetResourceTypeLabel(pin) }}
-                      @if (pin.ApplicationName && pin.ResourceType !== 'Custom') {
-                        <span class="pin-app-badge">{{ pin.ApplicationName }}</span>
-                      }
-                    </div>
-                  </div>
-                </div>
-              }
-
-              <!-- Grouped Pins -->
-              @for (group of PinGroups; track TrackByGroup($index, group)) {
-                <!-- Group Header -->
-                <div class="group-header">
-                  @if (EditMode && EditingGroupName === group) {
-                    <input class="group-name-input"
-                      [value]="group"
-                      (blur)="SaveGroupName(group, GetInputValue($event))"
-                      (keydown.enter)="SaveGroupName(group, GetInputValue($event))" />
-                  } @else {
-                    <span class="group-name" (click)="EditMode ? StartEditingGroup(group) : null">{{ group }}</span>
-                  }
-                  <div class="group-line"></div>
-                  <span class="group-count">{{ GetPinsInGroup(group).length }} pins</span>
-                  @if (EditMode) {
-                    <div class="group-edit-controls">
-                      <button class="group-edit-btn danger" (click)="RemoveGroup(group)">
-                        <i class="fa-solid fa-folder-minus"></i> Remove Group
-                      </button>
-                    </div>
-                  }
-                </div>
-
-                <!-- Pins in Group -->
-                @for (pin of GetPinsInGroup(group); track TrackByPin($index, pin)) {
-                  <div class="pin-card"
-                    [class.edit-mode]="EditMode"
-                    [class.dragging]="DraggingPinId === pin.Id"
-                    [class.drag-over]="DragOverPinId === pin.Id"
-                    [draggable]="EditMode"
-                    (dragstart)="OnDragStart($event, pin)"
-                    (dragover)="OnDragOver($event, pin)"
-                    (dragleave)="OnDragLeave()"
-                    (drop)="OnDrop($event, pin)"
-                    (dragend)="OnDragEnd()"
-                    (click)="OnPinClick(pin)">
-
-                    @if (EditMode) {
-                      <div class="edit-controls">
-                        <div class="drag-handle"><i class="fa-solid fa-grip-vertical"></i></div>
-                        <div class="edit-card-actions">
-                          <button class="edit-card-btn delete" aria-label="Remove pin" title="Remove pin" (click)="RemovePin(pin.Id); $event.stopPropagation()">
-                            <i class="fa-solid fa-xmark"></i>
-                          </button>
-                        </div>
-                      </div>
-                    }
-
-                    @if (pin.Thumbnail) {
-                      <div class="pin-thumbnail">
-                        <img [src]="pin.Thumbnail" [alt]="pin.DisplayName" />
-                        @if (!EditMode) {
-                          <div class="pin-overlay">
-                            <button class="open-btn" (click)="OnPinClick(pin); $event.stopPropagation()">Open</button>
-                          </div>
-                        }
-                      </div>
-                    } @else if (pin.ResourceType === 'Actions') {
-                      <div class="pin-thumbnail action-mode"
-                           [style.background]="'linear-gradient(135deg, ' + GetPinAccentColor(pin) + ' 0%, ' + GetPinAccentColor(pin) + 'cc 100%)'">
-                        <i [class]="GetPinIcon(pin)"></i>
-                        @if (!EditMode) {
-                          <div class="pin-overlay">
-                            <button class="open-btn" (click)="OnPinClick(pin); $event.stopPropagation()">Run</button>
-                          </div>
-                        }
-                      </div>
-                    } @else {
-                      <div class="pin-thumbnail icon-mode" [style.--pin-icon-color]="pin.Color || 'var(--mj-text-muted)'">
-                        <i [class]="GetPinIcon(pin)"></i>
-                        @if (!EditMode) {
-                          <div class="pin-overlay">
-                            <button class="open-btn" (click)="OnPinClick(pin); $event.stopPropagation()">Open</button>
-                          </div>
-                        }
-                      </div>
-                    }
-
-                    <div class="pin-info">
-                      @if (EditMode && EditingPinId === pin.Id) {
-                        <input class="pin-name-input"
-                          [value]="pin.DisplayName"
-                          (blur)="SavePinName(pin.Id, $event.target.value)"
-                          (keydown.enter)="SavePinName(pin.Id, $event.target.value)"
-                          (click)="$event.stopPropagation()" />
-                      } @else {
-                        <div class="pin-name" (click)="EditMode ? StartEditingPin(pin.Id, $event) : null">
-                          {{ pin.DisplayName }}
-                          @if (!EditMode) {
-                            <button class="more-btn" aria-label="Pin options" title="Pin options" (click)="$event.stopPropagation()">
-                              <i class="fa-solid fa-ellipsis"></i>
-                            </button>
-                          }
-                        </div>
-                      }
-                      <div class="pin-meta">
-                        <i [class]="GetPinIcon(pin)"></i>
-                        {{ GetResourceTypeLabel(pin) }}
-                        @if (pin.ApplicationName) {
-                          <span class="pin-app-badge">{{ pin.ApplicationName }}</span>
-                        }
-                      </div>
-                    </div>
-                  </div>
-                }
-              }
-
-              <!-- Add Pin card (edit mode) -->
+          </ng-template>
+          <ng-template mjAccordionBody>
+            <div class="pinned-body">
               @if (EditMode) {
-                <div class="add-pin-card" (click)="OpenAddPinPanel()">
-                  <i class="fa-solid fa-plus"></i>
-                  <span>Add Pin</span>
+                <div class="edit-mode-banner">
+                  <i class="fa-solid fa-arrows-up-down-left-right"></i>
+                  <span><strong>Edit mode</strong> — Drag cards to reorder. Click names to rename.</span>
+                </div>
+              }
+
+              <!-- Empty State -->
+              @if (PinnedItems.length === 0 && (EditMode || !HidePinEmptyState)) {
+                <div class="pin-empty-state">
+                  @if (!EditMode) {
+                    <button type="button" class="pin-empty-close" (click)="DismissPinEmptyState()" title="Hide this">
+                      <i class="fa-solid fa-xmark"></i>
+                    </button>
+                  }
+                  <mj-empty-state Icon="fa-solid fa-thumbtack"
+                    Title="No pinned items yet"
+                    Message="Pin your favorite dashboards, views, queries, and reports for quick access.">
+                    <button actions mjButton variant="primary" (click)="OpenAddPinPanel()">
+                      <i class="fa-solid fa-plus"></i> Add your first pin
+                    </button>
+                    @if (!EditMode && !HidePinEmptyState) {
+                      <button actions mjButton variant="flat" (click)="DismissPinEmptyState()">
+                        Don't show this again
+                      </button>
+                    }
+                  </mj-empty-state>
+                </div>
+              }
+
+              <!-- Pin Grid: the ungrouped pins, then each group under its header, from one card markup -->
+              @if (PinnedItems.length > 0) {
+                <div class="pin-grid">
+                  @for (section of PinSections; track section.Key) {
+                    @if (section.Group !== null) {
+                      <div class="group-header">
+                        @if (EditMode && EditingGroupName === section.Group) {
+                          <input class="group-name-input" [value]="section.Group"
+                            (blur)="SaveGroupName(section.Group, GetInputValue($event))"
+                            (keydown.enter)="SaveGroupName(section.Group, GetInputValue($event))" />
+                        } @else {
+                          <span class="group-name" (click)="EditMode ? StartEditingGroup(section.Group) : null">{{ section.Group }}</span>
+                        }
+                        <div class="group-line"></div>
+                        <span class="group-count">{{ section.Pins.length }} pins</span>
+                        @if (EditMode) {
+                          <div class="group-edit-controls">
+                            <button type="button" class="group-edit-btn danger" (click)="RemoveGroup(section.Group)">
+                              <i class="fa-solid fa-folder-minus" aria-hidden="true"></i> Remove Group
+                            </button>
+                          </div>
+                        }
+                      </div>
+                    }
+                    @for (pin of section.Pins; track pin.Id) {
+                      <div class="pin-card"
+                        [class.edit-mode]="EditMode"
+                        [class.dragging]="DraggingPinId === pin.Id"
+                        [class.drag-over]="DragOverPinId === pin.Id"
+                        [class.menu-open]="PinMenuPin?.Id === pin.Id"
+                        [draggable]="EditMode"
+                        (dragstart)="OnDragStart($event, pin)" (dragover)="OnDragOver($event, pin)" (dragleave)="OnDragLeave()"
+                        (drop)="OnDrop($event, pin)" (dragend)="OnDragEnd()"
+                        (click)="OnPinClick(pin)">
+
+                        <!-- Edit mode controls -->
+                        @if (EditMode) {
+                          <div class="edit-controls">
+                            <div class="drag-handle"><i class="fa-solid fa-grip-vertical" aria-hidden="true"></i></div>
+                            <div class="edit-card-actions">
+                              <button type="button" class="edit-card-btn delete" aria-label="Remove pin" title="Remove pin"
+                                (click)="RemovePin(pin.Id); $event.stopPropagation()"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
+                            </div>
+                          </div>
+                        }
+
+                        <!-- Thumbnail: the pin's image, the action accent, or the brand icon tile -->
+                        @if (pin.Thumbnail) {
+                          <div class="pin-thumbnail">
+                            <img [src]="pin.Thumbnail" [alt]="PinName(pin)" />
+                            @if (!EditMode) {
+                              <div class="pin-overlay">
+                                <button type="button" mjButton Variant="secondary" Size="sm" [attr.aria-label]="'Open ' + PinName(pin)"
+                                  (click)="OnPinClick(pin); $event.stopPropagation()">Open</button>
+                              </div>
+                            }
+                          </div>
+                        } @else if (pin.ResourceType === 'Actions') {
+                          <div class="pin-thumbnail action-mode"
+                               [style.background]="'linear-gradient(135deg, ' + GetPinAccentColor(pin) + ' 0%, ' + GetPinAccentColor(pin) + 'cc 100%)'">
+                            <i [class]="GetPinIcon(pin)" aria-hidden="true"></i>
+                            @if (!EditMode) {
+                              <div class="pin-overlay">
+                                <button type="button" mjButton Variant="secondary" Size="sm" [attr.aria-label]="'Run ' + PinName(pin)"
+                                  (click)="OnPinClick(pin); $event.stopPropagation()">Run</button>
+                              </div>
+                            }
+                          </div>
+                        } @else {
+                          <div class="pin-thumbnail icon-mode">
+                            <i [class]="GetPinIcon(pin)" aria-hidden="true"></i>
+                            @if (!EditMode) {
+                              <div class="pin-overlay">
+                                <button type="button" mjButton Variant="secondary" Size="sm" [attr.aria-label]="'Open ' + PinName(pin)"
+                                  (click)="OnPinClick(pin); $event.stopPropagation()">Open</button>
+                              </div>
+                            }
+                          </div>
+                        }
+
+                        <!-- Pin Info: the name with the pin options button, and the kind line -->
+                        <div class="pin-info">
+                          @if (EditMode && EditingPinId === pin.Id) {
+                            <input class="pin-name-input" [value]="PinName(pin)" [attr.aria-label]="'Name of ' + PinName(pin)"
+                              (blur)="SavePinName(pin.Id, GetInputValue($event))"
+                              (keydown.enter)="OnPinNameEnter(pin.Id, $event)"
+                              (click)="$event.stopPropagation()" />
+                          } @else {
+                            <div class="pin-name" (click)="EditMode ? StartEditingPin(pin.Id, $event) : null">
+                              <span class="pin-name-text">{{ PinName(pin) }}</span>
+                              @if (!EditMode) {
+                                <button type="button" class="more-btn" [attr.aria-label]="'Pin options for ' + PinName(pin)" title="Pin options" aria-haspopup="menu"
+                                  [attr.aria-expanded]="PinMenuPin?.Id === pin.Id" (click)="ShowPinMenu($event, pin)">
+                                  <i class="fa-solid fa-ellipsis" aria-hidden="true"></i>
+                                </button>
+                              }
+                            </div>
+                          }
+                          <div class="pin-meta">
+                            @if (pin.ResourceType === 'Dashboards') {
+                              <i class="fa-solid fa-gauge-high" aria-hidden="true"></i>
+                            }
+                            <span class="pin-kind">{{ GetResourceTypeLabel(pin) }}</span>
+                          </div>
+                        </div>
+                      </div>
+                    }
+                  }
+
+                  <!-- Add Pin card (edit mode) -->
+                  @if (EditMode) {
+                    <div class="add-pin-card" (click)="OpenAddPinPanel()">
+                      <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                      <span>Add Pin</span>
+                    </div>
+                  }
                 </div>
               }
             </div>
+          </ng-template>
+        </mj-accordion-panel>
+
+        <!-- My applications -->
+        <section class="apps-section">
+          <h2 class="section-title">My applications</h2>
+          <div class="apps-grid">
+            @for (appData of AppsDisplayData; track TrackByApp($index, appData)) {
+              <div class="app-card" [mjClickable]="appData.app.Name" [TestId]="'app-tile-' + appData.app.Name"
+                [style.--app-color]="appData.color" (click)="OnAppClick(appData.app)">
+                <div class="app-icon" aria-hidden="true"><i [class]="appData.icon"></i></div>
+                <div class="app-info">
+                  <h3 class="app-name">{{ appData.app.Name }}</h3>
+                  @if (appData.app.Description) {
+                    <p class="app-description">{{ appData.app.Description }}</p>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+          <!-- Empty State -->
+          @if (Apps.length === 0) {
+            <mj-empty-state Icon="fa-solid fa-folder-open"
+              Title="No Applications Available"
+              Message="You don't have any applications configured yet."
+              ActionText="Configure Applications"
+              ActionIcon="fa-solid fa-gear"
+              (Action)="OpenConfigDialog()" />
           }
-        </ng-template>
-      </mj-accordion-panel>
+        </section>
+      </div>
     }
 
-    <!-- Pin Context Menu (ellipsis) -->
+    <!-- Dashboard view: a pinned dashboard at full size in place of the overview, in the shared dashboard editor -->
+    @if (ShowDashboardView && CurrentDashboardId) {
+      <mj-dashboard-editor #dashboardEditor class="home-dashboard-view"
+          [Provider]="Provider" [DashboardId]="CurrentDashboardId"
+          [(StartInEditMode)]="DashboardStartsInEditMode"
+          [TitleTemplate]="homeDashboardTitle" [ShowOpenInDashboards]="true" BodyStyle="card"
+          (Loaded)="OnDashboardViewLoaded($event)"
+          (EditingChange)="OnDashboardEditingChange($event)" (NameChanged)="OnDashboardSaved()" (Saved)="OnDashboardSaved()"
+          (LoadFailed)="OnDashboardViewLoadFailed()"
+          (OpenInDashboardsRequested)="OpenDashboardInDashboardsApp($event)"
+          (NavigationRequested)="OnDashboardNavigationRequested($event)">
+      </mj-dashboard-editor>
+    }
+
+    <!-- The dashboard view's title in view mode: the breadcrumb over the Dashboards switcher, whose trigger is the view's heading -->
+    <ng-template #homeDashboardTitle let-dashboard>
+      <div class="dashboard-title">
+        <nav class="dashboard-crumb" aria-label="Breadcrumb">
+          <button type="button" class="crumb-home" (click)="OnSwitcherPick(null)"><i class="fa-solid fa-house" aria-hidden="true"></i> Home</button>
+          <span aria-hidden="true">/</span>
+          <span>Pinned dashboards</span>
+        </nav>
+        <mj-home-dashboard-switcher Look="title" Align="left" [HeadingLevel]="1" [Label]="dashboard.Name"
+            [Dashboards]="PinnedDashboards" [CurrentId]="dashboard.ID"
+            (Pick)="OnSwitcherPick($event)" (New)="OpenNewDashboardDialog()" (ManagePins)="ManagePins()">
+        </mj-home-dashboard-switcher>
+      </div>
+    </ng-template>
+
+    <!-- Pin options menu (ellipsis): fixed next to its button (below it, or above it when there is no room below), outside the cards so it stacks above them -->
     @if (PinMenuVisible && PinMenuPin) {
-      <div class="pin-context-menu"
-        [style.left.px]="PinMenuX"
-        [style.top.px]="PinMenuY">
-        <div class="pin-context-item" (click)="OnPinMenuEdit()">
-          <i class="fa-solid fa-pen"></i>
-          <span>Edit</span>
-        </div>
-        <div class="pin-context-divider"></div>
-        <div class="pin-context-submenu">
-          <div class="pin-context-item submenu-header">
-            <i class="fa-solid fa-folder"></i>
-            <span>Move to Group</span>
-          </div>
+      <div #pinMenu class="pin-context-menu" role="menu" [attr.aria-label]="'Options for ' + PinName(PinMenuPin)"
+        [style.left.px]="PinMenuX" [style.top.px]="PinMenuY" [style.max-height.px]="PinMenuMaxHeight" (keydown)="OnPinMenuKeydown($event)">
+        <button type="button" role="menuitem" class="pin-context-item" (click)="OnPinMenuEdit()">
+          <i class="fa-solid fa-pen" aria-hidden="true"></i><span>Edit</span>
+        </button>
+        <div class="pin-context-divider" role="separator"></div>
+        <div role="group" [attr.aria-labelledby]="PinMenuGroupLabelId">
+          <div class="pin-context-item submenu-header" [id]="PinMenuGroupLabelId"><i class="fa-solid fa-folder" aria-hidden="true"></i><span>Move to Group</span></div>
           @if (PinMenuPin.Group) {
-            <div class="pin-context-item submenu-item" (click)="OnPinMenuMoveToGroup(undefined)">
-              <span>(No group)</span>
-            </div>
+            <button type="button" role="menuitem" class="pin-context-item submenu-item" (click)="OnPinMenuMoveToGroup(undefined)"><span>(No group)</span></button>
           }
           @for (group of PinGroups; track group) {
             @if (group !== PinMenuPin.Group) {
-              <div class="pin-context-item submenu-item" (click)="OnPinMenuMoveToGroup(group)">
-                <span>{{ group }}</span>
-              </div>
+              <button type="button" role="menuitem" class="pin-context-item submenu-item" (click)="OnPinMenuMoveToGroup(group)"><span>{{ group }}</span></button>
             }
           }
         </div>
-        <div class="pin-context-divider"></div>
-        <div class="pin-context-item danger" (click)="OnPinMenuUnpin()">
-          <i class="fa-solid fa-thumbtack-slash"></i>
-          <span>Unpin</span>
-        </div>
+        <div class="pin-context-divider" role="separator"></div>
+        <button type="button" role="menuitem" class="pin-context-item danger" (click)="OnPinMenuUnpin()">
+          <i class="fa-solid fa-thumbtack-slash" aria-hidden="true"></i><span>Unpin</span>
+        </button>
       </div>
     }
 
@@ -592,84 +516,21 @@
       (Result)="OnActionRunnerResult($event)">
     </mj-action-pin-runner-dialog>
 
+    <!-- New dashboard: asks for the name; Cancel creates nothing -->
+    <mj-dashboard-name-dialog [Visible]="ShowNewDashboardDialog" [MaxLength]="NewDashboardNameMaxLength"
+        [Processing]="IsCreatingDashboard" (Confirmed)="OnNewDashboardNamed($event)" (Cancelled)="OnNewDashboardCancelled()">
+    </mj-dashboard-name-dialog>
+
     <!-- Loading State -->
     @if (isLoading) {
       <div class="loading-container">
         <mj-loading text="Loading your applications..." size="large"></mj-loading>
       </div>
     }
-
-    <!-- Apps Grid -->
-    @if (ShowOverview) {
-      <div class="apps-section">
-        <h2 class="section-title">
-          <i class="fa-solid fa-grid-2"></i>
-          My Applications
-        </h2>
-        <div class="apps-grid">
-          @for (appData of appsDisplayData; track trackByApp($index, appData)) {
-            <div
-              class="app-card"
-              [mjClickable]="appData.app.Name"
-              [testId]="'app-tile-' + appData.app.Name"
-              [style.--app-color]="appData.color"
-              (click)="onAppClick(appData.app)">
-              <!-- App Icon -->
-              <div class="app-icon-wrapper">
-                <div class="app-icon">
-                  <i [class]="appData.icon"></i>
-                </div>
-              </div>
-              <!-- App Info -->
-              <div class="app-info">
-                <h3 class="app-name">{{ appData.app.Name }}</h3>
-                @if (appData.app.Description) {
-                  <p class="app-description">{{ appData.app.Description }}</p>
-                }
-                <!-- Nav Items Preview -->
-                @if (appData.navItemsCount > 0) {
-                  <div class="nav-preview">
-                    @for (item of appData.navItemsPreview; track trackByNavItem($index, item)) {
-                      <div class="nav-item-chip">
-                        <i [class]="item.Icon"></i>
-                        <span>{{ item.Label }}</span>
-                      </div>
-                    }
-                    @if (appData.showMoreItems) {
-                      <span class="more-items">
-                        +{{ appData.moreItemsCount }} more
-                      </span>
-                    }
-                  </div>
-                }
-              </div>
-              <!-- Hover Arrow -->
-              <div class="app-arrow">
-                <i class="fa-solid fa-arrow-right"></i>
-              </div>
-            </div>
-          }
-        </div>
-        <!-- Empty State -->
-        @if (apps.length === 0) {
-          <mj-empty-state Icon="fa-solid fa-folder-open"
-            Title="No Applications Available"
-            Message="You don't have any applications configured yet."
-            ActionText="Configure Applications"
-            ActionIcon="fa-solid fa-gear"
-            (Action)="openConfigDialog()" />
-        }
-      </div>
-    }
-
-    <!-- Manage home dashboards -->
-    @if (ShowHomePrefsDialog) {
-      <mj-dashboard-preferences-dialog Scope="Global" (Result)="OnManageHomeDashboardsClosed()"></mj-dashboard-preferences-dialog>
-    }
   </div>
 
-  <!-- Collapsible Right Sidebar -->
-  @if (hasSidebarContent) {
+  <!-- Collapsible Right Sidebar (the overview only) -->
+  @if (ShowQuickAccess) {
     <div class="quick-access-sidebar">
       <div class="sidebar-header">
         <h3>
@@ -783,8 +644,8 @@
     </div>
   }
 
-  <!-- Quick Access FAB Toggle (Fixed Button) -->
-  @if (hasSidebarContent && !sidebarOpen) {
+  <!-- Quick Access FAB Toggle (Fixed Button; the overview only) -->
+  @if (ShowQuickAccess && !SidebarOpen) {
     <button class="sidebar-fab-toggle"
       (click)="toggleSidebar()"
       title="Quick Access">

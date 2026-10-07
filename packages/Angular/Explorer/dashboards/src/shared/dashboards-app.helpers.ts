@@ -4,7 +4,7 @@ import { UserInfoEngine } from '@memberjunction/core-entities';
 import type { MJDashboardEntity } from '@memberjunction/core-entities';
 import type { ApplicationManager, BaseApplication } from '@memberjunction/ng-base-application';
 import type { DashboardNavigationOptions } from '@memberjunction/ng-shared';
-import { CreateDefaultDashboardConfig } from '@memberjunction/ng-dashboard-viewer';
+import { CreateDefaultDashboardConfig, DASHBOARD_NAME_MAX_LENGTH } from '@memberjunction/ng-dashboard-viewer';
 import {
   DASHBOARDS_APP_AUTO_INSTALL_SETTING_KEY,
   DashboardsAppInstallOperations,
@@ -15,8 +15,8 @@ import {
 
 export const DASHBOARDS_APP_NAME = 'Dashboards';
 
-/** Label of the Dashboards app's Browse nav item. */
-export const DASHBOARDS_BROWSE_NAV_ITEM = 'Browse';
+/** Label of the Dashboards app's Library nav item. */
+export const DASHBOARDS_LIBRARY_NAV_ITEM = 'Library';
 
 /** The Dashboards application, if the user has it enabled. */
 export function FindDashboardsApp(appManager: ApplicationManager): BaseApplication | undefined {
@@ -41,11 +41,28 @@ export function DashboardsAppOpenOptions(appManager: ApplicationManager, openInE
   };
 }
 
-/** Creates and saves an empty Config dashboard owned by the current user. Returns null on failure. */
-export async function CreateBlankDashboard(md: IMetadataProvider, categoryId?: string | null): Promise<MJDashboardEntity | null> {
+/** The entity of dashboard records. */
+const DASHBOARDS_ENTITY = 'MJ: Dashboards';
+
+/** The longest name MJ: Dashboards stores: the MaxLength of its Name field, or DASHBOARD_NAME_MAX_LENGTH when the metadata gives none. */
+export function DashboardNameMaxLength(md: IMetadataProvider): number {
+  const maxLength = md.EntityByName(DASHBOARDS_ENTITY)?.FieldByName('Name')?.MaxLength ?? 0;
+  return maxLength > 0 ? maxLength : DASHBOARD_NAME_MAX_LENGTH;
+}
+
+/**
+ * Creates and saves an empty Config dashboard with the trimmed `name`, owned by the current user, in
+ * `categoryId` when one is given. Returns null for a blank name or a failed save.
+ */
+export async function CreateBlankDashboard(md: IMetadataProvider, name: string, categoryId?: string | null): Promise<MJDashboardEntity | null> {
+  const trimmed = name.trim();
+  if (!trimmed) {
+    LogError('CreateBlankDashboard: the dashboard needs a name');
+    return null;
+  }
   try {
-    const dashboard = await md.GetEntityObject<MJDashboardEntity>('MJ: Dashboards', md.CurrentUser);
-    dashboard.Name = 'New Dashboard';
+    const dashboard = await md.GetEntityObject<MJDashboardEntity>(DASHBOARDS_ENTITY, md.CurrentUser);
+    dashboard.Name = trimmed;
     dashboard.Description = '';
     dashboard.UserID = md.CurrentUser.ID;
     dashboard.UIConfigDetails = JSON.stringify(CreateDefaultDashboardConfig());
@@ -80,8 +97,8 @@ export async function AutoInstallDashboardsApp(appManager: ApplicationManager): 
 }
 
 /**
- * Explicit install path, for a user click that goes to the Dashboards app (Open Dashboards,
- * See all, Browse all). Installs the app when it is missing or removed. Never rejects.
+ * Explicit install path, for a user click that goes to the Dashboards app (for example Open
+ * Dashboards on the Data Explorer banner). Installs the app when it is missing or removed. Never rejects.
  * @returns the app to pass to `NavigationService.SwitchToApp`, or undefined when no Active
  * Dashboards app exists, the user is not authorized for it, or the install failed or did not
  * finish within DASHBOARDS_APP_INSTALL_STEP_TIMEOUT_MS.

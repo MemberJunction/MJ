@@ -3,11 +3,13 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { ComponentFixture } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { BehaviorSubject, Subject } from 'rxjs';
-import type { EngineDataChangeEvent, EntityInfo, IMetadataProvider } from '@memberjunction/core';
+import type { EngineDataChangeEvent, EntityInfo, IMetadataProvider, RunViewParams, RunViewResult } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { DashboardFavoritesService, NavigationService } from '@memberjunction/ng-shared';
 import type { DashboardNavigationOptions } from '@memberjunction/ng-shared';
 import { RecentAccessService } from '@memberjunction/ng-shared-generic';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 import type { RecentAccessItem } from '@memberjunction/ng-shared-generic';
 import { DashboardEngine, ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
 import type { DashboardUserPermissions, MJDashboardCategoryEntity, MJDashboardCategoryLinkEntity, MJDashboardEntity } from '@memberjunction/core-entities';
@@ -19,6 +21,7 @@ import {
   MJPageLayoutComponent,
   MJStatBadgeComponent,
 } from '@memberjunction/ng-ui-components';
+import { DashboardNameDialogComponent } from '@memberjunction/ng-dashboard-viewer';
 import type {
   CategoryChangeEvent,
   CategoryCreateEvent,
@@ -27,22 +30,25 @@ import type {
   DashboardCreateEvent,
   DashboardDeleteEvent,
   DashboardEditEvent,
+  DashboardFavoriteToggleEvent,
   DashboardMoveEvent,
   DashboardOpenEvent,
   ViewPreferenceChangeEvent,
 } from '@memberjunction/ng-dashboard-viewer';
-import { RenderComponentFixture, CreateFakeProvider, Query, QueryAll, Text } from '@memberjunction/ng-test-utils';
+import { RenderComponentFixture, CreateFakeProvider, Click, Query, QueryAll, Text, TypeInto } from '@memberjunction/ng-test-utils';
+import type { DashboardOwnerRow } from '../shared/dashboard-owner-names';
 import { DashboardBrowserResourceComponent } from './dashboard-browser-resource.component';
 
 /**
- * DOM coverage for the Browse resource (<mj-dashboard-browser-resource>). Every open, edit, new
- * dashboard and `?dashboard=` deep link goes to a tab of the Dashboards app through
- * NavigationService.OpenDashboard, with no forced new tab; Browse itself always shows the list. The page chrome and the
- * library rail are the real ui-components; the generic browser is stubbed, the dashboard engine is
- * an in-memory double that can emit cache changes, favorites and RecentAccessService are doubles, UserInfoEngine is a double holding the
- * user settings and the record-log cache that Recently opened reads, and NavigationService is a
- * double whose tab params behave like the workspace (writes merge in and replay to the tab), so
- * the real BaseResourceComponent query-param delivery runs.
+ * DOM coverage for the Library page of the Dashboards app (<mj-dashboard-browser-resource>). Every
+ * open, edit, new dashboard and `?dashboard=` deep link goes to a tab of the Dashboards app through
+ * NavigationService.OpenDashboard, with no forced new tab; the Library itself always shows the list.
+ * The page chrome, the library rail and the New dashboard name dialog are the real components; the
+ * generic browser is stubbed, the dashboard engine is an in-memory double that can emit cache
+ * changes, favorites, notifications and RecentAccessService are doubles, UserInfoEngine is a double
+ * holding the user settings and the record-log cache that Recently opened reads, and
+ * NavigationService is a double whose tab params behave like the workspace (writes merge in and
+ * replay to the tab), so the real BaseResourceComponent query-param delivery runs.
  */
 
 @Component({ standalone: true, selector: 'mj-dashboard-browser', template: '' })
@@ -58,11 +64,19 @@ class DashboardBrowserStub {
   @Input() AllowDragDrop = true;
   @Input() DashboardPermissions: Map<string, DashboardUserPermissions> | null = null;
   @Input() EffectiveCategoryMap: Map<string, string | null> | null = null;
+  @Input() FavoriteIds: string[] = [];
+  @Input() ShowFavorites = false;
+  @Input() OwnerLabels: Map<string, string> | null = null;
+  @Input() FlatEmptyIcon = '';
+  @Input() FlatEmptyTitle = '';
+  @Input() FlatEmptyMessage = '';
+  @Input() FlatEmptyWelcome = false;
   @Output() DashboardOpen = new EventEmitter<DashboardOpenEvent>();
   @Output() DashboardEdit = new EventEmitter<DashboardEditEvent>();
   @Output() DashboardDelete = new EventEmitter<DashboardDeleteEvent>();
   @Output() DashboardMove = new EventEmitter<DashboardMoveEvent>();
   @Output() DashboardCreate = new EventEmitter<DashboardCreateEvent>();
+  @Output() DashboardFavoriteToggle = new EventEmitter<DashboardFavoriteToggleEvent>();
   @Output() CategoryCreate = new EventEmitter<CategoryCreateEvent>();
   @Output() CategoryDelete = new EventEmitter<CategoryDeleteEvent>();
   @Output() CategoryChange = new EventEmitter<CategoryChangeEvent>();
@@ -75,18 +89,21 @@ interface ClientTool {
   Handler: (params: Record<string, unknown>) => Promise<unknown>;
 }
 
-const TAB_ID = 'browse-tab';
+const TAB_ID = 'library-tab';
 const CATEGORY_ID = 'C0000000-0000-4000-8000-000000000001';
 const USER_ID = 'test-user-id';
+const ANA_ID = 'U-ANA';
 const DASHBOARDS_ENTITY_ID = 'E0000000-0000-4000-8000-00000000da5b';
+/** The MaxLength of MJ: Dashboards.Name in the fake metadata. */
+const NAME_MAX_LENGTH = 120;
 const DASHBOARDS_APP = { ID: 'A0000000-0000-4000-8000-000000000001', Name: 'Dashboards' };
-/** OpenDashboard options for a dashboard opened from Browse: a tab of the Dashboards app, with no forced new tab. */
+/** OpenDashboard options for a dashboard opened from the Library: a tab of the Dashboards app, with no forced new tab. */
 const IN_DASHBOARDS_APP = { applicationId: DASHBOARDS_APP.ID };
 
 const REVENUE = { ID: 'D0000000-0000-4000-8000-000000000001', Name: 'Revenue', Type: 'Config', CategoryID: null, UserID: USER_ID, __mj_UpdatedAt: new Date('2026-09-02') } as unknown as MJDashboardEntity;
 const CHURN = { ID: 'D0000000-0000-4000-8000-000000000002', Name: 'Churn', Type: 'Config', CategoryID: null, UserID: USER_ID, __mj_UpdatedAt: new Date('2026-09-01') } as unknown as MJDashboardEntity;
 
-/** The dashboards, categories and user state one Browse render starts from. */
+/** The dashboards, categories and user state one Library render starts from. */
 interface LibraryFixture {
   dashboards?: MJDashboardEntity[];
   categories?: MJDashboardCategoryEntity[];
@@ -94,7 +111,7 @@ interface LibraryFixture {
   favoriteIds?: string[];
   /** Dashboard ids in UserInfoEngine's record-log cache, most recently opened first. */
   recentIds?: string[];
-  /** The list RecentAccessService holds. Browse only uses that service as a change trigger. */
+  /** The list RecentAccessService holds. The Library only uses that service as a change trigger. */
   serviceRecentIds?: string[];
   settings?: Record<string, string>;
   /** The dashboard cache fails to load. */
@@ -121,7 +138,7 @@ function stubDashboardEngine(dashboards: MJDashboardEntity[], categories: MJDash
   const state: EngineState = { dashboards, categories, links };
   const changes = new Subject<EngineDataChangeEvent>();
   const engine = {
-    Config: vi.fn(async () => undefined),
+    Config: vi.fn(async (_forceRefresh?: boolean) => undefined),
     GetAccessibleDashboards: vi.fn(() => state.dashboards),
     GetAccessibleCategories: vi.fn(() => state.categories),
     get DashboardCategoryLinks(): MJDashboardCategoryLinkEntity[] {
@@ -167,11 +184,53 @@ function stubUserInfoEngine(recentIds: string[], settings: Record<string, string
   return engine;
 }
 
-/** A fake provider whose metadata knows the MJ: Dashboards entity. */
-function providerWithDashboardsEntity(): IMetadataProvider {
-  return CreateFakeProvider({
-    entityByName: name => (name === 'MJ: Dashboards' ? ({ ID: DASHBOARDS_ENTITY_ID, Name: name } as unknown as EntityInfo) : undefined),
+/** A fake provider whose metadata knows the MJ: Dashboards entity and its Name length. `ownerRows` answers MJ: Users reads. */
+function providerWithDashboardsEntity(ownerRows: DashboardOwnerRow[] = [], reads: RunViewParams[] = []): IMetadataProvider {
+  const dashboardsEntity = {
+    ID: DASHBOARDS_ENTITY_ID,
+    Name: 'MJ: Dashboards',
+    FieldByName: (field: string) => (field === 'Name' ? { MaxLength: NAME_MAX_LENGTH } : undefined),
+  } as unknown as EntityInfo;
+  return CreateFakeProvider<DashboardOwnerRow>({
+    entityByName: name => (name === 'MJ: Dashboards' ? dashboardsEntity : undefined),
+    runViewResults: params => {
+      reads.push(params);
+      return params.EntityName === 'MJ: Users' ? ownerRows : [];
+    },
   });
+}
+
+/** A provider whose MJ: Users reads wait until the test calls `finish` with the rows. */
+function providerWithPendingOwnerRead() {
+  const reads: RunViewParams[] = [];
+  let answer: (rows: DashboardOwnerRow[]) => void = () => undefined;
+  const provider = {
+    ...providerWithDashboardsEntity(),
+    RunView: vi.fn((params: RunViewParams) => {
+      reads.push(params);
+      return new Promise<RunViewResult>(resolve => {
+        answer = rows => resolve({ Success: true, Results: rows, RowCount: rows.length, TotalRowCount: rows.length } as RunViewResult);
+      });
+    }),
+  } as unknown as IMetadataProvider;
+  return { provider, reads, finish: (rows: DashboardOwnerRow[]) => answer(rows) };
+}
+
+/** A provider whose new MJ: Dashboards object saves, fails to save, or saves when `saves` resolves, without a server. */
+function providerCreatingDashboards(saves: boolean | Promise<boolean> = true) {
+  const created = {
+    ID: 'D0000000-0000-4000-8000-000000000003',
+    Name: '',
+    Type: 'Config',
+    UserID: '',
+    CategoryID: null,
+    __mj_UpdatedAt: new Date('2026-09-20'),
+    LatestResult: { CompleteMessage: 'Name is required' },
+    Save: vi.fn(async () => saves),
+  } as unknown as MJDashboardEntity;
+  const getEntityObject = vi.fn(async () => created);
+  const provider = { ...providerWithDashboardsEntity(), GetEntityObject: getEntityObject } as unknown as IMetadataProvider;
+  return { created, provider, getEntityObject };
 }
 
 /** A NavigationService double. Its tab params act like the workspace: writes merge in and replay to the tab. */
@@ -199,13 +258,21 @@ function fakeNavigation(initialParams: Record<string, string>) {
   return { params$, service };
 }
 
-/** A DashboardFavoritesService double. `Set` replaces the favorites and emits Changed$. */
+/** A DashboardFavoritesService double. `Toggle` and `Set` change the favorites and emit Changed$. */
 function fakeFavorites(initialIds: string[]) {
-  let ids = initialIds;
+  let ids = [...initialIds];
   const changed$ = new Subject<void>();
+  const isFavorite = (id: string): boolean => ids.some(f => UUIDsEqual(f, id));
   return {
     Changed$: changed$,
     FavoriteIds: () => ids,
+    IsFavorite: isFavorite,
+    Toggle: vi.fn(async (id: string) => {
+      const on = !isFavorite(id);
+      ids = on ? [id, ...ids] : ids.filter(f => !UUIDsEqual(f, id));
+      changed$.next();
+      return on;
+    }),
     Set: (next: string[]) => {
       ids = next;
       changed$.next();
@@ -238,7 +305,7 @@ function fakeRecents(initialIds: string[]) {
 
 type FakeNavigation = ReturnType<typeof fakeNavigation>;
 
-function renderBrowse(initialParams: Record<string, string> = {}, provider: IMetadataProvider = providerWithDashboardsEntity(), library: LibraryFixture = {}) {
+function renderPage(initialParams: Record<string, string> = {}, provider: IMetadataProvider = providerWithDashboardsEntity(), library: LibraryFixture = {}) {
   const engine = stubDashboardEngine(library.dashboards ?? [REVENUE, CHURN], library.categories ?? [], library.links ?? []);
   if (library.loadFails) {
     engine.Config.mockRejectedValue(new Error('network down'));
@@ -247,10 +314,12 @@ function renderBrowse(initialParams: Record<string, string> = {}, provider: IMet
   const navigation = fakeNavigation(initialParams);
   const favorites = fakeFavorites(library.favoriteIds ?? []);
   const recents = fakeRecents(library.serviceRecentIds ?? []);
+  const notifications = { CreateSimpleNotification: vi.fn() };
   const loadComplete = vi.fn();
   const fixture = RenderComponentFixture(DashboardBrowserResourceComponent, {
     imports: [
       DashboardBrowserStub,
+      DashboardNameDialogComponent,
       MJPageLayoutComponent,
       MJPageHeaderComponent,
       MJPageBodyComponent,
@@ -264,6 +333,7 @@ function renderBrowse(initialParams: Record<string, string> = {}, provider: IMet
       { provide: DashboardFavoritesService, useValue: favorites },
       { provide: RecentAccessService, useValue: recents },
       { provide: ApplicationManager, useValue: { GetAllApps: () => [DASHBOARDS_APP] } },
+      { provide: MJNotificationService, useValue: notifications },
     ],
     setup: instance => {
       instance.Provider = provider;
@@ -272,14 +342,14 @@ function renderBrowse(initialParams: Record<string, string> = {}, provider: IMet
           tabId: TAB_ID,
           resourceType: 'Custom',
           driverClass: 'DashboardBrowserResource',
-          navItemName: 'Browse',
+          navItemName: 'Library',
           queryParams: initialParams,
         },
       });
       instance.LoadCompleteEvent = loadComplete;
     },
   });
-  return { fixture, navigation, favorites, recents, engine, userInfo, loadComplete };
+  return { fixture, navigation, favorites, recents, notifications, engine, userInfo, loadComplete };
 }
 
 /** Lets the async list load and any deferred tab-param writes finish. */
@@ -287,6 +357,17 @@ const settle = (): Promise<void> => new Promise(resolve => setTimeout(resolve, 0
 
 const browser = (fixture: ComponentFixture<DashboardBrowserResourceComponent>): DashboardBrowserStub =>
   fixture.debugElement.query(By.directive(DashboardBrowserStub)).componentInstance as DashboardBrowserStub;
+
+/** True while the New dashboard dialog shows. */
+const nameDialogOpen = (fixture: ComponentFixture<DashboardBrowserResourceComponent>): boolean =>
+  Query(fixture, 'mj-dashboard-name-dialog .mj-dialog-container') !== null;
+
+/** Types `name` into the open New dashboard dialog and clicks Create. */
+function createNamedDashboard(fixture: ComponentFixture<DashboardBrowserResourceComponent>, name: string): void {
+  TypeInto(fixture, 'mj-dashboard-name-dialog .dn-name', name);
+  fixture.detectChanges();
+  Click(fixture, 'mj-dashboard-name-dialog .dn-create');
+}
 
 function registeredTools(navigation: FakeNavigation): ClientTool[] {
   return navigation.service.SetAgentClientTools.mock.calls.at(-1)?.[1] ?? [];
@@ -337,22 +418,26 @@ function clickRail(fixture: ComponentFixture<DashboardBrowserResourceComponent>,
 
 const names = (dashboards: MJDashboardEntity[]): string[] => dashboards.map(d => d.Name);
 
+/** The MJ: Users reads among the RunView calls. */
+const ownerReads = (reads: RunViewParams[]): RunViewParams[] => reads.filter(r => r.EntityName === 'MJ: Users');
+
 describe('DashboardBrowserResourceComponent (DOM)', () => {
   it('always renders the dashboard browser with the loaded dashboards', async () => {
-    const { fixture } = renderBrowse();
+    const { fixture } = renderPage();
     await settle();
     expect(Query(fixture, 'mj-dashboard-browser')).not.toBeNull();
     expect(browser(fixture).Dashboards.map(d => d.Name)).toEqual(['Revenue', 'Churn']);
   });
 
-  it('names its tab Browse', async () => {
-    const { fixture } = renderBrowse();
+  it('names its tab Library', async () => {
+    const { fixture } = renderPage();
     await settle();
-    expect(await fixture.componentInstance.GetResourceDisplayName(new ResourceData())).toBe('Browse');
+    expect(await fixture.componentInstance.GetResourceDisplayName(new ResourceData())).toBe('Library');
+    expect(await fixture.componentInstance.GetResourceIconClass(new ResourceData())).toBe('fa-solid fa-layer-group');
   });
 
   it('calls NotifyLoadComplete once when the list loads', async () => {
-    const { fixture, loadComplete } = renderBrowse();
+    const { fixture, loadComplete } = renderPage();
     await settle();
 
     expect(loadComplete).toHaveBeenCalledTimes(1);
@@ -361,7 +446,7 @@ describe('DashboardBrowserResourceComponent (DOM)', () => {
 
   it('calls NotifyLoadComplete and stops loading when the dashboard cache fails to load', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const { fixture, loadComplete } = renderBrowse({}, providerWithDashboardsEntity(), { loadFails: true });
+    const { fixture, loadComplete } = renderPage({}, providerWithDashboardsEntity(), { loadFails: true });
     await settle();
     fixture.detectChanges();
 
@@ -370,8 +455,8 @@ describe('DashboardBrowserResourceComponent (DOM)', () => {
     expect(browser(fixture).IsLoading).toBe(false);
   });
 
-  it('opens a card in a tab of the Dashboards app and leaves Browse on the list', async () => {
-    const { fixture, navigation } = renderBrowse();
+  it('opens a card in a tab of the Dashboards app and leaves the Library on the list', async () => {
+    const { fixture, navigation } = renderPage();
     await settle();
 
     browser(fixture).DashboardOpen.emit({ Dashboard: CHURN, OpenInNewTab: false });
@@ -383,7 +468,7 @@ describe('DashboardBrowserResourceComponent (DOM)', () => {
   });
 
   it('opens a card in a separate tab of the Dashboards app when the browser asks for one (a Shift, Ctrl or Cmd click)', async () => {
-    const { fixture, navigation } = renderBrowse();
+    const { fixture, navigation } = renderPage();
     await settle();
 
     browser(fixture).DashboardOpen.emit({ Dashboard: CHURN, OpenInNewTab: true });
@@ -393,7 +478,7 @@ describe('DashboardBrowserResourceComponent (DOM)', () => {
   });
 
   it('opens the dashboard in edit mode in a tab of the Dashboards app for Edit', async () => {
-    const { fixture, navigation } = renderBrowse();
+    const { fixture, navigation } = renderPage();
     await settle();
 
     browser(fixture).DashboardEdit.emit({ Dashboard: REVENUE });
@@ -401,22 +486,102 @@ describe('DashboardBrowserResourceComponent (DOM)', () => {
     expect(navigation.service.OpenDashboard).toHaveBeenCalledExactlyOnceWith(REVENUE.ID, 'Revenue', { ...IN_DASHBOARDS_APP, openInEditMode: true });
   });
 
-  it('opens a new dashboard in edit mode in a tab of the Dashboards app after saving it', async () => {
-    const created = { ID: 'D0000000-0000-4000-8000-000000000003', Name: '', Type: 'Config', Save: vi.fn(async () => true) } as unknown as MJDashboardEntity;
-    const provider = { ...providerWithDashboardsEntity(), GetEntityObject: vi.fn(async () => created) } as unknown as IMetadataProvider;
-    const { fixture, navigation } = renderBrowse({}, provider);
+  it('New dashboard asks for a name and creates nothing when the user cancels', async () => {
+    const { provider, getEntityObject } = providerCreatingDashboards();
+    const { fixture, navigation } = renderPage({}, provider);
+    await settle();
+    expect(nameDialogOpen(fixture)).toBe(false);
+
+    browser(fixture).DashboardCreate.emit({ CategoryId: null });
+    fixture.detectChanges();
+
+    expect(Text(fixture, 'mj-dashboard-name-dialog .mj-dialog-title')).toBe('New dashboard');
+    expect(Query(fixture, 'mj-dashboard-name-dialog .dn-name')?.getAttribute('maxlength')).toBe(String(NAME_MAX_LENGTH));
+    Click(fixture, 'mj-dashboard-name-dialog .dn-cancel');
+    fixture.detectChanges();
+
+    expect(nameDialogOpen(fixture)).toBe(false);
+    expect(getEntityObject).not.toHaveBeenCalled();
+    expect(navigation.service.OpenDashboard).not.toHaveBeenCalled();
+  });
+
+  it('New dashboard saves the named dashboard in the folder, reloads the cache, then opens it in edit mode in a tab of the Dashboards app', async () => {
+    const { created, provider } = providerCreatingDashboards();
+    const { fixture, navigation, engine } = renderPage({ category: CATEGORY_ID }, provider);
+    await settle();
+
+    browser(fixture).DashboardCreate.emit({ CategoryId: CATEGORY_ID });
+    fixture.detectChanges();
+    createNamedDashboard(fixture, '  Q3 Pipeline ');
+    await settle();
+    fixture.detectChanges();
+
+    expect(created.Name).toBe('Q3 Pipeline');
+    expect(created.UserID).toBe(USER_ID);
+    expect(created.CategoryID).toBe(CATEGORY_ID);
+    expect(engine.Config).toHaveBeenLastCalledWith(true, provider.CurrentUser, provider);
+    expect(navigation.service.OpenDashboard).toHaveBeenCalledExactlyOnceWith(created.ID, 'Q3 Pipeline', { ...IN_DASHBOARDS_APP, openInEditMode: true });
+    expect(engine.Config.mock.invocationCallOrder.at(-1)).toBeLessThan(navigation.service.OpenDashboard.mock.invocationCallOrder[0]);
+    expect(browser(fixture).Dashboards[0]).toBe(created);
+    expect(names(browser(fixture).Dashboards)).toEqual(['Q3 Pipeline', 'Revenue', 'Churn']);
+    expect(railItem(fixture, 'All dashboards').badge).toBe('3');
+    expect(nameDialogOpen(fixture)).toBe(false);
+  });
+
+  it('keeps the dialog open with the name and tells the user when the dashboard cannot be saved', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const { provider } = providerCreatingDashboards(false);
+    const { fixture, navigation, engine, notifications } = renderPage({}, provider);
     await settle();
 
     browser(fixture).DashboardCreate.emit({ CategoryId: null });
+    fixture.detectChanges();
+    createNamedDashboard(fixture, 'Q3 Pipeline');
+    await settle();
+    fixture.detectChanges();
+    await fixture.whenStable();   // ngModel enables the field again in a microtask
+    fixture.detectChanges();
+
+    expect(notifications.CreateSimpleNotification).toHaveBeenCalledExactlyOnceWith('Could not create the dashboard', 'error', 3000);
+    expect(nameDialogOpen(fixture)).toBe(true);
+    expect((Query(fixture, 'mj-dashboard-name-dialog .dn-name') as HTMLInputElement).value).toBe('Q3 Pipeline');
+    expect((Query(fixture, 'mj-dashboard-name-dialog .dn-name') as HTMLInputElement).disabled).toBe(false);
+    expect((Query(fixture, 'mj-dashboard-name-dialog .dn-create') as HTMLButtonElement).disabled).toBe(false);
+    expect(navigation.service.OpenDashboard).not.toHaveBeenCalled();
+    expect(engine.Config).not.toHaveBeenCalledWith(true, provider.CurrentUser, provider);
+    expect(names(browser(fixture).Dashboards)).toEqual(['Revenue', 'Churn']);
+  });
+
+  it('ignores a second Create while the named dashboard is being saved', async () => {
+    let finishSave: (saved: boolean) => void = () => undefined;
+    const { created, provider, getEntityObject } = providerCreatingDashboards(new Promise<boolean>(resolve => (finishSave = resolve)));
+    const { fixture, navigation } = renderPage({}, provider);
     await settle();
 
-    expect(navigation.service.OpenDashboard).toHaveBeenCalledWith(created.ID, 'New Dashboard', { ...IN_DASHBOARDS_APP, openInEditMode: true });
-    expect(browser(fixture).Dashboards[0]).toBe(created);
-    expect(railItem(fixture, 'All dashboards').badge).toBe('3');
+    browser(fixture).DashboardCreate.emit({ CategoryId: null });
+    fixture.detectChanges();
+    createNamedDashboard(fixture, 'Q3 Pipeline');
+    await settle();
+    fixture.detectChanges();
+
+    expect((Query(fixture, 'mj-dashboard-name-dialog .dn-create') as HTMLButtonElement).disabled).toBe(true);
+    expect((Query(fixture, 'mj-dashboard-name-dialog .dn-cancel') as HTMLButtonElement).disabled).toBe(true);
+    const secondCreate = fixture.componentInstance.OnNewDashboardNamed('Q3 Pipeline');
+    await settle();
+    expect(getEntityObject).toHaveBeenCalledTimes(1);
+
+    finishSave(true);
+    await secondCreate;
+    await settle();
+    fixture.detectChanges();
+
+    expect(created.Save).toHaveBeenCalledTimes(1);
+    expect(navigation.service.OpenDashboard).toHaveBeenCalledExactlyOnceWith(created.ID, 'Q3 Pipeline', { ...IN_DASHBOARDS_APP, openInEditMode: true });
+    expect(nameDialogOpen(fixture)).toBe(false);
   });
 
   it('opens a ?dashboard= deep link in a tab of the Dashboards app once the list loads, then removes only that param', async () => {
-    const { navigation } = renderBrowse({ category: CATEGORY_ID, dashboard: CHURN.ID });
+    const { navigation } = renderPage({ category: CATEGORY_ID, dashboard: CHURN.ID });
     await settle();
 
     expect(navigation.service.OpenDashboard).toHaveBeenCalledTimes(1);
@@ -425,11 +590,11 @@ describe('DashboardBrowserResourceComponent (DOM)', () => {
     expect(navigation.params$.value).toEqual({ category: CATEGORY_ID });
   });
 
-  it('removes a ?dashboard= param delivered to a loaded Browse tab, so the same link opens again', async () => {
-    const { navigation } = renderBrowse();
+  it('removes a ?dashboard= param delivered to a loaded Library tab, so the same link opens again', async () => {
+    const { navigation } = renderPage();
     await settle();
 
-    // A Home pin or bookmark re-focusing the cached Browse tab.
+    // A Home pin or bookmark re-focusing the cached Library tab.
     navigation.params$.next({ dashboard: REVENUE.ID });
     await settle();
     expect(navigation.service.OpenDashboard).toHaveBeenCalledTimes(1);
@@ -442,7 +607,7 @@ describe('DashboardBrowserResourceComponent (DOM)', () => {
   });
 
   it('does not report to the agent while opening a ?dashboard= link and removing the param', async () => {
-    const { navigation } = renderBrowse();
+    const { navigation } = renderPage();
     await settle();
     const reported = navigation.service.SetAgentContext.mock.calls.length;
 
@@ -455,7 +620,7 @@ describe('DashboardBrowserResourceComponent (DOM)', () => {
   });
 
   it('removes a ?dashboard= param for a dashboard the user cannot access, without opening a tab', async () => {
-    const { navigation } = renderBrowse({ dashboard: 'D0000000-0000-4000-8000-00000000dead' });
+    const { navigation } = renderPage({ dashboard: 'D0000000-0000-4000-8000-00000000dead' });
     await settle();
 
     expect(navigation.service.OpenDashboard).not.toHaveBeenCalled();
@@ -463,7 +628,7 @@ describe('DashboardBrowserResourceComponent (DOM)', () => {
   });
 
   it('does not reopen a deep-linked dashboard when the agent refreshes the list', async () => {
-    const { navigation } = renderBrowse({ dashboard: CHURN.ID });
+    const { navigation } = renderPage({ dashboard: CHURN.ID });
     await settle();
     expect(navigation.service.OpenDashboard).toHaveBeenCalledTimes(1);
 
@@ -474,7 +639,7 @@ describe('DashboardBrowserResourceComponent (DOM)', () => {
   });
 
   it('registers one agent tool set, without the old open-dashboard tools', async () => {
-    const { navigation } = renderBrowse();
+    const { navigation } = renderPage();
     await settle();
 
     expect(navigation.service.SetAgentClientTools).toHaveBeenCalledTimes(1);
@@ -493,7 +658,7 @@ describe('DashboardBrowserResourceComponent (DOM)', () => {
   });
 
   it('the OpenDashboard agent tool opens the named dashboard in a tab of the Dashboards app', async () => {
-    const { navigation } = renderBrowse();
+    const { navigation } = renderPage();
     await settle();
 
     const result = await tool(navigation, 'OpenDashboard').Handler({ dashboard: 'churn' });
@@ -503,7 +668,7 @@ describe('DashboardBrowserResourceComponent (DOM)', () => {
   });
 
   it('the GetDashboardShares agent tool requires a dashboard ID or name', async () => {
-    const { navigation } = renderBrowse();
+    const { navigation } = renderPage();
     await settle();
 
     const result = await tool(navigation, 'GetDashboardShares').Handler({});
@@ -524,6 +689,7 @@ describe('DashboardBrowserResourceComponent (DOM)', () => {
         ID: `D1000000-0000-4000-8000-00000000000${n}`,
         Name,
         UserID,
+        User: UserID === ANA_ID ? 'ana@example.com' : 'test@example.com',
         CategoryID,
         Type,
         __mj_UpdatedAt: new Date(`2026-09-1${n}`),
@@ -534,12 +700,12 @@ describe('DashboardBrowserResourceComponent (DOM)', () => {
 
     /** A fresh library for each render: moves mutate CategoryID. */
     function library(): Library {
-      // Newest first, the order Browse loads them in.
+      // Newest first.
       const dashboards = [
         dashboard(6, 'Pipeline Health', USER_ID, PIPELINE_ID),
         dashboard(5, 'Custom Code', USER_ID, null, 'Code'),
-        dashboard(4, 'Partner KPIs', 'U-ANA', OWNER_CATEGORY_ID),
-        dashboard(3, 'Board Pack', 'U-ANA', OWNER_CATEGORY_ID),
+        dashboard(4, 'Partner KPIs', ANA_ID, OWNER_CATEGORY_ID),
+        dashboard(3, 'Board Pack', ANA_ID, OWNER_CATEGORY_ID),
         dashboard(2, 'Quota', USER_ID, SALES_ID),
         dashboard(1, 'Revenue', USER_ID, null),
       ];
@@ -548,7 +714,7 @@ describe('DashboardBrowserResourceComponent (DOM)', () => {
         if (!found) throw new Error(`No fixture dashboard ${name}`);
         return found;
       };
-      // The user filed Partner KPIs under Sales; Board Pack is unfiled, so it sits at the root.
+      // The user filed Partner KPIs under Sales; Board Pack is unfiled, so it is in no category.
       const links = [{ DashboardID: byName('Partner KPIs').ID, UserID: USER_ID, DashboardCategoryID: SALES_ID }] as unknown as MJDashboardCategoryLinkEntity[];
       return {
         dashboards,
@@ -562,19 +728,125 @@ describe('DashboardBrowserResourceComponent (DOM)', () => {
       };
     }
 
-    async function renderLibrary(params: Record<string, string> = {}, settings: Record<string, string> = {}) {
+    async function renderLibrary(params: Record<string, string> = {}, settings: Record<string, string> = {}, provider: IMetadataProvider = providerWithDashboardsEntity()) {
       const fixtureLibrary = library();
-      const rendered = renderBrowse(params, providerWithDashboardsEntity(), { ...fixtureLibrary, settings });
+      const rendered = renderPage(params, provider, { ...fixtureLibrary, settings });
       await settle();
       rendered.fixture.detectChanges();
       return { ...rendered, library: fixtureLibrary };
     }
 
-    it('renders the page chrome with the Browse title and an X of Y dashboards badge', async () => {
+    it('renders the page chrome with the Library title and an X of Y dashboards badge', async () => {
       const { fixture } = await renderLibrary();
-      expect(Text(fixture, '.mj-page-header-title')).toBe('Browse');
+      expect(Text(fixture, '.mj-page-header-title')).toBe('Library');
       expect(QueryAll(fixture, 'mj-stat-badge strong').map(el => el.textContent?.trim())).toEqual(['5', '5']);
       expect(Text(fixture, 'mj-stat-badge .mj-stat-badge-label')).toBe('dashboards');
+    });
+
+    it('lands on every dashboard as a flat list: favorites first, then the ones opened last, then the rest', async () => {
+      const { fixture, library: lib } = await renderLibrary();
+      const shown = browser(fixture);
+
+      expect(shown.FlatMode).toBe(true);
+      expect(shown.SelectedCategoryId).toBeNull();
+      expect(names(shown.Dashboards)).toEqual(['Custom Code', 'Partner KPIs', 'Revenue', 'Board Pack', 'Quota', 'Pipeline Health']);
+      expect(shown.ShowFavorites).toBe(true);
+      expect(shown.FavoriteIds).toEqual(lib.favoriteIds);
+    });
+
+    it('moves a dashboard to the front when the user stars it', async () => {
+      const { fixture, favorites, library: lib } = await renderLibrary();
+
+      favorites.Set([lib.byName('Quota').ID]);
+      fixture.detectChanges();
+
+      expect(names(browser(fixture).Dashboards)[0]).toBe('Quota');
+      expect(browser(fixture).FavoriteIds).toEqual([lib.byName('Quota').ID]);
+    });
+
+    it('stars a dashboard from its card and tells the user', async () => {
+      const { fixture, favorites, notifications, library: lib } = await renderLibrary();
+
+      browser(fixture).DashboardFavoriteToggle.emit({ Dashboard: lib.byName('Quota') });
+      await settle();
+      fixture.detectChanges();
+
+      expect(favorites.Toggle).toHaveBeenCalledExactlyOnceWith(lib.byName('Quota').ID);
+      expect(notifications.CreateSimpleNotification).toHaveBeenCalledWith('Added "Quota" to favorites', 'success', 2000);
+      // Quota joins the favorites, after Custom Code, which the user opened more recently.
+      expect(names(browser(fixture).Dashboards)).toEqual(['Custom Code', 'Quota', 'Partner KPIs', 'Revenue', 'Board Pack', 'Pipeline Health']);
+    });
+
+    it('unstars a dashboard from its card and tells the user', async () => {
+      const { fixture, notifications, library: lib } = await renderLibrary();
+
+      browser(fixture).DashboardFavoriteToggle.emit({ Dashboard: lib.byName('Revenue') });
+      await settle();
+
+      expect(notifications.CreateSimpleNotification).toHaveBeenCalledWith('Removed "Revenue" from favorites', 'success', 2000);
+    });
+
+    it('tells the user when the favorite cannot be changed', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const { fixture, favorites, notifications, library: lib } = await renderLibrary();
+      favorites.Toggle.mockRejectedValueOnce(new Error('network down'));
+
+      browser(fixture).DashboardFavoriteToggle.emit({ Dashboard: lib.byName('Quota') });
+      await settle();
+
+      expect(notifications.CreateSimpleNotification).toHaveBeenCalledExactlyOnceWith('Could not change the favorite', 'error', 3000);
+    });
+
+    it("labels the user's own dashboards You and reads the other owners' names once", async () => {
+      const reads: RunViewParams[] = [];
+      const provider = providerWithDashboardsEntity([{ ID: ANA_ID, Name: 'ana@example.com', FirstName: 'Ana', LastName: 'Ruiz' }], reads);
+      const { fixture, library: lib } = await renderLibrary({}, {}, provider);
+      await settle();
+      fixture.detectChanges();
+
+      const labels = browser(fixture).OwnerLabels;
+      expect(labels?.get(lib.byName('Revenue').ID)).toBe('You');
+      expect(labels?.get(lib.byName('Partner KPIs').ID)).toBe('Ana Ruiz');
+      expect(labels?.get(lib.byName('Board Pack').ID)).toBe('Ana Ruiz');
+      expect(ownerReads(reads)).toHaveLength(1);
+      expect(ownerReads(reads)[0].ExtraFilter).toBe("ID IN ('u-ana')");
+    });
+
+    it("shows the owner's user name without its e-mail domain when the read returns no name", async () => {
+      const { fixture, library: lib } = await renderLibrary();
+      await settle();
+      fixture.detectChanges();
+
+      expect(browser(fixture).OwnerLabels?.get(lib.byName('Partner KPIs').ID)).toBe('ana');
+    });
+
+    it('reads an owner once while the read is still running, then shows the name', async () => {
+      const { provider, reads, finish } = providerWithPendingOwnerRead();
+      const { fixture, engine, library: lib } = await renderLibrary({}, {}, provider);
+      expect(ownerReads(reads)).toHaveLength(1);
+
+      engine.Change({ dashboards: [...lib.dashboards] }, 'MJ: Dashboards');
+      await settle();
+      expect(ownerReads(reads)).toHaveLength(1);
+
+      finish([{ ID: ANA_ID, Name: 'ana@example.com', FirstName: 'Ana', LastName: 'Ruiz' }]);
+      await settle();
+      fixture.detectChanges();
+
+      expect(browser(fixture).OwnerLabels?.get(lib.byName('Partner KPIs').ID)).toBe('Ana Ruiz');
+      expect(ownerReads(reads)).toHaveLength(1);
+    });
+
+    it('gives the browser the empty state of the list it shows', async () => {
+      const { fixture } = await renderLibrary();
+      expect(browser(fixture).FlatEmptyWelcome).toBe(true);
+
+      clickRail(fixture, 'Favorites');
+      expect(browser(fixture).FlatEmptyTitle).toBe('No favorites yet');
+      expect(browser(fixture).FlatEmptyWelcome).toBe(false);
+
+      clickRail(fixture, 'Uncategorized');
+      expect(browser(fixture).FlatEmptyTitle).toBe('No uncategorized dashboards');
     });
 
     it('shows the Library filters with counts, then the category tree and Uncategorized', async () => {
@@ -592,7 +864,7 @@ describe('DashboardBrowserResourceComponent (DOM)', () => {
       expect(railItem(fixture, 'All dashboards').active).toBe(true);
     });
 
-    it('counts a shared dashboard where the user filed it, and an unfiled one at the root', async () => {
+    it('counts a shared dashboard where the user filed it, and an unfiled one as uncategorized', async () => {
       const { fixture } = await renderLibrary();
       // Sales: Quota + Partner KPIs (filed there by the user). Uncategorized: Revenue + Board Pack
       // (unfiled, although its owner put it in a category). Custom Code is not a Config dashboard.
@@ -686,15 +958,29 @@ describe('DashboardBrowserResourceComponent (DOM)', () => {
       expect(railItem(fixture, 'Sales').active).toBe(true);
     });
 
-    it('clicking Uncategorized returns to the root folder view', async () => {
+    it('clicking Uncategorized lists the dashboards in no category, flat, and writes ?category=uncategorized', async () => {
       const { fixture, navigation } = await renderLibrary();
       clickRail(fixture, 'Shared with me');
 
       clickRail(fixture, 'Uncategorized');
 
-      expect(browser(fixture).FlatMode).toBe(false);
+      // The stub also receives the Code dashboard; the real browser leaves it out.
+      expect(names(browser(fixture).Dashboards)).toEqual(['Custom Code', 'Revenue', 'Board Pack']);
+      expect(browser(fixture).FlatMode).toBe(true);
       expect(browser(fixture).SelectedCategoryId).toBeNull();
-      expect(navigation.params$.value).toEqual({});
+      expect(navigation.params$.value).toEqual({ category: 'uncategorized' });
+      expect(railItem(fixture, 'Uncategorized').active).toBe(true);
+    });
+
+    it('reports Uncategorized to the agent by name, and the SelectCategory agent tool opens it', async () => {
+      const { fixture, navigation } = await renderLibrary();
+
+      expect(await tool(navigation, 'SelectCategory').Handler({ category: 'uncategorized' })).toEqual({ Success: true });
+      fixture.detectChanges();
+
+      expect(railItem(fixture, 'Uncategorized').active).toBe(true);
+      expect(navigation.params$.value).toEqual({ category: 'uncategorized' });
+      expect(lastAgentContext(navigation)?.['SelectedCategoryName']).toBe('Uncategorized');
     });
 
     it('restores ?lib= from the URL on load', async () => {
@@ -706,7 +992,8 @@ describe('DashboardBrowserResourceComponent (DOM)', () => {
 
     it('treats an unknown ?lib= value as All', async () => {
       const { fixture } = await renderLibrary({ lib: 'bogus' });
-      expect(browser(fixture).FlatMode).toBe(false);
+      expect(browser(fixture).FlatMode).toBe(true);
+      expect(browser(fixture).Dashboards).toHaveLength(6);
       expect(railItem(fixture, 'All dashboards').active).toBe(true);
     });
 
@@ -715,13 +1002,14 @@ describe('DashboardBrowserResourceComponent (DOM)', () => {
 
       navigation.params$.next({ lib: 'mine' });
       fixture.detectChanges();
-      expect(names(browser(fixture).Dashboards)).toEqual(['Pipeline Health', 'Custom Code', 'Quota', 'Revenue']);
+      expect(names(browser(fixture).Dashboards)).toEqual(['Custom Code', 'Revenue', 'Quota', 'Pipeline Health']);
       expect(railItem(fixture, 'My dashboards').active).toBe(true);
       expect(lastAgentContext(navigation)?.['LibraryFilter']).toBe('mine');
 
       navigation.params$.next({});
       fixture.detectChanges();
-      expect(browser(fixture).FlatMode).toBe(false);
+      expect(browser(fixture).FlatMode).toBe(true);
+      expect(browser(fixture).Dashboards).toHaveLength(6);
       expect(railItem(fixture, 'All dashboards').active).toBe(true);
       expect(lastAgentContext(navigation)?.['LibraryFilter']).toBe('all');
     });
@@ -777,7 +1065,7 @@ describe('DashboardBrowserResourceComponent (DOM)', () => {
       expect(names(shown.Dashboards)).toContain('Board Pack');
       expect(shown.DashboardPermissions?.get(partnerKpis.ID)).toMatchObject({ IsOwner: false, CanEdit: false, CanDelete: false });
       expect(shown.DashboardPermissions?.get(boardPack.ID)).toMatchObject({ IsOwner: false, CanEdit: false, CanDelete: false });
-      // Partner KPIs stays where the user filed it; the unfiled Board Pack stays at the root.
+      // Partner KPIs stays where the user filed it; the unfiled Board Pack stays in no category.
       expect(shown.EffectiveCategoryMap?.get(partnerKpis.ID)).toBe(SALES_ID);
       expect(shown.EffectiveCategoryMap?.has(boardPack.ID)).toBe(true);
       expect(shown.EffectiveCategoryMap?.get(boardPack.ID)).toBeNull();
@@ -822,7 +1110,7 @@ describe('DashboardBrowserResourceComponent (DOM)', () => {
     it('keeps a flat Library list after moving its dashboards to a folder', async () => {
       const provider = { ...providerWithDashboardsEntity(), CreateTransactionGroup: vi.fn(async () => ({ Submit: vi.fn(async () => true) })) } as unknown as IMetadataProvider;
       const fixtureLibrary = library();
-      const { fixture, navigation } = renderBrowse({ lib: 'mine' }, provider, fixtureLibrary);
+      const { fixture, navigation } = renderPage({ lib: 'mine' }, provider, fixtureLibrary);
       await settle();
 
       await fixture.componentInstance.OnDashboardMove({ Dashboards: [fixtureLibrary.byName('Revenue')], TargetCategoryId: SALES_ID });
@@ -832,6 +1120,35 @@ describe('DashboardBrowserResourceComponent (DOM)', () => {
       expect(railItem(fixture, 'My dashboards').active).toBe(true);
       expect(railItem(fixture, 'Sales').badge).toBe('3');
       expect(navigation.params$.value).toEqual({ lib: 'mine' });
+    });
+
+    it('the deprecated CreateDashboard asks for the name, then files the dashboard in the open category folder', async () => {
+      const { created, provider, getEntityObject } = providerCreatingDashboards();
+      const { fixture } = await renderLibrary({ category: SALES_ID }, {}, provider);
+
+      await fixture.componentInstance.CreateDashboard();
+      fixture.detectChanges();
+      expect(nameDialogOpen(fixture)).toBe(true);
+      expect(getEntityObject).not.toHaveBeenCalled();
+
+      createNamedDashboard(fixture, 'Q3 Pipeline');
+      await settle();
+
+      expect(created.Name).toBe('Q3 Pipeline');
+      expect(created.CategoryID).toBe(SALES_ID);
+    });
+
+    it('files a new dashboard made from Uncategorized in no category', async () => {
+      const { created, provider } = providerCreatingDashboards();
+      const { fixture, navigation } = await renderLibrary({ category: 'uncategorized' }, {}, provider);
+
+      browser(fixture).DashboardCreate.emit({ CategoryId: null });
+      fixture.detectChanges();
+      createNamedDashboard(fixture, 'Q3 Pipeline');
+      await settle();
+
+      expect(created.CategoryID).toBeNull();
+      expect(navigation.service.OpenDashboard).toHaveBeenCalledExactlyOnceWith(created.ID, 'Q3 Pipeline', { ...IN_DASHBOARDS_APP, openInEditMode: true });
     });
 
     it('saves the collapsed rail for the user', async () => {
@@ -868,7 +1185,8 @@ describe('DashboardBrowserResourceComponent (DOM)', () => {
       await tool(navigation, 'ClearDashboardFilters').Handler({});
       fixture.detectChanges();
 
-      expect(browser(fixture).FlatMode).toBe(false);
+      expect(browser(fixture).FlatMode).toBe(true);
+      expect(browser(fixture).Dashboards).toHaveLength(6);
       expect(railItem(fixture, 'All dashboards').active).toBe(true);
     });
 
@@ -877,6 +1195,13 @@ describe('DashboardBrowserResourceComponent (DOM)', () => {
       const context = lastAgentContext(navigation);
       expect(context?.['LibraryFilter']).toBe('recent');
       expect(context?.['VisibleDashboards']).toEqual(['Board Pack', 'Custom Code', 'Quota']);
+    });
+
+    it('reports the Library counts and the dashboards opened last to the agent', async () => {
+      const { navigation } = await renderLibrary();
+      const context = lastAgentContext(navigation);
+      expect(context?.['LibraryCounts']).toEqual({ all: 5, mine: 3, shared: 2, favorites: 2, recent: 2 });
+      expect(context?.['RecentlyOpenedNames']).toEqual(['Board Pack', 'Quota']);
     });
   });
 });

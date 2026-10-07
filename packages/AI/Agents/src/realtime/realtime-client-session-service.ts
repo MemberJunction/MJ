@@ -337,6 +337,16 @@ export interface ExecuteRelayedToolInput {
      */
     ResumeRunID?: string;
     /**
+     * The browser's GraphQL session id. Lets the delegated run execute client tools the surface
+     * registered, because the client-tool request channel is keyed on this id.
+     */
+    BrowserSessionID?: string;
+    /**
+     * The app-context snapshot the browser sent at session start, so the delegated run's prompt sees
+     * surface context and tools. It does not follow later navigation in the browser.
+     */
+    AppContext?: AppContextSnapshot;
+    /**
      * The id of the human this delegation is FOR, threaded into the delegated run's `userId`.
      *
      * The relayed-tool path may execute under an ELEVATED principal (a scoped anonymous magic-link
@@ -2636,11 +2646,13 @@ export class RealtimeClientSessionService {
     /**
      * Runs (or resumes) the target agent for a delegation. Threads the combined abort signal, parent
      * run linkage, session id, and the `OnProgress` callback so the resolver can stream progress.
+     * The browser session id becomes the run's `sessionID` (client-tool channel) and the app-context
+     * snapshot rides `data.appContext` (prompt context and surface tools); both are optional.
      * When {@link ExecuteRelayedToolInput.ResumeRunID} is set, resumes that paused run via
      * `lastRunId` + `autoPopulateLastRunPayload` (the user's answer continues the same interactive
      * run) instead of starting fresh.
      *
-     * @param input The relayed tool input (linkage, progress callback, optional resume id).
+     * @param input The relayed tool input (linkage, progress callback, optional resume id, browser session, app context).
      * @param request The broker's delegation request (call id + arguments + abort signal).
      * @param target The resolved target agent.
      * @param contextUser The calling user.
@@ -2669,6 +2681,8 @@ export class RealtimeClientSessionService {
             cancellationToken: this.combineSignals(request.AbortSignal, input.AbortSignal),
             parentRun: parentRun ?? undefined,
             agentSessionID: input.AgentSessionID,
+            sessionID: input.BrowserSessionID,
+            data: input.AppContext ? { appContext: input.AppContext } : undefined,
             onProgress: input.OnProgress,
             lastRunId: input.ResumeRunID,
             autoPopulateLastRunPayload: input.ResumeRunID ? true : undefined

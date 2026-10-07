@@ -12,19 +12,21 @@ import { ApplicationManager } from '@memberjunction/ng-base-application';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import {
   MJButtonDirective,
+  MJConfirmService,
   MJEmptyStateComponent,
   MJPageBodyComponent,
   MJPageHeaderComponent,
   MJPageLayoutComponent,
 } from '@memberjunction/ng-ui-components';
+import type { MJConfirmOptions } from '@memberjunction/ng-ui-components';
 import { RenderComponentFixture, CreateFakeProvider, Click, Query, QueryAll, Text, TypeInto } from '@memberjunction/ng-test-utils';
 import { DashboardsCategoriesResourceComponent } from './dashboards-categories-resource.component';
 
 /**
  * DOM coverage for the Categories page of the Dashboards app (<mj-dashboards-categories-resource>).
  * The page chrome, the empty state, the button directive and ngModel are real; the dashboard
- * engine, navigation, the app list and notifications are doubles. Saving or deleting a category
- * changes the engine double's category list, as the real engine's cache does.
+ * engine, navigation, the app list, notifications and the confirm service are doubles. Saving or
+ * deleting a category changes the engine double's category list, as the real engine's cache does.
  */
 
 @Component({ standalone: true, selector: 'mj-loading', template: '' })
@@ -131,6 +133,11 @@ function fakeNavigation() {
   };
 }
 
+/** An MJConfirmService double. ConfirmDelete answers `answer`, or waits for the test when `answer` is a promise. */
+function fakeConfirm(answer: boolean | Promise<boolean> = true) {
+  return { ConfirmDelete: vi.fn(async (_options: Omit<MJConfirmOptions, 'type'>) => answer) };
+}
+
 /** A provider whose new MJ: Dashboard Categories object adds itself to the library when saved. */
 function providerCreatingCategories(library: CategoryLibrary, saveSucceeds = true) {
   const created = category(library, NEW_CATEGORY_ID, '', null);
@@ -145,7 +152,7 @@ function providerCreatingCategories(library: CategoryLibrary, saveSucceeds = tru
   return { created, save, provider };
 }
 
-function renderCategories(library: CategoryLibrary = standardLibrary(), provider: IMetadataProvider = CreateFakeProvider()) {
+function renderCategories(library: CategoryLibrary = standardLibrary(), provider: IMetadataProvider = CreateFakeProvider(), confirm = fakeConfirm()) {
   const engine = stubDashboardEngine(library);
   const navigation = fakeNavigation();
   const notifications = { CreateSimpleNotification: vi.fn() };
@@ -157,6 +164,7 @@ function renderCategories(library: CategoryLibrary = standardLibrary(), provider
       { provide: NavigationService, useValue: navigation },
       { provide: ApplicationManager, useValue: { GetAllApps: () => [DASHBOARDS_APP] } },
       { provide: MJNotificationService, useValue: notifications },
+      { provide: MJConfirmService, useValue: confirm },
     ],
     setup: instance => {
       instance.Provider = provider;
@@ -166,13 +174,13 @@ function renderCategories(library: CategoryLibrary = standardLibrary(), provider
       instance.LoadCompleteEvent = loadComplete;
     },
   });
-  return { fixture, engine, navigation, notifications, loadComplete, library };
+  return { fixture, engine, navigation, notifications, loadComplete, library, confirm };
 }
 
 const settle = (): Promise<void> => new Promise(resolve => setTimeout(resolve, 0));
 
-async function renderLoaded(library?: CategoryLibrary, provider?: IMetadataProvider) {
-  const rendered = renderCategories(library, provider);
+async function renderLoaded(library?: CategoryLibrary, provider?: IMetadataProvider, confirm?: ReturnType<typeof fakeConfirm>) {
+  const rendered = renderCategories(library, provider, confirm);
   await settle();
   rendered.fixture.detectChanges();
   return rendered;
@@ -239,11 +247,13 @@ describe('DashboardsCategoriesResourceComponent (DOM)', () => {
     expect(QueryAll(fixture, '.cat-delete').map(el => el.getAttribute('aria-label'))).toEqual(['Delete Ops']);
   });
 
-  it('Open shows the category on the Browse page of the Dashboards app', async () => {
+  it('Open shows the category on the Library page of the Dashboards app', async () => {
     const { fixture, navigation } = await renderLoaded();
-    rowButton(fixture, 'Sales', '.cat-open').click();
+    const open = rowButton(fixture, 'Sales', '.cat-open');
+    expect(open.getAttribute('aria-label')).toBe('Open Sales in the Library');
+    open.click();
     await settle();
-    expect(navigation.SwitchToApp).toHaveBeenCalledWith(DASHBOARDS_APP.ID, 'Browse', { lib: null, category: SALES_ID });
+    expect(navigation.SwitchToApp).toHaveBeenCalledWith(DASHBOARDS_APP.ID, 'Library', { lib: null, category: SALES_ID });
   });
 
   it('creates a top-level category from the New category box', async () => {
@@ -297,6 +307,24 @@ describe('DashboardsCategoriesResourceComponent (DOM)', () => {
     expect(fixture.componentInstance.NewName).toBe('Finance');
   });
 
+  it('asks before deleting a category, naming it', async () => {
+    const { fixture, confirm } = await renderLoaded();
+    rowButton(fixture, 'Ops', '.cat-delete').click();
+    await settle();
+    expect(confirm.ConfirmDelete).toHaveBeenCalledExactlyOnceWith({ title: 'Delete category', message: 'Delete "Ops"?', detail: 'This action cannot be undone.' });
+  });
+
+  it('keeps the category and says nothing when the user cancels', async () => {
+    const { fixture, library, notifications } = await renderLoaded(standardLibrary(), CreateFakeProvider(), fakeConfirm(false));
+    const ops = library.categories.find(c => c.Name === 'Ops');
+    rowButton(fixture, 'Ops', '.cat-delete').click();
+    await settle();
+    fixture.detectChanges();
+    expect(ops?.Delete).not.toHaveBeenCalled();
+    expect(texts(fixture, '.cat-main b')).toContain('Ops');
+    expect(notifications.CreateSimpleNotification).not.toHaveBeenCalled();
+  });
+
   it('deletes an empty category and rebuilds the tree from the cache, without reloading it', async () => {
     const { fixture, engine, library, navigation, notifications } = await renderLoaded();
     const ops = library.categories.find(c => c.Name === 'Ops');
@@ -317,7 +345,7 @@ describe('DashboardsCategoriesResourceComponent (DOM)', () => {
     const { fixture, engine, library, navigation } = await renderLoaded();
     const reported = navigation.SetAgentContext.mock.calls.length;
 
-    // In Browse, the user creates Finance; the engine adds it to its cache and emits.
+    // In the Library, the user creates Finance; the engine adds it to its cache and emits.
     library.categories = [...library.categories, category(library, NEW_CATEGORY_ID, 'Finance', null)];
     engine.EmitChange('MJ: Dashboard Categories');
     await settle();
@@ -331,7 +359,7 @@ describe('DashboardsCategoriesResourceComponent (DOM)', () => {
     const { fixture, engine, library } = await renderLoaded();
     expect(rowButton(fixture, 'Ops', '.cat-delete')).toBeTruthy();
 
-    // In Browse, the user moves a dashboard into Ops; the engine updates its cache and emits.
+    // In the Library, the user moves a dashboard into Ops; the engine updates its cache and emits.
     library.dashboards = [...library.dashboards, dashboard('D3000000-0000-4000-8000-000000000004', USER_ID, OPS_ID)];
     engine.EmitChange('MJ: Dashboards');
     await settle();
@@ -366,21 +394,21 @@ describe('DashboardsCategoriesResourceComponent (DOM)', () => {
     });
   });
 
-  it('registers only the read-only OpenCategoryInBrowse and RefreshCategories agent tools, once', async () => {
+  it('registers only the read-only OpenCategoryInLibrary and RefreshCategories agent tools, once', async () => {
     const { navigation } = await renderLoaded();
     expect(navigation.SetAgentClientTools).toHaveBeenCalledTimes(1);
     const names = navigation.SetAgentClientTools.mock.calls[0][1].map(t => t.Name);
-    expect(names).toEqual(['OpenCategoryInBrowse', 'RefreshCategories']);
+    expect(names).toEqual(['OpenCategoryInLibrary', 'RefreshCategories']);
     expect(names.filter(name => MUTATING_TOOL_NAME.test(name))).toEqual([]);
   });
 
-  it('the OpenCategoryInBrowse agent tool opens a category by name and rejects unknown ones', async () => {
+  it('the OpenCategoryInLibrary agent tool opens a category on the Library page by name and rejects unknown ones', async () => {
     const { navigation } = await renderLoaded();
 
-    expect(await tool(navigation, 'OpenCategoryInBrowse').Handler({ category: 'pipeline' })).toEqual({ Success: true });
-    expect(navigation.SwitchToApp).toHaveBeenCalledWith(DASHBOARDS_APP.ID, 'Browse', { lib: null, category: PIPELINE_ID });
+    expect(await tool(navigation, 'OpenCategoryInLibrary').Handler({ category: 'pipeline' })).toEqual({ Success: true });
+    expect(navigation.SwitchToApp).toHaveBeenCalledWith(DASHBOARDS_APP.ID, 'Library', { lib: null, category: PIPELINE_ID });
 
-    const missing = (await tool(navigation, 'OpenCategoryInBrowse').Handler({ category: 'Finance' })) as { Success: boolean };
+    const missing = (await tool(navigation, 'OpenCategoryInLibrary').Handler({ category: 'Finance' })) as { Success: boolean };
     expect(missing.Success).toBe(false);
   });
 

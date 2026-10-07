@@ -6,8 +6,9 @@ import { DashboardEngine, MJDashboardCategoryEntity, ResourceData } from '@membe
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { MJConfirmService } from '@memberjunction/ng-ui-components';
 import { AGENT_CONTEXT_NAME_LIST_CAP, type AgentToolResult } from '../shared/agent-tool-validation';
-import { DASHBOARDS_BROWSE_NAV_ITEM, FindDashboardsApp } from '../shared/dashboards-app.helpers';
+import { DASHBOARDS_LIBRARY_NAV_ITEM, FindDashboardsApp } from '../shared/dashboards-app.helpers';
 import { ObserveDashboardLibraryChanges } from '../shared/dashboard-library-changes';
 import { LocationQueryParams } from './dashboard-library-filter';
 import { DashboardsAgentClientTool, ResolveByIdOrName } from './dashboards-agent-tools';
@@ -21,9 +22,9 @@ import {
 
 /**
  * Categories page of the Dashboards app: the user's category tree with dashboard and sub-category
- * counts, a New category box, Delete for an empty category the user owns, and Open, which shows the
- * category on the Browse page. The agent tools are read-only; see the SAFETY BOUNDARY in the agent
- * section below.
+ * counts, a New category box, Delete, after a confirm, for an empty category the user owns, and Open,
+ * which shows the category on the Library page. The agent tools are read-only; see the SAFETY
+ * BOUNDARY in the agent section below.
  */
 @RegisterClass(BaseResourceComponent, 'DashboardsCategoriesResource')
 @Component({
@@ -56,7 +57,7 @@ import {
                 <b>{{ row.Category.Name }}</b>
                 <small>{{ Summary(row) }}</small>
               </span>
-              <button mjButton size="sm" class="cat-open" [ariaLabel]="'Open ' + row.Category.Name + ' in Browse'" (click)="OpenInBrowse(row.Category)">Open</button>
+              <button mjButton size="sm" class="cat-open" [ariaLabel]="'Open ' + row.Category.Name + ' in the Library'" (click)="OpenInLibrary(row.Category)">Open</button>
               @if (row.CanDelete) {
                 <button mjButton size="sm" variant="danger" class="cat-delete" [ariaLabel]="'Delete ' + row.Category.Name" [disabled]="IsSaving" (click)="Delete(row.Category)">
                   <i class="fa-solid fa-trash" aria-hidden="true"></i> Delete
@@ -115,6 +116,7 @@ import {
 export class DashboardsCategoriesResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {
   private appManager = inject(ApplicationManager);
   private notifications = inject(MJNotificationService);
+  private confirmService = inject(MJConfirmService);
 
   /** True until the categories have loaded. */
   public IsLoading = true;
@@ -138,7 +140,7 @@ export class DashboardsCategoriesResourceComponent extends BaseResourceComponent
   ngOnInit(): void {
     super.ngOnInit();
     // The dashboard cache also changes while this page is a background tab (categories created or
-    // deleted and dashboards moved in Browse or another session), so this only refreshes the view.
+    // deleted and dashboards moved in the Library or another session), so this only refreshes the view.
     ObserveDashboardLibraryChanges()
       .pipe(takeUntil(this.destroy$))
       .subscribe(() => this.onCacheChanged());
@@ -197,12 +199,20 @@ export class DashboardsCategoriesResourceComponent extends BaseResourceComponent
     }
   }
 
-  /** Deletes an empty category the user owns. */
+  /** Deletes an empty category the user owns, after the user confirms. */
   public async Delete(category: MJDashboardCategoryEntity): Promise<void> {
     if (this.IsSaving) {
       return;
     }
     const name = category.Name;
+    const confirmed = await this.confirmService.ConfirmDelete({
+      title: 'Delete category',
+      message: `Delete "${name}"?`,
+      detail: 'This action cannot be undone.',
+    });
+    if (!confirmed || this.IsSaving) {
+      return;
+    }
     this.setSaving(true);
     try {
       if (await category.Delete()) {
@@ -221,9 +231,9 @@ export class DashboardsCategoriesResourceComponent extends BaseResourceComponent
     }
   }
 
-  /** Shows the category on the Browse page of the Dashboards app. */
-  public async OpenInBrowse(category: MJDashboardCategoryEntity): Promise<void> {
-    await this.openInBrowse(category);
+  /** Shows the category on the Library page of the Dashboards app. */
+  public async OpenInLibrary(category: MJDashboardCategoryEntity): Promise<void> {
+    await this.openInLibrary(category);
   }
 
   private async load(): Promise<void> {
@@ -271,17 +281,17 @@ export class DashboardsCategoriesResourceComponent extends BaseResourceComponent
     this.Rows = BuildCategoryRows(engine.GetAccessibleCategories(userId), dashboards, effectiveCategoryMap, userId);
   }
 
-  private async openInBrowse(category: MJDashboardCategoryEntity): Promise<AgentToolResult> {
+  private async openInLibrary(category: MJDashboardCategoryEntity): Promise<AgentToolResult> {
     const app = FindDashboardsApp(this.appManager);
     if (!app) {
       this.notifications.CreateSimpleNotification('The Dashboards app is not available', 'error', 3000);
       return { Success: false, ErrorMessage: 'The Dashboards app is not available to this user.' };
     }
     try {
-      await this.navigationService.SwitchToApp(app.ID, DASHBOARDS_BROWSE_NAV_ITEM, LocationQueryParams({ Filter: 'all', CategoryId: category.ID }));
+      await this.navigationService.SwitchToApp(app.ID, DASHBOARDS_LIBRARY_NAV_ITEM, LocationQueryParams({ Filter: 'all', CategoryId: category.ID }));
       return { Success: true };
     } catch (error) {
-      LogError(`Dashboards Categories: could not open "${category.Name}" in Browse: ${errorMessage(error)}`);
+      LogError(`Dashboards Categories: could not open "${category.Name}" in the Library: ${errorMessage(error)}`);
       return { Success: false, ErrorMessage: errorMessage(error) };
     }
   }
@@ -295,8 +305,8 @@ export class DashboardsCategoriesResourceComponent extends BaseResourceComponent
   // Agent Context & Client Tools
   //
   // 🔒 SAFETY BOUNDARY: the Categories page exposes ONLY read-only /
-  // navigational tools to the AI agent: OpenCategoryInBrowse (shows a category
-  // on the Browse page) and RefreshCategories (reloads the tree).
+  // navigational tools to the AI agent: OpenCategoryInLibrary (shows a category
+  // on the Library page) and RefreshCategories (reloads the tree).
   //
   // Mutating operations — create / delete / rename / move / share a category,
   // and any change to a dashboard — are intentionally NOT exposed. The agent
@@ -321,8 +331,8 @@ export class DashboardsCategoriesResourceComponent extends BaseResourceComponent
   private buildAgentTools(): DashboardsAgentClientTool[] {
     return [
       {
-        Name: 'OpenCategoryInBrowse',
-        Description: 'Show a category and its dashboards on the Browse page. Accepts the category name or its ID.',
+        Name: 'OpenCategoryInLibrary',
+        Description: 'Show a category and its dashboards on the Library page. Accepts the category name or its ID.',
         ParameterSchema: {
           type: 'object',
           properties: { category: { type: 'string', description: 'The category name or ID.' } },
@@ -330,7 +340,7 @@ export class DashboardsCategoriesResourceComponent extends BaseResourceComponent
         },
         Handler: async (params: Record<string, unknown>): Promise<AgentToolResult> => {
           const lookup = ResolveByIdOrName(this.Rows.map(r => r.Category), params['category'], 'category');
-          return lookup.ok ? this.openInBrowse(lookup.value) : lookup.result;
+          return lookup.ok ? this.openInLibrary(lookup.value) : lookup.result;
         },
       },
       {

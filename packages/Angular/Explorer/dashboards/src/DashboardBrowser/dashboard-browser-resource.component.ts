@@ -1,10 +1,12 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy, inject } from '@angular/core';
 import { merge } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
+import { LogError } from '@memberjunction/core';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, DashboardFavoritesService } from '@memberjunction/ng-shared';
 import { RecentAccessService } from '@memberjunction/ng-shared-generic';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 import type { MJLeftNavItem, MJLeftNavSection } from '@memberjunction/ng-ui-components';
 import { ResourceData, MJDashboardEntity, MJDashboardCategoryEntity, DashboardEngine, DashboardUserPermissions, MJDashboardCategoryLinkEntity, MJDashboardPermissionEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import {
@@ -19,7 +21,11 @@ import {
     DASHBOARD_LIBRARY_FILTERS,
     DashboardLibraryFilter,
     FilterDashboardsForLibrary,
+    IsBrowsableDashboard,
+    IsCategoryFolderLocation,
     IsDashboardLibraryFilter,
+    LibraryEmptyState,
+    LibraryEmptyStateText,
     LibraryFilterContext,
     LocationQueryParams,
     ParseRailItemId,
@@ -27,17 +33,19 @@ import {
     ResolveBrowseLocation,
     SameBrowseLocation,
     ToggleExpandedId,
+    UNCATEGORIZED_CATEGORY_ID,
+    VisibleLibraryDashboards,
     WithExpandedAncestors,
 } from './dashboard-library-filter';
 import { GetRecentDashboardIds, ObserveRecentDashboardChanges } from '../shared/dashboard-recents';
 import { ObserveDashboardLibraryChanges } from '../shared/dashboard-library-changes';
-import { DashboardsAppOpenOptions } from '../shared/dashboards-app.helpers';
+import { BuildOwnerLabels, LoadDashboardOwnerNames, OwnerIdsToLoad } from '../shared/dashboard-owner-names';
+import { CreateBlankDashboard, DashboardNameMaxLength, DashboardsAppOpenOptions } from '../shared/dashboards-app.helpers';
 import {
     AgentToolResult,
     ValidateStringParam,
 } from '../shared/agent-tool-validation';
-import {
-    createDefaultDashboardConfig,
+import type {
     // Browser event types from generic component
     DashboardOpenEvent,
     DashboardEditEvent,
@@ -49,7 +57,9 @@ import {
     CategoryChangeEvent,
     ViewPreferenceChangeEvent,
     DashboardBrowserViewMode,
+    DashboardFavoriteToggleEvent,
 } from '@memberjunction/ng-dashboard-viewer';
+import { DASHBOARD_NAME_MAX_LENGTH } from '@memberjunction/ng-dashboard-viewer';
 
 /**
  * Local shape for an agent client tool. Matches the inline array type that
@@ -72,12 +82,14 @@ interface AgentClientTool {
 type AgentToolDataResult = AgentToolResult & { Data?: Record<string, unknown> };
 
 /**
- * Browse resource for the Dashboards app. A left rail picks a Library filter (All, Mine,
- * Shared with me, Favorites, Recently opened) or a category; the generic
- * DashboardBrowserComponent lists the result, as a folder view under All and as a flat list
- * for the other filters. A click opens the dashboard in a tab of the Dashboards app, in place of
- * the preview tab, so Back returns to Browse. A Shift, Ctrl or Cmd click opens it in a separate
- * tab.
+ * Library page of the Dashboards app. A left rail picks a Library filter (All, Mine, Shared with
+ * me, Favorites, Recently opened), a category or Uncategorized; the generic
+ * DashboardBrowserComponent lists the result. Every list is flat, favorites first, then the
+ * dashboards opened last, then the rest; a category opens as a folder. Cards show a star the user
+ * can toggle and the owner ("You" or the owner's name). A click opens the dashboard in a tab of the
+ * Dashboards app, in place of the preview tab, so Back returns to the Library. A Shift, Ctrl or Cmd
+ * click opens it in a separate tab. New dashboard asks for the name first, then opens the new
+ * dashboard in edit mode.
  */
 @RegisterClass(BaseResourceComponent, 'DashboardBrowserResource')
 @Component({
@@ -176,12 +188,28 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
     private favorites = inject(DashboardFavoritesService);
     private recentAccess = inject(RecentAccessService);
     private appManager = inject(ApplicationManager);
+    private notifications = inject(MJNotificationService);
 
     /** The active Library filter. A category is only selected under `all`. */
     public LibraryFilter: DashboardLibraryFilter = 'all';
 
-    /** The dashboards given to the browser: the loaded list narrowed by the Library filter. */
+    /** The dashboards given to the browser: the loaded list for the current location, in the Library order. */
     public VisibleDashboards: MJDashboardEntity[] = [];
+
+    /** IDs of the user's favorite dashboards, for the card stars. */
+    public FavoriteIds: string[] = [];
+
+    /** Each dashboard's owner text ("You" or the owner's name), keyed by dashboard ID. */
+    public OwnerLabels = new Map<string, string>();
+
+    /** What an empty flat list shows at the current location. */
+    public EmptyState: LibraryEmptyStateText = LibraryEmptyState({ Filter: 'all', CategoryId: null });
+
+    /** Owner names read so far, keyed by normalized user ID. '' = the read did not return the user. */
+    private ownerNames = new Map<string, string>();
+
+    /** Normalized IDs of the owners whose names are being read. */
+    private ownerReadsInFlight = new Set<string>();
 
     /** How many dashboards the browser shows for each Library filter. */
     public LibraryCounts: Record<DashboardLibraryFilter, number> = { all: 0, mine: 0, shared: 0, favorites: 0, recent: 0 };
@@ -194,6 +222,18 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
 
     /** Whether the rail is collapsed to icons. Saved per user. */
     public RailCollapsed = false;
+
+    /** True while the New dashboard dialog is open. */
+    public ShowNewDashboardDialog = false;
+
+    /** True while the dashboard named in the New dashboard dialog is being created. */
+    public IsCreatingDashboard = false;
+
+    /** The longest name the New dashboard dialog accepts. */
+    public NewDashboardNameMaxLength = DASHBOARD_NAME_MAX_LENGTH;
+
+    /** The category the dashboard named in the dialog is filed in; null for no category. */
+    private newDashboardCategoryId: string | null = null;
 
     private static readonly RAIL_COLLAPSED_SETTING = 'mj.dashboards.browseRailCollapsed';
 
@@ -218,14 +258,14 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
         // that arrive before loadDashboards() finishes are captured by OnQueryParamsChanged
         // into _pendingQueryParams and applied once the dashboard list is available.
 
-        // Favorites and recents change while Browse is also a background tab. RecentItems fires right
-        // after a dashboard open is logged; the record-log cache that recents are read from reloads
-        // about 1.5 s later and then ObserveRecentDashboardChanges fires.
+        // Favorites and recents change while the Library is also a background tab. RecentItems fires
+        // right after a dashboard open is logged; the record-log cache that recents are read from
+        // reloads about 1.5 s later and then ObserveRecentDashboardChanges fires.
         merge(this.favorites.Changed$, this.recentAccess.RecentItems, ObserveRecentDashboardChanges())
             .pipe(takeUntil(this.destroy$))
             .subscribe(() => this.onLibrarySourcesChanged());
-        // The dashboard cache also changes while Browse is a background tab (saves and deletes in
-        // other tabs or sessions), so Browse re-reads it and refreshes the view.
+        // The dashboard cache also changes while the Library is a background tab (saves and deletes
+        // in other tabs or sessions), so the Library re-reads it and refreshes the view.
         ObserveDashboardLibraryChanges()
             .pipe(takeUntil(this.destroy$))
             .subscribe(() => this.onLibraryCacheChanged());
@@ -296,8 +336,8 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
 
     /**
      * Opens a dashboard in a tab of the Dashboards app (see DashboardsAppOpenOptions), in edit mode
-     * when `openInEditMode` is set, and in a separate tab when `openInNewTab` is set. Browse itself
-     * stays on the list.
+     * when `openInEditMode` is set, and in a separate tab when `openInNewTab` is set. The Library
+     * itself stays on the list.
      */
     private openDashboard(dashboard: MJDashboardEntity, openInEditMode = false, openInNewTab = false): void {
         this.navigationService.OpenDashboard(dashboard.ID, dashboard.Name, DashboardsAppOpenOptions(this.appManager, openInEditMode, openInNewTab));
@@ -307,12 +347,12 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
     // BaseResourceComponent Implementation
     // ========================================
 
-    async GetResourceDisplayName(data: ResourceData): Promise<string> {
-        return 'Browse';
+    async GetResourceDisplayName(_data: ResourceData): Promise<string> {
+        return 'Library';
     }
 
-    async GetResourceIconClass(data: ResourceData): Promise<string> {
-        return 'fa-solid fa-gauge-high';
+    async GetResourceIconClass(_data: ResourceData): Promise<string> {
+        return 'fa-solid fa-layer-group';
     }
 
     // ========================================
@@ -324,12 +364,12 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
         return RailActiveItemId(this.currentLocation, this.Categories);
     }
 
-    /** True when the browser lists the Library filter flat instead of by folder. */
+    /** True unless one category's folder is open: every other location is a flat list. */
     public get IsFlatView(): boolean {
-        return this.LibraryFilter !== 'all';
+        return !IsCategoryFolderLocation(this.currentLocation);
     }
 
-    /** Moves Browse to the Library filter or category of the clicked rail item. */
+    /** Moves the Library to the Library filter, category or Uncategorized of the clicked rail item. */
     public OnRailItemClicked(item: MJLeftNavItem): void {
         const location = ParseRailItemId(item.id);
         if (location) {
@@ -368,10 +408,16 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
         this.refreshLibraryView();
     }
 
-    /** Recomputes the visible dashboards, the counts and the rail sections from the current state. */
+    /**
+     * Recomputes what the browser and the rail show from the current state: the visible dashboards,
+     * the stars, the owners, the empty state, the counts and the rail sections.
+     */
     private refreshLibraryView(): void {
         const context = this.libraryContext();
-        this.VisibleDashboards = FilterDashboardsForLibrary(this.Dashboards, this.LibraryFilter, context);
+        this.VisibleDashboards = VisibleLibraryDashboards(this.Dashboards, this.currentLocation, context, this.EffectiveCategoryMap);
+        this.FavoriteIds = context.FavoriteIds;
+        this.OwnerLabels = BuildOwnerLabels(this.Dashboards, context.CurrentUserId, this.ownerNames);
+        this.EmptyState = LibraryEmptyState(this.currentLocation);
         this.LibraryCounts = CountLibraryDashboards(this.Dashboards, context);
         const categoryCounts = CountDashboardsByCategory(this.Dashboards, this.Categories, this.EffectiveCategoryMap);
         this.RailSections = BuildLibraryRailSections(this.LibraryCounts, this.Categories, categoryCounts.ByCategory, categoryCounts.Uncategorized);
@@ -400,9 +446,9 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
     }
 
     /**
-     * Favorites or recents changed: recompute the view and re-render. Does not report to the
-     * agent, because these changes also arrive while Browse is a background tab and the agent
-     * context belongs to the active tab.
+     * Favorites or recents changed: recompute the view, which re-sorts it, and re-render. Does not
+     * report to the agent, because these changes also arrive while the Library is a background tab
+     * and the agent context belongs to the active tab.
      */
     private onLibrarySourcesChanged(): void {
         this.refreshLibraryView();
@@ -410,30 +456,31 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
     }
 
     /**
-     * The dashboard cache changed: re-read it and refresh the view. Does not report to the agent,
-     * because this also runs while Browse is a background tab.
+     * The dashboard cache changed: re-read it, refresh the view and read the names of new owners.
+     * Does not report to the agent, because this also runs while the Library is a background tab.
      */
     private onLibraryCacheChanged(): void {
         this.readLibraryFromEngine();
         this.refreshLibraryView();
         this.cdr.detectChanges();
+        void this.refreshOwnerNames();
     }
 
     // ========================================
     // Agent Context & Client Tools
     //
-    // 🔒 SAFETY BOUNDARY: the Dashboard Browser exposes ONLY read-only /
+    // 🔒 SAFETY BOUNDARY: the Library page exposes ONLY read-only /
     // navigational tools to the AI agent: SearchDashboards, OpenDashboard (opens
     // the dashboard), RefreshDashboardList, SelectLibraryFilter,
     // SelectCategory, FilterByCategory, ClearDashboardFilters, SwitchViewMode, and
     // the read-only detail tools GetCategoryHierarchy and GetDashboardShares.
     //
     // Mutating operations — create / delete / save / share / move a dashboard,
-    // create / delete a category — are intentionally NOT exposed. The agent
-    // helps the user find, open, and understand dashboards (the category tree
-    // and who a dashboard is shared with); the user performs every mutation
-    // from the UI. Do NOT add a mutating tool here without revisiting this
-    // boundary.
+    // create / delete a category, add or remove a favorite — are intentionally
+    // NOT exposed. The agent helps the user find, open, and understand dashboards
+    // (the category tree and who a dashboard is shared with); the user performs
+    // every mutation from the UI, including the star on a card. Do NOT add a
+    // mutating tool here without revisiting this boundary.
     // ========================================
 
     /**
@@ -442,22 +489,32 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
      * view mode, or loading state changes.
      */
     private emitAgentContext(): void {
-        const selectedCategory = this.SelectedCategoryId
-            ? this.Categories.find(c => UUIDsEqual(c.ID, this.SelectedCategoryId!)) ?? null
-            : null;
-
+        const context = this.libraryContext();
         this.navigationService.SetAgentContext(this, BuildDashboardBrowserAgentContext({
             VisibleDashboardNames: this.VisibleDashboards.map(d => d.Name || '(untitled)'),
             TotalDashboardCount: this.totalAccessibleDashboardCount,
             FilteredDashboardCount: this.VisibleDashboards.length,
             LibraryFilter: this.LibraryFilter,
+            LibraryCounts: this.LibraryCounts,
+            RecentlyOpenedNames: FilterDashboardsForLibrary(this.Dashboards.filter(IsBrowsableDashboard), 'recent', context).map(d => d.Name),
             SearchText: this.agentSearchText,
             AvailableCategoryNames: this.Categories.map(c => c.Name),
             SelectedCategoryId: this.SelectedCategoryId,
-            SelectedCategoryName: selectedCategory?.Name ?? null,
+            SelectedCategoryName: this.selectedCategoryName,
             ViewMode: this.ViewMode,
             IsLoading: this.isLoading,
         }));
+    }
+
+    /** The name of the selected category, "Uncategorized" for that list, or null for none. */
+    private get selectedCategoryName(): string | null {
+        if (this.SelectedCategoryId === UNCATEGORIZED_CATEGORY_ID) {
+            return 'Uncategorized';
+        }
+        const selectedCategory = this.SelectedCategoryId
+            ? this.Categories.find(c => UUIDsEqual(c.ID, this.SelectedCategoryId)) ?? null
+            : null;
+        return selectedCategory?.Name ?? null;
     }
 
     /**
@@ -472,7 +529,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
     }
 
     /**
-     * Registers the agent client tools. Browse always shows the list, so the
+     * Registers the agent client tools. The Library always shows the list, so the
      * tool set never changes and is registered once.
      */
     private registerAgentTools(): void {
@@ -543,7 +600,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
         return [
             {
                 Name: 'SelectLibraryFilter',
-                Description: 'Show one Library list from the Browse rail: "all" (every dashboard, browsed by category), "mine" (dashboards the user owns), "shared" (dashboards shared with the user), "favorites", or "recent" (recently opened). Clears any category filter.',
+                Description: 'Show one Library list from the rail: "all" (every dashboard: favorites first, then the ones opened last, then the rest), "mine" (dashboards the user owns), "shared" (dashboards shared with the user), "favorites", or "recent" (recently opened, the most recent first). Clears any category filter.',
                 ParameterSchema: { type: 'object', properties: { filter: { type: 'string', enum: [...DASHBOARD_LIBRARY_FILTERS] } }, required: ['filter'] },
                 Handler: async (params: Record<string, unknown>): Promise<AgentToolResult> => {
                     return this.agentSelectLibraryFilter(params['filter']);
@@ -551,8 +608,8 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             },
             {
                 Name: 'SelectCategory',
-                Description: 'Filter the dashboard list to a category. Accepts either the category NAME (as listed in AvailableCategories) or its ID. Pass an empty string to clear the category filter (show root).',
-                ParameterSchema: { type: 'object', properties: { category: { type: 'string', description: 'The category name or ID to filter by. Empty string clears the filter.' } }, required: ['category'] },
+                Description: 'Filter the dashboard list to a category. Accepts either the category NAME (as listed in AvailableCategories) or its ID, or "Uncategorized" for the dashboards in no category. Pass an empty string to clear the category filter (show the whole list).',
+                ParameterSchema: { type: 'object', properties: { category: { type: 'string', description: 'The category name or ID to filter by, or "Uncategorized". Empty string clears the filter.' } }, required: ['category'] },
                 Handler: async (params: Record<string, unknown>): Promise<AgentToolResult> => {
                     const v = ValidateStringParam(params['category'], 'category');
                     if (!v.ok) return v.result;
@@ -561,7 +618,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             },
             {
                 Name: 'FilterByCategory',
-                Description: 'Filter the dashboard list to a category by its ID. Pass an empty string to clear the category filter (show root). Prefer SelectCategory, which also accepts a category name.',
+                Description: 'Filter the dashboard list to a category by its ID. Pass an empty string to clear the category filter (show the whole list). Prefer SelectCategory, which also accepts a category name.',
                 ParameterSchema: { type: 'object', properties: { categoryId: { type: 'string' } }, required: ['categoryId'] },
                 Handler: async (params: Record<string, unknown>): Promise<AgentToolResult> => {
                     const v = ValidateStringParam(params['categoryId'], 'categoryId');
@@ -571,7 +628,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             },
             {
                 Name: 'ClearDashboardFilters',
-                Description: 'Clear all active dashboard-list filters — the text search, the Library filter and the category filter — and return to the full list at the root category.',
+                Description: 'Clear all active dashboard-list filters — the text search, the Library filter and the category filter — and return to the full list (All dashboards).',
                 ParameterSchema: { type: 'object', properties: {} },
                 Handler: async (): Promise<AgentToolResult> => this.agentClearDashboardFilters(),
             },
@@ -614,7 +671,8 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
      * Apply a category filter by NAME or ID (empty string clears it). Resolves a
      * supplied name (case-insensitive) to its id against the loaded, accessible
      * category list — mirroring the Data Explorer's SelectView name→id resolution.
-     * A category is shown under the All Library filter.
+     * "Uncategorized" (when no category has that name) shows the dashboards in no
+     * category. A category is shown under the All Library filter.
      */
     private agentSelectCategory(categoryNameOrId: string): AgentToolResult {
         const raw = categoryNameOrId.trim();
@@ -631,6 +689,11 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             this.Categories.find(c => UUIDsEqual(c.ID, raw)) ??
             this.Categories.find(c => (c.Name || '').toLowerCase() === lowered);
 
+        if (!match && lowered === UNCATEGORIZED_CATEGORY_ID) {
+            this.moveTo({ Filter: 'all', CategoryId: UNCATEGORIZED_CATEGORY_ID });
+            return { Success: true };
+        }
+
         if (!match) {
             const available = this.Categories.map(c => c.Name).join(', ') || '(none)';
             return { Success: false, ErrorMessage: `No accessible category named or identified by "${raw}". Available categories: ${available}.` };
@@ -640,7 +703,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
         return { Success: true };
     }
 
-    /** Clear the text search, the Library filter and the category filter, returning to the full root list. */
+    /** Clear the text search, the Library filter and the category filter, returning to All dashboards. */
     private agentClearDashboardFilters(): AgentToolResult {
         this.agentSearchText = '';
 
@@ -921,11 +984,9 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
       return this.OnDashboardMove(event);
     }
 
-    /**
-     * Handle create dashboard request from generic browser
-     */
+    /** The generic browser asks for a new dashboard (its New menu or an empty state): asks for the name first. */
     public async OnDashboardCreate(event: DashboardCreateEvent): Promise<void> {
-        await this.CreateDashboard(event.CategoryId);
+        this.OpenNewDashboardDialog(event.CategoryId);
     }
 
     /** @deprecated Use {@link OnDashboardCreate}. */
@@ -933,10 +994,24 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
       return this.OnDashboardCreate(event);
     }
 
+    /** Stars or unstars a dashboard from its card. Changed$ then re-sorts the Library. */
+    public async OnDashboardFavoriteToggle(event: DashboardFavoriteToggleEvent): Promise<void> {
+        const dashboard = event.Dashboard;
+        try {
+            const isFavorite = await this.favorites.Toggle(dashboard.ID);
+            const message = isFavorite ? `Added "${dashboard.Name}" to favorites` : `Removed "${dashboard.Name}" from favorites`;
+            this.notifications.CreateSimpleNotification(message, 'success', 2000);
+            this.emitAgentContext();
+        } catch (error) {
+            LogError(`Dashboards Library: could not change the favorite: ${error instanceof Error ? error.message : String(error)}`);
+            this.notifications.CreateSimpleNotification('Could not change the favorite', 'error', 3000);
+        }
+    }
+
     /**
      * Handle folder navigation in the generic browser and update the URL. Entering a
-     * folder shows it under the All Library filter; going back to the root keeps the
-     * current filter.
+     * folder shows it under the All Library filter; going back to the root shows the
+     * current Library filter's flat list.
      */
     public OnCategoryChange(event: CategoryChangeEvent): void {
         this.moveTo({ Filter: event.CategoryId ? 'all' : this.LibraryFilter, CategoryId: event.CategoryId });
@@ -1105,54 +1180,76 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
     // ========================================
 
     /**
-     * Create a new dashboard and open it in edit mode
+     * Opens the New dashboard dialog. The dashboard is filed in `categoryId`, else in the open
+     * category folder, else in no category.
      */
-    public async CreateDashboard(categoryId?: string | null): Promise<void> {
+    public OpenNewDashboardDialog(categoryId?: string | null): void {
+        this.newDashboardCategoryId = categoryId ?? (IsCategoryFolderLocation(this.currentLocation) ? this.SelectedCategoryId : null);
+        this.NewDashboardNameMaxLength = DashboardNameMaxLength(this.ProviderToUse);
+        this.ShowNewDashboardDialog = true;
+        this.cdr.detectChanges();
+    }
+
+    /** Closes the New dashboard dialog and creates nothing. */
+    public OnNewDashboardCancelled(): void {
+        this.ShowNewDashboardDialog = false;
+        this.cdr.detectChanges();
+    }
+
+    /**
+     * Creates the dashboard named in the dialog, reloads the cache the dashboard tab reads from, puts
+     * the dashboard first in the list, and opens it in edit mode in a tab of the Dashboards app. When
+     * the save fails, the dialog stays open with the name and the user is told. A second call while
+     * the dashboard is being created does nothing.
+     */
+    public async OnNewDashboardNamed(name: string): Promise<void> {
+        if (this.IsCreatingDashboard) return;
+        this.setCreatingDashboard(true);
         try {
-            this.isLoading = true;
-            this.cdr.detectChanges();
-
-            const md = this.ProviderToUse;
-            const dashboard = await md.GetEntityObject<MJDashboardEntity>('MJ: Dashboards');
-
-            dashboard.Name = 'New Dashboard';
-            dashboard.Description = '';
-            dashboard.UserID = md.CurrentUser.ID;
-            dashboard.UIConfigDetails = JSON.stringify(createDefaultDashboardConfig());
-
-            if (categoryId) {
-                dashboard.CategoryID = categoryId;
-            } else if (this.SelectedCategoryId) {
-                dashboard.CategoryID = this.SelectedCategoryId;
+            const dashboard = await CreateBlankDashboard(this.ProviderToUse, name, this.newDashboardCategoryId);
+            if (!dashboard) {
+                this.notifications.CreateSimpleNotification('Could not create the dashboard', 'error', 3000);
+                return;
             }
-
-            const saved = await dashboard.Save();
-
-            if (saved) {
-                this.Dashboards.unshift(dashboard);
-                this.Dashboards = [...this.Dashboards];
-                this.refreshLibraryView();
-                this.emitAgentContext();
-                this.openDashboard(dashboard, true);
-            } else {
-                console.error('Failed to save dashboard:', dashboard.LatestResult);
-            }
-        } catch (err) {
-            console.error('Failed to create dashboard:', err);
+            await this.reloadDashboardCache();
+            this.ShowNewDashboardDialog = false;
+            this.Dashboards = [dashboard, ...this.Dashboards.filter(d => !UUIDsEqual(d.ID, dashboard.ID))];
+            this.refreshLibraryView();
+            this.emitAgentContext();
+            this.openDashboard(dashboard, true);
         } finally {
-            this.isLoading = false;
-            this.cdr.detectChanges();
+            this.setCreatingDashboard(false);
         }
     }
 
-    /** @deprecated Use {@link CreateDashboard}. */
+    /** @deprecated Use {@link OpenNewDashboardDialog}. */
+    public async CreateDashboard(categoryId?: string | null): Promise<void> {
+        this.OpenNewDashboardDialog(categoryId);
+    }
+
+    /** @deprecated Use {@link OpenNewDashboardDialog}. */
     public async createDashboard(categoryId?: string | null): Promise<void> {
       return this.CreateDashboard(categoryId);
+    }
+
+    /** Sets whether the named dashboard is being created, and re-renders the dialog. */
+    private setCreatingDashboard(creating: boolean): void {
+        this.IsCreatingDashboard = creating;
+        this.cdr.detectChanges();
     }
 
     // ========================================
     // Private Methods - Data Loading
     // ========================================
+
+    /** Reloads the dashboard cache before the new dashboard's tab opens: the tab reads the dashboard from it. A failure is only logged. */
+    private async reloadDashboardCache(): Promise<void> {
+        try {
+            await DashboardEngine.Instance.Config(true, this.ProviderToUse.CurrentUser, this.ProviderToUse);
+        } catch (error) {
+            LogError(`Dashboards Library: could not reload the dashboards: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
 
     private async loadDashboards(): Promise<void> {
         try {
@@ -1187,6 +1284,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             }
 
             this.emitAgentContext();
+            void this.refreshOwnerNames();
         } catch (err) {
             console.error('Failed to load dashboards:', err);
         } finally {
@@ -1198,8 +1296,8 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
 
     /**
      * Reads the library from the engine cache: the dashboards the user can access (narrowed by an
-     * agent search, most recently updated first), the categories owned by or shared with the user
-     * (by name), and the permission and effective-category maps.
+     * agent search), the categories owned by or shared with the user (by name), and the permission
+     * and effective-category maps.
      */
     private readLibraryFromEngine(): void {
         const engine = DashboardEngine.Instance;
@@ -1211,17 +1309,41 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
         this.buildPermissionMaps(engine, currentUserId);
     }
 
-    /** The dashboards the user can access whose name or description contains the agent's search text (all when there is none), most recently updated first. */
+    /**
+     * The dashboards the user can access whose name or description contains the agent's search text
+     * (all when there is none). The Library order is applied when the view is refreshed.
+     */
     private readSearchedDashboards(): MJDashboardEntity[] {
         const accessible = DashboardEngine.Instance.GetAccessibleDashboards(this.ProviderToUse.CurrentUser.ID);
         const q = this.agentSearchText.toLowerCase();
-        const matched = q
+        return q
             ? accessible.filter(d =>
                 (d.Name || '').toLowerCase().includes(q) ||
                 (d.Description || '').toLowerCase().includes(q))
             : [...accessible];
-        return matched.sort((a, b) =>
-            new Date(b.__mj_UpdatedAt).getTime() - new Date(a.__mj_UpdatedAt).getTime());
+    }
+
+    /**
+     * Reads the names of owners not read yet and not being read, then shows them on the cards.
+     * Never throws.
+     */
+    private async refreshOwnerNames(): Promise<void> {
+        const provider = this.ProviderToUse;
+        const userId = provider.CurrentUser.ID;
+        const missing = OwnerIdsToLoad(DashboardEngine.Instance.GetAccessibleDashboards(userId), userId, this.ownerNames)
+            .filter(id => !this.ownerReadsInFlight.has(id));
+        if (missing.length === 0) return;
+        missing.forEach(id => this.ownerReadsInFlight.add(id));
+        try {
+            const loaded = await LoadDashboardOwnerNames(provider, missing);
+            for (const id of missing) this.ownerNames.set(id, loaded.get(id) ?? '');
+            this.refreshLibraryView();
+            this.cdr.detectChanges();
+        } catch (error) {
+            LogError(`Dashboards Library: could not read the dashboard owners: ${error instanceof Error ? error.message : String(error)}`);
+        } finally {
+            missing.forEach(id => this.ownerReadsInFlight.delete(id));
+        }
     }
 
     /**
@@ -1267,7 +1389,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
 
     /**
      * Update the URL query params for the current tab: the Library filter (`lib`,
-     * omitted for All), the category filter, and no `dashboard` param (Browse
+     * omitted for All), the category filter, and no `dashboard` param (the Library
      * never shows a dashboard itself).
      * Routes through BaseResourceComponent.UpdateQueryParams, which updates the tab
      * configuration (triggering the shell's URL sync while respecting app-scoped

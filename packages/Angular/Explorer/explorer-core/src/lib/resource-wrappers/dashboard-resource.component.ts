@@ -1,41 +1,109 @@
 import { Component, ViewContainerRef, ComponentRef, ViewChild, ElementRef, ChangeDetectorRef, inject } from '@angular/core';
 import {
     BaseResourceComponent, NavigationService, BaseDashboard, DashboardConfig, RecentAccessService,
-    DashboardFavoritesService, HomeDashboardTabsService, HomeAppPinService, SafeDetectChanges
+    HomeAppPinService, SafeDetectChanges, CaptureElementJpeg, BuildDashboardPinInput, DASHBOARD_PIN_RESOURCE_TYPE
 } from '@memberjunction/ng-shared';
 import type { HomeAppPinInput } from '@memberjunction/ng-shared';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import { ResourceData, MJDashboardEntity, DashboardEngine, MJDashboardUserStateEntity, MJDashboardCategoryEntity, MJDashboardPartTypeEntity, DashboardUserPermissions } from '@memberjunction/core-entities';
-import { RegisterClass, MJGlobal, SafeJSONParse , UUIDsEqual } from '@memberjunction/global';
-import { Metadata, CompositeKey, RunView, LogError } from '@memberjunction/core';
-import type { EngineDataChangeEvent } from '@memberjunction/core';
-import { auditTime, filter, takeUntil } from 'rxjs';
+import { RealtimeSessionService, ArtifactPermissionService } from '@memberjunction/ng-conversations';
+import {
+    ResourceData, MJDashboardEntity, DashboardEngine, MJDashboardUserStateEntity,
+    DashboardUserPermissions, UserViewEngine, QueryEngine, ArtifactMetadataEngine, MJEnvironmentEntityExtended, UserInfoEngine
+} from '@memberjunction/core-entities';
+import type { MJArtifactEntity, MJArtifactVersionEntity, MJConversationEntity } from '@memberjunction/core-entities';
+import { RegisterClass, MJGlobal, SafeJSONParse , UUIDsEqual, EscapeSQLString, NormalizeUUID } from '@memberjunction/global';
+import { CompositeKey, RunView, LogError } from '@memberjunction/core';
+import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { DefaultAgentResolver } from '@memberjunction/conversations-runtime';
+import type { NavigationRequest } from '@memberjunction/ng-artifacts';
+import type { PendingAttachment } from '@memberjunction/ng-composer';
+import { filter, takeUntil } from 'rxjs';
 import type { DataExplorerFilter } from '@memberjunction/ng-dashboards/data-explorer-dashboards.module';
-import type { ShareDialogResult } from '@memberjunction/ng-dashboards/core-dashboards.module';
-import { DashboardViewerComponent, DashboardNavRequestEvent, PanelInteractionEvent, AddPanelResult, DashboardPanel, ExtractPanelsFromLayout } from '@memberjunction/ng-dashboard-viewer';
-import type { DashboardConfig as DashboardLayoutConfig, EditPartDialogResult } from '@memberjunction/ng-dashboard-viewer';
+import type { DashboardEditorComponent, DashboardEditorLoadError, ShareDialogResult } from '@memberjunction/ng-dashboards/core-dashboards.module';
+import { ExtractPanelsFromLayout } from '@memberjunction/ng-dashboard-viewer';
+import type { DashboardConfig as DashboardLayoutConfig, DashboardNavRequestEvent, DashboardViewerComponent } from '@memberjunction/ng-dashboard-viewer';
 import { BuildDashboardTabAgentContext, BuildDashboardTabAgentTools, SummarizeDashboardPanels } from './dashboard-tab-agent';
 import type { DashboardPanelSummary, DashboardTabAgentHost, DashboardTabDashboard } from './dashboard-tab-agent';
+import { BuildDashboardStudioTools } from './dashboard-studio-tools';
+import type { DashboardStudioHost } from './dashboard-studio-tools';
+import { SearchDashboardSources, SOURCE_KINDS } from './dashboard-source-search';
+import type { SourceKind, SourceSearchDeps, SourceSearchResult } from './dashboard-source-search';
+import {
+    ParseStudioPanePrefs, PrefsFromSplitSizes, STUDIO_PANE_COPILOT_MAX_PCT, STUDIO_PANE_COPILOT_MIN_PCT, STUDIO_PANE_DEFAULTS, STUDIO_PANE_SETTING_KEY
+} from './dashboard-studio-pane';
+import type { StudioPanePrefs } from './dashboard-studio-pane';
 
-/** The Home pin resource type for dashboards. */
-const DASHBOARD_PIN_RESOURCE_TYPE = 'Dashboards';
+/** The permissions the tab reports while its editor shows no dashboard: nothing is allowed. */
+const NO_DASHBOARD_PERMISSIONS: DashboardUserPermissions = {
+    DashboardID: '', CanRead: false, CanEdit: false, CanDelete: false, CanShare: false, IsOwner: false, PermissionSource: 'none',
+};
 
-/** The entity of the dashboard records DashboardEngine caches. */
-const DASHBOARDS_ENTITY_NAME = 'MJ: Dashboards';
+/** Why an agent's request or edit fails while the tab shows no Config dashboard. */
+const NO_CONFIG_DASHBOARD = 'No Config dashboard is open in this tab.';
 
-/** How long Save waits for the dashboard screenshot. After that it saves without a new one. */
-const SAVE_SCREENSHOT_TIMEOUT_MS = 1500;
+/** How long, in milliseconds, an agent's confirm dialog waits for the user's answer before it closes. */
+const AGENT_CONFIRM_TIMEOUT_MS = 25_000;
 
-/** What bringing the open dashboard in step with DashboardEngine did (see syncWithSavedDashboard). */
-type SavedDashboardSync = 'reloaded' | 'took-copy' | 'unchanged';
+/** Why an agent's request failed when the user gave no answer in time. */
+const AGENT_CONFIRM_TIMED_OUT = `No answer within ${AGENT_CONFIRM_TIMEOUT_MS / 1000} s; the dialog was closed. Ask the user and try again.`;
 
-/** The part types offered while no viewer is open: one empty list, so change detection sees a stable value. */
-const NO_PART_TYPES: MJDashboardPartTypeEntity[] = [];
+/** The most artifacts the agent's source search reads. */
+const SOURCE_SEARCH_MAX_ARTIFACTS = 500;
+
+/** The most artifact IDs one filter of the latest-version lookup lists. */
+const ARTIFACT_VERSION_FILTER_CHUNK = 200;
+
+/** Why the tab refuses an agent's edit while the editor's Save runs. */
+const SAVE_IN_PROGRESS = 'A save is in progress. Try again when it finishes.';
+
+/** What an agent's Request* tool asks the user to confirm. */
+type AgentConfirmKind = Parameters<DashboardStudioHost['Confirm']>[0];
+
+/** The name and description an agent asks a save to apply. */
+type AgentConfirmDetail = Parameters<DashboardStudioHost['Confirm']>[1];
+
+/** The confirm dialog an agent's request opens: what it asks, and the texts it shows. */
+interface AgentConfirmDialog {
+    Kind: AgentConfirmKind;
+    Title: string;
+    Message: string;
+    ConfirmText: string;
+}
+
+/** The request behind an open agent confirm dialog. It settles once: with the user's answer, or aborted. */
+interface AgentConfirmRequest {
+    answer(confirmed: boolean): void;
+    abort(reason: Error): void;
+}
+
+/**
+ * The Dashboards application (metadata/applications/.dashboards-application.json). The AI pane's
+ * conversations belong to it, and its default agent answers in the pane.
+ */
+const DASHBOARDS_APPLICATION_ID = '4B439111-B492-4936-9E33-A428CB5725B4';
+
+/** What the AI pane shows when the Dashboards application has no default agent of its own. */
+const NO_DASHBOARD_ASSISTANT = 'No dashboard assistant is configured for the Dashboards app. Ask an administrator to set its default agent.';
+
+/** What the chat area's ConversationCreated output gives: the new conversation and the first message to send in it. */
+interface ChatConversationCreated {
+    conversation: MJConversationEntity;
+    pendingMessage?: string;
+    pendingAttachments?: PendingAttachment[];
+}
+
+/** An artifact as the agent's source search reads it. */
+type ArtifactRow = Pick<MJArtifactEntity, 'ID' | 'Name' | 'Description' | 'Type'>;
+
+/** An artifact version as the latest-version lookup reads it. */
+type ArtifactVersionRow = Pick<MJArtifactVersionEntity, 'ArtifactID' | 'VersionNumber'>;
 
 /**
  * Dashboard Resource Wrapper - displays a single dashboard in a tab
  * Extends BaseResourceComponent to work with the resource type system
- * Dynamically routes between code-based and config-based dashboards based on dashboard type
+ * Dynamically routes between code-based and config-based dashboards based on dashboard type:
+ * a Config dashboard shows in the shared dashboard editor (`mj-dashboard-editor`) with the AI pane
+ * beside it, and a Code dashboard or the Data Explorer shows in the tab's own container.
  */
 @RegisterClass(BaseResourceComponent, 'DashboardResource')
 @Component({
@@ -60,131 +128,147 @@ const NO_PART_TYPES: MJDashboardPartTypeEntity[] = [];
                 </div>
             }
 
-            <!-- View Mode Toolbar -->
-            @if (configDashboard && !isEditMode && !errorMessage) {
-                <div class="viewer-toolbar">
-                    <div class="toolbar-left">
-                        <span class="dashboard-title">
-                            <i class="fa-solid fa-chart-line"></i>
-                            {{ configDashboard.Name }}
-                        </span>
-                        @if (!dashboardPermissions.IsOwner && dashboardPermissions.PermissionSource !== 'none') {
-                            <span class="shared-indicator" title="Shared with you">
-                                <i class="fa-solid fa-share-nodes"></i>
+            <!-- A Config dashboard: the shared editor, with the AI pane on its right. The editor stays in the template while the pane opens and closes. -->
+            @if (ConfigDashboardId && !errorMessage) {
+                <as-split direction="horizontal" class="studio-copilot-splitter" unit="percent" [gutterSize]="ChatOpen ? 6 : 0" (dragEnd)="OnCopilotSplitDragEnd($event.sizes)">
+                    <as-split-area [size]="ChatOpen ? (CopilotExpanded ? 100 - CopilotMaxPct : MainSizePct) : 100" [minSize]="100 - CopilotMaxPct">
+                        <mj-dashboard-editor
+                            #editor
+                            [Provider]="Provider"
+                            [DashboardId]="ConfigDashboardId"
+                            (Loaded)="OnEditorLoaded($event)"
+                            (LoadFailed)="OnEditorLoadFailed($event)"
+                            (EditingChange)="OnEditorEditingChange()"
+                            (NameChanged)="OnEditorNameChanged($event)"
+                            (ConfigChanged)="OnEditorConfigChanged()"
+                            (ReloadedFromSaved)="OnEditorReloaded()"
+                            (FavoriteChange)="OnEditorFavoriteChange()"
+                            (NavigationRequested)="OnEditorNavigationRequested($event)">
+                            <button
+                                headerTools
+                                type="button"
+                                mjButton
+                                Variant="icon"
+                                Size="sm"
+                                class="dashboard-tab-ai-toggle"
+                                [class.is-active]="ChatOpen"
+                                title="AI assistant"
+                                aria-label="AI assistant"
+                                [attr.aria-expanded]="ChatOpen ? 'true' : 'false'"
+                                (click)="ToggleChat()">
+                                <i class="fa-solid fa-robot" aria-hidden="true"></i>
+                            </button>
+                            <span viewActions class="dashboard-tab-view-actions">
+                                <mj-dashboard-add-to-menu
+                                    [IsPinned]="IsPinnedToHome"
+                                    [CanShare]="CanShare"
+                                    (PinToHome)="PinToHome()"
+                                    (Share)="OpenShareDialog()">
+                                </mj-dashboard-add-to-menu>
+                                @if (CanShare) {
+                                    <button
+                                        type="button"
+                                        mjButton
+                                        Variant="icon"
+                                        Size="sm"
+                                        class="dashboard-tab-share"
+                                        title="Share dashboard"
+                                        aria-label="Share dashboard"
+                                        (click)="OpenShareDialog()">
+                                        <i class="fa-solid fa-share-nodes" aria-hidden="true"></i>
+                                    </button>
+                                }
                             </span>
-                        }
-                    </div>
-                    <div class="toolbar-actions">
-                        <button
-                            type="button"
-                            class="btn-icon"
-                            [class.active]="IsFavorite"
-                            title="Favorite"
-                            aria-label="Favorite"
-                            [attr.aria-pressed]="IsFavorite ? 'true' : 'false'"
-                            (click)="ToggleFavorite()">
-                            <i [class]="IsFavorite ? 'fa-solid fa-star' : 'fa-regular fa-star'"></i>
-                        </button>
-                        <mj-dashboard-add-to-menu
-                            [IsHomeTab]="IsHomeTab"
-                            [IsPinned]="IsPinnedToHome"
-                            [CanShare]="DashboardPermissions.CanShare"
-                            (ToggleHomeTab)="ToggleHomeTab()"
-                            (PinToHome)="PinToHome()"
-                            (Share)="OpenShareDialog()">
-                        </mj-dashboard-add-to-menu>
-                        @if (dashboardPermissions.CanShare) {
-                            <button
-                                class="btn-icon"
-                                title="Share Dashboard"
-                                (click)="openShareDialog()">
-                                <i class="fa-solid fa-share-nodes"></i>
-                            </button>
-                        }
-                        @if (dashboardPermissions.CanEdit) {
-                            <button
-                                class="btn-icon"
-                                title="Edit Dashboard"
-                                (click)="toggleEditMode()">
-                                <i class="fa-solid fa-edit"></i>
-                            </button>
-                        }
-                    </div>
-                </div>
+                        </mj-dashboard-editor>
+                    </as-split-area>
+                    @if (ChatOpen) {
+                        <as-split-area [size]="CopilotExpanded ? CopilotMaxPct : CopilotSizePct" [minSize]="CopilotMinPct" [maxSize]="CopilotMaxPct">
+                            <aside class="dashboard-copilot" [class.expanded]="CopilotExpanded" data-testid="dashboard-copilot" aria-label="AI assistant">
+                                <div class="dashboard-copilot-head">
+                                    <div class="dashboard-copilot-title"><i class="fa-solid fa-robot"></i> {{ ChatAgentName ?? 'AI assistant' }}</div>
+                                    <div class="dashboard-copilot-actions">
+                                        <button
+                                            type="button"
+                                            class="dashboard-copilot-btn copilot-expand"
+                                            [title]="CopilotExpanded ? 'Collapse panel' : 'Expand panel'"
+                                            [attr.aria-label]="CopilotExpanded ? 'Collapse panel' : 'Expand panel'"
+                                            (click)="ToggleCopilotExpanded()">
+                                            <i class="fa-solid" [class.fa-up-right-and-down-left-from-center]="!CopilotExpanded" [class.fa-down-left-and-up-right-to-center]="CopilotExpanded"></i>
+                                        </button>
+                                        <button type="button" class="dashboard-copilot-btn copilot-close" title="Close assistant" aria-label="Close assistant" (click)="CloseChat()">
+                                            <i class="fa-solid fa-xmark"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="dashboard-copilot-body">
+                                    @if (ChatAgentId && ProviderToUse.CurrentUser) {
+                                        <mj-conversation-chat-area
+                                            [Provider]="Provider" [EnvironmentId]="ChatEnvironmentId" [CurrentUser]="ProviderToUse.CurrentUser"
+                                            [Conversation]="ChatConversation" [ConversationId]="ChatConversationId" [IsNewConversation]="ChatIsNewConversation"
+                                            [PendingMessage]="ChatPendingMessage" [PendingAttachments]="ChatPendingAttachments"
+                                            [SuppressNewConversationEmptyState]="true" [AllowMentions]="false" [OverlayMode]="false"
+                                            [ShowExportButton]="false" [ShowShareButton]="false" [ShowArtifactIndicator]="false"
+                                            [ShowAgentPicker]="false" [ShowAgentModePicker]="false"
+                                            [DefaultAgentId]="ChatAgentId" [AllowedAgentIDs]="[ChatAgentId]"
+                                            ApplicationScope="Application" [ApplicationId]="ChatApplicationId" [AppContext]="ChatAppContext"
+                                            EmptyStateGreeting="What should this dashboard show?"
+                                            (ConversationCreated)="OnChatConversationCreated($event)"
+                                            (RealtimeConversationReady)="OnChatRealtimeConversationReady($event)"
+                                            (PendingMessageConsumed)="OnChatPendingMessageConsumed()"
+                                            (navigationRequest)="OnChatNavigationRequest($event)"
+                                            (OpenEntityRecord)="OnChatOpenEntityRecord($event)">
+                                        </mj-conversation-chat-area>
+                                    } @else if (ChatAgentError) {
+                                        <div class="dashboard-copilot-empty" role="status">{{ ChatAgentError }}</div>
+                                    } @else {
+                                        <div class="dashboard-copilot-empty"><mj-loading Text="Connecting…" Size="small"></mj-loading></div>
+                                    }
+                                </div>
+                            </aside>
+                        </as-split-area>
+                    }
+                </as-split>
             }
 
-            <!-- Edit Mode Toolbar -->
-            @if (configDashboard && isEditMode && !errorMessage) {
-                <div class="viewer-header editing">
-                    <div class="header-left">
-                        <button class="btn-add-part" [disabled]="IsSaving" (click)="OpenAddPartDialog()">
-                            <i class="fa-solid fa-plus"></i>
-                            Add Part
-                        </button>
-                        <div class="header-separator"></div>
-                        <div class="dashboard-info-edit">
-                            <input
-                                type="text"
-                                class="dashboard-name-input"
-                                [(ngModel)]="editingName"
-                                (blur)="OnNameBlur()"
-                                placeholder="Dashboard name">
-                            <input
-                                type="text"
-                                class="dashboard-description-input"
-                                [(ngModel)]="editingDescription"
-                                placeholder="Add a description...">
-                        </div>
-                    </div>
-                    <div class="header-right">
-                        <button class="btn-primary" [disabled]="IsSaving" (click)="SaveDashboard()">
-                            <i [class]="IsSaving ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-save'"></i>
-                            {{ IsSaving ? 'Saving...' : 'Save' }}
-                        </button>
-                        <button class="btn-cancel" [disabled]="IsSaving" (click)="CancelEdit()">
-                            Cancel
-                        </button>
-                    </div>
-                </div>
-            }
-
-            <!-- Dashboard Content Container -->
-            <div #container class="dashboard-resource-container"></div>
+            <!-- Code dashboards and the Data Explorer render here. It stays in the template, so the tab finds it when it starts. -->
+            <div #container class="dashboard-resource-container" [class.is-hidden]="!!ConfigDashboardId"></div>
 
             <!-- Share Dashboard Dialog -->
-            @if (configDashboard) {
+            @if (ConfigDashboard) {
                 <mj-dashboard-share-dialog
-                    [Visible]="showShareDialog"
-                    [Dashboard]="configDashboard"
-                    (Result)="onShareDialogResult($event)">
+                    [Visible]="ShowShareDialog"
+                    [Dashboard]="ConfigDashboard"
+                    (Result)="OnShareDialogResult($event)">
                 </mj-dashboard-share-dialog>
             }
 
-            <!-- Part Dialogs: Add Part, Edit Part, Remove Part confirmation. Each edit session gets new ones. -->
-            @if (ConfigDashboard && IsEditMode) {
-                <mj-add-panel-dialog
-                    [Visible]="ShowAddPartDialog"
-                    [PartTypes]="PartTypes"
-                    (PanelAdded)="OnPartAdded($event)"
-                    (cancelled)="OnAddPartCancelled()">
-                </mj-add-panel-dialog>
-                <mj-edit-part-dialog
-                    [Visible]="ShowEditPartDialog"
-                    [PartType]="EditPartType"
-                    [Panel]="EditPartPanel"
-                    [Config]="EditPartPanel?.config ?? null"
-                    (Saved)="OnEditPartSaved($event)"
-                    (Cancelled)="OnEditPartCancelled()">
-                </mj-edit-part-dialog>
+            <!-- Confirmation for an agent's Request* tool: the user, not the agent, saves or pins -->
+            @if (AgentConfirm) {
                 <mj-confirm-dialog
-                    [Visible]="ShowRemovePartDialog"
-                    Type="danger"
-                    [Title]="'Remove Part'"
-                    [Message]="RemovePartMessage"
-                    ConfirmText="Remove"
-                    CancelText="Cancel"
-                    (Confirmed)="OnRemovePartConfirmed()"
-                    (Cancelled)="OnRemovePartCancelled()">
+                    class="agent-confirm"
+                    [Visible]="true"
+                    Type="info"
+                    [Title]="AgentConfirm.Title"
+                    [Message]="AgentConfirm.Message"
+                    [ConfirmText]="AgentConfirm.ConfirmText"
+                    CancelText="Not now"
+                    (Confirmed)="OnAgentConfirm(true)"
+                    (Cancelled)="OnAgentConfirm(false)">
+                </mj-confirm-dialog>
+            }
+
+            <!-- Closing the AI pane ends a voice session, so the user confirms it first -->
+            @if (ShowCloseChatConfirm) {
+                <mj-confirm-dialog
+                    class="close-chat-confirm"
+                    [Visible]="true"
+                    Type="warning"
+                    Title="End the voice session?"
+                    Message="Closing the AI assistant ends the voice session."
+                    ConfirmText="Close"
+                    CancelText="Keep open"
+                    (Confirmed)="OnCloseChatConfirmed()"
+                    (Cancelled)="OnCloseChatCancelled()">
                 </mj-confirm-dialog>
             }
         </div>
@@ -203,220 +287,89 @@ const NO_PART_TYPES: MJDashboardPartTypeEntity[] = [];
             height: 100%;
             width: 100%;
         }
-        .dashboard-resource-container {
+        /* The editor and the AI pane share the tab. The global MJ splitter theme styles the gutter. */
+        .studio-copilot-splitter {
             flex: 1;
+            width: 100%;
+            height: 100%;
+            min-height: 0;
+            min-width: 0;
+        }
+        /* Holds a Code dashboard or the Data Explorer. Hidden while the editor shows a Config dashboard. */
+        .dashboard-resource-container {
+            width: 100%;
+            height: 100%;
             overflow: hidden;
+        }
+        .dashboard-resource-container.is-hidden { display: none; }
+
+        /* The view actions sit in the editor's header row as if they were its own buttons */
+        .dashboard-tab-view-actions { display: contents; }
+        /* The colour goes on the icon, never on the button: button.scss owns the button */
+        .dashboard-tab-ai-toggle.is-active i { color: var(--mj-brand-primary); }
+
+        /* AI pane */
+        .dashboard-copilot {
+            width: 100%;
+            height: 100%;
+            border-left: 1px solid var(--mj-border-default);
+            background: var(--mj-bg-surface);
+            display: flex;
+            flex-direction: column;
             min-height: 0;
         }
-
-        /* View Mode Toolbar */
-        .viewer-toolbar {
+        .dashboard-copilot-head {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 12px 24px;
-            background: var(--mj-bg-surface-card);
+            padding: 10px 14px;
             border-bottom: 1px solid var(--mj-border-default);
-            gap: 16px;
         }
-        .viewer-toolbar .toolbar-left {
+        .dashboard-copilot-title {
             display: flex;
             align-items: center;
-            gap: 12px;
-        }
-        .viewer-toolbar .dashboard-title {
-            font-size: 16px;
-            font-weight: 500;
+            gap: 8px;
+            font-weight: 600;
             color: var(--mj-text-primary);
+        }
+        .dashboard-copilot-title i { color: var(--mj-brand-primary); }
+        .dashboard-copilot-actions {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 4px;
         }
-        .viewer-toolbar .dashboard-title i {
-            color: var(--mj-brand-primary);
-        }
-        .shared-indicator {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 24px;
-            height: 24px;
-            border-radius: 50%;
-            background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
-            color: var(--mj-brand-primary);
-            font-size: 11px;
-        }
-        .viewer-toolbar .toolbar-actions {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        /* Edit Mode Header */
-        .viewer-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 12px 24px;
-            background: var(--mj-bg-surface-card);
-            border-bottom: 1px solid var(--mj-border-default);
-            transition: background 0.2s, border-color 0.2s;
-        }
-        .viewer-header.editing {
-            background: linear-gradient(135deg, color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface)) 0%, color-mix(in srgb, var(--mj-brand-primary) 25%, var(--mj-bg-surface)) 100%);
-            border-bottom: 2px solid var(--mj-brand-primary);
-        }
-        .viewer-header .header-left {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            flex: 1;
-        }
-        .viewer-header .header-right {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        /* Add Part button */
-        .btn-add-part {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 16px;
+        .dashboard-copilot-btn {
+            background: transparent;
             border: none;
-            border-radius: 6px;
-            background: var(--mj-brand-primary);
-            color: var(--mj-text-inverse);
-            font-size: 13px;
-            font-weight: 500;
             cursor: pointer;
-            transition: background 0.2s, transform 0.1s;
-            box-shadow: 0 2px 4px color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
-        }
-        .btn-add-part:hover:not(:disabled) {
-            background: var(--mj-brand-primary-hover);
-            transform: translateY(-1px);
-            box-shadow: 0 3px 6px color-mix(in srgb, var(--mj-brand-primary) 40%, transparent);
-        }
-        .btn-add-part i { font-size: 12px; }
-
-        /* Header separator */
-        .header-separator {
-            width: 1px;
-            height: 28px;
-            background: color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
-            margin: 0 4px;
-        }
-
-        /* Buttons */
-        .btn-primary {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 10px 18px;
-            border: none;
+            padding: 6px 8px;
             border-radius: 6px;
-            background: var(--mj-brand-primary);
-            color: var(--mj-text-inverse);
-            font-size: 14px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-        .btn-primary:hover:not(:disabled) { background: var(--mj-brand-primary-hover); }
-
-        /* While a Save runs: Save shows it is busy; Cancel and Add Part are dimmed */
-        .btn-primary:disabled { cursor: progress; }
-        .btn-add-part:disabled,
-        .btn-cancel:disabled {
-            opacity: 0.55;
-            cursor: not-allowed;
-        }
-
-        .btn-icon {
-            width: 36px;
-            height: 36px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border: 1px solid var(--mj-border-default);
-            border-radius: 6px;
-            background: var(--mj-bg-surface-card);
-            color: var(--mj-text-secondary);
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .btn-icon:hover { background: var(--mj-bg-surface-sunken); }
-        .btn-icon.active { color: var(--mj-status-warning); }
-
-        .btn-cancel {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 10px 18px;
-            border: 1px solid var(--mj-border-default);
-            border-radius: 6px;
-            background: var(--mj-bg-surface-card);
-            color: var(--mj-text-secondary);
-            font-size: 14px;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .btn-cancel:hover:not(:disabled) {
-            background: var(--mj-bg-surface-sunken);
-            border-color: var(--mj-border-default);
-            color: var(--mj-text-primary);
-        }
-
-        /* Dashboard info inputs */
-        .dashboard-info-edit {
-            display: flex;
-            align-items: center;
-            gap: 16px;
-            flex: 1;
-        }
-        .dashboard-name-input {
-            border: 1px solid transparent;
-            border-radius: 4px;
-            padding: 6px 12px;
-            font-size: 16px;
-            font-weight: 500;
-            color: var(--mj-text-primary);
-            background: rgba(255, 255, 255, 0.7);
-            outline: none;
-            min-width: 200px;
-            max-width: 300px;
-            transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
-        }
-        .dashboard-name-input:hover { background: rgba(255, 255, 255, 0.9); }
-        .dashboard-name-input:focus {
-            background: var(--mj-bg-surface-card);
-            border-color: var(--mj-brand-primary);
-            box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 20%, transparent);
-        }
-        .dashboard-description-input {
-            border: 1px solid transparent;
-            border-radius: 4px;
-            padding: 6px 12px;
-            font-size: 13px;
-            color: var(--mj-text-secondary);
-            background: rgba(255, 255, 255, 0.5);
-            outline: none;
-            flex: 1;
-            min-width: 150px;
-            max-width: 400px;
-            transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
-        }
-        .dashboard-description-input:hover { background: rgba(255, 255, 255, 0.8); }
-        .dashboard-description-input:focus {
-            background: var(--mj-bg-surface-card);
-            border-color: var(--mj-brand-primary);
-            box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 20%, transparent);
-        }
-        .dashboard-description-input::placeholder {
             color: var(--mj-text-muted);
-            font-style: normal;
+        }
+        .dashboard-copilot-btn:hover {
+            background: var(--mj-bg-surface-hover);
+            color: var(--mj-text-secondary);
+        }
+        .dashboard-copilot-body {
+            flex: 1;
+            min-height: 0;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        .dashboard-copilot-body mj-conversation-chat-area {
+            flex: 1;
+            min-height: 0;
+            display: block;
+        }
+        .dashboard-copilot-empty {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex: 1;
+            padding: 16px;
+            color: var(--mj-text-secondary);
+            text-align: center;
         }
 
         /* Error state */
@@ -471,46 +424,36 @@ const NO_PART_TYPES: MJDashboardPartTypeEntity[] = [];
             font-family: 'Consolas', 'Monaco', monospace;
             font-size: 12px;
         }
-
-        /* Responsive */
-        @media (max-width: 768px) {
-            .viewer-header {
-                flex-direction: column;
-                gap: 12px;
-                align-items: stretch;
-            }
-            .viewer-header .header-left { flex-wrap: wrap; }
-            .dashboard-info-edit {
-                flex-direction: column;
-                align-items: stretch;
-            }
-            .dashboard-name-input,
-            .dashboard-description-input { max-width: none; }
-        }
     `]
 })
 export class DashboardResource extends BaseResourceComponent {
     private componentRef: ComponentRef<unknown> | null = null;
     private recentAccess = inject(RecentAccessService);
-    private favoritesService = inject(DashboardFavoritesService);
-    private homeTabsService = inject(HomeDashboardTabsService);
     private homePins = inject(HomeAppPinService);
+    private realtimeSession = inject(RealtimeSessionService);
+    private artifactPermissions = inject(ArtifactPermissionService);
 
-    /** True while a Home tab change is running. Further Home tab clicks wait until it ends. */
-    private homeTabBusy = false;
+    /** The editor that shows the Config dashboard. Undefined while the tab shows none. */
+    @ViewChild('editor') private editor?: DashboardEditorComponent;
 
     /** The panels last reported to the agent, as JSON. Null until the open dashboard is first reported. */
     private reportedPanelsKey: string | null = null;
 
-    /** True once the tab follows saved dashboard changes and edit-mode requests (see watchForChanges). */
-    private watchingForChanges = false;
+    /**
+     * True once the tab registered the agent tools for the dashboard the editor loaded. Until then the
+     * tab reports no context, so the first report comes with the tools.
+     */
+    private agentStatePublished = false;
+
+    /** True once the tab follows edit-mode requests (see watchEditModeRequests). */
+    private watchingEditModeRequests = false;
 
     /**
      * A cache reattach moves this wrapper to another tab without recreating the dashboard inside it.
      * A child resource component (a Code dashboard, the Data Explorer) has its own tab stamp, taken
      * when we created it, and it has to move too. Without this the dashboard keeps reading and
      * writing the params of the tab it was born in, from inside a tab it no longer belongs to. The
-     * Config viewer has no tab of its own. The new tab can hold an edit-mode request (a card's Edit
+     * editor has no tab of its own. The new tab can hold an edit-mode request (a card's Edit
      * action reopens a closed tab this way), so the tab takes it here, where no load will.
      */
     protected override onTabIdRebound(tabId: string): void {
@@ -521,6 +464,7 @@ export class DashboardResource extends BaseResourceComponent {
         this.takeEditModeRequest(tabId);
     }
     private dataLoaded = false;
+    /** The element that holds a Code dashboard or the Data Explorer. */
     @ViewChild('container', { static: true }) ContainerElement!: ElementRef<HTMLDivElement>;
 
     /** @deprecated Use {@link ContainerElement}. */
@@ -546,83 +490,155 @@ export class DashboardResource extends BaseResourceComponent {
       this.ErrorDetails = value;
     }
 
-    /** Cached dashboard categories for breadcrumb navigation */
-    private categories: MJDashboardCategoryEntity[] = [];
+    /** The Config dashboard the editor shows. Null for a Code dashboard, the Data Explorer, or none. */
+    public ConfigDashboardId: string | null = null;
 
-    /** Reference to the dashboard viewer component (for config-based dashboards) */
-    private viewerInstance: DashboardViewerComponent | null = null;
-
-    /** The config-based dashboard entity (null for code-based dashboards) */
-    public ConfigDashboard: MJDashboardEntity | null = null;
+    /** The Config dashboard the editor shows, or null (a Code dashboard, the Data Explorer, or none). */
+    public get ConfigDashboard(): MJDashboardEntity | null {
+        return this.editor?.Dashboard ?? null;
+    }
 
     /** @deprecated Use {@link ConfigDashboard}. */
     public get configDashboard(): MJDashboardEntity | null {
       return this.ConfigDashboard;
     }
-    /** @deprecated Use {@link ConfigDashboard}. */
-    public set configDashboard(value: MJDashboardEntity | null) {
-      this.ConfigDashboard = value;
+
+    /** True while the editor is in edit mode. */
+    public get IsEditMode(): boolean {
+        return this.editor?.IsEditing ?? false;
     }
 
-    /** Whether we're in edit mode */
-    public IsEditMode = false;
-
     /** @deprecated Use {@link IsEditMode}. */
-    public get isEditMode() {
+    public get isEditMode(): boolean {
       return this.IsEditMode;
     }
-    /** @deprecated Use {@link IsEditMode}. */
-    public set isEditMode(value) {
-      this.IsEditMode = value;
+
+    /** True when the user may share the dashboard the editor shows. */
+    public get CanShare(): boolean {
+        return this.editor?.Permissions.CanShare ?? false;
     }
 
-    /**
-     * True while a Save runs (the screenshot, then the save). Meanwhile Save, Cancel, Add Part and
-     * part edits do nothing, and the edit header shows it.
-     */
-    public IsSaving = false;
+    /** The confirm dialog an agent's Request* tool opened, or null. The user, not the agent, saves or pins. */
+    public AgentConfirm: AgentConfirmDialog | null = null;
 
-    /** Editing fields */
-    public EditingName = '';
+    /** The request behind the open agent confirm dialog. Null while none is open. */
+    private agentConfirmRequest: AgentConfirmRequest | null = null;
 
-    /** @deprecated Use {@link EditingName}. */
-    public get editingName() {
-      return this.EditingName;
-    }
-    /** @deprecated Use {@link EditingName}. */
-    public set editingName(value) {
-      this.EditingName = value;
-    }
-    public EditingDescription = '';
+    // ── AI pane ──────────────────────────────────────────────────────
 
-    /** @deprecated Use {@link EditingDescription}. */
-    public get editingDescription() {
-      return this.EditingDescription;
-    }
-    /** @deprecated Use {@link EditingDescription}. */
-    public set editingDescription(value) {
-      this.EditingDescription = value;
+    /** True while the AI pane shows beside the dashboard. */
+    public ChatOpen = false;
+
+    /** True while the AI pane takes its largest width (CopilotMaxPct). */
+    public CopilotExpanded = false;
+
+    /** The dashboard's width while the AI pane is open, in percent of the tab's width. */
+    public MainSizePct: number = STUDIO_PANE_DEFAULTS.MainSizePct;
+
+    /** The AI pane's width, in percent of the tab's width. */
+    public CopilotSizePct: number = STUDIO_PANE_DEFAULTS.CopilotSizePct;
+
+    /** The smallest width of the AI pane, in percent of the tab's width. */
+    public readonly CopilotMinPct = STUDIO_PANE_COPILOT_MIN_PCT;
+
+    /** The largest width of the AI pane, in percent of the tab's width. */
+    public readonly CopilotMaxPct = STUDIO_PANE_COPILOT_MAX_PCT;
+
+    /** True while the dialog that asks before a voice session ends with the AI pane is open. */
+    public ShowCloseChatConfirm = false;
+
+    /** The agent the AI pane talks to: the Dashboards application's default agent. Null until it resolves. */
+    public ChatAgentId: string | null = null;
+
+    /** The name of that agent, which the AI pane shows in its header. */
+    public ChatAgentName: string | null = null;
+
+    /** Why the AI pane has no agent, or null. The pane then shows this instead of the chat. */
+    public ChatAgentError: string | null = null;
+
+    /** The AI pane's conversation, from the moment its first message created it. */
+    public ChatConversation: MJConversationEntity | null = null;
+
+    /** The ID of the AI pane's conversation. */
+    public ChatConversationId: string | null = null;
+
+    /** True until the first message creates the AI pane's conversation. */
+    public ChatIsNewConversation = true;
+
+    /** The first message, which the chat area sends once it has created the conversation. Null after it is sent. */
+    public ChatPendingMessage: string | null = null;
+
+    /** The files attached to the first message, sent with it. */
+    public ChatPendingAttachments: PendingAttachment[] | null = null;
+
+    /** The shell's app context snapshot, as the chat area's AppContext input takes it. The agent reads it. */
+    public ChatAppContext: Record<string, unknown> | null = null;
+
+    /** The application the AI pane's conversations belong to, and whose default agent answers in it. */
+    public readonly ChatApplicationId = DASHBOARDS_APPLICATION_ID;
+
+    /** True while the AI pane resolves its agent. */
+    private resolvingChatAgent = false;
+
+    /** The environment of the AI pane's conversations and of the artifacts the agent searches: the tab's, else the default. */
+    public get ChatEnvironmentId(): string {
+        const environmentId = this.Data?.Configuration?.['environmentId'];
+        return typeof environmentId === 'string' && environmentId ? environmentId : MJEnvironmentEntityExtended.DefaultEnvironmentID;
     }
 
-    /** Current user's permissions for this dashboard */
-    public DashboardPermissions: DashboardUserPermissions = {
-        DashboardID: '',
-        CanRead: true,
-        CanEdit: true,
-        CanDelete: true,
-        CanShare: true,
-        IsOwner: true,
-        PermissionSource: 'owner'
-    };
+    // ── Members the editor owns ──────────────────────────────────────
 
-    /** @deprecated Use {@link DashboardPermissions}. */
-    public get dashboardPermissions(): DashboardUserPermissions {
-      return this.DashboardPermissions;
-    }
-    /** @deprecated Use {@link DashboardPermissions}. */
-    public set dashboardPermissions(value: DashboardUserPermissions) {
-      this.DashboardPermissions = value;
-    }
+    /** @deprecated Use {@link DashboardEditorComponent.EditingName}. */
+    public get EditingName(): string { return this.editor?.EditingName ?? ''; }
+    /** @deprecated Use {@link DashboardEditorComponent.EditingName}. */
+    public set EditingName(value: string) { if (this.editor) this.editor.EditingName = value; }
+
+    /** @deprecated Use {@link DashboardEditorComponent.EditingName}. */
+    public get editingName(): string { return this.EditingName; }
+    /** @deprecated Use {@link DashboardEditorComponent.EditingName}. */
+    public set editingName(value: string) { this.EditingName = value; }
+
+    /** @deprecated Use {@link DashboardEditorComponent.EditingDescription}. */
+    public get EditingDescription(): string { return this.editor?.EditingDescription ?? ''; }
+    /** @deprecated Use {@link DashboardEditorComponent.EditingDescription}. */
+    public set EditingDescription(value: string) { if (this.editor) this.editor.EditingDescription = value; }
+
+    /** @deprecated Use {@link DashboardEditorComponent.EditingDescription}. */
+    public get editingDescription(): string { return this.EditingDescription; }
+    /** @deprecated Use {@link DashboardEditorComponent.EditingDescription}. */
+    public set editingDescription(value: string) { this.EditingDescription = value; }
+
+    /** @deprecated Use {@link DashboardEditorComponent.Permissions}. */
+    public get DashboardPermissions(): DashboardUserPermissions { return this.editor?.Permissions ?? NO_DASHBOARD_PERMISSIONS; }
+
+    /** @deprecated Use {@link DashboardEditorComponent.Permissions}. */
+    public get dashboardPermissions(): DashboardUserPermissions { return this.DashboardPermissions; }
+
+    /** @deprecated Use {@link DashboardEditorComponent.ToggleEditMode}. */
+    public ToggleEditMode(): void { this.editor?.ToggleEditMode(); }
+
+    /** @deprecated Use {@link DashboardEditorComponent.ToggleEditMode}. */
+    public toggleEditMode(): void { this.ToggleEditMode(); }
+
+    /** @deprecated Use {@link DashboardEditorComponent.CancelEdit}. */
+    public CancelEdit(): void { this.editor?.CancelEdit(); }
+
+    /** @deprecated Use {@link DashboardEditorComponent.CancelEdit}. */
+    public cancelEdit(): void { this.CancelEdit(); }
+
+    /** @deprecated Use {@link DashboardEditorComponent.SaveDashboard}. */
+    public SaveDashboard(): Promise<void> { return this.editor?.SaveDashboard() ?? Promise.resolve(); }
+
+    /** @deprecated Use {@link DashboardEditorComponent.SaveDashboard}. */
+    public saveDashboard(): Promise<void> { return this.SaveDashboard(); }
+
+    /** @deprecated Use {@link DashboardEditorComponent.OpenAddPartDialog}. */
+    public OpenAddPartDialog(): void { this.editor?.OpenAddPartDialog(); }
+
+    /** @deprecated Use {@link DashboardEditorComponent.OpenAddPartDialog}. */
+    public openAddPartDialog(): void { this.OpenAddPartDialog(); }
+
+    // ── Share and pin ────────────────────────────────────────────────
 
     /** Whether the share dialog is visible */
     public ShowShareDialog = false;
@@ -634,43 +650,6 @@ export class DashboardResource extends BaseResourceComponent {
     /** @deprecated Use {@link ShowShareDialog}. */
     public set showShareDialog(value) {
       this.ShowShareDialog = value;
-    }
-
-    /** Whether the Add Part dialog is open */
-    public ShowAddPartDialog = false;
-
-    /** Whether the Edit Part dialog is open */
-    public ShowEditPartDialog = false;
-    /** The part the Edit Part dialog edits */
-    public EditPartPanel: DashboardPanel | null = null;
-    /** The part type of the part the Edit Part dialog edits */
-    public EditPartType: MJDashboardPartTypeEntity | null = null;
-
-    /** Whether the Remove Part confirmation is open */
-    public ShowRemovePartDialog = false;
-    /** The title of the part the Remove Part confirmation asks about */
-    public RemovePartTitle = '';
-    /** The ID of the part the Remove Part confirmation asks about */
-    private removePartId = '';
-
-    /** The part types the Add Part dialog offers: the open viewer's part types. */
-    public get PartTypes(): MJDashboardPartTypeEntity[] {
-        return this.viewerInstance?.GetPartTypes() ?? NO_PART_TYPES;
-    }
-
-    /** The question the Remove Part confirmation asks. */
-    public get RemovePartMessage(): string {
-        return `Are you sure you want to remove '${this.RemovePartTitle}' from this dashboard?`;
-    }
-
-    /** True when the open Config dashboard is one of the user's favorites. */
-    public get IsFavorite(): boolean {
-        return this.readPlacement(this.ConfigDashboard?.ID, id => this.favoritesService.IsFavorite(id));
-    }
-
-    /** True when the open Config dashboard is one of the user's Home tabs. */
-    public get IsHomeTab(): boolean {
-        return this.readPlacement(this.ConfigDashboard?.ID, id => this.homeTabsService.HasTab(id));
     }
 
     /** True when the open Config dashboard is pinned to Home. */
@@ -723,8 +702,9 @@ export class DashboardResource extends BaseResourceComponent {
                 this.componentRef = null;
             }
             this.clearError();
-            this.ConfigDashboard = null;
-            this.viewerInstance = null;
+            this.abortAgentConfirm('The tab opened another dashboard before the user answered.');
+            this.ConfigDashboardId = null;
+            this.agentStatePublished = false;
             this.loadDashboard();
         }
     }
@@ -734,7 +714,13 @@ export class DashboardResource extends BaseResourceComponent {
         return super.Data;
     }
 
+    override ngOnInit(): void {
+        super.ngOnInit();
+        this.watchAppContext();
+    }
+
     ngOnDestroy(): void {
+        this.abortAgentConfirm('The dashboard tab was closed before the user answered.');
         super.ngOnDestroy();
         if (this.componentRef) {
             this.componentRef.destroy();
@@ -742,80 +728,95 @@ export class DashboardResource extends BaseResourceComponent {
     }
 
     // ========================================
-    // Edit Mode Methods
+    // The Editor
     // ========================================
 
     /**
-     * Toggle between view and edit mode
+     * Shows a Config dashboard in the editor, which reads it from DashboardEngine. The editor's Loaded
+     * or LoadFailed event finishes the load (OnEditorLoaded, OnEditorLoadFailed).
      */
-    public ToggleEditMode(): void {
-        if (this.IsEditMode) {
-            this.CancelEdit();
-        } else {
-            this.enterEditMode();
-        }
-    }
-
-    /** @deprecated Use {@link ToggleEditMode}. */
-    public toggleEditMode(): void {
-      return this.ToggleEditMode();
+    private showConfigDashboard(dashboard: MJDashboardEntity): void {
+        this.ContainerElement.nativeElement.innerHTML = '';
+        this.reportedPanelsKey = null;
+        this.ConfigDashboardId = dashboard.ID;
+        void this.loadHomePins();
+        this.watchEditModeRequests();
+        SafeDetectChanges(this.cdr);
     }
 
     /**
-     * Enter edit mode. Only a user who can edit the dashboard enters it.
+     * The editor shows the dashboard and its layout is ready. The loading screen goes, the tab takes an
+     * edit-mode request (a new dashboard, or a card's Edit action) when it has one, and the agent gets
+     * its tools and the dashboard. NavigationService removes the request when the tab takes it, so a
+     * later load of the tab opens for viewing.
      */
-    private enterEditMode(): void {
-        if (!this.startEditing()) return;
+    public OnEditorLoaded(dashboard: MJDashboardEntity): void {
+        this.NotifyLoadComplete();
+        if (this.navigationService.TakeDashboardEditModeRequest(this.getTabId(), dashboard.ID, this.tabApplicationId())) {
+            this.editor?.EnterEditMode();
+        }
+        SafeDetectChanges(this.cdr);
+        this.publishAgentState();
+    }
 
-        this.cdr.detectChanges();
+    /** The editor could not show the dashboard: the tab shows why, and the loading screen goes. */
+    public OnEditorLoadFailed(error: DashboardEditorLoadError): void {
+        const name = this.cachedDashboardName(error.DashboardId);
+        const subject = name ? `The dashboard "${name}"` : 'The dashboard';
+        this.setError(`${subject} could not be loaded. There may be an issue with the dashboard configuration.`, error.Message);
+        this.NotifyLoadComplete();
+        SafeDetectChanges(this.cdr);
+    }
+
+    /**
+     * The dashboard's saved name changed, by a save here or elsewhere. The tab takes the name as its
+     * title and keeps its dashboard ID: ResourceRecordSaved would rewrite the record ID in a form the
+     * tab configuration does not have, and the tab would reload on each Save.
+     */
+    public OnEditorNameChanged(name: string): void {
+        if (name) {
+            this.NotifyDisplayNameChanged(name);
+        }
+    }
+
+    /** The editor entered or left edit mode: the tab reports it to the agent. */
+    public OnEditorEditingChange(): void {
         this.emitAgentContext();
     }
 
-    /**
-     * Puts the tab and its viewer in edit mode. Returns false, and changes nothing, when no Config
-     * dashboard is open or the user cannot edit it. The tab first takes DashboardEngine's current
-     * copy of the dashboard; when the dashboard was saved elsewhere since the viewer loaded it, the
-     * viewer reloads the saved layout, so this tab's next save keeps those changes.
-     */
-    private startEditing(): boolean {
-        if (!this.ConfigDashboard || !this.DashboardPermissions.CanEdit) return false;
+    /** The editor's parts or layout changed: the tab reports the panels to the agent when they changed. */
+    public OnEditorConfigChanged(): void {
+        this.onViewerConfigChanged();
+    }
 
-        this.syncWithSavedDashboard();
-        this.IsEditMode = true;
-        this.EditingName = this.ConfigDashboard.Name;
-        this.EditingDescription = this.ConfigDashboard.Description || '';
+    /** The editor rebuilt the saved layout after a save elsewhere: the rebuild reports nothing to the agent. */
+    public OnEditorReloaded(): void {
+        this.treatPanelsAsReported();
+    }
 
-        // Tell the viewer to enter edit mode
-        if (this.viewerInstance) {
-            this.viewerInstance.IsEditing = true;
-        }
-        return true;
+    /** The user starred or unstarred the dashboard in the editor. */
+    public OnEditorFavoriteChange(): void {
+        this.onPlacementChanged();
+    }
+
+    /** A part of the dashboard asked to open something: a record, another dashboard, a query. */
+    public OnEditorNavigationRequested(event: DashboardNavRequestEvent): void {
+        this.handleNavigationRequest(event);
     }
 
     /**
-     * Starts in edit mode when the tab was opened with `openInEditMode` (a new dashboard, or a card's
-     * Edit action) and the user can edit the dashboard. NavigationService removes the request when
-     * the tab takes it, so a later load of the tab opens for viewing.
-     */
-    private applyEditModeRequest(): void {
-        const dashboard = this.ConfigDashboard;
-        if (dashboard && this.navigationService.TakeDashboardEditModeRequest(this.getTabId(), dashboard.ID, this.tabApplicationId())) {
-            this.startEditing();
-        }
-    }
-
-    /**
-     * Takes the tab's edit-mode request, if it has one for this tab's dashboard, and enters edit mode.
-     * A tab that has not finished loading leaves the request for its load (see applyEditModeRequest).
-     * A tab that is already editing keeps its changes. A request for what the tab shows now stays for
-     * that tab's component: a cached component can still be bound to a tab ID that OpenTab gave to
-     * another dashboard, or to this dashboard in another application.
+     * Takes the tab's edit-mode request, if it has one for this tab's dashboard, and enters edit mode in
+     * the editor. A tab that has not finished loading leaves the request for its load (see
+     * OnEditorLoaded). A tab that is already editing keeps its changes. A request for what the tab shows
+     * now stays for that tab's component: a cached component can still be bound to a tab ID that OpenTab
+     * gave to another dashboard, or to this dashboard in another application.
      */
     private takeEditModeRequest(tabId: string): void {
-        const dashboard = this.ConfigDashboard;
-        if (!this.LoadComplete || !dashboard) return;
-        if (this.navigationService.TakeDashboardEditModeRequest(tabId, dashboard.ID, this.tabApplicationId()) && !this.IsEditMode) {
-            this.enterEditMode();
+        const editor = this.editor;
+        const dashboard = editor?.Dashboard;
+        if (!this.LoadComplete || !editor || !dashboard || !UUIDsEqual(dashboard.ID, this.ConfigDashboardId)) return;
+        if (this.navigationService.TakeDashboardEditModeRequest(tabId, dashboard.ID, this.tabApplicationId()) && !editor.IsEditing) {
+            editor.EnterEditMode();
         }
     }
 
@@ -826,129 +827,16 @@ export class DashboardResource extends BaseResourceComponent {
     }
 
     /**
-     * Cancel edit mode and discard changes: the viewer shows the saved dashboard again, without the
-     * parts and layout changes made since the last save.
+     * Enters edit mode when OpenDashboard asks this open tab to (NavigationService.DashboardEditModeRequested$).
+     * Starts once per tab, and stops when the tab is destroyed.
      */
-    public CancelEdit(): void {
-        if (this.IsSaving) return;
-        this.IsEditMode = false;
-        this.closePartDialogs();
-
-        // Reload before the viewer leaves edit mode: the viewer drops its layout at once, so leaving
-        // edit mode applies to the saved layout it rebuilds.
-        this.reloadSavedDashboard();
-        if (this.viewerInstance) {
-            this.viewerInstance.IsEditing = false;
-        }
-
-        this.cdr.detectChanges();
-        this.emitAgentContext();
-    }
-
-    /** @deprecated Use {@link CancelEdit}. */
-    public cancelEdit(): void {
-      return this.CancelEdit();
-    }
-
-    // ========================================
-    // Saved Dashboard Changes
-    // ========================================
-
-    /**
-     * Starts, once per tab, to follow saves of the open dashboard made elsewhere and edit-mode
-     * requests for this tab. Both stop when the tab is destroyed.
-     */
-    private watchForChanges(): void {
-        if (this.watchingForChanges) return;
-        this.watchingForChanges = true;
-        this.watchSavedDashboard();
-        this.watchEditModeRequests();
-    }
-
-    /**
-     * Reloads the viewer when DashboardEngine reports a change to the open dashboard and the tab is
-     * not editing, so the tab shows the saved dashboard. A burst of changes reloads once, after the
-     * current task. The reload reports nothing to the agent.
-     */
-    private watchSavedDashboard(): void {
-        DashboardEngine.Instance.DataChange$.pipe(
-            filter(event => this.isChangeToOpenDashboard(event)),
-            auditTime(0),
-            takeUntil(this.destroy$)
-        ).subscribe(() => this.onSavedDashboardChanged());
-    }
-
-    /** Enters edit mode when OpenDashboard asks this open tab to (NavigationService.DashboardEditModeRequested$). */
     private watchEditModeRequests(): void {
+        if (this.watchingEditModeRequests) return;
+        this.watchingEditModeRequests = true;
         this.navigationService.DashboardEditModeRequested$.pipe(
             filter(tabId => UUIDsEqual(tabId, this.getTabId())),
             takeUntil(this.destroy$)
         ).subscribe(tabId => this.takeEditModeRequest(tabId));
-    }
-
-    /** True for a change to the open dashboard's record, or for a reload of all dashboards. */
-    private isChangeToOpenDashboard(event: EngineDataChangeEvent): boolean {
-        const open = this.ConfigDashboard;
-        if (!open || event.config.EntityName?.trim().toLowerCase() !== DASHBOARDS_ENTITY_NAME.toLowerCase()) {
-            return false;
-        }
-        const affected = event.affectedEntity;
-        return !affected || affected === open || affected.PrimaryKey.Equals(open.PrimaryKey);
-    }
-
-    /** Brings the tab in step with the saved dashboard after a change to it, unless the tab is editing. */
-    private onSavedDashboardChanged(): void {
-        if (this.IsEditMode) return;
-        const sync = this.syncWithSavedDashboard();
-        if (sync === 'unchanged') return;
-        if (sync === 'reloaded') {
-            this.treatPanelsAsReported();
-        }
-        SafeDetectChanges(this.cdr);
-    }
-
-    /**
-     * Brings the open dashboard in step with DashboardEngine's current copy of it. The viewer
-     * rebuilds only when the saved layout differs from the one it shows. When only the copy is new
-     * (DashboardEngine reloaded its dashboards), the tab and the viewer take it without a rebuild:
-     * a save writes every field of the entity, so saving an old copy would write its old values.
-     */
-    private syncWithSavedDashboard(): SavedDashboardSync {
-        const viewer = this.viewerInstance;
-        const saved = this.savedDashboard();
-        if (!viewer || !saved) return 'unchanged';
-        if (viewer.HasNewerSavedLayout(saved)) {
-            this.reloadSavedDashboard();
-            return 'reloaded';
-        }
-        if (saved !== this.ConfigDashboard && viewer.UseSavedCopy(saved)) {
-            this.ConfigDashboard = saved;
-            return 'took-copy';
-        }
-        return 'unchanged';
-    }
-
-    /** Shows the saved dashboard in the viewer: DashboardEngine's copy of it when the engine has one. */
-    private reloadSavedDashboard(): void {
-        const viewer = this.viewerInstance;
-        const saved = this.savedDashboard() ?? this.ConfigDashboard;
-        if (!viewer || !saved) return;
-
-        this.ConfigDashboard = saved;
-        viewer.ReloadFromSaved(saved).catch((error: unknown) => {
-            LogError(`Dashboard tab: could not reload the saved dashboard: ${errorMessage(error)}`);
-        });
-    }
-
-    /** The open dashboard as DashboardEngine holds it now. Null when the engine does not have it. */
-    private savedDashboard(): MJDashboardEntity | null {
-        const open = this.ConfigDashboard;
-        if (!open) return null;
-        try {
-            return DashboardEngine.Instance.Dashboards.find(d => UUIDsEqual(d.ID, open.ID)) ?? null;
-        } catch {
-            return null; // the user cannot read the dashboards cache
-        }
     }
 
     /**
@@ -959,244 +847,6 @@ export class DashboardResource extends BaseResourceComponent {
         if (this.reportedPanelsKey !== null) {
             this.reportedPanelsKey = JSON.stringify(this.livePanels());
         }
-    }
-
-    /**
-     * Saves the name, description and layout, then leaves edit mode. An empty name is never saved:
-     * the previous name is kept. When the save fails, the tab stays in edit mode (see onSaveFailed).
-     * One Save runs at a time (see IsSaving).
-     */
-    public async SaveDashboard(): Promise<void> {
-        const dashboard = this.ConfigDashboard;
-        const viewer = this.viewerInstance;
-        if (!dashboard || !viewer || this.IsSaving) return;
-        this.IsSaving = true;
-        SafeDetectChanges(this.cdr);
-
-        try {
-            // Puts a screenshot of the layout on the dashboard (Thumbnail), so this same Save stores
-            // the picture the dashboard cards show. A failed Save reverts it with the other fields.
-            await this.captureDashboardThumbnail(dashboard, viewer);
-
-            // The name and description are read after the screenshot, so edits made meanwhile count.
-            this.restoreEmptyName();
-            dashboard.Name = this.EditingName;
-            dashboard.Description = this.EditingDescription;
-
-            // Save via the viewer (which handles layout saving)
-            if (!await viewer.save()) {
-                this.onSaveFailed(dashboard);
-                return;
-            }
-
-            // Exit edit mode
-            this.IsEditMode = false;
-            this.closePartDialogs();
-            viewer.IsEditing = false;
-
-            this.cdr.detectChanges();
-            this.emitAgentContext();
-        } catch (error) {
-            this.onSaveFailed(dashboard, error);
-        } finally {
-            this.IsSaving = false;
-            SafeDetectChanges(this.cdr);
-        }
-    }
-
-    /** @deprecated Use {@link SaveDashboard}. */
-    public async saveDashboard(): Promise<void> {
-      return this.SaveDashboard();
-    }
-
-    /**
-     * Sets the dashboard's Thumbnail to a small screenshot of the dashboard's layout, or to null
-     * when the layout has no panels, so the dashboard cards show the icon. Keeps the current
-     * Thumbnail when no screenshot is ready in time (too many elements, no size, or the timeout).
-     * Never throws.
-     */
-    private async captureDashboardThumbnail(dashboard: MJDashboardEntity, viewer: DashboardViewerComponent): Promise<void> {
-        try {
-            if (ExtractPanelsFromLayout(viewer.getConfig()?.layout ?? null).length === 0) {
-                dashboard.Thumbnail = null;
-                return;
-            }
-            const thumbnail = await this.homePins.CaptureThumbnail(this.ContainerElement.nativeElement, SAVE_SCREENSHOT_TIMEOUT_MS);
-            if (thumbnail) {
-                dashboard.Thumbnail = thumbnail;
-            }
-        } catch (error) {
-            LogError(`Dashboard tab: could not take a screenshot of the dashboard: ${errorMessage(error)}`);
-        }
-    }
-
-    /** Keeps the previous name when the user leaves the name field empty or with only spaces. */
-    public OnNameBlur(): void {
-        this.restoreEmptyName();
-    }
-
-    /** Puts the saved name back into an empty or spaces-only name field. */
-    private restoreEmptyName(): void {
-        if (!this.EditingName.trim()) {
-            this.EditingName = this.ConfigDashboard?.Name || 'Untitled Dashboard';
-        }
-    }
-
-    /**
-     * Handles a save that did not complete. The tab stays in edit mode with the user's changes, the
-     * cached dashboard (which other pages read) goes back to its saved values, and the user sees why.
-     */
-    private onSaveFailed(dashboard: MJDashboardEntity, error?: unknown): void {
-        const reason = this.saveFailureReason(dashboard, error);
-        dashboard.Revert();
-        LogError(`Dashboard tab: could not save the dashboard: ${reason || 'no reason given'}`);
-        MJNotificationService.Instance.CreateSimpleNotification(reason ? `Could not save the dashboard: ${reason}` : 'Could not save the dashboard', 'error', 5000);
-        SafeDetectChanges(this.cdr);
-    }
-
-    /** Why a save failed: the thrown error, else the dashboard's failed save result. Empty when neither says. */
-    private saveFailureReason(dashboard: MJDashboardEntity, error: unknown): string {
-        if (error !== undefined) return errorMessage(error);
-        const latest = dashboard.LatestResult;
-        return latest && !latest.Success ? latest.CompleteMessage : '';
-    }
-
-    // ========================================
-    // Part Editing (edit mode only)
-    // ========================================
-
-    /** Opens the Add Part dialog. Does nothing outside edit mode or while a Save runs. */
-    public OpenAddPartDialog(): void {
-        if (!this.IsEditMode || this.IsSaving) return;
-        this.ShowAddPartDialog = true;
-        SafeDetectChanges(this.cdr);
-    }
-
-    /** @deprecated Use {@link OpenAddPartDialog}. */
-    public openAddPartDialog(): void {
-      return this.OpenAddPartDialog();
-    }
-
-    /** Closes the Add Part dialog and adds the part the user set up in it to the viewer. */
-    public async OnPartAdded(result: AddPanelResult): Promise<void> {
-        this.ShowAddPartDialog = false;
-        SafeDetectChanges(this.cdr);
-        await this.applyPartChange('Could not add the part', viewer => viewer.AddPanel(result.PartType.ID, result.Config, result.Title, result.Icon));
-    }
-
-    /** Closes the Add Part dialog without adding a part. */
-    public OnAddPartCancelled(): void {
-        this.ShowAddPartDialog = false;
-        SafeDetectChanges(this.cdr);
-    }
-
-    /** Closes the Edit Part dialog and applies the settings the user saved in it to the part. */
-    public async OnEditPartSaved(result: EditPartDialogResult): Promise<void> {
-        const panel = this.EditPartPanel;
-        this.closeEditPartDialog();
-        SafeDetectChanges(this.cdr);
-        if (panel) {
-            await this.applyPartChange('Could not update the part', viewer => viewer.UpdatePanelConfig(panel.id, result.Config, result.Title, result.Icon));
-        }
-    }
-
-    /** Closes the Edit Part dialog without changing the part. */
-    public OnEditPartCancelled(): void {
-        this.closeEditPartDialog();
-        SafeDetectChanges(this.cdr);
-    }
-
-    /** Closes the Remove Part confirmation and removes the part from the viewer. */
-    public async OnRemovePartConfirmed(): Promise<void> {
-        const panelId = this.removePartId;
-        this.closeRemovePartDialog();
-        SafeDetectChanges(this.cdr);
-        if (panelId) {
-            await this.applyPartChange('Could not remove the part', viewer => viewer.ConfirmRemovePanel(panelId));
-        }
-    }
-
-    /** Closes the Remove Part confirmation and keeps the part. */
-    public OnRemovePartCancelled(): void {
-        this.closeRemovePartDialog();
-        SafeDetectChanges(this.cdr);
-    }
-
-    /**
-     * Opens the dialog for a part request from the viewer: Add Part (its empty state), and a part's
-     * Configure and Remove buttons. Ignores requests outside edit mode and while a Save runs.
-     */
-    private onPanelInteraction(event: PanelInteractionEvent): void {
-        if (event.interactionType !== 'custom' || !this.IsEditMode || this.IsSaving) return;
-        switch (event.payload?.['action']) {
-            case 'add-panel-requested':
-                this.OpenAddPartDialog();
-                break;
-            case 'configure-part-requested':
-                this.openEditPartDialog(event.panelId);
-                break;
-            case 'remove-part-requested':
-                this.openRemovePartDialog(event.panelId, event.payload['panelTitle']);
-                break;
-        }
-    }
-
-    /** Opens the Edit Part dialog for a part of the viewer. Does nothing when the viewer cannot find the part or its type. */
-    private openEditPartDialog(panelId: string): void {
-        const panel = this.viewerInstance?.GetPanel(panelId) ?? null;
-        const partType = this.viewerInstance?.GetPartTypeForPanel(panelId) ?? null;
-        if (!panel || !partType) {
-            LogError(`Dashboard tab: cannot configure part ${panelId}: the viewer has no such part or part type`);
-            return;
-        }
-        this.EditPartPanel = panel;
-        this.EditPartType = partType;
-        this.ShowEditPartDialog = true;
-        SafeDetectChanges(this.cdr);
-    }
-
-    private closeEditPartDialog(): void {
-        this.ShowEditPartDialog = false;
-        this.EditPartPanel = null;
-        this.EditPartType = null;
-    }
-
-    /** Opens the Remove Part confirmation for a part. A part without a title is called "this part". */
-    private openRemovePartDialog(panelId: string, panelTitle: unknown): void {
-        this.removePartId = panelId;
-        this.RemovePartTitle = typeof panelTitle === 'string' && panelTitle ? panelTitle : 'this part';
-        this.ShowRemovePartDialog = true;
-        SafeDetectChanges(this.cdr);
-    }
-
-    private closeRemovePartDialog(): void {
-        this.ShowRemovePartDialog = false;
-        this.removePartId = '';
-        this.RemovePartTitle = '';
-    }
-
-    /** Closes every part dialog. A part dialog belongs to one edit session. */
-    private closePartDialogs(): void {
-        this.ShowAddPartDialog = false;
-        this.closeEditPartDialog();
-        this.closeRemovePartDialog();
-    }
-
-    /**
-     * Applies one part change to the viewer, tells the user when it fails, and reports the
-     * dashboard's parts to the agent again. The change is saved with the dashboard's Save. Does
-     * nothing while a Save runs, for example from a dialog that was open when Save was clicked.
-     */
-    private async applyPartChange(failureMessage: string, change: (viewer: DashboardViewerComponent) => void | Promise<void>): Promise<void> {
-        const viewer = this.viewerInstance;
-        if (!viewer || this.IsSaving) return;
-        try {
-            await change(viewer);
-        } catch (error) {
-            LogError(`Dashboard tab: ${failureMessage}: ${errorMessage(error)}`);
-            MJNotificationService.Instance.CreateSimpleNotification(failureMessage, 'error', 3000);
-        }
-        this.onViewerConfigChanged();
     }
 
     /**
@@ -1226,18 +876,14 @@ export class DashboardResource extends BaseResourceComponent {
     }
 
     /**
-     * Handle share dialog result
+     * Handle share dialog result. After a save the editor reads the user's permissions again, since
+     * sharing can change them.
      */
     public OnShareDialogResult(result: ShareDialogResult): void {
         this.ShowShareDialog = false;
 
-        if (result.Action === 'save' && this.ConfigDashboard) {
-            // Recompute permissions after sharing changes
-            const md = this.ProviderToUse;
-            this.DashboardPermissions = DashboardEngine.Instance.GetDashboardPermissions(
-                this.ConfigDashboard.ID,
-                md.CurrentUser.ID
-            );
+        if (result.Action === 'save') {
+            this.editor?.RefreshPermissions();
         }
 
         this.cdr.detectChanges();
@@ -1247,44 +893,8 @@ export class DashboardResource extends BaseResourceComponent {
     }
 
     // ========================================
-    // Favorite and Add to menu
+    // Add to menu
     // ========================================
-
-    /** Stars or unstars the open dashboard and tells the user the new state. */
-    public async ToggleFavorite(): Promise<void> {
-        const dashboard = this.ConfigDashboard;
-        if (!dashboard) return;
-        try {
-            const isFavorite = await this.favoritesService.Toggle(dashboard.ID);
-            const message = isFavorite ? `Added "${dashboard.Name}" to favorites` : `Removed "${dashboard.Name}" from favorites`;
-            MJNotificationService.Instance.CreateSimpleNotification(message, 'success', 2000);
-        } catch (error) {
-            LogError(`Dashboard tab: could not change the favorite: ${errorMessage(error)}`);
-            MJNotificationService.Instance.CreateSimpleNotification('Could not change the favorite', 'error', 3000);
-        }
-        this.onPlacementChanged();
-    }
-
-    /**
-     * Adds the open dashboard to the user's Home tabs, or removes it when it is already there.
-     * The message comes from the Home tabs read back after the write. Clicks while a change runs do nothing.
-     */
-    public async ToggleHomeTab(): Promise<void> {
-        const dashboard = this.ConfigDashboard;
-        if (!dashboard || this.homeTabBusy) return;
-        this.homeTabBusy = true;
-        const adding = !this.hasHomeTab(dashboard.ID);
-        try {
-            await (adding ? this.homeTabsService.Add(dashboard.ID) : this.homeTabsService.Remove(dashboard.ID));
-            this.notifyHomeTabResult(dashboard, adding);
-        } catch (error) {
-            LogError(`Dashboard tab: could not ${adding ? 'add' : 'remove'} the Home tab: ${errorMessage(error)}`);
-            MJNotificationService.Instance.CreateSimpleNotification(adding ? 'Could not add the Home tab' : 'Could not remove the Home tab', 'error', 3000);
-        } finally {
-            this.homeTabBusy = false;
-        }
-        this.onPlacementChanged();
-    }
 
     /** Pins the open dashboard to Home as a card, then adds a thumbnail of it in the background. */
     public async PinToHome(): Promise<void> {
@@ -1305,24 +915,8 @@ export class DashboardResource extends BaseResourceComponent {
         this.onPlacementChanged();
     }
 
-    /** Tells the user whether the Home tab change took effect. */
-    private notifyHomeTabResult(dashboard: MJDashboardEntity, adding: boolean): void {
-        const notifications = MJNotificationService.Instance;
-        if (this.hasHomeTab(dashboard.ID) === adding) {
-            const message = adding ? `"${dashboard.Name}" is now a tab on Home` : `Removed "${dashboard.Name}" from your Home tabs`;
-            notifications.CreateSimpleNotification(message, 'success', 2000);
-        } else {
-            const message = adding ? `Could not add "${dashboard.Name}" as a Home tab` : `Could not remove "${dashboard.Name}" from your Home tabs`;
-            notifications.CreateSimpleNotification(message, 'warning', 3000);
-        }
-    }
-
-    private hasHomeTab(dashboardId: string): boolean {
-        return this.readPlacement(dashboardId, id => this.homeTabsService.HasTab(id));
-    }
-
     /**
-     * Reads one placement flag (favorite, Home tab, pin) for a dashboard. False without a dashboard,
+     * Reads one placement flag (the pin) for a dashboard. False without a dashboard,
      * or when the user cannot read that data (the engine throws PermissionConstrainedError).
      */
     private readPlacement(dashboardId: string | undefined, read: (dashboardId: string) => boolean): boolean {
@@ -1334,23 +928,18 @@ export class DashboardResource extends BaseResourceComponent {
         }
     }
 
-    /** The Home pin for a dashboard. A click on the pin opens the dashboard in the preview tab; a Shift-click opens a separate tab. */
+    /** The Home pin for a dashboard, in the shared dashboard pin shape. */
     private homePinFor(dashboard: MJDashboardEntity): HomeAppPinInput {
-        return {
-            DisplayName: dashboard.Name,
-            ResourceType: DASHBOARD_PIN_RESOURCE_TYPE,
-            Icon: 'fa-solid fa-gauge-high',
-            Configuration: { resourceType: DASHBOARD_PIN_RESOURCE_TYPE, dashboardId: dashboard.ID, recordId: dashboard.ID },
-        };
+        return BuildDashboardPinInput(dashboard);
     }
 
     /**
-     * Adds a thumbnail of the dashboard to its pin. Best effort: without one, Home shows the pin's icon.
-     * Logs a failure and never rejects, because the caller does not wait for it.
+     * Adds a thumbnail of the dashboard (the editor's body) to its pin. Best effort: without one, Home
+     * shows the pin's icon. Logs a failure and never rejects, because the caller does not wait for it.
      */
     private async attachPinThumbnail(dashboardId: string): Promise<void> {
         try {
-            const element = this.ContainerElement?.nativeElement;
+            const element = this.editor?.BodyElement;
             const thumbnail = element ? await this.homePins.CaptureThumbnail(element) : undefined;
             const pin = thumbnail ? this.homePins.FindPin(DASHBOARD_PIN_RESOURCE_TYPE, { dashboardId }) : undefined;
             if (pin && thumbnail) {
@@ -1370,42 +959,237 @@ export class DashboardResource extends BaseResourceComponent {
         }
     }
 
-    /** Updates the toolbar and reports the new placement to the agent. */
+    /** Updates the header buttons and reports the new placement to the agent. */
     private onPlacementChanged(): void {
         SafeDetectChanges(this.cdr);
         this.emitAgentContext();
     }
 
     // ========================================
+    // AI Pane
+    // ========================================
+
+    /** Opens the AI pane with the widths the user saved, or closes it as CloseChat does. */
+    public ToggleChat(): void {
+        if (this.ChatOpen) {
+            this.CloseChat();
+            return;
+        }
+        this.applyPanePrefs(this.savedPanePrefs());
+        this.ChatOpen = true;
+        void this.ensureChatAgentResolved();
+        SafeDetectChanges(this.cdr);
+    }
+
+    /**
+     * Closes the AI pane. Its conversation stays, so the pane shows it again when it opens. Closing the pane
+     * ends a voice session, so while one runs the user confirms first (OnCloseChatConfirmed).
+     */
+    public CloseChat(): void {
+        if (this.realtimeSession.IsActive) {
+            this.ShowCloseChatConfirm = true;
+        } else {
+            this.closeChatPane();
+        }
+        SafeDetectChanges(this.cdr);
+    }
+
+    /** The user confirmed: the AI pane closes, and the voice session ends with it. */
+    public OnCloseChatConfirmed(): void {
+        this.ShowCloseChatConfirm = false;
+        this.closeChatPane();
+        SafeDetectChanges(this.cdr);
+    }
+
+    /** The user keeps the AI pane open, and the voice session with it. */
+    public OnCloseChatCancelled(): void {
+        this.ShowCloseChatConfirm = false;
+        SafeDetectChanges(this.cdr);
+    }
+
+    /** Gives the AI pane its largest width, or its own width again. */
+    public ToggleCopilotExpanded(): void {
+        this.CopilotExpanded = !this.CopilotExpanded;
+        SafeDetectChanges(this.cdr);
+    }
+
+    /**
+     * Keeps the widths the user dragged the split to, in this tab and in the user's settings. The AI pane then
+     * has that width, not its largest one. Sizes that are not two numbers change nothing.
+     */
+    public OnCopilotSplitDragEnd(sizes: readonly (number | '*')[]): void {
+        const prefs = PrefsFromSplitSizes(sizes);
+        if (!prefs) return;
+        this.applyPanePrefs(prefs);
+        this.CopilotExpanded = false;
+        UserInfoEngine.Instance.SetSettingDebounced(STUDIO_PANE_SETTING_KEY, JSON.stringify(prefs));
+        SafeDetectChanges(this.cdr);
+    }
+
+    /**
+     * The chat area created the AI pane's conversation for the first message. The pane keeps the conversation
+     * and gives the message back to the chat area, which then sends it in that conversation.
+     */
+    public OnChatConversationCreated(event: ChatConversationCreated): void {
+        this.ChatConversation = event.conversation;
+        this.ChatConversationId = event.conversation.ID;
+        this.ChatIsNewConversation = false;
+        this.ChatPendingMessage = event.pendingMessage ?? null;
+        this.ChatPendingAttachments = event.pendingAttachments ?? null;
+        SafeDetectChanges(this.cdr);
+    }
+
+    /**
+     * A voice call started before any message, so the server created the AI pane's conversation. When the
+     * call ends, the pane adopts that conversation, so the chat area shows the call's transcript and the
+     * next message goes to it. The start of the call reports the same conversation without `select`; the
+     * pane leaves the chat area alone until the call ends, as the Conversations app does.
+     */
+    public async OnChatRealtimeConversationReady(event: { conversationId: string; select: boolean }): Promise<void> {
+        if (!event.select || !event.conversationId || this.ChatConversationId) return;
+        const conversation = await this.loadChatConversation(event.conversationId);
+        if (!conversation || this.ChatConversationId) return;
+        this.ChatConversation = conversation;
+        this.ChatConversationId = conversation.ID;
+        this.ChatIsNewConversation = false;
+        SafeDetectChanges(this.cdr);
+    }
+
+    /** The conversation with `conversationId` that the user can read, or null. */
+    private async loadChatConversation(conversationId: string): Promise<MJConversationEntity | null> {
+        const result = await RunView.FromMetadataProvider(this.ProviderToUse).RunView<MJConversationEntity>({
+            EntityName: 'MJ: Conversations',
+            ExtraFilter: `ID='${EscapeSQLString(conversationId)}'`,
+            ResultType: 'entity_object',
+        });
+        if (!result.Success) {
+            LogError(`DashboardResource: the AI pane could not load conversation ${conversationId}: ${result.ErrorMessage}`);
+            return null;
+        }
+        return result.Results?.[0] ?? null;
+    }
+
+    /** The chat area sent the first message. The pane drops it, so the chat area does not send it again. */
+    public OnChatPendingMessageConsumed(): void {
+        this.ChatPendingMessage = null;
+        this.ChatPendingAttachments = null;
+        SafeDetectChanges(this.cdr);
+    }
+
+    /** Opens the app page that an artifact in the chat asks for. An app the metadata does not name opens the page in the current app. */
+    public OnChatNavigationRequest(request: NavigationRequest): void {
+        const appId = request.appName ? this.applicationIdByName(request.appName) : undefined;
+        void this.navigationService.OpenNavItemByName(request.navItemName, undefined, appId, { queryParams: request.queryParams })
+            .catch((error: unknown) => LogError(`Dashboard tab: could not open ${request.navItemName}: ${errorMessage(error)}`));
+    }
+
+    /** Opens a record that the chat links to. */
+    public OnChatOpenEntityRecord(event: { entityName: string; compositeKey: CompositeKey }): void {
+        this.navigationService.OpenEntityRecord(event.entityName, event.compositeKey);
+    }
+
+    /** Keeps the shell's latest app context snapshot for the chat, until the tab is destroyed. Renders only while the pane is open. */
+    private watchAppContext(): void {
+        this.navigationService.AppContextSnapshot$.pipe(takeUntil(this.destroy$)).subscribe(snapshot => {
+            this.ChatAppContext = snapshot ? { ...snapshot } : null;
+            if (this.ChatOpen) {
+                SafeDetectChanges(this.cdr);
+            }
+        });
+    }
+
+    /** The AI pane widths in the user's settings, or the defaults when the settings cannot be read. */
+    private savedPanePrefs(): StudioPanePrefs {
+        try {
+            return ParseStudioPanePrefs(UserInfoEngine.Instance.GetSetting(STUDIO_PANE_SETTING_KEY));
+        } catch {
+            return ParseStudioPanePrefs(null); // the user cannot read their settings
+        }
+    }
+
+    private applyPanePrefs(prefs: StudioPanePrefs): void {
+        this.MainSizePct = prefs.MainSizePct;
+        this.CopilotSizePct = prefs.CopilotSizePct;
+    }
+
+    private closeChatPane(): void {
+        this.ChatOpen = false;
+        this.CopilotExpanded = false;
+    }
+
+    /** The ID of the application with this name, in any case, or undefined when the metadata has none. */
+    private applicationIdByName(appName: string): string | undefined {
+        const name = appName.trim().toLowerCase();
+        return this.ProviderToUse.Applications.find(app => app.Name.trim().toLowerCase() === name)?.ID;
+    }
+
+    /**
+     * Resolves the agent the AI pane talks to: the Dashboards application's default agent
+     * (Application.AgentSettings.DefaultAgentID). When the resolver falls back to Sage, the application has no
+     * agent of its own, and the pane says so instead of showing a chat. After a failure the next open tries again.
+     */
+    private async ensureChatAgentResolved(): Promise<void> {
+        if (this.ChatAgentId || this.resolvingChatAgent) return;
+        this.resolvingChatAgent = true;
+        this.ChatAgentError = null;
+        try {
+            const provider = this.ProviderToUse;
+            const agent = await new DefaultAgentResolver().Resolve({ applicationId: this.ChatApplicationId, contextUser: provider.CurrentUser, provider });
+            if (agent.Name === DefaultAgentResolver.FALLBACK_AGENT_NAME) {
+                this.ChatAgentError = NO_DASHBOARD_ASSISTANT;
+            } else {
+                this.ChatAgentId = agent.ID;
+                this.ChatAgentName = agent.Name;
+            }
+        } catch (error) {
+            LogError(`Dashboard tab: could not resolve the dashboard assistant: ${errorMessage(error)}`);
+            this.ChatAgentError = `The dashboard assistant could not be loaded: ${errorMessage(error)}`;
+        } finally {
+            this.resolvingChatAgent = false;
+        }
+        SafeDetectChanges(this.cdr);
+    }
+
+    // ========================================
     // Agent Context & Client Tools
     //
-    // 🔒 SAFETY BOUNDARY: a Config dashboard tab gives the AI agent ONLY the read-only tools built
-    // in dashboard-tab-agent.ts: GetDashboardPanels and GetDashboardDetail. Editing, saving,
-    // sharing, favoriting, pinning and Home tab changes are intentionally NOT exposed; the user
-    // does them from the toolbar. Do NOT add a mutating tool without revisiting this boundary.
+    // 🔒 BOUNDARY: the tab's agent tools change the open dashboard in memory only. Save, Share,
+    // Favorite and Pin stay user actions; the Request* tools in dashboard-studio-tools.ts ask
+    // for them through a confirm dialog and never perform them.
     // A Code dashboard is its own resource component and reports its own context and tools, so
     // this tab reports nothing for it.
     // ========================================
 
-    /** Registers the read-only tools and reports the open Config dashboard to the agent. */
+    /**
+     * Registers the tab's tools and reports the open Config dashboard to the agent. The studio tools
+     * of one registration share an edit queue, so the tab registers them once for each dashboard load.
+     */
     private publishAgentState(): void {
-        this.navigationService.SetAgentClientTools(this, BuildDashboardTabAgentTools(this.agentHost()));
+        this.navigationService.SetAgentClientTools(this, [
+            ...BuildDashboardTabAgentTools(this.agentHost()),
+            ...BuildDashboardStudioTools(this.studioHost()),
+        ]);
+        this.agentStatePublished = true;
         this.emitAgentContext();
     }
 
-    /** Reports the open Config dashboard to the agent. Does nothing while none is open. */
+    /**
+     * Reports the Config dashboard the editor shows to the agent. Does nothing while none is shown, and
+     * before the tab registered the tools for it: an edit-mode request taken on the load reports nothing
+     * of its own, so the load reports once.
+     */
     private emitAgentContext(): void {
-        const dashboard = this.ConfigDashboard;
-        if (!dashboard) return;
+        const editor = this.editor;
+        const dashboard = editor?.Dashboard;
+        if (!this.agentStatePublished || !editor || !dashboard) return;
         const panels = this.livePanels();
         this.reportedPanelsKey = JSON.stringify(panels);
         this.navigationService.SetAgentContext(this, BuildDashboardTabAgentContext({
             Dashboard: dashboard,
-            IsEditing: this.IsEditMode,
-            CanEdit: this.DashboardPermissions.CanEdit,
+            IsEditing: editor.IsEditing,
+            CanEdit: editor.CanEdit,
             Panels: panels,
-            IsFavorite: this.IsFavorite,
-            IsHomeTab: this.IsHomeTab,
+            IsFavorite: editor.IsFavorite,
             IsPinnedToHome: this.IsPinnedToHome,
         }));
     }
@@ -1432,11 +1216,11 @@ export class DashboardResource extends BaseResourceComponent {
     }
 
     /**
-     * The open dashboard's panels, read from the viewer's live layout, so unsaved edits count.
-     * Empty while the viewer is not ready. Best effort: a failed read never stops the context report.
+     * The open dashboard's panels, read from the editor's viewer and its live layout, so unsaved edits
+     * count. Empty while the viewer is not ready. Best effort: a failed read never stops the context report.
      */
     private livePanels(): DashboardPanelSummary[] {
-        const viewer = this.viewerInstance;
+        const viewer = this.editor?.Viewer;
         if (!viewer) return [];
         try {
             return SummarizeDashboardPanels(ExtractPanelsFromLayout(viewer.getConfig()?.layout ?? null), viewer.GetPartTypes());
@@ -1453,6 +1237,318 @@ export class DashboardResource extends BaseResourceComponent {
         } catch {
             return [];
         }
+    }
+
+    // ========================================
+    // Studio Tools Host
+    // ========================================
+
+    /**
+     * The reads and edits the studio tools make on this tab, through its editor, and the requests they
+     * put to the user. DashboardStudioHost says what each member must do.
+     */
+    private studioHost(): DashboardStudioHost {
+        return {
+            Dashboard: () => {
+                const dashboard = this.ConfigDashboard;
+                return dashboard ? { ID: dashboard.ID, Name: dashboard.Name, Description: dashboard.Description ?? null } : null;
+            },
+            GetConfig: () => this.editor?.Viewer?.getConfig() ?? null,
+            GetPartTypes: () => this.editor?.PartTypes ?? [],
+            IsEditing: () => this.editor?.IsEditing ?? false,
+            CanEdit: () => this.editor?.CanEdit ?? false,
+            HasUnsavedChanges: () => this.editor?.Viewer?.HasUnsavedChanges ?? false,
+            IsSaving: () => this.editor?.IsSaving ?? false,
+            EnterEditMode: () => this.editor?.EnterEditMode() ?? false,
+            ...this.studioEdits(),
+            GetPanelPath: panelId => this.editor?.Viewer?.GetPanelPath(panelId) ?? null,
+            CaptureScreenshot: maxWidth => this.editor
+                ? CaptureElementJpeg(this.editor.BodyElement, { maxWidth })
+                : Promise.reject(new Error(NO_CONFIG_DASHBOARD)),
+            PanelBounds: () => this.panelBounds(),
+            IsVoiceSessionActive: () => this.realtimeSession.IsActive,
+            SendVoiceFrame: (base64, mimeType) => this.realtimeSession.SendVideoFrame(base64, mimeType),
+            Confirm: (kind, detail) => this.askAgentConfirm(kind, detail),
+            SearchSources: (query, kinds, limit) => this.searchSources(query, kinds, limit),
+        };
+    }
+
+    /**
+     * The studio host's edits. Each runs through runAgentEdit, so it rejects with the reason when it
+     * cannot be made, and an edit the viewer can skip without an error is checked afterwards.
+     */
+    private studioEdits(): Pick<DashboardStudioHost, 'AddPanel' | 'RemovePanel' | 'UpdatePanelConfig' | 'ApplyLayout'> {
+        return {
+            AddPanel: (partTypeId, config, title, icon, position) =>
+                this.runAgentEdit('The assistant could not add the part', viewer => viewer.AddPanel(partTypeId, config, title, icon, position)),
+            RemovePanel: panelId =>
+                this.runAgentEdit('The assistant could not remove the part', viewer => {
+                    viewer.RemovePanel(panelId);
+                    if (viewer.GetPanel(panelId)) throw new Error('The dashboard did not remove the panel.');
+                }),
+            UpdatePanelConfig: (panelId, config, title, icon) =>
+                this.runAgentEdit('The assistant could not change the part', async viewer => {
+                    await viewer.UpdatePanelConfig(panelId, config, title, icon);
+                    if (JSON.stringify(viewer.GetPanel(panelId)?.config) !== JSON.stringify(config)) {
+                        throw new Error('The dashboard did not change the panel.');
+                    }
+                }),
+            ApplyLayout: layout =>
+                this.runAgentEdit('The assistant could not change the layout', async viewer => {
+                    if (!viewer.getConfig()) throw new Error('The dashboard has not loaded its layout yet.');
+                    await viewer.ApplyLayout(layout);
+                }),
+        };
+    }
+
+    /**
+     * Makes one agent edit on the editor's viewer, then reports the dashboard's parts to the agent again.
+     * The edit waits until the viewer's layout is ready: entering edit mode can reload the saved
+     * dashboard. Rejects with an Error that says why when no viewer is open, the editor's Save runs, or
+     * the edit fails; the user also sees a failed edit.
+     */
+    private async runAgentEdit<T>(failureMessage: string, edit: (viewer: DashboardViewerComponent) => T | Promise<T>): Promise<T> {
+        const viewer = this.editor?.Viewer;
+        if (!viewer) throw new Error(NO_CONFIG_DASHBOARD);
+        try {
+            await viewer.WaitForLayoutReady();
+            if (this.editor?.IsSaving) throw new Error(SAVE_IN_PROGRESS);
+            return await edit(viewer);
+        } catch (error) {
+            LogError(`Dashboard tab: ${failureMessage}: ${errorMessage(error)}`);
+            MJNotificationService.Instance.CreateSimpleNotification(failureMessage, 'error', 3000);
+            throw error instanceof Error ? error : new Error(errorMessage(error));
+        } finally {
+            this.onViewerConfigChanged();
+        }
+    }
+
+    /**
+     * The box of each panel the tab shows, in CSS pixels from the top left corner of the element that
+     * CaptureScreenshot captures (the editor's body). A panel whose content is hidden, such as one in a
+     * stack's inactive tab, is left out. html-to-image draws a scrolled container from its top, so each
+     * box adds the container's scroll offset. None while the editor shows no dashboard.
+     */
+    private panelBounds(): ReturnType<DashboardStudioHost['PanelBounds']> {
+        const editor = this.editor;
+        if (!editor) return [];
+        const container = editor.BodyElement;
+        const origin = container.getBoundingClientRect();
+        const contents = new Map(Array.from(container.querySelectorAll<HTMLElement>('[data-panel-id]'), element => [element.dataset['panelId'], element] as const));
+        return ExtractPanelsFromLayout(editor.Viewer?.getConfig()?.layout ?? null).flatMap(panel => {
+            const content = contents.get(panel.id);
+            if (!content || content.offsetParent === null) return [];
+            const box = content.getBoundingClientRect();
+            return [{
+                panelId: panel.id,
+                x: Math.round(box.left - origin.left + container.scrollLeft),
+                y: Math.round(box.top - origin.top + container.scrollTop),
+                width: Math.round(box.width),
+                height: Math.round(box.height),
+            }];
+        });
+    }
+
+    // ========================================
+    // Source Search for the Agent
+    // ========================================
+
+    /**
+     * Searches the sources the user may show in a panel. First loads the engines that the searched kinds
+     * read: the tab starts these loads with the dashboard, and a load that failed then runs again here.
+     */
+    private async searchSources(query: string, kinds: readonly SourceKind[], limit: number): Promise<SourceSearchResult[]> {
+        await this.loadSourceEngines(kinds);
+        return SearchDashboardSources(this.sourceSearchDeps(), query, kinds, limit);
+    }
+
+    /** The lists the source search reads, each limited to what the user may use. */
+    private sourceSearchDeps(): SourceSearchDeps {
+        const provider = this.ProviderToUse;
+        return {
+            ListArtifacts: query => this.artifactSources(query),
+            ListViews: () => viewSources(),
+            ListQueries: () => querySources(provider.CurrentUser),
+            ListEntities: () => entitySources(provider),
+        };
+    }
+
+    /**
+     * Loads the engines the source search reads for `kinds`: user views for 'view' and queries for
+     * 'query'. Artifacts and entities need neither. A loaded engine returns at once.
+     */
+    private async loadSourceEngines(kinds: readonly SourceKind[]): Promise<void> {
+        const provider = this.ProviderToUse;
+        const loads: Promise<void>[] = [];
+        if (kinds.includes('view')) loads.push(UserViewEngine.Instance.Config(false, provider.CurrentUser, provider));
+        if (kinds.includes('query')) loads.push(QueryEngine.Instance.Config(false, provider.CurrentUser, provider));
+        await Promise.all(loads);
+    }
+
+    /**
+     * Starts to load the source search engines with a Config dashboard, so that the agent's first search
+     * usually finds them loaded. The dashboard does not wait for it. Never rejects: a failure is logged,
+     * and the search loads the engines again.
+     */
+    private async preloadSourceEngines(): Promise<void> {
+        try {
+            await this.loadSourceEngines(SOURCE_KINDS);
+        } catch (error) {
+            LogError(`Dashboard tab: could not load the views and queries for the assistant's source search: ${errorMessage(error)}`);
+        }
+    }
+
+    /**
+     * The artifacts the user can read in the tab's environment (ChatEnvironmentId) whose name or description
+     * contains `query` in any case (all of them for a blank query), the first SOURCE_SEARCH_MAX_ARTIFACTS by
+     * name, each with its latest version number. An artifact whose versions cannot be read has none, so
+     * its panel shows the latest version. Rejects when the artifacts cannot be read.
+     */
+    private async artifactSources(query: string): Promise<Awaited<ReturnType<SourceSearchDeps['ListArtifacts']>>> {
+        const provider = this.ProviderToUse;
+        const user = provider.CurrentUser;
+        await ArtifactMetadataEngine.Instance.Config(false, user, provider);
+        const readable = await this.artifactPermissions.GetReadableArtifactsFilter(user.ID, user);
+        const environmentId = EscapeSQLString(this.ChatEnvironmentId);
+        const result = await RunView.FromMetadataProvider(provider).RunView<ArtifactRow>({
+            EntityName: 'MJ: Artifacts',
+            ExtraFilter: `${readable} AND EnvironmentID='${environmentId}' AND (Visibility IS NULL OR Visibility='Always')${artifactQueryFilter(query)}`,
+            Fields: ['ID', 'Name', 'Description', 'Type'],
+            OrderBy: 'Name',
+            MaxRows: SOURCE_SEARCH_MAX_ARTIFACTS,
+            ResultType: 'simple',
+        }, user);
+        if (!result.Success) throw new Error(`Could not read the artifacts: ${result.ErrorMessage || 'no reason given'}`);
+        const artifacts = result.Results ?? [];
+        const latest = await this.latestArtifactVersions(artifacts.map(artifact => artifact.ID));
+        return artifacts.map(artifact => ({
+            ID: artifact.ID,
+            Name: artifact.Name,
+            Description: artifact.Description,
+            Type: artifact.Type,
+            LatestVersion: latest.get(NormalizeUUID(artifact.ID)) ?? null,
+        }));
+    }
+
+    /**
+     * The highest version number of each artifact, by normalized artifact ID. One RunViews call reads
+     * every version of the artifacts, highest first and without the entity's row cap, with at most
+     * ARTIFACT_VERSION_FILTER_CHUNK IDs in each filter. The artifacts whose versions cannot be read are
+     * not in the map, and the failure is logged.
+     */
+    private async latestArtifactVersions(artifactIds: readonly string[]): Promise<Map<string, number>> {
+        const latest = new Map<string, number>();
+        if (artifactIds.length === 0) return latest;
+        const provider = this.ProviderToUse;
+        try {
+            const results = await RunView.FromMetadataProvider(provider).RunViews<ArtifactVersionRow>(
+                chunked(artifactIds, ARTIFACT_VERSION_FILTER_CHUNK).map(ids => ({
+                    EntityName: 'MJ: Artifact Versions',
+                    ExtraFilter: `ArtifactID IN (${ids.map(id => `'${EscapeSQLString(id)}'`).join(',')})`,
+                    Fields: ['ArtifactID', 'VersionNumber'],
+                    OrderBy: 'VersionNumber DESC',
+                    IgnoreMaxRows: true,
+                    ResultType: 'simple',
+                })),
+                provider.CurrentUser,
+            );
+            for (const result of results) {
+                if (result.Success) addLatestVersions(latest, result.Results ?? []);
+                else LogError(`Dashboard tab: could not read the artifact versions: ${result.ErrorMessage || 'no reason given'}`);
+            }
+        } catch (error) {
+            LogError(`Dashboard tab: could not read the artifact versions: ${errorMessage(error)}`);
+        }
+        return latest;
+    }
+
+    // ========================================
+    // Requests from the Agent
+    // ========================================
+
+    /**
+     * Opens the confirm dialog for an agent's request and settles with the user's answer: true once the
+     * confirmed action is done, false when the user cancels. Rejects when no Config dashboard is open,
+     * when another confirmation is open, when the confirmed action fails, and when no answer comes
+     * within AGENT_CONFIRM_TIMEOUT_MS; the dialog closes first.
+     */
+    private askAgentConfirm(kind: AgentConfirmKind, detail: AgentConfirmDetail): Promise<boolean> {
+        const dashboard = this.ConfigDashboard;
+        if (!dashboard) return Promise.reject(new Error(NO_CONFIG_DASHBOARD));
+        if (this.agentConfirmRequest) {
+            return Promise.reject(new Error('Another confirmation is already open. Wait for the user to answer it, then try again.'));
+        }
+        return new Promise<boolean>((resolve, reject) => {
+            const timer = setTimeout(() => {
+                this.abortAgentConfirm(AGENT_CONFIRM_TIMED_OUT);
+                SafeDetectChanges(this.cdr);
+            }, AGENT_CONFIRM_TIMEOUT_MS);
+            this.agentConfirmRequest = {
+                answer: confirmed => {
+                    clearTimeout(timer);
+                    if (!confirmed) {
+                        resolve(false);
+                        return;
+                    }
+                    this.performAgentRequest(kind, detail).then(() => resolve(true), reject);
+                },
+                abort: reason => {
+                    clearTimeout(timer);
+                    reject(reason);
+                },
+            };
+            this.AgentConfirm = { Kind: kind, ...agentConfirmText(kind, dashboard.Name, detail) };
+            SafeDetectChanges(this.cdr);
+        });
+    }
+
+    /** Takes the user's answer to the agent's confirm dialog. Does nothing when no dialog is open. */
+    public OnAgentConfirm(confirmed: boolean): void {
+        const request = this.closeAgentConfirm();
+        SafeDetectChanges(this.cdr);
+        request?.answer(confirmed);
+    }
+
+    /** Closes the agent's confirm dialog, if one is open, and fails its request with `reason`. */
+    private abortAgentConfirm(reason: string): void {
+        this.closeAgentConfirm()?.abort(new Error(reason));
+    }
+
+    /** Closes the agent's confirm dialog and returns its request, or null when none is open. */
+    private closeAgentConfirm(): AgentConfirmRequest | null {
+        const request = this.agentConfirmRequest;
+        this.agentConfirmRequest = null;
+        this.AgentConfirm = null;
+        return request;
+    }
+
+    /** Does what the user confirmed, as the editor's Save and the Add to menu do it. Rejects when it did not take effect. */
+    private async performAgentRequest(kind: AgentConfirmKind, detail: AgentConfirmDetail): Promise<void> {
+        switch (kind) {
+            case 'save':
+                return this.saveForAgent(detail);
+            case 'pin':
+                return this.pinForAgent();
+            default:
+                throw new Error(`The tab cannot do the request "${String(kind)}".`);
+        }
+    }
+
+    /**
+     * Saves the dashboard through the editor, as its Save does, with the new name and description the
+     * agent gave. Rejects with the reason the save did not happen. While a Save runs the editor refuses
+     * at once and leaves its name and description fields as they are, because that Save reads them.
+     */
+    private async saveForAgent(detail: AgentConfirmDetail): Promise<void> {
+        const editor = this.editor;
+        const failure = editor ? await editor.Save({ Name: detail.name, Description: detail.description }) : NO_CONFIG_DASHBOARD;
+        if (failure) throw new Error(failure);
+    }
+
+    /** Pins the dashboard to Home as the Add to menu does. Rejects when it is not pinned afterwards. */
+    private async pinForAgent(): Promise<void> {
+        await this.PinToHome();
+        if (!this.IsPinnedToHome) throw new Error(`Could not pin "${this.ConfigDashboard?.Name ?? 'the dashboard'}" to Home.`);
     }
 
     /** @deprecated Use {@link OnShareDialogResult}. */
@@ -1505,8 +1601,10 @@ export class DashboardResource extends BaseResourceComponent {
                 // CODE-BASED DASHBOARD: Use registered class via DriverClass
                 await this.loadCodeBasedDashboard(dashboard);
             } else {
-                // CONFIG-BASED DASHBOARD: Use the generic metadata-driven renderer
-                await this.loadConfigBasedDashboard(dashboard);
+                // CONFIG-BASED DASHBOARD: the shared dashboard editor shows it. Its studio tools
+                // search views and queries, so their engines start to load now; the dashboard does not wait.
+                void this.preloadSourceEngines();
+                this.showConfigDashboard(dashboard);
             }
         } catch (error) {
             console.error('Error loading dashboard:', error);
@@ -1719,97 +1817,7 @@ export class DashboardResource extends BaseResourceComponent {
     }
 
     /**
-     * Load a config-based dashboard using the new DashboardViewerComponent (Golden Layout)
-     */
-    private async loadConfigBasedDashboard(dashboard: MJDashboardEntity): Promise<void> {
-        try {
-            this.ContainerElement.nativeElement.innerHTML = '';
-            const componentRef = this.viewContainer.createComponent(DashboardViewerComponent);
-            this.componentRef = componentRef;
-            const instance = componentRef.instance;
-
-            // Store references for external toolbar control
-            this.viewerInstance = instance;
-            this.ConfigDashboard = dashboard;
-            this.reportedPanelsKey = null;
-            void this.loadHomePins();
-
-            // Compute user permissions for this dashboard
-            const md = this.ProviderToUse;
-            this.DashboardPermissions = DashboardEngine.Instance.GetDashboardPermissions(
-                dashboard.ID,
-                md.CurrentUser.ID
-            );
-
-            // Manually append the component's native element inside the div
-            const nativeElement = (this.componentRef.hostView as any).rootNodes[0];
-            nativeElement.style.width = '100%';
-            nativeElement.style.height = '100%';
-            this.ContainerElement.nativeElement.appendChild(nativeElement);
-
-            // Load categories for breadcrumb navigation (if not already loaded)
-            if (this.categories.length === 0) {
-                this.categories = DashboardEngine.Instance.DashboardCategories;
-            }
-
-            // Configure the viewer before assigning the dashboard. The dashboard input
-            // starts the layout lifecycle synchronously, so event handlers need to be
-            // wired first.
-            instance.showToolbar = false;         // We provide external toolbar
-            instance.ShowBreadcrumb = false;      // Already in a dashboard tab, no breadcrumb needed
-            instance.ShowOpenInTabButton = false; // Already in a dashboard tab
-            instance.showEditButton = false;      // External toolbar handles edit
-            instance.Categories = this.categories;
-
-            // Wire up navigation events - handle navigation requests from the dashboard
-            instance.navigationRequested.subscribe((event: DashboardNavRequestEvent) => {
-                this.handleNavigationRequest(event);
-            });
-
-            // Wire up "Open in Tab" button click
-            instance.openInTab.subscribe((event: { dashboardId: string; dashboardName: string }) => {
-                this.navigationService.OpenDashboard(event.dashboardId, event.dashboardName);
-            });
-
-            // A save can rename the dashboard: the tab takes the saved name and keeps its dashboard id
-            instance.dashboardSaved.subscribe((savedDashboard: MJDashboardEntity) => {
-                if (savedDashboard.Name) {
-                    this.NotifyDisplayNameChanged(savedDashboard.Name);
-                }
-            });
-
-            // Wire up error events
-            instance.error.subscribe((errorEvent: { message: string; error?: Error }) => {
-                console.error('Dashboard error:', errorEvent.message, errorEvent.error);
-            });
-
-            // Report panel adds, removals and changes to the agent
-            instance.configChanged.subscribe(() => this.onViewerConfigChanged());
-
-            // Open the part dialogs the viewer asks for: Add Part, and a part's Configure and Remove
-            instance.PanelInteraction.subscribe((event: PanelInteractionEvent) => this.onPanelInteraction(event));
-
-            // Follow saves of the dashboard made elsewhere, and edit-mode requests for this tab
-            this.watchForChanges();
-
-            // Set the dashboard entity directly on the viewer and wait for Golden Layout
-            // to initialize against a real container before clearing the resource loader.
-            instance.dashboard = dashboard;
-            await instance.waitForLayoutReady();
-            this.NotifyLoadComplete();
-            this.applyEditModeRequest();
-            this.cdr.detectChanges();
-            this.publishAgentState();
-
-        } catch (error) {
-            console.error('Error loading config-based dashboard:', error);
-            this.setError(`The dashboard "${dashboard.Name}" could not be loaded. There may be an issue with the dashboard configuration.`, error);
-            this.NotifyLoadComplete();
-        }
-    }
-
-    /**
-     * Handle navigation requests from the dashboard viewer
+     * Handle navigation requests from a part of the dashboard (the editor passes them on)
      */
     private handleNavigationRequest(event: DashboardNavRequestEvent): void {
         const request = event.request;
@@ -1902,4 +1910,109 @@ export class DashboardResource extends BaseResourceComponent {
 
 function errorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
+}
+
+/** The title, question and confirm button text of the dialog that asks the user to do what the agent requests. */
+function agentConfirmText(kind: AgentConfirmKind, dashboardName: string, detail: AgentConfirmDetail): Omit<AgentConfirmDialog, 'Kind'> {
+    const name = `"${dashboardName}"`;
+    switch (kind) {
+        case 'save': {
+            const rename = detail.name ? ` Its new name will be "${detail.name}".` : '';
+            const describe = detail.description ? ` Its new description will be "${detail.description}".` : '';
+            return { Title: 'Save dashboard?', Message: `The assistant asks to save ${name}.${rename}${describe}`, ConfirmText: 'Save' };
+        }
+        case 'pin':
+            return { Title: 'Pin to Home?', Message: `The assistant asks to pin ${name} to your Home app.`, ConfirmText: 'Pin' };
+    }
+}
+
+/** The user's own views and the shared views the user may see. None when the user cannot read views. */
+function viewSources(): ReturnType<SourceSearchDeps['ListViews']> {
+    const engine = UserViewEngine.Instance;
+    if (engine.IsPermissionConstrained) return [];
+    const shared = engine.GetSharedViews().filter(view => view.UserCanView);
+    return [...engine.GetViewsForCurrentUser(), ...shared].map(view => ({
+        ID: view.ID,
+        Name: view.Name,
+        Description: view.Description,
+        Entity: view.Entity,
+        EntityID: view.EntityID,
+    }));
+}
+
+/** The queries the user can run. None when the user cannot read queries. */
+function querySources(user: UserInfo): ReturnType<SourceSearchDeps['ListQueries']> {
+    const engine = QueryEngine.Instance;
+    if (engine.IsPermissionConstrained) return [];
+    return engine.Queries.filter(query => query.UserCanRun(user).canRun).map(query => ({
+        ID: query.ID,
+        Name: query.Name,
+        Description: query.Description,
+        Category: query.Category,
+    }));
+}
+
+/** The entities the user can read. */
+function entitySources(provider: IMetadataProvider): ReturnType<SourceSearchDeps['ListEntities']> {
+    const user = provider.CurrentUser;
+    return provider.Entities.filter(entity => entity.GetUserPermisions(user).CanRead).map(entity => ({
+        ID: entity.ID,
+        Name: entity.Name,
+        DisplayName: entity.DisplayName,
+        Description: entity.Description,
+    }));
+}
+
+/**
+ * The filter clause that keeps the artifacts whose name or description, in lower case, matches the query
+ * as a LIKE pattern (see likeNarrowingPattern), or '' when the query is blank. The clause only narrows
+ * the list: RankByQuery makes the exact match in the browser.
+ */
+function artifactQueryFilter(query: string): string {
+    const pattern = likeNarrowingPattern(query);
+    return pattern ? ` AND (LOWER(Name) LIKE '%${pattern}%' OR LOWER(Description) LIKE '%${pattern}%')` : '';
+}
+
+/**
+ * The query without its outer spaces as a lower-case LIKE pattern that matches the query, and can match
+ * more, in the same way on SQL Server and PostgreSQL. It needs no ESCAPE clause, which the server refuses
+ * in a client's filter. Each quote, backslash and LIKE wildcard (`%`, `_`, `[`, `]`) becomes `_`, which
+ * matches any one character. Each parenthesis becomes `_` too: the PostgreSQL provider rewrites date
+ * functions such as `GETDATE()` in the whole filter, string literals included. Each other character that is
+ * not ASCII becomes `_`, so the literal needs no `N` prefix, with two exceptions that become `%` (see
+ * nonAsciiWildcard). The text is put in lower case last, when it holds only ASCII.
+ */
+function likeNarrowingPattern(query: string): string {
+    const ascii = query
+        .trim()
+        .replace(/[\\%_[\]'()]/g, '_')
+        .replace(/[\u0080-\u{10FFFF}]/gu, nonAsciiWildcard);
+    return EscapeSQLString(ascii.toLowerCase());
+}
+
+/**
+ * The LIKE wildcard for a character that is not ASCII: `_`, which matches one character, or `%` where one
+ * character can be two on some database. SQL Server counts a character outside the BMP as two characters and
+ * PostgreSQL as one. `İ` (U+0130) is one character, but ICU collations put it in lower case as `i` and a
+ * combining dot.
+ */
+function nonAsciiWildcard(char: string): '%' | '_' {
+    return char.length > 1 || char === '\u0130' ? '%' : '_';
+}
+
+/** Records in `latest` the highest version number of each artifact in `rows`, by normalized artifact ID. */
+function addLatestVersions(latest: Map<string, number>, rows: readonly ArtifactVersionRow[]): void {
+    for (const row of rows) {
+        const key = NormalizeUUID(row.ArtifactID);
+        latest.set(key, Math.max(latest.get(key) ?? 0, row.VersionNumber));
+    }
+}
+
+/** The items in consecutive groups of at most `size`. */
+function chunked<T>(items: readonly T[], size: number): T[][] {
+    const groups: T[][] = [];
+    for (let start = 0; start < items.length; start += size) {
+        groups.push(items.slice(start, start + size));
+    }
+    return groups;
 }

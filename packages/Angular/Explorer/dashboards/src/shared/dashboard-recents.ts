@@ -1,6 +1,6 @@
 /**
- * @fileoverview The user's recently opened dashboards, for Browse (Recently opened), Overview
- * (Continue) and the Home Dashboards strip.
+ * @fileoverview The user's recently opened dashboards, for the Library (its order and Recently
+ * opened).
  *
  * The list comes from UserInfoEngine's cache of the user's MJ: User Record Logs, which holds every
  * record the user has opened, so it lists every opened dashboard, not only the dashboards among

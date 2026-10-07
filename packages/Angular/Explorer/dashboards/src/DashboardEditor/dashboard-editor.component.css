@@ -1,0 +1,51 @@
+:host { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+:host(.dashboard-editor--fill) { height: 100%; }
+
+.dashboard-editor-header {
+  display: flex; align-items: center; gap: var(--mj-space-4); flex-shrink: 0;
+  min-height: 72px; padding: var(--mj-space-3) var(--mj-space-8);
+  background: var(--mj-bg-surface); border-bottom: 1px solid var(--mj-border-default);
+}
+.dashboard-editor-namewrap { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.dashboard-editor-title {
+  margin: 0; font-size: var(--mj-text-lg); font-weight: var(--mj-font-bold); letter-spacing: var(--mj-tracking-tight);
+  color: var(--mj-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.dashboard-editor-shared { margin-left: var(--mj-space-2); font-size: var(--mj-text-xs); color: var(--mj-brand-primary); }
+
+/* .mj-input (global, ui-components input.scss) gives the border, radius, padding, hover and focus ring */
+.dashboard-editor-name { max-width: 520px; font-size: var(--mj-text-lg); font-weight: var(--mj-font-bold); letter-spacing: var(--mj-tracking-tight); }
+
+.dashboard-editor-desc {
+  width: min(100%, 520px); margin: 0 0 0 -8px; padding: 3px 8px;
+  font: inherit; font-size: var(--mj-text-xs); color: var(--mj-text-secondary);
+  background: transparent; border: 1px solid transparent; border-radius: var(--mj-radius-md);
+}
+.dashboard-editor-desc.is-placeholder, .dashboard-editor-desc::placeholder { color: var(--mj-text-muted); }
+.dashboard-editor-desc.is-editable:hover { border-color: var(--mj-border-default); background: var(--mj-bg-surface-card); }
+.dashboard-editor-desc.is-editable:focus {
+  outline: none; border-color: var(--mj-border-focus); background: var(--mj-bg-surface); box-shadow: var(--mj-focus-ring);
+}
+
+.dashboard-editor-actions { display: flex; align-items: center; gap: var(--mj-space-2); flex-shrink: 0; }
+.dashboard-editor-divider { width: 1px; height: 22px; margin: 0 var(--mj-space-1); background: var(--mj-border-default); }
+/* The colour goes on the icon, never on the button: button.scss owns the button */
+.dashboard-editor-favorite.is-favorite i { color: var(--mj-status-warning); }
+
+.dashboard-editor-main { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.dashboard-editor-body { position: relative; flex: 1; min-height: 0; overflow: hidden; }
+.dashboard-editor-note { margin: 0; padding: var(--mj-space-2) var(--mj-space-8) 0; font-size: var(--mj-text-xs); color: var(--mj-text-muted); }
+
+/* Card style: a padded body with the dashboard in a card. Golden Layout sizes itself from the body, so it needs a definite height. */
+.dashboard-editor-main.is-card { padding: var(--mj-space-4) var(--mj-space-8) var(--mj-space-8); }
+.dashboard-editor-main.is-card .dashboard-editor-note { padding: 0 0 var(--mj-space-3); }
+.dashboard-editor-main.is-card .dashboard-editor-body {
+  flex: none; height: max(480px, calc(100vh - 230px));
+  background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-lg); box-shadow: var(--mj-shadow-sm);
+}
+
+@media (max-width: 900px) {
+  .dashboard-editor-header { flex-wrap: wrap; padding-left: var(--mj-space-4); padding-right: var(--mj-space-4); }
+  .dashboard-editor-main.is-card { padding-left: var(--mj-space-4); padding-right: var(--mj-space-4); }
+}

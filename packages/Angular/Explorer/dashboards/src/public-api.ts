@@ -166,17 +166,13 @@ export {
   ShareDialogResult
 } from './DashboardBrowser/dashboard-share-dialog.component';
 
-// Dashboards app pages (Browse is DashboardBrowserResourceComponent above)
-export { DashboardsOverviewResourceComponent, LoadDashboardsOverviewResource } from './DashboardBrowser/dashboards-overview-resource.component';
-export { DashboardsSharedResourceComponent, LoadDashboardsSharedResource } from './DashboardBrowser/dashboards-shared-resource.component';
+// Dashboards app pages (the Library is DashboardBrowserResourceComponent above)
 export { DashboardsCategoriesResourceComponent, LoadDashboardsCategoriesResource } from './DashboardBrowser/dashboards-categories-resource.component';
-export { DashboardCardComponent } from './shared/dashboard-card/dashboard-card.component';
 export * from './shared/dashboards-app.helpers';
 
 // Home Application and Dashboard
 export { HomeApplication } from './Home/home-application';
 export { HomeDashboardComponent } from './Home/home-dashboard.component';
-export { DashboardPreferencesDialogComponent, DashboardPreferencesResult } from './Home/dashboard-preferences-dialog/dashboard-preferences-dialog.component';
 
 // Application Roles
 export { ApplicationRolesResourceComponent, LoadApplicationRolesResource } from './ApplicationRoles/application-roles-resource.component';

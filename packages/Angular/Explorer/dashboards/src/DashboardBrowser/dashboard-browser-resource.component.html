@@ -1,6 +1,6 @@
-<!-- Dashboard Browser Resource -->
+<!-- Library page of the Dashboards app -->
 <mj-page-layout>
-  <mj-page-header Title="Browse" Icon="fa-solid fa-layer-group" Subtitle="Every dashboard you own or that is shared with you">
+  <mj-page-header Title="Library" Icon="fa-solid fa-layer-group" Subtitle="Every dashboard you own or that is shared with you">
     <div meta>
       <mj-stat-badge [Count]="LibraryCounts[LibraryFilter]" [Total]="LibraryCounts.all" Label="dashboards"></mj-stat-badge>
     </div>
@@ -21,11 +21,11 @@
     </mj-left-nav>
 
     <mj-left-nav-content>
-      <!-- Generic browser: folders under All, a flat list for the other Library filters. A click opens the dashboard in the preview tab; a Shift, Ctrl or Cmd click opens it in a separate tab. -->
+      <!-- Generic browser: a flat list for every Library filter and Uncategorized, a folder for a category. A click opens the dashboard in the preview tab; a Shift, Ctrl or Cmd click opens it in a separate tab. -->
       <mj-dashboard-browser
         [Dashboards]="VisibleDashboards"
         [Categories]="Categories"
-        [SelectedCategoryId]="SelectedCategoryId"
+        [SelectedCategoryId]="IsFlatView ? null : SelectedCategoryId"
         [FlatMode]="IsFlatView"
         [ViewMode]="ViewMode"
         [IsLoading]="isLoading"
@@ -34,11 +34,19 @@
         [AllowDragDrop]="true"
         [DashboardPermissions]="DashboardPermissionsMap"
         [EffectiveCategoryMap]="EffectiveCategoryMap"
+        [FavoriteIds]="FavoriteIds"
+        [ShowFavorites]="true"
+        [OwnerLabels]="OwnerLabels"
+        [FlatEmptyIcon]="EmptyState.Icon"
+        [FlatEmptyTitle]="EmptyState.Title"
+        [FlatEmptyMessage]="EmptyState.Message"
+        [FlatEmptyWelcome]="EmptyState.Welcome"
         (DashboardOpen)="OnDashboardOpen($event)"
         (DashboardEdit)="OnDashboardEdit($event)"
         (DashboardDelete)="OnDashboardDelete($event)"
         (DashboardMove)="OnDashboardMove($event)"
         (DashboardCreate)="OnDashboardCreate($event)"
+        (DashboardFavoriteToggle)="OnDashboardFavoriteToggle($event)"
         (CategoryCreate)="OnCategoryCreate($event)"
         (CategoryDelete)="OnCategoryDelete($event)"
         (CategoryChange)="OnCategoryChange($event)"
@@ -47,3 +55,12 @@
     </mj-left-nav-content>
   </mj-page-body>
 </mj-page-layout>
+
+<!-- New dashboard: asks for the name first; Cancel creates nothing -->
+<mj-dashboard-name-dialog
+  [Visible]="ShowNewDashboardDialog"
+  [MaxLength]="NewDashboardNameMaxLength"
+  [Processing]="IsCreatingDashboard"
+  (Confirmed)="OnNewDashboardNamed($event)"
+  (Cancelled)="OnNewDashboardCancelled()">
+</mj-dashboard-name-dialog>

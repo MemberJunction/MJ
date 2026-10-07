@@ -20,7 +20,14 @@ export * from './lib/layout-preview/dashboard-layout-preview';
 export * from './lib/layout-preview/dashboard-layout-preview.component';
 export * from './lib/layout-preview/dashboard-layout-preview-node.component';
 
+// Dashboard Card (one dashboard: picture, name, owner, Shared marker, favorite star). A host that
+// declares the card itself (for example a test module) declares the layout preview components with it.
+export * from './lib/dashboard-card/dashboard-card.component';
+export * from './lib/dashboard-card/dashboard-card.helpers';
+
 // Generic Dialogs
+export * from './lib/dialogs/part-dialog/dashboard-part-dialog.component';
+export * from './lib/dialogs/dashboard-name-dialog/dashboard-name-dialog.component';
 export * from './lib/dialogs/add-panel-dialog/add-panel-dialog.component';
 export * from './lib/dialogs/edit-part-dialog/edit-part-dialog.component';
 export * from './lib/config-dialogs/confirm-dialog.component';
@@ -43,6 +50,8 @@ export * from './lib/parts/artifact-part.component';
 
 // Types and Models
 export * from './lib/models/dashboard-types';
+export * from './lib/models/dashboard-layout-editor';
+export * from './lib/models/remove-part-confirm';
 
 // Services
 export * from './lib/services/golden-layout-wrapper.service';

@@ -32,8 +32,8 @@ function dashboard(id: string, name: string, extra: Partial<DashboardTabDashboar
   };
 }
 
-function panel(title: string, partTypeId: string, type: string, icon?: string): DashboardTabPanel {
-  return { title, partTypeId, icon, config: { type } };
+function panel(id: string, title: string, partTypeId: string, type: string, icon?: string): DashboardTabPanel {
+  return { id, title, partTypeId, icon, config: { type } };
 }
 
 function permissions(overrides: Partial<DashboardUserPermissions> = {}): DashboardUserPermissions {
@@ -51,8 +51,8 @@ function permissions(overrides: Partial<DashboardUserPermissions> = {}): Dashboa
 
 const openDashboard = dashboard(OPEN_ID, 'Sales pipeline', { Description: 'Open deals', Category: 'Sales', CategoryID: 'CAT-1' });
 const otherDashboard = dashboard(OTHER_ID, 'Support Queue');
-const livePanels: DashboardPanelSummary[] = [{ Title: 'Revenue', PartTypeName: 'Query' }];
-const savedPanels: DashboardPanelSummary[] = [{ Title: 'Open tickets', PartTypeName: 'View' }];
+const livePanels: DashboardPanelSummary[] = [{ Id: 'panel-1', Title: 'Revenue', PartTypeName: 'Query' }];
+const savedPanels: DashboardPanelSummary[] = [{ Id: 'panel-7', Title: 'Open tickets', PartTypeName: 'View' }];
 
 function host(overrides: Partial<DashboardTabAgentHost> = {}): DashboardTabAgentHost {
   return {
@@ -73,24 +73,24 @@ async function runTool(tools: ReturnType<typeof BuildDashboardTabAgentTools>, na
 describe('SummarizeDashboardPanels', () => {
   const partTypes = [{ ID: 'pt-query', Name: 'Query', Icon: 'fa-solid fa-database' }];
 
-  it('names each panel\'s part type, matching the part type id without regard to case', () => {
-    const summaries = SummarizeDashboardPanels([panel('Revenue', 'PT-QUERY', 'Query')], partTypes);
-    expect(summaries).toEqual([{ Title: 'Revenue', PartTypeName: 'Query', Icon: 'fa-solid fa-database' }]);
+  it('names each panel\'s id and part type, matching the part type id without regard to case', () => {
+    const summaries = SummarizeDashboardPanels([panel('panel-1', 'Revenue', 'PT-QUERY', 'Query')], partTypes);
+    expect(summaries).toEqual([{ Id: 'panel-1', Title: 'Revenue', PartTypeName: 'Query', Icon: 'fa-solid fa-database' }]);
   });
 
   it('prefers the panel\'s own icon over the part type icon', () => {
-    const summaries = SummarizeDashboardPanels([panel('Revenue', 'pt-query', 'Query', 'fa-solid fa-coins')], partTypes);
+    const summaries = SummarizeDashboardPanels([panel('panel-1', 'Revenue', 'pt-query', 'Query', 'fa-solid fa-coins')], partTypes);
     expect(summaries[0].Icon).toBe('fa-solid fa-coins');
   });
 
   it('falls back to the config type, then Unknown, and names untitled panels', () => {
     const summaries = SummarizeDashboardPanels(
-      [panel('', 'pt-missing', 'WebURL'), { title: 'Bare', partTypeId: 'pt-missing', config: { type: '' } }],
+      [panel('panel-2', '', 'pt-missing', 'WebURL'), { id: 'panel-3', title: 'Bare', partTypeId: 'pt-missing', config: { type: '' } }],
       partTypes,
     );
     expect(summaries).toEqual([
-      { Title: '(untitled panel)', PartTypeName: 'WebURL' },
-      { Title: 'Bare', PartTypeName: 'Unknown' },
+      { Id: 'panel-2', Title: '(untitled panel)', PartTypeName: 'WebURL' },
+      { Id: 'panel-3', Title: 'Bare', PartTypeName: 'Unknown' },
     ]);
   });
 });
@@ -103,7 +103,6 @@ describe('BuildDashboardTabAgentContext', () => {
       CanEdit: true,
       Panels: livePanels,
       IsFavorite: true,
-      IsHomeTab: false,
       IsPinnedToHome: true,
     });
     expect(context).toEqual({
@@ -115,15 +114,15 @@ describe('BuildDashboardTabAgentContext', () => {
       OpenedDashboardPanelCount: 1,
       OpenedDashboardPanels: livePanels,
       IsFavorite: true,
-      IsHomeTab: false,
       IsPinnedToHome: true,
     });
+    expect(context).not.toHaveProperty('IsHomeTab');
   });
 
   it('lists at most the cap of panels but counts all of them', () => {
-    const many = Array.from({ length: DASHBOARD_TAB_AGENT_LIST_CAP + 5 }, (_, i) => ({ Title: `Panel ${i}`, PartTypeName: 'View' }));
+    const many = Array.from({ length: DASHBOARD_TAB_AGENT_LIST_CAP + 5 }, (_, i) => ({ Id: `panel-${i}`, Title: `Panel ${i}`, PartTypeName: 'View' }));
     const context = BuildDashboardTabAgentContext({
-      Dashboard: openDashboard, IsEditing: true, CanEdit: true, Panels: many, IsFavorite: false, IsHomeTab: false, IsPinnedToHome: false,
+      Dashboard: openDashboard, IsEditing: true, CanEdit: true, Panels: many, IsFavorite: false, IsPinnedToHome: false,
     });
     expect(context['OpenedDashboardPanelCount']).toBe(DASHBOARD_TAB_AGENT_LIST_CAP + 5);
     expect(context['OpenedDashboardPanels']).toHaveLength(DASHBOARD_TAB_AGENT_LIST_CAP);

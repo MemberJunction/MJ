@@ -595,6 +595,9 @@ importers:
 
   packages/AI/AgentsClient:
     dependencies:
+      '@memberjunction/ai-core-plus':
+        specifier: 6.2.0-edge.1
+        version: link:../CorePlus
       '@memberjunction/core':
         specifier: 6.2.0-edge.1
         version: link:../../MJCore
@@ -5083,6 +5086,9 @@ importers:
       '@memberjunction/communication-types':
         specifier: 6.2.0-edge.1
         version: link:../../../Communication/base-types
+      '@memberjunction/conversations-runtime':
+        specifier: 6.2.0-edge.1
+        version: link:../../../ConversationsRuntime
       '@memberjunction/core':
         specifier: 6.2.0-edge.1
         version: link:../../../MJCore
@@ -5224,6 +5230,9 @@ importers:
       '@memberjunction/theme-engine':
         specifier: 6.2.0-edge.1
         version: link:../../../ThemeEngine
+      angular-split:
+        specifier: ^20.0.0
+        version: 20.0.0(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2)
       golden-layout:
         specifier: ^2.6.0
         version: 2.6.0
@@ -5243,6 +5252,12 @@ importers:
       '@memberjunction/ng-test-utils':
         specifier: 6.2.0-edge.1
         version: link:../../Generic/test-utils
+      '@memberjunction/sql-dialect':
+        specifier: 6.2.0-edge.1
+        version: link:../../../SQLDialect
+      '@memberjunction/sql-parser':
+        specifier: 6.2.0-edge.1
+        version: link:../../../SQLParser
       sass:
         specifier: ^1.97.3
         version: 1.97.3

@@ -1,20 +1,21 @@
 /**
- * @fileoverview Pure logic for the Browse page's library rail: the Library filters, the rail
- * sections and their counts, the rail item ids, and the `lib` / `category` query params.
+ * @fileoverview Pure logic for the Library page of the Dashboards app: the order of its dashboards,
+ * the list each rail item shows, the empty state of each list, the rail sections and their counts,
+ * the rail item ids, and the `lib` / `category` query params.
  *
- * Counts follow the same rules as `mj-dashboard-browser`, so a rail badge equals the number of
- * dashboard cards the browser shows when that item is clicked: only Config dashboards count, a
- * Library filter other than All is shown flat, and a category shows the dashboards whose
- * effective category it is.
+ * Every Library filter and Uncategorized is a flat list; only a category opens as a folder. Counts
+ * follow the same rules as `mj-dashboard-browser`, so a rail badge equals the number of dashboard
+ * cards the browser shows when that item is clicked: only Config dashboards count, and a category
+ * or Uncategorized shows the dashboards whose effective category it is.
  */
 import type { MJDashboardCategoryEntity, MJDashboardEntity } from '@memberjunction/core-entities';
-import { UUIDsEqual } from '@memberjunction/global';
+import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import type { MJLeftNavItem, MJLeftNavSection } from '@memberjunction/ng-ui-components';
 
 /** The Library filters, in rail order. */
 export const DASHBOARD_LIBRARY_FILTERS = ['all', 'mine', 'shared', 'favorites', 'recent'] as const;
 
-/** A Library filter in the Browse rail. */
+/** A Library filter in the Library rail. */
 export type DashboardLibraryFilter = (typeof DASHBOARD_LIBRARY_FILTERS)[number];
 
 /** True when `value` is one of the Library filters (exact, case-sensitive). */
@@ -30,12 +31,15 @@ export interface LibraryFilterContext {
   RecentIds: string[];
 }
 
-/** Where Browse is: a Library filter, or (with the All filter) a category. */
+/** Where the Library is: a Library filter, or (with the All filter) a category or Uncategorized. */
 export interface BrowseLocation {
   Filter: DashboardLibraryFilter;
-  /** The selected category, or null for the library root. */
+  /** The selected category, UNCATEGORIZED_CATEGORY_ID for Uncategorized, or null for none. */
   CategoryId: string | null;
 }
+
+/** The `category` value of the Uncategorized list: the dashboards in no category. */
+export const UNCATEGORIZED_CATEGORY_ID = 'uncategorized';
 
 /** Category counts for the rail, keyed by the category's own id. */
 export interface CategoryCounts {
@@ -55,7 +59,7 @@ const LIBRARY_ITEMS: Array<[DashboardLibraryFilter, string, string]> = [
   ['recent', 'Recently opened', 'fa-solid fa-clock-rotate-left'],
 ];
 
-/** The dashboards a Library filter keeps. `recent` follows the recents order. */
+/** The dashboards a Library filter keeps, in the order given. `recent` follows the recents order. */
 export function FilterDashboardsForLibrary(
   dashboards: MJDashboardEntity[],
   filter: DashboardLibraryFilter,
@@ -114,6 +118,115 @@ export function EffectiveCategoryId(dashboard: MJDashboardEntity, effectiveCateg
 }
 
 /**
+ * The Library's default order: favorites first, then the dashboards the user opened, the most recent
+ * open first, then the rest. Within each group a dashboard opened more recently comes first;
+ * dashboards never opened follow, the most recently updated first, then by name. Returns a new array.
+ */
+export function OrderLibraryDashboards(dashboards: readonly MJDashboardEntity[], ctx: LibraryFilterContext): MJDashboardEntity[] {
+  const favorites = new Set(ctx.FavoriteIds.map(id => NormalizeUUID(id)));
+  const ranks = recentRanks(ctx.RecentIds);
+  return dashboards
+    .map(dashboard => ({ dashboard, key: libraryOrderKey(dashboard, favorites, ranks) }))
+    .sort((a, b) => compareLibraryOrderKeys(a.key, b.key))
+    .map(entry => entry.dashboard);
+}
+
+/** What the Library sorts a dashboard by. */
+interface LibraryOrderKey {
+  Favorite: boolean;
+  /** Position in the recents (0 = opened last); Infinity when never opened. */
+  RecentRank: number;
+  /** Last update in ms since the epoch; 0 when unknown. */
+  UpdatedAt: number;
+  Name: string;
+}
+
+function libraryOrderKey(dashboard: MJDashboardEntity, favorites: ReadonlySet<string>, ranks: ReadonlyMap<string, number>): LibraryOrderKey {
+  const id = NormalizeUUID(dashboard.ID);
+  return {
+    Favorite: favorites.has(id),
+    RecentRank: ranks.get(id) ?? Number.POSITIVE_INFINITY,
+    UpdatedAt: timeOf(dashboard.__mj_UpdatedAt),
+    Name: dashboard.Name ?? '',
+  };
+}
+
+function compareLibraryOrderKeys(a: LibraryOrderKey, b: LibraryOrderKey): number {
+  if (a.Favorite !== b.Favorite) return a.Favorite ? -1 : 1;
+  if (a.RecentRank !== b.RecentRank) return a.RecentRank < b.RecentRank ? -1 : 1;
+  if (a.UpdatedAt !== b.UpdatedAt) return b.UpdatedAt - a.UpdatedAt;
+  return a.Name.localeCompare(b.Name);
+}
+
+/** Each recent id's first position, keyed by the normalized id. */
+function recentRanks(recentIds: readonly string[]): Map<string, number> {
+  const ranks = new Map<string, number>();
+  recentIds.forEach((id, index) => {
+    const key = NormalizeUUID(id);
+    if (!ranks.has(key)) ranks.set(key, index);
+  });
+  return ranks;
+}
+
+/** Milliseconds since the epoch, or 0 for a missing or invalid date. */
+function timeOf(value: Date | null | undefined): number {
+  const time = value ? new Date(value).getTime() : Number.NaN;
+  return Number.isNaN(time) ? 0 : time;
+}
+
+/** True when a location shows one category's folder; every other location is a flat list. */
+export function IsCategoryFolderLocation(location: BrowseLocation): boolean {
+  return !!location.CategoryId && location.CategoryId !== UNCATEGORIZED_CATEGORY_ID;
+}
+
+/**
+ * The dashboards the Library gives the browser for a location, in display order (see
+ * OrderLibraryDashboards; Recently opened keeps the order of the last opens). Uncategorized keeps the
+ * dashboards in no category. A category folder gets every dashboard: the browser shows the folder's own.
+ */
+export function VisibleLibraryDashboards(
+  dashboards: readonly MJDashboardEntity[],
+  location: BrowseLocation,
+  ctx: LibraryFilterContext,
+  effectiveCategoryMap: Map<string, string | null>
+): MJDashboardEntity[] {
+  const ordered = OrderLibraryDashboards(dashboards, ctx);
+  if (location.CategoryId === UNCATEGORIZED_CATEGORY_ID) {
+    return ordered.filter(d => !EffectiveCategoryId(d, effectiveCategoryMap));
+  }
+  return FilterDashboardsForLibrary(ordered, location.Filter, ctx);
+}
+
+/** What an empty flat Library list shows. */
+export interface LibraryEmptyStateText {
+  Icon: string;
+  Title: string;
+  Message: string;
+  /** True for the whole library: the browser shows its first-run welcome instead. */
+  Welcome: boolean;
+}
+
+const LIBRARY_EMPTY_STATES: Record<DashboardLibraryFilter, LibraryEmptyStateText> = {
+  all: { Icon: 'fa-solid fa-gauge-high', Title: 'Welcome to Dashboards', Message: '', Welcome: true },
+  mine: { Icon: 'fa-solid fa-user', Title: 'You have no dashboards yet', Message: 'Create one with New.', Welcome: false },
+  shared: { Icon: 'fa-solid fa-inbox', Title: 'Nothing shared with you yet', Message: 'Dashboards other people share with you appear here.', Welcome: false },
+  favorites: { Icon: 'fa-solid fa-star', Title: 'No favorites yet', Message: 'Star a dashboard to keep it here.', Welcome: false },
+  recent: { Icon: 'fa-solid fa-clock-rotate-left', Title: 'Nothing opened yet', Message: 'Open a dashboard and it appears here.', Welcome: false },
+};
+
+const UNCATEGORIZED_EMPTY_STATE: LibraryEmptyStateText = {
+  Icon: 'fa-solid fa-folder-open',
+  Title: 'No uncategorized dashboards',
+  Message: 'Every dashboard is in a category.',
+  Welcome: false,
+};
+
+/** The empty state of a flat Library list. */
+export function LibraryEmptyState(location: BrowseLocation): LibraryEmptyStateText {
+  return location.CategoryId === UNCATEGORIZED_CATEGORY_ID ? UNCATEGORIZED_EMPTY_STATE : LIBRARY_EMPTY_STATES[location.Filter];
+}
+
+/**
  * Counts the browsable dashboards directly in each category, and those at the root. A dashboard
  * whose category is not in `categories` is not counted, as the browser cannot reach it.
  */
@@ -139,8 +252,8 @@ export function CountDashboardsByCategory(
 }
 
 /**
- * The rail's two sections: Library (one item per filter) and Categories (the category tree, then
- * Uncategorized). A category whose parent is not in `categories` shows at the top level.
+ * The rail's two sections: Dashboards (one item per Library filter) and Categories (the category
+ * tree, then Uncategorized). A category whose parent is not in `categories` shows at the top level.
  */
 export function BuildLibraryRailSections(
   counts: Record<DashboardLibraryFilter, number>,
@@ -156,7 +269,7 @@ export function BuildLibraryRailSections(
   const roots = categories.filter(c => isTopLevel(c, categories)).map(toItem);
   roots.push({ id: UNCATEGORIZED_RAIL_ID, label: 'Uncategorized', icon: 'fa-solid fa-folder-open', badge: uncategorizedCount });
   return [
-    { label: 'Library', items: library },
+    { label: 'Dashboards', items: library },
     { label: 'Categories', items: roots },
   ];
 }
@@ -211,7 +324,7 @@ export function CategoryRailItemId(categoryId: string): string {
 /** The location a rail item opens, or null for an id the rail never builds. */
 export function ParseRailItemId(id: string): BrowseLocation | null {
   if (id === UNCATEGORIZED_RAIL_ID) {
-    return { Filter: 'all', CategoryId: null };
+    return { Filter: 'all', CategoryId: UNCATEGORIZED_CATEGORY_ID };
   }
   if (id.startsWith(CATEGORY_RAIL_PREFIX)) {
     return { Filter: 'all', CategoryId: id.slice(CATEGORY_RAIL_PREFIX.length) };
@@ -224,10 +337,13 @@ export function ParseRailItemId(id: string): BrowseLocation | null {
 }
 
 /**
- * The rail item to mark active: the selected category, written with the category's own id so the
- * rail's exact id match finds it, else the Library filter.
+ * The rail item to mark active: Uncategorized, or the selected category, written with the
+ * category's own id so the rail's exact id match finds it, else the Library filter.
  */
 export function RailActiveItemId(location: BrowseLocation, categories: MJDashboardCategoryEntity[]): string {
+  if (location.CategoryId === UNCATEGORIZED_CATEGORY_ID) {
+    return UNCATEGORIZED_RAIL_ID;
+  }
   if (!location.CategoryId) {
     return LibraryRailItemId(location.Filter);
   }

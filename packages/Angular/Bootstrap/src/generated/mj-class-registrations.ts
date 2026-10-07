@@ -647,7 +647,7 @@ import {
     TagEngineBase,
 } from '@memberjunction/tag-engine-base';
 
-// @memberjunction/ng-dashboards (106 classes)
+// @memberjunction/ng-dashboards (107 classes)
 import {
     AIAnalyticsResourceComponent,
     AIOverviewHubComponent,
@@ -688,6 +688,7 @@ import {
     CredentialsOverviewResourceComponent,
     CredentialsTypesResourceComponent,
     DashboardBrowserResourceComponent,
+    DashboardsCategoriesResourceComponent,
     DataExplorerDashboardComponent,
     DataExplorerResourceComponent,
     DatabaseDesignerDashboardComponent,
@@ -1382,6 +1383,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     CredentialsOverviewResourceComponent,
     CredentialsTypesResourceComponent,
     DashboardBrowserResourceComponent,
+    DashboardsCategoriesResourceComponent,
     DataExplorerDashboardComponent,
     DataExplorerResourceComponent,
     DatabaseDesignerDashboardComponent,
@@ -1390,11 +1392,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     EntityIntegrationComponent,
     EventMonitorComponent,
     FeaturePipelinesResourceComponent,
-    FormBuilderResourceComponent,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    FormBuilderResourceComponent,
     GraphQLConsoleComponent,
     GridWidthLabComponent,
     HomeApplication,
@@ -1480,7 +1482,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 671;
+export const CLASS_REGISTRATIONS_COUNT = 672;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

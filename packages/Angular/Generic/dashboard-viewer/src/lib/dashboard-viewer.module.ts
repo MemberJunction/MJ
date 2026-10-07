@@ -17,13 +17,21 @@ import { QueryViewerModule } from '@memberjunction/ng-query-viewer';
 // MJ Artifacts for displaying conversation artifacts
 import { ArtifactsModule } from '@memberjunction/ng-artifacts';
 
-// MJ UI Components for the canonical empty-state placeholder + collapsible config-panel sections
-import { MJEmptyStateComponent, MJAccordionModule } from '@memberjunction/ng-ui-components';
+// MJ UI Components for the canonical empty-state placeholder, collapsible config-panel sections,
+// and the dialog and buttons of the part dialog
+import {
+    MJEmptyStateComponent,
+    MJAccordionModule,
+    MJDialogComponent,
+    MJDialogActionsComponent,
+    MJButtonDirective
+} from '@memberjunction/ng-ui-components';
 
 // Main Component
 import { DashboardViewerComponent } from './dashboard-viewer/dashboard-viewer.component';
 
 // Dialogs
+import { DashboardPartDialogComponent } from './dialogs/part-dialog/dashboard-part-dialog.component';
 import { AddPanelDialogComponent } from './dialogs/add-panel-dialog/add-panel-dialog.component';
 import { EditPartDialogComponent } from './dialogs/edit-part-dialog/edit-part-dialog.component';
 
@@ -52,6 +60,9 @@ import { DashboardBreadcrumbComponent } from './breadcrumb/dashboard-breadcrumb.
 import { DashboardLayoutPreviewComponent } from './layout-preview/dashboard-layout-preview.component';
 import { DashboardLayoutPreviewNodeComponent } from './layout-preview/dashboard-layout-preview-node.component';
 
+// Dashboard Card (one dashboard: picture, name, owner, Shared marker, favorite star)
+import { DashboardCardComponent } from './dashboard-card/dashboard-card.component';
+
 @NgModule({
     declarations: [
         // Main Component
@@ -67,7 +78,11 @@ import { DashboardLayoutPreviewNodeComponent } from './layout-preview/dashboard-
         DashboardLayoutPreviewComponent,
         DashboardLayoutPreviewNodeComponent,
 
+        // Dashboard Card
+        DashboardCardComponent,
+
         // Generic Dialogs
+        DashboardPartDialogComponent,
         AddPanelDialogComponent,
         EditPartDialogComponent,
         ConfirmDialogComponent,
@@ -95,7 +110,10 @@ import { DashboardLayoutPreviewNodeComponent } from './layout-preview/dashboard-
         QueryViewerModule,
         ArtifactsModule,
         MJEmptyStateComponent,
-        MJAccordionModule
+        MJAccordionModule,
+        MJDialogComponent,
+        MJDialogActionsComponent,
+        MJButtonDirective
     ],
     exports: [
         // Main Component
@@ -110,7 +128,11 @@ import { DashboardLayoutPreviewNodeComponent } from './layout-preview/dashboard-
         // Layout Preview
         DashboardLayoutPreviewComponent,
 
+        // Dashboard Card
+        DashboardCardComponent,
+
         // Generic Dialogs
+        DashboardPartDialogComponent,
         AddPanelDialogComponent,
         EditPartDialogComponent,
         ConfirmDialogComponent,

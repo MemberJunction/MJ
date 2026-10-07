@@ -25,8 +25,8 @@ export interface ConfigPanelResult {
  * They communicate with their container via the configChanged output.
  *
  * This allows the same panel to be used:
- * 1. Embedded in the add-panel-dialog (step 2)
- * 2. Wrapped in a dialog for editing existing panels
+ * 1. As the Source section of the part dialog (`mj-dashboard-part-dialog`), which adds and edits parts
+ * 2. In the deprecated add-panel and edit-part dialogs
  *
  * Subclasses are registered with @RegisterClass and instantiated via ClassFactory.
  */
@@ -34,6 +34,12 @@ export interface ConfigPanelResult {
 export abstract class BaseConfigPanel extends BaseAngularComponent {
     /** The part type being configured */
     @Input() partType: MJDashboardPartTypeEntity | null = null;
+
+    /**
+     * Shows the fields that the part dialog shows itself: the title and, for a query, the
+     * parameter-controls and auto refresh options. The part dialog sets it to false.
+     */
+    @Input() ShowCommonFields = true;
 
     /** The existing panel (for editing) or null (for creating) */
     @Input() panel: DashboardPanel | null = null;

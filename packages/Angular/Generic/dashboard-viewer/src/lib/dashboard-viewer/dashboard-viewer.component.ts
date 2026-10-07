@@ -36,7 +36,8 @@ import {
     ExtractPanelsFromLayout,
     FindPanelInLayout
 } from '../models/dashboard-types';
-import { GoldenLayoutWrapperService, LayoutLocation } from '../services/golden-layout-wrapper.service';
+import { GoldenLayoutWrapperService, StackActionEvent } from '../services/golden-layout-wrapper.service';
+import { InsertPanel, FindPanelPath, DescribePath, type PanelPosition } from '../models/dashboard-layout-editor';
 import { BaseDashboardPart } from '../parts/base-dashboard-part';
 
 export type DashboardLayoutReadyState =
@@ -133,7 +134,6 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
         this._isEditing = value;
         // When isEditing changes (and layout exists), reinitialize to apply GL settings
         if (value !== previous && this._glService) {
-            console.log('[DashboardViewer] isEditing changed from', previous, 'to', value);
             this.updatePanelEditModes();
         }
     }
@@ -149,6 +149,12 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
     @Input() set isEditing(value: boolean) {
       this.IsEditing = value;
     }
+
+    /**
+     * Whether the user may edit this dashboard. An empty dashboard then offers Add part in view mode
+     * too; the host decides how to get into edit mode.
+     */
+    @Input() CanEdit = false;
 
     /** Whether to show the toolbar */
     private _showToolbar = true;
@@ -486,24 +492,26 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
     }
 
     /**
-     * Add a new panel to the dashboard.
-     * The panel is stored in GL's componentState - no separate panels array.
+     * Adds a panel and returns its id, or null when nothing was added (no layout yet, or an unknown
+     * part type). With a location, the layout editor places the panel there and the layout is
+     * rebuilt; without one, Golden Layout adds the panel to its first stack.
+     * @throws LayoutEditError when the location is not valid or names a panel that is not in the layout.
      */
     public async AddPanel(
         partTypeId: string,
         panelConfig: PanelConfig,
         title: string,
         icon?: string,
-        location?: LayoutLocation
-    ): Promise<void> {
+        location?: PanelPosition
+    ): Promise<string | null> {
         if (!this.config || !this._glService) {
-            return;
+            return null;
         }
 
         const partType = this.PartTypes.find(pt => UUIDsEqual(pt.ID, partTypeId));
         if (!partType) {
             this.error.emit({ message: `Unknown panel type: ${partTypeId}` });
-            return;
+            return null;
         }
 
         const panel: DashboardPanel = {
@@ -514,17 +522,22 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
             config: panelConfig
         };
 
+        if (location) {
+            await this.ApplyLayout(InsertPanel(this._glService.getLayoutConfig() ?? this.config.layout, panel, location));
+            return panel.id;
+        }
+
         // Add to Golden Layout - panel data stored in componentState
-        this._glService.addPanel(panel, location);
+        this._glService.addPanel(panel);
 
         // Sync the layout config from Golden Layout to capture the new panel
-        // The layout IS the source of truth - it contains the panel in componentState
         const currentLayout = this._glService.getLayoutConfig();
         if (currentLayout) {
             this.config.layout = currentLayout;
         }
 
         this.markDirty();
+        return panel.id;
     }
 
     /** @deprecated Use {@link AddPanel}. */
@@ -533,8 +546,8 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
         panelConfig: PanelConfig,
         title: string,
         icon?: string,
-        location?: LayoutLocation
-    ): Promise<void> {
+        location?: PanelPosition
+    ): Promise<string | null> {
       return this.AddPanel(partTypeId, panelConfig, title, icon, location);
     }
 
@@ -617,6 +630,32 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
     /** @deprecated Use {@link RefreshAllPanels}. */
     public async refreshAllPanels(): Promise<void> {
       return this.RefreshAllPanels();
+    }
+
+    /**
+     * Shows `layout`: stores it as the dashboard's layout, rebuilds the panels, marks the dashboard
+     * changed and emits a `layout` config change. Build the layout with the layout editor functions.
+     * Rejects when the rebuild fails, for example when the container stays at zero size.
+     */
+    public async ApplyLayout(layout: ResolvedLayoutConfig): Promise<void> {
+        if (!this.config) return;
+        this.config.layout = layout;
+        try {
+            if (this._glService) {
+                await this.initializeLayout();
+            }
+        } finally {
+            // After the rebuild, so an auto-save reads the new layout back from Golden Layout.
+            // The layout has changed even when the rebuild fails.
+            this.markDirty();
+        }
+        this.configChanged.emit({ config: this.config, changeType: 'layout' });
+    }
+
+    /** The panel's address in the layout, for example `row/1 › tab 0`, or null when it is not in the layout. */
+    public GetPanelPath(panelId: string): string | null {
+        const path = FindPanelPath(this.config?.layout ?? null, panelId);
+        return path ? DescribePath(path) : null;
     }
 
     /**
@@ -721,8 +760,9 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
      * Update a panel's configuration.
      * Since panels live in componentState within the layout, we need to
      * update the layout tree directly or reinitialize with updated data.
+     * Resolves once the layout is rebuilt with the updated panel; rejects when the rebuild fails.
      */
-    public UpdatePanelConfig(panelId: string, newConfig: PanelConfig, title?: string, icon?: string): void {
+    public async UpdatePanelConfig(panelId: string, newConfig: PanelConfig, title?: string, icon?: string): Promise<void> {
         if (!this.config || !this._glService) return;
 
         // Get current layout which contains all panel data
@@ -736,11 +776,11 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
         this.markDirty();
 
         // Reinitialize layout to reflect the updated panel
-        this.initializeLayout();
+        await this.initializeLayout();
     }
 
     /** @deprecated Use {@link UpdatePanelConfig}. */
-    public updatePanelConfig(panelId: string, newConfig: PanelConfig, title?: string, icon?: string): void {
+    public updatePanelConfig(panelId: string, newConfig: PanelConfig, title?: string, icon?: string): Promise<void> {
       return this.UpdatePanelConfig(panelId, newConfig, title, icon);
     }
 
@@ -1193,6 +1233,22 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
             .subscribe((panelId: string) => {
                 this.onPanelSelected(panelId);
             });
+
+        this._glService.OnStackAction
+            .pipe(takeUntil(this._destroy$))
+            .subscribe((event: StackActionEvent) => this.onStackAction(event));
+    }
+
+    /** Asks the host to edit or remove the part a stack header button acts on. */
+    private onStackAction(event: StackActionEvent): void {
+        switch (event.Action) {
+            case 'edit':
+                this.onConfigurePart(event.PanelId);
+                break;
+            case 'remove':
+                this.onRemovePart(event.PanelId);
+                break;
+        }
     }
 
     private onLayoutChanged(event: LayoutChangedEvent): void {
@@ -1245,16 +1301,10 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
     private async createPanelComponent(panel: DashboardPanel, container: HTMLElement, glService: GoldenLayoutWrapperService): Promise<void> {
         const partType = this.PartTypes.find(pt => UUIDsEqual(pt.ID, panel.partTypeId));
 
-        // Create the panel wrapper with header and content
+        // Create the panel wrapper; the Golden Layout tab shows the part's title
         const wrapper = document.createElement('div');
         wrapper.className = 'dashboard-part-wrapper';
         wrapper.style.cssText = 'display: flex; flex-direction: column; height: 100%; background: var(--mj-bg-surface);';
-
-        // Only show header in edit mode - GL tabs already display the title in view mode
-        if (this.IsEditing) {
-            const header = this.createPartHeader(panel, panel.id);
-            wrapper.appendChild(header);
-        }
 
         // Create content area
         const content = document.createElement('div');
@@ -1346,97 +1396,6 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
         }
     }
 
-    private createPartHeader(panel: DashboardPanel, panelId: string): HTMLElement {
-        const header = document.createElement('div');
-        header.className = 'dashboard-part-header';
-        header.style.cssText = `
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 10px 12px;
-            background: var(--mj-bg-surface-card);
-            border-bottom: 1px solid var(--mj-border-default);
-            min-height: 40px;
-        `;
-
-        // Icon and title
-        const titleSection = document.createElement('div');
-        titleSection.style.cssText = 'display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;';
-        titleSection.innerHTML = `
-            <i class="${EscapeHTML(panel.icon || 'fa-solid fa-puzzle-piece')}" style="color: var(--mj-brand-primary); font-size: 14px;"></i>
-            <span style="font-weight: 500; font-size: 14px; color: var(--mj-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${EscapeHTML(panel.title)}</span>
-        `;
-        header.appendChild(titleSection);
-
-        // Action buttons (only in edit mode)
-        if (this.IsEditing) {
-            const actions = document.createElement('div');
-            actions.style.cssText = 'display: flex; gap: 4px;';
-
-            // Configure button
-            const configBtn = document.createElement('button');
-            configBtn.className = 'part-action-btn';
-            configBtn.title = 'Configure';
-            configBtn.style.cssText = `
-                width: 28px;
-                height: 28px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                border: none;
-                border-radius: 4px;
-                background: transparent;
-                color: var(--mj-text-secondary);
-                cursor: pointer;
-                transition: all 0.15s;
-            `;
-            configBtn.innerHTML = '<i class="fa-solid fa-cog" style="font-size: 12px;"></i>';
-            configBtn.addEventListener('click', () => this.onConfigurePart(panelId));
-            configBtn.addEventListener('mouseenter', () => {
-                configBtn.style.background = 'var(--mj-border-default)';
-                configBtn.style.color = 'var(--mj-text-primary)';
-            });
-            configBtn.addEventListener('mouseleave', () => {
-                configBtn.style.background = 'transparent';
-                configBtn.style.color = 'var(--mj-text-secondary)';
-            });
-
-            // Remove button
-            const removeBtn = document.createElement('button');
-            removeBtn.className = 'part-action-btn';
-            removeBtn.title = 'Remove';
-            removeBtn.style.cssText = `
-                width: 28px;
-                height: 28px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                border: none;
-                border-radius: 4px;
-                background: transparent;
-                color: var(--mj-text-secondary);
-                cursor: pointer;
-                transition: all 0.15s;
-            `;
-            removeBtn.innerHTML = '<i class="fa-solid fa-times" style="font-size: 12px;"></i>';
-            removeBtn.addEventListener('click', () => this.onRemovePart(panelId));
-            removeBtn.addEventListener('mouseenter', () => {
-                removeBtn.style.background = 'color-mix(in srgb, var(--mj-status-error) 10%, transparent)';
-                removeBtn.style.color = 'var(--mj-status-error)';
-            });
-            removeBtn.addEventListener('mouseleave', () => {
-                removeBtn.style.background = 'transparent';
-                removeBtn.style.color = 'var(--mj-text-secondary)';
-            });
-
-            actions.appendChild(configBtn);
-            actions.appendChild(removeBtn);
-            header.appendChild(actions);
-        }
-
-        return header;
-    }
-
     private renderPartContent(panel: DashboardPanel, container: HTMLElement, partType: MJDashboardPartTypeEntity | undefined): void {
         const config = panel.config;
 
@@ -1465,7 +1424,7 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
                 <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--mj-text-secondary); text-align: center; padding: 24px;">
                     <i class="fa-solid fa-globe" style="font-size: 48px; color: var(--mj-text-muted); margin-bottom: 16px;"></i>
                     <h4 style="margin: 0 0 8px 0; color: var(--mj-text-primary);">No URL Configured</h4>
-                    <p style="margin: 0; font-size: 13px;">Click the configure button to set a URL for this part.</p>
+                    <p style="margin: 0; font-size: 13px;">Use Edit part to set a URL.</p>
                 </div>
             `;
             return;
@@ -1500,7 +1459,7 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
                 <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--mj-text-secondary); text-align: center; padding: 24px;">
                     <i class="fa-solid fa-table" style="font-size: 48px; color: var(--mj-text-muted); margin-bottom: 16px;"></i>
                     <h4 style="margin: 0 0 8px 0; color: var(--mj-text-primary);">No View Selected</h4>
-                    <p style="margin: 0; font-size: 13px;">Click configure to select a view for this part.</p>
+                    <p style="margin: 0; font-size: 13px;">Use Edit part to choose a view.</p>
                 </div>
             `;
             return;
@@ -1538,7 +1497,7 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
                 <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--mj-text-secondary); text-align: center; padding: 24px;">
                     <i class="fa-solid fa-database" style="font-size: 48px; color: var(--mj-text-muted); margin-bottom: 16px;"></i>
                     <h4 style="margin: 0 0 8px 0; color: var(--mj-text-primary);">No Query Selected</h4>
-                    <p style="margin: 0; font-size: 13px;">Click configure to select a query for this part.</p>
+                    <p style="margin: 0; font-size: 13px;">Use Edit part to choose a query.</p>
                 </div>
             `;
             return;
@@ -1574,7 +1533,7 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
                 <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--mj-text-secondary); text-align: center; padding: 24px;">
                     <i class="fa-solid fa-cube" style="font-size: 48px; color: var(--mj-text-muted); margin-bottom: 16px;"></i>
                     <h4 style="margin: 0 0 8px 0; color: var(--mj-text-primary);">No Artifact Selected</h4>
-                    <p style="margin: 0; font-size: 13px;">Click configure to select an artifact for this part.</p>
+                    <p style="margin: 0; font-size: 13px;">Use Edit part to choose an artifact.</p>
                 </div>
             `;
             return;
@@ -1625,14 +1584,15 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
     }
 
     private onRemovePart(panelId: string): void {
-        // Emit event for parent to show confirmation dialog
+        // Emit event for parent to show confirmation dialog, with the part's title and part type name
         const panel = FindPanelInLayout(this.config?.layout ?? null, panelId);
         this.PanelInteraction.emit({
             panelId,
             interactionType: 'custom',
             payload: {
                 action: 'remove-part-requested',
-                panelTitle: panel?.title || 'this part'
+                panelTitle: panel?.title || 'this part',
+                partTypeName: this.GetPartTypeForPanel(panelId)?.Name ?? null
             }
         });
     }

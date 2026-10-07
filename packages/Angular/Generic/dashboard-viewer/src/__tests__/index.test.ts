@@ -3,10 +3,17 @@ import * as publicApi from '../public-api';
 import {
   DashboardViewerModule,
   DashboardViewerComponent,
+  DashboardPartDialogComponent,
+  DashboardNameDialogComponent,
+  DASHBOARD_NAME_MAX_LENGTH,
   GoldenLayoutWrapperService,
   DashboardLayoutPreviewComponent,
   DashboardLayoutPreviewNodeComponent,
   BuildDashboardLayoutPreview,
+  DashboardCardComponent,
+  IsDashboardNotSetUp,
+  FormatDashboardDate,
+  DashboardCategoryPath,
 } from '../public-api';
 
 /**
@@ -22,6 +29,7 @@ describe('@memberjunction/ng-dashboard-viewer', () => {
   it('exports its load-bearing classes as constructors', () => {
     expect(DashboardViewerModule).toBeTypeOf('function');
     expect(DashboardViewerComponent).toBeTypeOf('function');
+    expect(DashboardPartDialogComponent).toBeTypeOf('function');
     expect(GoldenLayoutWrapperService).toBeTypeOf('function');
   });
 
@@ -34,5 +42,17 @@ describe('@memberjunction/ng-dashboard-viewer', () => {
       Title: 'A',
       Icon: null,
     });
+  });
+
+  it('exports the New dashboard name dialog and the longest name it accepts by default', () => {
+    expect(DashboardNameDialogComponent).toBeTypeOf('function');
+    expect(DASHBOARD_NAME_MAX_LENGTH).toBe(255);
+  });
+
+  it('exports the dashboard card and its helpers', () => {
+    expect(DashboardCardComponent).toBeTypeOf('function');
+    expect(IsDashboardNotSetUp({ Type: 'Config', UIConfigDetails: '{}' })).toBe(true);
+    expect(FormatDashboardDate(null)).toBe('');
+    expect(DashboardCategoryPath(null, [])).toBeNull();
   });
 });

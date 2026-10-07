@@ -3,11 +3,11 @@
  * Pure functions: the tab supplies its state and reads through {@link DashboardTabAgentHost}.
  * Tool handlers never throw; a bad parameter or a failed read returns a failure result.
  *
- * 🔒 SAFETY BOUNDARY: the tab gives the AI agent ONLY read-only tools — GetDashboardPanels and
- * GetDashboardDetail. Editing, saving, deleting, sharing, favoriting, pinning and Home tab changes
- * are intentionally NOT exposed; the user does them from the tab's toolbar. Do NOT add a mutating
- * tool here without revisiting this boundary.
+ * 🔒 BOUNDARY: the tab's agent tools change the open dashboard in memory only. Save, Share,
+ * Favorite and Pin stay user actions; the Request* tools in dashboard-studio-tools.ts ask
+ * for them through a confirm dialog and never perform them.
  */
+import type { ClientToolMediaItem } from '@memberjunction/ai-core-plus';
 import type { DashboardUserPermissions, MJDashboardEntity, MJDashboardPartTypeEntity } from '@memberjunction/core-entities';
 import type { DashboardPanel } from '@memberjunction/ng-dashboard-viewer';
 import { UUIDsEqual } from '@memberjunction/global';
@@ -22,13 +22,15 @@ export type DashboardTabDashboard = Pick<
 >;
 
 /** The panel fields a panel summary reads. */
-export type DashboardTabPanel = Pick<DashboardPanel, 'title' | 'icon' | 'partTypeId' | 'config'>;
+export type DashboardTabPanel = Pick<DashboardPanel, 'id' | 'title' | 'icon' | 'partTypeId' | 'config'>;
 
 /** The part type fields a panel summary reads. */
 export type DashboardTabPartType = Pick<MJDashboardPartTypeEntity, 'ID' | 'Name' | 'Icon'>;
 
 /** One panel of a dashboard, as the agent sees it. */
 export interface DashboardPanelSummary {
+  /** The panel id, which the studio tools take as panelId. */
+  Id: string;
   Title: string;
   /** The part type name, for example View, Query or WebURL. */
   PartTypeName: string;
@@ -42,7 +44,6 @@ export interface DashboardTabAgentState {
   CanEdit: boolean;
   Panels: readonly DashboardPanelSummary[];
   IsFavorite: boolean;
-  IsHomeTab: boolean;
   IsPinnedToHome: boolean;
 }
 
@@ -51,6 +52,8 @@ export interface DashboardTabToolResult {
   Success: boolean;
   ErrorMessage?: string;
   Data?: Record<string, unknown>;
+  /** Images for the model, when the tool returns any. */
+  Media?: ClientToolMediaItem[];
 }
 
 /** A client tool, in the shape `NavigationService.SetAgentClientTools` takes. */
@@ -96,6 +99,7 @@ export function SummarizeDashboardPanels(
   return panels.map(panel => {
     const partType = partTypes.find(pt => UUIDsEqual(pt.ID, panel.partTypeId));
     const summary: DashboardPanelSummary = {
+      Id: panel.id,
       Title: panel.title || '(untitled panel)',
       PartTypeName: partType?.Name || panel.config?.type || 'Unknown',
     };
@@ -118,7 +122,6 @@ export function BuildDashboardTabAgentContext(state: DashboardTabAgentState): Re
     OpenedDashboardPanelCount: state.Panels.length,
     OpenedDashboardPanels: state.Panels.slice(0, DASHBOARD_TAB_AGENT_LIST_CAP),
     IsFavorite: state.IsFavorite,
-    IsHomeTab: state.IsHomeTab,
     IsPinnedToHome: state.IsPinnedToHome,
   };
 }

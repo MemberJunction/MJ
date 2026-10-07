@@ -3,19 +3,22 @@ import { Subject, BehaviorSubject } from 'rxjs';
 import {
     LayoutConfig,
     ResolvedLayoutConfig,
-    ComponentContainer,
     JsonValue,
     ComponentItemConfig,
     VirtualLayout
 } from 'golden-layout';
+import type { ComponentContainer, EventEmitter, Stack, Tab } from 'golden-layout';
 import {
     DashboardPanel,
     LayoutChangedEvent
 } from '../models/dashboard-types';
+import { BuildStackPartActions, LabelStackPartActions, STACK_PART_ACTIONS_CLASS } from './stack-part-actions';
 
 // Golden Layout interfaces for VirtualLayout
 interface GLVirtualLayout {
     rootItem: GLLayoutItem | null;
+    on(event: 'itemCreated', callback: (event: EventEmitter.BubblingEvent) => void): void;
+    on(event: 'tabCreated', callback: (tab: Tab) => void): void;
     on(event: string, callback: (item?: unknown) => void): void;
     destroy(): void;
     loadLayout(config: LayoutConfig): void;
@@ -47,6 +50,21 @@ export interface LayoutLocation {
  * Receives the full DashboardPanel from GL's componentState (single source of truth).
  */
 export type PanelComponentFactory = (panel: DashboardPanel, container: HTMLElement) => void;
+
+/** What a part button in a stack header asks for. */
+export type StackAction = 'edit' | 'remove';
+
+/** A click on a stack header's part button: the action, and the panel in the stack's active tab. */
+export interface StackActionEvent {
+    Action: StackAction;
+    PanelId: string;
+}
+
+/** The height of a stack header (part tabs and part buttons), in pixels. The viewer CSS uses the same value. */
+export const DASHBOARD_STACK_HEADER_HEIGHT = 44;
+
+/** Room Golden Layout keeps beside a stack's tabs, in pixels: the tab track's inset, borders and padding, the tab dropdown button with its gaps, and the controls' inset. The viewer CSS uses the same values. */
+export const DASHBOARD_TAB_CONTROL_OFFSET = 78;
 
 /**
  * Service that wraps Golden Layout for Angular integration.
@@ -114,6 +132,9 @@ export class GoldenLayoutWrapperService {
         this.OnPanelSelected = value;
     }
 
+    /** Emitted when the user clicks Edit part or Remove in a stack header. Edit mode only. */
+    public OnStackAction = new Subject<StackActionEvent>();
+
     /** Current panels in layout */
     public Panels$ = new BehaviorSubject<string[]>([]);
 
@@ -170,6 +191,10 @@ export class GoldenLayoutWrapperService {
             this.emitLayoutChanged('resize');
         });
 
+        // Wire each stack and tab as Golden Layout creates it; loadLayout creates the first ones
+        this._layout.on('itemCreated', (event: EventEmitter.BubblingEvent) => this.onItemCreated(event));
+        this._layout.on('tabCreated', (tab: Tab) => this.onTabCreated(tab));
+
         // Build the LayoutConfig to load
         const glConfig = this.buildLayoutConfig(savedLayout);
 
@@ -200,16 +225,22 @@ export class GoldenLayoutWrapperService {
      * then applies current edit mode settings.
      */
     private buildLayoutConfig(savedLayout: ResolvedLayoutConfig | null): LayoutConfig {
-        // Base settings - reorderEnabled is always true so users can click tabs and
-        // rearrange in view mode (changes won't be saved). Close button only in edit mode.
+        // Base settings: tabs can be dragged only in edit mode, stack headers have room for the part buttons,
+        // and Golden Layout counts the spacing the viewer CSS adds beside the tabs
         const baseSettings: LayoutConfig = {
             settings: {
-                reorderEnabled: this._isEditing
+                reorderEnabled: this._isEditing,
+                tabControlOffset: DASHBOARD_TAB_CONTROL_OFFSET
+            },
+            dimensions: {
+                headerHeight: DASHBOARD_STACK_HEADER_HEIGHT
             },
             header: {
                 show: 'top',
                 popout: false,
                 maximise: false,
+                // Truthy in edit mode: GL cancels a drag of the only tab of a stack whose header cannot close.
+                // The viewer CSS hides the stack close button.
                 close: this._isEditing ? 'tab' : false
             },
             root: undefined
@@ -233,6 +264,10 @@ export class GoldenLayoutWrapperService {
                     settings: {
                         ...convertedConfig.settings,
                         ...baseSettings.settings
+                    },
+                    dimensions: {
+                        ...convertedConfig.dimensions,
+                        ...baseSettings.dimensions
                     },
                     header: {
                         ...convertedConfig.header,
@@ -341,6 +376,9 @@ export class GoldenLayoutWrapperService {
         if (!panel?.id) {
             wrapper.innerHTML = '<div class="panel-error">No panel ID provided</div>';
         } else {
+            // A host finds and measures a panel's content by this attribute
+            wrapper.dataset['panelId'] = panel.id;
+
             // Store reference to container
             this._containerMap.set(panel.id, container);
 
@@ -403,6 +441,82 @@ export class GoldenLayoutWrapperService {
      */
     private unbindComponentEventListener(_container: ComponentContainer): void {
         // Cleanup handled in beforeComponentRelease
+    }
+
+    /**
+     * Wires each stack Golden Layout creates: on load, on add, and when a dragged tab makes a new stack.
+     * Every stack gets tab list ARIA; in edit mode it also gets the part buttons.
+     */
+    private onItemCreated(event: EventEmitter.BubblingEvent): void {
+        const item = event.target;
+        if (!isStack(item)) return;
+        this.addTabListAria(item);
+        if (this._isEditing) {
+            this.addStackActions(item);
+        }
+    }
+
+    /**
+     * Marks the stack header's tab list as a tablist, and the tab dropdown list too (Golden Layout moves the
+     * tabs that do not fit there). Keeps aria-selected on each tab in step with the stack's active tab.
+     */
+    private addTabListAria(stack: Stack): void {
+        const header = stack.header;
+        if (header.tabsContainerElement.getAttribute('role') === 'tablist') return;
+        header.tabsContainerElement.setAttribute('role', 'tablist');
+        header.element.querySelector('.lm_tabdropdown_list')?.setAttribute('role', 'tablist');
+        const markSelected = (): void => {
+            for (const tab of header.tabs) {
+                tab.element.setAttribute('aria-selected', String(tab.isActive));
+            }
+        };
+        stack.on('activeContentItemChanged', markSelected);
+        markSelected();
+    }
+
+    /** Adds Edit part and Remove to the stack header. They act on the stack's active tab at click time. */
+    private addStackActions(stack: Stack): void {
+        const controls = stack.header.controlsContainerElement;
+        if (controls.querySelector(`.${STACK_PART_ACTIONS_CLASS}`)) return;
+        const group = BuildStackPartActions(action => this.emitStackAction(stack, action));
+        controls.appendChild(group);
+        const relabel = (): void => LabelStackPartActions(group, stack.getActiveComponentItem()?.title ?? '');
+        stack.on('activeContentItemChanged', relabel);
+        relabel();
+    }
+
+    /** Emits the action for the panel in the stack's active tab. Does nothing when the active tab has no panel. */
+    private emitStackAction(stack: Stack, action: StackAction): void {
+        const container = stack.getActiveComponentItem()?.container;
+        const panelId = container ? this.panelIdOf(container) : null;
+        if (panelId) {
+            this.OnStackAction.next({ Action: action, PanelId: panelId });
+        }
+    }
+
+    /** The ID of the panel bound to a component container, or null. */
+    private panelIdOf(container: ComponentContainer): string | null {
+        for (const [panelId, bound] of this._containerMap) {
+            if (bound === container) return panelId;
+        }
+        return null;
+    }
+
+    /**
+     * Allows tab dragging only in edit mode (a saved part's own reorderEnabled would allow it in view mode),
+     * and makes the tab reachable from the keyboard.
+     */
+    private onTabCreated(tab: Tab): void {
+        tab.reorderEnabled = this._isEditing;
+        const element = tab.element;
+        element.setAttribute('role', 'tab');
+        element.tabIndex = 0;
+        element.addEventListener('keydown', (event: KeyboardEvent) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                element.click(); // GL's own click handler activates the tab
+            }
+        });
     }
 
     /**
@@ -692,7 +806,7 @@ export class GoldenLayoutWrapperService {
 
             // Create icon element and insert at the beginning of tabElement
             // This preserves GL's .lm_title structure for drag/drop
-            // Icon is positioned absolutely via CSS in the left padding area
+            // The viewer CSS keeps the icon in the tab's flow, before the title
             const iconEl = document.createElement('i');
             iconEl.className = `${normalizedIconClass} panel-icon`;
 
@@ -714,4 +828,9 @@ export class GoldenLayoutWrapperService {
             }, 100);
         }, 50);
     }
+}
+
+/** True when the Golden Layout item is a stack. */
+function isStack(item: EventEmitter): item is Stack {
+    return 'isStack' in item && item.isStack === true;
 }
