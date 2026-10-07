@@ -95,6 +95,24 @@ import {
 import { SelectRealtimeVendorForModel, RealtimeVendorSelection } from './realtime-vendor-resolution';
 
 /**
+ * Context passed to {@link PrepareClientSessionInput.ResolveHostTools} describing the
+ * model, vendor, and driver resolved for the realtime session.
+ */
+export interface RealtimeHostToolsResolutionContext {
+    /** The resolved model entity ID. */
+    ModelID?: string;
+    /** The resolved model vendor ID, if known. */
+    ModelVendorID?: string;
+    /** The resolved realtime driver class name (e.g. 'OpenAILiveRealtime'). */
+    DriverClass?: string;
+}
+
+/**
+ * Resolver callback signature for dynamically resolving host tools prior to session start.
+ */
+export type RealtimeHostToolsResolver = (resolved: RealtimeHostToolsResolutionContext) => RealtimeToolDefinition[] | undefined;
+
+/**
  * Input for {@link RealtimeClientSessionService.PrepareClientSession}.
  *
  * The co-agent may be supplied either as a fully-loaded entity (`CoAgent`) or by id (`CoAgentID`),
@@ -153,6 +171,11 @@ export interface PrepareClientSessionInput {
      * local tool handler ({@link BridgeRealtimeRuntime.SetLocalToolHandler}).
      */
     HostTools?: RealtimeToolDefinition[];
+    /**
+     * Optional callback that allows the host to resolve host tools dynamically based on
+     * the model, vendor, and driver actually resolved for the session, before session opening.
+     */
+    ResolveHostTools?: RealtimeHostToolsResolver;
     /**
      * Host-authored instructions appended to the system prompt (e.g. "this is an audio-only phone call …",
      * the caller's number and verification status). Empty/absent adds nothing.
@@ -947,8 +970,21 @@ export class RealtimeClientSessionService {
         }
         const resolution = outcome.Resolution;
 
+        let hostTools = input.HostTools;
+        if (input.ResolveHostTools) {
+            const dynamicHostTools = input.ResolveHostTools({
+                ModelID: resolution.ModelID,
+                ModelVendorID: resolution.ModelVendorID,
+                DriverClass: resolution.DriverClass,
+            });
+            if (dynamicHostTools !== undefined) {
+                hostTools = dynamicHostTools;
+            }
+        }
+
+        const effectiveInput = hostTools !== input.HostTools ? { ...input, HostTools: hostTools } : input;
         const sessionParams = await this.buildSessionParams(
-            input, coAgent, resolution.APIName, contextUser, provider, effectiveConfig, resolution.DriverClass,
+            effectiveInput, coAgent, resolution.APIName, contextUser, provider, effectiveConfig, resolution.DriverClass,
             resolution.ModelID, resolution.ModelVendorID,
         );
 
