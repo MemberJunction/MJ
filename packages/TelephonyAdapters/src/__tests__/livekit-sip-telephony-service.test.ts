@@ -425,7 +425,7 @@ describe('custom inbound handler', () => {
         expect(h.starter.Start).not.toHaveBeenCalled();
     });
 
-    it('falls back to default agent lookup when custom handler throws an error', async () => {
+    it('fails closed and hangs up when custom handler throws an error', async () => {
         const h = harness();
         const customHandler = {
             HandleInboundCall: vi.fn().mockRejectedValue(new Error('Ingress exploded')),
@@ -433,9 +433,11 @@ describe('custom inbound handler', () => {
         h.service.SetInboundHandler(customHandler);
 
         const result = await h.service.HandleWebhookEvent(inboundEvent(), USER, dbProvider());
-        expect(result.accepted).toBe(true);
+        expect(result.accepted).toBe(false);
+        expect(result.reason).toContain('Ingress exploded');
         expect(customHandler.HandleInboundCall).toHaveBeenCalled();
-        expect(h.starter.Start).toHaveBeenCalled();
+        expect(h.sip.RemoveParticipant).toHaveBeenCalledWith('call-abc', 'sip_+14155550123');
+        expect(h.starter.Start).not.toHaveBeenCalled();
     });
 
     it('invokes HandleRoomFinished on room_finished webhook event', async () => {

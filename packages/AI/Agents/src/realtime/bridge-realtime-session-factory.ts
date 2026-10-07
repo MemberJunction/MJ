@@ -17,13 +17,13 @@
  * @author MemberJunction.com
  */
 
-import { IRealtimeSession, ChatMessage, BaseRealtimeModel, RealtimeVoiceOption, RealtimeToolDefinition, RealtimeSessionCapabilities, AIAPIKeyResolver, MakeAIAPIKeyResolver } from '@memberjunction/ai';
+import { IRealtimeSession, ChatMessage, BaseRealtimeModel, RealtimeVoiceOption, RealtimeToolDefinition, AIAPIKeyResolver, MakeAIAPIKeyResolver } from '@memberjunction/ai';
 import { IMetadataProvider, Metadata, UserInfo } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { BaseAgent } from '../base-agent';
-import { RealtimeClientSessionService, PrepareClientSessionInput, RealtimeHostToolsResolver } from './realtime-client-session-service';
+import { RealtimeClientSessionService, RealtimeHostToolsResolver } from './realtime-client-session-service';
 import { SelectRealtimeVendorForModel } from './realtime-vendor-resolution';
 
 /**

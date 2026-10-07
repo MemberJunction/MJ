@@ -15,7 +15,7 @@
 
 import { BaseSingleton, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { LogError, LogStatus, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import { ResolveIsModelFullDuplex, type IRealtimeSession, type RealtimeToolDefinition, type RealtimeSessionCapabilities } from '@memberjunction/ai';
+import { ResolveIsModelFullDuplex, type IRealtimeSession, type RealtimeToolDefinition } from '@memberjunction/ai';
 import { AIEngine } from '@memberjunction/aiengine';
 import {
   AlwaysAddressedMatcher,
@@ -92,7 +92,7 @@ export interface RealtimeSessionStartContext {
   HostTools?: RealtimeToolDefinition[];
   /**
    * Optional callback allowing the coordinator to resolve host tools dynamically based on
-   * the model and driver capabilities actually resolved for the session, before session opening.
+   * the model and driver class context actually resolved for the session, before session opening.
    */
   ResolveHostTools?: (resolved: { ModelID?: string; ModelVendorID?: string; DriverClass?: string }) => RealtimeToolDefinition[] | undefined;
   /** Host-authored instructions appended to the system prompt (for example the phone framing). */
@@ -390,6 +390,7 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
           return buildToolsForFullDuplex(resolvedFullDuplex ?? false);
         },
       });
+      const declaredTurnToolsInitially = !resolvedFullDuplex && addressing !== 'Regex';
       if (resolvedFullDuplex === undefined) {
         resolvedFullDuplex = opened.Capabilities?.FullDuplex === true;
       } else if (opened.Capabilities?.FullDuplex !== undefined && opened.Capabilities.FullDuplex !== resolvedFullDuplex) {
@@ -398,6 +399,37 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
           `which disagrees with pre-open resolved FullDuplex=${resolvedFullDuplex}. Initial tools may mismatch.`
         );
       }
+
+      // If full duplex is active, but turn-taking tools were declared to the session initially
+      // (e.g. because full-duplex was only discovered after open, or custom factory ignored ResolveHostTools):
+      if (resolvedFullDuplex && declaredTurnToolsInitially) {
+        if (typeof opened.RegisterTools === 'function') {
+          const desiredTools = buildToolsForFullDuplex(true);
+          try {
+            await opened.RegisterTools(desiredTools ?? []);
+          } catch (err) {
+            LogError(
+              `[LiveKitAgentRoomCoordinator] Failed to reconfigure tools after discovering FullDuplex: ${err instanceof Error ? err.message : String(err)}`
+            );
+          }
+        }
+        // Explicitly bind a no-op handler so any in-flight or model-cached turn-taking tool calls return a clear "not available" result
+        if (this.turnToolBinder) {
+          const noopTurnHandler: BridgeTurnTakingToolHandler = {
+            Handles(toolName: string): boolean {
+              return TURN_TAKING_TOOL_DEFINITIONS.some(t => t.Name === toolName);
+            },
+            async Execute(call: { ToolName: string; Arguments: string }): Promise<string> {
+              return JSON.stringify({
+                success: false,
+                error: `Tool '${call.ToolName}' is not available: session is running in full-duplex mode.`,
+              });
+            },
+          };
+          this.turnToolBinder(opened, noopTurnHandler);
+        }
+      }
+
       host?.OnModelSession?.(opened);
       if (activeTurnHandler) {
         this.bindTurnTools(opened, activeTurnHandler, botName, resolvedFullDuplex);

@@ -330,4 +330,50 @@ describe('InteractionLifecycleService', () => {
             expect(event).toBe(false);
         });
     });
+
+    describe('ResolveRoomInteractionID', () => {
+        it('resolves immediately from memory cache if previously remembered', async () => {
+            lifecycle.RememberRoomInteraction('room-cached', 'int-cached-1');
+            const runViewSpy = vi.fn();
+            const mockProvider = { RunView: runViewSpy } as unknown as IMetadataProvider;
+
+            const resolved = await lifecycle.ResolveRoomInteractionID('room-cached', USER, mockProvider);
+            expect(resolved).toBe('int-cached-1');
+            expect(runViewSpy).not.toHaveBeenCalled();
+        });
+
+        it('queries database with Status IN (\'Queued\',\'Active\') and ResultType simple when not in cache', async () => {
+            const runViewSpy = vi.fn(async (params) => {
+                expect(params.EntityName).toBe('MJ: Interactions');
+                expect(params.ExtraFilter).toContain("Status IN ('Queued','Active')");
+                expect(params.ExtraFilter).toContain("RoomName='room-queued-db'");
+                expect(params.ResultType).toBe('simple');
+                expect(params.Fields).toEqual(['ID']);
+                return {
+                    Success: true,
+                    Results: [{ ID: 'int-queued-456' }],
+                };
+            });
+            const mockProvider = { RunView: runViewSpy } as unknown as IMetadataProvider;
+
+            const resolved = await lifecycle.ResolveRoomInteractionID('room-queued-db', USER, mockProvider);
+            expect(resolved).toBe('int-queued-456');
+            expect(runViewSpy).toHaveBeenCalledTimes(1);
+
+            // Verify it was cached in memory
+            expect(lifecycle.GetRoomInteractionID('room-queued-db')).toBe('int-queued-456');
+        });
+
+        it('returns null when query returns no results', async () => {
+            const runViewSpy = vi.fn(async () => ({
+                Success: true,
+                Results: [],
+            }));
+            const mockProvider = { RunView: runViewSpy } as unknown as IMetadataProvider;
+
+            const resolved = await lifecycle.ResolveRoomInteractionID('room-not-found', USER, mockProvider);
+            expect(resolved).toBeNull();
+        });
+    });
 });
+

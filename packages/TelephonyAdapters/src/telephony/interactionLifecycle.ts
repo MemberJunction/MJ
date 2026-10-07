@@ -346,6 +346,7 @@ export class InteractionLifecycleService extends BaseSingleton<InteractionLifecy
                 this.ForgetRoomInteraction(entity.RoomName);
             }
 
+            // When Status is 'Failed' (or another terminal status other than 'Abandoned'), an 'Ended' event is recorded to finalize the interaction.
             await this.RecordEvent({
                 InteractionID: params.InteractionID,
                 EventType: entity.Status === 'Abandoned' ? 'Abandoned' : 'Ended',
@@ -364,7 +365,7 @@ export class InteractionLifecycleService extends BaseSingleton<InteractionLifecy
         }
     }
 
-    /** Resolves active interaction ID for a room name (memory cache first, then database query). */
+    /** Resolves active or queued interaction ID for a room name (memory cache first, then database query). */
     public async ResolveRoomInteractionID(roomName: string, contextUser: UserInfo, provider?: IMetadataProvider): Promise<string | null> {
         const cached = this.GetRoomInteractionID(roomName);
         if (cached) {
@@ -379,12 +380,13 @@ export class InteractionLifecycleService extends BaseSingleton<InteractionLifecy
                 return null;
             }
 
-            const result = await runView.RunView<MJInteractionEntity>(
+            const result = await runView.RunView<{ ID: string }>(
                 {
                     EntityName: INTERACTION_ENTITY,
-                    ExtraFilter: `RoomName='${EscapeSQLString(roomName)}' AND Status='Active'`,
+                    ExtraFilter: `RoomName='${EscapeSQLString(roomName)}' AND Status IN ('Queued','Active')`,
+                    Fields: ['ID'],
                     MaxRows: 1,
-                    ResultType: 'entity_object',
+                    ResultType: 'simple',
                 },
                 contextUser,
             );

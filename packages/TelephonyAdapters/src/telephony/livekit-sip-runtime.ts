@@ -38,7 +38,10 @@ export interface LiveKitSipInboundHandlerResult {
 
 /**
  * Hook for external packages (like Contact Center) to intercept and route inbound LiveKit SIP calls.
- * If HandleInboundCall throws an error or returns Handled: false, LiveKitSipTelephonyService falls back to the default AI-agent path.
+ * If HandleInboundCall returns Handled: false, LiveKitSipTelephonyService falls back to the default AI-agent path.
+ * If HandleInboundCall throws, the call is failed closed (hung up and refused) to prevent duplicate call handling
+ * if the handler partially acted before the error. Handlers should catch expected internal errors and return
+ * Handled: true with an appropriate Outcome when they have already acted on the call.
  */
 export interface ILiveKitSipInboundHandler {
     HandleInboundCall: (context: LiveKitSipInboundCallContext) => Promise<LiveKitSipInboundHandlerResult>;

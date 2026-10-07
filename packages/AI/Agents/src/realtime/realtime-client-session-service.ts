@@ -47,7 +47,6 @@ import {
     IRealtimeSession,
     JSONObject,
     RealtimeSessionParams,
-    RealtimeSessionCapabilities,
     RealtimeToolCall,
     RealtimeToolDefinition
 } from '@memberjunction/ai';

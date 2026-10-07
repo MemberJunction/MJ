@@ -277,9 +277,13 @@ export class LiveKitSipTelephonyService {
                     return handledResult.Outcome ?? { accepted: true };
                 }
             } catch (handlerErr) {
+                const message = handlerErr instanceof Error ? handlerErr.message : String(handlerErr);
                 LogError(
-                    `[Telephony][LiveKitSip] custom inbound handler threw error for room ${event.RoomName}: ${handlerErr instanceof Error ? handlerErr.message : String(handlerErr)}`
+                    `[Telephony][LiveKitSip] custom inbound handler threw error for room ${event.RoomName}: ${message}`
                 );
+                await this.hangUpLeg(event.RoomName, event.ParticipantIdentity);
+                void this.recordRefusedInteraction(event, undefined, 'HandlerError', contextUser, provider);
+                return { accepted: false, reason: `Custom inbound handler threw: ${message}` };
             }
         }
 
