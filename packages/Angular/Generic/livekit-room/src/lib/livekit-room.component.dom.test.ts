@@ -547,7 +547,7 @@ describe('LiveKitRoomComponent (DOM, fake controller)', () => {
       f.detectChanges();
     };
     /** The named participant's box. */
-    const boxOf = (f: ReturnType<typeof render>, name: string): HTMLElement | undefined =>
+    const boxOf = (f: ReturnType<typeof render>, name: string): Element | undefined =>
       queryAll(f, '.lk-room__pips .stage-surface--pip').find((box) => box.querySelector('.stage-pip-title')?.textContent?.trim() === name);
     /** Opens the "Move to…" menu on the named participant's box bar and lists its items. */
     const openBarMenu = (f: ReturnType<typeof render>, name: string): HTMLElement[] => {
