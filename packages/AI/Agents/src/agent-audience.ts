@@ -33,7 +33,7 @@ export function AgentAudienceProblem(audience: unknown): string | null {
         return `expected { Mode, UserIDs }, got ${describeValue(audience)}. Omit Audience for a run with no audience.`;
     }
     const mode = 'Mode' in audience ? audience.Mode : undefined;
-    if (typeof mode !== 'string' || !(mode in AUDIENCE_MODES)) {
+    if (!isAudienceMode(mode)) {
         return `Mode must be 'Caller' or 'Intersection', got ${typeof mode === 'string' ? `'${mode}'` : describeValue(mode)}.`;
     }
     const ids = 'UserIDs' in audience ? audience.UserIDs : undefined;
@@ -76,6 +76,15 @@ export function MatchAudienceUsers(ids: string[], users: UserInfo[]): AudienceUs
         }
     }
     return match;
+}
+
+/**
+ * Whether a value is one of the {@link AUDIENCE_MODES} — an own key, never a name the object inherits. `in` would
+ * accept `'toString'`, `'constructor'`, `'__proto__'` and the rest of `Object.prototype`, and a mode that is neither
+ * `'Caller'` nor `'Intersection'` adds no reader in {@link AgentAudienceReaderIDs}: every gate would be skipped.
+ */
+function isAudienceMode(mode: unknown): mode is AgentAudienceMode {
+    return typeof mode === 'string' && Object.prototype.hasOwnProperty.call(AUDIENCE_MODES, mode);
 }
 
 /** `'Caller'` takes no readers: `UserIDs` absent or empty. */

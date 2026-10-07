@@ -312,14 +312,27 @@ describe('AgentPreExecutionRAG', () => {
                 expect(mockSearch).not.toHaveBeenCalled();
                 expect(mockLogForbidden).toHaveBeenCalledTimes(1);
                 expect(forbiddenRow()).toMatchObject({ ScopeIDs: ['s1'], ContextUser: fakeUser, AIAgentID: 'agent-1', PrimaryScopeRecordID: 'org-1' });
-                expect(forbiddenRow().FailureReason).toMatch(/Audience reader 'Reader B' \(reader-b\) may not search this scope: no grant for this reader/);
+                // Recorded under the caller, so it names the reader by ID and the verdict's fixed Source only:
+                // never the reader's name, nor the resolver's reason (which describes the reader's own grants).
+                expect(forbiddenRow().FailureReason).toBe('Audience reader reader-b may not search this scope (NoGrant).');
+                expect(forbiddenRow().FailureReason).not.toMatch(/Reader B|no grant for this reader/);
             });
 
             it('refuses a reader whose grant is only Read, as it does the caller', async () => {
                 mockResolvePermission.mockImplementation(async (input: ResolvePermissionInput) =>
                     input.User.ID === 'reader-a' ? Verdict(true, 'Read', 'RoleGrant', 'read grant') : PERMITTED);
                 expect(await run({ audienceReaders: [readerA] })).toBeNull();
-                expect(forbiddenRow().FailureReason).toMatch(/Read grants visibility/);
+                expect(forbiddenRow().FailureReason).toBe('Audience reader reader-a may not search this scope (Read level: visibility, not search).');
+            });
+
+            it("writes no provider count to the streaming trace for a room — it is the caller's unfiltered reach", async () => {
+                mockStreamSearch.mockImplementation(async function* () {
+                    yield { phase: 'provider' as const, providerName: 'FullText', results: [], resultCount: 4, durationMs: 12 };
+                    yield { phase: 'final' as const, results: [], sourceCounts: { Vector: 0, FullText: 4, Entity: 0, Storage: 0 }, elapsedMs: 15 };
+                });
+                const streamingTrace: string[] = [];
+                await run({ audienceReaders: [readerA], streamingEnabled: true, streamingTrace });
+                expect(streamingTrace).toEqual([]);
             });
 
             it('skips only the refused scope: a scope every reader may search still runs', async () => {

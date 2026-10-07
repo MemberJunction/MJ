@@ -23,7 +23,10 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
 vi.mock('@memberjunction/aiengine', () => ({
     AIEngine: {
         get Instance() {
-            return { Config: async (): Promise<void> => undefined, Agents: [], AgentRelationships: [], AgentActions: [], GetSubAgents: (): unknown[] => [] };
+            return {
+                Config: async (): Promise<void> => undefined, Agents: [], AgentRelationships: [], AgentActions: [],
+                GetSubAgents: (): unknown[] => [], GetClientToolsForAgent: (): unknown[] => [],
+            };
         },
     },
 }));
@@ -84,6 +87,7 @@ function paramsWith(audience?: AgentRunAudience, extra: Partial<ExecuteAgentPara
 interface AudienceInternals {
     _audienceReaders: UserInfo[] | undefined;
     _fatalActionFailures: Set<string>;
+    _audienceLockedActions: Set<string>;
     _depth: number;
     _agentRun: { Status: string; ErrorMessage: string | null; Save: () => Promise<boolean> } | null;
     audienceReadersFor(params: ExecuteAgentParams): Promise<{ Readers: UserInfo[] } | { Error: string }>;
@@ -94,7 +98,18 @@ interface AudienceInternals {
     withoutTaskGraphs(promptParams: Record<string, unknown>): Record<string, unknown>;
     executeTasksStep(params: ExecuteAgentParams, previous: BaseAgentNextStep): Promise<BaseAgentNextStep>;
     createStepEntity(input: Record<string, unknown>): Promise<unknown>;
+    finalizeStepEntity(step: unknown, success: boolean, errorMessage?: string, outputData?: unknown): Promise<void>;
     sessionAudienceRefusal(params: ExecuteAgentParams): string | null;
+    executeClientToolsStep(params: ExecuteAgentParams, config: unknown, previous: BaseAgentNextStep, stepCount?: number): Promise<BaseAgentNextStep>;
+    executePromptStep(...args: unknown[]): Promise<BaseAgentNextStep>;
+    callerContextSections(
+        agent: MJAIAgentEntityExtended, extraData: Record<string, unknown> | undefined, withhold: boolean
+    ): { clientToolDetails: string; appContext: string };
+    promptWithholding(params: ExecuteAgentParams): { TaskGraphs: boolean; CallerContext: boolean };
+    processMemoryWritesForTurn(writes: unknown[], params: ExecuteAgentParams): Promise<void>;
+    executeMemoryWritesAsSteps(writes: unknown[], params: ExecuteAgentParams): Promise<unknown[]>;
+    raiseFeedbackRequest(params: ExecuteAgentParams, step: unknown, decision: BaseAgentNextStep): Promise<void>;
+    createFeedbackRequest(params: ExecuteAgentParams, step: unknown, decision: BaseAgentNextStep): Promise<void>;
 }
 
 const internalsOf = (agent: BaseAgent): AudienceInternals => agent as unknown as AudienceInternals;
@@ -214,18 +229,40 @@ describe('BaseAgent — run audience', () => {
             const params = paramsWith({ Mode: 'Intersection', UserIDs: [READER_ID] });
             const refused = await dispatch(params);
             expect(refused.Success).toBe(false);
-            expect(internals._fatalActionFailures.has('Calculate Expression')).toBe(true);
+            expect(internals._audienceLockedActions.has('Calculate Expression')).toBe(true);
+            expect(internals._fatalActionFailures.has('Calculate Expression')).toBe(false);
 
+            // Its own breaker reason and message: not available in a shared conversation, never a configuration error.
             const again = await dispatch(params);
             expect(again).toBeInstanceOf(CircuitBreakerActionResult);
-            expect((again as CircuitBreakerActionResult).Reason).toBe('fatal');
+            expect((again as CircuitBreakerActionResult).Reason).toBe('audience');
+            expect(again.Message).toMatch(/not available in this shared conversation/);
+            expect(again.Message).toMatch(/Do not call it again/);
+            expect(again.Message).not.toMatch(/configuration or credential/);
             expect(h.dispatched).toHaveLength(1);
+        });
+
+        it('when the action runs as someone other than the caller, the caller is a reader and the user it runs as is not', async () => {
+            const OTHER = userOf('aaaaaaaa-0000-4000-8000-0000000000f9', 'Other');
+            UserCache.Instance.SetUsers([CALLER, READER, OTHER]);
+            const params = paramsWith({ Mode: 'Intersection', UserIDs: [READER_ID, OTHER.ID] });
+            await agent.ExecuteSingleAction(params, ACTION, ACTION_ENTITY, READER, { skipCircuitBreaker: true });
+            expect(lastDispatch().Audience).toEqual({ Readers: [OTHER, CALLER] });
+            // Control: run as the caller, the readers are the audience's, the caller left out.
+            await agent.ExecuteSingleAction(params, ACTION, ACTION_ENTITY, CALLER, { skipCircuitBreaker: true });
+            expect(lastDispatch().Audience).toEqual({ Readers: [READER, OTHER] });
+        });
+
+        it('a run with no reader stays without one, whoever the action runs as', async () => {
+            await agent.ExecuteSingleAction(paramsWith(), ACTION, ACTION_ENTITY, READER, { skipCircuitBreaker: true });
+            expect(lastDispatch().Audience).toBeUndefined();
         });
 
         it('leaves the breaker alone for a caller that does its own accounting (skipCircuitBreaker)', async () => {
             h.answer = { Success: false, ResultCode: 'AUDIENCE_UNSUPPORTED', Message: 'refused' };
             await dispatch(paramsWith({ Mode: 'Intersection', UserIDs: [READER_ID] }), true);
             expect(internals._fatalActionFailures.size).toBe(0);
+            expect(internals._audienceLockedActions.size).toBe(0);
         });
     });
 
@@ -265,6 +302,58 @@ describe('BaseAgent — run audience', () => {
             expect(next).toMatchObject({ step: 'Failed', terminate: true });
             expect(next.errorMessage).toMatch(/audience/);
             expect(createStep).not.toHaveBeenCalled();
+        });
+
+        it("offers no client tools and injects none of the caller's app context (control: both without an audience)", () => {
+            const extraData = {
+                clientTools: [{ Name: 'NavigateTo', Description: 'Open a view in the browser', InputSchema: {} }],
+                appContext: { App: { Name: 'CRM' }, AdditionalContext: { selectedAccount: 'Acme (private)' } },
+            };
+            expect(internals.promptWithholding(paramsWith(ROOM)).CallerContext).toBe(true);
+            expect(internals.promptWithholding(paramsWith()).CallerContext).toBe(false);
+            expect(internals.callerContextSections(AGENT, extraData, true)).toEqual({ clientToolDetails: '', appContext: '' });
+            const open = internals.callerContextSections(AGENT, extraData, false);
+            expect(open.clientToolDetails).toContain('NavigateTo');
+            expect(open.appContext).toContain('Acme (private)');
+        });
+
+        it('refuses a client-tools step the model emits anyway, before anything reaches the browser', async () => {
+            const prompt = vi.spyOn(internals, 'executePromptStep').mockResolvedValue({ step: 'Retry' } as BaseAgentNextStep);
+            const previous = { step: 'ClientTools', clientTools: [{ Name: 'NavigateTo', Params: {} }], previousPayload: {} } as unknown as BaseAgentNextStep;
+            const next = await internals.executeClientToolsStep(paramsWith(ROOM, { sessionID: 'browser-session' }), {}, previous);
+            expect(next).toMatchObject({ step: 'Failed', terminate: true });
+            expect(next.errorMessage).toMatch(/Client tools are not available in a run with an audience/);
+            expect(prompt).not.toHaveBeenCalled();
+        });
+
+        it("saves no memory writes: one skip step, and the model is told why (control: an opted-in agent alone writes)", async () => {
+            const writer = { ...AGENT, AllowMemoryWrite: true } as unknown as MJAIAgentEntityExtended;
+            const steps: Array<Record<string, unknown>> = [];
+            vi.spyOn(internals, 'createStepEntity').mockImplementation(async (input) => { steps.push(input); return {}; });
+            vi.spyOn(internals, 'finalizeStepEntity').mockResolvedValue(undefined);
+            const write = vi.spyOn(internals, 'executeMemoryWritesAsSteps').mockResolvedValue([]);
+            const roomParams = paramsWith(ROOM, { agent: writer });
+            await internals.processMemoryWritesForTurn([{ note: 'Acme renewal is at risk', type: 'Context' }], roomParams);
+            expect(write).not.toHaveBeenCalled();
+            expect(steps.map((s) => s.stepName)).toEqual(['Memory Writes: skipped (shared conversation)']);
+            const told = String(roomParams.conversationMessages.at(-1)?.content);
+            expect(told).toMatch(/not available in a shared conversation — the requested memories were NOT saved/);
+
+            await internals.processMemoryWritesForTurn([{ note: 'Acme renewal is at risk', type: 'Context' }], paramsWith(undefined, { agent: writer }));
+            expect(write).toHaveBeenCalledOnce();
+        });
+
+        it('raises no out-of-conversation feedback request (control: a root run with no reader raises one)', async () => {
+            internals._depth = 0;
+            const create = vi.spyOn(internals, 'createFeedbackRequest').mockResolvedValue(undefined);
+            const decision = { step: 'Chat', message: 'Which account?' } as unknown as BaseAgentNextStep;
+            await internals.raiseFeedbackRequest(paramsWith(ROOM), {}, decision);
+            expect(create).not.toHaveBeenCalled();
+            await internals.raiseFeedbackRequest(paramsWith({ Mode: 'Intersection', UserIDs: [CALLER_ID] }), {}, decision);
+            expect(create).toHaveBeenCalledOnce();
+            internals._depth = 1;
+            await internals.raiseFeedbackRequest(paramsWith(), {}, decision);
+            expect(create).toHaveBeenCalledOnce();
         });
 
         it('refuses a session-driven (realtime) run and a bridged session, and lets one with no reader through', async () => {

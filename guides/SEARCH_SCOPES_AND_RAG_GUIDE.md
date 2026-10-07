@@ -194,7 +194,7 @@ The action accepts two optional inputs whose values flow into `SearchParams.Sear
 | Input | Type | Purpose |
 |---|---|---|
 | `PrimaryScopeRecordID` | string (UUID) | Primary tenant key (e.g. `OrganizationID`). Available in templates as `{{ context.PrimaryScopeRecordID }}`. Inside an agent run it may only restate the run's tenant — see below. |
-| `SecondaryScopes` | JSON object string, or an object | Flat object of additional dimensions as `{ "<key>": <value> }`. Each value must be `string \| number \| boolean \| string[]`. Available in templates as `{{ context.SecondaryScopes.<key> }}`. Input that is not valid JSON, is not an object, or holds a value of another type is **refused** (`INVALID_PARAM`) — never dropped, which would run the search without that dimension. |
+| `SecondaryScopes` | JSON object string, or an object | Flat object of additional dimensions as `{ "<key>": <value> }`. Each value must be `string \| number \| boolean \| string[]`. Available in templates as `{{ context.SecondaryScopes.<key> }}`. Input that is not valid JSON, is not an object, or holds a value of another type is **refused** (`INVALID_PARAM`) — never dropped, which would run the search without that dimension. The refusal message states the expected shape, so a model can correct its call. |
 
 #### Inside an agent run, the run's scope is authoritative
 
@@ -208,9 +208,20 @@ Inside a Loop agent the action's inputs are written by the model, so they are bo
 
 `SecondaryScopes` follows the same rule per key: a key the run sets may only be restated with an equal value (text compared case-insensitively, arrays as sets; the run's value is the one used) — a different value is refused like a tenant; a key the run does not set is added, as outside a run, and stays bounded by the scope's own dimension trust rules ([§10](#10-multi-tenant-search-context)).
 
-**The host sets a run's tenant, never the model**: pass `ExecuteAgentParams.PrimaryScopeEntityName` / `PrimaryScopeRecordID` / `SecondaryScopes` (or the same keys in `data`, which a run reads only when its params set `TrustReservedRunData` — see [Agent Memory Scoping](../packages/AI/Agents/docs/AGENT_MEMORY_SCOPING.md#scope-through-data-trusted-callers-only)). Sub-agents inherit the parent's scope; `BaseAgent` strips those keys (and `__agentTypePromptParams`) from a sub-agent request's model-authored `templateParameters` before they reach the child's `data` — the same reserved list (`RESERVED_AGENT_RUN_DATA_KEYS` in `@memberjunction/ai-core-plus`) `BaseAgent.Execute` strips from every untrusted run's `data`. Outside an agent run (no `RunScope` — a direct action call, a workflow, an external orchestrator) the inputs are used as given.
+**The host sets a run's tenant, never the model**: pass `ExecuteAgentParams.PrimaryScopeEntityName` / `PrimaryScopeRecordID` / `SecondaryScopes` (or the same keys in `data`, which a run reads only when its params set `TrustReservedRunData` — see [Agent Memory Scoping](../packages/AI/Agents/docs/AGENT_MEMORY_SCOPING.md#scope-through-data-trusted-callers-only)). Sub-agents inherit the parent's scope; `BaseAgent` strips those keys (and `__agentTypePromptParams`) from a sub-agent request's model-authored `templateParameters` before they reach the child's `data` — the reserved list (`RESERVED_AGENT_RUN_DATA_KEYS` in `@memberjunction/ai-core-plus`) `BaseAgent.Execute` strips from every untrusted run's `data` — together with the browser, conversation and realtime controls a host sets and a model never does (`clientTools`, `sessionID`, `appContext`, `applicationId`, `conversationId`, `targetAgentID`, `agentSessionId`, `recording`, `realtime*`: `HOST_ONLY_AGENT_RUN_DATA_KEYS`). Outside an agent run (no `RunScope` — a direct action call, a workflow, an external orchestrator) the inputs are used as given.
 
 One consequence: a single agent run can no longer search several tenants (e.g. compare orgs in one turn) by passing different `PrimaryScopeRecordID` values. Run one agent run per tenant instead.
+
+The refusal messages say what to do — inside an agent run the tenant comes from the run, so omit `PrimaryScopeRecordID`; omit a `SecondaryScopes` key the run sets differently — because a model reads them to correct its next call. (The parameter descriptions in the action's metadata still describe the tenant as supplied per call; they are updated in a metadata change.)
+
+The rest of the run honours the same scope:
+
+- **Memory, RAG and prompt configuration read the validated scope.** Notes and examples, pre-execution RAG, scoped prompt parts and scoped prompt configs take the scope `initializeAgentRun` validated (trimmed, the agent's `ScopeConfig` defaults applied, never an untrusted `data` scope) — the scope on the run row and on every dispatch.
+- **The plain Search action is refused** (`RUN_SCOPE_UNSUPPORTED`) when `RunScope` carries a tenant or a secondary dimension: it takes no tenant, so it would search across every tenant the caller can reach. The message points the model at Scoped Search.
+- **Task graphs are withheld**, as under an audience: a graph's action nodes run in the task-graph runner with no `RunScope` (a model-written Scoped Search node would take the "outside a run" branch), and an agent node's run would drop the tenant.
+- **Execute Agent passes the scope on**: the nested run gets the calling run's `RunScope` as its first-class `PrimaryScope*` / `SecondaryScopes` fields.
+
+A model-added secondary dimension (a `SecondaryScopes` key the run does not set) is still accepted by Scoped Search, bounded by the scope's own dimension trust rules — by design: the run's dimensions are a floor, not a ceiling.
 
 #### The skill principal
 
@@ -331,7 +342,7 @@ Audience filtering raises the residual-filter rate, so a host serving rooms shou
 
 #### A whole agent run for an audience
 
-`SearchParams.Audience` bounds one search. `ExecuteAgentParams.Audience` bounds a whole agent run — every path in it that reads data on the caller's behalf — and is what a host sets when an agent answers in a shared conversation:
+`SearchParams.Audience` bounds one search. `ExecuteAgentParams.Audience` bounds a whole agent run — every path in it that reads data on the caller's behalf, or shows the room the caller's own context — and is what a host sets when an agent answers in a shared conversation:
 
 ```typescript
 const result = await new AgentRunner().RunAgent({
@@ -345,24 +356,27 @@ const result = await new AgentRunner().RunAgent({
 
 It is a typed, server-only field: it is never read from `data`, and the GraphQL, MCP and A2A agent runners pass named fields (client JSON lands in `data`), so no client can set or clear it. `Mode` is `'Caller'` (no readers — the same as omitting it) or `'Intersection'` (only what the caller **and** every listed user may see). Every gate below fires only when the audience adds a reader **other than the caller**, so an `'Intersection'` whose only ID is the caller behaves exactly as `'Caller'`.
 
-**The run fails before any prompt** — marked Failed like a refused permission — when the audience is malformed (an unknown `Mode`, an `'Intersection'` with no IDs or a blank one, a `'Caller'` with IDs) or names an ID no user has. `BaseAgent` hydrates the IDs from the server's `UserCache` (each reader with its roles), refreshing the cache once for an unknown ID, and refuses rather than skips one it still cannot find: a skipped reader would restrict nothing. Each sub-agent run, and a realtime delegation target, inherits the audience and hydrates it again. `BaseAgent.ResolveAudienceUsers` is the override point for a host with its own user directory.
+**The run fails before any prompt** — marked Failed like a refused permission — when the audience is malformed (an unknown `Mode`, including a name `Object.prototype` carries such as `'toString'`; an `'Intersection'` with no IDs or a blank one; a `'Caller'` with IDs) or names an ID no user has. `BaseAgent` hydrates the IDs from the server's `UserCache` (each reader with its roles), refreshing the cache once for an unknown ID, and refuses rather than skips one it still cannot find: a skipped reader would restrict nothing. An inactive user is accepted as a reader — a reader only narrows what the run shows. Each sub-agent run, and a realtime delegation target, inherits the audience and hydrates it again. `BaseAgent.ResolveAudienceUsers` is the override point for a host with its own user directory. The hydrated readers are per run: they are forgotten when the run ends.
 
 What the run then does:
 
 | Path | Under an audience |
 |---|---|
-| Pre-execution RAG | Each reader must pass the same scope gate as the caller (`ResolveEffectivePermission` with the reader as `User`, the caller as `ContextUser`, the same agent, skill and tenant; the bar is above `Read`). A refused reader skips that scope and writes a `Forbidden` search-log row naming them. The searches carry `Audience: { Readers }`. |
+| Pre-execution RAG | Each reader must pass the same scope gate as the caller (`ResolveEffectivePermission` with the reader as `User`, the caller as `ContextUser`, the same agent, skill and tenant; the bar is above `Read`). A refused reader skips that scope and writes a `Forbidden` search-log row naming them by ID and the verdict's `Source` only — the row is the caller's to read, so never the reader's name or the resolver's reason. The searches carry `Audience: { Readers }`; a streamed search writes no provider counts to the trace. |
 | Agent notes and examples | Only shared ones (`UserID` empty) are injected, on both the cache and the semantic path; scope matching still applies. |
 | Agent data-source preload | Skipped (it loads with the caller's rights alone), logged. |
 | The previous turn's tool results | Not carried forward (they were fetched for whoever ran that turn). |
-| Actions | Each dispatch carries `RunActionParams.Audience`. The engine refuses (`AUDIENCE_UNSUPPORTED`, without running it or writing an execution log row) every action whose class does not declare `BaseAction.SupportsAudience`, and every runtime-defined or deferred action; the agent locks a refused action out for the run and the model is told it is unavailable. Only **Search** and **Scoped Search** declare support: they pass the audience to the search, Scoped Search runs the per-reader scope gate, and both leave `SourceCounts` out of their output. An agent whose work needs other actions is therefore limited to search in a shared room — by design. |
-| Task graphs | Not offered (`enableTaskGraphs` off for the run, on a copy of the cached prompt params), and a graph the model writes anyway is refused: its action nodes run outside the run's gates. |
+| Actions | Each dispatch carries `RunActionParams.Audience`: the readers besides the user the action runs as (the caller is one of them when the action runs as someone else). The engine refuses (`AUDIENCE_UNSUPPORTED`, without running it or writing an execution log row) every action whose class does not declare `BaseAction.SupportsAudience`, every runtime-defined or deferred action, and — under a malformed audience — every action at all; the agent locks a refused action out for the run under its own breaker reason (`'audience'`), and the model is told it is not available in a shared conversation (not that it is misconfigured). Only **Search** and **Scoped Search** declare support: they pass the audience to the search (even a malformed one, which the engine refuses), Scoped Search runs the per-reader scope gate, and both leave `SourceCounts` out of their output — and Scoped Search's streamed `ProgressEvents` carry no provider counts. An agent whose work needs other actions is therefore limited to search in a shared room — by design. |
+| Task graphs | Not offered (`enableTaskGraphs` off for the run, on a copy of the cached prompt params), and a graph the model writes anyway is refused: its action nodes run outside the run's gates. Withheld in a tenant-scoped run too (above). |
+| Client tools and app context | Client tools are not offered (they run in the caller's browser, and what they return reaches the room) and a client-tools step the model emits anyway is refused; the caller's app context (`data.appContext`, with its `AdditionalContext`) is not injected into the prompt. |
+| Memory writes | Not saved, and the memory-writes docs are left out of the prompt: a write is the caller's note, and its reply ("already exists verbatim", superseded) is read against the caller's own notes. |
+| Asking the user, presenting a plan | The question or plan still reaches the room, which answers in the conversation (where the host starts the next run with the room's audience). No `MJ: AI Agent Requests` row is raised: answered on the dashboard or through the API, it would resume the run without the audience. |
 | Realtime / voice / bridge sessions | Refused; a live session acts outside the gates above. |
 
 **Limits, by design for now:**
 - **Per-reader scope expansion.** `ScopeDimensionResolver` binds one `UserID` (the caller's), so expansion queries and `ServerDerived` dimensions resolve for the caller only. The per-reader result filter covers scopes whose lanes carry per-user row filters; don't rely on dimension-only bounds for a room (rule 4 above).
 - **No `Union`, and no anchor or narrowing modes.** A run bounded by a shared record or tenant uses `PrimaryScopeEntityName` / `PrimaryScopeRecordID` / `SecondaryScopes`.
-- **Resume.** A run paused for a human answer and resumed (`MJAIAgentRequestEntityServer.resumeAgent`) resumes as the responder with **no** audience: the audience is not persisted on the run. Persisting it needs a column — an open design point shared with bound action parameters.
+- **Resume.** `MJAIAgentRequestEntityServer.resumeAgent` (a request answered on the dashboard or through the API) resumes as the responder and has nowhere to read an audience from — neither the request nor the run row has a field for it — so a run with an audience raises no request (above). Persisting the audience needs a column — an open design point shared with bound action parameters. Until then an agent with `RequirePlanMode` cannot have a plan approved in a shared conversation.
 - **Conversation history and artifacts** are what the host passes in; choosing what a room may see of them is the host's job.
 
 ### Overfetch factor tuning

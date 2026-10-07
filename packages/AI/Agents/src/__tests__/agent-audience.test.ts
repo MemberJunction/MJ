@@ -29,6 +29,17 @@ describe('AgentAudienceProblem', () => {
     ])('refuses %s', (_label, audience, message) => {
         expect(AgentAudienceProblem(audience)).toMatch(message);
     });
+
+    // `mode in { Caller, Intersection }` accepted every name Object.prototype carries, so such an audience passed
+    // validation, added no reader (it is not 'Intersection') and every gate was skipped.
+    it.each(['toString', 'constructor', 'valueOf', 'hasOwnProperty', '__proto__', 'isPrototypeOf', 'propertyIsEnumerable', 'toLocaleString'])(
+        "refuses the inherited name '%s' as a Mode, with or without readers",
+        (mode) => {
+            expect(AgentAudienceProblem({ Mode: mode, UserIDs: [READER] })).toMatch(/Mode must be 'Caller' or 'Intersection'/);
+            expect(AgentAudienceProblem({ Mode: mode })).toMatch(/Mode must be 'Caller' or 'Intersection'/);
+            expect(AgentAudienceAddsReader({ Mode: mode, UserIDs: [READER] } as unknown as AgentRunAudience, CALLER)).toBe(true);
+        },
+    );
 });
 
 describe('AgentAudienceReaderIDs', () => {

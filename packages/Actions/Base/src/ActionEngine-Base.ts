@@ -651,8 +651,14 @@ export type RuntimeCredentialScope = 'Any' | 'RuntimeOnly';
 
 /**
  * One secondary scope dimension's value. The same union as `SecondaryScopeValue` in
- * `@memberjunction/ai-core-plus`, declared here because that package depends on this one: BaseAgent assigns
- * the one to the other, so a value added to either and not both fails to compile there.
+ * `@memberjunction/ai-core-plus`, declared here because that package depends on this one.
+ *
+ * Nothing here ties the two together; the compiler does only where code converts one into the other, and each
+ * conversion guards one direction. In `@memberjunction/ai-agents`, BaseAgent assigns `SecondaryScopeValue` records
+ * into {@link ActionRunScope} (so a value added to `SecondaryScopeValue` alone fails there) and passes the run's
+ * {@link ActionRunScope} back into its memory, RAG and scoped-prompt inputs, typed `SecondaryScopeValue` (so a value
+ * added here alone fails there). Scoped Search in `@memberjunction/core-actions` makes the second conversion too.
+ * Removing those conversions removes the guard: keep the two unions identical by hand.
  */
 export type ActionRunScopeValue = string | number | boolean | string[];
 
@@ -667,4 +673,19 @@ export interface ActionRunScope {
    PrimaryScopeRecordID: string | null;
    /** The run's secondary dimensions (with the agent's configured defaults applied), or `null` when it has none. */
    SecondaryScopes?: Record<string, ActionRunScopeValue> | null;
+}
+
+/**
+ * Whether an agent run's scope bounds what the run may reach: it carries a tenant (a non-blank
+ * `PrimaryScopeRecordID`) or at least one secondary dimension. `false` outside an agent run (`undefined`) and for an
+ * unscoped run's nulls; a primary entity name alone bounds nothing. The one predicate for "this run is
+ * tenant-scoped": BaseAgent withholds work that would run outside the scope (task graphs) when it holds, and an
+ * action that searches without a tenant (the Search action) refuses to run.
+ */
+export function ActionRunScopeIsBounded(scope: ActionRunScope | null | undefined): boolean {
+   if (!scope) return false;
+   const tenant = scope.PrimaryScopeRecordID;
+   if (typeof tenant === 'string' && tenant.trim().length > 0) return true;
+   const secondary = scope.SecondaryScopes;
+   return secondary !== null && typeof secondary === 'object' && Object.keys(secondary).length > 0;
 }
