@@ -6,4 +6,5 @@ export * from './models/openAIImage';
 export * from './models/openAIRealtime';
 export * from './models/rawRealtimeWebSocketConnection';
 export * from './models/openAILiveRealtime';
+export * from './models/openAIDecision';
 

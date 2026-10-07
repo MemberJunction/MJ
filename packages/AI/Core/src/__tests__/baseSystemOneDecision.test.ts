@@ -3,7 +3,9 @@ import {
     BaseSystemOneDecision,
     CreateSystemOneHTTPError,
     IsSystemOneWireObject,
+    NormalizeDecisionProbabilities,
     ParseSystemOneCredential,
+    ReadDecisionConfidence,
     SystemOneConfigurationError,
 } from '../generic/baseSystemOneDecision';
 import {
@@ -205,6 +207,20 @@ describe('BaseSystemOneDecision', () => {
             });
             expect(ParseSystemOneCredential('["a"]')).toEqual({ APIKey: '["a"]' });
             expect(ParseSystemOneCredential('')).toEqual({ APIKey: '' });
+        });
+
+        it('NormalizeDecisionProbabilities renormalises over the given keys, in order, counting bad entries as 0', () => {
+            expect(NormalizeDecisionProbabilities([['a', 1], ['b', 3], ['c', undefined]])).toEqual({ a: 0.25, b: 0.75, c: 0 });
+            expect(Object.keys(NormalizeDecisionProbabilities([['z', 1], ['a', 1]]) ?? {})).toEqual(['z', 'a']);
+            expect(NormalizeDecisionProbabilities([['a', -1], ['b', 'x'], ['c', Number.NaN], ['d', 2]])).toEqual({ a: 0, b: 0, c: 0, d: 1 });
+            expect(NormalizeDecisionProbabilities([['a', 0], ['b', 0]])).toBeUndefined();
+        });
+
+        it("ReadDecisionConfidence takes the API's confidence, clamped, else the top probability", () => {
+            expect(ReadDecisionConfidence({ confidence: 0.4 }, { a: 0.9, b: 0.1 })).toBe(0.4);
+            expect(ReadDecisionConfidence({ confidence: 1.5 }, { a: 0.9, b: 0.1 })).toBe(1);
+            expect(ReadDecisionConfidence({ confidence: 'high' }, { a: 0.3, b: 0.7 })).toBe(0.7);
+            expect(ReadDecisionConfidence({}, { a: 0.3, b: 0.7 })).toBe(0.7);
         });
 
         it('fails without a request, allowing failover, when the configuration check reports a problem', async () => {
