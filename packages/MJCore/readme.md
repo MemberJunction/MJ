@@ -469,6 +469,8 @@ if (!result.Success) {
 }
 ```
 
+A binary field (`varbinary` / `binary` / `image`, PostgreSQL `bytea`) holds a base64 string; `Validate()` rejects a value that is not canonical base64, and one whose decoded length exceeds a fixed-length column. See the [Binary Fields Guide](../../guides/BINARY_FIELDS_GUIDE.md).
+
 #### IS-A (Table-Per-Type) entities
 
 An entity may inherit from another — `Webinar` IS-A `Meeting` IS-A `Product` — with one primary key
@@ -766,6 +768,8 @@ const countResult = await rv.RunView({
 });
 ```
 
+**Binary fields are omitted by default.** A `RunView` without `Fields` leaves out `varbinary` / `bytea` columns (the key is absent from the row). Pass `IncludeBinaryFields: true`, or name a binary field in `Fields`, to get them as base64 strings. `entity.Load()` always includes them, and saving a record loaded without them is safe — an unloaded field is never written. See the [Binary Fields Guide](../../guides/BINARY_FIELDS_GUIDE.md).
+
 #### RunViewParams Reference
 
 | Parameter | Type | Description |
@@ -776,7 +780,8 @@ const countResult = await rv.RunView({
 | `EntityName` | `string` | Entity name for dynamic views |
 | `ExtraFilter` | `string` | Additional SQL WHERE clause |
 | `OrderBy` | `string` | SQL ORDER BY clause |
-| `Fields` | `string[]` | Field names to return (simple mode only) |
+| `Fields` | `string[]` | Field names to return (simple mode only). Naming a binary field sets `IncludeBinaryFields`. |
+| `IncludeBinaryFields` | `boolean` | Return binary (`varbinary` / `bytea`) fields as base64 strings; omitted by default. Part of the cache fingerprint. |
 | `UserSearchString` | `string` | User search term |
 | `MaxRows` | `number` | Maximum rows to return |
 | `StartRow` | `number` | Row offset (OFFSET-based pagination). Use for UI grids. For deep iteration over large tables, prefer `AfterKey`. |
@@ -1115,6 +1120,7 @@ Key features:
 - Automatic refresh when entities are saved or deleted (debounced)
 - Local caching support via `CacheLocal` and `CacheLocalTTL` options
 - Supports both entity and dataset loading
+- `IncludeBinaryFields: true | 'DatabaseProviderOnly'` on a config loads binary fields (the second form only in server processes, where e.g. persisted embedding columns are needed)
 
 #### Permission-Constrained Loading
 
@@ -1553,7 +1559,8 @@ export class MyEntityServer extends MyEntity {
             {
                 fieldName: 'Description',
                 vectorFieldName: 'DescriptionVector',
-                modelFieldName: 'DescriptionVectorModelID'
+                modelFieldName: 'DescriptionVectorModelID',
+                binaryVectorFieldName: 'DescriptionVectorBinary'   // optional
             }
         ]);
         return await super.Save();
@@ -1570,6 +1577,7 @@ Features:
 - **Dirty Detection** -- Only generates embeddings when source text changes
 - **Null Handling** -- Clears vector fields when source text is empty
 - **Parallel Processing** -- Multiple embeddings generated concurrently
+- **Binary Companion** -- The optional `binaryVectorFieldName` (`binaryVectorField` on `GenerateEmbedding`/`GenerateEmbeddings`) stores the same vector as base64 float32 bytes alongside the JSON field, set and cleared together. Readers decode it with `ReadStoredVector` from `@memberjunction/ai-vectors-memory`; see the [Binary Fields Guide](../../guides/BINARY_FIELDS_GUIDE.md)
 
 ---
 
