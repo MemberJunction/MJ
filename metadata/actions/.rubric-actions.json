@@ -129,15 +129,15 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Deterministic, or LLM. LLM runs the Rubric Evaluator prompt. AI is not accepted. Deterministic when omitted.",
+            "Description": "A registered rubric evaluator: LLM (a chat prompt, Rubric Evaluator by default), Decision (typed Score questions on a Decision model, Default Decision by default), Agent (the Rubric Evaluation Agent), Deterministic (the criteria's rules), or a custom evaluator a host registered. AI is accepted as Agent. Human is not accepted, because a person completes it. LLM when omitted.",
             "IsRequired": false
           },
           "primaryKey": {
             "ID": "BFF0056D-119E-4F11-8E8B-B97CFC8DDF9F"
           },
           "sync": {
-            "lastModified": "2026-10-02T21:42:08.039Z",
-            "checksum": "fbe080e10d5b9d81e78d12d49be131f8ad6fa889f8d1b77153645ae7f30a588f"
+            "lastModified": "2026-10-06T20:21:43.042Z",
+            "checksum": "201a40004b315ce6032887803f0e4f974b2428cd9de4cdf120a82a522d128a0c"
           }
         },
         {

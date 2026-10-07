@@ -17,7 +17,9 @@
   "author": "MemberJunction.com",
   "license": "BUSL-1.1",
   "dependencies": {
+    "@memberjunction/ai": "6.2.0-edge.2",
     "@memberjunction/ai-agents": "6.2.0-edge.2",
+    "@memberjunction/ai-engine-base": "6.2.0-edge.2",
     "@memberjunction/ai-bridge-base": "6.2.0-edge.2",
     "@memberjunction/ai-bridge-ringcentral": "6.2.0-edge.2",
     "@memberjunction/ai-bridge-server": "6.2.0-edge.2",
@@ -28,6 +30,7 @@
     "@memberjunction/core-entities": "6.2.0-edge.2",
     "@memberjunction/generic-database-provider": "6.2.0-edge.2",
     "@memberjunction/global": "6.2.0-edge.2",
+    "@memberjunction/livekit-room-server": "6.2.0-edge.2",
     "@memberjunction/server-extensions-core": "6.2.0-edge.2",
     "cors": "^2.8.5",
     "express": "^5.2.1",

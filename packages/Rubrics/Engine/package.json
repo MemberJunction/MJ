@@ -6,8 +6,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
-    "/dist",
-    "/templates"
+    "/dist"
   ],
   "scripts": {
     "build": "tsc && tsc-alias -f",
@@ -31,6 +30,7 @@
     "@memberjunction/rubrics-base": "6.2.0-edge.2"
   },
   "devDependencies": {
+    "nunjucks": "3.2.4",
     "typescript": "^5.9.3",
     "tsc-alias": "^1.8.16",
     "vitest": "^4.0.18"

@@ -74,14 +74,18 @@
             "RubricID": "@lookup:MJ: Rubrics.Name=Research answer",
             "Purpose": "Evaluation",
             "IsDefault": true,
-            "Status": "Active"
+            "Status": "Active",
+            "EvaluatorConfig": {
+              "EvaluatorType": "AIPrompt",
+              "PromptName": "Rubric Judge - Knowledge Base Research Agent"
+            }
           },
           "primaryKey": {
             "ID": "C38D96BE-D1BD-4EAA-90D2-739B599EE711"
           },
           "sync": {
-            "lastModified": "2026-10-02T21:42:25.097Z",
-            "checksum": "ba83d5a9b4b5956ade014ae9ebf74067a9e42d18b67a20f3e33151614f96e237"
+            "lastModified": "2026-10-06T20:21:55.377Z",
+            "checksum": "ca56707f899bdf94acf973a449ecc47f7a2d89f36da9f47f8902746d6bb1cdd3"
           }
         }
       ]

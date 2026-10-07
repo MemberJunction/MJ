@@ -163,6 +163,9 @@ Preferring credentials matters: env vars are process-wide, so falling back means
 whatever the *server* holds rather than only what it was *granted*. Fine for dev and single-tenant.
 **Multi-tenant deployments should grant explicitly.** The fallback is logged, not silent.
 
+This is separate from a run's `CredentialScope`, which governs the AI keys its model calls spend.
+`'RuntimeOnly'` does **not** restrict these grants or their environment fallback.
+
 `MJ: AI Agent Credentials` is the **grant edge** only — custody stays in `MJ: Credentials` /
 `CredentialEngine`. It is distinct from `MJ: AI Credential Bindings`, which is inference-selection
 plumbing for `AIPromptRunner` failover when *MJ itself* executes a prompt.
