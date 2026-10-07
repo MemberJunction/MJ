@@ -39,6 +39,7 @@
     "@memberjunction/content-autotagging": "6.2.0-edge.3",
     "@memberjunction/conversations-runtime": "6.2.0-edge.3",
     "@memberjunction/core": "6.2.0-edge.3",
+    "@memberjunction/postgresql-dataprovider": "6.2.0-edge.3",
     "@memberjunction/rubrics": "6.2.0-edge.3",
     "@memberjunction/rubrics-base": "6.2.0-edge.3",
     "@memberjunction/core-entities": "6.2.0-edge.3",
