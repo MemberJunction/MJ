@@ -52,6 +52,13 @@ Second line.
             expect(result.frontmatter.name).toBe('Skill: With Colon');
         });
 
+        it('reads tab-separated list items, and a long whitespace run in one, in linear time', () => {
+            const md = ['---', 'name: X', 'actions:', '-\tRun Query', '  - ' + '\t'.repeat(100_000) + 'Generate PDF\r', '---', 'Body'].join('\n');
+            const started = Date.now();
+            expect(SkillMarkdownConverter.Parse(md).frontmatter.actions).toEqual(['Run Query', 'Generate PDF']);
+            expect(Date.now() - started).toBeLessThan(1000);
+        });
+
         it('parses codeOnlyActions as a list, and leaves it undefined when the key is absent', () => {
             const withKey = SkillMarkdownConverter.Parse(['---', 'name: X', 'actions:', '  - Run Query', '  - Generate PDF', 'codeOnlyActions:', '  - Generate PDF', '---', 'Body'].join('\n'));
             expect(withKey.frontmatter.actions).toEqual(['Run Query', 'Generate PDF']);

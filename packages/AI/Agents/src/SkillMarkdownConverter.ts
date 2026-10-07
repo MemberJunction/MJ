@@ -118,8 +118,6 @@ const MODELLED_KEYS: ReadonlySet<string> = new Set<string>(['name', 'description
 
 /** A top-level `key: value` line. Column 0 only: the key must start the line. */
 const KEY_LINE_RE = /^([A-Za-z_][\w-]*)\s*:(.*)$/;
-/** A `- item` line, at any indentation. */
-const LIST_ITEM_RE = /^\s*-\s+(.*)$/;
 
 /** One top-level key and the lines under it (indented, `- item` and blank lines). */
 interface FrontmatterEntry {
@@ -224,7 +222,7 @@ export class SkillMarkdownConverter {
             const last = entries[entries.length - 1];
             if (key) {
                 entries.push({ Key: key[1], Inline: key[2].trim(), Under: [], Lines: [line] });
-            } else if (last && (line.trim() === '' || /^\s/.test(line) || LIST_ITEM_RE.test(line))) {
+            } else if (last && (line.trim() === '' || /^\s/.test(line) || listItemText(line) !== null)) {
                 last.Under.push(line);
                 last.Lines.push(line);
             } else {
@@ -248,9 +246,9 @@ export class SkillMarkdownConverter {
         if (!isList) return undefined;
         const items: string[] = [];
         for (const line of under) {
-            const item = LIST_ITEM_RE.exec(line);
-            if (!item) return undefined;
-            items.push(unquote(item[1]));
+            const item = listItemText(line);
+            if (item === null) return undefined;
+            items.push(unquote(item));
         }
         return items.filter(item => item.length > 0);
     }
@@ -352,6 +350,15 @@ export class SkillMarkdownConverter {
         }
         return fm;
     }
+}
+
+/**
+ * The text of a `- item` line at any indentation, or null when the line is not one. Not a regex:
+ * `/^\s*-\s+(.*)$/` backtracks quadratically on a long whitespace run that `.` cannot finish.
+ */
+function listItemText(line: string): string | null {
+    const trimmed = line.trimStart();
+    return trimmed.startsWith('-') && /\s/.test(trimmed[1] ?? '') ? trimmed.slice(1).trimStart() : null;
 }
 
 /**
