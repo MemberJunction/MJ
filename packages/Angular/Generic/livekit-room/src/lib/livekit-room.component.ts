@@ -73,6 +73,7 @@ import {
   type MediaSurface,
   type MediaVideoSource,
 } from '@memberjunction/ai-realtime-client/media';
+import type { RoomOptions } from 'livekit-client';
 import { LiveKitControlBarComponent } from './components/livekit-control-bar.component';
 import { LiveKitChatPanelComponent } from './components/livekit-chat-panel.component';
 import { LiveKitParticipantsPanelComponent } from './components/livekit-participants-panel.component';
@@ -279,6 +280,8 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
   @Input() public E2EEPassphrase: string | null = null;
   /** The E2EE web worker (host-provided, bundler-specific). Required for {@link E2EEPassphrase}. */
   @Input() public E2EEWorker: Worker | null = null;
+  /** Advanced livekit-client room options merged into the constructed Room (overrides speech defaults). */
+  @Input() public RoomOptions?: RoomOptions;
 
   // ── Cancelable Before-event outputs (set `$event.Cancel = true` to veto) ─────────
   /** Fired before connecting. Cancelable. */
@@ -479,6 +482,7 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
       MicrophoneDeviceId: choices?.MicrophoneDeviceId,
       CameraDeviceId: choices?.CameraDeviceId,
       E2EE: this.buildE2EEOptions(),
+      RoomOptions: this.RoomOptions,
     });
   }
 
