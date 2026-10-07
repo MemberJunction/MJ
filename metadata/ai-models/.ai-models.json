@@ -15240,25 +15240,6 @@
         {
           "fields": {
             "ModelID": "@parent:ID",
-            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
-            "Priority": 0,
-            "Status": "Active",
-            "DriverClass": "GeminiLLM",
-            "APIName": "gemma-4-31b-it",
-            "MaxInputTokens": 262144,
-            "MaxOutputTokens": 8192,
-            "SupportedResponseFormats": "Any, JSON",
-            "SupportsEffortLevel": false,
-            "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
-          },
-          "primaryKey": {
-            "ID": "C69E645B-60F6-4CFE-849D-1EB94B42E9D1"
-          }
-        },
-        {
-          "fields": {
-            "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
             "Priority": 0,
             "Status": "Inactive",
@@ -15425,25 +15406,6 @@
           "sync": {
             "lastModified": "2026-04-27T18:50:00.877Z",
             "checksum": "b2dda844c0d01e8186a3004dd69dc1851a98b32983b9b9122f3790118a339ab6"
-          }
-        },
-        {
-          "fields": {
-            "ModelID": "@parent:ID",
-            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
-            "Priority": 0,
-            "Status": "Active",
-            "DriverClass": "GeminiLLM",
-            "APIName": "gemma-4-26b-a4b-it",
-            "MaxInputTokens": 262144,
-            "MaxOutputTokens": 8192,
-            "SupportedResponseFormats": "Any, JSON",
-            "SupportsEffortLevel": false,
-            "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
-          },
-          "primaryKey": {
-            "ID": "5E6DD962-80A3-408C-8911-DDC475D01501"
           }
         },
         {
