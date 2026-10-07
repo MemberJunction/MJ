@@ -17,6 +17,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Work Queue Deliveries&Name=Subscription"
+          },
+          "sync": {
+            "lastModified": "2026-10-06T20:21:58.727Z",
+            "checksum": "3980a054b5d6fcb2805ae6a0b030e114ef8da0fb49036cc2ea1cd1b3823228cd"
           }
         },
         {
@@ -33,6 +37,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Work Queue Deliveries&Name=AttemptCount"
+          },
+          "sync": {
+            "lastModified": "2026-10-06T20:21:58.746Z",
+            "checksum": "3980a054b5d6fcb2805ae6a0b030e114ef8da0fb49036cc2ea1cd1b3823228cd"
           }
         },
         {
@@ -49,6 +57,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Work Queue Deliveries&Name=VisibleAt"
+          },
+          "sync": {
+            "lastModified": "2026-10-06T20:21:58.771Z",
+            "checksum": "3980a054b5d6fcb2805ae6a0b030e114ef8da0fb49036cc2ea1cd1b3823228cd"
           }
         },
         {
@@ -57,6 +69,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Work Queue Deliveries&Name=LeaseExpiresAt"
+          },
+          "sync": {
+            "lastModified": "2026-10-06T20:21:58.791Z",
+            "checksum": "3980a054b5d6fcb2805ae6a0b030e114ef8da0fb49036cc2ea1cd1b3823228cd"
           }
         },
         {
@@ -65,6 +81,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Work Queue Deliveries&Name=DeadLetterReason"
+          },
+          "sync": {
+            "lastModified": "2026-10-06T20:21:58.810Z",
+            "checksum": "3980a054b5d6fcb2805ae6a0b030e114ef8da0fb49036cc2ea1cd1b3823228cd"
           }
         },
         {
@@ -73,6 +93,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Work Queue Deliveries&Name=__mj_CreatedAt"
+          },
+          "sync": {
+            "lastModified": "2026-10-06T20:21:58.831Z",
+            "checksum": "3980a054b5d6fcb2805ae6a0b030e114ef8da0fb49036cc2ea1cd1b3823228cd"
           }
         }
       ]
@@ -96,6 +120,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Work Queue Messages&Name=Topic"
+          },
+          "sync": {
+            "lastModified": "2026-10-06T20:21:58.857Z",
+            "checksum": "3980a054b5d6fcb2805ae6a0b030e114ef8da0fb49036cc2ea1cd1b3823228cd"
           }
         },
         {
@@ -128,6 +156,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Work Queue Messages&Name=PublishedAt"
+          },
+          "sync": {
+            "lastModified": "2026-10-06T20:21:58.877Z",
+            "checksum": "3980a054b5d6fcb2805ae6a0b030e114ef8da0fb49036cc2ea1cd1b3823228cd"
           }
         }
       ]
