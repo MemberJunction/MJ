@@ -242,6 +242,51 @@ describe('OpenAILiveClient (Browser WebRTC Driver)', () => {
         expect(i2).toBeInstanceOf(OpenAILiveClient);
     });
 
+    describe('remote (agent) media stream', () => {
+        const landTrack = (stream: MediaStream): void => {
+            client.MockPC.ontrack?.({ streams: [stream] } as unknown as RTCTrackEvent);
+        };
+
+        it('publishes the WebRTC track: a handler registered before it lands fires once with it', async () => {
+            const delivered: MediaStream[] = [];
+            client.OnRemoteMediaStream((s) => delivered.push(s));
+            await client.Connect(makeConfig(), micStream);
+            expect(client.GetRemoteMediaStream()).toBeNull();
+
+            const agent = new FakeMediaStream([new FakeTrack()]);
+            landTrack(agent);
+
+            expect(client.GetRemoteMediaStream()).toBe(agent);
+            expect(delivered).toEqual([agent]);
+        });
+
+        it('fires a handler registered after the track landed immediately, once', async () => {
+            await client.Connect(makeConfig(), micStream);
+            const agent = new FakeMediaStream([new FakeTrack()]);
+            landTrack(agent);
+
+            const delivered: MediaStream[] = [];
+            client.OnRemoteMediaStream((s) => delivered.push(s));
+
+            expect(delivered).toEqual([agent]);
+        });
+
+        it('clears the stream and drops the session handlers on Disconnect', async () => {
+            const stale: MediaStream[] = [];
+            client.OnRemoteMediaStream((s) => stale.push(s));
+            await client.Connect(makeConfig(), micStream);
+            landTrack(new FakeMediaStream([new FakeTrack()]));
+            await client.Disconnect();
+            expect(client.GetRemoteMediaStream()).toBeNull();
+
+            client.MockPC = new FakePeerConnection();
+            await client.Connect(makeConfig(), new FakeMediaStream([new FakeTrack()]));
+            landTrack(new FakeMediaStream([new FakeTrack()]));
+
+            expect(stale).toHaveLength(1);
+        });
+    });
+
     it('creates data channel BEFORE createOffer and performs non-trickle SDP handshake', async () => {
         const states: RealtimeClientState[] = [];
         const usages: RealtimeClientUsage[] = [];
