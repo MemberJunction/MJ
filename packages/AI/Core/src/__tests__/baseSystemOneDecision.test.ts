@@ -199,7 +199,7 @@ describe('BaseSystemOneDecision', () => {
                 .toEqual({ APIKey: '', Endpoint: 'https://e.example.test', AccountID: undefined });
             expect(ParseSystemOneCredential('{"apiKey":7}')).toEqual({ APIKey: '', Endpoint: undefined, AccountID: undefined });
             expect(ParseSystemOneCredential('acct:token')).toEqual({ APIKey: 'acct:token' });
-            expect(ParseSystemOneCredential('{not json')).toEqual({ APIKey: '{not json' });
+            expect(ParseSystemOneCredential('{not json')).toMatchObject({ APIKey: '', ParseError: expect.stringContaining('looks like JSON') });
             expect(ParseSystemOneCredential('["a"]')).toEqual({ APIKey: '["a"]' });
             expect(ParseSystemOneCredential('')).toEqual({ APIKey: '' });
         });
@@ -215,6 +215,18 @@ describe('BaseSystemOneDecision', () => {
             // candidate would stop the loop before a correctly configured one got its turn.
             expect(result.errorInfo).toEqual({ errorType: 'NoCredentials', severity: 'Retriable', canFailover: true });
             expect(result.Answers).toEqual({});
+        });
+
+        it('fails without a request when the credential starts with { but is not JSON, never sending its text', async () => {
+            // One stray comma: before, the whole text, real key included, went out as the bearer token.
+            const driver = new TestSystemOneDecision('{"apiKey":"sk-123","endpoint":"https://s1.example",}');
+            const result = await driver.Decide(params());
+
+            expect(driver.Sent).toHaveLength(0);
+            expect(result.success).toBe(false);
+            expect(result.errorMessage).toMatch(/^Test Decisions API: The credential looks like JSON but does not parse/);
+            expect(result.errorMessage).not.toContain('sk-123');
+            expect(result.errorInfo).toEqual({ errorType: 'NoCredentials', severity: 'Retriable', canFailover: true });
         });
     });
 
@@ -383,6 +395,8 @@ describe('BaseSystemOneDecision', () => {
             expect(result.success).toBe(false);
             expect(result.errorMessage).toBe('Test Decisions API reported a failure (HTTP 200)');
             expect(result.errorInfo?.httpStatusCode).toBe(200);
+            // An envelope failure names no known error, so it must still let another model answer.
+            expect(result.errorInfo?.canFailover).toBe(true);
         });
     });
 

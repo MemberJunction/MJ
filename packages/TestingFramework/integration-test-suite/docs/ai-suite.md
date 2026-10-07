@@ -1,6 +1,6 @@
 # AI Suite — the AI-stack integration bundles
 
-**Scope:** every shipped integration-check bundle that exercises MemberJunction's AI stack — skills governance, cost accounting, the dual-path permission helpers, persisted embeddings, the agent loop's deterministic seams, the conversation-compaction assembly layer, the live prompt/agent smoke runners, concurrent-persistence stress, the AI code-authoring Remote Operation, and the Clef, Kev and Perplexity Decider decision-model drivers. **14 bundles, 93 checks total**, all registered on the shared `IntegrationCheckRegistry` in this package (`src/checks/*.checks.ts`) and dispatched by the metadata-driven `IntegrationTestDriver` via `mj test`. **Tier split:** 10 bundles / 86 checks are **deterministic** (no LLM call, members of the *"Integration Tests — Deterministic"* suite, the blocking CI gate) and 4 bundles / 7 checks are **live-model** (real token-costing model calls, members of the *"Integration Tests — Live Model"* suite). Run the deterministic tier with `npm run test:integration` from repo root (= `MJ_INTEGRATION_TEST=1 mj test suite "Integration Tests — Deterministic"`); run the live tier with `MJ_INTEGRATION_TEST=1 mj test suite "Integration Tests — Live Model"`; run one bundle with `MJ_INTEGRATION_TEST=1 npx mj test run --name "<IT record name>"`. Since the **2026-07-20 gate inversion** (`packages/TestingFramework/testing-integration/src/tiers.ts:7-11`), the live-model tier is **ON by default — opt out with `RUN_AGENT_TESTS=0`** (invoking the Live Model suite is already an explicit act; `RUN_AGENT_TESTS=1` still means on for backward compatibility). CI pins `RUN_AGENT_TESTS=0`.
+**Scope:** every shipped integration-check bundle that exercises MemberJunction's AI stack — skills governance, cost accounting, the dual-path permission helpers, persisted embeddings and their binary vector columns, the agent loop's deterministic seams, the conversation-compaction assembly layer, the live prompt/agent smoke runners, concurrent-persistence stress, the AI code-authoring Remote Operation, and the Clef, Kev and Perplexity Decider decision-model drivers. **15 bundles, 99 checks total**, all registered on the shared `IntegrationCheckRegistry` in this package (`src/checks/*.checks.ts`) and dispatched by the metadata-driven `IntegrationTestDriver` via `mj test`. **Tier split:** 11 bundles / 92 checks are **deterministic** (two of them mutation-gated) (no LLM call, members of the *"Integration Tests — Deterministic"* suite, the blocking CI gate) and 4 bundles / 7 checks are **live-model** (real token-costing model calls, members of the *"Integration Tests — Live Model"* suite). Run the deterministic tier with `npm run test:integration` from repo root (= `MJ_INTEGRATION_TEST=1 mj test suite "Integration Tests — Deterministic"`); run the live tier with `MJ_INTEGRATION_TEST=1 mj test suite "Integration Tests — Live Model"`; run one bundle with `MJ_INTEGRATION_TEST=1 npx mj test run --name "<IT record name>"`. Since the **2026-07-20 gate inversion** (`packages/TestingFramework/testing-integration/src/tiers.ts:7-11`), the live-model tier is **ON by default — opt out with `RUN_AGENT_TESTS=0`** (invoking the Live Model suite is already an explicit act; `RUN_AGENT_TESTS=1` still means on for backward compatibility). CI pins `RUN_AGENT_TESTS=0`.
 
 Design ancestor: [test-catalog.md](./test-catalog.md) **Domain 4 — AI Stack Deterministic Seams**. Defect cross-references: [bug-register.md](../../../../plans/integration-test-expansion/bug-register.md). Next expansion for this family: [agents-extended-suite-proposal.md](../../../../plans/integration-test-expansion/agents-extended-suite-proposal.md) (see the closing section).
 
@@ -13,7 +13,7 @@ Design ancestor: [test-catalog.md](./test-catalog.md) **Domain 4 — AI Stack De
 
 The mutation axis is **not** a separate suite: several deterministic AI bundles mutate the DB by design (own tagged fixtures only, FK-ordered teardown) and are deliberately NOT `RequiresMutation`-gated, mirroring `runquery-cache` (stated in the `conversation-compaction` and `agent-loop-standin` headers).
 
-All ten deterministic bundles honor the family's **anti-vacuity / loud-skip discipline**: data-dependent checks count their subjects and skip-as-pass with an explicit `console.warn` (never silently), while legs that can always run assert unconditionally.
+All eleven deterministic bundles honor the family's **anti-vacuity / loud-skip discipline**: data-dependent checks count their subjects and skip-as-pass with an explicit `console.warn` (never silently), while legs that can always run assert unconditionally.
 
 ---
 
@@ -28,9 +28,10 @@ All ten deterministic bundles honor the family's **anti-vacuity / loud-skip disc
 | `agent-loop-standin` | 6 | ALS1–ALS6 | deterministic | server | IT46 | Deterministic |
 | `conversation-compaction` | 12 | CC1–CC12 | deterministic | server | IT30 | Deterministic |
 | `agent-decisions-switch` | 9 | DS1–DS9 | deterministic | server | IT97 | Deterministic |
-| `cloudflare-clef` | 6 | CF1–CF6 | deterministic | server | IT99 | Deterministic |
-| `systemone-kev` | 10 | KV1–KV10 | deterministic | server | IT100 | Deterministic |
-| `perplexity-decider` | 5 | PX1–PX5 | deterministic | server | IT101 | Deterministic |
+| `binary-fields` | 6 | BF1–BF6 | deterministic (BF4, BF6 mutation-gated) | client | IT101 | Deterministic |
+| `cloudflare-clef` | 6 | CF1–CF6 | deterministic | server | IT108 | Deterministic |
+| `systemone-kev` | 10 | KV1–KV10 | deterministic | server | IT109 | Deterministic |
+| `perplexity-decider` | 5 | PX1–PX5 | deterministic | server | IT110 | Deterministic |
 | `prompt-runner` | 1 | PR1 | live-model | server | IT16 | Live Model |
 | `agent-runner` | 1 | AR1 | live-model | server | IT17 | Live Model |
 | `concurrent` | 2 | CC1–CC2 (bundle-prefixed `concurrent.CC*`) | live-model | server | IT18 | Live Model |
@@ -126,7 +127,7 @@ Counts are pinned by `src/__tests__/check-registry.test.ts` (the per-bundle coun
 
 ## 4. `ai-embeddings` (AE1–AE5) — persisted-embedding invariants without a model call
 
-**Machinery under test.** The persisted-embedding pattern (`guides/BASE_ENTITY_SERVER_PATTERNS.md`): vectors stored as JSON `number[]` strings with a stamped `EmbeddingModelID` across six surfaces on five entities (`MJ: AI Agent Notes` / `AI Agent Examples` / `Queries` / `Tags` `.EmbeddingVector`, plus `MJ: Components`' `FunctionalRequirementsVector` and `TechnicalDesignVector` pairs). Audited over whatever vectors the deployment has (up to 100 rows per surface, loaded once and memoized across AE1–AE4): parseability + per-(surface, model) dimensional consistency, degenerate-vector detection + the unit-L2-norm convention, **cross-entity** dimensional agreement per model (a note vector and a query vector from the same model must agree or cross-source similarity silently breaks), model-reference integrity into the AI catalog, and the `LocalEmbeddings` catalog shape the `EmbedTextLocal` chain resolves through. Deliberately **never invokes** the LocalEmbedding provider — its first call downloads an ONNX model, a network dependency the deterministic tier must never take.
+**Machinery under test.** The persisted-embedding pattern (`guides/BASE_ENTITY_SERVER_PATTERNS.md`): vectors stored as JSON `number[]` strings (each also has a binary float32 companion column, audited by [`binary-fields`](#12-binary-fields-bf1bf6--binary-fields-end-to-end-and-the-binary-vector-columns)) with a stamped `EmbeddingModelID` across six surfaces on five entities (`MJ: AI Agent Notes` / `AI Agent Examples` / `Queries` / `Tags` `.EmbeddingVector`, plus `MJ: Components`' `FunctionalRequirementsVector` and `TechnicalDesignVector` pairs). Audited over whatever vectors the deployment has (up to 100 rows per surface, loaded once and memoized across AE1–AE4): parseability + per-(surface, model) dimensional consistency, degenerate-vector detection + the unit-L2-norm convention, **cross-entity** dimensional agreement per model (a note vector and a query vector from the same model must agree or cross-source similarity silently breaks), model-reference integrity into the AI catalog, and the `LocalEmbeddings` catalog shape the `EmbedTextLocal` chain resolves through. Deliberately **never invokes** the LocalEmbedding provider — its first call downloads an ONNX model, a network dependency the deterministic tier must never take.
 
 **Transport.** Client-capable; IT45 declares `transport: client`.
 
@@ -293,7 +294,32 @@ Counts are pinned by `src/__tests__/check-registry.test.ts` (the per-bundle coun
 
 ---
 
-## 12. `cloudflare-clef` (CF1–CF6) — Cloudflare's Clef decision models, through an HTTP stand-in
+## 12. `binary-fields` (BF1–BF6) — binary fields end to end, and the binary vector columns
+
+**Machinery under test.** The binary-field contract in [`guides/BINARY_FIELDS_GUIDE.md`](../../../../guides/BINARY_FIELDS_GUIDE.md): a `varbinary` / `bytea` value is a **base64 string** everywhere above the database (BaseEntity, caches, RunView rows, the GraphQL wire); providers convert at the DB boundary; `RunView` omits binary fields unless `IncludeBinaryFields` is set or one is named in `Fields`, while `Load()` always includes them. Also the seven binary vector companion columns (`MJ: Entity Record Documents.VectorBinary`, `EmbeddingVectorBinary` on AI Agent Notes / AI Agent Examples / Queries / Tags, and the two `MJ: Components` companions) that the vector writers fill and the readers prefer over JSON.
+
+**Transport.** **Client-first** (IT101 declares `transport: client`): every check crosses client BaseEntity → base64 mutation → resolver → provider hex / bytea binding → SQL → base64 → JSON → client, which is where a `{type:'Buffer',data:[…]}` serialization, a `varbinary(1)` truncation or a silently dropped field would surface.
+
+**Fixtures / lifecycle.** BF4–BF6 write throwaway `MJ: Entity Record Documents` rows under an existing Entity Document and Vector Index (skipping loudly when the install has neither); RecordID is prefixed `mj-it99-<timestamp>`, DocumentText is tagged `(mj-integration-test — safe to delete)`, and each check deletes its rows in a `finally` block. No pre-existing record is modified.
+
+**Tier.** All 6 deterministic; BF4 and BF6 are mutation-gated (`RUN_MUTATION_TESTS=1`). BF2 and BF3 skip-as-pass loudly on an empty entity or when nothing has been embedded yet.
+
+| Id | Name (abridged) | Asserted observable | Failure it catches |
+|---|---|---|---|
+| `binary-fields.BF1` | Binary vector companion columns | the seven companions exist, are binary, nullable, and sit beside their JSON vector column | a migration or CodeGen run that dropped or mistyped a companion |
+| `binary-fields.BF2` | Selection + cache isolation | default RunView omits binary keys; `IncludeBinaryFields` or naming one in `Fields` returns base64; a flagged read never leaks into a later unflagged read | binary payloads on every list read; a cache fingerprint that ignores the flag |
+| `binary-fields.BF3` | Stored vectors agree with JSON | every persisted binary vector decodes to whole, finite float32 values equal to its JSON copy at float32 precision | writers that update one column and not the other; corrupt encodings |
+| `binary-fields.BF4` | Byte fidelity (mutation) | all 256 byte values survive create → Load → RunView → update → clear byte for byte; a default RunView returns the same row without the field | Buffer-shaped wire values, `varbinary(1)` truncation, lossy encoding |
+| `binary-fields.BF5` | Validation | a non-base64 value is refused before any INSERT, with a message naming base64 | garbage reaching the provider's hex binding |
+| `binary-fields.BF6` | Vector round trip (mutation) | a 1,536-d float32 vector saved as binary reads back bit-identical through a RunView that only names the field | precision loss or byte-order bugs in the vector codec |
+
+```bash
+pnpm mj test run "IT101 - Binary Fields and Vector Columns"
+```
+
+---
+
+## 13. `cloudflare-clef` (CF1–CF6) — Cloudflare's Clef decision models, through an HTTP stand-in
 
 **Machinery under test.** The `Clef` and `Clef-flash` models (`metadata/ai-models/.clef-models.json`), the `Cloudflare` vendor, the `CloudflareDecision` driver (`@memberjunction/ai-cloudflare`) and the System One mapping it inherits from `BaseSystemOneDecision` (`@memberjunction/ai`), from the synced metadata through `AIDecisionRunner` to the Workers AI request: the v4 envelope's success and failure, a bare response, and a credential's `accountId`.
 
@@ -316,7 +342,7 @@ Counts are pinned by `src/__tests__/check-registry.test.ts` (the per-bundle coun
 
 ---
 
-## 13. `systemone-kev` (KV1–KV10) — Kev and the generic System One driver, against loopback servers
+## 14. `systemone-kev` (KV1–KV10) — Kev and the generic System One driver, against loopback servers
 
 **Machinery under test.** The `Kev-0.8B`, `Kev-4B`, `Kev-9B` and `Kev-27B` models (`metadata/ai-models/.kev-models.json`), the `System One Endpoint` vendor, Kev-4B's OpenRouter route, the `SystemOneDecision` driver (`@memberjunction/ai-systemone`) and the credential parsing it inherits from `BaseSystemOneDecision`, from the synced metadata through `AIDecisionRunner` to a real HTTP request; and what the runner does with them: `Default Decision`'s candidate order and selection, credentials bound per model-vendor row and per prompt-model row (including a binding on the serving row of a model that has a second row on the same vendor), failover past misconfigured candidates, and the classification of a server's 503, 429 and 401.
 
@@ -341,7 +367,7 @@ Counts are pinned by `src/__tests__/check-registry.test.ts` (the per-bundle coun
 | `CloudflareDecision`'s missing-account check disabled | KV7 ("requests Clef sent with no account ID — expected 0, got 1"); the guard answered, nothing left the process |
 | `CreateSystemOneHTTPError` drops the HTTP status | KV8 ("503: the attempts the runner logged — expected ServiceUnavailable:retry, got Unknown:retry") |
 | `OpenRouterDecision` always sends its default (Jev) model | KV9 (the request body's `model`) |
-| the `ModelVendor` binding looked up on only the first Active row of the model and vendor, in both `HasCredentialsAvailable` and `ResolveCredentialForExecution` (the pre-fix `BaseModelRunner`) | KV10 ("the candidate has no credential after its Inference Provider row was bound (the Model Developer row, first in the engine, was read instead)"); its precondition held, every other check passed, and IT99's CF6 still passed, because Clef's Inference Provider row sorts first by key |
+| the `ModelVendor` binding looked up on only the first Active row of the model and vendor, in both `HasCredentialsAvailable` and `ResolveCredentialForExecution` (the pre-fix `BaseModelRunner`) | KV10 ("the candidate has no credential after its Inference Provider row was bound (the Model Developer row, first in the engine, was read instead)"); its precondition held, every other check passed, and IT108's CF6 still passed, because Clef's Inference Provider row sorts first by key |
 | the same, in `ResolveCredentialForExecution` alone | KV10 ("the decision failed: System One endpoint has no base URL…": the candidate was selected but no credential resolved) |
 
 | Id | Name (abridged) | Asserted observable | Failure it catches |
@@ -359,11 +385,11 @@ Counts are pinned by `src/__tests__/check-registry.test.ts` (the per-bundle coun
 
 ---
 
-## 14. `perplexity-decider` (PX1–PX5) — Perplexity's Decider, through an HTTP stand-in
+## 15. `perplexity-decider` (PX1–PX5) — Perplexity's Decider, through an HTTP stand-in
 
 **Machinery under test.** The `Perplexity Decider v1 27B` model (`metadata/ai-models/.perplexity-decider-models.json`), the `Perplexity` vendor, the `PerplexityDecision` driver (`@memberjunction/ai-systemone`) and the System One mapping it inherits from `BaseSystemOneDecision`, from the synced metadata through `AIDecisionRunner` to the Decisions API request (`POST https://api.perplexity.ai/v1/decisions`): Perplexity's own quickstart request and response, a bound credential's token, and what `Default Decision` does with the new model.
 
-**No network, real everything else.** For the whole bundle `PerplexityDecision` is replaced by `ScriptedPerplexityDecision`, a subclass that overrides only `SendRequest` (the driver's one network call): it records each request, answers with the quickstart's response, verbatim, only while a check arms it, and otherwise refuses with a `503` in Perplexity's error shape, so no check can reach api.perplexity.ai. PX5's selection legs register the shared `ScriptedDecision` over every decision driver class, as IT97 and IT100 do, and its failover leg registers `UnavailableDecision` (`src/checks/decision-fixtures.ts`) over every decision driver but Perplexity's. The prompt, model and vendor rows, candidate selection, credential resolution (a legacy `apiKeys` entry in PX3, a bound `MJ: Credentials` row in PX4 and PX5), the URL, header and body building, the answer mapping, `BaseDecision`'s validation, the failover loop and the `MJ: AI Prompt Runs` rows are all real.
+**No network, real everything else.** For the whole bundle `PerplexityDecision` is replaced by `ScriptedPerplexityDecision`, a subclass that overrides only `SendRequest` (the driver's one network call): it records each request, answers with the quickstart's response, verbatim, only while a check arms it, and otherwise refuses with a `503` in Perplexity's error shape, so no check can reach api.perplexity.ai. PX5's selection legs register the shared `ScriptedDecision` over every decision driver class, as IT97 and IT109 do, and its failover leg registers `UnavailableDecision` (`src/checks/decision-fixtures.ts`) over every decision driver but Perplexity's. The prompt, model and vendor rows, candidate selection, credential resolution (a legacy `apiKeys` entry in PX3, a bound `MJ: Credentials` row in PX4 and PX5), the URL, header and body building, the answer mapping, `BaseDecision`'s validation, the failover loop and the `MJ: AI Prompt Runs` rows are all real.
 
 **Transport.** Server-only by necessity: the stand-in is a ClassFactory registration in the test process.
 

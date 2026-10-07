@@ -26,7 +26,7 @@
  * `SendRequest`, the driver's one network call: it records each request, answers with Perplexity's
  * quickstart response only while a check arms it, and refuses otherwise, so no check can reach
  * api.perplexity.ai. PX5 registers the shared scripted decision driver over every decision driver class
- * for its selection legs, as IT97 and IT100 do, and `UnavailableDecision` over every other decision
+ * for its selection legs, as IT97 and IT109 do, and `UnavailableDecision` over every other decision
  * driver for its failover leg. Everything else is real: the prompt, model and vendor rows, candidate
  * selection, credential resolution (a legacy `apiKeys` entry in PX3, a bound `MJ: Credentials` row in
  * PX4 and PX5), the driver's URL, header and body building, the answer mapping, `BaseDecision`'s

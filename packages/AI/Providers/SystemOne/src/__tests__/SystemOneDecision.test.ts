@@ -214,6 +214,18 @@ describe('SystemOneDecision', () => {
       expect(result.errorMessage).toContain('SYSTEMONE_BASE_URL');
       expect(result.errorInfo).toEqual({ errorType: 'NoCredentials', severity: 'Retriable', canFailover: true });
     });
+
+    it('sends nothing to SYSTEMONE_BASE_URL when the credential starts with { but is not JSON', async () => {
+      // Before, the whole text, key and intended endpoint included, went to the variable's host as the token.
+      process.env[ENV_VAR] = 'http://env.example.test';
+      const calls = fakeFetch(() => jsonResponse(KEV_RESPONSE));
+      const result = await new SystemOneDecision('{"apiKey":"sk-123","endpoint":"https://s1.example",}').Decide(params());
+
+      expect(calls).toHaveLength(0);
+      expect(result.errorMessage).toContain('looks like JSON but does not parse');
+      expect(result.errorMessage).not.toContain('sk-123');
+      expect(result.errorInfo).toEqual({ errorType: 'NoCredentials', severity: 'Retriable', canFailover: true });
+    });
   });
 
   describe('the response', () => {

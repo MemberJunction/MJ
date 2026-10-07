@@ -76,6 +76,7 @@ One additional realtime primitive lives here that is *not* a `BaseModel` capabil
 | Export | Description |
 |--------|-------------|
 | `AIAPIKeys` / `GetAIAPIKey()` | API key resolution from environment variables (`AI_VENDOR_API_KEY__<DRIVER>`) with optional runtime overrides |
+| `AICredentialScope` / `CredentialScopeAllows()` | Which credential sources (`'Runtime'`, `'PlatformCredential'`, `'Environment'`) a run's scope (`'Any'` or `'RuntimeOnly'`) may use — the one place that decision is made |
 | `ErrorAnalyzer` | Classifies provider errors into structured types with severity, retry hints, and failover recommendations |
 | `AIErrorInfo` / `AIErrorType` | Structured error types: rate limit, authentication, context length, content filter, etc. |
 | `serializeMessageContent()` / `deserializeMessageContent()` | Content block serialization for database storage |
@@ -174,6 +175,9 @@ const key = GetAIAPIKey("OpenAILLM");
 const key2 = GetAIAPIKey("AnthropicLLM", [
     { driverClass: "AnthropicLLM", apiKey: "sk-ant-..." },
 ]);
+
+// Restricted to the runtime keys: no environment fallback for a class the list lacks
+const key3 = GetAIAPIKey("OpenAILLM", runKeys, false, 'RuntimeOnly'); // undefined unless runKeys has OpenAILLM
 ```
 
 ## Implementing a New Provider

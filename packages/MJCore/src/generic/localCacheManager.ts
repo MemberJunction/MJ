@@ -337,6 +337,18 @@ export interface CacheChangedEvent {
      * For `'removed'` and `'category_cleared'` actions, this is `undefined`.
      */
     Data?: string;
+
+    /**
+     * Monotonic counter shared by every server, incremented once per shared-cache mutation.
+     *
+     * For recovery rather than ordering: a subscriber that was disconnected cannot see what pub/sub
+     * did not replay, so it records the highest epoch it has seen and compares that with the current
+     * value on reconnect to learn whether anything was invalidated meanwhile.
+     *
+     * Optional — transports without the counter omit it, and consumers that do not reconcile can
+     * ignore it.
+     */
+    Epoch?: number;
 }
 
 // ============================================================================
@@ -1663,6 +1675,16 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         // existing cache entries are invalidated.
         if (params.IgnoreMaxRows === true) {
             parts.push('imr:1');
+        }
+
+        // Binary-width segment. Cached slots are fetched at full width, but "full width" leaves
+        // binary columns out unless the caller asks for them (RunViewParams.IncludeBinaryFields,
+        // set automatically by ProviderBase when a caller names a binary field in Fields). A slot
+        // without binary columns must never answer a request that needs them, so the two widths
+        // get separate slots. Appended only when true, so every existing fingerprint stays
+        // byte-for-byte identical.
+        if (params.IncludeBinaryFields === true) {
+            parts.push('bin:1');
         }
 
         // DataSource segment. RunViewParams.DataSource:'Materialized' routes the read to the entity's

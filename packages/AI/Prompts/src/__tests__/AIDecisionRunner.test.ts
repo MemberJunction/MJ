@@ -757,6 +757,33 @@ describe('AIDecisionRunner', () => {
     });
   });
 
+  it("7d. an LLMDecision driver carries the decision's execution scope, so its chat prompt spends the decision's credentials", () => {
+    const testUser = { ID: 'user-scope-1', Name: 'Scope User' } as unknown as UserInfo;
+    vi.mocked(MJGlobal.Instance.ClassFactory.CreateInstance).mockImplementation(
+      (_baseClass: unknown, _driverClass: string | null = null, ...args: unknown[]) =>
+        new LLMDecision(args[0] as string, args[1] as string, args[2] as UserInfo) as never
+    );
+    const apiKeys = [{ driverClass: 'GeminiLLM', apiKey: 'customer-key' }];
+    const params = new AIDecisionParams();
+    params.contextUser = testUser;
+    params.configurationId = 'config-1';
+    params.apiKeys = apiKeys;
+    params.CredentialScope = 'RuntimeOnly';
+    const candidate = { driverClass: LLM_DRIVER, apiName: 'Decision System Chat Prompt' };
+    const createDriver = (runner as unknown as {
+      createDriver(candidate: { driverClass: string; apiName: string }, apiKey: string, params: AIDecisionParams): BaseDecision | string;
+    }).createDriver.bind(runner);
+
+    const driver = createDriver(candidate, '', params);
+
+    expect(driver).toBeInstanceOf(LLMDecision);
+    const scope = (driver as LLMDecision).ExecutionScope;
+    expect(scope?.apiKeys).toBe(apiKeys);
+    expect(scope?.configurationId).toBe('config-1');
+    expect(scope?.CredentialScope).toBe('RuntimeOnly');
+    expect(scope?.contextUser).toBe(testUser);
+  });
+
   // 8. Driver dispatch and answer mapping: verifies Likelihood, Choice, and Score answers are correctly mapped into AIDecisionRunResult
   it('8. dispatches driver and maps Likelihood, Choice, and Score answers into AIDecisionRunResult', async () => {
     const prompt = makeDecisionPrompt();

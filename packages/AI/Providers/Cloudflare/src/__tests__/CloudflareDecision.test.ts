@@ -253,6 +253,16 @@ describe('CloudflareDecision', () => {
       expect(result.errorMessage).toMatch(/has no API token/);
       expect(result.errorInfo).toEqual({ errorType: 'NoCredentials', severity: 'Retriable', canFailover: true });
     });
+
+    it('fails without a request when the credential starts with { but is not JSON', async () => {
+      const calls = fakeFetch(() => jsonResponse(WRAPPED_RESPONSE));
+      const result = await new CloudflareDecision(`{"apiKey":"${COMPOUND_KEY}",}`).Decide(params());
+
+      expect(calls).toHaveLength(0);
+      expect(result.errorMessage).toContain('looks like JSON but does not parse');
+      expect(result.errorMessage).not.toContain(API_TOKEN);
+      expect(result.errorInfo).toEqual({ errorType: 'NoCredentials', severity: 'Retriable', canFailover: true });
+    });
   });
 
   describe('the base URL', () => {
@@ -330,6 +340,7 @@ describe('CloudflareDecision', () => {
       expect(result.success).toBe(false);
       expect(result.errorMessage).toBe('Cloudflare Workers AI reported a failure (HTTP 200): Error: oneOf at /questions/team not met');
       expect(result.Answers).toEqual({});
+      expect(result.errorInfo?.canFailover).toBe(true);
     });
 
     it('fails over when a wrapped success has no answers', async () => {

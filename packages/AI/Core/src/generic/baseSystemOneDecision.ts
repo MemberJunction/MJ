@@ -53,6 +53,11 @@ export interface SystemOneCredential {
     Endpoint?: string;
     /** The credential's `accountId`, when it has one. */
     AccountID?: string;
+    /**
+     * Set when the key starts with `{` but is not valid JSON. {@link APIKey} is then empty, so the
+     * credential's text is never sent as a token, and the call fails before any request.
+     */
+    ParseError?: string;
 }
 
 /**
@@ -75,7 +80,8 @@ export function IsSystemOneWireObject(value: unknown): value is SystemOneWireObj
 
 /**
  * Reads a decision driver's API key. A JSON object (what an AI Credential resolves to) gives its
- * `apiKey`, `endpoint` and `accountId` string values; anything else is the API key as given.
+ * `apiKey`, `endpoint` and `accountId` string values; text starting with `{` that does not parse gives
+ * an empty key and a {@link SystemOneCredential.ParseError}; anything else is the API key as given.
  */
 export function ParseSystemOneCredential(apiKey: string): SystemOneCredential {
     const raw = apiKey ?? '';
@@ -87,7 +93,8 @@ export function ParseSystemOneCredential(apiKey: string): SystemOneCredential {
     try {
         parsed = JSON.parse(trimmed);
     } catch {
-        return { APIKey: raw };
+        // The parser's own message is left out: it can quote the credential's text.
+        return { APIKey: '', ParseError: 'The credential looks like JSON but does not parse; fix the AI Credential\'s values' };
     }
     if (!IsSystemOneWireObject(parsed)) {
         return { APIKey: raw };
@@ -238,7 +245,8 @@ export abstract class BaseSystemOneDecision extends BaseDecision {
      */
     protected async DoDecide(params: DecisionParams): Promise<DecisionResult> {
         const startTime = new Date();
-        const configurationError = this.GetConfigurationError();
+        const parseError = this.Credential.ParseError;
+        const configurationError = parseError ? { ErrorType: 'NoCredentials' as const, Message: `${this.ServiceName}: ${parseError}` } : this.GetConfigurationError();
         if (configurationError) {
             return this.configurationFailure(configurationError, startTime);
         }

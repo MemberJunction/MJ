@@ -324,7 +324,7 @@ export class MJRubricFormComponentExtended extends MJRubricFormComponent {
             row.NewRecord();
             return true;
         }
-        const loaded = await row.InnerLoad(CompositeKey.FromID(id));
+        const loaded = await row.InnerLoad(CompositeKey.FromID(id)); // first-pk-ok: openRow only receives MJ: Rubric* core entities, all keyed on ID
         if (!loaded) throw new Error(`The ${label} was not found.`);
         return true;
     }

@@ -1,9 +1,9 @@
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
-import { LogError } from '@memberjunction/core';
+import { LogError, type BaseEntity } from '@memberjunction/core';
 import { ChatMessage } from '@memberjunction/ai';
-import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { AgentRunner } from '@memberjunction/ai-agents';
 import { AIEngine } from '@memberjunction/aiengine';
 
@@ -112,6 +112,9 @@ export class ExecuteAgentAction extends BaseAction {
                 agent: agent as MJAIAgentEntityExtended,
                 conversationMessages,
                 contextUser: params.ContextUser,
+                // The calling run's credential scope; see execute-ai-prompt. Without keys, a 'RuntimeOnly'
+                // nested run fails rather than spending the platform's.
+                CredentialScope: params.CredentialScope,
                 data,
                 conversationDetailId: conversationDetailId ?? undefined,
                 lastRunId: lastRunId ?? undefined,
@@ -122,7 +125,7 @@ export class ExecuteAgentAction extends BaseAction {
             // ---- Expose outputs for downstream action consumers ----
             this.setOutputParam(params, 'AgentRunID', runResult.agentRun?.ID ?? null);
             this.setOutputParam(params, 'Payload', runResult.payload ?? null);
-            this.setOutputParam(params, 'AgentResult', runResult);
+            this.setOutputParam(params, 'AgentResult', this.toStorableAgentResult(runResult));
 
             if (runResult.success) {
                 return {
@@ -150,6 +153,27 @@ export class ExecuteAgentAction extends BaseAction {
                 Message: `Error executing agent: ${message}`
             };
         }
+    }
+
+    /**
+     * The run result as plain data, for the `AgentResult` output param.
+     *
+     * Output params are DATA: a durable (task-graph) run stores them on the Task row as JSON. The run
+     * result carries live entities bound to the provider — `agentRun`, and the notes and examples in
+     * `memoryContext` when the agent injects memory — whose event plumbing is circular, so passing
+     * any of them through fails the task after the agent has already run. Their field values carry
+     * the same information; the entities themselves stay in-process.
+     */
+    private toStorableAgentResult(runResult: ExecuteAgentResult) {
+        const { memoryContext } = runResult;
+        return {
+            ...runResult,
+            agentRun: runResult.agentRun?.GetAll() ?? null,
+            memoryContext: memoryContext && {
+                notes: memoryContext.notes.map((note: BaseEntity) => note.GetAll()),
+                examples: memoryContext.examples.map((example: BaseEntity) => example.GetAll())
+            }
+        };
     }
 
     // ------------------------------------------------------------------------

@@ -156,6 +156,19 @@ describe.each(branches)('RealtimeClientSessionService key precedence — $name',
         expect(minted).toEqual([{ DriverClass: 'VoiceDriver', APIKey: 'sk-run' }]);
     });
 
+    it('RuntimeOnly: the session still mints on the run key it carries', async () => {
+        await new FunnelService().Resolve({ ...input(RUN_KEYS), CredentialScope: 'RuntimeOnly' }, config);
+        expect(minted).toEqual([{ DriverClass: 'VoiceDriver', APIKey: 'sk-run' }]);
+    });
+
+    it('RuntimeOnly: with no run key for the vendor, neither the environment nor the seam mints one', async () => {
+        const fromEnvironment = await new FunnelService().Resolve({ ...input(), CredentialScope: 'RuntimeOnly' }, config);
+        const fromSeam = await new SeamOverrideService(() => 'sk-vault').Resolve({ ...input(), CredentialScope: 'RuntimeOnly' }, config);
+        expect(fromEnvironment.Resolution).toBeUndefined();
+        expect(fromSeam.Resolution).toBeUndefined();
+        expect(minted).toEqual([]);
+    });
+
     it('selection and mint agree — a vendor the seam refuses is skipped, and the one it keys is minted on its key', async () => {
         // VoiceDriver outranks BackupDriver and is keyed by the environment. The seam refuses it and
         // keys BackupDriver from a vault, so selection must pass over VoiceDriver and the mint must
@@ -198,13 +211,14 @@ describe('probe: BaseAgent.StartBridgeRealtimeSession mints on the run\'s key', 
         );
     });
 
-    function start(apiKeys?: AIAPIKey[], data?: Record<string, unknown>): Promise<IRealtimeSession> {
+    function start(apiKeys?: AIAPIKey[], data?: Record<string, unknown>, CredentialScope?: ExecuteAgentParams['CredentialScope']): Promise<IRealtimeSession> {
         const params: ExecuteAgentParams = {
             agent: coAgent,
             conversationMessages: [],
             contextUser: { ID: 'u1' } as unknown as UserInfo,
             apiKeys,
-            data
+            data,
+            CredentialScope
         };
         return new BaseAgent().StartBridgeRealtimeSession(params);
     }
@@ -225,6 +239,11 @@ describe('probe: BaseAgent.StartBridgeRealtimeSession mints on the run\'s key', 
         expect(minted).toEqual([{ DriverClass: 'VoiceDriver', APIKey: 'sk-platform' }]);
     });
 
+    it('RuntimeOnly with no run keys → no session, even though the platform holds a key', async () => {
+        await expect(start(undefined, undefined, 'RuntimeOnly')).rejects.toThrow();
+        expect(minted).toEqual([]);
+    });
+
     it('no run keys, seam overridden → the override decides, not the environment', async () => {
         vi.spyOn(proto, 'getAPIKeyForDriver').mockReturnValue(undefined);
         await expect(start(undefined)).rejects.toThrow();
@@ -239,8 +258,8 @@ describe('probe: BaseAgent.StartBridgeRealtimeSession mints on the run\'s key', 
 /** The server-run realtime path (`executeRealtimeSession`) resolves in BaseAgent itself, with no seam. */
 describe('probe: BaseAgent.resolveRealtimeModel (server-run realtime session)', () => {
     class ProbeAgent extends BaseAgent {
-        public Resolve(apiKeys?: AIAPIKey[]) {
-            return this.resolveRealtimeModel({ agent: coAgent, conversationMessages: [], apiKeys });
+        public Resolve(apiKeys?: AIAPIKey[], CredentialScope?: ExecuteAgentParams['CredentialScope']) {
+            return this.resolveRealtimeModel({ agent: coAgent, conversationMessages: [], apiKeys, CredentialScope });
         }
     }
 
@@ -253,5 +272,10 @@ describe('probe: BaseAgent.resolveRealtimeModel (server-run realtime session)', 
     it('mints on the platform key with no run keys', async () => {
         await new ProbeAgent().Resolve();
         expect(minted).toEqual([{ DriverClass: 'VoiceDriver', APIKey: 'sk-platform' }]);
+    });
+
+    it('RuntimeOnly with no run keys → no model, not the platform key', async () => {
+        expect(await new ProbeAgent().Resolve(undefined, 'RuntimeOnly')).toBeNull();
+        expect(minted).toEqual([]);
     });
 });
