@@ -1,6 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseRealtimeClient } from '@memberjunction/ai-realtime-client';
+import { BaseRealtimeClient, REQUESTED_TRACKS_SESSION_KEY } from '@memberjunction/ai-realtime-client';
 import type { IMetadataProvider } from '@memberjunction/core';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import {
@@ -333,22 +335,97 @@ describe('session lifecycle, driven end to end with fakes', () => {
         expect(runtime.LastStartError).toBeNull();
         await runtime.EndRealtimeSession();
     });
+
+    describe('recording mixes the agent stream (#5153)', () => {
+        const agentStream = { getAudioTracks: () => [{}], getTracks: () => [] } as unknown as MediaStream;
+
+        /** A PCM-playback driver: publishes its playout output during Connect, as Gemini/ElevenLabs/xAI do. */
+        @RegisterClass(BaseRealtimeClient, 'fake-pcm-provider')
+        class FakePcmClient extends FakeRealtimeClient {
+            public override async Connect(): Promise<void> {
+                this.publishRemoteMediaStream(agentStream);
+            }
+        }
+
+        /** A WebRTC driver: the agent track lands after Connect resolves, as OpenAI's does. */
+        @RegisterClass(BaseRealtimeClient, 'fake-webrtc-provider')
+        class FakeWebRtcClient extends FakeRealtimeClient {
+            public static Last: FakeWebRtcClient | null = null;
+            public override async Connect(): Promise<void> {
+                FakeWebRtcClient.Last = this;
+            }
+            public LandTrack(stream: MediaStream): void {
+                this.publishRemoteMediaStream(stream);
+            }
+        }
+
+        it('hands a stream published at Connect to the recorder at Start', async () => {
+            expect(FakePcmClient).toBeDefined();
+            const host = new FakeMediaHost();
+            const { runtime } = build(host);
+            await runtime.StartRealtimeSessionFromResult(mintedSession('fake-pcm-provider'), { recordingConsent: true });
+
+            expect(host.recorder?.Start).toHaveBeenCalledTimes(1);
+            expect(host.recorder?.Start.mock.calls[0][1]).toBe(agentStream);
+            await runtime.EndRealtimeSession();
+        });
+
+        it('attaches a stream that lands after Connect to the recorder already running', async () => {
+            const host = new FakeMediaHost();
+            const { runtime } = build(host);
+            await runtime.StartRealtimeSessionFromResult(mintedSession('fake-webrtc-provider'), { recordingConsent: true });
+            expect(host.recorder?.Start.mock.calls[0][1]).toBeNull();
+
+            FakeWebRtcClient.Last?.LandTrack(agentStream);
+
+            expect(host.recorder?.AttachRemoteStream).toHaveBeenCalledWith(agentStream);
+            await runtime.EndRealtimeSession();
+        });
+    });
 });
 
 describe('channel registry on a connect-only provider (#4887)', () => {
     // Bracket access reaches the private method with its real return type, no cast needed.
     const fetchChannelDefinitions = (runtime: RealtimeSessionRuntime) => runtime['fetchChannelDefinitions']();
 
-    it('returns no channels without touching AIEngineBase when the provider has no entity metadata', async () => {
+    // A connect-only provider has no entity metadata, so AIEngineBase cannot load — but the embed
+    // still needs its channels: without them Whiteboard/Media tools never reach the mint and the
+    // agent loses them (seen live on Caliber's widget). The registry is read over GraphQL instead.
+    const registryRow = (Name: string, IsActive: boolean) => ({
+        Data: JSON.stringify({ ID: `id-${Name}`, Name, ClientPluginClass: `${Name}Channel`, IsActive }),
+    });
+
+    it('reads the ACTIVE registry rows over GraphQL, without touching AIEngineBase, when the provider has no entity metadata', async () => {
         const spy = vi.spyOn(AIEngineBase, 'GetProviderInstance');
+        const ExecuteGQL = vi.fn().mockResolvedValue({
+            RunDynamicView: { Success: true, Results: [registryRow('Whiteboard', true), registryRow('Retired', false)] },
+        });
         try {
             const runtime = new RealtimeSessionRuntime(new FakeMediaHost());
-            runtime.Provider = { Entities: [] } as never; // only Entities is read
+            runtime.Provider = { Entities: [], ExecuteGQL } as never; // Entities + ExecuteGQL are all it reads
 
-            await expect(fetchChannelDefinitions(runtime)).resolves.toEqual([]);
+            await expect(fetchChannelDefinitions(runtime)).resolves.toEqual([
+                { ID: 'id-Whiteboard', Name: 'Whiteboard', ClientPluginClass: 'WhiteboardChannel' },
+            ]);
+            expect(ExecuteGQL).toHaveBeenCalledTimes(1);
+            expect(ExecuteGQL.mock.calls[0][1]).toMatchObject({ input: { EntityName: 'MJ: AI Agent Channels' } });
             expect(spy).not.toHaveBeenCalled();
         } finally {
             spy.mockRestore();
+        }
+    });
+
+    it('degrades to no channels, with a warning, when the GraphQL registry read fails', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const ExecuteGQL = vi.fn().mockResolvedValue({ RunDynamicView: { Success: false, ErrorMessage: 'denied', Results: [] } });
+        try {
+            const runtime = new RealtimeSessionRuntime(new FakeMediaHost());
+            runtime.Provider = { Entities: [], ExecuteGQL } as never;
+
+            await expect(fetchChannelDefinitions(runtime)).resolves.toEqual([]);
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining('Channel registry unavailable'), expect.stringContaining('denied'));
+        } finally {
+            warn.mockRestore();
         }
     });
 
@@ -367,5 +444,29 @@ describe('channel registry on a connect-only provider (#4887)', () => {
             spy.mockRestore();
             warn.mockRestore();
         }
+    });
+});
+
+describe('BuildClientConfig: the requested-tracks key has one home', () => {
+    // The drivers read the hint (Gemini) and strip it before the wire (OpenAI-protocol) through
+    // REQUESTED_TRACKS_SESSION_KEY; the writer must use the same constant, or a rename on either
+    // side silently breaks track negotiation and re-leaks the hint into OpenAI's session.update.
+    const session = (SessionConfigJson: string): StartRealtimeClientSessionResult =>
+        ({ AgentSessionId: 's', ConversationId: null, Provider: 'gemini', Model: 'm', EphemeralToken: 't', ExpiresAt: 'x', SessionConfigJson, ModelName: null }) as StartRealtimeClientSessionResult;
+
+    it('writes channel-sourced tracks under REQUESTED_TRACKS_SESSION_KEY, keeping the mint-supplied ones', () => {
+        const runtime = new RealtimeSessionRuntime(new FakeMediaHost());
+        const video = { Direction: 'Inbound', Modality: 'Video' } as const;
+        runtime['_activeChannels$'].next([{ GetSourcedTracks: () => [video] } as never]);
+        const minted = { Direction: 'Outbound', Modality: 'Video' };
+        const config = runtime.BuildClientConfig(session(JSON.stringify({ [REQUESTED_TRACKS_SESSION_KEY]: [minted] })));
+        const tracks = config.SessionConfig?.[REQUESTED_TRACKS_SESSION_KEY] as Array<{ Direction: string; Modality: string }>;
+        expect(tracks).toEqual(expect.arrayContaining([expect.objectContaining(video), expect.objectContaining(minted)]));
+    });
+
+    it('never spells the key as a string literal in the runtime source', () => {
+        const source = readFileSync(fileURLToPath(new URL('../session/RealtimeSessionRuntime.ts', import.meta.url)), 'utf8');
+        expect(source.length).toBeGreaterThan(0);
+        expect(source).not.toMatch(/['"`]requestedTracks['"`]/);
     });
 });

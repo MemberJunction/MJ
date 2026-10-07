@@ -81,7 +81,32 @@
     <div class="mj-forms-panel-content"
          #panelContent
          [style.height.px]="PanelContentHeight">
+      <!-- Contributions drawn inside this section: one host above the fields, one below. A
+           panel standing in for fields draws in their place; one placed in the section by its
+           key replaces nothing. -->
+      @if (HostsFieldPanels) {
+        <mj-form-field-panel-slot
+          [Entity]="FieldPanelEntity"
+          [FieldNames]="ClaimableFieldNames"
+          [SectionKey]="SectionKey"
+          Position="start"
+          [Record]="FieldPanelForm!.record"
+          [FormComponent]="FieldPanelForm!"
+          [FormContext]="FormContext">
+        </mj-form-field-panel-slot>
+      }
       <ng-content></ng-content>
+      @if (HostsFieldPanels) {
+        <mj-form-field-panel-slot
+          [Entity]="FieldPanelEntity"
+          [FieldNames]="ClaimableFieldNames"
+          [SectionKey]="SectionKey"
+          Position="end"
+          [Record]="FieldPanelForm!.record"
+          [FormComponent]="FieldPanelForm!"
+          [FormContext]="FormContext">
+        </mj-form-field-panel-slot>
+      }
     </div>
   </div>
 </div>

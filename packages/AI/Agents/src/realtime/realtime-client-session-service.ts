@@ -42,6 +42,8 @@ import {
     GetAIAPIKey,
     AIAPIKey,
     AIAPIKeyResolver,
+    AICredentialScope,
+    CredentialScopeAllows,
     IRealtimeSession,
     JSONObject,
     RealtimeSessionParams,
@@ -94,6 +96,24 @@ import {
 import { SelectRealtimeVendorForModel, RealtimeVendorSelection } from './realtime-vendor-resolution';
 
 /**
+ * Context passed to {@link PrepareClientSessionInput.ResolveHostTools} describing the
+ * model, vendor, and driver resolved for the realtime session.
+ */
+export interface RealtimeHostToolsResolutionContext {
+    /** The resolved model entity ID. */
+    ModelID?: string;
+    /** The resolved model vendor ID, if known. */
+    ModelVendorID?: string;
+    /** The resolved realtime driver class name (e.g. 'OpenAILiveRealtime'). */
+    DriverClass?: string;
+}
+
+/**
+ * Resolver callback signature for dynamically resolving host tools prior to session start.
+ */
+export type RealtimeHostToolsResolver = (resolved: RealtimeHostToolsResolutionContext) => RealtimeToolDefinition[] | undefined;
+
+/**
  * Input for {@link RealtimeClientSessionService.PrepareClientSession}.
  *
  * The co-agent may be supplied either as a fully-loaded entity (`CoAgent`) or by id (`CoAgentID`),
@@ -112,6 +132,13 @@ export interface PrepareClientSessionInput {
      * client-initiated session today.
      */
     APIKeys?: AIAPIKey[];
+    /**
+     * The run's credential scope (`ExecuteAgentParams.CredentialScope`). `'RuntimeOnly'` makes
+     * {@link PrepareClientSessionInput.APIKeys} the whole key chain: a vendor they do not key is not
+     * selected, and the {@link RealtimeClientSessionService.getAPIKeyForDriver} seam (by default the
+     * platform's environment key) is never consulted. Absent ⇒ `'Any'`.
+     */
+    CredentialScope?: AICredentialScope;
     /** The Realtime Co-Agent entity. Provide this OR {@link PrepareClientSessionInput.CoAgentID}. */
     CoAgent?: MJAIAgentEntityExtended;
     /** The Realtime Co-Agent id (resolved from cached metadata). Provide this OR {@link PrepareClientSessionInput.CoAgent}. */
@@ -145,6 +172,11 @@ export interface PrepareClientSessionInput {
      * local tool handler ({@link BridgeRealtimeRuntime.SetLocalToolHandler}).
      */
     HostTools?: RealtimeToolDefinition[];
+    /**
+     * Optional callback that allows the host to resolve host tools dynamically based on
+     * the model, vendor, and driver actually resolved for the session, before session opening.
+     */
+    ResolveHostTools?: RealtimeHostToolsResolver;
     /**
      * Host-authored instructions appended to the system prompt (e.g. "this is an audio-only phone call …",
      * the caller's number and verification status). Empty/absent adds nothing.
@@ -939,8 +971,21 @@ export class RealtimeClientSessionService {
         }
         const resolution = outcome.Resolution;
 
+        let hostTools = input.HostTools;
+        if (input.ResolveHostTools) {
+            const dynamicHostTools = input.ResolveHostTools({
+                ModelID: resolution.ModelID,
+                ModelVendorID: resolution.ModelVendorID,
+                DriverClass: resolution.DriverClass,
+            });
+            if (dynamicHostTools !== undefined) {
+                hostTools = dynamicHostTools;
+            }
+        }
+
+        const effectiveInput = hostTools !== input.HostTools ? { ...input, HostTools: hostTools } : input;
         const sessionParams = await this.buildSessionParams(
-            input, coAgent, resolution.APIName, contextUser, provider, effectiveConfig, resolution.DriverClass,
+            effectiveInput, coAgent, resolution.APIName, contextUser, provider, effectiveConfig, resolution.DriverClass,
             resolution.ModelID, resolution.ModelVendorID,
         );
 
@@ -1770,14 +1815,15 @@ export class RealtimeClientSessionService {
         // A resolver that fell back to the environment itself would answer before the seam, so a
         // subclass that overrides the seam would lose to AI_VENDOR_API_KEY__<driver>.
         const resolveRunKey = this.buildRunKeyResolver(input.APIKeys);
+        const scope = input.CredentialScope ?? 'Any';
         if (input.PreferredModelID) {
-            return this.resolvePreferredRealtimeModel(input.PreferredModelID, resolveRunKey);
+            return this.resolvePreferredRealtimeModel(input.PreferredModelID, resolveRunKey, scope);
         }
-        const fromConfig = this.resolveConfiguredModelPreference(effectiveConfig, resolveRunKey);
+        const fromConfig = this.resolveConfiguredModelPreference(effectiveConfig, resolveRunKey, scope);
         if (fromConfig) {
             return { Resolution: fromConfig };
         }
-        const resolution = await this.resolveRealtimeModel(coAgent, resolveRunKey);
+        const resolution = await this.resolveRealtimeModel(coAgent, resolveRunKey, scope);
         return resolution ? { Resolution: resolution } : { ErrorMessage: this.noModelMessage() };
     }
 
@@ -1803,9 +1849,10 @@ export class RealtimeClientSessionService {
      *
      * @param effectiveConfig The resolved effective configuration.
      * @param resolve The session's run-scoped key resolver (run keys only; see {@link resolveVendorAndInstantiate}).
+     * @param credentialScope The session's credential scope; see {@link resolveVendorAndInstantiate}.
      * @returns The resolution, or `null` when no preference is configured or it can't be satisfied.
      */
-    protected resolveConfiguredModelPreference(effectiveConfig?: RealtimeCoAgentConfig, resolve?: AIAPIKeyResolver): RealtimeModelResolution | null {
+    protected resolveConfiguredModelPreference(effectiveConfig?: RealtimeCoAgentConfig, resolve?: AIAPIKeyResolver, credentialScope: AICredentialScope = 'Any'): RealtimeModelResolution | null {
         const preference = effectiveConfig?.realtime?.modelPreference;
         if (!preference) {
             return null;
@@ -1825,7 +1872,7 @@ export class RealtimeClientSessionService {
             );
             return null;
         }
-        const resolution = this.resolveVendorAndInstantiate(model, resolve);
+        const resolution = this.resolveVendorAndInstantiate(model, resolve, credentialScope);
         if (!resolution) {
             LogError(
                 `RealtimeClientSessionService: configured realtime model preference '${model.Name}' has no usable ` +
@@ -1863,9 +1910,10 @@ export class RealtimeClientSessionService {
      *
      * @param preferredModelID The `MJ: AI Models.ID` the user chose.
      * @param resolve The session's run-scoped key resolver (run keys only; see {@link resolveVendorAndInstantiate}).
+     * @param credentialScope The session's credential scope; see {@link resolveVendorAndInstantiate}.
      * @returns The resolution outcome (resolution or a specific failure reason).
      */
-    protected resolvePreferredRealtimeModel(preferredModelID: string, resolve?: AIAPIKeyResolver): RealtimeModelResolutionOutcome {
+    protected resolvePreferredRealtimeModel(preferredModelID: string, resolve?: AIAPIKeyResolver, credentialScope: AICredentialScope = 'Any'): RealtimeModelResolutionOutcome {
         const model = this.findModelByID(preferredModelID);
         if (!model) {
             return { ErrorMessage: `The requested realtime model (id '${preferredModelID}') was not found in AI model metadata.` };
@@ -1876,7 +1924,7 @@ export class RealtimeClientSessionService {
         if (!this.isRealtimeModel(model)) {
             return { ErrorMessage: `The requested model '${model.Name}' is not a Realtime model (its type is '${model.AIModelType}').` };
         }
-        const resolution = this.resolveVendorAndInstantiate(model, resolve);
+        const resolution = this.resolveVendorAndInstantiate(model, resolve, credentialScope);
         if (!resolution) {
             return {
                 ErrorMessage:
@@ -1913,9 +1961,10 @@ export class RealtimeClientSessionService {
      *
      * @param coAgent The co-agent being voiced (reserved for future per-agent model preference).
      * @param resolve The session's run-scoped key resolver (run keys only; see {@link resolveVendorAndInstantiate}).
+     * @param credentialScope The session's credential scope; see {@link resolveVendorAndInstantiate}.
      * @returns The resolved model + identifiers, or `null`.
      */
-    protected async resolveRealtimeModel(coAgent: MJAIAgentEntityExtended, resolve?: AIAPIKeyResolver): Promise<RealtimeModelResolution | null> {
+    protected async resolveRealtimeModel(coAgent: MJAIAgentEntityExtended, resolve?: AIAPIKeyResolver, credentialScope: AICredentialScope = 'Any'): Promise<RealtimeModelResolution | null> {
         // Walk candidates in descending PowerRank, returning the FIRST that fully resolves to a usable
         // client-direct driver (active vendor + API key + ClassFactory driver + SupportsClientDirect).
         // Single-pick dead-ended whenever the highest-power model lacked a key or client-direct support
@@ -1923,7 +1972,7 @@ export class RealtimeClientSessionService {
         // surfaced "No usable Realtime model" instead of falling through to a model that works.
         const candidates = this.selectRealtimeModelCandidates(coAgent);
         for (const model of candidates) {
-            const resolution = this.resolveVendorAndInstantiate(model, resolve);
+            const resolution = this.resolveVendorAndInstantiate(model, resolve, credentialScope);
             if (resolution && resolution.Model.SupportsClientDirect) {
                 return resolution;
             }
@@ -1943,12 +1992,18 @@ export class RealtimeClientSessionService {
      * @param resolve The session's run-scoped key resolver. Expected to answer with run keys only:
      *   one that falls back to the environment itself answers before {@link getAPIKeyForDriver} and
      *   so bypasses an override of it.
+     * @param credentialScope A scope that rules out the `'Environment'` source (`'RuntimeOnly'`) drops the
+     *   {@link getAPIKeyForDriver} seam: the run's keys are the whole chain, so a vendor they do not key
+     *   is never selected on the platform's key.
      * @returns The full resolution, or `null` when no vendor/key/driver can be satisfied.
      */
-    protected resolveVendorAndInstantiate(model: MJAIModelEntityExtended, resolve?: AIAPIKeyResolver): RealtimeModelResolution | null {
+    protected resolveVendorAndInstantiate(model: MJAIModelEntityExtended, resolve?: AIAPIKeyResolver, credentialScope: AICredentialScope = 'Any'): RealtimeModelResolution | null {
         // The run's keys first, then this service's own seam (which subclasses and tests override) —
         // so a run-scoped credential wins without taking that seam away from anyone who replaced it.
-        const resolveKey: AIAPIKeyResolver = (driverClass) => resolve?.(driverClass) ?? this.getAPIKeyForDriver(driverClass);
+        // A scope that rules out the environment has no second step: the seam's default is the platform key.
+        const resolveKey: AIAPIKeyResolver = CredentialScopeAllows(credentialScope, 'Environment')
+            ? (driverClass) => resolve?.(driverClass) ?? this.getAPIKeyForDriver(driverClass)
+            : (driverClass) => resolve?.(driverClass);
         const vendor = this.selectRealtimeVendor(model.ID, resolveKey);
         if (!vendor) {
             return null;
