@@ -988,6 +988,25 @@ describe('per-model Live legality', () => {
         });
     });
 
+    describe('full-duplex capability — what a room\'s floor gate keys on', () => {
+        it('reports the 3.8 models as full-duplex (proactive audio is permanently on)', async () => {
+            const session = await new TestGeminiRealtime('k').StartSession(makeParams({ Model: 'gemini-3.8-live' }));
+            expect(session.Capabilities?.FullDuplex).toBe(true);
+        });
+
+        it('reports the 3.1 preview as turn-based', async () => {
+            const session = await new TestGeminiRealtime('k').StartSession(makeParams({ Model: 'gemini-3.1-flash-live-preview' }));
+            expect(session.Capabilities?.FullDuplex).toBe(false);
+        });
+
+        it('reports a 3.8 session in MEETING mode as turn-based: its activity detection is off, so the bridge drives turns', async () => {
+            const session = await new TestGeminiRealtime('k').StartSession(
+                makeParams({ Model: 'gemini-3.8-live', Config: { disableAutoResponse: true } })
+            );
+            expect(session.Capabilities?.FullDuplex).toBe(false);
+        });
+    });
+
     describe('C3 — thinking level per model', () => {
         it('omits thinkingConfig ENTIRELY for gemini-3.8-live, as its model page instructs', async () => {
             const d = new TestGeminiRealtime('k');
