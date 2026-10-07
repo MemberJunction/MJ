@@ -7,7 +7,7 @@ import { PageRecordsParams, VectorBase } from '@memberjunction/ai-vectors';
 import { BaseEntity, CompositeKey, EntityField, EntityFieldInfo, EntityInfo, IMetadataProvider, LogError, LogStatus, LogStatusEx, Metadata, RunView, RunViewResult, UserInfo } from '@memberjunction/core';
 import { MJAIModelEntity, MJEntityDocumentEntity, MJEntityDocumentTypeEntity, MJEntityRecordDocumentEntity, MJTemplateContentEntity,
   MJTemplateContentTypeEntity, MJTemplateEntity, MJTemplateEntityExtended, MJTemplateParamEntity, MJVectorDatabaseEntity, MJVectorIndexEntity } from '@memberjunction/core-entities';
-import { IsValidUUID, MJGlobal, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { Float32VectorToBase64, IsValidUUID, MJGlobal, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { pipeline } from 'node:stream/promises';
 import { EmbeddingData, TemplateParamData, VectorEmeddingData, VectorizeEntityParams, VectorizeEntityResponse, VectorizeProgressUpdate } from '../generic/vectorSync.types';
 import { EntityDocumentConfiguration, EntityDocumentMetadataConfig, EntityDocumentFieldConfig } from '../generic/entityDocumentConfig.types';
@@ -157,7 +157,7 @@ export class EntityVectorSyncer extends VectorBase {
     const vectorIndexProviderConfig = this.parseProviderConfig(vectorIndexEntity.ProviderConfig);
 
     const vectorUpserter = this.createVectorUpserter(
-      entityDocument, templateContent, obj.vectorDB, vectorIndexEntity.Name, delayTimeMS,
+      entityDocument, templateContent, obj.vectorDB, AIEngine.Instance.GetProviderIndexName(vectorIndexEntity), delayTimeMS,
       params.UpsertBatchCount || pipelineConfig?.upsertBatchSize,
       vectorIndexProviderConfig
     );
@@ -760,7 +760,7 @@ export class EntityVectorSyncer extends VectorBase {
     const idStrategy = docConfig.vectorIdStrategy ?? 'hash';
 
     // Short-circuit for read-only providers (e.g. SimpleVectorServiceProvider,
-    // which reads vectors directly from MJ: Entity Record Documents.VectorJSON
+    // which reads vectors directly from MJ: Entity Record Documents.VectorBinary / VectorJSON
     // — there is no remote store to upsert into). Still stamp VectorIDs on the
     // batch so the downstream ERD upserter has consistent record IDs to write.
     if (vectorDB.IsReadOnly) {
@@ -1181,7 +1181,7 @@ export class EntityVectorSyncer extends VectorBase {
 
   /**
    * Resolves the VectorIndex for the given EntityDocument by looking up its VectorIndexID
-   * using the cached KnowledgeHubMetadataEngine. If VectorIndexID is not set on the
+   * using the AIEngine vector index cache. If VectorIndexID is not set on the
    * EntityDocument, throws a descriptive error instructing the user to configure it.
    */
   private getVectorIndexForEntityDocument(entityDocument: MJEntityDocumentEntity): MJVectorIndexEntity {
@@ -1193,7 +1193,7 @@ export class EntityVectorSyncer extends VectorBase {
       );
     }
 
-    const vectorIndex = KnowledgeHubMetadataEngine.Instance.GetVectorIndexByID(entityDocument.VectorIndexID);
+    const vectorIndex = AIEngine.Instance.GetVectorIndexByID(entityDocument.VectorIndexID);
     if (!vectorIndex) {
       throw new Error(
         `Vector Index with ID "${entityDocument.VectorIndexID}" not found for Entity Document "${entityDocument.Name}". ` +
@@ -1476,9 +1476,9 @@ export class EntityVectorSyncer extends VectorBase {
     contextUser: UserInfo
   ): Promise<void> {
     const vectorIndexID: string = String(embeddingData.VectorIndexID);
-    const vectorIndex = KnowledgeHubMetadataEngine.Instance.GetVectorIndexByID(vectorIndexID);
+    const vectorIndex = AIEngine.Instance.GetVectorIndexByID(vectorIndexID);
     if (!vectorIndex) {
-      LogError(`Vector Index with ID ${vectorIndexID} not found in KnowledgeHubMetadataEngine cache`);
+      LogError(`Vector Index with ID ${vectorIndexID} not found in AIEngine cache`);
       return;
     }
 
@@ -1497,7 +1497,10 @@ export class EntityVectorSyncer extends VectorBase {
     erdEntity.RecordID = recordID;
     erdEntity.DocumentText = embeddingData.TemplateContent ?? null;
     erdEntity.VectorID = embeddingData.VectorID != null ? String(embeddingData.VectorID) : null;
+    // Both persisted forms: JSON for readers that predate the binary column, float32 bytes (base64) for
+    // readers that prefer a copy over a parse (SimpleVectorServiceProvider, clustering).
     erdEntity.VectorJSON = JSON.stringify(embeddingData.Vector);
+    erdEntity.VectorBinary = Float32VectorToBase64(embeddingData.Vector);
     erdEntity.VectorIndexID = vectorIndexID;
     erdEntity.EntityRecordUpdatedAt = new Date();
     erdEntity.EntityDocumentID = entityDocumentID;

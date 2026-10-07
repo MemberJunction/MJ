@@ -16,10 +16,12 @@ When creating or editing metadata JSON files, **NEVER** include the following fi
 The `sync` blocks will be automatically added/updated when `mj sync push` runs.
 
 ### 1b. Release-Time Metadata Sync — NO Per-PR Metadata_Sync Migrations
+**Installs receive metadata only through migrations, and individual PRs never ship metadata migration SQL** (so reviewers should not flag its absence). The full model, the Open App recipe, and how to diagnose rows missing after a fresh install: [Release Metadata Migrations](../guides/RELEASE_METADATA_MIGRATIONS_GUIDE.md).
+
 **Do NOT hand-author `*__Metadata_Sync.sql` migrations for metadata changes** (new AI models, prompts, agents, etc.). The release workflow is:
 
 1. PRs contribute ONLY the declarative metadata JSON changes (fields + `@lookup` refs + `uuidgen` primaryKey, no `sync`).
-2. At build time, the build engineer takes all merged PRs on `next` and runs `mj sync push` against a clean DB at the last released version.
+2. At build time, the build engineer starts from a clean DB at the last released version, runs `mj migrate` to apply every migration merged to `next` since that release, then runs `mj sync push`. The build engineer does **not** run CodeGen: each developer's PR already carries its migration plus its CodeGen output (SQL and generated code), and CodeGen is idempotent, so rerunning it is a wasted no-op.
 3. That push generates ONE consolidated metadata-sync migration for the release (SQL Server + PostgreSQL) and writes the `sync` blocks back into the JSON files.
 4. **Post-Sync Verification**: After applying a new `Metadata_Sync` migration to a from-nothing database, verify that `SELECT COUNT(*) FROM [__mj].[EntityField] WHERE ID IN (<ids in file>)` matches the count of `-- Save MJ: Entity Fields` blocks. `spUpdateEntityField` is a full-row procedure that silently no-ops when an ID is absent rather than throwing a SQL error.
 
@@ -64,6 +66,16 @@ All agents in MemberJunction currently use the "Loop" agent type, which provides
 - **AgentID**: Use `@parent:ID` when nested under agent
 - **ActionID**: Reference to action using `@lookup:`
 - **Status**: Typically "Active"
+
+#### AI Agent Rubrics
+Nest under the agent as `relatedEntities["MJ: AI Agent Rubrics"]`.
+- **AgentID**: `@parent:ID`
+- **RubricID**: `@lookup:MJ: Rubrics.Name=...` for a rubric authored under `metadata/rubrics/`
+- **Purpose**: `Evaluation`, `SelfCheck`, or `ProductionSampling`
+- **IsDefault**: true for the rubric used when a caller does not name one
+- **Status**: `Active` or `Disabled`
+- **PassThreshold**, **SampleRate**, **MaxSelfCheckAttempts**, **EvaluatorConfig**: optional overrides
+- **primaryKey**: a UUID from `uuidgen`. Do not add a `sync` block.
 
 #### AI Prompts
 - **Name**: Unique prompt name

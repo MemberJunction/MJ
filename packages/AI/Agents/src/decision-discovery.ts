@@ -289,7 +289,10 @@ export function FailedDecisionDiscovery(reason: string): DecisionDiscoveryOutcom
     return { Injected: false, Succeeded: false, Reason: reason };
 }
 
-/** Whether decision discovery is on in merged agent-type prompt params. Only `true` turns it on. */
+/**
+ * Whether the `decisionDiscovery` setting is on in merged agent-type prompt params. Only `true` turns it
+ * on. Discovery runs only when the master switch, `decisionsEnabled`, is on as well: `BaseAgent` checks both.
+ */
 export function IsDecisionDiscoveryOn(promptParams: Record<string, unknown> | undefined): boolean {
     return promptParams?.decisionDiscovery === true;
 }

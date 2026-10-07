@@ -19,7 +19,8 @@ import {
   RealtimeClientState,
   RealtimeClientToolCall,
   RealtimeClientTranscript,
-  RealtimeClientUsage
+  RealtimeClientUsage,
+  REQUESTED_TRACKS_SESSION_KEY
 } from '@memberjunction/ai-realtime-client';
 import { BuildNarrationInstructions } from '../narration/narration-template';
 import { ParseDelegationResultJson, ParsedDelegationArtifact, FormatToolName } from './delegation-result-parser';
@@ -1313,9 +1314,11 @@ export class RealtimeSessionRuntime {
       this.currentTurnStartMs = recorder.IsRecording ? 0 : null;
       this.turnAudioStartCaptured = false;
       if (this.recorder) {
-        // The agent's WebRTC audio track usually lands AFTER Connect() resolves, so `remoteStream`
-        // above is typically null and we'd capture mic-only. Attach the agent stream whenever it
-        // arrives (fires immediately if already present) so the recording includes the agent voice.
+        // WebRTC drivers (OpenAI): the agent's track usually lands AFTER Connect() resolves, so
+        // `remoteStream` above is null here and this handler attaches it later. PCM-playback
+        // drivers (Gemini, ElevenLabs, AssemblyAI, xAI, HuggingFace) publish at Connect, so
+        // `remoteStream` is already set and the handler fires immediately with the same stream;
+        // AttachRemoteStream is idempotent, so it is mixed only once.
         client.OnRemoteMediaStream?.((stream) => this.recorder?.AttachRemoteStream(stream));
         this.startSegmentFlushing();
       }
@@ -1524,18 +1527,19 @@ export class RealtimeSessionRuntime {
   }
 
   /**
-   * Reads the ACTIVE `MJ: AI Agent Channels` rows from {@link AIEngineBase}'s cached
-   * `AgentChannels` (provider-scoped engine instance, lazy `Config` — no RunView
-   * round-trip; the engine's BaseEntity-event reactivity keeps the registry fresh).
-   * Failures are logged and degrade to an empty list — channel availability must
-   * never block the voice session.
+   * Reads the ACTIVE `MJ: AI Agent Channels` rows. With entity metadata: from {@link AIEngineBase}'s
+   * cached `AgentChannels` (provider-scoped engine instance, lazy `Config` — no RunView round-trip;
+   * the engine's BaseEntity-event reactivity keeps the registry fresh). On a connect-only provider:
+   * one `RunDynamicView` query ({@link fetchChannelDefinitionsOverGraphQL}). Failures are logged and
+   * degrade to an empty list — channel availability must never block the voice session.
    */
   private async fetchChannelDefinitions(): Promise<RealtimeChannelDefinitionRow[]> {
     // A connect-only provider (ConnectGraphQLClient — anonymous embeds) has no entity metadata,
     // so AIEngineBase cannot load; asking it would only fail with "Entity … not found in
-    // metadata". An embed brings its own channels, so "no registry channels" is the right answer.
+    // metadata". The registry is still the authority, so read it over GraphQL instead — answering
+    // "no channels" here cost an embed every channel tool (Whiteboard, Media) at mint.
     if ((this.Provider?.Entities?.length ?? 0) === 0) {
-      return [];
+      return this.fetchChannelDefinitionsOverGraphQL();
     }
     try {
       const engine = AIEngineBase.GetProviderInstance<AIEngineBase>(this.Provider, AIEngineBase) as AIEngineBase;
@@ -1545,6 +1549,35 @@ export class RealtimeSessionRuntime {
         .map<RealtimeChannelDefinitionRow>(c => ({ ID: c.ID, Name: c.Name, ClientPluginClass: c.ClientPluginClass }));
     } catch (error) {
       console.warn('[RealtimeSession] Channel registry unavailable — starting with no channels:', error);
+      return [];
+    }
+  }
+
+  /**
+   * The connect-only path of {@link fetchChannelDefinitions}: the same ACTIVE `MJ: AI Agent Channels`
+   * rows, read with a dynamic view because a connect-only client has no entity metadata to build a
+   * typed RunView from. Same tolerance as the engine path — a failure is logged and means "no
+   * channels", never a blocked session.
+   */
+  private async fetchChannelDefinitionsOverGraphQL(): Promise<RealtimeChannelDefinitionRow[]> {
+    const query = `query RealtimeChannelRegistry($input: RunDynamicViewInput!) {
+      RunDynamicView(input: $input) { Success ErrorMessage Results { Data } }
+    }`;
+    try {
+      const result = (await this.gql().ExecuteGQL(query, {
+        input: { EntityName: 'MJ: AI Agent Channels', ExtraFilter: 'IsActive = 1', Fields: ['ID', 'Name', 'ClientPluginClass', 'IsActive'] },
+      })) as { RunDynamicView?: { Success: boolean; ErrorMessage?: string; Results?: { Data: string }[] } } | null;
+      const view = result?.RunDynamicView;
+      if (!view?.Success) {
+        console.warn('[RealtimeSession] Channel registry unavailable — starting with no channels:', view?.ErrorMessage ?? 'no result');
+        return [];
+      }
+      return (view.Results ?? [])
+        .map((r) => JSON.parse(r.Data) as RealtimeChannelDefinitionRow & { IsActive?: boolean })
+        .filter((row) => row.IsActive === true)
+        .map<RealtimeChannelDefinitionRow>((row) => ({ ID: row.ID, Name: row.Name, ClientPluginClass: row.ClientPluginClass }));
+    } catch (error) {
+      console.warn('[RealtimeSession] Channel registry unavailable — starting with no channels:', error instanceof Error ? error.message : String(error));
       return [];
     }
   }
@@ -1873,20 +1906,20 @@ export class RealtimeSessionRuntime {
 
   /**
    * Builds the client-direct session config the realtime client connects with.
-   * Aggregates tracks sourced by active channels into `requestedTracks` so the driver
+   * Aggregates tracks sourced by active channels under {@link REQUESTED_TRACKS_SESSION_KEY} so the driver
    * can negotiate them (e.g., establishing inbound video streaming for Whiteboard / RemoteBrowser).
    */
   public BuildClientConfig(session: StartRealtimeClientSessionResult): ClientRealtimeSessionConfig {
     const sessionConfig = this.parseSessionConfig(session.SessionConfigJson);
     const channelTracks = this._activeChannels$.value.flatMap((c) => c.GetSourcedTracks());
     if (channelTracks.length > 0) {
-      // `requestedTracks` crosses a JSON boundary — the driver reads it back out of the session
+      // The requested tracks cross a JSON boundary — the driver reads them back out of the session
       // config bag (`GeminiRealtimeClient.parseSessionConfig`). A `RealtimeTrackDescriptor` is NOT
       // structurally a `JSONValue`: it has no index signature and `UsageBasis` is readonly, so the
       // conversion is written out rather than asserted. Dedupe key and precedence are unchanged —
       // audio floor first, then anything the mint supplied, then the channels' own tracks.
-      const existing: readonly JSONValue[] = Array.isArray(sessionConfig['requestedTracks'])
-        ? sessionConfig['requestedTracks']
+      const existing: readonly JSONValue[] = Array.isArray(sessionConfig[REQUESTED_TRACKS_SESSION_KEY])
+        ? sessionConfig[REQUESTED_TRACKS_SESSION_KEY]
         : [];
       const trackMap = new Map<string, JSONValue>();
       for (const t of DEFAULT_REALTIME_AUDIO_TRACKS) {
@@ -1901,7 +1934,7 @@ export class RealtimeSessionRuntime {
       for (const t of channelTracks) {
         trackMap.set(`${t.Direction}:${t.Modality}`, trackDescriptorToJSON(t));
       }
-      sessionConfig['requestedTracks'] = Array.from(trackMap.values());
+      sessionConfig[REQUESTED_TRACKS_SESSION_KEY] = Array.from(trackMap.values());
     }
     return {
       Provider: session.Provider,

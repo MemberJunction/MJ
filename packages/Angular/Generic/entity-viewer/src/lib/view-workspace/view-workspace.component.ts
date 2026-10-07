@@ -8,7 +8,7 @@ import {
   ViewChild
 } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { EntityFieldInfo, EntityInfo, LogError } from '@memberjunction/core';
+import { EntityFieldInfo, EntityInfo, LogError, ToPlainJSON } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import {
   MJUserViewEntityExtended,
@@ -22,6 +22,7 @@ import {
 import { CompositeFilterDescriptor, FilterFieldInfo } from '@memberjunction/ng-filter-builder';
 import { ExportDialogConfig, ExportDialogResult } from '@memberjunction/ng-export-service';
 import { ExportColumn } from '@memberjunction/export-engine';
+import { ExportColumnTypeForSQLType } from '../utils/export-column.util';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 import {
@@ -741,7 +742,8 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
    * Timeline export the columns a grid of this view would show: saved settings are sorted by
    * `orderIndex`, headed by the user's rename, resolved to the entity's field spelling (the export
    * engine reads each row by that key), and dropped when the field no longer exists; fields the
-   * user is denied read access to are left out.
+   * user is denied read access to are left out. Each column carries the type the grid gives it, so a
+   * date-only field exports as its day (`YYYY-MM-DD`) here as it does from the grid.
    */
   private buildExportColumns(): ExportColumn[] {
     const entity = this._entity;
@@ -765,7 +767,11 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
       for (const c of sorted) {
         const field = entity.Fields.find(f => f.Name.toLowerCase() === c.Name.toLowerCase());
         if (field && readable(field)) {
-          columns.push({ name: field.Name, displayName: c.userDisplayName || c.DisplayName || field.DisplayNameOrName });
+          columns.push({
+            name: field.Name,
+            displayName: c.userDisplayName || c.DisplayName || field.DisplayNameOrName,
+            dataType: ExportColumnTypeForSQLType(field.Type),
+          });
         }
       }
       if (columns.length > 0) {
@@ -774,7 +780,7 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     }
     return entity.Fields
       .filter(f => !f.IsVirtual && readable(f))
-      .map(f => ({ name: f.Name, displayName: f.DisplayNameOrName }));
+      .map(f => ({ name: f.Name, displayName: f.DisplayNameOrName, dataType: ExportColumnTypeForSQLType(f.Type) }));
   }
 
   private buildExportFileName(): string {
@@ -1900,7 +1906,9 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
       return null;
     }
     try {
-      const parsed = view.GridStateObject;
+      // Detached copy: the grid and config panel edit this state in place (e.g. aggregate reorder),
+      // and edits through the live accessor would dirty the view even when the user cancels.
+      const parsed = ToPlainJSON(view.GridStateObject);
       if (parsed && Array.isArray(parsed.columnSettings)) {
         const validColumns = this._entity
           ? parsed.columnSettings.filter(

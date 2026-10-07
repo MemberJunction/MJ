@@ -1201,12 +1201,15 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         // auto-refresh handles updates from saves/deletes on the entities it tracks.
         const engine = KnowledgeHubMetadataEngine.Instance;
         await engine.Config(forceRefresh);
-        // AIEngineBase is deferred at startup; ensure loaded before reading .VectorDatabases.
+        // AIEngineBase is deferred at startup; ensure loaded before reading .VectorDatabases / .VectorIndexes.
         await AIEngineBase.Instance.EnsureLoaded();
+        if (forceRefresh) {
+            await AIEngineBase.Instance.RefreshItem('_vectorIndexes');
+        }
 
         this.entityDocuments = engine.EntityDocuments;
         this.vectorDatabases = AIEngineBase.Instance.VectorDatabases;
-        this.vectorIndexes = engine.VectorIndexes;
+        this.vectorIndexes = AIEngineBase.Instance.VectorIndexes;
 
         // Build per-EntityDocument aggregate stats (vector count + last synced).
         // Each query fetches only the most recent row (MaxRows: 1) and uses

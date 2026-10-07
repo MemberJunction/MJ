@@ -3,7 +3,7 @@ import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-sha
 import { ResourceData, MJUserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities';
 import { RegisterClass, MJGlobal, MJEventType , UUIDsEqual } from '@memberjunction/global';
 import { CompositeKey, Metadata, EntityInfo, BaseEntity, BaseEntityEvent } from '@memberjunction/core';
-import { RecordOpenedEvent, ViewGridState, EntityViewerComponent, ViewRelatedRecordNavigation } from '@memberjunction/ng-entity-viewer';
+import { RecordOpenedEvent, ViewGridState, EntityViewerComponent, ViewRelatedRecordNavigation, ExportColumnTypeForSQLType } from '@memberjunction/ng-entity-viewer';
 import { ExportService } from '@memberjunction/ng-export-service';
 import { ExportColumn } from '@memberjunction/export-engine';
 import { GraphQLDataProvider, GraphQLListsClient } from '@memberjunction/graphql-dataprovider';
@@ -538,22 +538,31 @@ export class UserViewResource extends BaseResourceComponent {
       return this.OnExport();
     }
 
-    /** Columns to export — from grid state, else the view's columns, else the entity's real fields. */
+    /**
+     * Columns to export — from grid state, else the view's columns, else the entity's real fields. Each
+     * column carries its field's export type, as the grid's export does, so a date-only field writes
+     * a date cell on its stored day rather than a timestamp.
+     */
     private buildExportColumns(): ExportColumn[] {
         if (!this.EntityInfo) return [];
+        const entity = this.EntityInfo;
+        const typed = (name: string, displayName: string): ExportColumn => {
+            const field = entity.Fields.find(f => f.Name.toLowerCase() === name.toLowerCase());
+            return { name, displayName, dataType: ExportColumnTypeForSQLType(field?.Type) };
+        };
         if (this.GridState?.columnSettings && this.GridState.columnSettings.length > 0) {
             return this.GridState.columnSettings
                 .filter(col => col.hidden !== true)
-                .map(col => ({ name: col.Name, displayName: col.DisplayName || col.Name }));
+                .map(col => typed(col.Name, col.DisplayName || col.Name));
         }
         if (this.ViewEntity?.Columns) {
             return this.ViewEntity.Columns
                 .filter(col => !col.hidden)
-                .map(col => ({ name: col.Name, displayName: col.DisplayName || col.Name }));
+                .map(col => typed(col.Name, col.DisplayName || col.Name));
         }
-        return this.EntityInfo.Fields
+        return entity.Fields
             .filter(f => !f.IsVirtual)
-            .map(f => ({ name: f.Name, displayName: f.DisplayNameOrName }));
+            .map(f => typed(f.Name, f.DisplayNameOrName));
     }
 
     private buildExportFileName(): string {
