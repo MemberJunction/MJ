@@ -34,6 +34,9 @@ import type { BridgeHandlerMap } from "@memberjunction/code-execution";
 export const ACTION_PREVENTED_BY_FILTER_MESSAGE =
    'Filters were run and the result indicated this action should not be executed. This is a Success condition as filters returning false is not considered an error.';
 
+/** Why `CheckAudience` refuses every action under a malformed audience (the refusal message's closing clause). */
+const MALFORMED_AUDIENCE_REASON = 'the audience naming them is malformed, so who they are cannot be checked';
+
 /**
  * Execution context handed to an Action Filter's `Code` when the engine evaluates it inline
  * (i.e. when no {@link BaseActionFilter} subclass is registered for the filter). The code runs
@@ -559,11 +562,14 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
     * the caller and this run cannot honour it, else null — after normalizing the audience to the distinct
     * readers beyond the caller, or clearing it when it adds nobody, so the action sees exactly the people to check.
     *
-    * Refused under an audience that adds a reader (a malformed audience counts as adding one): an action whose
-    * class does not declare `BaseAction.SupportsAudience`, or has no registered class; a runtime-defined action,
-    * whose code cannot declare support; and any deferred run, which hands the work to a path that executes it
-    * later, outside this gate. The refusal carries {@link AUDIENCE_UNSUPPORTED_RESULT_CODE} and writes no
-    * execution log row, since nothing ran. Protected so a host can change the rule.
+    * Refused, for EVERY action, under a malformed audience (`Readers` not an array, a reader that is not an object
+    * or has no `ID` — see {@link ActionAudienceReaders}): who the readers are cannot be checked, so no action may run
+    * as if there were none, nor pass it on to one that would take it as no audience. Refused under a well-formed
+    * audience that adds a reader: an action whose class does not declare `BaseAction.SupportsAudience`, or has no
+    * registered class; a runtime-defined action, whose code cannot declare support; and any deferred run, which
+    * hands the work to a path that executes it later, outside this gate. The refusal carries
+    * {@link AUDIENCE_UNSUPPORTED_RESULT_CODE} and writes no execution log row, since nothing ran. Protected so a
+    * host can change the rule.
     */
    protected CheckAudience(params: RunActionParams): ActionResult | null {
       const readers = ActionAudienceReaders(params.Audience, params.ContextUser);
@@ -571,12 +577,9 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
          params.Audience = undefined;
          return null;
       }
-      const reason = this.audienceUnsupportedReason(params);
-      if (!reason) {
-         // A malformed audience is left as it is: the search engine refuses it, so it cannot pass as no audience.
-         if (readers) {
-            params.Audience = { Readers: readers };
-         }
+      const reason = readers === null ? MALFORMED_AUDIENCE_REASON : this.audienceUnsupportedReason(params);
+      if (!reason && readers) {
+         params.Audience = { Readers: readers };
          return null;
       }
       LogStatus(`ActionEngine: action '${params.Action.Name}' refused under an audience — ${reason}.`);

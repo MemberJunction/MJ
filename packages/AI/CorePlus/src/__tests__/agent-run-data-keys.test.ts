@@ -4,7 +4,14 @@
  * (`ExecuteAgentParams.TrustReservedRunData`) `BaseAgent.Execute` applies to every run's `data`.
  */
 import { describe, it, expect } from 'vitest';
-import { RESERVED_AGENT_RUN_DATA_KEYS, WithAgentRunDataTrustApplied, WithoutReservedAgentRunDataKeys } from '../agent-run-data-keys';
+import {
+    HOST_ONLY_AGENT_RUN_DATA_KEYS,
+    IsHostOnlyAgentRunDataKey,
+    RESERVED_AGENT_RUN_DATA_KEYS,
+    WithAgentRunDataTrustApplied,
+    WithoutHostOnlyAgentRunDataKeys,
+    WithoutReservedAgentRunDataKeys,
+} from '../agent-run-data-keys';
 import type { ExecuteAgentParams, MJAIAgentEntityExtended } from '../index';
 
 describe('RESERVED_AGENT_RUN_DATA_KEYS', () => {
@@ -49,6 +56,46 @@ describe('WithoutReservedAgentRunDataKeys', () => {
     it('matches keys exactly: only top-level, case-sensitive names are read by the agent framework', () => {
         const result = WithoutReservedAgentRunDataKeys({ primaryScopeRecordID: 'org-1', nested: { PrimaryScopeRecordID: 'org-2' } });
         expect(result.StrippedKeys).toEqual([]);
+    });
+});
+
+describe('HOST_ONLY_AGENT_RUN_DATA_KEYS', () => {
+    it('holds every reserved key, and the browser, conversation and realtime controls BaseAgent reads from data', () => {
+        for (const key of RESERVED_AGENT_RUN_DATA_KEYS) {
+            expect(HOST_ONLY_AGENT_RUN_DATA_KEYS).toContain(key);
+        }
+        for (const key of ['clientTools', 'sessionID', 'appContext', 'applicationId', 'conversationId', 'targetAgentID', 'agentSessionId', 'recording']) {
+            expect(IsHostOnlyAgentRunDataKey(key)).toBe(true);
+        }
+    });
+
+    it('treats every realtime* key as host-only, and matches case-sensitively, as BaseAgent reads them', () => {
+        const realtimeKeys = ['realtimeModelID', 'realtimeVoice', 'realtimeMeetingMode', 'realtimeSelfNames', 'realtimeHostTools', 'realtimeHostFraming'];
+        for (const key of [...realtimeKeys, 'realtimePriorTranscript']) {
+            expect(IsHostOnlyAgentRunDataKey(key)).toBe(true);
+        }
+        expect(IsHostOnlyAgentRunDataKey('ClientTools')).toBe(false);
+        expect(IsHostOnlyAgentRunDataKey('topic')).toBe(false);
+    });
+});
+
+describe('WithoutHostOnlyAgentRunDataKeys', () => {
+    it('removes the reserved keys and the host controls, keeps the rest, and reports what it removed in data order', () => {
+        const data = {
+            topic: 'refunds', clientTools: [{ Name: 'Navigate' }], appContext: { App: { Name: 'CRM' } }, conversationId: 'conv-2',
+            realtimeHostTools: [], targetAgentID: 'agent-x', PrimaryScopeRecordID: 'org-1', step: 2,
+        };
+        const result = WithoutHostOnlyAgentRunDataKeys(data);
+        expect(result.Data).toEqual({ topic: 'refunds', step: 2 });
+        expect(result.StrippedKeys).toEqual(['clientTools', 'appContext', 'conversationId', 'realtimeHostTools', 'targetAgentID', 'PrimaryScopeRecordID']);
+    });
+
+    it('returns the input itself, and never mutates it', () => {
+        const clean = { topic: 'refunds' };
+        expect(WithoutHostOnlyAgentRunDataKeys(clean).Data).toBe(clean);
+        const dirty = { appContext: {}, topic: 'refunds' };
+        WithoutHostOnlyAgentRunDataKeys(dirty);
+        expect(dirty).toEqual({ appContext: {}, topic: 'refunds' });
     });
 });
 

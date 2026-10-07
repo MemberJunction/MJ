@@ -7,6 +7,7 @@ import {
     SearchAudience,
     SearchResult,
     SearchResultItem,
+    SearchStreamEvent,
     GetSearchScopePermissionResolver,
     EffectivePermission
 } from "@memberjunction/search-engine";
@@ -39,6 +40,13 @@ interface FormattedSearchResult {
     MatchedAt: string;
     RawMetadata?: string;
 }
+
+/**
+ * What a well-formed `SecondaryScopes` is, said in every refusal of a malformed one so the model can correct the call.
+ * (The parameter descriptions in the action's metadata predate the refusal; this text is the authority until they are updated.)
+ */
+const SECONDARY_SCOPES_SHAPE = 'SecondaryScopes must be a JSON object mapping each dimension name to a string, number, boolean or '
+    + 'array of strings — e.g. {"Department":"Finance","Tags":["q3"]} — or be omitted.';
 
 /** Strict UUID shape for the skill principal — it is caller-supplied and binds into a query. */
 const SCOPED_SEARCH_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -482,12 +490,14 @@ export class ScopedSearchAction extends BaseAction {
             'PERMISSION_DENIED');
     }
 
-    /** The audit reason for one refused audience reader: who, and why (capped to the log column). */
+    /**
+     * The audit reason for one refused audience reader. The row is recorded under the CALLER, who can read their own
+     * search log, so it names the reader by ID with the verdict's fixed `Source` (or the `Read` level) only — never the
+     * reader's name, nor the resolver's `Reason`, which describes the reader's own grants and principals.
+     */
     private audienceRefusalReason(reader: UserInfo, verdict: EffectivePermission): string {
-        const why = verdict.Allowed && verdict.Level === 'Read'
-            ? 'Read grants visibility of the scope, not the right to search it'
-            : verdict.Reason;
-        return `Audience reader '${reader.Name}' (${reader.ID}) may not search this scope: ${why}`.substring(0, 500);
+        const kind = verdict.Allowed && verdict.Level === 'Read' ? 'Read level: visibility, not search' : verdict.Source;
+        return `Audience reader ${reader.ID} may not search this scope (${kind}).`.substring(0, 500);
     }
 
     /**
@@ -593,23 +603,13 @@ export class ScopedSearchAction extends BaseAction {
         let finalEvent: { results: SearchResultItem[]; sourceCounts: { Vector: number; FullText: number; Entity: number; Storage: number }; elapsedMs: number } | undefined;
         let errorMsg: string | undefined;
         for await (const ev of SearchEngine.Instance.streamSearch(baseParams, input.contextUser)) {
-            // Skip 'final' event's results from the progress trail to keep
-            // the param size sane — the final results are returned via the
-            // Results output param anyway.
             if (ev.phase === 'final') {
                 finalEvent = { results: ev.results, sourceCounts: ev.sourceCounts, elapsedMs: ev.elapsedMs };
-                progressEvents.push({ phase: 'final', count: ev.results.length, elapsedMs: ev.elapsedMs });
-            } else if (ev.phase === 'provider') {
-                // Progress only: a provider event carries a count, never the rows (they precede the permission pass).
-                progressEvents.push({ phase: 'provider', providerName: ev.providerName, count: ev.resultCount, durationMs: ev.durationMs });
-            } else if (ev.phase === 'fused') {
-                progressEvents.push({ phase: 'fused', count: ev.results.length });
-            } else if (ev.phase === 'reranked') {
-                progressEvents.push({ phase: 'reranked', rerankerName: ev.rerankerName, count: ev.results.length });
             } else if (ev.phase === 'error') {
                 errorMsg = ev.error;
-                progressEvents.push({ phase: 'error', error: ev.error });
             }
+            const progress = this.progressEventFor(ev, input.audience !== undefined);
+            if (progress) progressEvents.push(progress);
         }
         if (errorMsg || !finalEvent) {
             return { ok: false, result: this.createErrorResult(errorMsg ?? 'Stream completed without a final event', 'SEARCH_FAILED') };
@@ -623,6 +623,29 @@ export class ScopedSearchAction extends BaseAction {
             Providers: [],
         };
         return { ok: true, sr, progressEvents };
+    }
+
+    /**
+     * One streamed event as a `ProgressEvents` entry, or null when it is left out. A 'final' event carries only its
+     * count (the results are the Results output). A 'provider' event carries a count, never the rows — and that count
+     * precedes the permission and audience passes, so it is the caller's unfiltered reach: under an audience (`!== undefined`
+     * at the call, so a malformed one counts) provider events are left out entirely, as `SourceCounts` are.
+     */
+    private progressEventFor(ev: SearchStreamEvent, underAudience: boolean): Record<string, unknown> | null {
+        switch (ev.phase) {
+            case 'final':
+                return { phase: 'final', count: ev.results.length, elapsedMs: ev.elapsedMs };
+            case 'provider':
+                return underAudience ? null : { phase: 'provider', providerName: ev.providerName, count: ev.resultCount, durationMs: ev.durationMs };
+            case 'fused':
+                return { phase: 'fused', count: ev.results.length };
+            case 'reranked':
+                return { phase: 'reranked', rerankerName: ev.rerankerName, count: ev.results.length };
+            case 'error':
+                return { phase: 'error', error: ev.error };
+            default:
+                return null;
+        }
     }
 
     /**
@@ -921,17 +944,27 @@ export class ScopedSearchAction extends BaseAction {
         const run = params.RunScope;
         if (!run) return { tenant: { primaryScopeRecordID: named, secondaryScopes: parsed.value } };
         const runTenant = this.runTenantID(run);
-        if (named && !(runTenant && UUIDsEqual(named, runTenant))) {
-            return {
-                forbidden: `PrimaryScopeRecordID '${named}' is not the tenant this agent run is scoped to. Inside an agent run the `
-                    + `run's scope is authoritative: omit PrimaryScopeRecordID and the run's tenant applies.`,
-                audit: `Refused a PrimaryScopeRecordID the agent run does not carry: '${named}' (the run is scoped to `
-                    + `${runTenant ? `'${runTenant}'` : 'no tenant'}).`,
-            };
-        }
+        if (named && !(runTenant && UUIDsEqual(named, runTenant))) return this.tenantRefusal(named, runTenant);
         const secondary = this.mergeRunSecondaryScopes(run.SecondaryScopes ?? undefined, parsed.value);
         if ('forbidden' in secondary) return secondary;
         return { tenant: { primaryScopeRecordID: runTenant, secondaryScopes: secondary.value } };
+    }
+
+    /**
+     * The refusal of a model-named tenant the run does not carry. The caller is told exactly what to do — inside an
+     * agent run the tenant comes from the run, so omit `PrimaryScopeRecordID` — and never the run's own tenant; the
+     * audit row names both.
+     */
+    private tenantRefusal(named: string, runTenant: string | undefined): TenantRefusal {
+        const why = runTenant
+            ? `PrimaryScopeRecordID '${named}' is not this agent run's tenant.`
+            : `PrimaryScopeRecordID '${named}' was given, but this agent run is not scoped to a tenant.`;
+        return {
+            forbidden: `${why} Inside an agent run the tenant comes from the run — omit PrimaryScopeRecordID`
+                + `${runTenant ? " and the run's tenant applies" : ''}; never pass one.`,
+            audit: `Refused a PrimaryScopeRecordID the agent run does not carry: '${named}' (the run is scoped to `
+                + `${runTenant ? `'${runTenant}'` : 'no tenant'}).`,
+        };
     }
 
     /** The run's tenant as a non-blank string, or `undefined` when the run has none. */
@@ -956,8 +989,8 @@ export class ScopedSearchAction extends BaseAction {
                 added.push([key, value]);
             } else if (!this.scopeValuesEqual(runEntry[1], value)) {
                 return {
-                    forbidden: `SecondaryScopes '${key}' differs from the value this agent run is scoped to. Inside an agent run the `
-                        + `run's scope is authoritative: omit the key and the run's value applies.`,
+                    forbidden: `SecondaryScopes '${key}' differs from this agent run's value for it. Inside an agent run the run's `
+                        + `dimensions come from the run — omit '${key}' from SecondaryScopes and the run's value applies.`,
                     audit: `Refused a SecondaryScopes value the agent run does not carry: '${key}' = ${JSON.stringify(value)} `
                         + `(the run has ${JSON.stringify(runEntry[1])}).`,
                 };
@@ -1025,14 +1058,14 @@ export class ScopedSearchAction extends BaseAction {
         if ('malformed' in raw) return raw;
         if (raw.value === undefined) return { value: undefined };
         if (!IsPlainObject(raw.value)) {
-            return { malformed: `SecondaryScopes must be a JSON object of dimension values, got ${this.describeScopeValue(raw.value)}.` };
+            return { malformed: `SecondaryScopes is ${this.describeScopeValue(raw.value)}, not an object. ${SECONDARY_SCOPES_SHAPE}` };
         }
         const entries = Object.entries(raw.value);
         const valid = entries.filter((entry): entry is [string, SecondaryScopeValue] => this.isSecondaryScopeValue(entry[1]));
         const bad = entries.find(([, value]) => !this.isSecondaryScopeValue(value));
         if (bad) {
-            return { malformed: `SecondaryScopes key '${bad[0]}' has an unsupported value (${this.describeScopeValue(bad[1])}); `
-                + `each value must be a string, number, boolean or array of strings.` };
+            return { malformed: `SecondaryScopes key '${bad[0]}' has an unsupported value (${this.describeScopeValue(bad[1])}). `
+                + SECONDARY_SCOPES_SHAPE };
         }
         // fromEntries defines own properties, so a '__proto__' key stays a plain key rather than a prototype.
         return { value: valid.length > 0 ? Object.fromEntries(valid) : undefined };
@@ -1049,7 +1082,7 @@ export class ScopedSearchAction extends BaseAction {
             const parsed: unknown = JSON.parse(value);
             return { value: parsed };
         } catch (e) {
-            return { malformed: `SecondaryScopes is not valid JSON: ${e instanceof Error ? e.message : String(e)}` };
+            return { malformed: `SecondaryScopes is not valid JSON (${e instanceof Error ? e.message : String(e)}). ${SECONDARY_SCOPES_SHAPE}` };
         }
     }
 

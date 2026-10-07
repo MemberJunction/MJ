@@ -19,6 +19,10 @@
  * - AU7 the run's scope is authoritative for the Scoped Search tenant (A12.14): dispatched through `ExecuteSingleAction`
  *   on a run whose `PrimaryScopeRecordID` is A, a model-supplied tenant B is refused (`INVALID_PARAM`, one Forbidden
  *   row, no search), and with no model tenant the search runs under A (a Success row recording tenant A).
+ * - AU8 `Execute` with an audience whose `Mode` is a name `Object.prototype` carries (`'toString'`) fails the run before
+ *   any prompt (`Invalid Audience`), rather than passing validation and skipping every gate.
+ * - AU9 the plain Search action takes no tenant, so inside a tenant-scoped run it is refused (`RUN_SCOPE_UNSUPPORTED`,
+ *   pointing at Scoped Search) without searching (control: the same call in an unscoped run searches).
  *
  * FIXTURES. Like 'agent-rag-gate' this bundle seeds NO `MJ: AI Agent Notes` (a note save embeds, which the
  * deterministic lane cannot rely on), so the scope's corpus may be empty: the proofs are the search and action
@@ -55,6 +59,7 @@ const IT_SCOPE_NAME = 'IT: Integration Test Scope';
 const SEARCH_AGENT_NAME = 'it: search agent';
 const LOG_QUERY_PREFIX = 'mj-integration-test audience';
 const SCOPED_SEARCH_ACTION = 'Scoped Search';
+const SEARCH_ACTION = 'Search';
 const UNSUPPORTED_ACTION = 'Calculate Expression';
 /** An MJ: Users ID no user has (uuidgen). */
 const UNKNOWN_USER_ID = '75F8CF59-11B7-4D1A-BF0D-99419F70BFF6';
@@ -257,7 +262,7 @@ export const AgentRunAudienceChecks: NamedCheck[] = [
       AssertEqual(refused.ResultCode, 'AUDIENCE_UNSUPPORTED', `unexpected result code: ${refused.ResultCode ?? ''} — ${refused.Message ?? ''}`);
       Assert(!refused.LogEntry, 'a refused call has no log entry');
       const again = await harness.call(calc, { Expression: '3 + 4', Note: roomMarker });
-      Assert(again instanceof CircuitBreakerActionResult && again.Reason === 'fatal', 'the refused action must be locked out for the run');
+      Assert(again instanceof CircuitBreakerActionResult && again.Reason === 'audience', 'the refused action must be locked out for the run (audience rule)');
 
       await settle(1500); // the log writes ride a fire-and-forget queue
       Assert((await actionLogRows(ctx, calc.ID, controlMarker)).length >= 1, 'control: the unrestricted call left an Action Execution Log row');
@@ -290,18 +295,7 @@ export const AgentRunAudienceChecks: NamedCheck[] = [
       AssertEqual(run!.Status, 'Failed', 'run Status=Failed');
       const error = run!.ErrorMessage ?? '';
       Assert(error.toLowerCase().includes(UNKNOWN_USER_ID.toLowerCase()), `the error must name the unknown ID: '${error}'`);
-      const prompts = await new RunView().RunView<{ ID: string }>(
-        {
-          EntityName: 'MJ: AI Agent Run Steps',
-          ExtraFilter: `AgentRunID='${run!.ID}' AND StepType='Prompt'`,
-          Fields: ['ID'],
-          ResultType: 'simple',
-          BypassCache: true,
-        },
-        ctx.User,
-      );
-      Assert(prompts.Success, `step read failed: ${prompts.ErrorMessage ?? ''}`);
-      AssertEqual(prompts.Results.length, 0, 'no prompt may run for a refused audience');
+      AssertEqual(await promptStepCount(ctx, run!.ID), 0, 'no prompt may run for a refused audience');
       console.log(`      → run ${run!.ID} Failed before any prompt: ${run!.ErrorMessage}`);
     },
   },
@@ -322,7 +316,71 @@ export const AgentRunAudienceChecks: NamedCheck[] = [
       console.log("      → run tenant A: a model tenant B refused (INVALID_PARAM, one Forbidden row, no search); no model tenant searched under A");
     },
   },
+  {
+    Id: 'agent-run-audience.AU8',
+    Name: "AU8: (deterministic) Execute with an audience whose Mode is an inherited name ('toString') fails the run before any prompt",
+    Fn: async (ctx): Promise<void> => {
+      const fx = fixtureFor('AU8');
+      if (!fx) return;
+      const result = await new BaseAgent().Execute({
+        agent: fx.Agent,
+        conversationMessages: [{ role: 'user', content: `${LOG_QUERY_PREFIX} ${fx.Marker} AU8 — should be refused` }],
+        contextUser: ctx.User,
+        provider: ctx.Provider,
+        Audience: { Mode: 'toString', UserIDs: [fx.NoGrant.ID] } as unknown as AgentRunAudience,
+      });
+      const run: MJAIAgentRunEntityExtended | undefined = result.agentRun;
+      if (run?.IsSaved) fx.RunIDs.push(run.ID);
+      AssertEqual(result.success, false, "an audience whose Mode is 'toString' must fail the run");
+      if ((run?.ErrorMessage ?? '').includes('does not have permission')) {
+        skipNote('AU8', `the context user may not run '${fx.Agent.Name}', so the permission check refused the run first`);
+        return;
+      }
+      Assert((run?.ErrorMessage ?? '').startsWith('Invalid Audience'), `the run must fail on the audience: '${run?.ErrorMessage ?? ''}'`);
+      AssertEqual(await promptStepCount(ctx, run!.ID), 0, 'no prompt may run for a refused audience');
+      console.log(`      → run ${run!.ID} Failed before any prompt: ${run!.ErrorMessage}`);
+    },
+  },
+  {
+    Id: 'agent-run-audience.AU9',
+    Name: 'AU9: (deterministic) the Search action is refused in a tenant-scoped run (RUN_SCOPE_UNSUPPORTED, no search); an unscoped run searches',
+    Fn: async (ctx): Promise<void> => {
+      const fx = fixtureFor('AU9');
+      if (!fx) return;
+      const search = await activeAction(ctx, SEARCH_ACTION);
+      if (!search) {
+        skipNote('AU9', `the '${SEARCH_ACTION}' action is not Active in this database`);
+        return;
+      }
+      const query = `${LOG_QUERY_PREFIX} ${fx.Marker} plain search in a scoped run`;
+      const refused = await actionHarness(ctx, fx, undefined, { PrimaryScopeRecordID: RUN_TENANT_ID }).call(search, { Query: query });
+      AssertEqual(refused.Success, false, 'Search must be refused in a tenant-scoped run');
+      AssertEqual(refused.ResultCode, 'RUN_SCOPE_UNSUPPORTED', `unexpected result code: ${refused.ResultCode ?? ''} — ${refused.Message ?? ''}`);
+      Assert((refused.Message ?? '').includes('Scoped Search'), `the refusal must point at Scoped Search: ${refused.Message ?? ''}`);
+      AssertEqual((await searchLogRows(ctx, query, 'Success', false)).length, 0, 'no search may run in a tenant-scoped run');
+
+      const control = await actionHarness(ctx, fx).call(search, { Query: `${query} control` });
+      AssertEqual(control.Success, true, `control (unscoped run) failed: ${control.Message ?? ''}`);
+      console.log('      → Search in a run scoped to a tenant: refused (RUN_SCOPE_UNSUPPORTED), no search; unscoped control searched');
+    },
+  },
 ];
+
+/** This run's Prompt steps: none means the run was refused before its first prompt. */
+async function promptStepCount(ctx: IntegrationCheckContext, runID: string): Promise<number> {
+  const prompts = await new RunView().RunView<{ ID: string }>(
+    {
+      EntityName: 'MJ: AI Agent Run Steps',
+      ExtraFilter: `AgentRunID='${EscapeSQLString(runID)}' AND StepType='Prompt'`,
+      Fields: ['ID'],
+      ResultType: 'simple',
+      BypassCache: true,
+    },
+    ctx.User,
+  );
+  Assert(prompts.Success, `step read failed: ${prompts.ErrorMessage ?? ''}`);
+  return prompts.Results.length;
+}
 
 type ActionCall = (action: MJActionEntityExtended, actionParams: Record<string, unknown>) => Promise<ActionResult>;
 

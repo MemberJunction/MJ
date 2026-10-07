@@ -1330,11 +1330,13 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      * nothing a client sends through GraphQL, MCP or A2A (whose agent runners pass named fields and put
      * client JSON in `data`) can set or clear it.
      *
-     * **Validation fails the run** before any prompt, as a refused permission does: an unknown `Mode`;
-     * `'Intersection'` whose `UserIDs` is empty, not an array, or holds a blank entry; `'Caller'` with
-     * any `UserIDs`; or an ID no user has (after one refresh of the server's user cache). Every gate
-     * below fires only when the audience adds a reader **other than the caller**, so an
-     * `'Intersection'` whose only reader is the caller behaves exactly as `'Caller'`.
+     * **Validation fails the run** before any prompt, as a refused permission does: an unknown `Mode`
+     * (including a name `Object.prototype` carries, such as `'toString'`); `'Intersection'` whose
+     * `UserIDs` is empty, not an array, or holds a blank entry; `'Caller'` with any `UserIDs`; or an ID
+     * no user has (after one refresh of the server's user cache). An inactive user is accepted: a reader
+     * only narrows what the run may show. Every gate below fires only when the audience adds a reader
+     * **other than the caller**, so an `'Intersection'` whose only reader is the caller behaves exactly
+     * as `'Caller'`.
      *
      * **What it bounds.** Each run (sub-agents included — they inherit it and re-hydrate the IDs) loads
      * the readers from the user cache and then:
@@ -1345,17 +1347,27 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      * - agent data-source preloading and the previous turn's tool-result carry-forward are skipped;
      * - every action call carries `RunActionParams.Audience`. Only the Search and Scoped Search actions
      *   declare they can honour it; any other action is refused (`AUDIENCE_UNSUPPORTED`) without running
-     *   and is locked out for the run, so an agent with other actions is limited to search in a shared room;
-     * - task graphs are not offered, and one the model writes anyway is refused;
+     *   and is locked out for the run (the model is told it is unavailable in a shared conversation), so an
+     *   agent with other actions is limited to search in a shared room. A malformed audience on an action
+     *   call refuses every action;
+     * - task graphs are not offered, and one the model writes anyway is refused (they are withheld in a
+     *   tenant-scoped run too: a graph runs outside the run's scope);
+     * - client tools are not offered and a client-tools step is refused (they run in the caller's browser),
+     *   and the caller's app context (`data.appContext`) is not injected into the prompt;
+     * - memory writes are not saved (a write's reply is read against the caller's own notes);
+     * - no out-of-conversation `MJ: AI Agent Requests` row is raised for a Chat or Plan step: answered on
+     *   the dashboard or through the API, it would resume the run without the audience. The room answers in
+     *   the conversation, where the host starts the next run with the audience;
      * - session-driven (realtime / voice / bridge) agent types are refused.
      *
      * **Not covered (documented limits).**
      * - Scope expansion queries and `ServerDerived` dimensions resolve for the caller only
      *   (`ScopeDimensionResolver` binds one `UserID`); the per-reader result filter covers scopes whose
      *   lanes carry per-user row filters.
-     * - A resumed run (`MJAIAgentRequestEntityServer.resumeAgent`, after a human answers a request)
-     *   resumes as the responder with no audience: persisting the audience on the run needs a column,
-     *   an open design point shared with bound action parameters.
+     * - A run is never resumed with its audience (`MJAIAgentRequestEntityServer.resumeAgent` has no field to
+     *   read it from), so a run with one raises no request to resume from (above); persisting the audience
+     *   needs a column, an open design point shared with bound action parameters. An agent with
+     *   `RequirePlanMode` therefore cannot have a plan approved in a shared conversation.
      * - The conversation history and artifacts the host passes in are the host's to choose.
      *
      * @since 6.2.0

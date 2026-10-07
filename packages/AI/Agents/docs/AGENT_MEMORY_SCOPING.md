@@ -249,7 +249,8 @@ Who sets the marker:
 }
 ```
 
-- **A sub-agent** inherits its parent's marker along with its parent's `data`. The template parameters a model writes for a sub-agent lose the reserved keys whether or not the parent is trusted.
+- **A sub-agent** inherits its parent's marker along with its parent's `data`. The template parameters a model writes for a sub-agent lose the reserved keys whether or not the parent is trusted — and the other host-only keys too (`clientTools`, `sessionID`, `appContext`, `applicationId`, `conversationId`, `targetAgentID`, `agentSessionId`, `recording`, `realtime*`; `HOST_ONLY_AGENT_RUN_DATA_KEYS`), so the child keeps its parent's values for them.
+- **The Execute Agent action** passes the calling run's scope (`RunActionParams.RunScope`) to the nested run as its first-class scope fields, so a nested run inside a tenant-scoped run keeps the tenant without trusting `Data`.
 
 Any other server code that starts a run sets the first-class fields shown above, which need no marker. It sets `TrustReservedRunData` only when `data` itself comes from a caller it has authenticated as trusted, and it never copies the marker from client input.
 

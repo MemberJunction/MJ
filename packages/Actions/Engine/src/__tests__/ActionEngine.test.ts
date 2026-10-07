@@ -463,6 +463,25 @@ describe('ActionEngineServer', () => {
             expect((await run(paramsFor({ Readers: [{ Name: 'no id' }] }))).ResultCode).toBe('AUDIENCE_UNSUPPORTED');
         });
 
+        it.each<[string, unknown]>([
+            ['null', null],
+            ['Readers not an array', { Readers: 'everyone' }],
+            ['a reader with no ID', { Readers: [{ Name: 'no id' }] }],
+            ['a null reader', { Readers: [null] }],
+        ])('refuses a malformed audience (%s) even for an action that supports one: it never runs and is never handed it', async (_label, audience) => {
+            const action = new AudienceAwareAction();
+            mockClassFactory.CreateInstance.mockReturnValue(action);
+            const validateSpy = vi.spyOn(engine as never, 'ValidateInputs' as never);
+
+            const result = await run(paramsFor(audience));
+
+            expect(result.Success).toBe(false);
+            expect(result.ResultCode).toBe('AUDIENCE_UNSUPPORTED');
+            expect(result.Message).toMatch(/malformed/);
+            expect(action.ranWith).toHaveLength(0);
+            expect(validateSpy).not.toHaveBeenCalled();
+        });
+
         it('lets an action that declares SupportsAudience run, with the audience normalized to the distinct readers beyond the caller', async () => {
             const action = new AudienceAwareAction();
             mockClassFactory.CreateInstance.mockReturnValue(action);

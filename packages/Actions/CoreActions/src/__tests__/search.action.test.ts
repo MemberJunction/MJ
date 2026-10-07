@@ -2,7 +2,8 @@
  * The `Search` action (`__Internal_Search`) — its audience contract: an action that declares it can honour
  * `RunActionParams.Audience` must hand the readers to the search engine (which keeps only what every reader may
  * read) and must not show the room `SourceCounts`, which are counted before that filtering. The search names no
- * scope, so there is no per-reader scope gate to run.
+ * scope, so there is no per-reader scope gate to run. And its run-scope contract: it takes no tenant, so inside a
+ * tenant-scoped agent run it refuses rather than search across tenants.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { RunActionParams, ActionResultSimple, ActionParam } from '@memberjunction/actions-base';
@@ -24,7 +25,8 @@ vi.mock('@memberjunction/search-engine', () => ({
     },
 }));
 
-vi.mock('@memberjunction/core', () => ({
+vi.mock('@memberjunction/core', async (importOriginal) => ({
+    ...(await importOriginal<Record<string, unknown>>()),
     LogError: vi.fn(),
     LogStatus: vi.fn(),
 }));
@@ -90,5 +92,34 @@ describe('SearchAction', () => {
         expect(result.Success).toBe(false);
         expect(result.ResultCode).toBe('SEARCH_FAILED');
         expect(result.Params).toBeUndefined();
+    });
+
+    it('passes a null audience on to the engine (which refuses it) instead of searching unbounded, and withholds SourceCounts', async () => {
+        const params = { ...paramsFor(), Audience: null } as unknown as RunActionParams;
+        const result = await run(params);
+        expect(searchSpy.mock.calls[0][0]).toHaveProperty('Audience', null);
+        expect(outputNames(result)).not.toContain('SourceCounts');
+    });
+
+    describe('inside a tenant-scoped agent run (RunActionParams.RunScope)', () => {
+        const TENANT = 'aaaaaaaa-0000-4000-8000-0000000000a7';
+        const scoped = (RunScope: Record<string, unknown>): RunActionParams => ({ ...paramsFor(), RunScope }) as unknown as RunActionParams;
+
+        it.each<[string, Record<string, unknown>]>([
+            ['a tenant', { PrimaryScopeEntityName: 'Organizations', PrimaryScopeRecordID: TENANT, SecondaryScopes: null }],
+            ['a secondary dimension', { PrimaryScopeEntityName: null, PrimaryScopeRecordID: null, SecondaryScopes: { Region: 'EMEA' } }],
+        ])('refuses when the run carries %s, without searching, and points at Scoped Search', async (_label, runScope) => {
+            const result = await run(scoped(runScope));
+            expect(result.Success).toBe(false);
+            expect(result.ResultCode).toBe('RUN_SCOPE_UNSUPPORTED');
+            expect(result.Message).toMatch(/Use the Scoped Search action/);
+            expect(searchSpy).not.toHaveBeenCalled();
+        });
+
+        it('searches as before in an unscoped run (nulls) and outside a run (no RunScope)', async () => {
+            expect((await run(scoped({ PrimaryScopeEntityName: null, PrimaryScopeRecordID: null, SecondaryScopes: null }))).Success).toBe(true);
+            expect((await run(paramsFor())).Success).toBe(true);
+            expect(searchSpy).toHaveBeenCalledTimes(2);
+        });
     });
 });

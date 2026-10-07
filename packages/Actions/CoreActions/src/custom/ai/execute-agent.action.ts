@@ -3,7 +3,7 @@ import { BaseAction } from '@memberjunction/actions';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { LogError, type BaseEntity } from '@memberjunction/core';
 import { ChatMessage } from '@memberjunction/ai';
-import { ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { ExecuteAgentResult, MJAIAgentEntityExtended, type AgentRunAudience, type ExecuteAgentParams } from '@memberjunction/ai-core-plus';
 import { AgentRunner } from '@memberjunction/ai-agents';
 import { AIEngine } from '@memberjunction/aiengine';
 
@@ -31,6 +31,15 @@ import { AIEngine } from '@memberjunction/aiengine';
  * `ExecuteAgentParams.TrustReservedRunData`). Everything else in `Data` reaches
  * the agent as template data.
  *
+ * **Inside an agent run the nested run keeps the caller's bounds.** The calling run's scope
+ * (`RunActionParams.RunScope`) becomes the nested run's first-class `PrimaryScopeEntityName` /
+ * `PrimaryScopeRecordID` / `SecondaryScopes` — `Data` cannot carry them — so it searches the same
+ * tenant; its audience (`RunActionParams.Audience`) becomes an `'Intersection'` of the readers' IDs,
+ * which the nested run validates and hydrates again. The action does not declare `SupportsAudience`, so
+ * under an audience the engine refuses it before it runs: the nested run's output comes back as the
+ * whole `AgentResult` (its run record, memory context and payload), which nothing yet limits to what
+ * every reader may see.
+ *
  * @example
  * ```typescript
  * await runAction({
@@ -48,63 +57,11 @@ export class ExecuteAgentAction extends BaseAction {
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
             // ---- Resolve agent ----
-            const agentID = this.getStringParam(params, 'agentid');
-            const agentName = this.getStringParam(params, 'agentname');
-
-            if (!agentID && !agentName) {
-                return {
-                    Success: false,
-                    ResultCode: 'MISSING_AGENT_IDENTIFIER',
-                    Message: 'Execute Agent requires either AgentID or AgentName parameter.'
-                };
+            const resolved = await this.resolveAgent(params);
+            if ('result' in resolved) {
+                return resolved.result;
             }
-
-            // Make sure AIEngine has agent metadata loaded before we look anything up.
-            await AIEngine.Instance.Config(false, params.ContextUser);
-
-            const agent = agentID
-                ? AIEngine.Instance.Agents.find((a) => UUIDsEqual(a.ID, agentID))
-                : AIEngine.Instance.Agents.find(
-                      (a) => a.Name?.trim().toLowerCase() === agentName!.trim().toLowerCase()
-                  );
-
-            if (!agent) {
-                return {
-                    Success: false,
-                    ResultCode: 'AGENT_NOT_FOUND',
-                    Message: agentID
-                        ? `No agent found with ID '${agentID}'`
-                        : `No agent found with name '${agentName}'`
-                };
-            }
-
-            // Sub-agents (ParentID set) can't be exposed — their contract is
-            // governed by the parent; invoking them directly would bypass the
-            // parent agent's payload filtering.
-            if (agent.ParentID) {
-                return {
-                    Success: false,
-                    ResultCode: 'AGENT_IS_SUB_AGENT',
-                    Message:
-                        `Agent '${agent.Name}' is a sub-agent (ParentID is set). ` +
-                        'Only top-level agents can be invoked through Execute Agent. ' +
-                        "Run the parent agent instead, or invoke this sub-agent via the parent's workflow."
-                };
-            }
-
-            // Only agents that the operator has explicitly flagged as callable
-            // from outside may be dispatched this way. This is the
-            // `ExposeAsAction` contract — once auto-registration lands, it
-            // will only create catalog entries for agents that pass this check.
-            if (!agent.ExposeAsAction) {
-                return {
-                    Success: false,
-                    ResultCode: 'AGENT_NOT_EXPOSED',
-                    Message:
-                        `Agent '${agent.Name}' is not exposed as an action (AIAgent.ExposeAsAction=false). ` +
-                        'Enable ExposeAsAction on the agent record to allow invocation via Execute Agent.'
-                };
-            }
+            const { agent } = resolved;
 
             // ---- Collect optional inputs ----
             const conversationMessages =
@@ -123,6 +80,8 @@ export class ExecuteAgentAction extends BaseAction {
                 // The calling run's credential scope; see execute-ai-prompt. Without keys, a 'RuntimeOnly'
                 // nested run fails rather than spending the platform's.
                 CredentialScope: params.CredentialScope,
+                // The calling run's tenant and audience, as first-class fields (see the class doc).
+                ...this.callerRunBounds(params),
                 data,
                 conversationDetailId: conversationDetailId ?? undefined,
                 lastRunId: lastRunId ?? undefined,
@@ -161,6 +120,99 @@ export class ExecuteAgentAction extends BaseAction {
                 Message: `Error executing agent: ${message}`
             };
         }
+    }
+
+    /**
+     * The agent this call names — `AgentID`, else `AgentName` — when it is a top-level agent exposed as an action,
+     * or the refusal to return.
+     */
+    private async resolveAgent(params: RunActionParams): Promise<{ agent: MJAIAgentEntityExtended } | { result: ActionResultSimple }> {
+        const agentID = this.getStringParam(params, 'agentid');
+        const agentName = this.getStringParam(params, 'agentname');
+        if (!agentID && !agentName) {
+            const message = 'Execute Agent requires either AgentID or AgentName parameter.';
+            return { result: { Success: false, ResultCode: 'MISSING_AGENT_IDENTIFIER', Message: message } };
+        }
+
+        // Make sure AIEngine has agent metadata loaded before we look anything up.
+        await AIEngine.Instance.Config(false, params.ContextUser);
+        const agent = agentID
+            ? AIEngine.Instance.Agents.find((a) => UUIDsEqual(a.ID, agentID))
+            : AIEngine.Instance.Agents.find((a) => a.Name?.trim().toLowerCase() === agentName?.trim().toLowerCase());
+        if (!agent) {
+            const message = agentID ? `No agent found with ID '${agentID}'` : `No agent found with name '${agentName}'`;
+            return { result: { Success: false, ResultCode: 'AGENT_NOT_FOUND', Message: message } };
+        }
+        const refusal = this.exposureRefusal(agent);
+        return refusal ? { result: refusal } : { agent: agent as MJAIAgentEntityExtended };
+    }
+
+    /**
+     * Why an agent may not be dispatched this way, or null. Sub-agents (ParentID set) can't be exposed — their contract is
+     * governed by the parent; invoking them directly would bypass the parent agent's payload filtering. And only agents
+     * the operator has explicitly flagged as callable from outside (`ExposeAsAction`) may be — once auto-registration
+     * lands, it will only create catalog entries for agents that pass this check.
+     */
+    private exposureRefusal(agent: Pick<MJAIAgentEntityExtended, 'Name' | 'ParentID' | 'ExposeAsAction'>): ActionResultSimple | null {
+        if (agent.ParentID) {
+            return {
+                Success: false,
+                ResultCode: 'AGENT_IS_SUB_AGENT',
+                Message:
+                    `Agent '${agent.Name}' is a sub-agent (ParentID is set). ` +
+                    'Only top-level agents can be invoked through Execute Agent. ' +
+                    "Run the parent agent instead, or invoke this sub-agent via the parent's workflow."
+            };
+        }
+        if (!agent.ExposeAsAction) {
+            return {
+                Success: false,
+                ResultCode: 'AGENT_NOT_EXPOSED',
+                Message:
+                    `Agent '${agent.Name}' is not exposed as an action (AIAgent.ExposeAsAction=false). ` +
+                    'Enable ExposeAsAction on the agent record to allow invocation via Execute Agent.'
+            };
+        }
+        return null;
+    }
+
+    /**
+     * The calling run's bounds for the nested run, as its first-class fields: the scope (`RunActionParams.RunScope` —
+     * the calling run's validated tenant and secondary dimensions; nulls become absent) and the audience
+     * ({@link nestedRunAudience}). Outside an agent run there is no `RunScope`, and the nested run is unscoped as before.
+     */
+    private callerRunBounds(
+        params: RunActionParams
+    ): Pick<ExecuteAgentParams, 'PrimaryScopeEntityName' | 'PrimaryScopeRecordID' | 'SecondaryScopes' | 'Audience'> {
+        const scope = params.RunScope;
+        return {
+            PrimaryScopeEntityName: scope?.PrimaryScopeEntityName ?? undefined,
+            PrimaryScopeRecordID: scope?.PrimaryScopeRecordID ?? undefined,
+            SecondaryScopes: scope?.SecondaryScopes ?? undefined,
+            Audience: this.nestedRunAudience(params.Audience),
+        };
+    }
+
+    /**
+     * The calling run's audience for the nested run: an `'Intersection'` of the readers' IDs, which the nested run
+     * validates and hydrates again. None when there is no audience or it names no reader. A malformed one (no
+     * `Readers` array, a reader with no ID) becomes an audience the nested run refuses — never no audience.
+     */
+    private nestedRunAudience(audience: RunActionParams['Audience']): AgentRunAudience | undefined {
+        if (audience === undefined) {
+            return undefined;
+        }
+        const readers: unknown = audience?.Readers;
+        if (!Array.isArray(readers)) {
+            return { Mode: 'Intersection', UserIDs: [] };
+        }
+        const list: unknown[] = readers;
+        return list.length === 0 ? undefined : { Mode: 'Intersection', UserIDs: list.map((reader) => this.readerID(reader)) };
+    }
+
+    /** A reader's ID, or `''` (which the nested run refuses) when it has none. */
+    private readerID(reader: unknown): string {
+        return reader !== null && typeof reader === 'object' && 'ID' in reader && typeof reader.ID === 'string' ? reader.ID : '';
     }
 
     /**

@@ -355,9 +355,13 @@ export class AgentPreExecutionRAG {
     /**
      * The scope gate for every reader of the run's audience, resolved concurrently with the caller as
      * `ContextUser` (whose rights read the permission rows) and the reader as `User`. Every refused reader
-     * gets a Forbidden row naming them, and one refusal skips the scope: a room may see a scope's results only
-     * if each person in it may search that scope. A reader whose permission cannot be resolved skips the scope
-     * too, logged, with no Forbidden row — as for the caller.
+     * gets a Forbidden row naming them by ID, and one refusal skips the scope: a room may see a scope's results
+     * only if each person in it may search that scope. A reader whose permission cannot be resolved skips the
+     * scope too, logged, with no Forbidden row — as for the caller.
+     *
+     * The row is recorded under the CALLER, who can read their own search log, so it carries the reader's ID and
+     * the verdict's `Source` (a fixed enum) only: never the reader's name, nor the resolver's `Reason`, which
+     * names the reader's grants and principals — what the caller could not otherwise see about another user.
      */
     private async audiencePermitted(
         scope: MJSearchScopeEntity,
@@ -375,9 +379,9 @@ export class AgentPreExecutionRAG {
                 permitted = false;
             } else if (!this.searchAllowed(verdict)) {
                 permitted = false;
-                const reader = `'${readers[i].Name}' (${readers[i].ID})`;
-                const reason = `Audience reader ${reader} may not search this scope: ${this.refusalReason(verdict)}`;
-                await this.logRefusal(scope, params, skill, { Who: `audience reader ${reader}`, Reason: reason, Source: verdict.Source }, startTime);
+                const who = `audience reader ${readers[i].ID}`;
+                const reason = `Audience reader ${readers[i].ID} may not search this scope (${this.readerRefusalKind(verdict)}).`;
+                await this.logRefusal(scope, params, skill, { Who: who, Reason: reason, Source: verdict.Source }, startTime);
             }
         }
         return permitted;
@@ -410,6 +414,11 @@ export class AgentPreExecutionRAG {
     /** The bar: allowed, and above `Read` (which grants seeing a scope, not searching it). */
     private searchAllowed(verdict: EffectivePermission): boolean {
         return verdict.Allowed && verdict.Level !== 'Read';
+    }
+
+    /** A reader's refusal for the caller-visible row: the verdict's fixed `Source`, or the `Read` level — no free text. */
+    private readerRefusalKind(verdict: EffectivePermission): string {
+        return verdict.Allowed && verdict.Level === 'Read' ? 'Read level: visibility, not search' : verdict.Source;
     }
 
     /** The resolver's reason, with why a `Read` grant is not enough when that is what refused it. */
@@ -498,7 +507,6 @@ export class AgentPreExecutionRAG {
             Audience: this.searchAudience(input.params),
         }, input.params.contextUser)) {
             if (ev.phase === 'provider') {
-                // Progress only: a provider event carries a count, never the rows (they precede the permission pass).
                 traces.push(`### Provider \`${ev.providerName}\` returned ${ev.resultCount} rows in ${ev.durationMs}ms`);
             } else if (ev.phase === 'final') {
                 finalResults = ev.results;
@@ -508,7 +516,8 @@ export class AgentPreExecutionRAG {
                 errorMsg = ev.error;
             }
         }
-        if (input.params.streamingTrace) input.params.streamingTrace.push(...traces);
+        // Provider counts (never rows) precede the permission pass — the caller's unfiltered reach — so a room sees none.
+        if (input.params.streamingTrace && !this.searchAudience(input.params)) input.params.streamingTrace.push(...traces);
         return {
             Success: !errorMsg,
             Results: finalResults,

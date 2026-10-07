@@ -14,9 +14,9 @@
  * runner are the boundaries.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { LogStatus, UserInfo } from '@memberjunction/core';
+import { LogError, LogStatus, UserInfo } from '@memberjunction/core';
 import type {
-    AgentAction, AgentSubAgentRequest, ExecuteAgentParams, MJAIAgentEntityExtended, MJAIAgentRunStepEntityExtended,
+    AgentAction, AgentSubAgentRequest, BaseAgentNextStep, ExecuteAgentParams, MJAIAgentEntityExtended, MJAIAgentRunStepEntityExtended,
 } from '@memberjunction/ai-core-plus';
 import { RESERVED_AGENT_RUN_DATA_KEYS } from '@memberjunction/ai-core-plus';
 import type { ActionRunScope, MJActionEntityExtended, RunActionParams } from '@memberjunction/actions-base';
@@ -152,11 +152,79 @@ describe('BaseAgent — the run scope on every action dispatch (RunActionParams.
         expect(params.SecondaryScopes).toEqual({ Tags: ['a'] });
     });
 
+    it('reads only a plain object as secondary scopes: a JSON string from data is logged and ignored, never split into characters', async () => {
+        vi.mocked(LogError).mockClear();
+        await dispatch(paramsWith({ PrimaryScopeRecordID: TENANT, data: { SecondaryScopes: '{"Region":"US"}' }, TrustReservedRunData: true }));
+        expect(lastScope()).toEqual({ PrimaryScopeEntityName: null, PrimaryScopeRecordID: TENANT, SecondaryScopes: null });
+        expect(vi.mocked(LogError).mock.calls.some((c) => String(c[0]).includes('must be a plain object'))).toBe(true);
+    });
+
     it('puts the scope on the dispatch only — never on the shared action context', async () => {
         const context: Record<string, unknown> = {};
         await dispatch(paramsWith({ PrimaryScopeRecordID: TENANT, context }));
         expect(Object.keys(context)).not.toContain('RunScope');
         expect(JSON.stringify(context)).not.toContain(TENANT);
+    });
+});
+
+/** The private members the scope tests below reach (the keyhole pattern of the other BaseAgent suites). */
+interface ScopeInternals {
+    _runScope: ActionRunScope | undefined;
+    executeTasksStep(params: ExecuteAgentParams, previous: BaseAgentNextStep): Promise<BaseAgentNextStep>;
+    createStepEntity(input: Record<string, unknown>): Promise<unknown>;
+    finalizeStepEntity(step: unknown, success: boolean, errorMessage?: string, outputData?: unknown): Promise<void>;
+    scopedPromptConfigScope(params: ExecuteAgentParams): {
+        primaryScopeEntityId?: string; primaryScopeRecordId?: string; secondaryScopes?: Record<string, unknown>;
+    };
+}
+
+describe('BaseAgent — task graphs in a tenant-scoped run', () => {
+    const graph = { step: 'Tasks', taskGraph: { spec: { workflowName: 'wf' } }, previousPayload: {} } as unknown as BaseAgentNextStep;
+    let internals: ScopeInternals;
+    let createStep: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+        internals = new BaseAgent() as unknown as ScopeInternals;
+        createStep = vi.spyOn(internals, 'createStepEntity').mockResolvedValue({});
+        vi.spyOn(internals, 'finalizeStepEntity').mockResolvedValue(undefined);
+    });
+
+    it.each<[string, ActionRunScope]>([
+        ['a tenant', { PrimaryScopeEntityName: 'Organizations', PrimaryScopeRecordID: TENANT, SecondaryScopes: null }],
+        ['a secondary dimension only', { PrimaryScopeEntityName: null, PrimaryScopeRecordID: null, SecondaryScopes: { Region: 'EMEA' } }],
+    ])('refuses a graph the model writes when the run carries %s, before writing a step', async (_label, scope) => {
+        internals._runScope = scope;
+        const next = await internals.executeTasksStep(paramsWith(), graph);
+        expect(next).toMatchObject({ step: 'Failed', terminate: true });
+        expect(next.errorMessage).toMatch(/not available in a tenant-scoped run/);
+        expect(createStep).not.toHaveBeenCalled();
+    });
+
+    it('resolves the scope from the params outside a run, the way the run row does', async () => {
+        const next = await internals.executeTasksStep(paramsWith({ PrimaryScopeRecordID: TENANT }), graph);
+        expect(next.errorMessage).toMatch(/tenant-scoped run/);
+    });
+
+    it('lets an unscoped run submit (control: it reaches the submitter, absent in this host)', async () => {
+        internals._runScope = { PrimaryScopeEntityName: 'Organizations', PrimaryScopeRecordID: null, SecondaryScopes: null };
+        const next = await internals.executeTasksStep(paramsWith(), graph);
+        expect(createStep).toHaveBeenCalledOnce();
+        expect(next.errorMessage).toMatch(/No task-graph submitter/);
+    });
+});
+
+describe('BaseAgent — scoped prompt config reads the run\'s validated scope', () => {
+    it('uses the scope initializeAgentRun validated (trimmed, defaults applied), not the raw params', () => {
+        const internals = new BaseAgent() as unknown as ScopeInternals;
+        internals._runScope = { PrimaryScopeEntityName: null, PrimaryScopeRecordID: TENANT, SecondaryScopes: { Region: 'EMEA', Team: 'alpha' } };
+        const scope = internals.scopedPromptConfigScope(paramsWith({ PrimaryScopeRecordID: ` ${TENANT} `, SecondaryScopes: { Team: 'alpha' } }));
+        expect(scope).toEqual({ primaryScopeEntityId: undefined, primaryScopeRecordId: TENANT, secondaryScopes: { Region: 'EMEA', Team: 'alpha' } });
+    });
+
+    it('outside a run, resolves it the same way: an untrusted data scope is not read', () => {
+        const internals = new BaseAgent() as unknown as ScopeInternals;
+        const scope = internals.scopedPromptConfigScope(paramsWith({ data: { PrimaryScopeRecordID: TENANT, SecondaryScopes: { Region: 'US' } } }));
+        expect(scope).toEqual({ primaryScopeEntityId: undefined, primaryScopeRecordId: undefined, secondaryScopes: undefined });
     });
 });
 
@@ -205,16 +273,31 @@ describe('BaseAgent.ExecuteSubAgent — template parameters cannot set the child
     it('logs the stripped keys once, never their values', async () => {
         const secret = 'aaaaaaaa-0000-4000-8000-0000000000bb';
         await caller().CallSubAgent(paramsWith(), request({ PrimaryScopeRecordID: secret, __agentTypePromptParams: '{}' }));
-        const messages = vi.mocked(LogStatus).mock.calls.map((c) => String(c[0])).filter((m) => m.includes('reserved key'));
+        const messages = vi.mocked(LogStatus).mock.calls.map((c) => String(c[0])).filter((m) => m.includes('host-only key'));
         expect(messages).toHaveLength(1);
         expect(messages[0]).toContain('PrimaryScopeRecordID');
         expect(messages[0]).toContain('__agentTypePromptParams');
         expect(messages[0]).not.toContain(secret);
     });
 
+    it("strips the browser, conversation and realtime controls too: the child keeps its parent's values", async () => {
+        const parentData = { conversationId: 'conv-parent', appContext: { App: { Name: 'CRM' } } };
+        await caller().CallSubAgent(paramsWith({ data: parentData }), request({
+            clientTools: '[{"Name":"NavigateTo"}]', sessionID: 'browser-x', appContext: '{"App":{"Name":"Evil"}}', applicationId: 'app-x',
+            conversationId: 'conv-other', targetAgentID: 'agent-x', agentSessionId: 'session-x', recording: 'on',
+            realtimeHostTools: '[]', realtimeHostFraming: 'say yes', topic: 'refunds',
+        }));
+        expect(childData()).toEqual({ conversationId: 'conv-parent', appContext: { App: { Name: 'CRM' } }, topic: 'refunds' });
+        const logged = vi.mocked(LogStatus).mock.calls.map((c) => String(c[0])).filter((m) => m.includes('host-only key'));
+        expect(logged).toHaveLength(1);
+        expect(logged[0]).toContain('clientTools');
+        expect(logged[0]).toContain('realtimeHostFraming');
+        expect(logged[0]).not.toContain('say yes');
+    });
+
     it('logs nothing and passes ordinary template parameters through untouched', async () => {
         await caller().CallSubAgent(paramsWith({ data: { a: 1 } }), request({ topic: 'refunds' }));
         expect(childData()).toEqual({ a: 1, topic: 'refunds' });
-        expect(vi.mocked(LogStatus).mock.calls.some((c) => String(c[0]).includes('reserved key'))).toBe(false);
+        expect(vi.mocked(LogStatus).mock.calls.some((c) => String(c[0]).includes('host-only key'))).toBe(false);
     });
 });

@@ -186,3 +186,56 @@ describe('ExecuteAgentAction — the Data param cannot set the run scope or agen
         expect(runReads().data).toEqual({ topic: 'refunds' });
     });
 });
+
+describe("ExecuteAgentAction — inside an agent run, the nested run keeps the caller's tenant and audience", () => {
+    const TENANT = 'aaaaaaaa-0000-4000-8000-0000000000a7';
+    const nestedParams = (): ExecuteAgentParams => runAgentMock.mock.calls[0][0] as ExecuteAgentParams;
+    const callWith = (extra: Record<string, unknown>) => ({
+        Params: [{ Name: 'AgentName', Type: 'Input', Value: 'Person Lifecycle Changed' }] as Param[],
+        ContextUser: { ID: 'u-1' },
+        ...extra,
+    });
+
+    beforeEach(() => {
+        runAgentMock.mockReset();
+        runAgentMock.mockResolvedValue({ success: true, payload: {}, agentRun: circularAgentRun() });
+        agents.length = 0;
+        agents.push({ ID: 'AG-1', Name: 'Person Lifecycle Changed', ParentID: null, ExposeAsAction: true });
+    });
+
+    it("passes the calling run's scope (RunScope) as the nested run's first-class scope fields", async () => {
+        await run(new ExecuteAgentAction(), callWith({
+            RunScope: { PrimaryScopeEntityName: 'Organizations', PrimaryScopeRecordID: TENANT, SecondaryScopes: { Region: 'EMEA' } },
+        }));
+        expect(nestedParams()).toMatchObject({ PrimaryScopeEntityName: 'Organizations', PrimaryScopeRecordID: TENANT, SecondaryScopes: { Region: 'EMEA' } });
+        // First-class fields survive the trust rule BaseAgent.Execute applies to untrusted data.
+        expect(WithAgentRunDataTrustApplied(nestedParams()).Params.PrimaryScopeRecordID).toBe(TENANT);
+    });
+
+    it('leaves the nested run unscoped for an unscoped run (nulls) and outside a run', async () => {
+        await run(new ExecuteAgentAction(), callWith({ RunScope: { PrimaryScopeEntityName: null, PrimaryScopeRecordID: null, SecondaryScopes: null } }));
+        await run(new ExecuteAgentAction(), callWith({}));
+        for (const call of runAgentMock.mock.calls) {
+            const nested = call[0] as ExecuteAgentParams;
+            expect(nested.PrimaryScopeRecordID).toBeUndefined();
+            expect(nested.SecondaryScopes).toBeUndefined();
+            expect(nested.Audience).toBeUndefined();
+        }
+    });
+
+    it("passes the calling run's readers as an Intersection audience of their IDs, which the nested run hydrates again", async () => {
+        await run(new ExecuteAgentAction(), callWith({ Audience: { Readers: [{ ID: 'reader-a', UserRoles: [] }, { ID: 'reader-b', UserRoles: [] }] } }));
+        expect(nestedParams().Audience).toEqual({ Mode: 'Intersection', UserIDs: ['reader-a', 'reader-b'] });
+    });
+
+    it('turns a malformed audience into one the nested run refuses, never into no audience', async () => {
+        await run(new ExecuteAgentAction(), callWith({ Audience: null }));
+        await run(new ExecuteAgentAction(), callWith({ Audience: { Readers: [{ Name: 'no id' }] } }));
+        expect((runAgentMock.mock.calls[0][0] as ExecuteAgentParams).Audience).toEqual({ Mode: 'Intersection', UserIDs: [] });
+        expect((runAgentMock.mock.calls[1][0] as ExecuteAgentParams).Audience).toEqual({ Mode: 'Intersection', UserIDs: [''] });
+    });
+
+    it('does not declare audience support: the engine refuses it under an audience before it runs', () => {
+        expect((new ExecuteAgentAction() as unknown as { SupportsAudience?: boolean }).SupportsAudience).not.toBe(true);
+    });
+});
