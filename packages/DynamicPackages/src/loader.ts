@@ -26,6 +26,7 @@ import { ResolveDynamicPackagesMode } from './mode.js';
 import { MatchesProcess, NormalizeProcessId } from './process-id.js';
 import type {
     DiscoveredDynamicPackage,
+    DynamicPackageStartupContext,
     DynamicPackageTier,
     DynamicPackagesLogger,
     DynamicPackagesReport,
@@ -362,7 +363,8 @@ async function loadOne(
         const startup = entry.StartupExport ? mod[entry.StartupExport] : undefined;
         let ranStartupExport = false;
         if (typeof startup === 'function') {
-            await Promise.resolve((startup as () => unknown)());
+            const context: DynamicPackageStartupContext = { ProcessId: report.ProcessId };
+            await Promise.resolve((startup as (ctx?: DynamicPackageStartupContext) => unknown)(context));
             ranStartupExport = true;
         } else if (entry.StartupExport) {
             // A named export that is missing is a real mis-configuration (renamed export, stale

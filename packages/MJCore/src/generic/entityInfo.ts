@@ -2735,11 +2735,21 @@ export class EntityInfo extends BaseInfo {
      */
     AuditViewRuns: boolean = null
     /**
-     * When true (default), the server-side RunView cache will store and return cached results
-     * for this entity, trusting that all mutations flow through BaseEntity.Save() which fires
-     * cache invalidation events. Set to false for entities whose rows are created as side-effects
-     * of other operations via raw SQL (e.g., Record Changes created by spCreateRecordChange_Internal),
-     * since those inserts bypass BaseEntity and never trigger cache invalidation.
+     * Whether every change to this entity's rows fires a `BaseEntity` event. True (the default)
+     * declares that all mutations flow through `BaseEntity.Save()`/`Delete()`, so a cached copy
+     * kept current by those events can be trusted. False declares that rows can change without an
+     * event: raw SQL, a stored procedure (e.g. Record Changes created by
+     * `spCreateRecordChange_Internal`), or another application writing the same table.
+     *
+     * Each cache layer responds to `false` in the way that suits it:
+     * - **Server RunView cache:** does not cache the entity, since re-validating would cost as
+     *   much as running the query.
+     * - **Client RunView cache:** caches as before; every read is validated against the database.
+     * - **Engine caches (`BaseEngine`):** keep the rows, and the engine sweep re-checks them on its
+     *   interval. The user cache and the metadata sweep do the same for their entities.
+     *
+     * To keep an entity out of caching altogether, set {@link AllowCaching} to false instead.
+     * Setting any `AllowDirectSQL*` flag requires this to be false (a database CHECK enforces it).
      */
     TrustServerCacheCompletely: boolean = true
     /**

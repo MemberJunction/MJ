@@ -13,6 +13,14 @@
  *  - If the command uses only standard npm packages or light @memberjunction
  *    packages (like @memberjunction/config), add its oclif command ID here.
  */
+/**
+ * NOTE on spelling: oclif command ids are **colon**-separated (`cache:clear`), whatever
+ * `topicSeparator` is set to — that only affects how a user types it. The space forms below are
+ * kept because they read the way the command is invoked, but each one is paired with its colon id,
+ * which is what `Command.id` actually equals at runtime. Without the colon form the entry never
+ * matches and the command silently pays the full bootstrap: `cache clear` measured 4.4-7.4 s
+ * against 0.19-0.29 s. `light-commands.ids.test.ts` fails on a space-only entry.
+ */
 export const LIGHT_COMMANDS: ReadonlySet<string> = new Set([
   // Built-in oclif plugins
   'version',
@@ -22,8 +30,11 @@ export const LIGHT_COMMANDS: ReadonlySet<string> = new Set([
   // metadata only; no bootstrap needed. Plugin entry points are light.
   'usage',
   'sync usage',
+  'sync:usage',
   'codegen usage',
+  'codegen:usage',
   'dev usage',
+  'dev:usage',
   // Every remaining domain's tier-2 page. These compose oclif's own manifest plus the
   // light plugin entry points — the whole point of the surface is that an agent can
   // read it without paying for a runtime boot. Both id spellings are listed because
@@ -72,15 +83,25 @@ export const LIGHT_COMMANDS: ReadonlySet<string> = new Set([
 
   // Plugin registry editing — just writes mj-cli-plugins.json
   'plugin add',
+  'plugin:add',
 
   // Bump - uses zod, fast-glob, fs only
   'bump',
+
+  // Shared cache - uses @memberjunction/redis-provider (ioredis + core) only
+  'cache',
+  'cache clear',
+  'cache:clear',
+  'cache usage',
+  'cache:usage',
 
   // Database commands - use @memberjunction/skyway-core + config only
   'clean',
   'migrate',
   'migrate convert',
+  'migrate:convert',
   'migrate create',
+  'migrate:create',
 
   // Install wizard - uses @memberjunction/installer engine (lightweight, no bootstrap)
   'install',
@@ -95,15 +116,20 @@ export const LIGHT_COMMANDS: ReadonlySet<string> = new Set([
   'ai',
   'queue',
   'ai audit',
+  'ai:audit',
   'test',
   'dbdoc',
   'dev',
 
   // Dev workspace generator - node stdlib + chalk only, no bootstrap
   'dev workspace',
+  'dev:workspace',
   'dev workspace status',
+  'dev:workspace:status',
   'dev workspace doctor',
+  'dev:workspace:doctor',
   'dev workspace clean',
+  'dev:workspace:clean',
 
   // SQL conversion commands - use @memberjunction/sql-converter + sqlglot-ts only
   'sql-convert',
@@ -118,13 +144,21 @@ export const LIGHT_COMMANDS: ReadonlySet<string> = new Set([
   // Must be light to break the circular dependency: server-bootstrap-lite's prebuild calls
   // `mj codegen manifest`, but bootstrap-lite must be built before MJCLI's prerun can import it.
   'codegen manifest',
+  'codegen:manifest',
 
   // DBDoc commands - already use dynamic imports internally
   'dbdoc init',
+  'dbdoc:init',
   'dbdoc analyze',
+  'dbdoc:analyze',
   'dbdoc export',
+  'dbdoc:export',
   'dbdoc export-sample-queries',
+  'dbdoc:export-sample-queries',
   'dbdoc generate-queries',
+  'dbdoc:generate-queries',
   'dbdoc reset',
+  'dbdoc:reset',
   'dbdoc status',
+  'dbdoc:status',
 ]);
