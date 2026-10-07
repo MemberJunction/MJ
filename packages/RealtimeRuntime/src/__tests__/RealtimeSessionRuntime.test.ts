@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseRealtimeClient, REQUESTED_TRACKS_SESSION_KEY } from '@memberjunction/ai-realtime-client';
+import { BaseRealtimeClient, MEDIA_PLACEMENTS, REQUESTED_TRACKS_SESSION_KEY } from '@memberjunction/ai-realtime-client';
 import type { IMetadataProvider } from '@memberjunction/core';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import {
@@ -391,26 +391,27 @@ describe('channel registry on a connect-only provider (#4887)', () => {
     // A connect-only provider has no entity metadata, so AIEngineBase cannot load — but the embed
     // still needs its channels: without them Whiteboard/Media tools never reach the mint and the
     // agent loses them (seen live on Caliber's widget). The registry is read over GraphQL instead.
-    const registryRow = (Name: string, IsActive: boolean) => ({
-        Data: JSON.stringify({ ID: `id-${Name}`, Name, ClientPluginClass: `${Name}Channel`, IsActive }),
+    const registryRow = (Name: string, IsActive: boolean, UIConfig?: string) => ({
+        Data: JSON.stringify({ ID: `id-${Name}`, Name, ClientPluginClass: `${Name}Channel`, IsActive, ...(UIConfig ? { UIConfig } : {}) }),
     });
 
     it('reads the registry rows over GraphQL, active and inactive (an inactive row is the kill switch), without touching AIEngineBase, when the provider has no entity metadata', async () => {
         const spy = vi.spyOn(AIEngineBase, 'GetProviderInstance');
         const ExecuteGQL = vi.fn().mockResolvedValue({
-            RunDynamicView: { Success: true, Results: [registryRow('Whiteboard', true), registryRow('Retired', false)] },
+            RunDynamicView: { Success: true, Results: [registryRow('Whiteboard', true, JSON.stringify({ Placement: 'pip' })), registryRow('Retired', false)] },
         });
         try {
             const runtime = new RealtimeSessionRuntime(new FakeMediaHost());
             runtime.Provider = { Entities: [], ExecuteGQL } as never; // Entities + ExecuteGQL are all it reads
 
             await expect(fetchChannelDefinitions(runtime)).resolves.toEqual([
-                { ID: 'id-Whiteboard', Name: 'Whiteboard', ClientPluginClass: 'WhiteboardChannel', IsActive: true },
-                { ID: 'id-Retired', Name: 'Retired', ClientPluginClass: 'RetiredChannel', IsActive: false },
+                { ID: 'id-Whiteboard', Name: 'Whiteboard', ClientPluginClass: 'WhiteboardChannel', IsActive: true, SurfacePlacement: { Default: 'pip', Allowed: MEDIA_PLACEMENTS } },
+                { ID: 'id-Retired', Name: 'Retired', ClientPluginClass: 'RetiredChannel', IsActive: false, SurfacePlacement: { Default: 'tab', Allowed: MEDIA_PLACEMENTS } },
             ]);
             expect(ExecuteGQL).toHaveBeenCalledTimes(1);
             expect(ExecuteGQL.mock.calls[0][1]).toMatchObject({ input: { EntityName: 'MJ: AI Agent Channels' } });
             expect(ExecuteGQL.mock.calls[0][1].input.ExtraFilter).toBeUndefined();
+            expect(ExecuteGQL.mock.calls[0][1].input.Fields).toContain('UIConfig');
             expect(spy).not.toHaveBeenCalled();
         } finally {
             spy.mockRestore();
