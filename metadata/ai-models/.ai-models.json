@@ -25250,7 +25250,12 @@
       "IsActive": true,
       "SpeedRank": 10,
       "CostRank": 5,
-      "InheritTypeModalities": true
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "Realtime": {
+          "FullDuplex": true
+        }
+      }
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
@@ -25263,7 +25268,12 @@
             "SupportedResponseFormats": "Any",
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer",
+            "ModelConfiguration": {
+              "Realtime": {
+                "FullDuplex": true
+              }
+            }
           },
           "primaryKey": {
             "ID": "F3431AC6-C079-4866-9F46-A2F38E5A57EB"
@@ -25284,7 +25294,12 @@
             "SupportedResponseFormats": "Any",
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "Realtime": {
+                "FullDuplex": true
+              }
+            }
           },
           "primaryKey": {
             "ID": "29B5A4BC-C201-4341-B60E-C3E929E4E513"
@@ -25579,7 +25594,8 @@
           },
           "TurnDetection": {
             "Coverage": "audioActivityAndAllVideo"
-          }
+          },
+          "FullDuplex": true
         }
       }
     },
@@ -25606,7 +25622,8 @@
                 },
                 "TurnDetection": {
                   "Coverage": "audioActivityAndAllVideo"
-                }
+                },
+                "FullDuplex": true
               }
             }
           },
@@ -25790,7 +25807,8 @@
           "Reasoning": {
             "IncludeThoughtSummaries": true,
             "Level": "medium"
-          }
+          },
+          "FullDuplex": true
         }
       }
     },
@@ -25818,7 +25836,8 @@
                 "Reasoning": {
                   "IncludeThoughtSummaries": true,
                   "Level": "medium"
-                }
+                },
+                "FullDuplex": true
               }
             }
           },

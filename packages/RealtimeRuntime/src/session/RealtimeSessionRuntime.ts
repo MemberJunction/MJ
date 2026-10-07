@@ -1314,9 +1314,11 @@ export class RealtimeSessionRuntime {
       this.currentTurnStartMs = recorder.IsRecording ? 0 : null;
       this.turnAudioStartCaptured = false;
       if (this.recorder) {
-        // The agent's WebRTC audio track usually lands AFTER Connect() resolves, so `remoteStream`
-        // above is typically null and we'd capture mic-only. Attach the agent stream whenever it
-        // arrives (fires immediately if already present) so the recording includes the agent voice.
+        // WebRTC drivers (OpenAI): the agent's track usually lands AFTER Connect() resolves, so
+        // `remoteStream` above is null here and this handler attaches it later. PCM-playback
+        // drivers (Gemini, ElevenLabs, AssemblyAI, xAI, HuggingFace) publish at Connect, so
+        // `remoteStream` is already set and the handler fires immediately with the same stream;
+        // AttachRemoteStream is idempotent, so it is mixed only once.
         client.OnRemoteMediaStream?.((stream) => this.recorder?.AttachRemoteStream(stream));
         this.startSegmentFlushing();
       }
