@@ -121,6 +121,7 @@ import {
     SummarizeDecisionAnswers,
     SystemPlaceholderManager,
     WithoutReservedAgentRunDataKeys,
+    WithAgentRunDataTrustApplied,
     type AIPromptExecutionScope,
     type AgentRunAudience
 } from '@memberjunction/ai-core-plus';
@@ -1996,6 +1997,27 @@ export class BaseAgent {
     }
 
     /**
+     * The params a run executes with: `params` itself, or, when the caller did not set
+     * `ExecuteAgentParams.TrustReservedRunData` and `data` carries reserved keys, a copy whose `data` lacks them
+     * (`WithAgentRunDataTrustApplied` in `@memberjunction/ai-core-plus`). {@link Execute} applies it first, so it
+     * holds for every entry point: AgentRunner, the Execute Agent action, MCP, A2A, Runtime Actions, sub-agents.
+     * The removed keys are logged once with the agent and user, never their values.
+     */
+    private withRunDataTrustApplied<C>(params: ExecuteAgentParams<C>): ExecuteAgentParams<C> {
+        const { Params, StrippedKeys } = WithAgentRunDataTrustApplied(params);
+        if (StrippedKeys.length > 0) {
+            this.logStatus(
+                `🔒 Ignored reserved run-data key(s) ${StrippedKeys.join(', ')} for agent '${params.agent?.Name}' ` +
+                `(user ${params.contextUser?.Email ?? 'unknown'}): a run's scope and agent-type parameters come from the ` +
+                `ExecuteAgentParams fields, or from data only when the server sets TrustReservedRunData.`,
+                false,
+                params
+            );
+        }
+        return Params;
+    }
+
+    /**
      * Executes an AI agent using hierarchical prompt composition.
      * 
      * This method orchestrates the entire agent execution process, from loading
@@ -2034,6 +2056,10 @@ export class BaseAgent {
     }
 
     public async Execute<C = any, R = any>(params: ExecuteAgentParams<C>): Promise<ExecuteAgentResult<R>> {
+        // Every run, whatever started it: the reserved data keys (scope, agent-type params) count only when the
+        // caller set TrustReservedRunData. Everything below reads the cleaned params.
+        params = this.withRunDataTrustApplied(params);
+
         // Capture per-request provider for the duration of this execution so all entity
         // saves go through the isolated provider, never the global singleton's transaction.
         this._activeProvider = params.provider ?? Metadata.Provider;
@@ -3230,6 +3256,7 @@ export class BaseAgent {
                 CredentialScope: params.CredentialScope,
                 Audience: params.Audience, // the target answers the same people, so it is bounded the same way
                 data: params.data,
+                TrustReservedRunData: params.TrustReservedRunData, // the session's data, already vetted when it started
                 verbose: params.verbose,
                 // Progress streams BOTH to the runner's narration consumer (request.OnProgress —
                 // it paces SendContextNote/RequestSpokenUpdate over the live socket) AND to any
@@ -10920,6 +10947,7 @@ The context is now within limits. Please retry your request with the recovered c
                         ...params.data,
                         ...templateParameters,
                       }, // parent data first, then the template parameters (never the reserved scope keys) so loop agents can override parent data
+                TrustReservedRunData: params.TrustReservedRunData, // the reserved keys left in data are the parent's, already vetted
                 context: subAgentContext, // use subAgentRequest.context if provided, otherwise params.context
                 verbose: params.verbose, // pass verbose flag to sub-agent
                 actionChanges: subAgentActionChanges, // propagate filtered action changes to sub-agent
@@ -10964,9 +10992,9 @@ The context is now within limits. Please retry your request with the recovered c
      * (`RESERVED_AGENT_RUN_DATA_KEYS` in `@memberjunction/ai-core-plus`: the scope family and
      * `__agentTypePromptParams`). They are merged into the child's `data`, which `BaseAgent` reads as the fallback
      * for the child's scope and agent-type parameters, and inside a Loop agent they are written by the model — so
-     * left in, a model could set a sub-agent's tenant whenever the parent's scope arrived through `data`. The child
-     * inherits the parent's scope instead (its own params, and the parent's `data` as is). What was removed is
-     * logged once, by key only — never the values.
+     * left in, a model could set a sub-agent's tenant whenever the parent's run trusts its `data`
+     * (`TrustReservedRunData`, which the child inherits). The child inherits the parent's scope instead (its own
+     * params, and the parent's `data` as is). What was removed is logged once, by key only — never the values.
      */
     private subAgentTemplateParameters(params: ExecuteAgentParams, subAgentRequest: AgentSubAgentRequest): Record<string, unknown> | undefined {
         if (!subAgentRequest.templateParameters) {
@@ -18924,17 +18952,18 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
-     * The run's scope inputs: the explicit `ExecuteAgentParams` fields, else their `data` fallbacks (GraphQL callers
-     * pass the scope in `data`; the server strips those keys from an untrusted caller's `data`, and
-     * {@link ExecuteSubAgent} from the model's template parameters).
+     * The run's scope inputs: the explicit `ExecuteAgentParams` fields, else their `data` fallbacks, which count only
+     * when the caller set `TrustReservedRunData`. {@link Execute} has already cleaned `data`; the rule is applied here
+     * again for {@link ExecuteSingleAction} called outside a run (the realtime tool path, harnesses).
      */
     private runScopeInputs(params: ExecuteAgentParams): {
         EntityName: string | undefined; RecordID: string | undefined; Secondary: Record<string, SecondaryScopeValue> | undefined
     } {
+        const data = WithAgentRunDataTrustApplied(params).Params.data;
         return {
-            EntityName: this.scopeText(params.PrimaryScopeEntityName ?? params.data?.PrimaryScopeEntityName),
-            RecordID: this.scopeText(params.PrimaryScopeRecordID ?? params.data?.PrimaryScopeRecordID),
-            Secondary: params.SecondaryScopes ?? (params.data?.SecondaryScopes as Record<string, SecondaryScopeValue> | undefined),
+            EntityName: this.scopeText(params.PrimaryScopeEntityName ?? data?.PrimaryScopeEntityName),
+            RecordID: this.scopeText(params.PrimaryScopeRecordID ?? data?.PrimaryScopeRecordID),
+            Secondary: params.SecondaryScopes ?? (data?.SecondaryScopes as Record<string, SecondaryScopeValue> | undefined),
         };
     }
 

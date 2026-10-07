@@ -1566,7 +1566,7 @@ describe('BaseAgent.Execute — decisions on a turn', () => {
 
     /** Run params for an agent whose finishIf gates are `mode` (gates are opt-in; the default is off). */
     function gateParams(mode: 'on' | 'shadow'): ExecuteAgentParams {
-        return makeParams({ data: { __agentTypePromptParams: { finishIfMode: mode } } });
+        return makeParams({ data: { __agentTypePromptParams: { finishIfMode: mode } }, TrustReservedRunData: true });
     }
 
     function gatedActionsEnvelope(): LoopAgentResponse {
@@ -1951,6 +1951,7 @@ describe('BaseAgent.Execute — decisions on a turn', () => {
         const result = await agent.Execute(makeParams({
             payload: { tickets: ['Printer on fire.', 'Password reset.', 'Coffee machine.'] },
             data: { __agentTypePromptParams: { decisionsMaxCallsPerTurn: 2 } },
+            TrustReservedRunData: true,
         }));
 
         expect(result.success).toBe(true);
@@ -1981,7 +1982,7 @@ describe('BaseAgent.Execute — a finishIfMode that is not a mode', () => {
             () => llmEnvelope(actionsEnvelope()),
             () => llmEnvelope(successEnvelope()),
         ]);
-        const result = await agent.Execute(makeParams({ data: { __agentTypePromptParams: { finishIfMode } } }));
+        const result = await agent.Execute(makeParams({ data: { __agentTypePromptParams: { finishIfMode } }, TrustReservedRunData: true }));
         expect(result.success).toBe(true);
         expect(runner.Calls).toHaveLength(2);
     }
@@ -2321,5 +2322,73 @@ describe('BaseAgent.Execute — the run scope on every action dispatch (RunActio
 
         expect(harness.runScopes[0]).toMatchObject({ PrimaryScopeRecordID: TENANT });
         expect(harness.runScopes[1]).toMatchObject({ PrimaryScopeRecordID: null });
+    });
+});
+
+describe('BaseAgent.Execute — the reserved run-data keys count only with TrustReservedRunData', () => {
+    const TENANT = 'aaaaaaaa-0000-4000-8000-0000000000b7';
+    /** What an untrusted caller (a browser, an Execute Agent action call, MCP, A2A) might put in `data`. */
+    const hostileData = (): Record<string, unknown> => ({
+        topic: 'refunds',
+        PrimaryScopeRecordID: TENANT,
+        SecondaryScopes: { Region: 'EMEA' },
+        __agentTypePromptParams: { enableTaskGraphs: true },
+    });
+    const scopedRun = (): FakeAgentRun & { PrimaryScopeRecordID?: string | null } => harness.run as FakeAgentRun & { PrimaryScopeRecordID?: string | null };
+    const promptParamsSeen = (runner: ScriptedPromptRunner): Record<string, unknown> | undefined =>
+        runner.Calls[0].data?.__agentTypePromptParams as Record<string, unknown> | undefined;
+    const reservedKeyLogs = (): string[] => vi.mocked(LogStatus).mock.calls.map((c) => String(c[0])).filter((m) => m.includes('reserved run-data key'));
+
+    beforeEach(() => {
+        vi.mocked(LogStatus).mockClear();
+    });
+
+    function makeRun(): { agent: HarnessAgent; runner: ScriptedPromptRunner } {
+        return makeAgent([() => llmEnvelope(actionsEnvelope()), () => llmEnvelope(successEnvelope())]);
+    }
+
+    it('without it, drops the scope and agent-type keys from data before the run starts, and keeps the rest', async () => {
+        const { agent, runner } = makeRun();
+
+        const result = await agent.Execute(makeParams({ data: hostileData() }));
+
+        expect(result.success).toBe(true);
+        expect(harness.runScopes).toEqual([{ PrimaryScopeEntityName: null, PrimaryScopeRecordID: null, SecondaryScopes: null }]);
+        expect(scopedRun().PrimaryScopeRecordID ?? null).toBeNull();
+        expect(promptParamsSeen(runner)?.enableTaskGraphs).not.toBe(true);
+        expect(runner.Calls[0].data?.topic).toBe('refunds');
+    });
+
+    it("never mutates the caller's params or data, and logs the dropped keys once, never their values", async () => {
+        const data = hostileData();
+        const params = makeParams({ data });
+        const { agent } = makeRun();
+
+        await agent.Execute(params);
+
+        expect(params.data).toBe(data);
+        expect(data).toEqual(hostileData());
+        expect(reservedKeyLogs()).toHaveLength(1);
+        expect(reservedKeyLogs()[0]).toContain('PrimaryScopeRecordID, SecondaryScopes, __agentTypePromptParams');
+        expect(reservedKeyLogs()[0]).not.toContain(TENANT);
+    });
+
+    it('with it, the run reads its scope and agent-type parameters from data, as a trusted server caller intends', async () => {
+        const { agent, runner } = makeRun();
+
+        await agent.Execute(makeParams({ data: hostileData(), TrustReservedRunData: true }));
+
+        expect(harness.runScopes).toEqual([{ PrimaryScopeEntityName: null, PrimaryScopeRecordID: TENANT, SecondaryScopes: { Region: 'EMEA' } }]);
+        expect(scopedRun().PrimaryScopeRecordID).toBe(TENANT);
+        expect(promptParamsSeen(runner)?.enableTaskGraphs).toBe(true);
+        expect(reservedKeyLogs()).toHaveLength(0);
+    });
+
+    it('leaves the first-class scope fields alone: server code sets a scope without the marker', async () => {
+        const { agent } = makeRun();
+
+        await agent.Execute(makeParams({ PrimaryScopeRecordID: TENANT, data: { PrimaryScopeRecordID: 'aaaaaaaa-0000-4000-8000-0000000000ff' } }));
+
+        expect(harness.runScopes[0]).toMatchObject({ PrimaryScopeRecordID: TENANT });
     });
 });
