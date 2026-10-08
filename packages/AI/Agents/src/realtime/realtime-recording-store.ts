@@ -306,3 +306,127 @@ export async function StoreRealtimeRecording(input: StoreRealtimeRecordingInput)
 export async function storeRealtimeRecording(input: StoreRealtimeRecordingInput): Promise<StoreRealtimeRecordingResult> {
     return StoreRealtimeRecording(input);
 }
+
+const RECORDING_WAV_HEADER_BYTES = 44;
+const RECORDING_BYTES_PER_SAMPLE = 2; // mono, 16-bit PCM
+/** WAV stores sizes as uint32; the RIFF chunk size is `36 + dataSize`, so data tops out 36 bytes short of the max. */
+const RECORDING_MAX_DATA_BYTES = 0xFFFFFFFF - 36;
+
+/** One recovered shard: its zero-based position in the recording and its raw mono PCM16-LE bytes. */
+export interface RecordingSegmentBytes {
+    readonly Index: number;
+    readonly Bytes: Buffer;
+}
+
+/** A WAV assembled from shards, plus what had to be invented to keep it aligned. */
+export interface AssembledRecording {
+    /** Canonical 44-byte-header mono 16-bit PCM WAV. */
+    readonly Wav: Buffer;
+    /** Shard indexes (ascending) that were absent and filled with silence. */
+    readonly MissingIndexes: number[];
+    /** Byte length used for each silent gap; reported even when nothing was missing. */
+    readonly GapBytes: number;
+}
+
+/**
+ * Assembles recovered recording shards into one WAV, in index order, filling every absent index with
+ * silence. Silence (rather than skipping the gap) keeps all later audio at its true time offset, so it
+ * stays aligned with transcript cues, which are offsets from the session's `RecordingStartedAt`.
+ *
+ * The gap length is the median length of the present shards excluding the highest present index (that
+ * one is normally a partial window); with a single shard, that shard's length. It is rounded down to
+ * an even byte count (whole 16-bit samples), minimum 2.
+ *
+ * @param segments Recovered shards; any order, unique non-negative integer indexes starting from 0.
+ * @param sampleRate Sample rate of the PCM data, in Hz.
+ * @throws Error on no segments, an invalid sample rate or index, a duplicate index, an empty or
+ *   odd-length shard, or a result too large for a WAV.
+ */
+export function BuildRecordingFromSegments(segments: RecordingSegmentBytes[], sampleRate: number): AssembledRecording {
+    validateRecordingInputs(segments, sampleRate);
+    const ordered = [...segments].sort((a, b) => a.Index - b.Index);
+    const gapBytes = computeRecordingGapBytes(ordered);
+    const missingIndexes = findMissingIndexes(ordered);
+
+    const dataSize = ordered.reduce((sum, s) => sum + s.Bytes.length, 0) + missingIndexes.length * gapBytes;
+    if (dataSize > RECORDING_MAX_DATA_BYTES) {
+        throw new Error(`BuildRecordingFromSegments: data of ${dataSize} bytes exceeds the maximum WAV data size of ${RECORDING_MAX_DATA_BYTES} bytes`);
+    }
+
+    // Buffer.alloc zero-fills, so gaps need no explicit write.
+    const wav = Buffer.alloc(RECORDING_WAV_HEADER_BYTES + dataSize);
+    writeRecordingWavHeader(wav, sampleRate, dataSize);
+    let offset = RECORDING_WAV_HEADER_BYTES;
+    let expectedIndex = 0;
+    for (const segment of ordered) {
+        offset += (segment.Index - expectedIndex) * gapBytes;
+        offset += segment.Bytes.copy(wav, offset);
+        expectedIndex = segment.Index + 1;
+    }
+    return { Wav: wav, MissingIndexes: missingIndexes, GapBytes: gapBytes };
+}
+
+function validateRecordingInputs(segments: RecordingSegmentBytes[], sampleRate: number): void {
+    if (segments.length === 0) {
+        throw new Error('BuildRecordingFromSegments: no segments to assemble');
+    }
+    if (!Number.isInteger(sampleRate) || sampleRate <= 0) {
+        throw new Error(`BuildRecordingFromSegments: sample rate must be a positive integer, got ${sampleRate}`);
+    }
+    const seen = new Set<number>();
+    for (const { Index, Bytes } of segments) {
+        if (!Number.isInteger(Index) || Index < 0) {
+            throw new Error(`BuildRecordingFromSegments: segment index must be a non-negative integer, got ${Index}`);
+        }
+        if (seen.has(Index)) {
+            throw new Error(`BuildRecordingFromSegments: duplicate segment index ${Index}`);
+        }
+        seen.add(Index);
+        if (Bytes.length === 0) {
+            throw new Error(`BuildRecordingFromSegments: segment ${Index} is empty`);
+        }
+        if (Bytes.length % RECORDING_BYTES_PER_SAMPLE !== 0) {
+            throw new Error(`BuildRecordingFromSegments: segment ${Index} has odd length ${Bytes.length}; PCM16 needs an even byte count`);
+        }
+    }
+}
+
+/** Median length of the present shards minus the highest-indexed one (a partial window), floored to even, min 2. */
+function computeRecordingGapBytes(ordered: RecordingSegmentBytes[]): number {
+    const basis = ordered.length > 1 ? ordered.slice(0, -1) : ordered;
+    const lengths = basis.map(s => s.Bytes.length).sort((a, b) => a - b);
+    const mid = Math.floor(lengths.length / 2);
+    const median = lengths.length % 2 === 1 ? lengths[mid] : (lengths[mid - 1] + lengths[mid]) / 2;
+    const even = Math.floor(median / RECORDING_BYTES_PER_SAMPLE) * RECORDING_BYTES_PER_SAMPLE;
+    return Math.max(RECORDING_BYTES_PER_SAMPLE, even);
+}
+
+/** Indexes in [0, highest present) with no shard. `ordered` is sorted ascending. */
+function findMissingIndexes(ordered: RecordingSegmentBytes[]): number[] {
+    const highestIndex = ordered[ordered.length - 1].Index;
+    const present = new Set(ordered.map(s => s.Index));
+    const missing: number[] = [];
+    for (let i = 0; i < highestIndex; i++) {
+        if (!present.has(i)) {
+            missing.push(i);
+        }
+    }
+    return missing;
+}
+
+/** Same canonical header layout as `RealtimeRecordingCapture.encodeWavBuffer` (mono, 16-bit, PCM). */
+function writeRecordingWavHeader(buffer: Buffer, sampleRate: number, dataSize: number): void {
+    buffer.write('RIFF', 0, 'ascii');
+    buffer.writeUInt32LE(36 + dataSize, 4);
+    buffer.write('WAVE', 8, 'ascii');
+    buffer.write('fmt ', 12, 'ascii');
+    buffer.writeUInt32LE(16, 16);
+    buffer.writeUInt16LE(1, 20);
+    buffer.writeUInt16LE(1, 22);
+    buffer.writeUInt32LE(sampleRate, 24);
+    buffer.writeUInt32LE(sampleRate * RECORDING_BYTES_PER_SAMPLE, 28);
+    buffer.writeUInt16LE(RECORDING_BYTES_PER_SAMPLE, 32);
+    buffer.writeUInt16LE(16, 34);
+    buffer.write('data', 36, 'ascii');
+    buffer.writeUInt32LE(dataSize, 40);
+}
