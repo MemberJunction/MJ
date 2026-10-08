@@ -33,7 +33,10 @@ export const MAX_CONCURRENT_FLUSHES = 2;
  * Per-attempt upload deadline. A hung request would otherwise pin one of the
  * {@link MAX_CONCURRENT_FLUSHES} slots forever and silently stop all later shards. A timeout counts
  * as a failed attempt; if the request later succeeds anyway that is harmless, because the server
- * key is per-index and a resend is an idempotent overwrite.
+ * key is per-index and a resend is an idempotent overwrite. The timeout is logical only:
+ * `ExecuteGQL` accepts no AbortSignal, so a timed-out request may still be on the wire. Requests
+ * stay rate-bounded regardless (at most {@link MAX_CONCURRENT_FLUSHES} flushes, each sending at
+ * most one batch, per timeout window), and a late success is an idempotent same-index overwrite.
  */
 export const SHARD_UPLOAD_TIMEOUT_MS = 60_000;
 
@@ -71,8 +74,9 @@ export class RecordingShardQueue {
   }
 
   /**
-   * Takes ownership of retained shards, captures a new window, then uploads the batch oldest-first.
-   * A failure never stops the rest of the batch. Skips entirely (no snapshot) when
+   * Takes ownership of retained shards and uploads them oldest-first, then captures a new window
+   * and uploads it. Retained shards go first so a hung snapshot cannot strand them. A failure never
+   * stops the rest of the flush. Skips entirely (no snapshot) when
    * {@link MAX_CONCURRENT_FLUSHES} are already running. Never rejects.
    */
   public async Flush(snapshot: ShardSnapshot, upload: ShardUpload): Promise<void> {
@@ -86,13 +90,15 @@ export class RecordingShardQueue {
       // Swap the array out so a concurrent flush only sees shards nobody is currently sending.
       const batch = this.retained;
       this.retained = [];
-      const fresh = await this.captureShard(snapshot);
-      if (fresh) {
-        // Already index-ordered: `send` keeps retained sorted and a fresh index exceeds every earlier one.
-        batch.push(fresh);
-      }
+      // Retained shards go first, BEFORE the capture: a snapshot that never resolves must not strand
+      // shards that already failed. Index order is unaffected — indexes are assigned in capture order
+      // on the serialized chain, and every retained shard already has an older index.
       for (const shard of batch) {
         await this.send(shard, upload);
+      }
+      const fresh = await this.captureShard(snapshot);
+      if (fresh) {
+        await this.send(fresh, upload);
       }
     } finally {
       this.inFlight--;

@@ -207,6 +207,29 @@ describe('RecordingShardQueue', () => {
     expect(Calls.find((c) => c.Audio === 'newer')?.Index).toBe(1);
   });
 
+  it('uploads retained shards even when the new window\'s snapshot never resolves', async () => {
+    const queue = new RecordingShardQueue();
+    const stored = new Set<number>();
+    let refuseFirst = true;
+    const upload: ShardUpload = async (index) => {
+      if (refuseFirst) {
+        refuseFirst = false;
+        return false;
+      }
+      stored.add(index);
+      return true;
+    };
+    await queue.Flush(snapshotOf('a'), upload);
+    expect(queue.RetainedCount).toBe(1);
+
+    // The hung snapshot must not strand the already-failed shard behind it.
+    const hungFlush = queue.Flush(() => new Promise<string | null>(() => undefined), upload);
+    await settle();
+    expect([...stored]).toEqual([0]);
+    expect(queue.RetainedCount).toBe(0);
+    void hungFlush;
+  });
+
   it('skips a flush without snapshotting when MAX_CONCURRENT_FLUSHES are in flight', async () => {
     expect(MAX_CONCURRENT_FLUSHES).toBe(2);
     const queue = new RecordingShardQueue();
@@ -295,6 +318,46 @@ describe('RecordingShardQueue', () => {
       await queue.Flush(snapshot, Upload);
       expect(snapshot).toHaveBeenCalledTimes(1);
       expect(Calls.map((c) => c.Index)).toEqual([0, 1]);
+    });
+
+    it('a timed-out upload that LATER rejects causes no unhandled rejection and no extra retained entry', async () => {
+      const unhandled = vi.fn();
+      process.on('unhandledRejection', unhandled);
+      try {
+        const queue = new RecordingShardQueue();
+        let rejectLate!: (reason: Error) => void;
+        const slow: ShardUpload = () =>
+          new Promise<boolean>((_, reject) => {
+            rejectLate = reject;
+          });
+        const flush = queue.Flush(snapshotOf('a'), slow);
+        await vi.advanceTimersByTimeAsync(SHARD_UPLOAD_TIMEOUT_MS);
+        await flush;
+        expect(queue.RetainedCount).toBe(1);
+
+        rejectLate(new Error('late failure'));
+        await vi.advanceTimersByTimeAsync(0);
+        expect(queue.RetainedCount).toBe(1);
+        expect(unhandled).not.toHaveBeenCalled();
+      } finally {
+        process.off('unhandledRejection', unhandled);
+      }
+    });
+
+    it('a timed-out upload that LATER resolves true still leaves exactly one retained entry (idempotent same-index retry)', async () => {
+      const queue = new RecordingShardQueue();
+      let resolveLate!: (stored: boolean) => void;
+      const slow: ShardUpload = () =>
+        new Promise<boolean>((resolve) => {
+          resolveLate = resolve;
+        });
+      const flush = queue.Flush(snapshotOf('a'), slow);
+      await vi.advanceTimersByTimeAsync(SHARD_UPLOAD_TIMEOUT_MS);
+      await flush;
+
+      resolveLate(true);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(queue.RetainedCount).toBe(1);
     });
 
     it('clears the timer when the upload settles in time', async () => {

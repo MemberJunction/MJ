@@ -1448,9 +1448,12 @@ export class RealtimeSessionRuntime {
     if (!recorder || !agentSessionId || !queue) {
       return;
     }
+    // Read once: a shard's sample rate is fixed at capture, and the recorder may be stopped by the
+    // time a retry of it runs.
+    const sampleRate = recorder.SampleRate;
     await queue.Flush(
       () => recorder.SnapshotNewSegmentBase64(),
-      (segmentIndex, audioBase64) => this.uploadRecordingShard(agentSessionId, recorder.SampleRate, segmentIndex, audioBase64),
+      (segmentIndex, audioBase64) => this.uploadRecordingShard(agentSessionId, sampleRate, segmentIndex, audioBase64),
     );
   }
 
