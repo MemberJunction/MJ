@@ -13,6 +13,7 @@ import { EmbeddingData, TemplateParamData, VectorEmeddingData, VectorizeEntityPa
 import { EntityDocumentConfiguration, EntityDocumentMetadataConfig, EntityDocumentFieldConfig } from '../generic/entityDocumentConfig.types';
 import { EntityDocumentCache } from '@memberjunction/entity-documents';
 import { PagedRecords } from './PagedRecords';
+import { EntityDocumentTemplateDataBuilder } from './EntityDocumentTemplateData';
 import { AsyncBatchTransform } from './AsyncBatchTransform';
 import { Transform, TransformCallback, Writable } from 'node:stream';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -1296,43 +1297,12 @@ export class EntityVectorSyncer extends VectorBase {
     return runViewResult.Results;
   }
 
+  /**
+   * The data one record's template renders. Built by {@link EntityDocumentTemplateDataBuilder}, which
+   * duplicate detection renders with too, so the text it queries with matches the text stored here.
+   */
   protected async GetTemplateData(entity: EntityInfo, record: Record<string, unknown>, template: MJTemplateEntityExtended, relatedData: TemplateParamData[]): Promise<Record<string, unknown>> {
-    const templateData: Record<string, unknown> = {};
-    for (const param of template.Params) {
-      switch (param.Type) {
-        case 'Record':
-          // NEW convention: main entity fields are TOP-LEVEL variables (no Entity. prefix).
-          // Spread record fields directly into the root context so templates use {{FieldName}}.
-          Object.assign(templateData, record);
-          break;
-        case 'Entity': {
-          if (templateData[param.Name]) {
-            continue;
-          }
-          const paramData: TemplateParamData | undefined = relatedData.find((rd: TemplateParamData) => rd.ParamName === param.Name);
-          if (!paramData) {
-            LogError(`No related data found for param ${param.Name} in template ${template.ID}`);
-            break;
-          }
-          // Related entities use their relationship name as prefix: {{RelationshipName.FieldName}}
-          const pkValue = record[entity.FirstPrimaryKey.Name]; // first-pk-ok: LinkedParameterField is a single-column FK on the related entity pointing at this entity's key
-          templateData[param.Name] = paramData.Data.filter((rdfr: unknown) => {
-            const typedRdfr = rdfr as Record<string, unknown>;
-            return typedRdfr[param.LinkedParameterField] === pkValue;
-          });
-          break;
-        }
-        case 'Scalar':
-          // Flat convention: entity fields are top-level, so pull directly from record
-          templateData[param.Name] = record[param.Name] ?? '';
-          break;
-        case 'Array':
-        case 'Object':
-          LogError(`Unsupported parameter type ${param.Type} for parameter ${param.Name} in template ${template.ID}`);
-          break;
-      }
-    }
-    return templateData;
+    return this.templateDataBuilder().BuildTemplateData(entity, record, template, relatedData);
   }
 
   /**
@@ -1347,38 +1317,13 @@ export class EntityVectorSyncer extends VectorBase {
     return CompositeKey.FromEntityRecord(entity, record).ToCompactURLSegment();
   }
 
+  /** The related-entity rows a page of records' templates render; see {@link EntityDocumentTemplateDataBuilder.LoadRelatedData}. */
   protected async GetRelatedTemplateDataForBatch(entity: EntityInfo, records: unknown[], template: MJTemplateEntityExtended): Promise<TemplateParamData[]> {
-    const relatedData: TemplateParamData[] = [];
+    return this.templateDataBuilder().LoadRelatedData(entity, records as Record<string, unknown>[], template);
+  }
 
-    for (const templateParam of template.Params) {
-      if (templateParam.Type !== 'Entity') {
-        continue;
-      }
-
-      const relatedEntity = templateParam.Entity;
-      const relatedField = templateParam.LinkedParameterField;
-      const quotes = entity.FirstPrimaryKey.NeedsQuotes ? "'" : ''; // first-pk-ok: LinkedParameterField is a single-column FK on the related entity pointing at this entity's key
-      const pkName = entity.FirstPrimaryKey.Name; // first-pk-ok: LinkedParameterField is a single-column FK on the related entity pointing at this entity's key
-      const filter = `${relatedField} in (${records.map((record: unknown) => {
-        const typedRecord = record as Record<string, unknown>;
-        return `${quotes}${typedRecord[pkName]}${quotes}`;
-      }).join(',')})`;
-      const finalFilter = templateParam.ExtraFilter ? `(${filter}) AND (${templateParam.ExtraFilter})` : filter;
-
-      const result = await super.RunView.RunView<Record<string, unknown>>({
-        EntityName: relatedEntity,
-        ExtraFilter: finalFilter,
-        ResultType: 'simple'
-      }, super.CurrentUser);
-
-      if (result && result.Success) {
-        relatedData.push({ ParamName: templateParam.Name, Data: result.Results });
-      } else {
-        LogError(`Error getting related data for entity ${relatedEntity} with filter ${finalFilter}`, undefined, result.ErrorMessage);
-      }
-    }
-
-    return relatedData;
+  private templateDataBuilder(): EntityDocumentTemplateDataBuilder {
+    return new EntityDocumentTemplateDataBuilder(super.RunView, super.CurrentUser);
   }
 
   /**
@@ -1441,6 +1386,9 @@ export class EntityVectorSyncer extends VectorBase {
           EntityName: 'MJ: Entity Record Documents',
           ExtraFilter: `EntityID = '${g.entityID}' AND EntityDocumentID = '${g.entityDocumentID}' AND RecordID IN (${inClause})`,
           ResultType: 'entity_object' as const,
+          // A find-or-create read: it must see the database, and each batch's filter is unique, so
+          // a cached copy would only be written and then dropped by the saves below.
+          BypassCache: true,
         };
       }),
       contextUser
