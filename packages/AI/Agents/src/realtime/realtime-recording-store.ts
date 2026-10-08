@@ -7,9 +7,9 @@
  *
  * @module @memberjunction/ai-agents
  */
-import { IMetadataProvider, UserInfo, LogError } from '@memberjunction/core';
+import { IMetadataProvider, UserInfo, LogError, LogStatus } from '@memberjunction/core';
 import { MJAIAgentEntity, MJAIAgentSessionEntity, MJFileEntityRecordLinkEntity, MJFileEntity } from '@memberjunction/core-entities';
-import { FileStorageEngine } from '@memberjunction/storage';
+import { FileStorageEngine, FileStorageBase } from '@memberjunction/storage';
 import { RealtimeRecordingMedia } from './realtime-recording-capture';
 
 /**
@@ -70,6 +70,17 @@ export interface StoreRealtimeRecordingInput {
      * waveform without re-decoding the audio. Best-effort — a sidecar failure never fails the recording.
      */
     Peaks?: number[];
+    /** Name of the uploaded file. Defaults to `recording.<ext>`. */
+    FileName?: string;
+    /** Description stored on the `MJ: Files` row (e.g. how a recovered recording was assembled). */
+    Description?: string;
+    /**
+     * When true, the session is re-read right before linking/stamping and, if it already has a
+     * `RecordingFileID`, that recording is left alone: nothing is linked or stamped and the result is
+     * `Superseded`. Recovery sets this so a late-arriving real recording is never overwritten. Left
+     * false (the default) for the end-of-call upload, which stamps unconditionally.
+     */
+    PreserveExistingRecording?: boolean;
 }
 
 /** A short, stable file extension for the recording's MIME type. */
@@ -81,6 +92,27 @@ function extensionForMime(mimeType: string): string {
     // recovery concatenates them in order and WAV-wraps. The consolidated file is always WAV.
     if (mimeType.includes('L16') || mimeType.includes('pcm')) return 'pcm';
     return 'wav';
+}
+
+/**
+ * Sample rate (Hz) carried by a raw-PCM MIME type such as `audio/L16;rate=48000`. Case-insensitive on
+ * the type and parameter name; whitespace and extra parameters are tolerated. Returns `null` for any
+ * other type, a missing `rate`, or a rate that is not a positive integer. Shared by the shard-key
+ * writer and the recovery's content-type fallback so the two cannot disagree on what counts as a rate.
+ */
+function parsePcmRate(mimeType: string): number | null {
+    const [type, ...params] = mimeType.split(';').map(part => part.trim());
+    if (!/^audio\/(l16|pcm)$/i.test(type)) {
+        return null;
+    }
+    for (const param of params) {
+        const match = /^rate\s*=\s*(\d+)$/i.exec(param);
+        const rate = match ? Number(match[1]) : 0;
+        if (Number.isSafeInteger(rate) && rate > 0) {
+            return rate;
+        }
+    }
+    return null;
 }
 
 /** The per-session folder all of a session's recording artifacts live in (shards + final file). */
@@ -146,7 +178,19 @@ export interface WriteRecordingSegmentInput {
 }
 
 /**
- * Writes ONE crash-recovery segment shard (`seg-NNNN.<ext>`) into the session's folder as a RAW
+ * `seg-NNNN.<ext>`, or `seg-NNNN.r<rate>.pcm` for a PCM shard whose MIME carries a rate. Header-less
+ * PCM has no way to say how fast to play it back, and recovery runs after the browser (and its
+ * `RecordingStartedAt`/rate bookkeeping) is gone, so the rate travels in the key itself.
+ */
+function segmentFileName(segmentIndex: number, mimeType: string): string {
+    const index = String(segmentIndex).padStart(4, '0');
+    const extension = extensionForMime(mimeType);
+    const rate = extension === 'pcm' ? parsePcmRate(mimeType) : null;
+    return rate === null ? `seg-${index}.${extension}` : `seg-${index}.r${rate}.${extension}`;
+}
+
+/**
+ * Writes ONE crash-recovery segment shard (`seg-NNNN[.r<rate>].<ext>`) into the session's folder as a RAW
  * storage object — no `MJ: Files` row, no session stamping. Shards are durability insurance during a
  * live call (so a browser/tab death loses at most the last window); they are byte-slices of one
  * continuous stream (only the first carries the container header), so they are NOT individually
@@ -159,7 +203,7 @@ export async function WriteRealtimeRecordingSegment(input: WriteRecordingSegment
     const { SessionID, SegmentIndex, Audio, MimeType, StorageAccountID, ContextUser } = input;
     try {
         const driver = await FileStorageEngine.Instance.GetDriver(StorageAccountID, ContextUser);
-        const name = `seg-${String(SegmentIndex).padStart(4, '0')}.${extensionForMime(MimeType)}`;
+        const name = segmentFileName(SegmentIndex, MimeType);
         return await driver.PutObject(`${recordingFolder(SessionID)}/${name}`, Audio, MimeType);
     } catch (error) {
         LogError(`writeRealtimeRecordingSegment failed (session ${SessionID}, seg ${SegmentIndex}): ${error instanceof Error ? error.message : String(error)}`);
@@ -241,6 +285,12 @@ export interface StoreRealtimeRecordingResult {
     readonly FileID: string | null;
     /** Why it failed, verbatim from the layer that knew. Null on success. */
     readonly ErrorMessage: string | null;
+    /**
+     * True only when `PreserveExistingRecording` was set and the session already had a recording: the
+     * file was uploaded but deliberately not linked or stamped, so it is an orphan. False on every
+     * other path.
+     */
+    readonly Superseded: boolean;
 }
 
 /**
@@ -259,8 +309,9 @@ export async function StoreRealtimeRecording(input: StoreRealtimeRecordingInput)
         // Canonical consolidated file in the session's own folder, alongside (then replacing) its shards.
         const uploaded = await FileStorageEngine.Instance.UploadFile({
             content: Audio,
-            fileName: `recording.${extensionForMime(MimeType)}`,
+            fileName: input.FileName ?? `recording.${extensionForMime(MimeType)}`,
             mimeType: MimeType,
+            description: input.Description,
             contextUser: ContextUser,
             storageAccountId: StorageAccountID,
             provider: Provider,
@@ -271,34 +322,51 @@ export async function StoreRealtimeRecording(input: StoreRealtimeRecordingInput)
         // rendering without re-decoding the audio. A sidecar failure never fails the recording itself.
         await WriteRecordingPeaksSidecar(SessionID, StorageAccountID, Peaks, ContextUser);
 
-        // Link the file to the session record so it's discoverable via MJ: File Entity Record Links.
-        const sessionEntityID = Provider.EntityByName('MJ: AI Agent Sessions')?.ID;
-        if (sessionEntityID) {
-            const link = await Provider.GetEntityObject<MJFileEntityRecordLinkEntity>('MJ: File Entity Record Links', ContextUser);
-            link.NewRecord();
-            link.FileID = uploaded.FileID;
-            link.EntityID = sessionEntityID;
-            link.RecordID = SessionID;
-            if (!await link.Save()) {
-                LogError(`storeRealtimeRecording: failed to link recording to session ${SessionID}: ${link.LatestResult?.CompleteMessage ?? 'unknown error'}`);
-            }
+        // Read the session as late as possible: a recording that landed during our upload must win.
+        const session = await Provider.GetEntityObject<MJAIAgentSessionEntity>('MJ: AI Agent Sessions', ContextUser);
+        const sessionLoaded = await session.Load(SessionID);
+        if (input.PreserveExistingRecording && sessionLoaded && session.RecordingFileID) {
+            LogStatus(`storeRealtimeRecording: session ${SessionID} already has recording file ${session.RecordingFileID}; the just-uploaded file ${uploaded.FileID} is orphaned and was not linked or stamped`);
+            return { FileID: uploaded.FileID, ErrorMessage: null, Superseded: true };
         }
 
-        // Stamp the recording fields on the session (file + media kind + t0).
-        const session = await Provider.GetEntityObject<MJAIAgentSessionEntity>('MJ: AI Agent Sessions', ContextUser);
-        if (await session.Load(SessionID)) {
-            session.RecordingFileID = uploaded.FileID;
-            session.RecordingMedia = Media;
-            session.RecordingStartedAt = StartedAt;
-            if (!await session.Save()) {
-                LogError(`storeRealtimeRecording: failed to stamp recording fields on session ${SessionID}: ${session.LatestResult?.CompleteMessage ?? 'unknown error'}`);
-            }
+        await linkRecordingToSession(uploaded.FileID, SessionID, ContextUser, Provider);
+        if (sessionLoaded) {
+            await stampRecordingOnSession(session, uploaded.FileID, Media, StartedAt);
         }
-        return { FileID: uploaded.FileID, ErrorMessage: null };
+        return { FileID: uploaded.FileID, ErrorMessage: null, Superseded: false };
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         LogError(`storeRealtimeRecording failed for session ${SessionID}: ${message}`);
-        return { FileID: null, ErrorMessage: message };
+        return { FileID: null, ErrorMessage: message, Superseded: false };
+    }
+}
+
+/** Links the file to the session record so it's discoverable via MJ: File Entity Record Links. */
+async function linkRecordingToSession(fileID: string, sessionID: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<void> {
+    const sessionEntityID = provider.EntityByName('MJ: AI Agent Sessions')?.ID;
+    if (!sessionEntityID) {
+        return;
+    }
+    const link = await provider.GetEntityObject<MJFileEntityRecordLinkEntity>('MJ: File Entity Record Links', contextUser);
+    link.NewRecord();
+    link.FileID = fileID;
+    link.EntityID = sessionEntityID;
+    link.RecordID = sessionID;
+    if (!await link.Save()) {
+        LogError(`storeRealtimeRecording: failed to link recording to session ${sessionID}: ${link.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+    }
+}
+
+/** Stamps the recording fields on an already-loaded session (file + media kind + t0). */
+async function stampRecordingOnSession(
+    session: MJAIAgentSessionEntity, fileID: string, media: RealtimeRecordingMedia, startedAt: Date
+): Promise<void> {
+    session.RecordingFileID = fileID;
+    session.RecordingMedia = media;
+    session.RecordingStartedAt = startedAt;
+    if (!await session.Save()) {
+        LogError(`storeRealtimeRecording: failed to stamp recording fields on session ${session.ID}: ${session.LatestResult?.CompleteMessage ?? 'unknown error'}`);
     }
 }
 
@@ -431,4 +499,203 @@ function writeRecordingWavHeader(buffer: Buffer, sampleRate: number, dataSize: n
     buffer.writeUInt16LE(16, 34);
     buffer.write('data', 36, 'ascii');
     buffer.writeUInt32LE(dataSize, 40);
+}
+
+/**
+ * Most shards recovery will assemble. At ~15 s per shard this is an hour of audio, far past any real
+ * call; a listing at or beyond it (by count or by highest index) is treated as corrupt or hostile and
+ * fails closed rather than allocating a huge WAV.
+ */
+export const MAX_RECOVERY_SEGMENTS = 240;
+
+/** `seg-0003.pcm` or `seg-0003.r48000.pcm`: index, optional keyed rate, extension. */
+const SEGMENT_KEY_PATTERN = /^seg-(\d+)(?:\.r(\d+))?\.([A-Za-z0-9]+)$/;
+const RECOVERED_FILE_NAME = 'recording-recovered.wav';
+
+/** Input to {@link RecoverRealtimeRecordingFromSegments}. */
+export interface RecoverRealtimeRecordingInput {
+    SessionID: string;
+    /** Storage account the shards were written to. */
+    StorageAccountID: string;
+    /** The recording `t0`, stamped on the session (recovery cannot derive it from the shards). */
+    StartedAt: Date;
+    ContextUser: UserInfo;
+    Provider: IMetadataProvider;
+}
+
+/** What {@link RecoverRealtimeRecordingFromSegments} did. */
+export type RecoverRealtimeRecordingOutcome = 'Recovered' | 'NoSegments' | 'Superseded' | 'Failed';
+
+/** Result of {@link RecoverRealtimeRecordingFromSegments}. */
+export interface RecoverRealtimeRecordingResult {
+    readonly Outcome: RecoverRealtimeRecordingOutcome;
+    /** The recovered `MJ: Files` id; set for `Recovered`, and for `Superseded` when an orphan was uploaded. */
+    readonly FileID: string | null;
+    /** Number of shards found in the session folder. */
+    readonly SegmentCount: number;
+    /** Shard indexes that were absent and filled with estimated silence. */
+    readonly MissingIndexes: number[];
+    /** Why recovery failed; null otherwise. */
+    readonly ErrorMessage: string | null;
+}
+
+interface ListedShard {
+    readonly Name: string;
+    readonly Path: string;
+    readonly Index: number;
+    readonly KeyedRate: number | null;
+    readonly Extension: string;
+}
+
+/**
+ * Rebuilds a session's recording from the `seg-*` crash-recovery shards left in its storage folder —
+ * for a call whose browser died or whose end-of-call upload never ran, so no `recording.*` exists.
+ * Shards are concatenated in order (silence for absent ones), uploaded as `recording-recovered.wav`,
+ * stamped on the session, and only then deleted. Deletion happens only after a reload confirms the
+ * session points at the recovered file, so a failure at any step leaves the shards for the next try.
+ * If the session gained a recording meanwhile, that one is kept and the outcome is `Superseded`.
+ *
+ * Never throws: every failure is logged with the session id and returned as `Failed`.
+ *
+ * @param input Session, storage account, recording `t0`, and server context.
+ */
+export async function RecoverRealtimeRecordingFromSegments(input: RecoverRealtimeRecordingInput): Promise<RecoverRealtimeRecordingResult> {
+    try {
+        return await recoverFromSegments(input);
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        LogError(`RecoverRealtimeRecordingFromSegments failed (session ${input.SessionID}): ${message}`);
+        return recoveryResult('Failed', { ErrorMessage: message });
+    }
+}
+
+function recoveryResult(
+    outcome: RecoverRealtimeRecordingOutcome, fields: Partial<Omit<RecoverRealtimeRecordingResult, 'Outcome'>> = {}
+): RecoverRealtimeRecordingResult {
+    return { Outcome: outcome, FileID: null, SegmentCount: 0, MissingIndexes: [], ErrorMessage: null, ...fields };
+}
+
+async function recoverFromSegments(input: RecoverRealtimeRecordingInput): Promise<RecoverRealtimeRecordingResult> {
+    const { SessionID, StorageAccountID, StartedAt, ContextUser, Provider } = input;
+    const driver = await FileStorageEngine.Instance.GetDriver(StorageAccountID, ContextUser);
+    const shards = await listRecordingShards(driver, SessionID);
+    if (shards.length === 0) {
+        LogStatus(`RecoverRealtimeRecordingFromSegments: no shards for session ${SessionID} in storage account ${StorageAccountID}`);
+        return recoveryResult('NoSegments');
+    }
+    assertRecoverable(shards);
+
+    const sampleRate = await resolveSharedSampleRate(driver, shards);
+    const segments = await readShardBytes(driver, shards);
+    const assembled = BuildRecordingFromSegments(segments, sampleRate);
+    const description = describeRecovery(shards.length, assembled, sampleRate);
+    if (assembled.MissingIndexes.length > 0) {
+        LogStatus(`RecoverRealtimeRecordingFromSegments (session ${SessionID}): ${description}`);
+    }
+
+    const stored = await StoreRealtimeRecording({
+        Audio: assembled.Wav, MimeType: 'audio/wav', Media: 'Audio', StartedAt, StorageAccountID, SessionID,
+        ContextUser, Provider, FileName: RECOVERED_FILE_NAME, Description: description, PreserveExistingRecording: true,
+    });
+    const found = { FileID: stored.FileID, SegmentCount: shards.length, MissingIndexes: assembled.MissingIndexes };
+    if (stored.Superseded) {
+        return recoveryResult('Superseded', found);
+    }
+    if (!stored.FileID) {
+        throw new Error(stored.ErrorMessage ?? 'storing the recovered recording failed');
+    }
+    return finishRecovery(input, stored.FileID, found);
+}
+
+/** Confirms the stamp stuck, then (and only then) deletes the shards. */
+async function finishRecovery(
+    input: RecoverRealtimeRecordingInput, fileID: string, found: Partial<Omit<RecoverRealtimeRecordingResult, 'Outcome'>>
+): Promise<RecoverRealtimeRecordingResult> {
+    const { SessionID, StorageAccountID, ContextUser, Provider } = input;
+    const session = await Provider.GetEntityObject<MJAIAgentSessionEntity>('MJ: AI Agent Sessions', ContextUser);
+    if (!await session.Load(SessionID)) {
+        throw new Error(`could not reload session ${SessionID} to confirm the recovered recording was stamped`);
+    }
+    if (session.RecordingFileID && session.RecordingFileID !== fileID) {
+        LogStatus(`RecoverRealtimeRecordingFromSegments (session ${SessionID}): session now points at ${session.RecordingFileID}, not recovered file ${fileID}; keeping shards`);
+        return recoveryResult('Superseded', found);
+    }
+    if (session.RecordingFileID !== fileID) {
+        throw new Error(`recovered file ${fileID} uploaded but not stamped on session ${SessionID}; shards kept`);
+    }
+    const shardCount = found.SegmentCount ?? 0;
+    const deleted = await DeleteRealtimeRecordingSegments(SessionID, StorageAccountID, ContextUser);
+    if (deleted < shardCount) {
+        LogError(`RecoverRealtimeRecordingFromSegments (session ${SessionID}): deleted ${deleted} of ${shardCount} shards after recovery`);
+    }
+    return recoveryResult('Recovered', found);
+}
+
+/** Lists the session folder's `seg-*` objects. Other objects (recording.*, peaks.json) are ignored. */
+async function listRecordingShards(driver: FileStorageBase, sessionID: string): Promise<ListedShard[]> {
+    const folder = recordingFolder(sessionID);
+    const listed = await driver.ListObjects(`${folder}/`);
+    const shards: ListedShard[] = [];
+    for (const obj of listed.objects ?? []) {
+        const name = obj.name.split('/').pop() ?? obj.name;
+        const match = SEGMENT_KEY_PATTERN.exec(name);
+        if (match) {
+            shards.push({
+                Name: name, Path: `${folder}/${name}`, Index: Number(match[1]),
+                KeyedRate: match[2] ? Number(match[2]) : null, Extension: match[3],
+            });
+        }
+    }
+    return shards;
+}
+
+/** Fail closed on an oversized listing and on anything that is not raw PCM (webm/ogg shards cannot be concatenated). */
+function assertRecoverable(shards: ListedShard[]): void {
+    const highestIndex = Math.max(...shards.map(s => s.Index));
+    if (shards.length >= MAX_RECOVERY_SEGMENTS || highestIndex >= MAX_RECOVERY_SEGMENTS) {
+        throw new Error(`refusing to recover ${shards.length} shards (highest index ${highestIndex}); limit is ${MAX_RECOVERY_SEGMENTS}`);
+    }
+    const notPcm = shards.find(s => s.Extension !== 'pcm');
+    if (notPcm) {
+        throw new Error(`shard ${notPcm.Name} is not raw PCM; only .pcm shards can be reassembled`);
+    }
+}
+
+/** One sample rate for every shard: from the key when present, else the object's stored content type. */
+async function resolveSharedSampleRate(driver: FileStorageBase, shards: ListedShard[]): Promise<number> {
+    let rate: number | null = null;
+    let rateSource = '';
+    for (const shard of shards) {
+        const shardRate = shard.KeyedRate ?? parsePcmRate((await driver.GetObjectMetadata({ fullPath: shard.Path })).contentType ?? '');
+        if (shardRate === null) {
+            throw new Error(`cannot determine the sample rate of shard ${shard.Name}`);
+        }
+        if (rate !== null && shardRate !== rate) {
+            throw new Error(`shards disagree on sample rate: ${rateSource} is ${rate} Hz but ${shard.Name} is ${shardRate} Hz`);
+        }
+        rate = shardRate;
+        rateSource = shard.Name;
+    }
+    if (rate === null) {
+        throw new Error('no shards to take a sample rate from');
+    }
+    return rate;
+}
+
+/** Sequential on purpose: bounds memory and request concurrency against the storage account. */
+async function readShardBytes(driver: FileStorageBase, shards: ListedShard[]): Promise<RecordingSegmentBytes[]> {
+    const segments: RecordingSegmentBytes[] = [];
+    for (const shard of shards) {
+        segments.push({ Index: shard.Index, Bytes: await driver.GetObject({ fullPath: shard.Path }) });
+    }
+    return segments;
+}
+
+function describeRecovery(shardCount: number, assembled: AssembledRecording, sampleRate: number): string {
+    const head = `Recovered from ${shardCount} crash-recovery segment(s)`;
+    if (assembled.MissingIndexes.length === 0) {
+        return `${head}.`;
+    }
+    const seconds = assembled.GapBytes / RECORDING_BYTES_PER_SAMPLE / sampleRate;
+    return `${head}; missing segment(s) ${assembled.MissingIndexes.join(', ')} filled with estimated silence (~${seconds.toFixed(1)} s each).`;
 }
