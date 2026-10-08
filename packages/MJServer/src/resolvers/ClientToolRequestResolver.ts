@@ -14,6 +14,7 @@ import { AppContext } from '../types.js';
 import { LogStatus, LogError } from '@memberjunction/core';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { ClientToolRequestManager, CLIENT_TOOL_REQUEST_TOPIC, ClientToolRequestNotificationPayload } from '@memberjunction/ai-agents';
+import { ParseClientToolMedia } from '@memberjunction/ai-core-plus';
 
 @ObjectType()
 export class ClientToolRequestNotification {
@@ -71,7 +72,9 @@ export class ClientToolRequestResolver extends ResolverBase {
     /**
      * Client sends the result of executing a client tool back to the server.
      * This resolves the pending Promise in ClientToolRequestManager so the
-     * agent loop can continue.
+     * agent loop can continue. `media` is an optional JSON array of images.
+     * When `media` fails validation or `result` is not valid JSON, the request
+     * resolves as a failed result.
      */
     @Mutation(() => Boolean)
     async RespondToClientToolRequest(
@@ -79,15 +82,25 @@ export class ClientToolRequestResolver extends ResolverBase {
         @Arg('success') success: boolean,
         @Arg('result', { nullable: true }) result: string | undefined,
         @Arg('errorMessage', { nullable: true }) errorMessage: string | undefined,
+        @Arg('media', { nullable: true }) media: string | undefined,
         @Ctx() _context: AppContext = {} as AppContext
     ): Promise<boolean> {
         try {
-            const found = ClientToolRequestManager.Instance.ReceiveResponse({
-                RequestID: requestID,
-                Success: success,
-                Result: result ? JSON.parse(result) : undefined,
-                ErrorMessage: errorMessage
-            });
+            const parsedMedia = ParseClientToolMedia(media);
+            // `=== true` narrows the union; this package compiles without strictNullChecks.
+            const found = ClientToolRequestManager.Instance.ReceiveResponse(parsedMedia.ok === true
+                ? {
+                    RequestID: requestID,
+                    Success: success,
+                    Result: result ? JSON.parse(result) : undefined,
+                    ErrorMessage: errorMessage,
+                    Media: parsedMedia.media.length ? parsedMedia.media : undefined
+                }
+                : {
+                    RequestID: requestID,
+                    Success: false,
+                    ErrorMessage: `Client tool media rejected: ${parsedMedia.error}`
+                });
 
             if (!found) {
                 LogError(`RespondToClientToolRequest: no pending request for ${requestID} (may have timed out)`);
@@ -96,6 +109,11 @@ export class ClientToolRequestResolver extends ResolverBase {
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
             LogError(`RespondToClientToolRequest error: ${msg}`);
+            ClientToolRequestManager.Instance.ReceiveResponse({
+                RequestID: requestID,
+                Success: false,
+                ErrorMessage: `Client tool response rejected: ${msg}`
+            });
             return false;
         }
     }

@@ -1,0 +1,45 @@
+{
+  "fields": {
+    "Name": "Dashboards",
+    "Description": "Every dashboard you own or that is shared with you, in one place",
+    "Icon": "fa-solid fa-gauge-high",
+    "DefaultForNewUser": true,
+    "DefaultSequence": 3,
+    "Color": "#0e7490",
+    "Status": "Active",
+    "NavigationStyle": "App Switcher",
+    "DefaultNavItems": [
+      {
+        "Label": "Library",
+        "Icon": "fa-solid fa-layer-group",
+        "ResourceType": "Custom",
+        "DriverClass": "DashboardBrowserResource",
+        "isDefault": true
+      },
+      {
+        "Label": "Categories",
+        "Icon": "fa-solid fa-folder-tree",
+        "ResourceType": "Custom",
+        "DriverClass": "DashboardsCategoriesResource",
+        "isDefault": false
+      }
+    ],
+    "AgentSettings": {
+      "DefaultAgentID": "@lookup:MJ: AI Agents.Name=Dashboards Expert",
+      "Realtime": {
+        "ModelPreference": "Gemini 3.8 Live",
+        "Disclosure": "mention",
+        "Persona": {
+          "Tone": "direct and helpful",
+          "SpeakingStyle": "short sentences, names panels by title"
+        }
+      }
+    }
+  },
+  "relatedEntities": {
+    "MJ: Application Entities": []
+  },
+  "primaryKey": {
+    "ID": "4B439111-B492-4936-9E33-A428CB5725B4"
+  }
+}

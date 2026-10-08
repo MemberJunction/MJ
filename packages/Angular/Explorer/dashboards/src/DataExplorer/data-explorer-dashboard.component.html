@@ -120,6 +120,18 @@
       </div>
     </div>
 
+    <!-- Dashboards moved banner: shows with or without a selected entity.
+         panel-open makes room for the Quick Access panel, which shows only on the loaded home view. -->
+    @if (ShowDashboardsMovedBanner) {
+      <div class="dx-moved-banner" role="status"
+        [class.panel-open]="State.quickAccessPanelOpen && !SelectedEntity && !IsLoadingEntities">
+        <i class="fa-solid fa-gauge-high" aria-hidden="true"></i>
+        <span><b>Dashboards moved.</b> They now live in the Dashboards app.</span>
+        <button mjButton size="sm" (click)="OpenDashboardsApp()">Open Dashboards</button>
+        <button mjButton size="sm" variant="flat" (click)="DismissDashboardsMovedBanner()">Got it</button>
+      </div>
+    }
+
     <!-- Content Body - Using mj-entity-viewer composite -->
     <div class="content-body" [class.home-content]="isAtHomeLevel">
       @if (!selectedEntity) {

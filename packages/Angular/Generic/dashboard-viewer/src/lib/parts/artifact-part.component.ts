@@ -40,7 +40,7 @@ import { Subject } from 'rxjs';
               class="part-placeholder"
               Icon="fa-solid fa-palette"
               Title="No Artifact Selected"
-              Message="Click the configure button to select an artifact for this part."
+              Message="Use Edit part to choose an artifact."
               Size="compact" />
           }
         

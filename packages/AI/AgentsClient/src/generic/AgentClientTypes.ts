@@ -7,6 +7,8 @@
  * @module @memberjunction/ai-agent-client
  */
 
+import type { ClientToolMediaItem } from '@memberjunction/ai-core-plus';
+
 /**
  * Message sent from client to server.
  */
@@ -103,6 +105,8 @@ export interface ClientToolResult {
     Success: boolean;
     /** The result data */
     Data?: unknown;
+    /** Images for the model, when the tool returns any */
+    Media?: ClientToolMediaItem[];
     /** Error message if execution failed */
     ErrorMessage?: string;
 }
