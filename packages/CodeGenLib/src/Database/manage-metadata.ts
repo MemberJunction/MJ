@@ -6165,7 +6165,7 @@ VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)
     * back quoted — `([Status]='Active' OR [Status]='Inactive')` — but numeric and `bit` literals come back
     * **unquoted and parenthesized**: `([Level]=(3) OR [Level]=(2) OR [Level]=(1))`. Matching only the quoted
     * form left a numeric IN-list with no value list at all, and so no dropdown in Explorer either (#3978).
-    * PostgreSQL's `= ANY (ARRAY[...])` rendering is handled separately, by parsePgArrayConstraint.
+    * PostgreSQL's renderings are handled separately, by parsePostgreSQLConstraint.
     *
     * A single-value list is captured too: `CHECK (Status='Active')` — which is also how SQL Server renders
     * `IN ('Active')` — permits exactly one value, which is a one-item list.
@@ -6293,6 +6293,19 @@ VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)
    }
 
    /**
+    * A PostgreSQL `::type` cast as `pg_get_constraintdef()` writes it — `::text`, `::bigint`,
+    * `::character varying`, `::double precision`, `::text[]`.
+    *
+    * Spelled as explicit space-separated words rather than the obvious `[A-Za-z0-9 ]*`, because that
+    * form lets two quantifiers consume the same run of spaces (`[A-Za-z0-9 ]*` then `\\s*`), which is
+    * polynomial backtracking on input like `::A` followed by many spaces. CodeQL flags it as
+    * js/polynomial-redos, and it is right to: a constraint definition is input this library does not
+    * control. Requiring a letter after every space removes the ambiguity — a run of spaces can be
+    * split exactly one way.
+    */
+   private static readonly PG_CAST = `::[A-Za-z][A-Za-z0-9]*(?: [A-Za-z][A-Za-z0-9]*)*(?:\\[\\])?`;
+
+   /**
     * Parses PostgreSQL's renderings of a value-list CHECK into the values it permits, or null when the
     * constraint is not a plain value list (#4713 — the other dialect of #3978).
     *
@@ -6326,7 +6339,7 @@ VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)
       const field = ManageMetadataBase.escapeForRegex(fieldName);
       // The left-hand side: the bare column, optionally double-quoted, optionally parenthesized and
       // cast (`(status)::text`) — which is how PG compares a varchar.
-      const lhs = `\\(?"?${field}"?\\)?(?:::[A-Za-z][A-Za-z0-9 ]*(?:\\[\\])?)?`;
+      const lhs = `\\(?"?${field}"?\\)?(?:${ManageMetadataBase.PG_CAST})?`;
 
       // `(x IS NULL) OR <rest>` — the nullable form. Unwrap it and judge <rest> on its own.
       const nullable = new RegExp(`^\\(?\\s*${lhs}\\s+IS\\s+NULL\\s*\\)?\\s+OR\\s+(.*)$`, 'is').exec(body);
@@ -6419,7 +6432,8 @@ VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)
       let text = element.trim();
       // Peel casts and wrapping parens until neither is left: ('x'::numeric)::double precision
       for (let i = 0; i < 10; i++) {
-         const stripped = ManageMetadataBase.stripOuterParens(text.replace(/::[A-Za-z][A-Za-z0-9 ]*(?:\[\])?\s*$/, '').trim());
+         const castAtEnd = new RegExp(`${ManageMetadataBase.PG_CAST}$`);
+         const stripped = ManageMetadataBase.stripOuterParens(text.replace(castAtEnd, '').trim());
          if (stripped === text) {
             break;
          }

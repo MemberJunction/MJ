@@ -123,3 +123,16 @@ describe('PostgreSQL constraints that are NOT value lists', () => {
       expect(mm.parse(`CHECK ((other = ANY (ARRAY[1, 2])))`, 'mine')).toBeNull();
    });
 });
+
+describe('PostgreSQL value lists — pathological input', () => {
+   it('does not backtrack polynomially on a cast followed by many spaces', () => {
+      // CodeQL js/polynomial-redos: the cast pattern was `[A-Za-z0-9 ]*` followed by `\\s*`, so both
+      // quantifiers could consume the same run of spaces. A constraint definition is input this
+      // library does not control, so the ambiguity is a real hazard rather than a theoretical one.
+      const pathological = `CHECK ((x = ${'::A' + ' '.repeat(50000)}))`;
+      const started = Date.now();
+      expect(mm.parse(pathological, 'x')).toBeNull();
+      // Quadratic backtracking on 50k spaces takes minutes; the linear form is sub-millisecond.
+      expect(Date.now() - started).toBeLessThan(1000);
+   });
+});
