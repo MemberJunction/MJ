@@ -915,7 +915,11 @@ describe('VectorSearchProvider', () => {
             contextUser: UserInfo
         ) => Promise<Array<{ Score: number }>>;
 
-        it('routes a colocated provider through ColocatedQuery, passing the query text as the keyword', async () => {
+        it('routes a colocated provider through ColocatedQuery as a vector-only (semantic) search', async () => {
+            // The semantic lane asks the colocated store for similarity only. MJ's own keyword and
+            // full-text lanes cover text matching, and MJ's RRF fuses all lanes. A store-side
+            // vector+keyword RRF here would count text matches twice and return an RRF value
+            // (<= 2/61) where the semantic floor expects a similarity.
             // VectorDatabase lookup resolves to a colocated ClassKey
             mockRunViewFn.mockResolvedValue({
                 Success: true,
@@ -941,9 +945,10 @@ describe('VectorSearchProvider', () => {
 
             expect(tryWire).toHaveBeenCalledTimes(1);
             expect(colocatedQuery).toHaveBeenCalledWith(
-                expect.objectContaining({ indexName: 'idx', keyword: 'climate policy', fusion: 'rrf' }),
+                expect.objectContaining({ indexName: 'idx', fusion: 'vector-only' }),
                 contextUser
             );
+            expect(colocatedQuery.mock.calls[0][0].keyword).toBeUndefined();
             expect(queryIndex).not.toHaveBeenCalled();
             expect(results[0].Score).toBe(0.91);
         });

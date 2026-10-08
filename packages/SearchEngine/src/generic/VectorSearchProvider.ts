@@ -356,18 +356,23 @@ export class VectorSearchProvider extends BaseSearchProvider {
             return [];
         }
 
-        // Colocated path: wire in the active data-provider connection and run a hybrid
-        // (vector + keyword) query in the same database as the entity rows. TryWireColocatedHost
-        // is a no-op for non-colocated providers, so this is safe to attempt unconditionally.
+        // Colocated path: wire in the active data-provider connection and run the query in the
+        // same database as the entity rows. TryWireColocatedHost is a no-op for non-colocated
+        // providers, so this is safe to attempt unconditionally.
+        //
+        // VECTOR-ONLY on purpose. This is the semantic lane: MJ's own keyword and full-text lanes do
+        // the text matching, and MJ's RRF fuses every lane. Asking the store for its own
+        // vector+keyword RRF here would count text matches twice (in this lane and in MJ's
+        // keyword lane), and its score would be an RRF value (<= 2/61) where MinScore's semantic
+        // floor expects a similarity. Vector-only returns a true similarity, like SQL Server's.
         vectorDBInstance.TryWireColocatedHost(this.Provider);
         if (vectorDBInstance.SupportsColocatedQuery) {
             const colocated = await vectorDBInstance.ColocatedQuery({
                 indexName: AIEngine.Instance.GetProviderIndexName(vectorIndex),
                 vector: queryVector,
-                keyword: queryText,
                 topK,
                 filter,
-                fusion: 'rrf',
+                fusion: 'vector-only',
                 includeMetadata: true,
             }, contextUser);
             const [fallbackEntity, entityByContentSourceID] = await Promise.all([
