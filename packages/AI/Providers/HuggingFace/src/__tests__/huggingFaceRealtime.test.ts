@@ -212,6 +212,13 @@ describe('HuggingFaceRealtime', () => {
             expect(pact['sampleRate']).toBe(HUGGINGFACE_DEFAULT_PCM_SAMPLE_RATE);
         });
 
+        it('takes the proxy origin from Config.proxyBaseUrl before MJAPI_PUBLIC_URL', async () => {
+            const driver = new TestHuggingFaceRealtime('secret-key');
+            process.env['MJAPI_PUBLIC_URL'] = 'https://mjapi.example.com';
+            const config = await driver.CreateClientSession(makeParams({ Config: { proxyBaseUrl: 'https://edge.example.com/some/path' } }));
+            expect(config.EphemeralToken.startsWith('wss://edge.example.com/realtime-proxy?ticket=')).toBe(true);
+        });
+
         it('registers the ticket so the proxy can consume the internal endpoint + auth once', async () => {
             const driver = new TestHuggingFaceRealtime('secret-key');
             process.env['MJAPI_PUBLIC_URL'] = 'http://localhost:4000';
