@@ -9,8 +9,10 @@ import {
     IMetadataProvider,
     LogError,
     LogStatusEx,
-    IsVerboseLoggingEnabled
+    IsVerboseLoggingEnabled,
+    RunView
 } from '@memberjunction/core';
+import { MJLruCache } from '@memberjunction/global';
 import {
     MJTestEntity,
     MJTestRunEntity
@@ -24,8 +26,18 @@ import {
     ValidationError,
     ValidationWarning,
     TestLogMessage,
-    SuiteFixtureContext
+    SuiteFixtureContext,
+    OracleInput
 } from '../types';
+import {
+    EnsureImplicitRubricOracle,
+    PublishedVersionPin,
+    ResolveRubric,
+    WeightsForImplicitRubric,
+    type AgentRubricResolution,
+    type RubricJudgedConfig,
+    type RubricSuiteRow
+} from '../oracles/rubric-resolution';
 
 /**
  * Default timeout for test execution in milliseconds (5 minutes)
@@ -73,6 +85,11 @@ export abstract class BaseTestDriver {
      */
     protected _provider: IMetadataProvider | null = null;
 
+    /** Published rubric version chosen per suite run (or per test run outside a suite). */
+    private readonly versionPins = new PublishedVersionPin();
+    /** Version labels for the pins above. Bounded because a driver is cached for the process lifetime. */
+    private readonly versionLabels = new MJLruCache<string, string>({ maxSize: 5000, ttlMs: 6 * 60 * 60 * 1000 });
+
     /**
      * The metadata provider this driver uses. Falls back to the global `Metadata.Provider`
      * when the engine hasn't injected an explicit provider — multi-tenant servers should
@@ -113,6 +130,23 @@ export abstract class BaseTestDriver {
      */
     protected get _metadata(): Metadata {
         return this.Provider as unknown as Metadata;
+    }
+
+    /**
+     * The input every oracle receives: the test, the run, the user, this driver's
+     * provider, and the fields the caller supplies.
+     */
+    protected BuildOracleInput(
+        context: DriverExecutionContext,
+        fields: Omit<OracleInput, 'test' | 'contextUser' | 'testRunId' | 'provider'>
+    ): OracleInput {
+        return {
+            test: context.test,
+            contextUser: context.contextUser,
+            testRunId: context.testRun.ID,
+            provider: this.Provider ?? undefined,
+            ...fields,
+        };
     }
 
     /**
@@ -391,14 +425,29 @@ export abstract class BaseTestDriver {
      * (which receives this same context via `DriverExecutionContext.fixtures`) can
      * read them, and `TeardownSuite` can clean them up.
      *
-     * Default is a no-op, so existing drivers (AgentEval, Computer Use) are
-     * unaffected. Does NOT fire for the standalone `mj test run` path (no suite).
+     * The base pins the suite chain's rubric to its latest Published version on
+     * `context.PinnedRubricVersions`, so a publish mid-run does not split the suite.
+     * Overrides must call `super.SetupSuite` first. Does NOT fire for the standalone
+     * `mj test run` path (no suite).
      *
      * @param context - Per-suite-run fixture bag, keyed by SuiteRunID
      * @param contextUser - User context for data access
      */
     public async SetupSuite(context: SuiteFixtureContext, contextUser: UserInfo): Promise<void> {
-        // no-op by default
+        const execution = {
+            contextUser,
+            fixtures: context,
+            test: { ID: '' },
+            testRun: { ID: context.SuiteRunID, TestSuiteRunID: context.SuiteRunID },
+            options: {},
+            oracleRegistry: new Map(),
+        } as unknown as DriverExecutionContext;
+        const loaded = await this.LoadSuites(execution);
+        const choice = ResolveRubric({ suites: loaded.suites, suiteId: loaded.suiteId });
+        if (!choice.RubricId || context.PinnedRubricVersions?.[choice.RubricId]) return;
+        const found = await this.LookupLatestPublished(execution, choice.RubricId);
+        if (!found) return;
+        context.PinnedRubricVersions = { ...context.PinnedRubricVersions, [choice.RubricId]: found };
     }
 
     /**
@@ -415,6 +464,123 @@ export abstract class BaseTestDriver {
      */
     public async TeardownSuite(context: SuiteFixtureContext, contextUser: UserInfo): Promise<void> {
         // no-op by default
+    }
+
+    /**
+     * Adds the rubric oracle for this run. The first source that names a rubric wins: the
+     * run flag, a rubric oracle's own config, the test, the suite chain, then the agent
+     * default the caller passes. The Published version is pinned for the suite run. A rubric
+     * with no Published version adds nothing unless a rubric oracle named it itself.
+     */
+    protected async ResolveRubricForRun<T extends RubricJudgedConfig>(
+        config: T,
+        context: DriverExecutionContext,
+        agentRubric?: AgentRubricResolution
+    ): Promise<T> {
+        const named = config.oracles?.find(oracle => oracle.type === 'rubric')?.config as
+            { rubricId?: string; rubricVersionId?: string; evaluator?: Record<string, unknown> | string } | undefined;
+        const loaded = await this.LoadSuites(context);
+        const choice = ResolveRubric({
+            run: context.options.rubricId ? { rubricId: context.options.rubricId, versionId: context.options.rubricVersionId } : undefined,
+            oracle: named,
+            testRubricId: context.test.RubricID,
+            suites: loaded.suites,
+            suiteId: loaded.suiteId,
+            agentRubricId: agentRubric?.rubricId,
+            agentEvaluatorConfig: agentRubric?.evaluatorConfig,
+        });
+        const rubricId = choice.RubricId;
+        if (!rubricId) return config;
+        const hadRubric = (config.oracles ?? []).some(oracle => oracle.type === 'rubric');
+        const suiteRunId = context.testRun.TestSuiteRunID || context.testRun.ID;
+        const labelKey = `${suiteRunId}:${rubricId}`;
+        let versionId: string | undefined;
+        let versionLabel: string | undefined;
+        if (choice.ExplicitVersion && choice.VersionId) {
+            versionId = choice.VersionId;
+            versionLabel = await this.LookupVersionLabel(context, choice.VersionId);
+        } else {
+            const pinned = context.fixtures?.PinnedRubricVersions?.[rubricId];
+            if (pinned) {
+                versionId = pinned.id;
+                versionLabel = pinned.label;
+            } else {
+                versionId = await this.versionPins.Remember(suiteRunId, rubricId, undefined, async () => {
+                    const found = await this.LookupLatestPublished(context, rubricId);
+                    if (found) this.versionLabels.Set(labelKey, found.label);
+                    return found?.id;
+                });
+                versionLabel = this.versionLabels.Get(labelKey);
+                if (versionId && context.fixtures) {
+                    context.fixtures.PinnedRubricVersions = {
+                        ...context.fixtures.PinnedRubricVersions,
+                        [rubricId]: { id: versionId, label: versionLabel ?? '' },
+                    };
+                }
+            }
+        }
+        if (!versionId && choice.Source !== 'oracle') {
+            this.logToTestRun(context, 'warn', `Rubric ${rubricId} has no published version. The rubric oracle was not added.`);
+            return config;
+        }
+        const oracles = EnsureImplicitRubricOracle(config.oracles, choice, versionId, versionLabel);
+        const addedImplicit = oracles.length > (config.oracles?.length ?? 0) && !hadRubric;
+        return { ...config, oracles, scoringWeights: WeightsForImplicitRubric(config.scoringWeights, addedImplicit) };
+    }
+
+    /**
+     * The suites of this run, loaded once. The suite id comes from the run's Test Suite Run.
+     * ResolveRubric walks ParentID over these rows in memory.
+     */
+    protected async LoadSuites(context: DriverExecutionContext): Promise<{ suiteId?: string; suites: RubricSuiteRow[] }> {
+        const suiteRunId = context.testRun.TestSuiteRunID;
+        if (!suiteRunId) return { suites: [] };
+        const suiteRun = await this.ReadOne(context, 'MJ: Test Suite Runs', `ID='${suiteRunId.replace(/'/g, "''")}'`);
+        const suiteId = suiteRun?.SuiteID == null || suiteRun.SuiteID === '' ? undefined : String(suiteRun.SuiteID);
+        if (!suiteId) return { suites: [] };
+        const rows = await this.ReadMany(context, 'MJ: Test Suites', '', 5000);
+        return {
+            suiteId,
+            suites: rows.map(row => ({
+                Id: String(row.ID ?? ''),
+                ParentId: row.ParentID == null ? null : String(row.ParentID),
+                RubricId: row.RubricID == null ? null : String(row.RubricID),
+            })).filter(row => row.Id.length > 0),
+        };
+    }
+
+    /** The latest Published version of a rubric, by Major.Minor.Patch. */
+    protected async LookupLatestPublished(context: DriverExecutionContext, rubricId: string): Promise<{ id: string; label: string } | undefined> {
+        const rows = await this.ReadMany(context, 'MJ: Rubric Versions', `RubricID='${rubricId}' AND Status='Published'`);
+        const best = [...rows].sort((a, b) =>
+            Number(b.MajorVersion ?? 0) - Number(a.MajorVersion ?? 0)
+            || Number(b.MinorVersion ?? 0) - Number(a.MinorVersion ?? 0)
+            || Number(b.PatchVersion ?? 0) - Number(a.PatchVersion ?? 0))[0];
+        if (!best) return undefined;
+        return { id: String(best.ID), label: `${best.MajorVersion ?? 0}.${best.MinorVersion ?? 0}.${best.PatchVersion ?? 0}` };
+    }
+
+    /** Major.Minor.Patch of one version. Does not change the suite pin. */
+    protected async LookupVersionLabel(context: DriverExecutionContext, versionId: string): Promise<string | undefined> {
+        const row = await this.ReadOne(context, 'MJ: Rubric Versions', `ID='${versionId}'`);
+        if (!row) return undefined;
+        return `${row.MajorVersion ?? 0}.${row.MinorVersion ?? 0}.${row.PatchVersion ?? 0}`;
+    }
+
+    /** The first row a filter returns, or undefined. */
+    protected async ReadOne(context: DriverExecutionContext, entityName: string, filter: string): Promise<Record<string, unknown> | undefined> {
+        const rows = await this.ReadMany(context, entityName, filter);
+        return rows[0];
+    }
+
+    /** Rows through this driver's provider. A failed view throws instead of reading as no rows. */
+    protected async ReadMany(context: DriverExecutionContext, entityName: string, filter: string, maxRows = 100): Promise<Record<string, unknown>[]> {
+        const provider = this.Provider;
+        if (!provider) throw new Error(`Could not read ${entityName}.`);
+        const view = RunView.FromMetadataProvider(provider);
+        const found = await view.RunView({ EntityName: entityName, ExtraFilter: filter, ResultType: 'simple', MaxRows: maxRows }, context.contextUser);
+        if (!found.Success) throw new Error(found.ErrorMessage || `Could not read ${entityName}.`);
+        return (found.Results ?? []) as Record<string, unknown>[];
     }
 
     /**

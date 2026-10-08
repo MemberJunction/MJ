@@ -99,6 +99,18 @@ export interface OracleConfigLike {
     config?: Record<string, unknown>; // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
+/** The agent's default Evaluation rubric and the evaluator its link names. */
+export interface AgentRubricResolution {
+    rubricId: string;
+    evaluatorConfig?: Record<string, unknown> | string;
+}
+
+/** The part of a driver config that rubric resolution reads and rewrites. */
+export interface RubricJudgedConfig {
+    oracles?: OracleConfigLike[];
+    scoringWeights?: Record<string, number>;
+}
+
 /**
  * Pins the resolved rubric onto the oracle list.
  * An llm-judge skips only the agent's own Evaluation rubric (`Source === 'agent'`).

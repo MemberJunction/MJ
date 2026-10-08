@@ -127,7 +127,7 @@ describe('agent eval rubric driver', () => {
         expect(pinned.oracles[0].config).toEqual({ rubricId: 'named', rubricVersionId: 'version-9', versionLabel: '9.0.0' });
     });
 
-    it('keeps the inline judge when the resolved rubric has no published version', async () => {
+    it('adds no rubric oracle when the resolved rubric has no published version', async () => {
         class DraftProbe extends SuiteProbe {
             protected override async LookupLatestPublished(): Promise<{ id: string; label: string } | undefined> {
                 return undefined;
@@ -145,10 +145,7 @@ describe('agent eval rubric driver', () => {
             agentId: 'agent',
             oracles: [{ type: 'llm-judge', config: { criteria: ['Accurate'] } }],
         }, context);
-        expect(resolved.oracles).toEqual([
-            { type: 'llm-judge', config: { criteria: ['Accurate'] } },
-            { type: 'rubric', config: { rubricId: 'draft-rubric' } },
-        ]);
+        expect(resolved.oracles).toEqual([{ type: 'llm-judge', config: { criteria: ['Accurate'] } }]);
     });
 
     it('pins the test rubric when an llm-judge is also present', async () => {
@@ -174,8 +171,10 @@ describe('agent eval rubric driver', () => {
     it('refuses a failed view instead of treating it as no rows', () => {
         const directory = dirname(fileURLToPath(import.meta.url));
         const driver = readFileSync(join(directory, '../drivers/AgentEvalDriver.ts'), 'utf8');
+        const base = readFileSync(join(directory, '../drivers/BaseTestDriver.ts'), 'utf8');
         const calibration = readFileSync(join(directory, '../drivers/RubricCalibrationTestDriver.ts'), 'utf8');
-        expect(driver).toContain('if (!found.Success)');
+        expect(base).toContain('if (!found.Success)');
+        expect(base).not.toMatch(/new RunView\(\)/);
         expect(calibration).toContain('if (!result.Success)');
         expect(driver).not.toMatch(/new RunView\(\)/);
         expect(driver).not.toContain('RunView.Provider as unknown');

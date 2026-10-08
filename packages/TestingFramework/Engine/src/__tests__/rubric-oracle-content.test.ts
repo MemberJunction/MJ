@@ -22,6 +22,24 @@ describe('RubricOracle content', () => {
         expect(RubricOracleContent({ actualOutput: 'shipped' }).text).toBe('shipped');
     });
 
+    it('sends the driver subject content when the driver supplies it', async () => {
+        const seen: { content?: unknown }[] = [];
+        const oracle = new RubricOracle({
+            async EvaluateRecord(request) {
+                seen.push(request);
+                return { evaluationId: 'eval', score: 1, outcome: 'Passed', criteria: [] };
+            },
+        });
+        await oracle.evaluate({
+            test: { ID: 'test' } as never,
+            actualOutput: { finalScreenshot: 'AAAA' },
+            subjectContent: { text: 'Step 1: opened the page', data: { goal: 'open the page' } },
+            testRunId: 'run',
+            contextUser: { ID: 'user' } as never,
+        }, { rubricId: 'rubric' });
+        expect(seen[0].content).toEqual({ text: 'Step 1: opened the page', data: { goal: 'open the page' } });
+    });
+
     it('maps each built-in subject onto a column the generated entity actually has', () => {
         const source = readFileSync(new URL('../../../../MJCoreEntities/src/generated/entities/__mj.ts', import.meta.url), 'utf8');
         const shape = (name: string) => {

@@ -48,8 +48,7 @@ import {
 } from '@memberjunction/ai-core-plus';
 import { BaseTestDriver } from './BaseTestDriver';
 import { PinnedDecisionRunner } from './PinnedDecisionRunner';
-import { DriverExecutionContext, DriverExecutionResult, OracleInput, OracleResult, ValidationResult } from '../types';
-import { OraclesWithNamedRubric } from '../oracles/rubric-resolution.js';
+import { DriverExecutionContext, DriverExecutionResult, OracleResult, ValidationResult } from '../types';
 import { MapPointToRoutingInput, type DecisionEvalAgentCatalog } from '../decision-eval/point-mapping';
 import { DiscoveryDecisionState } from '../decision-eval/discovery-mapping';
 import { FIND_CANDIDATE_AGENTS_TOP_K, RankSemanticSearchBaseline } from '../decision-eval/discovery-baseline';
@@ -437,25 +436,14 @@ export class DecisionEvalDriver extends BaseTestDriver {
         context: DriverExecutionContext
     ): Promise<OracleResult[]> {
         const results: OracleResult[] = [];
-        const oracles = OraclesWithNamedRubric(test.Config.oracles, {
-            runRubricId: context.options.rubricId,
-            runVersionId: context.options.rubricVersionId,
-            testRubricId: context.test.RubricID,
-        });
-        for (const spec of oracles) {
+        const judged = await this.ResolveRubricForRun(test.Config, context);
+        for (const spec of judged.oracles ?? []) {
             const oracle = context.oracleRegistry.get(spec.type);
             if (!oracle) {
                 results.push({ oracleType: spec.type, passed: false, score: 0, message: `Oracle '${spec.type}' is not registered — its weight cannot be scored` });
                 continue;
             }
-            const oracleInput: OracleInput = {
-                test: context.test,
-                testRunId: context.testRun.ID,
-                expectedOutput: test.Expected,
-                actualOutput: actual,
-                targetEntity: result?.promptRun,
-                contextUser: context.contextUser
-            };
+            const oracleInput = this.BuildOracleInput(context, { expectedOutput: test.Expected, actualOutput: actual, targetEntity: result?.promptRun });
             try {
                 results.push(await oracle.evaluate(oracleInput, spec.config ?? {}));
             } catch (error) {
