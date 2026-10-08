@@ -1,25 +1,49 @@
 import { BaseSingleton } from '@memberjunction/global';
 
+/** One frame a judge may look at. `data` is base64 with no data-URL prefix. */
+export interface RubricSubjectImage {
+    label: string;
+    mimeType: string;
+    data: string;
+}
+
 /** What an evaluator is allowed to read about a subject. */
 export interface RubricSubjectContent {
     text?: string;
     data?: Record<string, unknown>;
     files?: { fileId: string; name: string }[];
+    /** Frames sent to the judge as images after the subject text. */
+    images?: RubricSubjectImage[];
 }
 
-/** MJ: Test Runs. InputData, ExpectedOutputData, ActualOutputData, ResultDetails, and output files. */
+/** The first, the last, and evenly spaced items between them, at most `max`. */
+export function SelectEvenly<T>(items: T[], max: number): T[] {
+    if (max <= 0 || items.length === 0) return [];
+    if (items.length <= max) return [...items];
+    if (max === 1) return [items[items.length - 1]];
+    const picked: T[] = [];
+    for (let i = 0; i < max; i++) {
+        picked.push(items[Math.round(i * (items.length - 1) / (max - 1))]);
+    }
+    return picked;
+}
+
+/** MJ: Test Runs. InputData, ExpectedOutputData, ActualOutputData, ResultDetails, output files, and saved screenshots. */
 export function TestRunContent(record: {
     input?: unknown;
     expectedOutcomes?: unknown;
     actualOutput?: unknown;
     trace?: string;
     files?: { fileId: string; name: string }[];
+    images?: RubricSubjectImage[];
 }): RubricSubjectContent {
-    return {
+    const content: RubricSubjectContent = {
         text: record.trace,
         data: { input: record.input, expectedOutcomes: record.expectedOutcomes, actualOutput: record.actualOutput },
         files: record.files,
     };
+    if (record.images && record.images.length > 0) content.images = record.images;
+    return content;
 }
 
 /** MJ: AI Agent Runs. The final payload, and the in-memory message when the run has not stored it yet. There is no Turns column. */
@@ -83,6 +107,7 @@ export class RubricContentRegistry extends BaseSingleton<RubricContentRegistry> 
             actualOutput: record.ActualOutputData ?? record.actualOutputData,
             trace: (record.ResultDetails ?? record.resultDetails) as string | undefined,
             files: record.files as { fileId: string; name: string }[] | undefined,
+            images: record.Images as RubricSubjectImage[] | undefined,
         }));
         this.Register('MJ: AI Agent Runs', record => AgentRunContent({
             finalPayload: record.FinalPayload ?? record.finalPayload,
