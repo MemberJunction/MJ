@@ -363,9 +363,9 @@ describe('conversation subject content', () => {
         return viewCalls.find(call => call.EntityName === 'MJ: Conversation Details');
     }
 
-    it('reads the Main details of a conversation subject, in Sequence order', async () => {
+    it('reads the live Main details of a conversation subject, in Sequence order', async () => {
         const content = await subjectContent();
-        expect(detailCall()?.ExtraFilter).toBe("[ConversationID]='conv-1' AND [BranchID] IS NULL");
+        expect(detailCall()?.ExtraFilter).toBe("[ConversationID]='conv-1' AND [BranchID] IS NULL AND [ReplacedAt] IS NULL");
         expect(detailCall()?.OrderBy).toBe('Sequence');
         expect(content.data?.details).toEqual([{ Role: 'User', Message: 'hello' }]);
     });
