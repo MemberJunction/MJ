@@ -5,8 +5,15 @@
  * recording storage account, upload the audio, link it to the `AIAgentSession`, and stamp the session's
  * recording fields. Keeps the storage policy in one place rather than duplicated per topology.
  *
+ * Also hosts server-side recovery ({@link RecoverRealtimeRecordingFromSegments}): rebuilding a recording
+ * from its crash-recovery shards when the end-of-call upload never arrived. Recovery defers to a
+ * recording that already exists on a best-effort basis: it re-checks the session immediately before
+ * its stamp, but `BaseEntity` has no compare-and-set, so a writer landing inside that one load -> save
+ * window can still be overwritten.
+ *
  * @module @memberjunction/ai-agents
  */
+import { randomBytes } from 'crypto';
 import { IMetadataProvider, UserInfo, LogError, LogStatus } from '@memberjunction/core';
 import { MJAIAgentEntity, MJAIAgentSessionEntity, MJFileEntityRecordLinkEntity, MJFileEntity } from '@memberjunction/core-entities';
 import { FileStorageEngine, FileStorageBase } from '@memberjunction/storage';
@@ -75,22 +82,26 @@ export interface StoreRealtimeRecordingInput {
     /** Description stored on the `MJ: Files` row (e.g. how a recovered recording was assembled). */
     Description?: string;
     /**
-     * When true, the session is re-read right before linking/stamping and, if it already has a
-     * `RecordingFileID`, that recording is left alone: nothing is linked or stamped and the result is
-     * `Superseded`. Recovery sets this so a late-arriving real recording is never overwritten. Left
-     * false (the default) for the end-of-call upload, which stamps unconditionally.
+     * When true, the order becomes re-check -> stamp -> link: the session is re-read immediately before
+     * the stamp and, if it already has a `RecordingFileID`, that recording is left alone (nothing is
+     * linked or stamped; the result is `Superseded`). The link is written only after the stamp saved, so
+     * a superseded or failed store never leaves a link row. Best effort, not a guarantee: without a
+     * compare-and-set, a recording stamped inside the one load -> save window is still overwritten.
+     * Recovery sets this. Left false (the default) for the end-of-call upload, which links and then
+     * stamps unconditionally.
      */
     PreserveExistingRecording?: boolean;
 }
 
-/** A short, stable file extension for the recording's MIME type. */
+/** A short, stable file extension for the recording's MIME type (MIME types are case-insensitive). */
 function extensionForMime(mimeType: string): string {
-    if (mimeType.includes('webm')) return 'webm';
-    if (mimeType.includes('ogg')) return 'ogg';
-    if (mimeType.includes('mp4') || mimeType.includes('m4a')) return 'm4a';
+    const type = mimeType.toLowerCase();
+    if (type.includes('webm')) return 'webm';
+    if (type.includes('ogg')) return 'ogg';
+    if (type.includes('mp4') || type.includes('m4a')) return 'm4a';
     // Header-less raw PCM crash-recovery shards (audio/L16 / audio/pcm) — NOT individually playable;
     // recovery concatenates them in order and WAV-wraps. The consolidated file is always WAV.
-    if (mimeType.includes('L16') || mimeType.includes('pcm')) return 'pcm';
+    if (type.includes('l16') || type.includes('pcm')) return 'pcm';
     return 'wav';
 }
 
@@ -284,14 +295,18 @@ export async function deleteRealtimeRecordingSegments(sessionID: string, storage
 
 /** Outcome of {@link storeRealtimeRecording}. */
 export interface StoreRealtimeRecordingResult {
-    /** The `MJ: Files` id when the recording was stored; null on every failure. */
+    /**
+     * The uploaded `MJ: Files` id; null when the upload itself failed. With `PreserveExistingRecording`
+     * it is also set alongside an `ErrorMessage` when the file was uploaded but the session could not be
+     * re-read or stamped: that file is an orphan, neither linked nor stamped.
+     */
     readonly FileID: string | null;
-    /** Why it failed, verbatim from the layer that knew. Null on success. */
+    /** Why it failed, verbatim from the layer that knew. Null on success and on `Superseded`. */
     readonly ErrorMessage: string | null;
     /**
-     * True only when `PreserveExistingRecording` was set and the session already had a recording: the
-     * file was uploaded but deliberately not linked or stamped, so it is an orphan. False on every
-     * other path.
+     * True only when `PreserveExistingRecording` was set and the re-check right before the stamp found
+     * the session already had a recording: the file was uploaded but deliberately not linked or stamped,
+     * so it is an orphan. False on every other path.
      */
     readonly Superseded: boolean;
 }
@@ -307,7 +322,7 @@ export interface StoreRealtimeRecordingResult {
  * @returns The created `MJ: Files` id, or the failure reason.
  */
 export async function StoreRealtimeRecording(input: StoreRealtimeRecordingInput): Promise<StoreRealtimeRecordingResult> {
-    const { Audio, MimeType, Media, StartedAt, StorageAccountID, SessionID, ContextUser, Provider, Peaks } = input;
+    const { Audio, MimeType, StorageAccountID, SessionID, ContextUser, Provider, Peaks } = input;
     try {
         // Canonical consolidated file in the session's own folder, alongside (then replacing) its shards.
         const uploaded = await FileStorageEngine.Instance.UploadFile({
@@ -325,31 +340,55 @@ export async function StoreRealtimeRecording(input: StoreRealtimeRecordingInput)
         // rendering without re-decoding the audio. A sidecar failure never fails the recording itself.
         await WriteRecordingPeaksSidecar(SessionID, StorageAccountID, Peaks, ContextUser);
 
-        // Read the session as late as possible: a recording that landed during our upload must win.
-        const session = await Provider.GetEntityObject<MJAIAgentSessionEntity>('MJ: AI Agent Sessions', ContextUser);
-        const sessionLoaded = await session.Load(SessionID);
-        if (input.PreserveExistingRecording && sessionLoaded && session.RecordingFileID) {
-            LogStatus(`storeRealtimeRecording: session ${SessionID} already has recording file ${session.RecordingFileID}; the just-uploaded file ${uploaded.FileID} is orphaned and was not linked or stamped`);
-            return { FileID: uploaded.FileID, ErrorMessage: null, Superseded: true };
-        }
-
-        await linkRecordingToSession(uploaded.FileID, SessionID, ContextUser, Provider);
-        if (input.PreserveExistingRecording && sessionLoaded) {
-            // Re-read after the link work so the read-to-write window is one load -> save.
-            if (!await session.Load(SessionID) || session.RecordingFileID) {
-                LogStatus(`storeRealtimeRecording: session ${SessionID} gained recording file ${session.RecordingFileID} while linking; file ${uploaded.FileID} is orphaned and was not stamped`);
-                return { FileID: uploaded.FileID, ErrorMessage: null, Superseded: true };
-            }
-        }
-        if (sessionLoaded) {
-            await stampRecordingOnSession(session, uploaded.FileID, Media, StartedAt);
-        }
-        return { FileID: uploaded.FileID, ErrorMessage: null, Superseded: false };
+        return input.PreserveExistingRecording
+            ? await stampPreservingExisting(input, uploaded.FileID)
+            : await linkAndStamp(input, uploaded.FileID);
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         LogError(`storeRealtimeRecording failed for session ${SessionID}: ${message}`);
         return { FileID: null, ErrorMessage: message, Superseded: false };
     }
+}
+
+/**
+ * End-of-call path: link, then stamp unconditionally, so the browser's own recording replaces whatever
+ * the session pointed at. A session that cannot be loaded is still linked but not stamped (unchanged
+ * long-standing behaviour; the upload is reported as stored).
+ */
+async function linkAndStamp(input: StoreRealtimeRecordingInput, fileID: string): Promise<StoreRealtimeRecordingResult> {
+    const { Media, StartedAt, SessionID, ContextUser, Provider } = input;
+    const session = await Provider.GetEntityObject<MJAIAgentSessionEntity>('MJ: AI Agent Sessions', ContextUser);
+    const sessionLoaded = await session.Load(SessionID);
+    await linkRecordingToSession(fileID, SessionID, ContextUser, Provider);
+    if (sessionLoaded) {
+        await stampRecordingOnSession(session, fileID, Media, StartedAt);
+    }
+    return { FileID: fileID, ErrorMessage: null, Superseded: false };
+}
+
+/**
+ * Recovery path: re-check -> stamp -> link. The re-check is the last read before the stamp, so the
+ * window in which a late recording can still be overwritten is one load -> save. The link is written
+ * only once the stamp saved, so a `Superseded` or failed result never leaves a link row behind.
+ */
+async function stampPreservingExisting(input: StoreRealtimeRecordingInput, fileID: string): Promise<StoreRealtimeRecordingResult> {
+    const { Media, StartedAt, SessionID, ContextUser, Provider } = input;
+    const session = await Provider.GetEntityObject<MJAIAgentSessionEntity>('MJ: AI Agent Sessions', ContextUser);
+    if (!await session.Load(SessionID)) {
+        const message = `could not re-read session ${SessionID} before stamping; file ${fileID} is orphaned and was not linked or stamped`;
+        LogError(`storeRealtimeRecording: ${message}`);
+        return { FileID: fileID, ErrorMessage: message, Superseded: false };
+    }
+    if (session.RecordingFileID) {
+        LogStatus(`storeRealtimeRecording: session ${SessionID} already has recording file ${session.RecordingFileID}; the just-uploaded file ${fileID} is orphaned and was not linked or stamped`);
+        return { FileID: fileID, ErrorMessage: null, Superseded: true };
+    }
+    if (!await stampRecordingOnSession(session, fileID, Media, StartedAt)) {
+        const reason = session.LatestResult?.CompleteMessage ?? 'unknown error';
+        return { FileID: fileID, ErrorMessage: `could not stamp file ${fileID} on session ${SessionID} (file orphaned, not linked): ${reason}`, Superseded: false };
+    }
+    await linkRecordingToSession(fileID, SessionID, ContextUser, Provider);
+    return { FileID: fileID, ErrorMessage: null, Superseded: false };
 }
 
 /** Links the file to the session record so it's discoverable via MJ: File Entity Record Links. */
@@ -368,16 +407,18 @@ async function linkRecordingToSession(fileID: string, sessionID: string, context
     }
 }
 
-/** Stamps the recording fields on an already-loaded session (file + media kind + t0). */
+/** Stamps the recording fields on an already-loaded session (file + media kind + t0). Logs and returns false on a failed save. */
 async function stampRecordingOnSession(
     session: MJAIAgentSessionEntity, fileID: string, media: RealtimeRecordingMedia, startedAt: Date
-): Promise<void> {
+): Promise<boolean> {
     session.RecordingFileID = fileID;
     session.RecordingMedia = media;
     session.RecordingStartedAt = startedAt;
     if (!await session.Save()) {
         LogError(`storeRealtimeRecording: failed to stamp recording fields on session ${session.ID}: ${session.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        return false;
     }
+    return true;
 }
 
 /** @deprecated Use {@link StoreRealtimeRecording}. */
@@ -414,6 +455,11 @@ export interface AssembledRecording {
  * The gap length is the median length of the present shards excluding the highest present index (that
  * one is normally a partial window); with a single shard, that shard's length. It is rounded down to
  * an even byte count (whole 16-bit samples), minimum 2.
+ *
+ * The byte ceiling does not bound the index range on its own: under the default ceiling a single shard
+ * at index ~10^9 still fits, and the missing-index list grows with the highest index. Callers handling
+ * untrusted shards must cap the shard count and highest index themselves (recovery does, via
+ * {@link MAX_RECOVERY_SEGMENTS}) and pass a smaller `maxDataBytes`.
  *
  * @param segments Recovered shards; any order, unique non-negative integer indexes starting from 0.
  * @param sampleRate Sample rate of the PCM data, in Hz.
@@ -524,16 +570,28 @@ function writeRecordingWavHeader(buffer: Buffer, sampleRate: number, dataSize: n
 export const MAX_RECOVERY_SEGMENTS = 240;
 
 /**
- * Ceiling on the PCM a recovery will hold in memory: 384 MiB covers an hour of 48 kHz mono PCM16
+ * Ceiling on the PCM data a recovery will assemble: 384 MiB covers an hour of 48 kHz mono PCM16
  * (345.6 MB) with headroom. Shard sizes are client-controlled (the GraphQL body limit is 50 MB, so one
  * shard can be ~37 MB) and gaps are filled with silence, so without this a session owner could make the
  * janitor allocate gigabytes. Checked against listed sizes, running actual bytes, and the assembled size.
+ *
+ * It caps the data, not the process's memory: the shard buffers are still held while the WAV is
+ * assembled, so peak memory for one recovery is about twice this (shards + WAV).
  */
 export const MAX_RECOVERY_BYTES = 384 * 1024 * 1024;
 
 /** `seg-0003.pcm` or `seg-0003.r48000.pcm`: index, optional keyed rate, extension. */
 const SEGMENT_KEY_PATTERN = /^seg-(\d+)(?:\.r(\d+))?\.([A-Za-z0-9]+)$/;
-const RECOVERED_FILE_NAME = 'recording-recovered.wav';
+
+/**
+ * A fresh name per recovery attempt (`recording-recovered-<epoch ms>-<random hex>.wav`). Storage keys are
+ * `<folder>/<file name>`, so a fixed name would make retries and concurrent instances write the SAME
+ * object behind several `MJ: Files` rows: deleting an orphan row would delete the stamped recording, and
+ * a late attempt could overwrite it with a mostly silent WAV.
+ */
+function recoveredFileName(): string {
+    return `recording-recovered-${Date.now()}-${randomBytes(4).toString('hex')}.wav`;
+}
 
 /** Input to {@link RecoverRealtimeRecordingFromSegments}. */
 export interface RecoverRealtimeRecordingInput {
@@ -575,10 +633,13 @@ interface ListedShard {
 /**
  * Rebuilds a session's recording from the `seg-*` crash-recovery shards left in its storage folder —
  * for a call whose browser died or whose end-of-call upload never ran, so no `recording.*` exists.
- * Shards are concatenated in order (silence for absent ones), uploaded as `recording-recovered.wav`,
- * stamped on the session, and only then deleted. Deletion happens only after a reload confirms the
- * session points at the recovered file, so a failure at any step leaves the shards for the next try.
- * If the session gained a recording meanwhile, that one is kept and the outcome is `Superseded`.
+ * Shards are concatenated in order (silence for absent ones), uploaded under a per-attempt
+ * `recording-recovered-<epoch ms>-<random hex>.wav`, stamped on the session, linked, and only then
+ * deleted. Deletion happens only after a reload confirms the session points at the recovered file, so a
+ * failure at any step leaves the shards for the next try. If the session has (or gains) another
+ * recording, the outcome is `Superseded` and the shards are kept. Deferring to that recording is best
+ * effort: the session is re-checked immediately before the stamp, but a recording stamped inside that
+ * one load -> save window is overwritten (there is no compare-and-set).
  *
  * Never throws: every failure is logged with the session id and returned as `Failed`.
  *
@@ -620,13 +681,14 @@ async function recoverFromSegments(input: RecoverRealtimeRecordingInput): Promis
 
     const stored = await StoreRealtimeRecording({
         Audio: assembled.Wav, MimeType: 'audio/wav', Media: 'Audio', StartedAt, StorageAccountID, SessionID,
-        ContextUser, Provider, FileName: RECOVERED_FILE_NAME, Description: description, PreserveExistingRecording: true,
+        ContextUser, Provider, FileName: recoveredFileName(), Description: description, PreserveExistingRecording: true,
     });
     const found = { FileID: stored.FileID, SegmentCount: shards.length, MissingIndexes: assembled.MissingIndexes };
     if (stored.Superseded) {
         return recoveryResult('Superseded', found);
     }
-    if (!stored.FileID) {
+    // An ErrorMessage with a FileID is an uploaded-but-unstamped orphan (re-read or stamp failed).
+    if (!stored.FileID || stored.ErrorMessage) {
         throw new Error(stored.ErrorMessage ?? 'storing the recovered recording failed');
     }
     return finishRecovery(input, stored.FileID, found, shards);
