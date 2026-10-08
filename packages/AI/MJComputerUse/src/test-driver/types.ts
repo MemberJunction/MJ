@@ -121,6 +121,16 @@ export interface ComputerUseTestConfig {
     /** Oracles to run for evaluation */
     oracles?: ComputerUseOracleConfig[];
 
+    /** How many run frames the rubric judge sees after the run (default 6). 0 sends the transcript only. */
+    rubricFrames?: number;
+
+    /**
+     * When a published rubric resolves, its criteria drive the in-run judge and the
+     * rubric oracle stores that judge's final verdict with no second model call (default true).
+     * False keeps judgeValidationCriteria in the loop and judges the rubric after the run.
+     */
+    judgeWithRubric?: boolean;
+
     /**
      * When true, the inline criteria verdict gates Passed/Failed.
      * Otherwise that verdict is advisory and only the configured oracles gate.

@@ -370,6 +370,7 @@ export class MJComputerUseEngine extends ComputerUseEngine {
                 currentUrl: request.CurrentUrl,
                 diagnostics: request.Diagnostics,
                 validationCriteria: request.ValidationCriteria,
+                rubricCriteria: request.RubricCriteria,
                 applicationContext: request.ApplicationContext,
             }, request.Signal);
 

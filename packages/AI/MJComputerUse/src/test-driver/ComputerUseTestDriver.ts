@@ -49,7 +49,6 @@ import {
     type IOracle,
     DriverExecutionContext,
     DriverExecutionResult,
-    OracleInput,
     OracleResult,
     ValidationResult,
     ValidationError,
@@ -57,8 +56,8 @@ import {
     TestRunOutputItem,
     ReplayTelemetry,
     InlineOracleFromVerdicts,
-    OraclesWithNamedRubric,
 } from '@memberjunction/testing-engine';
+import { ProviderPromptService, ProviderRubricEngine, RenderCriteriaText, RUBRIC_CRITERION_PROMPT } from '@memberjunction/rubrics';
 
 import {
     BrowserConfig,
@@ -85,7 +84,7 @@ import {
     GoalPostcondition,
     TraceTarget,
 } from '@memberjunction/computer-use';
-import type { AuthMethod, ComputerUseResult, BrowserDiagnosticEvent, ReplayTier, ReplayInfo } from '@memberjunction/computer-use';
+import type { AuthMethod, ComputerUseResult, BrowserDiagnosticEvent, ReplayTier, ReplayInfo, RubricJudgeCriterion } from '@memberjunction/computer-use';
 import { BaseBrowserAdapter } from '@memberjunction/computer-use';
 
 import { MJComputerUseEngine } from '../engine/MJComputerUseEngine.js';
@@ -122,6 +121,10 @@ import {
     type ArtifactRetentionPolicy,
 } from './driver-policy.js';
 import { AllowsLLMFallback, LoadScript, SaveScript } from './script-store.js';
+import { BuildRubricSubject, COMPUTER_USE_RUBRIC_JUDGE, WithDefaultRubricEvaluator, type RubricSubject } from './rubric-subject.js';
+import { DEFAULT_RUBRIC_FRAMES, SelectRubricFrames } from './rubric-frames.js';
+import { RubricCriteriaForJudge } from './rubric-judge-criteria.js';
+import '../rubric/ComputerUseRubricEvaluator.js';
 
 import { GoalCompletionOracle } from './oracles/GoalCompletionOracle.js';
 import { UrlMatchOracle } from './oracles/UrlMatchOracle.js';
@@ -293,6 +296,18 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             // substitution applies to both so authors can reference {{baseUrl}} etc.
             const applicationContext = this.resolveApplicationContext(context, input, variableValues);
 
+            // 1d. Resolve the rubric once. A published rubric's leaves drive the in-run judge,
+            // and its oracle then stores that judge's verdict (the ComputerUse evaluator).
+            // Without them, the oracle judges the run afterwards with the vision judge.
+            const resolved = await this.ResolveRubricForRun(config, context);
+            // A checkpoint tour keeps its own per-section judge, so the rubric is judged after the run.
+            const rubricCriteria = expected.checkpoints && expected.checkpoints.length > 0
+                ? undefined
+                : await this.loadJudgeRubric(resolved, context);
+            config = WithDefaultRubricEvaluator(resolved, rubricCriteria
+                ? { EvaluatorName: 'ComputerUse' }
+                : { EvaluatorType: 'AIPrompt', PromptName: COMPUTER_USE_RUBRIC_JUDGE, ModelSelection: 'Judge' });
+
             // 2. Build engine params
             const runParams = this.buildRunParams(config, input, context);
 
@@ -306,9 +321,15 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             if (applicationContext) {
                 runParams.ApplicationContext = applicationContext;
             }
-            // Rubric judging: thread the test's authored validation
-            // criteria into the in-run judge so Done is derived per-criterion.
-            if (expected.judgeValidationCriteria && expected.judgeValidationCriteria.length > 0) {
+            // Rubric judging: the published rubric's criteria, or else the test's authored
+            // validation criteria, go to the in-run judge so Done is derived per-criterion.
+            if (rubricCriteria) {
+                runParams.RubricCriteria = rubricCriteria;
+                runParams.ValidationCriteria = rubricCriteria.map(item => item.Text);
+                if (expected.judgeValidationCriteria && expected.judgeValidationCriteria.length > 0) {
+                    this.logToTestRun(context, 'warn', 'The rubric drives the judge; judgeValidationCriteria were not used.');
+                }
+            } else if (expected.judgeValidationCriteria && expected.judgeValidationCriteria.length > 0) {
                 runParams.ValidationCriteria = expected.judgeValidationCriteria;
             }
             // Checkpoint tour: map the test's declared sections to engine
@@ -349,6 +370,9 @@ export class ComputerUseTestDriver extends BaseTestDriver {
 
             // 4. Build actual output with execution configuration
             const actualOutput = this.buildActualOutput(result);
+            if (rubricCriteria) {
+                actualOutput.judgedWithRubric = true;
+            }
 
  ///tier telemetry. `tier` is the tier that produced this
             // result (a diverged replay that fell back reports 'llm'); `replay`
@@ -406,7 +430,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
 
             // 5. Run oracles
             this.logToTestRun(context, 'info', 'Running oracles for evaluation');
-            const oracleResults = await this.runOracles(config, input, expected, actualOutput, context);
+            const oracleResults = await this.runOracles(config, input, expected, actualOutput, result, context);
 
             // 6. Calculate score and status. Advisory oracles (e.g. step-count)
             // are scored for diagnostics but do NOT gate Passed/Failed,
@@ -1208,6 +1232,12 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             output.criteriaVerdicts = result.FinalJudgeVerdict.CriteriaVerdicts;
         }
 
+        // The prompt run of the last judged step, so a stored rubric evaluation can link it.
+        const judgedStep = [...result.Steps].reverse().find(step => step.JudgeVerdict);
+        if (judgedStep?.JudgePromptRunId) {
+            output.finalJudgePromptRunId = judgedStep.JudgePromptRunId;
+        }
+
         // Include judge verdict if available
         if (result.FinalJudgeVerdict) {
             output.finalJudgeVerdict = {
@@ -1413,7 +1443,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         // score identically to one that never logged in. Status stays 'Timeout'.
         let oracleResults: OracleResult[] = [];
         try {
-            oracleResults = await this.runOracles(config, input, expected, actualOutput, context);
+            oracleResults = await this.runOracles(config, input, expected, actualOutput, result, context);
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             this.logToTestRun(context, 'warn', `Oracle evaluation on timeout partial failed: ${msg}`);
@@ -1583,6 +1613,22 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         return 'unknown';
     }
 
+    /**
+     * The resolved rubric's leaves, rendered for the in-run judge. Undefined when the test
+     * turns this off, when no rubric oracle is pinned to a version, or when the version has no leaves.
+     */
+    protected async loadJudgeRubric(config: ComputerUseTestConfig, context: DriverExecutionContext): Promise<RubricJudgeCriterion[] | undefined> {
+        if (config.judgeWithRubric === false) return undefined;
+        const rubricOracle = config.oracles?.find(oracle => oracle.type === 'rubric');
+        const versionId = rubricOracle?.config?.rubricVersionId;
+        if (typeof versionId !== 'string' || rubricOracle?.config?.evaluator !== undefined) return undefined;
+        const version = await ProviderRubricEngine(this.Provider, context.contextUser).GetRubric({ versionId });
+        if (!version) return undefined;
+        const criteria = await RenderCriteriaText(version, ProviderPromptService(this.Provider, context.contextUser), { Name: RUBRIC_CRITERION_PROMPT });
+        const judge = RubricCriteriaForJudge(criteria);
+        return judge.length > 0 ? judge : undefined;
+    }
+
     // ═══════════════════════════════════════════════════════════
     // ORACLE EVALUATION
     // ═══════════════════════════════════════════════════════════
@@ -1593,30 +1639,34 @@ export class ComputerUseTestDriver extends BaseTestDriver {
      * Oracle resolution priority:
      * 1. Built-in Computer Use oracles (goal-completion, url-match, step-count)
      * 2. Global oracle registry from execution context (llm-judge, schema-validate, etc.)
+     *
+     * A rubric oracle reads a step transcript and chosen frames, not the raw output. When the
+     * rubric drove the in-run judge, its verdicts are stored by the rubric oracle, so the
+     * inline judge verdict is not reported a second time.
      */
     private async runOracles(
         config: ComputerUseTestConfig,
         input: ComputerUseTestInput,
         expected: ComputerUseExpectedOutcomes,
         actualOutput: Record<string, unknown>,
+        result: ComputerUseResult,
         context: DriverExecutionContext
     ): Promise<OracleResult[]> {
-        const oracleConfigs = OraclesWithNamedRubric(config.oracles, {
-            runRubricId: context.options.rubricId,
-            runVersionId: context.options.rubricVersionId,
-            testRubricId: context.test.RubricID,
-        });
-        const verdicts = actualOutput.criteriaVerdicts as { criterion: string; met: boolean; evidence?: string }[] | undefined;
+        const oracleConfigs = config.oracles ?? [];
+        const rawVerdicts = actualOutput.criteriaVerdicts as { criterion: string; met: boolean; evidence?: string }[] | undefined;
+        const verdicts = actualOutput.judgedWithRubric === true ? undefined : rawVerdicts;
         if (oracleConfigs.length === 0 && !(verdicts && verdicts.length > 0)) {
             this.logToTestRun(context, 'info', 'No oracles configured — skipping evaluation');
             return [];
         }
 
         const results: OracleResult[] = [];
+        const needsSubject = oracleConfigs.some(oracleConfig => oracleConfig.type === 'rubric');
+        const frames = needsSubject ? SelectRubricFrames(result, config.rubricFrames ?? DEFAULT_RUBRIC_FRAMES) : [];
+        const subject = needsSubject ? BuildRubricSubject(input, expected, actualOutput, frames) : undefined;
 
         for (const oracleConfig of oracleConfigs) {
-            const result = await this.runSingleOracle(oracleConfig, expected, actualOutput, context);
-            results.push(result);
+            results.push(await this.runSingleOracle(oracleConfig, expected, actualOutput, subject, context));
         }
 
         if (verdicts && verdicts.length > 0) {
@@ -1640,6 +1690,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         oracleConfig: ComputerUseOracleConfig,
         expected: ComputerUseExpectedOutcomes,
         actualOutput: Record<string, unknown>,
+        subject: RubricSubject | undefined,
         context: DriverExecutionContext
     ): Promise<OracleResult> {
         const advisory = IsOracleAdvisory(oracleConfig.type, oracleConfig.advisory);
@@ -1660,13 +1711,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         }
 
         try {
-            const oracleInput: OracleInput = {
-                test: context.test,
-                testRunId: context.testRun.ID,
-                expectedOutput: expected,
-                actualOutput,
-                contextUser: context.contextUser
-            };
+            const oracleInput = this.BuildOracleInput(context, { expectedOutput: expected, actualOutput, subjectContent: subject });
 
             const result = await oracle.evaluate(oracleInput, oracleConfig.config ?? {});
             result.advisory = advisory;
