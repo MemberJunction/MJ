@@ -264,29 +264,11 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
         shouldClose?: (session: MJAIAgentSessionEntity) => boolean,
     ): Promise<number> {
         let closedCount = 0;
-        let afterKey: CompositeKey | undefined;
-
-        // eslint-disable-next-line no-constant-condition
-        while (true) {
-            const fetched = await this.fetchPage(filter, afterKey, provider, systemUser);
-            if (fetched == null) {
-                break; // load failure already logged
-            }
-            if (fetched.length === 0) {
-                break;
-            }
-            // Advance the keyset BEFORE the optional JS predicate narrows the page (we must page by the
-            // SQL-matched set, not the post-filtered subset, or pagination would stall/skip).
-            const lastFetchedId = fetched[fetched.length - 1].ID;
-            const fetchedCount = fetched.length;
+        await this.forEachSessionPage(filter, provider, systemUser, async fetched => {
             // Optional in-JS narrowing (e.g. exact deadline check the SQL pre-filter can't express).
             const page = shouldClose ? fetched.filter(shouldClose) : fetched;
             if (page.length === 0) {
-                if (fetchedCount < SWEEP_PAGE_SIZE) {
-                    break;
-                }
-                afterKey = CompositeKey.FromID(lastFetchedId); // first-pk-ok: keyset AfterKey on SESSION_ENTITY = MJ: AI Agent Sessions, a core entity keyed by ID
-                continue;
+                return;
             }
             // Batch-load every channel for this whole page of sessions in ONE query, then hand each
             // session its own slice to CloseSession — avoids the N+1 channel read (one RunView per
@@ -308,12 +290,47 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
                     closedCount++;
                 }
             }
+        });
+        return closedCount;
+    }
+
+    /**
+     * Keyset-page (`AfterKey`) through every session matching `filter`, handing each full fetched page
+     * to `visit`. Stops on a load failure (already logged), an empty page, a partial page, or when
+     * `visit` returns `false`.
+     *
+     * `visit` receives the page exactly as the SQL filter matched it. The keyset advances from the
+     * LAST FETCHED row, so any narrowing `visit` does in JS can never stall or skip pagination.
+     */
+    private async forEachSessionPage(
+        filter: string,
+        provider: IMetadataProvider,
+        systemUser: UserInfo,
+        visit: (page: MJAIAgentSessionEntity[]) => Promise<boolean | void>,
+    ): Promise<void> {
+        let afterKey: CompositeKey | undefined;
+
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+            const fetched = await this.fetchPage(filter, afterKey, provider, systemUser);
+            if (fetched == null) {
+                return; // load failure already logged
+            }
+            if (fetched.length === 0) {
+                return;
+            }
+            // Advance from the last FETCHED row (before `visit` narrows anything): we must page by the
+            // SQL-matched set, not a post-filtered subset, or pagination would stall/skip.
+            const lastFetchedId = fetched[fetched.length - 1].ID;
+            const fetchedCount = fetched.length;
+            if ((await visit(fetched)) === false) {
+                return;
+            }
             if (fetchedCount < SWEEP_PAGE_SIZE) {
-                break; // partial page (by the SQL-matched set) => end of data
+                return; // partial page (by the SQL-matched set) => end of data
             }
             afterKey = CompositeKey.FromID(lastFetchedId); // first-pk-ok: keyset AfterKey on SESSION_ENTITY = MJ: AI Agent Sessions, a core entity keyed by ID
         }
-        return closedCount;
     }
 
     /** Fetch one keyset page of matching sessions, or null on a load failure (logged). */
