@@ -3198,7 +3198,7 @@ describe('RealtimeClientSessionResolver — scoped-anonymous elevation (issue #3
         expect((writeSegmentMock.mock.calls[0][0] as { ContextUser: unknown }).ContextUser).toBe(SYSTEM_USER);
     });
 
-    it('recording writes stay entirely on the caller for a normal authenticated user', async () => {
+    it('a normal authenticated owner’s recording store runs as the SYSTEM user; ownership stays on the caller (#5195)', async () => {
         currentProvider = makeRecordingProvider();
         // A named caller owning the session (the recording provider stamps UserID 'anon-1', so re-stamp).
         const session = makeSessionEntity({ UserID: 'user-1' });
@@ -3211,9 +3211,13 @@ describe('RealtimeClientSessionResolver — scoped-anonymous elevation (issue #3
         const result = await resolver.UploadRealtimeRecording('session-1', AUDIO_B64, 'audio/wav', makeCtx(), 1000, true);
 
         expect(result.Success).toBe(true);
-        expect(getEntityObjectSpy()).toHaveBeenCalledWith('MJ: AI Agents', USER);
-        expect((storeRecordingMock.mock.calls[0][0] as { ContextUser: unknown }).ContextUser).toBe(USER);
-        expect(getSystemUserMock).not.toHaveBeenCalled();
+        // Ownership is proven as the CALLER; the store (MJ: Files, the file link and the session stamp —
+        // entities the stock UI role cannot create/update) runs as SYSTEM.
+        expect(getEntityObjectSpy()).toHaveBeenCalledWith('MJ: AI Agent Sessions', USER);
+        expect(getEntityObjectSpy()).toHaveBeenCalledWith('MJ: AI Agents', SYSTEM_USER);
+        expect(resolveStorageMock.mock.calls[0][1]).toBe(SYSTEM_USER);
+        expect((storeRecordingMock.mock.calls[0][0] as { ContextUser: unknown }).ContextUser).toBe(SYSTEM_USER);
+        expect(deleteSegmentsMock).toHaveBeenCalledWith('session-1', 'storage-acct-1', SYSTEM_USER);
     });
 
     /** Provider routing a hidden-tool-turn RelayRealtimeToolTurn call: session, prompt run, detail. */
