@@ -43,9 +43,15 @@ vi.mock('@memberjunction/ai', () => {
         constructor(apiKey: string) {
             this._apiKey = apiKey;
         }
+        protected get apiKey(): string { return this._apiKey; }
     }
     class BaseLLM extends BaseModel {
         protected _additionalSettings: Record<string, unknown> = {};
+        // Mirrors @memberjunction/ai's BaseLLM: settings merge into what is already there.
+        public get AdditionalSettings(): Record<string, unknown> { return this._additionalSettings; }
+        public SetAdditionalSettings(settings: Record<string, unknown>): void {
+            this._additionalSettings = { ...this._additionalSettings, ...settings };
+        }
         public get SupportsStreaming(): boolean { return false; }
         // The trailing volatile-state seam, mirroring @memberjunction/ai's BaseLLM: the base test is
         // the metadata flag alone; AnthropicLLM's override adds its tag-literal fallback on top.
@@ -1249,5 +1255,51 @@ describe('AnthropicLLM — streaming and non-streaming send the same request', (
 
         expect(content).toBe('The answer.');
         expect(result.data.choices[0].message.thinking).toBe('Weighing the options.');
+    });
+});
+
+describe('AnthropicLLM — keys not scoped to a workspace', () => {
+    // Anthropic rejects a key that is not scoped to a workspace unless every request names one:
+    // "This API key is not scoped to a workspace, so this request must include the
+    // anthropic-workspace-id header". The driver sends it when a workspace is configured.
+    beforeEach(() => {
+        vi.clearAllMocks();
+        vi.unstubAllEnvs();
+    });
+
+    it('sends no workspace header when none is configured', () => {
+        vi.stubEnv('ANTHROPIC_WORKSPACE_ID', '');
+        new AnthropicLLM('test-api-key');
+        expect(MockAnthropic).toHaveBeenCalledWith({ apiKey: 'test-api-key' });
+    });
+
+    it('names the workspace from ANTHROPIC_WORKSPACE_ID on every request', () => {
+        vi.stubEnv('ANTHROPIC_WORKSPACE_ID', ' wrkspc_01 ');
+        new AnthropicLLM('test-api-key');
+        expect(MockAnthropic).toHaveBeenCalledWith({
+            apiKey: 'test-api-key',
+            defaultHeaders: { 'anthropic-workspace-id': 'wrkspc_01' },
+        });
+    });
+
+    it('takes a workspaceId setting over the environment, and rebuilds the client with it', () => {
+        vi.stubEnv('ANTHROPIC_WORKSPACE_ID', 'wrkspc_env');
+        const llm = new AnthropicLLM('test-api-key');
+        const before = llm.AnthropicClient;
+        llm.SetAdditionalSettings({ workspaceId: 'wrkspc_setting' });
+        expect(MockAnthropic).toHaveBeenLastCalledWith({
+            apiKey: 'test-api-key',
+            defaultHeaders: { 'anthropic-workspace-id': 'wrkspc_setting' },
+        });
+        expect(llm.AnthropicClient).not.toBe(before);
+    });
+
+    it('keeps the client when a setting names no workspace', () => {
+        vi.stubEnv('ANTHROPIC_WORKSPACE_ID', '');
+        const llm = new AnthropicLLM('test-api-key');
+        const before = llm.AnthropicClient;
+        llm.SetAdditionalSettings({ workspaceId: '  ' });
+        expect(llm.AnthropicClient).toBe(before);
+        expect(MockAnthropic).toHaveBeenCalledTimes(1);
     });
 });

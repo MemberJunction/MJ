@@ -39,6 +39,16 @@ const MIN_THINKING_BUDGET_TOKENS = 1024;
 /** Headroom added above the thinking budget when `max_tokens` would not exceed it; budget-form thinking spends from `max_tokens`. */
 const THINKING_BUDGET_HEADROOM_TOKENS = 1000;
 
+/**
+ * Environment variable naming the Anthropic workspace requests are billed to. Only keys that are not
+ * scoped to a workspace need it: Anthropic rejects their requests with "This API key is not scoped to
+ * a workspace, so this request must include the anthropic-workspace-id header".
+ */
+export const ANTHROPIC_WORKSPACE_ID_ENV = 'ANTHROPIC_WORKSPACE_ID';
+
+/** The request header that names the workspace, for keys that are not scoped to one. */
+const WORKSPACE_ID_HEADER = 'anthropic-workspace-id';
+
 /** A minimal Anthropic text content block, optionally carrying an ephemeral cache breakpoint. */
 type AnthropicTextBlock = { type: 'text'; text: string; cache_control?: { type: 'ephemeral' } };
 
@@ -79,7 +89,30 @@ export class AnthropicLLM extends BaseLLM {
 
     constructor(apiKey: string) {
         super(apiKey);
-        this._anthropic = new Anthropic({apiKey});
+        this._anthropic = AnthropicLLM.createClient(apiKey, AnthropicLLM.workspaceIdFromEnvironment());
+    }
+
+    /**
+     * Accepts `workspaceId` (overriding {@link ANTHROPIC_WORKSPACE_ID_ENV}) and rebuilds the client so
+     * every request names that workspace.
+     */
+    public override SetAdditionalSettings(settings: Record<string, string | number | boolean | null | undefined>): void {
+        super.SetAdditionalSettings(settings);
+        const workspaceId = this.AdditionalSettings.workspaceId;
+        if (typeof workspaceId === 'string' && workspaceId.trim() !== '') {
+            this._anthropic = AnthropicLLM.createClient(this.apiKey, workspaceId);
+        }
+    }
+
+    /** The workspace ID set in the environment, if any. */
+    private static workspaceIdFromEnvironment(): string | undefined {
+        return typeof process !== 'undefined' ? process.env[ANTHROPIC_WORKSPACE_ID_ENV] : undefined;
+    }
+
+    /** An SDK client that sends `anthropic-workspace-id` on every request when a workspace is named. */
+    private static createClient(apiKey: string, workspaceId: string | undefined): Anthropic {
+        const id = workspaceId?.trim();
+        return id ? new Anthropic({ apiKey, defaultHeaders: { [WORKSPACE_ID_HEADER]: id } }) : new Anthropic({ apiKey });
     }
 
     /**
