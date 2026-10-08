@@ -51,6 +51,11 @@ vi.mock('fs', async () => {
             // The emit path routes through writeFileIfChanged, which creates the output
             // directory before writing. Unmocked, that hits the real filesystem at '/out'.
             mkdirSync: vi.fn(),
+            // writeFileIfChanged also reads the file it is about to replace, and existsSync above
+            // says it is there. Under '/out' that read must come from the mock too: an empty
+            // "previous" file, so every emit is a real write the tests can capture.
+            readFileSync: vi.fn((file: fs.PathOrFileDescriptor, options?: Parameters<typeof actual.readFileSync>[1]) =>
+                String(file).replace(/\\/g, '/').startsWith('/out') ? '' : actual.readFileSync(file, options)),
         },
     };
 });
