@@ -1,6 +1,7 @@
 import { Command, Flags } from '@oclif/core';
 import ora from 'ora-classic';
 import { AI_FORMAT_MAP, CANONICAL_FORMAT_FLAG, ResolveLegacyFormat } from '../../../lib/format-compat.js';
+import { CloseAIProvider, EndAICommand, RouteConsoleToStderr } from '../../../lib/ai-command-lifecycle.js';
 
 export default class ActionsRun extends Command {
   static description = 'Execute an AI action with parameters';
@@ -46,7 +47,9 @@ export default class ActionsRun extends Command {
   };
 
   async run(): Promise<void> {
-    const { ActionService, OutputFormatter } = await import('@memberjunction/ai-cli');
+    // stdout is this command's result; framework logging goes to stderr so --format json parses.
+    RouteConsoleToStderr();
+    const { ActionService, OutputFormatter, CloseMJProvider } = await import('@memberjunction/ai-cli');
 
     const { flags, metadata } = await this.parse(ActionsRun);
     const service = new ActionService();
@@ -70,6 +73,7 @@ export default class ActionsRun extends Command {
       }
     }
 
+    let exitCode = 0;
     try {
       if (flags['dry-run']) {
         // Route the dry run through the same formatter as a real run, so --format=json
@@ -88,13 +92,14 @@ export default class ActionsRun extends Command {
 
         spinner.stop();
         this.log(formatter.formatActionResult(result));
-
-        if (!result.success) {
-          this.exit(1);
-        }
+        exitCode = result.success ? 0 : 1;
       }
     } catch (error) {
+      await CloseAIProvider(CloseMJProvider);
       this.error(error as Error);
     }
+
+    // Close the database pool so the process can exit; it used to hang here after printing.
+    await EndAICommand(CloseMJProvider, exitCode);
   }
 }

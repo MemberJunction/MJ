@@ -28,5 +28,10 @@ export type {
   StepDetailOptions,
   RunSummaryOptions,
 } from './services/AgentAuditService';
+export type { WorkflowTaskInfo, WorkflowTaskSummary } from './lib/workflow-tasks';
+
+// Types for AgentService results
+export type { AgentExecutionOptions } from './services/AgentService';
+export type { ExecutionResult } from './lib/output-formatter';
 
 

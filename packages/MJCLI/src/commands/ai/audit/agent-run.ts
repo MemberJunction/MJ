@@ -4,6 +4,7 @@ import ora from 'ora-classic';
 import chalk from 'chalk';
 import * as fs from 'fs/promises';
 import { CANONICAL_FORMAT_FLAG, ResolveLegacyFormat } from '../../../lib/format-compat.js';
+import { CloseAIProvider, EndAICommand, RouteConsoleToStderr } from '../../../lib/ai-command-lifecycle.js';
 
 export default class AgentRun extends Command {
   static description = 'Audit and analyze AI agent execution runs for debugging and performance analysis';
@@ -129,7 +130,9 @@ export default class AgentRun extends Command {
   };
 
   async run(): Promise<void> {
-    const { AgentAuditService } = await import('@memberjunction/ai-cli');
+    // stdout is this command's result; framework logging goes to stderr so --format json parses.
+    RouteConsoleToStderr();
+    const { AgentAuditService, CloseMJProvider } = await import('@memberjunction/ai-cli');
 
     const { args, flags, metadata } = await this.parse(AgentRun);
     const spinner = ora();
@@ -159,7 +162,7 @@ export default class AgentRun extends Command {
         spinner.stop();
 
         this.log(service.formatRunList(runs, outputFormat));
-        process.exit(0);
+        await EndAICommand(CloseMJProvider, 0);
         return;
       }
 
@@ -182,7 +185,7 @@ export default class AgentRun extends Command {
         spinner.stop();
 
         this.log(service.formatStepDetail(stepDetail, outputFormat));
-        process.exit(0);
+        await EndAICommand(CloseMJProvider, 0);
         return;
       }
 
@@ -193,7 +196,7 @@ export default class AgentRun extends Command {
         spinner.stop();
 
         this.log(service.formatErrorAnalysis(errorAnalysis, outputFormat));
-        process.exit(0);
+        await EndAICommand(CloseMJProvider, 0);
         return;
       }
 
@@ -206,7 +209,7 @@ export default class AgentRun extends Command {
 
         this.log(chalk.green(`✓ Full audit data exported to ${flags.file}`));
         this.log(chalk.dim(`  File size: ${(JSON.stringify(exportData).length / 1024).toFixed(1)} KB`));
-        process.exit(0);
+        await EndAICommand(CloseMJProvider, 0);
         return;
       }
 
@@ -220,18 +223,23 @@ export default class AgentRun extends Command {
 
       this.log(service.formatRunSummary(summary, outputFormat));
 
-      if (flags.verbose) {
+      // Tips are for a reader; under --format json they would follow the document on stdout.
+      if (flags.verbose && outputFormat !== 'json') {
         this.log(chalk.dim('\n💡 Tip: Use --step <N> to see details for a specific step'));
         this.log(chalk.dim('💡 Tip: Use --errors to see only error information'));
       }
 
-      process.exit(0);
+      // Close the database pool rather than process.exit(): exiting at once cut a large piped
+      // --format json report short.
+      await EndAICommand(CloseMJProvider, 0);
     } catch (error) {
       spinner.fail('Audit failed');
+      await CloseAIProvider(CloseMJProvider);
 
+      // stderr, like the error itself: stdout carries only the command's result.
       if (flags.verbose && error instanceof Error) {
-        this.log(chalk.red('\nError Details:'));
-        this.log(error.stack || error.message);
+        this.logToStderr(chalk.red('\nError Details:'));
+        this.logToStderr(error.stack || error.message);
       }
 
       this.error(error as Error);
