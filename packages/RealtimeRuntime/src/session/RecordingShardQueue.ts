@@ -23,7 +23,9 @@ export const MAX_SHARD_UPLOAD_ATTEMPTS = 3;
  * Flushes allowed in flight at once. Ticks are 15 s apart, so overlap only happens when an upload is
  * slower than a tick; an unbounded pile-up on a dead network would snapshot (and hold in memory) a
  * new window every tick. A skipped tick costs nothing: the recorder keeps the audio and the next
- * flush ships the larger window.
+ * flush ships the larger window. While both slots are pinned the recorder cursor does not advance,
+ * so the next capture is one larger window (bounded by the upload timeout x attempts); if that
+ * shard is later dropped, recovery fills a correspondingly longer gap with silence.
  */
 export const MAX_CONCURRENT_FLUSHES = 2;
 

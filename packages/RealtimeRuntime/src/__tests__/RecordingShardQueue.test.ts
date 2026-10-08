@@ -210,7 +210,7 @@ describe('RecordingShardQueue', () => {
   it('skips a flush without snapshotting when MAX_CONCURRENT_FLUSHES are in flight', async () => {
     expect(MAX_CONCURRENT_FLUSHES).toBe(2);
     const queue = new RecordingShardQueue();
-    // Leave shard 0 retained so the skip has something it must not touch.
+    // Shard 0 fails once and is retained; flush 1 below takes ownership of it.
     await queue.Flush(snapshotOf('a'), recordingUpload(() => false).Upload);
     expect(queue.RetainedCount).toBe(1);
 
@@ -221,17 +221,18 @@ describe('RecordingShardQueue', () => {
       return uploadGate.Promise;
     };
     const snapshotGate = createDeferred<string | null>();
-    // Flush 1 takes shard 0 and hangs in its upload; flush 2 hangs in its snapshot.
+    // Flush 1 takes shard 0 into its in-flight batch and hangs in its upload; flush 2 hangs in its snapshot.
+    // The skipped third call must therefore not upload shard 0, and nothing is left retained.
     const flush1 = queue.Flush(snapshotOf(null), gatedUpload);
     const flush2 = queue.Flush(() => snapshotGate.Promise, gatedUpload);
     await settle();
     expect(uploadedIndexes).toEqual([0]);
-    const retainedBefore = queue.RetainedCount;
+    expect(queue.RetainedCount).toBe(0);
 
     const third = vi.fn(async () => 'c');
     await queue.Flush(third, gatedUpload);
     expect(third).not.toHaveBeenCalled();
-    expect(queue.RetainedCount).toBe(retainedBefore);
+    expect(queue.RetainedCount).toBe(0);
     expect(uploadedIndexes).toEqual([0]);
 
     uploadGate.Resolve(true);

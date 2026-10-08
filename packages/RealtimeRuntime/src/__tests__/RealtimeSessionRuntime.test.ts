@@ -548,12 +548,12 @@ describe('session lifecycle, driven end to end with fakes', () => {
             const original = provider.ExecuteGQL.bind(provider);
             let answered = false;
             provider.ExecuteGQL = async (query: string, variables?: ShardUpload) => {
-                if (!answered && /mutation UploadRealtimeRecordingSegment\(/.test(query)) {
+                if (!answered && variables && /mutation UploadRealtimeRecordingSegment\(/.test(query)) {
                     answered = true;
                     provider.Attempts.push({
-                        agentSessionId: variables!.agentSessionId,
-                        segmentIndex: variables!.segmentIndex,
-                        audioBase64: variables!.audioBase64,
+                        agentSessionId: variables.agentSessionId,
+                        segmentIndex: variables.segmentIndex,
+                        audioBase64: variables.audioBase64,
                     });
                     return result;
                 }
