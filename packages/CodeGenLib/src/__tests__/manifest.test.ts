@@ -732,6 +732,28 @@ describe('generateClassRegistrationsManifest - syncDependencies integration', ()
         expect(pkgWrite).toBeUndefined();
     });
 
+    it('should leave a package declared as a peer out of dependencies', async () => {
+        // An Open App declares host-provided packages as peers. Re-adding one to `dependencies` at
+        // the version on disk pins a second copy into every host on a later release.
+        virtualFiles[`${appDir}/package.json`] = JSON.stringify({
+            name: 'test-app',
+            dependencies: { '@test/bundle': '1.0.0' },
+            peerDependencies: { '@test/provider': '^1.0.0' },
+        }, null, 2);
+
+        const result = await GenerateClassRegistrationsManifest({
+            outputPath,
+            appDir,
+            verbose: false,
+            syncDependencies: true,
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.AddedDependencies).toEqual({});
+        const pkgWrite = writtenFiles.find(w => w.path === `${appDir}/package.json`);
+        expect(pkgWrite).toBeUndefined();
+    });
+
     it('should sort dependencies alphabetically after adding', async () => {
         const result = await GenerateClassRegistrationsManifest({
             outputPath,
