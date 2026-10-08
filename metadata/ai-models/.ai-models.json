@@ -25808,6 +25808,9 @@
             "IncludeThoughtSummaries": true,
             "Level": "medium"
           },
+          "TurnDetection": {
+            "Coverage": "audioActivityAndAllVideo"
+          },
           "FullDuplex": true
         }
       }
@@ -25836,6 +25839,9 @@
                 "Reasoning": {
                   "IncludeThoughtSummaries": true,
                   "Level": "medium"
+                },
+                "TurnDetection": {
+                  "Coverage": "audioActivityAndAllVideo"
                 },
                 "FullDuplex": true
               }
