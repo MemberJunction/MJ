@@ -20,7 +20,7 @@ import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptE
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase, ToPlainJSON } from '@memberjunction/core';
 import { AgentRunWatchdog } from './agent-run-watchdog';
 import { AIPromptRunner, GetToolCallingDecision, AIDecisionRunResult } from '@memberjunction/ai-prompts';
-import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, CredentialScopeAllows, MakeAIAPIKeyResolver, IRealtimeSession, IsPrefixPromptCache, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice, DecisionQuestion, DecisionAnswer } from '@memberjunction/ai';
+import { ChatMessage, ChatMessageContent, AIErrorType, BaseRealtimeModel, GetAIAPIKey, CredentialScopeAllows, MakeAIAPIKeyResolver, IRealtimeSession, IsPrefixPromptCache, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice, DecisionQuestion, DecisionAnswer } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
 import { ProviderRubricEngine } from '@memberjunction/rubrics';
 import { ExecuteSelfCheck, PickSelfCheckLink, type SelfCheckLink, type SelfCheckLinkRow } from './self-check';
@@ -212,6 +212,7 @@ import { AgentPayloadChangeRequest } from '@memberjunction/ai-core-plus';
 import { GetValueFromPath, SetMappedValue } from '@memberjunction/ai-core-plus';
 import { AgentDataPreloader } from './AgentDataPreloader';
 import { ClientToolRequestManager } from './ClientToolRequestManager';
+import { BuildClientToolResultMessage, ResolveClientToolResultMaxChars, ReplaceMediaBlocksWithStubs, IsMediaBlock, IMAGE_BLOCK_TOKEN_ESTIMATE } from './client-tool-results';
 import { ConversationMessageResolver } from './utils/ConversationMessageResolver';
 import { ForEachOperation, WhileOperation } from '@memberjunction/ai-core-plus';
 import _ from 'lodash';
@@ -6914,24 +6915,15 @@ export class BaseAgent {
 
     /**
      * Converts ChatMessageContent to a string representation.
-     * Handles both simple strings and content block arrays.
+     * Handles both simple strings and content block arrays. Text blocks keep their text;
+     * image, audio, video and file blocks become a short stub instead of their base64.
      *
      * @param content - The message content to convert
      * @returns String representation of the content
      * @protected
      */
     protected contentToString(content: ChatMessageContent): string {
-        if (typeof content === 'string') {
-            return content;
-        }
-
-        // Content is an array of blocks - convert to string
-        return content.map((block: ChatMessageContentBlock) => {
-            if (block.type === 'text') {
-                return block.content;
-            }
-            return `[${block.type}: ${block.content}]`;
-        }).join('\n');
+        return ReplaceMediaBlocksWithStubs(content);
     }
 
     /**
@@ -7245,9 +7237,7 @@ export class BaseAgent {
 
             const originalTokens = candidate.tokens;
             const originalMessage = candidate.message as AgentChatMessage;
-            const originalContent = typeof originalMessage.content === 'string'
-                ? originalMessage.content
-                : JSON.stringify(originalMessage.content);
+            const originalContent = ReplaceMediaBlocksWithStubs(originalMessage.content);
 
             if (originalMessage.role === 'tool') {
                 // compact each tool_result block's text; the block structure is what the provider needs.
@@ -7341,9 +7331,7 @@ export class BaseAgent {
 
             const originalTokens = candidate.tokens;
             const originalMessage = candidate.message as AgentChatMessage;
-            const originalContent = typeof originalMessage.content === 'string'
-                ? originalMessage.content
-                : JSON.stringify(originalMessage.content);
+            const originalContent = ReplaceMediaBlocksWithStubs(originalMessage.content);
 
             // Aggressive compaction - keep only first 200 chars
             const compactedContent = await this.compactMessage(
@@ -9547,13 +9535,16 @@ The context is now within limits. Please retry your request with the recovered c
      */
     protected buildAgentBaseCatalog(agent: MJAIAgentEntityExtended, engine: AIEngine): AgentBaseCatalog {
         // Resolve sub-agents: direct ParentID children + active relationships, de-duped, ordered.
+        // Only Active agents are kept, so a Disabled relationship target never reaches the catalog.
         const activeSubAgents = engine.Agents.filter(a => UUIDsEqual(a.ParentID, agent.ID) && a.Status === 'Active')
             .sort((a, b) => a.ExecutionOrder - b.ExecutionOrder);
         const activeAgentRelationships = engine.AgentRelationships.filter(ar => UUIDsEqual(ar.AgentID, agent.ID) && ar.Status === 'Active');
         const uniqueActiveSubAgentIDs = new Set<string>();
         activeSubAgents.forEach(a => uniqueActiveSubAgentIDs.add(a.ID));
         activeAgentRelationships.forEach(ar => uniqueActiveSubAgentIDs.add(ar.SubAgentID));
-        const uniqueActiveSubAgents = Array.from(uniqueActiveSubAgentIDs).map(id => engine.Agents.find(a => UUIDsEqual(a.ID, id)));
+        const uniqueActiveSubAgents = Array.from(uniqueActiveSubAgentIDs)
+            .map(id => engine.Agents.find(a => UUIDsEqual(a.ID, id)))
+            .filter((a): a is MJAIAgentEntityExtended => !!a && a.Status === 'Active');
 
         // Resolve actions from the agent's active AIAgentAction junctions.
         const agentActions = engine.AgentActions.filter(aa => UUIDsEqual(aa.AgentID, agent.ID) && aa.Status === 'Active');
@@ -10902,7 +10893,7 @@ The context is now within limits. Please retry your request with the recovered c
         lines.push('records. When you choose client tools, set nextStep.type to "ClientTools".');
         lines.push('');
         lines.push('NOTE: Do NOT use client tools for asking the user questions or collecting input.');
-        lines.push('Use the "Chat" step for that. Client tools are for programmatic UI interaction only.');
+        lines.push('Use the "Chat" step for that. Client tools read and change the user\'s UI; some return an image.');
         lines.push('');
 
         for (const tool of tools) {
@@ -15160,27 +15151,25 @@ The context is now within limits. Please retry your request with the recovered c
                 stepEntity,
                 response.Success,
                 response.ErrorMessage,
-                { result: response.Result }
+                {
+                    result: response.Result,
+                    media: response.Media?.map(m => ({ mimeType: m.MimeType, bytes: Math.floor((m.Base64.length * 3) / 4), width: m.Width, height: m.Height }))
+                }
             );
 
             results.push({
                 ToolName: tool.Name,
                 Success: response.Success,
                 Result: response.Result,
+                Media: response.Media,
                 ErrorMessage: response.ErrorMessage
             });
         }
 
         // Format results as conversation message
-        const resultsMarkdown = this.formatClientToolResultsAsMarkdown(results);
-        params.conversationMessages.push({
-            role: 'user',
-            content: resultsMarkdown,
-            metadata: {
-                turnAdded: this._promptTurnCount,
-                messageType: 'client-tool-result'
-            }
-        } as AgentChatMessage);
+        params.conversationMessages.push(
+            BuildClientToolResultMessage(results, this._promptTurnCount, ResolveClientToolResultMaxChars(this._agentTypePromptParams))
+        );
 
         // If the LLM already declared taskComplete=true alongside the client tools,
         // honor that intent now that tools have executed — no need for another LLM call.
@@ -15202,31 +15191,6 @@ The context is now within limits. Please retry your request with the recovered c
         }
 
         return await this.executePromptStep(params, config, previousDecision, stepCount);
-    }
-
-    /**
-     * Format client tool results as a compact markdown summary for the conversation.
-     */
-    private formatClientToolResultsAsMarkdown(results: ClientToolResultSummary[]): string {
-        const failedCount = results.filter(r => !r.Success).length;
-        const header = failedCount > 0
-            ? `${failedCount} of ${results.length} client tool(s) failed:`
-            : 'Client tool results:';
-
-        const lines = results.map(r => {
-            const icon = r.Success ? '✓' : '✗';
-            let line = `${icon} **${r.ToolName}**: ${r.Success ? 'succeeded' : 'failed'}`;
-            if (r.ErrorMessage) line += ` — ${r.ErrorMessage}`;
-            if (r.Success && r.Result != null) {
-                const resultStr = typeof r.Result === 'string' ? r.Result : JSON.stringify(r.Result);
-                if (resultStr.length <= 500) {
-                    line += `\n  Result: ${resultStr}`;
-                }
-            }
-            return line;
-        });
-
-        return `${header}\n${lines.join('\n')}`;
     }
 
     /**
@@ -18262,9 +18226,7 @@ The context is now within limits. Please retry your request with the recovered c
         },
         params: ExecuteAgentParams
     ): Promise<string> {
-        const originalContent = typeof message.content === 'string'
-            ? message.content
-            : JSON.stringify(message.content);
+        const originalContent = ReplaceMediaBlocksWithStubs(message.content);
 
         switch (metadata.compactMode) {
             case 'First N Chars': {
@@ -18400,13 +18362,15 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     protected estimateTokens(content: ChatMessage['content'], modelName?: string): number {
-        const text = typeof content === 'string'
-            ? content
-            : JSON.stringify(content);
-
-        // Use heuristic token estimation (fast, good enough for context management)
-        // Avoids heavy tokenizer dependencies while providing ~10-20% accuracy
-        return this.heuristicTokenCount(text);
+        if (typeof content === 'string') {
+            return this.heuristicTokenCount(content);
+        }
+        // Each media block counts as IMAGE_BLOCK_TOKEN_ESTIMATE, not by its base64 length.
+        let tokens = 0;
+        for (const block of content) {
+            tokens += IsMediaBlock(block) ? IMAGE_BLOCK_TOKEN_ESTIMATE : this.heuristicTokenCount(block.content);
+        }
+        return tokens;
     }
 
     /**

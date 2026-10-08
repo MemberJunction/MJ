@@ -26,7 +26,7 @@
  */
 import { Resolver, Mutation, Arg, Ctx, Int, Float, ObjectType, Field, PubSub, PubSubEngine } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
-import { AuthorizationEvaluator, UserInfo, IMetadataProvider, LogError, LogStatus, RunView, BaseEntity } from '@memberjunction/core';
+import { AuthorizationEvaluator, UserInfo, IMetadataProvider, LogError, LogErrorEx, LogStatus, RunView, BaseEntity } from '@memberjunction/core';
 import { UUIDsEqual, IsValidUUID } from '@memberjunction/global';
 import {
     MJAIAgentEntity,
@@ -101,7 +101,8 @@ const WHITEBOARD_ARTIFACT_TYPE_NAME = 'Whiteboard';
  */
 const MAX_CLIENT_TOOLS = 64;
 /** Maximum accepted size (chars) of the serialized client tool declarations. Raised in step with
- *  {@link MAX_CLIENT_TOOLS} — multi-channel tool sets with verbose descriptions + JSON schemas run large. */
+ *  {@link MAX_CLIENT_TOOLS} — multi-channel tool sets with verbose descriptions + JSON schemas run large.
+ *  Also the largest serialized app-context snapshot stored on the session config. */
 const MAX_CLIENT_TOOLS_JSON_CHARS = 256_000;
 /** Maximum accepted size (chars) of a persisted channel state blob. */
 const MAX_CHANNEL_STATE_CHARS = 2_000_000;
@@ -158,6 +159,12 @@ interface RealtimeSessionConfig {
      * for observability / continuity; absent when the session carries no app context.
      */
     applicationID?: string;
+    /**
+     * The app-context snapshot the browser sent at session start. Passed into each delegated
+     * target-agent run so its prompt sees the surface context and tools. Absent when the start carried
+     * none, or when its JSON is longer than {@link MAX_CLIENT_TOOLS_JSON_CHARS}.
+     */
+    appContext?: AppContextSnapshot;
     /**
      * The session's effective allowed delegation targets (union from the config cascade, incl. the app's
      * `RelevantAgents`). Persisted at start so each relayed `invoke-target-agent` call can validate a
@@ -601,6 +608,12 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 AttributionUserID: contextUser.ID,
                 // Nest the delegated target-agent run under the co-agent observability run (when present).
                 ParentRunID: config.coAgentRunID,
+                // The client-tool channel is keyed on the browser session id, so the delegated run can call
+                // the surface's tools; the session-start app context gives its prompt the surface context.
+                BrowserSessionID: userPayload.sessionId,
+                // The app context is a snapshot the browser sent, so a run elevated to the system user
+                // does not get it in its prompt.
+                AppContext: runUser === contextUser ? config.appContext : undefined,
                 Call: { CallID: callId, ToolName: toolName, Arguments: argsJson },
                 OnProgress: this.buildDelegationProgressCallback(pubSub, userPayload, agentSessionId, callId),
                 // Resume a previously-paused delegated run (if any) with the user's answer.
@@ -695,8 +708,10 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             // Preserve the server-authoritative voice deadline across config rewrites.
             maxSessionDeadlineIso: config.maxSessionDeadlineIso,
             applicationID: config.applicationID,
+            appContext: config.appContext,
             allowedAgents: config.allowedAgents,
             conversationBranchID: config.conversationBranchID,
+            directActions: config.directActions,
         };
         session.Config_ = JSON.stringify(next);
         if (!(await session.Save())) {
@@ -1581,7 +1596,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         await this.persistObservabilityRunIDs(
             session, targetAgentId, prep.CoAgentRunID, prep.PromptRunID, prep.CoAgentRunStepID,
             applicationId, prep.EffectiveConfig?.realtime?.allowedAgents,
-            prep.EffectiveConfig?.realtime?.directActions,
+            prep.EffectiveConfig?.realtime?.directActions, appContext,
         );
 
         const cfg = prep.ClientConfig;
@@ -1604,8 +1619,10 @@ export class RealtimeClientSessionResolver extends ResolverBase {
     /**
      * Writes the co-agent observability run ids into the session's `Config_` alongside the
      * authoritative `targetAgentID`, then saves the session. These ids are read back on close to
-     * finalize the runs (and on relay to nest delegated runs). Best-effort: a save failure is logged,
-     * not thrown — the voice session still proceeds, it just won't carry the run ids.
+     * finalize the runs (and on relay to nest delegated runs). The app awareness (application id,
+     * allowed agents, direct actions, app-context snapshot) is written with them for each relay to read.
+     * Best-effort: a save failure is logged, not thrown — the voice session still proceeds, it just
+     * won't carry the run ids.
      */
     private async persistObservabilityRunIDs(
         session: MJAIAgentSessionEntity,
@@ -1616,6 +1633,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         applicationID?: string,
         allowedAgents?: RealtimeAllowedAgent[],
         directActions?: RealtimeDirectActionsConfig,
+        appContext?: AppContextSnapshot,
     ): Promise<void> {
         // Preserve any server-authoritative voice deadline stamped at session start (this rebuilds the
         // full config, so read the existing value forward rather than dropping it).
@@ -1627,6 +1645,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             coAgentRunStepID,
             maxSessionDeadlineIso: existing?.maxSessionDeadlineIso,
             applicationID,
+            appContext: this.appContextToStore(appContext, session.ID),
             allowedAgents: allowedAgents && allowedAgents.length > 0 ? allowedAgents : undefined,
             directActions,
             conversationBranchID: existing?.conversationBranchID,
@@ -1638,6 +1657,32 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 `RealtimeClientSessionResolver.persistObservabilityRunIDs save failed for session ${session.ID}: ${this.describeSaveFailure(session)}`,
             );
         }
+    }
+
+    /**
+     * Returns the app-context snapshot to store on the session config. A snapshot whose JSON is longer
+     * than {@link MAX_CLIENT_TOOLS_JSON_CHARS} is not stored: a warning is logged and `undefined` is
+     * returned, so the session still starts and its delegated runs get no app context.
+     *
+     * @param appContext The snapshot the browser sent at session start, or undefined.
+     * @param sessionID The session the snapshot belongs to (for the warning).
+     * @returns The snapshot to store, or `undefined`.
+     */
+    private appContextToStore(appContext: AppContextSnapshot | undefined, sessionID: string): AppContextSnapshot | undefined {
+        if (!appContext) {
+            return undefined;
+        }
+        const chars = JSON.stringify(appContext).length;
+        if (chars > MAX_CLIENT_TOOLS_JSON_CHARS) {
+            LogErrorEx({
+                message:
+                    `RealtimeClientSessionResolver: app context for session ${sessionID} not stored — ${chars} chars ` +
+                    `exceeds the ${MAX_CLIENT_TOOLS_JSON_CHARS} cap; delegated runs get no app context.`,
+                severity: 'warning',
+            });
+            return undefined;
+        }
+        return appContext;
     }
 
     /**
@@ -2482,6 +2527,10 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                         maxSessionDeadlineIso:
                             typeof parsed.maxSessionDeadlineIso === 'string' ? parsed.maxSessionDeadlineIso : undefined,
                         applicationID: typeof parsed.applicationID === 'string' ? parsed.applicationID : undefined,
+                        appContext:
+                            parsed.appContext && typeof parsed.appContext === 'object' && !Array.isArray(parsed.appContext)
+                                ? parsed.appContext
+                                : undefined,
                         allowedAgents: Array.isArray(parsed.allowedAgents) ? parsed.allowedAgents : undefined,
                         directActions:
                             parsed.directActions && typeof parsed.directActions === 'object' && typeof parsed.directActions.enabled === 'boolean'

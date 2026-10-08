@@ -203,6 +203,23 @@ function trackKeyFromJSON(raw: JSONValue): string | null {
   return `${direction}:${modality}`;
 }
 
+/** A surface client tool handler's result that reports its own failure. */
+interface FailedClientToolHandlerResult {
+  Success: false;
+  ErrorMessage?: unknown;
+}
+
+/** Whether a surface client tool handler's result is an object whose `Success` is `false`. */
+function reportsFailure(result: unknown): result is FailedClientToolHandlerResult {
+  return typeof result === 'object' && result !== null && 'Success' in result && result.Success === false;
+}
+
+/** The failed result's `ErrorMessage` when it is text that is not blank, else `'Tool failed'`. */
+function failureMessage(result: FailedClientToolHandlerResult): string {
+  const message = result.ErrorMessage;
+  return typeof message === 'string' && message.trim() ? message : 'Tool failed';
+}
+
 /**
  * One thought/reasoning narration emitted on {@link RealtimeSessionRuntime.ThoughtNarration$}.
  * Distinct from spoken progress narrations: thought summaries are authored by reasoning models
@@ -1311,12 +1328,15 @@ export class RealtimeSessionRuntime {
 
   /**
    * Relays a video frame to the underlying realtime client if active.
+   *
+   * @returns `true` when the client accepted and sent the frame; `false` when no session is live, the
+   *   client cannot take video frames, or the client dropped the frame.
    */
-  public SendVideoFrame(base64Image: string, mimeType?: string): void {
+  public SendVideoFrame(base64Image: string, mimeType?: string): boolean {
     if (!this.client || !this.isSessionLive()) {
-      return;
+      return false;
     }
-    this.client.SendVideoFrame?.(base64Image, mimeType);
+    return this.client.SendVideoFrame?.(base64Image, mimeType) === true;
   }
 
   /**
@@ -1767,7 +1787,8 @@ export class RealtimeSessionRuntime {
   /**
    * Executes a host-registered surface client tool by name (the {@link RealtimeChannelContext.ExecuteClientTool}
    * implementation). Tolerant: an unknown tool or a thrown handler resolves to a structured
-   * `Success: false` result the channel narrates — never throws.
+   * `Success: false` result the channel narrates — never throws. A handler that returns an object with
+   * `Success: false` also gives `Success: false`, with the handler's `ErrorMessage` and its object as `Result`.
    *
    * @param name The tool name (the model's `action`).
    * @param params The tool parameters.
@@ -1787,7 +1808,9 @@ export class RealtimeSessionRuntime {
     }
     try {
       const result = await handler(params ?? {});
-      return { Success: true, Result: result };
+      return reportsFailure(result)
+        ? { Success: false, ErrorMessage: failureMessage(result), Result: result }
+        : { Success: true, Result: result };
     } catch (error) {
       return { Success: false, ErrorMessage: error instanceof Error ? error.message : String(error) };
     }
