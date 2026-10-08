@@ -1,259 +1,131 @@
 # MemberJunction Citizen Agent Builder
 
-> **Instructions for AI Coding Agents (Claude Code, Antigravity, Cursor, Codex, Windsurf):**
-> If you are an AI coding agent reading this file, you have been tasked with setting up, authoring, testing, and packaging MemberJunction AI Agents for your user end-to-end.
-> Follow the numbered steps below. You have the tools to run the bash commands, inspect database traces, author declarative metadata, and package the final agent bundle without requiring your user to write code or manage database migrations.
+> **Instructions for AI coding agents (Claude Code, Antigravity, Cursor, Codex, Windsurf):**
+> You are setting up, authoring, testing and packaging MemberJunction AI agents for a business user,
+> end to end. Your rulebook is [`AGENTS.md`](AGENTS.md): read it before you do anything else, and
+> follow its rules on asking for everything up front, keeping the user informed while setup runs,
+> never asking for a secret in chat, and testing the way the user will actually use the agent.
 
 ---
 
-## ⚡ Getting Started (Choose Your Path)
+## ⚡ Getting started
 
-### Option A: The Agent-Driven Path (Recommended — Zero Manual Setup)
-You don't need to manually run CLI commands, configure Docker files, or edit JSON files by hand. Simply create a new empty directory, open your favorite AI coding agent (**Claude Code**, **Antigravity**, **Cursor**, **Codex**, or **Windsurf**), and paste this prompt:
+### Before you start: what you need (about 5 minutes)
+
+Collect these first, so setup never stops part way to ask for them:
+
+| You need | Why | Where it comes from |
+|---|---|---|
+| **Docker Desktop**, with **12 GB of memory** and **20 GB of free disk** | Runs the local database, API and web app. At Docker's default of 8 GB the install runs out of memory. | [docker.com](https://www.docker.com/products/docker-desktop). Then Docker Desktop → Settings → Resources → Memory. |
+| **An AI provider API key** | Your agents call a model with it. | For Anthropic, create one at [console.anthropic.com](https://console.anthropic.com/settings/keys) inside a workspace. A Claude or ChatGPT subscription does not include an API key. |
+| **The email you sign in with** | That account gets the role that can run the agents you build. | You. |
+| **Sign-in settings** for the web app (Microsoft Entra or Auth0) | Without them the Explorer web app cannot sign you in; you can still build and test from the command line. | Usually your IT or platform team. |
+
+A GitHub token is **not** needed for the public sample data.
+
+### Option A: let your coding agent do it (recommended)
+
+Create an empty folder, open your coding agent in it, and paste:
 
 ```markdown
-Please review the MemberJunction Citizen Agent Builder guide at:
-https://github.com/MemberJunction/MJ/tree/next/citizen-builder
+Set up the MemberJunction Citizen Agent Builder in this folder by running
+`npx @memberjunction/cli@edge agent init .`, then read AGENTS.md and follow it.
 
-Follow the instructions in that guide:
-1. Initialize a new MemberJunction agent builder workspace here using `npx @memberjunction/cli agent init .`
-2. Start the local Docker environment and verify services are running.
-3. Review available entities and actions in CAPABILITIES.md.
-4. Build me an AI agent that:
-   [Describe your business goal here — e.g. "analyzes customer order frequency and overdue invoices, flags accounts at risk of churning, and drafts personalized retention outreach emails."]
-5. Push the metadata, run test executions, verify the run traces in the database, and package the final distributable bundle for promotion.
+Build me an AI agent that:
+[Describe your business goal, e.g. "analyzes customer order frequency and overdue invoices,
+flags accounts at risk of churning, and drafts personalized retention outreach emails."]
+
+Test it the way I will use it, package it for promotion, and tell me how to try it myself.
 ```
 
-Your coding agent will read the guide, scaffold the workspace, start the local database and API, author the declarative agent metadata, test it against local data, and hand you a packaged distribution `.zip` file with an `AGENT_MANIFEST.md` report.
+### Option B: step by step
 
----
-
-### Option B: The Manual / Step-by-Step Path
-If you prefer to initialize the workspace and start the Docker environment yourself before handing off to an agent:
-
-1. **Scaffold the workspace**:
+1. **Create the workspace** (this also starts it):
    ```bash
-   npx @memberjunction/cli agent init ./my-agents
+   npx @memberjunction/cli@edge agent init ./my-agents
    cd ./my-agents
    ```
-2. **Add your LLM API Key**:
-   Open `.env` and add your OpenAI, Anthropic, Gemini, or Groq API key:
-   ```bash
-   OPENAI_API_KEY=sk-...
-   ```
-3. **Start the local Docker stack**:
+   `agent init` picks free ports, generates an encryption key, and lists anything still missing.
+   Add `--no-start` to fill in `.env` before anything starts.
+2. **Fill in `.env`.** It is a hidden file. Open it with `open -e .env` (macOS), `notepad .env`
+   (Windows) or `xdg-open .env` (Linux). The values to fill in are at the top.
+3. **Start or restart the stack** after editing `.env`:
    ```bash
    docker compose up -d
    ```
-4. **Launch your coding agent**:
-   Open your coding agent in `./my-agents` and tell it what you want to build:
-   ```
-   "Build me an agent that monitors accounts receivable aging and drafts payment follow-ups."
-   ```
-   The coding agent will detect `AGENTS.md`, adhere to the 3-tier safety boundaries, and build the agent for you.
+4. **Open your coding agent** in `./my-agents` and say what you want to build.
 
----
+> `@edge` is required: the agent builder ships in MemberJunction 6.2, which is published as
+> `@memberjunction/cli@edge` until it is released.
 
-## 1. Overview & Architecture
+### How long it takes
 
-> **Product Principle:** *Make the human surface simple; keep the agent surface complete.*
-> The business-user experience is a straightforward chat. The agent experience is comprehensive — giving coding agents full machine-readable access to live entity metadata, actions, progressive CLI discovery, diagnostic probes, execution traces, and packaging.
-
-The **Citizen Agent Builder** provides an isolated, local MemberJunction environment that runs entirely inside Docker:
-* **`sqlserver` (Port 1433)**: Microsoft SQL Server 2022.
-* **`mj` (Ports 4000 & 4202)**: A Node 24 container that executes `mj install` on first boot, provisions the database schema, installs business context (More Cheese default, or enterprise apps like Blue Cypress), and serves:
-  * **MJAPI** at `http://localhost:4000` (GraphQL API and agent execution engine).
-  * **MJExplorer** at `http://localhost:4202` (Web UI for testing agents and viewing records; port 4202 is an authorized redirect URI for Auth0/MSAL).
-* **Metadata Directory (`./metadata`)**: Local JSON and Markdown files mapped into the container. Pushing metadata to the database is done with a single command (`./scripts/sync-metadata.sh`).
-
-### Available Agent Tools & CLI Commands
-
-Every tool and command in this workspace supports machine-readable output (`--format json`) for autonomous coding agents:
-
-| Tool / Command | What It Does |
+| Step | Usually |
 |---|---|
-| `./scripts/sync-metadata.sh` | Pushes declarative metadata files in `./metadata/` to the database, resolving `@lookup` and `@file` references. |
-| `./scripts/query-run-history.sh ["<Agent>"\|<ID>]` | Queries agent run history, step execution traces, and action logs via native CLI. |
-| `./scripts/generate-capabilities.sh` | Re-scans the live database and regenerates `CAPABILITIES.md` with current entities and actions. |
-| `docker compose exec -T mj mj doctor --format json` | Runs system diagnostics returning structured checks, failures, and auto-remediations. |
-| `docker compose exec -T mj mj doctor --format json --scope [ai\|runtime\|install]` | Filters diagnostics by specific subsystem (e.g. AI provider credentials or encryption keys). |
-| `docker compose exec -T mj mj ai actions list --format json` | Lists all available system and business actions with parameter schemas. |
-| `docker compose exec -T mj mj ai agents list --format json` | Lists all existing agents, agent types, and categories in the instance. |
-| `docker compose exec -T mj mj ai agents run -a "<Name>" -p "<Input>" --format json` | Executes an agent headlessly and emits structured execution results. |
-| `docker compose exec -T mj mj ai audit agent-run <ID> --format json` | Audits an agent run: step-by-step prompts, LLM completions, token counts, and tool calls. |
+| Download and build the images (first time) | 10 to 20 minutes |
+| Install MemberJunction (first time) | 10 to 25 minutes |
+| Load the sample business data (first time) | 10 to 30 minutes |
+| Start the API and web app (every start) | 2 to 6 minutes |
+
+Apple Silicon Macs run the image under emulation, so expect the longer end. Later starts skip the
+install steps. Progress is always in **`.mj-status.json`**: the current step, how long it usually
+takes, and on failure what went wrong and what to do.
 
 ---
 
-## 2. Documentation & Architecture References
+## 1. What runs where
 
-When authoring agents or researching MemberJunction APIs, consult these authoritative resources:
+> **Product principle:** *make the human surface simple; keep the agent surface complete.*
 
-### A. Official Documentation Portal (`docs.memberjunction.org`)
-Use your web search or fetch tools to research topics across the documentation portal:
-* **Documentation Portal**: [https://docs.memberjunction.org/](https://docs.memberjunction.org/)
-* **AI Agents Architecture**: [https://docs.memberjunction.org/ai/](https://docs.memberjunction.org/ai/) — Details on Agent Types (`Flow` deterministic step graphs vs `Loop` iterative tool-calling), Prompt bindings, model selection, execution lifecycles, and sub-agents.
-* **Actions Framework**: [https://docs.memberjunction.org/actions/](https://docs.memberjunction.org/actions/) — Available actions, parameter definitions, and result codes.
-* **Metadata Sync System**: [https://docs.memberjunction.org/developer-guide/metadata-sync/](https://docs.memberjunction.org/developer-guide/metadata-sync/) — Complete specification for declarative metadata files, reference resolution, and upsert mechanics.
-* **Entity Data Platform**: [https://docs.memberjunction.org/concepts/entities/](https://docs.memberjunction.org/concepts/entities/) — Core entities, schema relationships, permissions, and query patterns.
+Everything runs in Docker on your machine:
 
-### B. MemberJunction Repository Specifications
-If you have access to the repository (or view them on GitHub at `https://github.com/MemberJunction/MJ/blob/next/`):
-* [`metadata/CLAUDE.md`](https://github.com/MemberJunction/MJ/blob/next/metadata/CLAUDE.md): **The Definitive Metadata Specification**. Rules on `@lookup`, `@file`, `@parent`, native nested JSON objects, and `mj sync push` mechanics.
-* [`packages/Actions/CLAUDE.md`](https://github.com/MemberJunction/MJ/blob/next/packages/Actions/CLAUDE.md): Action authoring conventions and parameter schemas.
-* [`packages/AI/README.md`](https://github.com/MemberJunction/MJ/blob/next/packages/AI/README.md): AI Agent execution engine, state machines, and task graph dispatcher.
+* **`sqlserver`** (port `DB_PORT`, default 1433): Microsoft SQL Server 2022.
+* **`db-init`**: creates the MemberJunction database, then exits.
+* **`mj`**: installs MemberJunction on first start, loads the business context app (the More Cheese
+  sample data by default, or your organization's), pushes the agents in `./metadata`, then serves:
+  * the **API** at `http://localhost:4000` (`API_PORT`), and
+  * the **Explorer web app** at `http://localhost:4202` (`EXPLORER_PORT`).
 
----
+`agent init` moves a port that is already in use on your machine to a free one and writes it to
+`.env`. Settings live in `.env`; the container reads it on every start, so restarting is enough
+after a change (`./scripts/restart-api.sh` for keys).
 
-## 3. Step-by-Step Execution Guide for Coding Agents
+### Commands
 
-### Step 1: Initialize & Start the Environment
-
-1. **Verify Docker Status**:
-   Run `docker info` in the terminal.
-   * If running: proceed.
-   * If on macOS and Docker Desktop is stopped, run `open -a Docker` and wait 15–20 seconds for the daemon to start.
-   * If Docker is not installed, provide your user with the installation link: `https://www.docker.com/products/docker-desktop` (or `brew install --cask docker`).
-
-2. **Configure Environment Variables**:
-   If `.env` does not exist, copy `.env.example` to `.env`:
-   ```bash
-   cp .env.example .env
-   ```
-   Ask the user to supply their LLM API key (e.g. `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `GEMINI_API_KEY`) and set it in `.env`.
-
-3. **Start the Stack**:
-   Run:
-   ```bash
-   docker compose up -d
-   ```
-   *On first start, the container runs `mj install`, applies core migrations, installs the business context app (More Cheese), and launches both MJAPI and MJExplorer.*
-   Monitor startup until ready:
-   ```bash
-   docker compose logs -f mj
-   ```
-   Once the banner appears:
-   * **MJAPI is live at**: `http://localhost:4000`
-   * **MJExplorer is live at**: `http://localhost:4202`
+| Command | What it does |
+|---|---|
+| `cat .mj-status.json` | Setup progress: step, typical duration, warnings, and errors with what to do. |
+| `./scripts/sync-metadata.sh` | Pushes `./metadata/` to the database, then restarts the API so it loads the changes. |
+| `./scripts/restart-api.sh` | Applies `.env` changes (keys, sign-in) and restarts the API. |
+| `./scripts/generate-capabilities.sh` | Writes `CAPABILITIES.md`: installed apps, entities, actions and agents. |
+| `./scripts/query-run-history.sh ["<Agent>"\|<RunID>]` | Agent run history and traces. |
+| `docker compose exec -T mj mj ai agents run -a "<Name>" -p "<Input>" --format json` | Runs an agent to completion and prints its result and run ID. |
+| `docker compose exec -T mj mj ai audit agent-run <RunID> --format json` | One run's steps, prompts, model output, tokens and tool calls. |
+| `docker compose exec -T mj mj doctor --format json` | Diagnostics, with fixes. |
+| `docker compose logs -f mj` | The setup log. |
 
 ---
 
-### Step 2: Understand the 3-Tier Boundary & Guardrails
+## 2. References
 
-Always enforce these constraints when authoring agents:
-
-| Tier | Classification | What You May Author | Human Approval Needed? |
-|---|---|---|---|
-| **Tier 1** | **Declarative Only** | Flows, Loops, prompts, step mappings, action bindings, and sub-agent composition. | No — auto-promotable |
-| **Tier 2** | **Runtime Code** | Sandboxed JavaScript **Runtime Actions** with explicit permission scopes. | Yes — admin code review |
-| **Tier 3** | **Schema Changes** | New database tables, columns, migrations, or entity CodeGen. | **Strictly Off-Limits** |
-
-#### Mandatory Defaults:
-1. **`ModelSelectionMode: "Agent Type"`**: Never hardcode specific provider models (`gpt-4o`, `claude-3-5-sonnet`). The destination environment maps models to Agent Types.
-2. **`ExposeAsAction: false`**: Do not set `true` unless the user explicitly wants other agents to call this agent as an action.
-3. **Dynamic Record Resolution**: Never hardcode record IDs or personal names. Use queries, parameters, or lookup actions.
-4. **Prefer `Flow` Agents**: Use `Flow` agents for predictable step-by-step tasks. Use `Loop` only for dynamic problem-solving with open-ended tool calling.
-
----
-
-### Step 3: The Authoring Loop
-
-1. **Check Available Tools & Entities**:
-   Review `CAPABILITIES.md` (or run `./scripts/generate-capabilities.sh` to update it). This file contains the exact entity names, fields, and available actions in the running instance.
-
-2. **Metadata Formatting Rules (CRITICAL)**:
-   * **Native JSON Objects**: Fields storing JSON (such as `Configuration` or `Settings`) **MUST** be written as clean, native nested JSON objects. **NEVER** write escaped JSON strings (`"Configuration": "{\"Steps\":...}"`), as this breaks `@lookup` reference resolution!
-   * **No `sync` Blocks**: Do not author `sync` blocks (`lastModified`, `checksum`). `mj sync push` manages these automatically.
-   * **Assign Deterministic UUIDs**: Assign a fresh uppercase UUID for `primaryKey` (e.g. via CLI `uuidgen | tr '[:lower:]' '[:upper:]'`).
-   * **Use Dynamic References**:
-     - `@lookup:<EntityName>.<FieldName>=<Value>` for foreign keys (e.g. `@lookup:MJ: AI Agent Types.Name=Flow`).
-     - `@file:<relativePath>` for external template files (e.g. `@file:templates/<slug>.template.md`). Note that `@file:` paths are resolved at push time; running `./scripts/sync-metadata.sh` updates the database.
-     - `@parent:ID` for linking child records to parent records in nested structures.
-
-3. **Author Files**:
-   * Prompt Markdown template: `metadata/prompts/templates/<slug>.template.md`
-   * Prompt metadata JSON: `metadata/prompts/.<slug>-prompt.json`
-   * Agent metadata JSON: `metadata/agents/.<slug>-agent.json`
-   *(See `metadata/agents/.customer-insight-agent.json` for a reference Flow agent).*
-
-4. **Push to Local Database**:
-   ```bash
-   ./scripts/sync-metadata.sh
-   ```
+* [`AGENTS.md`](AGENTS.md): the coding agent's rulebook for this workspace. **Authoritative.**
+* [docs.memberjunction.org](https://docs.memberjunction.org/): [AI agents](https://docs.memberjunction.org/ai/),
+  [actions](https://docs.memberjunction.org/actions/),
+  [metadata sync](https://docs.memberjunction.org/developer-guide/metadata-sync/),
+  [entities](https://docs.memberjunction.org/concepts/entities/).
+* In the MemberJunction repository (`https://github.com/MemberJunction/MJ/blob/next/`):
+  [`metadata/CLAUDE.md`](https://github.com/MemberJunction/MJ/blob/next/metadata/CLAUDE.md) (metadata
+  file rules) and
+  [`metadata/agents/.workflow-demo-agents.json`](https://github.com/MemberJunction/MJ/blob/next/metadata/agents/.workflow-demo-agents.json)
+  (working Flow agents with steps, paths and mappings).
+* [`docs/PROMOTION_GUIDE.md`](docs/PROMOTION_GUIDE.md): how a platform team reviews and deploys a packaged agent.
+* [`docs/ENTERPRISE_ORG_SETUP.md`](docs/ENTERPRISE_ORG_SETUP.md): building against your organization's own schemas.
 
 ---
 
-### Step 4: Testing & Autonomous Diagnostics (The Dual Loop)
+## 3. Building against your organization's data
 
-1. **Interactive Testing (Explorer UI)**:
-   Invite the user to test in their browser at `http://localhost:4202`.
-
-2. **Headless Execution**:
-   You can trigger test runs directly via CLI with structured output:
-   ```bash
-   docker compose exec -T mj mj ai agents run -a "<Agent Name>" -p "<Test Input>" --format json
-   ```
-
-3. **Diagnosing Errors & Auditing Execution Traces**:
-   When an agent runs, **do not ask the user for console logs**. Audit execution traces directly via native CLI:
-   ```bash
-   # List recent runs for this agent
-   ./scripts/query-run-history.sh "<Agent Name>"
-
-   # View full machine-readable JSON trace for a specific run ID
-   ./scripts/query-run-history.sh <RunID> --format json
-
-   # Or drill down into specific steps or errors
-   ./scripts/query-run-history.sh <RunID> --step 1 --detail full
-   ./scripts/query-run-history.sh <RunID> --errors
-   ```
-   
-   **Trace Verification Assertions**:
-   * Verify that `actionsUsed` matches expected actions and tools.
-   * Verify that `actionsNotUsed` contains sensitive or dangerous actions.
-   * Check step prompts, outputs, and token counts to spot prompt drift or infinite loops.
-   
-   Analyze the trace, refine your prompt template or mapping, run `./scripts/sync-metadata.sh`, and re-test.
-
----
-
-### Step 5: Packaging for Promotion
-
-When the user is satisfied, package the agent for promotion to staging or production:
-
-1. Validate that all Tier 1 guardrails are met (no secrets, no hardcoded IDs, `ModelSelectionMode: "Agent Type"`).
-2. Query the last successful run metrics using `./scripts/query-run-history.sh "<Agent Name>"`.
-3. Generate `AGENT_MANIFEST.md` detailing:
-   * Agent Name, Purpose, and Author.
-   * Tier Classification (Tier 1 vs Tier 2).
-   * Data Footprint (Entities Read vs Entities Written).
-   * Bound Tools and Actions.
-   * Sample Execution Trace Receipt.
-4. Create the distribution archive:
-   ```bash
-   mkdir -p dist
-   zip -r "dist/<agent-slug>-package.zip" \
-     AGENT_MANIFEST.md \
-     metadata/agents/.*"<agent-slug>"*.json \
-     metadata/prompts/.*"<agent-slug>"*.json \
-     metadata/prompts/templates/"<agent-slug>"*.md
-   ```
-5. Give the user the path to `dist/<agent-slug>-package.zip` and explain how their platform admin can review and deploy it (see `docs/PROMOTION_GUIDE.md`).
-
----
-
-## 4. Enterprise Organization Setup (e.g. Blue Cypress)
-
-By default, the builder runs against **More Cheese** (a rich synthetic dataset covering 9 business apps).
-
-To build agents against your organization's **real schemas and synthetic records** (e.g. **Blue Cypress / BC**):
-1. In `.env`, set:
-   ```bash
-   OPEN_APP_INSTALL_URL=https://github.com/BlueCypress/bc-sampledata
-   GITHUB_TOKEN=ghp_yourReadOnlyTokenHere
-   ```
-2. Restart the container:
-   ```bash
-   docker compose down -v && docker compose up -d
-   ```
-3. Run `./scripts/generate-capabilities.sh` to refresh `CAPABILITIES.md` with your organization's custom entities and actions.
-👉 For complete enterprise details, see [docs/ENTERPRISE_ORG_SETUP.md](docs/ENTERPRISE_ORG_SETUP.md).
+By default the builder installs **More Cheese**, a synthetic dataset spread across several business apps.
+To build against your organization's entities, point `OPEN_APP_INSTALL_URL` in `.env` at your
+organization's sample-data app (and set `GITHUB_TOKEN` if that repository is private), then start a
+fresh workspace. [`docs/ENTERPRISE_ORG_SETUP.md`](docs/ENTERPRISE_ORG_SETUP.md) has the details.

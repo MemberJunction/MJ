@@ -1,7 +1,12 @@
 {
-  "version": "1.0",
-  "directories": [
-    "agents",
-    "prompts"
+  "version": "1.0.0",
+  "push": {
+    "autoCreateMissingRecords": true
+  },
+  "directoryOrder": [
+    "queries",
+    "actions",
+    "prompts",
+    "agents"
   ]
 }

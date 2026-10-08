@@ -1,70 +1,66 @@
-# Promotion & Governance Guide: Reviewing Packaged Agents
+# Promotion and governance: reviewing packaged agents
 
-This guide is for MemberJunction platform administrators, team leads, and review boards responsible for evaluating and deploying agents authored via the Citizen Agent Builder.
+For platform administrators, team leads and review boards who evaluate and deploy agents built with
+the Citizen Agent Builder.
 
 ---
 
-## 1. What Arrives at Promotion
+## 1. What arrives
 
-A citizen builder submits an export archive (e.g. `dist/InvoiceAuditAgent-package.zip`), which contains:
+A builder submits an archive such as `dist/invoice-audit-package.zip`, containing:
 
-1. **`AGENT_MANIFEST.md`**: An executive summary describing:
-   - What the agent does and who built it.
-   - Classification: **Tier 1 (Declarative)** vs **Tier 2 (Runtime Action)**.
-   - Data Footprint: Explicit list of entities read and entities modified.
-   - Sample Execution Receipt: Verification trace from a test run.
-2. **Metadata Files**:
+1. **`AGENT_MANIFEST.md`**: what the agent does and who built it; its tier (1 declarative, or 2 with
+   runtime actions); the entities it reads and writes and anything it sends; the roles its users need;
+   its schedule and delivery target; test receipts naming the identity and model each test ran with;
+   known gaps.
+2. **Metadata**, in the workspace's folder layout and with its `.mj-sync.json` files, so it installs as is:
+   - `metadata/.mj-sync.json` and each folder's `.mj-sync.json`
    - `metadata/agents/.*<name>*.json`
-   - `metadata/prompts/.*<name>*.json`
-   - `metadata/prompts/templates/<name>*.md`
-   - (If Tier 2) `metadata/actions/.*<name>*.json`
+   - `metadata/prompts/.*<name>*.json` and `metadata/prompts/templates/<name>*.md`
+   - any other folders the agent uses (saved queries, scheduled jobs, Tier 2 actions)
 
 ---
 
-## 2. The Review Process
+## 2. Review
 
-### Tier 1 (Declarative Agents) — Fast Track (5-Minute Review)
-Tier 1 agents contain **zero executable code** and **zero schema changes**. Reviewing them is straightforward:
+### Tier 1 (declarative): fast track
+Tier 1 agents contain no executable code and no schema changes.
 
-1. **Check Defaults in Manifest**:
-   - `ModelSelectionMode` is `"Agent Type"` (no hardcoded models).
-   - `ExposeAsAction` is `false` (unless a valid business rationale is documented).
-2. **Scan Prompts**:
-   - Verify no credentials, tokens, or raw SQL queries are embedded in prompt templates.
-   - Verify no hardcoded record IDs or personal names are used.
-3. **Approve**:
-   - Tier 1 submissions that satisfy these checks can be approved and imported immediately.
+1. **Defaults:** `ModelSelectionMode` is `"Agent Type"`; `ExposeAsAction` is `false` unless the manifest
+   explains why.
+2. **Prompts:** no credentials, tokens, raw SQL, record IDs, personal names or hardcoded recipients.
+3. **Writes and sends:** every write or send has a confirmation step or a documented approval. A step
+   that delivers results must not run when the steps before it failed.
+4. **Schedules:** ship as `Pending`; enable them deliberately after deployment.
+5. **Users:** check the roles the manifest says users need against who will run it (see section 3).
 
-### Tier 2 (Runtime Actions) — Code Review Gate
-Tier 2 agents include custom JavaScript actions running in the MemberJunction sandboxed runtime:
-
-1. **Review JavaScript Logic**:
-   - Inspect the code inside the action's metadata definition.
-   - Ensure the logic is deterministic, handles errors, and contains no obfuscated operations or network calls.
-2. **Review & Narrow Permissions**:
-   - Verify that `allowedEntities` is an explicit, minimal list of required entities.
-   - **Reject any submission with `allowAnyEntity: true` or wildcard entity grants.**
-3. **Decide Graduation**:
-   - **Keep as Runtime Action**: Approve the action metadata for deployment as sandboxed JS.
-   - **Promote to Package**: If the action is mission-critical or widely reused, have an engineer reimplement it as a strongly-typed TypeScript action in an `@mj-biz-apps/*` package.
+### Tier 2 (runtime actions): code review
+1. **Logic:** deterministic, handles errors, no obfuscated code or unexpected network calls.
+2. **Permissions:** `allowedEntities` is an explicit, minimal list. **Reject `allowAnyEntity: true` or wildcards.**
+3. **Graduation:** keep it as a sandboxed runtime action, or, if it is critical or widely reused, have
+   an engineer reimplement it as a typed action in a package.
 
 ---
 
-## 3. Deploying the Agent
+## 3. Deploy
 
-### Option 1: Commit to the Organization's Platform Repo (Recommended)
-1. Extract the metadata files into your organization's repository (e.g. `bc-platform/metadata/`).
-2. Commit and push the changes:
-   ```bash
-   git add metadata/
-   git commit -m "feat(agents): add InvoiceAuditAgent from citizen builder"
-   git push
-   ```
-3. Your CI/CD deployment pipeline will push the metadata to staging and production.
+### Option 1: commit to your organization's platform repository (recommended)
+1. Copy the package's `metadata/` folders into your platform app's `metadata/`, keeping the layout.
+2. Commit and push; your pipeline pushes the metadata to staging and production.
 
-### Option 2: Direct Sync Push to Target Instance
-If deploying directly to a staging or production instance via CLI:
+### Option 2: push directly to an instance
 ```bash
-mj sync push --dir /path/to/extracted/metadata
+unzip invoice-audit-package.zip -d invoice-audit
+mj sync push --dir invoice-audit/metadata
 ```
-The agent is now active and ready for end users.
+
+### After either: restart the API
+The API loads AI prompts when it starts, so a newly pushed prompt fails ("Prompt … is not in the
+engine's metadata") until the instance's MJAPI restarts. Restart it after every deployment that adds
+or changes prompts.
+
+### Check who can run it
+Agents started from the web app run as the signed-in user. Users with only the basic `UI` role cannot
+run Flow agents (creating their task records needs Create permission on `MJ: Tasks` and
+`MJ: Task Dependencies`). Grant what the manifest lists to the role its users have, through your
+normal permissions process, then run the agent once as such a user before announcing it.
