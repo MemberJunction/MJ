@@ -127,6 +127,28 @@ export interface AutoDocConnectionConfig {
 /**
  * Query result wrapper
  */
+/**
+ * An existing index on a table, as read from the database catalog.
+ * Primary-key indexes are included (IsPrimaryKey = true).
+ */
+export interface AutoDocIndex {
+  SchemaName: string;
+  TableName: string;
+  IndexName: string;
+  /** Key columns, in index order. Expression parts of an expression index are omitted. */
+  Columns: string[];
+  /** Non-key columns carried by the index (SQL Server INCLUDE / PostgreSQL INCLUDE). */
+  IncludeColumns: string[];
+  IsUnique: boolean;
+  IsPrimaryKey: boolean;
+  /** Access method or index type as the database names it (btree, gin, NONCLUSTERED, BTREE, …). */
+  Method: string;
+  /** Partial-index predicate (PostgreSQL WHERE / SQL Server filter), when present. */
+  FilterDefinition?: string;
+  /** True when some key parts are expressions rather than plain columns. */
+  HasExpressions: boolean;
+}
+
 export interface AutoDocQueryResult<T = any> {
   success: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   data?: T[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
