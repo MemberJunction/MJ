@@ -6,9 +6,15 @@
  * - **Format: fragmented MP4.** The first piece of a turn is an init segment (`ftyp` + `moov`); each later
  *   piece is a media fragment (`moof` + `mdat`). A turn may send a fresh init segment and restart its
  *   timestamps; the source buffer runs in `sequence` mode, so playback stays continuous either way.
- * - **The video carries the voice.** An avatar's audio is muxed into the MP4, so the element is not muted and
+ * - **Codecs come from the init segment.** The source buffer takes the codecs the init segment's tracks name
+ *   (`avc1.42c01f` alone for video-only MP4), read by `ReadFmp4Init` from `@memberjunction/ai`; until an init
+ *   arrives, or when it names a codec the reader doesn't know, it takes {@link VideoPlayoutOptions.MimeType}.
+ * - **The video carries the voice.** An avatar's audio is muxed into the MP4, so the element is unmuted and
  *   lips and voice stay in sync on the media's own timestamps. While media is buffered ahead of the
- *   playhead, {@link VideoPlayout.IsPlaying} is true: the agent is audibly speaking.
+ *   playhead, {@link VideoPlayout.IsPlaying} is true: the agent is audibly speaking. When the voice plays
+ *   elsewhere (separate PCM), {@link VideoPlayout.CarriesVoice} `false` mutes the element.
+ *   {@link VideoPlayoutOptions.OnElementAttached} lets the realtime client route the element's audio into its
+ *   own Web Audio graph, so its meter and its recording carry the avatar's voice.
  * - **End of turn.** {@link VideoPlayout.EndOfTurn} lets playback run to the true end of the turn. Without it the
  *   element stops just short of the end, waiting for more data, and holds the last frame of speech back.
  * - **Barge-in.** {@link VideoPlayout.Flush} drops everything not yet played, so the voice stops at once.
@@ -19,6 +25,7 @@
  * @module @memberjunction/ai-realtime-client/media
  */
 
+import { ReadFmp4Init, SniffFmp4Piece } from '@memberjunction/ai';
 import type { MediaVideoSource } from './model';
 
 /** The type of a Gemini Live avatar: H.264 Constrained Baseline 3.1 video, AAC-LC audio. */
@@ -43,10 +50,24 @@ const PLAYING_EPSILON_SECONDS = 0.05;
 const HAVE_FUTURE_DATA = 3;
 
 export interface VideoPlayoutOptions {
-    /** The MSE type, with codecs. Defaults to {@link GEMINI_AVATAR_MP4_TYPE}. */
+    /**
+     * The MSE type, with codecs, that {@link VideoPlayout.IsSupported} checks and the source buffer opens with until an
+     * init segment names its own codecs (or when it names one the reader doesn't know). Defaults to
+     * {@link GEMINI_AVATAR_MP4_TYPE}.
+     */
     MimeType?: string;
     /** Seconds of played media to keep behind the playhead. Defaults to 10. */
     BackBufferSeconds?: number;
+    /**
+     * Whether the element plays the media's audio. Defaults to `true`: an avatar's MP4 carries its voice. `false`
+     * mutes the element, for a voice that plays elsewhere. {@link VideoPlayout.CarriesVoice} changes it later.
+     */
+    CarriesVoice?: boolean;
+    /**
+     * Called with each element the player takes over, before playback starts, such as to route the element's audio
+     * into a Web Audio graph. A player that moves to another element calls it again with that one.
+     */
+    OnElementAttached?: (element: HTMLVideoElement) => void;
 }
 
 /** Why playout reported a problem. */
@@ -75,24 +96,59 @@ function mediaSourceClass(): { Class: MediaSourceClass; Managed: boolean } | nul
 
 /** Whether a piece is an MP4 init segment: its first box is `ftyp`. */
 export function IsMp4InitSegment(piece: ArrayBuffer): boolean {
-    if (piece.byteLength < 8) {
-        return false;
+    return SniffFmp4Piece(piece) === 'init';
+}
+
+/**
+ * The MSE type an init segment's video and audio tracks need, from their codecs: `video/mp4; codecs="avc1.42c01f,
+ * mp4a.40.2"` for a muxed avatar, `video/mp4; codecs="avc1.42c01f"` for video alone. `null` when the init can't be read,
+ * declares neither, or names a codec the reader doesn't know.
+ */
+function mseTypeOf(init: ArrayBuffer): string | null {
+    const tracks = ReadFmp4Init(init)?.Tracks.filter((track) => track.Handler === 'vide' || track.Handler === 'soun') ?? [];
+    if (tracks.length === 0 || tracks.some((track) => !track.Codec)) {
+        return null;
     }
-    const type = new Uint8Array(piece, 4, 4);
-    return type[0] === 0x66 && type[1] === 0x74 && type[2] === 0x79 && type[3] === 0x70; // 'ftyp'
+    return `video/mp4; codecs="${tracks.map((track) => track.Codec).join(', ')}"`;
+}
+
+/**
+ * What a realtime driver needs from an avatar's video player: {@link VideoPlayout} in a browser, a fake in tests.
+ */
+export interface IAvatarVideoPlayout {
+    /** The video to show. A driver hands it to the host once. */
+    readonly Source: MediaVideoSource;
+    /** Whether it plays forward with media buffered ahead of the playhead: the avatar is audibly speaking. */
+    readonly IsPlaying: boolean;
+    /** Whether the element plays the media's audio; `false` mutes it. */
+    CarriesVoice: boolean;
+    /** Hands over one piece: an init segment or a media fragment, in the order they arrived. */
+    Append(piece: ArrayBuffer): void;
+    /** The turn's last piece has arrived: playback runs to its true end and holds the last frame. */
+    EndOfTurn(): void;
+    /** Barge-in: drops everything not yet played and stops at once, holding the last frame. */
+    Flush(): void;
+    /** Reports problems, once per kind. Returns a function that removes the handler. */
+    OnProblem(handler: (problem: VideoPlayoutProblem, message: string) => void): () => void;
+    /** Stops playout and releases the element. */
+    Dispose(): void;
 }
 
 /** Plays fragmented MP4 pieces through MSE into one `<video>` element at a time. */
-export class VideoPlayout {
+export class VideoPlayout implements IAvatarVideoPlayout {
     private readonly mimeType: string;
     private readonly backBufferSeconds: number;
+    private readonly onElementAttached: ((element: HTMLVideoElement) => void) | undefined;
     private readonly pending: ArrayBuffer[] = [];
     private readonly problemHandlers = new Set<(problem: VideoPlayoutProblem, message: string) => void>();
     private readonly reported = new Set<VideoPlayoutProblem>();
+    private carriesVoice: boolean;
     private element: HTMLVideoElement | null = null;
     private mediaSource: MediaSource | null = null;
     private objectUrl: string | null = null;
     private sourceBuffer: SourceBuffer | null = null;
+    /** The type the source buffer was opened with, or last changed to. */
+    private bufferType: string | null = null;
     /** The latest init segment, replayed into a new source buffer when the player moves to another element. */
     private lastInit: ArrayBuffer | null = null;
     /** Set by Flush: the next append starts at the playhead instead of after what was dropped. */
@@ -112,11 +168,27 @@ export class VideoPlayout {
     constructor(options: VideoPlayoutOptions = {}) {
         this.mimeType = options.MimeType ?? GEMINI_AVATAR_MP4_TYPE;
         this.backBufferSeconds = options.BackBufferSeconds ?? DEFAULT_BACK_BUFFER_SECONDS;
+        this.carriesVoice = options.CarriesVoice ?? true;
+        this.onElementAttached = options.OnElementAttached;
     }
 
     /** The video to show: the player takes over the element it is attached to. */
     public get Source(): MediaVideoSource {
         return { Kind: 'element', Attach: (element) => this.attach(element) };
+    }
+
+    /**
+     * Whether the element plays the media's audio. `false` mutes it: the voice plays elsewhere, such as separate PCM
+     * audio when the MP4 has no audio track. Takes effect at once on an attached element.
+     */
+    public get CarriesVoice(): boolean {
+        return this.carriesVoice;
+    }
+    public set CarriesVoice(value: boolean) {
+        this.carriesVoice = value;
+        if (this.element) {
+            this.element.muted = !value;
+        }
     }
 
     /**
@@ -201,6 +273,9 @@ export class VideoPlayout {
     }
 
     private attach(element: HTMLVideoElement): () => void {
+        if (this.disposed) {
+            return () => undefined;
+        }
         this.detach();
         const mse = mediaSourceClass();
         if (!mse || !mse.Class.isTypeSupported(this.mimeType)) {
@@ -210,10 +285,7 @@ export class VideoPlayout {
         const mediaSource = new mse.Class();
         this.mediaSource = mediaSource;
         this.element = element;
-        if (mse.Managed) {
-            // ManagedMediaSource plays only when remote playback (AirPlay) is off or has an alternative source.
-            element.disableRemotePlayback = true;
-        }
+        this.prepareElement(element, mse.Managed);
         mediaSource.addEventListener('sourceopen', () => this.openSourceBuffer(mediaSource), { once: true });
         this.objectUrl = URL.createObjectURL(mediaSource);
         element.src = this.objectUrl;
@@ -227,11 +299,28 @@ export class VideoPlayout {
         };
     }
 
+    /** Readies an element before it plays: its audio on or off, the attach hook, and what iOS's managed MSE requires. */
+    private prepareElement(element: HTMLVideoElement, managed: boolean): void {
+        if (managed) {
+            // ManagedMediaSource plays only when remote playback (AirPlay) is off or has an alternative source.
+            element.disableRemotePlayback = true;
+        }
+        // Set either way: a host may hand over an element it muted (a media tile never plays audio itself).
+        element.muted = !this.carriesVoice;
+        try {
+            this.onElementAttached?.(element);
+        } catch (err) {
+            console.warn(`[VideoPlayout] The element-attached hook failed: ${err instanceof Error ? err.message : String(err)}`);
+        }
+    }
+
     private openSourceBuffer(mediaSource: MediaSource): void {
         if (this.mediaSource !== mediaSource) {
             return;
         }
-        const buffer = mediaSource.addSourceBuffer(this.mimeType);
+        const type = this.typeFor(this.lastInit);
+        const buffer = mediaSource.addSourceBuffer(type);
+        this.bufferType = type;
         // Sequence mode lays pieces end to end, so a turn that restarts its timestamps still plays on.
         buffer.mode = 'sequence';
         buffer.addEventListener('updateend', () => this.afterUpdate());
@@ -256,12 +345,39 @@ export class VideoPlayout {
         }
         const piece = this.pending[0];
         try {
+            if (IsMp4InitSegment(piece)) {
+                this.matchBufferType(buffer, piece);
+            }
             buffer.appendBuffer(piece);
             this.pending.shift();
             this.retriedAfterQuota = false;
         } catch (err) {
             this.handleAppendError(err);
         }
+    }
+
+    /**
+     * The type for a source buffer that takes `init`: the init's own codecs when this browser plays them, else
+     * {@link VideoPlayoutOptions.MimeType}.
+     */
+    private typeFor(init: ArrayBuffer | null): string {
+        const fromInit = init ? mseTypeOf(init) : null;
+        return fromInit && mediaSourceClass()?.Class.isTypeSupported(fromInit) ? fromInit : this.mimeType;
+    }
+
+    /**
+     * Switches the source buffer to an init segment's codecs before the init is appended, when they differ from the
+     * buffer's: it opened with {@link VideoPlayoutOptions.MimeType} before the first init arrived, or a later init
+     * changed tracks. A browser without `changeType`, or an init whose codecs can't be read or played, leaves the buffer
+     * as it is.
+     */
+    private matchBufferType(buffer: SourceBuffer, init: ArrayBuffer): void {
+        const type = mseTypeOf(init);
+        if (!type || type === this.bufferType || typeof buffer.changeType !== 'function' || !mediaSourceClass()?.Class.isTypeSupported(type)) {
+            return;
+        }
+        buffer.changeType(type);
+        this.bufferType = type;
     }
 
     /** After each append or removal: trims played media, appends the next piece, and ends a finished turn. */
@@ -358,6 +474,7 @@ export class VideoPlayout {
         this.element = null;
         this.mediaSource = null;
         this.sourceBuffer = null;
+        this.bufferType = null;
         this.objectUrl = null;
         this.restartAtPlayhead = false;
         this.trimmedTo = 0;

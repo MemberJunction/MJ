@@ -77,6 +77,8 @@ Thumbs.db
 
 # Large media files
 *.mp4
+# ...except the two small generated stand-in avatars the fragmented MP4 reader tests read (made by the script beside them)
+!packages/AI/Core/src/__tests__/fixtures/avatar-standin-*.mp4
 *.tiff
 *.avi
 *.flv

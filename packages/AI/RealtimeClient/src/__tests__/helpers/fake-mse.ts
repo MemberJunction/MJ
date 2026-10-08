@@ -37,11 +37,18 @@ export class FakeSourceBuffer extends EventTarget {
     public Aborts = 0;
     /** Errors the next appends throw, one each, in order. */
     public readonly AppendErrors: Error[] = [];
+    /** Every `changeType(type)`, in order, with the number of pieces appended before it. */
+    public readonly TypeChanges: Array<{ Type: string; AfterAppends: number }> = [];
     /** Bumped by abort, so an aborted operation's completion is ignored. */
     private operation = 0;
 
     constructor(public readonly Type: string) {
         super();
+    }
+
+    /** Records the switch. A test plays a browser without it by defining the property as `undefined` on the instance. */
+    public changeType(type: string): void {
+        this.TypeChanges.push({ Type: type, AfterAppends: this.Appended.length });
     }
 
     public appendBuffer(data: ArrayBuffer): void {
@@ -102,14 +109,16 @@ export class FakeSourceBuffer extends EventTarget {
 export class FakeMediaSource extends EventTarget {
     /** Whether `isTypeSupported` says yes. */
     public static Supported = true;
+    /** Types `isTypeSupported` refuses even while {@link Supported} is true. */
+    public static readonly UnsupportedTypes = new Set<string>();
     /** Every instance created, in order. */
     public static readonly Instances: FakeMediaSource[] = [];
     public readyState: ReadyState = 'closed';
     public readonly Buffers: FakeSourceBuffer[] = [];
     public EndOfStreamCalls = 0;
 
-    public static isTypeSupported(_type: string): boolean {
-        return FakeMediaSource.Supported;
+    public static isTypeSupported(type: string): boolean {
+        return FakeMediaSource.Supported && !FakeMediaSource.UnsupportedTypes.has(type);
     }
 
     constructor() {
@@ -138,6 +147,7 @@ export class FakeMediaSource extends EventTarget {
 /** Installs the fake as `MediaSource`, or as `ManagedMediaSource` (iOS Safari) when `managed` is set. */
 export function InstallFakeMse(options: { Managed?: boolean } = {}): void {
     FakeMediaSource.Supported = true;
+    FakeMediaSource.UnsupportedTypes.clear();
     FakeMediaSource.Instances.length = 0;
     vi.stubGlobal('MediaSource', options.Managed ? undefined : FakeMediaSource);
     vi.stubGlobal('ManagedMediaSource', options.Managed ? FakeMediaSource : undefined);

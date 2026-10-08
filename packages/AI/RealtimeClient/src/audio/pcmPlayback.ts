@@ -1,5 +1,6 @@
 import { Pcm16ToFloat32 } from './pcmUtils';
 import { IRealtimeAudioMeter, RealtimeAudioMeter } from './audioMeter';
+import { MediaElementAudioRouter } from './mediaElementAudioRouter';
 
 /**
  * The playback contract for a client-owned realtime audio plane: schedules raw PCM16 chunks
@@ -34,6 +35,14 @@ export interface IRealtimePcmPlayback {
      * valid; callers use `playback.GetOutputStream?.() ?? null`.
      */
     GetOutputStream?(): MediaStream | null;
+    /**
+     * OPTIONAL: plays a media element's audio through this engine's output, so the agent meter
+     * ({@link CreateMeter}) and the recording stream ({@link GetOutputStream}) carry it as they
+     * carry PCM: an avatar's voice is in its video. Once per element for each engine; later calls
+     * for the same element do nothing. An element shown in an earlier call works again in the
+     * next. Optional so test fakes stay valid; callers use `playback.ConnectMediaElement?.(element)`.
+     */
+    ConnectMediaElement?(element: HTMLMediaElement): void;
 }
 
 /**
@@ -68,6 +77,8 @@ export class RealtimePcmPlayback implements IRealtimePcmPlayback {
     private playheadTime = 0;
     /** Sources scheduled and not yet ended (so Flush can stop them). */
     private activeSources = new Set<AudioBufferSourceNode>();
+    /** Elements {@link ConnectMediaElement} has taken in (or tried to), so each is taken in once. */
+    private connectedElements = new WeakSet<HTMLMediaElement>();
 
     /**
      * @param sampleRate The PCM16 sample rate (Hz) of the chunks this engine will play
@@ -147,6 +158,31 @@ export class RealtimePcmPlayback implements IRealtimePcmPlayback {
      */
     public GetOutputStream(): MediaStream | null {
         return this.outputDestination?.stream ?? null;
+    }
+
+    /**
+     * Takes a media element's audio into the master gain, beside the PCM sources: the speakers,
+     * the meter and the recording tap then carry it. The audio arrives as the element's stream
+     * from the page's {@link MediaElementAudioRouter}, which connects the element to Web Audio
+     * once per page (a browser allows that once per element, ever), so the next call that shows
+     * the same element takes its voice too. Once per element for this engine. When the router
+     * can't route the element, it logs why; a failure here is logged too, never thrown: the call
+     * goes on without that element's voice.
+     */
+    public ConnectMediaElement(element: HTMLMediaElement): void {
+        if (this.connectedElements.has(element)) {
+            return;
+        }
+        this.connectedElements.add(element);
+        const stream = MediaElementAudioRouter.Instance.StreamFor(element);
+        if (!stream) {
+            return;
+        }
+        try {
+            this.context.createMediaStreamSource(stream).connect(this.masterGain);
+        } catch (error) {
+            console.warn('[RealtimePcmPlayback] Could not take the media element\'s audio into the agent audio; the speakers, the meter and the recording miss its voice:', error);
+        }
     }
 
     /** @inheritdoc */

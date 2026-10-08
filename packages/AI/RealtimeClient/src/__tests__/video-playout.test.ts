@@ -3,6 +3,7 @@ import { GEMINI_AVATAR_MP4_TYPE, IsMp4InitSegment, VideoPlayout, type VideoPlayo
 import { AttachVideoSource } from '../media/attachVideoSource';
 import { InstallFakeDom, type FakeDom } from './helpers/fake-dom';
 import { FakeFragment, FakeInitSegment, FakeMediaSource, FakeTimeRanges, InstallFakeMse, type FakeSourceBuffer } from './helpers/fake-mse';
+import { AvatarFragment, AvatarInitSegment, VIDEO_ONLY_MP4_TYPE } from './helpers/fmp4-pieces';
 
 /** Lets the fake source buffer finish its pending operations. */
 async function settle(): Promise<void> {
@@ -129,6 +130,108 @@ describe('VideoPlayout', () => {
             playout.Append(later);
             await settle();
             expect(next.Appended).toEqual([init, later]);
+        });
+    });
+
+    describe('the voice', () => {
+        it('unmutes the element it takes over, even one the host muted: the video carries the voice', () => {
+            video.muted = true;
+            attachAndOpen();
+            expect(dom.Videos[0].muted).toBe(false);
+        });
+
+        it('mutes the element when the voice plays elsewhere', () => {
+            playout.Dispose();
+            playout = new VideoPlayout({ CarriesVoice: false });
+            expect(playout.CarriesVoice).toBe(false);
+            attachAndOpen();
+            expect(dom.Videos[0].muted).toBe(true);
+        });
+
+        it('CarriesVoice switches an attached element at once, and the next element follows it', () => {
+            attachAndOpen();
+            playout.CarriesVoice = false;
+            expect(dom.Videos[0].muted).toBe(true);
+
+            AttachVideoSource(playout.Source, document.createElement('video'));
+            expect(dom.Videos[1].muted).toBe(true);
+            playout.CarriesVoice = true;
+            expect(dom.Videos[1].muted).toBe(false);
+        });
+    });
+
+    describe('OnElementAttached', () => {
+        it('hands over each element the player takes over, once, before it plays', () => {
+            const seen: Array<{ Element: HTMLVideoElement; PausedThen: boolean }> = [];
+            playout.Dispose();
+            playout = new VideoPlayout({ OnElementAttached: (element) => seen.push({ Element: element, PausedThen: element.paused }) });
+            attachAndOpen();
+            AttachVideoSource(playout.Source, document.createElement('video'));
+            expect(seen).toEqual([
+                { Element: dom.Videos[0], PausedThen: true },
+                { Element: dom.Videos[1], PausedThen: true },
+            ]);
+        });
+
+        it('logs a hook that throws, and the element still plays', () => {
+            playout.Dispose();
+            playout = new VideoPlayout({
+                OnElementAttached: () => {
+                    throw new Error('no graph');
+                },
+            });
+            attachAndOpen();
+            expect(dom.Videos[0].Paused).toBe(false);
+            expect(vi.mocked(console.warn).mock.calls.some((call) => String(call[0]).includes('no graph'))).toBe(true);
+        });
+    });
+
+    describe('codecs from the init segment', () => {
+        it('opens the source buffer with the codecs of an init that arrived first', () => {
+            playout.Append(AvatarInitSegment(false));
+            expect(attachAndOpen().Type).toBe(VIDEO_ONLY_MP4_TYPE);
+        });
+
+        it("opens with MimeType when the init's codecs are not playable here", () => {
+            FakeMediaSource.UnsupportedTypes.add(VIDEO_ONLY_MP4_TYPE);
+            playout.Append(AvatarInitSegment(false));
+            expect(attachAndOpen().Type).toBe(GEMINI_AVATAR_MP4_TYPE);
+        });
+
+        it("switches the buffer to an init's codecs before appending it, when they differ, once", async () => {
+            const buffer = attachAndOpen();
+            playout.Append(AvatarInitSegment(false));
+            playout.Append(AvatarFragment());
+            playout.Append(AvatarInitSegment(false));
+            await settle();
+            expect(buffer.TypeChanges).toEqual([{ Type: VIDEO_ONLY_MP4_TYPE, AfterAppends: 0 }]);
+            expect(buffer.Appended).toHaveLength(3);
+        });
+
+        it('keeps the type for an init with the same codecs, or one it cannot read', async () => {
+            const buffer = attachAndOpen();
+            playout.Append(AvatarInitSegment(true));
+            playout.Append(FakeInitSegment());
+            await settle();
+            expect(buffer.TypeChanges).toEqual([]);
+        });
+
+        it("keeps the type when the browser can't play the init's codecs", async () => {
+            FakeMediaSource.UnsupportedTypes.add(VIDEO_ONLY_MP4_TYPE);
+            const buffer = attachAndOpen();
+            playout.Append(AvatarInitSegment(false));
+            await settle();
+            expect(buffer.TypeChanges).toEqual([]);
+            expect(buffer.Appended).toHaveLength(1);
+        });
+
+        it("appends the init as it is in a browser that can't switch types", async () => {
+            const buffer = attachAndOpen();
+            Object.defineProperty(buffer, 'changeType', { value: undefined });
+            playout.Append(AvatarInitSegment(false));
+            await settle();
+            expect(buffer.TypeChanges).toEqual([]);
+            expect(buffer.Appended).toHaveLength(1);
         });
     });
 
@@ -343,6 +446,17 @@ describe('VideoPlayout', () => {
             await settle();
             expect(dom.Videos[0].src).toBe('');
             expect(buffer.Appended).toHaveLength(0);
+        });
+
+        it('a disposed player takes over no element, so none is routed or played', () => {
+            const attached: HTMLVideoElement[] = [];
+            playout.Dispose();
+            playout = new VideoPlayout({ OnElementAttached: (element) => attached.push(element) });
+            playout.Dispose();
+            AttachVideoSource(playout.Source, video);
+            expect(attached).toEqual([]);
+            expect(dom.Videos[0]).toMatchObject({ src: '', Paused: true });
+            expect(FakeMediaSource.Instances).toHaveLength(0);
         });
     });
 });

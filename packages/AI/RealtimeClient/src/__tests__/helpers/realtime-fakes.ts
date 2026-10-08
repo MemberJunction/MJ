@@ -28,6 +28,8 @@ import {
     IGeminiAudioPlayback,
     IGeminiMicCapture,
 } from '../../drivers/geminiRealtimeClient';
+import { GEMINI_AVATAR_MP4_TYPE, type IAvatarVideoPlayout, type VideoPlayoutOptions, type VideoPlayoutProblem } from '../../media/videoPlayout';
+import type { MediaVideoSource } from '../../media/model';
 
 // ── Generic media fakes ────────────────────────────────────────────────────────
 
@@ -323,6 +325,8 @@ export class FakeGeminiPlayback implements IGeminiAudioPlayback {
     public Closed = false;
     /** Controllable stand-in for "playhead is ahead of the context clock". */
     public IsPlaying = false;
+    /** Every element routed into the playback's graph, in order. */
+    public readonly ConnectedElements: HTMLMediaElement[] = [];
 
     public Enqueue(pcm16: ArrayBuffer): void {
         this.Enqueued.push(pcm16);
@@ -336,6 +340,42 @@ export class FakeGeminiPlayback implements IGeminiAudioPlayback {
         this.Closed = true;
         this.IsPlaying = false;
     }
+    public ConnectMediaElement(element: HTMLMediaElement): void {
+        this.ConnectedElements.push(element);
+    }
+}
+
+/** Fake avatar video player: records what the driver hands it and does with it. */
+export class FakeAvatarPlayout implements IAvatarVideoPlayout {
+    public readonly Appended: ArrayBuffer[] = [];
+    public EndOfTurnCount = 0;
+    public FlushCount = 0;
+    public Disposed = false;
+    /** Controllable stand-in for "the element plays with media buffered ahead". */
+    public IsPlaying = false;
+    public CarriesVoice: boolean;
+    public readonly Source: MediaVideoSource = { Kind: 'element', Attach: () => () => undefined };
+
+    constructor(public readonly Options: VideoPlayoutOptions) {
+        this.CarriesVoice = Options.CarriesVoice ?? true;
+    }
+
+    public Append(piece: ArrayBuffer): void {
+        this.Appended.push(piece);
+    }
+    public EndOfTurn(): void {
+        this.EndOfTurnCount++;
+    }
+    public Flush(): void {
+        this.FlushCount++;
+        this.IsPlaying = false;
+    }
+    public OnProblem(_handler: (problem: VideoPlayoutProblem, message: string) => void): () => void {
+        return () => undefined;
+    }
+    public Dispose(): void {
+        this.Disposed = true;
+    }
 }
 
 /** Harness overriding all three creation seams so Connect runs with NO network / audio. */
@@ -346,6 +386,28 @@ export class GeminiTestClient extends GeminiRealtimeClient {
     public LastConnectArgs: GeminiClientConnectArgs | null = null;
     /** The driver's mic-chunk callback, captured so tests can simulate worklet frames. */
     public OnPcmChunk: ((base64Pcm16: string) => void) | null = null;
+    /** Every avatar player the driver created, in order (fakes unless {@link UseRealPlayout}). */
+    public readonly Playouts: IAvatarVideoPlayout[] = [];
+    /** Every set of options the driver created an avatar player with. */
+    public readonly PlayoutOptions: VideoPlayoutOptions[] = [];
+    /** Create the real `VideoPlayout` (install the fake MSE and DOM first) instead of a {@link FakeAvatarPlayout}. */
+    public UseRealPlayout = false;
+
+    /** The fake avatar player the driver created last; throws when it created none or a real one. */
+    public get Playout(): FakeAvatarPlayout {
+        const playout = this.Playouts.at(-1);
+        if (!(playout instanceof FakeAvatarPlayout)) {
+            throw new Error('The driver created no fake avatar player.');
+        }
+        return playout;
+    }
+
+    protected override CreateVideoPlayout(options: VideoPlayoutOptions): IAvatarVideoPlayout {
+        this.PlayoutOptions.push(options);
+        const playout = this.UseRealPlayout ? super.CreateVideoPlayout(options) : new FakeAvatarPlayout(options);
+        this.Playouts.push(playout);
+        return playout;
+    }
 
     protected override async connectLiveSession(args: GeminiClientConnectArgs): Promise<GeminiLiveClientSession> {
         this.LastConnectArgs = args;
@@ -380,4 +442,31 @@ export function makeGeminiConfig(sessionConfig?: JSONObject): ClientRealtimeSess
             config: { systemInstruction: 'be the voice', responseModalities: ['AUDIO'] },
         },
     };
+}
+
+/** How {@link makeGeminiAvatarConfig} mints the avatar and what the host asks for. */
+export interface GeminiAvatarConfigOptions {
+    /** The minted `audioMuxed`. Default `true`. */
+    AudioMuxed?: boolean;
+    /** The minted encoding; `null` mints none. Default the Gemini avatar type. */
+    Encoding?: string | null;
+    /** Whether the host requests the agent's video, as the Avatar channel does. Default `true`. */
+    RequestAgentVideo?: boolean;
+}
+
+/** The avatar name the avatar configs carry (a stand-in, not a real preset). */
+export const STAND_IN_AVATAR_NAME = 'stand-in-avatar';
+
+/** A Gemini session config whose server granted an avatar (the minted `avatar` block), as AV2's mint writes it. */
+export function makeGeminiAvatarConfig(options: GeminiAvatarConfigOptions = {}): ClientRealtimeSessionConfig {
+    const encoding = options.Encoding === undefined ? GEMINI_AVATAR_MP4_TYPE : options.Encoding;
+    const sessionConfig: JSONObject = {
+        model: 'gemini-3.8-live',
+        config: { systemInstruction: 'be the voice', responseModalities: ['VIDEO'], avatarConfig: { avatarName: STAND_IN_AVATAR_NAME } },
+        avatar: { output: true, encoding, audioMuxed: options.AudioMuxed ?? true },
+    };
+    if (options.RequestAgentVideo !== false) {
+        sessionConfig['requestedTracks'] = [{ Modality: 'video', Direction: 'outbound' }];
+    }
+    return makeGeminiConfig(sessionConfig);
 }

@@ -11,11 +11,13 @@ import {
     RealtimeToolBatchBarrier,
     RealtimeTrackDescriptor,
     ExtractToolSchedulingHint,
+    type RealtimeAvatarUnavailableReason,
     type RealtimeResumeAttempt,
 } from '@memberjunction/ai';
 import {
     GoogleGenAI,
     FunctionResponseScheduling,
+    Modality,
     type Blob as GeminiBlob,
     type Content,
     type FunctionCall,
@@ -33,6 +35,8 @@ import { CreatePcmMicCapture, IPcmMicCapture } from '../audio/micCapture';
 import { FrameSampler } from '../media/frameSampler';
 import { DEFAULT_INBOUND_VIDEO_RATE, MinVideoFrameSpacingMs } from '../media/videoPacing';
 import { VideoSourceArbiter } from '../media/videoSourceArbiter';
+import { GEMINI_AVATAR_MP4_TYPE, VideoPlayout, type IAvatarVideoPlayout, type VideoPlayoutOptions } from '../media/videoPlayout';
+import { GeminiAvatarOutput, type GeminiAvatarGrant } from './geminiAvatarOutput';
 import type { RealtimeUsageModalityDetail } from '@memberjunction/ai';
 
 // ── Audio constants (Gemini Live wire formats) ─────────────────────────────────
@@ -108,6 +112,21 @@ export interface GeminiClientConnectArgs {
 /** What a connection is opened against; a resume reuses it with the new handle in `Config`. */
 type GeminiConnectTarget = Pick<GeminiClientConnectArgs, 'Model' | 'Config' | 'EphemeralToken'>;
 
+/** What {@link GeminiRealtimeClient} reads from the server-minted `SessionConfig`. */
+interface GeminiParsedSessionConfig {
+    model: string;
+    liveConfig: LiveConnectConfig;
+    idleSignal: RealtimeIdleSignal;
+    supportsScheduling: boolean;
+    supportsBlocking: boolean;
+    supportsInboundVideo?: boolean;
+    maxInboundVideoRate?: number;
+    maxInboundVideoStreams?: number;
+    requestedTracks?: readonly RealtimeTrackDescriptor[];
+    /** The avatar the server granted this session, or `null` when it granted none. */
+    avatar: GeminiAvatarGrant | null;
+}
+
 /** A connection {@link GeminiRealtimeClient} opened, with the number that marks it as current. */
 interface GeminiOpenedConnection {
     Session: GeminiLiveClientSession;
@@ -165,6 +184,11 @@ export class GeminiPcmPlayback extends RealtimePcmPlayback {
  *   ({@link createMicCapture} seam) and streamed with `sendRealtimeInput`.
  * - **Audio out**: model PCM16 @ 24 kHz chunks scheduled through {@link GeminiPcmPlayback}
  *   ({@link createPlayback} seam); {@link IsAudioPlaying} is computed from the playout clock.
+ * - **Avatar out**: when the minted config grants an avatar and the host shows it (the outbound
+ *   video track is live), fragmented MP4 parts play through a {@link VideoPlayout}
+ *   ({@link CreateVideoPlayout} seam) handed to the host at connect, whose audio routes into the
+ *   PCM playback's graph; PCM follows the avatar's voice rule (see `GeminiAvatarOutput`). A host
+ *   that shows no avatar gets an audio-only session.
  * - **Event translation** (Gemini → contract): `inputTranscription` → User deltas/finals,
  *   `outputTranscription` → Assistant deltas/finals (accumulated like the OpenAI driver),
  *   `toolCall.functionCalls` → {@link OnToolCall} (callID→name cached for
@@ -211,6 +235,11 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     private micCapture: IGeminiMicCapture | null = null;
     private cameraSampler: FrameSampler | null = null;
     private playback: IGeminiAudioPlayback | null = null;
+    /**
+     * The avatar half of the session: created at connect when the server granted an avatar and the host shows it (the
+     * outbound video track is live). `null` otherwise, and the session then plays model output as it always has.
+     */
+    private avatarOutput: GeminiAvatarOutput | null = null;
     private firstVideoSendTimestamp = 0;
     private lastVideoSendTimestamp = 0;
     protected videoFramesSent = 0;
@@ -312,17 +341,43 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     /**
      * Opens the client-direct Gemini Live session: creates the playout engine, connects with
      * the ephemeral token + the server-built `SessionConfig` (`{ model, config }` — the same
-     * values the server LOCKED into the token, so tampering is ignored by the API), then wires
-     * the mic-capture worklet. Reports `'listening'` once audio is flowing.
-     */
-    /**
-     * Opens the client-direct Gemini Live session: creates the playout engine, connects with
-     * the ephemeral token + the server-built `SessionConfig` (`{ model, config }` — the same
      * values the server LOCKED into the token, so tampering is ignored by the API), negotiates
      * tracks, then wires the mic-capture worklet and optional video capture.
      * Reports `'listening'` once audio is flowing.
+     *
+     * When the server granted an avatar (the minted `avatar` block) and the host shows it (the
+     * outbound video track is live), the avatar's video goes to the host once the connection is
+     * open. When the host doesn't show it, the session connects audio only.
      */
     public async Connect(config: ClientRealtimeSessionConfig, micStream: MediaStream, cameraStream?: MediaStream): Promise<void> {
+        this.resetForConnect(micStream, cameraStream);
+        this.setState('connecting');
+        const session = this.parseSessionConfig(config);
+        this.idleSignal = session.idleSignal;
+        this.supportsScheduling = session.supportsScheduling;
+        this.supportsBlocking = session.supportsBlocking;
+        this.negotiateSessionTracks(session);
+        const playback = this.createPlayback();
+        this.playback = playback;
+        // The agent voice plays through Web Audio only; publish it so a host recorder can mix
+        // it in (issue #5153). Null for playbacks with no output stream (fakes, no WebAudio).
+        this.publishRemoteMediaStream(playback.GetOutputStream?.() ?? null);
+        const liveConfig = this.prepareAvatar(session, playback);
+        this.resumption?.Dispose();
+        this.resumption = this.createResumption();
+        this.connectTarget = { Model: session.model, Config: liveConfig, EphemeralToken: config.EphemeralToken };
+        this.useConnection(await this.openConnection(this.connectTarget));
+        this.setState('connected');
+        // Handed over now rather than at the first part, so the avatar's tile is up before the agent speaks.
+        if (this.avatarOutput) {
+            this.emitRemoteVideo(this.avatarOutput.Source);
+        }
+        await this.startLocalCapture(micStream);
+        this.setState('listening');
+    }
+
+    /** Takes the streams for a new connect and clears what an earlier one left behind. */
+    private resetForConnect(micStream: MediaStream, cameraStream?: MediaStream): void {
         this.micStream = micStream;
         this.cameraStream = cameraStream ?? null;
         this.clearSafetyBackstop();
@@ -330,22 +385,20 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.firstVideoSendTimestamp = 0;
         this.lastVideoSendTimestamp = 0;
         this.videoFramesSent = 0;
-        this.setState('connecting');
-        const {
-            model, liveConfig, idleSignal, supportsScheduling, supportsBlocking, supportsInboundVideo, maxInboundVideoRate,
-            maxInboundVideoStreams, requestedTracks
-        } = this.parseSessionConfig(config);
-        this.idleSignal = idleSignal;
-        this.supportsScheduling = supportsScheduling;
-        this.supportsBlocking = supportsBlocking;
+        this.disposeAvatarOutput();
+    }
 
-        // Negotiate tracks. Video capability and its frame-rate ceiling are PER-MODEL DATA, minted
-        // from the provider's profile table (GeminiLiveModelProfile.SupportsInboundVideo /
-        // .MaxInboundVideoRate) and carried in the session config. Deriving either from the model
-        // id would put a second answer to the same question in a second place: the two agreed only
-        // because the model names happened to line up, and the next model to break that pattern
-        // would diverge silently.
-        const isVideoModel = supportsInboundVideo ?? model.toLowerCase().startsWith(LEGACY_VIDEO_MODEL_PREFIX);
+    /**
+     * Negotiates tracks. Video capability and its frame-rate ceiling are PER-MODEL DATA, minted
+     * from the provider's profile table (GeminiLiveModelProfile.SupportsInboundVideo /
+     * .MaxInboundVideoRate) and carried in the session config. Deriving either from the model
+     * id would put a second answer to the same question in a second place: the two agreed only
+     * because the model names happened to line up, and the next model to break that pattern
+     * would diverge silently. A granted avatar adds an outbound video track when this browser
+     * can play it.
+     */
+    private negotiateSessionTracks(session: GeminiParsedSessionConfig): void {
+        const isVideoModel = session.supportsInboundVideo ?? session.model.toLowerCase().startsWith(LEGACY_VIDEO_MODEL_PREFIX);
         const supportedTracks: RealtimeTrackDescriptor[] = [
             { Modality: 'audio', Direction: 'inbound' },
             { Modality: 'audio', Direction: 'outbound' },
@@ -357,38 +410,87 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
                 Encoding: 'image/jpeg',
                 // The model's own ceiling. ResolveRequestedTracks takes the more restrictive of
                 // this and what the session requested, so this is what bounds the live track.
-                Rate: maxInboundVideoRate ?? LEGACY_VIDEO_MODEL_RATE,
+                Rate: session.maxInboundVideoRate ?? LEGACY_VIDEO_MODEL_RATE,
                 UsageBasis: ['tokens', 'frames'] as const,
                 RequiresConsent: true,
             });
         }
+        const avatarTrack = session.avatar ? GeminiRealtimeClient.avatarTrackFor(session.avatar) : null;
+        if (avatarTrack) {
+            supportedTracks.push(avatarTrack);
+        }
         // How many inbound video streams the model takes, minted from the profile like the rate. A mint
         // that predates the field falls back to one stream for a video model (every model that had video
         // took exactly one) and none otherwise.
-        this.negotiateTracks(requestedTracks, supportedTracks, isVideoModel ? (maxInboundVideoStreams ?? 1) : 0);
+        this.negotiateTracks(session.requestedTracks, supportedTracks, isVideoModel ? (session.maxInboundVideoStreams ?? 1) : 0);
+    }
 
-        this.playback = this.createPlayback();
-        // The agent voice plays through Web Audio only; publish it so a host recorder can mix
-        // it in (issue #5153). Null for playbacks with no output stream (fakes, no WebAudio).
-        this.publishRemoteMediaStream(this.playback.GetOutputStream?.() ?? null);
-        this.resumption?.Dispose();
-        this.resumption = this.createResumption();
-        this.connectTarget = { Model: model, Config: liveConfig, EphemeralToken: config.EphemeralToken };
-        this.useConnection(await this.openConnection(this.connectTarget));
-        this.setState('connected');
+    /** The outbound video track a granted avatar offers, or `null` when this browser can't play its type through MSE. */
+    private static avatarTrackFor(grant: GeminiAvatarGrant): RealtimeTrackDescriptor | null {
+        const encoding = grant.Encoding ?? GEMINI_AVATAR_MP4_TYPE;
+        if (!VideoPlayout.IsSupported(encoding)) {
+            return null;
+        }
+        return { Modality: 'video', Direction: 'outbound', Encoding: encoding, UsageBasis: ['seconds'] as const };
+    }
+
+    /**
+     * Sets up the avatar the server granted, when the host shows it (the outbound video track is
+     * live). Otherwise the session runs audio only: the config sent at connect asks for audio and
+     * no avatar, and one line says why. Returns the config to connect with.
+     */
+    private prepareAvatar(session: GeminiParsedSessionConfig, playback: IGeminiAudioPlayback): LiveConnectConfig {
+        const grant = session.avatar;
+        if (!grant) {
+            return session.liveConfig;
+        }
+        if (!this.IsTrackEstablished('video', 'outbound')) {
+            console.warn(this.avatarDowngradeMessage(session.liveConfig, grant));
+            return GeminiRealtimeClient.withoutAvatar(session.liveConfig);
+        }
+        const playout = this.CreateVideoPlayout({
+            MimeType: grant.Encoding ?? GEMINI_AVATAR_MP4_TYPE,
+            CarriesVoice: grant.AudioMuxed,
+            // The avatar's voice plays through the PCM engine's graph, so the meter and the recording carry it.
+            OnElementAttached: (element) => playback.ConnectMediaElement?.(element),
+        });
+        this.avatarOutput = new GeminiAvatarOutput(playout, playback, grant);
+        return session.liveConfig;
+    }
+
+    /** The one line for a granted avatar this session won't show, in the server driver's format. */
+    private avatarDowngradeMessage(config: LiveConnectConfig, grant: GeminiAvatarGrant): string {
+        const requested = this.AllTracks.some(
+            (t) => t.Descriptor.Direction === 'outbound' && String(t.Descriptor.Modality).trim().toLowerCase() === 'video'
+        );
+        const why = requested ? `this browser cannot play ${grant.Encoding ?? GEMINI_AVATAR_MP4_TYPE}` : 'the host shows no agent video';
+        const reason: RealtimeAvatarUnavailableReason = 'downgraded';
+        return `[GeminiRealtimeClient] Avatar "${config.avatarConfig?.avatarName ?? ''}" not used: ${why}. The call is audio only. Reason: ${reason}.`;
+    }
+
+    /** The connect config of a session whose avatar won't show: audio out, and no avatar. */
+    private static withoutAvatar(config: LiveConnectConfig): LiveConnectConfig {
+        const { avatarConfig: _avatar, ...rest } = config;
+        return { ...rest, responseModalities: [Modality.AUDIO] };
+    }
+
+    /** Starts the microphone capture, the camera passed to `Connect` when inbound video is live, and both audio meters. */
+    private async startLocalCapture(micStream: MediaStream): Promise<void> {
         this.micCapture = await this.createMicCapture(micStream, (base64Pcm16) => this.sendMicChunk(base64Pcm16));
-
-        // Start camera capture if inbound video is established and cameraStream provided
         if (this.cameraStream && this.IsTrackEstablished('video', 'inbound')) {
             this.cameraSampler = this.startConnectCamera(this.cameraStream);
         }
-
         // Audio-activity capability (base obligation #9): agent side taps the playout
         // engine's master gain; user side meters the mic stream. Null-safe — test fakes /
         // no-WebAudio environments simply leave the session un-metered.
         this.attachOutputAudioMeter(this.playback?.CreateMeter?.() ?? null);
         this.attachInputAudioMeter(RealtimeAudioMeter.ForMicStream(micStream));
-        this.setState('listening');
+    }
+
+    /** Stops the avatar's video and releases its element; the session then has no avatar. */
+    private disposeAvatarOutput(): void {
+        this.avatarOutput?.Dispose();
+        this.avatarOutput = null;
     }
 
     /**
@@ -433,6 +535,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.cameraStream = null;
         this.micCapture?.Stop();
         this.micCapture = null;
+        this.disposeAvatarOutput();
         this.playback?.Close();
         this.playback = null;
         // Stop resuming before the socket closes, and drop events still in flight from it.
@@ -532,7 +635,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * by a cancel). Server-side, the next client content sent naturally interrupts any
      * residual generation per the Live API contract. The interrupted turn's accumulated
      * transcript is kept — the provider's trailing frames finalize what WAS spoken. No-op
-     * when nothing is active.
+     * when nothing is active. An avatar's video stops with the voice.
      */
     public CancelActiveResponse(): void {
         if (!this.session) {
@@ -543,6 +646,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         }
         this.clearSafetyBackstop();
         this.playback?.Flush();
+        this.avatarOutput?.Cancel();
         this.responseActive = false;
         this.interactionInProgress = false;
         this.activeResponseKind = 'normal';
@@ -653,10 +757,12 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      *
      * Computed directly from the playout engine's playhead clock — this client OWNS the output
      * buffer (no WebRTC playback events exist on Gemini), so "audibly playing" is precisely
-     * "scheduled audio extends beyond the audio context's current time".
+     * "scheduled audio extends beyond the audio context's current time". In an avatar session
+     * the avatar's video counts too, while it plays with media ahead of its playhead: its MP4
+     * usually carries the voice.
      */
     public get IsAudioPlaying(): boolean {
-        return this.playback?.IsPlaying ?? false;
+        return (this.playback?.IsPlaying ?? false) || (this.avatarOutput?.IsPlaying ?? false);
     }
 
     // ── Overridable creation seams (tests inject fakes — no network / audio) ──
@@ -699,6 +805,18 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         return new GeminiPcmPlayback();
     }
 
+    /**
+     * Creation seam for the avatar's video player, called at connect when the server granted an
+     * avatar and the host shows it. Production returns {@link VideoPlayout} (Media Source
+     * Extensions); unit tests return a fake.
+     *
+     * @param options The type the grant names, whether the video carries the voice, and the hook
+     *   that routes the element's audio into the PCM playback's Web Audio graph.
+     */
+    protected CreateVideoPlayout(options: VideoPlayoutOptions): IAvatarVideoPlayout {
+        return new VideoPlayout(options);
+    }
+
     // ── Connection internals ───────────────────────────────────────────────────
 
     /**
@@ -707,17 +825,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * Falls back to the top-level `Model` / an empty config if a field is missing — the
      * server locked the real config into the token, so the session still behaves correctly.
      */
-    private parseSessionConfig(config: ClientRealtimeSessionConfig): {
-        model: string;
-        liveConfig: LiveConnectConfig;
-        idleSignal: RealtimeIdleSignal;
-        supportsScheduling: boolean;
-        supportsBlocking: boolean;
-        supportsInboundVideo?: boolean;
-        maxInboundVideoRate?: number;
-        maxInboundVideoStreams?: number;
-        requestedTracks?: readonly RealtimeTrackDescriptor[];
-    } {
+    private parseSessionConfig(config: ClientRealtimeSessionConfig): GeminiParsedSessionConfig {
         const sessionConfig: JSONObject = config.SessionConfig ?? {};
         const model = typeof sessionConfig['model'] === 'string' ? sessionConfig['model'] : config.Model;
         const raw = sessionConfig['config'];
@@ -738,34 +846,51 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         const rawMaxStreams = sessionConfig['maxInboundVideoStreams'];
         const maxInboundVideoStreams =
             typeof rawMaxStreams === 'number' && Number.isInteger(rawMaxStreams) && rawMaxStreams >= 0 ? rawMaxStreams : undefined;
-        const rawRequestedTracks = sessionConfig[REQUESTED_TRACKS_SESSION_KEY];
-        let requestedTracks: readonly RealtimeTrackDescriptor[] | undefined = undefined;
-        if (Array.isArray(rawRequestedTracks)) {
-            const list: RealtimeTrackDescriptor[] = [];
-            for (const item of rawRequestedTracks) {
-                if (item !== null && typeof item === 'object' && !Array.isArray(item)) {
-                    const modality = typeof item['Modality'] === 'string' ? item['Modality'] : undefined;
-                    const direction = item['Direction'];
-                    if (modality && (direction === 'inbound' || direction === 'outbound')) {
-                        list.push({
-                            Modality: modality,
-                            Direction: direction,
-                            Encoding: typeof item['Encoding'] === 'string' ? item['Encoding'] : undefined,
-                            Rate: typeof item['Rate'] === 'number' ? item['Rate'] : undefined,
-                            RequiresConsent:
-                                typeof item['RequiresConsent'] === 'boolean' ? item['RequiresConsent'] : undefined,
-                            SourceID: typeof item['SourceID'] === 'string' ? item['SourceID'] : undefined,
-                            Label: typeof item['Label'] === 'string' ? item['Label'] : undefined,
-                        });
-                    }
-                }
-            }
-            requestedTracks = list;
-        }
         return {
             model, liveConfig, idleSignal, supportsScheduling, supportsBlocking, supportsInboundVideo, maxInboundVideoRate,
-            maxInboundVideoStreams, requestedTracks
+            maxInboundVideoStreams,
+            requestedTracks: GeminiRealtimeClient.readRequestedTracks(sessionConfig[REQUESTED_TRACKS_SESSION_KEY]),
+            avatar: GeminiRealtimeClient.readAvatarGrant(sessionConfig['avatar']),
         };
+    }
+
+    /** The tracks the runtime asks the session for (`requestedTracks`); `undefined` when it sent no list. */
+    private static readRequestedTracks(raw: JSONValue | undefined): readonly RealtimeTrackDescriptor[] | undefined {
+        if (!Array.isArray(raw)) {
+            return undefined;
+        }
+        const list: RealtimeTrackDescriptor[] = [];
+        for (const item of raw) {
+            if (item !== null && typeof item === 'object' && !Array.isArray(item)) {
+                const modality = typeof item['Modality'] === 'string' ? item['Modality'] : undefined;
+                const direction = item['Direction'];
+                if (modality && (direction === 'inbound' || direction === 'outbound')) {
+                    list.push({
+                        Modality: modality,
+                        Direction: direction,
+                        Encoding: typeof item['Encoding'] === 'string' ? item['Encoding'] : undefined,
+                        Rate: typeof item['Rate'] === 'number' ? item['Rate'] : undefined,
+                        RequiresConsent:
+                            typeof item['RequiresConsent'] === 'boolean' ? item['RequiresConsent'] : undefined,
+                        SourceID: typeof item['SourceID'] === 'string' ? item['SourceID'] : undefined,
+                        Label: typeof item['Label'] === 'string' ? item['Label'] : undefined,
+                    });
+                }
+            }
+        }
+        return list;
+    }
+
+    /**
+     * The avatar the server granted: the minted `avatar` block (`{ output: true, encoding, audioMuxed }`), which the
+     * server writes only when the session renders one. `audioMuxed` defaults to true, as the server's profile does.
+     */
+    private static readAvatarGrant(raw: JSONValue | undefined): GeminiAvatarGrant | null {
+        const block = GeminiRealtimeClient.readObject(raw);
+        if (block?.['output'] !== true) {
+            return null;
+        }
+        return { Encoding: GeminiRealtimeClient.readString(block['encoding']) ?? null, AudioMuxed: block['audioMuxed'] !== false };
     }
 
     /** Streams one base64 PCM16 mic chunk to the model (no-op once the session is gone, closed, or in error). */
@@ -943,9 +1068,11 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     /**
      * The session continues on a new connection. A turn cut off by a drop never completes
      * there, so the turn state is reset (its partial transcripts are emitted as final) and sends
-     * queued behind it go out on the new connection.
+     * queued behind it go out on the new connection. An avatar's video plays out what arrived
+     * of that turn and holds its last frame.
      */
     private handleResumed(): void {
+        this.avatarOutput?.Resumed();
         this.finalizeUserTranscript();
         this.finalizeAssistantTranscript();
         this.responseActive = false;
@@ -1075,7 +1202,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
             this.handleInterruption();
         }
         if (content.modelTurn) {
-            this.handleModelAudio(content.modelTurn);
+            this.handleModelMedia(content.modelTurn);
             this.handleModelThoughts(content.modelTurn);
         }
         if (content.inputTranscription) {
@@ -1098,8 +1225,11 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      *
      * Per Reviewer Item 20: Draining the queue happens on turnComplete or true IDLE, not prematurely
      * on generationComplete. We set responseActive = false so busy state reflects token completion.
+     * An avatar's video gets its end of turn here: playback runs to the true end and holds the
+     * last frame.
      */
     private handleGenerationComplete(): void {
+        this.avatarOutput?.GenerationComplete();
         if (this.idleSignal === 'turnComplete') {
             this.responseActive = false;
         }
@@ -1111,17 +1241,23 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * client's audio queue), surface the TRUE barge-in to the host (Gemini only emits
      * `interrupted` when user input actually cut off in-flight generation — no extra gating
      * needed), and give the floor back. The interrupted turn's accumulated transcript is
-     * kept — the following `turnComplete` finalizes what WAS spoken.
+     * kept — the following `turnComplete` finalizes what WAS spoken. In an avatar session the
+     * video stops too, and the turn's late parts are dropped until its `turnComplete`.
      */
     private handleInterruption(): void {
         this.playback?.Flush();
+        this.avatarOutput?.Interrupted();
         this.finalizeThoughtTranscript();
         this.emitInterruption();
         this.setState('listening');
     }
 
-    /** Decodes inline model-audio parts (base64 PCM16 @ 24 kHz) into the playout queue. */
-    private handleModelAudio(modelTurn: Content): void {
+    /**
+     * Plays inline model parts. In an avatar session the avatar output routes each part to the
+     * video, to the PCM playback or nowhere; otherwise base64 PCM16 @ 24 kHz parts go to the
+     * playout queue.
+     */
+    private handleModelMedia(modelTurn: Content): void {
         if (!modelTurn.parts) {
             return;
         }
@@ -1131,6 +1267,12 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
             }
             const inline = part.inlineData;
             if (!inline?.data) {
+                continue;
+            }
+            if (this.avatarOutput) {
+                if (this.avatarOutput.Accept(inline.mimeType, Base64ToArrayBuffer(inline.data))) {
+                    this.markGenerationStarted();
+                }
                 continue;
             }
             // A part that names a non-PCM type (e.g. video/mp4 avatar frames) must never reach PCM
@@ -1255,6 +1397,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * and queued sends remain held until the true IDLE signal lands.
      */
     private handleTurnComplete(): void {
+        this.avatarOutput?.TurnComplete();
         this.finalizeAssistantTranscript();
         this.finalizeThoughtTranscript();
         if (this.idleSignal === 'turnComplete') {
