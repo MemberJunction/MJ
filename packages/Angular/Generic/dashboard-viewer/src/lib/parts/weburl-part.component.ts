@@ -46,7 +46,7 @@ import { PanelConfig } from '../models/dashboard-types';
               class="part-placeholder"
               Icon="fa-solid fa-globe"
               Title="No URL Configured"
-              Message="Click the configure button to set a URL for this part."
+              Message="Use Edit part to set a URL."
               Size="compact" />
           }
         
