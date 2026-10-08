@@ -1,7 +1,13 @@
 import { RegisterClass } from '@memberjunction/global';
+import type { IMetadataProvider } from '@memberjunction/core';
+import { DashboardEngine } from '@memberjunction/core-entities';
 import type { MentionSuggestion, ComposerSuggestionRequest } from '@memberjunction/ng-composer';
 import type { SearchResultItem } from '@memberjunction/ng-search';
 import { OmnibarProvider, OMNIBAR_NAV_KEY, OmnibarNavPayload } from '../omnibar-provider';
+import { CanOpenInDashboardTab, DashboardMatchLike, DashboardMatchSplit, SplitDashboardMatches } from '../omnibar-dashboard-matches';
+
+/** Most dashboard rows in the results: name matches and description or category matches together. */
+const MAX_DASHBOARD_ROWS = 3;
 
 /** Icon per cross-source result type (matches the Search Results page vocabulary). */
 function iconForResult(item: SearchResultItem): string {
@@ -24,8 +30,11 @@ function groupForResult(item: SearchResultItem): string {
 /**
  * The omnibar's DEFAULT mode (empty TriggerChar): plain text = the same
  * cross-source search that backs the Search Results page (vectors + full-text +
- * entities + storage), served through `SearchService.PreviewSearch`. Always appends
- * a trailing "See all results" suggestion that opens the full Search workspace.
+ * entities + storage), served through `SearchService.PreviewSearch`. Matching
+ * dashboards from the cached `DashboardEngine` form a "Dashboards" group: name matches
+ * come before the search results, and dashboards that match only by description or
+ * category come after them. Always appends a trailing "See all results" suggestion
+ * that opens the full Search workspace.
  */
 @RegisterClass(OmnibarProvider, 'omnibar-search')
 export class OmnibarSearchProvider extends OmnibarProvider {
@@ -41,15 +50,62 @@ export class OmnibarSearchProvider extends OmnibarProvider {
         if (!search || query.length === 0) {
             return [];
         }
+        const dashboards = this.dashboardSuggestions(query, request);
+        const dashboardCount = dashboards.NameMatches.length + dashboards.DescriptionOrCategoryMatches.length;
         try {
-            const response = await search.PreviewSearch(query, Math.max(1, request.MaxResults - 1));
+            // Search fills the rows left after the dashboards and the trailing "see all".
+            const response = await search.PreviewSearch(query, Math.max(1, request.MaxResults - 1 - dashboardCount));
             const suggestions = (response.Success ? response.Results : []).map((item) => this.toSuggestion(item));
-            suggestions.push(this.seeAllSuggestion(query));
-            return suggestions;
+            return [...dashboards.NameMatches, ...suggestions, ...dashboards.DescriptionOrCategoryMatches, this.seeAllSuggestion(query)];
         } catch {
-            // Fail soft — the palette still offers the full-search escape hatch.
-            return [this.seeAllSuggestion(query)];
+            // Fail soft — the palette still offers the dashboards and the full-search escape hatch.
+            return [...dashboards.NameMatches, ...dashboards.DescriptionOrCategoryMatches, this.seeAllSuggestion(query)];
         }
+    }
+
+    /**
+     * Dashboards the user can open in a dashboard tab whose name, description or category
+     * matches the query, split into name matches and description-or-category-only matches.
+     * Reads only the cached engine: returns empty lists when it is not loaded or no user
+     * is known, and never loads it.
+     */
+    private dashboardSuggestions(query: string, request: ComposerSuggestionRequest): DashboardMatchSplit<MentionSuggestion> {
+        const none: DashboardMatchSplit<MentionSuggestion> = { NameMatches: [], DescriptionOrCategoryMatches: [] };
+        try {
+            const engine = this.dashboardEngine(request.Provider);
+            const userId = request.ContextUser?.ID ?? (request.Provider ?? this.context.Search?.Provider)?.CurrentUser?.ID;
+            if (!userId || !engine.Loaded) {
+                return none;
+            }
+            const openable = engine.GetAccessibleDashboards(userId).filter(CanOpenInDashboardTab);
+            const matches = SplitDashboardMatches(openable, query, MAX_DASHBOARD_ROWS);
+            return {
+                NameMatches: matches.NameMatches.map((d) => this.toDashboardSuggestion(d)),
+                DescriptionOrCategoryMatches: matches.DescriptionOrCategoryMatches.map((d) => this.toDashboardSuggestion(d)),
+            };
+        } catch {
+            return none;
+        }
+    }
+
+    /** The DashboardEngine for the request's provider, else the global instance. */
+    private dashboardEngine(provider: IMetadataProvider | null): DashboardEngine {
+        return provider
+            ? DashboardEngine.GetProviderInstance<DashboardEngine>(provider, DashboardEngine) as DashboardEngine
+            : DashboardEngine.Instance;
+    }
+
+    private toDashboardSuggestion(dashboard: DashboardMatchLike): MentionSuggestion {
+        const nav: OmnibarNavPayload = { kind: 'dashboard', dashboardId: dashboard.ID, dashboardName: dashboard.Name };
+        return {
+            type: 'dashboard',
+            id: `dashboard:${dashboard.ID}`,
+            name: dashboard.Name,
+            displayName: dashboard.Name,
+            description: [dashboard.Category, dashboard.User].filter(Boolean).join(' · '),
+            icon: 'fa-solid fa-gauge-high',
+            data: { [OMNIBAR_NAV_KEY]: nav, group: 'Dashboards' },
+        };
     }
 
     private toSuggestion(item: SearchResultItem): MentionSuggestion {

@@ -23,7 +23,7 @@ import { RunView } from '@memberjunction/core';
 import { GetGlobalObjectStore } from '@memberjunction/global';
 import type { UserInfo } from '@memberjunction/core';
 import { GraphQLDataProvider, GraphQLProviderConfigData } from '@memberjunction/graphql-dataprovider';
-import type { MJEntityEntity, MJUserSettingEntity } from '@memberjunction/core-entities';
+import type { MJActionCategoryEntity, MJEntityEntity, MJUserSettingEntity } from '@memberjunction/core-entities';
 // Side-effect import: registers generated entity subclasses so GetEntityObject<…>()
 // materializes a real BaseEntity (this script doesn't go through bootstrapIntegrationClient).
 import '@memberjunction/server-bootstrap-lite';
@@ -97,6 +97,25 @@ async function modelRowsServedBy(provider: GraphQLDataProvider, user: UserInfo):
         throw new Error(`RunView (MJ: AI Models) failed: ${res.ErrorMessage}`);
     }
     return res.Results?.length ?? 0;
+}
+
+/**
+ * IDs of every `MJ: Action Categories` row the given server returns for an unfiltered read. An
+ * unfiltered read is served from a slot the server keeps up to date in place, so this shows the
+ * rows that server's cache holds after a peer's change arrived.
+ */
+async function categoryIdsServedBy(provider: GraphQLDataProvider, user: UserInfo): Promise<Set<string>> {
+    const rv = RunView.FromMetadataProvider(provider);
+    const res = await rv.RunView<{ ID: string }>({
+        EntityName: 'MJ: Action Categories',
+        Fields: ['ID'],
+        IgnoreMaxRows: true,
+        ResultType: 'simple',
+    }, user);
+    if (!res.Success) {
+        throw new Error(`RunView (MJ: Action Categories) failed: ${res.ErrorMessage}`);
+    }
+    return new Set(res.Results.map(r => r.ID.toUpperCase()));
 }
 
 /** Polls until `predicate` holds or the timeout passes; returns the elapsed ms, or null. */
@@ -187,6 +206,57 @@ async function main(): Promise<void> {
             await setModelsMaxRows(a, userA, previous);
             const restored = await waitUntil(async () => (await modelRowsServedBy(b, userB)) === baseline, 20000);
             console.log(`      → B restored in ${restored ?? 'never (20 s)'} ms`);
+        }
+    });
+
+    suite.Test('XS4: a transaction group saved through A leaves B serving every row of it, and none after a group of deletes', async () => {
+        await categoryIdsServedBy(b, userB); // B caches the slot before A's group changes it
+        const group = await a.CreateTransactionGroup();
+        const categories: MJActionCategoryEntity[] = [];
+        for (let i = 0; i < 3; i++) {
+            const category = await a.GetEntityObject<MJActionCategoryEntity>('MJ: Action Categories', userA);
+            category.NewRecord();
+            category.Name = `XS4 group ${i} ${Date.now()} (mj-integration-test — safe to delete)`;
+            category.Status = 'Active';
+            category.TransactionGroup = group;
+            Assert(await category.Save(), `queueing a category in A failed: ${category.LatestResult?.CompleteMessage ?? 'unknown'}`);
+            categories.push(category);
+        }
+        Assert(await group.Submit(), 'the transaction group in A failed to submit');
+        const ids = categories.map(c => c.ID.toUpperCase());
+        let deleted = false;
+        try {
+            const arrived = await waitUntil(async () => {
+                const served = await categoryIdsServedBy(b, userB);
+                return ids.every(id => served.has(id));
+            }, 10000);
+            console.log(`      → B served all ${ids.length} rows of A's group ${arrived === null ? 'never (10 s)' : `after ${arrived} ms`}`);
+            Assert(arrived !== null, "B must serve every row of A's transaction group");
+
+            const deletes = await a.CreateTransactionGroup();
+            for (const category of categories) {
+                category.TransactionGroup = deletes;
+                Assert(await category.Delete(), `queueing a delete in A failed: ${category.LatestResult?.CompleteMessage ?? 'unknown'}`);
+            }
+            Assert(await deletes.Submit(), 'the group of deletes in A failed to submit');
+            deleted = true;
+            const gone = await waitUntil(async () => {
+                const served = await categoryIdsServedBy(b, userB);
+                return ids.every(id => !served.has(id));
+            }, 10000);
+            console.log(`      → B dropped all ${ids.length} rows ${gone === null ? 'never (10 s)' : `after ${gone} ms`}`);
+            Assert(gone !== null, "B must stop serving the rows A's group of deletes removed");
+        } finally {
+            if (!deleted) {
+                // Through a new group: each entity still points at the submitted one, which would take
+                // a plain Delete() and never run it.
+                const cleanup = await a.CreateTransactionGroup();
+                for (const category of categories) {
+                    category.TransactionGroup = cleanup;
+                    await category.Delete();
+                }
+                await cleanup.Submit();
+            }
         }
     });
 
