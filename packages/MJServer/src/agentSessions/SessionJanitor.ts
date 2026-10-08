@@ -66,9 +66,15 @@ interface RecoveryBackoff {
 interface RecoverySweepContext {
     provider: IMetadataProvider;
     systemUser: UserInfo;
-    /** Agents loaded this sweep, by lowercase id; `null` records a failed load so it is not retried per session. */
-    agents: Map<string, MJAIAgentEntity | null>;
+    /** Per-agent storage resolution this sweep, by lowercase agent id, so each agent costs one load + one resolve. */
+    storage: Map<string, RecoveryStorage>;
 }
+
+/** Outcome of resolving where an agent's recordings live. */
+type RecoveryStorage =
+    | { Kind: 'Resolved'; AccountID: string }
+    | { Kind: 'NoAccount' }
+    | { Kind: 'AgentUnavailable' };
 
 /** What one candidate cost the sweep: `Attempted` = the recovery routine was called (counts against the cap). */
 interface RecoveryVisit {
@@ -81,8 +87,9 @@ interface RecoveryVisit {
  * away from volatile process reality. A crash/redeploy vaporizes a host's in-memory sockets but
  * leaves its session rows reading `Active`/`Idle` forever; the janitor force-closes those orphans.
  *
- * Two sweeps, both writing through {@link SessionManager.CloseSession} so Record Changes captures
- * each transition and channel rows are disconnected consistently:
+ * Two close sweeps, both writing through {@link SessionManager.CloseSession} so Record Changes captures
+ * each transition and channel rows are disconnected consistently (a third, {@link RunMaxDurationSweep},
+ * enforces the hard duration cap the same way):
  *
  * 1. **Own-host recovery ({@link RunStartupRecovery})** — run once at boot. Closes any `Active`/`Idle`
  *    session whose `HostInstanceID` belongs to a *previous* boot of *this* host (same hostname prefix,
@@ -91,7 +98,10 @@ interface RecoveryVisit {
  *    Closes any `Active`/`Idle` session whose `LastActiveAt` is older than `closeThresholdMinutes`,
  *    regardless of host. Catches sessions whose owner died without a clean reboot (OOM, scaled-down pod).
  *
- * Both sweeps stamp `CloseReason = 'Janitor'`. A third, shutdown-time path —
+ * Separately from closing, {@link RunRecordingRecoverySweep} runs on every periodic tick and rebuilds
+ * the recording of already-`Closed` sessions whose end-of-call upload never arrived (it closes nothing).
+ *
+ * The close sweeps stamp `CloseReason = 'Janitor'`. A third, shutdown-time path —
  * {@link RunShutdownDrain}, invoked from {@link Shutdown} during the graceful ShutdownRegistry
  * drain — closes this exact host instance's own live sessions with `CloseReason = 'Shutdown'`.
  *
@@ -103,6 +113,8 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
     private _config: SessionJanitorConfig = DEFAULT_CONFIG;
     private _sweepTimer: ReturnType<typeof setInterval> | null = null;
     private _sweepRunning = false;
+    /** Separate from {@link _sweepRunning}: slow recording recovery must never block the close sweeps. */
+    private _recoveryRunning = false;
     private _registered = false;
     private _provider: IMetadataProvider | null = null;
     private _systemUser: UserInfo | null = null;
@@ -265,21 +277,19 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
             `Status = 'Closed' AND RecordingStartedAt IS NOT NULL AND RecordingFileID IS NULL ` +
             `AND ClosedAt < '${graceCutoff}' AND ClosedAt >= '${lookbackCutoff}'`;
 
-        const context: RecoverySweepContext = { provider, systemUser, agents: new Map() };
+        const context: RecoverySweepContext = { provider, systemUser, storage: new Map() };
         const seen = new Set<string>();
         let attempts = 0;
         let recovered = 0;
-        let capped = false;
 
-        await this.forEachSessionPage(filter, provider, systemUser, async page => {
+        const walk = await this.forEachSessionPage(filter, provider, systemUser, async page => {
             for (const session of page) {
                 seen.add(session.ID.toLowerCase());
                 if (this.isRecoveryBackedOff(session.ID)) {
                     continue;
                 }
                 if (attempts >= MAX_RECOVERIES_PER_SWEEP) {
-                    capped = true;
-                    return false;
+                    return false; // cap reached: stop paging
                 }
                 const visit = await this.recoverSessionRecording(session, context);
                 attempts += visit.Attempted ? 1 : 0;
@@ -287,7 +297,9 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
             }
         });
 
-        if (!capped) {
+        // Only a walk that reached the end saw every candidate. A capped or failed-load walk has an
+        // incomplete `seen`; pruning on it would wipe backoff and give-up state for unseen sessions.
+        if (walk === 'complete') {
             this.pruneRecoveryBackoff(seen);
         }
         if (recovered > 0) {
@@ -323,7 +335,7 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
         }
     }
 
-    /** Schedule the periodic staleness sweep, exactly once. Timer is unref'd so it never blocks exit. */
+    /** Schedule the periodic sweep tick (close sweeps + recording recovery), exactly once. Timer is unref'd so it never blocks exit. */
     private scheduleSweep(): void {
         if (this._sweepTimer) {
             return;
@@ -332,7 +344,15 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
         this._sweepTimer.unref?.();
     }
 
-    /** Timer tick: run the staleness sweep under the captured provider/user, guarding overlap. */
+    /**
+     * Timer tick: run the close sweeps (staleness, then max-duration) under the captured
+     * provider/user, guarding overlap, then kick off recording recovery.
+     *
+     * Recovery is started WITHOUT awaiting and has its own overlap guard: it can spend minutes on
+     * large downloads/uploads, and awaiting it under the close sweeps' guard would delay the
+     * max-duration cost cap and make every later tick return early. A slow recovery therefore skips
+     * only the next recovery pass.
+     */
     private async periodicSweep(): Promise<void> {
         if (this._sweepRunning || !this._provider || !this._systemUser) {
             return;
@@ -345,15 +365,25 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
             await this.RunMaxDurationSweep(this._provider, this._systemUser);
         } catch (err) {
             LogError(`SessionJanitor periodic sweep failed: ${err instanceof Error ? err.message : String(err)}`);
-        }
-        // Own try/catch: a recovery failure must not mask the close sweeps, nor a close failure skip recovery.
-        try {
-            await this.RunRecordingRecoverySweep(this._provider, this._systemUser);
-        } catch (err) {
-            LogError(`SessionJanitor recording recovery sweep failed: ${err instanceof Error ? err.message : String(err)}`);
         } finally {
             this._sweepRunning = false;
         }
+        this.startRecoveryPass(this._provider, this._systemUser);
+    }
+
+    /** Fire-and-forget recording recovery, skipped when the previous pass is still running. */
+    private startRecoveryPass(provider: IMetadataProvider, systemUser: UserInfo): void {
+        if (this._recoveryRunning) {
+            return;
+        }
+        this._recoveryRunning = true;
+        this.RunRecordingRecoverySweep(provider, systemUser)
+            .catch(err => {
+                LogError(`SessionJanitor recording recovery sweep failed: ${err instanceof Error ? err.message : String(err)}`);
+            })
+            .finally(() => {
+                this._recoveryRunning = false;
+            });
     }
 
     /**
@@ -372,12 +402,15 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
             if (session.RecordingFileID) {
                 return { Attempted: false, Recovered: false };
             }
-            const agent = await this.loadRecoveryAgent(candidate.AgentID, context);
-            const accountID = agent ? await ResolveRecordingStorageAccountID(agent, context.systemUser, context.provider) : null;
-            if (!accountID) {
-                LogStatus(`[SessionJanitor] Recording recovery skipped for session ${candidate.ID}: no recording storage account for agent ${candidate.AgentID}`);
+            const storage = await this.resolveRecoveryStorage(candidate.AgentID, context);
+            if (storage.Kind !== 'Resolved') {
+                const why = storage.Kind === 'AgentUnavailable'
+                    ? `agent ${candidate.AgentID} could not be loaded`
+                    : `no recording storage account for agent ${candidate.AgentID}`;
+                LogStatus(`[SessionJanitor] Recording recovery skipped for session ${candidate.ID}: ${why}`);
                 return this.recordRecoveryFailure(candidate.ID, false);
             }
+            const accountID = storage.AccountID;
             attempted = true;
             const result = await RecoverRealtimeRecordingFromSegments({
                 SessionID: candidate.ID,
@@ -408,19 +441,28 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
         }
     }
 
-    /** Loads (and memoizes for this sweep) the agent that carries a session's recording storage config. */
-    private async loadRecoveryAgent(agentID: string, context: RecoverySweepContext): Promise<MJAIAgentEntity | null> {
+    /**
+     * Loads the agent carrying a session's recording storage config and resolves its storage account,
+     * memoized per agent for the sweep: the resolve may force a storage-engine reload, so it must not
+     * repeat for every session of the same agent.
+     */
+    private async resolveRecoveryStorage(agentID: string, context: RecoverySweepContext): Promise<RecoveryStorage> {
         const key = agentID.toLowerCase();
-        if (context.agents.has(key)) {
-            return context.agents.get(key) ?? null;
+        const cached = context.storage.get(key);
+        if (cached) {
+            return cached;
         }
         const agent = await context.provider.GetEntityObject<MJAIAgentEntity>(AGENT_ENTITY, context.systemUser);
-        const loaded = await agent.Load(agentID);
-        if (!loaded) {
+        let storage: RecoveryStorage;
+        if (!(await agent.Load(agentID))) {
             LogError(`[SessionJanitor] Recording recovery could not load agent ${agentID}`);
+            storage = { Kind: 'AgentUnavailable' };
+        } else {
+            const accountID = await ResolveRecordingStorageAccountID(agent, context.systemUser, context.provider);
+            storage = accountID ? { Kind: 'Resolved', AccountID: accountID } : { Kind: 'NoAccount' };
         }
-        context.agents.set(key, loaded ? agent : null);
-        return loaded ? agent : null;
+        context.storage.set(key, storage);
+        return storage;
     }
 
     /** True while a session's backoff (or give-up) window has not elapsed. */
@@ -507,33 +549,37 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
      *
      * `visit` receives the page exactly as the SQL filter matched it. The keyset advances from the
      * LAST FETCHED row, so any narrowing `visit` does in JS can never stall or skip pagination.
+     *
+     * Returns how the walk ended: `'complete'` (reached the end of the matching set), `'stopped'`
+     * (`visit` returned `false`) or `'failed'` (a page failed to load). Callers that reason about the
+     * WHOLE set (e.g. pruning state for absent rows) must act only on `'complete'`.
      */
     private async forEachSessionPage(
         filter: string,
         provider: IMetadataProvider,
         systemUser: UserInfo,
         visit: (page: MJAIAgentSessionEntity[]) => Promise<boolean | void>,
-    ): Promise<void> {
+    ): Promise<'complete' | 'stopped' | 'failed'> {
         let afterKey: CompositeKey | undefined;
 
         // eslint-disable-next-line no-constant-condition
         while (true) {
             const fetched = await this.fetchPage(filter, afterKey, provider, systemUser);
             if (fetched == null) {
-                return; // load failure already logged
+                return 'failed'; // load failure already logged
             }
             if (fetched.length === 0) {
-                return;
+                return 'complete';
             }
             // Advance from the last FETCHED row (before `visit` narrows anything): we must page by the
             // SQL-matched set, not a post-filtered subset, or pagination would stall/skip.
             const lastFetchedId = fetched[fetched.length - 1].ID;
             const fetchedCount = fetched.length;
             if ((await visit(fetched)) === false) {
-                return;
+                return 'stopped';
             }
             if (fetchedCount < SWEEP_PAGE_SIZE) {
-                return; // partial page (by the SQL-matched set) => end of data
+                return 'complete'; // partial page (by the SQL-matched set) => end of data
             }
             afterKey = CompositeKey.FromID(lastFetchedId); // first-pk-ok: keyset AfterKey on SESSION_ENTITY = MJ: AI Agent Sessions, a core entity keyed by ID
         }
