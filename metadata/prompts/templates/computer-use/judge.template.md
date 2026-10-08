@@ -20,7 +20,13 @@ The browser reported the following errors this step — use them to explain the 
 A failed script/chunk load or failed API request means the page did not render (an infrastructure/app error), which is distinct from the agent doing the wrong thing. This is still a transient/error condition to describe accurately — not necessarily impossibility.
 {% endif %}
 
-{% if validationCriteria and validationCriteria.length > 0 %}
+{% if rubricCriteria and rubricCriteria.length > 0 %}
+## Rubric Criteria
+Evaluate the end-state against EACH criterion below. In your JSON response, include a `"criteria"` array with one entry per criterion: `{ "key": "<key exactly as written>", "criterion": "<text>", "met": true|false, "level": "<one of the criterion's levels>", "evidence": "<what you observed>" }`. `met` is true only when the chosen level is the highest level. The goal is "done" ONLY when EVERY criterion is met.
+{% for criterion in rubricCriteria %}
+{{ loop.index }}. [{{ criterion.Key }}] {{ criterion.Text | safe }}{% if criterion.Levels and criterion.Levels.length > 0 %} (levels, lowest first: {{ criterion.Levels | join(' / ') }}){% endif %}
+{% endfor %}
+{% elif validationCriteria and validationCriteria.length > 0 %}
 ## Validation Criteria
 Evaluate the end-state against EACH criterion below. In your JSON response, include a `"criteria"` array with one entry per criterion: `{ "criterion": "<text>", "met": true|false, "evidence": "<what you observed>" }`. The goal is "done" ONLY when EVERY criterion is met — decide each criterion as a plain true/false, and let those decide `done`.
 {% for criterion in validationCriteria %}

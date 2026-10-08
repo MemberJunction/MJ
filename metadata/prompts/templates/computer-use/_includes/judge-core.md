@@ -58,6 +58,8 @@ Respond with ONLY a JSON object (no other text):
 
 > Omit `criteria` only when no validation criteria were supplied with this prompt. When they were,
 > every criterion must appear exactly once, and `done` must equal "every criterion met".
+> When a criterion is listed with a key and levels, echo the `key` exactly and add `"level"` with the
+> chosen level label; `met` is true only for the highest level.
 
 ## Field Definitions
 - **"done"**: `true` ONLY if the goal is fully accomplished and visible on screen

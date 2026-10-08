@@ -17,6 +17,13 @@ import { ComputerUseError } from './errors.js';
 import { SettleReason } from './app-profile.js';
 
 // ─── Judge Context ─────────────────────────────────────────
+/** One rubric criterion the judge scores: its permanent key, its rendered text, and its level labels lowest first. */
+export class RubricJudgeCriterion {
+    public Key: string = '';
+    public Text: string = '';
+    public Levels?: string[];
+}
+
 /**
  * Everything the judge needs to evaluate whether the goal is met.
  * Uses a "pull" pattern — the judge receives all context in one object
@@ -60,6 +67,9 @@ export class JudgeContext {
      * assessment of the goal.
      */
     public ValidationCriteria?: string[];
+
+    /** Rubric criteria with keys and levels. When present, the judge echoes each key and chooses a level. */
+    public RubricCriteria?: RubricJudgeCriterion[];
 
     /** Free-form application context, threaded through to the judge prompt. */
     public ApplicationContext?: string;

@@ -79,6 +79,9 @@ export class ComputerUseResult {
     /** Final screenshot captured (base64 PNG) */
     public FinalScreenshot: string = '';
 
+    /** True when FinalScreenshot was captured after the last step's actions, not at the start of that step. */
+    public FinalFrameCapturedAfterActions: boolean = false;
+
     /** Final URL the browser was on when the run ended */
     public FinalUrl: string = '';
 

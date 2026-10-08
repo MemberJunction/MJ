@@ -122,6 +122,9 @@ import type { ToolCallRecord } from '../types/tools.js';
 import { DEFAULT_CONTROLLER_PROMPT } from '../prompts/default-controller.js';
 import { DEFAULT_JUDGE_PROMPT } from '../prompts/default-judge.js';
 
+/** How long the final frame capture after the last step may take before the step frame is kept. */
+const FINAL_FRAME_TIMEOUT_MS = 10_000;
+
 export class ComputerUseEngine {
     // ─── Component Instances ────────────────────────────────
     protected browserAdapter: BaseBrowserAdapter;
@@ -191,6 +194,7 @@ export class ComputerUseEngine {
             }
             await this.runPrelude(context);
             result = await this.executeMainLoop(context);
+            await this.refreshFinalFrame(result);
             return result;
         } catch (error) {
             this.logError('Run failed with error', error);
@@ -2829,6 +2833,7 @@ export class ComputerUseEngine {
         judgeContext.ControllerRequestedJudgement = controllerRequestedJudgement;
         judgeContext.CurrentDiagnosticsDigest = currentDiagnosticsDigest;
         judgeContext.ValidationCriteria = this.activeJudgeCriteria(context, signaledCheckpoint);   // rubric judging; tour visual criteria
+        judgeContext.RubricCriteria = IsCheckpointRun(context.Params.Checkpoints) ? undefined : context.Params.RubricCriteria;
         judgeContext.ApplicationContext = context.Params.ApplicationContext;   // app facts belong in metadata, not the shared prompt
         judgeContext.IsCheckpointTour = IsCheckpointRun(context.Params.Checkpoints);   // suppress navigation-shape heuristics on a tour
         judgeContext.Signal = this.abortController.signal;   // abort in-flight judge call on Stop()
@@ -3212,7 +3217,12 @@ export class ComputerUseEngine {
         // Rubric: when the run supplied validation criteria, ask the judge
         // for a binary per-criterion verdict. Done is then derived as
         // all-criteria-met (the generic prompt has no {{criteria}} slot).
-        if (request.ValidationCriteria && request.ValidationCriteria.length > 0) {
+        if (request.RubricCriteria && request.RubricCriteria.length > 0) {
+            const list = request.RubricCriteria
+                .map((c, i) => `${i + 1}. [${c.Key}] ${c.Text}${c.Levels && c.Levels.length > 0 ? ` (levels, lowest first: ${c.Levels.join(' / ')})` : ''}`)
+                .join('\n');
+            sections.push(`## Rubric Criteria\nEvaluate the end-state against EACH criterion below. In your JSON response, include a "criteria" array of \`{ "key": "<key exactly as written>", "criterion": "<text>", "met": true|false, "level": "<one of the criterion's levels>", "evidence": "<what you observed>" }\` — one entry per criterion. "met" is true only when the chosen level is the highest one. The goal is "done" only when EVERY criterion is met.\n${list}`);
+        } else if (request.ValidationCriteria && request.ValidationCriteria.length > 0) {
             const list = request.ValidationCriteria.map((c, i) => `${i + 1}. ${c}`).join('\n');
             sections.push(`## Validation Criteria\nEvaluate the end-state against EACH criterion below. In your JSON response, include a "criteria" array of \`{ "criterion": "<text>", "met": true|false, "evidence": "<what you observed>" }\` — one entry per criterion. The goal is "done" only when EVERY criterion is met.\n${list}`);
         }
@@ -3232,6 +3242,33 @@ export class ComputerUseEngine {
     /**
      * Build a ComputerUseResult from the current context.
      */
+    /**
+     * Replaces the result's final screenshot with a frame captured after the last step's
+     * actions, so the end state is imaged. Best effort: skipped when a step was abandoned
+     * (the page may be wedged), bounded by FINAL_FRAME_TIMEOUT_MS, and a failed or late
+     * capture keeps the step frame.
+     */
+    private async refreshFinalFrame(result: ComputerUseResult): Promise<void> {
+        if (result.Status === 'Error' || result.Status === 'Cancelled' || this.cancelled) return;
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        try {
+            const late = new Promise<string>(resolve => {
+                timer = setTimeout(() => resolve(''), FINAL_FRAME_TIMEOUT_MS);
+            });
+            const frame = await Promise.race([this.browserAdapter.CaptureScreenshot(), late]);
+            if (frame) {
+                result.FinalScreenshot = frame;
+                result.FinalFrameCapturedAfterActions = true;
+            } else {
+                this.log('Final frame capture timed out; keeping the last step frame');
+            }
+        } catch (error) {
+            this.log(`Final frame capture skipped: ${error instanceof Error ? error.message : String(error)}`);
+        } finally {
+            if (timer) clearTimeout(timer);
+        }
+    }
+
     private buildResult(
         context: RunContext,
         status: ComputerUseResult['Status'],

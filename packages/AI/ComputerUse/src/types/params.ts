@@ -9,7 +9,7 @@ import { BrowserConfig } from './browser.js';
 import type { BrowserAction, ContextSeed } from './browser.js';
 import { ComputerUseTool } from './tools.js';
 import type { AIAPIKeyResolver } from '@memberjunction/ai';
-import type { JudgeFrequency } from './judge.js';
+import type { JudgeFrequency, RubricJudgeCriterion } from './judge.js';
 import type { AppProfile } from './app-profile.js';
 import { GoalPostcondition } from './trace.js';
 
@@ -231,6 +231,13 @@ export class RunComputerUseParams {
      * scalar judging.
      */
     public ValidationCriteria?: string[];
+
+    /**
+     * A published rubric's leaves, rendered for the judge. The judge echoes each key and
+     * chooses a level; `Done` is still every criterion met. Set ValidationCriteria to the
+     * same texts so loop detection counts them.
+     */
+    public RubricCriteria?: RubricJudgeCriterion[];
 
     /**
      * Per-test UI hints injected after the goal in the controller prompt — e.g.

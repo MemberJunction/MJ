@@ -17,6 +17,10 @@
 export interface CriterionVerdict {
     /** The criterion text (echoed back from the rubric). */
     criterion: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+    /** The rubric criterion's permanent key, when the run supplied rubric criteria. */
+    key?: string;  // case-violation-ok-legacy-back-compat: stored verdict JSON uses lowercase field names
+    /** The level label the judge chose, when the criterion has levels. */
+    level?: string;  // case-violation-ok-legacy-back-compat: stored verdict JSON uses lowercase field names
     /** Whether this criterion is satisfied by the observed end-state. */
     met: boolean;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
  /** The judge's evidence for the decision (feeds triage + distillation). */
