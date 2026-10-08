@@ -78,6 +78,11 @@ describe('BuildRecordingFromSegments', () => {
         expect(() => BuildRecordingFromSegments([shard(1.5, 4, 1)], 16000)).toThrow(/index/i);
     });
 
+    it('throws on a result past the WAV size limit without enumerating the gaps', () => {
+        // 2^31 missing indexes x 2 bytes each overflows uint32; must fail fast, not loop 2^31 times.
+        expect(() => BuildRecordingFromSegments([shard(2 ** 31, 2, 1)], 16000)).toThrow(/maximum WAV data size/i);
+    });
+
     it('throws on an empty segment list', () => {
         expect(() => BuildRecordingFromSegments([], 16000)).toThrow(/no segments|empty/i);
     });

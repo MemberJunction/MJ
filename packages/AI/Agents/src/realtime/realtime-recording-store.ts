@@ -346,9 +346,11 @@ export function BuildRecordingFromSegments(segments: RecordingSegmentBytes[], sa
     validateRecordingInputs(segments, sampleRate);
     const ordered = [...segments].sort((a, b) => a.Index - b.Index);
     const gapBytes = computeRecordingGapBytes(ordered);
-    const missingIndexes = findMissingIndexes(ordered);
+    // Count gaps arithmetically (indexes are unique and non-negative) so an absurd index fails the size
+    // check below instead of first enumerating billions of missing indexes.
+    const missingCount = ordered[ordered.length - 1].Index - (ordered.length - 1);
 
-    const dataSize = ordered.reduce((sum, s) => sum + s.Bytes.length, 0) + missingIndexes.length * gapBytes;
+    const dataSize = ordered.reduce((sum, s) => sum + s.Bytes.length, 0) + missingCount * gapBytes;
     if (dataSize > RECORDING_MAX_DATA_BYTES) {
         throw new Error(`BuildRecordingFromSegments: data of ${dataSize} bytes exceeds the maximum WAV data size of ${RECORDING_MAX_DATA_BYTES} bytes`);
     }
@@ -363,7 +365,7 @@ export function BuildRecordingFromSegments(segments: RecordingSegmentBytes[], sa
         offset += segment.Bytes.copy(wav, offset);
         expectedIndex = segment.Index + 1;
     }
-    return { Wav: wav, MissingIndexes: missingIndexes, GapBytes: gapBytes };
+    return { Wav: wav, MissingIndexes: findMissingIndexes(ordered), GapBytes: gapBytes };
 }
 
 function validateRecordingInputs(segments: RecordingSegmentBytes[], sampleRate: number): void {
