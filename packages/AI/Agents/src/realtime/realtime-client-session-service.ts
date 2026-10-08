@@ -72,6 +72,7 @@ import {
     type RealtimeSessionClientTools
 } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
+import { ResolveRealtimeAvatar, type RealtimeAvatarResolution } from './realtime-avatar-resolution';
 
 import { AgentMemoryContextBuilder } from '../agent-memory-context-builder';
 import { AgentRunner } from '../AgentRunner';
@@ -2340,7 +2341,8 @@ export class RealtimeClientSessionService {
         const tools = this.appendHostTools(this.buildStableToolSet(combinedExtra), input.HostTools);
         // Hoisted (rather than built inline at the return) so the mint log below can report the voice
         // that ACTUALLY reached the driver — see the `voice=` field. Same bag, built once.
-        const configBag = this.buildSessionConfigBag(input, effectiveConfig, driverClass, modelID, modelVendorID);
+        const avatar = this.ResolveSessionAvatar(input, coAgent, effectiveConfig, modelID, modelVendorID);
+        const configBag = this.withAvatarVoice(this.buildSessionConfigBag(input, effectiveConfig, driverClass, modelID, modelVendorID), avatar, input);
         WarnOnUnmatchedProviderVoice(effectiveConfig, driverClass, 'RealtimeClientSessionService');
 
         // One line per mint: confirms which tools + whether the channel-direct framing actually reach
@@ -2351,6 +2353,7 @@ export class RealtimeClientSessionService {
         console.log(
             `[RealtimeCoAgent] mint model=${modelApiName} driver=${driverClass ?? 'unknown'} ` +
             `voice=${typeof configBag?.['voice'] === 'string' ? configBag['voice'] : 'none'} ` +
+            `avatar=${avatar.Avatar ? avatar.Avatar.AvatarID : avatar.Reason ? `none(${avatar.Reason})` : 'none'} ` +
             `tools=[${tools.map(t => t.Name).join(', ')}] ` +
             `channelExceptionInPrompt=${systemPrompt.includes('interactive-surface')}`,
         );
@@ -2367,7 +2370,48 @@ export class RealtimeClientSessionService {
             MaxSessionSeconds: input.MaxSessionSeconds,
             UserID: contextUser?.ID,
             HasToolFraming: true,
+            ...(avatar.Avatar ? { Avatar: avatar.Avatar } : {}),
         };
+    }
+
+    /**
+     * The live avatar this session asks for, if any: from the voiced agent's persona, or `realtime.video.avatarId`,
+     * when the agent's video setting is on (see `ResolveRealtimeAvatar`). Whether the session can render it is the
+     * driver's call. A seam so tests can supply a resolution without the engine's persona metadata.
+     *
+     * @param input The prepare-session input (the voiced agent).
+     * @param coAgent The co-agent.
+     * @param effectiveConfig The effective configuration.
+     * @param modelID The resolved model.
+     * @param modelVendorID The resolved model-vendor row; its vendor scopes the persona bindings.
+     */
+    protected ResolveSessionAvatar(
+        input: PrepareClientSessionInput,
+        coAgent: MJAIAgentEntityExtended,
+        effectiveConfig: RealtimeCoAgentConfig | undefined,
+        modelID: string | undefined,
+        modelVendorID: string | undefined,
+    ): RealtimeAvatarResolution {
+        if (!modelID || effectiveConfig?.realtime?.video?.enabled !== true) {
+            return {};
+        }
+        const vendorID = modelVendorID ? AIEngine.Instance.ModelVendors.find((mv) => UUIDsEqual(mv.ID, modelVendorID))?.VendorID : undefined;
+        return ResolveRealtimeAvatar(
+            { EffectiveConfig: effectiveConfig, TargetAgentID: input.TargetAgentID, CoAgentID: coAgent.ID, ModelID: modelID, VendorID: vendorID },
+            AIEngine.Instance,
+        );
+    }
+
+    /**
+     * The config bag with the avatar persona's voice, so the face and the voice match, unless a voice was picked in this
+     * call (a runtime override's `realtime.voice.default.voice`), which wins.
+     */
+    private withAvatarVoice(bag: JSONObject | undefined, avatar: RealtimeAvatarResolution, input: PrepareClientSessionInput): JSONObject | undefined {
+        if (!avatar.Avatar || !avatar.Voice) {
+            return bag;
+        }
+        const picked = ResolveEffectiveRealtimeConfig(null, null, input.ConfigOverridesJson).realtime?.voice?.default?.voice;
+        return picked ? bag : { ...(bag ?? {}), voice: avatar.Voice };
     }
 
     /**

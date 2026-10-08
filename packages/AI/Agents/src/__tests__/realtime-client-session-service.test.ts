@@ -7,6 +7,7 @@
  * stubbed. No network, no DB — fully deterministic.
  */
 import { describe, it, expect, vi, beforeEach, afterEach, beforeAll } from 'vitest';
+import type { RealtimeAvatarResolution } from '../realtime/realtime-avatar-resolution';
 import {
     BaseRealtimeModel,
     ClientRealtimeSessionConfig,
@@ -2179,6 +2180,50 @@ describe('Direct Action Invocation (Section B / B-8)', () => {
         expect(service.buildDirectActionTools('target-1', {
             realtime: { directActions: { enabled: true, actionNames: [] } }
         }, 'OpenAIRealtime')).toHaveLength(0);
+    });
+
+    it('carries the avatar the session asks for, pairs its voice, and names it in the mint log', async () => {
+        class AvatarService extends TestableService {
+            protected override ResolveSessionAvatar(): RealtimeAvatarResolution {
+                return { Avatar: { AvatarID: 'Ben', PersonaName: 'Ben', Source: 'persona' }, Voice: 'Puck' };
+            }
+        }
+        const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+        try {
+            const service = new AvatarService();
+            const coAgent = makeCoAgent();
+            const params = await service.ExposeBuildSessionParams(makePrepInput({ CoAgent: coAgent, TargetAgentID: 'target-1' }), coAgent, 'gemini-3.8-live', contextUser, provider, {}, 'GeminiRealtime');
+            expect(params.Avatar).toEqual({ AvatarID: 'Ben', PersonaName: 'Ben', Source: 'persona' });
+            expect(params.Config?.['voice']).toBe('Puck');
+            expect(log.mock.calls.map((c) => String(c[0])).some((l) => l.includes('voice=Puck avatar=Ben '))).toBe(true);
+
+            // A voice picked in this call wins over the avatar persona's voice.
+            const picked = await service.ExposeBuildSessionParams(
+                makePrepInput({ CoAgent: coAgent, TargetAgentID: 'target-1', ConfigOverridesJson: JSON.stringify({ realtime: { voice: { default: { voice: 'Kore' } } } }) }),
+                coAgent, 'gemini-3.8-live', contextUser, provider, {}, 'GeminiRealtime');
+            expect(picked.Avatar?.AvatarID).toBe('Ben');
+            expect(picked.Config?.['voice']).not.toBe('Puck');
+        } finally {
+            log.mockRestore();
+        }
+    });
+
+    it('asks for no avatar when none resolves, and logs why', async () => {
+        class NoFaceService extends TestableService {
+            protected override ResolveSessionAvatar(): RealtimeAvatarResolution {
+                return { Reason: 'no-binding' };
+            }
+        }
+        const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+        try {
+            const service = new NoFaceService();
+            const coAgent = makeCoAgent();
+            const params = await service.ExposeBuildSessionParams(makePrepInput({ CoAgent: coAgent, TargetAgentID: 'target-1' }), coAgent, 'gemini-3.8-live', contextUser, provider, {}, 'GeminiRealtime');
+            expect(params.Avatar).toBeUndefined();
+            expect(log.mock.calls.map((c) => String(c[0])).some((l) => l.includes('avatar=none(no-binding)'))).toBe(true);
+        } finally {
+            log.mockRestore();
+        }
     });
 
     it('end-to-end buildSessionParams: ElevenLabs gets only invoke-target-agent while OpenAI gets direct actions', async () => {
