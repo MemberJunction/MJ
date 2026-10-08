@@ -841,6 +841,7 @@ export class RealtimeSessionRuntime {
    *   the server-side Media channel resolves THIS collection as the agent's media kit for the session,
    *   taking precedence over the agent's `DefaultMediaCollectionID`. The server UUID-validates it
    *   (malformed ⇒ ignored, the agent default applies). Omit/`null` to use the agent default kit.
+   * @param conversationBranchId Optional fork the session starts on; null or omitted is Main. Its transcript is written there.
    */
   public async StartRealtimeSession(
     targetAgentId: string,
@@ -854,7 +855,8 @@ export class RealtimeSessionRuntime {
     recordingConsent?: boolean | null,
     mediaCollectionId?: string | null,
     applicationId?: string | null,
-    appContext?: AppContextSnapshot | null
+    appContext?: AppContextSnapshot | null,
+    conversationBranchId?: string | null
   ): Promise<void> {
     if (this.IsActive) {
       return; // a session is already running — ignore duplicate starts
@@ -873,7 +875,7 @@ export class RealtimeSessionRuntime {
       // Resolve + initialize the interactive-channel plugins FIRST: their client-executed
       // tool sets must be declared to the realtime model at session mint.
       const allClientTools = [...(clientTools ?? []), ...(await this.startChannels())];
-      session = await this.mintSession(targetAgentId, conversationId, lastSessionId, preferredModelId, allClientTools, coAgentId, configOverridesJson, consent, this.recordingStartedAtIso, mediaCollectionId, this.applicationId, effectiveAppContext);
+      session = await this.mintSession(targetAgentId, conversationId, lastSessionId, preferredModelId, allClientTools, coAgentId, configOverridesJson, consent, this.recordingStartedAtIso, mediaCollectionId, this.applicationId, effectiveAppContext, conversationBranchId);
     } catch (error) {
       // An ended or replaced start only logs its failure: the error state and the teardown belong
       // to the session that is current now, which a newer start may own.
@@ -2458,11 +2460,12 @@ export class RealtimeSessionRuntime {
     recordingStartedAt?: string | null,
     mediaCollectionId?: string | null,
     applicationId?: string | null,
-    appContext?: AppContextSnapshot | null
+    appContext?: AppContextSnapshot | null,
+    conversationBranchId?: string | null
   ): Promise<StartRealtimeClientSessionResult> {
     const mutation = `
-      mutation StartRealtimeClientSession($targetAgentId: String!, $conversationId: String, $lastSessionId: String, $preferredModelId: String, $clientToolsJson: String, $coAgentId: String, $configOverridesJson: String, $recordingConsent: Boolean, $recordingStartedAt: String, $mediaCollectionId: String, $applicationId: String, $appContextJson: String) {
-        StartRealtimeClientSession(targetAgentId: $targetAgentId, conversationId: $conversationId, lastSessionId: $lastSessionId, preferredModelId: $preferredModelId, clientToolsJson: $clientToolsJson, coAgentId: $coAgentId, configOverridesJson: $configOverridesJson, recordingConsent: $recordingConsent, recordingStartedAt: $recordingStartedAt, mediaCollectionId: $mediaCollectionId, applicationId: $applicationId, appContextJson: $appContextJson) {
+      mutation StartRealtimeClientSession($targetAgentId: String!, $conversationId: String, $lastSessionId: String, $preferredModelId: String, $clientToolsJson: String, $coAgentId: String, $configOverridesJson: String, $recordingConsent: Boolean, $recordingStartedAt: String, $mediaCollectionId: String, $applicationId: String, $appContextJson: String, $conversationBranchId: String) {
+        StartRealtimeClientSession(targetAgentId: $targetAgentId, conversationId: $conversationId, lastSessionId: $lastSessionId, preferredModelId: $preferredModelId, clientToolsJson: $clientToolsJson, coAgentId: $coAgentId, configOverridesJson: $configOverridesJson, recordingConsent: $recordingConsent, recordingStartedAt: $recordingStartedAt, mediaCollectionId: $mediaCollectionId, applicationId: $applicationId, appContextJson: $appContextJson, conversationBranchId: $conversationBranchId) {
           AgentSessionId
           ConversationId
           Provider
@@ -2488,7 +2491,8 @@ export class RealtimeSessionRuntime {
       recordingStartedAt: recordingStartedAt ?? null,
       mediaCollectionId: mediaCollectionId ?? null,
       applicationId: applicationId ?? null,
-      appContextJson: appContext ? JSON.stringify(appContext) : null
+      appContextJson: appContext ? JSON.stringify(appContext) : null,
+      conversationBranchId: conversationBranchId ?? null
     };
     const result = await this.gql().ExecuteGQL(mutation, variables);
     const payload = result?.StartRealtimeClientSession as StartRealtimeClientSessionResult | undefined;

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ConversationEngine } from '@memberjunction/core-entities';
 import type { RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import { FallbackContent, ShapeContent, TestRunContent } from '../content.js';
 import { DeterministicRubricEvaluator } from '../DeterministicRubricEvaluator.js';
@@ -364,12 +365,15 @@ describe('agreement and consensus', () => {
 });
 
 describe('conversation subject scope', () => {
-    function records(conversationScope?: RubricRecords['conversationScope']): RubricRecords & { reads: string[] } {
+    function records(conversationScope?: RubricRecords['conversationScope']): RubricRecords & { reads: string[]; filters: Map<string, string> } {
         const reads: string[] = [];
+        const filters = new Map<string, string>();
         return {
             reads,
-            async rows(entityName: string) {
+            filters,
+            async rows(entityName: string, filter: string) {
                 reads.push(entityName);
+                filters.set(entityName, filter);
                 return entityName === 'MJ: Conversations' ? [{ ID: 'conv-1', Name: 'Standup' }] : [];
             },
             async createDraft() { return { id: 'draft', status: 'Draft' }; },
@@ -389,5 +393,12 @@ describe('conversation subject scope', () => {
         await expect(new RubricEngine(undefined, without).SubjectContent({ subjectEntityName: 'MJ: Conversations', subjectRecordId: 'conv-1' }))
             .rejects.toThrow('subject conversation not readable');
         expect(without.reads).not.toContain('MJ: Conversation Details');
+    });
+
+    it('reads only the details of Main that no rerun replaced', async () => {
+        const main = records(async (conversationId) => ConversationEngine.TrunkScope(conversationId));
+        await new RubricEngine(undefined, main).SubjectContent({ subjectEntityName: 'MJ: Conversations', subjectRecordId: 'conv-1' });
+        expect(main.filters.get('MJ: Conversation Details'))
+            .toBe(`[ConversationID]='conv-1' AND [BranchID] IS NULL AND [ReplacedAt] IS NULL`);
     });
 });

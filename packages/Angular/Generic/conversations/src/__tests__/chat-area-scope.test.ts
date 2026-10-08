@@ -6,23 +6,24 @@ import { RunView } from '@memberjunction/core';
 import { ConversationEngine, type ConversationBranchRow, type ConversationScope } from '@memberjunction/core-entities';
 import { Subject } from 'rxjs';
 import { ConversationChatAreaComponent } from '../lib/components/conversation/conversation-chat-area.component';
-import { ConversationScopeService } from '../lib/services/conversation-scope.service';
+import { MAIN_OPEN_VIEW } from '../lib/utils/conversation-forks';
 
 /**
- * The chat area's conversation reads use the scope of the current branch path: the pin count and
- * the pins panel, the most recent component artifact, and the agent-run poll. The branch rows it
- * loads are registered with `ConversationScopeService` with the chat area as owner; a conversation
- * change and destroy clear only the rows this chat area registered. A branch reload refreshes an
- * open artifact viewer in the new scope.
+ * The chat area's conversation reads use the scope of the open view's path: the pin count and the
+ * pins panel, the most recent component artifact, and the agent-run poll. The scope is built from
+ * the chat area's own fork rows: a conversation change clears them, and another chat area on the
+ * same conversation never reads, replaces or clears them. A view reload refreshes an open artifact
+ * viewer in the new scope.
  *
  * Built via `Object.create(prototype)` so the real methods run against stubbed collaborators,
- * matching `chat-area-branch-switch.test.ts`.
+ * matching `chat-area-open-view.test.ts`.
  */
 
 const B: ConversationBranchRow = { ID: 'BRANCH-B', ConversationID: 'CONV-1', ParentBranchID: null, ForkFromSequence: 2, Name: 'alt' };
 const BRANCH_SCOPE: ConversationScope = { ConversationID: 'CONV-1', BranchID: 'BRANCH-B', Branches: [B] };
-const TRUNK_PIN_FILTER = `[ConversationID]='CONV-1' AND [BranchID] IS NULL AND [IsPinned]=1`;
-const BRANCH_PIN_FILTER = `${ConversationEngine.ScopeFilter(BRANCH_SCOPE)} AND [IsPinned]=1`;
+const TRUNK_PIN_FILTER = `[ConversationID]='CONV-1' AND [BranchID] IS NULL AND [ReplacedAt] IS NULL AND [IsPinned]=1`;
+const BRANCH_PIN_FILTER = `${ConversationEngine.LiveRowsFilter(ConversationEngine.ScopeFilter(BRANCH_SCOPE))} AND [IsPinned]=1`;
+const TRUNK_SCOPE: ConversationScope = { ConversationID: 'CONV-1', BranchID: null, Branches: [] };
 
 interface RunViewCall {
   EntityName: string;
@@ -33,34 +34,47 @@ interface RunViewCall {
 interface Harness {
   component: ConversationChatAreaComponent;
   open: Record<string, unknown>;
-  conversation: { ID: string; CurrentBranchID: string | null; Name: string };
-  scopeService: ConversationScopeService;
   runView: ReturnType<typeof vi.fn>;
   windowStore: { SetPinnedCount: ReturnType<typeof vi.fn>; SetPinnedDetails: ReturnType<typeof vi.fn> };
   agentState: { startPolling: ReturnType<typeof vi.fn>; stopPolling: ReturnType<typeof vi.fn> };
 }
 
-function createHarness(currentBranchId: string | null): Harness {
+function createHarness(forkId: string | null): Harness {
   const component = Object.create(ConversationChatAreaComponent.prototype) as ConversationChatAreaComponent;
   const open = component as unknown as Record<string, unknown>;
-  const conversation = { ID: 'CONV-1', CurrentBranchID: currentBranchId, Name: 'Chat' };
-  const scopeService = new ConversationScopeService();
   const runView = vi.fn(async () => ({ Success: true, Results: [], TotalRowCount: 3 }));
   vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({ RunView: runView } as unknown as RunView);
   const windowStore = { SetPinnedCount: vi.fn(), SetPinnedDetails: vi.fn() };
   const agentState = { startPolling: vi.fn(), stopPolling: vi.fn() };
 
   open['_conversationId'] = 'CONV-1';
-  open['Conversation'] = conversation;
+  open['openView'] = forkId ? { Kind: 'Fork', BranchID: forkId } : MAIN_OPEN_VIEW;
   open['CurrentUser'] = { ID: 'USER-1' };
-  open['scopeService'] = scopeService;
   open['windowStore'] = windowStore;
   open['agentStateService'] = agentState;
   open['conversationLoadToken'] = 1;
   open['scopeFallbackLogged'] = null;
-  open['cdr'] = { detectChanges: vi.fn() };
+  open['cdr'] = { detectChanges: vi.fn(), markForCheck: vi.fn() };
+  open['loadForkSummaries'] = vi.fn(async () => undefined);
 
-  return { component, open, conversation, scopeService, runView, windowStore, agentState };
+  return { component, open, runView, windowStore, agentState };
+}
+
+/** Gives the chat area fork rows of CONV-1, as its loaders do. */
+function setRows(h: Harness, rows: ConversationBranchRow[]): void {
+  (h.open['setBranchRows'] as (id: string, r: ConversationBranchRow[]) => void).call(h.component, 'CONV-1', rows);
+}
+
+/** Runs the real ngOnDestroy against stubs for the members it touches besides the rows. */
+function destroy(h: Harness): void {
+  h.open['destroy$'] = new Subject<void>();
+  h.open['clearTurnTracking'] = vi.fn();
+  vi.stubGlobal('window', { removeEventListener: vi.fn() });
+  try {
+    h.component.ngOnDestroy();
+  } finally {
+    vi.unstubAllGlobals();
+  }
 }
 
 function call<T>(h: Harness, method: string, ...args: unknown[]): Promise<T> {
@@ -86,7 +100,7 @@ describe('ConversationChatAreaComponent conversation scope', () => {
   describe('pins', () => {
     it('counts the pins on the current branch path', async () => {
       const h = createHarness('BRANCH-B');
-      h.scopeService.SetBranches('CONV-1', [B], h.component);
+      setRows(h, [B]);
 
       await call(h, 'loadPinnedMessageCount', 'CONV-1', 1);
 
@@ -104,7 +118,7 @@ describe('ConversationChatAreaComponent conversation scope', () => {
 
     it('loads the pins panel rows from the current branch path', async () => {
       const h = createHarness('BRANCH-B');
-      h.scopeService.SetBranches('CONV-1', [B], h.component);
+      setRows(h, [B]);
 
       await call(h, 'hydratePinnedMessages', 'CONV-1');
 
@@ -120,7 +134,7 @@ describe('ConversationChatAreaComponent conversation scope', () => {
       expect(runViewCall(h, 0).ExtraFilter).toBe(TRUNK_PIN_FILTER);
     });
 
-    it('registers the branch rows before it counts the pins on open', async () => {
+    it('keeps the branch rows before it counts the pins on open', async () => {
       const h = createHarness('BRANCH-B');
       h.open['loadBranchesOrEmpty'] = vi.fn(async () => [B]);
       h.open['isActiveConversationLoad'] = () => true;
@@ -129,10 +143,10 @@ describe('ConversationChatAreaComponent conversation scope', () => {
 
       expect(rows).toEqual([B]);
       expect(runViewCall(h, 0).ExtraFilter).toBe(BRANCH_PIN_FILTER);
-      expect(h.scopeService.ForConversation('CONV-1', 'BRANCH-B')).toEqual(BRANCH_SCOPE);
+      expect(h.component.ExportScope).toEqual(BRANCH_SCOPE);
     });
 
-    it('does not register rows or count pins for a conversation load that is no longer current', async () => {
+    it('does not keep rows or count pins for a conversation load that is no longer current', async () => {
       const h = createHarness('BRANCH-B');
       h.open['loadBranchesOrEmpty'] = vi.fn(async () => [B]);
       h.open['isActiveConversationLoad'] = () => false;
@@ -140,17 +154,19 @@ describe('ConversationChatAreaComponent conversation scope', () => {
       await call(h, 'loadBranchesAndPinCount', 'CONV-1', 1);
 
       expect(h.runView).not.toHaveBeenCalled();
-      expect(() => h.scopeService.ForConversation('CONV-1', 'BRANCH-B')).toThrow();
+      expect(h.open['branches']).toBeUndefined();
+      expect(h.component.ExportScope).toEqual(TRUNK_SCOPE);
     });
   });
 
   describe('conversation load', () => {
-    it('registers the branch rows before the pin count runs', async () => {
+    it('keeps the branch rows before the pin count runs', async () => {
       const h = createHarness('BRANCH-B');
-      const register = vi.spyOn(h.scopeService, 'SetBranches');
+      const keep = vi.spyOn(h.open as { setBranchRows: (id: string, r: ConversationBranchRow[]) => void }, 'setBranchRows');
+      const loadLatest = vi.fn(async () => undefined);
       h.open['windowStore'] = {
         ...h.windowStore,
-        LoadLatest: vi.fn(async () => undefined),
+        LoadLatest: loadLatest,
         GetSnapshot: vi.fn(() => ({})),
       };
       h.open['messages'] = [];
@@ -165,18 +181,19 @@ describe('ConversationChatAreaComponent conversation scope', () => {
       await call(h, 'loadMessages', 'CONV-1', 1);
 
       expect(console.error).not.toHaveBeenCalled();
-      expect(register).toHaveBeenCalledTimes(1);
+      expect(keep).toHaveBeenCalledWith('CONV-1', [B]);
       expect(h.runView).toHaveBeenCalledTimes(1);
-      expect(register.mock.invocationCallOrder[0]).toBeLessThan(h.runView.mock.invocationCallOrder[0]);
+      expect(keep.mock.invocationCallOrder[0]).toBeLessThan(h.runView.mock.invocationCallOrder[0]);
       expect(runViewCall(h, 0)).toMatchObject({ ExtraFilter: BRANCH_PIN_FILTER, ResultType: 'count_only' });
       expect(h.windowStore.SetPinnedCount).toHaveBeenCalledWith(3);
+      expect(loadLatest).toHaveBeenCalledWith('CONV-1', { ID: 'USER-1' }, 'BRANCH-B');
     });
   });
 
   describe('most recent component artifact', () => {
     it('reads the details of the current branch path', async () => {
       const h = createHarness('BRANCH-B');
-      h.scopeService.SetBranches('CONV-1', [B], h.component);
+      setRows(h, [B]);
 
       await call(h, 'findMostRecentComponentArtifactId');
 
@@ -193,7 +210,7 @@ describe('ConversationChatAreaComponent conversation scope', () => {
   });
 
   describe('scope fallback', () => {
-    it('reads the trunk and warns once when the current branch rows are not registered', async () => {
+    it("reads Main and warns once when the open fork's rows are not loaded", async () => {
       const h = createHarness('BRANCH-B');
 
       await call(h, 'loadPinnedMessageCount', 'CONV-1', 1);
@@ -214,7 +231,7 @@ describe('ConversationChatAreaComponent conversation scope', () => {
       h.open['messages'] = [];
       h.open['engine'] = { HasCachedDetails: () => true };
       h.open['resetConversationScopedViewState'] = vi.fn();
-      h.open['loadMessages'] = vi.fn(async () => h.scopeService.SetBranches('CONV-1', [B], h.component));
+      h.open['loadMessages'] = vi.fn(async () => setRows(h, [B]));
       h.open['restoreActiveTasks'] = vi.fn(async () => undefined);
 
       await call(h, 'onConversationChanged', 'CONV-1');
@@ -223,10 +240,10 @@ describe('ConversationChatAreaComponent conversation scope', () => {
     });
   });
 
-  describe('branch reload', () => {
+  describe('view reload', () => {
     function prepareReload(h: Harness, pinsHydrated: boolean): void {
-      h.open['branchReloadToken'] = 0;
-      h.open['pinsDuringBranchReload'] = null;
+      h.open['viewReloadToken'] = 0;
+      h.open['pinsDuringViewReload'] = null;
       h.open['pinsHydrated'] = pinsHydrated;
       h.open['windowStore'] = {
         ...h.windowStore,
@@ -238,29 +255,42 @@ describe('ConversationChatAreaComponent conversation scope', () => {
       };
       h.open['isActiveConversationLoad'] = () => true;
       h.open['isActiveConversation'] = () => true;
-      h.open['loadBranchesOrEmpty'] = vi.fn(async () => [B]);
+      h.open['loadBranchesOrNull'] = vi.fn(async () => [B]);
       h.open['applyWindowSnapshot'] = vi.fn();
       h.open['loadPeripheralData'] = vi.fn(async () => undefined);
     }
 
     function reload(h: Harness): Promise<boolean> {
-      return call<boolean>(h, 'reloadWindowForBranch');
+      return call<boolean>(h, 'reloadWindowForView');
     }
 
-    it('registers the new branch rows, counts the pins and restarts the poll in the new scope', async () => {
+    it('keeps the new branch rows, counts the pins and restarts the poll in the new scope', async () => {
       const h = createHarness('BRANCH-B');
       prepareReload(h, false);
 
       expect(await reload(h)).toBe(true);
 
-      expect(h.scopeService.ForConversation('CONV-1', 'BRANCH-B')).toEqual(BRANCH_SCOPE);
+      expect(h.component.ExportScope).toEqual(BRANCH_SCOPE);
       expect(h.runView).toHaveBeenCalledTimes(1);
       expect(runViewCall(h, 0)).toMatchObject({ ExtraFilter: BRANCH_PIN_FILTER, ResultType: 'count_only' });
       expect(h.windowStore.SetPinnedCount).toHaveBeenLastCalledWith(3);
       expect(h.agentState.startPolling).toHaveBeenCalledWith(expect.anything(), 'CONV-1', BRANCH_SCOPE);
     });
 
-    it('reloads the open artifact viewer once, after the new branch rows are registered', async () => {
+    it('loads the newest page of the open fork path, as in Main', async () => {
+      type Loads = { LoadLatest: ReturnType<typeof vi.fn> };
+      const fork = createHarness('BRANCH-B');
+      prepareReload(fork, false);
+      expect(await reload(fork)).toBe(true);
+      expect((fork.open['windowStore'] as Loads).LoadLatest).toHaveBeenCalledWith('CONV-1', { ID: 'USER-1' }, 'BRANCH-B');
+
+      const main = createHarness(null);
+      prepareReload(main, false);
+      expect(await reload(main)).toBe(true);
+      expect((main.open['windowStore'] as Loads).LoadLatest).toHaveBeenCalledWith('CONV-1', { ID: 'USER-1' }, null);
+    });
+
+    it('reloads the open artifact viewer once, after the new branch rows are kept', async () => {
       const h = createHarness('BRANCH-B');
       prepareReload(h, false);
       const refresh = new Subject<{ artifactId: string; versionNumber: number }>();
@@ -312,6 +342,23 @@ describe('ConversationChatAreaComponent conversation scope', () => {
       expect(requests).toEqual([]);
     });
 
+    it('keeps the earlier fork rows and the fork scope when the fork rows cannot be read', async () => {
+      const h = createHarness('BRANCH-B');
+      prepareReload(h, false);
+      setRows(h, [B]);
+      delete h.open['loadBranchesOrNull'];
+      const read = vi.spyOn(ConversationEngine, 'LoadBranchesFresh').mockRejectedValue(new Error('offline'));
+
+      expect(await reload(h)).toBe(true);
+
+      expect(read).toHaveBeenCalledWith('CONV-1', expect.anything(), undefined);
+      expect(h.open['branches']).toEqual([B]);
+      expect(h.component.ExportScope).toEqual(BRANCH_SCOPE);
+      expect(runViewCall(h, 0)).toMatchObject({ ExtraFilter: BRANCH_PIN_FILTER, ResultType: 'count_only' });
+      expect(h.agentState.startPolling).toHaveBeenCalledWith(expect.anything(), 'CONV-1', BRANCH_SCOPE);
+      expect(warn).not.toHaveBeenCalled();
+    });
+
     it('reads the loaded pins panel rows again in the new scope', async () => {
       const h = createHarness('BRANCH-B');
       prepareReload(h, true);
@@ -323,80 +370,90 @@ describe('ConversationChatAreaComponent conversation scope', () => {
     });
   });
 
-  describe('branch row registration', () => {
-    function register(h: Harness, rows: ConversationBranchRow[]): void {
-      (h.open['registerBranchRows'] as (id: string, r: ConversationBranchRow[]) => void).call(h.component, 'CONV-1', rows);
-    }
-
+  describe('branch rows', () => {
     function reset(h: Harness): void {
       (h.open['resetConversationScopedViewState'] as () => void).call(h.component);
     }
 
-    /** Runs the real ngOnDestroy against stubs for the members it touches besides the rows. */
-    function destroy(h: Harness): void {
-      h.open['destroy$'] = new Subject<void>();
-      h.open['clearTurnTracking'] = vi.fn();
-      vi.stubGlobal('window', { removeEventListener: vi.fn() });
-      try {
-        h.component.ngOnDestroy();
-      } finally {
-        vi.unstubAllGlobals();
-      }
-    }
-
-    it('registers the rows with the chat area as their owner', () => {
+    it('builds the open fork scope from its own rows', () => {
       const h = createHarness('BRANCH-B');
-      const setBranches = vi.spyOn(h.scopeService, 'SetBranches');
 
-      register(h, [B]);
+      setRows(h, [B]);
 
-      expect(setBranches).toHaveBeenCalledWith('CONV-1', [B], h.component);
+      expect(h.component.ExportScope).toEqual(BRANCH_SCOPE);
+      expect(h.component.ArtifactViewerScope).toEqual(BRANCH_SCOPE);
     });
 
-    it('clears the registered branch rows when the conversation changes', () => {
+    it('does not use rows of another conversation', () => {
       const h = createHarness('BRANCH-B');
-      register(h, [B]);
-      expect(h.scopeService.ForConversation('CONV-1', 'BRANCH-B')).toEqual(BRANCH_SCOPE);
+      (h.open['setBranchRows'] as (id: string, r: ConversationBranchRow[]) => void).call(h.component, 'CONV-2', [B]);
+
+      expect(h.component.ExportScope).toEqual(TRUNK_SCOPE);
+      expect(warn).toHaveBeenCalledTimes(1);
+    });
+
+    it('clears its rows when the conversation changes', () => {
+      const h = createHarness('BRANCH-B');
+      setRows(h, [B]);
 
       reset(h);
 
-      expect(() => h.scopeService.ForConversation('CONV-1', 'BRANCH-B')).toThrow();
+      expect(h.open['branches']).toEqual([]);
+      expect(h.open['branchRowsConversationId']).toBeNull();
     });
 
-    it('keeps the rows another chat area registered for the same conversation when it clears', () => {
-      const other = createHarness('BRANCH-B');
+    it('stops the agent-run poll when destroyed', () => {
       const h = createHarness('BRANCH-B');
-      h.open['scopeService'] = other.scopeService;
-      register(h, [B]);
-      register(other, [B]);
-
-      reset(h);
-
-      expect(other.scopeService.ForConversation('CONV-1', 'BRANCH-B')).toEqual(BRANCH_SCOPE);
-      reset(other);
-      expect(() => other.scopeService.ForConversation('CONV-1', 'BRANCH-B')).toThrow();
-    });
-
-    it('clears its own rows when destroyed', () => {
-      const h = createHarness('BRANCH-B');
-      register(h, [B]);
+      setRows(h, [B]);
 
       destroy(h);
 
-      expect(() => h.scopeService.ForConversation('CONV-1', 'BRANCH-B')).toThrow();
       expect(h.agentState.stopPolling).toHaveBeenCalled();
     });
+  });
 
-    it('keeps the rows another chat area registered when destroyed', () => {
-      const other = createHarness('BRANCH-B');
-      const h = createHarness('BRANCH-B');
-      h.open['scopeService'] = other.scopeService;
-      register(h, [B]);
-      register(other, [B]);
+  describe('two chat areas on one conversation', () => {
+    const C: ConversationBranchRow = { ID: 'BRANCH-C', ConversationID: 'CONV-1', ParentBranchID: null, ForkFromSequence: 1, Name: 'other' };
 
-      destroy(h);
+    /** Loads the fork rows the way the chat area does on a refresh, with the read stubbed. */
+    async function loadRows(h: Harness, rows: ConversationBranchRow[]): Promise<void> {
+      h.open['loadBranchesOrNull'] = vi.fn(async () => rows);
+      h.open['isActiveConversation'] = () => true;
+      await h.component.RefreshForkSummaries();
+    }
 
-      expect(other.scopeService.ForConversation('CONV-1', 'BRANCH-B')).toEqual(BRANCH_SCOPE);
+    it("keeps the other chat area's fork scope when the one that loaded rows last is destroyed", async () => {
+      const first = createHarness('BRANCH-B');
+      const second = createHarness('BRANCH-B');
+      await loadRows(first, [B]);
+      await loadRows(second, [B]);
+
+      destroy(second);
+
+      expect(first.component.ExportScope).toEqual(BRANCH_SCOPE);
+      expect(first.component.ArtifactViewerScope).toEqual(BRANCH_SCOPE);
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it("keeps the other chat area's fork scope when one changes conversation", async () => {
+      const first = createHarness('BRANCH-B');
+      const second = createHarness('BRANCH-B');
+      await loadRows(first, [B]);
+      await loadRows(second, [B]);
+
+      (second.open['resetConversationScopedViewState'] as () => void).call(second.component);
+
+      expect(first.component.ExportScope).toEqual(BRANCH_SCOPE);
+    });
+
+    it("does not replace the other chat area's rows when one loads different rows", async () => {
+      const first = createHarness('BRANCH-B');
+      const second = createHarness('BRANCH-C');
+      await loadRows(first, [B]);
+      await loadRows(second, [C]);
+
+      expect(first.component.ExportScope).toEqual(BRANCH_SCOPE);
+      expect(second.component.ExportScope).toEqual({ ConversationID: 'CONV-1', BranchID: 'BRANCH-C', Branches: [C] });
     });
   });
 });

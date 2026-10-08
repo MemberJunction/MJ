@@ -47,7 +47,6 @@
         [isNewConversation]="ChatIsNewConversation"
         [pendingMessage]="PendingMessage"
         [pendingAttachments]="PendingAttachments"
-        [threadId]="ChatThreadId"
         [pendingArtifactId]="ChatPendingArtifactId"
         [pendingArtifactVersionNumber]="ChatPendingArtifactVersionNumber"
         [overlayMode]="true"
@@ -68,8 +67,6 @@
         (taskClicked)="OnTaskClicked($event)"
         (artifactLinkClicked)="OnArtifactLinkClicked($event)"
         (conversationRenamed)="OnConversationRenamed($event)"
-        (threadOpened)="OnThreadOpened($event)"
-        (threadClosed)="OnThreadClosed()"
         (pendingArtifactConsumed)="OnPendingArtifactConsumed()">
       </mj-conversation-chat-area>
     } @else {

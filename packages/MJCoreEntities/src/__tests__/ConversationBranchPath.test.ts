@@ -64,24 +64,3 @@ describe('FilterRowsToBranchPath', () => {
         expect(ConversationEngine.FilterRowsToBranchPath([row(7, 'b')], 'B', branches)).toHaveLength(1);
     });
 });
-
-describe('GetAlternativesAt / ActiveAlternativeAt', () => {
-    it('lists the parent continuation first, then forks at that row in order', () => {
-        expect(ConversationEngine.GetAlternativesAt(2, null, branches)).toEqual([
-            { BranchID: null, Name: null },
-            { BranchID: 'B', Name: null },
-        ]);
-    });
-    it('lists rootless branches at the first message', () => {
-        expect(ConversationEngine.GetAlternativesAt(null, null, branches).map(a => a.BranchID)).toEqual([null, 'R']);
-    });
-    it('returns only the parent continuation where nothing forks', () => {
-        expect(ConversationEngine.GetAlternativesAt(5, null, branches)).toEqual([{ BranchID: null, Name: null }]);
-    });
-    it('names the chain branch that forks at the row, else the parent continuation', () => {
-        const chain = ConversationEngine.BuildBranchChain(branches, 'C');
-        expect(ConversationEngine.ActiveAlternativeAt(2, null, chain)).toBe('B');
-        expect(ConversationEngine.ActiveAlternativeAt(8, 'B', chain)).toBe('C');
-        expect(ConversationEngine.ActiveAlternativeAt(1, null, chain)).toBe(null);
-    });
-});

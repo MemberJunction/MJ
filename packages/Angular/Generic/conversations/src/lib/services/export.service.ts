@@ -110,10 +110,10 @@ export interface ExportConversationData {
   conversation: MJConversationEntity;
   details: MJConversationDetailEntity[];
   /**
-   * The branch the messages come from, as the header names it: the branch name, or its id
-   * when it has no name. Absent or null on the trunk, and the header then names no branch.
+   * The fork the messages come from, as the header names it (its display name). Absent or null
+   * in Main.
    */
-  branch?: string | null;
+  fork?: string | null;
 }
 
 /** Internal: options with defaults applied (branding stays optional). */
@@ -147,8 +147,8 @@ export class ExportService {
   }
 
   /**
-   * Exports the messages of one scope of a conversation (the trunk, or one branch path) and
-   * downloads the file. On a branch the export header names the branch.
+   * Exports the messages of one scope of a conversation (Main, or one fork's path) and
+   * downloads the file. In a fork the export header names the fork.
    * @throws when the scope belongs to another conversation, or the conversation is not found.
    */
   async ExportConversation(
@@ -164,8 +164,7 @@ export class ExportService {
   }
 
   /**
-   * @deprecated Use {@link ExportConversation}. Without `scope`, exports the path the
-   * conversation currently shows ({@link ConversationEngine.LoadCurrentScope}).
+   * @deprecated Use {@link ExportConversation}. Without `scope`, exports Main.
    */
   async exportConversation(
     conversationId: string,
@@ -174,7 +173,7 @@ export class ExportService {
     options: ExportOptions = {},
     scope?: ConversationScope
   ): Promise<void> {
-    const resolved = scope ?? await ConversationEngine.LoadCurrentScope(conversationId, currentUser, this.Provider);
+    const resolved = scope ?? ConversationEngine.TrunkScope(conversationId);
     return this.ExportConversation(conversationId, resolved, format, currentUser, options);
   }
 
@@ -404,7 +403,7 @@ export class ExportService {
     }
   }
 
-  /** Loads the conversation and the messages in the scope, in Sequence order. */
+  /** Loads the conversation and the messages in the scope that no rerun replaced, in Sequence order. */
   private async loadConversationData(
     conversationId: string,
     scope: ConversationScope,
@@ -424,7 +423,7 @@ export class ExportService {
       },
       {
         EntityName: 'MJ: Conversation Details',
-        ExtraFilter: ConversationEngine.ScopeFilter(scope),
+        ExtraFilter: ConversationEngine.LiveRowsFilter(ConversationEngine.ScopeFilter(scope)),
         OrderBy: 'Sequence ASC',
         ResultType: 'entity_object'
       }
@@ -434,20 +433,28 @@ export class ExportService {
       throw new Error('Conversation not found');
     }
 
+    const details = (detailsResult.Results || []) as MJConversationDetailEntity[];
     return {
       conversation: conversationResult.Results[0] as MJConversationEntity,
-      details: (detailsResult.Results || []) as MJConversationDetailEntity[],
-      branch: this.branchLabel(scope)
+      details,
+      fork: this.forkLabel(scope, details)
     };
   }
 
-  /** The header name of the scope's branch: its name, or its id when it has no name; null on the trunk. */
-  private branchLabel(scope: ConversationScope): string | null {
+  /** The header name of the scope's fork: its display name; null in Main. */
+  private forkLabel(scope: ConversationScope, details: ReadonlyArray<MJConversationDetailEntity>): string | null {
     if (scope.BranchID == null) {
       return null;
     }
-    const branch = scope.Branches.find(b => UUIDsEqual(b.ID, scope.BranchID));
-    return branch?.Name?.trim() || scope.BranchID;
+    const fork = scope.Branches.find(b => UUIDsEqual(b.ID, scope.BranchID));
+    if (!fork) {
+      return scope.BranchID;
+    }
+    const first = [...details]
+      .filter(d => UUIDsEqual(d.BranchID ?? null, scope.BranchID))
+      .sort((a, b) => a.Sequence - b.Sequence)
+      .find(d => ConversationEngine.ForkPlainText(d.Message) != null);
+    return ConversationEngine.ForkDisplayName(fork, first?.Message ?? null);
   }
 
   private exportAsJSON(
@@ -466,8 +473,8 @@ export class ExportService {
           updatedAt: data.conversation.__mj_UpdatedAt
         }
       : { name: data.conversation.Name };
-    if (data.branch) {
-      conversationBlock.branch = data.branch;
+    if (data.fork) {
+      conversationBlock.fork = data.fork;
     }
     exportData.conversation = conversationBlock;
 
@@ -523,8 +530,8 @@ export class ExportService {
       md += `**Created:** ${this.formatDate(data.conversation.__mj_CreatedAt)}\n\n`;
     }
 
-    if (data.branch) {
-      md += `**Branch:** ${data.branch}\n\n`;
+    if (data.fork) {
+      md += `**Fork:** ${data.fork}\n\n`;
     }
 
     md += `---\n\n`;
@@ -586,17 +593,17 @@ export class ExportService {
   ${theme.logoDataUri ? `<img class="brand-logo" src="${this.escapeAttr(theme.logoDataUri)}" alt="" />
   ` : ''}<h1>${this.escapeHtml(title)}</h1>`;
 
-    const branchLine = data.branch ? `
-    <p>Branch: ${this.escapeHtml(data.branch)}</p>` : '';
+    const forkLine = data.fork ? `
+    <p>Fork: ${this.escapeHtml(data.fork)}</p>` : '';
     if (options.includeMetadata) {
       html += `
   <div class="meta">
     ${data.conversation.Description ? `<p>${this.escapeHtml(data.conversation.Description)}</p>` : ''}
-    <p>Created: ${this.formatDate(data.conversation.__mj_CreatedAt)}</p>${branchLine}
+    <p>Created: ${this.formatDate(data.conversation.__mj_CreatedAt)}</p>${forkLine}
   </div>`;
-    } else if (branchLine) {
+    } else if (forkLine) {
       html += `
-  <div class="meta">${branchLine}
+  <div class="meta">${forkLine}
   </div>`;
     }
 
@@ -646,8 +653,8 @@ export class ExportService {
       text += `Created: ${this.formatDate(data.conversation.__mj_CreatedAt)}\n\n`;
     }
 
-    if (data.branch) {
-      text += `Branch: ${data.branch}\n\n`;
+    if (data.fork) {
+      text += `Fork: ${data.fork}\n\n`;
     }
 
     text += '-'.repeat(80) + '\n\n';

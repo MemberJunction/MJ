@@ -1,5 +1,5 @@
 /**
- * conversation-compaction.checks.ts — the 'conversation-compaction' bundle (CC1–CC20).
+ * conversation-compaction.checks.ts — the 'conversation-compaction' bundle (CC1–CC23).
  *
  * GRADUATED from packages/MJServer/integration-test-scripts/conversation-compaction-tests.ts
  * (shipped inside PR #2732 as a standalone dispatcher; check bodies lifted verbatim), so the
@@ -36,7 +36,7 @@ import {
     MJArtifactVersionEntity,
     MJConversationDetailArtifactEntity,
 } from '@memberjunction/core-entities';
-import type { ConversationBranchRow } from '@memberjunction/core-entities';
+import type { ConversationBranchRow, ForkKind } from '@memberjunction/core-entities';
 import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended } from '@memberjunction/ai-core-plus';
 import { BaseAgent, ConversationToolManager, ConversationSearchHit, ConversationToolMessage, PriorTurnToolResultCache } from '@memberjunction/ai-agents';
 import type { CarryForwardStepRecord } from '@memberjunction/ai-agents';
@@ -195,6 +195,8 @@ async function CreateBranchedConversationFixture(
 
     const branch = await ctx.Provider.GetEntityObject<MJConversationBranchEntity>('MJ: Conversation Branches', ctx.User);
     branch.ConversationID = conversationId;
+    branch.Kind = 'Fork';
+    branch.UserID = ctx.User.ID;
     branch.ParentBranchID = null;
     branch.ForkFromSequence = entry.Details[0].Sequence;
     Assert(await branch.Save(), `branch fixture save: ${branch.LatestResult?.CompleteMessage}`);
@@ -373,6 +375,58 @@ async function PinnedMessages(ctx: IntegrationCheckContext, filter: string): Pro
     }, ctx.User);
     Assert(result.Success, `pinned detail read: ${result.ErrorMessage}`);
     return result.Results.map(r => r.Message);
+}
+
+/** The Message text of the rows a details filter reads, in Sequence order. */
+async function MessagesInScope(ctx: IntegrationCheckContext, filter: string): Promise<string[]> {
+    const result = await new RunView().RunView<{ Message: string }>({
+        EntityName: 'MJ: Conversation Details',
+        ExtraFilter: filter,
+        OrderBy: 'Sequence ASC',
+        Fields: ['Message'],
+        ResultType: 'simple',
+    }, ctx.User);
+    Assert(result.Success, `detail read: ${result.ErrorMessage}`);
+    return result.Results.map(r => r.Message);
+}
+
+/** Saves a fork of a conversation, started by the context user. Not recorded for teardown; the caller decides. */
+async function SaveForkFixture(
+    ctx: IntegrationCheckContext,
+    conversationId: string,
+    parentBranchId: string | null,
+    forkFromSequence: number,
+    kind: ForkKind
+): Promise<MJConversationBranchEntity> {
+    const fork = await ctx.Provider.GetEntityObject<MJConversationBranchEntity>('MJ: Conversation Branches', ctx.User);
+    fork.ConversationID = conversationId;
+    fork.Kind = kind;
+    fork.UserID = ctx.User.ID;
+    fork.ParentBranchID = parentBranchId;
+    fork.ForkFromSequence = forkFromSequence;
+    Assert(await fork.Save(), `fork save: ${fork.LatestResult?.CompleteMessage}`);
+    return fork;
+}
+
+/** Saves one visible row in a fork (null is Main), as the composer or an agent reply does. Not recorded for teardown. */
+async function SaveDetailFixture(
+    ctx: IntegrationCheckContext,
+    conversationId: string,
+    branchId: string | null,
+    role: 'User' | 'AI',
+    text: string
+): Promise<MJConversationDetailEntity> {
+    const row = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', ctx.User);
+    row.ConversationID = conversationId;
+    row.BranchID = branchId;
+    row.Role = role;
+    row.Message = text;
+    row.HiddenToUser = false;
+    if (role === 'User') {
+        row.UserID = ctx.User.ID;
+    }
+    Assert(await row.Save(), `row save: ${row.LatestResult?.CompleteMessage}`);
+    return row;
 }
 
 /** Sequential `mN` messages, for the paging checks. */
@@ -897,6 +951,113 @@ export const ConversationCompactionChecks: NamedCheck[] = [
                 'pin-1,pin-2', 'the trunk reads its own pins and not the branch pin');
             AssertEqual((await PinnedMessages(ctx, ConversationEngine.ScopeFilter(branchScope))).join(','),
                 'pin-1,pin-3', 'the branch reads the fork-point pin and its own pin, not the trunk pin after the fork');
+        }
+    },
+    {
+        Id: 'conversation-compaction.CC21',
+        Name: "CC21: a user reply and an AI reply saved with the fork's BranchID are in the fork's scope and the summary; Main is unchanged; a branch of another conversation is refused",
+        Fn: async (ctx): Promise<void> => {
+            const fixture = requireFixture(ctx);
+            const entry = await CreateConversationFixture(ctx, [{ role: 'User', text: 'th-1' }, { role: 'AI', text: 'th-2' }]);
+            const conversationId = entry.Conversation.ID;
+            const mainFilter = ConversationEngine.ScopeFilter(ConversationEngine.TrunkScope(conversationId));
+            AssertEqual((await MessagesInScope(ctx, mainFilter)).join(','), 'th-1,th-2', 'Main holds its two rows');
+
+            const fork = await SaveForkFixture(ctx, conversationId, null, entry.Details[0].Sequence, 'Fork');
+            fixture.WindowRoots.push(fork);   // after its details, before its conversation
+            // Both rows are saved directly with the fork's BranchID; no agent runs here. That agent-written
+            // rows take the turn's BranchID is covered by unit tests: packages/AI/Agents/src/__tests__/agent-runner-run-branch.test.ts,
+            // packages/MJServer/src/__tests__/TaskGraphContinuationDeliverer.test.ts and
+            // packages/MJServer/src/__tests__/RealtimeClientSessionResolver.test.ts.
+            entry.Details.push(await SaveDetailFixture(ctx, conversationId, fork.ID, 'User', 'th-3'));
+            entry.Details.push(await SaveDetailFixture(ctx, conversationId, fork.ID, 'AI', 'th-4'));
+
+            AssertEqual((await MessagesInScope(ctx, mainFilter)).join(','), 'th-1,th-2', 'Main is unchanged by the two rows saved in the fork');
+            const forkScope = await ConversationEngine.LoadScope(conversationId, fork.ID, ctx.User, ctx.Provider);
+            AssertEqual((await MessagesInScope(ctx, ConversationEngine.ScopeFilter(forkScope))).join(','), 'th-1,th-3,th-4',
+                'the fork reads its anchor and the user row and AI row saved in it');
+
+            const summaries = await ConversationEngine.LoadForkSummaries(conversationId, ctx.User, ctx.Provider);
+            AssertEqual(summaries.length, 1, 'one fork summary');
+            AssertEqual(summaries[0].MessageCount, 2, 'the summary counts the user row and the AI row');
+            AssertEqual(summaries[0].PlacementDetailID, entry.Details[0].ID, 'the chip sits under the anchor');
+            AssertEqual(summaries[0].DisplayName, 'th-3', 'an unnamed fork is named by its first message');
+
+            const other = await CreateConversationFixture(ctx, [{ role: 'User', text: 'other-1' }]);
+            const stray = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', ctx.User);
+            stray.ConversationID = other.Conversation.ID;
+            stray.BranchID = fork.ID;
+            stray.Role = 'User';
+            stray.Message = 'stray';
+            stray.HiddenToUser = false;
+            Assert(!(await stray.Save()), 'a row naming a fork of another conversation is refused');
+            const why = stray.LatestResult?.CompleteMessage ?? stray.LatestResult?.Message ?? '';
+            Assert(why.includes('does not belong to conversation'), `the refusal says why: ${why}`);
+        }
+    },
+    {
+        Id: 'conversation-compaction.CC22',
+        Name: 'CC22: deleting a conversation with nested forks deletes its forks and messages',
+        Fn: async (ctx): Promise<void> => {
+            const fixture = requireFixture(ctx);
+            const entry = await CreateConversationFixture(ctx, [{ role: 'User', text: 'nd-1' }, { role: 'AI', text: 'nd-2' }]);
+            const conversationId = entry.Conversation.ID;
+            const outer = await SaveForkFixture(ctx, conversationId, null, entry.Details[0].Sequence, 'Fork');
+            const outerRows = [
+                await SaveDetailFixture(ctx, conversationId, outer.ID, 'User', 'nd-3'),
+                await SaveDetailFixture(ctx, conversationId, outer.ID, 'AI', 'nd-4'),
+            ];
+            const nested = await SaveForkFixture(ctx, conversationId, outer.ID, outerRows[1].Sequence, 'Fork');
+            const nestedRows = [await SaveDetailFixture(ctx, conversationId, nested.ID, 'User', 'nd-5')];
+            entry.Details.push(...outerRows, ...nestedRows);
+
+            const deleted = await entry.Conversation.Delete();
+            if (!deleted) {
+                fixture.WindowRoots.push(outer, nested);   // reverse order on teardown deletes the nested fork first
+            }
+            Assert(deleted, `conversation delete: ${entry.Conversation.LatestResult?.CompleteMessage}`);
+            fixture.Conversations.splice(fixture.Conversations.indexOf(entry), 1);
+
+            // conversation-scope: whole-conversation control reads after the delete
+            const details = await new RunView().RunView<{ ID: string }>({ EntityName: 'MJ: Conversation Details', ExtraFilter: `ConversationID='${conversationId}'`, ResultType: 'count_only' }, ctx.User);
+            const forks = await new RunView().RunView<{ ID: string }>({ EntityName: 'MJ: Conversation Branches', ExtraFilter: `ConversationID='${conversationId}'`, ResultType: 'count_only' }, ctx.User);
+            Assert(details.Success && forks.Success, `post-delete reads: ${details.ErrorMessage ?? ''} ${forks.ErrorMessage ?? ''}`);
+            AssertEqual(details.TotalRowCount, 0, 'no message of the conversation remains');
+            AssertEqual(forks.TotalRowCount, 0, 'no fork of the conversation remains');
+        }
+    },
+    {
+        Id: 'conversation-compaction.CC23',
+        Name: 'CC23: a replaced answer is kept and hidden, and is left out of the chat window and of every agent context window',
+        Fn: async (ctx): Promise<void> => {
+            const entry = await CreateConversationFixture(ctx, [
+                { role: 'User', text: 'rp-1' }, { role: 'AI', text: 'rp-2' }, { role: 'User', text: 'rp-3' }, { role: 'AI', text: 'rp-4' },
+            ]);
+            const conversationId = entry.Conversation.ID;
+            // An in-place Regenerate marks the old answer this way, then the rerun writes the new answer.
+            const replaced = entry.Details[3];
+            replaced.HiddenToUser = true;
+            replaced.ReplacedAt = new Date();
+            Assert(await replaced.Save(), `replace save: ${replaced.LatestResult?.CompleteMessage}`);
+            entry.Details.push(await SaveDetailFixture(ctx, conversationId, null, 'AI', 'rp-5'));
+
+            const reloaded = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', ctx.User);
+            Assert(await reloaded.Load(replaced.ID), 'the replaced answer is kept');
+            Assert(reloaded.HiddenToUser === true && reloaded.ReplacedAt != null, 'the replaced answer is hidden and marked replaced');
+
+            const live = 'rp-1,rp-2,rp-3,rp-5';
+            const rows = await ConversationEngine.LoadWindowRowsFresh(conversationId, ctx.User, ctx.Provider);
+            AssertEqual(rows.map(r => r.Message).join(','), live, 'the fresh window rows (agent resolver, compaction) leave out the replaced answer');
+            AssertEqual(ConversationEngine.AssembleContextWindow(rows).map(m => m.content).join(','), live, 'the assembled agent context leaves it out');
+            ConversationEngine.Instance.InvalidateConversation(conversationId);
+            const cached = await ConversationEngine.Instance.GetAgentContextWindow(conversationId, ctx.User);
+            AssertEqual(cached.map(m => m.content).join(','), live, 'the cache-backed agent context leaves it out');
+            const page = await ConversationEngine.Instance.LoadDetailWindow({ ConversationID: conversationId }, ctx.User);
+            AssertEqual(page.Details.map(d => d.Message).join(','), live, 'the chat window leaves it out');
+            const trunk = ConversationEngine.ScopeFilter(ConversationEngine.TrunkScope(conversationId));
+            AssertEqual((await MessagesInScope(ctx, ConversationEngine.LiveRowsFilter(trunk))).join(','), live, 'a live-rows read leaves it out');
+            // conversation-scope: control read of every stored row on Main
+            AssertEqual((await MessagesInScope(ctx, trunk)).join(','), 'rp-1,rp-2,rp-3,rp-4,rp-5', 'control: the replaced row is still stored');
         }
     }
 ];

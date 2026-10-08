@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MJDialogComponent, MJDialogActionsComponent, MJButtonDirective } from '@memberjunction/ng-ui-components';
@@ -27,20 +27,10 @@ describe('ExportModalComponent (DOM)', () => {
 
   const exportServiceStub = { ExportConversation: vi.fn(() => Promise.resolve()) };
   const toastStub = { success: vi.fn(), error: vi.fn() };
-  /** The scope of a conversation with no current branch. */
-  const TRUNK: ConversationScope = { ConversationID: 'c1', BranchID: null, Branches: [] };
-  /** `ConversationEngine.LoadCurrentScope`, which the modal reads at export time; the trunk by default. */
-  let loadScope: MockInstance<typeof ConversationEngine.LoadCurrentScope>;
-  /** Lets the export handler finish: it awaits the scope read before calling the export service. */
+  /** Main of the conversation: what the modal exports when no Scope is set. */
+  const TRUNK: ConversationScope = ConversationEngine.TrunkScope('c1');
+  /** Lets the async export handler finish. */
   const settle = () => new Promise<void>(resolve => setTimeout(resolve, 0));
-
-  beforeEach(() => {
-    loadScope = vi.spyOn(ConversationEngine, 'LoadCurrentScope').mockResolvedValue(TRUNK);
-  });
-
-  afterEach(() => {
-    loadScope.mockRestore();
-  });
 
   const render = (inputs: Record<string, unknown> = {}, setup?: (c: ExportModalComponent) => void) =>
     renderComponentFixture(ExportModalComponent, {
@@ -128,6 +118,10 @@ describe('ExportModalComponent (DOM)', () => {
   describe('conversation scope', () => {
     const branch: ConversationBranchRow = { ID: 'BRANCH-B', ConversationID: 'c1', ParentBranchID: null, ForkFromSequence: 2, Name: 'Shorter answers' };
     const branchScope: ConversationScope = { ConversationID: 'c1', BranchID: 'BRANCH-B', Branches: [branch] };
+    const exportNow = async (f: ReturnType<typeof render>) => {
+      (queryAll(f, 'mj-dialog-actions button')[1] as HTMLButtonElement).click();
+      await settle();
+    };
 
     beforeEach(() => {
       exportServiceStub.ExportConversation.mockClear();
@@ -135,12 +129,9 @@ describe('ExportModalComponent (DOM)', () => {
       toastStub.error.mockClear();
     });
 
-    it('reads the current scope of the conversation at export time and exports it', async () => {
-      loadScope.mockResolvedValueOnce(branchScope);
-      const f = render();
-      (queryAll(f, 'mj-dialog-actions button')[1] as HTMLButtonElement).click();
-      await settle();
-      expect(loadScope).toHaveBeenCalledWith('c1', currentUser);
+    it('exports the Scope input when it belongs to the conversation', async () => {
+      const f = render({ Scope: branchScope });
+      await exportNow(f);
       expect(exportServiceStub.ExportConversation).toHaveBeenCalledWith(
         'c1',
         branchScope,
@@ -150,16 +141,34 @@ describe('ExportModalComponent (DOM)', () => {
       );
     });
 
-    it('reports the error and exports nothing when the scope cannot be read', async () => {
-      loadScope.mockRejectedValueOnce(new Error('Conversation c1 could not be read: denied'));
+    it('exports Main when no Scope is set', async () => {
       const f = render();
-      (queryAll(f, 'mj-dialog-actions button')[1] as HTMLButtonElement).click();
-      await settle();
-      f.detectChanges();
-      expect(exportServiceStub.ExportConversation).not.toHaveBeenCalled();
-      expect(toastStub.error).toHaveBeenCalledWith('Conversation c1 could not be read: denied');
-      expect(toastStub.success).not.toHaveBeenCalled();
-      expect(text(f, '.error-message')).toContain('could not be read: denied');
+      await exportNow(f);
+      expect(exportServiceStub.ExportConversation).toHaveBeenCalledWith(
+        'c1',
+        ConversationEngine.TrunkScope('c1'),
+        'markdown',
+        currentUser,
+        expect.objectContaining({ includeMessages: true })
+      );
+    });
+
+    it('exports Main when the Scope is of another conversation', async () => {
+      const otherScope: ConversationScope = {
+        ConversationID: 'c2',
+        BranchID: 'BRANCH-X',
+        Branches: [{ ID: 'BRANCH-X', ConversationID: 'c2', ParentBranchID: null, ForkFromSequence: 1, Name: null }],
+      };
+      const f = render({ Scope: otherScope });
+      await exportNow(f);
+      expect(exportServiceStub.ExportConversation).toHaveBeenCalledWith(
+        'c1',
+        ConversationEngine.TrunkScope('c1'),
+        'markdown',
+        currentUser,
+        expect.objectContaining({ includeMessages: true })
+      );
+      expect(toastStub.error).not.toHaveBeenCalled();
     });
   });
 

@@ -1,7 +1,6 @@
 /**
- * The past-meeting transcript reads the room conversation's current branch path:
- * `ConversationEngine.ScopeFilter` over `MJ: Conversation Details` in `Sequence` order.
- * When the scope cannot be read, the transcript is empty.
+ * The past-meeting transcript reads the room conversation's Main rows (a bridge session writes
+ * Main): the Main predicate over `MJ: Conversation Details` in `Sequence` order.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
@@ -18,7 +17,6 @@ const hoisted = vi.hoisted(() => {
     provider: { CurrentUser: user },
     views: [] as ViewCall[],
     detailRows: [] as Array<Record<string, unknown>>,
-    logError: vi.fn(),
     detectChanges: vi.fn(),
   };
 });
@@ -44,7 +42,6 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@memberjunction/core')>();
   return {
     ...actual,
-    LogError: hoisted.logError,
     RunView: {
       FromMetadataProvider: () => ({
         RunView: async (params: ViewCall) => {
@@ -84,12 +81,9 @@ vi.mock('@memberjunction/ai-engine-base', () => ({
   AIEngineBase: { Instance: { Agents: [{ ID: 'agent-1', Name: 'Sage' }] } },
 }));
 
-import { ConversationEngine, type ConversationBranchRow, type ConversationScope } from '@memberjunction/core-entities';
 import { LiveKitRoomResource } from './livekit-room-resource.component';
 
 const ROOM = { ConversationID: 'conv-1', Name: 'Standup' };
-const BRANCH: ConversationBranchRow = { ID: 'branch-2', ConversationID: 'conv-1', ParentBranchID: null, ForkFromSequence: 3, Name: null };
-const BRANCH_SCOPE: ConversationScope = { ConversationID: 'conv-1', BranchID: 'branch-2', Branches: [BRANCH] };
 
 describe('LiveKitRoomResource.OpenTranscript', () => {
   let resource: LiveKitRoomResource;
@@ -100,7 +94,6 @@ describe('LiveKitRoomResource.OpenTranscript', () => {
       { Role: 'User', Message: 'hi', AgentID: null, Error: null },
       { Role: 'AI', Message: 'hello', AgentID: 'agent-1', Error: null },
     ];
-    hoisted.logError.mockReset();
     resource = new LiveKitRoomResource();
   });
 
@@ -108,55 +101,17 @@ describe('LiveKitRoomResource.OpenTranscript', () => {
     vi.restoreAllMocks();
   });
 
-  it('reads the details on the current branch path in Sequence order', async () => {
-    const loadScope = vi.spyOn(ConversationEngine, 'LoadCurrentScope').mockResolvedValue(BRANCH_SCOPE);
-
+  it('reads the Main rows in Sequence order', async () => {
     await resource.OpenTranscript(ROOM);
 
-    expect(loadScope).toHaveBeenCalledWith('conv-1', hoisted.user, hoisted.provider);
     expect(hoisted.views).toHaveLength(1);
     expect(hoisted.views[0].EntityName).toBe('MJ: Conversation Details');
-    expect(hoisted.views[0].ExtraFilter).toBe(ConversationEngine.ScopeFilter(BRANCH_SCOPE));
-    expect(hoisted.views[0].ExtraFilter).toContain("[BranchID]='branch-2'");
+    expect(hoisted.views[0].ExtraFilter).toBe("[ConversationID]='conv-1' AND [BranchID] IS NULL");
     expect(hoisted.views[0].OrderBy).toBe('Sequence ASC');
     expect(resource.HistoryTranscript).toEqual([
       { Kind: 'human', Speaker: 'Participant', Message: 'hi' },
       { Kind: 'agent', Speaker: 'Sage', Message: 'hello' },
     ]);
     expect(resource.LoadingTranscript).toBe(false);
-  });
-
-  it('reads only trunk rows when the conversation is on the trunk', async () => {
-    vi.spyOn(ConversationEngine, 'LoadCurrentScope').mockResolvedValue(ConversationEngine.TrunkScope('conv-1'));
-
-    await resource.OpenTranscript(ROOM);
-
-    expect(hoisted.views[0].ExtraFilter).toBe("[ConversationID]='conv-1' AND [BranchID] IS NULL");
-    expect(hoisted.views[0].OrderBy).toBe('Sequence ASC');
-  });
-
-  it('shows an empty transcript and logs when the scope cannot be read', async () => {
-    vi.spyOn(ConversationEngine, 'LoadCurrentScope').mockRejectedValue(new Error('Conversation conv-1 not found'));
-
-    await resource.OpenTranscript(ROOM);
-
-    expect(hoisted.views).toHaveLength(0);
-    expect(resource.HistoryTranscript).toEqual([]);
-    expect(resource.LoadingTranscript).toBe(false);
-    expect(hoisted.logError).toHaveBeenCalledWith(expect.stringContaining('conv-1'));
-  });
-
-  it('shows an empty transcript and logs when the scope filter cannot be built', async () => {
-    vi.spyOn(ConversationEngine, 'LoadCurrentScope').mockResolvedValue(BRANCH_SCOPE);
-    vi.spyOn(ConversationEngine, 'ScopeFilter').mockImplementationOnce(() => {
-      throw new Error('Branch branch-2 chain is broken');
-    });
-
-    await expect(resource.OpenTranscript(ROOM)).resolves.toBeUndefined();
-
-    expect(hoisted.views).toHaveLength(0);
-    expect(resource.HistoryTranscript).toEqual([]);
-    expect(resource.LoadingTranscript).toBe(false);
-    expect(hoisted.logError).toHaveBeenCalledWith(expect.stringContaining('chain is broken'));
   });
 });

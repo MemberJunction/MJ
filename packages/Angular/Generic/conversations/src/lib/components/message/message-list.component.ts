@@ -44,7 +44,7 @@ import {
     type DateJumpPeriod,
     type DateJumpOutcome
 } from '../../utils/date-jump';
-import { BranchSwitcherState, BranchSwitchRequest } from '../../utils/conversation-branching';
+import { EMPTY_FORK_CHIPS, type ForkChip, type ForkViewLayout, type LatestTurn } from '../../utils/conversation-forks';
 
 /** Context handed to the `messageRenderer` slot template per message. */
 interface MessageRendererContext {
@@ -120,19 +120,49 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     return this.Conversation;
   }
 
-  /**
-   * Switcher state per detail ID. Rows without an entry show no switcher. A new map is pushed
-   * into the message items already on screen.
-   */
+  /** Fork chips per normalized detail id, from the chat area's fork summaries. A new map is pushed into the items on screen. */
   @Input()
-  public set BranchSwitcherMap(value: Map<string, BranchSwitcherState>) {
-    this._branchSwitcherMap = value;
-    this.applyBranchSwitchers();
+  public set ForkChipMap(value: ReadonlyMap<string, readonly ForkChip[]>) {
+    this._forkChipMap = value ?? new Map();
+    this.applyForkChips();
   }
-  public get BranchSwitcherMap(): Map<string, BranchSwitcherState> {
-    return this._branchSwitcherMap;
+  public get ForkChipMap(): ReadonlyMap<string, readonly ForkChip[]> {
+    return this._forkChipMap ?? new Map();
   }
-  private _branchSwitcherMap = new Map<string, BranchSwitcherState>();
+  private _forkChipMap: ReadonlyMap<string, readonly ForkChip[]> = new Map();
+
+  /** How a fork view draws its rows; null in Main. A new layout is pushed into the items on screen. */
+  @Input()
+  public set ForkLayout(value: ForkViewLayout | null) {
+    this._forkLayout = value ?? null;
+    this.applyForkLayout();
+  }
+  public get ForkLayout(): ForkViewLayout | null {
+    return this._forkLayout ?? null;
+  }
+  private _forkLayout: ForkViewLayout | null = null;
+
+  /** True when the person may start forks; a new value is pushed into the items on screen. False hides the fork actions. */
+  @Input()
+  public set CanFork(value: boolean) {
+    this._canFork = value !== false;
+    this.applyCanFork();
+  }
+  public get CanFork(): boolean {
+    return this._canFork !== false;
+  }
+  private _canFork = true;
+
+  /** The latest turn that in-place Edit and Regenerate may change; null when there is none. A new value is pushed into the items on screen. */
+  @Input()
+  public set InPlaceTurn(value: LatestTurn | null) {
+    this._inPlaceTurn = value ?? null;
+    this.applyInPlaceRoles();
+  }
+  public get InPlaceTurn(): LatestTurn | null {
+    return this._inPlaceTurn ?? null;
+  }
+  private _inPlaceTurn: LatestTurn | null = null;
 
   @Input() public CurrentUser!: UserInfo;
 
@@ -527,10 +557,14 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
    * initialise in order, and the other way round this captures undefined.
    */
   @Output() public retryMessage = this.RetryMessage;
-  /** Forwarded from MessageItemComponent: the user stepped to another alternative at a fork point. */
-  @Output() public BranchSwitchRequested = new EventEmitter<BranchSwitchRequest>();
-  /** Forwarded from MessageItemComponent: the user edited a message to send on a new branch. */
+  /** Forwarded from MessageItemComponent: the user edited a message to save as a new fork. */
   @Output() public EditResendRequested = new EventEmitter<{ Message: MJConversationDetailEntity; NewText: string }>();
+  /** A chip was clicked in one of the items. */
+  @Output() public ForkOpenRequested = new EventEmitter<{ BranchID: string }>();
+  /** An item asked to fork the conversation at its message. */
+  @Output() public ForkRequested = new EventEmitter<MJConversationDetailEntity>();
+  /** Forwarded from MessageItemComponent: "Save and resend" saved a user message; the host reruns its turn. */
+  @Output() public ResendInPlaceRequested = new EventEmitter<MJConversationDetailEntity>();
   @Output() public TestFeedbackMessage = new EventEmitter<MJConversationDetailEntity>();
 
   /**
@@ -551,26 +585,6 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
    * initialise in order, and the other way round this captures undefined.
    */
   @Output() public artifactClicked = this.ArtifactClicked;
-  @Output() public ReplyInThread = new EventEmitter<MJConversationDetailEntity>();
-
-  /**
-   * @deprecated Use {@link ReplyInThread}.
-   *
-   * The same emitter under the old binding name, so a template still binding
-   * (replyInThread) keeps working. Must stay AFTER ReplyInThread: class fields
-   * initialise in order, and the other way round this captures undefined.
-   */
-  @Output() public replyInThread = this.ReplyInThread;
-  @Output() public ViewThread = new EventEmitter<MJConversationDetailEntity>();
-
-  /**
-   * @deprecated Use {@link ViewThread}.
-   *
-   * The same emitter under the old binding name, so a template still binding
-   * (viewThread) keeps working. Must stay AFTER ViewThread: class fields
-   * initialise in order, and the other way round this captures undefined.
-   */
-  @Output() public viewThread = this.ViewThread;
   @Output() public MessageEdited = new EventEmitter<MJConversationDetailEntity>();
 
   /**
@@ -1073,12 +1087,78 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
 
   }
 
-  /** Pushes the current switcher map into every rendered message component. */
-  private applyBranchSwitchers(): void {
-    for (const [, rendered] of this._renderedMessages) {
+  /** The chips placed under a message. */
+  private chipsFor(detailId: string): readonly ForkChip[] {
+    return this.ForkChipMap.get(NormalizeUUID(detailId)) ?? EMPTY_FORK_CHIPS;
+  }
+
+  /** Pushes the current chips into every rendered message component. */
+  private applyForkChips(): void {
+    for (const [, rendered] of this._renderedMessages ?? new Map<string, RenderedMessageEntry>()) {
       if (rendered.kind === 'component') {
         const instance = rendered.ref.instance as MessageItemComponent;
-        instance.BranchSwitcher = this.BranchSwitcherMap.get(instance.message.ID) ?? null;
+        instance.ForkChips = this.chipsFor(instance.message.ID);
+        rendered.ref.changeDetectorRef.markForCheck();
+      }
+    }
+  }
+
+  /** The rail of a row in the current layout. */
+  private railFor(detailId: string): 'Inherited' | 'Own' | null {
+    const layout = this.ForkLayout;
+    if (!layout) {
+      return null;
+    }
+    return layout.InheritedIDs.has(NormalizeUUID(detailId)) ? 'Inherited' : 'Own';
+  }
+
+  /** The fork marker under a row in the current layout. */
+  private markerFor(detailId: string): string | null {
+    const layout = this.ForkLayout;
+    return layout?.MarkerDetailID && UUIDsEqual(layout.MarkerDetailID, detailId) ? layout.MarkerText : null;
+  }
+
+  /** Pushes the current layout into every rendered message component. */
+  private applyForkLayout(): void {
+    for (const [, rendered] of this._renderedMessages ?? new Map<string, RenderedMessageEntry>()) {
+      if (rendered.kind === 'component') {
+        const instance = rendered.ref.instance as MessageItemComponent;
+        instance.ForkRail = this.railFor(instance.message.ID);
+        instance.ForkMarkerText = this.markerFor(instance.message.ID);
+        rendered.ref.changeDetectorRef.markForCheck();
+      }
+    }
+  }
+
+  /** The in-place role of a row in the current turn. */
+  private inPlaceRoleFor(detailId: string): 'User' | 'Answer' | null {
+    const turn = this.InPlaceTurn;
+    if (!turn) {
+      return null;
+    }
+    if (UUIDsEqual(turn.UserDetailID, detailId)) {
+      return 'User';
+    }
+    return turn.AnswerDetailID && UUIDsEqual(turn.AnswerDetailID, detailId) ? 'Answer' : null;
+  }
+
+  /** Pushes the in-place roles into every rendered message component. */
+  private applyInPlaceRoles(): void {
+    for (const [, rendered] of this._renderedMessages ?? new Map<string, RenderedMessageEntry>()) {
+      if (rendered.kind === 'component') {
+        const instance = rendered.ref.instance as MessageItemComponent;
+        instance.InPlaceRole = this.inPlaceRoleFor(instance.message.ID);
+        rendered.ref.changeDetectorRef.markForCheck();
+      }
+    }
+  }
+
+  /** Pushes {@link CanFork} into every rendered message component. */
+  private applyCanFork(): void {
+    for (const [, rendered] of this._renderedMessages ?? new Map<string, RenderedMessageEntry>()) {
+      if (rendered.kind === 'component') {
+        const instance = rendered.ref.instance as MessageItemComponent;
+        instance.CanFork = this.CanFork;
         rendered.ref.changeDetectorRef.markForCheck();
       }
     }
@@ -1885,6 +1965,10 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     instance.agentRun = this.AgentRunMap.get(message.ID) || null;
     instance.ratings = this.RatingsMap.get(message.ID);
     instance.attachments = this.AttachmentsMap.get(message.ID) || [];
+    instance.ForkChips = this.chipsFor(message.ID);
+    instance.ForkRail = this.railFor(message.ID);
+    instance.ForkMarkerText = this.markerFor(message.ID);
+    instance.InPlaceRole = this.inPlaceRoleFor(message.ID);
 
     // After the inputs above, for the same reason as the create path: this can force a
     // synchronous child pass, which would otherwise paint the previous refresh's agent run,
@@ -1911,6 +1995,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     instance.allowMessageEdit = this.AllowMessageEdit;
     instance.allowMessageDelete = this.AllowMessageDelete;
     instance.ReadOnly = this.ReadOnly;
+    instance.CanFork = this.CanFork;
     instance.assistantDisplayName = this.AssistantDisplayName;
     instance.assistantAvatarUrl = this.AssistantAvatarUrl;
   }
@@ -1960,9 +2045,14 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     instance.agentRun = this.AgentRunMap.get(message.ID) || null;
     instance.ratings = this.RatingsMap.get(message.ID);
     instance.attachments = this.AttachmentsMap.get(message.ID) || [];
-    instance.BranchSwitcher = this.BranchSwitcherMap.get(message.ID) ?? null;
-    instance.BranchSwitchRequested.subscribe((request: BranchSwitchRequest) => this.BranchSwitchRequested.emit(request));
+    instance.ForkChips = this.chipsFor(message.ID);
+    instance.ForkRail = this.railFor(message.ID);
+    instance.ForkMarkerText = this.markerFor(message.ID);
+    instance.InPlaceRole = this.inPlaceRoleFor(message.ID);
     instance.EditResendRequested.subscribe((e) => this.EditResendRequested.emit(e));
+    instance.ForkOpenRequested.subscribe((e: { BranchID: string }) => this.ForkOpenRequested.emit(e));
+    instance.ForkRequested.subscribe((m: MJConversationDetailEntity) => this.ForkRequested.emit(m));
+    instance.ResendInPlaceRequested.subscribe((m: MJConversationDetailEntity) => this.ResendInPlaceRequested.emit(m));
 
     instance.editClicked.subscribe((msg: MJConversationDetailEntity) => this.EditMessage.emit(msg));
     instance.deleteClicked.subscribe((msg: MJConversationDetailEntity) => this.DeleteMessage.emit(msg));

@@ -37,7 +37,7 @@ function createHarness(withChatArea = true): Harness {
   });
 
   open['NavigationChanged'] = navigation;
-  open['engine'] = { GetConversation: (id: string) => ({ ID: id, CurrentBranchID: null }) };
+  open['engine'] = { GetConversation: (id: string) => ({ ID: id }) };
   open['cdr'] = { detectChanges: vi.fn(() => calls.push('detectChanges')) };
   open['chatArea'] = withChatArea ? { OpenMessage: openMessage } : undefined;
 

@@ -29,8 +29,7 @@ import {
   DoCheck,
   ChangeDetectorRef,
   HostListener,
-  ViewChild,
-  inject
+  ViewChild
 } from '@angular/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { MJConversationEntity, MJArtifactEntity, MJTaskEntity, ArtifactMetadataEngine, MJUserSettingEntity, UserInfoEngine, ConversationEngine, type ConversationScope } from '@memberjunction/core-entities';
@@ -39,7 +38,6 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { ArtifactStateService } from '../../services/artifact-state.service';
 import { CollectionStateService } from '../../services/collection-state.service';
 import { ArtifactPermissionService } from '../../services/artifact-permission.service';
-import { ConversationScopeService } from '../../services/conversation-scope.service';
 import { PendingAttachment } from '@memberjunction/ng-composer';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
 import { ConversationStreamingService } from '../../services/conversation-streaming.service';
@@ -570,16 +568,6 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   public set selectedConversation(value: MJConversationEntity | null) {
     this.SelectedConversation = value;
   }
-  public SelectedThreadId: string | null = null;
-
-  /** @deprecated Use {@link SelectedThreadId}. */
-  public get selectedThreadId(): string | null {
-    return this.SelectedThreadId;
-  }
-  /** @deprecated Use {@link SelectedThreadId}. */
-  public set selectedThreadId(value: string | null) {
-    this.SelectedThreadId = value;
-  }
   public IsNewUnsavedConversation: boolean = false;
 
   /** @deprecated Use {@link IsNewUnsavedConversation}. */
@@ -657,23 +645,19 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   private engine = ConversationEngine.Instance;
   /** The chat area this workspace shows; absent while the collections or tasks tab is shown. */
   @ViewChild(ConversationChatAreaComponent) private chatArea?: ConversationChatAreaComponent;
-  /** Builds the scope of the selected conversation's current branch path. */
-  private readonly scopeService = inject(ConversationScopeService);
 
   /**
-   * The selected conversation's scope, passed to the artifact viewer; null with no selected
-   * conversation. The trunk while the rows of its current branch are not registered.
+   * The scope the artifact viewer reads: the chat area's (the view the person has open) for the
+   * selected conversation; Main when no chat area is rendered or it shows another conversation;
+   * null with no selected conversation.
    */
   public get ArtifactViewerScope(): ConversationScope | null {
     const conversationId = this.SelectedConversationId;
     if (!conversationId) {
       return null;
     }
-    try {
-      return this.scopeService.ForConversation(conversationId, this.SelectedConversation?.CurrentBranchID ?? null);
-    } catch {
-      return ConversationEngine.TrunkScope(conversationId);
-    }
+    const scope = this.chatArea?.ArtifactViewerScope ?? null;
+    return scope && UUIDsEqual(scope.ConversationID, conversationId) ? scope : ConversationEngine.TrunkScope(conversationId);
   }
 
   // Shared AI mention/suggestion engine (BaseSingleton — same instance the composer plugins use)
@@ -771,31 +755,6 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   }
 
   /**
-   * Opens a thread panel for a specific message
-   * @param messageId The parent message ID
-   */
-  OpenThread(messageId: string): void {
-    this.SelectedThreadId = messageId;
-  }
-
-  /** @deprecated Use {@link OpenThread}. */
-  openThread(messageId: string): void {
-    return this.OpenThread(messageId);
-  }
-
-  /**
-   * Closes the currently open thread panel
-   */
-  CloseThread(): void {
-    this.SelectedThreadId = null;
-  }
-
-  /** @deprecated Use {@link CloseThread}. */
-  closeThread(): void {
-    return this.CloseThread();
-  }
-
-  /**
    * Handler for conversation selection from sidebar/list
    */
   OnConversationSelected(conversationId: string): void {
@@ -885,30 +844,6 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     this.PendingMessageToSend = event.text;
     this.PendingAttachmentsToSend = event.attachments;
     this.PendingMessageConversationId = this.SelectedConversationId;
-  }
-
-  /**
-   * Handler for thread opened from chat area
-   */
-  OnThreadOpened(threadId: string): void {
-    this.SelectedThreadId = threadId;
-  }
-
-  /** @deprecated Use {@link OnThreadOpened}. */
-  onThreadOpened(threadId: string): void {
-    return this.OnThreadOpened(threadId);
-  }
-
-  /**
-   * Handler for thread closed from chat area
-   */
-  OnThreadClosed(): void {
-    this.SelectedThreadId = null;
-  }
-
-  /** @deprecated Use {@link OnThreadClosed}. */
-  onThreadClosed(): void {
-    return this.OnThreadClosed();
   }
 
   async ngOnInit() {

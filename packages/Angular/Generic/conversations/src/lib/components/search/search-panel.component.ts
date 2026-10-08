@@ -8,14 +8,12 @@ import {
   HostListener,
   ViewChild,
   ElementRef,
-  ChangeDetectorRef,
-  inject
+  ChangeDetectorRef
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { UserInfo } from '@memberjunction/core';
-import { HighlightSearchMatches, UUIDsEqual } from '@memberjunction/global';
-import { ConversationEngine } from '@memberjunction/core-entities';
+import { HighlightSearchMatches } from '@memberjunction/global';
 import {
   SearchService,
   SearchResult,
@@ -23,7 +21,6 @@ import {
   GroupedSearchResults,
   DateRange
 } from '../../services/search.service';
-import { ConversationScopeService } from '../../services/conversation-scope.service';
 
 /**
  * Search panel component providing global search UI
@@ -211,8 +208,6 @@ export class SearchPanelComponent implements OnInit, OnDestroy {
   }
 
   private destroy$ = new Subject<void>();
-  /** Builds a conversation's current branch path from the branch rows the chat area registered. */
-  private readonly scopeService = inject(ConversationScopeService);
 
   /** True only while ngOnInit subscribes — see applyState(). */
   private initializing = false;
@@ -363,27 +358,9 @@ export class SearchPanelComponent implements OnInit, OnDestroy {
     return this.ClearSearch();
   }
 
-  /**
-   * True when a message hit is not on its conversation's current branch path. A row of an
-   * ancestor up to its fork point is on the path. The current branch is read from the
-   * conversation the engine has loaded, and the path from the branch rows the chat area
-   * registered; without those rows, or without the hit's sequence, the hit's branch is compared
-   * with the current branch. A hit in a conversation the engine has not loaded shows no tag.
-   */
-  public IsOnAnotherBranch(result: SearchResult): boolean {
-    if (result.type !== 'message' || !result.conversationId) {
-      return false;
-    }
-    const conversation = ConversationEngine.Instance.GetConversation(result.conversationId);
-    if (!conversation) {
-      return false;
-    }
-    const branchId = result.branchId ?? null;
-    const currentBranchId = conversation.CurrentBranchID ?? null;
-    if (result.sequence == null) {
-      return !UUIDsEqual(branchId, currentBranchId);
-    }
-    return !this.scopeService.IsOnCurrentPath(result.conversationId, currentBranchId, { BranchID: branchId, Sequence: result.sequence });
+  /** True when a message hit sits in a fork rather than in Main. */
+  public IsInFork(result: SearchResult): boolean {
+    return result.type === 'message' && result.branchId != null;
   }
 
   /**

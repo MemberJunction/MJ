@@ -31,7 +31,11 @@ import {
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
 import { BadgeTextForAttachment } from '../../util/attachment-badge';
-import { BranchSwitcherState, BranchSwitchRequest } from '../../utils/conversation-branching';
+import { EMPTY_FORK_CHIPS, ForkKindIcon, type ForkChip } from '../../utils/conversation-forks';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
+
+/** How a saved edit of a message is applied: as a new fork, in place with a rerun of its turn, or in place only. */
+export type MessageEditMode = 'Fork' | 'Resend' | 'Save';
 
 /**
  * Represents an attachment on a message for display
@@ -145,8 +149,6 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   public get currentUser(): UserInfo {
     return this.CurrentUser;
   }
-  /** The `< i / n >` switcher for this row; null when the row is not the first after a fork point. */
-  @Input() public BranchSwitcher: BranchSwitcherState | null = null;
   @Input() public AllMessages!: MJConversationDetailEntity[];
 
   /** @deprecated Use {@link AllMessages}. */
@@ -157,6 +159,82 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   public get allMessages(): MJConversationDetailEntity[] {
     return this.AllMessages;
   }
+
+  /** The forks placed under this message, as chips; set by the message list. */
+  @Input() public ForkChips: readonly ForkChip[] = EMPTY_FORK_CHIPS;
+
+  /** A chip was clicked: the host opens that fork. */
+  @Output() public ForkOpenRequested = new EventEmitter<{ BranchID: string }>();
+
+  /** The rail a fork view draws this row on: 'Inherited' (faded, dashed) or 'Own' (solid); null in Main. Set by the message list. */
+  @Input() public ForkRail: 'Inherited' | 'Own' | null = null;
+
+  /** The fork marker shown under this row (the last inherited row of a fork view); null for none. Set by the message list. */
+  @Input() public ForkMarkerText: string | null = null;
+
+  /** True when the person may start forks; false hides "Fork from here", and Edit and Regenerate then work in place ({@link EditMode}, {@link InPlaceRole}). Set by the message list. */
+  @Input() public CanFork = true;
+
+  /** The row's role in the latest turn when forking is off: its user message ('User') or its answer ('Answer'); null otherwise. Set by the message list. */
+  @Input() public InPlaceRole: 'User' | 'Answer' | null = null;
+
+  /** Asks the host to rerun this user message's turn in place, after "Save and resend" saved the new text. */
+  @Output() public ResendInPlaceRequested = new EventEmitter<MJConversationDetailEntity>();
+
+  /**
+   * How a saved edit is applied: 'Fork' while the person may fork; with forking off, 'Resend' on the
+   * latest user message and 'Save' on an earlier one; null on an inherited row of a fork view.
+   */
+  public get EditMode(): MessageEditMode | null {
+    if (this.CanFork !== false) {
+      return 'Fork';
+    }
+    if (this.ForkRail === 'Inherited') {
+      return null;
+    }
+    return (this.InPlaceRole ?? null) === 'User' ? 'Resend' : 'Save';
+  }
+
+  /** The label of the edit's save button. */
+  public get EditSaveLabel(): string {
+    switch (this.EditMode) {
+      case 'Resend':
+        return 'Save and resend';
+      case 'Save':
+        return 'Save';
+      default:
+        return 'Save as fork';
+    }
+  }
+
+  /** The keyboard hint under the editor. */
+  public get EditHint(): string {
+    switch (this.EditMode) {
+      case 'Resend':
+        return 'Press Enter to save and resend, Shift+Enter for a new line, Escape to cancel';
+      case 'Save':
+        return 'Press Enter to save, Shift+Enter for a new line, Escape to cancel';
+      default:
+        return 'Press Enter to save as a fork, Shift+Enter for a new line, Escape to cancel';
+    }
+  }
+
+  /** The tooltip of the Regenerate button. */
+  public get RegenerateTitle(): string {
+    return this.CanFork !== false ? 'Regenerate as a fork' : 'Regenerate';
+  }
+
+  /** The kind icon of a chip. */
+  public ChipIcon(chip: ForkChip): string {
+    return ForkKindIcon(chip.Kind);
+  }
+
+  /** Opens the chip's fork; the click does not reach the message bubble. */
+  public OnForkChipClick(chip: ForkChip, event: Event): void {
+    event.stopPropagation();
+    this.ForkOpenRequested.emit({ BranchID: chip.BranchID });
+  }
+
   @Input() public IsProcessing: boolean = false;
 
   /**
@@ -591,10 +669,10 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * initialise in order, and the other way round this captures undefined.
    */
   @Output() public afterResponseFormSubmitted = this.AfterResponseFormSubmitted;
-  /** Emits the alternative to show when the user steps through the branch switcher. */
-  @Output() public BranchSwitchRequested = new EventEmitter<BranchSwitchRequest>();
-  /** Emits the edited text of this message; the host sends it on a new branch. */
+  /** Emits the edited text of this message; the host saves it as a new fork. */
   @Output() public EditResendRequested = new EventEmitter<{ Message: MJConversationDetailEntity; NewText: string }>();
+  /** "Fork from here" was clicked. */
+  @Output() public ForkRequested = new EventEmitter<MJConversationDetailEntity>();
 
   private _loadTime: number = Date.now();
   private _elapsedTimeInterval: any = null;
@@ -1818,6 +1896,11 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     if (this.IsEditing) {
       classes.push('editing');
     }
+    if (this.ForkRail === 'Inherited') {
+      classes.push('fork-rail-inherited');
+    } else if (this.ForkRail === 'Own') {
+      classes.push('fork-rail-own');
+    }
     return classes.join(' ');
   }
 
@@ -1844,21 +1927,6 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   /** @deprecated Use {@link OnEditClick}. */
   public onEditClick(): void {
     return this.OnEditClick();
-  }
-
-  /** True when this row is the first after a fork point with more than one alternative. */
-  public get HasBranchSwitcher(): boolean {
-    return !!this.BranchSwitcher && this.BranchSwitcher.Alternatives.length > 1;
-  }
-
-  /** Requests the previous (-1) or next (1) alternative, wrapping at either end. Does nothing while a reply is processing. */
-  public OnBranchStep(delta: -1 | 1): void {
-    if (!this.BranchSwitcher || this.IsProcessing) {
-      return;
-    }
-    const count = this.BranchSwitcher.Alternatives.length;
-    const next = (this.BranchSwitcher.CurrentIndex + delta + count) % count;
-    this.BranchSwitchRequested.emit({ DetailID: this.message.ID, BranchID: this.BranchSwitcher.Alternatives[next].BranchID });
   }
 
   public StartEditing(): void {
@@ -1894,14 +1962,40 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     return this.CancelEditing();
   }
 
-  /** Hands the edited text to the host, which forks a branch and resends it. The original row is never changed. */
-  public SaveEdit(): void {
+  /**
+   * Saves the edit. With forking on, hands the text to the host, which saves it as a new fork; this row is
+   * not changed. With forking off, saves the text on this row (the server marks it edited) and, for the
+   * latest user message, then asks the host to rerun its turn. A failed save keeps the editor open.
+   */
+  public async SaveEdit(): Promise<void> {
     const text = this.EditedText.trim();
-    if (!text || this.EditedText === this.originalText) {
+    const mode = this.EditMode;
+    if (!text || this.EditedText === this.originalText || mode == null) {
       this.CancelEditing();
       return;
     }
-    this.EditResendRequested.emit({ Message: this.message, NewText: text });
+    if (mode === 'Fork') {
+      this.EditResendRequested.emit({ Message: this.message, NewText: text });
+      this.closeEditor();
+      return;
+    }
+    const previous = this.message.Message;
+    this.message.Message = text;
+    if (!(await this.message.Save())) {
+      this.message.Message = previous;
+      MJNotificationService.Instance.CreateSimpleNotification('Could not save the message', 'error', 3000);
+      this.cdRef.detectChanges();
+      return;
+    }
+    this.closeEditor();
+    this.MessageEdited.emit(this.message);
+    if (mode === 'Resend') {
+      this.ResendInPlaceRequested.emit(this.message);
+    }
+  }
+
+  /** Closes the inline editor and renders. */
+  private closeEditor(): void {
     this.IsEditing = false;
     this.EditedText = '';
     this.originalText = '';
@@ -1919,7 +2013,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       this.CancelEditing();
     } else if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
-      this.SaveEdit();
+      void this.SaveEdit();
     }
   }
 
@@ -1970,9 +2064,42 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     return this.OnTestFeedbackClick();
   }
 
-  /** True for an AI reply that is finished and not being edited, so a new reply can be asked for. */
+  /**
+   * True for an AI reply that is finished and not being edited, for a person who may write, so a new
+   * reply can be asked for: as a fork while the person may fork, else in place on the latest answer only.
+   */
   public get CanRegenerate(): boolean {
-    return this.IsAIMessage && !this.IsProcessing && !this.IsEditing && this.MessageStatus !== 'In-Progress';
+    const offered = this.CanFork !== false || (this.InPlaceRole ?? null) === 'Answer';
+    return offered && this.IsAIMessage && !this.ReadOnly && !this.IsProcessing && !this.IsEditing && this.MessageStatus !== 'In-Progress';
+  }
+
+  /**
+   * Fork from here (a new fork that replaces this message): only on a finished user message the current
+   * person wrote (the author rule of Edit), when the person may write and may fork, not while processing
+   * or editing. Not on agent answers; Regenerate covers those.
+   */
+  public get CanStartFork(): boolean {
+    return this.CanFork !== false && !this.ReadOnly && !this.IsProcessing && !this.IsEditing && !!this.message?.ID
+      && this.MessageStatus === 'Complete' && this.IsUserMessage && this.isOwnMessage();
+  }
+
+  /** True when the current person wrote this message. */
+  private isOwnMessage(): boolean {
+    return !!this.message.UserID && UUIDsEqual(this.message.UserID, this.CurrentUser?.ID);
+  }
+
+  /** Edit: only the author of a finished user message who may write, when the host allows edits and {@link EditMode} is not null. */
+  public get CanEdit(): boolean {
+    return this.EditMode != null && this.AllowMessageEdit && this.IsUserMessage && !this.ReadOnly && !this.IsEditing
+      && this.MessageStatus === 'Complete' && this.isOwnMessage();
+  }
+
+  /** Asks the host to fork the conversation at this message; the click does not reach the message bubble. */
+  public OnForkClick(event: Event): void {
+    event.stopPropagation();
+    if (this.CanStartFork) {
+      this.ForkRequested.emit(this.message);
+    }
   }
 
   /** Asks the host for a new reply in place of this one, when {@link CanRegenerate} allows it. */

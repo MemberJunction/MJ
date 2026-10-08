@@ -301,6 +301,12 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     return this._reviewData;
   }
 
+  /**
+   * Review mode: whether the "Start live session" action is offered. A host turns it off where
+   * a voice session cannot start (the chat area does so while a draft fork is open).
+   */
+  @Input() AllowStartLive = true;
+
   /** Emitted after the call ends so the host can react (visibility is driven by Active$). */
   @Output() Ended = new EventEmitter<void>();
 
@@ -1506,7 +1512,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
    */
   public OnStartLive(): void {
     const review = this._reviewData;
-    if (!review) {
+    if (!review || !this.AllowStartLive) {
       return;
     }
     this.pendingLiveContinuation = true;

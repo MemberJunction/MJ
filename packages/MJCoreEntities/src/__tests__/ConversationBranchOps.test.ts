@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Only the core exports used while the engine module loads: ConversationEngine extends
 // BaseEngine, and ResourcePermissionEngine applies @RegisterForStartup. BaseEngine keeps
 // getInstance so ConversationEngine.Instance returns one shared engine. @memberjunction/global
-// stays real so the helpers use real UUID normalisation.
+// stays real.
 vi.mock('@memberjunction/core', () => ({
     BaseEngine: class MockBaseEngine {
         static getInstance<T>(): T {
@@ -19,57 +19,64 @@ vi.mock('@memberjunction/core', () => ({
 
 import { ConversationEngine } from '../engines/conversations';
 
-function fakeEntity(fields: Record<string, unknown> = {}) {
-    const entity: Record<string, unknown> = { ...fields, ID: fields.ID ?? 'new-id' };
-    entity.Load = vi.fn(async () => true);
-    entity.Save = vi.fn(async () => true);
+function fakeBranch(): Record<string, unknown> {
+    const entity: Record<string, unknown> = { ID: 'T-new', LatestResult: { CompleteMessage: 'denied' } };
     entity.NewRecord = vi.fn();
+    entity.Save = vi.fn(async () => true);
     return entity;
 }
 
-describe('ConversationEngine branch operations', () => {
+describe('ConversationEngine.CreateFork', () => {
     let engine: ConversationEngine;
     let branch: Record<string, unknown>;
-    let conversation: Record<string, unknown>;
+    let requested: string[];
     const user = { ID: 'user-1' } as never;
 
     beforeEach(() => {
         engine = ConversationEngine.Instance;
-        branch = fakeEntity({ ID: 'B-new' });
-        conversation = fakeEntity({ ID: 'conv-1', CurrentBranchID: null });
+        branch = fakeBranch();
+        requested = [];
         Object.defineProperty(engine, 'ProviderToUse', {
             configurable: true,
             get: () => ({
-                GetEntityObject: async (name: string) => name === 'MJ: Conversation Branches' ? branch : conversation,
+                GetEntityObject: async (name: string) => {
+                    requested.push(name);
+                    return branch;
+                },
             }),
         });
     });
 
-    it('ForkBranch creates the branch and makes it current', async () => {
-        const created = await engine.ForkBranch({ ConversationID: 'conv-1', ForkFromSequence: 4, ParentBranchID: 'B' }, user);
+    it('creates the fork started by the context user and never reads or writes the conversation', async () => {
+        const created = await engine.CreateFork(
+            { ConversationID: 'conv-1', Kind: 'Edit', ParentBranchID: 'T1', ForkFromSequence: 4, SourceDetailID: 'd-5', Name: '  Week 3 ' },
+            user
+        );
+
         expect(created).toBe(branch);
-        expect(branch.ConversationID).toBe('conv-1');
-        expect(branch.ForkFromSequence).toBe(4);
-        expect(branch.ParentBranchID).toBe('B');
-        expect(conversation.CurrentBranchID).toBe('B-new');
-        expect(conversation.Save).toHaveBeenCalledOnce();
+        expect(branch.NewRecord).toHaveBeenCalledOnce();
+        expect(branch).toMatchObject({
+            ConversationID: 'conv-1', Kind: 'Edit', ParentBranchID: 'T1', ForkFromSequence: 4, SourceDetailID: 'd-5', UserID: 'user-1', Name: 'Week 3',
+        });
+        expect(branch.Save).toHaveBeenCalledOnce();
+        expect(requested).toEqual(['MJ: Conversation Branches']);
     });
 
-    it('ForkBranch forces ParentBranchID to null when ForkFromSequence is null', async () => {
-        await engine.ForkBranch({ ConversationID: 'conv-1', ForkFromSequence: null, ParentBranchID: 'B' }, user);
+    it('starts from Main when the fork is before the first message', async () => {
+        await engine.CreateFork({ ConversationID: 'conv-1', Kind: 'Edit', ParentBranchID: 'T1', ForkFromSequence: null, SourceDetailID: 'd-1' }, user);
         expect(branch.ParentBranchID).toBeNull();
+        expect(branch.ForkFromSequence).toBeNull();
     });
 
-    it('ForkBranch throws when the branch save fails and does not touch the conversation', async () => {
+    it('stores no name for a blank one and no source when none is given', async () => {
+        await engine.CreateFork({ ConversationID: 'conv-1', Kind: 'Fork', ParentBranchID: null, ForkFromSequence: 2, Name: '   ' }, user);
+        expect(branch.Name).toBeNull();
+        expect(branch.SourceDetailID).toBeNull();
+    });
+
+    it('throws with the save message when the fork cannot be saved', async () => {
         (branch.Save as ReturnType<typeof vi.fn>).mockResolvedValue(false);
-        await expect(engine.ForkBranch({ ConversationID: 'conv-1', ForkFromSequence: 1, ParentBranchID: null }, user)).rejects.toThrow(/branch/i);
-        expect(conversation.Save).not.toHaveBeenCalled();
-    });
-
-    it('SwitchBranch sets CurrentBranchID, null for the trunk', async () => {
-        expect(await engine.SwitchBranch('conv-1', 'B', user)).toBe(true);
-        expect(conversation.CurrentBranchID).toBe('B');
-        expect(await engine.SwitchBranch('conv-1', null, user)).toBe(true);
-        expect(conversation.CurrentBranchID).toBeNull();
+        await expect(engine.CreateFork({ ConversationID: 'conv-1', Kind: 'Fork', ParentBranchID: null, ForkFromSequence: 2 }, user))
+            .rejects.toThrow('Failed to create the fork: denied');
     });
 });

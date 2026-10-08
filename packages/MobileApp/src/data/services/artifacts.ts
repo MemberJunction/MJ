@@ -131,14 +131,13 @@ function classify(typeName: string, content: string): Classification {
  * Load an artifact and its latest version content, classified for rendering.
  *
  * Loads the `MJ: Conversation Artifacts` row via `GetEntityObject().Load()`, then reads its
- * versions visible on the current path of the conversation it belongs to (see
- * {@link loadVisibleVersions}), and runs {@link classify} on the newest one to pick a render kind
- * + payload.
+ * versions visible in Main of the conversation it belongs to (see {@link loadVisibleVersions}), and
+ * runs {@link classify} on the newest one to pick a render kind + payload.
  *
  * @param artifactId  The `MJ: Conversation Artifacts` record id.
  * @param contextUser Optional acting user (server-side scoping); defaults to `Metadata.CurrentUser`.
  * @returns A {@link LoadedArtifact}, or `null` if the artifact can't be loaded.
- * @throws When the scope of the artifact's conversation or its message links cannot be read.
+ * @throws When the message links of the artifact's conversation cannot be read.
  */
 export async function LoadArtifact(artifactId: string, contextUser?: UserInfo): Promise<LoadedArtifact | null> {
     const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
@@ -176,16 +175,16 @@ export async function LoadArtifact(artifactId: string, contextUser?: UserInfo): 
 }
 
 /**
- * The artifact's versions visible on the current path of the conversation it belongs to, newest
- * first: the versions a message on that path links to, plus those no message links to.
+ * The artifact's versions visible in Main of the conversation it belongs to, newest first: the
+ * versions a Main message links to, plus those no message links to.
  *
- * @throws When the conversation's scope or the message links cannot be read.
+ * @throws When the message links cannot be read.
  */
 async function loadVisibleVersions(
     artifact: MJConversationArtifactEntity,
     user: UserInfo,
 ): Promise<MJConversationArtifactVersionEntity[]> {
-    const scope = await ConversationEngine.LoadCurrentScope(artifact.ConversationID, user);
+    const scope = ConversationEngine.TrunkScope(artifact.ConversationID);
     const [versionsResult, inScopeLinks, anyPathLinks] = await new RunView().RunViews(
         [
             {
@@ -251,24 +250,23 @@ function quotedIdList(ids: string[]): string {
 }
 
 /**
- * Load the artifacts of a conversation visible on its current path as dock summaries — including a
- * coarse category, a preview snippet, and best-effort agent attribution.
+ * Load the artifacts of a conversation visible in Main as dock summaries — including a coarse
+ * category, a preview snippet, and best-effort agent attribution.
  *
- * An artifact is visible when a message on the path links to it (`ConversationDetail.ArtifactID`),
- * or when no message links to it. Attribution comes from the first message on the path that links
- * the artifact and has an agent; the preview/category come from the newest version visible on the
- * path.
+ * An artifact is visible when a Main message links to it (`ConversationDetail.ArtifactID`), or when
+ * no message links to it. Attribution comes from the first Main message that links the artifact and
+ * has an agent; the preview/category come from the newest version visible in Main.
  *
  * @param conversationId The conversation whose artifacts to load.
  * @param contextUser    Optional acting user (server-side scoping).
- * @throws When the conversation's scope or the message links cannot be read.
+ * @throws When the message links cannot be read.
  */
 export async function LoadConversationArtifacts(conversationId: string, contextUser?: UserInfo): Promise<ArtifactSummary[]> {
     const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
     const currentUser = contextUser ?? md.CurrentUser;
     const rv = new RunView();
 
-    const scope = await ConversationEngine.LoadCurrentScope(conversationId, currentUser);
+    const scope = ConversationEngine.TrunkScope(conversationId);
     const [artifactsResult, inScopeLinks, anyPathLinks] = await rv.RunViews(
         [
             {

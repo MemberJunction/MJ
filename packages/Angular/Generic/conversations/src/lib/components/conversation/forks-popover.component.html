@@ -1,0 +1,31 @@
+<section #panel class="forks-popover" role="dialog" tabindex="-1" [attr.id]="PanelID || null" aria-label="Forks in this conversation">
+  <div class="forks-popover-header">
+    <h2 class="forks-popover-title">Forks</h2>
+    <button mjButton Variant="icon" Size="sm" class="forks-popover-close" (click)="Close()" aria-label="Close" title="Close">
+      <i class="fa-solid fa-xmark"></i>
+    </button>
+  </div>
+  <div class="forks-popover-filters" role="group" aria-label="Filter forks">
+    <mj-filter-chip Label="All" [Active]="Filter === 'All'" (Clicked)="SetFilter('All')" />
+    <mj-filter-chip Label="Mine" [Active]="Filter === 'Mine'" (Clicked)="SetFilter('Mine')" />
+  </div>
+  <div class="forks-popover-body">
+    @if (Rows.length === 0) {
+      <mj-empty-state Size="compact" Icon="fa-solid fa-code-branch" [Title]="Filter === 'All' ? 'No forks yet' : 'No forks you started or wrote in'" />
+    }
+    @for (row of Rows; track row.Summary.Branch.ID) {
+      <div class="forks-popover-row" [class.nested]="row.Depth > 0" [style.margin-left.px]="row.Depth * 24"
+           [attr.data-kind]="row.Summary.Kind"
+           [mjClickable]="'Open fork ' + row.Summary.DisplayName + ', ' + row.MetaText" (click)="SelectRow(row)">
+        <span class="forks-popover-icon" aria-hidden="true"><i [class]="row.Icon"></i></span>
+        <span class="forks-popover-text">
+          <span class="forks-popover-name">{{ row.Summary.DisplayName }}</span>
+          @if (row.PreviewText) {
+            <span class="forks-popover-preview">{{ row.PreviewText }}</span>
+          }
+          <span class="forks-popover-meta">{{ row.MetaText }}</span>
+        </span>
+      </div>
+    }
+  </div>
+</section>

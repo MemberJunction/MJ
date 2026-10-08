@@ -560,11 +560,16 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   @Input() AgentHistoryFrom: Date | null = null;
 
   /**
-   * The conversation's active branch. The agent's previous output and the configuration preset
-   * pinned by an earlier '@mention' are looked up only on this branch's path. Null (the
-   * default) is the trunk.
+   * The fork new messages from this composer go to; null (the default) is Main. The agent turn of a
+   * message, and the agent-history reads it makes, use the message's branch.
    */
-  @Input() CurrentBranchId: string | null = null;
+  @Input() TargetBranchID: string | null = null;
+
+  /**
+   * When set, called once at the start of each send to get the branch of the new user row; undefined
+   * stops the send and nothing is written. A host uses it to create a draft fork on its first send.
+   */
+  @Input() ResolveTargetBranch: (() => Promise<string | null | undefined>) | null = null;
 
   /**
    * Runs agent turns on the host's server instead of MJ's own path. The chat area still picks
@@ -960,6 +965,16 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       setTimeout(() => this.InputBox?.focus(), 50);
     }
   }
+
+  /**
+   * Puts the text of a send that did not go out back into the composer. Text the composer holds
+   * already stays first, and the returned text follows it on a new line.
+   */
+  private restoreUnsentText(text: string): void {
+    const current = this.GetSerializedDraft();
+    this.SetDraft(current ? `${current}\n${text}` : text);
+  }
+
   public IsSending: boolean = false;
 
   /** @deprecated Use {@link IsSending}. */
@@ -1541,7 +1556,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * uses exactly that model or fails with a clear reason (no silent fallback) — and is
    * mirrored into `configOverridesJson` (`{"realtime":{"modelPreference":…}}`, the
    * pinned override envelope). An explicit co-agent choice (picker pick or persisted
-   * preference) rides along as `coAgentId`.
+   * preference) rides along as `coAgentId`. The session runs on {@link TargetBranchID}.
    *
    * Interactive-channel tools (e.g. the live whiteboard's `Whiteboard_*` set) are NOT
    * passed here — the session service resolves the active channel plugins from the
@@ -1571,7 +1586,8 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         // user is, what they see, capability manifest) — drives the server-side app cascade + the
         // mint-time prompt injection, and seeds the ClientContextChannel's streaming.
         this.ApplicationId,
-        this.AppContext as AppContextSnapshot | null
+        this.AppContext as AppContextSnapshot | null,
+        this.TargetBranchID
       );
     } catch (error) {
       console.error('Failed to start voice session:', error);
@@ -1824,7 +1840,12 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     const attachmentsToSave = [...this.pendingAttachments];
 
     try {
-      const messageDetail = await this.createMessageDetailFromText(text?.trim() || '');
+      const branchId = await this.resolveSendBranch(undefined);
+      if (branchId === undefined) {
+        this.restoreUnsentText(text);
+        return;
+      }
+      const messageDetail = await this.createMessageDetailFromText(text?.trim() || '', branchId);
 
       const saved = await messageDetail.Save();
 
@@ -1907,7 +1928,11 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
     this.IsSending = true;
     try {
-      const messageDetail = await this.createMessageDetail();
+      const branchId = await this.resolveSendBranch(undefined);
+      if (branchId === undefined) {
+        return;
+      }
+      const messageDetail = await this.createMessageDetail(branchId);
       const saved = await messageDetail.Save();
 
       if (saved) {
@@ -1942,11 +1967,14 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * alone: only `extraAttachments` are saved with the message, and the pending attachments and
    * editor text are not cleared. The send never counts as the conversation's first message, so
    * it does not name the conversation or claim a pending Plan Mode choice.
+   *
+   * `options.TargetBranchID` writes the message to that fork (null is Main) instead of the
+   * composer's own target.
    */
   public async SendMessageWithText(
     text: string,
     extraAttachments?: PendingAttachment[],
-    options?: { IsResend?: boolean }
+    options?: { IsResend?: boolean; TargetBranchID?: string | null }
   ): Promise<boolean> {
     if (this.ReadOnly) {
       return false;
@@ -1982,11 +2010,16 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     const attachmentsToSave = merged;
 
     try {
+      const branchId = await this.resolveSendBranch(options?.TargetBranchID);
+      if (branchId === undefined) {
+        return false;
+      }
       const detail = await this.dataCache.createConversationDetail(this.CurrentUser);
       detail.ConversationID = this.ConversationId;
       detail.Message = text?.trim() || '';
       detail.Role = 'User';
       detail.UserID = this.CurrentUser.ID; // Set the user who sent the message
+      detail.BranchID = branchId;
 
       if (this.ParentMessageId) {
         detail.ParentID = this.ParentMessageId;
@@ -2070,20 +2103,21 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
   /**
    * Routes an existing user message through the agent path again, so the agent writes a new reply
-   * on the current branch. No message is saved, and the composer's draft and pending attachments
-   * are left alone. The rerun never counts as the conversation's first message. `IsSending` stays
-   * true until the agent turn ends, so no other send starts meanwhile.
+   * on `targetBranchId` (default: the message's own branch). No message is saved, and the
+   * composer's draft and pending attachments are left alone. The rerun never counts as the
+   * conversation's first message. `IsSending` stays true until the agent turn ends, so no other
+   * send starts meanwhile.
    *
    * @returns false, with no agent turn, when the composer is read-only or already sending.
    */
-  public async RerunAgentForMessage(userMessage: MJConversationDetailEntity): Promise<boolean> {
+  public async RerunAgentForMessage(userMessage: MJConversationDetailEntity, targetBranchId?: string | null): Promise<boolean> {
     if (this.ReadOnly || this.IsSending) {
       return false;
     }
     this.IsSending = true;
     try {
       const mentionResult = this.parseMentionsFromMessage(userMessage.Message || '');
-      await this.routeMessage(userMessage, mentionResult, false);
+      await this.routeMessage(userMessage, mentionResult, false, targetBranchId !== undefined ? targetBranchId : (userMessage.BranchID ?? null));
       return true;
     } finally {
       this.IsSending = false;
@@ -2091,15 +2125,49 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   }
 
   /**
-   * Creates and configures a new conversation detail message
+   * The branch of a new user row: `explicit` when given, else the {@link ResolveTargetBranch} answer
+   * when set, else {@link TargetBranchID}. Undefined when the resolver declined or failed.
    */
-  private async createMessageDetail(): Promise<MJConversationDetailEntity> {
+  private async resolveSendBranch(explicit: string | null | undefined): Promise<string | null | undefined> {
+    if (explicit !== undefined) {
+      return explicit;
+    }
+    const resolve = this.ResolveTargetBranch;
+    if (!resolve) {
+      return this.TargetBranchID ?? null;
+    }
+    try {
+      return await resolve();
+    } catch (error) {
+      console.error('Could not resolve the fork of the message:', error);
+      return undefined;
+    }
+  }
+
+  /**
+   * A new AI row of an agent turn: in `conversationId`, on the turn's branch `branchId` (null is
+   * Main), visible. The caller sets Message, ParentID, Status and AgentID, then saves it.
+   */
+  private async createTurnRow(conversationId: string, branchId: string | null): Promise<MJConversationDetailEntity> {
+    const row = await this.dataCache.createConversationDetail(this.CurrentUser);
+    row.ConversationID = conversationId;
+    row.BranchID = branchId;
+    row.Role = 'AI';
+    row.HiddenToUser = false;
+    return row;
+  }
+
+  /**
+   * Creates and configures a new conversation detail message on `branchId` (null is Main)
+   */
+  private async createMessageDetail(branchId: string | null): Promise<MJConversationDetailEntity> {
     const detail = await this.dataCache.createConversationDetail(this.CurrentUser);
 
     detail.ConversationID = this.ConversationId;
     detail.Message = this.MessageText.trim();
     detail.Role = 'User';
     detail.UserID = this.CurrentUser.ID; // Set the user who sent the message
+    detail.BranchID = branchId;
 
     if (this.ParentMessageId) {
       detail.ParentID = this.ParentMessageId;
@@ -2109,15 +2177,17 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   }
 
   /**
-   * Creates and configures a new conversation detail message from provided text
+   * Creates and configures a new conversation detail message from provided text, on `branchId`
+   * (null is Main)
    */
-  private async createMessageDetailFromText(text: string): Promise<MJConversationDetailEntity> {
+  private async createMessageDetailFromText(text: string, branchId: string | null): Promise<MJConversationDetailEntity> {
     const detail = await this.dataCache.createConversationDetail(this.CurrentUser);
 
     detail.ConversationID = this.ConversationId;
     detail.Message = text;
     detail.Role = 'User';
     detail.UserID = this.CurrentUser.ID; // Set the user who sent the message
+    detail.BranchID = branchId;
 
     if (this.ParentMessageId) {
       detail.ParentID = this.ParentMessageId;
@@ -2163,12 +2233,19 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * last agent's place ({@link decideAgentRouting}).
    * {@link BeforeAgentTurn} is then fired once, before any reply row exists, and the turn runs on
    * MJ's path or through the host's {@link AgentTurnHandler}.
+   *
+   * `turnBranchId` overrides the turn's branch (a rerun into a new fork); else the turn runs on
+   * the message's branch. The branch is fixed here and passed down the turn, so every row and
+   * agent-history read of this turn uses it, whatever the composer targets later.
    */
   private async routeMessage(
     messageDetail: MJConversationDetailEntity,
     mentionResult: MentionParseResult,
-    isFirstMessage: boolean
+    isFirstMessage: boolean,
+    turnBranchId?: string | null
   ): Promise<void> {
+    const branchId = turnBranchId !== undefined ? turnBranchId : (messageDetail.BranchID ?? null);
+
     // A Plan Mode choice made on the new-conversation composer (no conversation yet) lives in a
     // pending bucket — the FIRST routed message claims it onto the real conversation so the
     // toggle carries across the empty-state → chat-area transition without bleeding into other
@@ -2197,7 +2274,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     // another conversation, and the chat area then rebinds its history and pinned agent, so a
     // read after the routing decision could see another conversation's state (or none).
     const candidates = this.agentTurnCandidates(this.agentMentionIds(mentionResult));
-    const routing = await this.decideAgentRouting(messageDetail, candidates);
+    const routing = await this.decideAgentRouting(messageDetail, candidates, branchId);
     const target = this.resolveAgentTurnTarget(candidates, routing);
     if (!target) {
       await this.finishWithoutAgentTurn(messageDetail, 'NoAgent');
@@ -2208,7 +2285,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       await this.finishWithoutAgentTurn(messageDetail, 'Declined');
       return;
     }
-    await this.runAgentTurn(messageDetail, mentionResult, turn, routing);
+    await this.runAgentTurn(messageDetail, mentionResult, turn, branchId, routing);
   }
 
   /**
@@ -2217,10 +2294,12 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * when anything fails: the message then keeps today's routing.
    *
    * @param candidates The turn's candidates, read before any await (see {@link routeMessage}).
+   * @param branchId The turn's branch (null is Main); the artifact versions are read on its path.
    */
   private async decideAgentRouting(
     message: MJConversationDetailEntity,
-    candidates: AgentTurnCandidates
+    candidates: AgentTurnCandidates,
+    branchId: string | null
   ): Promise<RoutingDecisionOutcome | null> {
     const continuityAgentId = candidates.ContinuityAgentId;
     const qualifies = ShouldRunRoutingDecision({
@@ -2239,7 +2318,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       if (!CanAskRoutingDecision(input)) {
         return null;
       }
-      input.ArtifactVersions = await this.loadRoutingArtifactVersions(message.ConversationID, input.Participants);
+      input.ArtifactVersions = await this.loadRoutingArtifactVersions(message.ConversationID, branchId, input.Participants);
       const outcome = await RunRoutingDecision(input, params => this.agentService.RunDecision(params));
       LogStatusEx({
         message: `Decision routing: ${outcome.Verdict}, ${outcome.Reason} (prompt run ${outcome.PromptRunID ?? 'none'})`,
@@ -2281,14 +2360,15 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     };
   }
 
-  /** Every participant's artifact versions in this conversation, for the artifact question. */
+  /** Every participant's artifact versions on the path of `branchId` in this conversation, for the artifact question. */
   private async loadRoutingArtifactVersions(
     conversationId: string,
+    branchId: string | null,
     participants: readonly RoutingParticipant[]
   ): Promise<RoutingArtifactVersion[]> {
     const artifactsByAgent = await Promise.all(participants.map(async participant => ({
       Agent: participant.Agent,
-      Artifacts: await this.agentService.FindAgentArtifacts(conversationId, participant.Agent.ID, this.AgentHistoryFrom, this.CurrentBranchId)
+      Artifacts: await this.agentService.FindAgentArtifacts(conversationId, participant.Agent.ID, this.AgentHistoryFrom, branchId)
     })));
     return BuildRoutingArtifactVersions(artifactsByAgent);
   }
@@ -2375,26 +2455,30 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * Runs a turn that {@link BeforeAgentTurn} let through, on the host's handler or MJ's path.
    * The routing decision, when there was one, supplies the artifact version the turn's agent
    * continues from; a host's handler receives it as `TargetArtifactVersionId`.
+   *
+   * @param branchId The turn's branch (null is Main): every row the turn writes and every
+   *   agent-history read it makes uses it.
    */
   private async runAgentTurn(
     userMessage: MJConversationDetailEntity,
     mentionResult: MentionParseResult,
     turn: AgentTurnTarget,
+    branchId: string | null,
     routing: RoutingDecisionOutcome | null = null
   ): Promise<void> {
     const mention = turn.Route === 'Mention' ? this.findAgentMention(mentionResult, turn.AgentId) : null;
     const targetArtifactVersionId = ArtifactVersionForTurn(routing, turn.AgentId);
     if (this.AgentTurnHandler) {
-      await this.runHostAgentTurn(this.AgentTurnHandler, userMessage, turn, mention, targetArtifactVersionId);
+      await this.runHostAgentTurn(this.AgentTurnHandler, userMessage, turn, mention, targetArtifactVersionId, branchId);
       return;
     }
     if (mention) {
-      await this.invokeAgentDirectly(userMessage, mention, userMessage.ConversationID);
+      await this.invokeAgentDirectly(userMessage, mention, userMessage.ConversationID, branchId);
     } else if (turn.Route === 'ConversationManager' || (turn.Route === 'Redirect' && this.isConversationManager(turn.AgentId))) {
-      await this.runConversationManagerTurn(userMessage, mentionResult);
+      await this.runConversationManagerTurn(userMessage, mentionResult, branchId);
     } else {
       // Pinned and host defaults keep their direct call even when they name the manager, as before.
-      await this.handleAgentContinuity(userMessage, turn.AgentId, targetArtifactVersionId);
+      await this.handleAgentContinuity(userMessage, turn.AgentId, branchId, targetArtifactVersionId);
     }
   }
 
@@ -2441,17 +2525,20 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * ({@link decideAgentRouting}); the prompt-based check stays unused. A confident answer from it
    * may name the artifact version this agent should continue from.
    *
+   * @param branchId The turn's branch (null is Main).
    * @param targetArtifactVersionId The artifact version the routing decision named, or null.
    */
   private async handleAgentContinuity(
     messageDetail: MJConversationDetailEntity,
     agentId: string,
+    branchId: string | null,
     targetArtifactVersionId: string | null = null
   ): Promise<void> {
     await this.continueWithAgent(
       messageDetail,
       agentId,
       messageDetail.ConversationID,
+      branchId,
       targetArtifactVersionId ?? undefined // set only by a confident routing decision
     );
   }
@@ -2460,14 +2547,17 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * The conversation manager's turn. When an earlier message @mentioned the manager with a
    * configuration preset, the preset keeps applying and the manager answers directly;
    * otherwise it evaluates the message and may delegate.
+   *
+   * @param branchId The turn's branch (null is Main).
    */
   private async runConversationManagerTurn(
     messageDetail: MJConversationDetailEntity,
-    mentionResult: MentionParseResult
+    mentionResult: MentionParseResult,
+    branchId: string | null
   ): Promise<void> {
     const manager = this.ConverationManagerAgent;
     const managerPreset = manager?.ID && messageDetail.ConversationID
-      ? await this.agentService.FindConfigurationPresetForAgent(messageDetail.ConversationID, manager.ID, this.CurrentBranchId)
+      ? await this.agentService.FindConfigurationPresetForAgent(messageDetail.ConversationID, manager.ID, branchId)
       : undefined;
     if (manager?.ID && managerPreset) {
       await this.executeAgentContinuation(
@@ -2475,13 +2565,14 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         manager.ID,
         manager.Name || 'Sage',
         messageDetail.ConversationID,
+        branchId,
         null, // Sage doesn't use payload continuity
         null, // Sage doesn't use artifact info
         managerPreset // Pass the already-found config preset
       );
       return;
     }
-    await this.processMessageThroughAgent(messageDetail, mentionResult);
+    await this.processMessageThroughAgent(messageDetail, mentionResult, branchId);
   }
 
   /**
@@ -2561,15 +2652,18 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * Runs the turn through the host's {@link AgentTurnHandler} instead of MJ's path. Nothing is
    * written here: the host writes the reply rows and reports them, and each is shown like a row
    * MJ wrote — one still In-Progress is followed like any other in-progress reply.
+   *
+   * @param branchId The turn's branch (null is Main), sent to the handler as `BranchID`.
    */
   private async runHostAgentTurn(
     handler: AgentTurnHandler,
     userMessage: MJConversationDetailEntity,
     turn: AgentTurnTarget,
     mention: Mention | null,
-    targetArtifactVersionId: string | null
+    targetArtifactVersionId: string | null,
+    branchId: string | null
   ): Promise<void> {
-    const request = this.buildAgentTurnRequest(userMessage, turn, mention, targetArtifactVersionId);
+    const request = this.buildAgentTurnRequest(userMessage, turn, mention, targetArtifactVersionId, branchId);
     const result = await this.callAgentTurnHandler(handler, request);
     if (!result.Success) {
       this.notifyAgentTurnProblem(result.ErrorMessage || 'The agent could not answer this message.', 'error');
@@ -2597,15 +2691,18 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    *
    * @param targetArtifactVersionId The artifact version the routing decision named for this
    *   turn's agent, or null.
+   * @param branchId The turn's branch (null is Main).
    */
   private buildAgentTurnRequest(
     userMessage: MJConversationDetailEntity,
     turn: AgentTurnTarget,
     mention: Mention | null,
-    targetArtifactVersionId: string | null
+    targetArtifactVersionId: string | null,
+    branchId: string | null
   ): AgentTurnRequest {
     return {
       ConversationId: userMessage.ConversationID,
+      BranchID: branchId,
       UserMessageId: userMessage.ID,
       MessageText: userMessage.Message ?? '',
       AgentId: turn.AgentId,
@@ -2640,10 +2737,10 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   }
 
   /**
-   * Checks if message should continue with the previous agent
-   * Emits events to show temporary intent checking message in conversation
+   * Checks if message should continue with the previous agent, reading the path of `branchId`
+   * (null is Main). Emits events to show temporary intent checking message in conversation
    */
-  private async checkContinuityIntent(agentId: string, message: string) {
+  private async checkContinuityIntent(agentId: string, message: string, branchId: string | null) {
     // FAST PATH: If message contains form response syntax, skip the intent check entirely
     // Form responses always continue with the agent that requested the form
     // Don't show "Analyzing intent..." message for this obvious case
@@ -2673,7 +2770,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         agentId,
         message,
         this.ConversationHistory,
-        this.CurrentBranchId
+        branchId
       );
       return intent;
     } catch (error) {
@@ -2798,10 +2895,13 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * Process the message through agents (multi-stage: Sage -> possible sub-agent)
    * Only called when there's no @mention and no implicit agent context.
    * {@link BeforeAgentTurn} has already fired — routing announces the turn before any row exists.
+   *
+   * @param branchId The turn's branch (null is Main).
    */
   private async processMessageThroughAgent(
     userMessage: MJConversationDetailEntity,
-    mentionResult: MentionParseResult
+    mentionResult: MentionParseResult,
+    branchId: string | null
   ): Promise<void> {
     let taskId: string | null = null;
     let conversationManagerMessage: MJConversationDetailEntity | null = null;
@@ -2812,14 +2912,11 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
     try {
       // Create AI message for Sage BEFORE invoking
-      conversationManagerMessage = await this.dataCache.createConversationDetail(this.CurrentUser);
+      conversationManagerMessage = await this.createTurnRow(conversationId, branchId);
 
-      conversationManagerMessage.ConversationID = conversationId;
-      conversationManagerMessage.Role = 'AI';
       conversationManagerMessage.Message = '⏳ Starting...';
       conversationManagerMessage.ParentID = userMessage.ID;
       conversationManagerMessage.Status = 'In-Progress';
-      conversationManagerMessage.HiddenToUser = false;
       // Use the preloaded Sage agent instead of looking it up
       if (this.ConverationManagerAgent?.ID) {
         conversationManagerMessage.AgentID = this.ConverationManagerAgent.ID;
@@ -2877,7 +2974,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
       // Stage 2: Check for task graph (multi-step orchestration)
       if (result.payload?.taskGraph) {
-        await this.handleTaskGraphExecution(userMessage, result, conversationId, conversationManagerMessage);
+        await this.handleTaskGraphExecution(userMessage, result, conversationId, branchId, conversationManagerMessage);
         // Remove CM from active tasks
         if (taskId) {
           // Task removed in markMessageComplete() - this.activeTasks.remove(taskId);
@@ -2886,7 +2983,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       // Stage 3: Check for sub-agent invocation (single-step delegation)
       else if (result.agentRun.FinalStep === 'Success' && result.payload?.invokeAgent) {
         // Reuse the existing conversationManagerMessage instead of creating new ones
-        await this.handleSubAgentInvocation(userMessage, result, conversationId, conversationManagerMessage);
+        await this.handleSubAgentInvocation(userMessage, result, conversationId, branchId, conversationManagerMessage);
         // Remove CM from active tasks
         if (taskId) {
           // Task removed in markMessageComplete() - this.activeTasks.remove(taskId);
@@ -2944,7 +3041,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
           this.MessageSent.emit(conversationManagerMessage);
 
-          await this.handleSilentObservation(userMessage, conversationId);
+          await this.handleSilentObservation(userMessage, conversationId, branchId);
 
           // Clean up completion timestamp after delay
           this.cleanupCompletionTimestamp(conversationManagerMessage.ID);
@@ -3004,11 +3101,14 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * Single-task graphs are no longer special-cased here. The old client-side fork ran them through
    * a different code path entirely; they now submit like any other graph, and the decision about
    * whether a one-node graph is worth durable machinery moves server-side where it can be recorded.
+   *
+   * @param branchId The turn's branch (null is Main); the task-graph message is written there.
    */
   private async handleTaskGraphExecution(
     userMessage: MJConversationDetailEntity,
     managerResult: ExecuteAgentResult,
     conversationId: string,
+    branchId: string | null,
     conversationManagerMessage: MJConversationDetailEntity
   ): Promise<void> {
     // `payload` is untyped by construction (an agent's payload shape is agent-specific), so pin the
@@ -3033,13 +3133,10 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     const taskCount = Array.isArray(taskGraph.tasks) ? taskGraph.tasks.length : 0;
 
     // A message the user can watch. Progress frames from the dispatcher land against this ID.
-    const taskExecutionMessage = await this.dataCache.createConversationDetail(this.CurrentUser);
-    taskExecutionMessage.ConversationID = conversationId;
-    taskExecutionMessage.Role = 'AI';
+    const taskExecutionMessage = await this.createTurnRow(conversationId, branchId);
     taskExecutionMessage.Message = `⏳ **${workflowName}**\n\n${reasoning}\n\nSubmitting ${taskCount} task(s)…`;
     taskExecutionMessage.ParentID = conversationManagerMessage.ID;
     taskExecutionMessage.Status = 'In-Progress';
-    taskExecutionMessage.HiddenToUser = false;
     await taskExecutionMessage.Save();
     this.MessageSent.emit(taskExecutionMessage);
 
@@ -3154,9 +3251,9 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * artifact below the window's oldest row — and a null payload is a legal agent input, so
    * the miss surfaces as the agent regenerating from scratch instead of modifying. Covers
    * system-visibility artifacts (Agent Manager and friends) for free: the query filters on
-   * Direction, not on Visibility.
+   * Direction, not on Visibility. Only the path of `branchId` (null is Main) is read.
    */
-  private async loadPreviousPayloadForAgent(agentId: string): Promise<{
+  private async loadPreviousPayloadForAgent(agentId: string, branchId: string | null): Promise<{
     payload: Record<string, unknown> | null;
     artifactInfo: {artifactId: string; versionId: string; versionNumber: number} | null;
   }> {
@@ -3164,7 +3261,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       return { payload: null, artifactInfo: null };
     }
 
-    const source = await this.agentService.FindLatestAgentOutputVersion(this.ConversationId, agentId, this.AgentHistoryFrom, this.CurrentBranchId);
+    const source = await this.agentService.FindLatestAgentOutputVersion(this.ConversationId, agentId, this.AgentHistoryFrom, branchId);
     if (!source || source.payload == null) {
       console.log(`📦 No previous payload found for agent ${agentId}`);
       return { payload: null, artifactInfo: null };
@@ -3184,11 +3281,14 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   /**
    * Handle sub-agent invocation based on Sage's payload
    * Reuses the existing conversationManagerMessage to avoid creating multiple records
+   *
+   * @param branchId The turn's branch (null is Main).
    */
   private async handleSubAgentInvocation(
     userMessage: MJConversationDetailEntity,
     managerResult: ExecuteAgentResult,
     conversationId: string,
+    branchId: string | null,
     conversationManagerMessage: MJConversationDetailEntity
   ): Promise<void> {
     const payload = managerResult.payload;
@@ -3209,14 +3309,11 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       }
 
       // Create AI response message BEFORE invoking agent (for duration tracking)
-      agentResponseMessage = await this.dataCache.createConversationDetail(this.CurrentUser);
+      agentResponseMessage = await this.createTurnRow(conversationId, branchId);
 
-      agentResponseMessage.ConversationID = conversationId;
-      agentResponseMessage.Role = 'AI';
       agentResponseMessage.Message = '⏳ Starting...'; // Initial message
       agentResponseMessage.ParentID = conversationManagerMessage.ID; // Thread under delegation message
       agentResponseMessage.Status = 'In-Progress';
-      agentResponseMessage.HiddenToUser = false;
       // Set AgentID immediately for proper attribution
       if (agent?.ID) {
         agentResponseMessage.AgentID = agent.ID;
@@ -3238,12 +3335,12 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
       // Load previous payload if agent has been invoked before
       const { payload: previousPayload, artifactInfo } = agent?.ID
-        ? await this.loadPreviousPayloadForAgent(agent.ID)
+        ? await this.loadPreviousPayloadForAgent(agent.ID, branchId)
         : { payload: null, artifactInfo: null };
 
       // Find configuration preset from previous @mention in conversation history
       const configurationPresetId = agent?.ID
-        ? await this.agentService.FindConfigurationPresetForAgent(conversationId, agent.ID, this.CurrentBranchId)
+        ? await this.agentService.FindConfigurationPresetForAgent(conversationId, agent.ID, branchId)
         : undefined;
 
       // Invoke the sub-agent with progress callback
@@ -3381,10 +3478,13 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   /**
    * Handle silent observation - when Sage stays silent,
    * check if we should continue with the last agent for iterative refinement
+   *
+   * @param branchId The turn's branch (null is Main).
    */
   private async handleSilentObservation(
     userMessage: MJConversationDetailEntity,
-    conversationId: string
+    conversationId: string,
+    branchId: string | null
   ): Promise<void> {
     // Find the last AI message (excluding Sage) this turn may read
     const lastAIMessage = this.findLastNonSageReply();
@@ -3419,7 +3519,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     // the loaded window while its artifact does not, and this path silently degrades to a
     // null payload when the lookup misses.
     const source = await this.agentService.FindLatestAgentOutputVersion(
-      conversationId, lastAIMessage.AgentID, this.AgentHistoryFrom, this.CurrentBranchId
+      conversationId, lastAIMessage.AgentID, this.AgentHistoryFrom, branchId
     );
     if (source && source.payload != null) {
       previousPayload = source.payload;
@@ -3432,14 +3532,11 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     }
 
     // Create status message showing agent continuity
-    const statusMessage = await this.dataCache.createConversationDetail(this.CurrentUser);
+    const statusMessage = await this.createTurnRow(conversationId, branchId);
 
-    statusMessage.ConversationID = conversationId;
-    statusMessage.Role = 'AI';
     statusMessage.Message = `Continuing with **${agentName}** for refinement...`;
     statusMessage.ParentID = userMessage.ID;
     statusMessage.Status = 'Complete';
-    statusMessage.HiddenToUser = false;
     statusMessage.AgentID = this.ConverationManagerAgent?.ID || null;
 
     await statusMessage.Save();
@@ -3480,14 +3577,11 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
       if (continuityResult && continuityResult.success) {
         // Create response message
-        const agentResponseMessage = await this.dataCache.createConversationDetail(this.CurrentUser);
+        const agentResponseMessage = await this.createTurnRow(conversationId, branchId);
 
-        agentResponseMessage.ConversationID = conversationId;
-        agentResponseMessage.Role = 'AI';
         agentResponseMessage.Message = continuityResult.agentRun?.Message || `✅ **${agentName}** completed refinement`;
         agentResponseMessage.ParentID = statusMessage.ID;
         agentResponseMessage.Status = 'Complete';
-        agentResponseMessage.HiddenToUser = false;
         agentResponseMessage.AgentID = lastAIMessage.AgentID;
 
         await agentResponseMessage.Save();
@@ -3524,11 +3618,14 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   /**
    * Invoke an agent directly when mentioned with @ symbol
    * Bypasses Sage completely - no status messages
+   *
+   * @param branchId The turn's branch (null is Main).
    */
   private async invokeAgentDirectly(
     userMessage: MJConversationDetailEntity,
     agentMention: Mention,
-    conversationId: string
+    conversationId: string,
+    branchId: string | null
   ): Promise<void> {
     const agentName = agentMention.name;
 
@@ -3556,14 +3653,11 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       const agent = AIEngineBase.Instance.Agents.find(a => a.Name === agentName);
 
       // Create AI response message BEFORE invoking agent (for duration tracking)
-      agentResponseMessage = await this.dataCache.createConversationDetail(this.CurrentUser);
+      agentResponseMessage = await this.createTurnRow(conversationId, branchId);
 
-      agentResponseMessage.ConversationID = conversationId;
-      agentResponseMessage.Role = 'AI';
       agentResponseMessage.Message = '⏳ Starting...'; // Initial message
       agentResponseMessage.ParentID = userMessage.ID;
       agentResponseMessage.Status = 'In-Progress';
-      agentResponseMessage.HiddenToUser = false;
       // Set AgentID immediately for proper attribution
       if (agent?.ID) {
         agentResponseMessage.AgentID = agent.ID;
@@ -3575,7 +3669,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
       // Load previous payload if agent has been invoked before
       const { payload: previousPayload, artifactInfo } = agent?.ID
-        ? await this.loadPreviousPayloadForAgent(agent.ID)
+        ? await this.loadPreviousPayloadForAgent(agent.ID, branchId)
         : { payload: null, artifactInfo: null };
 
       // Invoke the agent directly
@@ -3610,12 +3704,12 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         // Stage 1: Check for task graph (multi-step orchestration)
         if (result.payload?.taskGraph) {
           console.log('📋 Task graph detected from @mention, starting task orchestration');
-          await this.handleTaskGraphExecution(userMessage, result, conversationId, agentResponseMessage);
+          await this.handleTaskGraphExecution(userMessage, result, conversationId, branchId, agentResponseMessage);
         }
         // Stage 2: Check for sub-agent invocation (single-step delegation)
         else if (result.agentRun.FinalStep === 'Success' && result.payload?.invokeAgent) {
           console.log('🎯 Sub-agent invocation detected from @mention');
-          await this.handleSubAgentInvocation(userMessage, result, conversationId, agentResponseMessage);
+          await this.handleSubAgentInvocation(userMessage, result, conversationId, branchId, agentResponseMessage);
         }
         // Stage 3: Normal chat response
         else {
@@ -3653,12 +3747,14 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * Continue with the same agent from previous message (implicit continuation)
    * Bypasses Sage - no status messages
    *
+   * @param branchId The turn's branch (null is Main).
    * @param targetArtifactVersionId Optional specific artifact version to use as payload (from intent check)
    */
   private async continueWithAgent(
     userMessage: MJConversationDetailEntity,
     agentId: string,
     conversationId: string,
+    branchId: string | null,
     targetArtifactVersionId?: string
   ): Promise<void> {
     // Load the agent entity to get its name
@@ -3670,7 +3766,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         return;
       }
       console.warn('⚠️ Could not load agent for continuation - falling back to Sage');
-      await this.processMessageThroughAgent(userMessage, { mentions: [], agentMention: null, userMentions: [], entityMentions: [], skillMentions: [] });
+      await this.processMessageThroughAgent(userMessage, { mentions: [], agentMention: null, userMentions: [], entityMentions: [], skillMentions: [] }, branchId);
       return;
     }
 
@@ -3701,7 +3797,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
     // Extract configuration preset from the User message that @mentioned this agent
     // Uses the shared helper method in the agent service
-    previousConfigurationId = await this.agentService.FindConfigurationPresetForAgent(conversationId, agentId, this.CurrentBranchId);
+    previousConfigurationId = await this.agentService.FindConfigurationPresetForAgent(conversationId, agentId, branchId);
 
     // Fall back to the chat header's mode-picker selection when nothing
     // in the message history pinned a preset. The picker reflects the
@@ -3720,7 +3816,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     // used to walk is the loaded window, so the artifact it is looking for is exactly the
     // one most likely to be missing from it.
     if (!previousPayload) {
-      const source = await this.agentService.FindLatestAgentOutputVersion(conversationId, agentId, this.AgentHistoryFrom, this.CurrentBranchId);
+      const source = await this.agentService.FindLatestAgentOutputVersion(conversationId, agentId, this.AgentHistoryFrom, branchId);
       if (source && source.payload != null) {
         previousPayload = source.payload;
         previousArtifactInfo = {
@@ -3740,6 +3836,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       agentId,
       agentName,
       conversationId,
+      branchId,
       previousPayload,
       previousArtifactInfo,
       previousConfigurationId
@@ -3754,6 +3851,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * @param agentId The agent ID to invoke
    * @param agentName The agent's display name
    * @param conversationId The conversation ID
+   * @param branchId The turn's branch (null is Main); the reply row is written there
    * @param previousPayload Optional payload from previous artifact
    * @param previousArtifactInfo Optional artifact info (id, versionId, versionNumber)
    * @param configurationId Optional configuration preset ID to use
@@ -3763,6 +3861,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     agentId: string,
     agentName: string,
     conversationId: string,
+    branchId: string | null,
     previousPayload: Record<string, unknown> | null,
     previousArtifactInfo: {artifactId: string; versionId: string; versionNumber: number} | null,
     configurationId?: string
@@ -3788,14 +3887,11 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       this.MessageSent.emit(userMessage);
 
       // Create AI response message BEFORE invoking agent (for duration tracking)
-      agentResponseMessage = await this.dataCache.createConversationDetail(this.CurrentUser);
+      agentResponseMessage = await this.createTurnRow(conversationId, branchId);
 
-      agentResponseMessage.ConversationID = conversationId;
-      agentResponseMessage.Role = 'AI';
       agentResponseMessage.Message = '⏳ Starting...'; // Initial message
       agentResponseMessage.ParentID = userMessage.ID;
       agentResponseMessage.Status = 'In-Progress';
-      agentResponseMessage.HiddenToUser = false;
       agentResponseMessage.AgentID = agentId;
 
       // Save the record to establish __mj_CreatedAt timestamp

@@ -5,7 +5,6 @@ import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } fr
 import { ConversationEngine, type ConversationBranchRow, type MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ConversationChatAreaComponent } from '../lib/components/conversation/conversation-chat-area.component';
-import { ConversationScopeService } from '../lib/services/conversation-scope.service';
 
 /**
  * `OnDeleteMessage`: before the confirm dialog, the branch rows are read fresh and a row that
@@ -17,10 +16,8 @@ import { ConversationScopeService } from '../lib/services/conversation-scope.ser
 
 interface Harness {
   component: ConversationChatAreaComponent;
-  scopeService: ConversationScopeService;
   provider: { GetEntityObject: ReturnType<typeof vi.fn> };
   confirm: ReturnType<typeof vi.fn>;
-  rebuild: ReturnType<typeof vi.fn>;
 }
 
 function row(id: string, sequence: number): MJConversationDetailEntity {
@@ -42,8 +39,6 @@ function createHarness(): Harness {
   const open = component as unknown as Record<string, unknown>;
   const provider = { GetEntityObject: vi.fn() };
   const confirm = vi.fn(async () => false);
-  const rebuild = vi.fn();
-  const scopeService = new ConversationScopeService();
 
   open['_conversationId'] = 'CONV-1';
   open['Conversation'] = { ID: 'CONV-1', UserID: 'USER-1' };
@@ -54,14 +49,17 @@ function createHarness(): Harness {
   // The list held since the transcript loaded: empty, as after a failed read.
   open['branches'] = [];
   open['confirmDialog'] = { confirm };
-  open['rebuildBranchSwitcherMap'] = rebuild;
-  open['scopeService'] = scopeService;
 
-  return { component, scopeService, provider, confirm, rebuild };
+  return { component, provider, confirm };
 }
 
 function heldBranches(component: ConversationChatAreaComponent): ConversationBranchRow[] {
   return (component as unknown as { branches: ConversationBranchRow[] }).branches;
+}
+
+/** The conversation the chat area's held fork rows belong to. */
+function heldBranchesConversation(component: ConversationChatAreaComponent): string | null | undefined {
+  return (component as unknown as { branchRowsConversationId?: string | null }).branchRowsConversationId;
 }
 
 describe('ConversationChatAreaComponent.OnDeleteMessage branch guard', () => {
@@ -88,12 +86,11 @@ describe('ConversationChatAreaComponent.OnDeleteMessage branch guard', () => {
     await h.component.OnDeleteMessage(ROW_2);
 
     expect(loadBranches).toHaveBeenCalledWith('CONV-1', CURRENT_USER, h.provider);
-    expect(notify).toHaveBeenCalledWith('This message is shared with another branch and cannot be deleted', 'error', 3000);
+    expect(notify).toHaveBeenCalledWith('A fork depends on this message, so it cannot be deleted', 'error', 3000);
     expect(h.confirm).not.toHaveBeenCalled();
     expect(h.provider.GetEntityObject).not.toHaveBeenCalled();
     expect(heldBranches(h.component)).toBe(fresh);
-    expect(h.scopeService.ForConversation('CONV-1', 'BRANCH-A').Branches).toEqual(fresh);
-    expect(h.rebuild).toHaveBeenCalledTimes(1);
+    expect(heldBranchesConversation(h.component)).toBe('CONV-1');
   });
 
   it('deletes nothing when the branch rows cannot be read', async () => {
@@ -106,7 +103,6 @@ describe('ConversationChatAreaComponent.OnDeleteMessage branch guard', () => {
     expect(logError).toHaveBeenCalledTimes(1);
     expect(h.confirm).not.toHaveBeenCalled();
     expect(h.provider.GetEntityObject).not.toHaveBeenCalled();
-    expect(h.rebuild).not.toHaveBeenCalled();
   });
 
   it('asks for confirmation, counting rows by Sequence, when no branch forks at or after the row', async () => {
@@ -137,7 +133,6 @@ describe('ConversationChatAreaComponent.OnDeleteMessage branch guard', () => {
     expect(h.confirm).not.toHaveBeenCalled();
     expect(notify).not.toHaveBeenCalled();
     expect(heldBranches(h.component)).toEqual([]);
-    expect(() => h.scopeService.ForConversation('CONV-1', 'BRANCH-A')).toThrow();
-    expect(h.rebuild).not.toHaveBeenCalled();
+    expect(heldBranchesConversation(h.component)).toBeUndefined();
   });
 });

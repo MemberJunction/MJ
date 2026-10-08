@@ -148,6 +148,15 @@ describe('ConversationAgentService — host rules on the wire', () => {
 
             expect(h.runViewParams[0].ExtraFilter).not.toContain('__mj_CreatedAt');
         });
+
+        it('considers only replies no rerun replaced (the inner detail query)', async () => {
+            const h = buildService();
+            await h.service.FindLatestAgentOutputVersion('conv-1', RESEARCH.ID);
+
+            const filter = h.runViewParams[0].ExtraFilter ?? '';
+            expect(filter).toContain(`WHERE [ConversationID]='conv-1' AND [BranchID] IS NULL AND [ReplacedAt] IS NULL AND AgentID='${RESEARCH.ID}'`);
+            expect(filter.indexOf('[ReplacedAt] IS NULL')).toBeGreaterThan(filter.indexOf('[vwConversationDetails]'));
+        });
     });
 
     describe('branch path', () => {
@@ -171,7 +180,7 @@ describe('ConversationAgentService — host rules on the wire', () => {
         });
 
         // The artifact-version filter starts with `ID IN (`; the path predicate opens its inner detail query.
-        const TRUNK_ARTIFACTS = `WHERE [ConversationID]='conv-1' AND [BranchID] IS NULL AND AgentID='${RESEARCH.ID}'`;
+        const TRUNK_ARTIFACTS = `WHERE [ConversationID]='conv-1' AND [BranchID] IS NULL AND [ReplacedAt] IS NULL AND AgentID='${RESEARCH.ID}'`;
 
         /** The filter of the artifact-version query a harness ran. */
         function artifactQuery(h: ServiceHarness): string | undefined {

@@ -7,7 +7,7 @@
  *
  * @module @memberjunction/ng-dashboards
  */
-import { IMetadataProvider, LogError, RunView } from '@memberjunction/core';
+import { IMetadataProvider, RunView } from '@memberjunction/core';
 import { EscapeSQLString } from '@memberjunction/global';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { ConversationEngine } from '@memberjunction/core-entities';
@@ -72,11 +72,10 @@ export async function LoadMeetingRooms(provider: IMetadataProvider, maxRows = 50
 }
 
 /**
- * Loads + speaker-attributes one room's transcript: the details on the room conversation's current branch
- * path, in `Sequence` order. Resolves agent lines via `AgentID` (AIEngine cache) and heard lines via the
- * diarized `ExternalID` against the room's participant roster (so a `User` line reads as the actual person,
- * and another agent heard in the room reads as that agent — not a generic "User"). Returns an empty
- * transcript when the conversation's branch scope or its filter cannot be built.
+ * Loads + speaker-attributes one room's transcript: the room conversation's Main rows (a bridge session
+ * writes Main), in `Sequence` order. Resolves agent lines via `AgentID` (AIEngine cache) and heard lines via
+ * the diarized `ExternalID` against the room's participant roster (so a `User` line reads as the actual
+ * person, and another agent heard in the room reads as that agent — not a generic "User").
  *
  * @param provider The request-scoped metadata provider.
  * @param conversationID The room conversation id.
@@ -87,14 +86,7 @@ export async function LoadRoomTranscript(
     conversationID: string,
     roomKey: string,
 ): Promise<TranscriptLine[]> {
-    let pathFilter: string;
-    try {
-        const scope = await ConversationEngine.LoadCurrentScope(conversationID, provider.CurrentUser, provider);
-        pathFilter = ConversationEngine.ScopeFilter(scope);
-    } catch (e) {
-        LogError(`Room transcript: could not read the branch scope of conversation ${conversationID}: ${e instanceof Error ? e.message : String(e)}`);
-        return [];
-    }
+    const pathFilter = ConversationEngine.ScopeFilter(ConversationEngine.TrunkScope(conversationID));
     const rv = RunView.FromMetadataProvider(provider);
     const [detailResult, bridgeResult] = await rv.RunViews([
         {

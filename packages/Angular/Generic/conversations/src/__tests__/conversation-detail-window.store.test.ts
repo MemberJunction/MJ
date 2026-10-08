@@ -651,6 +651,58 @@ describe('ConversationDetailWindowStore — refresh gap', () => {
     });
 });
 
+/** A draft fork's window ends at its anchor: every read keeps rows at or below `upToSequence`. */
+describe('ConversationDetailWindowStore — upper Sequence bound', () => {
+    const user = {} as UserInfo;
+
+    it('ends the first page at the bound, then pages older rows as usual', async () => {
+        const load: Mock = vi.fn();
+        const store = new ConversationDetailWindowStore({ LoadDetailWindow: load });
+        load.mockResolvedValueOnce(pageOf([18, 19, 20], true));
+
+        await store.LoadLatest('conv-a', user, 'branch-b', 20);
+
+        expect(load.mock.calls[0][0]).toMatchObject({ ConversationID: 'conv-a', BranchID: 'branch-b', BeforeSequence: 21 });
+        expect(store.HasMoreAbove).toBe(true);
+        expect(store.CanLoadOlder()).toBe(true);
+
+        load.mockResolvedValueOnce(pageOf([15, 16, 17], false));
+        await store.LoadOlder(user);
+
+        expect(load.mock.calls[1][0]).toMatchObject({ BranchID: 'branch-b', BeforeSequence: 18 });
+        expect(sequencesOf(store.GetSnapshot().Details)).toEqual([15, 16, 17, 18, 19, 20]);
+        expect(store.HasMoreAbove).toBe(false);
+    });
+
+    it('keeps the bound on a refresh', async () => {
+        const load: Mock = vi.fn();
+        const store = new ConversationDetailWindowStore({ LoadDetailWindow: load });
+        load.mockResolvedValueOnce(pageOf([18, 19, 20], true));
+        await store.LoadLatest('conv-a', user, null, 20);
+
+        load.mockResolvedValueOnce(pageOf([18, 19, 20], true));
+        await store.RefreshLatest(user);
+
+        expect(load.mock.calls[1][0]).toMatchObject({ BranchID: null, BeforeSequence: 21 });
+        expect(sequencesOf(store.GetSnapshot().Details)).toEqual([18, 19, 20]);
+    });
+
+    it('reads the newest rows with no bound when none is given, and a later load drops an earlier bound', async () => {
+        const load: Mock = vi.fn();
+        const store = new ConversationDetailWindowStore({ LoadDetailWindow: load });
+        load.mockResolvedValueOnce(pageOf([18, 19, 20], true));
+        await store.LoadLatest('conv-a', user, 'branch-b', 20);
+
+        load.mockResolvedValueOnce(pageOf([40, 41, 42], true));
+        await store.LoadLatest('conv-a', user);
+        expect(load.mock.calls[1][0]).not.toHaveProperty('BeforeSequence');
+
+        load.mockResolvedValueOnce(pageOf([40, 41, 42, 43], true));
+        await store.RefreshLatest(user);
+        expect(load.mock.calls[2][0].BeforeSequence).toBeUndefined();
+    });
+});
+
 /**
  * Read failures.
  *

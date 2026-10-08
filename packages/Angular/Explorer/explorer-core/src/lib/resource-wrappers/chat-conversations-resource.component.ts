@@ -82,7 +82,6 @@ import { Subject, takeUntil } from 'rxjs';
               [currentUser]="currentUser"
               [conversationId]="selectedConversationId"
               [conversation]="selectedConversation"
-              [threadId]="selectedThreadId"
               [isNewConversation]="isNewUnsavedConversation"
               [pendingMessage]="pendingMessageToSend"
               [pendingAttachments]="pendingAttachmentsToSend"
@@ -93,8 +92,6 @@ import { Subject, takeUntil } from 'rxjs';
               (sidebarToggleClicked)="expandSidebar()"
               (conversationRenamed)="onConversationRenamed($event)"
               (conversationCreated)="onConversationCreated($event)"
-              (threadOpened)="onThreadOpened($event)"
-              (threadClosed)="onThreadClosed()"
               (pendingArtifactConsumed)="onPendingArtifactConsumed()"
               (pendingMessageConsumed)="onPendingMessageConsumed()"
               (pendingMessageRequested)="onPendingMessageRequested($event)"
@@ -341,16 +338,6 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   /** @deprecated Use {@link SelectedConversation}. */
   public set selectedConversation(value: MJConversationEntity | null) {
     this.SelectedConversation = value;
-  }
-  public SelectedThreadId: string | null = null;
-
-  /** @deprecated Use {@link SelectedThreadId}. */
-  public get selectedThreadId(): string | null {
-    return this.SelectedThreadId;
-  }
-  /** @deprecated Use {@link SelectedThreadId}. */
-  public set selectedThreadId(value: string | null) {
-    this.SelectedThreadId = value;
   }
   public IsNewUnsavedConversation: boolean = false;
 
@@ -970,7 +957,6 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
       } else {
         this.SelectedConversationId = null;
         this.SelectedConversation = null;
-        this.SelectedThreadId = null;
         this.IsNewUnsavedConversation = true;
         this.updateUrl();
       }
@@ -987,7 +973,6 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    */
   async OnConversationSelected(conversationId: string): Promise<void> {
     await this.selectConversation(conversationId);
-    this.SelectedThreadId = null; // Clear thread when switching conversations
     this.IsNewUnsavedConversation = false;
     this.updateUrl();
     this.updateTabTitle();
@@ -1247,7 +1232,6 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   OnNewConversationRequested(): void {
     this.SelectedConversationId = null;
     this.SelectedConversation = null;
-    this.SelectedThreadId = null;
     this.IsNewUnsavedConversation = true;
     this.updateUrl();
     this.NotifyDisplayNameChanged('New Conversation');
@@ -1313,30 +1297,6 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   /** @deprecated Use {@link OnConversationRenamed}. */
   onConversationRenamed(event: { conversationId: string; name: string; description: string }): void {
     return this.OnConversationRenamed(event);
-  }
-
-  /**
-   * Handle thread opened event
-   */
-  OnThreadOpened(threadId: string): void {
-    this.SelectedThreadId = threadId;
-  }
-
-  /** @deprecated Use {@link OnThreadOpened}. */
-  onThreadOpened(threadId: string): void {
-    return this.OnThreadOpened(threadId);
-  }
-
-  /**
-   * Handle thread closed event
-   */
-  OnThreadClosed(): void {
-    this.SelectedThreadId = null;
-  }
-
-  /** @deprecated Use {@link OnThreadClosed}. */
-  onThreadClosed(): void {
-    return this.OnThreadClosed();
   }
 
   /**

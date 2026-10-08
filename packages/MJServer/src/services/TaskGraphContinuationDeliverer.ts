@@ -46,7 +46,8 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
     ) {}
 
     /**
-     * Posts the roll-up as an AI-role message in the graph's conversation.
+     * Posts the roll-up as an AI-role message in the graph's conversation, on the fork of the
+     * message that started the graph (Main when that message is in Main).
      *
      * Never throws. The dispatcher calls this inside the compare-and-swap that marks a completion
      * delivered; an error escaping would either abort that guard or leave the graph looking
@@ -62,8 +63,8 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
             }
 
             const provider = await this.providerFactory.CreateProvider();
-            const conversationID = await this.resolveConversationID(params.ConversationDetailID, provider);
-            if (!conversationID) {
+            const origin = await this.resolveOrigin(params.ConversationDetailID, provider);
+            if (!origin) {
                 LogError(
                     `[TaskGraphContinuationDeliverer] Conversation detail ${params.ConversationDetailID} could not be loaded — ` +
                     `"${params.WorkflowName}" has nowhere to post its outcome.`
@@ -73,7 +74,8 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
 
             const detail = await provider.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', this.contextUser);
             detail.NewRecord();
-            detail.ConversationID = conversationID;
+            detail.ConversationID = origin.ConversationID;
+            detail.BranchID = origin.BranchID;
             detail.Role = 'AI';
             detail.Status = 'Complete';
             detail.HiddenToUser = false;
@@ -149,10 +151,10 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
         }
     }
 
-    /** The conversation a detail belongs to. */
-    private async resolveConversationID(conversationDetailID: string, provider: IMetadataProvider): Promise<string | null> {
+    /** The conversation and fork (null is Main) of the detail that started the graph; null when it cannot be loaded. */
+    private async resolveOrigin(conversationDetailID: string, provider: IMetadataProvider): Promise<{ ConversationID: string; BranchID: string | null } | null> {
         const detail = await provider.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', this.contextUser);
-        return (await detail.Load(conversationDetailID)) ? detail.ConversationID : null;
+        return (await detail.Load(conversationDetailID)) ? { ConversationID: detail.ConversationID, BranchID: detail.BranchID ?? null } : null;
     }
 
     /**

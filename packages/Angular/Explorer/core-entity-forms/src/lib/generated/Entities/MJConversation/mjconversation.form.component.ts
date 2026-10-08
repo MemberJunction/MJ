@@ -22,6 +22,7 @@ export class MJConversationFormComponent extends BaseFormComponent {
             { sectionKey: 'testRunDetails', sectionName: 'Test Run Details', isExpanded: true },
             { sectionKey: 'applicationIntegration', sectionName: 'Application Integration', isExpanded: true },
             { sectionKey: 'meetingMedia', sectionName: 'Meeting Media', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJConversationDetails', sectionName: 'Conversation Details', isExpanded: false },
             { sectionKey: 'mJConversationArtifacts', sectionName: 'Conversation Artifacts', isExpanded: false },
@@ -32,8 +33,8 @@ export class MJConversationFormComponent extends BaseFormComponent {
             { sectionKey: 'mJConversations', sectionName: 'Conversations', isExpanded: false },
             { sectionKey: 'mJUserRoutines', sectionName: 'User Routines', isExpanded: false },
             { sectionKey: 'mJConversationSkills', sectionName: 'Conversation Skills', isExpanded: false },
-            { sectionKey: 'mJConversationBranches', sectionName: 'Conversation Branches', isExpanded: false },
-            { sectionKey: 'mJMeetings', sectionName: 'Meetings', isExpanded: false }
+            { sectionKey: 'mJMeetings', sectionName: 'Meetings', isExpanded: false },
+            { sectionKey: 'mJConversationBranches', sectionName: 'Conversation Branches', isExpanded: false }
         ]);
     }
 }

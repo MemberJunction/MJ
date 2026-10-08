@@ -14,7 +14,7 @@
  * @module @memberjunction/realtime-widget
  */
 
-import { RunView, LogError, type UserInfo, type IMetadataProvider } from '@memberjunction/core';
+import { RunView, type UserInfo, type IMetadataProvider } from '@memberjunction/core';
 import { ConversationEngine } from '@memberjunction/core-entities';
 import type { MJConversationEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { setupGraphQLClient, GraphQLProviderConfigData } from '@memberjunction/graphql-dataprovider';
@@ -203,22 +203,14 @@ export class RuntimeWidgetTransport implements IWidgetTransport {
         return detail;
     }
 
-    /**
-     * Reads the newest AI Conversation Detail on the conversation's current branch path (the agent's
-     * reply). Returns an empty string when the conversation's scope cannot be read.
-     */
+    /** Reads the newest AI Conversation Detail in Main (the agent's reply). */
     private async readLatestAgentReply(): Promise<string> {
         const conversationId = this.conversationId;
         if (!conversationId || !this.contextUser) {
             return '';
         }
-        const scope = await ConversationEngine.LoadCurrentScope(conversationId, this.contextUser, this.provider ?? undefined).catch((err: unknown) => {
-            LogError(`[mj-widget] Could not read the branch scope of conversation ${conversationId}: ${err instanceof Error ? err.message : String(err)}`);
-            return undefined;
-        });
-        if (!scope) {
-            return '';
-        }
+        // The widget's conversations have no forks.
+        const scope = ConversationEngine.TrunkScope(conversationId);
         const rv = new RunView();
         const result = await rv.RunView<MJConversationDetailEntity>(
             {

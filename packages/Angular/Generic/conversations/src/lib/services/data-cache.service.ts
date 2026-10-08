@@ -182,20 +182,19 @@ export class DataCacheService {
   }
 
   /**
-   * Load the ConversationDetail entities in one scope of a conversation (the trunk, or one
-   * branch path) and cache them
+   * Load the ConversationDetail entities of one scope of a conversation (Main, or one fork's
+   * path) that no rerun replaced, and cache them
    * @param conversationId The conversation ID
    * @param currentUser User context
-   * @param scope The rows to read; when omitted, the path the conversation currently shows
-   *   ({@link ConversationEngine.LoadCurrentScope})
+   * @param scope The rows to read; Main when omitted
    * @returns Array of MJConversationDetailEntity objects
-   * @throws when the scope belongs to another conversation, or the current scope cannot be read
+   * @throws when the scope belongs to another conversation
    */
   async LoadConversationDetails(conversationId: string, currentUser: UserInfo, scope?: ConversationScope): Promise<MJConversationDetailEntity[]> {
     if (scope && !UUIDsEqual(scope.ConversationID, conversationId)) {
       throw new Error(`Conversation ${conversationId} cannot be read with the scope of conversation ${scope.ConversationID}`);
     }
-    const resolved = scope ?? await ConversationEngine.LoadCurrentScope(conversationId, currentUser, this.Provider);
+    const resolved = scope ?? ConversationEngine.TrunkScope(conversationId);
     const timestamp = new Date().toISOString();
     console.log(`[${timestamp}] 💾 DataCacheService.loadConversationDetails - Loading messages for conversation ${conversationId}`);
 
@@ -205,7 +204,7 @@ export class DataCacheService {
     const result = await rv.RunView<MJConversationDetailEntity>(
       {
         EntityName: 'MJ: Conversation Details',
-        ExtraFilter: ConversationEngine.ScopeFilter(resolved),
+        ExtraFilter: ConversationEngine.LiveRowsFilter(ConversationEngine.ScopeFilter(resolved)),
         OrderBy: '__mj_CreatedAt ASC',
         ResultType: 'entity_object'
       },

@@ -5,6 +5,7 @@
  * runs on the branch its reply row is on: the run's artifacts are gathered from that branch's
  * path, and the params handed to RunAgent carry the branch so history tools, compaction and
  * carry-forward read the same path. A reply row on the trunk leaves the key absent.
+ * The user and reply rows the runner creates itself carry the branch the caller named, else Main.
  *
  * No DB, no network — the provider is a fake and RunAgent and the artifact gather are stubbed on
  * the instance, matching `agent-runner-conversation-artifacts.test.ts`.
@@ -44,7 +45,7 @@ interface RunnerSeams {
     gatherConversationArtifacts(conversationId: string, contextUser: UserInfo, historyFrom?: Date, branchId?: string | null): Promise<InputArtifact[]>;
 }
 
-/** A fake conversation-detail entity. A new row's Save stamps `stampBranch`, as the server does. */
+/** A fake conversation-detail entity. */
 interface FakeDetail {
     ID: string;
     ConversationID: string;
@@ -56,21 +57,15 @@ interface FakeDetail {
     [key: string]: unknown;
 }
 
-function makeDetail(id: string, branchId: string | null, stampBranch: string | null = null): FakeDetail {
-    const detail: FakeDetail = {
+function makeDetail(id: string, branchId: string | null): FakeDetail {
+    return {
         ID: id,
         ConversationID: 'conv-1',
         BranchID: branchId,
-        Save: vi.fn(async () => {
-            if (detail.BranchID == null) {
-                detail.BranchID = stampBranch;
-            }
-            return true;
-        }),
+        Save: vi.fn(async () => true),
         Load: vi.fn(async () => true),
         EnsureSaveComplete: vi.fn(async () => undefined),
     };
-    return detail;
 }
 
 /** Provider handing out the given details in creation order. */
@@ -135,13 +130,30 @@ describe('AgentRunner.RunAgentInConversation — the run reads its branch', () =
         expect(runParams(s).ConversationBranchID).toBe('b1');
     });
 
-    it('reads the branch the server stamped on a reply row the runner created', async () => {
-        const s = stub(makeProvider([makeDetail('user-1', null, 'b1'), makeDetail('reply-1', null, 'b1')]));
+    it('writes the caller-named branch on the user and reply rows it creates, and reads that branch', async () => {
+        const userRow = makeDetail('user-1', null);
+        const replyRow = makeDetail('reply-1', null);
+        const s = stub(makeProvider([userRow, replyRow]));
+
+        await s.runner.RunAgentInConversation(makeParams({ ConversationBranchID: 'b1' }), { conversationId: 'conv-1', userMessage: 'hi' });
+
+        expect(userRow.BranchID).toBe('b1');
+        expect(replyRow.BranchID).toBe('b1');
+        expect(s.gather).toHaveBeenCalledWith('conv-1', USER, undefined, 'b1');
+        expect(runParams(s).ConversationBranchID).toBe('b1');
+    });
+
+    it('writes Main on the rows it creates when the caller names no branch', async () => {
+        const userRow = makeDetail('user-1', 'stale');
+        const replyRow = makeDetail('reply-1', 'stale');
+        const s = stub(makeProvider([userRow, replyRow]));
 
         await s.runner.RunAgentInConversation(makeParams(), { conversationId: 'conv-1', userMessage: 'hi' });
 
-        expect(s.gather).toHaveBeenCalledWith('conv-1', USER, undefined, 'b1');
-        expect(runParams(s).ConversationBranchID).toBe('b1');
+        expect(userRow.BranchID).toBeNull();
+        expect(replyRow.BranchID).toBeNull();
+        expect(s.gather).toHaveBeenCalledWith('conv-1', USER, undefined, undefined);
+        expect(runParams(s)).not.toHaveProperty('ConversationBranchID');
     });
 
     it('leaves ConversationBranchID absent for a reply row on the trunk', async () => {

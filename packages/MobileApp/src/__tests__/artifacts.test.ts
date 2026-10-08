@@ -2,8 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ---------------------------------------------------------------------------
 // The real `@memberjunction/core` with `Metadata` and `RunView` replaced, so no
-// provider/network is touched and the real `ConversationEngine` builds the scope
-// from the rows each test routes. Every RunView call is recorded.
+// provider/network is touched and the real `ConversationEngine` builds the Main
+// predicate. Every RunView call is recorded.
 // ---------------------------------------------------------------------------
 type RunViewParams = { EntityName: string; ExtraFilter?: string; Fields?: string[]; ResultType?: string };
 type RunViewResult = { Success: boolean; Results?: unknown[]; ErrorMessage?: string };
@@ -58,9 +58,8 @@ function artifactEntity(opts: { id?: string; type?: string; loadOk?: boolean; de
     };
 }
 
-/** The artifact's conversation on the trunk, with no message linking any artifact. */
-function trunkConversation(params: RunViewParams): RunViewResult | undefined {
-    if (params.EntityName === 'MJ: Conversations') return { Success: true, Results: [{ ID: CONV, CurrentBranchID: null }] };
+/** No message of the artifact's conversation links any artifact. */
+function noLinks(params: RunViewParams): RunViewResult | undefined {
     if (params.EntityName === 'MJ: Conversation Details') return { Success: true, Results: [] };
     return undefined;
 }
@@ -69,7 +68,7 @@ function trunkConversation(params: RunViewParams): RunViewResult | undefined {
 function setupSingle(opts: { type?: string; content: string; loadOk?: boolean }): void {
     state.entityObject = artifactEntity(opts);
     state.runView = (params) =>
-        trunkConversation(params) ?? { Success: true, Results: [{ ID: 'v2', Version: 2, Content: opts.content }] };
+        noLinks(params) ?? { Success: true, Results: [{ ID: 'v2', Version: 2, Content: opts.content }] };
 }
 
 beforeEach(() => {
@@ -147,7 +146,7 @@ describe('LoadArtifact — classify()', () => {
     it('returns version + count metadata', async () => {
         setupSingle({ type: 'Markdown', content: '# hi' });
         state.runView = (params) =>
-            trunkConversation(params) ?? {
+            noLinks(params) ?? {
                 Success: true,
                 Results: [
                     { ID: 'v3', Version: 3, Content: '# hi' },
@@ -176,8 +175,6 @@ describe('LoadConversationArtifacts — categorize + preview + attribution', () 
     }): (params: RunViewParams) => RunViewResult {
         return (params) => {
             switch (params.EntityName) {
-                case 'MJ: Conversations':
-                    return { Success: true, Results: [{ ID: 'conv-1', CurrentBranchID: null }] };
                 case 'MJ: Conversation Artifacts':
                     return { Success: true, Results: routes.artifacts };
                 case 'MJ: Conversation Artifact Versions':
@@ -232,36 +229,27 @@ describe('LoadConversationArtifacts — categorize + preview + attribution', () 
     });
 });
 
-describe('artifact reads — conversation scope', () => {
-    const B1 = 'B1111111-1111-1111-1111-111111111111';
+describe('artifact reads — Main', () => {
     const A1 = 'A1111111-1111-1111-1111-111111111111';
     const A2 = 'A2222222-2222-2222-2222-222222222222';
     const A3 = 'A3333333-3333-3333-3333-333333333333';
     const V1 = 'C1111111-1111-1111-1111-111111111111';
     const V2 = 'C2222222-2222-2222-2222-222222222222';
     const V3 = 'C3333333-3333-3333-3333-333333333333';
-    /** The current branch forks from the trunk after sequence 2. */
-    const SCOPE_FILTER = `[ConversationID]='${CONV}' AND ([BranchID]='${B1}' OR ([BranchID] IS NULL AND [Sequence] <= 2))`;
+    const MAIN_FILTER = `[ConversationID]='${CONV}' AND [BranchID] IS NULL`;
 
     type Link = { ArtifactID: string | null; ArtifactVersionID: string | null; AgentID?: string | null };
 
-    /** Routes the scope reads, then answers the details link queries by whether they carry the scope filter. */
-    function routeScoped(opts: {
+    /** Answers the details link queries by whether they carry the Main predicate. */
+    function routeMain(opts: {
         artifacts?: unknown[];
         versions?: unknown[];
-        scopedLinks: Link[];
+        mainLinks: Link[];
         allLinks: Link[];
         agents?: unknown[];
     }): (params: RunViewParams) => RunViewResult {
         return (params) => {
             switch (params.EntityName) {
-                case 'MJ: Conversations':
-                    return { Success: true, Results: [{ ID: CONV, CurrentBranchID: B1 }] };
-                case 'MJ: Conversation Branches':
-                    return {
-                        Success: true,
-                        Results: [{ ID: B1, ConversationID: CONV, ParentBranchID: null, ForkFromSequence: 2, Name: null }],
-                    };
                 case 'MJ: Conversation Artifacts':
                     return { Success: true, Results: opts.artifacts ?? [] };
                 case 'MJ: Conversation Artifact Versions':
@@ -269,7 +257,7 @@ describe('artifact reads — conversation scope', () => {
                 case 'MJ: Conversation Details':
                     return {
                         Success: true,
-                        Results: (params.ExtraFilter ?? '').includes(SCOPE_FILTER) ? opts.scopedLinks : opts.allLinks,
+                        Results: (params.ExtraFilter ?? '').includes(MAIN_FILTER) ? opts.mainLinks : opts.allLinks,
                     };
                 case 'MJ: AI Agents':
                     return { Success: true, Results: opts.agents ?? [] };
@@ -279,14 +267,14 @@ describe('artifact reads — conversation scope', () => {
         };
     }
 
-    it('LoadConversationArtifacts lists the artifacts a message in scope links to, and those no message links to', async () => {
-        state.runView = routeScoped({
+    it('LoadConversationArtifacts lists the artifacts a Main message links to, and those no message links to', async () => {
+        state.runView = routeMain({
             artifacts: [
-                { ID: A1, Name: 'in scope', Description: null, ArtifactType: 'Markdown' },
-                { ID: A2, Name: 'other path', Description: null, ArtifactType: 'Markdown' },
+                { ID: A1, Name: 'in Main', Description: null, ArtifactType: 'Markdown' },
+                { ID: A2, Name: 'in a fork', Description: null, ArtifactType: 'Markdown' },
                 { ID: A3, Name: 'no message', Description: null, ArtifactType: 'Markdown' },
             ],
-            scopedLinks: [{ ArtifactID: A1, ArtifactVersionID: null, AgentID: 'agent-1' }],
+            mainLinks: [{ ArtifactID: A1, ArtifactVersionID: null, AgentID: 'agent-1' }],
             allLinks: [
                 { ArtifactID: A1, ArtifactVersionID: null },
                 { ArtifactID: A2, ArtifactVersionID: null },
@@ -302,28 +290,29 @@ describe('artifact reads — conversation scope', () => {
         expect(result[1].AgentId).toBeNull();
     });
 
-    it('LoadConversationArtifacts reads the message links with the scope filter of the current branch', async () => {
-        state.runView = routeScoped({
+    it('LoadConversationArtifacts reads the message links with the Main predicate and reads no fork rows', async () => {
+        state.runView = routeMain({
             artifacts: [{ ID: A1, Name: 'x', Description: null, ArtifactType: 'Markdown' }],
-            scopedLinks: [],
+            mainLinks: [],
             allLinks: [],
         });
 
         await LoadConversationArtifacts(CONV);
 
         const detailReads = state.calls.filter((c) => c.EntityName === 'MJ: Conversation Details');
-        expect(detailReads.some((c) => (c.ExtraFilter ?? '').startsWith(SCOPE_FILTER))).toBe(true);
+        expect(detailReads.some((c) => (c.ExtraFilter ?? '').startsWith(MAIN_FILTER))).toBe(true);
         expect(detailReads.every((c) => !(c.ExtraFilter ?? '').startsWith(`ConversationID='${CONV}'`))).toBe(true);
+        expect(state.calls.some((c) => c.EntityName === 'MJ: Conversations' || c.EntityName === 'MJ: Conversation Branches')).toBe(false);
     });
 
-    it('LoadConversationArtifacts previews the newest version visible in scope', async () => {
-        state.runView = routeScoped({
+    it('LoadConversationArtifacts previews the newest version visible in Main', async () => {
+        state.runView = routeMain({
             artifacts: [{ ID: A1, Name: 'doc', Description: null, ArtifactType: 'Markdown' }],
             versions: [
-                { ID: V3, ConversationArtifactID: A1, Version: 3, Content: 'other path' },
-                { ID: V2, ConversationArtifactID: A1, Version: 2, Content: 'on this path' },
+                { ID: V3, ConversationArtifactID: A1, Version: 3, Content: 'in a fork' },
+                { ID: V2, ConversationArtifactID: A1, Version: 2, Content: 'in Main' },
             ],
-            scopedLinks: [{ ArtifactID: A1, ArtifactVersionID: V2, AgentID: null }],
+            mainLinks: [{ ArtifactID: A1, ArtifactVersionID: V2, AgentID: null }],
             allLinks: [
                 { ArtifactID: A1, ArtifactVersionID: V2 },
                 { ArtifactID: A1, ArtifactVersionID: V3 },
@@ -332,18 +321,18 @@ describe('artifact reads — conversation scope', () => {
 
         const [summary] = await LoadConversationArtifacts(CONV);
 
-        expect(summary.Preview).toBe('on this path');
+        expect(summary.Preview).toBe('in Main');
     });
 
-    it("LoadArtifact shows the newest version visible in the scope of the artifact's conversation", async () => {
+    it("LoadArtifact shows the newest version visible in Main of the artifact's conversation", async () => {
         state.entityObject = artifactEntity({ id: A1, type: 'Note' });
-        state.runView = routeScoped({
+        state.runView = routeMain({
             versions: [
-                { ID: V3, Version: 3, Content: 'other path' },
-                { ID: V2, Version: 2, Content: 'on this path' },
+                { ID: V3, Version: 3, Content: 'in a fork' },
+                { ID: V2, Version: 2, Content: 'in Main' },
                 { ID: V1, Version: 1, Content: 'no message' },
             ],
-            scopedLinks: [{ ArtifactID: A1, ArtifactVersionID: V2, AgentID: null }],
+            mainLinks: [{ ArtifactID: A1, ArtifactVersionID: V2, AgentID: null }],
             allLinks: [
                 { ArtifactID: A1, ArtifactVersionID: V2 },
                 { ArtifactID: A1, ArtifactVersionID: V3 },
@@ -354,9 +343,10 @@ describe('artifact reads — conversation scope', () => {
 
         expect(artifact?.Version).toBe(2);
         expect(artifact?.VersionCount).toBe(2);
-        expect(artifact?.content).toBe('on this path');
-        const scopeRead = state.calls.find((c) => c.EntityName === 'MJ: Conversations');
-        expect(scopeRead?.ExtraFilter).toBe(`ID='${CONV}'`);
+        expect(artifact?.content).toBe('in Main');
+        const mainLinkRead = state.calls.find((c) => c.EntityName === 'MJ: Conversation Details' && c.Fields?.includes('AgentID'));
+        expect(mainLinkRead?.ExtraFilter).toContain(MAIN_FILTER);
+        expect(state.calls.some((c) => c.EntityName === 'MJ: Conversations' || c.EntityName === 'MJ: Conversation Branches')).toBe(false);
     });
 });
 

@@ -176,7 +176,7 @@ describe('AgentRunner — conversation artifact hydration on the direct RunAgent
         await bridge(provider).hydrateConversationArtifacts(makeParams({ conversationId: 'conv-99', ConversationHistoryFrom: floor }));
 
         const detailScan = runViewCalls.find((c) => c.EntityName === 'MJ: Conversation Details');
-        expect(detailScan?.ExtraFilter).toBe(`[ConversationID]='conv-99' AND [BranchID] IS NULL AND __mj_CreatedAt >= '${floor.toISOString()}'`);
+        expect(detailScan?.ExtraFilter).toBe(`[ConversationID]='conv-99' AND [BranchID] IS NULL AND __mj_CreatedAt >= '${floor.toISOString()}' AND [ReplacedAt] IS NULL`);
     });
 
     it('without a floor, scans the whole conversation as before', async () => {
@@ -184,7 +184,7 @@ describe('AgentRunner — conversation artifact hydration on the direct RunAgent
         await bridge(provider).hydrateConversationArtifacts(makeParams({ conversationId: 'conv-99' }));
 
         const detailScan = runViewCalls.find((c) => c.EntityName === 'MJ: Conversation Details');
-        expect(detailScan?.ExtraFilter).toBe(`[ConversationID]='conv-99' AND [BranchID] IS NULL`);
+        expect(detailScan?.ExtraFilter).toBe(`[ConversationID]='conv-99' AND [BranchID] IS NULL AND [ReplacedAt] IS NULL`);
     });
 
     it('on a branch, gathers only the artifacts of messages on that branch\'s path', async () => {
@@ -193,6 +193,14 @@ describe('AgentRunner — conversation artifact hydration on the direct RunAgent
         await bridge(provider).hydrateConversationArtifacts(makeParams({ conversationId: 'conv-99', ConversationBranchID: 'b1' }));
 
         const detailScan = runViewCalls.find((c) => c.EntityName === 'MJ: Conversation Details');
-        expect(detailScan?.ExtraFilter).toBe(`[ConversationID]='conv-99' AND ([BranchID]='b1' OR ([BranchID] IS NULL AND [Sequence] <= 4))`);
+        expect(detailScan?.ExtraFilter).toBe(`[ConversationID]='conv-99' AND ([BranchID]='b1' OR ([BranchID] IS NULL AND [Sequence] <= 4)) AND [ReplacedAt] IS NULL`);
+    });
+
+    it('leaves out the artifacts of a replaced answer', async () => {
+        const { provider } = makeProvider();
+        await bridge(provider).hydrateConversationArtifacts(makeParams({ conversationId: 'conv-99' }));
+
+        const detailScan = runViewCalls.find((c) => c.EntityName === 'MJ: Conversation Details');
+        expect(detailScan?.ExtraFilter?.endsWith('AND [ReplacedAt] IS NULL')).toBe(true);
     });
 });

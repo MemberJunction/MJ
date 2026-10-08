@@ -47,8 +47,8 @@ export interface RubricRecords {
     rows(entityName: string, filter: string, orderBy?: string): Promise<Record<string, unknown>[]>;
     createDraft(input: { rubricId?: string; rubricName?: string; nodes: RubricNodeSnapshot[] }): Promise<{ id: string; status: string }>;
     /**
-     * The conversation's current branch scope. A conversation subject's details are read only within
-     * it, so records without this method cannot read a conversation subject.
+     * The conversation's Main scope. A conversation subject's details are read only within it, so
+     * records without this method cannot read a conversation subject.
      */
     conversationScope?(conversationId: string): Promise<ConversationScope>;
 }
@@ -425,12 +425,12 @@ export class RubricEngine {
         }
         if (input.subjectEntityName === 'MJ: Conversations') {
             const scope = await this.loadConversationScope(input.subjectRecordId);
-            record.Details = await this.records.rows('MJ: Conversation Details', ConversationEngine.ScopeFilter(scope), 'Sequence');
+            record.Details = await this.records.rows('MJ: Conversation Details', ConversationEngine.LiveRowsFilter(ConversationEngine.ScopeFilter(scope)), 'Sequence');
         }
         return ShapeContent(input.subjectEntityName, record);
     }
 
-    /** The conversation's current branch scope. Throws when the records cannot read it. */
+    /** The conversation's Main scope. Throws when the records cannot read it. */
     private async loadConversationScope(conversationId: string): Promise<ConversationScope> {
         if (!this.records.conversationScope) {
             throw new Error('subject conversation not readable');

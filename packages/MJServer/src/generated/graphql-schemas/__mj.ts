@@ -37258,26 +37258,38 @@ export class MJConversationArtifactResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: Conversation Branches
 //****************************************************************************
-@ObjectType({ description: "An alternative continuation of a conversation, created by editing an earlier user message or regenerating an AI reply. The branch's path is its own messages plus each ancestor's messages up to that ancestor's ForkFromSequence." })
+@ObjectType({ description: "A fork of a conversation: another path that starts at a message. Main (the trunk) is the messages with no branch. A fork's path is its own messages plus each ancestor's messages up to that ancestor's ForkFromSequence." })
 export class MJConversationBranch_ {
     @Field() 
     @MaxLength(36)
     ID: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: "The conversation this fork belongs to."}) 
     @MaxLength(36)
     ConversationID?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: "The fork this one started from. NULL means it started from Main, or before the first message when ForkFromSequence is also NULL."}) 
     @MaxLength(36)
     ParentBranchID?: string;
         
-    @Field(() => Int, {nullable: true, description: "Sequence of the last message shared with the parent path. NULL means the branch starts before the first message, in which case ParentBranchID is also NULL."}) 
+    @Field(() => Int, {nullable: true, description: "Sequence of the last message shared with the parent path. NULL means the fork starts before the first message, in which case ParentBranchID is also NULL."}) 
     ForkFromSequence?: number;
         
-    @Field({nullable: true, description: "Optional user-facing label for the branch."}) 
+    @Field({nullable: true, description: "Optional name of the fork. With no name, the UI shows a default label from Kind: a Fork is named from its first message."}) 
     @MaxLength(255)
     Name?: string;
+        
+    @Field({nullable: true, description: "How the fork started: Fork (Fork from here), Edit (a sent message was edited) or Regenerate (an answer was regenerated)."}) 
+    @MaxLength(20)
+    Kind?: string;
+        
+    @Field({nullable: true, description: "The edited message (Kind Edit) or the replaced answer (Kind Regenerate); NULL otherwise. Not a foreign key, to avoid a CodeGen cascade cycle with ConversationDetail."}) 
+    @MaxLength(36)
+    SourceDetailID?: string;
+        
+    @Field({nullable: true, description: "The person who started the fork."}) 
+    @MaxLength(36)
+    UserID?: string;
         
     @Field() 
     _mj__CreatedAt: Date;
@@ -37292,6 +37304,10 @@ export class MJConversationBranch_ {
     @Field({nullable: true}) 
     @MaxLength(255)
     ParentBranch?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    User?: string;
         
     @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
     ReadableFields___?: string[];
@@ -37318,6 +37334,15 @@ export class CreateMJConversationBranchInput {
     @Field({ nullable: true })
     Name: string | null;
 
+    @Field({ nullable: true })
+    Kind?: string;
+
+    @Field({ nullable: true })
+    SourceDetailID: string | null;
+
+    @Field({ nullable: true })
+    UserID?: string;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -37342,6 +37367,15 @@ export class UpdateMJConversationBranchInput {
 
     @Field({ nullable: true })
     Name?: string | null;
+
+    @Field({ nullable: true })
+    Kind?: string;
+
+    @Field({ nullable: true })
+    SourceDetailID?: string | null;
+
+    @Field({ nullable: true })
+    UserID?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -38349,9 +38383,12 @@ export class MJConversationDetail_ {
     @Field(() => Int, {nullable: true, description: "Monotonic, per-conversation ordinal assigned on insert (1-based). Provides a stable symbolic handle used by conversation-history retrieval tools and by the sequence markers embedded in compaction summaries. A summary stored in SummaryOfEarlierConversation on a given row covers all rows with a lower Sequence in the same conversation."}) 
     Sequence?: number;
         
-    @Field({nullable: true, description: "The branch this message belongs to. NULL means the trunk (the original conversation path)."}) 
+    @Field({nullable: true, description: "The fork this message belongs to. NULL means Main (the trunk). Every writer sets it explicitly."}) 
     @MaxLength(36)
     BranchID?: string;
+        
+    @Field({nullable: true, description: "When a rerun of this message's turn replaced it (Regenerate or Save and resend while forking is off). A replaced row is kept for audit, is hidden from the user and is never sent to an agent. NULL means the row is live."}) 
+    ReplacedAt?: Date;
         
     @Field({nullable: true}) 
     @MaxLength(255)
@@ -38504,6 +38541,9 @@ export class CreateMJConversationDetailInput {
     @Field({ nullable: true })
     BranchID: string | null;
 
+    @Field({ nullable: true })
+    ReplacedAt: Date | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -38606,6 +38646,9 @@ export class UpdateMJConversationDetailInput {
 
     @Field({ nullable: true })
     BranchID?: string | null;
+
+    @Field({ nullable: true })
+    ReplacedAt?: Date | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -39292,10 +39335,6 @@ export class MJConversation_ {
     @MaxLength(36)
     LastConversationID?: string;
         
-    @Field({nullable: true, description: "The branch currently shown and written to. NULL means the trunk. Not a foreign key, to avoid a CodeGen cascade cycle with ConversationBranch."}) 
-    @MaxLength(36)
-    CurrentBranchID?: string;
-        
     @Field({nullable: true}) 
     @MaxLength(100)
     User?: string;
@@ -39415,9 +39454,6 @@ export class CreateMJConversationInput {
     @Field({ nullable: true })
     LastConversationID: string | null;
 
-    @Field({ nullable: true })
-    CurrentBranchID: string | null;
-
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -39496,9 +39532,6 @@ export class UpdateMJConversationInput {
 
     @Field({ nullable: true })
     LastConversationID?: string | null;
-
-    @Field({ nullable: true })
-    CurrentBranchID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

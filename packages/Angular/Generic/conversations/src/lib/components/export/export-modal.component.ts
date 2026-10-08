@@ -1,6 +1,7 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
-import { ConversationEngine, MJConversationEntity } from '@memberjunction/core-entities';
+import { ConversationEngine, MJConversationEntity, type ConversationScope } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { ExportService, ExportFormat, ExportOptions, ExportBranding } from '../../services/export.service';
 import { DialogService } from '../../services/dialog.service';
 import { ToastService } from '../../services/toast.service';
@@ -402,6 +403,12 @@ export class ExportModalComponent {
   get branding(): ExportBranding | null {
     return this.Branding;
   }
+
+  /**
+   * The scope to export: the view the person has open. Null, or a scope of another conversation,
+   * exports Main.
+   */
+  @Input() Scope: ConversationScope | null = null;
   @Output() Cancelled = new EventEmitter<void>();
 
   /**
@@ -598,8 +605,9 @@ export class ExportModalComponent {
     const conversationId = this.Conversation.ID;
 
     try {
-      // The conversation's current branch path, read fresh; a failed read is an export error.
-      const scope = await ConversationEngine.LoadCurrentScope(conversationId, this.CurrentUser);
+      const scope = this.Scope && UUIDsEqual(this.Scope.ConversationID, conversationId)
+        ? this.Scope
+        : ConversationEngine.TrunkScope(conversationId);
       await this.exportService.ExportConversation(
         conversationId,
         scope,

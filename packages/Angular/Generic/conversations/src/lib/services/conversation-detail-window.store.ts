@@ -92,6 +92,8 @@ export interface ConversationDetailWindowSnapshot extends ConversationDetailWind
  *  - {@link Reset} bumps a generation counter; every in-flight load checks it after each
  *    await and discards its result if the conversation changed underneath.
  *  - {@link LoadOlder} is a no-op while a load is in flight or when nothing is above.
+ *  - A window loaded with an `upToSequence` ({@link LoadLatest}) holds only rows at or below it;
+ *    every later read keeps that bound.
  *  - Merges dedupe by normalized ID and re-sort by `Sequence` — session expansion can
  *    return rows an earlier page already had.
  *  - {@link ApplyLocalDetail} never hits the network; it is the send/stream/edit path.
@@ -111,6 +113,8 @@ export class ConversationDetailWindowStore {
     private isLoadingLatest = false;
     private isLoadingOlder = false;
     private loadFailed = false;
+    /** The newest `Sequence` the window may hold; null for no bound. */
+    private upToSequence: number | null = null;
 
     constructor(loader: DetailWindowLoader) {
         this.loader = loader;
@@ -132,6 +136,15 @@ export class ConversationDetailWindowStore {
         this.isLoadingLatest = false;
         this.isLoadingOlder = false;
         this.loadFailed = false;
+        this.upToSequence = null;
+    }
+
+    /**
+     * The exclusive `BeforeSequence` that keeps a newest-rows read at or below {@link upToSequence};
+     * undefined when the window has no bound. `Sequence` is an int column, so `< n + 1` is `<= n`.
+     */
+    private newestReadBound(): number | undefined {
+        return this.upToSequence == null ? undefined : this.upToSequence + 1;
     }
 
     /**
@@ -184,20 +197,35 @@ export class ConversationDetailWindowStore {
     }
 
     /**
-     * First paint: the newest page of a conversation.
+     * First paint: the newest page of a conversation's path.
+     *
+     * With `upToSequence`, the window holds only rows at or below that `Sequence`: the first page
+     * ends there, and every later read of the window keeps the bound. Older pages load as usual.
      *
      * The loader is not expected to throw — `LoadDetailWindow` logs and returns an empty
      * window on a failed read — but a transport-layer rejection would otherwise strand
      * `isLoadingLatest` at true and wedge the store, so the flag is cleared in `finally`.
      */
-    public async LoadLatest(conversationId: string, contextUser: UserInfo, branchId: string | null = null): Promise<void> {
+    public async LoadLatest(
+        conversationId: string,
+        contextUser: UserInfo,
+        branchId: string | null = null,
+        upToSequence: number | null = null
+    ): Promise<void> {
         this.Reset(conversationId, branchId);
+        this.upToSequence = upToSequence;
         const generation = this.generation;
         this.isLoadingLatest = true;
 
         try {
+            const before = this.newestReadBound();
             const result = await this.fetchPageFillingTimeline(
-                { ConversationID: conversationId, BranchID: this.branchId, PageSize: DEFAULT_TRANSCRIPT_PAGE_SIZE },
+                {
+                    ConversationID: conversationId,
+                    BranchID: this.branchId,
+                    PageSize: DEFAULT_TRANSCRIPT_PAGE_SIZE,
+                    ...(before === undefined ? {} : { BeforeSequence: before })
+                },
                 contextUser
             );
 
@@ -358,7 +386,7 @@ export class ConversationDetailWindowStore {
         contextUser: UserInfo
     ): Promise<RefreshedTail> {
         const results: DetailWindowLoadResult[] = [];
-        let before: number | undefined = undefined;
+        let before: number | undefined = this.newestReadBound();
 
         for (let page = 0; page <= MAX_REFRESH_BACKFILL_PAGES; page++) {
             const result = await this.loader.LoadDetailWindow(

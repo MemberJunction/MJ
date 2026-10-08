@@ -795,7 +795,7 @@ ${compactHistory}${artifactContext}
 
   /**
    * `ArtifactVersion.ID IN (...)` for every OUTPUT artifact an agent produced on one
-   * conversation path. Shared by {@link FindLatestAgentOutputVersion} and
+   * conversation path, in messages no rerun replaced. Shared by {@link FindLatestAgentOutputVersion} and
    * {@link findAllAgentArtifacts} so the two can never disagree about what "this agent's
    * artifacts" means.
    *
@@ -812,7 +812,7 @@ ${compactHistory}${artifactContext}
         SELECT ArtifactVersionID FROM [__mj].[vwConversationDetailArtifacts]
         WHERE Direction='Output' AND ConversationDetailID IN (
           SELECT ID FROM [__mj].[vwConversationDetails]
-          WHERE ${pathFilter} AND AgentID='${agentId}'
+          WHERE ${ConversationEngine.LiveRowsFilter(pathFilter)} AND AgentID='${agentId}'
             AND Role='AI' AND Status <> 'Error'${floor}
         )
       )`;

@@ -161,7 +161,6 @@ vi.mock('@memberjunction/generic-database-provider', async (importOriginal) => {
 });
 
 import { RealtimeClientSessionResolver } from '../resolvers/RealtimeClientSessionResolver.js';
-import { ConversationEngine } from '@memberjunction/core-entities';
 import type { AppContext } from '../types.js';
 import type { UserInfo } from '@memberjunction/core';
 import type { StoreRealtimeRecordingResult } from '@memberjunction/ai-agents';
@@ -214,6 +213,8 @@ interface FakeSession {
     LatestResult?: { CompleteMessage?: string; Success?: boolean };
     /** Only set on the fakes exercising `describeSaveFailure`'s "no failure detail recorded" branches. */
     ResultHistory?: unknown[];
+    /** The fork a conversation-detail fake is written on (null is Main). */
+    BranchID?: string | null;
 }
 
 /**
@@ -907,6 +908,26 @@ describe('RealtimeClientSessionResolver.RelayRealtimeTranscript', () => {
         expect(detail.UserID).toBe('user-1');
         expect(detail.Save).toHaveBeenCalled();
         expect(heartbeatMock).toHaveBeenCalledWith('session-1', USER, currentProvider);
+    });
+
+    it("writes the turn on the session's fork", async () => {
+        const detail = makeSessionEntity({ ID: 'detail-t' });
+        const session = makeSessionEntity({ ConversationID: 'conv-7', Config_: JSON.stringify({ targetAgentID: 'target-1', conversationBranchID: 'b1' }) });
+        currentProvider = makeProvider((name) => (name === 'MJ: Conversation Details' ? detail : session));
+
+        await makeResolver().RelayRealtimeTranscript('session-1', 'user', 'hello', makeCtx());
+
+        expect(detail.BranchID).toBe('b1');
+    });
+
+    it('writes the turn on Main when the session has no fork', async () => {
+        const detail = makeSessionEntity({ ID: 'detail-m' });
+        const session = makeSessionEntity({ ConversationID: 'conv-7' });
+        currentProvider = makeProvider((name) => (name === 'MJ: Conversation Details' ? detail : session));
+
+        await makeResolver().RelayRealtimeTranscript('session-1', 'user', 'hello', makeCtx());
+
+        expect(detail.BranchID).toBeNull();
     });
 
     it("maps a non-user role to 'AI'", async () => {
@@ -3450,25 +3471,20 @@ describe('RealtimeClientSessionResolver — conversation-history hydration', () 
 
     /**
      * Provider that answers BOTH Conversation Details queries separately: the prior-leg transcript
-     * (filtered by `AgentSessionID IN (…)`) and the conversation history (the active-path filter).
+     * (filtered by `AgentSessionID IN (…)`) and the conversation history (the session's path filter).
      * Routing on the filter is what keeps the two from being confused for one another. It also
-     * serves the conversation row (`CurrentBranchID`; null `conversation` = not found or hidden)
-     * and the conversation's branch rows, which the history read uses to build the path.
+     * serves the conversation's branch rows, which the start reads to check the named fork and
+     * to build its path.
      */
     function makeProvider(opts: {
         chain?: Record<string, { UserID: string; LastSessionID?: string | null }>;
         legRows?: Array<{ ID: string; Role: string; Message: string | null; HiddenToUser: boolean }>;
         historyRows?: HistoryRow[];
         historyFails?: boolean;
-        conversation?: { ID: string; CurrentBranchID: string | null } | null;
         branchRows?: BranchRow[];
         branchesFail?: boolean;
     }): { provider: unknown; runView: ReturnType<typeof vi.fn> } {
         const runView = vi.fn(async (params: { EntityName: string; ExtraFilter?: string }) => {
-            if (params.EntityName === 'MJ: Conversations') {
-                const conversation = opts.conversation === undefined ? { ID: 'conv-1', CurrentBranchID: null } : opts.conversation;
-                return { Success: true, Results: conversation ? [conversation] : [] };
-            }
             if (params.EntityName === 'MJ: Conversation Branches') {
                 return opts.branchesFail
                     ? { Success: false, ErrorMessage: 'db down', Results: [] }
@@ -3548,81 +3564,62 @@ describe('RealtimeClientSessionResolver — conversation-history hydration', () 
         ]);
     });
 
-    it('scopes the read to the session\'s conversation, on the trunk when it has no current branch', async () => {
-        const { provider, runView } = makeProvider({
-            historyRows: [row('User', 'hi')],
-            conversation: { ID: "conv-o'brien", CurrentBranchID: null },
-        });
+    /** Starts a session on `conversationId`, optionally on a fork (the mutation's last argument). */
+    function start(conversationId: string, forkId?: string): Promise<{ AgentSessionId: string }> {
+        return makeResolver().StartRealtimeClientSession(
+            'target-1', makeCtx(), conversationId,
+            undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+            forkId,
+        );
+    }
+
+    it('reads Main when the start names no fork, with the apostrophe doubled once', async () => {
+        const { provider, runView } = makeProvider({ historyRows: [row('User', 'hi')] });
         currentProvider = provider;
 
-        await makeResolver().StartRealtimeClientSession('target-1', makeCtx(), "conv-o'brien");
+        await start("conv-o'brien");
 
-        // The apostrophe must be doubled, not passed through — this string is concatenated into SQL.
-        const conversationCall = runView.mock.calls.find((c) => (c[0] as { EntityName: string }).EntityName === 'MJ: Conversations');
-        expect((conversationCall![0] as { ExtraFilter: string }).ExtraFilter).toBe("ID='conv-o''brien'");
-        expect(historyCall(runView)).toMatchObject({
-            ExtraFilter: "[ConversationID]='conv-o''brien' AND [BranchID] IS NULL",
-            OrderBy: 'Sequence ASC',
-        });
+        expect(historyCall(runView)).toMatchObject({ ExtraFilter: "[ConversationID]='conv-o''brien' AND [BranchID] IS NULL AND [ReplacedAt] IS NULL", OrderBy: 'Sequence ASC' });
+        expect(runView.mock.calls.some((c) => (c[0] as { EntityName: string }).EntityName === 'MJ: Conversation Branches')).toBe(false);
         expect(historyArg()).toEqual([{ role: 'user', content: 'hi' }]);
     });
 
-    it('reads only the path of the conversation\'s current branch, in Sequence order', async () => {
-        const pathFilter = vi.spyOn(ConversationEngine, 'BranchPathFilterFresh');
+    it('reads the path of the fork the start names, and stores the fork on the session', async () => {
         const { provider, runView } = makeProvider({
-            historyRows: [row('User', 'on the branch')],
-            conversation: { ID: 'conv-1', CurrentBranchID: 'b1' },
+            historyRows: [row('User', 'in the fork')],
             branchRows: [{ ID: 'b1', ConversationID: 'conv-1', ParentBranchID: null, ForkFromSequence: 4, Name: null }],
         });
         currentProvider = provider;
 
-        await makeResolver().StartRealtimeClientSession('target-1', makeCtx(), 'conv-1');
+        await start('conv-1', 'B1');
 
-        expect(pathFilter).toHaveBeenCalledWith('conv-1', 'b1', USER, provider);
         expect(historyCall(runView)).toMatchObject({
-            ExtraFilter: "[ConversationID]='conv-1' AND ([BranchID]='b1' OR ([BranchID] IS NULL AND [Sequence] <= 4))",
+            ExtraFilter: "[ConversationID]='conv-1' AND ([BranchID]='b1' OR ([BranchID] IS NULL AND [Sequence] <= 4)) AND [ReplacedAt] IS NULL",
             OrderBy: 'Sequence ASC',
         });
-        expect(historyArg()).toEqual([{ role: 'user', content: 'on the branch' }]);
-        pathFilter.mockRestore();
-    });
-
-    it('passes the raw conversation id to the engine, which escapes it once on the branch path', async () => {
-        const pathFilter = vi.spyOn(ConversationEngine, 'BranchPathFilterFresh');
-        const { provider, runView } = makeProvider({
-            historyRows: [row('User', 'on the branch')],
-            conversation: { ID: "conv-o'brien", CurrentBranchID: 'b1' },
-            branchRows: [{ ID: 'b1', ConversationID: "conv-o'brien", ParentBranchID: null, ForkFromSequence: 4, Name: null }],
-        });
-        currentProvider = provider;
-
-        await makeResolver().StartRealtimeClientSession('target-1', makeCtx(), "conv-o'brien");
-
-        expect(pathFilter).toHaveBeenCalledWith("conv-o'brien", 'b1', USER, provider);
-        const branchCall = runView.mock.calls.find((c) => (c[0] as { EntityName: string }).EntityName === 'MJ: Conversation Branches');
-        expect((branchCall![0] as { ExtraFilter: string }).ExtraFilter).toBe("ConversationID='conv-o''brien'");
-        expect(historyCall(runView)).toMatchObject({
-            ExtraFilter: "[ConversationID]='conv-o''brien' AND ([BranchID]='b1' OR ([BranchID] IS NULL AND [Sequence] <= 4))",
-            OrderBy: 'Sequence ASC',
-        });
-        pathFilter.mockRestore();
+        const config = JSON.parse((createSessionMock.mock.calls.at(-1)![0] as { config: string }).config) as { conversationBranchID?: string };
+        expect(config.conversationBranchID).toBe('b1');
     });
 
     it.each([
-        ['the current branch is not among the conversation\'s branches', { conversation: { ID: 'conv-1', CurrentBranchID: 'b-gone' } }],
-        ['the branch rows cannot be read', { conversation: { ID: 'conv-1', CurrentBranchID: 'b1' }, branchesFail: true }],
-        ['the conversation is not found or not visible', { conversation: null }],
-    ])('starts COLD, never with every branch, when %s', async (_label, opts) => {
-        errSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-        const { provider, runView } = makeProvider({ historyRows: [row('User', 'should never be read')], ...opts });
+        ['the fork is not a fork of the conversation', { branchRows: [] }],
+        ['the fork rows cannot be read', { branchesFail: true }],
+    ])('refuses the start when %s', async (_label, opts) => {
+        const { provider } = makeProvider({ historyRows: [row('User', 'never read')], ...opts });
+        currentProvider = provider;
+        const sessionsBefore = createSessionMock.mock.calls.length;
+
+        await expect(start('conv-1', 'b1')).rejects.toThrow(/fork b1/);
+        expect(createSessionMock.mock.calls.length).toBe(sessionsBefore);
+    });
+
+    it('refuses a fork without a conversation', async () => {
+        const { provider } = makeProvider({});
         currentProvider = provider;
 
-        const result = await makeResolver().StartRealtimeClientSession('target-1', makeCtx(), 'conv-1');
-
-        expect(result.AgentSessionId).toBe('session-new');
-        expect(historyArg()).toEqual([]);
-        expect(historyCall(runView)).toBeUndefined();
-        expect(errSpy.mock.calls.some((c) => String(c[0]).includes('could not build the active branch path'))).toBe(true);
+        await expect(makeResolver().StartRealtimeClientSession(
+            'target-1', makeCtx(), undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, 'b1',
+        )).rejects.toThrow(/needs a conversation/);
     });
 
     it('skips hidden rows, error rows, and empty messages', async () => {

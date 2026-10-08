@@ -111,4 +111,10 @@ describe('RealtimeAgentBannerComponent (DOM)', () => {
     expect(startLive).toHaveLength(1);
     expect(closes).toHaveLength(1);
   });
+
+  it('leaves out the start-live action, but keeps Close, when ShowStartLive is off', () => {
+    const f = render({ State: 'closed', ReviewMode: true, AgentName: 'Sage', ShowStartLive: false });
+    expect(query(f, '.start-live-pill')).toBeNull();
+    expect(query(f, '.bar-actions .iconb')).not.toBeNull();
+  });
 });

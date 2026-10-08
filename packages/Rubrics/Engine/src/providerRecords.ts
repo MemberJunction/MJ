@@ -4,7 +4,7 @@ import type { EvaluationAgentRunner } from './AgentRubricEvaluator.js';
 import type { RubricDecisionOutput, RubricDecisionService, RubricPromptRef, RubricPromptRequest, RubricPromptService } from './evaluatorServices.js';
 import { RUBRIC_JUDGE_PLACEHOLDER } from './LLMRubricEvaluator.js';
 import type { RubricCriterionTemplateData, RubricPromptData } from './promptData.js';
-import { RunInEntityTransaction, RunView, type EntityTransactionScope, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { RunInEntityTransaction, RunView, type EntityTransactionScope } from '@memberjunction/core';
 import { EscapeSQLString } from '@memberjunction/global';
 import { ConversationEngine, MJAIPromptEntity, MJRubricBandEntity, MJRubricCriterionEntity, MJRubricCriterionLevelEntity, MJRubricEntity, MJRubricEvaluationEntity, MJRubricEvaluationScoreEntity, MJRubricVersionEntity } from '@memberjunction/core-entities';
 import { EvidenceJson, HighestNonDraftVersion, type RubricNodeSnapshot, type ScoredNode } from '@memberjunction/rubrics-base';
@@ -25,7 +25,7 @@ interface RubricProvider {
 /**
  * Reads rubric rows through RunView and writes a Draft version through the
  * entity objects. Create sets Status to Draft and does not publish. A
- * conversation's scope is its current branch, read through ConversationEngine.
+ * conversation subject is read in Main.
  */
 export function ProviderRecords(provider: RubricProvider, user: unknown): RubricRecords {
     return {
@@ -39,7 +39,7 @@ export function ProviderRecords(provider: RubricProvider, user: unknown): Rubric
             return CreateDraftVersion(provider, user, input);
         },
         conversationScope(conversationId) {
-            return ConversationEngine.LoadCurrentScope(conversationId, user as UserInfo, provider as IMetadataProvider);
+            return Promise.resolve(ConversationEngine.TrunkScope(conversationId));
         },
     };
 }

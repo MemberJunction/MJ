@@ -358,4 +358,28 @@ describe('ConversationToolManager', () => {
             expect((range.result.data as { messages: Array<{ sequence: number }> }).messages.map(m => m.sequence)).toEqual([1, 2, 3]);
         });
     });
+
+    describe('replaced answers', () => {
+        beforeEach(() => {
+            mockCache.Details = [
+                detail(1, 'User', 'What was our Q3 budget?'),
+                { ...detail(2, 'AI', 'Old budget answer', 'Sage'), ReplacedAt: new Date('2026-10-07T10:00:00.000Z') },
+                detail(3, 'AI', 'New budget answer', 'Sage'),
+            ] as never;
+        });
+
+        it('leaves a replaced answer out of a range', async () => {
+            const r = await manager.ExecuteSingleToolCall({ tool: 'getMessagesByRange', input: { startSequence: 1, endSequence: 3 } });
+            const data = r.result.data as { messages: Array<{ sequence: number }> };
+            expect(data.messages.map(m => m.sequence)).toEqual([1, 3]);
+        });
+
+        it('does not find a replaced answer by search or by sequence', async () => {
+            const search = await manager.ExecuteSingleToolCall({ tool: 'searchConversation', input: { query: 'budget' } });
+            expect((search.result.data as { hits: Array<{ sequence: number }> }).hits.map(h => h.sequence)).toEqual([1, 3]);
+            const exact = await manager.ExecuteSingleToolCall({ tool: 'getMessageBySequence', input: { sequence: 2 } });
+            expect(exact.result.success).toBe(false);
+            expect(exact.result.errorMessage).toContain('No message found at sequence 2');
+        });
+    });
 });

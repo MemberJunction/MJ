@@ -3,7 +3,7 @@ import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ConversationEngine, ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { LogError, RunView } from '@memberjunction/core';
+import { RunView } from '@memberjunction/core';
 import { GraphQLLiveKitClient, GraphQLDataProvider, RealtimeModelVoices, RealtimeVoiceOption } from '@memberjunction/graphql-dataprovider';
 import { UserHoldsAuthorization, REALTIME_ADVANCED_SESSION_CONTROLS } from '@memberjunction/ng-conversations';
 import {
@@ -1243,8 +1243,8 @@ export class LiveKitRoomResource extends BaseResourceComponent implements OnInit
   }
 
   /**
-   * Opens a past meeting's transcript (drill-in): the details on the room conversation's current branch
-   * path, in `Sequence` order. The transcript stays empty when the branch scope or its filter cannot be built.
+   * Opens a past meeting's transcript (drill-in): the room conversation's Main rows (a bridge session
+   * writes Main), in `Sequence` order.
    */
   public async OpenTranscript(room: { ConversationID: string; Name: string }): Promise<void> {
     this.OpenHistoryRoom = room;
@@ -1252,14 +1252,7 @@ export class LiveKitRoomResource extends BaseResourceComponent implements OnInit
     this.LoadingTranscript = true;
     this.cdr.detectChanges();
     try {
-      let pathFilter: string;
-      try {
-        const scope = await ConversationEngine.LoadCurrentScope(room.ConversationID, this.ProviderToUse.CurrentUser, this.ProviderToUse);
-        pathFilter = ConversationEngine.ScopeFilter(scope);
-      } catch (e) {
-        LogError(`Meeting transcript: could not read the branch scope of conversation ${room.ConversationID}: ${e instanceof Error ? e.message : String(e)}`);
-        return;
-      }
+      const pathFilter = ConversationEngine.ScopeFilter(ConversationEngine.TrunkScope(room.ConversationID));
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const res = await rv.RunView<{ Role: string; Message: string; AgentID: string; Error: string }>(
         {

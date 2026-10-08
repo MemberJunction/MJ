@@ -83,7 +83,7 @@ export async function WriteReturningVisitorRecap(
       return;
     }
 
-    const transcript = await loadTranscript(conversationId, contextUser, provider);
+    const transcript = await loadTranscript(conversationId, contextUser);
     if (!transcript) {
       LogStatus(`[ReturningVisitorRecap] empty transcript for ${conversationId} — bailing`);
       return;
@@ -154,22 +154,15 @@ async function recapAlreadyExists(conversationId: string, contextUser: UserInfo)
 }
 
 /**
- * Builds a compact transcript string from the most recent detail turns on the conversation's current
- * branch path. Returns undefined when the conversation's scope cannot be read.
+ * Builds a compact transcript string from the most recent detail turns in Main that no rerun replaced
+ * (a returning visitor's widget conversation has no forks). Returns undefined when there are none.
  */
-async function loadTranscript(conversationId: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<string | undefined> {
-  const scope = await ConversationEngine.LoadCurrentScope(conversationId, contextUser, provider).catch((e: unknown) => {
-    LogError(`[ReturningVisitorRecap] could not read the branch scope of conversation ${conversationId}: ${e instanceof Error ? e.message : String(e)}`);
-    return undefined;
-  });
-  if (!scope) {
-    return undefined;
-  }
+async function loadTranscript(conversationId: string, contextUser: UserInfo): Promise<string | undefined> {
   const rv = new RunView();
   const result = await rv.RunView<MJConversationDetailEntity>(
     {
       EntityName: CONVERSATION_DETAILS_ENTITY,
-      ExtraFilter: ConversationEngine.ScopeFilter(scope),
+      ExtraFilter: ConversationEngine.LiveRowsFilter(ConversationEngine.ScopeFilter(ConversationEngine.TrunkScope(conversationId))),
       OrderBy: 'Sequence DESC',
       MaxRows: MAX_TRANSCRIPT_TURNS,
       ResultType: 'entity_object',

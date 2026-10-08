@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { IMetadataProvider, LogError, Metadata, RunView } from '@memberjunction/core';
 import { EscapeSQLString, RegisterClassEx } from '@memberjunction/global';
 import { BaseFormPanel } from '@memberjunction/ng-base-forms';
-import { ConversationEngine, ConversationScope, MJConversationDetailEntity, MJConversationEntity } from '@memberjunction/core-entities';
+import { ConversationEngine, MJConversationDetailEntity, MJConversationEntity } from '@memberjunction/core-entities';
 
 interface ConversationDetailRow {
     ID: string;
@@ -46,8 +46,8 @@ const RECENT_MESSAGE_COUNT = 4;
                             <span class="mj-metric-label">Total Messages</span>
                             <span class="mj-metric-val">{{ TotalMessageCount }}</span>
                         </div>
-                        @if (BranchCount > 0) {
-                            <div class="mj-branch-note">across {{ BranchCount }} {{ BranchCount === 1 ? 'branch' : 'branches' }}</div>
+                        @if (ForkCount > 0) {
+                            <div class="mj-fork-note">plus {{ ForkCount }} {{ ForkCount === 1 ? 'fork' : 'forks' }}</div>
                         }
                         <div class="mj-metric-row">
                             <span class="mj-metric-label">User Prompts</span>
@@ -140,7 +140,7 @@ const RECENT_MESSAGE_COUNT = 4;
             font-size: 12px;
         }
         .mj-metric-label { color: var(--mj-text-secondary, #94a3b8); }
-        .mj-branch-note { font-size: 11px; color: var(--mj-text-muted); margin-top: -6px; }
+        .mj-fork-note { font-size: 11px; color: var(--mj-text-muted); margin-top: -6px; }
         .mj-metric-val { font-weight: 600; color: var(--mj-text-primary, #f8fafc); font-family: monospace; }
         .mj-load-error { font-size: 12px; color: var(--mj-status-error); }
         .mj-pill { font-size: 10.5px; font-weight: 700; padding: 2px 6px; border-radius: 4px; }
@@ -150,16 +150,16 @@ const RECENT_MESSAGE_COUNT = 4;
 })
 export class ConversationOverviewPanel extends BaseFormPanel<MJConversationEntity> implements OnInit {
     private cdr = inject(ChangeDetectorRef);
-    /** The newest messages on the conversation's current branch path, newest first. */
+    /** The newest messages in Main, newest first. */
     public Messages: ConversationDetailRow[] = [];
-    /** Messages on the conversation's current branch path. */
+    /** Messages in Main. */
     public TotalMessageCount = 0;
-    /** User messages on the conversation's current branch path. */
+    /** User messages in Main. */
     public UserMessageCount = 0;
-    /** AI messages on the conversation's current branch path. */
+    /** AI messages in Main. */
     public AgentMessageCount = 0;
-    /** Branch rows of the conversation, whichever path is current. */
-    public BranchCount = 0;
+    /** Forks of the conversation. */
+    public ForkCount = 0;
     /** Set when a read fails, so the cards show the failure instead of zero messages. */
     public LoadError: string | null = null;
 
@@ -187,26 +187,16 @@ export class ConversationOverviewPanel extends BaseFormPanel<MJConversationEntit
     }
 
     /**
-     * Loads the counts and newest messages on the conversation's current branch path, and the
-     * conversation's branch count, in one batch. When the branch scope or a detail read fails, the
-     * cards show the failure.
+     * Loads the counts and newest messages in Main, and the conversation's fork count, in one
+     * batch. When a detail read fails, the cards show the failure.
      */
     private async loadConversationMessages(): Promise<void> {
         if (!this.Record?.ID) return;
         const provider = this.providerToUse;
-        let scope: ConversationScope;
-        try {
-            scope = await ConversationEngine.LoadCurrentScope(this.Record.ID, provider.CurrentUser, provider);
-        } catch (e) {
-            const message = e instanceof Error ? e.message : String(e);
-            LogError(`Conversation overview: could not read the branch scope of conversation ${this.Record.ID}: ${message}`);
-            this.showLoadError(message);
-            this.cdr.markForCheck();
-            return;
-        }
+        const scope = ConversationEngine.TrunkScope(this.Record.ID);
         try {
             const rv = RunView.FromMetadataProvider(provider);
-            const [total, user, agent, recent, branches] = await rv.RunViews<ConversationDetailRow>([
+            const [total, user, agent, recent, forks] = await rv.RunViews<ConversationDetailRow>([
                 {
                     EntityName: 'MJ: Conversation Details',
                     ExtraFilter: ConversationEngine.ScopeFilter(scope),
@@ -246,7 +236,7 @@ export class ConversationOverviewPanel extends BaseFormPanel<MJConversationEntit
                 this.AgentMessageCount = agent?.TotalRowCount ?? 0;
                 this.Messages = recent?.Results ?? [];
             }
-            this.BranchCount = branches?.Success ? branches.TotalRowCount : 0;
+            this.ForkCount = forks?.Success ? forks.TotalRowCount : 0;
         } catch (e) {
             const message = e instanceof Error ? e.message : String(e);
             LogError(`Conversation overview: could not load the details of conversation ${this.Record.ID}: ${message}`);

@@ -38,10 +38,10 @@ function createHarness(original: string, edited: string): Harness {
 }
 
 describe('MessageItemComponent.SaveEdit', () => {
-  it('emits the trimmed text, closes the editor and leaves the row unchanged', () => {
+  it('emits the trimmed text, closes the editor and leaves the row unchanged', async () => {
     const h = createHarness('What is the capital of France?', '  What is the capital of Spain?  ');
 
-    h.component.SaveEdit();
+    await h.component.SaveEdit();
 
     expect(h.emitted).toHaveLength(1);
     expect(h.emitted[0].NewText).toBe('What is the capital of Spain?');
@@ -52,20 +52,20 @@ describe('MessageItemComponent.SaveEdit', () => {
     expect(h.component.EditedText).toBe('');
   });
 
-  it('cancels without emitting when the text is unchanged', () => {
+  it('cancels without emitting when the text is unchanged', async () => {
     const h = createHarness('Hello', 'Hello');
 
-    h.component.SaveEdit();
+    await h.component.SaveEdit();
 
     expect(h.emitted).toHaveLength(0);
     expect(h.message.Save).not.toHaveBeenCalled();
     expect(h.component.IsEditing).toBe(false);
   });
 
-  it('cancels without emitting when the text is blank', () => {
+  it('cancels without emitting when the text is blank', async () => {
     const h = createHarness('Hello', '   ');
 
-    h.component.SaveEdit();
+    await h.component.SaveEdit();
 
     expect(h.emitted).toHaveLength(0);
     expect(h.message.Save).not.toHaveBeenCalled();

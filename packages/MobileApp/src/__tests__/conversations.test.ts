@@ -2,8 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } fr
 
 // ---------------------------------------------------------------------------
 // The real `@memberjunction/core` with `Metadata` and `RunView` replaced, so the real
-// `ConversationEngine` (scope loading, path predicate, in-memory filter) runs against the
-// rows each test routes. Every RunView call is recorded.
+// `ConversationEngine` (Main predicate, in-memory filter) runs against the rows each test
+// routes. Every RunView call is recorded.
 // ---------------------------------------------------------------------------
 type RunViewParams = {
     EntityName: string;
@@ -55,21 +55,14 @@ import { LoadConversation, LoadConversations } from '@/data/services/conversatio
 
 const C1 = '11111111-1111-1111-1111-111111111111';
 const C2 = '22222222-2222-2222-2222-222222222222';
-const C3 = '33333333-3333-3333-3333-333333333333';
 const B1 = 'B1111111-1111-1111-1111-111111111111';
 const B2 = 'B2222222-2222-2222-2222-222222222222';
-const B3 = 'B3333333-3333-3333-3333-333333333333';
 const A1 = 'A1111111-1111-1111-1111-111111111111';
 const A2 = 'A2222222-2222-2222-2222-222222222222';
 const A3 = 'A3333333-3333-3333-3333-333333333333';
 
 const DETAILS = 'MJ: Conversation Details';
 const BRANCHES = 'MJ: Conversation Branches';
-
-type Branch = { ID: string; ConversationID: string; ParentBranchID: string | null; ForkFromSequence: number | null; Name: string | null };
-function branch(id: string, conversationId: string, forkFromSequence: number): Branch {
-    return { ID: id, ConversationID: conversationId, ParentBranchID: null, ForkFromSequence: forkFromSequence, Name: null };
-}
 
 /** A recent detail row as the list query returns it; later sequences are created later unless `createdMinute` says otherwise. */
 function detail(conversationId: string, sequence: number, branchId: string | null, createdMinute = sequence) {
@@ -86,20 +79,18 @@ function detail(conversationId: string, sequence: number, branchId: string | nul
     };
 }
 
-function conversationRow(id: string, currentBranchId: string | null) {
-    return { ID: id, Name: `conversation ${id.slice(0, 2)}`, CurrentBranchID: currentBranchId, __mj_UpdatedAt: new Date() };
+function conversationRow(id: string) {
+    return { ID: id, Name: `conversation ${id.slice(0, 2)}`, __mj_UpdatedAt: new Date() };
 }
 
-/** Routes the list's queries: conversations, recent details, branch rows, agents. */
-function routeList(opts: { conversations: unknown[]; details: unknown[]; branches?: Branch[] }) {
+/** Routes the list's queries: conversations, recent details, agents. */
+function routeList(opts: { conversations: unknown[]; details: unknown[] }) {
     return (params: RunViewParams): RunViewResult => {
         switch (params.EntityName) {
             case 'MJ: Conversations':
                 return { Success: true, Results: opts.conversations };
             case DETAILS:
                 return { Success: true, Results: opts.details };
-            case BRANCHES:
-                return { Success: true, Results: opts.branches ?? [] };
             default:
                 return { Success: true, Results: [] };
         }
@@ -119,39 +110,29 @@ afterEach(() => {
     warn.mockRestore();
 });
 
-describe('LoadConversations — per-conversation scope', () => {
-    it('counts only the rows on the current branch path, and the trunk for an unbranched conversation', async () => {
+describe('LoadConversations — Main rows', () => {
+    it('counts only the Main rows of every conversation and shows the newest Main row', async () => {
         state.route = routeList({
-            conversations: [conversationRow(C1, B1), conversationRow(C2, null)],
+            conversations: [conversationRow(C1), conversationRow(C2)],
             details: [
-                // C1 forks at sequence 2: trunk rows 3 and 4 are on the other path. Row 4 is the newest.
                 detail(C1, 1, null),
                 detail(C1, 2, null),
-                detail(C1, 3, null),
-                detail(C1, 4, null, 30),
-                detail(C1, 5, B1),
-                detail(C1, 6, B1),
-                // C2 sits on the trunk; its branch row is on the other path.
+                detail(C1, 3, B1, 40),   // newest row, but in a fork
                 detail(C2, 1, null),
-                detail(C2, 2, null),
-                detail(C2, 3, null),
-                detail(C2, 4, B2),
+                detail(C2, 2, B2),
             ],
-            branches: [branch(B1, C1, 2), branch(B2, C2, 3)],
         });
 
         const list = await LoadConversations();
         const byId = new Map(list.map((item) => [item.entity.ID, item]));
 
-        expect(byId.get(C1)?.messageCount).toBe(4);
-        expect(byId.get(C1)?.LatestSnippet).toBe('message 6 (branch)');
-        expect(byId.get(C2)?.messageCount).toBe(3);
-        expect(byId.get(C2)?.LatestSnippet).toBe('message 3');
-        expect(warn).not.toHaveBeenCalled();
+        expect(byId.get(C1)?.messageCount).toBe(2);
+        expect(byId.get(C1)?.LatestSnippet).toBe('message 2');
+        expect(byId.get(C2)?.messageCount).toBe(1);
     });
 
     it('selects the branch and sequence columns on the recent-rows query', async () => {
-        state.route = routeList({ conversations: [conversationRow(C1, null)], details: [] });
+        state.route = routeList({ conversations: [conversationRow(C1)], details: [] });
 
         await LoadConversations();
 
@@ -159,74 +140,24 @@ describe('LoadConversations — per-conversation scope', () => {
         expect(recent?.Fields).toEqual(expect.arrayContaining(['BranchID', 'Sequence', 'ConversationID']));
     });
 
-    it('loads the branch rows of every branched conversation in one query', async () => {
-        state.route = routeList({
-            conversations: [conversationRow(C1, B1), conversationRow(C2, null), conversationRow(C3, B3)],
-            details: [detail(C1, 1, null), detail(C3, 1, null)],
-            branches: [branch(B1, C1, 1), branch(B3, C3, 1)],
-        });
-
-        await LoadConversations();
-
-        const branchQueries = state.calls.filter((c) => c.EntityName === BRANCHES);
-        expect(branchQueries).toHaveLength(1);
-        expect(branchQueries[0].ExtraFilter).toContain(`'${C1}'`);
-        expect(branchQueries[0].ExtraFilter).toContain(`'${C3}'`);
-        expect(branchQueries[0].ExtraFilter).not.toContain(C2);
-        expect(branchQueries[0].ExtraFilter).toMatch(/^ConversationID IN \(/);
-    });
-
-    it('issues no branch query when no listed conversation is on a branch', async () => {
-        state.route = routeList({
-            conversations: [conversationRow(C1, null), conversationRow(C2, null)],
-            details: [detail(C1, 1, null), detail(C2, 1, null)],
-        });
+    it('reads no fork rows', async () => {
+        state.route = routeList({ conversations: [conversationRow(C1), conversationRow(C2)], details: [detail(C1, 1, null)] });
 
         await LoadConversations();
 
         expect(state.calls.some((c) => c.EntityName === BRANCHES)).toBe(false);
-    });
-
-    it('counts the trunk and logs once when current branches are not among the loaded branch rows', async () => {
-        state.route = routeList({
-            conversations: [conversationRow(C1, B1), conversationRow(C3, B3)],
-            details: [
-                detail(C1, 1, null),
-                detail(C1, 2, null),
-                detail(C1, 3, null),
-                detail(C1, 4, B1),
-                detail(C3, 1, null),
-                detail(C3, 2, B3),
-            ],
-            branches: [],
-        });
-
-        const list = await LoadConversations();
-        const byId = new Map(list.map((item) => [item.entity.ID, item]));
-
-        expect(byId.get(C1)?.messageCount).toBe(3);
-        expect(byId.get(C3)?.messageCount).toBe(1);
-        expect(warn).toHaveBeenCalledTimes(1);
-        expect(String(warn.mock.calls[0][0])).toContain(C1);
-        expect(String(warn.mock.calls[0][0])).toContain(C3);
     });
 });
 
 describe('LoadConversation — scoped reads', () => {
     /** Routes LoadConversation's queries; the details rows carry artifact links. */
     function routeConversation(opts: {
-        currentBranchId: string | null;
-        branches?: Branch[];
         artifacts?: unknown[];
         scopedLinks?: unknown[];
         allLinks?: unknown[];
     }) {
         return (params: RunViewParams): RunViewResult => {
             switch (params.EntityName) {
-                case 'MJ: Conversations':
-                    return { Success: true, Results: [{ ID: C1, CurrentBranchID: opts.currentBranchId }] };
-                case BRANCHES:
-                    return { Success: true, Results: opts.branches ?? [] };
                 case 'MJ: Conversation Artifacts':
                     return { Success: true, Results: opts.artifacts ?? [] };
                 case DETAILS:
@@ -245,35 +176,22 @@ describe('LoadConversation — scoped reads', () => {
         state.conversation = { ID: C1, Name: 'one', Load: async () => true };
     });
 
-    it('reads the messages with the scope filter of the current branch, in Sequence order', async () => {
-        state.route = routeConversation({ currentBranchId: B1, branches: [branch(B1, C1, 2)] });
+    it('reads the messages with the Main predicate, in Sequence order', async () => {
+        state.route = routeConversation({});
 
         await LoadConversation(C1);
 
         const messages = state.calls.find((c) => c.EntityName === DETAILS && c.ResultType === 'entity_object');
-        expect(messages?.ExtraFilter).toBe(
-            `[ConversationID]='${C1}' AND ([BranchID]='${B1}' OR ([BranchID] IS NULL AND [Sequence] <= 2))`,
-        );
+        expect(messages?.ExtraFilter).toBe(`[ConversationID]='${C1}' AND [BranchID] IS NULL AND [ReplacedAt] IS NULL`);
         expect(messages?.OrderBy).toBe('Sequence ASC');
-    });
-
-    it('reads the trunk with the unchanged trunk predicate and no branch query', async () => {
-        state.route = routeConversation({ currentBranchId: null });
-
-        await LoadConversation(C1);
-
-        const messages = state.calls.find((c) => c.EntityName === DETAILS && c.ResultType === 'entity_object');
-        expect(messages?.ExtraFilter).toBe(`[ConversationID]='${C1}' AND [BranchID] IS NULL`);
         expect(state.calls.some((c) => c.EntityName === BRANCHES)).toBe(false);
     });
 
-    it('keeps the artifacts a message in scope links to, and those no message links to', async () => {
+    it('keeps the artifacts a Main message links to, and those no message links to', async () => {
         state.route = routeConversation({
-            currentBranchId: B1,
-            branches: [branch(B1, C1, 2)],
             artifacts: [
-                { ID: A1, Name: 'in scope' },
-                { ID: A2, Name: 'other path' },
+                { ID: A1, Name: 'in Main' },
+                { ID: A2, Name: 'in a fork' },
                 { ID: A3, Name: 'no message' },
             ],
             scopedLinks: [{ ArtifactID: A1, ArtifactVersionID: null, AgentID: null }],
@@ -289,13 +207,11 @@ describe('LoadConversation — scoped reads', () => {
         const scopedLinkQuery = state.calls.find(
             (c) => c.EntityName === DETAILS && c.ResultType === 'simple' && (c.ExtraFilter ?? '').includes('[BranchID]'),
         );
-        expect(scopedLinkQuery?.ExtraFilter).toContain(
-            `[ConversationID]='${C1}' AND ([BranchID]='${B1}' OR ([BranchID] IS NULL AND [Sequence] <= 2))`,
-        );
+        expect(scopedLinkQuery?.ExtraFilter).toContain(`[ConversationID]='${C1}' AND [BranchID] IS NULL`);
     });
 
     it('shows no artifacts when the artifact links cannot be read', async () => {
-        const base = routeConversation({ currentBranchId: null, artifacts: [{ ID: A1, Name: 'x' }] });
+        const base = routeConversation({ artifacts: [{ ID: A1, Name: 'x' }] });
         state.route = (params) =>
             params.EntityName === DETAILS && params.ResultType === 'simple'
                 ? { Success: false, Results: [], ErrorMessage: 'boom' }
@@ -305,11 +221,5 @@ describe('LoadConversation — scoped reads', () => {
 
         expect(load?.Artifacts).toEqual([]);
         expect(warn).toHaveBeenCalled();
-    });
-
-    it('fails when the current branch is not a branch of the conversation', async () => {
-        state.route = routeConversation({ currentBranchId: B1, branches: [] });
-
-        await expect(LoadConversation(C1)).rejects.toThrow(/not a branch/);
     });
 });

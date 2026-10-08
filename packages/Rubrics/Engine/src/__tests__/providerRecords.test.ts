@@ -86,7 +86,6 @@ vi.mock('@memberjunction/ai-core-plus', async () => ({
     },
 }));
 
-import { ConversationEngine, type ConversationScope } from '@memberjunction/core-entities';
 import type { AIPromptExecutionScope } from '@memberjunction/ai-core-plus';
 import type { EvaluationAgentRunner } from '../AgentRubricEvaluator.js';
 import { ProviderDecisionService, ProviderEvaluationStore, ProviderPromptService, ProviderRecords, ProviderRubricEngine, RegisterRubricAgentRunner } from '../providerRecords.js';
@@ -348,11 +347,6 @@ describe('conversation subject content', () => {
         async GetEntityObject(): Promise<never> { throw new Error('this test does not create rows'); },
     };
     const user = { ID: 'user' };
-    const branchScope: ConversationScope = {
-        ConversationID: 'conv-1',
-        BranchID: 'branch-2',
-        Branches: [{ ID: 'branch-2', ConversationID: 'conv-1', ParentBranchID: null, ForkFromSequence: 2, Name: 'Alt' }],
-    };
 
     beforeEach(() => {
         viewCalls.length = 0;
@@ -369,28 +363,10 @@ describe('conversation subject content', () => {
         return viewCalls.find(call => call.EntityName === 'MJ: Conversation Details');
     }
 
-    it('reads the details on the current branch path, in Sequence order', async () => {
-        const load = vi.spyOn(ConversationEngine, 'LoadCurrentScope').mockResolvedValue(branchScope);
+    it('reads the Main details of a conversation subject, in Sequence order', async () => {
         const content = await subjectContent();
-        expect(load).toHaveBeenCalledWith('conv-1', user, provider);
-        expect(detailCall()?.ExtraFilter).toBe(ConversationEngine.ScopeFilter(branchScope));
-        expect(detailCall()?.ExtraFilter).toContain("[BranchID]='branch-2'");
-        expect(detailCall()?.OrderBy).toBe('Sequence');
-        expect(content.data?.details).toEqual([{ Role: 'User', Message: 'hello' }]);
-    });
-
-    it('reads the trunk with the trunk predicate when the conversation has no current branch', async () => {
-        const trunk = ConversationEngine.TrunkScope('conv-1');
-        vi.spyOn(ConversationEngine, 'LoadCurrentScope').mockResolvedValue(trunk);
-        await subjectContent();
-        expect(detailCall()?.ExtraFilter).toBe(ConversationEngine.ScopeFilter(trunk));
         expect(detailCall()?.ExtraFilter).toBe("[ConversationID]='conv-1' AND [BranchID] IS NULL");
         expect(detailCall()?.OrderBy).toBe('Sequence');
-    });
-
-    it('throws and reads no details when the scope cannot be read', async () => {
-        vi.spyOn(ConversationEngine, 'LoadCurrentScope').mockRejectedValue(new Error('Conversation conv-1 not found'));
-        await expect(subjectContent()).rejects.toThrow('subject conversation not readable');
-        expect(detailCall()).toBeUndefined();
+        expect(content.data?.details).toEqual([{ Role: 'User', Message: 'hello' }]);
     });
 });

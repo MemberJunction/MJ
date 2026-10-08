@@ -7741,7 +7741,8 @@ The context is now within limits. Please retry your request with the recovered c
     /**
      * The `MJ: AI Agent Runs` predicate for this agent's previous settled root run on one
      * branch path: the run's reply row must be on that path, so a run made on a sibling
-     * branch is never carried forward.
+     * branch is never carried forward, and not replaced by a rerun of its turn, so a replaced
+     * answer's tool results are never carried forward.
      */
     public static BuildPriorTurnRunFilter(
         conversationId: string,
@@ -7752,7 +7753,7 @@ The context is now within limits. Please retry your request with the recovered c
     ): string {
         const pathFilter = ConversationEngine.BuildBranchPathFilter(conversationId, branchId, branches);
         return `ConversationID='${conversationId}' AND Status IN (${statusList}) AND ParentRunID IS NULL AND AgentID='${agentId}'`
-            + ` AND ConversationDetailID IN (SELECT ID FROM [__mj].[vwConversationDetails] WHERE ${pathFilter})`;
+            + ` AND ConversationDetailID IN (SELECT ID FROM [__mj].[vwConversationDetails] WHERE ${ConversationEngine.LiveRowsFilter(pathFilter)})`;
     }
 
     /**
@@ -7816,7 +7817,8 @@ The context is now within limits. Please retry your request with the recovered c
      * run's agent and branch (cache key = conversation + agent + branch) so parallel
      * agents in one conversation, and sibling branches, never cross-pollinate. An empty
      * projection is cached too (the negative-cache case that spares tool-free
-     * conversations the queries every turn).
+     * conversations the queries every turn). The run's reply row is stored with the entry,
+     * so the entry is no longer served once a rerun of its turn replaces that row.
      * Same-node edge semantics (failed step INSERTs, concurrent completions) are
      * documented on the cache class. Called from {@link finalizeAgentRun}.
      * @private
@@ -7831,7 +7833,13 @@ The context is now within limits. Please retry your request with the recovered c
         const records: CarryForwardStepRecord[] = (this._agentRun.Steps || [])
             .filter(s => s.StepType === predicate.stepType && s.Status === predicate.stepStatus)
             .map(s => ({ OutputData: s.OutputData || null }));
-        PriorTurnToolResultCache.Instance.Set(conversationId, this._agentRun.AgentID, this._executeParams?.ConversationBranchID ?? null, records);
+        PriorTurnToolResultCache.Instance.Set(
+            conversationId,
+            this._agentRun.AgentID,
+            this._executeParams?.ConversationBranchID ?? null,
+            records,
+            this._agentRun.ConversationDetailID ?? null
+        );
     }
 
     /**

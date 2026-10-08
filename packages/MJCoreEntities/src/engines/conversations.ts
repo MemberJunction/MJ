@@ -1,4 +1,4 @@
-import { BaseEngine, BaseEnginePropertyConfig, BaseEntityEvent, EntityEventRowIsFree, IMetadataProvider, ResolveEntityEventKey, ResolveEntityEventRow, RunQuery, RunView, TransformSimpleObjectToEntityObject, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, BaseEntityEvent, EntityEventRowIsFree, IMetadataProvider, ResolveEntityEventKey, ResolveEntityEventRow, RunQuery, RunView, type RunViewParams, TransformSimpleObjectToEntityObject, UserInfo } from "@memberjunction/core";
 import { ChatMessage } from "@memberjunction/ai";
 import { EscapeSQLString, NormalizeUUID, ToEpochMs, UUIDsEqual } from "@memberjunction/global";
 import { BehaviorSubject, Observable } from "rxjs";
@@ -124,6 +124,11 @@ export interface ConversationWindowSourceRow {
      * rows by hand for an unfloored assembly need not supply it.
      */
     __mj_CreatedAt?: Date | string | null;
+    /**
+     * Set when a rerun of the row's turn replaced it (in-place Regenerate or Save and resend). Such a
+     * row is kept for audit but left out of every window; optional so hand-built rows may omit it.
+     */
+    ReplacedAt?: Date | string | null;
 }
 
 /**
@@ -132,31 +137,136 @@ export interface ConversationWindowSourceRow {
  * from the assembler's requirements.
  */
 export const ConversationWindowFields: readonly (keyof ConversationWindowSourceRow)[] =
-    ['ID', 'Sequence', 'Role', 'Message', 'SummaryOfEarlierConversation', '__mj_CreatedAt'];
+    ['ID', 'Sequence', 'Role', 'Message', 'SummaryOfEarlierConversation', '__mj_CreatedAt', 'ReplacedAt'];
 
-/** One `MJ: Conversation Branches` row, as the path helpers need it. */
+/** How a fork started. The values come from the CHECK constraint on ConversationBranch.Kind. */
+export type ForkKind = MJConversationBranchEntity['Kind'];
+
+/** The fork kinds, keyed by {@link ForkKind} so a value CodeGen adds to the union fails to compile until it is listed. */
+const FORK_KIND_KEYS: Readonly<Record<ForkKind, true>> = { Fork: true, Edit: true, Regenerate: true };
+
+/** True when `value` is a key of {@link FORK_KIND_KEYS}. */
+function isForkKind(value: string): value is ForkKind {
+    return Object.prototype.hasOwnProperty.call(FORK_KIND_KEYS, value);
+}
+
+/** Every fork kind. */
+export const FORK_KINDS: readonly ForkKind[] = Object.keys(FORK_KIND_KEYS).filter(isForkKind);
+
+/** One `MJ: Conversation Branches` row (a fork), as the path helpers and the fork summaries need it. */
 export interface ConversationBranchRow {
     ID: string;
     ConversationID: string;
-    /** Branch this one forked from; null means it forked from the trunk. */
+    /** Fork this one started from; null means it started from Main. */
     ParentBranchID: string | null;
     /** Sequence of the last message shared with the parent path; null means none are shared. */
     ForkFromSequence: number | null;
     Name?: string | null;
-}
-
-/** One choice at a fork point. `BranchID` null is the trunk. */
-export interface BranchAlternative {
-    BranchID: string | null;
-    Name: string | null;
+    /** How the fork started; a row without it counts as 'Fork'. */
+    Kind?: ForkKind;
+    /** The edited message (Edit) or the replaced answer (Regenerate); null otherwise. */
+    SourceDetailID?: string | null;
+    /** The person who started the fork. */
+    UserID?: string;
+    /** The name of that person (the view's virtual field). */
+    User?: string | null;
+    __mj_CreatedAt?: Date | string;
 }
 
 /** Longest branch chain the path predicate will build. */
 export const MAX_BRANCH_DEPTH = 32;
 
-/** The Fields a fresh load of branch rows selects. */
+/** The Fields a fresh load of fork rows selects. */
 export const ConversationBranchFields: readonly (keyof ConversationBranchRow)[] =
-    ['ID', 'ConversationID', 'ParentBranchID', 'ForkFromSequence', 'Name'];
+    ['ID', 'ConversationID', 'ParentBranchID', 'ForkFromSequence', 'Name', 'Kind', 'SourceDetailID', 'UserID', 'User', '__mj_CreatedAt'];
+
+/**
+ * What {@link ConversationEngine.CreateFork} needs. A null ForkFromSequence starts before the first message.
+ * ParentBranchID must be the branch that owns the row at ForkFromSequence (null for a Main row); the
+ * fork-point helpers ({@link ConversationEngine.ForkPointFrom} and the others) produce that.
+ */
+export interface CreateForkInput {
+    ConversationID: string;
+    Kind: ForkKind;
+    ParentBranchID: string | null;
+    ForkFromSequence: number | null;
+    SourceDetailID?: string | null;
+    Name?: string | null;
+}
+
+/** Where a new fork starts: the parent path (null is Main) and the Sequence of the last shared message. */
+export interface ForkPoint {
+    readonly ParentBranchID: string | null;
+    readonly ForkFromSequence: number | null;
+}
+
+/** A person or an agent who wrote in a fork. */
+export interface ForkParticipant {
+    readonly Kind: 'User' | 'Agent';
+    readonly ID: string;
+    readonly Name: string | null;
+}
+
+/** A detail row as the fork summaries read it: a fork's own row, or an anchor row. */
+export interface ForkSummaryRow {
+    ID: MJConversationDetailEntity['ID'];
+    BranchID: MJConversationDetailEntity['BranchID'];
+    Sequence: MJConversationDetailEntity['Sequence'];
+    Role: MJConversationDetailEntity['Role'] | null;
+    Message: MJConversationDetailEntity['Message'] | null;
+    UserID: MJConversationDetailEntity['UserID'];
+    AgentID: MJConversationDetailEntity['AgentID'];
+    User?: MJConversationDetailEntity['User'];
+    Agent?: MJConversationDetailEntity['Agent'];
+    HiddenToUser?: MJConversationDetailEntity['HiddenToUser'] | null;
+    /** A Date on an entity, an ISO string on a 'simple' RunView row. */
+    __mj_CreatedAt: MJConversationDetailEntity['__mj_CreatedAt'] | string;
+}
+
+/** The Fields the fork-summary reads select. */
+export const ForkSummaryRowFields: readonly (keyof ForkSummaryRow)[] =
+    ['ID', 'BranchID', 'Sequence', 'Role', 'Message', 'UserID', 'AgentID', 'User', 'Agent', 'HiddenToUser', '__mj_CreatedAt'];
+
+/** Most participants a fork summary lists. */
+export const MAX_FORK_PARTICIPANTS = 3;
+
+/** What the UI shows for one fork: its chip, its header and its row in the forks list. */
+export interface ForkSummary {
+    readonly Branch: ConversationBranchRow;
+    readonly Kind: ForkKind;
+    readonly DisplayName: string;
+    /** The fork's own visible rows. */
+    readonly MessageCount: number;
+    /** Distinct agents and people of the own rows, in order of first appearance, at most {@link MAX_FORK_PARTICIPANTS}. */
+    readonly Participants: ReadonlyArray<ForkParticipant>;
+    /** Every person who wrote an own User row. */
+    readonly AuthorUserIDs: ReadonlyArray<string>;
+    /** The newest own row's time, else the fork's creation time. */
+    readonly LastActivityAt: Date;
+    readonly LastMessagePreview: string | null;
+    readonly LastMessageAuthorName: string | null;
+    /** The message the chip shows under: SourceDetailID, else the anchor. */
+    readonly PlacementDetailID: string | null;
+    /**
+     * The row the fork inherits up to: the parent fork's own row (a Main row when ParentBranchID
+     * is null) with Sequence = ForkFromSequence. Null when there is no such row.
+     */
+    readonly AnchorDetailID: string | null;
+    readonly AnchorAuthorName: string | null;
+    readonly AnchorAt: Date | null;
+    /**
+     * The author of the fork's source message (SourceDetailID: the replaced, edited or regenerated
+     * message): the agent of an agent row, else the person. Null with no source or when its row is not read.
+     */
+    readonly SourceAuthorName?: string | null;
+    readonly StartedByUserID: string | null;
+    readonly StartedByName: string | null;
+    readonly ParentBranchID: string | null;
+}
+
+const FORK_NAME_MAX_WORDS = 6;
+const FORK_NAME_MAX_CHARS = 40;
+const FORK_PREVIEW_MAX_CHARS = 120;
 
 /** The rows one reader may see: a conversation plus the branch whose path is active. */
 export interface ConversationScope {
@@ -1058,40 +1168,27 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     }
 
     /**
-     * Creates a branch forked after `ForkFromSequence` on `ParentBranchID` and makes it the
-     * conversation's current branch. A fork before the first message shares nothing, so
-     * its parent is always the trunk.
-     * @throws when the branch or the conversation cannot be saved
+     * Creates a fork (an `MJ: Conversation Branches` row) started by `contextUser`. A fork before the
+     * first message shares nothing, so its parent is always Main. Never reads or writes the
+     * conversation row. Write access is the branch entity's rule (owner, or an Edit/Owner share).
+     * The server refuses it unless the person holds the `Conversations: Fork` authorization.
+     * @throws when the fork cannot be saved; the message carries the save result
      */
-    public async ForkBranch(
-        input: { ConversationID: string; ForkFromSequence: number | null; ParentBranchID: string | null; Name?: string | null },
-        contextUser: UserInfo
-    ): Promise<MJConversationBranchEntity> {
-        const md = this.ProviderToUse;
-        const branch = await md.GetEntityObject<MJConversationBranchEntity>('MJ: Conversation Branches', contextUser);
+    public async CreateFork(input: CreateForkInput, contextUser: UserInfo): Promise<MJConversationBranchEntity> {
+        const branch = await this.ProviderToUse.GetEntityObject<MJConversationBranchEntity>('MJ: Conversation Branches', contextUser);
         branch.NewRecord();
         branch.ConversationID = input.ConversationID;
+        branch.Kind = input.Kind;
         branch.ForkFromSequence = input.ForkFromSequence;
         branch.ParentBranchID = input.ForkFromSequence == null ? null : input.ParentBranchID;
-        branch.Name = input.Name ?? null;
+        branch.SourceDetailID = input.SourceDetailID ?? null;
+        branch.UserID = contextUser.ID;
+        const name = input.Name?.trim();
+        branch.Name = name ? name : null;
         if (!(await branch.Save())) {
-            throw new Error(`Failed to create conversation branch: ${branch.LatestResult?.CompleteMessage ?? 'unknown error'}`);
-        }
-        if (!(await this.SwitchBranch(input.ConversationID, branch.ID, contextUser))) {
-            throw new Error(`Branch ${branch.ID} was created but could not be made current`);
+            throw new Error(`Failed to create the fork: ${branch.LatestResult?.CompleteMessage ?? 'unknown error'}`);
         }
         return branch;
-    }
-
-    /** Makes a branch (or the trunk, with null) the conversation's current branch. */
-    public async SwitchBranch(conversationId: string, branchId: string | null, contextUser: UserInfo): Promise<boolean> {
-        const md = this.ProviderToUse;
-        const conversation = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', contextUser);
-        if (!(await conversation.Load(conversationId))) {
-            return false;
-        }
-        conversation.CurrentBranchID = branchId;
-        return conversation.Save();
     }
 
     /**
@@ -1874,6 +1971,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * boundary, with no error. Use a separate partial cache if incremental caching is needed.
      *
      * Every detail read is limited to the path of `BranchID` (the trunk when omitted).
+     * Replaced rows (`ReplacedAt` set) are never read.
      *
      * Does not throw for a read that FAILS — a failed branch-path read, like a failed page
      * read, returns an empty window flagged {@link DetailWindowLoadResult.Failed} so the
@@ -1926,8 +2024,9 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         if (pathFilter === null) {
             return emptyDetailWindowResult(true);
         }
+        const liveFilter = ConversationEngine.LiveRowsFilter(pathFilter);
 
-        const page = await this.fetchDetailRowsBySequence(pathFilter, params.BeforeSequence, overread, contextUser);
+        const page = await this.fetchDetailRowsBySequence(liveFilter, params.BeforeSequence, overread, contextUser);
         // Deliberately two branches, not one. `null` is a FAILED read; an empty array is a
         // range that genuinely holds no rows. Collapsing them is what lets a transport blip
         // read downstream as "you have reached the start of the conversation".
@@ -1938,7 +2037,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             return emptyDetailWindowResult(false);
         }
 
-        const details = await this.expandOldestSession(pathFilter, page, contextUser);
+        const details = await this.expandOldestSession(liveFilter, page, contextUser);
         const oldestSequence = details[0].Sequence;
         const newestSequence = details[details.length - 1].Sequence;
 
@@ -1947,7 +2046,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         // to an empty/false result on a failed read — so `Promise.all` cannot introduce a
         // rejection path this method did not already have.
         const [olderProbe, peripherals] = await Promise.all([
-            this.hasOlderDetails(pathFilter, oldestSequence, contextUser),
+            this.hasOlderDetails(liveFilter, oldestSequence, contextUser),
             this.buildWindowPeripherals(details, contextUser)
         ]);
 
@@ -2579,7 +2678,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * fresh-load query shape (entity name, filter, order, fields) for every server-side
      * caller: the agent resolver's history loader and the cross-turn compaction pass both consume this,
      * so the two can never drift apart. THROWS on load failure — servers must fail
-     * loudly rather than proceed against an empty history.
+     * loudly rather than proceed against an empty history. Replaced rows never leave the database.
      *
      * @param conversationId - The conversation whose detail rows to load
      * @param contextUser - The requesting user (entity RLS is applied under this user)
@@ -2605,9 +2704,9 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         const pathFilter = await ConversationEngine.BranchPathFilterFresh(conversationId, branchId, contextUser, provider);
         const rows = await rv.RunView<ConversationWindowSourceRow>({
             EntityName: 'MJ: Conversation Details',
-            ExtraFilter: historyFrom
+            ExtraFilter: ConversationEngine.LiveRowsFilter(historyFrom
                 ? `${pathFilter} AND ${ConversationEngine.HistoryFromFilter(historyFrom)}`
-                : pathFilter,
+                : pathFilter),
             OrderBy: 'Sequence ASC',
             Fields: [...ConversationWindowFields],
             ResultType: 'simple',
@@ -2636,6 +2735,8 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * floor none is used, and the window is the most recent `maxTailMessages` rows at or
      * after the floor. A row whose `__mj_CreatedAt` is missing or unreadable can't be shown
      * to be after the floor, so it is dropped too.
+     *
+     * Replaced rows (`ReplacedAt` set) are always left out.
      */
     public static AssembleContextWindow(
         details: ReadonlyArray<ConversationWindowSourceRow>,
@@ -2648,7 +2749,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         const excluded = new Set((options?.excludeDetailIds || []).map(id => NormalizeUUID(id)));
         const floor = options?.historyFrom ?? null;
         const ordered = details
-            .filter(d => !excluded.has(NormalizeUUID(d.ID)))
+            .filter(d => !excluded.has(NormalizeUUID(d.ID)) && !ConversationEngine.IsReplacedRow(d))
             .filter(d => !floor || ConversationEngine.isAtOrAfter(d.__mj_CreatedAt, floor))
             .sort((a, b) => a.Sequence - b.Sequence);
 
@@ -2675,6 +2776,20 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      */
     public static HistoryFromFilter(historyFrom: Date, column: string = '__mj_CreatedAt'): string {
         return `${column} >= '${historyFrom.toISOString()}'`;
+    }
+
+    /**
+     * `filter` limited to rows no rerun replaced (`ReplacedAt` is NULL). A replaced row is an answer a
+     * rerun of its turn superseded: it is kept, but never shown and never sent to an agent. Every reader
+     * of conversation rows for display or for agent context applies this.
+     */
+    public static LiveRowsFilter(filter: string): string {
+        return `${filter} AND [ReplacedAt] IS NULL`;
+    }
+
+    /** True when a rerun of its turn replaced the row (`ReplacedAt` is set). */
+    public static IsReplacedRow(row: { ReplacedAt?: Date | string | null }): boolean {
+        return row.ReplacedAt != null;
     }
 
     /**
@@ -2794,32 +2909,6 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     }
 
     /**
-     * Reads the conversation's CurrentBranchID, then {@link LoadScope}.
-     * @throws when the conversation cannot be read or is not visible, or when {@link LoadScope} throws.
-     */
-    public static async LoadCurrentScope(
-        conversationId: string,
-        contextUser: UserInfo,
-        provider?: IMetadataProvider
-    ): Promise<ConversationScope> {
-        const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
-        const result = await rv.RunView<{ ID: string; CurrentBranchID: string | null }>({
-            EntityName: 'MJ: Conversations',
-            ExtraFilter: `ID='${EscapeSQLString(conversationId)}'`,
-            Fields: ['ID', 'CurrentBranchID'],
-            ResultType: 'simple',
-        }, contextUser);
-        if (!result.Success) {
-            throw new Error(`Conversation ${conversationId} could not be read: ${result.ErrorMessage}`);
-        }
-        const row = result.Results?.[0];
-        if (!row) {
-            throw new Error(`Conversation ${conversationId} not found`);
-        }
-        return ConversationEngine.LoadScope(conversationId, row.CurrentBranchID ?? null, contextUser, provider);
-    }
-
-    /**
      * Predicate over MJ: Conversation Details for the rows in scope. Same text as
      * {@link BuildBranchPathFilter}.
      * @throws when the scope's `BranchID`, or the parent of a branch on its chain, is not in the
@@ -2865,35 +2954,294 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             `)`;
     }
 
-    /**
-     * The choices available after the row at `forkFromSequence` on branch `parentBranchId`:
-     * the parent's own continuation first, then every branch forked there, in list order.
-     * `forkFromSequence` null means "before the first message".
-     */
-    public static GetAlternativesAt(
-        forkFromSequence: number | null,
-        parentBranchId: string | null,
-        branches: ReadonlyArray<ConversationBranchRow>
-    ): BranchAlternative[] {
-        const forks = branches.filter(b =>
-            (b.ForkFromSequence ?? null) === forkFromSequence && sameId(b.ParentBranchID, parentBranchId)
-        );
-        return [
-            { BranchID: parentBranchId, Name: null },
-            ...forks.map(b => ({ BranchID: b.ID, Name: b.Name ?? null })),
-        ];
+    /** The kind of a fork row; a missing or unknown value is 'Fork'. */
+    public static NormalizeForkKind(kind: string | null | undefined): ForkKind {
+        return FORK_KINDS.find(k => k === kind) ?? 'Fork';
     }
 
-    /** Which alternative at a fork point the given chain follows. */
-    public static ActiveAlternativeAt(
-        forkFromSequence: number | null,
-        parentBranchId: string | null,
-        chain: ReadonlyArray<ConversationBranchRow>
-    ): string | null {
-        const taken = chain.find(b =>
-            (b.ForkFromSequence ?? null) === forkFromSequence && sameId(b.ParentBranchID, parentBranchId)
-        );
-        return taken ? taken.ID : parentBranchId;
+    /**
+     * Plain text of a stored message: each `@{...}` mention becomes `@<name>`, or is dropped when it
+     * has no name, and runs of whitespace become one space. Null when nothing is left.
+     */
+    public static ForkPlainText(message: string | null | undefined): string | null {
+        if (!message) {
+            return null;
+        }
+        const plain = message
+            .replace(/@\{[^{}]*\}/g, token => {
+                try {
+                    const parsed = JSON.parse(token.slice(1)) as { name?: string | number | boolean | null };
+                    return typeof parsed.name === 'string' && parsed.name.trim().length > 0 ? `@${parsed.name.trim()}` : ' ';
+                } catch {
+                    return ' ';
+                }
+            })
+            .replace(/\s+/g, ' ')
+            .trim();
+        return plain.length > 0 ? plain : null;
+    }
+
+    /** The first words of a message, for a fork with no name: at most 6 words and 40 characters, '…' when cut. */
+    public static ForkFirstWords(message: string | null | undefined): string | null {
+        const plain = ConversationEngine.ForkPlainText(message);
+        if (!plain) {
+            return null;
+        }
+        const words = plain.split(' ');
+        let text = words.slice(0, FORK_NAME_MAX_WORDS).join(' ');
+        let cut = words.length > FORK_NAME_MAX_WORDS;
+        if (text.length > FORK_NAME_MAX_CHARS) {
+            text = text.slice(0, FORK_NAME_MAX_CHARS).trimEnd();
+            cut = true;
+        }
+        return cut ? `${text}…` : text;
+    }
+
+    /** A one-line preview of a message: at most 120 characters, '…' when cut. */
+    public static ForkPreviewText(message: string | null | undefined): string | null {
+        const plain = ConversationEngine.ForkPlainText(message);
+        if (!plain) {
+            return null;
+        }
+        return plain.length > FORK_PREVIEW_MAX_CHARS ? `${plain.slice(0, FORK_PREVIEW_MAX_CHARS).trimEnd()}…` : plain;
+    }
+
+    /**
+     * The label of a fork: its name, else a default from its kind — Fork: the first words of its first
+     * message, else "Fork"; Edit: "Edited version"; Regenerate: "Other answer".
+     */
+    public static ForkDisplayName(branch: Pick<ConversationBranchRow, 'Name' | 'Kind'>, firstOwnMessage: string | null): string {
+        const name = branch.Name?.trim();
+        if (name) {
+            return name;
+        }
+        switch (ConversationEngine.NormalizeForkKind(branch.Kind)) {
+            case 'Edit':
+                return 'Edited version';
+            case 'Regenerate':
+                return 'Other answer';
+            default:
+                return ConversationEngine.ForkFirstWords(firstOwnMessage) ?? 'Fork';
+        }
+    }
+
+    /** The fork point at a message: the new fork starts after the message itself, on its branch. */
+    public static ForkPointFrom(message: { BranchID?: string | null; Sequence: number }): ForkPoint {
+        return { ParentBranchID: message.BranchID ?? null, ForkFromSequence: message.Sequence };
+    }
+
+    /**
+     * Edit of a message, or Fork from here on it (the fork replaces it): the new fork starts at the row
+     * before it on its path (both null when it is the first message). Undefined when that row is not
+     * known: the message is not in `pathRows`, or it is the first loaded row while older rows exist
+     * (`hasMoreAbove`).
+     */
+    public static EditForkPoint(
+        message: { ID: string; Sequence: number },
+        pathRows: ReadonlyArray<{ ID: string; Sequence: number; BranchID?: string | null }>,
+        hasMoreAbove: boolean = false
+    ): ForkPoint | undefined {
+        const sorted = [...pathRows].sort((a, b) => a.Sequence - b.Sequence);
+        const index = sorted.findIndex(r => sameId(r.ID, message.ID));
+        if (index < 0) {
+            return undefined;
+        }
+        if (index === 0) {
+            return hasMoreAbove ? undefined : { ParentBranchID: null, ForkFromSequence: null };
+        }
+        return ConversationEngine.ForkPointFrom(sorted[index - 1]);
+    }
+
+    /** Regenerate of an answer: the new fork starts at the user message the answer replied to. */
+    public static RegenerateForkPoint(userMessage: { BranchID?: string | null; Sequence: number }): ForkPoint {
+        return ConversationEngine.ForkPointFrom(userMessage);
+    }
+
+    /**
+     * Predicate over MJ: Conversation Details for the anchor rows of the given forks (one clause per
+     * distinct fork point); null when no fork has a fork point.
+     */
+    public static AnchorRowsFilter(conversationId: string, branches: ReadonlyArray<ConversationBranchRow>): string | null {
+        const clauses: string[] = [];
+        for (const branch of branches) {
+            if (branch.ForkFromSequence == null) {
+                continue;
+            }
+            const onParent = branch.ParentBranchID == null
+                ? '[BranchID] IS NULL'
+                : `[BranchID]='${EscapeSQLString(branch.ParentBranchID)}'`;
+            const clause = `(${onParent} AND [Sequence]=${Math.trunc(branch.ForkFromSequence)})`;
+            if (!clauses.includes(clause)) {
+                clauses.push(clause);
+            }
+        }
+        if (clauses.length === 0) {
+            return null;
+        }
+        return `[ConversationID]='${EscapeSQLString(conversationId)}' AND (${clauses.join(' OR ')})`;
+    }
+
+    /**
+     * Predicate over MJ: Conversation Details for the source rows of the given forks (each distinct
+     * SourceDetailID once); null when no fork has a source.
+     */
+    public static SourceRowsFilter(conversationId: string, branches: ReadonlyArray<ConversationBranchRow>): string | null {
+        const ids: string[] = [];
+        for (const branch of branches) {
+            const id = branch.SourceDetailID;
+            if (id && !ids.some(known => sameId(known, id))) {
+                ids.push(id);
+            }
+        }
+        if (ids.length === 0) {
+            return null;
+        }
+        const list = ids.map(id => `'${EscapeSQLString(id)}'`).join(', ');
+        return `[ConversationID]='${EscapeSQLString(conversationId)}' AND [ID] IN (${list})`;
+    }
+
+    /**
+     * One summary per fork, in the order of `branches`. Pure: `ownRows` are the conversation's rows
+     * with a BranchID, `anchorRows` the rows {@link AnchorRowsFilter} selects, `sourceRows` the rows
+     * {@link SourceRowsFilter} selects.
+     */
+    public static BuildForkSummaries(
+        branches: ReadonlyArray<ConversationBranchRow>,
+        ownRows: ReadonlyArray<ForkSummaryRow>,
+        anchorRows: ReadonlyArray<ForkSummaryRow>,
+        sourceRows: ReadonlyArray<ForkSummaryRow> = []
+    ): ForkSummary[] {
+        const ownByFork = new Map<string, ForkSummaryRow[]>();
+        for (const row of ownRows) {
+            if (row.BranchID == null || row.HiddenToUser === true) {
+                continue;
+            }
+            const key = NormalizeUUID(row.BranchID);
+            const list = ownByFork.get(key);
+            if (list) {
+                list.push(row);
+            } else {
+                ownByFork.set(key, [row]);
+            }
+        }
+        return branches.map(branch => {
+            const own = [...(ownByFork.get(NormalizeUUID(branch.ID)) ?? [])].sort((a, b) => a.Sequence - b.Sequence);
+            const anchor = branch.ForkFromSequence == null
+                ? undefined
+                : anchorRows.find(r => r.Sequence === branch.ForkFromSequence && sameId(r.BranchID, branch.ParentBranchID ?? null));
+            const sourceId = branch.SourceDetailID;
+            const source = sourceId ? sourceRows.find(r => sameId(r.ID, sourceId)) : undefined;
+            const first = own.find(r => ConversationEngine.ForkPlainText(r.Message) != null);
+            const last = own.length > 0 ? own[own.length - 1] : undefined;
+            const authors: string[] = [];
+            for (const r of own) {
+                if (r.Role === 'User' && r.UserID && !authors.some(a => sameId(a, r.UserID))) {
+                    authors.push(r.UserID);
+                }
+            }
+            return {
+                Branch: branch,
+                Kind: ConversationEngine.NormalizeForkKind(branch.Kind),
+                DisplayName: ConversationEngine.ForkDisplayName(branch, first?.Message ?? null),
+                MessageCount: own.length,
+                Participants: ConversationEngine.forkParticipants(own),
+                AuthorUserIDs: authors,
+                LastActivityAt: (last ? ConversationEngine.toForkDate(last.__mj_CreatedAt) : null)
+                    ?? ConversationEngine.toForkDate(branch.__mj_CreatedAt)
+                    ?? new Date(0),
+                LastMessagePreview: last ? ConversationEngine.ForkPreviewText(last.Message) : null,
+                LastMessageAuthorName: last ? ConversationEngine.rowAuthorName(last) : null,
+                PlacementDetailID: branch.SourceDetailID ?? anchor?.ID ?? null,
+                AnchorDetailID: anchor?.ID ?? null,
+                AnchorAuthorName: anchor ? ConversationEngine.rowAuthorName(anchor) : null,
+                AnchorAt: anchor ? ConversationEngine.toForkDate(anchor.__mj_CreatedAt) : null,
+                SourceAuthorName: source ? ConversationEngine.rowAuthorName(source) : null,
+                StartedByUserID: branch.UserID ?? null,
+                StartedByName: branch.User ?? null,
+                ParentBranchID: branch.ParentBranchID ?? null,
+            };
+        });
+    }
+
+    /**
+     * Loads the fork summaries of a conversation FRESH (entity RLS applies): the fork rows (unless
+     * given), then the forks' own rows, their anchor rows and their source rows in one RunViews batch.
+     * @throws when a read fails
+     */
+    public static async LoadForkSummaries(
+        conversationId: string,
+        contextUser: UserInfo,
+        provider?: IMetadataProvider,
+        branches?: ReadonlyArray<ConversationBranchRow>
+    ): Promise<ForkSummary[]> {
+        const forks = branches ?? await ConversationEngine.LoadBranchesFresh(conversationId, contextUser, provider);
+        if (forks.length === 0) {
+            return [];
+        }
+        const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
+        const params: RunViewParams[] = [{
+            EntityName: 'MJ: Conversation Details',
+            ExtraFilter: `[ConversationID]='${EscapeSQLString(conversationId)}' AND [BranchID] IS NOT NULL`,
+            OrderBy: 'Sequence ASC',
+            Fields: [...ForkSummaryRowFields],
+            ResultType: 'simple',
+        }];
+        const rowsParams = (filter: string): RunViewParams => ({
+            EntityName: 'MJ: Conversation Details',
+            ExtraFilter: filter,
+            Fields: [...ForkSummaryRowFields],
+            ResultType: 'simple',
+        });
+        const anchorFilter = ConversationEngine.AnchorRowsFilter(conversationId, forks);
+        const anchorIndex = anchorFilter ? params.push(rowsParams(anchorFilter)) - 1 : -1;
+        const sourceFilter = ConversationEngine.SourceRowsFilter(conversationId, forks);
+        const sourceIndex = sourceFilter ? params.push(rowsParams(sourceFilter)) - 1 : -1;
+        const results = await rv.RunViews<ForkSummaryRow>(params, contextUser);
+        const own = results[0];
+        const anchors = anchorIndex >= 0 ? results[anchorIndex] : undefined;
+        const sources = sourceIndex >= 0 ? results[sourceIndex] : undefined;
+        if (!own?.Success) {
+            throw new Error(`Failed to load the forks of conversation ${conversationId}: ${own?.ErrorMessage}`);
+        }
+        if (anchors && !anchors.Success) {
+            throw new Error(`Failed to load the fork anchors of conversation ${conversationId}: ${anchors.ErrorMessage}`);
+        }
+        if (sources && !sources.Success) {
+            throw new Error(`Failed to load the fork source messages of conversation ${conversationId}: ${sources.ErrorMessage}`);
+        }
+        return ConversationEngine.BuildForkSummaries(forks, own.Results ?? [], anchors?.Results ?? [], sources?.Results ?? []);
+    }
+
+    /** Distinct agents and people of rows in order, at most {@link MAX_FORK_PARTICIPANTS}. */
+    private static forkParticipants(rows: ReadonlyArray<ForkSummaryRow>): ForkParticipant[] {
+        const out: ForkParticipant[] = [];
+        for (const r of rows) {
+            const participant: ForkParticipant | null = r.AgentID
+                ? { Kind: 'Agent', ID: r.AgentID, Name: r.Agent ?? null }
+                : r.UserID ? { Kind: 'User', ID: r.UserID, Name: r.User ?? null } : null;
+            if (!participant || out.some(p => p.Kind === participant.Kind && sameId(p.ID, participant.ID))) {
+                continue;
+            }
+            out.push(participant);
+            if (out.length === MAX_FORK_PARTICIPANTS) {
+                break;
+            }
+        }
+        return out;
+    }
+
+    /** The agent's name for an agent row, else the person's name; null when the row names neither. */
+    private static rowAuthorName(row: ForkSummaryRow): string | null {
+        return row.AgentID ? (row.Agent ?? null) : (row.User ?? null);
+    }
+
+    /** A Date from a stored timestamp; null when missing or unreadable. */
+    private static toForkDate(value: Date | string | null | undefined): Date | null {
+        if (value == null) {
+            return null;
+        }
+        const date = value instanceof Date ? value : new Date(value);
+        return Number.isNaN(date.getTime()) ? null : date;
     }
 
     /** True when a row's timestamp is at or after the floor; false when it is missing or unreadable. */

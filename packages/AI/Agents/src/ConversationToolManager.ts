@@ -319,15 +319,16 @@ export class ConversationToolManager {
     }
 
     /**
-     * The conversation history the run may read — the rows on the run's branch path (all of
-     * them, or from its floor) — ordered by Sequence, from the engine cache.
+     * The conversation history the run may read — the rows on the run's branch path that no
+     * rerun replaced (all of them, or from its floor) — ordered by Sequence, from the engine cache.
      */
     private async loadOrderedDetails(): Promise<MJConversationDetailEntity[]> {
         if (!this.conversationId || !this.contextUser) {
             throw new Error('Conversation tools are unavailable: no conversation is associated with this run');
         }
         const cache = await ConversationEngine.Instance.LoadConversationDetails(this.conversationId, this.contextUser);
-        const onPath = ConversationEngine.FilterRowsToBranchPath(cache.Details, this.branchId, this.branches);
+        const onPath = ConversationEngine.FilterRowsToBranchPath(cache.Details, this.branchId, this.branches)
+            .filter(d => d.ReplacedAt == null);
         const floor = this.historyFrom;
         const visible = floor ? onPath.filter(d => ConversationToolManager.isAtOrAfter(d.__mj_CreatedAt, floor)) : onPath;
         return [...visible].sort((a, b) => a.Sequence - b.Sequence);

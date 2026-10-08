@@ -313,8 +313,8 @@ describe('ExportService — BuildExportContent branding', () => {
 });
 
 /**
- * `ExportConversation` reads the messages of one scope: the trunk, or the path of the branch the
- * conversation shows. On a branch the export header names the branch.
+ * `ExportConversation` reads the messages of one scope: Main, or the path of a fork. In a fork
+ * the export header names the fork by its display name.
  */
 describe('ExportService — ExportConversation scope', () => {
   const conversation = {
@@ -371,56 +371,75 @@ describe('ExportService — ExportConversation scope', () => {
     return built.content;
   }
 
-  it('reads the details on the branch path with the scope filter, in Sequence order', async () => {
+  it('reads the details on the fork path with the scope filter, in Sequence order', async () => {
     await svc.ExportConversation('c1', branchScope, 'markdown', user);
 
     const read = detailsRead();
     expect(read.EntityName).toBe('MJ: Conversation Details');
-    expect(read.ExtraFilter).toBe(ConversationEngine.ScopeFilter(branchScope));
+    expect(read.ExtraFilter).toBe(ConversationEngine.LiveRowsFilter(ConversationEngine.ScopeFilter(branchScope)));
     expect(read.ExtraFilter).toContain(`[BranchID]='BRANCH-B'`);
     expect(read.OrderBy).toBe('Sequence ASC');
   });
 
-  it('reads the trunk details with the trunk predicate', async () => {
+  it('reads the Main details with the Main predicate', async () => {
     await svc.ExportConversation('c1', ConversationEngine.TrunkScope('c1'), 'markdown', user);
 
     const read = detailsRead();
-    expect(read.ExtraFilter).toBe(`[ConversationID]='c1' AND [BranchID] IS NULL`);
+    expect(read.ExtraFilter).toBe(`[ConversationID]='c1' AND [BranchID] IS NULL AND [ReplacedAt] IS NULL`);
     expect(read.OrderBy).toBe('Sequence ASC');
   });
 
-  it('names the branch in the header of every format on a branch', async () => {
+  it('names the fork in the header of every format in a fork', async () => {
     expect(await exportText(branchScope, 'markdown')).toContain('**Created:** ');
-    expect(await exportText(branchScope, 'markdown')).toContain('**Branch:** Shorter answers\n\n---');
-    expect(await exportText(branchScope, 'text')).toContain('\nBranch: Shorter answers\n\n----');
-    expect(await exportText(branchScope, 'html')).toContain('<p>Branch: Shorter answers</p>');
-    expect(JSON.parse(await exportText(branchScope, 'json')).conversation.branch).toBe('Shorter answers');
+    expect(await exportText(branchScope, 'markdown')).toContain('**Fork:** Shorter answers\n\n---');
+    expect(await exportText(branchScope, 'text')).toContain('\nFork: Shorter answers\n\n----');
+    expect(await exportText(branchScope, 'html')).toContain('<p>Fork: Shorter answers</p>');
+    expect(JSON.parse(await exportText(branchScope, 'json')).conversation.fork).toBe('Shorter answers');
   });
 
-  it('names the branch by its id when the branch has no name', async () => {
-    expect(await exportText(unnamedScope, 'markdown')).toContain('**Branch:** BRANCH-U');
-    expect(await exportText(unnamedScope, 'text')).toContain('Branch: BRANCH-U');
-    expect(await exportText(unnamedScope, 'html')).toContain('<p>Branch: BRANCH-U</p>');
-    expect(JSON.parse(await exportText(unnamedScope, 'json')).conversation.branch).toBe('BRANCH-U');
+  it('names an unnamed fork by its default display name', async () => {
+    const label = ConversationEngine.ForkDisplayName(unnamed, null);
+    expect(label).toBe('Fork');
+    expect(await exportText(unnamedScope, 'markdown')).toContain(`**Fork:** ${label}`);
+    expect(await exportText(unnamedScope, 'text')).toContain(`Fork: ${label}`);
+    expect(await exportText(unnamedScope, 'html')).toContain(`<p>Fork: ${label}</p>`);
+    expect(JSON.parse(await exportText(unnamedScope, 'json')).conversation.fork).toBe(label);
   });
 
-  it('names the branch when metadata is left out', async () => {
-    expect(await exportText(branchScope, 'markdown', false)).toContain('**Branch:** Shorter answers');
-    expect(await exportText(branchScope, 'text', false)).toContain('Branch: Shorter answers');
-    expect(await exportText(branchScope, 'html', false)).toContain('<p>Branch: Shorter answers</p>');
-    expect(JSON.parse(await exportText(branchScope, 'json', false)).conversation.branch).toBe('Shorter answers');
+  it("names an unnamed fork by the first words of its first own message", async () => {
+    const pathRows = [
+      { ID: 'm1', Role: 'User', Message: 'Main question', BranchID: null, Sequence: 1, __mj_CreatedAt: new Date('2026-01-02T03:05:00Z') },
+      { ID: 'm3', Role: 'AI', Message: 'Later reply', BranchID: 'BRANCH-U', Sequence: 4, __mj_CreatedAt: new Date('2026-01-02T03:07:00Z') },
+      { ID: 'm2', Role: 'User', Message: 'Try a shorter answer', BranchID: 'branch-u', Sequence: 3, __mj_CreatedAt: new Date('2026-01-02T03:06:00Z') },
+    ] as unknown as MJConversationDetailEntity[];
+    runViews.mockResolvedValue([
+      { Success: true, Results: [conversation] },
+      { Success: true, Results: pathRows },
+    ]);
+
+    const json = JSON.parse(await exportText(unnamedScope, 'json'));
+
+    expect(json.conversation.fork).toBe(ConversationEngine.ForkDisplayName(unnamed, 'Try a shorter answer'));
+    expect(json.conversation.fork).toBe('Try a shorter answer');
   });
 
-  it('adds no branch line on the trunk', async () => {
+  it('names the fork when metadata is left out', async () => {
+    expect(await exportText(branchScope, 'markdown', false)).toContain('**Fork:** Shorter answers');
+    expect(await exportText(branchScope, 'text', false)).toContain('Fork: Shorter answers');
+    expect(await exportText(branchScope, 'html', false)).toContain('<p>Fork: Shorter answers</p>');
+    expect(JSON.parse(await exportText(branchScope, 'json', false)).conversation.fork).toBe('Shorter answers');
+  });
+
+  it('adds no fork line in Main', async () => {
     for (const format of formats) {
       for (const includeMetadata of [true, false]) {
         const content = await exportText(ConversationEngine.TrunkScope('c1'), format, includeMetadata);
-        expect(content).not.toMatch(/branch/i);
+        expect(content).not.toMatch(/fork|branch/i);
       }
     }
   });
 
-  it('keeps the trunk document as BuildExportContent writes it', async () => {
+  it('keeps the Main document as BuildExportContent writes it', async () => {
     for (const format of formats) {
       const exported = await exportText(ConversationEngine.TrunkScope('c1'), format);
       const built = await svc.BuildExportContent({ conversation, details }, format);
@@ -434,21 +453,18 @@ describe('ExportService — ExportConversation scope', () => {
     expect(runViews).not.toHaveBeenCalled();
   });
 
-  it('the deprecated alias exports the current scope when no scope is given', async () => {
-    const loadCurrent = vi.spyOn(ConversationEngine, 'LoadCurrentScope').mockResolvedValue(branchScope);
+  it('the deprecated alias exports Main when no scope is given', async () => {
+    const loadScope = vi.spyOn(ConversationEngine, 'LoadScope');
 
     await svc.exportConversation('c1', 'markdown', user);
 
-    expect(loadCurrent).toHaveBeenCalledWith('c1', user, svc.Provider);
-    expect(detailsRead().ExtraFilter).toBe(ConversationEngine.ScopeFilter(branchScope));
+    expect(loadScope).not.toHaveBeenCalled();
+    expect(detailsRead().ExtraFilter).toBe(`[ConversationID]='c1' AND [BranchID] IS NULL AND [ReplacedAt] IS NULL`);
   });
 
-  it('the deprecated alias exports a given scope without reading the current one', async () => {
-    const loadCurrent = vi.spyOn(ConversationEngine, 'LoadCurrentScope');
+  it('the deprecated alias exports a given scope', async () => {
+    await svc.exportConversation('c1', 'markdown', user, {}, branchScope);
 
-    await svc.exportConversation('c1', 'markdown', user, {}, ConversationEngine.TrunkScope('c1'));
-
-    expect(loadCurrent).not.toHaveBeenCalled();
-    expect(detailsRead().ExtraFilter).toBe(`[ConversationID]='c1' AND [BranchID] IS NULL`);
+    expect(detailsRead().ExtraFilter).toBe(ConversationEngine.LiveRowsFilter(ConversationEngine.ScopeFilter(branchScope)));
   });
 });

@@ -228,30 +228,6 @@ describe('ConversationScope', () => {
         expect(await ConversationEngine.BranchPathFilterFresh(C, '', user)).toBe(`[ConversationID]='${C}' AND [BranchID] IS NULL`);
         expect(runViewFixture.params).toHaveLength(1);
     });
-
-    it('LoadCurrentScope reads CurrentBranchID and loads that branch', async () => {
-        runViewFixture.results.push({ Success: true, Results: [{ ID: C, CurrentBranchID: B }] });
-        vi.spyOn(ConversationEngine, 'LoadBranchesFresh').mockResolvedValue(branches);
-        const scopeSpy = vi.spyOn(ConversationEngine, 'LoadScope');
-        const s = await ConversationEngine.LoadCurrentScope(C, user);
-        expect(scopeSpy).toHaveBeenCalledWith(C, B, user, undefined);
-        expect(s).toEqual({ ConversationID: C, BranchID: B, Branches: branches });
-        expect(runViewFixture.params[0].EntityName).toBe('MJ: Conversations');
-        expect(runViewFixture.params[0].ExtraFilter).toBe(`ID='${C}'`);
-    });
-
-    it('LoadCurrentScope is the trunk when the conversation has no current branch', async () => {
-        runViewFixture.results.push({ Success: true, Results: [{ ID: C, CurrentBranchID: null }] });
-        expect(await ConversationEngine.LoadCurrentScope(C, user)).toEqual(ConversationEngine.TrunkScope(C));
-        expect(runViewFixture.params).toHaveLength(1);
-    });
-
-    it('LoadCurrentScope rejects when the conversation cannot be read or is not visible', async () => {
-        runViewFixture.results.push({ Success: false, Results: [], ErrorMessage: 'denied' });
-        await expect(ConversationEngine.LoadCurrentScope(C, user)).rejects.toThrow(/denied/);
-        runViewFixture.results.push({ Success: true, Results: [] });
-        await expect(ConversationEngine.LoadCurrentScope(C, user)).rejects.toThrow(/not found/);
-    });
 });
 
 describe('Engine cache consumers and scope', () => {

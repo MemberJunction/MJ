@@ -246,7 +246,7 @@ vi.mock('../engines/artifacts', () => ({
 // ---------------------------------------------------------------------------
 // Import the module under test AFTER mocks
 // ---------------------------------------------------------------------------
-import { ConversationEngine, BuildProjectVisibilityFilter, ExplainProjectDeleteFailure } from '../engines/conversations';
+import { ConversationEngine, ConversationWindowFields, BuildProjectVisibilityFilter, ExplainProjectDeleteFailure } from '../engines/conversations';
 import { ResourcePermissionEngine } from '../custom/ResourcePermissions/ResourcePermissionEngine';
 import { UserInfo } from '@memberjunction/core';
 
@@ -1807,6 +1807,16 @@ describe('ConversationEngine', () => {
             expect(window.map(m => m.content)).toEqual(['m1', 'm2']);
         });
 
+        it('leaves out a replaced answer (ReplacedAt set), whatever its type', () => {
+            const window = ConversationEngine.AssembleContextWindow([
+                row(1, 'User', 'm1'),
+                { ...row(2, 'AI', 'old answer'), ReplacedAt: '2026-10-07T10:00:00.000Z' },
+                { ...row(3, 'AI', 'other old answer'), ReplacedAt: new Date('2026-10-07T10:00:00.000Z') },
+                { ...row(4, 'AI', 'new answer'), ReplacedAt: null },
+            ]);
+            expect(window.map(m => m.content)).toEqual(['m1', 'new answer']);
+        });
+
         describe('history floor (historyFrom)', () => {
             const floor = new Date('2026-09-01T12:00:00.000Z');
             const dated = (sequence: number, createdAt: Date | string | null, summary?: string) => ({
@@ -1856,18 +1866,36 @@ describe('ConversationEngine', () => {
         });
     });
 
+    describe('LiveRowsFilter and IsReplacedRow', () => {
+        it('appends the replaced-row clause and leaves the trunk predicate as it is', () => {
+            expect(ConversationEngine.LiveRowsFilter(`[ConversationID]='c' AND [BranchID] IS NULL`))
+                .toBe(`[ConversationID]='c' AND [BranchID] IS NULL AND [ReplacedAt] IS NULL`);
+        });
+
+        it('says a row is replaced only when ReplacedAt is set', () => {
+            expect(ConversationEngine.IsReplacedRow({ ReplacedAt: new Date() })).toBe(true);
+            expect(ConversationEngine.IsReplacedRow({ ReplacedAt: '2026-10-07T10:00:00.000Z' })).toBe(true);
+            expect(ConversationEngine.IsReplacedRow({ ReplacedAt: null })).toBe(false);
+            expect(ConversationEngine.IsReplacedRow({})).toBe(false);
+        });
+
+        it('lists ReplacedAt among the window fields', () => {
+            expect(ConversationWindowFields).toContain('ReplacedAt');
+        });
+    });
+
     describe('LoadWindowRowsFresh', () => {
         it('loads the whole trunk, with the window fields including __mj_CreatedAt', async () => {
             await ConversationEngine.LoadWindowRowsFresh('conv-1', contextUser);
             expect(runViewParamsLog).toHaveLength(1);
-            expect(runViewParamsLog[0].ExtraFilter).toBe(`[ConversationID]='conv-1' AND [BranchID] IS NULL`);
+            expect(runViewParamsLog[0].ExtraFilter).toBe(`[ConversationID]='conv-1' AND [BranchID] IS NULL AND [ReplacedAt] IS NULL`);
             expect(runViewParamsLog[0].Fields).toContain('__mj_CreatedAt');
         });
 
         it('applies a history floor in the query, so earlier rows never leave the database', async () => {
             const floor = new Date('2026-09-01T12:00:00.000Z');
             await ConversationEngine.LoadWindowRowsFresh('conv-1', contextUser, undefined, floor);
-            expect(runViewParamsLog[0].ExtraFilter).toBe(`[ConversationID]='conv-1' AND [BranchID] IS NULL AND __mj_CreatedAt >= '2026-09-01T12:00:00.000Z'`);
+            expect(runViewParamsLog[0].ExtraFilter).toBe(`[ConversationID]='conv-1' AND [BranchID] IS NULL AND __mj_CreatedAt >= '2026-09-01T12:00:00.000Z' AND [ReplacedAt] IS NULL`);
         });
 
         it('fails before querying when the floor is an invalid date', async () => {
@@ -1883,7 +1911,7 @@ describe('ConversationEngine', () => {
             await ConversationEngine.LoadWindowRowsFresh('conv-1', contextUser, undefined, undefined, 'B');
             expect(runViewParamsLog[0].EntityName).toBe('MJ: Conversation Branches');
             expect(runViewParamsLog[0].ExtraFilter).toBe(`ConversationID='conv-1'`);
-            expect(runViewParamsLog[1].ExtraFilter).toBe(`[ConversationID]='conv-1' AND ([BranchID]='B' OR ([BranchID] IS NULL AND [Sequence] <= 2))`);
+            expect(runViewParamsLog[1].ExtraFilter).toBe(`[ConversationID]='conv-1' AND ([BranchID]='B' OR ([BranchID] IS NULL AND [Sequence] <= 2)) AND [ReplacedAt] IS NULL`);
         });
 
         it('does not query branches for the trunk', async () => {
@@ -2349,7 +2377,7 @@ describe('ConversationEngine', () => {
 
             const fetch = runViewParamsLog[0];
             expect(fetch.EntityName).toBe('MJ: Conversation Details');
-            expect(fetch.ExtraFilter).toBe(`[ConversationID]='conv-1' AND [BranchID] IS NULL`);
+            expect(fetch.ExtraFilter).toBe(`[ConversationID]='conv-1' AND [BranchID] IS NULL AND [ReplacedAt] IS NULL`);
             expect(fetch.OrderBy).toBe('Sequence DESC');
             expect(fetch.AfterKey).toBeUndefined();
         });
@@ -2667,6 +2695,7 @@ describe('ConversationEngine', () => {
             expect(detailQueries.map(q => q.MaxRows)).toEqual([15, 200, 1]);
             for (const q of detailQueries) {
                 expect(String(q.ExtraFilter)).toContain(expected);
+                expect(String(q.ExtraFilter)).toContain('[ReplacedAt] IS NULL');
             }
         });
 

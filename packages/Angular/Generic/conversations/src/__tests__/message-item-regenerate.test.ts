@@ -19,7 +19,7 @@ interface Harness {
   emitted: MJConversationDetailEntity[];
 }
 
-function createHarness(opts: { role?: string; status?: 'Complete' | 'In-Progress' | 'Error'; processing?: boolean; editing?: boolean } = {}): Harness {
+function createHarness(opts: { role?: string; status?: 'Complete' | 'In-Progress' | 'Error'; processing?: boolean; editing?: boolean; readOnly?: boolean } = {}): Harness {
   const component = Object.create(MessageItemComponent.prototype) as MessageItemComponent;
   const open = component as unknown as Record<string, unknown>;
   const emitted: MJConversationDetailEntity[] = [];
@@ -27,6 +27,7 @@ function createHarness(opts: { role?: string; status?: 'Complete' | 'In-Progress
 
   open.message = message;
   open.RegenerateRequested = { emit: (m: MJConversationDetailEntity) => emitted.push(m) };
+  open.ReadOnly = opts.readOnly ?? false;
   component.IsProcessing = opts.processing ?? false;
   component.IsEditing = opts.editing ?? false;
 
@@ -44,6 +45,10 @@ describe('MessageItemComponent regenerate', () => {
     expect(createHarness({ status: 'In-Progress' }).component.CanRegenerate).toBe(false);
     expect(createHarness({ processing: true }).component.CanRegenerate).toBe(false);
     expect(createHarness({ editing: true }).component.CanRegenerate).toBe(false);
+  });
+
+  it('refuses a person who may not write', () => {
+    expect(createHarness({ readOnly: true }).component.CanRegenerate).toBe(false);
   });
 
   it('emits the reply on click when it can be regenerated', () => {

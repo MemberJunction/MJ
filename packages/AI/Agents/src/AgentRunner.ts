@@ -378,6 +378,7 @@ export class AgentRunner {
                 userMessageDetail.Role = 'User';
                 userMessageDetail.UserID = contextUser.ID;
                 userMessageDetail.HiddenToUser = false;
+                userMessageDetail.BranchID = params.ConversationBranchID ?? null;
 
                 // Link to test run if provided (for test execution traceability)
                 if (options.testRunId) {
@@ -404,6 +405,7 @@ export class AgentRunner {
                 agentResponseDetail.Status = 'In-Progress';
                 agentResponseDetail.HiddenToUser = false;
                 agentResponseDetail.AgentID = params.agent.ID;
+                agentResponseDetail.BranchID = params.ConversationBranchID ?? null;
 
                 // Link to test run if provided (for test execution traceability)
                 if (options.testRunId) {
@@ -454,8 +456,7 @@ export class AgentRunner {
                 }
                 : originalOnProgress;
 
-            // The run reads the branch the caller named, else the branch its reply row is on
-            // (the server stamps a new row with the conversation's current branch). Undefined is the trunk.
+            // The run reads the branch the caller named, else the branch its reply row carries. Undefined is Main.
             const runBranchId = params.ConversationBranchID ?? agentResponseDetail?.BranchID ?? undefined;
 
             // Gather all artifacts on the run's branch path of this conversation for the ArtifactToolManager.
@@ -2223,7 +2224,8 @@ export class AgentRunner {
      *
      * @param historyFrom The run's history floor (`ExecuteAgentParams.ConversationHistoryFrom`).
      *   When set, only artifacts attached to messages written at or after it are gathered.
-     * @param branchId The run's branch; only artifacts of messages on its path are gathered.
+     * @param branchId The run's branch; only artifacts of messages on its path that no rerun
+     *   replaced are gathered.
      */
     private async gatherConversationArtifacts(
         conversationId: string,
@@ -2235,13 +2237,13 @@ export class AgentRunner {
             const rv = new RunView();
             const pathFilter = await ConversationEngine.BranchPathFilterFresh(conversationId, branchId, contextUser);
 
-            // Get the conversation detail IDs on the run's branch path (from its floor, if the run has one)
+            // Get the IDs of the live conversation details on the run's branch path (from its floor, if the run has one)
             const details = await rv.RunView<{ ID: string }>(
                 {
                     EntityName: 'MJ: Conversation Details',
-                    ExtraFilter: historyFrom
+                    ExtraFilter: ConversationEngine.LiveRowsFilter(historyFrom
                         ? `${pathFilter} AND ${ConversationEngine.HistoryFromFilter(historyFrom)}`
-                        : pathFilter,
+                        : pathFilter),
                     Fields: ['ID'],
                     ResultType: 'simple',
                 },

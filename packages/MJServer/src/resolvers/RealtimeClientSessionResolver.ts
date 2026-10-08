@@ -78,7 +78,6 @@ const SIGNIFICANT_PROGRESS_STEPS = ['prompt_execution', 'action_execution', 'sub
 const SESSION_ENTITY = 'MJ: AI Agent Sessions';
 const CO_AGENT_ENTITY = 'MJ: AI Agent Co Agents';
 const CONVERSATION_DETAIL_ENTITY = 'MJ: Conversation Details';
-const CONVERSATION_ENTITY = 'MJ: Conversations';
 const CHANNEL_ENTITY = 'MJ: AI Agent Channels';
 const SESSION_CHANNEL_ENTITY = 'MJ: AI Agent Session Channels';
 const ARTIFACT_ENTITY = 'MJ: Artifacts';
@@ -177,6 +176,11 @@ interface RealtimeSessionConfig {
      * agent default kit is used (the common case).
      */
     mediaCollectionID?: string;
+    /**
+     * The fork (`MJ: Conversation Branches.ID`) the session was started on, fixed at start; absent means
+     * Main. Every transcript, direct-action and anchor row the session writes carries it.
+     */
+    conversationBranchID?: string;
 }
 
 /**
@@ -420,6 +424,9 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      *   `TypeConfiguration` ← this). **Authorization-gated**: requires the
      *   `Realtime: Advanced Session Controls` authorization — unauthorized callers receive a
      *   structured rejection (never a silent ignore). Must be a JSON object.
+     * @param conversationBranchId Optional fork (`MJ: Conversation Branches.ID`) the session starts on;
+     *   omitted is Main. It must be a fork of `conversationId`, else the start fails and no session is
+     *   created. The session's history is read from that fork's path and its transcript is written there.
      *
      * @returns The ephemeral config + session linkage the browser needs to open its socket.
      */
@@ -438,6 +445,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         @Arg('mediaCollectionId', () => String, { nullable: true }) mediaCollectionId?: string,
         @Arg('applicationId', () => String, { nullable: true }) applicationId?: string,
         @Arg('appContextJson', () => String, { nullable: true }) appContextJson?: string,
+        @Arg('conversationBranchId', () => String, { nullable: true }) conversationBranchId?: string,
     ): Promise<StartRealtimeClientSessionResult> {
         const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
 
@@ -475,6 +483,10 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 );
             }
         }
+        const sessionBranchId = await this.resolveSessionBranch(conversationId, conversationBranchId, contextUser, provider);
+        if (sessionBranchId) {
+            config.conversationBranchID = sessionBranchId;
+        }
         const session = await this.sessionManager.CreateSession(
             {
                 agentID: coAgentID,
@@ -500,7 +512,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         // framed as the resumed transcript, and injecting the same turns twice puts two accounts of
         // the same exchange in one prompt.
         const conversationMessages = await this.loadConversationHistory(
-            conversationId, prior?.LegIDs ?? [], contextUser, provider,
+            conversationId, prior?.LegIDs ?? [], contextUser, provider, sessionBranchId,
         );
         const result = await this.prepareClientSessionOrClose(
             session, coAgentID, effectiveTargetId, contextUser, provider, preferredModelId, clientTools, prior?.Text,
@@ -510,6 +522,32 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         // board). Strictly tolerant — any problem yields a null field, never a failed start.
         result.PriorChannelStatesJson = (await this.loadPriorChannelStatesJson(lastSessionId, contextUser, provider)) ?? undefined;
         return result;
+    }
+
+    /**
+     * The fork a session starts on: null (Main) when none is named; else the named fork, which must
+     * belong to the session's conversation. Returns the fork's stored id.
+     * @throws when a fork is named without a conversation, or is not a fork of it, or the fork rows cannot be read
+     */
+    private async resolveSessionBranch(
+        conversationId: string | undefined,
+        branchId: string | undefined,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<string | null> {
+        const named = branchId?.trim();
+        if (!named) {
+            return null;
+        }
+        if (!conversationId) {
+            throw new Error(`StartRealtimeClientSession: fork ${named} needs a conversation`);
+        }
+        try {
+            const scope = await ConversationEngine.LoadScope(conversationId, named, contextUser, provider);
+            return scope.BranchID;
+        } catch (error) {
+            throw new Error(`StartRealtimeClientSession: fork ${named} is not a readable fork of conversation ${conversationId}: ${(error as Error).message}`);
+        }
     }
 
     /**
@@ -658,6 +696,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             maxSessionDeadlineIso: config.maxSessionDeadlineIso,
             applicationID: config.applicationID,
             allowedAgents: config.allowedAgents,
+            conversationBranchID: config.conversationBranchID,
         };
         session.Config_ = JSON.stringify(next);
         if (!(await session.Save())) {
@@ -1590,6 +1629,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             applicationID,
             allowedAgents: allowedAgents && allowedAgents.length > 0 ? allowedAgents : undefined,
             directActions,
+            conversationBranchID: existing?.conversationBranchID,
         };
         session.Config_ = JSON.stringify(config);
         const saved = await session.Save();
@@ -1845,10 +1885,9 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      * as the resumed transcript are removed, so the prompt never carries two accounts of one
      * exchange.
      *
-     * Only the rows on the conversation's active path are read: the path of its `CurrentBranchID`
-     * (the trunk when it has none), in `Sequence` order. When that path cannot be built — the
-     * conversation cannot be read or is not visible, or its branch rows are missing or invalid —
-     * the session starts with no history, never with every branch's rows.
+     * Only the rows on the session's path that no rerun replaced are read: the fork it started on,
+     * or Main, in `Sequence` order. When that path cannot be built — its branch rows are missing or invalid — the session
+     * starts with no history, never with every branch's rows.
      *
      * Strictly tolerant — no conversation, a failed read, or any throw yields `[]`, never a failed
      * session start. The call still works; it just starts cold.
@@ -1857,6 +1896,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      * @param coveredSessionIDs Session ids already framed via `PriorTranscript`.
      * @param contextUser The calling user (RunView scope — the read is row-level-secured).
      * @param provider The request-scoped metadata provider.
+     * @param branchId The fork the session started on; null is Main.
      * @returns The capped history, oldest first.
      */
     private async loadConversationHistory(
@@ -1864,6 +1904,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         coveredSessionIDs: string[],
         contextUser: UserInfo,
         provider: IMetadataProvider,
+        branchId: string | null,
     ): Promise<ChatMessage[]> {
         if (!conversationId) {
             return [];
@@ -1871,10 +1912,10 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         const rv = RunView.FromMetadataProvider(provider);
         let pathFilter: string;
         try {
-            pathFilter = await this.loadActivePathFilter(conversationId, rv, contextUser, provider);
+            pathFilter = await ConversationEngine.BranchPathFilterFresh(conversationId, branchId, contextUser, provider);
         } catch (error) {
             LogError(
-                `StartRealtimeClientSession: could not build the active branch path for conversation ${conversationId}: ${(error as Error).message}`,
+                `StartRealtimeClientSession: could not build the path of the session's view for conversation ${conversationId}: ${(error as Error).message}`,
             );
             return [];
         }
@@ -1887,7 +1928,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             }>(
                 {
                     EntityName: CONVERSATION_DETAIL_ENTITY,
-                    ExtraFilter: pathFilter,
+                    ExtraFilter: ConversationEngine.LiveRowsFilter(pathFilter),
                     Fields: ['ID', 'Role', 'Message', 'HiddenToUser', 'AgentSessionID', '__mj_CreatedAt'],
                     OrderBy: 'Sequence ASC',
                     ResultType: 'simple',
@@ -1914,40 +1955,6 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             );
             return [];
         }
-    }
-
-    /**
-     * The `ExtraFilter` predicate for the conversation's active path: its `CurrentBranchID` path,
-     * or the trunk when it has none. The id's apostrophes are doubled in the conversation read this
-     * method builds; the engine gets the raw id because it escapes the ids it puts into the path.
-     *
-     * @throws When the conversation read fails or returns no row (not found or not visible), or
-     *   the branch path cannot be built (failed branch read, unknown branch, chain too deep).
-     */
-    private async loadActivePathFilter(
-        conversationId: string,
-        rv: RunView,
-        contextUser: UserInfo,
-        provider: IMetadataProvider,
-    ): Promise<string> {
-        const safeId = conversationId.replace(/'/g, "''");
-        const conversation = await rv.RunView<{ ID: string; CurrentBranchID: string | null }>(
-            {
-                EntityName: CONVERSATION_ENTITY,
-                ExtraFilter: `ID='${safeId}'`,
-                Fields: ['ID', 'CurrentBranchID'],
-                ResultType: 'simple',
-            },
-            contextUser,
-        );
-        if (!conversation.Success) {
-            throw new Error(`conversation read failed: ${conversation.ErrorMessage}`);
-        }
-        const row = conversation.Results?.[0];
-        if (!row) {
-            throw new Error('conversation not found');
-        }
-        return ConversationEngine.BranchPathFilterFresh(conversationId, row.CurrentBranchID ?? null, contextUser, provider);
     }
 
     /**
@@ -2290,6 +2297,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         const detail = await provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, callerUser);
         detail.NewRecord();
         detail.ConversationID = session.ConversationID;
+        detail.BranchID = this.tryReadSessionConfig(session)?.conversationBranchID ?? null;
         detail.Role = 'AI';
         detail.HiddenToUser = true;
         detail.Message = 'Artifacts produced during a realtime session (system anchor).';
@@ -2479,6 +2487,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                             parsed.directActions && typeof parsed.directActions === 'object' && typeof parsed.directActions.enabled === 'boolean'
                                 ? (parsed.directActions as RealtimeDirectActionsConfig)
                                 : undefined,
+                        conversationBranchID: typeof parsed.conversationBranchID === 'string' ? parsed.conversationBranchID : undefined,
                     };
                 }
             } catch {
@@ -2566,6 +2575,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         );
         detail.NewRecord();
         detail.ConversationID = session.ConversationID;
+        detail.BranchID = this.tryReadSessionConfig(session)?.conversationBranchID ?? null;
         detail.Role = this.mapTranscriptRole(role);
         detail.Message = text;
         detail.AgentSessionID = session.ID;
@@ -2739,6 +2749,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             );
             detail.NewRecord();
             detail.ConversationID = session.ConversationID;
+            detail.BranchID = this.tryReadSessionConfig(session)?.conversationBranchID ?? null;
             detail.Role = 'AI';
             detail.HiddenToUser = true;
             detail.AgentSessionID = session.ID;

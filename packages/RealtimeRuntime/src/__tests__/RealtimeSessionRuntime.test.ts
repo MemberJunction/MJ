@@ -468,6 +468,31 @@ describe('session lifecycle, driven end to end with fakes', () => {
             error.mockRestore();
         }
     });
+
+    it('sends the fork the session starts on with the mint, and null for Main', async () => {
+        const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        try {
+            for (const [fork, expected] of [['fork-1', 'fork-1'], [null, null]] as const) {
+                const runtime = new RealtimeSessionRuntime(new FakeMediaHost());
+                const relays: Array<{ query: string; variables: Record<string, unknown> }> = [];
+                runtime.Provider = {
+                    Entities: [],
+                    ExecuteGQL: async (query: string, variables: Record<string, unknown>): Promise<unknown> => {
+                        relays.push({ query, variables });
+                        return {};   // no ephemeral token: the start fails right after the mint
+                    },
+                } as unknown as IMetadataProvider;
+
+                await runtime.StartRealtimeSession('agent-1', 'conv-2', null, null, null, null, null, null, false, null, null, null, fork);
+
+                const mint = relays.find((r) => r.query.includes('mutation StartRealtimeClientSession'));
+                expect(mint?.query).toContain('conversationBranchId: $conversationBranchId');
+                expect(mint?.variables.conversationBranchId).toBe(expected);
+            }
+        } finally {
+            error.mockRestore();
+        }
+    });
 });
 
 describe('channel registry on a connect-only provider (#4887)', () => {

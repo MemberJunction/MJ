@@ -4,7 +4,7 @@ import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { OverlayModule } from '@angular/cdk/overlay';
 
 // MJ UI Components
-import { MJButtonDirective, MJDatepickerComponent, MJDialogComponent, MJDialogActionsComponent, MJEmptyStateComponent, MJAlertComponent, MJAccordionModule } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJClickableDirective, MJDatepickerComponent, MJDialogComponent, MJDialogActionsComponent, MJEmptyStateComponent, MJAlertComponent, MJAccordionModule, MJFilterChipComponent } from '@memberjunction/ng-ui-components';
 
 // MemberJunction modules
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
@@ -45,7 +45,6 @@ import { ConversationChatAreaComponent } from './components/conversation/convers
 import { ConversationEmptyStateComponent } from './components/conversation/conversation-empty-state.component';
 import { ConversationAgentPickerComponent } from './components/conversation/conversation-agent-picker.component';
 import { ConversationModePickerComponent } from './components/conversation/conversation-mode-picker.component';
-import { ThreadPanelComponent } from './components/thread/thread-panel.component';
 import { CollectionTreeComponent } from './components/collection/collection-tree.component';
 import { CollectionViewComponent } from './components/collection/collection-view.component';
 import { CollectionArtifactCardComponent } from './components/collection/collection-artifact-card.component';
@@ -77,6 +76,7 @@ import { ArtifactShareModalComponent } from './components/artifact/artifact-shar
 import { GlobalTasksPanelComponent } from './components/global-tasks/global-tasks-panel.component';
 import { ImageViewerComponent } from './components/attachment/image-viewer.component';
 import { PinnedMessagesPanelComponent } from './components/conversation/pinned-messages-panel.component';
+import { ForksPopoverComponent } from './components/conversation/forks-popover.component';
 import { ChatAgentsOverlayComponent } from './components/overlay/chat-overlay.component';
 import { RealtimeAgentPickerComponent } from './components/realtime/realtime-agent-picker.component';
 import { RealtimeSessionOverlayComponent } from './components/realtime/realtime-session-overlay.component';
@@ -141,7 +141,6 @@ const COMPONENTS = [
   ConversationEmptyStateComponent,
   ConversationAgentPickerComponent,
   ConversationModePickerComponent,
-  ThreadPanelComponent,
   CollectionTreeComponent,
   CollectionViewComponent,
   CollectionArtifactCardComponent,
@@ -169,6 +168,7 @@ const COMPONENTS = [
   GlobalTasksPanelComponent,
   ImageViewerComponent,
   PinnedMessagesPanelComponent,
+  ForksPopoverComponent,
   ChatAgentsOverlayComponent
 ];
 
@@ -184,12 +184,14 @@ const COMPONENTS = [
     ReactiveFormsModule,
     OverlayModule,
     MJButtonDirective,
+    MJClickableDirective,
     MJDatepickerComponent,
     MJDialogComponent,
     MJDialogActionsComponent,
     MJEmptyStateComponent,
     MJAlertComponent,
     MJAccordionModule,
+    MJFilterChipComponent,
     ContainerDirectivesModule,
     CodeEditorModule,
     ArtifactsModule,

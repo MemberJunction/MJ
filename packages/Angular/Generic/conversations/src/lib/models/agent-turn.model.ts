@@ -67,6 +67,11 @@ export interface AgentTurnInfo extends AgentTurnTarget {
 export interface AgentTurnRequest {
     /** The conversation the message was posted in. */
     ConversationId: string;
+    /**
+     * The fork the turn's rows go to; null is Main. A handler that writes conversation rows sets this
+     * BranchID on them.
+     */
+    BranchID: string | null;
     /** The person's saved message (`MJ: Conversation Details`, Role `User`). */
     UserMessageId: string;
     /** The message text, with mentions in their stored JSON form. */

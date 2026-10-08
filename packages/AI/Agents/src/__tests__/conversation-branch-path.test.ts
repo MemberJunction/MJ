@@ -9,12 +9,12 @@ describe('BaseAgent.BuildPriorTurnRunFilter', () => {
     it('scopes the previous run to a reply row on the branch path', () => {
         expect(BaseAgent.BuildPriorTurnRunFilter('conv-1', 'agent-1', 'B', branches, STATUSES)).toBe(
             `ConversationID='conv-1' AND Status IN ('Completed', 'AwaitingFeedback') AND ParentRunID IS NULL AND AgentID='agent-1'` +
-            ` AND ConversationDetailID IN (SELECT ID FROM [__mj].[vwConversationDetails] WHERE [ConversationID]='conv-1' AND ([BranchID]='B' OR ([BranchID] IS NULL AND [Sequence] <= 2)))`
+            ` AND ConversationDetailID IN (SELECT ID FROM [__mj].[vwConversationDetails] WHERE [ConversationID]='conv-1' AND ([BranchID]='B' OR ([BranchID] IS NULL AND [Sequence] <= 2)) AND [ReplacedAt] IS NULL)`
         );
     });
     it('scopes the trunk to rows with no branch (control)', () => {
         expect(BaseAgent.BuildPriorTurnRunFilter('conv-1', 'agent-1', null, [], STATUSES)).toContain(
-            `WHERE [ConversationID]='conv-1' AND [BranchID] IS NULL)`
+            `WHERE [ConversationID]='conv-1' AND [BranchID] IS NULL AND [ReplacedAt] IS NULL)`
         );
     });
 });

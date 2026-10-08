@@ -17,14 +17,14 @@ export * from './lib/utils/agent-turn-routing';
 // NOTE: the routing decision's builders and types, and IsAgentAllowed, live in
 // @memberjunction/ai-core-plus — import them from there directly.
 export * from './lib/utils/decision-routing';
-// Branch switcher state and the pure helpers that build it
+// Fork rules: the delete guard and the open view (Main or one fork)
 export * from './lib/utils/conversation-branching';
+export * from './lib/utils/conversation-forks';
 
 // Services - State
 export * from './lib/services/data-cache.service';
 export * from './lib/services/artifact-state.service';
 export * from './lib/services/agent-state.service';
-export * from './lib/services/conversation-scope.service';
 export * from './lib/services/conversation-liveness-dom.service';
 export * from './lib/services/conversation-agent.service';
 export * from './lib/services/active-tasks.service';
@@ -114,6 +114,7 @@ export * from './lib/components/collection/collection-form-modal.component';
 export * from './lib/components/conversation/conversation-agent-picker.component';
 export * from './lib/components/conversation/conversation-mode-picker.component';
 export * from './lib/components/conversation/pinned-messages-panel.component';
+export * from './lib/components/conversation/forks-popover.component';
 export * from './lib/components/dialogs/input-dialog.component';
 export * from './lib/components/dialogs/rating-dialog.component';
 export * from './lib/components/export/export-modal.component';
@@ -124,7 +125,6 @@ export * from './lib/components/message/workflow-plan-card.component';
 export * from './lib/components/search/search-panel.component';
 export * from './lib/components/shared/user-picker.component';
 export * from './lib/components/tasks/tasks-dropdown.component';
-export * from './lib/components/thread/thread-panel.component';
 export * from './lib/directives/search-shortcut.directive';
 // SearchResult / SearchResultType are the payload of SearchPanelComponent's
 // ResultSelected output, so consumers cannot type a handler without them.
