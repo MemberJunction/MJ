@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { BuildRecordingFromSegments } from '../realtime/realtime-recording-store';
 
 /** A shard of `length` bytes, every byte set to `fill`. */
@@ -90,5 +90,19 @@ describe('BuildRecordingFromSegments', () => {
     it('throws on a non-positive or non-integer sample rate', () => {
         expect(() => BuildRecordingFromSegments([shard(0, 4, 1)], 0)).toThrow(/sample rate/i);
         expect(() => BuildRecordingFromSegments([shard(0, 4, 1)], 16000.5)).toThrow(/sample rate/i);
+    });
+});
+
+describe('BuildRecordingFromSegments maxDataBytes', () => {
+    it('throws naming the limit when shards plus gap fill exceed it, before allocating', () => {
+        const segments = [shard(0, 4, 1), shard(1000000, 4, 1)];
+        const allocSpy = vi.spyOn(Buffer, 'alloc');
+        try {
+            expect(() => BuildRecordingFromSegments(segments, 24000, 1000))
+                .toThrow(/1000 bytes/);
+            expect(allocSpy).not.toHaveBeenCalled();
+        } finally {
+            allocSpy.mockRestore();
+        }
     });
 });

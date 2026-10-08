@@ -12,7 +12,7 @@ vi.mock('@memberjunction/storage', () => ({
 }));
 
 import {
-    RecoverRealtimeRecordingFromSegments, StoreRealtimeRecording, WriteRealtimeRecordingSegment, MAX_RECOVERY_SEGMENTS,
+    RecoverRealtimeRecordingFromSegments, StoreRealtimeRecording, WriteRealtimeRecordingSegment, MAX_RECOVERY_SEGMENTS, MAX_RECOVERY_BYTES,
 } from '../realtime/realtime-recording-store';
 import { IMetadataProvider, UserInfo } from '@memberjunction/core';
 
@@ -25,6 +25,8 @@ class FakeBucket {
     public readonly ContentTypes = new Map<string, string>();
     public readonly Reads: string[] = [];
     public FailReadOf: string | null = null;
+    /** Sizes ListObjects reports instead of the real byte length (some drivers report 0). */
+    public readonly ListedSizes = new Map<string, number>();
     public Put(key: string, bytes: Buffer, contentType = 'audio/L16;rate=24000'): void {
         this.Objects.set(key, bytes);
         this.ContentTypes.set(key, contentType);
@@ -33,10 +35,12 @@ class FakeBucket {
         this.Put(key, bytes, contentType);
         return true;
     }
-    public async ListObjects(prefix: string): Promise<{ objects: { name: string }[]; prefixes: string[] }> {
-        const objects: { name: string }[] = [];
-        for (const key of this.Objects.keys()) {
-            if (key.startsWith(prefix) && !key.slice(prefix.length).includes('/')) objects.push({ name: key });
+    public async ListObjects(prefix: string): Promise<{ objects: { name: string; size: number }[]; prefixes: string[] }> {
+        const objects: { name: string; size: number }[] = [];
+        for (const [key, bytes] of this.Objects) {
+            if (key.startsWith(prefix) && !key.slice(prefix.length).includes('/')) {
+                objects.push({ name: key, size: this.ListedSizes.get(key) ?? bytes.length });
+            }
         }
         return { objects, prefixes: [] };
     }
@@ -65,13 +69,16 @@ class FakeProvider {
     public readonly Row: SessionRow = { RecordingFileID: null, RecordingMedia: null, RecordingStartedAt: null };
     public SessionSaveResult = true;
     public readonly Links: { FileID: string }[] = [];
+    /** Runs inside the link save, i.e. between the store's first session read and its stamp. */
+    public OnLinkSave: (() => void) | null = null;
     public EntityByName(name: string): { ID: string } | undefined {
         return name === 'MJ: AI Agent Sessions' ? { ID: 'ent-sessions' } : undefined;
     }
     public async GetEntityObject(name: string): Promise<unknown> {
         if (name === 'MJ: File Entity Record Links') {
             const links = this.Links;
-            const link = { FileID: '', NewRecord() { /* fresh row */ }, async Save() { links.push({ FileID: link.FileID }); return true; } };
+            const onSave = (): void => this.OnLinkSave?.();
+            const link = { FileID: '', NewRecord() { /* fresh row */ }, async Save() { onSave(); links.push({ FileID: link.FileID }); return true; } };
             return link;
         }
         const row = this.Row;
@@ -235,6 +242,62 @@ describe('RecoverRealtimeRecordingFromSegments', () => {
         const result = await RecoverRealtimeRecordingFromSegments(recoverInput());
         expect(result.Outcome).toBe('Failed');
         expect(bucket.Keys()).toEqual([`${FOLDER}/recording-recovered.wav`, `${FOLDER}/seg-0000.r24000.pcm`]);
+    });
+});
+
+describe('recovery bounds and precision', () => {
+    it('fails without reading when listed sizes exceed MAX_RECOVERY_BYTES', async () => {
+        seed({ 'seg-0000.r24000.pcm': 4, 'seg-0001.r24000.pcm': 4 });
+        bucket.ListedSizes.set(`${FOLDER}/seg-0000.r24000.pcm`, MAX_RECOVERY_BYTES);
+        bucket.ListedSizes.set(`${FOLDER}/seg-0001.r24000.pcm`, 2);
+        const result = await RecoverRealtimeRecordingFromSegments(recoverInput());
+        expect(result.Outcome).toBe('Failed');
+        expect(result.ErrorMessage).toContain(String(MAX_RECOVERY_BYTES));
+        expect(bucket.Reads).toHaveLength(0);
+        expect(bucket.Keys()).toHaveLength(2);
+    });
+
+    it('stops reading once actual bytes exceed the cap even if listed sizes are 0', async () => {
+        const half = MAX_RECOVERY_BYTES / 2 + 2;
+        for (const name of ['seg-0000.r24000.pcm', 'seg-0001.r24000.pcm', 'seg-0002.r24000.pcm']) {
+            bucket.Put(`${FOLDER}/${name}`, Buffer.allocUnsafeSlow(half));
+            bucket.ListedSizes.set(`${FOLDER}/${name}`, 0);
+        }
+        const result = await RecoverRealtimeRecordingFromSegments(recoverInput());
+        expect(result.Outcome).toBe('Failed');
+        expect(result.ErrorMessage).toContain(String(MAX_RECOVERY_BYTES));
+        expect(bucket.Reads).toHaveLength(2);
+        expect(uploads).toHaveLength(0);
+    });
+
+    it('deletes only the shards it assembled; one written after the listing survives', async () => {
+        seed({ 'seg-0000.r24000.pcm': 4, 'seg-0001.r24000.pcm': 4 });
+        uploadFileMock.mockImplementationOnce(async (args: UploadArgs) => {
+            uploads.push(args);
+            bucket.Put(`${FOLDER}/seg-0002.r24000.pcm`, Buffer.alloc(4));
+            return { FileID: 'file-new' };
+        });
+        provider.OnLinkSave = null;
+        const result = await RecoverRealtimeRecordingFromSegments(recoverInput());
+        expect(result.Outcome).toBe('Recovered');
+        expect(bucket.Keys()).toEqual([`${FOLDER}/seg-0002.r24000.pcm`]);
+    });
+
+    it('is Superseded when a recording is stamped during the link, before our stamp', async () => {
+        seed({ 'seg-0000.r24000.pcm': 4 });
+        provider.OnLinkSave = () => { provider.Row.RecordingFileID = 'file-late'; };
+        const result = await RecoverRealtimeRecordingFromSegments(recoverInput());
+        expect(result.Outcome).toBe('Superseded');
+        expect(provider.Row.RecordingFileID).toBe('file-late');
+        expect(bucket.Keys()).toContain(`${FOLDER}/seg-0000.r24000.pcm`);
+    });
+
+    it('rejects a keyed rate of 0 before reading, naming the key', async () => {
+        seed({ 'seg-0000.r0.pcm': 4 });
+        const result = await RecoverRealtimeRecordingFromSegments(recoverInput());
+        expect(result.Outcome).toBe('Failed');
+        expect(result.ErrorMessage).toContain('seg-0000.r0.pcm');
+        expect(bucket.Reads).toHaveLength(0);
     });
 });
 

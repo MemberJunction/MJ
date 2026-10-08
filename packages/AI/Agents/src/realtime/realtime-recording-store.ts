@@ -331,6 +331,13 @@ export async function StoreRealtimeRecording(input: StoreRealtimeRecordingInput)
         }
 
         await linkRecordingToSession(uploaded.FileID, SessionID, ContextUser, Provider);
+        if (input.PreserveExistingRecording && sessionLoaded) {
+            // Re-read after the link work so the read-to-write window is one load -> save.
+            if (!await session.Load(SessionID) || session.RecordingFileID) {
+                LogStatus(`storeRealtimeRecording: session ${SessionID} gained recording file ${session.RecordingFileID} while linking; file ${uploaded.FileID} is orphaned and was not stamped`);
+                return { FileID: uploaded.FileID, ErrorMessage: null, Superseded: true };
+            }
+        }
         if (sessionLoaded) {
             await stampRecordingOnSession(session, uploaded.FileID, Media, StartedAt);
         }
@@ -407,10 +414,14 @@ export interface AssembledRecording {
  *
  * @param segments Recovered shards; any order, unique non-negative integer indexes starting from 0.
  * @param sampleRate Sample rate of the PCM data, in Hz.
+ * @param maxDataBytes Ceiling on the PCM data size (shards plus gap fill), checked before anything is
+ *   allocated. Defaults to the WAV format's own limit; callers handling untrusted shards pass less.
  * @throws Error on no segments, an invalid sample rate or index, a duplicate index, an empty or
  *   odd-length shard, or a result too large for a WAV.
  */
-export function BuildRecordingFromSegments(segments: RecordingSegmentBytes[], sampleRate: number): AssembledRecording {
+export function BuildRecordingFromSegments(
+    segments: RecordingSegmentBytes[], sampleRate: number, maxDataBytes: number = RECORDING_MAX_DATA_BYTES
+): AssembledRecording {
     validateRecordingInputs(segments, sampleRate);
     const ordered = [...segments].sort((a, b) => a.Index - b.Index);
     const gapBytes = computeRecordingGapBytes(ordered);
@@ -419,8 +430,9 @@ export function BuildRecordingFromSegments(segments: RecordingSegmentBytes[], sa
     const missingCount = ordered[ordered.length - 1].Index - (ordered.length - 1);
 
     const dataSize = ordered.reduce((sum, s) => sum + s.Bytes.length, 0) + missingCount * gapBytes;
-    if (dataSize > RECORDING_MAX_DATA_BYTES) {
-        throw new Error(`BuildRecordingFromSegments: data of ${dataSize} bytes exceeds the maximum WAV data size of ${RECORDING_MAX_DATA_BYTES} bytes`);
+    const limit = Math.min(maxDataBytes, RECORDING_MAX_DATA_BYTES);
+    if (dataSize > limit) {
+        throw new Error(`BuildRecordingFromSegments: data of ${dataSize} bytes exceeds the maximum WAV data size of ${limit} bytes`);
     }
 
     // Buffer.alloc zero-fills, so gaps need no explicit write.
@@ -508,6 +520,14 @@ function writeRecordingWavHeader(buffer: Buffer, sampleRate: number, dataSize: n
  */
 export const MAX_RECOVERY_SEGMENTS = 240;
 
+/**
+ * Ceiling on the PCM a recovery will hold in memory: 384 MiB covers an hour of 48 kHz mono PCM16
+ * (345.6 MB) with headroom. Shard sizes are client-controlled (the GraphQL body limit is 50 MB, so one
+ * shard can be ~37 MB) and gaps are filled with silence, so without this a session owner could make the
+ * janitor allocate gigabytes. Checked against listed sizes, running actual bytes, and the assembled size.
+ */
+export const MAX_RECOVERY_BYTES = 384 * 1024 * 1024;
+
 /** `seg-0003.pcm` or `seg-0003.r48000.pcm`: index, optional keyed rate, extension. */
 const SEGMENT_KEY_PATTERN = /^seg-(\d+)(?:\.r(\d+))?\.([A-Za-z0-9]+)$/;
 const RECOVERED_FILE_NAME = 'recording-recovered.wav';
@@ -545,6 +565,8 @@ interface ListedShard {
     readonly Index: number;
     readonly KeyedRate: number | null;
     readonly Extension: string;
+    /** Size the listing reported; 0 on drivers that do not report one. */
+    readonly ListedSize: number;
 }
 
 /**
@@ -587,7 +609,7 @@ async function recoverFromSegments(input: RecoverRealtimeRecordingInput): Promis
 
     const sampleRate = await resolveSharedSampleRate(driver, shards);
     const segments = await readShardBytes(driver, shards);
-    const assembled = BuildRecordingFromSegments(segments, sampleRate);
+    const assembled = BuildRecordingFromSegments(segments, sampleRate, MAX_RECOVERY_BYTES);
     const description = describeRecovery(shards.length, assembled, sampleRate);
     if (assembled.MissingIndexes.length > 0) {
         LogStatus(`RecoverRealtimeRecordingFromSegments (session ${SessionID}): ${description}`);
@@ -604,12 +626,13 @@ async function recoverFromSegments(input: RecoverRealtimeRecordingInput): Promis
     if (!stored.FileID) {
         throw new Error(stored.ErrorMessage ?? 'storing the recovered recording failed');
     }
-    return finishRecovery(input, stored.FileID, found);
+    return finishRecovery(input, stored.FileID, found, shards);
 }
 
 /** Confirms the stamp stuck, then (and only then) deletes the shards. */
 async function finishRecovery(
-    input: RecoverRealtimeRecordingInput, fileID: string, found: Partial<Omit<RecoverRealtimeRecordingResult, 'Outcome'>>
+    input: RecoverRealtimeRecordingInput, fileID: string, found: Partial<Omit<RecoverRealtimeRecordingResult, 'Outcome'>>,
+    shards: ListedShard[]
 ): Promise<RecoverRealtimeRecordingResult> {
     const { SessionID, StorageAccountID, ContextUser, Provider } = input;
     const session = await Provider.GetEntityObject<MJAIAgentSessionEntity>('MJ: AI Agent Sessions', ContextUser);
@@ -623,12 +646,26 @@ async function finishRecovery(
     if (session.RecordingFileID !== fileID) {
         throw new Error(`recovered file ${fileID} uploaded but not stamped on session ${SessionID}; shards kept`);
     }
-    const shardCount = found.SegmentCount ?? 0;
-    const deleted = await DeleteRealtimeRecordingSegments(SessionID, StorageAccountID, ContextUser);
-    if (deleted < shardCount) {
-        LogError(`RecoverRealtimeRecordingFromSegments (session ${SessionID}): deleted ${deleted} of ${shardCount} shards after recovery`);
+    const deleted = await deleteListedShards(StorageAccountID, ContextUser, shards);
+    if (deleted < shards.length) {
+        LogError(`RecoverRealtimeRecordingFromSegments (session ${SessionID}): deleted ${deleted} of ${shards.length} shards after recovery`);
     }
     return recoveryResult('Recovered', found);
+}
+
+/**
+ * Deletes exactly the shards that were assembled. A re-list would also take shards written after our
+ * listing, whose audio is not in the recovered file. Returns how many were deleted.
+ */
+async function deleteListedShards(storageAccountID: string, contextUser: UserInfo, shards: ListedShard[]): Promise<number> {
+    const driver = await FileStorageEngine.Instance.GetDriver(storageAccountID, contextUser);
+    let deleted = 0;
+    for (const shard of shards) {
+        if (await driver.DeleteObject(shard.Path)) {
+            deleted++;
+        }
+    }
+    return deleted;
 }
 
 /** Lists the session folder's `seg-*` objects. Other objects (recording.*, peaks.json) are ignored. */
@@ -640,9 +677,13 @@ async function listRecordingShards(driver: FileStorageBase, sessionID: string): 
         const name = obj.name.split('/').pop() ?? obj.name;
         const match = SEGMENT_KEY_PATTERN.exec(name);
         if (match) {
+            const keyedRate = match[2] === undefined ? null : Number(match[2]);
+            if (keyedRate !== null && !(Number.isSafeInteger(keyedRate) && keyedRate > 0)) {
+                throw new Error(`shard ${name} has an invalid sample rate in its key`);
+            }
             shards.push({
                 Name: name, Path: `${folder}/${name}`, Index: Number(match[1]),
-                KeyedRate: match[2] ? Number(match[2]) : null, Extension: match[3],
+                KeyedRate: keyedRate, Extension: match[3], ListedSize: obj.size ?? 0,
             });
         }
     }
@@ -654,6 +695,10 @@ function assertRecoverable(shards: ListedShard[]): void {
     const highestIndex = Math.max(...shards.map(s => s.Index));
     if (shards.length >= MAX_RECOVERY_SEGMENTS || highestIndex >= MAX_RECOVERY_SEGMENTS) {
         throw new Error(`refusing to recover ${shards.length} shards (highest index ${highestIndex}); limit is ${MAX_RECOVERY_SEGMENTS}`);
+    }
+    const listedBytes = shards.reduce((sum, s) => sum + s.ListedSize, 0);
+    if (listedBytes > MAX_RECOVERY_BYTES) {
+        throw new Error(`shards total ${listedBytes} bytes, over the recovery limit of ${MAX_RECOVERY_BYTES} bytes`);
     }
     const notPcm = shards.find(s => s.Extension !== 'pcm');
     if (notPcm) {
@@ -685,8 +730,15 @@ async function resolveSharedSampleRate(driver: FileStorageBase, shards: ListedSh
 /** Sequential on purpose: bounds memory and request concurrency against the storage account. */
 async function readShardBytes(driver: FileStorageBase, shards: ListedShard[]): Promise<RecordingSegmentBytes[]> {
     const segments: RecordingSegmentBytes[] = [];
+    let total = 0;
     for (const shard of shards) {
-        segments.push({ Index: shard.Index, Bytes: await driver.GetObject({ fullPath: shard.Path }) });
+        const bytes = await driver.GetObject({ fullPath: shard.Path });
+        total += bytes.length;
+        // Listed sizes can be 0 or wrong, so the real total is enforced as bytes arrive.
+        if (total > MAX_RECOVERY_BYTES) {
+            throw new Error(`shards read so far total ${total} bytes (at ${shard.Name}), over the recovery limit of ${MAX_RECOVERY_BYTES} bytes`);
+        }
+        segments.push({ Index: shard.Index, Bytes: bytes });
     }
     return segments;
 }
