@@ -29,4 +29,6 @@ It calls the endpoint with `fetch`, because the package's `openai` SDK (6.18.0) 
 - Both vendors have cost rows at $0.10 per million input tokens, with free output.
 - OpenAI documents no per-request limits, so none are set.
 
-The `Default Decision` prompt's bindings are unchanged. As an active `Decision` model, the new model joins the power-matched fallbacks of any Decision prompt that does not require specific models, after the bound models, and only when one of its rows has a credential. An OpenRouter key set for Jev also covers its OpenRouter row.
+The `Default Decision` prompt's bindings are unchanged. As an active `Decision` model, the new model joins the power-matched fallbacks of any Decision prompt that does not require specific models, after the bound models, and only when one of its rows has a credential. Its PowerRank of 57 is `Default Decision`'s target rank (the priority-weighted mean of Jev and `LLM Decision`), so its two rows become that prompt's first fallbacks, ahead of Clef and Kev-27B.
+
+Existing credentials can be enough to reach it. An OpenRouter key set for Jev covers its OpenRouter row. A credential bound to the OpenAI vendor (for OpenAI's LLMs, say), or a default `API Key` credential, covers its OpenAI row. On such a host, `Default Decision` can now fail over to OpenAI's beta Decisions API. To prevent that, set that row's `Status` to `Inactive`.

@@ -25,7 +25,7 @@
  *        Inference Provider row (the model also has a Model Developer row on OpenAI), sends its token,
  *        not its JSON, as the bearer.
  *   OD7  `Default Decision`'s selection is unchanged by the new model: Jev, then LLM Decision, then the
- *        power-matched fallbacks, the new model's two rows among them; with no OpenAI decision credential
+ *        power-matched fallbacks, the new model's two rows first among them; with no OpenAI decision credential
  *        the runner selects the first of Jev and LLM Decision it has a credential for; with a credential
  *        bound to the model's OpenAI row it is a credentialed candidate still behind both, and the
  *        selection does not change; and with every other decision driver unavailable, the run fails
@@ -562,16 +562,23 @@ function describeCandidate(candidate: ModelVendorCandidate): string {
     return `${candidate.model.Name} / ${candidate.vendorName ?? 'no vendor'} / ${candidate.driverClass}`;
 }
 
-/** The model's two candidates, OpenAI first, both power-matched fallbacks behind Jev and LLM Decision. */
+/**
+ * The model's two candidates, OpenAI first, both power-matched fallbacks behind Jev and LLM Decision, and
+ * the first two fallbacks: its PowerRank (57) is `Default Decision`'s target rank, the priority-weighted
+ * mean of Jev's 60 and LLM Decision's 50, so it comes before Clef (58) and Kev-27B (56). The READMEs and
+ * the changeset say so; a rank change that moves it fails here.
+ */
 function assertLunaBehindBoundModels(candidates: ModelVendorCandidate[], label: string): void {
     AssertEqual(candidates[0] ? describeCandidate(candidates[0]) : 'none', 'Jev / OpenRouter / OpenRouterDecision', `${label}: first candidate`);
     AssertEqual(candidates[1] ? describeCandidate(candidates[1]) : 'none', 'LLM Decision / MemberJunction / LLMDecision', `${label}: second candidate`);
     const luna = candidates.filter(c => c.model.Name === MODEL_NAME);
-    AssertEqual(luna.map(describeCandidate).join(', '), `${MODEL_NAME} / ${OPENAI_VENDOR} / ${OPENAI_DRIVER}, ${MODEL_NAME} / ${OPENROUTER_VENDOR} / ${OPENROUTER_DRIVER}`, `${label}: the model's candidates`);
+    const expected = `${MODEL_NAME} / ${OPENAI_VENDOR} / ${OPENAI_DRIVER}, ${MODEL_NAME} / ${OPENROUTER_VENDOR} / ${OPENROUTER_DRIVER}`;
+    AssertEqual(luna.map(describeCandidate).join(', '), expected, `${label}: the model's candidates`);
     for (const candidate of luna) {
         Assert(candidates.indexOf(candidate) > 1, `${label}: ${describeCandidate(candidate)} is ahead of Jev or LLM Decision`);
         AssertEqual(candidate.source, 'power-match-fallback', `${label}: ${describeCandidate(candidate)} source`);
     }
+    AssertEqual(candidates.slice(2, 4).map(describeCandidate).join(', '), expected, `${label}: the first two power-matched fallbacks`);
 }
 
 /** The model's candidate on OpenAI. */
@@ -720,7 +727,7 @@ export const OpenAIDecisionsChecks: NamedCheck[] = [
     },
     {
         Id: 'openai-decisions.OD7',
-        Name: "OD7: Default Decision's candidates and selection are unchanged by GPT-6 Luna Decisions: Jev, then LLM Decision, then the fallbacks; a bound OpenAI row stays behind both, and is reached only by failing over",
+        Name: "OD7: Default Decision's candidates and selection are unchanged by GPT-6 Luna Decisions: Jev, then LLM Decision, then the fallbacks, the model's rows first; a bound OpenAI row stays behind both, and is reached only by failing over",
         Fn: checkDefaultDecisionSelection,
     },
 ];
