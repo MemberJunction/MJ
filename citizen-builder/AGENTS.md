@@ -310,11 +310,13 @@ say what is needed.
 
 ## 7. Known platform gaps (work around them; they are being fixed)
 
-* **Basic `UI`-role users cannot run Flow agents.** Running one creates task records the `UI` role
-  may not create. Everyone who signs in to this builder gets the Developer role and is unaffected;
-  users of an environment the agent is promoted to may not be, so record the gap in the manifest.
-  Never grant permissions in the database yourself: a permission change is the user's or their
-  admin's decision.
+* **Flow agents run for basic `UI`-role users, with that user's permissions.** The platform writes
+  a Flow agent's task records itself, so a user with only the `UI` role can run one. Every step then
+  runs as the person who started the flow: a user without rights to an action, prompt or sub-agent
+  the flow uses sees that step fail. Everyone who signs in to this builder gets the Developer role;
+  users of an environment the agent is promoted to may not, so record in the manifest every action,
+  prompt and sub-agent the flow uses. Never grant permissions in the database yourself: a
+  permission change is the user's or their admin's decision.
 * **After a promotion,** the destination's API must restart before new prompts work (`PROMOTION_GUIDE.md`).
 
 ---

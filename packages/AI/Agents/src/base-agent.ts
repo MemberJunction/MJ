@@ -17,7 +17,7 @@ import { BuildNativeToolSet, COMPLETE_TASK_TOOL, SUB_AGENT_TOOL_PREFIX, type Nat
 import { BuildAssistantToolCallTurn, BuildToolResultTurn, CompactToolResultContent, type NativeToolResult } from './native-tools/tool-result-turns';
 import { LooksLikeLoopEnvelope } from './native-tools/dual-channel';
 import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIPromptRunEntityExtended, ResolvePromptRunUserID } from "@memberjunction/ai-core-plus";
-import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase, ToPlainJSON } from '@memberjunction/core';
+import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase, ToPlainJSON, WellKnownUserSource } from '@memberjunction/core';
 import { AgentRunWatchdog } from './agent-run-watchdog';
 import { AIPromptRunner, GetToolCallingDecision, AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, CredentialScopeAllows, MakeAIAPIKeyResolver, IRealtimeSession, IsPrefixPromptCache, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice, DecisionQuestion, DecisionAnswer } from '@memberjunction/ai';
@@ -16108,9 +16108,14 @@ The context is now within limits. Please retry your request with the recovered c
             const priority = resolvedStrategy?.priority ?? 50;
             const expirationMinutes = resolvedStrategy?.expirationMinutes;
 
-            const request = await (params.provider || this._activeProvider).GetEntityObject<MJAIAgentRequestEntity>(
+            // Written as the system user: the request is the platform's record that the run paused,
+            // and the baseline UI role may only READ `MJ: AI Agent Requests`, so writing it as the
+            // run's user silently lost the pause for everyone without the Developer role. Who the
+            // request is FOR is `RequestForUserID` below, unchanged.
+            const provider = params.provider || this._activeProvider;
+            const request = await provider.GetEntityObject<MJAIAgentRequestEntity>(
                 'MJ: AI Agent Requests',
-                params.contextUser
+                await this.resolveRequestWriter(provider, params.contextUser)
             );
             request.NewRecord();
             request.AgentID = params.agent.ID;
@@ -16148,6 +16153,22 @@ The context is now within limits. Please retry your request with the recovered c
         } catch (error) {
             // Don't let request creation failure break the agent execution
             LogError(`Error creating feedback request: ${(error as Error).message}`);
+        }
+    }
+
+    /**
+     * The identity a feedback request is written as: the system user, when this process has one.
+     *
+     * Falls back to the run's user when none can be resolved (a client-side provider, no server-side
+     * source loaded, a failed lookup) — the behaviour before this existed, which may be refused for a
+     * user who cannot create requests but never writes as anyone more privileged than that user.
+     */
+    private async resolveRequestWriter(provider: IMetadataProvider, runUser: UserInfo): Promise<UserInfo> {
+        try {
+            return (await WellKnownUserSource.Instance.GetSystemUser(provider)) ?? runUser;
+        } catch (error) {
+            LogError(`Could not resolve the system user to record the feedback request as; recording it as the run's user: ${(error as Error).message}`);
+            return runUser;
         }
     }
 

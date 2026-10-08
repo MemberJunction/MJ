@@ -12,14 +12,14 @@
  * BaseAgent. Only the entity layer is faked, and the fake request enforces the foreign key the way the
  * database does: it refuses to save while its originating step has not been inserted.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('@memberjunction/core', async (importOriginal) => ({
     ...(await importOriginal<typeof import('@memberjunction/core')>()),
     LogError: vi.fn(),
 }));
 
-import { LogError } from '@memberjunction/core';
+import { LogError, UserInfo, WellKnownUserSource } from '@memberjunction/core';
 import { BaseAgent } from '../base-agent';
 
 /** Shared ordering log, so a test can see which INSERT landed first. */
@@ -118,8 +118,11 @@ type FeedbackParams = {
     agent: { ID: string; Name: string; TypeID: string; CategoryID: null };
     contextUser: { ID: string; Name: string };
     assignmentStrategy: { type: 'RunUser' };
-    provider: { GetEntityObject: (entityName: string) => Promise<FakeStep | FakeRequest> };
+    provider: { GetEntityObject: (entityName: string, user?: UserLike) => Promise<FakeStep | FakeRequest> };
 };
+
+/** The identity a row was requested as — all these tests read is which user it was. */
+type UserLike = { ID: string; Name: string };
 
 /** The private BaseAgent members these tests drive — checked, so a rename fails loudly here. */
 type FeedbackInternals = {
@@ -132,15 +135,28 @@ function drivesFeedback(value: object): value is FeedbackInternals {
         && typeof Reflect.get(value, 'finalizeAgentRun') === 'function';
 }
 
-type Harness = { internals: FeedbackInternals; params: FeedbackParams; run: FakeRun; step: FakeStep; request: FakeRequest; log: EventLog };
+type Harness = {
+    internals: FeedbackInternals;
+    params: FeedbackParams;
+    run: FakeRun;
+    step: FakeStep;
+    request: FakeRequest;
+    log: EventLog;
+    /** The user the request row was requested — and therefore saved — as. */
+    requestWrittenAs: () => UserLike | undefined;
+};
 
 function harness(options: { stepInsertFails?: boolean; requestRefusesWith?: string } = {}): Harness {
     const log: EventLog = [];
     const step = new FakeStep(log, options.stepInsertFails);
     const request = new FakeRequest(log, [step], options.requestRefusesWith);
+    let requestWrittenAs: UserLike | undefined;
     const provider = {
-        GetEntityObject: async (entityName: string): Promise<FakeStep | FakeRequest> =>
-            entityName === 'MJ: AI Agent Requests' ? request : step,
+        GetEntityObject: async (entityName: string, user?: UserLike): Promise<FakeStep | FakeRequest> => {
+            if (entityName !== 'MJ: AI Agent Requests') return step;
+            requestWrittenAs = user;
+            return request;
+        },
     };
     const run: FakeRun = { ID: 'run-1', AgentID: 'agent-1', Steps: [], Status: 'Running', ErrorMessage: null, Save: async () => true };
 
@@ -156,7 +172,7 @@ function harness(options: { stepInsertFails?: boolean; requestRefusesWith?: stri
         assignmentStrategy: { type: 'RunUser' },
         provider,
     };
-    return { internals: agent, params, run, step, request, log };
+    return { internals: agent, params, run, step, request, log, requestWrittenAs: () => requestWrittenAs };
 }
 
 const ASK: ChatDecision = { step: 'Chat', message: 'Which tone should the draft use?', terminate: true };
@@ -164,6 +180,10 @@ const ASK: ChatDecision = { step: 'Chat', message: 'Which tone should the draft 
 describe('BaseAgent feedback request (Chat pause)', () => {
     beforeEach(() => {
         vi.mocked(LogError).mockClear();
+    });
+
+    afterEach(() => {
+        vi.restoreAllMocks();
     });
 
     it('records the request only after the step it points at has been inserted', async () => {
@@ -205,6 +225,40 @@ describe('BaseAgent feedback request (Chat pause)', () => {
         await h.internals.finalizeAgentRun(ASK);
 
         expect(h.run.ErrorMessage).toContain('step record save(s) failed');
+    });
+
+    it('records the pause as the system user, still addressed to the person it is for', async () => {
+        // The UI role may only READ AI Agent Requests, so a request written as the run's user was
+        // refused and the pause was lost for everyone without the Developer role.
+        const systemUser = Object.assign(new UserInfo(), { ID: 'system-1', Name: 'System' });
+        vi.spyOn(WellKnownUserSource.Instance, 'GetSystemUser').mockResolvedValue(systemUser);
+        const h = harness();
+
+        await h.internals.executeChatStep(h.params, ASK);
+
+        expect(h.request.Saved).toBe(true);
+        expect(h.requestWrittenAs()).toBe(systemUser);
+        expect(h.request.RequestForUserID).toBe('user-1');
+    });
+
+    it('records the pause as the run\'s user when this process has no system user', async () => {
+        vi.spyOn(WellKnownUserSource.Instance, 'GetSystemUser').mockResolvedValue(null);
+        const h = harness();
+
+        await h.internals.executeChatStep(h.params, ASK);
+
+        expect(h.requestWrittenAs()).toBe(h.params.contextUser);
+        expect(h.request.RequestForUserID).toBe('user-1');
+    });
+
+    it('records the pause as the run\'s user when resolving the system user throws', async () => {
+        vi.spyOn(WellKnownUserSource.Instance, 'GetSystemUser').mockRejectedValue(new Error('no connection'));
+        const h = harness();
+
+        await h.internals.executeChatStep(h.params, ASK);
+
+        expect(h.request.Saved).toBe(true);
+        expect(h.requestWrittenAs()).toBe(h.params.contextUser);
     });
 
     it('logs why the request was refused, not just that it was', async () => {

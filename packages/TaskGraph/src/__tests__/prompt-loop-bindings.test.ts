@@ -9,7 +9,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { TaskGraphDispatcher } from '../TaskGraphDispatcher';
 import { BuildTaskGraphParentInputPayload } from '../TaskGraphService';
-import type { TaskPromptRunParams, TaskPromptRunResult } from '../types';
+import { UserInfo } from '@memberjunction/core';
+import type { TaskPromptRunParams, TaskPromptRunResult, TaskUserResolver } from '../types';
 
 /** The fields of a Task row the loop path reads. */
 type FakeLoopTask = {
@@ -42,9 +43,16 @@ function drivesLoop(value: object): value is PromptLoopDispatcher {
     return typeof Reflect.get(value, 'runTaskBody') === 'function';
 }
 
-/** A dispatcher with only what the prompt-loop path reads; the method under test comes from the prototype. */
+/**
+ * A dispatcher with only what the prompt-loop path reads; the method under test comes from the
+ * prototype. The graph records `user-1` as its submitter, so the step's user is resolved through
+ * the stub resolver.
+ */
 function dispatcherWith(promptRunner: { RunPromptForTask: (p: TaskPromptRunParams) => Promise<TaskPromptRunResult> }): PromptLoopDispatcher {
-    const instance = { promptRunner, contextUser: {} };
+    const userResolver: TaskUserResolver = {
+        FindUserByID: async (id: string) => Object.assign(new UserInfo(), { ID: id, Name: 'Submitter', IsActive: true }),
+    };
+    const instance = { promptRunner, contextUser: {}, stepUserIDByGraph: new Map<string, string | null>(), userResolver };
     Object.setPrototypeOf(instance, TaskGraphDispatcher.prototype);
     if (!drivesLoop(instance)) throw new Error('TaskGraphDispatcher no longer has runTaskBody.');
     return instance;

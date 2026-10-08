@@ -60,7 +60,8 @@ engine's metadata") until the instance's MJAPI restarts. Restart it after every 
 or changes prompts.
 
 ### Check who can run it
-Agents started from the web app run as the signed-in user. Users with only the basic `UI` role cannot
-run Flow agents (creating their task records needs Create permission on `MJ: Tasks` and
-`MJ: Task Dependencies`). Grant what the manifest lists to the role its users have, through your
-normal permissions process, then run the agent once as such a user before announcing it.
+Agents started from the web app run as the signed-in user, and every step of a Flow agent runs with
+that user's permissions. Users with only the basic `UI` role can run Flow agents, but a step whose
+action, prompt or sub-agent they have no rights to fails. Grant what the manifest lists to the role
+its users have, through your normal permissions process, then run the agent once as such a user
+before announcing it.
