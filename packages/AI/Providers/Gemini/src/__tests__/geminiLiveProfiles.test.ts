@@ -4,6 +4,7 @@ import {
     ResolveGeminiMaxInboundVideoStreams,
     ResolveGeminiThinkingLevel,
     GEMINI_LIVE_FALLBACK_PROFILE,
+    GEMINI_LIVE_ENDPOINT_OVERLAYS,
 } from '../geminiLiveProfiles';
 
 describe('ResolveGeminiLiveProfile', () => {
@@ -34,13 +35,61 @@ describe('ResolveGeminiLiveProfile', () => {
 
     it('falls back permissively for an unknown model rather than refusing to connect', () => {
         for (const id of ['gemini-9.9-live-future', '', '   ', null, undefined]) {
-            expect(ResolveGeminiLiveProfile(id as string)).toBe(GEMINI_LIVE_FALLBACK_PROFILE);
+            expect(ResolveGeminiLiveProfile(id as string)).toEqual({ ...GEMINI_LIVE_FALLBACK_PROFILE, SupportsAvatarOutput: false, Endpoint: 'developer' });
         }
     });
 
     it('never invents a thinking level for an unknown model', () => {
         expect(GEMINI_LIVE_FALLBACK_PROFILE.SupportsThinkingLevel).toBe(false);
         expect(GEMINI_LIVE_FALLBACK_PROFILE.AllowedThinkingLevels).toEqual([]);
+    });
+
+    it('returns the same object for one model on one endpoint, so a resolved profile is stable', () => {
+        expect(ResolveGeminiLiveProfile('gemini-3.8-live')).toBe(ResolveGeminiLiveProfile(' GEMINI-3.8-LIVE '));
+        expect(ResolveGeminiLiveProfile('gemini-3.8-live', 'enterprise')).not.toBe(ResolveGeminiLiveProfile('gemini-3.8-live'));
+    });
+});
+
+describe('ResolveGeminiLiveProfile by endpoint (live avatars)', () => {
+    it('defaults to the Developer API, where no model renders an avatar', () => {
+        for (const id of ['gemini-3.8-live', 'gemini-3.8-live-extended-thinking', 'gemini-3.1-flash-live-preview', 'unknown-live']) {
+            const p = ResolveGeminiLiveProfile(id);
+            expect(p.Endpoint, id).toBe('developer');
+            expect(p.SupportsAvatarOutput, id).toBe(false);
+            expect(p.AvatarOutputEncoding, id).toBeUndefined();
+        }
+    });
+
+    it('renders an avatar on Gemini Enterprise for gemini-3.8-live: fragmented MP4 that carries the voice', () => {
+        const p = ResolveGeminiLiveProfile('gemini-3.8-live', 'enterprise');
+        expect(p.Endpoint).toBe('enterprise');
+        expect(p.SupportsAvatarOutput).toBe(true);
+        expect(p.AvatarOutputEncoding).toBe('video/mp4; codecs="avc1.42c01f, mp4a.40.2"');
+        expect(p.AvatarAudioMuxed).toBe(true);
+    });
+
+    it('keeps every other fact of the model row on Enterprise', () => {
+        const { Endpoint: _e, SupportsAvatarOutput: _s, AvatarOutputEncoding: _a, AvatarAudioMuxed: _m, ...enterprise } = ResolveGeminiLiveProfile('gemini-3.8-live', 'enterprise');
+        const { Endpoint: _e2, SupportsAvatarOutput: _s2, AvatarOutputEncoding: _a2, AvatarAudioMuxed: _m2, ...developer } = ResolveGeminiLiveProfile('gemini-3.8-live');
+        expect(enterprise).toEqual(developer);
+    });
+
+    it("doesn't let Extended Thinking inherit 3.8 Live's avatar through the longer id", () => {
+        const et = ResolveGeminiLiveProfile('gemini-3.8-live-extended-thinking', 'enterprise');
+        expect(et.MatchPrefix).toBe('gemini-3.8-live-extended-thinking');
+        expect(et.SupportsAvatarOutput).toBe(false);
+    });
+
+    it('renders no avatar for the legacy model or an unknown one on Enterprise', () => {
+        expect(ResolveGeminiLiveProfile('gemini-3.1-flash-live-preview', 'enterprise').SupportsAvatarOutput).toBe(false);
+        expect(ResolveGeminiLiveProfile('gemini-9.9-live-future', 'enterprise').SupportsAvatarOutput).toBe(false);
+        expect(ResolveGeminiLiveProfile(undefined, 'enterprise').SupportsAvatarOutput).toBe(false);
+    });
+
+    it('declares overlays only for model rows that exist', () => {
+        for (const overlay of GEMINI_LIVE_ENDPOINT_OVERLAYS) {
+            expect(ResolveGeminiLiveProfile(overlay.ModelPrefix, overlay.Endpoint).MatchPrefix).toBe(overlay.ModelPrefix);
+        }
     });
 });
 

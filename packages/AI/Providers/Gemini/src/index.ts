@@ -1366,6 +1366,7 @@ export * from './geminiImage';
 
 // Export realtime (Gemini Live) driver
 export * from './geminiRealtime';
+export type { GeminiLiveEndpoint } from './geminiLiveProfiles';
 
 // Export multimodal embeddings
 export * from './geminiEmbedding';

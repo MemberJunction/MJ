@@ -29,6 +29,40 @@ import { ResolveMaxInboundVideoStreams, type RealtimeIdleSignal, type RealtimeTo
 /** Thinking levels the Live API accepts. `'minimal'` is legal on 3.1 but NOT on 3.8 Extended Thinking. */
 export type GeminiThinkingLevel = 'minimal' | 'low' | 'medium' | 'high';
 
+/**
+ * Which Gemini endpoint serves a Live session: the Gemini Developer API (an API key) or Gemini Enterprise (Vertex AI,
+ * Google Cloud credentials). The protocol is the same; some outputs are not. On the Developer API, `gemini-3.8-live`
+ * refuses every avatar field and returns audio for a VIDEO request (probed 2026-10-08).
+ */
+export type GeminiLiveEndpoint = 'developer' | 'enterprise';
+
+/** What a Live model renders as video output on one endpoint: a live avatar, or nothing. */
+export interface GeminiLiveAvatarFacts {
+    /** Whether the model renders a live avatar on this endpoint. */
+    SupportsAvatarOutput: boolean;
+    /** The avatar stream's media type when it does: fragmented MP4 with its codecs, as Media Source Extensions name it. */
+    AvatarOutputEncoding?: string;
+    /**
+     * Whether the avatar's video stream carries the voice. When it does, separate PCM must not also play, or the voice
+     * doubles. From Google's sample stream (an AAC track inside the MP4); a player still follows the stream itself.
+     */
+    AvatarAudioMuxed?: boolean;
+}
+
+/** A model profile resolved for one endpoint: the model's facts plus what it renders there. */
+export interface GeminiLiveResolvedProfile extends GeminiLiveModelProfile, GeminiLiveAvatarFacts {
+    /** The endpoint this profile was resolved for. */
+    Endpoint: GeminiLiveEndpoint;
+}
+
+/** Endpoint-specific facts for one model row, matched by that row's exact {@link GeminiLiveModelProfile.MatchPrefix}. */
+export interface GeminiLiveEndpointOverlay extends GeminiLiveAvatarFacts {
+    /** The endpoint these facts hold on. */
+    Endpoint: GeminiLiveEndpoint;
+    /** The model row they belong to: equal to its `MatchPrefix`, so a longer model id never inherits another row's facts. */
+    ModelPrefix: string;
+}
+
 /** What a given Gemini Live model accepts. Every field is a documented fact, not a preference. */
 export interface GeminiLiveModelProfile {
     /** Model id prefix this profile matches (longest match wins). */
@@ -201,14 +235,51 @@ export const GEMINI_LIVE_FALLBACK_PROFILE: GeminiLiveModelProfile = {
 };
 
 /**
- * Resolves the profile for a model id, longest prefix first.
+ * What each model renders on each endpoint, beyond its row's facts. A model with no overlay for an endpoint renders no
+ * avatar there. Matched by the row's exact `MatchPrefix`, so `gemini-3.8-live-extended-thinking` never inherits
+ * `gemini-3.8-live`'s avatar.
+ */
+export const GEMINI_LIVE_ENDPOINT_OVERLAYS: readonly GeminiLiveEndpointOverlay[] = [
+    {
+        // Live avatars are Gemini Enterprise only, on `gemini-3.8-live` only. Encoding and muxing are from Google's sample
+        // stream (H.264 Constrained Baseline 3.1, 704x1280 at 24 fps, and AAC-LC in fragmented MP4); the spike against a
+        // live Enterprise session confirms them.
+        Endpoint: 'enterprise',
+        ModelPrefix: 'gemini-3.8-live',
+        SupportsAvatarOutput: true,
+        AvatarOutputEncoding: 'video/mp4; codecs="avc1.42c01f, mp4a.40.2"',
+        AvatarAudioMuxed: true,
+    },
+];
+
+/** Resolved profiles by endpoint and model row, so every resolution of one model on one endpoint is the same object. */
+const resolvedProfiles = new Map<string, GeminiLiveResolvedProfile>();
+
+/**
+ * Resolves the profile for a model id on an endpoint: the model's row (longest prefix first), plus what it renders on
+ * that endpoint ({@link GEMINI_LIVE_ENDPOINT_OVERLAYS}).
  *
  * Case- and whitespace-insensitive because model ids reach us from metadata that humans edit.
  * Never throws and never returns undefined — an unknown model gets
  * {@link GEMINI_LIVE_FALLBACK_PROFILE} so a new model release degrades to "treated conservatively"
  * rather than "cannot connect".
+ *
+ * @param model The model id.
+ * @param endpoint The endpoint serving the session. Default: the Developer API.
  */
-export function ResolveGeminiLiveProfile(model: string | null | undefined): GeminiLiveModelProfile {
+export function ResolveGeminiLiveProfile(model: string | null | undefined, endpoint: GeminiLiveEndpoint = 'developer'): GeminiLiveResolvedProfile {
+    const row = resolveModelRow(model);
+    const key = `${endpoint}|${row.MatchPrefix}`;
+    let resolved = resolvedProfiles.get(key);
+    if (!resolved) {
+        resolved = { ...row, ...avatarFactsFor(row, endpoint), Endpoint: endpoint };
+        resolvedProfiles.set(key, resolved);
+    }
+    return resolved;
+}
+
+/** The model's row: the longest matching prefix, or the fallback. */
+function resolveModelRow(model: string | null | undefined): GeminiLiveModelProfile {
     const id = String(model ?? '').trim().toLowerCase();
     if (id.length === 0) {
         return GEMINI_LIVE_FALLBACK_PROFILE;
@@ -220,6 +291,15 @@ export function ResolveGeminiLiveProfile(model: string | null | undefined): Gemi
         }
     }
     return best ?? GEMINI_LIVE_FALLBACK_PROFILE;
+}
+
+/** The row's overlay on the endpoint, or no avatar. */
+function avatarFactsFor(row: GeminiLiveModelProfile, endpoint: GeminiLiveEndpoint): GeminiLiveAvatarFacts {
+    const overlay = GEMINI_LIVE_ENDPOINT_OVERLAYS.find((o) => o.Endpoint === endpoint && o.ModelPrefix === row.MatchPrefix);
+    if (!overlay) {
+        return { SupportsAvatarOutput: false };
+    }
+    return { SupportsAvatarOutput: overlay.SupportsAvatarOutput, AvatarOutputEncoding: overlay.AvatarOutputEncoding, AvatarAudioMuxed: overlay.AvatarAudioMuxed };
 }
 
 /**
