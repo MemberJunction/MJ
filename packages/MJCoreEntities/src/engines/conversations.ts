@@ -230,6 +230,12 @@ export const ForkSummaryRowFields: readonly (keyof ForkSummaryRow)[] =
 /** Most participants a fork summary lists. */
 export const MAX_FORK_PARTICIPANTS = 3;
 
+/** Where a message is: its branch (null is Main) and its Sequence. */
+export interface ForkMessagePosition {
+    readonly BranchID: string | null;
+    readonly Sequence: number;
+}
+
 /** What the UI shows for one fork: its chip, its header and its row in the forks list. */
 export interface ForkSummary {
     readonly Branch: ConversationBranchRow;
@@ -247,6 +253,8 @@ export interface ForkSummary {
     readonly LastMessageAuthorName: string | null;
     /** The message the chip shows under: SourceDetailID, else the anchor. */
     readonly PlacementDetailID: string | null;
+    /** The branch and Sequence of the placement message; null when its row is not read. */
+    readonly PlacementPosition?: ForkMessagePosition | null;
     /**
      * The row the fork inherits up to: the parent fork's own row (a Main row when ParentBranchID
      * is null) with Sequence = ForkFromSequence. Null when there is no such row.
@@ -3131,6 +3139,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
                 : anchorRows.find(r => r.Sequence === branch.ForkFromSequence && sameId(r.BranchID, branch.ParentBranchID ?? null));
             const sourceId = branch.SourceDetailID;
             const source = sourceId ? sourceRows.find(r => sameId(r.ID, sourceId)) : undefined;
+            const placement = sourceId ? source : anchor;
             const first = own.find(r => ConversationEngine.ForkPlainText(r.Message) != null);
             const last = own.length > 0 ? own[own.length - 1] : undefined;
             const authors: string[] = [];
@@ -3152,6 +3161,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
                 LastMessagePreview: last ? ConversationEngine.ForkPreviewText(last.Message) : null,
                 LastMessageAuthorName: last ? ConversationEngine.rowAuthorName(last) : null,
                 PlacementDetailID: branch.SourceDetailID ?? anchor?.ID ?? null,
+                PlacementPosition: placement ? { BranchID: placement.BranchID ?? null, Sequence: placement.Sequence } : null,
                 AnchorDetailID: anchor?.ID ?? null,
                 AnchorAuthorName: anchor ? ConversationEngine.rowAuthorName(anchor) : null,
                 AnchorAt: anchor ? ConversationEngine.toForkDate(anchor.__mj_CreatedAt) : null,

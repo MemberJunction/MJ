@@ -31,7 +31,7 @@ import {
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
 import { BadgeTextForAttachment } from '../../util/attachment-badge';
-import { EMPTY_FORK_CHIPS, ForkKindIcon, type ForkChip } from '../../utils/conversation-forks';
+import { EMPTY_FORK_CHIPS, ForkChipAriaLabel, ForkChipIcon, ForkChipOpenRequestOf, type ForkChipOpenRequest, type MessageForkChip } from '../../utils/conversation-forks';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 /** How a saved edit of a message is applied: as a new fork, in place with a rerun of its turn, or in place only. */
@@ -160,11 +160,14 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     return this.AllMessages;
   }
 
-  /** The forks placed under this message, as chips; set by the message list. */
-  @Input() public ForkChips: readonly ForkChip[] = EMPTY_FORK_CHIPS;
+  /**
+   * The chips under this message: the forks placed under it and, on a fork's first own message, the
+   * fork's alternatives (an original chip and the other forks of the replaced message). Set by the message list.
+   */
+  @Input() public ForkChips: readonly MessageForkChip[] = EMPTY_FORK_CHIPS;
 
-  /** A chip was clicked: the host opens that fork. */
-  @Output() public ForkOpenRequested = new EventEmitter<{ BranchID: string }>();
+  /** A chip was clicked: the host opens that fork, or for an original chip, its view at the replaced message. */
+  @Output() public ForkOpenRequested = new EventEmitter<ForkChipOpenRequest>();
 
   /** The rail a fork view draws this row on: 'Inherited' (faded, dashed) or 'Own' (solid); null in Main. Set by the message list. */
   @Input() public ForkRail: 'Inherited' | 'Own' | null = null;
@@ -224,15 +227,20 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     return this.CanFork !== false ? 'Regenerate as a fork' : 'Regenerate';
   }
 
-  /** The kind icon of a chip. */
-  public ChipIcon(chip: ForkChip): string {
-    return ForkKindIcon(chip.Kind);
+  /** The icon of a chip (see {@link ForkChipIcon}). */
+  public ChipIcon(chip: MessageForkChip): string {
+    return ForkChipIcon(chip);
   }
 
-  /** Opens the chip's fork; the click does not reach the message bubble. */
-  public OnForkChipClick(chip: ForkChip, event: Event): void {
+  /** The aria-label of a chip (see {@link ForkChipAriaLabel}). */
+  public ChipAriaLabel(chip: MessageForkChip): string {
+    return ForkChipAriaLabel(chip);
+  }
+
+  /** Opens the chip's fork, or the original chip's view at the replaced message; the click does not reach the message bubble. */
+  public OnForkChipClick(chip: MessageForkChip, event: Event): void {
     event.stopPropagation();
-    this.ForkOpenRequested.emit({ BranchID: chip.BranchID });
+    this.ForkOpenRequested.emit(ForkChipOpenRequestOf(chip));
   }
 
   @Input() public IsProcessing: boolean = false;

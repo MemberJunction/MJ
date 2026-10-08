@@ -179,8 +179,36 @@ export interface ForkChip {
     readonly Avatars: ReadonlyArray<ForkChipAvatar>;
 }
 
+/**
+ * The chip, on a fork's first own message, that opens the view holding the message the fork replaced,
+ * positioned at that message.
+ */
+export interface OriginalForkChip {
+    readonly Kind: 'Original';
+    /** The fork that holds the replaced message; null is Main. */
+    readonly BranchID: string | null;
+    /** The replaced message's Sequence; null when it is not known (the view opens at its latest rows). */
+    readonly Sequence: number | null;
+    /** "Main", or the display name of the fork that holds the replaced message. */
+    readonly DisplayName: string;
+}
+
+/** A chip under a message: a fork placed there, or the original of the message a fork replaced. */
+export type MessageForkChip = ForkChip | OriginalForkChip;
+
+/** What a clicked chip asks the host to open. */
+export interface ForkChipOpenRequest {
+    /** The fork to open; null opens Main. */
+    readonly BranchID: string | null;
+    /** When set, the view opens positioned at the row with this Sequence on that branch. */
+    readonly Sequence?: number | null;
+}
+
 /** The chips of a message with no fork placed under it. */
 export const EMPTY_FORK_CHIPS: readonly ForkChip[] = [];
+
+/** The name of Main on an original chip. */
+export const MAIN_VIEW_LABEL = 'Main';
 
 /** The Font Awesome icon of a fork kind. */
 export function ForkKindIcon(kind: ForkKind): string {
@@ -192,6 +220,26 @@ export function ForkKindIcon(kind: ForkKind): string {
         default:
             return 'fa-solid fa-code-branch';
     }
+}
+
+/** The icon of a chip: the kind icon of a fork chip; on an original chip, a house for Main and the fork icon for a fork. */
+export function ForkChipIcon(chip: MessageForkChip): string {
+    if (chip.Kind === 'Original') {
+        return chip.BranchID ? 'fa-solid fa-code-branch' : 'fa-solid fa-house';
+    }
+    return ForkKindIcon(chip.Kind);
+}
+
+/** The aria-label of a chip: "Open fork <name>, <N messages>", or "Open the original in <name>". */
+export function ForkChipAriaLabel(chip: MessageForkChip): string {
+    return chip.Kind === 'Original'
+        ? `Open the original in ${chip.DisplayName}`
+        : `Open fork ${chip.DisplayName}, ${chip.MessageLabel}`;
+}
+
+/** The request a clicked chip sends: its fork, or for an original chip, its view and the replaced message. */
+export function ForkChipOpenRequestOf(chip: MessageForkChip): ForkChipOpenRequest {
+    return chip.Kind === 'Original' ? { BranchID: chip.BranchID, Sequence: chip.Sequence } : { BranchID: chip.BranchID };
 }
 
 /** "1 message", or "N messages". */
@@ -235,6 +283,18 @@ export function FormatForkActivity(at: Date, now: Date): string {
     return at.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
+/** The chip of one fork. */
+function forkChipOf(summary: ForkSummary, avatarFor: (participant: ForkParticipant) => ForkChipAvatar, now: Date): ForkChip {
+    return {
+        BranchID: summary.Branch.ID,
+        Kind: summary.Kind,
+        DisplayName: summary.DisplayName,
+        MessageLabel: ForkMessageLabel(summary.MessageCount),
+        ActivityLabel: FormatForkActivity(summary.LastActivityAt, now),
+        Avatars: summary.Participants.map(avatarFor),
+    };
+}
+
 /**
  * The chips of each placement message: one chip per fork whose PlacementDetailID is that message,
  * in the order of `summaries`. Keys are normalized detail ids; a fork with no placement has no chip.
@@ -249,14 +309,7 @@ export function BuildForkChipMap(
         if (!summary.PlacementDetailID) {
             continue;
         }
-        const chip: ForkChip = {
-            BranchID: summary.Branch.ID,
-            Kind: summary.Kind,
-            DisplayName: summary.DisplayName,
-            MessageLabel: ForkMessageLabel(summary.MessageCount),
-            ActivityLabel: FormatForkActivity(summary.LastActivityAt, now),
-            Avatars: summary.Participants.map(avatarFor),
-        };
+        const chip = forkChipOf(summary, avatarFor, now);
         const key = NormalizeUUID(summary.PlacementDetailID);
         const list = map.get(key);
         if (list) {
@@ -264,6 +317,68 @@ export function BuildForkChipMap(
         } else {
             map.set(key, [chip]);
         }
+    }
+    return map;
+}
+
+/**
+ * The alternatives a fork shows on its first own message: an original chip for the view that holds the
+ * message the fork replaced (its SourceDetailID), then a chip for every other fork placed under that
+ * message with the same parent branch, in the order of `summaries`. Empty when the fork is not in
+ * `summaries` or replaced no message (its chips are then under its anchor, which its view shows).
+ * @param forkLabel The display name of a fork, for an original chip of a fork.
+ */
+export function BuildForkAlternativeChips(
+    forkId: string,
+    summaries: ReadonlyArray<ForkSummary>,
+    avatarFor: (participant: ForkParticipant) => ForkChipAvatar,
+    now: Date,
+    forkLabel: (branchId: string) => string
+): MessageForkChip[] {
+    const fork = summaries.find(s => UUIDsEqual(s.Branch.ID, forkId));
+    const placement = fork?.PlacementDetailID;
+    if (!fork || !fork.Branch.SourceDetailID || !placement) {
+        return [];
+    }
+    const position = fork.PlacementPosition ?? null;
+    const branchId = position ? position.BranchID : fork.ParentBranchID;
+    const original: OriginalForkChip = {
+        Kind: 'Original',
+        BranchID: branchId,
+        Sequence: position?.Sequence ?? null,
+        DisplayName: branchId ? forkLabel(branchId) : MAIN_VIEW_LABEL,
+    };
+    const siblings = summaries.filter(s =>
+        !UUIDsEqual(s.Branch.ID, fork.Branch.ID)
+        && s.PlacementDetailID != null
+        && UUIDsEqual(s.PlacementDetailID, placement)
+        && UUIDsEqual(s.ParentBranchID ?? null, fork.ParentBranchID ?? null));
+    return [original, ...siblings.map(s => forkChipOf(s, avatarFor, now))];
+}
+
+/**
+ * The chips of a view's messages: {@link BuildForkChipMap} over every fork but the one a fork view shows
+ * (its chip would open the view already open). In a fork view, the fork's alternatives
+ * ({@link BuildForkAlternativeChips}) come first on its first own message `firstOwnDetailId`.
+ */
+export function BuildViewForkChipMap(
+    summaries: ReadonlyArray<ForkSummary>,
+    view: ConversationOpenView,
+    firstOwnDetailId: string | null,
+    avatarFor: (participant: ForkParticipant) => ForkChipAvatar,
+    now: Date,
+    forkLabel: (branchId: string) => string
+): ReadonlyMap<string, readonly MessageForkChip[]> {
+    if (view.Kind !== 'Fork') {
+        return BuildForkChipMap(summaries, avatarFor, now);
+    }
+    const map: Map<string, readonly MessageForkChip[]> = new Map(
+        BuildForkChipMap(summaries.filter(s => !UUIDsEqual(s.Branch.ID, view.BranchID)), avatarFor, now)
+    );
+    const alternatives = firstOwnDetailId ? BuildForkAlternativeChips(view.BranchID, summaries, avatarFor, now, forkLabel) : [];
+    if (firstOwnDetailId && alternatives.length > 0) {
+        const key = NormalizeUUID(firstOwnDetailId);
+        map.set(key, [...alternatives, ...(map.get(key) ?? [])]);
     }
     return map;
 }
@@ -297,6 +412,23 @@ export function SplitForkRows<T extends { BranchID?: string | null; Sequence: nu
         (UUIDsEqual(r.BranchID ?? null, view.BranchID) ? own : inherited).push(r);
     }
     return { Inherited: inherited, Own: own };
+}
+
+/**
+ * The id of a fork view's first own row (lowest Sequence) when the loaded rows reach it: an inherited
+ * row is loaded, or no older rows remain (`hasMoreAbove` false). Null with no own row loaded.
+ */
+export function FirstOwnRowID<T extends { ID: string; Sequence: number }>(rows: ForkRows<T>, hasMoreAbove: boolean): string | null {
+    if (rows.Own.length === 0 || (rows.Inherited.length === 0 && hasMoreAbove)) {
+        return null;
+    }
+    let first = rows.Own[0];
+    for (const row of rows.Own) {
+        if (row.Sequence < first.Sequence) {
+            first = row;
+        }
+    }
+    return first.ID;
 }
 
 /** How the message list draws a fork or draft view. */

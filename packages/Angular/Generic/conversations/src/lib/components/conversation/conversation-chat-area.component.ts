@@ -68,11 +68,12 @@ import {
   BackLabelOf,
   BuildForkBreadcrumbs,
   BuildForkMarkerText,
-  BuildForkChipMap,
   BuildForkComposerHint,
   BuildForkViewLayout,
+  BuildViewForkChipMap,
   CanForkFrom,
   FindLatestTurn,
+  FirstOwnRowID,
   ForkDependsOnRows,
   IsRowInOpenView,
   MAIN_COMPOSER_PLACEHOLDER,
@@ -90,11 +91,12 @@ import {
   type DraftForkOpenView,
   type ForkBreadcrumb,
   type ForkChainRow,
-  type ForkChip,
   type ForkChipAvatar,
+  type ForkChipOpenRequest,
   type ForkRows,
   type ForkViewLayout,
-  type LatestTurn
+  type LatestTurn,
+  type MessageForkChip
 } from '../../utils/conversation-forks';
 import { DecideArtifactPanelAction, SnapshotArtifactVersions, ArtifactPanelAction, ArtifactPanelBaseline, ArtifactVersionRef } from '../../utils/artifact-panel-action';
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
@@ -2610,15 +2612,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   /** The number of the newest fork summary read whose result is shown. */
   private forkSummaryShownSequence = 0;
   /**
-   * The chip map built from {@link ForkSummaries} for a window view, with the summaries, the view and
-   * the avatar map (and its version) it was built from.
+   * The chip map built from {@link ForkSummaries} for a window view, with the summaries, the view, the
+   * fork's first own row and the avatar map (and its version) it was built from.
    */
   private forkChipCache: {
     Summaries: ForkSummary[];
     View: ConversationOpenView;
+    FirstOwnID: string | null;
     AvatarMap: Map<string, {imageUrl: string | null; iconClass: string | null}>;
     AvatarVersion: number;
-    Map: ReadonlyMap<string, readonly ForkChip[]>;
+    Map: ReadonlyMap<string, readonly MessageForkChip[]>;
   } | null = null;
   /** Increments each time {@link UserAvatarMap} is filled, so the chip map is built again with the new avatars. */
   private userAvatarMapVersion = 0;
@@ -4581,9 +4584,17 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     input.SetDraft(text);
   }
 
-  /** A chip was clicked: open its fork. */
-  public OnForkOpenRequested(event: { BranchID: string }): void {
-    void this.OpenFork(event.BranchID);
+  /**
+   * A chip was clicked: opens its fork. An original chip opens its view (a fork, or Main) positioned at
+   * the replaced message, as a search hit does ({@link OpenMessage}).
+   */
+  public OnForkOpenRequested(event: ForkChipOpenRequest): void {
+    const conversationId = this.ConversationId;
+    if (event.Sequence != null && conversationId) {
+      void this.OpenMessage(conversationId, event.BranchID, event.Sequence);
+      return;
+    }
+    void (event.BranchID ? this.OpenFork(event.BranchID) : this.BackToMain());
   }
 
   /** Opens or closes the forks list. Opening it closes the pinned messages panel. */
@@ -5100,22 +5111,33 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   /**
    * The chips of each message, from the fork summaries; the same map until the summaries, the window
-   * view or the avatar map change. In a fork's full view, that fork's own chip is left out (it would
-   * open the view already open).
+   * view, the fork's first own row or the avatar map change. In a fork's full view, that fork's own
+   * chip is left out (it would open the view already open), and its first own row shows the fork's
+   * alternatives: the original view of the message it replaced and the other forks placed there.
    */
-  public get ForkChipMap(): ReadonlyMap<string, readonly ForkChip[]> {
+  public get ForkChipMap(): ReadonlyMap<string, readonly MessageForkChip[]> {
     const summaries = this.ForkSummaries ?? [];
     const view = this.WindowView;
     const avatarMap = this.UserAvatarMap;
     const avatarVersion = this.userAvatarMapVersion;
+    const firstOwnId = this.firstOwnRowIdOf(view);
     const cache = this.forkChipCache;
-    if (cache && cache.Summaries === summaries && cache.View === view && cache.AvatarMap === avatarMap && cache.AvatarVersion === avatarVersion) {
+    if (cache && cache.Summaries === summaries && cache.View === view && cache.FirstOwnID === firstOwnId
+      && cache.AvatarMap === avatarMap && cache.AvatarVersion === avatarVersion) {
       return cache.Map;
     }
-    const shown = view.Kind === 'Fork' ? summaries.filter(s => !UUIDsEqual(s.Branch.ID, view.BranchID)) : summaries;
-    const map = BuildForkChipMap(shown, p => this.forkChipAvatar(p), new Date());
-    this.forkChipCache = { Summaries: summaries, View: view, AvatarMap: avatarMap, AvatarVersion: avatarVersion, Map: map };
+    const map = BuildViewForkChipMap(summaries, view, firstOwnId, p => this.forkChipAvatar(p), new Date(), id => this.forkLabelOf(id));
+    this.forkChipCache = { Summaries: summaries, View: view, FirstOwnID: firstOwnId, AvatarMap: avatarMap, AvatarVersion: avatarVersion, Map: map };
     return map;
+  }
+
+  /** The first own row of a fork view when the loaded window reaches it (see {@link FirstOwnRowID}); null in Main and in a draft. */
+  private firstOwnRowIdOf(view: ConversationOpenView): string | null {
+    if (view.Kind !== 'Fork') {
+      return null;
+    }
+    const split = this.displayState().Split;
+    return FirstOwnRowID(split, split.Inherited.length === 0 && this.HasMoreMessagesAbove);
   }
 
   /** Records that {@link UserAvatarMap} was filled, so the chip map is built again. */

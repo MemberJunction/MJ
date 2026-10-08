@@ -254,6 +254,15 @@ describe('BuildForkSummaries', () => {
         expect(ConversationEngine.BuildForkSummaries([E1], [], [])[0].SourceAuthorName).toBeNull();
     });
 
+    it('gives the branch and Sequence of the placement message: the source row, else the anchor row', () => {
+        expect(byId.get('E1')!.PlacementPosition).toEqual({ BranchID: null, Sequence: 5 });
+        expect(byId.get('R1')!.PlacementPosition).toEqual({ BranchID: null, Sequence: 6 });
+        expect(byId.get('T1')!.PlacementPosition).toEqual({ BranchID: null, Sequence: 2 });
+        expect(byId.get('F1')!.PlacementPosition).toEqual({ BranchID: 'T1', Sequence: 11 });
+        expect(byId.get('EF')!.PlacementPosition).toBeNull();
+        expect(ConversationEngine.BuildForkSummaries([E1], [], ANCHORS)[0].PlacementPosition).toBeNull();
+    });
+
     it('treats a row without Kind as a Fork with the default name', () => {
         expect(byId.get('X1')).toMatchObject({ Kind: 'Fork', DisplayName: 'Fork', MessageCount: 0, PlacementDetailID: 'd-2' });
     });

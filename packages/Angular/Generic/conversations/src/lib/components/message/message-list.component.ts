@@ -44,7 +44,7 @@ import {
     type DateJumpPeriod,
     type DateJumpOutcome
 } from '../../utils/date-jump';
-import { EMPTY_FORK_CHIPS, type ForkChip, type ForkViewLayout, type LatestTurn } from '../../utils/conversation-forks';
+import { EMPTY_FORK_CHIPS, type ForkChipOpenRequest, type ForkViewLayout, type LatestTurn, type MessageForkChip } from '../../utils/conversation-forks';
 
 /** Context handed to the `messageRenderer` slot template per message. */
 interface MessageRendererContext {
@@ -122,14 +122,14 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
 
   /** Fork chips per normalized detail id, from the chat area's fork summaries. A new map is pushed into the items on screen. */
   @Input()
-  public set ForkChipMap(value: ReadonlyMap<string, readonly ForkChip[]>) {
+  public set ForkChipMap(value: ReadonlyMap<string, readonly MessageForkChip[]>) {
     this._forkChipMap = value ?? new Map();
     this.applyForkChips();
   }
-  public get ForkChipMap(): ReadonlyMap<string, readonly ForkChip[]> {
+  public get ForkChipMap(): ReadonlyMap<string, readonly MessageForkChip[]> {
     return this._forkChipMap ?? new Map();
   }
-  private _forkChipMap: ReadonlyMap<string, readonly ForkChip[]> = new Map();
+  private _forkChipMap: ReadonlyMap<string, readonly MessageForkChip[]> = new Map();
 
   /** How a fork view draws its rows; null in Main. A new layout is pushed into the items on screen. */
   @Input()
@@ -559,8 +559,8 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   @Output() public retryMessage = this.RetryMessage;
   /** Forwarded from MessageItemComponent: the user edited a message to save as a new fork. */
   @Output() public EditResendRequested = new EventEmitter<{ Message: MJConversationDetailEntity; NewText: string }>();
-  /** A chip was clicked in one of the items. */
-  @Output() public ForkOpenRequested = new EventEmitter<{ BranchID: string }>();
+  /** A chip was clicked in one of the items: a fork to open, or the view and message of an original chip. */
+  @Output() public ForkOpenRequested = new EventEmitter<ForkChipOpenRequest>();
   /** An item asked to fork the conversation at its message. */
   @Output() public ForkRequested = new EventEmitter<MJConversationDetailEntity>();
   /** Forwarded from MessageItemComponent: "Save and resend" saved a user message; the host reruns its turn. */
@@ -1088,7 +1088,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   }
 
   /** The chips placed under a message. */
-  private chipsFor(detailId: string): readonly ForkChip[] {
+  private chipsFor(detailId: string): readonly MessageForkChip[] {
     return this.ForkChipMap.get(NormalizeUUID(detailId)) ?? EMPTY_FORK_CHIPS;
   }
 
@@ -2050,7 +2050,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     instance.ForkMarkerText = this.markerFor(message.ID);
     instance.InPlaceRole = this.inPlaceRoleFor(message.ID);
     instance.EditResendRequested.subscribe((e) => this.EditResendRequested.emit(e));
-    instance.ForkOpenRequested.subscribe((e: { BranchID: string }) => this.ForkOpenRequested.emit(e));
+    instance.ForkOpenRequested.subscribe((e: ForkChipOpenRequest) => this.ForkOpenRequested.emit(e));
     instance.ForkRequested.subscribe((m: MJConversationDetailEntity) => this.ForkRequested.emit(m));
     instance.ResendInPlaceRequested.subscribe((m: MJConversationDetailEntity) => this.ResendInPlaceRequested.emit(m));
 

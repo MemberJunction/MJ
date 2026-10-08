@@ -1,8 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import type { ForkSummary } from '@memberjunction/core-entities';
 import {
+    BuildForkAlternativeChips,
     BuildForkMarkerText,
     BuildForkChipMap,
+    BuildViewForkChipMap,
+    FirstOwnRowID,
+    ForkChipAriaLabel,
+    ForkChipIcon,
+    ForkChipOpenRequestOf,
     BuildForkComposerHint,
     BuildForkListRows,
     BuildForkViewLayout,
@@ -103,6 +109,101 @@ describe('fork chips', () => {
                 { Kind: 'Agent', ID: 'a1', Label: 'Sage', Initials: 'S', ImageURL: null, IconClass: null },
             ],
         });
+    });
+});
+
+describe('fork alternatives', () => {
+    const NOW = new Date(Date.UTC(2026, 9, 6, 15, 0));
+
+    /** A fork that replaced `source` (placed under it), started from the row before it on `parent`. */
+    function fork(id: string, source: string | null, parent: string | null, over: Partial<ForkSummary> = {}): ForkSummary {
+        return {
+            Branch: { ID: id, ConversationID: 'c1', ParentBranchID: parent, ForkFromSequence: 4, SourceDetailID: source },
+            Kind: 'Fork', DisplayName: `name ${id}`, MessageCount: 1, Participants: [], AuthorUserIDs: [],
+            LastActivityAt: NOW, LastMessagePreview: null, LastMessageAuthorName: null,
+            PlacementDetailID: source ?? 'd-4', PlacementPosition: { BranchID: parent, Sequence: source ? 5 : 4 },
+            AnchorDetailID: 'd-4', AnchorAuthorName: null, AnchorAt: null,
+            StartedByUserID: 'u1', StartedByName: 'Maya Chen', ParentBranchID: parent,
+            ...over,
+        };
+    }
+    const avatar = (p: { Kind: 'User' | 'Agent'; ID: string; Name: string | null }) =>
+        ({ Kind: p.Kind, ID: p.ID, Label: p.Name ?? '', Initials: ForkInitials(p.Name), ImageURL: null, IconClass: null });
+    const label = (id: string) => `label ${id}`;
+    const THREE = [fork('F1', 'd-5', null), fork('F2', 'd-5', null), fork('F3', 'd-5', null)];
+
+    it('gives a fork an original chip for Main and a chip for each other fork of the replaced message, not itself', () => {
+        const chips = BuildForkAlternativeChips('f2', THREE, avatar, NOW, label);
+        expect(chips[0]).toEqual({ Kind: 'Original', BranchID: null, Sequence: 5, DisplayName: 'Main' });
+        expect(chips.slice(1).map(c => c.BranchID)).toEqual(['F1', 'F3']);
+        expect(chips[1]).toMatchObject({ Kind: 'Fork', DisplayName: 'name F1', MessageLabel: '1 message' });
+    });
+
+    it('names the parent fork on the original chip of a nested fork', () => {
+        const nested = [fork('N1', 't-7', 'T1', { PlacementPosition: { BranchID: 'T1', Sequence: 7 } }), fork('N2', 't-7', 'T1')];
+        const chips = BuildForkAlternativeChips('N1', nested, avatar, NOW, label);
+        expect(chips[0]).toEqual({ Kind: 'Original', BranchID: 'T1', Sequence: 7, DisplayName: 'label T1' });
+        expect(chips.slice(1).map(c => c.BranchID)).toEqual(['N2']);
+    });
+
+    it('lists the other Regenerate forks of a replaced answer', () => {
+        const answers = [fork('R1', 'd-6', null, { Kind: 'Regenerate' }), fork('R2', 'd-6', null, { Kind: 'Regenerate' }), fork('E1', 'd-5', null, { Kind: 'Edit' })];
+        const chips = BuildForkAlternativeChips('R2', answers, avatar, NOW, label);
+        expect(chips.map(c => [c.Kind, c.BranchID])).toEqual([['Original', null], ['Regenerate', 'R1']]);
+    });
+
+    it('leaves out forks of the same message with another parent branch', () => {
+        const chips = BuildForkAlternativeChips('F1', [fork('F1', 'd-5', null), fork('G1', 'd-5', 'T9')], avatar, NOW, label);
+        expect(chips.map(c => c.BranchID)).toEqual([null]);
+    });
+
+    it('opens the parent at its latest rows when the replaced message position is not known', () => {
+        const [original] = BuildForkAlternativeChips('F1', [fork('F1', 'd-5', 'T1', { PlacementPosition: null })], avatar, NOW, label);
+        expect(original).toEqual({ Kind: 'Original', BranchID: 'T1', Sequence: null, DisplayName: 'label T1' });
+    });
+
+    it('has no alternatives for a fork that replaced no message, or that is not in the summaries', () => {
+        expect(BuildForkAlternativeChips('A1', [fork('A1', null, null), fork('F1', 'd-5', null)], avatar, NOW, label)).toEqual([]);
+        expect(BuildForkAlternativeChips('Z9', THREE, avatar, NOW, label)).toEqual([]);
+    });
+
+    it('icons, labels and open requests of the chips', () => {
+        const [main] = BuildForkAlternativeChips('F1', THREE, avatar, NOW, label);
+        const [inFork] = BuildForkAlternativeChips('F1', [fork('F1', 'd-5', 'T1')], avatar, NOW, label);
+        const [, sibling] = BuildForkAlternativeChips('F1', THREE, avatar, NOW, label);
+        expect(ForkChipIcon(main)).toBe('fa-solid fa-house');
+        expect(ForkChipIcon(inFork)).toBe('fa-solid fa-code-branch');
+        expect(ForkChipIcon(sibling)).toBe('fa-solid fa-code-branch');
+        expect(ForkChipAriaLabel(main)).toBe('Open the original in Main');
+        expect(ForkChipAriaLabel(inFork)).toBe('Open the original in label T1');
+        expect(ForkChipAriaLabel(sibling)).toBe('Open fork name F2, 1 message');
+        expect(ForkChipOpenRequestOf(main)).toEqual({ BranchID: null, Sequence: 5 });
+        expect(ForkChipOpenRequestOf(sibling)).toEqual({ BranchID: 'F2' });
+    });
+
+    it('puts the alternatives first on the first own message of a fork view, before the chips placed there', () => {
+        const nestedOnFirst = fork('N1', 'f1-a', null, { PlacementDetailID: 'f1-a' });
+        const map = BuildViewForkChipMap([...THREE, nestedOnFirst], { Kind: 'Fork', BranchID: 'F1' }, 'F1-A', avatar, NOW, label);
+        expect(map.get('f1-a')!.map(c => [c.Kind, c.BranchID])).toEqual([['Original', null], ['Fork', 'F2'], ['Fork', 'F3'], ['Fork', 'N1']]);
+        expect(map.get('d-5')!.map(c => c.BranchID)).toEqual(['F2', 'F3']);
+    });
+
+    it('shows no alternatives in Main, in a draft, or before the first own message is loaded', () => {
+        const main = BuildViewForkChipMap(THREE, MAIN_OPEN_VIEW, 'x', avatar, NOW, label);
+        expect([...main.keys()]).toEqual(['d-5']);
+        expect(main.get('d-5')!.map(c => c.BranchID)).toEqual(['F1', 'F2', 'F3']);
+        const draft = BuildViewForkChipMap(THREE, { Kind: 'DraftFork', ParentBranchID: null, ForkFromSequence: 4, AnchorDetailID: 'd-4', SourceDetailID: 'd-5' }, 'x', avatar, NOW, label);
+        expect([...draft.keys()]).toEqual(['d-5']);
+        const notLoaded = BuildViewForkChipMap(THREE, { Kind: 'Fork', BranchID: 'F1' }, null, avatar, NOW, label);
+        expect([...notLoaded.keys()]).toEqual(['d-5']);
+    });
+
+    it('finds the first own row only when the loaded rows reach it', () => {
+        const own = [{ ID: 'b', Sequence: 12 }, { ID: 'a', Sequence: 10 }];
+        expect(FirstOwnRowID({ Inherited: [{ ID: 'i', Sequence: 4 }], Own: own }, true)).toBe('a');
+        expect(FirstOwnRowID({ Inherited: [], Own: own }, false)).toBe('a');
+        expect(FirstOwnRowID({ Inherited: [], Own: own }, true)).toBeNull();
+        expect(FirstOwnRowID({ Inherited: [{ ID: 'i', Sequence: 4 }], Own: [] }, false)).toBeNull();
     });
 });
 

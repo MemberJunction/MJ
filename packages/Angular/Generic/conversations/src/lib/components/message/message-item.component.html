@@ -217,30 +217,40 @@
 
     @if (ForkChips.length > 0 && !isEditing) {
       <div class="message-fork-chips">
-        @for (chip of ForkChips; track chip.BranchID) {
-          <button mjButton Variant="flat" Size="sm" class="fork-chip" [attr.data-kind]="chip.Kind"
-                  (click)="OnForkChipClick(chip, $event)"
-                  [attr.aria-label]="'Open fork ' + chip.DisplayName + ', ' + chip.MessageLabel">
-            <i [class]="'fork-chip-icon ' + ChipIcon(chip)" aria-hidden="true"></i>
-            @if (chip.Avatars.length > 0) {
-              <span class="fork-chip-avatars" aria-hidden="true">
-                @for (avatar of chip.Avatars; track avatar.Kind + avatar.ID) {
-                  <span class="fork-chip-avatar" [title]="avatar.Label">
-                    @if (avatar.ImageURL) {
-                      <img [src]="avatar.ImageURL" alt="" />
-                    } @else if (avatar.IconClass) {
-                      <i [class]="avatar.IconClass"></i>
-                    } @else {
-                      {{ avatar.Initials }}
-                    }
-                  </span>
-                }
-              </span>
-            }
-            <span class="fork-chip-messages">{{ chip.MessageLabel }}</span>
-            <span class="fork-chip-name">{{ chip.DisplayName }}</span>
-            <span class="fork-chip-time">· {{ chip.ActivityLabel }}</span>
-          </button>
+        @for (chip of ForkChips; track chip.Kind + (chip.BranchID ?? '')) {
+          @if (chip.Kind === 'Original') {
+            <button mjButton Variant="flat" Size="sm" class="fork-chip" data-kind="Original"
+                    (click)="OnForkChipClick(chip, $event)"
+                    [attr.aria-label]="ChipAriaLabel(chip)">
+              <i [class]="'fork-chip-icon ' + ChipIcon(chip)" aria-hidden="true"></i>
+              <span class="fork-chip-name">{{ chip.DisplayName }}</span>
+              <span class="fork-chip-time">· original</span>
+            </button>
+          } @else {
+            <button mjButton Variant="flat" Size="sm" class="fork-chip" [attr.data-kind]="chip.Kind"
+                    (click)="OnForkChipClick(chip, $event)"
+                    [attr.aria-label]="ChipAriaLabel(chip)">
+              <i [class]="'fork-chip-icon ' + ChipIcon(chip)" aria-hidden="true"></i>
+              @if (chip.Avatars.length > 0) {
+                <span class="fork-chip-avatars" aria-hidden="true">
+                  @for (avatar of chip.Avatars; track avatar.Kind + avatar.ID) {
+                    <span class="fork-chip-avatar" [title]="avatar.Label">
+                      @if (avatar.ImageURL) {
+                        <img [src]="avatar.ImageURL" alt="" />
+                      } @else if (avatar.IconClass) {
+                        <i [class]="avatar.IconClass"></i>
+                      } @else {
+                        {{ avatar.Initials }}
+                      }
+                    </span>
+                  }
+                </span>
+              }
+              <span class="fork-chip-messages">{{ chip.MessageLabel }}</span>
+              <span class="fork-chip-name">{{ chip.DisplayName }}</span>
+              <span class="fork-chip-time">· {{ chip.ActivityLabel }}</span>
+            </button>
+          }
         }
       </div>
     }
