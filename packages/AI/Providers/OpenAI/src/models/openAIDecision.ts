@@ -135,7 +135,7 @@ export class OpenAIDecision extends BaseDecision {
         const entries = Object.entries(params.Questions);
         for (let i = 0; i < entries.length; i++) {
             const [key, question] = entries[i];
-            const mapped = this.mapAnswer(key, question, FindAnswer(answers, key, i));
+            const mapped = this.mapAnswer(key, question, findAnswer(answers, key, i));
             if ('errorMessage' in mapped) {
                 return this.FailResult(result, mapped.errorMessage);
             }
@@ -152,7 +152,7 @@ export class OpenAIDecision extends BaseDecision {
     /** The request body: `{ model, input, questions }`, the questions in `params.Questions` order. */
     protected BuildRequestBody(model: string, params: DecisionParams): SystemOneWireObject {
         const input = typeof params.State === 'string' ? params.State : JSON.stringify(params.State);
-        const questions = Object.entries(params.Questions).map(([key, question]) => BuildWireQuestion(key, question));
+        const questions = Object.entries(params.Questions).map(([key, question]) => buildWireQuestion(key, question));
         return { model, input, questions };
     }
 
@@ -177,7 +177,7 @@ export class OpenAIDecision extends BaseDecision {
      * @param bodyText The response body as text, possibly empty.
      */
     protected DescribeHTTPError(status: number, bodyText: string): string {
-        const message = OpenAIErrorMessage(bodyText) || bodyText.slice(0, ERROR_SNIPPET_LENGTH);
+        const message = openAIErrorMessage(bodyText) || bodyText.slice(0, ERROR_SNIPPET_LENGTH);
         return this.redact(`${OpenAIDecision.SERVICE_NAME} returned HTTP ${status}${message ? `: ${message}` : ''}`);
     }
 
@@ -233,7 +233,7 @@ export class OpenAIDecision extends BaseDecision {
         if (IsSystemOneWireObject(usage)) {
             // The API bills input tokens only, with no cache charge, so every input token is a prompt
             // token at the input price. The response carries no cost: the run is priced from the cost row.
-            result.Usage = new ModelUsage(FiniteOr(usage['input_tokens'], 0), FiniteOr(usage['output_tokens'], 0));
+            result.Usage = new ModelUsage(finiteOr(usage['input_tokens'], 0), finiteOr(usage['output_tokens'], 0));
         }
     }
 
@@ -252,11 +252,11 @@ export class OpenAIDecision extends BaseDecision {
         }
         switch (question.Kind) {
             case 'Likelihood':
-                return MapPredicate(key, answer);
+                return mapPredicate(key, answer);
             case 'Choice':
-                return MapChoice(key, question, answer);
+                return mapChoice(key, question, answer);
             case 'Score':
-                return MapScore(key, question, answer);
+                return mapScore(key, question, answer);
         }
     }
 
@@ -277,7 +277,7 @@ export function ToOpenAIDecisionsURL(url: string): string {
 }
 
 /** One MJ question on the wire, named by its key. */
-function BuildWireQuestion(key: string, question: DecisionQuestion): SystemOneWireObject {
+function buildWireQuestion(key: string, question: DecisionQuestion): SystemOneWireObject {
     const wire: SystemOneWireObject = { type: WIRE_TYPES[question.Kind], name: key, instructions: question.Instructions };
     switch (question.Kind) {
         case 'Likelihood':
@@ -293,7 +293,7 @@ function BuildWireQuestion(key: string, question: DecisionQuestion): SystemOneWi
  * The answer for the question at `index` named `key`: the answer carrying that name, else the answer at
  * the same position when it carries no name. An answer named for another question is never used.
  */
-function FindAnswer(answers: unknown[], key: string, index: number): unknown {
+function findAnswer(answers: unknown[], key: string, index: number): unknown {
     const named = answers.find(a => IsSystemOneWireObject(a) && a['name'] === key);
     if (named !== undefined) {
         return named;
@@ -303,23 +303,23 @@ function FindAnswer(answers: unknown[], key: string, index: number): unknown {
     return name === undefined || name === null || name === '' ? positional : undefined;
 }
 
-function MapPredicate(key: string, answer: SystemOneWireObject): MapAnswerResult {
+function mapPredicate(key: string, answer: SystemOneWireObject): MapAnswerResult {
     const probability = answer['probability'];
     if (typeof probability !== 'number' || !Number.isFinite(probability)) {
         return { success: false, errorMessage: `Question '${key}': the predicate probability is not a finite number` };
     }
-    return { success: true, answer: { Kind: 'Likelihood', Probability: Clamp(probability, 0, 1) } };
+    return { success: true, answer: { Kind: 'Likelihood', Probability: clamp(probability, 0, 1) } };
 }
 
 /** A Choice: the chosen value must be one of the options; its probabilities arrive as `[{ value, probability }]`. */
-function MapChoice(key: string, question: ChoiceQuestion, answer: SystemOneWireObject): MapAnswerResult {
+function mapChoice(key: string, question: ChoiceQuestion, answer: SystemOneWireObject): MapAnswerResult {
     const values = question.Options.map(o => o.Value);
     const choice = answer['choice'];
     if (typeof choice !== 'string' || !values.includes(choice)) {
         return { success: false, errorMessage: `Question '${key}': the choice '${String(choice)}' is not one of the options (${values.join(', ')})` };
     }
     // Choice values are typed on the wire: only a string value matches an MJ option.
-    const raw = ProbabilitiesBy(answer, 'value');
+    const raw = probabilitiesBy(answer, 'value');
     const probabilities = NormalizeDecisionProbabilities(values.map(value => [value, raw.get(value)?.Probability]));
     if (!probabilities) {
         return { success: false, errorMessage: `Question '${key}': the Choice probabilities sum to 0` };
@@ -331,20 +331,20 @@ function MapChoice(key: string, question: ChoiceQuestion, answer: SystemOneWireO
  * A Score: its probabilities arrive as `[{ label, value, probability }]` and are keyed by level label. The
  * `score` is on the scale of the levels' `value`s, so it is mapped onto MJ's 0-based level positions.
  */
-function MapScore(key: string, question: ScoreQuestion, answer: SystemOneWireObject): MapAnswerResult {
+function mapScore(key: string, question: ScoreQuestion, answer: SystemOneWireObject): MapAnswerResult {
     const score = answer['score'];
     if (typeof score !== 'number' || !Number.isFinite(score)) {
         return { success: false, errorMessage: `Question '${key}': the Score value is not a finite number` };
     }
-    const raw = ProbabilitiesBy(answer, 'label');
+    const raw = probabilitiesBy(answer, 'label');
     const probabilities = NormalizeDecisionProbabilities(question.Levels.map(level => [level, raw.get(level)?.Probability]));
     if (!probabilities) {
         return { success: false, errorMessage: `Question '${key}': the Score probabilities sum to 0` };
     }
-    const position = ScoreToLevelPosition(score, question.Levels.map(level => raw.get(level)?.Value), probabilities, question.Levels);
+    const position = scoreToLevelPosition(score, question.Levels.map(level => raw.get(level)?.Value), probabilities, question.Levels);
     return {
         success: true,
-        answer: { Kind: 'Score', Value: Clamp(position, 0, question.Levels.length - 1), Probabilities: probabilities, Confidence: ReadDecisionConfidence(answer, probabilities) },
+        answer: { Kind: 'Score', Value: clamp(position, 0, question.Levels.length - 1), Probabilities: probabilities, Confidence: ReadDecisionConfidence(answer, probabilities) },
     };
 }
 
@@ -358,7 +358,7 @@ interface WireProbability {
  * An answer's `probabilities` array, keyed by the string in `keyField` (`value` for a Choice, `label` for
  * a Score). Entries whose key is not a string are skipped; the first entry for a key wins.
  */
-function ProbabilitiesBy(answer: SystemOneWireObject, keyField: 'value' | 'label'): Map<string, WireProbability> {
+function probabilitiesBy(answer: SystemOneWireObject, keyField: 'value' | 'label'): Map<string, WireProbability> {
     const result = new Map<string, WireProbability>();
     const entries = answer['probabilities'];
     if (!Array.isArray(entries)) {
@@ -378,7 +378,7 @@ function ProbabilitiesBy(answer: SystemOneWireObject, keyField: 'value' | 'label
  * values are missing or not strictly increasing in level order, the position is the expected level under
  * the normalised distribution instead.
  */
-function ScoreToLevelPosition(score: number, levelValues: unknown[], probabilities: Record<string, number>, levels: string[]): number {
+function scoreToLevelPosition(score: number, levelValues: unknown[], probabilities: Record<string, number>, levels: string[]): number {
     const values = levelValues.filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
     const increasing = values.length === levels.length && values.every((v, i) => i === 0 || v > values[i - 1]);
     if (!increasing) {
@@ -396,7 +396,7 @@ function ScoreToLevelPosition(score: number, levelValues: unknown[], probabiliti
 }
 
 /** OpenAI's `error.message` from an error body, or an empty string. */
-function OpenAIErrorMessage(bodyText: string): string {
+function openAIErrorMessage(bodyText: string): string {
     const body = SafeJSONParse<unknown>(bodyText);
     if (!IsSystemOneWireObject(body)) {
         return '';
@@ -408,10 +408,10 @@ function OpenAIErrorMessage(bodyText: string): string {
     return typeof error === 'string' ? error.trim() : '';
 }
 
-function Clamp(value: number, min: number, max: number): number {
+function clamp(value: number, min: number, max: number): number {
     return Math.max(min, Math.min(max, value));
 }
 
-function FiniteOr(value: unknown, fallback: number): number {
+function finiteOr(value: unknown, fallback: number): number {
     return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 }
