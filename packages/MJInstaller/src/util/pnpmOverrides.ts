@@ -1,18 +1,31 @@
 /**
- * pnpm `overrides` that keep a distribution install on ONE copy of Angular.
+ * pnpm `overrides` that keep a distribution install on ONE copy of Angular and ONE copy of
+ * each `@memberjunction/*` package.
  *
- * MJ's Angular packages declare Angular only as a peer range, and some packages in
+ * **Angular.** MJ's Angular packages declare Angular only as a peer range, and some packages in
  * Explorer's dependency graph declare no Angular dependency at all. With nothing
  * pinned at the workspace root, pnpm 10 (`auto-install-peers`) fills those peers
  * with the NEWEST Angular release, while `apps/MJExplorer` pins an exact one. Two
  * copies of `@angular/core` then load and Explorer renders a blank page (NG0203 on
- * `MSAL_INSTANCE`).
+ * `MSAL_INSTANCE`). Pinning the Angular family — plus `rxjs` and `zone.js`, whose second copy
+ * breaks the same way — to Explorer's own versions collapses the graph to one copy. Those pins
+ * are derived from `apps/MJExplorer/package.json` at install time, so they move with Explorer.
  *
- * pnpm applies `overrides` to peer ranges as well as to dependency specs, so pinning
- * the Angular family — plus `rxjs` and `zone.js`, whose second copy breaks the same
- * way — to Explorer's own versions collapses the graph to one copy. The pins are
- * derived from `apps/MJExplorer/package.json` at install time, so they move with
- * Explorer and cannot drift.
+ * **MemberJunction.** Open Apps declare `@memberjunction/*` with ranges written against the MJ
+ * release they were built on (`~6.1.5`, `^6.1.0-edge.5`). A host on another release — a
+ * `6.2.0-edge.N` prerelease satisfies neither — gets a parallel 6.1.x tree: every MJ package
+ * pins its siblings exactly, so one out-of-range `@memberjunction/ng-hierarchy-tree` drags in its
+ * own `@memberjunction/core` and `global`. Two copies of those split MJ's class-factory registry,
+ * and entities and resolvers silently stop registering. The host's version is authoritative (the
+ * Open App engine checks each app's `mjVersionRange` before installing it), so every
+ * `@memberjunction/*` package the install resolves at that version is pinned to it. pnpm has no
+ * glob override keys, so the names come from the install's own lockfile ({@link
+ * MemberJunctionPins}). Each pin is written as `$@memberjunction/cli` — a reference to the root
+ * manifest's `@memberjunction/cli` dependency — rather than a literal version, so `mj bump`
+ * moving that dependency moves every pin with it instead of silently holding the upgrade back.
+ *
+ * pnpm applies `overrides` to peer ranges as well as to dependency specs, which is what makes
+ * both families work.
  *
  * The workspace file is edited as text: the installer ships no YAML parser. A
  * block-style top-level `overrides:` mapping is merged into line by line, so other
@@ -55,17 +68,41 @@ const ENTRY_PATTERN = /^([ \t]+)('(?:[^']|'')*'|"[^"]*"|[^\s#'"][^:#]*?)[ \t]*:[
  * Written only when the installer creates the block.
  */
 const OVERRIDES_COMMENT: readonly string[] = [
-  '# Pins the Angular family (plus rxjs and zone.js) to the versions',
-  '# apps/MJExplorer/package.json declares. Without it, pnpm fills peer-only Angular',
-  '# ranges with the newest release and Explorer loads two copies of Angular',
-  '# (blank page, NG0203). mj install refreshes these entries from Explorer on every run.',
+  '# Keeps one copy of Angular and of each @memberjunction/* package. mj install refreshes',
+  '# these entries on every run.',
+  '# - The Angular family (plus rxjs and zone.js) at the versions apps/MJExplorer/package.json',
+  '#   declares. Without them pnpm fills peer-only Angular ranges with the newest release and',
+  '#   Explorer loads two copies of Angular (blank page, NG0203).',
+  "# - Every @memberjunction/* package at the root @memberjunction/cli version ('$@memberjunction/cli').",
+  '#   Without them an Open App built on an older MJ release pulls in a second copy of',
+  "#   @memberjunction/core and MJ's class registry splits. Upgrade MJ with 'mj bump -r' so the",
+  '#   root @memberjunction/cli moves with everything else.',
 ];
+
+/** Scope of the MemberJunction packages {@link MemberJunctionPins} pins. */
+const MEMBERJUNCTION_SCOPE = '@memberjunction/';
+
+/** The root dependency every MemberJunction pin references. */
+export const MEMBERJUNCTION_PIN_SOURCE = '@memberjunction/cli';
+
+/** Override value for a MemberJunction pin: pnpm's reference to the root `@memberjunction/cli` spec. */
+export const MEMBERJUNCTION_PIN_VALUE = `$${MEMBERJUNCTION_PIN_SOURCE}`;
+
+/** An exact semver version (prerelease and build metadata allowed) — never a range or a dist-tag. */
+const EXACT_VERSION_PATTERN = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
+
+/**
+ * One package entry of a pnpm lockfile's top-level `packages:` section: two-space indent, an
+ * optionally quoted key, an optional leading `/` (lockfile v6), then `name@version`. Group 1 is
+ * the name, group 2 the version — which stops at a `(` peer suffix (lockfile v9 snapshots).
+ */
+const LOCKFILE_PACKAGE_KEY_PATTERN = /^  ['"]?\/?((?:@[^@\s'"/]+\/)?[^@\s'"(/]+)@(\d[0-9A-Za-z.+-]*)/;
 
 /** One override: a package and the version spec every resolution of it is forced to. */
 export interface PnpmOverridePin {
   /** Package name, e.g. `@angular/core`. */
   Name: string;
-  /** Version spec exactly as Explorer declares it, e.g. `21.2.22`. */
+  /** Override value, e.g. `21.2.22` (as Explorer declares it) or `$@memberjunction/cli`. */
   Version: string;
 }
 
@@ -75,7 +112,7 @@ export interface PnpmOverrideChange {
   Name: string;
   /** Version the workspace file held before the merge. */
   Previous: string;
-  /** Version Explorer declares, now written in its place. */
+  /** Pinned version, now written in its place. */
   Current: string;
 }
 
@@ -94,7 +131,7 @@ export interface PnpmOverridesMergeResult {
   Yaml: string;
   /** What the merge did. */
   Outcome: PnpmOverridesOutcome;
-  /** Existing entries whose version was replaced by Explorer's (only ever non-empty when `merged`). */
+  /** Existing entries whose version the merge replaced (only ever non-empty when `merged`). */
   Changed: PnpmOverrideChange[];
 }
 
@@ -154,17 +191,78 @@ export function ExplorerAngularPins(
 }
 
 /**
+ * True for an exact version such as `6.2.0` or `6.2.0-edge.3`; false for a range (`^6.2.0`), a
+ * dist-tag (`latest`) or a protocol (`workspace:*`). Only an exact host version can anchor the
+ * MemberJunction pins.
+ */
+export function IsExactVersion(spec: string | undefined): spec is string {
+  return typeof spec === 'string' && EXACT_VERSION_PATTERN.test(spec.trim());
+}
+
+/**
+ * The versions a pnpm lockfile resolves for each package of its top-level `packages:` section.
+ * Importer specifiers, `overrides`, and `snapshots` are not read, so a name maps only to versions
+ * that are actually installed.
+ *
+ * @param lockfileYaml - Content of `pnpm-lock.yaml` (lockfile v6 or v9).
+ * @returns Package name → the distinct versions resolved for it.
+ */
+export function LockfilePackageVersions(lockfileYaml: string): Map<string, Set<string>> {
+  const versions = new Map<string, Set<string>>();
+  let inPackages = false;
+  for (const line of lockfileYaml.split(/\r?\n/)) {
+    if (isTopLevelKeyLine(line)) {
+      inPackages = /^packages:\s*$/.test(line);
+      continue;
+    }
+    const match = inPackages ? LOCKFILE_PACKAGE_KEY_PATTERN.exec(line) : null;
+    if (match) {
+      const set = versions.get(match[1]) ?? new Set<string>();
+      set.add(match[2]);
+      versions.set(match[1], set);
+    }
+  }
+  return versions;
+}
+
+/**
+ * Pins for every `@memberjunction/*` package the lockfile resolves at `hostVersion`, each written
+ * as {@link MEMBERJUNCTION_PIN_VALUE}, sorted by name.
+ *
+ * Only packages resolved at the host version are pinned: they are the ones published in MJ's
+ * lockstep release, so they exist at whatever version the root `@memberjunction/cli` names.
+ * Separately versioned packages in the scope (the `@memberjunction/skyway-*` migration engine, at
+ * `0.6.x`) are left alone — pinning them to the MJ version would ask for a release that does not
+ * exist.
+ *
+ * @param lockfileYaml - Content of the install's `pnpm-lock.yaml`.
+ * @param hostVersion - The exact MJ version the install runs (the root `@memberjunction/cli` spec).
+ * @returns One pin per MemberJunction package; empty when `hostVersion` is not an exact version.
+ */
+export function MemberJunctionPins(lockfileYaml: string, hostVersion: string): PnpmOverridePin[] {
+  if (!IsExactVersion(hostVersion)) {
+    return [];
+  }
+  const host = hostVersion.trim();
+  return [...LockfilePackageVersions(lockfileYaml)]
+    .filter(([name, resolved]) => name.startsWith(MEMBERJUNCTION_SCOPE) && resolved.has(host))
+    .map(([name]) => name)
+    .sort()
+    .map((name) => ({ Name: name, Version: MEMBERJUNCTION_PIN_VALUE }));
+}
+
+/**
  * Apply `pins` to the `overrides` of a `pnpm-workspace.yaml`.
  *
  * Adds a top-level `overrides:` block when the file has none. When it has a
  * block mapping, missing pins are appended to it and entries whose version
  * differs are rewritten to the pinned version — every other line, including
- * unrelated overrides and comments, is kept as it was. Explorer's versions win a
- * conflict: they are what the install actually runs, and a stale pin left by an
- * earlier install would hold every Angular package back after an upgrade.
+ * unrelated overrides and comments, is kept as it was. The pins win a conflict:
+ * they are what the install actually runs, and a stale pin left by an earlier
+ * install would hold every Angular package back after an upgrade.
  *
  * @param workspaceYaml - Current content of `pnpm-workspace.yaml`.
- * @param pins - Pins to apply, typically from {@link ExplorerAngularPins}.
+ * @param pins - Pins to apply, from {@link ExplorerAngularPins} and/or {@link MemberJunctionPins}.
  * @returns The new content and what changed.
  */
 export function MergePnpmOverrides(workspaceYaml: string, pins: readonly PnpmOverridePin[]): PnpmOverridesMergeResult {

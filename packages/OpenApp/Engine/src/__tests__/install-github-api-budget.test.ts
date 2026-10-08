@@ -32,6 +32,7 @@ vi.mock('../install/package-manager.js', () => ({
     RemoveAppPackages: vi.fn(),
     RunPackageInstall: vi.fn(),
     BumpPrefixedDependencies: vi.fn(),
+    FindDuplicateMemberJunctionPackages: vi.fn(() => []),
 }));
 vi.mock('../install/config-manager.js', () => ({
     AddServerDynamicPackages: vi.fn(),

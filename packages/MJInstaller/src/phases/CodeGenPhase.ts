@@ -8,13 +8,21 @@
  * are current.
  *
  * **Artifact verification** is two-tier:
- * - `mj_generatedentities` in `node_modules/` — **critical** (blocks install if missing).
- * - `packages/GeneratedEntities` — **secondary** (warns if missing, does not block).
+ * - **Critical** (blocks install if missing): `mj_generatedentities` resolvable from MJAPI —
+ *   looked up the way Node resolves MJAPI's import, from MJAPI's own `node_modules` up to the
+ *   install root — and the `entity_subclasses.ts` barrel CodeGen writes into it.
+ * - **Secondary** (warns if missing): `packages/GeneratedEntities`.
  *
  * **Retry strategy**: If codegen fails on the first attempt (common when AFTER
- * commands leave stale `dist/` from a partial build), the phase runs a full
- * workspace build (`<pm> run build`) to restore consistency, then retries codegen once. Timeouts
- * are not retried (they indicate deeper connectivity or performance issues).
+ * commands leave stale `dist/` from a partial build), the phase rebuilds and retries
+ * codegen once. A distribution install rebuilds only the two generated packages — its
+ * CLI and every `@memberjunction/*` package come pre-built from npm, so nothing else
+ * can be stale; a monorepo install runs the full workspace build (`<pm> run build`),
+ * because there the CLI that runs codegen is itself built from the workspace.
+ * Two failures are not retried: timeouts (they indicate deeper connectivity or
+ * performance issues), and a `mj_generatedentities` package MJAPI cannot resolve —
+ * the package manager creates that link at install time, so no build or codegen
+ * re-run can produce it.
  *
  * **Post-codegen pipeline** (4 steps after successful codegen):
  * 1. Force-rebuild codegen output packages (`.d.ts` exports must reflect new classes).
@@ -77,6 +85,33 @@ export interface CodeGenResult {
   ArtifactsVerified: boolean;
   /** Whether a full rebuild + retry was needed to produce artifacts. */
   RetryUsed: boolean;
+}
+
+/** Outcome of one codegen attempt (codegen run + artifact verification). */
+interface CodeGenAttemptResult {
+  /** Codegen exited 0 and the critical artifacts exist. */
+  Success: boolean;
+  /** The secondary artifact exists too. */
+  AllArtifactsVerified: boolean;
+  /** Codegen's AFTER commands reported a failure. */
+  AfterCommandsFailed: boolean;
+  /** Why the attempt failed (empty on success). */
+  FailureReason: string;
+  /**
+   * Whether a rebuild + second attempt can fix the failure. False when MJAPI cannot
+   * resolve `mj_generatedentities`: that link is made by the package manager's install,
+   * so neither a build nor another codegen run can create it.
+   */
+  Retryable: boolean;
+}
+
+/** Result of the critical + secondary artifact checks. */
+interface ArtifactVerification {
+  CriticalPassed: boolean;
+  AllPassed: boolean;
+  MissingCritical: string[];
+  /** MJAPI resolves `mj_generatedentities` (from {@link CodeGenPhase} `findGeneratedEntitiesPackage`). */
+  PackageResolvable: boolean;
 }
 
 /**
@@ -148,6 +183,14 @@ export class CodeGenPhase {
     return !(await this.fileSystem.DirectoryExists(monorepoMarker));
   }
 
+  /** The package MJAPI imports CodeGen's entity subclasses from. */
+  private static readonly GENERATED_ENTITIES_PACKAGE = 'mj_generatedentities';
+
+  /** Where MJAPI lives: `apps/MJAPI` in a distribution, `packages/MJAPI` in the monorepo. */
+  private static mjapiRelativeDir(isDistribution: boolean): string {
+    return isDistribution ? path.join('apps', 'MJAPI') : path.join('packages', 'MJAPI');
+  }
+
   /**
    * Execute the codegen phase: run `mj codegen`, verify artifacts, retry if needed,
    * then run the post-codegen pipeline (manifest regen + known-issue patches).
@@ -155,16 +198,18 @@ export class CodeGenPhase {
    * @param context - Codegen input with directory, emitter, and fast-mode flag.
    * @returns Codegen result with success status, artifact verification, and retry flag.
    * @throws {InstallerError} With code `CODEGEN_TIMEOUT` if codegen exceeds 15 minutes.
-   * @throws {InstallerError} With code `CODEGEN_FAILED` if codegen fails after rebuild + retry.
+   * @throws {InstallerError} With code `CODEGEN_FAILED` if codegen fails after rebuild + retry,
+   *   or at once when MJAPI cannot resolve `mj_generatedentities` (a retry cannot create that link).
    */
   async Run(context: CodeGenContext): Promise<CodeGenResult> {
     const { Emitter: emitter } = context;
 
     const versionTag = context.VersionTag;
     const pm = new PackageManagerCommands(context.PackageManager);
+    const isDistribution = await this.isDistributionLayout(context.Dir);
 
     // --- First attempt ---
-    const firstResult = await this.attemptCodeGen(context.Dir, emitter, pm, versionTag);
+    const firstResult = await this.attemptCodeGen(context.Dir, emitter, pm, isDistribution, versionTag);
 
     if (firstResult.Success) {
       // Codegen succeeded — regenerate class registration manifests and rebuild.
@@ -176,20 +221,29 @@ export class CodeGenPhase {
       return { Success: true, ArtifactsVerified: firstResult.AllArtifactsVerified, RetryUsed: false };
     }
 
-    // --- First attempt failed (codegen crash OR missing critical artifacts) ---
+    if (!firstResult.Retryable) {
+      throw new InstallerError(
+        'codegen',
+        'CODEGEN_FAILED',
+        `Code generation failed: ${firstResult.FailureReason}`,
+        `Run "${pm.Name} install" at the install root — it links mj_generatedentities into ${path.join(CodeGenPhase.mjapiRelativeDir(isDistribution), 'node_modules')} — then re-run "mj codegen".`
+      );
+    }
+
+    // --- First attempt failed (codegen crash OR missing barrel) ---
     // Common cause: a previous codegen run's AFTER commands failed, leaving
     // dist/ directories with stale compiled .js that reference generated .ts
-    // files which were never compiled. A full rebuild restores consistency.
+    // files which were never compiled. Rebuilding restores consistency.
     emitter.Emit('warn', {
       Type: 'warn',
       Phase: 'codegen',
-      Message: `First codegen attempt failed: ${firstResult.FailureReason}. Rebuilding packages before retry...`,
+      Message: `First codegen attempt failed: ${firstResult.FailureReason}. Rebuilding ${isDistribution ? 'the generated packages' : 'packages'} before retry...`,
     });
 
-    await this.rebuildPackages(context.Dir, pm, emitter);
+    await this.rebuildBeforeRetry(context.Dir, pm, emitter, isDistribution);
 
     // --- Second attempt (throws on failure — no more retries) ---
-    const secondResult = await this.attemptCodeGen(context.Dir, emitter, pm, versionTag);
+    const secondResult = await this.attemptCodeGen(context.Dir, emitter, pm, isDistribution, versionTag);
 
     if (secondResult.Success) {
       emitter.Emit('log', {
@@ -219,8 +273,9 @@ export class CodeGenPhase {
     dir: string,
     emitter: InstallerEventEmitter,
     pm: PackageManagerCommands,
+    isDistribution: boolean,
     versionTag?: string
-  ): Promise<{ Success: boolean; AllArtifactsVerified: boolean; AfterCommandsFailed: boolean; FailureReason: string }> {
+  ): Promise<CodeGenAttemptResult> {
     emitter.Emit('step:progress', {
       Type: 'step:progress',
       Phase: 'codegen',
@@ -230,7 +285,7 @@ export class CodeGenPhase {
     const codegenResult = await this.runCodeGen(dir, pm, emitter, versionTag);
 
     if (!codegenResult.Success) {
-      return { Success: false, AllArtifactsVerified: false, AfterCommandsFailed: false, FailureReason: codegenResult.ErrorSummary };
+      return { Success: false, AllArtifactsVerified: false, AfterCommandsFailed: false, FailureReason: codegenResult.ErrorSummary, Retryable: true };
     }
 
     // Codegen exited 0 — verify artifacts
@@ -240,7 +295,7 @@ export class CodeGenPhase {
       Message: 'Verifying generated artifacts...',
     });
 
-    const artifacts = await this.verifyArtifacts(dir, emitter);
+    const artifacts = await this.verifyArtifacts(dir, emitter, isDistribution);
 
     if (artifacts.CriticalPassed) {
       emitter.Emit('log', {
@@ -253,6 +308,7 @@ export class CodeGenPhase {
         AllArtifactsVerified: artifacts.AllPassed,
         AfterCommandsFailed: codegenResult.AfterCommandsFailed,
         FailureReason: '',
+        Retryable: true,
       };
     }
 
@@ -261,6 +317,7 @@ export class CodeGenPhase {
       AllArtifactsVerified: false,
       AfterCommandsFailed: codegenResult.AfterCommandsFailed,
       FailureReason: `critical artifact(s) not found after codegen: ${artifacts.MissingCritical.join(', ')}`,
+      Retryable: artifacts.PackageResolvable,
     };
   }
 
@@ -425,64 +482,29 @@ export class CodeGenPhase {
    * Verify that codegen produced the expected artifacts.
    *
    * Two-tier check:
-   * - **Critical**: `mj_generatedentities` must be resolvable by MJAPI (it can't start without it): the
-   *   repo-root `node_modules` under npm hoisting, or `apps/MJAPI/node_modules` under pnpm, which links
-   *   workspace packages into each dependent and never populates the root (MemberJunction/MJ#4599, #4707).
+   * - **Critical**: MJAPI can't start without either of these.
+   *   - `mj_generatedentities` resolvable from MJAPI — see {@link findGeneratedEntitiesPackage}.
+   *   - The `entity_subclasses.ts` barrel CodeGen writes: the package's `index.ts` re-exports
+   *     `./generated/entity_subclasses.js` unconditionally, so a run that prints "complete" without
+   *     writing that file leaves MJAPI unable to start (MemberJunction/MJ#4477).
    * - **Secondary**: `packages/GeneratedEntities` is expected but absence is only a warning.
    *
    * @param dir - Repo root directory.
    * @param emitter - Event emitter for diagnostic logging.
-   * @returns Object indicating whether critical and all artifacts passed verification.
+   * @param isDistribution - Distribution layout (`apps/MJAPI`) rather than the monorepo (`packages/MJAPI`).
+   * @returns Which artifacts passed, and whether MJAPI resolves the package at all.
    */
-  private async verifyArtifacts(
-    dir: string,
-    emitter: InstallerEventEmitter
-  ): Promise<{ CriticalPassed: boolean; AllPassed: boolean; MissingCritical: string[] }> {
-    // Critical: mj_generatedentities must exist in node_modules for the app to run, AND the
-    // barrel CodeGen writes into it must exist. The package's index.ts re-exports
-    // `./generated/entity_subclasses.js` unconditionally, so a run that prints "complete"
-    // without writing that file leaves MJAPI unable to start (MemberJunction/MJ#4477).
-    // Secondary: packages/GeneratedEntities is expected but its absence is a warning, not a blocker.
-    // npm hoists workspace packages to the repo root; pnpm (the installer default) links them into each
-    // dependent's own node_modules and never creates the root entry (MemberJunction/MJ#4599, #4707).
-    // Same two locations resolveCli() already checks for the CLI.
-    const criticalCandidates = [
-      path.join(dir, 'node_modules', 'mj_generatedentities'),
-      path.join(dir, 'apps', 'MJAPI', 'node_modules', 'mj_generatedentities'),
-    ];
+  private async verifyArtifacts(dir: string, emitter: InstallerEventEmitter, isDistribution: boolean): Promise<ArtifactVerification> {
+    const lookup = this.generatedEntitiesLookupPaths(dir, isDistribution);
+    const packageFoundAt = await this.findGeneratedEntitiesPackage(lookup);
     const barrelPath = path.join(dir, 'packages', 'GeneratedEntities', 'src', 'generated', 'entity_subclasses.ts');
     const secondaryPath = path.join(dir, 'packages', 'GeneratedEntities');
-
-    let criticalFoundAt: string | undefined;
-    for (const candidate of criticalCandidates) {
-      if (await this.fileSystem.DirectoryExists(candidate)) {
-        criticalFoundAt = candidate;
-        break;
-      }
-    }
-    const criticalExists = criticalFoundAt !== undefined;
     const barrelExists = await this.fileSystem.FileExists(barrelPath);
     const secondaryExists = await this.fileSystem.DirectoryExists(secondaryPath);
 
-    emitter.Emit('log', {
-      Type: 'log',
-      Level: 'verbose',
-      Message: `[codegen] mj_generatedentities package: ${criticalFoundAt ? `found (${path.relative(dir, criticalFoundAt)})` : 'NOT found'}`,
-    });
+    this.logArtifactStatus(dir, emitter, packageFoundAt, barrelExists, secondaryExists);
 
-    emitter.Emit('log', {
-      Type: 'log',
-      Level: 'verbose',
-      Message: `[codegen] GeneratedEntities/src/generated/entity_subclasses.ts: ${barrelExists ? 'found' : 'NOT found'}`,
-    });
-
-    emitter.Emit('log', {
-      Type: 'log',
-      Level: 'verbose',
-      Message: `[codegen] packages/GeneratedEntities directory: ${secondaryExists ? 'found' : 'NOT found'}`,
-    });
-
-    if (!secondaryExists && criticalExists) {
+    if (!secondaryExists && packageFoundAt) {
       emitter.Emit('warn', {
         Type: 'warn',
         Phase: 'codegen',
@@ -491,14 +513,74 @@ export class CodeGenPhase {
     }
 
     const missingCritical: string[] = [];
-    if (!criticalExists) missingCritical.push('mj_generatedentities (checked node_modules/ and apps/MJAPI/node_modules/)');
+    if (!packageFoundAt) {
+      const looked = lookup.map((candidate) => path.relative(dir, path.dirname(candidate))).join(', ');
+      missingCritical.push(
+        `${CodeGenPhase.GENERATED_ENTITIES_PACKAGE} is not resolvable from ${CodeGenPhase.mjapiRelativeDir(isDistribution)} (looked in ${looked})`
+      );
+    }
     if (!barrelExists) missingCritical.push('packages/GeneratedEntities/src/generated/entity_subclasses.ts');
 
     return {
       CriticalPassed: missingCritical.length === 0,
       AllPassed: missingCritical.length === 0 && secondaryExists,
       MissingCritical: missingCritical,
+      PackageResolvable: packageFoundAt !== undefined,
     };
+  }
+
+  /**
+   * Every `node_modules/mj_generatedentities` Node consults when MJAPI imports the package:
+   * MJAPI's own `node_modules`, then each parent directory's, up to and including the install root.
+   *
+   * Where the entry lives depends on the package manager, not on CodeGen. npm hoists workspace
+   * packages to the root `node_modules`; pnpm (the installer default) links each one into the
+   * `node_modules` of every workspace package that declares it — `apps/MJAPI` in a distribution,
+   * `packages/MJAPI` in the monorepo — and never creates a root entry (MemberJunction/MJ#4599, #4707).
+   * Either way the link is made by the install, before CodeGen runs, so it already exists when this
+   * check runs. Checking a fixed path instead of MJAPI's resolution chain is what made a healthy
+   * pnpm install fail its first CodeGen attempt.
+   */
+  private generatedEntitiesLookupPaths(dir: string, isDistribution: boolean): string[] {
+    const root = path.resolve(dir);
+    const paths: string[] = [];
+    let current = path.join(root, CodeGenPhase.mjapiRelativeDir(isDistribution));
+    for (;;) {
+      paths.push(path.join(current, 'node_modules', CodeGenPhase.GENERATED_ENTITIES_PACKAGE));
+      const parent = path.dirname(current);
+      if (path.relative(root, current) === '' || parent === current) {
+        return paths;
+      }
+      current = parent;
+    }
+  }
+
+  /** The first lookup path that exists (a directory, or a link to one) — where MJAPI's import lands. */
+  private async findGeneratedEntitiesPackage(lookupPaths: readonly string[]): Promise<string | undefined> {
+    for (const candidate of lookupPaths) {
+      if (await this.fileSystem.DirectoryExists(candidate)) {
+        return candidate;
+      }
+    }
+    return undefined;
+  }
+
+  /** Verbose diagnostics for the artifact check. */
+  private logArtifactStatus(
+    dir: string,
+    emitter: InstallerEventEmitter,
+    packageFoundAt: string | undefined,
+    barrelExists: boolean,
+    secondaryExists: boolean
+  ): void {
+    const lines = [
+      `[codegen] ${CodeGenPhase.GENERATED_ENTITIES_PACKAGE} package: ${packageFoundAt ? `found (${path.relative(dir, packageFoundAt)})` : 'NOT found'}`,
+      `[codegen] GeneratedEntities/src/generated/entity_subclasses.ts: ${barrelExists ? 'found' : 'NOT found'}`,
+      `[codegen] packages/GeneratedEntities directory: ${secondaryExists ? 'found' : 'NOT found'}`,
+    ];
+    for (const message of lines) {
+      emitter.Emit('log', { Type: 'log', Level: 'verbose', Message: message });
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -524,7 +606,33 @@ export class CodeGenPhase {
   ];
 
   /**
-   * Full workspace rebuild to restore consistency before retrying codegen.
+   * Restore a consistent build before the second codegen attempt, rebuilding only what
+   * that attempt can depend on.
+   *
+   * - **Distribution**: the two generated packages. The CLI that runs codegen and every
+   *   `@memberjunction/*` package are pre-built from npm, and codegen's AFTER commands boot
+   *   MJAPI from source, so `mj_generatedentities` / `mj_generatedactions` are the only
+   *   `dist/` directories that can be stale. Building the whole workspace here also ran the
+   *   Explorer production build — minutes of work no retry needs, and the step that ran out
+   *   of memory in an 8 GB container.
+   * - **Monorepo**: the full workspace build, because the CLI and CodeGen library that run
+   *   codegen are themselves built from this workspace.
+   */
+  private async rebuildBeforeRetry(
+    dir: string,
+    pm: PackageManagerCommands,
+    emitter: InstallerEventEmitter,
+    isDistribution: boolean
+  ): Promise<void> {
+    if (isDistribution) {
+      await this.forceRebuildLocalGeneratedPackages(dir, pm, emitter);
+      return;
+    }
+    await this.rebuildPackages(dir, pm, emitter);
+  }
+
+  /**
+   * Full workspace rebuild to restore consistency before retrying codegen (monorepo layout).
    *
    * Runs the workspace build script at the repo root. Tolerates build failures in
    * codegen-managed packages (they contain stale generated code that the
@@ -891,7 +999,10 @@ export class CodeGenPhase {
   /**
    * Force-rebuild only the local generated packages in a distribution layout.
    * These are `mj_generatedentities` and `mj_generatedactions` — the only
-   * workspace packages whose source is regenerated by codegen.
+   * workspace packages whose source is regenerated by codegen. Runs after a
+   * successful codegen, and before the retry of a failed one
+   * ({@link rebuildBeforeRetry}); a failure is not fatal in either place, since
+   * the next codegen run regenerates and rebuilds both packages.
    */
   private async forceRebuildLocalGeneratedPackages(dir: string, pm: PackageManagerCommands, emitter: InstallerEventEmitter): Promise<void> {
     emitter.Emit('step:progress', {

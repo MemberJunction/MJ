@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { createMockProcessRunner, createMockFileSystem } from './mocks/adapters.js';
 import { createMockEmitter, emittedEvents } from './mocks/emitter.js';
 import { InstallerError } from '../errors/InstallerError.js';
@@ -716,6 +717,192 @@ describe('DependencyPhase package-manager awareness', () => {
 
       expect(writtenWorkspace()).toBeUndefined();
       expect(mockFs.ReadJSON.mock.calls.some(([p]) => String(p).includes('MJExplorer'))).toBe(false);
+    });
+  });
+
+  describe('MemberJunction pins (pnpm overrides)', () => {
+    const HOST = '6.2.0-edge.3';
+    const EXPLORER_MANIFEST = { dependencies: { '@angular/core': '21.2.22' } };
+
+    /** The lockfile pnpm writes for a fresh distribution: every MJ package at the release, skyway at its own version. */
+    const LOCKFILE = [
+      "lockfileVersion: '9.0'",
+      '',
+      'packages:',
+      '',
+      `  '@angular/core@21.2.22':`,
+      '    resolution: {}',
+      '',
+      `  '@memberjunction/cli@${HOST}':`,
+      '    resolution: {}',
+      '',
+      `  '@memberjunction/core@${HOST}':`,
+      '    resolution: {}',
+      '',
+      `  '@memberjunction/global@${HOST}':`,
+      '    resolution: {}',
+      '',
+      "  '@memberjunction/skyway-core@0.6.2':",
+      '    resolution: {}',
+      '',
+    ].join('\n');
+
+    /** In-memory text files under the install root; anything else reads as absent. */
+    let files: Map<string, string>;
+
+    function rootManifest(cli: string | undefined): Record<string, unknown> {
+      return cli === undefined ? {} : { devDependencies: { '@memberjunction/cli': cli } };
+    }
+
+    /**
+     * A distribution after scaffold: root manifest, apps/MJAPI and apps/MJExplorer manifests, and
+     * no pnpm-workspace.yaml. The install writes {@link LOCKFILE} unless `lockfileAfterInstall` is null.
+     */
+    function distribution(options: { cli?: string; mjapiCore?: string; workspace?: string; lockfileAfterInstall?: string | null } = {}): void {
+      files = new Map();
+      if (options.workspace !== undefined) files.set(path.join('/test/install', 'pnpm-workspace.yaml'), options.workspace);
+      const cli = 'cli' in options ? options.cli : HOST;
+      const mjapiCore = 'mjapiCore' in options ? options.mjapiCore : HOST;
+      mockFs.DirectoryExists.mockResolvedValue(false); // distribution layout
+      mockFs.FileExists.mockImplementation(async (p: string) =>
+        files.has(String(p)) || String(p).endsWith('package.json'));
+      mockFs.ReadText.mockImplementation(async (p: string) => files.get(String(p)) ?? '');
+      mockFs.WriteText.mockImplementation(async (p: string, content: string) => { files.set(String(p), content); });
+      mockFs.ReadJSON.mockImplementation(async (p: string) => {
+        if (String(p).includes('MJExplorer')) return EXPLORER_MANIFEST;
+        if (String(p).includes('MJAPI')) return mjapiCore === undefined ? {} : { dependencies: { '@memberjunction/core': mjapiCore } };
+        return rootManifest(cli);
+      });
+      const lockfile = options.lockfileAfterInstall === undefined ? LOCKFILE : options.lockfileAfterInstall;
+      mockRunner.Run.mockImplementation(async (_cmd: string, args: string[]) => {
+        if (args[0] === 'install' && !args.includes('--lockfile-only') && lockfile !== null) {
+          files.set(path.join('/test/install', 'pnpm-lock.yaml'), lockfile);
+        }
+        return ok();
+      });
+    }
+
+    function workspaceYaml(): string {
+      return files.get(path.join('/test/install', 'pnpm-workspace.yaml')) ?? '';
+    }
+
+    /** The package-manager invocations, in order, as `cmd arg arg…`. */
+    function commands(): string[] {
+      return mockRunner.Run.mock.calls.map((c) => [c[0], ...(c[1] as string[])].join(' '));
+    }
+
+    function warnings(emitSpy: ReturnType<typeof createMockEmitter>['emitSpy']): string[] {
+      return (emittedEvents(emitSpy, 'warn') as Array<{ Message: string }>).map((w) => w.Message);
+    }
+
+    it('pins every MJ package the install resolved to the root CLI, in the Angular block, then resyncs the lockfile before building', async () => {
+      distribution();
+      const { emitter, emitSpy } = createMockEmitter();
+
+      const result = await phase.Run(makeContext({ Emitter: emitter, Tag: `v${HOST}` }));
+
+      const yaml = workspaceYaml();
+      expect(yaml.match(/^overrides:/gm)).toHaveLength(1);
+      expect(yaml).toContain("  '@angular/core': '21.2.22'\n");
+      for (const name of ['cli', 'core', 'global']) {
+        expect(yaml).toContain(`  '@memberjunction/${name}': '$@memberjunction/cli'\n`);
+      }
+      expect(yaml).not.toContain('skyway');
+      expect(commands()).toEqual(['pnpm install', 'pnpm install --lockfile-only', 'pnpm run build']);
+      expect(result.Warnings).toEqual([]);
+      expect(warnings(emitSpy)).toEqual([]);
+    });
+
+    it('does not rewrite or resync when the pins are already current', async () => {
+      distribution();
+      await phase.Run(makeContext({ Tag: `v${HOST}` }));
+      const firstYaml = workspaceYaml();
+      mockRunner.Run.mockClear();
+
+      await phase.Run(makeContext({ Tag: `v${HOST}` }));
+
+      expect(workspaceYaml()).toBe(firstYaml);
+      expect(commands()).toEqual(['pnpm install', 'pnpm run build']);
+    });
+
+    it('does not pin when the root CLI is not an exact version (a branch-ref install resolves "latest")', async () => {
+      distribution({ cli: 'latest' });
+
+      await phase.Run(makeContext({ Tag: 'feature/some-branch' }));
+
+      expect(workspaceYaml()).not.toContain("'@memberjunction/");
+      expect(commands()).toEqual(['pnpm install', 'pnpm run build']);
+    });
+
+    it('does not pin, and says why, when apps/MJAPI declares a different @memberjunction/core than the root CLI', async () => {
+      distribution({ mjapiCore: '6.1.5' });
+      const { emitter, emitSpy } = createMockEmitter();
+
+      await phase.Run(makeContext({ Emitter: emitter, Tag: `v${HOST}` }));
+
+      expect(workspaceYaml()).not.toContain("'@memberjunction/");
+      expect(warnings(emitSpy).some((w) => w.includes('apps/MJAPI declares @memberjunction/core 6.1.5'))).toBe(true);
+    });
+
+    it('does not pin outside a distribution layout (no apps/MJAPI)', async () => {
+      distribution();
+      mockFs.FileExists.mockImplementation(async (p: string) =>
+        files.has(String(p)) || (String(p).endsWith('package.json') && !String(p).includes('MJAPI')));
+
+      await phase.Run(makeContext({ Tag: `v${HOST}` }));
+
+      expect(workspaceYaml()).not.toContain("'@memberjunction/");
+    });
+
+    it('leaves npm installs alone', async () => {
+      distribution();
+
+      await phase.Run(makeContext({ PackageManager: 'npm', Tag: `v${HOST}` }));
+
+      expect(workspaceYaml()).toBe('');
+      expect(commands()).toEqual(['npm install', 'npm run build']);
+    });
+
+    it('keeps the install successful, with a warning, when the lockfile resync fails', async () => {
+      distribution();
+      const { emitter, emitSpy } = createMockEmitter();
+      const install = mockRunner.Run.getMockImplementation()!;
+      mockRunner.Run.mockImplementation(async (cmd: string, args: string[], opts) =>
+        args.includes('--lockfile-only') ? fail({ Stderr: 'ERR_PNPM_FETCH_503' }) : install(cmd, args, opts));
+
+      const result = await phase.Run(makeContext({ Emitter: emitter, Tag: `v${HOST}` }));
+
+      expect(result.InstallSuccess).toBe(true);
+      expect(workspaceYaml()).toContain("'@memberjunction/core': '$@memberjunction/cli'");
+      expect(result.Warnings.some((w) => w.includes('apply from the next "pnpm install"'))).toBe(true);
+      expect(warnings(emitSpy).some((w) => w.includes('ERR_PNPM_FETCH_503'))).toBe(true);
+    });
+
+    it('reports, and does not fail the install, when the lockfile cannot be read', async () => {
+      distribution();
+      const read = mockFs.ReadText.getMockImplementation()!;
+      mockFs.ReadText.mockImplementation(async (p: string) => {
+        if (String(p).endsWith('pnpm-lock.yaml')) throw new Error('EACCES: permission denied');
+        return read(p);
+      });
+      const { emitter, emitSpy } = createMockEmitter();
+
+      const result = await phase.Run(makeContext({ Emitter: emitter, Tag: `v${HOST}` }));
+
+      expect(result.InstallSuccess).toBe(true);
+      expect(commands()).toEqual(['pnpm install', 'pnpm run build']);
+      expect(warnings(emitSpy).some((w) => w.includes('were not pinned: EACCES: permission denied'))).toBe(true);
+    });
+
+    it('warns instead of writing when the overrides key is not a block mapping', async () => {
+      distribution({ workspace: "packages:\n  - 'apps/*'\noverrides: {}\n" });
+      const { emitter, emitSpy } = createMockEmitter();
+
+      const result = await phase.Run(makeContext({ Emitter: emitter, Tag: `v${HOST}` }));
+
+      expect(workspaceYaml()).toBe("packages:\n  - 'apps/*'\noverrides: {}\n");
+      expect(result.Warnings.some((w) => w.includes('3 @memberjunction/* packages were not pinned'))).toBe(true);
+      expect(warnings(emitSpy).length).toBeGreaterThanOrEqual(2); // the Angular warning and this one
     });
   });
 

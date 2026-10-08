@@ -14,6 +14,11 @@
  *   `zone.js` to the versions `apps/MJExplorer/package.json` declares, via
  *   `overrides` in `pnpm-workspace.yaml` — otherwise pnpm fills peer-only Angular
  *   ranges with the newest release and Explorer loads two copies (blank page).
+ * - **One copy of MemberJunction (pnpm)**: after the install, pins every
+ *   `@memberjunction/*` package it resolved to the root `@memberjunction/cli`
+ *   version in the same `overrides` block, so an Open App whose packages declare an
+ *   older MJ range (`~6.1.5`) cannot pull a second copy of `@memberjunction/core`
+ *   into the host later.
  * - **ERESOLVE retry (npm only)**: If `npm install` fails with peer dependency
  *   conflicts, automatically retries with `--legacy-peer-deps`. pnpm has no
  *   equivalent flag and treats peer conflicts as warnings, so no retry exists.
@@ -36,6 +41,9 @@ import { PackageManagerCommands, type PackageManagerType } from '../models/Packa
 import { ClassifyTurboFailures } from '../util/turboOutput.js';
 import {
   ExplorerAngularPins,
+  IsExactVersion,
+  MEMBERJUNCTION_PIN_SOURCE,
+  MemberJunctionPins,
   MergePnpmOverrides,
   type PnpmOverridePin,
   type PnpmOverridesMergeResult,
@@ -230,6 +238,12 @@ export class DependencyPhase {
 
     // Step 1: install
     await this.runInstall(context.Dir, pm, emitter, warnings);
+
+    // Step 1b (pnpm): pin every @memberjunction/* package the install resolved to the
+    // host's MJ version, so an Open App installed later cannot add a second copy of MJ.
+    if (pm.Name === 'pnpm') {
+      await this.pinMemberJunctionPackages(context.Dir, pm, emitter, warnings);
+    }
 
     // Step 2: build
     const buildPartial = await this.runBuild(context.Dir, pm, emitter, warnings);
@@ -836,6 +850,156 @@ export class DependencyPhase {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // MemberJunction pins (pnpm)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Pin every `@memberjunction/*` package this install resolved, at the host's MJ version, in the
+   * same `overrides:` block as the Angular pins — see {@link MemberJunctionPins} for why.
+   *
+   * Runs after the install because the names come from its lockfile: pnpm has no glob override
+   * keys, and the MJ packages in the graph are only known once pnpm has resolved it (a fresh
+   * distribution resolves ~300, every one at the release version, since MJ packages pin each other
+   * exactly). The pins change nothing in this install; they bind every later `pnpm install` — in
+   * particular the one `mj app install` runs after adding an Open App's packages. The lockfile is
+   * then re-resolved (`--lockfile-only`) so it records the new overrides and a later
+   * `pnpm install --frozen-lockfile` still matches it.
+   *
+   * Never fails the install: without the pins this install is unaffected, and every reason to skip
+   * them — including an unreadable manifest or lockfile — is reported.
+   */
+  private async pinMemberJunctionPackages(
+    dir: string,
+    pm: PackageManagerCommands,
+    emitter: InstallerEventEmitter,
+    warnings: string[]
+  ): Promise<void> {
+    try {
+      await this.applyMemberJunctionPins(dir, pm, emitter, warnings);
+    } catch (err) {
+      const message =
+        `@memberjunction/* packages were not pinned: ${err instanceof Error ? err.message : String(err)}. ` +
+        'The install is unaffected, but an Open App installed later can add a second copy of @memberjunction/core.';
+      warnings.push(message);
+      emitter.Emit('warn', { Type: 'warn', Phase: 'dependencies', Message: message });
+    }
+  }
+
+  /** The body of {@link pinMemberJunctionPackages}: derive the pins, merge them in, resync the lockfile. */
+  private async applyMemberJunctionPins(
+    dir: string,
+    pm: PackageManagerCommands,
+    emitter: InstallerEventEmitter,
+    warnings: string[]
+  ): Promise<void> {
+    const hostVersion = await this.readHostMJVersion(dir, emitter);
+    if (!hostVersion) {
+      return;
+    }
+    const pins = MemberJunctionPins((await this.readOptionalText(path.join(dir, pm.LockfileName))) ?? '', hostVersion);
+    if (pins.length === 0) {
+      this.logVerbose(emitter, `${pm.LockfileName} lists no @memberjunction/* package at ${hostVersion} — nothing to pin.`);
+      return;
+    }
+    const wsPath = path.join(dir, 'pnpm-workspace.yaml');
+    const merge = MergePnpmOverrides((await this.readOptionalText(wsPath)) ?? '', pins);
+    if (merge.Outcome === 'unsupported') {
+      this.warnMemberJunctionPinsUnsupported(pins.length, emitter, warnings);
+      return;
+    }
+    if (merge.Outcome === 'unchanged') {
+      return;
+    }
+    await this.fileSystem.WriteText(wsPath, merge.Yaml);
+    emitter.Emit('step:progress', {
+      Type: 'step:progress',
+      Phase: 'dependencies',
+      Message: `Pinned ${pins.length} @memberjunction/* package(s) to the root ${MEMBERJUNCTION_PIN_SOURCE} version (${hostVersion}) via pnpm overrides`,
+    });
+    await this.resyncLockfile(dir, pm, emitter, warnings);
+  }
+
+  /**
+   * The MJ version this install runs, when it can anchor the pins: the root `@memberjunction/cli`
+   * dependency — {@link ensureCliDependency} sets it to the release tag — provided it is an exact
+   * version and `apps/MJAPI` does not declare a different `@memberjunction/core`. Anything else is
+   * left unpinned, because the pins would force MJAPI onto a version it does not declare: a
+   * branch-ref install (`latest`), the monorepo (`workspace:*`, and no `apps/MJAPI`), or a
+   * hand-edited MJAPI manifest.
+   */
+  private async readHostMJVersion(dir: string, emitter: InstallerEventEmitter): Promise<string | undefined> {
+    const mjapiManifestPath = path.join(dir, 'apps', 'MJAPI', 'package.json');
+    if (!(await this.fileSystem.FileExists(mjapiManifestPath))) {
+      this.logVerbose(emitter, 'No apps/MJAPI/package.json (not a distribution layout) — @memberjunction/* packages are not pinned.');
+      return undefined;
+    }
+    const root = await this.fileSystem.ReadJSON<ManifestDependencies>(path.join(dir, 'package.json'));
+    const cliVersion = root?.devDependencies?.[MEMBERJUNCTION_PIN_SOURCE] ?? root?.dependencies?.[MEMBERJUNCTION_PIN_SOURCE];
+    if (!IsExactVersion(cliVersion)) {
+      this.logVerbose(
+        emitter,
+        `Root ${MEMBERJUNCTION_PIN_SOURCE} is "${cliVersion ?? '(missing)'}", not an exact version — @memberjunction/* packages are not pinned.`
+      );
+      return undefined;
+    }
+    const mjapi = await this.fileSystem.ReadJSON<ManifestDependencies>(mjapiManifestPath);
+    const mjapiCore = mjapi?.dependencies?.['@memberjunction/core'];
+    if (mjapiCore != null && mjapiCore.trim() !== cliVersion.trim()) {
+      emitter.Emit('warn', {
+        Type: 'warn',
+        Phase: 'dependencies',
+        Message:
+          `apps/MJAPI declares @memberjunction/core ${mjapiCore} but the root ${MEMBERJUNCTION_PIN_SOURCE} is ${cliVersion}, so ` +
+          '@memberjunction/* packages were not pinned (the pins would force MJAPI onto the CLI version). Align the two with ' +
+          '"mj bump -r"; until they match, an Open App can add a second copy of @memberjunction/core.',
+      });
+      return undefined;
+    }
+    return cliVersion.trim();
+  }
+
+  /** Re-resolve the lockfile so it records the overrides just written. A failure is a warning, not an error. */
+  private async resyncLockfile(
+    dir: string,
+    pm: PackageManagerCommands,
+    emitter: InstallerEventEmitter,
+    warnings: string[]
+  ): Promise<void> {
+    const install = pm.Install(['--lockfile-only']);
+    const result = await this.processRunner.Run(install.Cmd, install.Args, { Cwd: dir, TimeoutMs: 900_000 });
+    if (result.ExitCode === 0 && !result.TimedOut) {
+      return;
+    }
+    const detail = result.TimedOut ? 'timed out' : `exited ${result.ExitCode}: ${this.lastNLines(result.Stderr || result.Stdout, 5)}`;
+    const message =
+      `${pm.LockfileName} could not be updated with the new @memberjunction pins (${pm.Name} install --lockfile-only ${detail}). ` +
+      `The pins are in pnpm-workspace.yaml and apply from the next "${pm.Name} install".`;
+    warnings.push(message);
+    emitter.Emit('warn', { Type: 'warn', Phase: 'dependencies', Message: message });
+  }
+
+  /** The workspace file's `overrides` key is not a block mapping, so the MJ pins could not be merged in. */
+  private warnMemberJunctionPinsUnsupported(count: number, emitter: InstallerEventEmitter, warnings: string[]): void {
+    const message =
+      'pnpm-workspace.yaml has an "overrides" key the installer cannot edit (it only merges into a block mapping), so the ' +
+      `${count} @memberjunction/* packages were not pinned and an Open App may add a second copy of @memberjunction/core. ` +
+      `Make "overrides:" a block mapping and re-run the install, or add '<package>': '$${MEMBERJUNCTION_PIN_SOURCE}' for each ` +
+      '@memberjunction/* package in pnpm-lock.yaml.';
+    warnings.push(message);
+    emitter.Emit('warn', { Type: 'warn', Phase: 'dependencies', Message: message });
+  }
+
+  /** A file's text, or undefined when it does not exist. */
+  private async readOptionalText(filePath: string): Promise<string | undefined> {
+    return (await this.fileSystem.FileExists(filePath)) ? this.fileSystem.ReadText(filePath) : undefined;
+  }
+
+  /** Emit a verbose log line for the dependencies phase. */
+  private logVerbose(emitter: InstallerEventEmitter, message: string): void {
+    emitter.Emit('log', { Type: 'log', Level: 'verbose', Message: message });
+  }
+
   /**
    * pnpm 10 applies a root `package.json`'s `pnpm.overrides` / `resolutions`
    * INSTEAD of the `overrides` in `pnpm-workspace.yaml`: when the manifest
@@ -853,10 +1017,17 @@ export class DependencyPhase {
       Phase: 'dependencies',
       Message:
         'The root package.json declares pnpm "overrides" or "resolutions", and pnpm applies those instead of the overrides in ' +
-        'pnpm-workspace.yaml — so the Angular pins there are ignored and Explorer may load two copies of Angular (blank page, ' +
-        'NG0203). Move those package.json entries into the "overrides:" block of pnpm-workspace.yaml, then run pnpm install.',
+        'pnpm-workspace.yaml — so the Angular and @memberjunction pins there are ignored: Explorer may load two copies of Angular ' +
+        '(blank page, NG0203), and an Open App may add a second copy of @memberjunction/core. Move those package.json entries ' +
+        'into the "overrides:" block of pnpm-workspace.yaml, then run pnpm install.',
     });
   }
+}
+
+/** The dependency sections of a `package.json` the MemberJunction pins read. */
+interface ManifestDependencies {
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
 }
 
 /** The parts of a root `package.json` that pnpm reads overrides from. */

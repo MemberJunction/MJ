@@ -21,7 +21,7 @@ import { CheckCanMigrateAppSchema, CreateAppSchema, DropAppSchema, SchemaExists,
 import { RunFkGraphTeardown, BuildRootDoomedPredicate } from './entity-teardown.js';
 import { ExtractApplicationIds } from './migration-application-ids.js';
 import { RunAppMigrations, type SkywayDatabaseConfig } from './migration-runner.js';
-import { AddAppPackages, RemoveAppPackages, RunPackageInstall, BumpPrefixedDependencies, type PackageManagerType, type VersionStrategy, type WorkspaceTarget } from './package-manager.js';
+import { AddAppPackages, RemoveAppPackages, RunPackageInstall, BumpPrefixedDependencies, FindDuplicateMemberJunctionPackages, type PackageManagerType, type VersionStrategy, type WorkspaceTarget } from './package-manager.js';
 import { BuildHookResolutionBases, ResolveHookModule } from './hook-module-resolver.js';
 import { AddServerDynamicPackages, AddClientDynamicPackages, RemoveServerDynamicPackages, PruneDynamicPackagesNotInManifest, ToggleServerDynamicPackages, AddEntityPackageMapping, RemoveEntityPackageMapping, AddExcludeSchema, RemoveExcludeSchema } from './config-manager.js';
 import { AngularConfigManager } from './angular-config-manager.js';
@@ -2115,7 +2115,43 @@ async function HandlePackageInstallation(
   if (!installResult.Success) {
     return { Success: false, PackageJsonUpdated: true, ErrorMessage: installResult.ErrorMessage };
   }
+  WarnOnDuplicateMemberJunctionPackages(installResult.InstallRoot ?? context.RepoRoot, manifest, context);
   return { Success: true };
+}
+
+/** How many duplicated packages a warning names before summarising the rest. */
+const DUPLICATE_PACKAGES_LISTED = 8;
+
+/**
+ * Warn when the install just run left more than one version of any `@memberjunction/*` package —
+ * see {@link FindDuplicateMemberJunctionPackages}. The install itself succeeded, and the duplicate
+ * fails silently at runtime (entities and resolvers stop registering), so this warning is the only
+ * place the operator can learn of it. Not fatal: the packages are already installed, and the fix
+ * is a workspace setting, not a re-run of this app's install.
+ */
+function WarnOnDuplicateMemberJunctionPackages(installRoot: string, manifest: MJAppManifest, context: OrchestratorContext): void {
+  let duplicates: ReturnType<typeof FindDuplicateMemberJunctionPackages>;
+  try {
+    duplicates = FindDuplicateMemberJunctionPackages(installRoot);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    context.Callbacks?.OnWarn?.('Packages', `Could not check pnpm-lock.yaml for duplicate @memberjunction packages: ${message}`);
+    return;
+  }
+  if (duplicates.length === 0) {
+    return;
+  }
+  const listed = duplicates.slice(0, DUPLICATE_PACKAGES_LISTED).map((d) => `${d.Name} (${d.Versions.join(', ')})`);
+  const more = duplicates.length > DUPLICATE_PACKAGES_LISTED ? `, and ${duplicates.length - DUPLICATE_PACKAGES_LISTED} more` : '';
+  context.Callbacks?.OnWarn?.(
+    'Packages',
+    `Installing ${manifest.name} left ${duplicates.length} @memberjunction package(s) at more than one version: ${listed.join(', ')}${more}. ` +
+      `This host runs MJ ${context.MJVersion}, and a second copy of @memberjunction/core or global splits MJ's class registry: ` +
+      'entities and resolvers stop registering without an error. An app package declares an MJ range this host does not satisfy. ' +
+      `Pin every @memberjunction/* package pnpm-lock.yaml lists at ${context.MJVersion} to that version in the "overrides:" block of ` +
+      `${installRoot}/pnpm-workspace.yaml, then run pnpm install there. (A distribution installed by mj install already carries ` +
+      "these pins, written as '<package>': '$@memberjunction/cli'.)"
+  );
 }
 
 /**

@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { ExplorerAngularPins, MergePnpmOverrides, type PnpmOverridePin } from '../util/pnpmOverrides.js';
+import {
+  ExplorerAngularPins,
+  IsExactVersion,
+  LockfilePackageVersions,
+  MEMBERJUNCTION_PIN_VALUE,
+  MemberJunctionPins,
+  MergePnpmOverrides,
+  type PnpmOverridePin,
+} from '../util/pnpmOverrides.js';
 
 /** The shape of a distribution's pnpm-workspace.yaml before any pins are added. */
 const WORKSPACE = [
@@ -197,5 +205,153 @@ describe('MergePnpmOverrides', () => {
     const result = MergePnpmOverrides(yaml, PINS);
     expect(result.Outcome).toBe('appended');
     expect(overridesKeyCount(result.Yaml)).toBe(1);
+  });
+});
+
+/**
+ * A pnpm 10 (lockfile v9) lockfile in the shape a host has after an Open App built on MJ 6.1 was
+ * installed into a 6.2.0-edge.3 distribution: `@memberjunction/core` and `global` at both versions,
+ * an app-only package at 6.1.5, the separately versioned skyway engine, and a non-MJ package.
+ * The `importers`, `overrides` and `snapshots` sections carry MJ names too, and must not count.
+ */
+const LOCKFILE_V9 = [
+  "lockfileVersion: '9.0'",
+  '',
+  'settings:',
+  '  autoInstallPeers: true',
+  '',
+  'overrides:',
+  "  '@angular/core': 21.2.22",
+  "  '@memberjunction/cli@9.9.9': 9.9.9",
+  '',
+  'importers:',
+  '',
+  '  apps/MJAPI:',
+  '    dependencies:',
+  "      '@memberjunction/core':",
+  '        specifier: 6.2.0-edge.3',
+  '        version: 6.2.0-edge.3',
+  "      '@mj-biz-apps/orders-ng':",
+  '        specifier: ^5.29.0',
+  '        version: 5.29.0(8f4d5d6b7ab951bf64b45bb56b8c7a15)',
+  '',
+  'packages:',
+  '',
+  "  '@angular/core@21.2.22':",
+  "    resolution: {integrity: sha512-a}",
+  '',
+  "  '@memberjunction/cli@6.2.0-edge.3':",
+  "    resolution: {integrity: sha512-b}",
+  '',
+  "  '@memberjunction/core@6.1.5':",
+  "    resolution: {integrity: sha512-c}",
+  '',
+  "  '@memberjunction/core@6.2.0-edge.3':",
+  "    resolution: {integrity: sha512-d}",
+  '',
+  "  '@memberjunction/global@6.1.5':",
+  "    resolution: {integrity: sha512-e}",
+  '',
+  "  '@memberjunction/global@6.2.0-edge.3':",
+  "    resolution: {integrity: sha512-f}",
+  '',
+  "  '@memberjunction/ng-gantt@6.1.5':",
+  "    resolution: {integrity: sha512-g}",
+  '',
+  "  '@memberjunction/skyway-core@0.6.2':",
+  "    resolution: {integrity: sha512-h}",
+  '',
+  "  '@mj-biz-apps/orders-ng@5.29.0':",
+  "    resolution: {integrity: sha512-i}",
+  '',
+  '  zod@3.25.76:',
+  "    resolution: {integrity: sha512-j}",
+  '',
+  'snapshots:',
+  '',
+  "  '@memberjunction/ng-hierarchy-tree@6.1.0(ddf62253752cda2228ff32c508be04b3)':",
+  '    dependencies:',
+  "      '@memberjunction/core': 6.1.5",
+  '',
+].join('\n');
+
+describe('IsExactVersion', () => {
+  it('accepts release, prerelease and build-metadata versions', () => {
+    for (const version of ['6.2.0', '6.2.0-edge.3', '6.1.0-edge.5', '1.0.0+build.7', ' 6.2.0 ']) {
+      expect(IsExactVersion(version)).toBe(true);
+    }
+  });
+
+  it('rejects ranges, dist-tags, protocols and a missing value', () => {
+    for (const spec of ['^6.2.0', '~6.1.5', '>=6.1.2 <7.0.0', 'latest', 'workspace:*', 'file:../cli', '6.2', '', undefined]) {
+      expect(IsExactVersion(spec)).toBe(false);
+    }
+  });
+});
+
+describe('LockfilePackageVersions', () => {
+  it('reads every installed version from the packages section and nothing else', () => {
+    const versions = LockfilePackageVersions(LOCKFILE_V9);
+
+    expect([...(versions.get('@memberjunction/core') ?? [])].sort()).toEqual(['6.1.5', '6.2.0-edge.3']);
+    expect([...(versions.get('@memberjunction/ng-gantt') ?? [])]).toEqual(['6.1.5']);
+    expect([...(versions.get('zod') ?? [])]).toEqual(['3.25.76']);
+    // Only in `snapshots:` (and as a dependency value): not an installed package key here.
+    expect(versions.has('@memberjunction/ng-hierarchy-tree')).toBe(false);
+    // The override selector `@memberjunction/cli@9.9.9` is config, not an install.
+    expect([...(versions.get('@memberjunction/cli') ?? [])]).toEqual(['6.2.0-edge.3']);
+  });
+
+  it('reads lockfile v6 keys, which carry a leading slash and are unquoted', () => {
+    const v6 = ['lockfileVersion: \'6.0\'', '', 'packages:', '', '  /@memberjunction/core@6.2.0:', '    resolution: {}', '', '  /zod@3.25.76:', '    resolution: {}', ''].join('\n');
+    const versions = LockfilePackageVersions(v6);
+    expect([...(versions.get('@memberjunction/core') ?? [])]).toEqual(['6.2.0']);
+    expect([...(versions.get('zod') ?? [])]).toEqual(['3.25.76']);
+  });
+
+  it('handles CRLF line endings and an empty file', () => {
+    expect(LockfilePackageVersions(LOCKFILE_V9.replace(/\n/g, '\r\n')).get('@memberjunction/core')?.size).toBe(2);
+    expect(LockfilePackageVersions('').size).toBe(0);
+  });
+});
+
+describe('MemberJunctionPins', () => {
+  it('pins every @memberjunction package resolved at the host version to the root CLI, sorted', () => {
+    expect(MemberJunctionPins(LOCKFILE_V9, '6.2.0-edge.3')).toEqual([
+      { Name: '@memberjunction/cli', Version: '$@memberjunction/cli' },
+      { Name: '@memberjunction/core', Version: '$@memberjunction/cli' },
+      { Name: '@memberjunction/global', Version: '$@memberjunction/cli' },
+    ]);
+    expect(MEMBERJUNCTION_PIN_VALUE).toBe('$@memberjunction/cli');
+  });
+
+  it('leaves alone what was never resolved at the host version: app-only MJ packages, skyway, other scopes', () => {
+    const names = MemberJunctionPins(LOCKFILE_V9, '6.2.0-edge.3').map((pin) => pin.Name);
+    expect(names).not.toContain('@memberjunction/ng-gantt');
+    expect(names).not.toContain('@memberjunction/skyway-core');
+    expect(names.every((name) => name.startsWith('@memberjunction/'))).toBe(true);
+  });
+
+  it('pins nothing without an exact host version', () => {
+    expect(MemberJunctionPins(LOCKFILE_V9, 'latest')).toEqual([]);
+    expect(MemberJunctionPins(LOCKFILE_V9, '^6.2.0')).toEqual([]);
+    expect(MemberJunctionPins(LOCKFILE_V9, '9.9.9')).toEqual([]);
+  });
+
+  it('merges into the Angular block as one overrides key, and a second merge changes nothing', () => {
+    const withAngular = MergePnpmOverrides(WORKSPACE, PINS).Yaml;
+    const merged = MergePnpmOverrides(withAngular, MemberJunctionPins(LOCKFILE_V9, '6.2.0-edge.3'));
+
+    expect(merged.Outcome).toBe('merged');
+    expect(overridesKeyCount(merged.Yaml)).toBe(1);
+    expect(merged.Yaml).toContain("  '@angular/core': '21.2.22'\n");
+    expect(merged.Yaml).toContain("  '@memberjunction/core': '$@memberjunction/cli'\n");
+    expect(MergePnpmOverrides(merged.Yaml, MemberJunctionPins(LOCKFILE_V9, '6.2.0-edge.3')).Outcome).toBe('unchanged');
+  });
+
+  it('replaces a literal MJ version someone pinned by hand with the CLI reference', () => {
+    const yaml = `${WORKSPACE}overrides:\n  '@memberjunction/core': '6.1.5'\n`;
+    const merged = MergePnpmOverrides(yaml, MemberJunctionPins(LOCKFILE_V9, '6.2.0-edge.3'));
+    expect(merged.Changed).toEqual([{ Name: '@memberjunction/core', Previous: '6.1.5', Current: '$@memberjunction/cli' }]);
   });
 });
