@@ -262,6 +262,7 @@ describe('SessionJanitor.RunRecordingRecoverySweep', () => {
     const HOUR = 60 * MINUTE;
     const STARTED_AT = new Date('2026-10-07T09:00:00.000Z');
     const NO_SEGMENTS = { Outcome: 'NoSegments', FileID: null, SegmentCount: 0, MissingIndexes: [], ErrorMessage: null };
+    const FAILED = { Outcome: 'Failed', FileID: null, SegmentCount: 0, MissingIndexes: [], ErrorMessage: 'upload exploded' };
     const MAX_ATTEMPTS_FOR_TEST = 8; // mirrors MAX_RECOVERY_ATTEMPTS
     let nextSessionNumber = 0;
 
@@ -391,7 +392,7 @@ describe('SessionJanitor.RunRecordingRecoverySweep', () => {
         expect(logErrorMock).toHaveBeenCalledWith(expect.stringMatching(new RegExp(`${noStart.ID}.*RecordingStartedAt`)));
     });
 
-    it('treats a missing storage account as a failure: no recover call, backed off', async () => {
+    it('defers a session whose agent has no storage account: no recover call, backed off', async () => {
         const noAccount = candidate();
         resolveAccountMock.mockResolvedValue(null);
         const { provider } = makeRecoveryProvider();
@@ -404,6 +405,36 @@ describe('SessionJanitor.RunRecordingRecoverySweep', () => {
         resolveAccountMock.mockClear();
         await sweepWith(provider, [noAccount]);
         expect(resolveAccountMock).not.toHaveBeenCalled();
+    });
+
+    it('never gives up on a no-storage session: it is not a failed attempt, so no LogError and one status line', async () => {
+        const noAccount = candidate();
+        resolveAccountMock.mockResolvedValue(null);
+        const { provider } = makeRecoveryProvider();
+
+        for (let i = 0; i < 12; i++) {
+            vi.setSystemTime(NOW.getTime() + i * 7 * HOUR);
+            await sweepWith(provider, [noAccount]);
+        }
+
+        expect(recoverMock).not.toHaveBeenCalled();
+        expect(logErrorMock.mock.calls.filter((c) => String(c[0]).includes(noAccount.ID))).toHaveLength(0);
+        expect(logStatusMock.mock.calls.filter((c) => String(c[0]).includes(noAccount.ID))).toHaveLength(1);
+    });
+
+    it('recovers a deferred no-storage session once its agent gains a storage account', async () => {
+        const later = candidate();
+        resolveAccountMock.mockResolvedValue(null);
+        const { provider } = makeRecoveryProvider();
+        for (let i = 0; i < 9; i++) {
+            vi.setSystemTime(NOW.getTime() + i * 7 * HOUR);
+            await sweepWith(provider, [later]);
+        }
+
+        resolveAccountMock.mockResolvedValue('account-1');
+        vi.setSystemTime(NOW.getTime() + 9 * 7 * HOUR);
+        expect(await sweepWith(provider, [later])).toBe(1);
+        expect(recoverMock).toHaveBeenCalledTimes(1);
     });
 
     it('logs a Superseded outcome without treating it as a failure', async () => {
@@ -472,9 +503,9 @@ describe('SessionJanitor.RunRecordingRecoverySweep', () => {
         expect(recoverMock).toHaveBeenCalledTimes(8);
     });
 
-    it('gives up after 8 failures: never retried again, one LogError for the session', async () => {
+    it('gives up after 8 failures: never retried again, one give-up LogError for the session', async () => {
         const doomed = candidate();
-        recoverMock.mockResolvedValue(NO_SEGMENTS);
+        recoverMock.mockResolvedValue(FAILED);
         const { provider } = makeRecoveryProvider();
 
         for (let i = 0; i < 12; i++) {
@@ -483,7 +514,22 @@ describe('SessionJanitor.RunRecordingRecoverySweep', () => {
         }
 
         expect(recoverMock).toHaveBeenCalledTimes(8);
-        expect(logErrorMock.mock.calls.filter((c) => String(c[0]).includes(doomed.ID))).toHaveLength(1);
+        expect(logErrorMock.mock.calls.filter((c) => String(c[0]).includes(doomed.ID) && String(c[0]).includes('Giving up'))).toHaveLength(1);
+    });
+
+    it('stops checking a session that never has segments with a status line, not an error', async () => {
+        const empty = candidate();
+        recoverMock.mockResolvedValue(NO_SEGMENTS);
+        const { provider } = makeRecoveryProvider();
+
+        for (let i = 0; i < 12; i++) {
+            vi.setSystemTime(NOW.getTime() + i * 7 * HOUR);
+            await sweepWith(provider, [empty]);
+        }
+
+        expect(recoverMock).toHaveBeenCalledTimes(8);
+        expect(logErrorMock.mock.calls.filter((c) => String(c[0]).includes(empty.ID))).toHaveLength(0);
+        expect(logStatusMock).toHaveBeenCalledWith(expect.stringMatching(new RegExp(`${empty.ID}.*no recoverable segments in 8 checks`)));
     });
 
     it('prunes backoff for sessions that left the candidate set', async () => {
@@ -537,7 +583,7 @@ describe('SessionJanitor.RunRecordingRecoverySweep', () => {
 
     it('does not prune backoff when a page load fails, and a given-up session stays given up', async () => {
         const doomed = candidate();
-        recoverMock.mockResolvedValue(NO_SEGMENTS);
+        recoverMock.mockResolvedValue(FAILED);
         const { provider } = makeRecoveryProvider();
         for (let i = 0; i < MAX_ATTEMPTS_FOR_TEST; i++) {
             vi.setSystemTime(NOW.getTime() + i * 7 * HOUR);
@@ -578,7 +624,113 @@ describe('SessionJanitor.RunRecordingRecoverySweep', () => {
         expect(logErrorMock).toHaveBeenCalledWith(expect.stringContaining(bad.ID));
     });
 
+    describe('attempt timeout', () => {
+        /** A recovery call for `sessionID` that never settles until the returned release is called. */
+        function hangRecoveryFor(sessionID: string): () => void {
+            let release: () => void = () => undefined;
+            const gate = new Promise<void>((resolve) => { release = resolve; });
+            recoverMock.mockImplementation(async (input: { SessionID: string }) => {
+                if (input.SessionID === sessionID) {
+                    await gate;
+                    return NO_SEGMENTS;
+                }
+                return { Outcome: 'Recovered', FileID: 'file-1', SegmentCount: 3, MissingIndexes: [], ErrorMessage: null };
+            });
+            return release;
+        }
+
+        it('abandons an attempt that outlives the timeout, logs it as a failure, and recovers the next candidate', async () => {
+            const hung = candidate();
+            const next = candidate();
+            const release = hangRecoveryFor(hung.ID);
+            const { provider } = makeRecoveryProvider();
+            try {
+                const sweep = sweepWith(provider, [hung, next]);
+                await vi.advanceTimersByTimeAsync(10 * MINUTE);
+                expect(await sweep).toBe(1);
+
+                expect(recoverMock.mock.calls.map((c) => (c[0] as { SessionID: string }).SessionID)).toEqual([hung.ID, next.ID]);
+                expect(logErrorMock).toHaveBeenCalledWith(expect.stringMatching(new RegExp(`${hung.ID}.*did not finish within 10 minutes`)));
+            } finally {
+                release();
+                await vi.advanceTimersByTimeAsync(0);
+            }
+        });
+
+        it('starts no second attempt for a session while its abandoned attempt is still running', async () => {
+            const hung = candidate();
+            const release = hangRecoveryFor(hung.ID);
+            const { provider } = makeRecoveryProvider();
+            try {
+                const first = sweepWith(provider, [hung]);
+                await vi.advanceTimersByTimeAsync(10 * MINUTE);
+                await first;
+
+                // Past the 10-minute backoff of the first failure, but the abandoned call is still in flight.
+                vi.setSystemTime(Date.now() + 11 * MINUTE);
+                await sweepWith(provider, [hung]);
+                expect(recoverMock).toHaveBeenCalledTimes(1);
+
+                release();
+                await vi.advanceTimersByTimeAsync(0);
+                vi.setSystemTime(Date.now() + 11 * MINUTE);
+                await sweepWith(provider, [hung]);
+                expect(recoverMock).toHaveBeenCalledTimes(2);
+            } finally {
+                release();
+                await vi.advanceTimersByTimeAsync(0);
+            }
+        });
+
+        it('honours a configured attempt timeout', async () => {
+            SessionJanitor.Instance.Configure({ recordingRecoveryAttemptTimeoutMinutes: 2 });
+            const hung = candidate();
+            const release = hangRecoveryFor(hung.ID);
+            const { provider } = makeRecoveryProvider();
+            try {
+                const sweep = sweepWith(provider, [hung]);
+                await vi.advanceTimersByTimeAsync(2 * MINUTE);
+                expect(await sweep).toBe(0);
+                expect(logErrorMock).toHaveBeenCalledWith(expect.stringMatching(/did not finish within 2 minutes/));
+            } finally {
+                SessionJanitor.Instance.Configure({ recordingRecoveryAttemptTimeoutMinutes: 10 });
+                release();
+                await vi.advanceTimersByTimeAsync(0);
+            }
+        });
+    });
+
     describe('periodic tick', () => {
+        it('a recovery call that never settles does not stop later ticks from recovering other sessions', async () => {
+            const hung = candidate();
+            const later = candidate();
+            let release: () => void = () => undefined;
+            const gate = new Promise<void>((resolve) => { release = resolve; });
+            recoverMock.mockImplementation(async (input: { SessionID: string }) => {
+                if (input.SessionID === hung.ID) {
+                    await gate;
+                }
+                return { Outcome: 'Recovered', FileID: 'file-1', SegmentCount: 1, MissingIndexes: [], ErrorMessage: null };
+            });
+            const { provider } = makeRecoveryProvider();
+            await SessionJanitor.Instance.Start(provider, makeUser(), 60_000);
+            runViewMock.mockImplementation(async (params: { EntityName: string; ExtraFilter?: string }) => {
+                if (params.ExtraFilter?.includes('RecordingStartedAt')) {
+                    return { Success: true, Results: recoverMock.mock.calls.length === 0 ? [hung] : [later] };
+                }
+                return { Success: true, Results: [] };
+            });
+            try {
+                await vi.advanceTimersByTimeAsync(60_000); // tick 1: the hung attempt starts
+                await vi.advanceTimersByTimeAsync(12 * MINUTE); // timeout elapses; later ticks run new passes
+
+                expect(recoverMock.mock.calls.map((c) => (c[0] as { SessionID: string }).SessionID)).toContain(later.ID);
+            } finally {
+                release();
+                await vi.advanceTimersByTimeAsync(0);
+            }
+        });
+
         it('runs recovery after the close sweeps', async () => {
             const { provider } = makeRecoveryProvider();
             await SessionJanitor.Instance.Start(provider, makeUser(), 60_000);
@@ -722,6 +874,7 @@ describe('SessionJanitor.RunRecordingRecoverySweep', () => {
 describe('SessionJanitor.Configure', () => {
     const DEFAULTS: SessionJanitorConfig = {
         closeThresholdMinutes: 15, sweepIntervalMs: 60_000, recordingRecoveryGraceMinutes: 10, recordingRecoveryLookbackHours: 168,
+        recordingRecoveryAttemptTimeoutMinutes: 10,
     };
 
     afterEach(() => {
@@ -735,6 +888,7 @@ describe('SessionJanitor.Configure', () => {
         ['recordingRecoveryLookbackHours', -1],
         ['closeThresholdMinutes', 0],
         ['sweepIntervalMs', Number.POSITIVE_INFINITY],
+        ['recordingRecoveryAttemptTimeoutMinutes', 0],
     ] as const)('rejects %s = %s, naming the field and the value', (field, value) => {
         const config: Partial<SessionJanitorConfig> = { [field]: value };
         expect(() => SessionJanitor.Instance.Configure(config)).toThrow(new RegExp(`${field}.*${String(value)}`));
