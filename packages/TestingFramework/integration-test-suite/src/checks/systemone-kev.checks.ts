@@ -704,11 +704,15 @@ async function assertSelectionWithBoundKev(
     assertConsidered(result, bound, label);
 }
 
-/** The drivers KV4's failover leg makes unavailable: every decision driver but System One's. */
-const UNAVAILABLE_DRIVER_CLASSES: readonly string[] = ['OpenRouterDecision', 'LLMDecision', 'CloudflareDecision', 'OpenAIDecision'];
+/**
+ * The drivers KV4's failover leg makes unavailable: every decision driver the shipped prompts can reach
+ * but System One's, so a driver added to the shared list is covered here too.
+ */
+const UNAVAILABLE_DRIVER_CLASSES: readonly string[] = SCRIPTED_DECISION_DRIVER_CLASSES.filter(name => name !== DRIVER_CLASS);
 
 /**
- * KV4 failover: with Jev, LLM Decision and Clef unavailable, `Default Decision` fails over from model to
+ * KV4 failover: with every other decision driver unavailable (Jev, LLM Decision, Clef, GPT-6 Luna
+ * Decisions on OpenAI and every OpenRouter row among them), `Default Decision` fails over from model to
  * model, past every credentialed candidate ahead of the bound Kev-27B, and Kev-27B answers. Its
  * `FailoverStrategy` is the column default, `SameModelDifferentVendor`, and `AIDecisionRunner` treats
  * every strategy but `None` as the full priority list: the strategy does not keep it on one model.
