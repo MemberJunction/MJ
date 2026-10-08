@@ -574,6 +574,7 @@ describe('session lifecycle, driven end to end with fakes', () => {
             await runtime.EndRealtimeSession();
         });
 
+        // Regression guard for the per-recording queue (it passes on the pre-fix code too), not a repro.
         it("a flush still in flight when a new session starts does not touch the new session's shard indexes", async () => {
             const { runtime, provider, flush } = await startRecorded();
             let release!: (outcome: ShardOutcome) => void;

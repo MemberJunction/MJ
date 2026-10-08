@@ -141,15 +141,15 @@ export interface RealtimeChannelFocusEvent {
   Focused: boolean;
 }
 
-/**
- * The narrow projection of an ACTIVE `MJ: AI Agent Channels` registry row the service
- * reads at session start from {@link AIEngineBase}'s cached `AgentChannels`.
- */
 /** The `UploadRealtimeRecordingSegment` mutation result; `true` only when the server stored the shard. */
 interface UploadRecordingSegmentResult {
   UploadRealtimeRecordingSegment?: boolean;
 }
 
+/**
+ * The narrow projection of an ACTIVE `MJ: AI Agent Channels` registry row the service
+ * reads at session start from {@link AIEngineBase}'s cached `AgentChannels`.
+ */
 interface RealtimeChannelDefinitionRow {
   ID: string;
   Name: string;
@@ -644,6 +644,9 @@ export class RealtimeSessionRuntime {
    * Owns shard indexing and retry for the current recording: it assigns each shard its index and
    * keeps failed shards to resend under that same index. A fresh queue per recording keeps a flush
    * still in flight from a previous session off this session's indexes. Null when not recording.
+   * A recording that ends discards its queue, and any retained shard with it: the consolidated
+   * end-of-call upload supersedes them, and if that upload is lost too, server-side recovery
+   * (#5196) fills the gap with silence.
    */
   private shardQueue: RecordingShardQueue | null = null;
   /** How often crash-recovery shards are flushed during a recording. */
@@ -1457,12 +1460,7 @@ export class RealtimeSessionRuntime {
    * without a single client-side log line — so the typed result must be checked, not just the absence
    * of a throw.
    */
-  private async uploadRecordingShard(
-    agentSessionId: string,
-    sampleRate: number,
-    segmentIndex: number,
-    audioBase64: string,
-  ): Promise<boolean> {
+  private async uploadRecordingShard(agentSessionId: string, sampleRate: number, segmentIndex: number, audioBase64: string): Promise<boolean> {
     const mutation = `
       mutation UploadRealtimeRecordingSegment($agentSessionId: String!, $segmentIndex: Int!, $audioBase64: String!, $mimeType: String!) {
         UploadRealtimeRecordingSegment(agentSessionId: $agentSessionId, segmentIndex: $segmentIndex, audioBase64: $audioBase64, mimeType: $mimeType)

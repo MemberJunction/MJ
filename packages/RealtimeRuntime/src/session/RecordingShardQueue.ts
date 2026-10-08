@@ -130,10 +130,7 @@ export class RecordingShardQueue {
   private async uploadWithTimeout(upload: ShardUpload, shard: PendingShard): Promise<boolean> {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const deadline = new Promise<never>((_, reject) => {
-      timer = setTimeout(
-        () => reject(new Error(`upload timed out after ${SHARD_UPLOAD_TIMEOUT_MS}ms`)),
-        SHARD_UPLOAD_TIMEOUT_MS,
-      );
+      timer = setTimeout(() => reject(new Error(`upload timed out after ${SHARD_UPLOAD_TIMEOUT_MS}ms`)), SHARD_UPLOAD_TIMEOUT_MS);
     });
     try {
       return await Promise.race([upload(shard.Index, shard.AudioBase64), deadline]);
