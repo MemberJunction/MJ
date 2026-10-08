@@ -213,7 +213,9 @@ export async function DeleteRealtimeRecordingSegments(sessionID: string, storage
     try {
         const driver = await FileStorageEngine.Instance.GetDriver(storageAccountID, contextUser);
         const folder = recordingFolder(sessionID);
-        const listed = await driver.ListObjects(folder);
+        // List the folder's CONTENTS: without the trailing slash, delimiter-based drivers (S3, GCS)
+        // return the folder itself as a common prefix and no objects, so no shard was ever deleted.
+        const listed = await driver.ListObjects(`${folder}/`);
         let deleted = 0;
         for (const obj of listed.objects ?? []) {
             const base = (obj.name.split('/').pop() ?? obj.name);

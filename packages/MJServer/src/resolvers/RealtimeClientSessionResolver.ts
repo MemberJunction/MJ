@@ -64,7 +64,7 @@ import { ResolverBase } from '../generic/ResolverBase.js';
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
 import { GetReadWriteProvider } from '../util.js';
 import { SessionManager } from '../agentSessions/index.js';
-import { ResolveWidgetGuestRunContext, ResolveScopedAnonymousRunUser } from '../realtimeWidget/widgetGuestElevation.js';
+import { ResolveWidgetGuestRunContext, ResolveScopedAnonymousRunUser, ResolveRecordingStoreUser } from '../realtimeWidget/widgetGuestElevation.js';
 
 /**
  * Progress steps worth narrating to the realtime model — mirrors the normal agent-run path's filter
@@ -782,11 +782,11 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             return { Success: false, ErrorMessage: 'Recording consent was not granted.' };
         }
 
-        // SCOPED-ANONYMOUS ELEVATION (issue #3371): past the ownership + consent gates, the store is
-        // server-side plumbing over entities (MJ: AI Agents read, MJ: Files, the file-session link)
-        // the caller's narrow relay role deliberately does not hold. Attribution flows through the
-        // session link, so nothing here depends on the caller's identity.
-        const runUser = ResolveScopedAnonymousRunUser(contextUser);
+        // ELEVATION (issue #3371, #5195): past the ownership + consent gates, the store is server-side
+        // plumbing over entities (MJ: AI Agents read, MJ: Files, the file-session link, the session's
+        // recording stamp) that neither a scoped-anonymous relay role nor the stock UI role holds.
+        // Attribution flows through the session link, so nothing here depends on the caller's identity.
+        const runUser = ResolveRecordingStoreUser(contextUser);
         try {
             const agent = await provider.GetEntityObject<MJAIAgentEntity>('MJ: AI Agents', runUser);
             if (!(await agent.Load(session.AgentID))) {
