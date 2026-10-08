@@ -405,4 +405,26 @@ describe('BaseEngine slot sync inside a batch', () => {
         await engine.Sync(config, event);
         expect(upsert).toHaveBeenCalledOnce();
     });
+    it('leaves the slot to a batch that took the event, even when the batch closed before the sync ran', async () => {
+        delete GetGlobalObjectStore()['___SINGLETON__LocalCacheManager'];
+        const manager = LocalCacheManager.Instance;
+        await manager.Initialize(new MockCacheStorageProvider());
+        const upsert = vi.spyOn(manager, 'UpsertSingleEntity').mockResolvedValue(true);
+        const owner = newOwner();
+        const event = {
+            type: 'save',
+            payload: null,
+            baseEntity: { EntityInfo: ENTITY_INFO, ProviderToUse: owner, PrimaryKey: key('1'), Get: () => null, GetAll: () => ({ ID: '1' }) },
+        } as unknown as BaseEntityEvent;
+        const config = new BaseEnginePropertyConfig({ Type: 'entity', EntityName: ENTITY, PropertyName: '_items', CacheLocal: true });
+        const engine = new SyncEngine();
+
+        manager.BeginEntityEventBatch(owner);
+        MJGlobal.Instance.RaiseEvent({ event: MJEventType.ComponentEvent, eventCode: BaseEntity.BaseEventCode, component: null, args: event });
+        await manager.EndEntityEventBatch(owner, true);
+
+        expect(manager.WasTakenByEntityEventBatch(event)).toBe(true);
+        await engine.Sync(config, event);
+        expect(upsert).not.toHaveBeenCalled();
+    });
 });
