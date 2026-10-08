@@ -19,6 +19,7 @@
     "@memberjunction/global": "6.2.0-edge.3",
     "@memberjunction/core": "6.2.0-edge.3",
     "@memberjunction/graphql-dataprovider": "6.2.0-edge.3",
+    "@memberjunction/ai-core-plus": "6.2.0-edge.3",
     "rxjs": "^7.8.1"
   },
   "devDependencies": {
