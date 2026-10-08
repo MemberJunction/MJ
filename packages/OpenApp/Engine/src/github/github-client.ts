@@ -78,6 +78,23 @@ export interface MigrationDownloadResult {
 }
 
 /**
+ * `value` without its leading and trailing slashes. A loop rather than `/^\/+|\/+$/g`: that
+ * pattern's end-anchored half backtracks quadratically on a long run of slashes, and the value
+ * comes from a manifest or a URL someone typed.
+ */
+function TrimSlashes(value: string): string {
+    let start = 0;
+    let end = value.length;
+    while (start < end && value[start] === '/') {
+        start++;
+    }
+    while (end > start && value[end - 1] === '/') {
+        end--;
+    }
+    return value.slice(start, end);
+}
+
+/**
  * Parses a GitHub repository URL into owner, repo, and an optional in-repo subpath.
  *
  * Supports two forms:
@@ -102,7 +119,7 @@ export function ParseGitHubUrl(repoUrl: string): { Owner: string; Repo: string; 
     }
     const owner = match[1];
     const repo = match[2].replace(/\.git$/, '');
-    const rawSubpath = (match[3] ?? '').replace(/^\/+|\/+$/g, '');
+    const rawSubpath = TrimSlashes(match[3] ?? '');
     const subpath = rawSubpath.length > 0 ? rawSubpath : undefined;
     return { Owner: owner, Repo: repo, Subpath: subpath };
 }
@@ -555,7 +572,7 @@ async function ListDirectory(octokit: Octokit, owner: string, repo: string, path
  * own independent tag line (`CRM-HubSpot@1.2.0`). undefined for single-app repos (repo-wide `vX.Y.Z`).
  */
 function ScopedTagPrefix(subpath: string | undefined): string | undefined {
-    const s = subpath?.replace(/^\/+|\/+$/g, '');
+    const s = subpath != null ? TrimSlashes(subpath) : undefined;
     return s ? s.replace(/\//g, '-') : undefined;
 }
 
@@ -631,7 +648,8 @@ export async function FetchManifestFromGitHub(
         return { Success: false, ErrorMessage: `Invalid GitHub URL: ${repoUrl}` };
     }
 
-    const effectiveSubpath = (subpath ?? parsed.Subpath)?.replace(/^\/+|\/+$/g, '');
+    const requestedSubpath = subpath ?? parsed.Subpath;
+    const effectiveSubpath = requestedSubpath != null ? TrimSlashes(requestedSubpath) : undefined;
     const ref = ResolveRef(version, effectiveSubpath);
     const manifestPath = ComposeRepoPath(effectiveSubpath, 'mj-app.json');
     const token = RepoToken(repoUrl, options);
@@ -865,7 +883,8 @@ export async function DownloadMigrations(
         return { Success: false, ErrorMessage: `Invalid GitHub URL: ${repoUrl}` };
     }
 
-    const effectiveSubpath = (subpath ?? parsed.Subpath)?.replace(/^\/+|\/+$/g, '');
+    const requestedSubpath = subpath ?? parsed.Subpath;
+    const effectiveSubpath = requestedSubpath != null ? TrimSlashes(requestedSubpath) : undefined;
     const ref = ResolveRef(version, effectiveSubpath);
     const cleanPath = NormalizeRepoPath(ComposeRepoPath(effectiveSubpath, migrationsPath));
     const token = RepoToken(repoUrl, options);

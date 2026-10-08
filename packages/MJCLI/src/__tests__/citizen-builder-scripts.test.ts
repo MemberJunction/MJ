@@ -6,7 +6,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -166,7 +166,9 @@ describe('citizen builder template scripts', () => {
       const first = keyOf();
       expect(first).not.toBe('0123456789abcdef0123456789abcdef');
       expect(keyOf()).toBe(first);
-      expect(existsSync(path.join(ws.Installed, '.citizen-builder', 'encryption-key'))).toBe(true);
+      const keyFile = path.join(ws.Installed, '.citizen-builder', 'encryption-key');
+      expect(readFileSync(keyFile, 'utf8').trim()).toBe(first);
+      expect(statSync(keyFile).mode & 0o777).toBe(0o600); // readable by its owner only
     });
 
     it('uses the key in .env when it is valid', () => {

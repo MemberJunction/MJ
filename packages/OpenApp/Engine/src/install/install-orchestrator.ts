@@ -6,7 +6,7 @@
  */
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { mkdirSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import type { AppInstallCallbacks, InstallOptions, UpgradeOptions, RemoveOptions, AppOperationResult, ErrorPhase, PassthroughInstallOptions, AppHookPayload, AppStatus, InstallAction } from '../types/open-app-types.js';
 import type { MJAppManifest } from '../manifest/manifest-schema.js';
@@ -1905,8 +1905,7 @@ async function HandleMigrations(manifest: MJAppManifest, context: OrchestratorCo
   }
 
   context.Callbacks?.OnProgress?.('Migration', 'Downloading migration files...');
-  const tempDir = join(tmpdir(), `mj-app-${manifest.name}-${Date.now()}`);
-  mkdirSync(tempDir, { recursive: true });
+  const tempDir = CreatePrivateTempDir(`mj-app-${manifest.name}-`);
 
   try {
     // Live DB platform — selects the Skyway provider for RunAppMigrations below.
@@ -1941,6 +1940,16 @@ async function HandleMigrations(manifest: MJAppManifest, context: OrchestratorCo
 }
 
 /**
+ * Creates a new, empty directory under the OS temp dir for downloaded migration or teardown SQL.
+ * `mkdtemp` picks a random, unused name and creates it readable only by this user, so another
+ * account on the machine cannot pre-create or swap the files the engine is about to run. A name
+ * built from the app name and a timestamp could be guessed and claimed first.
+ */
+function CreatePrivateTempDir(prefix: string): string {
+  return mkdtempSync(join(tmpdir(), prefix));
+}
+
+/**
  * Removes a temp directory the engine created for a download. Best-effort by design: a cleanup
  * failure must never fail — or mask the result of — the operation that created the directory.
  */
@@ -1972,8 +1981,7 @@ async function HandleTeardown(manifest: MJAppManifest, context: OrchestratorCont
 
   const platform = context.DatabaseProvider.Dialect.PlatformKey;
   const dir = platform === 'postgresql' ? `${teardownDir}-pg` : teardownDir;
-  const tempDir = join(tmpdir(), `mj-app-${manifest.name}-teardown-${Date.now()}`);
-  mkdirSync(tempDir, { recursive: true });
+  const tempDir = CreatePrivateTempDir(`mj-app-${manifest.name}-teardown-`);
 
   try {
     context.Callbacks?.OnProgress?.('Metadata', 'Downloading teardown scripts...');
@@ -2540,8 +2548,7 @@ async function ExtractDeclaredApplicationIds(
   }
   let tempDir: string | undefined;
   try {
-    tempDir = join(tmpdir(), `mj-app-${manifest.name}-appids-${Date.now()}`);
-    mkdirSync(tempDir, { recursive: true });
+    tempDir = CreatePrivateTempDir(`mj-app-${manifest.name}-appids-`);
     const download = await DownloadAppMigrations(manifest, context, tempDir, subpath);
     if (!download.Success) {
       return [];

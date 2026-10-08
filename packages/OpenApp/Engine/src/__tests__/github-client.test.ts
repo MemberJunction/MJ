@@ -123,6 +123,13 @@ describe('ParseGitHubUrl', () => {
         expect(ParseGitHubUrl('https://github.com/Acme/App/')?.Subpath).toBeUndefined();
     });
 
+    it('trims any run of slashes around the subpath, keeping the inner ones', () => {
+        const slashes = '/'.repeat(10_000);
+        const result = ParseGitHubUrl(`https://github.com/Acme/App${slashes}CRM/HubSpot${slashes}`);
+        expect(result?.Subpath).toBe('CRM/HubSpot');
+        expect(ParseGitHubUrl('https://github.com/Acme/App//CRM//HubSpot//')?.Subpath).toBe('CRM//HubSpot');
+    });
+
     it('returns null for invalid URL', () => {
         expect(ParseGitHubUrl('https://gitlab.com/foo/bar')).toBeNull();
     });

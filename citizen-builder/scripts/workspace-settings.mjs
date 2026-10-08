@@ -18,7 +18,7 @@
 // is recreated. Reading the file means a restart is enough.
 // ==============================================================================
 import { randomBytes } from 'node:crypto';
-import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -77,9 +77,25 @@ function unquote(raw) {
   return value.replace(/\s+#.*$/, ''); // an unquoted value ends at an inline comment
 }
 
+/**
+ * A file's text, or undefined when it does not exist. Reading straight away, rather than checking
+ * that the file exists first, leaves no window for it to change between the check and the read.
+ */
+function readIfExists(file) {
+  try {
+    return readFileSync(file, 'utf8');
+  } catch (error) {
+    if (error?.code === 'ENOENT') {
+      return undefined;
+    }
+    throw error;
+  }
+}
+
 /** .env wins for the settings a user edits; the container environment supplies everything else. */
 export function LoadSettings(env = process.env, hostEnvFile = HOST_ENV_FILE) {
-  const fromFile = existsSync(hostEnvFile) ? ParseDotenv(readFileSync(hostEnvFile, 'utf8')) : {};
+  const hostEnv = readIfExists(hostEnvFile);
+  const fromFile = hostEnv === undefined ? {} : ParseDotenv(hostEnv);
   const settings = { ...env };
   for (const key of USER_SETTINGS) {
     if (key in fromFile) {
@@ -150,13 +166,21 @@ export function ResolveEncryptionKey(settings, keyFile = GENERATED_KEY_FILE) {
   if (configured && configured !== LEGACY_PLACEHOLDER_KEY) {
     return configured;
   }
-  if (existsSync(keyFile)) {
-    return readFileSync(keyFile, 'utf8').trim();
+  const kept = readIfExists(keyFile);
+  if (kept !== undefined) {
+    return kept.trim();
   }
   const generated = randomBytes(32).toString('base64');
   mkdirSync(dirname(keyFile), { recursive: true });
-  writeFileSync(keyFile, `${generated}\n`, { encoding: 'utf8', mode: 0o600 });
-  chmodSync(keyFile, 0o600);
+  try {
+    // 'wx' creates the file only if it is still missing, readable by this user alone.
+    writeFileSync(keyFile, `${generated}\n`, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+  } catch (error) {
+    if (error?.code !== 'EEXIST') {
+      throw error;
+    }
+    return readFileSync(keyFile, 'utf8').trim(); // another start generated one first; keep it
+  }
   return generated;
 }
 
@@ -310,10 +334,10 @@ function explorerEnvironmentValues(settings) {
 
 /** Apply `edit` to a file if it exists; returns whether the content changed. */
 function rewriteFile(file, edit) {
-  if (!existsSync(file)) {
+  const before = readIfExists(file);
+  if (before === undefined) {
     return false;
   }
-  const before = readFileSync(file, 'utf8');
   const after = edit(before);
   if (after === before) {
     return false;

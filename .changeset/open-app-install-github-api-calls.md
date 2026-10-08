@@ -15,3 +15,5 @@ When the limit is reached anyway, the error now says so plainly: what was being 
 Installing from a default branch (no version) right after a push can briefly see the previous `mj-app.json`, because raw.githubusercontent.com is cached for a few minutes. Installs of a tagged version are unaffected.
 
 Also new: `ListGitHubTagNames()` returns every tag name in a repository, and `GitHubAccessError` now has `IsRateLimit` and `ResetAt`.
+
+Downloaded migration and teardown scripts now go into a temp directory with a random name, readable only by the user running the install (`mkdtemp`). The name used to be the app name plus a timestamp, which another account on the same machine could guess and create first.
