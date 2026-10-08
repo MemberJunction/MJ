@@ -42,13 +42,17 @@ import { ClassifyTurboFailures } from '../util/turboOutput.js';
 import {
   ExplorerAngularPins,
   IsExactVersion,
+  LOCKSTEP_PACKAGES_FILE,
   MEMBERJUNCTION_PIN_SOURCE,
   MemberJunctionPins,
   MergePnpmOverrides,
+  UsableLockstepPackages,
+  type LockstepPackageList,
   type PnpmOverridePin,
   type PnpmOverridesMergeResult,
 } from '../util/pnpmOverrides.js';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 /**
  * Convert an install tag into a valid npm version spec.
@@ -855,14 +859,15 @@ export class DependencyPhase {
   // ---------------------------------------------------------------------------
 
   /**
-   * Pin every `@memberjunction/*` package this install resolved, at the host's MJ version, in the
+   * Pin every `@memberjunction/*` package of the host's release, at the host's MJ version, in the
    * same `overrides:` block as the Angular pins — see {@link MemberJunctionPins} for why.
    *
-   * Runs after the install because the names come from its lockfile: pnpm has no glob override
-   * keys, and the MJ packages in the graph are only known once pnpm has resolved it (a fresh
-   * distribution resolves ~300, every one at the release version, since MJ packages pin each other
-   * exactly). The pins change nothing in this install; they bind every later `pnpm install` — in
-   * particular the one `mj app install` runs after adding an Open App's packages. The lockfile is
+   * Runs after the install because part of the names come from its lockfile: pnpm has no glob
+   * override keys (a fresh distribution resolves ~300 MJ packages, every one at the release version,
+   * since MJ packages pin each other exactly). The rest come from the list the installer ships, which
+   * adds packages only an Open App uses. The pins change nothing in this install; they bind every
+   * later `pnpm install` — in particular the one `mj app install` runs after adding an Open App's
+   * packages. The lockfile is
    * then re-resolved (`--lockfile-only`) so it records the new overrides and a later
    * `pnpm install --frozen-lockfile` still matches it.
    *
@@ -897,7 +902,9 @@ export class DependencyPhase {
     if (!hostVersion) {
       return;
     }
-    const pins = MemberJunctionPins((await this.readOptionalText(path.join(dir, pm.LockfileName))) ?? '', hostVersion);
+    const lockfile = (await this.readOptionalText(path.join(dir, pm.LockfileName))) ?? '';
+    const lockstep = UsableLockstepPackages(await this.readLockstepPackageList(emitter), hostVersion);
+    const pins = MemberJunctionPins(lockfile, hostVersion, lockstep);
     if (pins.length === 0) {
       this.logVerbose(emitter, `${pm.LockfileName} lists no @memberjunction/* package at ${hostVersion} — nothing to pin.`);
       return;
@@ -957,6 +964,26 @@ export class DependencyPhase {
       return undefined;
     }
     return cliVersion.trim();
+  }
+
+  /**
+   * The release's full package list the installer ships in its `dist/` ({@link LockstepPackageList}),
+   * so packages only an Open App uses are pinned before any app is installed. Absent (an installer
+   * run from source) or unreadable, it is skipped with a verbose note and only the lockfile's
+   * packages are pinned.
+   */
+  private async readLockstepPackageList(emitter: InstallerEventEmitter): Promise<LockstepPackageList | undefined> {
+    const listPath = fileURLToPath(new URL(`../${LOCKSTEP_PACKAGES_FILE}`, import.meta.url));
+    if (!(await this.fileSystem.FileExists(listPath))) {
+      this.logVerbose(emitter, `${LOCKSTEP_PACKAGES_FILE} not found next to the installer — pinning only the @memberjunction/* packages in the lockfile.`);
+      return undefined;
+    }
+    try {
+      return await this.fileSystem.ReadJSON<LockstepPackageList>(listPath);
+    } catch (err) {
+      this.logVerbose(emitter, `${LOCKSTEP_PACKAGES_FILE} could not be read (${err instanceof Error ? err.message : String(err)}) — pinning only the lockfile's packages.`);
+      return undefined;
+    }
   }
 
   /** Re-resolve the lockfile so it records the overrides just written. A failure is a warning, not an error. */

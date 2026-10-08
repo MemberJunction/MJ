@@ -6,6 +6,7 @@ import {
   MEMBERJUNCTION_PIN_VALUE,
   MemberJunctionPins,
   MergePnpmOverrides,
+  UsableLockstepPackages,
   type PnpmOverridePin,
 } from '../util/pnpmOverrides.js';
 
@@ -332,7 +333,31 @@ describe('MemberJunctionPins', () => {
     expect(names.every((name) => name.startsWith('@memberjunction/'))).toBe(true);
   });
 
+  it("adds the release's shipped package list, so packages only an Open App uses are pinned too", () => {
+    const names = MemberJunctionPins(LOCKFILE_V9, '6.2.0-edge.3', [
+      '@memberjunction/ng-gantt',
+      '@memberjunction/ng-kanban',
+      '@memberjunction/core', // also in the lockfile: one pin, not two
+      'left-pad', // never outside the scope
+    ]).map((pin) => pin.Name);
+
+    expect(names).toEqual([
+      '@memberjunction/cli',
+      '@memberjunction/core',
+      '@memberjunction/global',
+      '@memberjunction/ng-gantt',
+      '@memberjunction/ng-kanban',
+    ]);
+  });
+
+  it('pins the shipped list even before anything is installed', () => {
+    expect(MemberJunctionPins('', '6.2.0-edge.3', ['@memberjunction/ng-gantt'])).toEqual([
+      { Name: '@memberjunction/ng-gantt', Version: '$@memberjunction/cli' },
+    ]);
+  });
+
   it('pins nothing without an exact host version', () => {
+    expect(MemberJunctionPins(LOCKFILE_V9, 'latest', ['@memberjunction/ng-gantt'])).toEqual([]);
     expect(MemberJunctionPins(LOCKFILE_V9, 'latest')).toEqual([]);
     expect(MemberJunctionPins(LOCKFILE_V9, '^6.2.0')).toEqual([]);
     expect(MemberJunctionPins(LOCKFILE_V9, '9.9.9')).toEqual([]);
@@ -353,5 +378,33 @@ describe('MemberJunctionPins', () => {
     const yaml = `${WORKSPACE}overrides:\n  '@memberjunction/core': '6.1.5'\n`;
     const merged = MergePnpmOverrides(yaml, MemberJunctionPins(LOCKFILE_V9, '6.2.0-edge.3'));
     expect(merged.Changed).toEqual([{ Name: '@memberjunction/core', Previous: '6.1.5', Current: '$@memberjunction/cli' }]);
+  });
+});
+
+describe('UsableLockstepPackages', () => {
+  const LIST = { Version: '6.2.0-edge.3', Packages: ['@memberjunction/core', '@memberjunction/ng-gantt'] };
+
+  it('uses the list for a host on the same major release, prerelease or not', () => {
+    expect(UsableLockstepPackages(LIST, '6.2.0-edge.3')).toEqual(LIST.Packages);
+    expect(UsableLockstepPackages(LIST, '6.1.5')).toEqual(LIST.Packages);
+    expect(UsableLockstepPackages(LIST, '6.4.0')).toEqual(LIST.Packages);
+  });
+
+  it('ignores a list from another major release, which may name packages the host release lacks', () => {
+    expect(UsableLockstepPackages(LIST, '5.51.0')).toEqual([]);
+    expect(UsableLockstepPackages({ Version: '7.0.0', Packages: LIST.Packages }, '6.2.0')).toEqual([]);
+  });
+
+  it('ignores a missing or malformed list, and a host version that is not exact', () => {
+    expect(UsableLockstepPackages(undefined, '6.2.0')).toEqual([]);
+    expect(UsableLockstepPackages({ Version: 'latest', Packages: LIST.Packages }, '6.2.0')).toEqual([]);
+    expect(UsableLockstepPackages({ Version: '6.2.0' } as unknown as typeof LIST, '6.2.0')).toEqual([]);
+    expect(UsableLockstepPackages(LIST, '^6.2.0')).toEqual([]);
+  });
+
+  it('returns a copy, so callers cannot change the list', () => {
+    const names = UsableLockstepPackages(LIST, '6.2.0');
+    names.push('@memberjunction/extra');
+    expect(LIST.Packages).toHaveLength(2);
   });
 });

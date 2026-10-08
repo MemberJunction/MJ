@@ -750,6 +750,9 @@ describe('DependencyPhase package-manager awareness', () => {
     /** In-memory text files under the install root; anything else reads as absent. */
     let files: Map<string, string>;
 
+    /** The release package list the installer ships next to its code. */
+    const SHIPPED_LIST_FILE = 'memberjunction-packages.json';
+
     function rootManifest(cli: string | undefined): Record<string, unknown> {
       return cli === undefined ? {} : { devDependencies: { '@memberjunction/cli': cli } };
     }
@@ -758,17 +761,25 @@ describe('DependencyPhase package-manager awareness', () => {
      * A distribution after scaffold: root manifest, apps/MJAPI and apps/MJExplorer manifests, and
      * no pnpm-workspace.yaml. The install writes {@link LOCKFILE} unless `lockfileAfterInstall` is null.
      */
-    function distribution(options: { cli?: string; mjapiCore?: string; workspace?: string; lockfileAfterInstall?: string | null } = {}): void {
+    function distribution(options: {
+      cli?: string;
+      mjapiCore?: string;
+      workspace?: string;
+      lockfileAfterInstall?: string | null;
+      shippedList?: { Version: string; Packages: string[] };
+    } = {}): void {
       files = new Map();
       if (options.workspace !== undefined) files.set(path.join('/test/install', 'pnpm-workspace.yaml'), options.workspace);
       const cli = 'cli' in options ? options.cli : HOST;
       const mjapiCore = 'mjapiCore' in options ? options.mjapiCore : HOST;
       mockFs.DirectoryExists.mockResolvedValue(false); // distribution layout
       mockFs.FileExists.mockImplementation(async (p: string) =>
-        files.has(String(p)) || String(p).endsWith('package.json'));
+        files.has(String(p)) || String(p).endsWith('package.json') ||
+        (options.shippedList !== undefined && String(p).endsWith(SHIPPED_LIST_FILE)));
       mockFs.ReadText.mockImplementation(async (p: string) => files.get(String(p)) ?? '');
       mockFs.WriteText.mockImplementation(async (p: string, content: string) => { files.set(String(p), content); });
       mockFs.ReadJSON.mockImplementation(async (p: string) => {
+        if (String(p).endsWith(SHIPPED_LIST_FILE)) return options.shippedList;
         if (String(p).includes('MJExplorer')) return EXPLORER_MANIFEST;
         if (String(p).includes('MJAPI')) return mjapiCore === undefined ? {} : { dependencies: { '@memberjunction/core': mjapiCore } };
         return rootManifest(cli);
@@ -811,6 +822,30 @@ describe('DependencyPhase package-manager awareness', () => {
       expect(commands()).toEqual(['pnpm install', 'pnpm install --lockfile-only', 'pnpm run build']);
       expect(result.Warnings).toEqual([]);
       expect(warnings(emitSpy)).toEqual([]);
+    });
+
+    it("also pins the installer's shipped package list, so packages only an Open App uses get the host version", async () => {
+      distribution({
+        shippedList: { Version: HOST, Packages: ['@memberjunction/core', '@memberjunction/ng-gantt', '@memberjunction/ng-kanban'] },
+      });
+
+      await phase.Run(makeContext({ Tag: `v${HOST}` }));
+
+      const yaml = workspaceYaml();
+      for (const name of ['cli', 'core', 'global', 'ng-gantt', 'ng-kanban']) {
+        expect(yaml).toContain(`  '@memberjunction/${name}': '$@memberjunction/cli'\n`);
+      }
+      expect(yaml.match(/'@memberjunction\/core':/g)).toHaveLength(1);
+      expect(yaml).not.toContain('skyway');
+    });
+
+    it('ignores a shipped list from another major release and pins the lockfile only', async () => {
+      distribution({ shippedList: { Version: '7.0.0', Packages: ['@memberjunction/ng-gantt'] } });
+
+      await phase.Run(makeContext({ Tag: `v${HOST}` }));
+
+      expect(workspaceYaml()).toContain("  '@memberjunction/core': '$@memberjunction/cli'\n");
+      expect(workspaceYaml()).not.toContain('ng-gantt');
     });
 
     it('does not rewrite or resync when the pins are already current', async () => {

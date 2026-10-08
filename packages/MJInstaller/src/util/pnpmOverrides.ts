@@ -18,9 +18,11 @@
  * own `@memberjunction/core` and `global`. Two copies of those split MJ's class-factory registry,
  * and entities and resolvers silently stop registering. The host's version is authoritative (the
  * Open App engine checks each app's `mjVersionRange` before installing it), so every
- * `@memberjunction/*` package the install resolves at that version is pinned to it. pnpm has no
- * glob override keys, so the names come from the install's own lockfile ({@link
- * MemberJunctionPins}). Each pin is written as `$@memberjunction/cli` — a reference to the root
+ * `@memberjunction/*` package of the host's release is pinned to it. pnpm has no glob override
+ * keys, so the names come from the install's own lockfile plus the list of lockstep packages the
+ * installer ships with ({@link MemberJunctionPins}) — the lockfile alone misses packages only an
+ * Open App uses, which are not in the graph until the app is installed. Each pin is written as
+ * `$@memberjunction/cli` — a reference to the root
  * manifest's `@memberjunction/cli` dependency — rather than a literal version, so `mj bump`
  * moving that dependency moves every pin with it instead of silently holding the upgrade back.
  *
@@ -226,29 +228,73 @@ export function LockfilePackageVersions(lockfileYaml: string): Map<string, Set<s
 }
 
 /**
- * Pins for every `@memberjunction/*` package the lockfile resolves at `hostVersion`, each written
- * as {@link MEMBERJUNCTION_PIN_VALUE}, sorted by name.
+ * Pins for every `@memberjunction/*` package of the host's lockstep release, each written as
+ * {@link MEMBERJUNCTION_PIN_VALUE}, sorted by name. The names are the union of:
  *
- * Only packages resolved at the host version are pinned: they are the ones published in MJ's
- * lockstep release, so they exist at whatever version the root `@memberjunction/cli` names.
+ * - every package the lockfile resolves at `hostVersion` — published in MJ's lockstep release, so
+ *   they exist at whatever version the root `@memberjunction/cli` names; and
+ * - `lockstepPackages`, the release's full package list ({@link LockstepPackageList}). It covers
+ *   packages only an Open App uses (`ng-gantt`, `ng-kanban`, ...), which are absent from a fresh
+ *   distribution's lockfile and would otherwise come in at whatever version the app's range allows.
+ *   A pin for a package nothing installs is inert.
+ *
  * Separately versioned packages in the scope (the `@memberjunction/skyway-*` migration engine, at
- * `0.6.x`) are left alone — pinning them to the MJ version would ask for a release that does not
- * exist.
+ * `0.6.x`) appear in neither, so they are left alone — pinning them to the MJ version would ask for
+ * a release that does not exist.
  *
  * @param lockfileYaml - Content of the install's `pnpm-lock.yaml`.
  * @param hostVersion - The exact MJ version the install runs (the root `@memberjunction/cli` spec).
+ * @param lockstepPackages - Names from {@link UsableLockstepPackages}; empty pins the lockfile's only.
  * @returns One pin per MemberJunction package; empty when `hostVersion` is not an exact version.
  */
-export function MemberJunctionPins(lockfileYaml: string, hostVersion: string): PnpmOverridePin[] {
+export function MemberJunctionPins(
+  lockfileYaml: string,
+  hostVersion: string,
+  lockstepPackages: readonly string[] = []
+): PnpmOverridePin[] {
   if (!IsExactVersion(hostVersion)) {
     return [];
   }
   const host = hostVersion.trim();
-  return [...LockfilePackageVersions(lockfileYaml)]
+  const fromLockfile = [...LockfilePackageVersions(lockfileYaml)]
     .filter(([name, resolved]) => name.startsWith(MEMBERJUNCTION_SCOPE) && resolved.has(host))
-    .map(([name]) => name)
-    .sort()
-    .map((name) => ({ Name: name, Version: MEMBERJUNCTION_PIN_VALUE }));
+    .map(([name]) => name);
+  const names = new Set([...fromLockfile, ...lockstepPackages.filter((name) => name.startsWith(MEMBERJUNCTION_SCOPE))]);
+  return [...names].sort().map((name) => ({ Name: name, Version: MEMBERJUNCTION_PIN_VALUE }));
+}
+
+/**
+ * The installer's list of its own lockstep release: every published `@memberjunction/*` package at
+ * `Version`. Written to `dist/memberjunction-packages.json` by `scripts/write-lockstep-packages.mjs`
+ * at build time.
+ */
+export interface LockstepPackageList {
+  Version: string;
+  Packages: string[];
+}
+
+/** File name of the {@link LockstepPackageList} in the installer's `dist/`. */
+export const LOCKSTEP_PACKAGES_FILE = 'memberjunction-packages.json';
+
+/**
+ * The names from `list` that may be pinned for a host on `hostVersion`: all of them when the list
+ * belongs to the same major release, none otherwise (or when there is no list). Within a major,
+ * a package the host's release lacks is only installed by an app the host could not run anyway,
+ * and a package the list lacks is still pinned from the lockfile when it is there.
+ *
+ * @param list - The installer's shipped list, or undefined when it was not found.
+ * @param hostVersion - The exact MJ version the install runs.
+ */
+export function UsableLockstepPackages(list: LockstepPackageList | undefined, hostVersion: string): string[] {
+  if (!list || !Array.isArray(list.Packages) || !IsExactVersion(list.Version) || !IsExactVersion(hostVersion)) {
+    return [];
+  }
+  return majorOf(list.Version) === majorOf(hostVersion) ? [...list.Packages] : [];
+}
+
+/** The major version of an exact version string. */
+function majorOf(version: string): string {
+  return version.trim().split('.')[0];
 }
 
 /**
