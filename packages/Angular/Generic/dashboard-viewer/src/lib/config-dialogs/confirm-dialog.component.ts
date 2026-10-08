@@ -1,12 +1,11 @@
 import { Component, Input, Output, EventEmitter, ChangeDetectorRef } from '@angular/core';
 
-/**
- * Confirmation dialog types
- */
+/** @deprecated Use `MJConfirmDialogType` from `@memberjunction/ng-ui-components`. */
 export type ConfirmDialogType = 'warning' | 'danger' | 'info';
 
 /**
- * A nice confirmation dialog to replace browser confirm().
+ * A confirmation dialog for the dashboard viewer's hosts.
+ * @deprecated Use `MJConfirmService` (imperative) or `MJConfirmDialogComponent` (`<mj-confirm-dialog>`) from `@memberjunction/ng-ui-components`.
  */
 @Component({
   standalone: false,

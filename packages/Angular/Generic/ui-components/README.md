@@ -255,7 +255,7 @@ Re-export of `angular-split` — use `<as-split>` / `<as-split-area>` directly:
 ```
 
 ### `mj-accordion-panel` — MJAccordionPanelComponent (+ directives)
-Collapsible panel replacing Kendo panelbar/expansion panel. Inputs: `Title`, `Expanded` (+`ExpandedChange`), `Disabled`, `Variant: 'default'|'primary'|'secondary'`, `Size: 'sm'|'md'`, `Bare`, `FlushBody`, `Fill` (consume leftover height). Rich content via structural directives — `*mjAccordionTitle`, `*mjAccordionActions` (rendered outside the toggle button), and `*mjAccordionBody` (**lazy — instantiated on first expand, then kept alive**). Import `MJAccordionModule` to get the panel plus all three directives in one symbol.
+Collapsible panel replacing Kendo panelbar/expansion panel. Inputs: `Title`, `Expanded` (+`ExpandedChange`), `Disabled`, `Variant: 'default'|'primary'|'secondary'`, `Size: 'sm'|'md'`, `Bare` (no border, header background, body fill or row hover fill, for a panel inside a card or a section directly on a page; on a device that can hover, pointing at the title or chevron gives both the brand color), `HeadingLevel: 1–6 | null` (wraps the toggle in a `role="heading"` element with that `aria-level`; null, the default, adds no wrapper), `FlushBody`, `Fill` (consume leftover height). Rich content via structural directives — `*mjAccordionTitle`, `*mjAccordionActions` (rendered outside the toggle button), and `*mjAccordionBody` (**lazy — instantiated on first expand, then kept alive**). Import `MJAccordionModule` to get the panel plus all three directives in one symbol.
 
 ```html
 <mj-accordion-panel [Expanded]="open" (ExpandedChange)="open = $event">

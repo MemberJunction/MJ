@@ -451,6 +451,41 @@
   z-index: 3;           /* added — higher than .content-header's z-index: 2 */
 }
 
+/* ============================================
+   DASHBOARDS MOVED BANNER
+   ============================================ */
+
+/* Sits between .content-header and .content-body in the .content-area column. Side margins line up with the header text. */
+.dx-moved-banner {
+  display: flex;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  margin: 12px 24px;
+  border-radius: 10px;
+  background: var(--mj-status-info-bg);
+  color: var(--mj-status-info-text);
+  font-size: 13px;
+  transition: margin-right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* The home header has no bottom border and ends with its own padding. */
+.content-header.home-header + .dx-moved-banner {
+  margin-top: 0;
+}
+
+/* The open Quick Access panel covers the right 320px, so the banner ends 24px before it. */
+.dx-moved-banner.panel-open {
+  margin-right: 344px;
+}
+
+/* The text fills the free space. When less than 200px is free, the buttons go to a second line. */
+.dx-moved-banner span {
+  flex: 1 1 200px;
+}
+
 .loading-container,
 .loading-state {
   display: flex;
@@ -1079,6 +1114,11 @@
   .quick-access-panel {
     width: 100%;
   }
+
+  /* The Quick Access panel covers the full width here, so the banner keeps its normal margin. */
+  .dx-moved-banner.panel-open {
+    margin-right: 24px;
+  }
 }
 
 @media (max-width: 600px) {
@@ -1096,6 +1136,12 @@
 
   .content-body {
     padding: 12px 16px;
+  }
+
+  /* The entity header has 16px side padding here. The home header keeps 24px. */
+  .content-header:not(.home-header) + .dx-moved-banner {
+    margin-left: 16px;
+    margin-right: 16px;
   }
 
   .entity-item-grid {
