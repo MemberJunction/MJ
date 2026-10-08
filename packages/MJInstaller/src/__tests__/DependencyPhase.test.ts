@@ -414,6 +414,7 @@ describe('DependencyPhase package-manager awareness', () => {
     mockFs.ReadJSON.mockClear().mockResolvedValue({});
     mockFs.WriteJSON.mockClear().mockResolvedValue(undefined);
     mockFs.WriteText.mockClear().mockResolvedValue(undefined);
+    mockFs.ReadText.mockClear().mockResolvedValue('');
     mockFs.FileExists.mockClear().mockResolvedValue(true);
     mockFs.DirectoryExists.mockClear().mockResolvedValue(true);
   });
@@ -588,6 +589,133 @@ describe('DependencyPhase package-manager awareness', () => {
 
       const wsWrite = mockFs.WriteText.mock.calls.find(([p]) => String(p).endsWith('pnpm-workspace.yaml'));
       expect(wsWrite).toBeUndefined();
+    });
+  });
+
+  describe('Angular pins (pnpm overrides)', () => {
+    const EXPLORER_MANIFEST = {
+      dependencies: {
+        '@angular/core': '21.2.22',
+        '@angular/cdk': '21.2.14',
+        rxjs: '^7.8.2',
+        '@memberjunction/ng-explorer-core': '6.2.0',
+      },
+      devDependencies: { '@angular/cli': '21.2.23' },
+    };
+
+    const CURRENT_PINS =
+      "overrides:\n  '@angular/cdk': '21.2.14'\n  '@angular/cli': '21.2.23'\n  '@angular/core': '21.2.22'\n  'rxjs': '^7.8.2'\n";
+
+    /** Explorer's manifest for apps/MJExplorer/package.json, `root` for every other package.json. */
+    function readJsonByPath(root: Record<string, unknown> = {}) {
+      return async (p: string) => (String(p).includes('MJExplorer') ? EXPLORER_MANIFEST : root);
+    }
+
+    /** The text written to pnpm-workspace.yaml, or undefined when the file was not written. */
+    function writtenWorkspace(): string | undefined {
+      const call = mockFs.WriteText.mock.calls.find(([p]) => String(p).endsWith('pnpm-workspace.yaml'));
+      return call ? String(call[1]) : undefined;
+    }
+
+    function warnings(emitSpy: ReturnType<typeof createMockEmitter>['emitSpy']): string[] {
+      return (emittedEvents(emitSpy, 'warn') as Array<{ Message: string }>).map((w) => w.Message);
+    }
+
+    beforeEach(() => {
+      mockFs.DirectoryExists.mockResolvedValue(false); // distribution layout
+      mockFs.ReadJSON.mockImplementation(readJsonByPath());
+      mockRunner.Run.mockResolvedValue(ok());
+    });
+
+    it("pins the Angular family to apps/MJExplorer's versions in a newly written workspace file", async () => {
+      mockFs.FileExists.mockImplementation(async (p: string) => !String(p).endsWith('pnpm-workspace.yaml'));
+      const { emitter, emitSpy } = createMockEmitter();
+
+      await phase.Run(makeContext({ Emitter: emitter }));
+
+      const yaml = writtenWorkspace();
+      expect(yaml).toContain('linkWorkspacePackages: true');
+      expect(yaml).toContain(CURRENT_PINS);
+      expect(yaml).not.toContain('@memberjunction/ng-explorer-core');
+      expect(warnings(emitSpy)).toEqual([]);
+    });
+
+    it('merges into an existing overrides block instead of adding a second one', async () => {
+      mockFs.ReadText.mockResolvedValue("packages:\n  - 'apps/*'\noverrides:\n  'some-lib': '1.0.0'\n  '@angular/core': '21.2.20'\n");
+      const { emitter, emitSpy } = createMockEmitter();
+
+      await phase.Run(makeContext({ Emitter: emitter }));
+
+      const yaml = writtenWorkspace() ?? '';
+      expect(yaml.match(/^overrides:/gm)).toHaveLength(1);
+      expect(yaml).toContain("'some-lib': '1.0.0'");
+      expect(yaml).toContain("'@angular/core': '21.2.22'");
+      expect(yaml).not.toContain('21.2.20');
+      const logs = emittedEvents(emitSpy, 'log') as Array<{ Message: string }>;
+      expect(logs.some((l) => l.Message.includes('@angular/core: 21.2.20 → 21.2.22'))).toBe(true);
+    });
+
+    it('does not rewrite a workspace file whose pins are already current', async () => {
+      mockFs.ReadText.mockResolvedValue(`packages:\n  - 'apps/*'\n${CURRENT_PINS}`);
+
+      await phase.Run(makeContext());
+
+      expect(writtenWorkspace()).toBeUndefined();
+    });
+
+    it('pins nothing when apps/MJExplorer/package.json is missing', async () => {
+      mockFs.FileExists.mockImplementation(
+        async (p: string) => !String(p).endsWith('pnpm-workspace.yaml') && !String(p).includes('MJExplorer')
+      );
+
+      await phase.Run(makeContext());
+
+      const yaml = writtenWorkspace();
+      expect(yaml).toContain('linkWorkspacePackages: true');
+      expect(yaml).not.toContain('overrides');
+      expect(mockFs.ReadJSON.mock.calls.some(([p]) => String(p).includes('MJExplorer'))).toBe(false);
+    });
+
+    it('warns and leaves the file alone when its overrides key is not a block mapping', async () => {
+      mockFs.ReadText.mockResolvedValue("packages:\n  - 'apps/*'\noverrides: {}\n");
+      const { emitter, emitSpy } = createMockEmitter();
+
+      await phase.Run(makeContext({ Emitter: emitter }));
+
+      expect(writtenWorkspace()).toBeUndefined();
+      expect(warnings(emitSpy).some((w) => w.includes("'@angular/core': '21.2.22'"))).toBe(true);
+    });
+
+    it('warns when root package.json overrides would make pnpm ignore the workspace pins', async () => {
+      mockFs.FileExists.mockImplementation(async (p: string) => !String(p).endsWith('pnpm-workspace.yaml'));
+      mockFs.ReadJSON.mockImplementation(readJsonByPath({ pnpm: { overrides: { lodash: '4.17.21' } } }));
+      const { emitter, emitSpy } = createMockEmitter();
+
+      await phase.Run(makeContext({ Emitter: emitter }));
+
+      expect(writtenWorkspace()).toContain(CURRENT_PINS);
+      expect(warnings(emitSpy).some((w) => w.includes('pnpm applies those instead'))).toBe(true);
+    });
+
+    it('fails before installing, naming the file, when apps/MJExplorer/package.json is not valid JSON', async () => {
+      mockFs.ReadJSON.mockImplementation(async (p: string) => {
+        if (String(p).includes('MJExplorer')) {
+          throw new SyntaxError('Unexpected token } in JSON at position 10');
+        }
+        return {};
+      });
+
+      await expect(phase.Run(makeContext())).rejects.toThrow(/MJExplorer[\\/]package\.json/);
+      expect(mockRunner.Run).not.toHaveBeenCalled();
+    });
+
+    it('leaves the workspace file to npm installs entirely', async () => {
+      mockFs.FileExists.mockResolvedValue(false);
+
+      await phase.Run(makeContext({ PackageManager: 'npm' }));
+
+      expect(writtenWorkspace()).toBeUndefined();
+      expect(mockFs.ReadJSON.mock.calls.some(([p]) => String(p).includes('MJExplorer'))).toBe(false);
     });
   });
 
