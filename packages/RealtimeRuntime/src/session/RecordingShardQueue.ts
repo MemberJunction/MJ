@@ -27,6 +27,19 @@ export const MAX_SHARD_UPLOAD_ATTEMPTS = 3;
  */
 export const MAX_CONCURRENT_FLUSHES = 2;
 
+/**
+ * Per-attempt upload deadline. A hung request would otherwise pin one of the
+ * {@link MAX_CONCURRENT_FLUSHES} slots forever and silently stop all later shards. A timeout counts
+ * as a failed attempt; if the request later succeeds anyway that is harmless, because the server
+ * key is per-index and a resend is an idempotent overwrite.
+ */
+export const SHARD_UPLOAD_TIMEOUT_MS = 60_000;
+
+/** One-line reason for a warn message; the raw value is still passed along for its stack. */
+function describeFailure(failure: unknown): string {
+  return failure instanceof Error ? failure.message : String(failure);
+}
+
 interface PendingShard {
   Index: number;
   AudioBase64: string;
@@ -41,6 +54,8 @@ export class RecordingShardQueue {
   private nextIndex = 0;
   private retained: PendingShard[] = [];
   private inFlight = 0;
+  /** True once a capacity stall has been logged; cleared when a flush actually runs. */
+  private capacityWarned = false;
   /**
    * Serializes "take a snapshot, then assign an index". The recorder advances its cursor
    * synchronously but encodes asynchronously, so two overlapping snapshots could resolve out of
@@ -60,8 +75,10 @@ export class RecordingShardQueue {
    */
   public async Flush(snapshot: ShardSnapshot, upload: ShardUpload): Promise<void> {
     if (this.inFlight >= MAX_CONCURRENT_FLUSHES) {
+      this.warnCapacitySkip();
       return;
     }
+    this.capacityWarned = false;
     this.inFlight++;
     try {
       // Swap the array out so a concurrent flush only sees shards nobody is currently sending.
@@ -69,15 +86,26 @@ export class RecordingShardQueue {
       this.retained = [];
       const fresh = await this.captureShard(snapshot);
       if (fresh) {
+        // Already index-ordered: `send` keeps retained sorted and a fresh index exceeds every earlier one.
         batch.push(fresh);
       }
-      batch.sort((a, b) => a.Index - b.Index);
       for (const shard of batch) {
         await this.send(shard, upload);
       }
     } finally {
       this.inFlight--;
     }
+  }
+
+  /** Warns once per stall so a wedged uploader is visible without logging every 15 s tick. */
+  private warnCapacitySkip(): void {
+    if (this.capacityWarned) {
+      return;
+    }
+    this.capacityWarned = true;
+    console.warn(
+      `[RealtimeSession] Recording flush skipped: at capacity with ${this.inFlight}/${MAX_CONCURRENT_FLUSHES} flushes in flight and ${this.retained.length} shard(s) retained. The recorder keeps the audio for the next flush.`,
+    );
   }
 
   private captureShard(snapshot: ShardSnapshot): Promise<PendingShard | null> {
@@ -99,12 +127,27 @@ export class RecordingShardQueue {
     }
   }
 
+  private async uploadWithTimeout(upload: ShardUpload, shard: PendingShard): Promise<boolean> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const deadline = new Promise<never>((_, reject) => {
+      timer = setTimeout(
+        () => reject(new Error(`upload timed out after ${SHARD_UPLOAD_TIMEOUT_MS}ms`)),
+        SHARD_UPLOAD_TIMEOUT_MS,
+      );
+    });
+    try {
+      return await Promise.race([upload(shard.Index, shard.AudioBase64), deadline]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   private async send(shard: PendingShard, upload: ShardUpload): Promise<void> {
     shard.Attempts++;
     let stored = false;
     let failure: unknown = 'server refused the shard';
     try {
-      stored = await upload(shard.Index, shard.AudioBase64);
+      stored = await this.uploadWithTimeout(upload, shard);
     } catch (error) {
       failure = error;
     }
@@ -113,13 +156,13 @@ export class RecordingShardQueue {
     }
     if (shard.Attempts >= MAX_SHARD_UPLOAD_ATTEMPTS) {
       console.warn(
-        `[RealtimeSession] Dropping recording shard ${shard.Index} after ${shard.Attempts}/${MAX_SHARD_UPLOAD_ATTEMPTS} failed uploads; recovery will fill the gap with silence:`,
+        `[RealtimeSession] Dropping recording shard ${shard.Index} after ${shard.Attempts}/${MAX_SHARD_UPLOAD_ATTEMPTS} failed uploads (${describeFailure(failure)}); recovery will fill the gap with silence:`,
         failure,
       );
       return;
     }
     console.warn(
-      `[RealtimeSession] Recording shard ${shard.Index} upload failed (attempt ${shard.Attempts}/${MAX_SHARD_UPLOAD_ATTEMPTS}); will retry next flush:`,
+      `[RealtimeSession] Recording shard ${shard.Index} upload failed (attempt ${shard.Attempts}/${MAX_SHARD_UPLOAD_ATTEMPTS}: ${describeFailure(failure)}); will retry next flush:`,
       failure,
     );
     // Sorted re-insert: concurrent flushes can fail out of index order, and the oldest must go first.

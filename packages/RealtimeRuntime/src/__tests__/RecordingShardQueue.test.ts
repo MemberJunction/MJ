@@ -3,6 +3,7 @@ import {
   MAX_CONCURRENT_FLUSHES,
   MAX_SHARD_UPLOAD_ATTEMPTS,
   RecordingShardQueue,
+  SHARD_UPLOAD_TIMEOUT_MS,
   type ShardSnapshot,
   type ShardUpload,
 } from '../session/RecordingShardQueue';
@@ -170,7 +171,7 @@ describe('RecordingShardQueue', () => {
     await Promise.all(flushes);
 
     expect(maxActiveForAnyIndex).toBe(1);
-    expect([...stored].sort()).toEqual([0, 1]);
+    expect([...stored].sort((a, b) => a - b)).toEqual([0, 1]);
   });
 
   it('keeps RetainedCount at MAX_SHARD_UPLOAD_ATTEMPTS - 1 or fewer when uploads always fail', async () => {
@@ -209,23 +210,97 @@ describe('RecordingShardQueue', () => {
   it('skips a flush without snapshotting when MAX_CONCURRENT_FLUSHES are in flight', async () => {
     expect(MAX_CONCURRENT_FLUSHES).toBe(2);
     const queue = new RecordingShardQueue();
-    const { Upload } = recordingUpload();
-    const pending: Array<Deferred<string | null>> = [];
-    const flushes: Array<Promise<void>> = [];
-    for (let i = 0; i < MAX_CONCURRENT_FLUSHES; i++) {
-      const gate = createDeferred<string | null>();
-      pending.push(gate);
-      flushes.push(queue.Flush(() => gate.Promise, Upload));
-    }
-    const third = vi.fn(async () => 'c');
-    await queue.Flush(third, Upload);
-    expect(third).not.toHaveBeenCalled();
+    // Leave shard 0 retained so the skip has something it must not touch.
+    await queue.Flush(snapshotOf('a'), recordingUpload(() => false).Upload);
+    expect(queue.RetainedCount).toBe(1);
 
-    for (const gate of pending) gate.Resolve(null);
-    await Promise.all(flushes);
+    const uploadGate = createDeferred<boolean>();
+    const uploadedIndexes: number[] = [];
+    const gatedUpload: ShardUpload = (index) => {
+      uploadedIndexes.push(index);
+      return uploadGate.Promise;
+    };
+    const snapshotGate = createDeferred<string | null>();
+    // Flush 1 takes shard 0 and hangs in its upload; flush 2 hangs in its snapshot.
+    const flush1 = queue.Flush(snapshotOf(null), gatedUpload);
+    const flush2 = queue.Flush(() => snapshotGate.Promise, gatedUpload);
+    await settle();
+    expect(uploadedIndexes).toEqual([0]);
+    const retainedBefore = queue.RetainedCount;
+
+    const third = vi.fn(async () => 'c');
+    await queue.Flush(third, gatedUpload);
+    expect(third).not.toHaveBeenCalled();
+    expect(queue.RetainedCount).toBe(retainedBefore);
+    expect(uploadedIndexes).toEqual([0]);
+
+    uploadGate.Resolve(true);
+    snapshotGate.Resolve(null);
+    await Promise.all([flush1, flush2]);
     // Capacity is released: a later flush snapshots again.
-    await queue.Flush(third, Upload);
+    await queue.Flush(third, gatedUpload);
     expect(third).toHaveBeenCalledTimes(1);
+  });
+
+  it('warns once per capacity stall, not once per skipped tick', async () => {
+    const queue = new RecordingShardQueue();
+    const { Upload } = recordingUpload();
+    const gates = [createDeferred<string | null>(), createDeferred<string | null>()];
+    const flushes = gates.map((gate) => queue.Flush(() => gate.Promise, Upload));
+    await queue.Flush(snapshotOf('x'), Upload);
+    await queue.Flush(snapshotOf('y'), Upload);
+    const stallWarnings = warn.mock.calls.filter((c) => String(c[0]).includes('at capacity'));
+    expect(stallWarnings).toHaveLength(1);
+    expect(String(stallWarnings[0][0])).toContain('in flight');
+    expect(String(stallWarnings[0][0])).toContain('retained');
+
+    gates.forEach((gate) => gate.Resolve(null));
+    await Promise.all(flushes);
+    // A flush that actually runs ends the stall, so the next stall warns again.
+    const again = gates.map(() => createDeferred<string | null>());
+    const flushesAgain = again.map((gate) => queue.Flush(() => gate.Promise, Upload));
+    await queue.Flush(snapshotOf('z'), Upload);
+    expect(warn.mock.calls.filter((c) => String(c[0]).includes('at capacity'))).toHaveLength(2);
+    again.forEach((gate) => gate.Resolve(null));
+    await Promise.all(flushesAgain);
+  });
+
+  describe('upload timeout', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('treats a never-resolving upload as failed after SHARD_UPLOAD_TIMEOUT_MS, retains it and releases capacity', async () => {
+      const queue = new RecordingShardQueue();
+      const hung: ShardUpload = () => new Promise<boolean>(() => undefined);
+      const flushes = [queue.Flush(snapshotOf('a'), hung), queue.Flush(snapshotOf('b'), hung)];
+      await vi.advanceTimersByTimeAsync(SHARD_UPLOAD_TIMEOUT_MS);
+      await Promise.all(flushes);
+
+      expect(queue.RetainedCount).toBe(2);
+      const timeoutWarning = warn.mock.calls.map((c) => String(c[0])).find((m) => m.includes('timed out'));
+      expect(timeoutWarning).toBeDefined();
+      expect(timeoutWarning).toContain(`attempt 1/${MAX_SHARD_UPLOAD_ATTEMPTS}`);
+      expect(timeoutWarning).toContain(String(SHARD_UPLOAD_TIMEOUT_MS));
+      expect(vi.getTimerCount()).toBe(0);
+
+      // inFlight was released, so the next flush runs and retries both shards oldest-first.
+      const { Upload, Calls } = recordingUpload();
+      const snapshot = snapshotOf(null);
+      await queue.Flush(snapshot, Upload);
+      expect(snapshot).toHaveBeenCalledTimes(1);
+      expect(Calls.map((c) => c.Index)).toEqual([0, 1]);
+    });
+
+    it('clears the timer when the upload settles in time', async () => {
+      const queue = new RecordingShardQueue();
+      await queue.Flush(snapshotOf('a'), recordingUpload().Upload);
+      expect(vi.getTimerCount()).toBe(0);
+    });
   });
 
   it('retries retained shards in index order even when they failed out of order', async () => {
