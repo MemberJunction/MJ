@@ -46,6 +46,15 @@ export {
     type RealtimeSessionRunOptions,
 } from './session/RealtimeSessionRuntime';
 
+// Crash-recovery shard retry queue — host-agnostic, reusable by other session hosts.
+export {
+    RecordingShardQueue,
+    MAX_SHARD_UPLOAD_ATTEMPTS,
+    MAX_CONCURRENT_FLUSHES,
+    type ShardSnapshot,
+    type ShardUpload,
+} from './session/RecordingShardQueue';
+
 // The platform seam.
 export {
     type IRealtimeMediaHost,
