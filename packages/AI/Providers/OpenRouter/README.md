@@ -107,7 +107,7 @@ same Decisions API, as `openai/gpt-6-luna-decisions`. The model's OpenRouter row
 `openai/gpt-6-luna-decisions-20261006`, served by OpenAI with a 1,050,000-token context, and uses
 `OpenRouterDecision` and the same key. OpenRouter's response for it is in the System One format, so
 this driver maps it unchanged. The model's other route is OpenAI's own Decisions API, which has its own
-wire format, through `OpenAIDecision` in [`@memberjunction/ai-openai`](../OpenAI/README.md). That row
+wire format, through `OpenAIDecision` in [`@memberjunction/ai-openai`](../OpenAI/readme.md). That row
 has the higher priority, so with keys for both, the runner tries OpenAI first and fails over to
 OpenRouter.
 
