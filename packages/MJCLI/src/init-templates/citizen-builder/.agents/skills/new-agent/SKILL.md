@@ -25,9 +25,9 @@ fix that first: its `error.whatToDo` says how.
 
 ## Step 3: Choose the pattern
 - **Flow** (`"TypeID": "@lookup:MJ: AI Agent Types.Name=Flow"`) for a predictable sequence of steps.
-  Data steps use `Get Records`; query actions cannot feed a Flow (AGENTS.md section 2E).
-- **Loop** (`"TypeID": "@lookup:MJ: AI Agent Types.Name=Loop"`) for open-ended tool use, including
-  saved queries through `Run Stored Query`.
+  Data steps use `Get Records` or `Run Stored Query`, mapping their output parameters into the
+  payload (AGENTS.md section 2E).
+- **Loop** (`"TypeID": "@lookup:MJ: AI Agent Types.Name=Loop"`) for open-ended tool use.
 - Always `"ModelSelectionMode": "Agent Type"` and `"ExposeAsAction": false`.
 - Tier 2 (a sandboxed runtime action) only when no existing action can do it, with an explicit
   `allowedEntities` list.

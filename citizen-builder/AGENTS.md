@@ -34,8 +34,10 @@ API keys and tokens typed into chat end up in transcripts and logs. Instead:
 - check it without printing it, e.g. `grep -c '^ANTHROPIC_API_KEY=.' .env`;
 - apply it with `./scripts/restart-api.sh` (or `docker compose up -d` if the stack is not running).
 
-An Anthropic key must be created **inside a workspace** in the Anthropic console. A key that is not
-scoped to a workspace fails at the first model call with an error about `anthropic-workspace-id`.
+An Anthropic key created **inside a workspace** in the Anthropic console works as it is. A key that
+is not scoped to a workspace fails at the first model call with an error about
+`anthropic-workspace-id` until the user also fills in `ANTHROPIC_WORKSPACE_ID` in `.env` (the ID of
+the workspace to bill, from the Anthropic console's workspace settings); then restart the API.
 
 ### Keep them informed while you work
 Silence over a minute reads as "stuck". During any wait, post a plain-language update at every
@@ -170,10 +172,11 @@ A Flow agent is a graph. There is **no** `Configuration.Steps` field on the agen
 
 ### E. How data moves through a Flow
 * **Action steps:** `ActionOutputMapping` copies an action's **output parameters** into payload keys.
-  Only actions that declare output parameters can feed later steps. `Get Records` does (`Records`,
-  `TotalCount`). `Run Ad-hoc Query` and `Run Stored Query` do not: their rows come back only in the
-  action's message, so a Flow step mapping them gets `{}`. For query-shaped data in a Flow, use
-  `Get Records`; for saved queries, use a Loop agent, whose model reads the action's message.
+  Only output parameters reach later steps, never the action's message. `Get Records` returns
+  `Records` and `TotalCount`. `Run Stored Query` returns `Results` (the rows), `RowCount`,
+  `TotalRowCount` and `WasTruncated`, e.g. `{ "Results": "openInvoices", "TotalRowCount": "openInvoiceTotal" }`.
+  `Run Ad-hoc Query` returns `Results`, `RowCount`, `Columns` and `WasTruncated`. `Results` always
+  holds full values: `DataFormat` and `ColumnMaxLength` shape only the copy in the message.
 * **Prompt steps:** give the prompt `"ResponseFormat": "JSON"` and have it return a JSON object; it
   is merged into the payload, so later steps and path conditions can read its keys. A response
   containing `taskComplete: true` with a `message` (or `nextStep.type: "Chat"`) **ends the flow**
@@ -277,8 +280,8 @@ Apply safe remediations; ask the user for anything only they can provide (sectio
   does none of that, so a CLI pass does not prove the user's path works. Run it from Explorer chat
   with the **user's own wording**, as the owner (`OWNER_EMAIL`, Developer role), and confirm the
   result actually appears where the user will look.
-* If people other than the owner will run it, test with an account that has only the basic `UI`
-  role, and record in the manifest which permissions those users need.
+* If people other than the owner will run it, they get the roles of the environment it is promoted
+  to, often only the basic `UI` role. Record in the manifest which permissions those users need.
 * Check the content against the data, not just that the run succeeded: numbers, names, ties,
   anything the model may have invented (offers, prior contact, dates).
 
@@ -308,13 +311,11 @@ say what is needed.
 
 ## 7. Known platform gaps (work around them; they are being fixed)
 
-* **Flow agent results in chat.** A Flow agent run from Explorer chat may never post its result back
-  ("You do not have access to this conversation" in the API log). If the user needs to see the
-  result, deliver it explicitly (an in-app notification step) and say so.
 * **Basic `UI`-role users cannot run Flow agents.** Running one creates task records the `UI` role
-  may not create. The owner has the Developer role and is unaffected; record the gap in the manifest
-  for other users. Never grant permissions in the database yourself: a permission change is the
-  user's or their admin's decision.
+  may not create. Everyone who signs in to this builder gets the Developer role and is unaffected;
+  users of an environment the agent is promoted to may not be, so record the gap in the manifest.
+  Never grant permissions in the database yourself: a permission change is the user's or their
+  admin's decision.
 * **After a promotion,** the destination's API must restart before new prompts work (`PROMOTION_GUIDE.md`).
 
 ---

@@ -8,7 +8,8 @@
 //   check                 Validate settings. Prints problems; exits 1 if one blocks setup.
 //   install-config <file> Write the `mj install --config` file.
 //   shell-env             Print `export` lines for the entrypoint (keys the CLI needs).
-//   sync                  Copy keys, ports and sign-in settings into the installed workspace.
+//   sync                  Copy keys, ports and sign-in settings into the installed workspace,
+//                         and give people who sign in the Developer role.
 //                         Prints {"api":bool,"explorer":bool}: which services need a restart.
 //
 // Why .env is read from the mounted workspace instead of the container's
@@ -42,6 +43,7 @@ const PROVIDER_KEYS = {
 /** Settings a user edits in .env and that take effect on a restart. Everything else comes from docker-compose.yml. */
 const USER_SETTINGS = [
   ...Object.keys(PROVIDER_KEYS),
+  'ANTHROPIC_WORKSPACE_ID',
   'MJ_BASE_ENCRYPTION_KEY',
   'OWNER_EMAIL', 'OWNER_FIRST_NAME', 'OWNER_LAST_NAME',
   'ENTRA_TENANT_ID', 'ENTRA_CLIENT_ID',
@@ -130,7 +132,7 @@ export function CheckSettings(settings) {
     warnings.push('No sign-in provider is set in .env (ENTRA_* or AUTH0_*), so the Explorer web app cannot sign anyone in.');
   }
   if (!value(settings, 'OWNER_EMAIL')) {
-    warnings.push('OWNER_EMAIL is not set in .env, so the person signing in gets only the basic UI role and cannot run Flow agents.');
+    warnings.push('OWNER_EMAIL is not set in .env, so the installed owner is a placeholder account. Whoever signs in to Explorer is created at first sign-in instead, with the UI and Developer roles.');
   }
   return { errors, warnings };
 }
@@ -229,6 +231,7 @@ export function ShellExports(settings, encryptionKey) {
   for (const [name, driver] of Object.entries(PROVIDER_KEYS)) {
     exports[`AI_VENDOR_API_KEY__${driver}`] = value(settings, name);
   }
+  exports.ANTHROPIC_WORKSPACE_ID = value(settings, 'ANTHROPIC_WORKSPACE_ID');
   exports.GITHUB_TOKEN = value(settings, 'GITHUB_TOKEN');
   exports.OPEN_APP_INSTALL_URL = value(settings, 'OPEN_APP_INSTALL_URL');
   return Object.entries(exports).map(([name, text]) => `export ${name}=${shellQuote(text)}`).join('\n');
@@ -272,6 +275,8 @@ function apiDotenvValues(settings, encryptionKey) {
   for (const [name, driver] of Object.entries(PROVIDER_KEYS)) {
     values[`AI_VENDOR_API_KEY__${driver}`] = value(settings, name);
   }
+  // Written even when empty, so clearing it in .env clears it here too.
+  values.ANTHROPIC_WORKSPACE_ID = value(settings, 'ANTHROPIC_WORKSPACE_ID');
   const auth = AuthProvider(settings);
   if (auth === 'entra') {
     values.WEB_CLIENT_ID = value(settings, 'ENTRA_CLIENT_ID');
@@ -317,12 +322,37 @@ function rewriteFile(file, edit) {
   return true;
 }
 
+/** Marks the block {@link EnsureLocalSignInRoles} appends to mj.config.cjs, so it is added once. */
+const LOCAL_SIGN_IN_ROLES_MARKER = '// citizen-builder: roles for people who sign in';
+
+/**
+ * Whoever signs in to a local builder is the developer building agents, so MJAPI creates them with
+ * the Developer role as well as UI. Its default is UI only, which is right for a shared server but
+ * leaves a builder unable to run the Flow agents they build from Explorer. docker-compose.yml binds
+ * every port to this machine, so nobody else can reach the sign-in.
+ *
+ * Appended after `module.exports = {...}` rather than edited into it, so it survives whatever shape
+ * the installed file has. MJAPI merges it over its defaults; the array replaces the default list.
+ */
+export function EnsureLocalSignInRoles(text) {
+  if (text.includes(LOCAL_SIGN_IN_ROLES_MARKER)) {
+    return text;
+  }
+  const block = [
+    `${LOCAL_SIGN_IN_ROLES_MARKER} (added by scripts/workspace-settings.mjs)`,
+    "module.exports.userHandling = { ...(module.exports.userHandling || {}), newUserRoles: ['UI', 'Developer'] };",
+  ].join('\n');
+  return `${text.replace(/\s*$/, '')}\n\n${block}\n`;
+}
+
 function syncApi(settings, encryptionKey) {
   const values = apiDotenvValues(settings, encryptionKey);
   const apply = (text) => Object.entries(values).reduce((acc, [k, v]) => UpsertDotenv(acc, k, v), text);
   const apiChanged = rewriteFile(join(WORKSPACE, 'apps', 'MJAPI', '.env'), apply);
   const rootChanged = rewriteFile(join(WORKSPACE, '.env'), apply); // what `mj` CLI runs in /workspace read
-  return apiChanged || rootChanged;
+  // apps/MJAPI/mj.config.cjs requires this file, so MJAPI reads it too.
+  const rolesChanged = rewriteFile(join(WORKSPACE, 'mj.config.cjs'), EnsureLocalSignInRoles);
+  return apiChanged || rootChanged || rolesChanged;
 }
 
 function syncExplorer(settings) {

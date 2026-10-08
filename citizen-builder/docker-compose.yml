@@ -14,8 +14,10 @@ services:
     environment:
       ACCEPT_EULA: "Y"
       MSSQL_SA_PASSWORD: "${DB_PASSWORD:-TestPassword123!}"
+    # Every port is bound to this machine only: the database has a well-known default password, and
+    # anyone who signs in to Explorer is given the Developer role (scripts/workspace-settings.mjs).
     ports:
-      - "${DB_PORT:-1433}:1433"
+      - "127.0.0.1:${DB_PORT:-1433}:1433"
     healthcheck:
       test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q \"SELECT 1\" -C -No"]
       interval: 10s
@@ -67,9 +69,10 @@ services:
         condition: service_completed_successfully
     # The API listens on API_PORT inside the container too: the browser calls it at
     # http://localhost:API_PORT, so the two must match. Explorer always listens on 4200 inside.
+    # Bound to this machine only, like the database port above.
     ports:
-      - "${API_PORT:-4000}:${API_PORT:-4000}"
-      - "${EXPLORER_PORT:-4202}:4200"
+      - "127.0.0.1:${API_PORT:-4000}:${API_PORT:-4000}"
+      - "127.0.0.1:${EXPLORER_PORT:-4202}:4200"
     # Only the database connection and ports are set here. AI provider keys, the encryption key and
     # sign-in settings are read from .env on every start (scripts/workspace-settings.mjs) and
     # written into the files MemberJunction loads, so editing .env and restarting is enough.

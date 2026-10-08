@@ -35,10 +35,12 @@ a short settings sheet (or a pre-filled `.env`) with:
 | `OPEN_APP_INSTALL_URL` | Your sample-data app, e.g. `https://github.com/your-org/your-sampledata` |
 | `GITHUB_TOKEN` | Only if that repository is private: a fine-grained, read-only token with `Contents: Read` on the sample-data and platform repositories. |
 | `ENTRA_TENANT_ID` and `ENTRA_CLIENT_ID` (or `AUTH0_DOMAIN` and `AUTH0_CLIENT_ID`) | A single-page app registration for local builders, with `http://localhost:4202` registered as a redirect URI. One registration serves everyone. |
-| An AI provider key | Ideally an organization-managed key per team. For Anthropic, keys must be created inside a workspace. |
+| An AI provider key | Ideally an organization-managed key per team. For Anthropic, a key created inside a workspace works as it is; a key that is not scoped to one also needs `ANTHROPIC_WORKSPACE_ID`. |
 
-Each builder adds their own `OWNER_EMAIL` (the account they sign in with), which gets the Developer
-role so they can run the agents they build.
+Each builder adds their own `OWNER_EMAIL` (the account they sign in with). A local builder gives
+everyone who signs in to it the Developer role, so they can run the agents they build; its ports
+accept connections only from that machine. An environment the agents are promoted to keeps its own
+roles.
 
 A builder then creates a workspace pointed at your app:
 ```bash

@@ -49,6 +49,16 @@ function installMemberJunction(ws: Workspace): void {
     ].join('\n')
   );
   writeFileSync(path.join(ws.Installed, 'apps', 'MJExplorer', 'package.json'), JSON.stringify({ scripts: { start: 'ng serve' } }));
+  writeFileSync(
+    path.join(ws.Installed, 'mj.config.cjs'),
+    "module.exports = {\n  settings: { host: 'sqlserver' },\n  userHandling: { autoCreateNewUsers: true },\n};\n"
+  );
+}
+
+/** Evaluate the installed mj.config.cjs the way MJAPI does: `require` it in a fresh process. */
+function loadServerConfig(ws: Workspace): { settings?: { host?: string }; userHandling?: { autoCreateNewUsers?: boolean; newUserRoles?: string[] } } {
+  const script = `process.stdout.write(JSON.stringify(require(${JSON.stringify(path.join(ws.Installed, 'mj.config.cjs'))})))`;
+  return JSON.parse(execFileSync(process.execPath, ['-e', script], { encoding: 'utf8' }));
 }
 
 /** Run a template script with the container's environment, redirected into the temp workspace. */
@@ -203,13 +213,38 @@ describe('citizen builder template scripts', () => {
       expect(JSON.parse(result.stdout).api).toBe(true);
       expect(readFileSync(path.join(ws.Installed, 'apps', 'MJAPI', '.env'), 'utf8')).toContain("AI_VENDOR_API_KEY__AnthropicLLM='added-later'");
     });
+
+    it('gives people who sign in the Developer role as well as UI, once', () => {
+      writeFileSync(ws.HostEnv, '');
+      expect(JSON.parse(run(ws, 'workspace-settings.mjs', ['sync']).stdout).api).toBe(true);
+
+      const config = loadServerConfig(ws);
+      expect(config.userHandling).toEqual({ autoCreateNewUsers: true, newUserRoles: ['UI', 'Developer'] });
+      expect(config.settings).toEqual({ host: 'sqlserver' });
+
+      expect(JSON.parse(run(ws, 'workspace-settings.mjs', ['sync']).stdout).api).toBe(false);
+      const text = readFileSync(path.join(ws.Installed, 'mj.config.cjs'), 'utf8');
+      expect(text.match(/newUserRoles/g)).toHaveLength(1);
+    });
+
+    it('carries the Anthropic workspace ID to the API and the CLI, and clears it when .env does', () => {
+      writeFileSync(ws.HostEnv, 'ANTHROPIC_API_KEY=sk-org\nANTHROPIC_WORKSPACE_ID=wrkspc_1\n');
+      run(ws, 'workspace-settings.mjs', ['sync']);
+      expect(readFileSync(path.join(ws.Installed, 'apps', 'MJAPI', '.env'), 'utf8')).toContain("ANTHROPIC_WORKSPACE_ID='wrkspc_1'");
+      expect(readFileSync(path.join(ws.Installed, '.env'), 'utf8')).toContain("ANTHROPIC_WORKSPACE_ID='wrkspc_1'");
+
+      writeFileSync(ws.HostEnv, 'ANTHROPIC_API_KEY=sk-scoped\nANTHROPIC_WORKSPACE_ID=\n');
+      const result = run(ws, 'workspace-settings.mjs', ['sync']);
+      expect(JSON.parse(result.stdout).api).toBe(true);
+      expect(readFileSync(path.join(ws.Installed, 'apps', 'MJAPI', '.env'), 'utf8')).toContain("ANTHROPIC_WORKSPACE_ID=''");
+    });
   });
 
   it('workspace-settings.mjs shell-env quotes values so the shell reads them back exactly', () => {
-    writeFileSync(ws.HostEnv, "ANTHROPIC_API_KEY=a'b $HOME `x`\nGITHUB_TOKEN=gh-1\n");
+    writeFileSync(ws.HostEnv, "ANTHROPIC_API_KEY=a'b $HOME `x`\nANTHROPIC_WORKSPACE_ID=wrkspc_2\nGITHUB_TOKEN=gh-1\n");
     const exports = run(ws, 'workspace-settings.mjs', ['shell-env']).stdout;
-    const echoed = execFileSync('bash', ['-c', `${exports}\nprintf '%s|%s' "$AI_VENDOR_API_KEY__AnthropicLLM" "$GITHUB_TOKEN"`], { encoding: 'utf8' });
-    expect(echoed).toBe("a'b $HOME `x`|gh-1");
+    const echoed = execFileSync('bash', ['-c', `${exports}\nprintf '%s|%s|%s' "$AI_VENDOR_API_KEY__AnthropicLLM" "$ANTHROPIC_WORKSPACE_ID" "$GITHUB_TOKEN"`], { encoding: 'utf8' });
+    expect(echoed).toBe("a'b $HOME `x`|wrkspc_2|gh-1");
   });
 
   it('builder-status.mjs records each step, warnings, a failure with its log, and ready', () => {

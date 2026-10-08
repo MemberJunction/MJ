@@ -45,8 +45,8 @@ Check:
 3. **Cost**: tokens and duration are reasonable, with no runaway loop.
 
 Errors that point at the environment rather than the agent: "No suitable model found" (no usable AI
-key: see `mj doctor --scope ai`), `anthropic-workspace-id` (an Anthropic key not created inside a
-workspace), "is not in the engine's metadata" (the API needs a restart: `./scripts/restart-api.sh`).
+key: see `mj doctor --scope ai`), `anthropic-workspace-id` (an Anthropic key not scoped to a
+workspace: set `ANTHROPIC_WORKSPACE_ID` in `.env`), "is not in the engine's metadata" (the API needs a restart: `./scripts/restart-api.sh`).
 
 ## 4. Iterate
 1. Fix the template, mapping or step.

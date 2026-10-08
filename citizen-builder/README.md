@@ -17,7 +17,7 @@ Collect these first, so setup never stops part way to ask for them:
 | You need | Why | Where it comes from |
 |---|---|---|
 | **Docker Desktop**, with **12 GB of memory** and **20 GB of free disk** | Runs the local database, API and web app. At Docker's default of 8 GB the install runs out of memory. | [docker.com](https://www.docker.com/products/docker-desktop). Then Docker Desktop → Settings → Resources → Memory. |
-| **An AI provider API key** | Your agents call a model with it. | For Anthropic, create one at [console.anthropic.com](https://console.anthropic.com/settings/keys) inside a workspace. A Claude or ChatGPT subscription does not include an API key. |
+| **An AI provider API key** | Your agents call a model with it. | For Anthropic, create one at [console.anthropic.com](https://console.anthropic.com/settings/keys), ideally inside a workspace (otherwise also set `ANTHROPIC_WORKSPACE_ID`). A Claude or ChatGPT subscription does not include an API key. |
 | **The email you sign in with** | That account gets the role that can run the agents you build. | You. |
 | **Sign-in settings** for the web app (Microsoft Entra or Auth0) | Without them the Explorer web app cannot sign you in; you can still build and test from the command line. | Usually your IT or platform team. |
 
