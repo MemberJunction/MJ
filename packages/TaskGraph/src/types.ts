@@ -97,8 +97,13 @@ export type TaskPromptRunParams = {
     InputPayload: unknown;
     /** Outputs of this node's satisfied prerequisites, in the same shape agent nodes receive. */
     DependencyOutputs: Map<string, unknown>;
-    /** Template parameters declared on the node's configuration. */
-    TemplateParameters?: Record<string, string>;
+    /**
+     * Template parameters: those declared on the node's configuration, plus — for a loop body — the
+     * loop's item and index bindings. Values are passed as they are, objects included; the runner
+     * prepares structured values for the template rather than receiving them as JSON text, which a
+     * template cannot read a field of.
+     */
+    TemplateParameters?: Record<string, unknown>;
     Provider: IMetadataProvider;
     ContextUser: UserInfo;
     /** Optional progress sink; the dispatcher turns calls into rate-limited `NodeProgress` frames. */

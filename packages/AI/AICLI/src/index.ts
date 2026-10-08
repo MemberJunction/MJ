@@ -6,7 +6,7 @@ export { ActionService } from './services/ActionService';
 export { ConversationService } from './services/ConversationService';
 export { ValidationService } from './services/ValidationService';
 export { PromptService } from './services/PromptService';
-export { AgentAuditService } from './services/AgentAuditService';
+export { AgentAuditService, SummarizeRunTokens } from './services/AgentAuditService';
 
 // Export utilities
 export { OutputFormatter } from './lib/output-formatter';
@@ -27,6 +27,7 @@ export type {
   ListRunsOptions,
   StepDetailOptions,
   RunSummaryOptions,
+  RunTokenUsage,
 } from './services/AgentAuditService';
 export type { WorkflowTaskInfo, WorkflowTaskSummary } from './lib/workflow-tasks';
 

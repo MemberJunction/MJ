@@ -34,6 +34,11 @@ vi.mock('@memberjunction/core', () => ({
                 get StartedAt() { return db.run?.StartedAt; },
                 get CompletedAt() { return db.run?.CompletedAt; },
                 get TotalTokensUsed() { return db.run?.TotalTokensUsed; },
+                get TotalPromptTokensUsed() { return db.run?.TotalPromptTokensUsed; },
+                get TotalCompletionTokensUsed() { return db.run?.TotalCompletionTokensUsed; },
+                get TotalCacheReadTokensUsed() { return db.run?.TotalCacheReadTokensUsed; },
+                get TotalCacheWriteTokensUsed() { return db.run?.TotalCacheWriteTokensUsed; },
+                get TotalCost() { return db.run?.TotalCost; },
                 get ErrorMessage() { return db.run?.ErrorMessage; },
             };
         }
@@ -125,6 +130,57 @@ describe('AgentAuditService', () => {
             expect(summary.errorCount).toBe(0);
             expect(summary.hasErrors).toBe(false);
             expect(db.calls.filter(call => call.EntityName === 'MJ: Tasks')).toHaveLength(1);
+        });
+    });
+
+    // A prompt run's TokensPrompt counts UNCACHED input only; with prompt caching it read 4 for a
+    // prompt of several thousand tokens, and the audit's totals were built from it alone.
+    describe('GetRunSummary token usage', () => {
+        beforeEach(() => {
+            db.graphParents = [];
+            db.run = {
+                ...db.run,
+                Status: 'Completed',
+                ErrorMessage: null,
+                TotalTokensUsed: 304,          // uncached input + output, by the AIPromptRun invariant
+                TotalPromptTokensUsed: 4,
+                TotalCompletionTokensUsed: 300,
+                TotalCacheReadTokensUsed: 5000,
+                TotalCacheWriteTokensUsed: 1200,
+                TotalCost: 0.0123,
+            };
+        });
+
+        it('counts cache reads and writes as input', async () => {
+            const summary = await new AgentAuditService().GetRunSummary(RUN_ID, { includeStepList: false, maxTokens: 100 });
+
+            expect(summary.Tokens).toEqual({ UncachedInput: 4, CacheRead: 5000, CacheWrite: 1200, TotalInput: 6204, Output: 300 });
+            expect(summary.totalTokens).toBe(6504);
+        });
+
+        it('reports the recorded cost, which already prices each bucket, instead of a flat estimate', async () => {
+            const summary = await new AgentAuditService().GetRunSummary(RUN_ID, { includeStepList: false, maxTokens: 100 });
+
+            expect(summary.estimatedCost).toBe(0.0123);
+            expect(summary.CostSource).toBe('Recorded');
+        });
+
+        it('falls back to an estimate, and says so, when the run recorded no cost', async () => {
+            db.run = { ...db.run, TotalCost: 0 };
+
+            const summary = await new AgentAuditService().GetRunSummary(RUN_ID, { includeStepList: false, maxTokens: 100 });
+
+            expect(summary.CostSource).toBe('Estimated');
+            expect(summary.estimatedCost).toBeCloseTo((6504 / 1000) * 0.01, 10);
+        });
+
+        it('keeps a run that predates the split columns at its recorded total', async () => {
+            db.run = { ...db.run, TotalTokensUsed: 1200, TotalPromptTokensUsed: null, TotalCompletionTokensUsed: null, TotalCacheReadTokensUsed: null, TotalCacheWriteTokensUsed: null };
+
+            const summary = await new AgentAuditService().GetRunSummary(RUN_ID, { includeStepList: false, maxTokens: 100 });
+
+            expect(summary.totalTokens).toBe(1200);
+            expect(summary.Tokens).toBeUndefined();
         });
     });
 

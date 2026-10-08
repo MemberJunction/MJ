@@ -592,6 +592,13 @@ export class BaseAgent {
     private _stepSaveQueue = new AgentRunStepSaveQueue();
 
     /**
+     * Step-save failures reported by a flush that ran BEFORE {@link finalizeAgentRun} — see
+     * {@link awaitQueuedStepSaves}. A flush resets the queue's own tally, so without carrying them here
+     * the run's "N step record save(s) failed" note would silently lose them.
+     */
+    private _earlierStepSaveFailures = 0;
+
+    /**
      * Active per-request metadata provider, set at the start of Execute().
      * Defaults to the global Metadata.Provider; overridden when a per-request
      * provider is passed through ExecuteAgentParams.provider for server isolation.
@@ -16117,11 +16124,12 @@ The context is now within limits. Please retry your request with the recovered c
                 : null;
             request.Priority = priority;
             request.OriginatingAgentRunID = this._agentRun?.ID || null;
-            request.OriginatingAgentRunStepID = stepEntity.ID;
 
             if (expirationMinutes != null && expirationMinutes > 0) {
                 request.ExpiresAt = new Date(Date.now() + expirationMinutes * 60_000);
             }
+
+            await this.linkRequestToPersistedStep(request, stepEntity);
 
             const saved = await request.Save();
             if (saved) {
@@ -16132,12 +16140,54 @@ The context is now within limits. Please retry your request with the recovered c
                     params
                 );
             } else {
-                LogError(`Failed to save AIAgentRequest for agent ${params.agent.Name}`);
+                LogError(
+                    `Failed to save AIAgentRequest for agent ${params.agent.Name} ` +
+                    `(run ${this._agentRun?.ID ?? 'unknown'}): ${request.LatestResult?.CompleteMessage ?? 'unknown error'}`
+                );
             }
         } catch (error) {
             // Don't let request creation failure break the agent execution
             LogError(`Error creating feedback request: ${(error as Error).message}`);
         }
+    }
+
+    /**
+     * Points the request at the step that raised it, once that step's row exists.
+     *
+     * `OriginatingAgentRunStepID` is a foreign key to `AIAgentRunStep`, and the Chat/Plan step was
+     * created moments ago with a fire-and-forget INSERT (see {@link createStepEntity}). Saving the
+     * request before that INSERT landed raced it, and losing the race failed the request on
+     * `FK_AIAgentRequest_OriginatingStep`: the run still ended `AwaitingFeedback`, but no request was
+     * recorded, so nothing showed the pause and nothing could answer it. The run is ending anyway, so
+     * waiting for the queued step saves costs nothing that {@link finalizeAgentRun} would not pay.
+     *
+     * If the step's own INSERT failed, the request is still recorded, unlinked from the step: the pause
+     * matters more than the breadcrumb, and a dangling id would fail the save for the same reason.
+     */
+    private async linkRequestToPersistedStep(
+        request: MJAIAgentRequestEntity,
+        stepEntity: MJAIAgentRunStepEntityExtended
+    ): Promise<void> {
+        await this.awaitQueuedStepSaves();
+        if (stepEntity.IsSaved) {
+            request.OriginatingAgentRunStepID = stepEntity.ID;
+            return;
+        }
+        request.OriginatingAgentRunStepID = null;
+        LogError(
+            `Feedback request for run ${this._agentRun?.ID ?? 'unknown'} is recorded without its originating step: ` +
+            `step ${stepEntity.ID} was not saved (${stepEntity.LatestResult?.CompleteMessage ?? 'unknown error'})`
+        );
+    }
+
+    /**
+     * Waits for every step save queued so far, so a row that references one of those steps by foreign
+     * key is not inserted ahead of it. Failures are carried into {@link finalizeAgentRun}'s report,
+     * because a flush resets the queue's own count.
+     */
+    private async awaitQueuedStepSaves(): Promise<void> {
+        const { failures } = await this._stepSaveQueue.Flush();
+        this._earlierStepSaveFailures += failures;
     }
 
     /**
@@ -17400,7 +17450,8 @@ The context is now within limits. Please retry your request with the recovered c
         // Flush every pending step save (success OR failure) via the shared queue, which allSettles so a
         // single failure doesn't shadow the rest and drains itself so a reused instance doesn't leak
         // settled promises. Surface the failure count on the run for visibility.
-        const { failures } = await this._stepSaveQueue.Flush();
+        const failures = (await this._stepSaveQueue.Flush()).failures + this._earlierStepSaveFailures;
+        this._earlierStepSaveFailures = 0;
         if (failures > 0 && this._agentRun) {
             const note = `${failures} step record save(s) failed during this run; see logs for details.`;
             this._agentRun.ErrorMessage = this._agentRun.ErrorMessage

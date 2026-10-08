@@ -42,8 +42,21 @@ export interface RunSummary {
   duration: number; // milliseconds
 
   // Performance metrics
+  /**
+   * Every token the run's models processed: all input (uncached, cache reads and cache writes) plus
+   * output. The run row's `TotalTokensUsed` is narrower — uncached input plus output — because
+   * prompt runs store cache reads and writes in their own columns; see {@link Tokens}.
+   */
   totalTokens: number;
+  /**
+   * The run's recorded `TotalCost` when it has one — priced per token bucket, cache reads and writes
+   * included — otherwise a flat per-token estimate. {@link CostSource} says which.
+   */
   estimatedCost: number;
+  /** Whether {@link estimatedCost} is the run's recorded cost or a flat estimate. */
+  CostSource?: 'Recorded' | 'Estimated';
+  /** Input and output tokens, with input broken into the buckets the provider reported. */
+  Tokens?: RunTokenUsage;
   stepCount: number;
 
   // Step list with identifiable information
@@ -78,6 +91,54 @@ export interface RunSummary {
    * toward `errorCount`.
    */
   Workflow?: WorkflowTaskSummary;
+}
+
+/**
+ * A run's token usage by bucket.
+ *
+ * `TotalPromptTokensUsed` (and `AIPromptRun.TokensPrompt`) count UNCACHED input only. With prompt
+ * caching, most of a long prompt is a cache read, so on its own that column can read 4 for a prompt of
+ * several thousand tokens. The input a model actually processed is the sum of all three buckets.
+ */
+export interface RunTokenUsage {
+  /** Input not served from the provider's prompt cache — what `TotalPromptTokensUsed` stores. */
+  UncachedInput: number;
+  /** Input read from the provider's prompt cache. */
+  CacheRead: number;
+  /** Input written to the provider's prompt cache. */
+  CacheWrite: number;
+  /** All input the models processed: uncached + cache read + cache write. */
+  TotalInput: number;
+  /** Output (completion) tokens. */
+  Output: number;
+}
+
+/** The token columns of an `MJ: AI Agent Runs` row that the audit reads. */
+type RunTokenColumns = Pick<
+  MJAIAgentRunEntity,
+  'TotalTokensUsed' | 'TotalPromptTokensUsed' | 'TotalCompletionTokensUsed' | 'TotalCacheReadTokensUsed' | 'TotalCacheWriteTokensUsed'
+>;
+
+/**
+ * Totals a run's token usage across all input buckets.
+ *
+ * A row written before the uncached/output split was recorded carries only `TotalTokensUsed`
+ * (uncached input plus output); it gets that total plus its cache buckets, and no breakdown, rather
+ * than a breakdown of zeros.
+ */
+export function SummarizeRunTokens(run: RunTokenColumns): { Tokens?: RunTokenUsage; TotalTokens: number } {
+  const cacheRead = run.TotalCacheReadTokensUsed ?? 0;
+  const cacheWrite = run.TotalCacheWriteTokensUsed ?? 0;
+  if (run.TotalPromptTokensUsed == null && run.TotalCompletionTokensUsed == null) {
+    return { TotalTokens: (run.TotalTokensUsed ?? 0) + cacheRead + cacheWrite };
+  }
+  const uncachedInput = run.TotalPromptTokensUsed ?? 0;
+  const output = run.TotalCompletionTokensUsed ?? 0;
+  const totalInput = uncachedInput + cacheRead + cacheWrite;
+  return {
+    Tokens: { UncachedInput: uncachedInput, CacheRead: cacheRead, CacheWrite: cacheWrite, TotalInput: totalInput, Output: output },
+    TotalTokens: totalInput + output,
+  };
 }
 
 export interface StepDetail {
@@ -260,7 +321,8 @@ export class AgentAuditService {
     const steps = stepsResult.Results || [];
 
     // Calculate metrics - note: token counts are at the run level, not step level
-    const totalTokens = runEntity.TotalTokensUsed || 0;
+    const { Tokens: tokens, TotalTokens: totalTokens } = SummarizeRunTokens(runEntity);
+    const recordedCost = runEntity.TotalCost ?? 0;
 
     const duration = runEntity.StartedAt && runEntity.CompletedAt
       ? new Date(runEntity.CompletedAt).getTime() - new Date(runEntity.StartedAt).getTime()
@@ -282,7 +344,10 @@ export class AgentAuditService {
       completedAt: runEntity.CompletedAt?.toISOString(),
       duration,
       totalTokens,
-      estimatedCost: this.analyzer.estimateCost(totalTokens),
+      // A run with no cost row priced it as 0, so 0 means "not recorded", not "free".
+      estimatedCost: recordedCost > 0 ? recordedCost : this.analyzer.estimateCost(totalTokens),
+      CostSource: recordedCost > 0 ? 'Recorded' : 'Estimated',
+      Tokens: tokens,
       stepCount: steps.length,
       hasErrors: errorCount > 0 || !!runErrorMessage,
       errorCount,

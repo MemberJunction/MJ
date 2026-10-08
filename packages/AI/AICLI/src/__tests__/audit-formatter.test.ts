@@ -101,6 +101,44 @@ describe('AuditFormatter', () => {
         });
     });
 
+    describe('FormatRunSummary token usage', () => {
+        const WITH_TOKENS: RunSummary = {
+            ...SUMMARY,
+            Workflow: undefined,
+            totalTokens: 6504,
+            estimatedCost: 0.0123,
+            CostSource: 'Recorded',
+            Tokens: { UncachedInput: 4, CacheRead: 5000, CacheWrite: 1200, TotalInput: 6204, Output: 300 },
+        };
+
+        it('shows total input with its buckets, and the recorded cost, in compact mode', () => {
+            const output = formatter.FormatRunSummary(WITH_TOKENS, 'compact');
+            expect(output).toContain('Total Tokens:   6,504 (input 6,204 + output 300)');
+            expect(output).toContain('Input Tokens:   6,204 = uncached 4 + cache read 5,000 + cache write 1,200');
+            expect(output).toContain('Cost:           $0.0123');
+            expect(output).not.toContain('Estimated Cost');
+        });
+
+        it('shows the same in markdown and table', () => {
+            expect(formatter.FormatRunSummary(WITH_TOKENS, 'markdown'))
+                .toContain('- **Input Tokens**: 6,204 = uncached 4 + cache read 5,000 + cache write 1,200');
+            expect(formatter.FormatRunSummary(WITH_TOKENS, 'table'))
+                .toContain('Total Tokens | 6,504 (input 6,204 + output 300)');
+        });
+
+        it('labels a flat estimate as one', () => {
+            const output = formatter.FormatRunSummary({ ...WITH_TOKENS, CostSource: 'Estimated' }, 'compact');
+            expect(output).toContain('Estimated Cost: $0.0123');
+        });
+
+        it('still renders a summary built without the token breakdown', () => {
+            const output = formatter.FormatRunSummary(SUMMARY, 'compact');
+            expect(output).toContain('Total Tokens:   1,200\n');
+            expect(output).toContain('Estimated Cost: $0.0100');
+            expect(output).not.toContain('Input Tokens');
+        });
+    });
+
     describe('FormatErrorAnalysis', () => {
         it('lists the failed workflow tasks in compact mode', () => {
             const output = formatter.FormatErrorAnalysis(ANALYSIS, 'compact');

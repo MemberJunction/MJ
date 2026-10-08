@@ -1,7 +1,7 @@
 import chalk from 'chalk';
 import { table } from 'table';
 import { MJAIAgentRunEntity } from '@memberjunction/core-entities';
-import type { RunSummary, StepDetail, ErrorAnalysis } from '../services/AgentAuditService';
+import type { RunSummary, StepDetail, ErrorAnalysis, RunTokenUsage } from '../services/AgentAuditService';
 import type { WorkflowTaskInfo, WorkflowTaskSummary } from './workflow-tasks';
 
 export type AuditOutputFormat = 'compact' | 'json' | 'table' | 'markdown';
@@ -132,8 +132,10 @@ export class AuditFormatter {
     // Performance Metrics
     output += chalk.bold('Performance Metrics:\n');
     output += `  Total Steps:    ${summary.stepCount}\n`;
-    output += `  Total Tokens:   ${summary.totalTokens.toLocaleString()}\n`;
-    output += `  Estimated Cost: $${summary.estimatedCost.toFixed(4)}\n\n`;
+    for (const [label, value] of this.usageRows(summary)) {
+      output += `  ${`${label}:`.padEnd(16)}${value}\n`;
+    }
+    output += '\n';
 
     // Error Summary
     if (summary.hasErrors) {
@@ -188,6 +190,33 @@ export class AuditFormatter {
   }
 
   /**
+   * The token and cost rows every run-summary format shows.
+   *
+   * Input is shown as its total with the buckets beside it. A prompt run's `TokensPrompt` counts
+   * UNCACHED input only, so with prompt caching it can read 4 for a prompt of several thousand
+   * tokens; a total that left out cache reads and writes understated what the models processed.
+   */
+  private usageRows(summary: RunSummary): Array<[string, string]> {
+    const rows: Array<[string, string]> = [['Total Tokens', this.totalTokensText(summary)]];
+    if (summary.Tokens) {
+      rows.push(['Input Tokens', this.inputTokensText(summary.Tokens)]);
+    }
+    rows.push([summary.CostSource === 'Recorded' ? 'Cost' : 'Estimated Cost', `$${summary.estimatedCost.toFixed(4)}`]);
+    return rows;
+  }
+
+  private totalTokensText(summary: RunSummary): string {
+    const total = summary.totalTokens.toLocaleString();
+    if (!summary.Tokens) return total;
+    return `${total} (input ${summary.Tokens.TotalInput.toLocaleString()} + output ${summary.Tokens.Output.toLocaleString()})`;
+  }
+
+  private inputTokensText(tokens: RunTokenUsage): string {
+    return `${tokens.TotalInput.toLocaleString()} = uncached ${tokens.UncachedInput.toLocaleString()}` +
+      ` + cache read ${tokens.CacheRead.toLocaleString()} + cache write ${tokens.CacheWrite.toLocaleString()}`;
+  }
+
+  /**
    * Format run summary as table
    */
   private formatRunSummaryTable(summary: RunSummary): string {
@@ -201,8 +230,7 @@ export class AuditFormatter {
       ['Status', this.formatStatusText(summary.status)],
       ['Duration', `${(summary.duration / 1000).toFixed(2)}s`],
       ['Total Steps', summary.stepCount.toString()],
-      ['Total Tokens', summary.totalTokens.toLocaleString()],
-      ['Est. Cost', `$${summary.estimatedCost.toFixed(4)}`],
+      ...this.usageRows(summary),
       ...this.workflowTableRows(summary),
     ];
 
@@ -251,8 +279,10 @@ export class AuditFormatter {
 
     md += `## Performance Metrics\n`;
     md += `- **Total Steps**: ${summary.stepCount}\n`;
-    md += `- **Total Tokens**: ${summary.totalTokens.toLocaleString()}\n`;
-    md += `- **Estimated Cost**: $${summary.estimatedCost.toFixed(4)}\n\n`;
+    for (const [label, value] of this.usageRows(summary)) {
+      md += `- **${label}**: ${value}\n`;
+    }
+    md += '\n';
 
     if (summary.hasErrors) {
       md += `## ⚠️ Errors Detected\n`;

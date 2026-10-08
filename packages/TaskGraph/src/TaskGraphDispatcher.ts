@@ -278,21 +278,6 @@ type GraphContext = {
 };
 
 /**
- * Renders a loop's bindings as template values.
- *
- * Template parameters are strings; an item is usually an object. Objects are JSON-encoded rather
- * than dropped, because `{{ field }}` printing `[object Object]` — or nothing at all — is exactly
- * the silent failure this exists to prevent.
- */
-function stringifyBindings(bindings: Record<string, unknown>): Record<string, string> {
-    const out: Record<string, string> = {};
-    for (const [key, value] of Object.entries(bindings)) {
-        out[key] = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
-    }
-    return out;
-}
-
-/**
  * How much of a loop's per-pass payloads may be kept, and what happens when that runs out.
  *
  * **Why a budget exists at all.** A loop's trace lives inside one `Configuration` column, and its
@@ -3662,7 +3647,12 @@ export class TaskGraphDispatcher implements IShutdownable {
                     // through the payload placeholder instead works but is not discoverable, and
                     // getting it wrong is silent: the variable renders empty and the model answers
                     // confidently about nothing.
-                    TemplateParameters: { ...stringifyBindings(Bindings), ...op.prompt?.templateParameters },
+                    //
+                    // The bindings go over AS VALUES, not JSON text. An item is usually an object, and
+                    // pre-serializing it made `{{ item.name }}` render empty (a string has no `.name`)
+                    // and `{{ item | dump }}` double-encode. The prompt runner prepares every structured
+                    // value so it also prints as JSON when written whole (`{{ item }}`).
+                    TemplateParameters: { ...Bindings, ...op.prompt?.templateParameters },
                     Provider: provider,
                     ContextUser: this.contextUser,
                 }), iterationPayload);
