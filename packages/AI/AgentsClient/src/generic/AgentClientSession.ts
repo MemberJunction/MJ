@@ -542,13 +542,15 @@ export class AgentClientSession {
                     $requestID: String!,
                     $success: Boolean!,
                     $result: String,
-                    $errorMessage: String
+                    $errorMessage: String,
+                    $media: String
                 ) {
                     RespondToClientToolRequest(
                         requestID: $requestID,
                         success: $success,
                         result: $result,
-                        errorMessage: $errorMessage
+                        errorMessage: $errorMessage,
+                        media: $media
                     )
                 }
             `;
@@ -557,7 +559,8 @@ export class AgentClientSession {
                 requestID,
                 success: result.Success,
                 result: result.Data != null ? JSON.stringify(result.Data) : undefined,
-                errorMessage: result.ErrorMessage
+                errorMessage: result.ErrorMessage,
+                media: result.Media?.length ? JSON.stringify(result.Media) : undefined
             });
         } catch (error: unknown) {
             const msg = error instanceof Error ? error.message : String(error);

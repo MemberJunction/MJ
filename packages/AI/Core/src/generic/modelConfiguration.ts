@@ -147,6 +147,16 @@ export interface RealtimeConfigurationSettings {
      */
     Reasoning?: RealtimeReasoningSettings;
 
+    /**
+     * Whether this realtime model natively supports full-duplex conversational audio
+     * (simultaneous speaking and listening with natural interruptions).
+     *
+     * When true, full-duplex models do not receive turn-taking tools or an energy-VAD floor gate,
+     * allowing the provider's native full-duplex model to handle natural turn transitions.
+     * Cascades AIModelType -> Vendor ModelDefaults -> AIModel -> AIModelVendor.
+     */
+    FullDuplex?: boolean | null;
+
     /** Tool-execution semantics this model permits. Absent = the profile's own defaults. */
     Tooling?: RealtimeToolingSettings;
 
@@ -481,3 +491,31 @@ function mergeInto(target: JSONObject, source: JSONObject): void {
 export function IsPrefixPromptCache(config: AIModelConfiguration | null | undefined): boolean {
     return config?.LLM?.PrefixPromptCache === true;
 }
+
+/**
+ * Resolves whether a realtime model/session is full-duplex.
+ *
+ * Resolution order:
+ * 1. The cascaded metadata value (`modelConfig.Realtime.FullDuplex`) if explicitly set (boolean).
+ * 2. Otherwise falls back to the driver capability (`driverCapabilities?.FullDuplex === true`).
+ *
+ * @param modelConfig The effective model configuration (or raw Realtime configuration section).
+ * @param driverCapabilities Optional capabilities declared by the realtime session/driver.
+ * @returns Whether full-duplex mode is active for this model/session.
+ */
+export function ResolveIsModelFullDuplex(
+    modelConfig?: { Realtime?: { FullDuplex?: boolean | null } | null } | { FullDuplex?: boolean | null } | null,
+    driverCapabilities?: { FullDuplex?: boolean | null } | boolean | null
+): boolean {
+    if (modelConfig) {
+        const realtime = 'Realtime' in modelConfig ? modelConfig.Realtime : (modelConfig as { FullDuplex?: boolean | null });
+        if (typeof realtime?.FullDuplex === 'boolean') {
+            return realtime.FullDuplex;
+        }
+    }
+    if (typeof driverCapabilities === 'boolean') {
+        return driverCapabilities;
+    }
+    return driverCapabilities?.FullDuplex === true;
+}
+

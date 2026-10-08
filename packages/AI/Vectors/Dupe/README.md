@@ -140,6 +140,15 @@ for (const dupe of result.Duplicates) {
 
 ---
 
+## The Query Text Is the Stored Text
+
+Each record is matched by embedding its entity document's template text and querying the index with that vector. The text must be the text vector sync embedded for the record, or the query describes a different document than the one stored and genuine duplicates fall below the threshold. So the detector renders the template the way sync does, through the same `EntityDocumentTemplateDataBuilder` from `@memberjunction/ai-vector-sync`:
+
+- from the row `RunView` returns for the record (`ResultType: 'simple'`), not `BaseEntity.GetAll()`, which turns date fields into `Date` objects;
+- with the rows of every `Entity` template param (a person's Phones, Emails, Addresses...), loaded once per sub-batch.
+
+If a related param's rows can't be loaded, the batch fails rather than query with text that can't match. An unsaved record (the entry-time check) renders from its own values, with empty related rows.
+
 ## DuplicateDetectionOptions Reference
 
 Options are passed via the `Options` property on `PotentialDuplicateRequest`, or directly to `CheckSingleRecord`.
@@ -374,6 +383,24 @@ interface ScoredCandidate {
 ```
 
 ---
+
+## Excluding Records: the Record Filter
+
+An entity document can name the records that take part in duplicate detection with `recordFilter.extraFilter` in its `Configuration` JSON, a RunView `ExtraFilter` predicate on the document's entity:
+
+```json
+{ "recordFilter": { "extraFilter": "ind_delete_flag <> '1'" } }
+```
+
+A record that fails the filter is never checked by a batch run and never offered as a candidate, yet stays readable everywhere else. `CheckSingleRecord` and the entry-time check still check the record they are given, since the caller asked about that record; only its candidates are filtered. Typical uses are records a source system has flagged deleted or merged, and inactive records.
+
+- **Records checked.** A whole-entity run ANDs the filter into its own `ExtraFilter`; a list or view run is narrowed to the members that pass it.
+- **Candidates.** Vector sync skips filtered records too, but their vectors can already be in the index, so every match is checked against the filter with the existence check that drops orphaned vectors. This applies to batch runs, `CheckSingleRecord` and the entry-time check.
+- **TopK.** With a filter set, the query asks for three times TopK and the result is trimmed back to TopK after filtering, so excluded records don't take a genuine duplicate's slot.
+- **Errors.** If the filter can't be applied (a typo in a column name, say), the run fails instead of letting excluded records through.
+- **SQL.** Keep the filter to plain comparisons on the entity's columns (`=`, `<>`, `IN`, `IS NULL`, `AND`/`OR`). On PostgreSQL, MJ quotes identifiers, converts `[brackets]`, turns `= 0`/`= 1` on boolean columns into `FALSE`/`TRUE`, and translates `GETDATE()`, `GETUTCDATE()`, `SYSDATETIMEOFFSET()` and `DATEADD`. Other T-SQL, such as `ISNULL`, `LEN` or `+` string concatenation, is passed through unchanged and fails there.
+
+Vector sync applies the same filter to the records it vectorizes; see the [Sync README](../Sync/README.md#record-filter). Vectors already stored for records the filter now excludes are not removed by sync.
 
 ## Inverse Match Deduplication
 

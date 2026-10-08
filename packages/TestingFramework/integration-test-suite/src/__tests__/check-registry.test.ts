@@ -41,10 +41,13 @@ import { AgentPlanModeChecks } from '../checks/agent-plan-mode.checks';
 import { AgentCompactionE2EChecks } from '../checks/agent-compaction-e2e.checks';
 import { AgentMemoryGuardsChecks } from '../checks/agent-memory-guards.checks';
 import { AgentNoteCacheTypeChecks } from '../checks/agent-note-cache-types.checks';
+import { CacheArchitectureChecks } from '../checks/cache-architecture.checks';
 import { AgentRagSearchChecks } from '../checks/agent-rag-search.checks';
 import { AgentWireCallbackChecks } from '../checks/agent-wire-callback.checks';
 import { ViewSecurityChecks } from '../checks/view-security.checks';
 import { AiProvidersChecks } from '../checks/ai-providers.checks';
+import { CloudflareClefChecks } from '../checks/cloudflare-clef.checks';
+import { SystemOneKevChecks } from '../checks/systemone-kev.checks';
 import { AppBehavioralChecks } from '../checks/app-behavioral.checks';
 import { ContentVectorizationChecks } from '../checks/content-vectorization.checks';
 import { MaterializedReadChecks } from '../checks/materialized-read.checks';
@@ -55,6 +58,7 @@ import { EntityGraphChecks } from '../checks/entity-graph.checks';
 import { EntityEmbeddedChecks } from '../checks/entity-embedded.checks';
 import { EntityGraphClientChecks } from '../checks/entity-graph-client.checks';
 import { JSONTypeLiveSyncChecks, JSONTypeLiveSyncClientChecks } from '../checks/jsontype-live-sync.checks';
+import { SelfAvatarClientChecks } from '../checks/self-avatar-client.checks';
 import { RecordCloningChecks } from '../checks/record-cloning.checks';
 import { BinaryFieldsChecks } from '../checks/binary-fields.checks';
 import { TaskGraphOrchestrationChecks } from '../checks/task-graph-orchestration.checks';
@@ -115,7 +119,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
     const bundles: Array<[string, NamedCheck[], number]> = [
         ['server-cache', ServerCacheChecks, 32],
         ['cache-immutability', CacheImmutabilityChecks, 15], // F1-F15 freeze-on-write runtime contract (IT81); F13/F14 cover review findings C1/C2, F15 covers M3 (dataset key collision)
-        ['client-cache', ClientCacheChecks, 13],
+        ['client-cache', ClientCacheChecks, 14],
         ['runquery-cache', RunQueryCacheChecks, 12], // Q11 (B46 category collision) + Q12 (B45 hit-vs-miss permission parity) added 2026-07-20
         // RLS1–RLS10 (rls-isolation.checks.ts) + KF1–KF6 (keyrowfilter.checks.ts, API-key row filters) share one bundle
         ['rls-isolation', [...RlsIsolationChecks, ...KeyRowFilterChecks], 16],
@@ -149,11 +153,14 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['agent-plan-mode', AgentPlanModeChecks, 6],
         ['agent-compaction-e2e', AgentCompactionE2EChecks, 3],
         ['agent-memory-guards', AgentMemoryGuardsChecks, 5],
-        ['agent-note-cache-types', AgentNoteCacheTypeChecks, 3], // NC1-NC3 entity_object cache-event invariant (IT84)
+        ['agent-note-cache-types', AgentNoteCacheTypeChecks, 5], // NC1-NC3 entity_object cache-event invariant, NC4-NC5 identical-payload skip (IT84)
+        ['cache-architecture', CacheArchitectureChecks, 11], // CA1-CA11 engine/cache architecture pins (IT107)
         ['agent-rag-search', AgentRagSearchChecks, 7], // extended-agents suite (live-model, IT53-62)
         ['agent-wire-callback', AgentWireCallbackChecks, 2], // over-the-wire fire-and-forget callback (IT63)
         ['view-security', ViewSecurityChecks, 4], // two-identity V14/V15/V16 + RV17 (IT64)
         ['ai-providers', AiProvidersChecks, 3], // AI7/AI13/AI15 model-resolution seams (IT65)
+        ['cloudflare-clef', CloudflareClefChecks, 6], // CF1-CF6 Clef/Clef-flash metadata, driver registration, runner calls through an HTTP stand-in: envelope failures and failover, a bare response, a JSON credential's account (IT108)
+        ['systemone-kev', SystemOneKevChecks, 10], // KV1-KV10 Kev metadata, SystemOneDecision registration, runner calls against loopback System One servers: Default Decision selection, bound credentials, per-row routing, failover and error classification, Kev-4B on OpenRouter, a binding on the serving row of a two-row model (IT109)
         ['app-behavioral', AppBehavioralChecks, 3], // S4/S6/S8 Application behaviors (IT66)
         ['content-vectorization', ContentVectorizationChecks, 10], // CV1-CV10 content vectorization pipeline (IT67)
         ['materialized-read', MaterializedReadChecks, 3], // MR1-MR2 served-from-snapshot proof + MR3 delete-path FK cleanup (IT79)
@@ -176,6 +183,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['fls-enforcement', FlsEnforcementChecks, 24], // FLS1-FLS24 field-level security against a live DB (IT90); FLS22/FLS23 cover the Record Changes payload projection, FLS24 record names, FLS21 measures metadata-refresh cost
         ['fls-lifecycle', FlsLifecycleChecks, 9], // LC1-LC9 FLS lifecycle + system-user guards, mutation tier (IT91)
         ['fls-enforcement-client', FlsClientChecks, 6], // FC1-FC6 FLS over the wire via per-user API keys (IT92)
+        ['self-avatar-client', SelfAvatarClientChecks, 6], // AV1-AV6 self-service avatar mutation over the wire via per-user API keys (IT106)
         ['metadata-sync-push', MetadataSyncPushChecks, 10], // MSP1-MSP10 sync push atomicity, in-transaction metadata reload, and one row-level security filter, mutation tier (IT94)
         ['record-cloning', RecordCloningChecks, 13], // RC1-RC9 plan §13.2 + RC10-RC13 real-database dry runs, client transport (IT96)
         ['binary-fields', BinaryFieldsChecks, 6], // BF1-BF6 binary fields end to end + binary vector columns, client transport (IT101)
@@ -208,9 +216,9 @@ describe('migrated bundles (coverage-loss guard)', () => {
         expect(mutating.sort()).toEqual(['server-cache.S17', 'server-cache.S23', 'server-cache.S24', 'server-cache.S29', 'server-cache.S30', 'server-cache.S31b']);
     });
 
-    it('client-cache marks exactly C10 as RequiresMutation', () => {
+    it('client-cache marks exactly C10 and C14 as RequiresMutation', () => {
         const mutating = ClientCacheChecks.filter(c => c.RequiresMutation).map(c => c.Id);
-        expect(mutating).toEqual(['client-cache.C10']);
+        expect(mutating).toEqual(['client-cache.C10', 'client-cache.C14']);
     });
 
     it('runquery-cache marks nothing RequiresMutation (the whole bundle mutates by design)', () => {
@@ -236,7 +244,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'agent-loop-standin': 11,
         'prompt-eval-harness': 7,
         'agent-memory-guards': 5,
-        'agent-note-cache-types': 3,
+        'agent-note-cache-types': 5,
         'agent-payload-guards': 9,
         'agent-plan-mode': 6,
         'agent-rag-search': 7,
@@ -254,17 +262,19 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'app-wiring': 10,
         'auth-validation': 7,
         'binary-fields': 6,
+        'cache-architecture': 11,
         'cache-gauntlet': 8,
         'cache-immutability': 15,
         'class-resolution': 5,
-        'client-cache': 13,
+        'client-cache': 14,
+        'cloudflare-clef': 6,
         'codegen-determinism': 6,
         'communication': 5,
         'concurrent': 2,
         'content-vectorization': 10,
         'conversation-compaction': 18,
         'trailing-runtime-state': 6,
-        'dataset-cache': 3,
+        'dataset-cache': 4,
         'entity-actions': 8,
         'entity-embedded': 6,
         'entity-graph': 11,
@@ -315,11 +325,13 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'scope-enforcement': 5,
         'scoped-anon-elevation': 6,
         'search': 7,
+        'self-avatar-client': 6,
         'server-cache': 32,
         'shipped-agents-live': 4,
         'startup-mode': 3,
         'storage': 6,
         'subscription-isolation': 2,
+        'systemone-kev': 10,
         'task-graph-execution': 27,
         'task-graph-orchestration': 18,
         'templates': 8,
@@ -354,7 +366,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(105);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(109);
     });
 });
 
@@ -397,6 +409,14 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'app-behavioral.AB2',
         'binary-fields.BF4',
         'binary-fields.BF6',
+        'cache-architecture.CA10',
+        'cache-architecture.CA11',
+        'cache-architecture.CA2',
+        'cache-architecture.CA4',
+        'cache-architecture.CA5',
+        'cache-architecture.CA7',
+        'cache-architecture.CA8',
+        'cache-architecture.CA9',
         'cache-gauntlet.CG1',
         'cache-gauntlet.CG2',
         'cache-gauntlet.CG3',
@@ -407,6 +427,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'cache-gauntlet.CG8',
         'cache-immutability.F12',
         'client-cache.C10',
+        'client-cache.C14',
         'content-vectorization.CV1',
         'content-vectorization.CV10',
         'content-vectorization.CV2',
@@ -523,6 +544,12 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'rubrics.R8',
         'rubrics.R9',
         'rubrics.W1',
+        'self-avatar-client.AV1',
+        'self-avatar-client.AV2',
+        'self-avatar-client.AV3',
+        'self-avatar-client.AV4',
+        'self-avatar-client.AV5',
+        'self-avatar-client.AV6',
         'server-cache.S17',
         'server-cache.S23',
         'server-cache.S24',

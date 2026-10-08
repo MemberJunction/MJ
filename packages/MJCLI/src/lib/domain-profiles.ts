@@ -83,6 +83,10 @@ export const DOMAIN_PROFILES: Readonly<Record<string, DomainProfile>> = {
     Summary: 'Bundle interactive component source for distribution.',
     Runtime: { class: 'moderate', typicalSeconds: 20 },
   },
+  cache: {
+    Summary: 'Inspect and clear the shared (Redis) server cache.',
+    Runtime: { class: 'fast', note: 'one SCAN per category; scales with the Redis keyspace' },
+  },
   clean: {
     Summary: 'Remove build artifacts and generated output.',
     Runtime: { class: 'fast' },

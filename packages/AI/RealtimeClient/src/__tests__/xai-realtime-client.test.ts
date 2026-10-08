@@ -65,6 +65,12 @@ class FakePlayback implements IRealtimePcmPlayback {
     public Closed = false;
     /** Controllable stand-in for "playhead is ahead of the context clock". */
     public IsPlaying = false;
+    /** Stand-in for the Web Audio output stream the real playback exposes (issue #5153). */
+    public OutputStream: MediaStream | null = null;
+
+    public GetOutputStream(): MediaStream | null {
+        return this.OutputStream;
+    }
 
     public Enqueue(pcm16: ArrayBuffer): void {
         this.Enqueued.push(pcm16);
@@ -722,6 +728,22 @@ describe('xAIRealtimeClient', () => {
             expect(track.enabled).toBe(false);
             client.SetMuted(false);
             expect(track.enabled).toBe(true);
+        });
+
+        it('should publish the playback output stream on Connect and clear it on Disconnect (#5153)', async () => {
+            const agentStream = new FakeMediaStream([]);
+            client.Playback.OutputStream = agentStream;
+            const delivered: (MediaStream | null)[] = [];
+            client.OnRemoteMediaStream((s) => delivered.push(s));
+
+            await connect(client);
+
+            expect(client.GetRemoteMediaStream()).toBe(agentStream);
+            expect(delivered).toEqual([agentStream]);
+
+            await client.Disconnect();
+
+            expect(client.GetRemoteMediaStream()).toBeNull();
         });
 
         it('should tear everything down and emit closed on Disconnect', async () => {
