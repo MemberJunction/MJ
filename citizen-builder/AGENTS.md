@@ -181,10 +181,9 @@ A Flow agent is a graph. There is **no** `Configuration.Steps` field on the agen
   is merged into the payload, so later steps and path conditions can read its keys. A response
   containing `taskComplete: true` with a `message` (or `nextStep.type: "Chat"`) **ends the flow**
   and shows that message to the user: use that shape only in the last step.
-* **Reading the payload in a template:** write `{{ _CURRENT_PAYLOAD | jsonparse | json }}` to show
-  it, or `{% set p = _CURRENT_PAYLOAD | jsonparse %}` then `{{ p.certifications | json }}` for one
-  part. A Flow step can receive the payload as a JSON string, and `| json` on a string encodes it a
-  second time, so the next step sees an empty or unreadable value. `jsonparse` leaves an object as it is.
+* **Reading the payload in a template:** `{{ _CURRENT_PAYLOAD }}` prints the whole payload as JSON,
+  and `{{ _CURRENT_PAYLOAD.certifications | dump }}` prints one part. A ForEach prompt reads its
+  item the same way (`{{ item.name }}`). Older templates that pipe through `| jsonparse` keep working.
 * **Failures:** a later step must not act on an earlier step's failure. Give delivery steps a path
   `Condition` that checks the data they send exists, so a failed run never sends an empty result.
 

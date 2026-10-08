@@ -40,8 +40,9 @@ docker compose exec -T mj pm2 logs mjapi --nostream --lines 100   # the API's ow
 ```
 Check:
 1. **Actions**: which ran, and that nothing ran the user did not approve (writes, sends, deletes).
-2. **Steps**: each step's input is what the previous step produced. An empty or escaped payload
-   usually means a template printed `_CURRENT_PAYLOAD` with `| json` instead of `| jsonparse | json`.
+2. **Steps**: each step's input is what the previous step produced. An empty value usually means a
+   template reads a key the previous step never wrote (compare key names), or an action step has no
+   `ActionOutputMapping` for it.
 3. **Cost**: tokens and duration are reasonable, with no runaway loop.
 
 Errors that point at the environment rather than the agent: "No suitable model found" (no usable AI

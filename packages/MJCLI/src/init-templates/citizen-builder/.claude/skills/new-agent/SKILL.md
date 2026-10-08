@@ -37,7 +37,7 @@ If you later find the chosen pattern cannot work, explain why and ask before swi
 ## Step 4: Author the files
 1. **Prompt template**: `metadata/prompts/templates/<slug>.template.md`: role, instructions, rules,
    edge cases, and the exact output format. For a Flow step, ask for JSON with named keys, and read
-   the payload with `{{ _CURRENT_PAYLOAD | jsonparse | json }}` (never `| json` alone).
+   the payload with `{{ _CURRENT_PAYLOAD }}` (all of it) or `{{ _CURRENT_PAYLOAD.<key> | dump }}`.
 2. **Prompt metadata**: `metadata/prompts/.<slug>-prompt.json`
    ```json
    [
