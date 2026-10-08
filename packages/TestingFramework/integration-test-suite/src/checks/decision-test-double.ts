@@ -12,7 +12,10 @@
  * prompt, the binding, the candidate selection, the `MJ: AI Prompt Runs` row) and makes sure no
  * decision call can reach a provider, whichever candidate this environment's credentials select.
  * `LLMDecision` needs no credential, so a runner with no keys at all (CI) selects it; a host with an
- * OpenRouter key selects Jev's `OpenRouterDecision`. Both names go to the stand-in.
+ * OpenRouter key selects Jev's `OpenRouterDecision`. Both names go to the stand-in, and so do
+ * `CloudflareDecision` and `SystemOneDecision`: the Clef and Kev models are in no shipped prompt's
+ * bindings, but as active Decision models they join the Default Decision prompt's power-matched fallback
+ * candidates, so a host with their credentials could otherwise reach a provider on a failover.
  */
 import { MJGlobal } from '@memberjunction/global';
 import {
@@ -24,8 +27,11 @@ import {
     type DecisionQuestion,
 } from '@memberjunction/ai';
 
-/** The decision driver classes the shipped decision prompts bind to: LLM Decision and Jev. */
-export const SCRIPTED_DECISION_DRIVER_CLASSES: readonly string[] = ['LLMDecision', 'OpenRouterDecision'];
+/**
+ * The decision driver classes the shipped decision prompts can reach: LLM Decision and Jev, which they
+ * bind to, and Clef and self-hosted Kev, power-matched fallbacks (Kev-4B on OpenRouter is Jev's driver).
+ */
+export const SCRIPTED_DECISION_DRIVER_CLASSES: readonly string[] = ['LLMDecision', 'OpenRouterDecision', 'CloudflareDecision', 'SystemOneDecision'];
 
 /** The model name the stand-in reports, so a prompt run it answered is recognisable. */
 export const SCRIPTED_DECISION_MODEL = 'it-scripted-decision';

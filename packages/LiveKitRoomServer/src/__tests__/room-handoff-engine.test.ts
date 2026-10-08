@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import * as Core from '@memberjunction/core';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { LiveKitUserIdentity } from '../livekit-token-service';
 import { HandoffOfferRegistry, HANDOFF_OFFER_TIMEOUT_MS } from '../room-handoff/handoff-offer-registry';
@@ -445,4 +446,59 @@ describe('RoomHandoffEngine', () => {
       expect(state.left).toBe(true);
     });
   });
+
+  describe('RegisterObserver', () => {
+    it('notifies registered observers on handoff events and unregisters cleanly', async () => {
+      const { agent } = makeAgent();
+      const events: string[] = [];
+      const registration = engine.RegisterObserver({
+        OnHandoffEvent: (evt) => {
+          events.push(evt.EventType);
+        },
+      });
+
+      await engine.RequestHandoff(agent, userRequest());
+      expect(events).toContain('Offered');
+      expect(events).toContain('Escalated');
+
+      events.length = 0;
+      registration.Unregister();
+
+      const offer = (await engine.ListOffersForUser(PERSON))[0];
+      await engine.AcceptOffer(offer.OfferID, PERSON);
+      expect(events).toHaveLength(0);
+    });
+
+    it('catches and logs async observer rejections without producing unhandled rejections', async () => {
+      const logErrorSpy = vi.spyOn(Core, 'LogError');
+      const { agent } = makeAgent();
+      let registeredCalled = false;
+      let primaryCalled = false;
+      engine.RegisterObserver({
+        OnHandoffEvent: async () => {
+          registeredCalled = true;
+          throw new Error('Async registered observer rejection boom');
+        },
+      });
+
+      engine.Configure({
+        Observer: {
+          OnHandoffEvent: async () => {
+            primaryCalled = true;
+            throw new Error('Async primary observer rejection boom');
+          },
+        },
+      });
+
+      await expect(engine.RequestHandoff(agent, userRequest())).resolves.toBeDefined();
+      await vi.advanceTimersByTimeAsync(10);
+
+      expect(registeredCalled).toBe(true);
+      expect(primaryCalled).toBe(true);
+      expect(logErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Async primary observer rejection boom'));
+      expect(logErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Async registered observer rejection boom'));
+      logErrorSpy.mockRestore();
+    });
+  });
 });
+
