@@ -207,7 +207,7 @@ GO
          , [__mj_UpdatedAt]
       )
       VALUES (
-         '2f1640fe-6f74-4ed4-a9bb-2bc968521864',
+         'c43a32a6-3400-4a03-a0e3-8817d24c341d',
          'MJ: Conversation Branches',
          'Conversation Branches',
          'A fork of a conversation: another path that starts at a message. Main (the trunk) is the messages with no branch. A fork''s path is its own messages plus each ancestor''s messages up to that ancestor''s ForkFromSequence.',
@@ -233,33 +233,33 @@ GO
 /* SQL generated to add new entity MJ: Conversation Branches to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
                                        ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '2f1640fe-6f74-4ed4-a9bb-2bc968521864', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
+                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'c43a32a6-3400-4a03-a0e3-8817d24c341d', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: Conversation Branches for role UI */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                 ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
-              SELECT CAST('2f1640fe-6f74-4ed4-a9bb-2bc968521864' AS uniqueidentifier), CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE()
+              SELECT CAST('c43a32a6-3400-4a03-a0e3-8817d24c341d' AS uniqueidentifier), CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE()
               WHERE NOT EXISTS (
                 SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
-                WHERE [EntityID] = CAST('2f1640fe-6f74-4ed4-a9bb-2bc968521864' AS uniqueidentifier) AND [RoleID] = CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+                WHERE [EntityID] = CAST('c43a32a6-3400-4a03-a0e3-8817d24c341d' AS uniqueidentifier) AND [RoleID] = CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
               );
 
 /* SQL generated to add new permission for entity MJ: Conversation Branches for role Developer */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                 ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
-              SELECT CAST('2f1640fe-6f74-4ed4-a9bb-2bc968521864' AS uniqueidentifier), CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
+              SELECT CAST('c43a32a6-3400-4a03-a0e3-8817d24c341d' AS uniqueidentifier), CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
               WHERE NOT EXISTS (
                 SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
-                WHERE [EntityID] = CAST('2f1640fe-6f74-4ed4-a9bb-2bc968521864' AS uniqueidentifier) AND [RoleID] = CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+                WHERE [EntityID] = CAST('c43a32a6-3400-4a03-a0e3-8817d24c341d' AS uniqueidentifier) AND [RoleID] = CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
               );
 
 /* SQL generated to add new permission for entity MJ: Conversation Branches for role Integration */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                 ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
-              SELECT CAST('2f1640fe-6f74-4ed4-a9bb-2bc968521864' AS uniqueidentifier), CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
+              SELECT CAST('c43a32a6-3400-4a03-a0e3-8817d24c341d' AS uniqueidentifier), CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
               WHERE NOT EXISTS (
                 SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
-                WHERE [EntityID] = CAST('2f1640fe-6f74-4ed4-a9bb-2bc968521864' AS uniqueidentifier) AND [RoleID] = CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+                WHERE [EntityID] = CAST('c43a32a6-3400-4a03-a0e3-8817d24c341d' AS uniqueidentifier) AND [RoleID] = CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
               );
 
 /* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.ConversationBranch */
@@ -296,7 +296,7 @@ GO
 
 /* SQL text to insert 12 new entity field(s) */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '64d580c5-1b41-4b35-9737-9f0e7a170ccd' OR (EntityID = '2F1640FE-6F74-4ED4-A9BB-2BC968521864' AND Name = 'ID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'eea65c41-e1ff-4976-ba32-aa4e0ba70463' OR (EntityID = '12248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'BranchID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -329,637 +329,7 @@ GO
          )
          VALUES
          (
-            '64d580c5-1b41-4b35-9737-9f0e7a170ccd',
-            '2F1640FE-6F74-4ED4-A9BB-2BC968521864', -- Entity: MJ: Conversation Branches
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '2F1640FE-6F74-4ED4-A9BB-2BC968521864'),
-            'ID',
-            'ID',
-            NULL,
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            0,
-            'newsequentialid()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            1,
-            1,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '73e637d3-748b-45bc-bca4-fcd09b68db00' OR (EntityID = '2F1640FE-6F74-4ED4-A9BB-2BC968521864' AND Name = 'ConversationID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '73e637d3-748b-45bc-bca4-fcd09b68db00',
-            '2F1640FE-6F74-4ED4-A9BB-2BC968521864', -- Entity: MJ: Conversation Branches
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '2F1640FE-6F74-4ED4-A9BB-2BC968521864'),
-            'ConversationID',
-            'Conversation ID',
-            'The conversation this fork belongs to.',
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            '13248F34-2837-EF11-86D4-6045BDEE16E6',
-            'ID',
-            0,
-            0,
-            1,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ed14b70f-a269-4062-a41b-608d947e2d7c' OR (EntityID = '2F1640FE-6F74-4ED4-A9BB-2BC968521864' AND Name = 'ParentBranchID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'ed14b70f-a269-4062-a41b-608d947e2d7c',
-            '2F1640FE-6F74-4ED4-A9BB-2BC968521864', -- Entity: MJ: Conversation Branches
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '2F1640FE-6F74-4ED4-A9BB-2BC968521864'),
-            'ParentBranchID',
-            'Parent Branch ID',
-            'The fork this one started from. NULL means it started from Main, or before the first message when ForkFromSequence is also NULL.',
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            '2F1640FE-6F74-4ED4-A9BB-2BC968521864',
-            'ID',
-            0,
-            0,
-            1,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b50172b0-a274-46d0-8059-1a7b16a383a1' OR (EntityID = '2F1640FE-6F74-4ED4-A9BB-2BC968521864' AND Name = 'ForkFromSequence')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'b50172b0-a274-46d0-8059-1a7b16a383a1',
-            '2F1640FE-6F74-4ED4-A9BB-2BC968521864', -- Entity: MJ: Conversation Branches
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '2F1640FE-6F74-4ED4-A9BB-2BC968521864'),
-            'ForkFromSequence',
-            'Fork From Sequence',
-            'Sequence of the last message shared with the parent path. NULL means the fork starts before the first message, in which case ParentBranchID is also NULL.',
-            'int',
-            4,
-            10,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            1,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1995554b-03f9-4623-9c8d-ef767619e013' OR (EntityID = '2F1640FE-6F74-4ED4-A9BB-2BC968521864' AND Name = 'Name')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '1995554b-03f9-4623-9c8d-ef767619e013',
-            '2F1640FE-6F74-4ED4-A9BB-2BC968521864', -- Entity: MJ: Conversation Branches
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '2F1640FE-6F74-4ED4-A9BB-2BC968521864'),
-            'Name',
-            'Name',
-            'Optional name of the fork. With no name, the UI shows a default label from Kind: a Fork is named from its first message.',
-            'nvarchar',
-            510,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            1,
-            1,
-            0,
-            1,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f15c833b-cd0b-40ea-86ac-49ea014db573' OR (EntityID = '2F1640FE-6F74-4ED4-A9BB-2BC968521864' AND Name = 'Kind')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'f15c833b-cd0b-40ea-86ac-49ea014db573',
-            '2F1640FE-6F74-4ED4-A9BB-2BC968521864', -- Entity: MJ: Conversation Branches
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '2F1640FE-6F74-4ED4-A9BB-2BC968521864'),
-            'Kind',
-            'Kind',
-            'How the fork started: Fork (Fork from here), Edit (a sent message was edited) or Regenerate (an answer was regenerated).',
-            'nvarchar',
-            40,
-            0,
-            0,
-            0,
-            'Fork',
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '8eacf365-9bac-4b23-8ee2-ba46ed6f21da' OR (EntityID = '2F1640FE-6F74-4ED4-A9BB-2BC968521864' AND Name = 'SourceDetailID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '8eacf365-9bac-4b23-8ee2-ba46ed6f21da',
-            '2F1640FE-6F74-4ED4-A9BB-2BC968521864', -- Entity: MJ: Conversation Branches
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '2F1640FE-6F74-4ED4-A9BB-2BC968521864'),
-            'SourceDetailID',
-            'Source Detail ID',
-            'The edited message (Kind Edit) or the replaced answer (Kind Regenerate); NULL otherwise. Not a foreign key, to avoid a CodeGen cascade cycle with ConversationDetail.',
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd2cf05c7-8bfa-4b3d-8cb9-008eeb2b4598' OR (EntityID = '2F1640FE-6F74-4ED4-A9BB-2BC968521864' AND Name = 'UserID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'd2cf05c7-8bfa-4b3d-8cb9-008eeb2b4598',
-            '2F1640FE-6F74-4ED4-A9BB-2BC968521864', -- Entity: MJ: Conversation Branches
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '2F1640FE-6F74-4ED4-A9BB-2BC968521864'),
-            'UserID',
-            'User ID',
-            'The person who started the fork.',
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            'E1238F34-2837-EF11-86D4-6045BDEE16E6',
-            'ID',
-            0,
-            0,
-            1,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f1c9c28c-6b2d-41c6-8c89-868da4188f62' OR (EntityID = '2F1640FE-6F74-4ED4-A9BB-2BC968521864' AND Name = '__mj_CreatedAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'f1c9c28c-6b2d-41c6-8c89-868da4188f62',
-            '2F1640FE-6F74-4ED4-A9BB-2BC968521864', -- Entity: MJ: Conversation Branches
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '2F1640FE-6F74-4ED4-A9BB-2BC968521864'),
-            '__mj_CreatedAt',
-            'Created At',
-            NULL,
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            0,
-            'getutcdate()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '8a118c6b-65e4-47f8-9432-84bee49f7be7' OR (EntityID = '2F1640FE-6F74-4ED4-A9BB-2BC968521864' AND Name = '__mj_UpdatedAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '8a118c6b-65e4-47f8-9432-84bee49f7be7',
-            '2F1640FE-6F74-4ED4-A9BB-2BC968521864', -- Entity: MJ: Conversation Branches
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '2F1640FE-6F74-4ED4-A9BB-2BC968521864'),
-            '__mj_UpdatedAt',
-            'Updated At',
-            NULL,
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            0,
-            'getutcdate()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f4e3b02d-8242-44c7-a35b-8b9a05416b04' OR (EntityID = '12248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'BranchID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'f4e3b02d-8242-44c7-a35b-8b9a05416b04',
+            'eea65c41-e1ff-4976-ba32-aa4e0ba70463',
             '12248F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Conversation Details
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '12248F34-2837-EF11-86D4-6045BDEE16E6'),
             'BranchID',
@@ -975,7 +345,7 @@ GO
             1,
             0,
             0,
-            '2F1640FE-6F74-4ED4-A9BB-2BC968521864',
+            'C43A32A6-3400-4A03-A0E3-8817D24C341D',
             'ID',
             0,
             0,
@@ -989,7 +359,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5697b934-d9c0-4048-b59b-5fed82969668' OR (EntityID = '12248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'ReplacedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '240c11f0-66f7-4242-a207-0b65e1d51067' OR (EntityID = '12248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'ReplacedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1022,7 +392,7 @@ GO
          )
          VALUES
          (
-            '5697b934-d9c0-4048-b59b-5fed82969668',
+            '240c11f0-66f7-4242-a207-0b65e1d51067',
             '12248F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Conversation Details
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '12248F34-2837-EF11-86D4-6045BDEE16E6'),
             'ReplacedAt',
@@ -1052,64 +422,694 @@ GO
          )
       END;
 
-/* SQL text to insert entity field value with ID 58da56d3-29ba-4984-a5d8-701ec697ddc4 */
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'cefe126b-0df6-4f94-b0b1-b5ea48c0c443' OR (EntityID = 'C43A32A6-3400-4A03-A0E3-8817D24C341D' AND Name = 'ID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'cefe126b-0df6-4f94-b0b1-b5ea48c0c443',
+            'C43A32A6-3400-4A03-A0E3-8817D24C341D', -- Entity: MJ: Conversation Branches
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'C43A32A6-3400-4A03-A0E3-8817D24C341D'),
+            'ID',
+            'ID',
+            NULL,
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            'newsequentialid()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5caaea2f-4fab-444c-8997-7d18220e5e29' OR (EntityID = 'C43A32A6-3400-4A03-A0E3-8817D24C341D' AND Name = 'ConversationID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '5caaea2f-4fab-444c-8997-7d18220e5e29',
+            'C43A32A6-3400-4A03-A0E3-8817D24C341D', -- Entity: MJ: Conversation Branches
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'C43A32A6-3400-4A03-A0E3-8817D24C341D'),
+            'ConversationID',
+            'Conversation ID',
+            'The conversation this fork belongs to.',
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            '13248F34-2837-EF11-86D4-6045BDEE16E6',
+            'ID',
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ece1c405-0c2e-42ae-8840-9de6faa5c029' OR (EntityID = 'C43A32A6-3400-4A03-A0E3-8817D24C341D' AND Name = 'ParentBranchID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'ece1c405-0c2e-42ae-8840-9de6faa5c029',
+            'C43A32A6-3400-4A03-A0E3-8817D24C341D', -- Entity: MJ: Conversation Branches
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'C43A32A6-3400-4A03-A0E3-8817D24C341D'),
+            'ParentBranchID',
+            'Parent Branch ID',
+            'The fork this one started from. NULL means it started from Main, or before the first message when ForkFromSequence is also NULL.',
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            'C43A32A6-3400-4A03-A0E3-8817D24C341D',
+            'ID',
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b9abb056-d80b-419a-b818-60f62ba07638' OR (EntityID = 'C43A32A6-3400-4A03-A0E3-8817D24C341D' AND Name = 'ForkFromSequence')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'b9abb056-d80b-419a-b818-60f62ba07638',
+            'C43A32A6-3400-4A03-A0E3-8817D24C341D', -- Entity: MJ: Conversation Branches
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'C43A32A6-3400-4A03-A0E3-8817D24C341D'),
+            'ForkFromSequence',
+            'Fork From Sequence',
+            'Sequence of the last message shared with the parent path. NULL means the fork starts before the first message, in which case ParentBranchID is also NULL.',
+            'int',
+            4,
+            10,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '9d996e7b-e635-49de-a677-a9c2dd6530ba' OR (EntityID = 'C43A32A6-3400-4A03-A0E3-8817D24C341D' AND Name = 'Name')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '9d996e7b-e635-49de-a677-a9c2dd6530ba',
+            'C43A32A6-3400-4A03-A0E3-8817D24C341D', -- Entity: MJ: Conversation Branches
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'C43A32A6-3400-4A03-A0E3-8817D24C341D'),
+            'Name',
+            'Name',
+            'Optional name of the fork. With no name, the UI shows a default label from Kind: a Fork is named from its first message.',
+            'nvarchar',
+            510,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            1,
+            1,
+            0,
+            1,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '649a9cdc-326b-4916-b469-a045204de013' OR (EntityID = 'C43A32A6-3400-4A03-A0E3-8817D24C341D' AND Name = 'Kind')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '649a9cdc-326b-4916-b469-a045204de013',
+            'C43A32A6-3400-4A03-A0E3-8817D24C341D', -- Entity: MJ: Conversation Branches
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'C43A32A6-3400-4A03-A0E3-8817D24C341D'),
+            'Kind',
+            'Kind',
+            'How the fork started: Fork (Fork from here), Edit (a sent message was edited) or Regenerate (an answer was regenerated).',
+            'nvarchar',
+            40,
+            0,
+            0,
+            0,
+            'Fork',
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ec7d4c23-7652-468f-be0a-4873967125a7' OR (EntityID = 'C43A32A6-3400-4A03-A0E3-8817D24C341D' AND Name = 'SourceDetailID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'ec7d4c23-7652-468f-be0a-4873967125a7',
+            'C43A32A6-3400-4A03-A0E3-8817D24C341D', -- Entity: MJ: Conversation Branches
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'C43A32A6-3400-4A03-A0E3-8817D24C341D'),
+            'SourceDetailID',
+            'Source Detail ID',
+            'The edited message (Kind Edit) or the replaced answer (Kind Regenerate); NULL otherwise. Not a foreign key, to avoid a CodeGen cascade cycle with ConversationDetail.',
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ec1290ea-a783-4dd5-b374-f22ff6805f02' OR (EntityID = 'C43A32A6-3400-4A03-A0E3-8817D24C341D' AND Name = 'UserID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'ec1290ea-a783-4dd5-b374-f22ff6805f02',
+            'C43A32A6-3400-4A03-A0E3-8817D24C341D', -- Entity: MJ: Conversation Branches
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'C43A32A6-3400-4A03-A0E3-8817D24C341D'),
+            'UserID',
+            'User ID',
+            'The person who started the fork.',
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            'E1238F34-2837-EF11-86D4-6045BDEE16E6',
+            'ID',
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1ea4cb32-3ac6-498e-a032-5a9a415dc14f' OR (EntityID = 'C43A32A6-3400-4A03-A0E3-8817D24C341D' AND Name = '__mj_CreatedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '1ea4cb32-3ac6-498e-a032-5a9a415dc14f',
+            'C43A32A6-3400-4A03-A0E3-8817D24C341D', -- Entity: MJ: Conversation Branches
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'C43A32A6-3400-4A03-A0E3-8817D24C341D'),
+            '__mj_CreatedAt',
+            'Created At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '04101288-1659-433b-9f81-0a8a49e43547' OR (EntityID = 'C43A32A6-3400-4A03-A0E3-8817D24C341D' AND Name = '__mj_UpdatedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '04101288-1659-433b-9f81-0a8a49e43547',
+            'C43A32A6-3400-4A03-A0E3-8817D24C341D', -- Entity: MJ: Conversation Branches
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'C43A32A6-3400-4A03-A0E3-8817D24C341D'),
+            '__mj_UpdatedAt',
+            'Updated At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert entity field value with ID aada0665-57c6-4fa9-9abe-5bcfa8147319 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('58da56d3-29ba-4984-a5d8-701ec697ddc4', 'F15C833B-CD0B-40EA-86AC-49EA014DB573', 1, 'Edit', 'Edit', GETUTCDATE(), GETUTCDATE());
+                                       ('aada0665-57c6-4fa9-9abe-5bcfa8147319', '649A9CDC-326B-4916-B469-A045204DE013', 1, 'Edit', 'Edit', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 47b20094-551f-4f24-b88c-78f7dc9430fc */
+/* SQL text to insert entity field value with ID 737335d8-20c4-4b1b-b509-d984be6c3b8e */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('47b20094-551f-4f24-b88c-78f7dc9430fc', 'F15C833B-CD0B-40EA-86AC-49EA014DB573', 2, 'Fork', 'Fork', GETUTCDATE(), GETUTCDATE());
+                                       ('737335d8-20c4-4b1b-b509-d984be6c3b8e', '649A9CDC-326B-4916-B469-A045204DE013', 2, 'Fork', 'Fork', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 0daa8b1a-55be-4657-a5e7-16516cd99f04 */
+/* SQL text to insert entity field value with ID 3c375eb7-3913-4de9-8113-854bd545c31d */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('0daa8b1a-55be-4657-a5e7-16516cd99f04', 'F15C833B-CD0B-40EA-86AC-49EA014DB573', 3, 'Regenerate', 'Regenerate', GETUTCDATE(), GETUTCDATE());
+                                       ('3c375eb7-3913-4de9-8113-854bd545c31d', '649A9CDC-326B-4916-B469-A045204DE013', 3, 'Regenerate', 'Regenerate', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to update ValueListType for entity field ID F15C833B-CD0B-40EA-86AC-49EA014DB573 */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='F15C833B-CD0B-40EA-86AC-49EA014DB573';
-
-
-/* Create Entity Relationship: MJ: Conversation Branches -> MJ: Conversation Branches (One To Many via ParentBranchID) */
-   IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'acc47dd0-6caa-4be7-847d-8c940ac20905'
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('acc47dd0-6caa-4be7-847d-8c940ac20905', '2F1640FE-6F74-4ED4-A9BB-2BC968521864', '2F1640FE-6F74-4ED4-A9BB-2BC968521864', 'ParentBranchID', 'One To Many', 1, 1, 1, GETUTCDATE(), GETUTCDATE())
-   END;
-                    
-/* Create Entity Relationship: MJ: Conversation Branches -> MJ: Conversation Details (One To Many via BranchID) */
-   IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '662483a6-2e56-4584-af62-de120b531321'
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('662483a6-2e56-4584-af62-de120b531321', '2F1640FE-6F74-4ED4-A9BB-2BC968521864', '12248F34-2837-EF11-86D4-6045BDEE16E6', 'BranchID', 'One To Many', 1, 1, 2, GETUTCDATE(), GETUTCDATE())
-   END;
+/* SQL text to update ValueListType for entity field ID 649A9CDC-326B-4916-B469-A045204DE013 */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='649A9CDC-326B-4916-B469-A045204DE013';
 
 
 /* Create Entity Relationship: MJ: Users -> MJ: Conversation Branches (One To Many via UserID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'f8ced895-fde9-45dd-96d1-2322879c6649'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'bea04ea5-cb08-497b-9e29-6730cbd5536c'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('f8ced895-fde9-45dd-96d1-2322879c6649', 'E1238F34-2837-EF11-86D4-6045BDEE16E6', '2F1640FE-6F74-4ED4-A9BB-2BC968521864', 'UserID', 'One To Many', 1, 1, 118, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('bea04ea5-cb08-497b-9e29-6730cbd5536c', 'E1238F34-2837-EF11-86D4-6045BDEE16E6', 'C43A32A6-3400-4A03-A0E3-8817D24C341D', 'UserID', 'One To Many', 1, 1, 118, GETUTCDATE(), GETUTCDATE())
    END;
 
 
 /* Create Entity Relationship: MJ: Conversations -> MJ: Conversation Branches (One To Many via ConversationID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '4385857a-e03c-4aa5-8d4b-7834a3f5e696'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '0b5144a8-c7ad-49c2-b8b7-142c224f86ea'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('4385857a-e03c-4aa5-8d4b-7834a3f5e696', '13248F34-2837-EF11-86D4-6045BDEE16E6', '2F1640FE-6F74-4ED4-A9BB-2BC968521864', 'ConversationID', 'One To Many', 1, 1, 11, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('0b5144a8-c7ad-49c2-b8b7-142c224f86ea', '13248F34-2837-EF11-86D4-6045BDEE16E6', 'C43A32A6-3400-4A03-A0E3-8817D24C341D', 'ConversationID', 'One To Many', 1, 1, 11, GETUTCDATE(), GETUTCDATE())
+   END;
+
+
+/* Create Entity Relationship: MJ: Conversation Branches -> MJ: Conversation Details (One To Many via BranchID) */
+   IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'd36a4884-e5a4-43e1-8f0a-a3e09440eb60'
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
+                    VALUES ('d36a4884-e5a4-43e1-8f0a-a3e09440eb60', 'C43A32A6-3400-4A03-A0E3-8817D24C341D', '12248F34-2837-EF11-86D4-6045BDEE16E6', 'BranchID', 'One To Many', 1, 1, 1, GETUTCDATE(), GETUTCDATE())
+   END;
+                    
+/* Create Entity Relationship: MJ: Conversation Branches -> MJ: Conversation Branches (One To Many via ParentBranchID) */
+   IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '0e18636b-23bc-4a6d-b8c2-019daeb233a9'
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
+                    VALUES ('0e18636b-23bc-4a6d-b8c2-019daeb233a9', 'C43A32A6-3400-4A03-A0E3-8817D24C341D', 'C43A32A6-3400-4A03-A0E3-8817D24C341D', 'ParentBranchID', 'One To Many', 1, 1, 2, GETUTCDATE(), GETUTCDATE())
    END;
 
 /* Index for Foreign Keys for ConversationBranch */
@@ -1148,14 +1148,14 @@ IF NOT EXISTS (
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_ConversationBranch_UserID ON [${flyway:defaultSchema}].[ConversationBranch] ([UserID]);
 
-/* SQL text to update entity field related entity name field map for entity field ID 73E637D3-748B-45BC-BCA4-FCD09B68DB00 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='73E637D3-748B-45BC-BCA4-FCD09B68DB00', @RelatedEntityNameFieldMap='Conversation';
+/* SQL text to update entity field related entity name field map for entity field ID 5CAAEA2F-4FAB-444C-8997-7D18220E5E29 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='5CAAEA2F-4FAB-444C-8997-7D18220E5E29', @RelatedEntityNameFieldMap='Conversation';
 
-/* SQL text to update entity field related entity name field map for entity field ID ED14B70F-A269-4062-A41B-608D947E2D7C */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='ED14B70F-A269-4062-A41B-608D947E2D7C', @RelatedEntityNameFieldMap='ParentBranch';
+/* SQL text to update entity field related entity name field map for entity field ID ECE1C405-0C2E-42AE-8840-9DE6FAA5C029 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='ECE1C405-0C2E-42AE-8840-9DE6FAA5C029', @RelatedEntityNameFieldMap='ParentBranch';
 
-/* SQL text to update entity field related entity name field map for entity field ID D2CF05C7-8BFA-4B3D-8CB9-008EEB2B4598 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='D2CF05C7-8BFA-4B3D-8CB9-008EEB2B4598', @RelatedEntityNameFieldMap='User';
+/* SQL text to update entity field related entity name field map for entity field ID EC1290EA-A783-4DD5-B374-F22FF6805F02 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='EC1290EA-A783-4DD5-B374-F22FF6805F02', @RelatedEntityNameFieldMap='User';
 
 /* Base View SQL for MJ: Conversation Branches */
 -----------------------------------------------------------------
@@ -1535,8 +1535,8 @@ IF NOT EXISTS (
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_ConversationDetail_BranchID ON [${flyway:defaultSchema}].[ConversationDetail] ([BranchID]);
 
-/* SQL text to update entity field related entity name field map for entity field ID F4E3B02D-8242-44C7-A35B-8B9A05416B04 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='F4E3B02D-8242-44C7-A35B-8B9A05416B04', @RelatedEntityNameFieldMap='Branch';
+/* SQL text to update entity field related entity name field map for entity field ID EEA65C41-E1FF-4976-BA32-AA4E0BA70463 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='EEA65C41-E1FF-4976-BA32-AA4E0BA70463', @RelatedEntityNameFieldMap='Branch';
 
 /* Hierarchy Metadata Function SQL for MJ: Conversation Details.ParentID */
 -----------------------------------------------------------------
@@ -4900,7 +4900,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgent] TO [cdp_Developer],
 
 /* SQL text to insert 4 new entity field(s) */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '66b9d781-8289-46f2-80ad-7b7a4ff20d41' OR (EntityID = '2F1640FE-6F74-4ED4-A9BB-2BC968521864' AND Name = 'Conversation')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '6d60af4e-b4e8-40f4-a1b7-23db23f604c8' OR (EntityID = '12248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'Branch')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -4933,196 +4933,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgent] TO [cdp_Developer],
          )
          VALUES
          (
-            '66b9d781-8289-46f2-80ad-7b7a4ff20d41',
-            '2F1640FE-6F74-4ED4-A9BB-2BC968521864', -- Entity: MJ: Conversation Branches
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '2F1640FE-6F74-4ED4-A9BB-2BC968521864'),
-            'Conversation',
-            'Conversation',
-            NULL,
-            'nvarchar',
-            510,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            0,
-            1,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '8ae71eec-c5c1-4ad3-b06b-f2e9cf50ed0b' OR (EntityID = '2F1640FE-6F74-4ED4-A9BB-2BC968521864' AND Name = 'ParentBranch')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '8ae71eec-c5c1-4ad3-b06b-f2e9cf50ed0b',
-            '2F1640FE-6F74-4ED4-A9BB-2BC968521864', -- Entity: MJ: Conversation Branches
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '2F1640FE-6F74-4ED4-A9BB-2BC968521864'),
-            'ParentBranch',
-            'Parent Branch',
-            NULL,
-            'nvarchar',
-            510,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            0,
-            1,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd772c76a-2656-44a3-b835-8f6849d3cced' OR (EntityID = '2F1640FE-6F74-4ED4-A9BB-2BC968521864' AND Name = 'User')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'd772c76a-2656-44a3-b835-8f6849d3cced',
-            '2F1640FE-6F74-4ED4-A9BB-2BC968521864', -- Entity: MJ: Conversation Branches
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '2F1640FE-6F74-4ED4-A9BB-2BC968521864'),
-            'User',
-            'User',
-            NULL,
-            'nvarchar',
-            200,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            0,
-            1,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd788f344-ca6d-46f3-81db-5421d07543c5' OR (EntityID = '12248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'Branch')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'd788f344-ca6d-46f3-81db-5421d07543c5',
+            '6d60af4e-b4e8-40f4-a1b7-23db23f604c8',
             '12248F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Conversation Details
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '12248F34-2837-EF11-86D4-6045BDEE16E6'),
             'Branch',
@@ -5152,21 +4963,220 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgent] TO [cdp_Developer],
          )
       END;
 
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'cbd0ddc3-67be-4190-b3d8-48832d1cd971' OR (EntityID = 'C43A32A6-3400-4A03-A0E3-8817D24C341D' AND Name = 'Conversation')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'cbd0ddc3-67be-4190-b3d8-48832d1cd971',
+            'C43A32A6-3400-4A03-A0E3-8817D24C341D', -- Entity: MJ: Conversation Branches
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'C43A32A6-3400-4A03-A0E3-8817D24C341D'),
+            'Conversation',
+            'Conversation',
+            NULL,
+            'nvarchar',
+            510,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b4c8575b-1c0d-452e-931d-8fbf03febe71' OR (EntityID = 'C43A32A6-3400-4A03-A0E3-8817D24C341D' AND Name = 'ParentBranch')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'b4c8575b-1c0d-452e-931d-8fbf03febe71',
+            'C43A32A6-3400-4A03-A0E3-8817D24C341D', -- Entity: MJ: Conversation Branches
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'C43A32A6-3400-4A03-A0E3-8817D24C341D'),
+            'ParentBranch',
+            'Parent Branch',
+            NULL,
+            'nvarchar',
+            510,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '44243d08-adf6-4b2d-9305-b7b0fa512e01' OR (EntityID = 'C43A32A6-3400-4A03-A0E3-8817D24C341D' AND Name = 'User')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '44243d08-adf6-4b2d-9305-b7b0fa512e01',
+            'C43A32A6-3400-4A03-A0E3-8817D24C341D', -- Entity: MJ: Conversation Branches
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'C43A32A6-3400-4A03-A0E3-8817D24C341D'),
+            'User',
+            'User',
+            NULL,
+            'nvarchar',
+            200,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
 /* Set field properties for entity */
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = 'F15C833B-CD0B-40EA-86AC-49EA014DB573'
+               WHERE ID = '649A9CDC-326B-4916-B469-A045204DE013'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '8A118C6B-65E4-47F8-9432-84BEE49F7BE7'
+               WHERE ID = '1EA4CB32-3AC6-498E-A032-5A9A415DC14F'
+               AND AutoUpdateDefaultInView = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = 'CBD0DDC3-67BE-4190-B3D8-48832D1CD971'
+               AND AutoUpdateDefaultInView = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = '44243D08-ADF6-4B2D-9305-B7B0FA512E01'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET UserSearchPredicateAPI = 'BeginsWith'
-               WHERE ID = '1995554B-03F9-4623-9C8D-EF767619E013'
+               WHERE ID = '9D996E7B-E635-49DE-A677-A9C2DD6530BA'
                AND AutoUpdateUserSearchPredicate = 1;
 
 /* Set categories for 7 fields */
@@ -5178,15 +5188,15 @@ SET
    GeneratedFormSection = 'Category',
    DisplayName = 'Branch'
 WHERE 
-   ID = 'F4E3B02D-8242-44C7-A35B-8B9A05416B04';
+   ID = 'EEA65C41-E1FF-4976-BA32-AA4E0BA70463';
 
 -- UPDATE Entity Field Category Info MJ: Conversation Details.ReplacedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Message Core',
+   Category = 'Media and Timing',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '5697B934-D9C0-4048-B59B-5FED82969668';
+   ID = '240C11F0-66F7-4242-A207-0B65E1D51067';
 
 -- UPDATE Entity Field Category Info MJ: Conversation Details.Branch 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -5194,7 +5204,7 @@ SET
    Category = 'Related Entities',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = 'D788F344-CA6D-46F3-81DB-5421D07543C5';
+   ID = '6D60AF4E-B4E8-40F4-A1B7-23DB23F604C8';
 
 -- UPDATE Entity Field Category Info MJ: Conversation Details.ParentIDDepth 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -5236,7 +5246,7 @@ SET
    Category = 'System Metadata',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '64D580C5-1B41-4B35-9737-9F0E7A170CCD';
+   ID = 'CEFE126B-0DF6-4F94-B0B1-B5EA48C0C443';
 
 -- UPDATE Entity Field Category Info MJ: Conversation Branches.ConversationID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -5245,7 +5255,7 @@ SET
    GeneratedFormSection = 'Category',
    DisplayName = 'Conversation'
 WHERE 
-   ID = '73E637D3-748B-45BC-BCA4-FCD09B68DB00';
+   ID = '5CAAEA2F-4FAB-444C-8997-7D18220E5E29';
 
 -- UPDATE Entity Field Category Info MJ: Conversation Branches.ParentBranchID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -5254,7 +5264,7 @@ SET
    GeneratedFormSection = 'Category',
    DisplayName = 'Parent Branch'
 WHERE 
-   ID = 'ED14B70F-A269-4062-A41B-608D947E2D7C';
+   ID = 'ECE1C405-0C2E-42AE-8840-9DE6FAA5C029';
 
 -- UPDATE Entity Field Category Info MJ: Conversation Branches.ForkFromSequence 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -5262,7 +5272,7 @@ SET
    Category = 'Branch Details',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = 'B50172B0-A274-46D0-8059-1A7B16A383A1';
+   ID = 'B9ABB056-D80B-419A-B818-60F62BA07638';
 
 -- UPDATE Entity Field Category Info MJ: Conversation Branches.Name 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -5270,7 +5280,7 @@ SET
    Category = 'Branch Details',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '1995554B-03F9-4623-9C8D-EF767619E013';
+   ID = '9D996E7B-E635-49DE-A677-A9C2DD6530BA';
 
 -- UPDATE Entity Field Category Info MJ: Conversation Branches.Kind 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -5278,7 +5288,7 @@ SET
    Category = 'Branch Details',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = 'F15C833B-CD0B-40EA-86AC-49EA014DB573';
+   ID = '649A9CDC-326B-4916-B469-A045204DE013';
 
 -- UPDATE Entity Field Category Info MJ: Conversation Branches.SourceDetailID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -5287,7 +5297,7 @@ SET
    GeneratedFormSection = 'Category',
    DisplayName = 'Source Detail'
 WHERE 
-   ID = '8EACF365-9BAC-4B23-8EE2-BA46ED6F21DA';
+   ID = 'EC7D4C23-7652-468F-BE0A-4873967125A7';
 
 -- UPDATE Entity Field Category Info MJ: Conversation Branches.UserID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -5296,31 +5306,34 @@ SET
    GeneratedFormSection = 'Category',
    DisplayName = 'User'
 WHERE 
-   ID = 'D2CF05C7-8BFA-4B3D-8CB9-008EEB2B4598';
+   ID = 'EC1290EA-A783-4DD5-B374-F22FF6805F02';
 
 -- UPDATE Entity Field Category Info MJ: Conversation Branches.Conversation 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    Category = 'Related Information',
-   GeneratedFormSection = 'Category'
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Conversation Detail'
 WHERE 
-   ID = '66B9D781-8289-46F2-80AD-7B7A4FF20D41';
+   ID = 'CBD0DDC3-67BE-4190-B3D8-48832D1CD971';
 
 -- UPDATE Entity Field Category Info MJ: Conversation Branches.ParentBranch 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    Category = 'Related Information',
-   GeneratedFormSection = 'Category'
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Parent Branch Detail'
 WHERE 
-   ID = '8AE71EEC-C5C1-4AD3-B06B-F2E9CF50ED0B';
+   ID = 'B4C8575B-1C0D-452E-931D-8FBF03FEBE71';
 
 -- UPDATE Entity Field Category Info MJ: Conversation Branches.User 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    Category = 'Related Information',
-   GeneratedFormSection = 'Category'
+   GeneratedFormSection = 'Category',
+   DisplayName = 'User Name'
 WHERE 
-   ID = 'D772C76A-2656-44A3-B835-8F6849D3CCED';
+   ID = '44243D08-ADF6-4B2D-9305-B7B0FA512E01';
 
 -- UPDATE Entity Field Category Info MJ: Conversation Branches.__mj_CreatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -5328,7 +5341,7 @@ SET
    Category = 'System Metadata',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = 'F1C9C28C-6B2D-41C6-8C89-868DA4188F62';
+   ID = '1EA4CB32-3AC6-498E-A032-5A9A415DC14F';
 
 -- UPDATE Entity Field Category Info MJ: Conversation Branches.__mj_UpdatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -5336,27 +5349,27 @@ SET
    Category = 'System Metadata',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '8A118C6B-65E4-47F8-9432-84BEE49F7BE7';
+   ID = '04101288-1659-433B-9F81-0A8A49E43547';
 
 /* Set entity icon to fa fa-code-branch */
 
                UPDATE [${flyway:defaultSchema}].[Entity]
                SET [Icon] = 'fa fa-code-branch', [__mj_UpdatedAt] = GETUTCDATE()
-               WHERE [ID] = '2F1640FE-6F74-4ED4-A9BB-2BC968521864';
+               WHERE [ID] = 'C43A32A6-3400-4A03-A0E3-8817D24C341D';
 
 /* Insert FieldCategoryInfo setting for entity */
 IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = '2F1640FE-6F74-4ED4-A9BB-2BC968521864' AND [Name] = 'FieldCategoryInfo'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = 'C43A32A6-3400-4A03-A0E3-8817D24C341D' AND [Name] = 'FieldCategoryInfo'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('5156c63c-eb49-5f3f-9501-64deaa5beae6', '2F1640FE-6F74-4ED4-A9BB-2BC968521864', 'FieldCategoryInfo', '{
+               VALUES ('8649007a-3765-5463-a293-cdba0fa709b7', 'C43A32A6-3400-4A03-A0E3-8817D24C341D', 'FieldCategoryInfo', '{
   "Branch Details": {
-    "description": "Core properties defining the conversation branch, fork sequence, and origin details",
+    "description": "Core configuration and lineage details for conversation forks",
     "icon": "fa fa-code-branch"
   },
   "Related Information": {
-    "description": "Related display fields and textual descriptions associated with the branch",
+    "description": "Additional descriptive fields and denormalized context",
     "icon": "fa fa-info-circle"
   },
   "System Metadata": {
@@ -5368,11 +5381,11 @@ IF NOT EXISTS (
 
 /* Insert FieldCategoryIcons setting (legacy) */
 IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = '2F1640FE-6F74-4ED4-A9BB-2BC968521864' AND [Name] = 'FieldCategoryIcons'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = 'C43A32A6-3400-4A03-A0E3-8817D24C341D' AND [Name] = 'FieldCategoryIcons'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('f5127349-5fc7-5dc8-a092-5ac8f1e7844a', '2F1640FE-6F74-4ED4-A9BB-2BC968521864', 'FieldCategoryIcons', '{
+               VALUES ('e634a5a7-0e2d-5c4f-b8bc-e13823df2115', 'C43A32A6-3400-4A03-A0E3-8817D24C341D', 'FieldCategoryIcons', '{
   "Branch Details": "fa fa-code-branch",
   "Related Information": "fa fa-info-circle",
   "System Metadata": "fa fa-cog"
@@ -5383,7 +5396,7 @@ IF NOT EXISTS (
 
          UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
          SET [DefaultForNewUser] = 1, [__mj_UpdatedAt] = GETUTCDATE()
-         WHERE [EntityID] = '2F1640FE-6F74-4ED4-A9BB-2BC968521864';
+         WHERE [EntityID] = 'C43A32A6-3400-4A03-A0E3-8817D24C341D';
 
 /* spCreate SQL for MJ: Conversation Branches */
 -----------------------------------------------------------------

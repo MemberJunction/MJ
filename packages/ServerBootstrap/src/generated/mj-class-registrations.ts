@@ -2071,12 +2071,12 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRecommendationItemEntity,
     MJRecommendationProviderEntity,
     MJRecommendationRunEntity,
-    MJRecordChangeEntity,
-    MJRecordChangeReplayRunEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJRecordChangeEntity,
+    MJRecordChangeReplayRunEntity,
     MJRecordCloneLogEntity,
     MJRecordCloneLogItemEntity,
     MJRecordGeoCodeEntity,
@@ -2275,12 +2275,12 @@ const CLASS_REGISTRATIONS_2: any[] = [
     GetSingleSurveyMonkeyResponseAction,
     GetSingleTypeformResponseAction,
     GetSurveyMonkeyDetailsAction,
-    GetSurveyMonkeyResponsesAction,
-    GetSurveyMonkeyStatisticsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    GetSurveyMonkeyResponsesAction,
+    GetSurveyMonkeyStatisticsAction,
     GetTypeformAction,
     GetTypeformFileContentAction,
     GetTypeformFormsAction,
@@ -2479,12 +2479,12 @@ const CLASS_REGISTRATIONS_3: any[] = [
     ClientContextChannelServer,
     DataSnapshotToolLibrary,
     DocxToolLibrary,
-    DuplicateReasoningAgentProvider,
-    ExcelToolLibrary,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    DuplicateReasoningAgentProvider,
+    ExcelToolLibrary,
     FlowAgentType,
     GenericBinaryToolLibrary,
     JSONToolLibrary,
@@ -2683,12 +2683,12 @@ const CLASS_REGISTRATIONS_4: any[] = [
     CreateDirectoryAction,
     CreateDocumentAction,
     CreateEmployeeAction,
-    CreateFormContributionAction,
-    CreateInteractiveFormAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    CreateFormContributionAction,
+    CreateInteractiveFormAction,
     CreateListAction,
     CreateMermaidDiagramAction,
     CreateRecordAction,
@@ -2854,7 +2854,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1149;
+export const CLASS_REGISTRATIONS_COUNT = 1151;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

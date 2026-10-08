@@ -14685,15 +14685,15 @@ export const MJConversationBranchSchema = z.object({
         * * Default Value: getutcdate()`),
     Conversation: z.string().nullable().describe(`
         * * Field Name: Conversation
-        * * Display Name: Conversation
+        * * Display Name: Conversation Detail
         * * SQL Data Type: nvarchar(255)`),
     ParentBranch: z.string().nullable().describe(`
         * * Field Name: ParentBranch
-        * * Display Name: Parent Branch
+        * * Display Name: Parent Branch Detail
         * * SQL Data Type: nvarchar(255)`),
     User: z.string().describe(`
         * * Field Name: User
-        * * Display Name: User
+        * * Display Name: User Name
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -80157,7 +80157,7 @@ export class MJConversationBranchEntity extends BaseEntity<MJConversationBranchE
 
     /**
     * * Field Name: Conversation
-    * * Display Name: Conversation
+    * * Display Name: Conversation Detail
     * * SQL Data Type: nvarchar(255)
     */
     get Conversation(): string | null {
@@ -80166,7 +80166,7 @@ export class MJConversationBranchEntity extends BaseEntity<MJConversationBranchE
 
     /**
     * * Field Name: ParentBranch
-    * * Display Name: Parent Branch
+    * * Display Name: Parent Branch Detail
     * * SQL Data Type: nvarchar(255)
     */
     get ParentBranch(): string | null {
@@ -80175,7 +80175,7 @@ export class MJConversationBranchEntity extends BaseEntity<MJConversationBranchE
 
     /**
     * * Field Name: User
-    * * Display Name: User
+    * * Display Name: User Name
     * * SQL Data Type: nvarchar(100)
     */
     get User(): string {

@@ -18,8 +18,8 @@ export class MJConversationBranchFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'branchDetails', sectionName: 'Branch Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJConversationBranches', sectionName: 'Conversation Branches', isExpanded: false },
-            { sectionKey: 'mJConversationDetails', sectionName: 'Conversation Details', isExpanded: false }
+            { sectionKey: 'mJConversationDetails', sectionName: 'Conversation Details', isExpanded: false },
+            { sectionKey: 'mJConversationBranches', sectionName: 'Conversation Branches', isExpanded: false }
         ]);
     }
 }
