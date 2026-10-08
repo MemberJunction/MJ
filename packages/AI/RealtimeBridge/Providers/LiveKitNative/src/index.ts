@@ -3,8 +3,12 @@ export * from './media-worker-types';
 export * from './media-worker-session';
 export * from './room-telemetry';
 export * from './livekit-worker-room-client';
+export * from './video-frame-pixels';
 export * from './video-frame-encoder';
+export * from './video-encode-protocol';
+export * from './video-encode-worker-host';
 export * from './room-video-watcher';
+// Not exported: the two worker entries, which run on import.
 
 import { CreateLiveKitRtcNodeModule } from './livekit-rtc-node-room';
 

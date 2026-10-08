@@ -22,7 +22,7 @@ import type {
     RtcVideoStream,
     RtcVideoStreamReader,
 } from '../livekit-rtc-node-room';
-import { I420ByteLength } from '../video-frame-encoder';
+import { I420ByteLength } from '../video-frame-pixels';
 
 export const ROOM_EVENT = {
     TrackSubscribed: 'trackSubscribed',
@@ -151,11 +151,18 @@ export function fakePerson(
 /** The consent attribute as a person who lets agents see them carries it. */
 export const LETS_AGENTS_SEE: Record<string, string> = { 'mj.agentCanSee': 'true' };
 
+/** A Y'CbCr color. */
+export interface YuvColor {
+    y: number;
+    u: number;
+    v: number;
+}
+
 /** A solid-color I420 frame (Y'CbCr values), as `@livekit/rtc-node` delivers one. `convert` throws unless given. */
 export function i420Frame(
     width: number,
     height: number,
-    color: { y: number; u: number; v: number } = { y: 126, u: 128, v: 128 },
+    color: YuvColor = { y: 126, u: 128, v: 128 },
     convert: (dstType: number) => RtcVideoFrame = () => {
         throw new Error('unexpected convert');
     },
@@ -167,6 +174,24 @@ export function i420Frame(
     data.fill(color.u, lumaLength, lumaLength + chromaLength);
     data.fill(color.v, lumaLength + chromaLength);
     return { data, width, height, type: VIDEO_BUFFER_TYPE.I420, convert };
+}
+
+/** An I420 frame whose left half is one color and right half another (width a multiple of 4, so chroma splits too). */
+export function twoColorFrame(width: number, height: number, left: YuvColor, right: YuvColor): RtcVideoFrame {
+    const frame = i420Frame(width, height, left);
+    const chromaWidth = width / 2;
+    const chromaHeight = Math.ceil(height / 2);
+    const lumaLength = width * height;
+    const chromaLength = chromaWidth * chromaHeight;
+    for (let y = 0; y < height; y++) {
+        frame.data.fill(right.y, y * width + width / 2, (y + 1) * width);
+    }
+    for (let y = 0; y < chromaHeight; y++) {
+        const row = y * chromaWidth;
+        frame.data.fill(right.u, lumaLength + row + chromaWidth / 2, lumaLength + row + chromaWidth);
+        frame.data.fill(right.v, lumaLength + chromaLength + row + chromaWidth / 2, lumaLength + chromaLength + row + chromaWidth);
+    }
+    return frame;
 }
 
 /** Records every captured outbound frame, every AudioStream rate request and every VideoStream opened. */

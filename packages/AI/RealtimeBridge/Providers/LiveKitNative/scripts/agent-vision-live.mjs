@@ -9,30 +9,40 @@
  * Topology (one fresh room per run):
  *   - "person" participant : @livekit/rtc-node client publishing a synthetic camera (or screen share) with a VideoSource +
  *                            LocalVideoTrack at a steady frame rate. Pre-rendered I420 frames, so the person adds almost
- *                            no work to this process.
- *   - "bot" participant    : the client UNDER TEST (LiveKitRtcNodeRoomClient, in-process, so encoding runs on this
- *                            process's main loop), created with video options as the bridge would when the agent watches.
+ *                            no work to this process. It runs in this process, so its own cost is in the baseline too.
+ *   - "bot" participant    : the client UNDER TEST, built through CreateLiveKitRtcNodeModule (the path MJAPI takes) with
+ *                            video options as the bridge would when the agent watches. Frames are encoded on the encode
+ *                            worker's thread (VISION_ENCODER=worker, the default) or on the thread that hosts the room
+ *                            (VISION_ENCODER=in-process). With VISION_WORKER_MEDIA=on the room runs in the media worker,
+ *                            which has its own encode worker.
  *   - consent              : set and withdrawn on the person through the server API (RoomServiceClient.updateParticipant),
  *                            the way MJAPI records a person's choice.
  *
- * Phases: join -> warm-up without consent (the bot must read nothing) -> consent on, measured window -> opt-out -> settle.
+ * Phases: join -> baseline without consent, as long as the window (the bot must read nothing) -> consent on, measured
+ * window (optionally the encode worker is killed halfway) -> opt-out -> settle.
  *
  * Reported:
+ *   - the mode: where frames are encoded, which thread hosts the room
  *   - frames received before consent (expected 0)
  *   - time from consent to the first frame (selection, subscription, first keyframe)
  *   - frames per second during the window, JPEG sizes (min / mean / max), encoded dimensions
- *   - encode ms (last / max, from the client's video telemetry) and the telemetry counters
- *   - main-thread event-loop delay p99 during the window (the thread that encodes)
+ *   - from the client's video telemetry: where frames were encoded and encode worker restarts; encode ms (last / max, on the
+ *     thread that encoded); the round trip (last / max) and the room thread's dispatch cost (max); every counter
+ *   - main-thread event-loop delay p99 during the baseline and during the window
+ *   - with VISION_WORKER_MEDIA=on: the media worker's loop p99, outbound underruns and pacerQueuedMs
+ *   - with VISION_CRASH_ENCODER=1: when the encode worker was killed, and the time to the next frame
  *   - time from the opt-out request to the last frame, frames after the opt-out, and when the ended source was reported
  *
- * NOT covered: the worker media plane (MJ_LIVEKIT_WORKER_MEDIA=on), the bridge/engine/model above the room client,
- * several people at once, real camera content (synthetic frames compress unusually well), network between this host and a
- * remote server.
+ * NOT covered: the bridge/engine/model above the room client, several people at once, real camera content (synthetic
+ * frames compress unusually well), network between this host and a remote server, the person in another process.
  *
  * Requirements (environment ONLY; the script exits immediately if any is missing):
  *   LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET
- *   Optional: VISION_DURATION_S (default 10), VISION_SOURCE=camera|screen (default camera),
- *             VISION_WIDTH / VISION_HEIGHT (default 1280 x 720), VISION_FPS (default 30), VISION_RATE (default 1)
+ *   Optional: VISION_DURATION_S (default 10; the baseline is as long), VISION_SOURCE=camera|screen (default camera),
+ *             VISION_WIDTH / VISION_HEIGHT (default 1280 x 720), VISION_FPS (default 30), VISION_RATE (default 1),
+ *             VISION_ENCODER=worker|in-process (default worker), VISION_WORKER_MEDIA=on (default off),
+ *             VISION_CRASH_ENCODER=1 (kill the encode worker halfway through the window; VISION_ENCODER=worker on the
+ *             main thread only, since a media worker's encode worker cannot be reached from here)
  * Build first:  pnpm run build   (this script statically imports ../dist/index.js)
  * Run:          LIVEKIT_URL=... LIVEKIT_API_KEY=... LIVEKIT_API_SECRET=... node scripts/agent-vision-live.mjs
  */
@@ -42,7 +52,13 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AgentVisionAttributes } from '@memberjunction/ai';
-import { LiveKitRtcNodeRoomClient, DefaultRtcNodeLoader, I420ByteLength } from '../dist/index.js';
+import {
+    CreateLiveKitRtcNodeModule,
+    CreateVideoEncodeWorker,
+    DefaultRtcNodeLoader,
+    I420ByteLength,
+    VideoEncodeWorkerHost,
+} from '../dist/index.js';
 
 const REQUIRED_ENV = ['LIVEKIT_URL', 'LIVEKIT_API_KEY', 'LIVEKIT_API_SECRET'];
 const missing = REQUIRED_ENV.filter((k) => !process.env[k]);
@@ -59,7 +75,13 @@ const WIDTH = Number(process.env.VISION_WIDTH ?? '1280');
 const HEIGHT = Number(process.env.VISION_HEIGHT ?? '720');
 const FPS = Number(process.env.VISION_FPS ?? '30');
 const RATE = Number(process.env.VISION_RATE ?? '1');
-const WARMUP_MS = 3000;
+const ENCODER = process.env.VISION_ENCODER === 'in-process' ? 'in-process' : 'worker';
+const WORKER_MEDIA = ['on', 'true', '1'].includes((process.env.VISION_WORKER_MEDIA ?? '').trim().toLowerCase());
+const CRASH_ENCODER = process.env.VISION_CRASH_ENCODER === '1';
+/** The crash phase needs the encode worker on this thread; a media worker's own encode worker is out of reach. */
+const CAN_CRASH_ENCODER = ENCODER === 'worker' && !WORKER_MEDIA;
+/** The pre-consent baseline is as long as the window, so each run carries its own before and after. */
+const WARMUP_MS = DURATION_MS;
 const SETTLE_MS = 3000;
 const PERSON = 'vision-person';
 const BOT = 'agent-vision-under-test';
@@ -143,9 +165,26 @@ async function startPerson(rtc, roomName) {
     };
 }
 
-/** The bot under test, recording every frame and ended source it raises. */
+/**
+ * Has the encode worker host start its workers through a factory that remembers each one, so the crash phase can kill
+ * the running worker. Must run before the first frame.
+ */
+function recordEncodeWorkers() {
+    const spawned = [];
+    const host = VideoEncodeWorkerHost.Instance;
+    host.Configure({
+        WorkerFactory: () => {
+            const worker = CreateVideoEncodeWorker(host.WorkerPath);
+            spawned.push(worker);
+            return worker;
+        },
+    });
+    return spawned;
+}
+
+/** The bot under test, built the way MJAPI builds it, recording every frame and ended source it raises. */
 async function startBot(roomName) {
-    const client = new LiveKitRtcNodeRoomClient(24000, 24000, 1, DefaultRtcNodeLoader, {
+    const client = CreateLiveKitRtcNodeModule({ VideoEncodeWorker: ENCODER === 'worker', UseWorker: WORKER_MEDIA }).createRoomClient({
         Video: { Streams: 1, Rate: RATE, Cameras: true, Screens: true },
     });
     const frames = [];
@@ -170,25 +209,57 @@ function summarizeWindow(frames, fromMs, toMs) {
     };
 }
 
+/** The main thread's event-loop delay p99 (ms) over the next `ms` milliseconds. */
+async function mainLoopP99During(ms) {
+    const monitor = monitorEventLoopDelay({ resolution: 10 });
+    monitor.enable();
+    await sleep(ms);
+    monitor.disable();
+    return monitor.percentile(99) / 1e6;
+}
+
+/** The measured window and the main loop's p99 over it; kills the running encode worker halfway when asked. */
+async function runWindow(encodeWorkers) {
+    const monitor = monitorEventLoopDelay({ resolution: 10 });
+    monitor.enable();
+    let crashAt;
+    if (encodeWorkers) {
+        await sleep(DURATION_MS / 2);
+        const running = encodeWorkers[encodeWorkers.length - 1];
+        if (running) {
+            crashAt = performance.now();
+            await running.terminate();
+        }
+        await sleep(DURATION_MS / 2);
+    } else {
+        await sleep(DURATION_MS);
+    }
+    monitor.disable();
+    return { loopP99Ms: monitor.percentile(99) / 1e6, crashAt };
+}
+
+/** A fresh snapshot: the worker client asks its media worker; the in-process client answers at once. */
+async function readTelemetry(client) {
+    return typeof client.RefreshTelemetry === 'function' ? client.RefreshTelemetry() : client.GetTelemetry();
+}
+
 async function run() {
     const rtc = await DefaultRtcNodeLoader();
     const roomName = `vision-${Date.now()}`;
     const roomService = new RoomServiceClient(serverApiHost(LIVEKIT_URL), LIVEKIT_KEY, LIVEKIT_SECRET);
     console.log(`Agent vision live check  server=${LIVEKIT_URL}  source=${SOURCE_KIND} ${WIDTH}x${HEIGHT}@${FPS}fps  rate=${RATE}fps  window=${DURATION_MS / 1000}s`);
+    const encodeWorkers = CRASH_ENCODER && CAN_CRASH_ENCODER ? recordEncodeWorkers() : undefined;
 
     const person = await startPerson(rtc, roomName);
     const bot = await startBot(roomName);
-    await sleep(WARMUP_MS);
+    const baselineLoopP99Ms = await mainLoopP99During(WARMUP_MS);
     const framesBeforeConsent = bot.frames.length;
 
     const consentAt = performance.now();
     await roomService.updateParticipant(roomName, PERSON, { attributes: AgentVisionAttributes(true) });
-    const loopMonitor = monitorEventLoopDelay({ resolution: 10 });
-    loopMonitor.enable();
-    await sleep(DURATION_MS);
-    loopMonitor.disable();
+    const { loopP99Ms, crashAt } = await runWindow(encodeWorkers);
     const windowEnd = performance.now();
-    const telemetry = bot.client.GetTelemetry();
+    const telemetry = await readTelemetry(bot.client);
 
     const optOutAt = performance.now();
     await roomService.updateParticipant(roomName, PERSON, { attributes: AgentVisionAttributes(false) });
@@ -197,12 +268,16 @@ async function run() {
 
     const firstFrame = bot.frames.find((f) => f.at >= consentAt);
     const lastFrame = bot.frames[bot.frames.length - 1];
+    const frameAfterCrash = crashAt === undefined ? undefined : bot.frames.find((f) => f.at > crashAt);
     const result = {
         framesBeforeConsent,
         firstFrameMs: firstFrame ? firstFrame.at - consentAt : undefined,
         window: summarizeWindow(bot.frames, firstFrame?.at ?? consentAt, windowEnd),
-        loopP99Ms: loopMonitor.percentile(99) / 1e6,
+        baselineLoopP99Ms,
+        loopP99Ms,
         telemetry,
+        crashAtMs: crashAt === undefined ? undefined : crashAt - consentAt,
+        nextFrameAfterCrashMs: frameAfterCrash ? frameAfterCrash.at - crashAt : undefined,
         framesAfterOptOut: bot.frames.filter((f) => f.at > optOutAt).length,
         lastFrameAfterOptOutMs: lastFrame ? lastFrame.at - optOutAt : undefined,
         optOutAckMs: optOutAckAt - optOutAt,
@@ -215,16 +290,44 @@ async function run() {
     return result;
 }
 
+/** The crash phase's line: when the encode worker was killed and how long until the next frame, or why it did not run. */
+function crashSummary(r) {
+    if (!CAN_CRASH_ENCODER) {
+        return 'skipped: needs VISION_ENCODER=worker without VISION_WORKER_MEDIA';
+    }
+    if (r.crashAtMs === undefined) {
+        return 'skipped: no encode worker was running halfway through the window';
+    }
+    return `killed ${fmtMs(r.crashAtMs)} after consent; next frame ${fmtMs(r.nextFrameAfterCrashMs)} later`;
+}
+
 function report(r) {
-    const v = r.telemetry.video;
+    const t = r.telemetry;
+    const v = t.video;
     const w = r.window;
-    console.log(`\nframes before consent (expected 0)          : ${r.framesBeforeConsent}`);
+    console.log(`\nmode                                        : encoder=${ENCODER}, room on the ${WORKER_MEDIA ? 'media worker' : 'main thread'}`);
+    console.log(`frames before consent (expected 0)          : ${r.framesBeforeConsent}`);
     console.log(`consent -> first frame                      : ${fmtMs(r.firstFrameMs)}`);
     console.log(`frames in window                            : ${w.count} (${w.fps.toFixed(2)} fps; dims ${w.dims})`);
     console.log(`JPEG bytes min / mean / max                 : ${w.minBytes ?? 'n/a'} / ${w.meanBytes?.toFixed(0) ?? 'n/a'} / ${w.maxBytes ?? 'n/a'}`);
-    console.log(`encode ms last / max (client telemetry)     : ${fmtMs(v?.encodeMsLast)} / ${fmtMs(v?.encodeMsMax)}`);
-    console.log(`video counters                              : received=${v?.framesReceived ?? 'n/a'} sent=${v?.framesSent ?? 'n/a'} notDue=${v?.framesSkippedNotDue ?? 'n/a'} bytes=${v?.bytesSent ?? 'n/a'} selected=${v?.selectedSources ?? 'n/a'}`);
-    console.log(`main event-loop p99 during window           : ${fmtMs(r.loopP99Ms)} (client telemetry: ${fmtMs(r.telemetry.eventLoopDelayP99Ms)})`);
+    console.log(`encoded on (client telemetry)               : ${v?.encoder ?? 'n/a'} (encode worker restarts: ${v?.encodeWorkerRestarts ?? 'n/a'})`);
+    console.log(`encode ms last / max (thread that encoded)  : ${fmtMs(v?.encodeMsLast)} / ${fmtMs(v?.encodeMsMax)}`);
+    console.log(`round trip ms last / max (room thread)      : ${fmtMs(v?.encodeRoundTripMsLast)} / ${fmtMs(v?.encodeRoundTripMsMax)}`);
+    console.log(`dispatch ms max (room thread's own cost)    : ${fmtMs(v?.encodeDispatchMsMax)}`);
+    console.log(
+        `video counters                              : received=${v?.framesReceived ?? 'n/a'} sent=${v?.framesSent ?? 'n/a'} ` +
+            `notDue=${v?.framesSkippedNotDue ?? 'n/a'} skippedEncoding=${v?.framesSkippedEncoding ?? 'n/a'} ` +
+            `droppedAfterEncode=${v?.framesDroppedAfterEncode ?? 'n/a'} failures=${v?.encodeFailures ?? 'n/a'} ` +
+            `inFlight=${v?.encodeInFlight ?? 'n/a'} queueDepth=${v?.encodeQueueDepth ?? 'n/a'} bytes=${v?.bytesSent ?? 'n/a'} selected=${v?.selectedSources ?? 'n/a'}`,
+    );
+    const clientMainP99 = WORKER_MEDIA ? t.mainEventLoopDelayP99Ms : t.eventLoopDelayP99Ms;
+    console.log(`main event-loop p99 baseline / window       : ${fmtMs(r.baselineLoopP99Ms)} / ${fmtMs(r.loopP99Ms)} (client telemetry: ${fmtMs(clientMainP99)})`);
+    if (WORKER_MEDIA) {
+        console.log(`media worker loop p99 / underruns / pacer   : ${fmtMs(t.workerEventLoopDelayP99Ms)} / ${t.outbound?.underrunCount ?? 'n/a'} / ${fmtMs(t.pacerQueuedMs)}`);
+    }
+    if (CRASH_ENCODER) {
+        console.log(`encode worker killed                        : ${crashSummary(r)}`);
+    }
     console.log(`opt-out request -> server ack               : ${fmtMs(r.optOutAckMs)}`);
     console.log(`opt-out request -> last frame               : ${r.lastFrameAfterOptOutMs === undefined || r.lastFrameAfterOptOutMs < 0 ? 'no frame after the request' : fmtMs(r.lastFrameAfterOptOutMs)} (frames after: ${r.framesAfterOptOut})`);
     console.log(`opt-out request -> source reported ended    : ${fmtMs(r.endedAfterOptOutMs)} ${r.ended.length ? JSON.stringify(r.ended.map(({ at, ...rest }) => rest)) : ''}`);

@@ -2,9 +2,18 @@
  * Tests for participant video inside the bot, driven through {@link LiveKitRtcNodeRoomClient} and a fake
  * `@livekit/rtc-node` room: who may be read (consent, agents, kinds), selection (one source at a time, the next when it
  * ends), subscriptions, pacing to the session's rate, consent winning over a frame in hand, every way a source ends,
- * teardown, and telemetry. The frames are real JPEGs (the encoder is not mocked).
+ * teardown, and telemetry. The frames are real JPEGs from the default in-process encoder, except in the tests of
+ * encoding off the thread, which settle each encode by hand ({@link DeferredVideoEncoder}).
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+const mocks = vi.hoisted(() => ({ LogError: vi.fn<(message: string) => void>() }));
+
+vi.mock('@memberjunction/core', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/core')>();
+    return { ...actual, LogError: mocks.LogError };
+});
+
 import jpeg from 'jpeg-js';
 import type {
     NativeConnectArgs,
@@ -13,7 +22,8 @@ import type {
     NativeRoomVideoSourceEnd,
 } from '@memberjunction/ai-bridge-livekit';
 import { LiveKitRtcNodeRoomClient, type RtcParticipant, type RtcTrack, type RtcVideoFrameEvent } from '../livekit-rtc-node-room';
-import { VideoFrameEncoder } from '../video-frame-encoder';
+import type { IRoomVideoFrameEncoder } from '../video-frame-encoder';
+import { DeferredVideoEncoder } from './fake-video-encode';
 import {
     fakePerson,
     FakePublication,
@@ -41,13 +51,21 @@ interface Harness {
     clock: { now: number };
 }
 
-/** A connected bot that watches the meeting, with an injected clock. */
-async function watching(remote: RtcParticipant[], video: Partial<NativeRoomVideoOptions> = {}, now?: () => number): Promise<Harness> {
+beforeEach(() => mocks.LogError.mockClear());
+
+/** A connected bot that watches the meeting, with an injected clock (and encoder; default: in-process). */
+async function watching(
+    remote: RtcParticipant[],
+    video: Partial<NativeRoomVideoOptions> = {},
+    now?: () => number,
+    encoder?: IRoomVideoFrameEncoder,
+): Promise<Harness> {
     const fake = makeFakeRtc(remote);
     const clock = { now: 0 };
     const client = new LiveKitRtcNodeRoomClient(24000, 24000, 1, async () => fake.module, {
         Video: { ...WATCH, ...video },
         Now: now ?? (() => clock.now),
+        VideoEncoder: encoder,
     });
     const frames: NativeRoomVideoFrame[] = [];
     const ended: NativeRoomVideoSourceEnd[] = [];
@@ -445,19 +463,21 @@ describe('RoomVideoWatcher: a source ends', () => {
         expect(h.frames).toHaveLength(1);
     });
 
-    it('does not even encode a frame of someone who no longer lets agents see', async () => {
-        const encode = vi.spyOn(VideoFrameEncoder.prototype, 'Encode');
-        try {
-            const { h, ada, stream } = await readingAda();
-            const encodedBefore = encode.mock.calls.length;
-            ada.attributes = { 'mj.agentCanSee': 'false' }; // no event yet
-            h.clock.now = 1500; // the next frame is due
-            await pushFrame(stream);
-            expect(encode.mock.calls.length).toBe(encodedBefore);
-            expect(h.frames).toHaveLength(1);
-        } finally {
-            encode.mockRestore();
-        }
+    it('does not even send a frame of someone who no longer lets agents see to the encoder', async () => {
+        const encoder = new DeferredVideoEncoder();
+        const { ada, cam } = adaWithCamera();
+        const h = await watching([ada], {}, undefined, encoder);
+        const stream = subscribe(h, cam, ada)!;
+        await pushFrame(stream);
+        encoder.resolve(0);
+        await flush();
+        expect(h.frames).toHaveLength(1);
+
+        ada.attributes = { 'mj.agentCanSee': 'false' }; // no event yet
+        h.clock.now = 1500; // the next frame is due
+        await pushFrame(stream);
+        expect(encoder.calls).toHaveLength(1);
+        expect(h.frames).toHaveLength(1);
     });
 
     it('leave: cancels the reader and reports the source', async () => {
@@ -542,22 +562,251 @@ describe('RoomVideoWatcher: the bot leaving', () => {
 });
 
 describe('RoomVideoWatcher: telemetry', () => {
-    it('counts frames, bytes, encode time and selected sources', async () => {
+    it('counts frames, bytes, encode time, the round trip and selected sources (in-process)', async () => {
         const { ada, cam } = adaWithCamera();
         let ticks = 0;
         const h = await watching([ada], {}, () => (ticks += 7)); // every clock read advances 7 ms
         const stream = subscribe(h, cam, ada)!;
-        await pushFrame(stream); // arrives at 7, encoded by 14
-        await pushFrame(stream); // arrives at 21: not due
+        await pushFrame(stream); // arrives at 7; the in-process encode runs from 14 to 21; dispatch ends at 28; reply at 35
+        await pushFrame(stream); // arrives at 42: not due
         const video = h.client.GetTelemetry().video;
         expect(video).toEqual({
             framesReceived: 2,
             framesSent: 1,
             framesSkippedNotDue: 1,
+            framesSkippedEncoding: 0,
+            framesDroppedAfterEncode: 0,
+            encodeFailures: 0,
+            encodeInFlight: 0,
             encodeMsLast: 7,
             encodeMsMax: 7,
+            encodeRoundTripMsLast: 28,
+            encodeRoundTripMsMax: 28,
+            encodeDispatchMsMax: 21,
             bytesSent: h.frames[0].data.byteLength,
             selectedSources: 1,
+            encoder: 'in-process',
+            encodeQueueDepth: 0,
+            encodeWorkerRestarts: 0,
         });
+    });
+
+    it('reports the encode time the encoder measured, the round trip on this thread, and the encoder\'s own counters', async () => {
+        const encoder = new DeferredVideoEncoder();
+        encoder.stats = { QueueDepth: 4, WorkerRestarts: 2 };
+        const { ada, cam } = adaWithCamera();
+        const h = await watching([ada], {}, undefined, encoder);
+        await pushFrame(subscribe(h, cam, ada)!); // sent at 0
+        expect(h.client.GetTelemetry().video).toMatchObject({ encodeInFlight: 1, encoder: 'worker', encodeQueueDepth: 4, encodeWorkerRestarts: 2 });
+        h.clock.now = 40;
+        encoder.resolve(0, 12);
+        await flush();
+        expect(h.client.GetTelemetry().video).toMatchObject({
+            encodeMsLast: 12,
+            encodeMsMax: 12,
+            encodeRoundTripMsLast: 40,
+            encodeRoundTripMsMax: 40,
+            encodeDispatchMsMax: 0,
+            encodeInFlight: 0,
+            framesSent: 1,
+        });
+        encoder.Location = 'in-process';
+        expect(h.client.GetTelemetry().video?.encoder).toBe('in-process');
+    });
+});
+
+describe('RoomVideoWatcher: encoding off the thread', () => {
+    /** Ada's camera, read through an encoder the test settles by hand. */
+    async function adaThroughDeferred(video: Partial<NativeRoomVideoOptions> = {}): Promise<{
+        h: Harness;
+        encoder: DeferredVideoEncoder;
+        ada: FakeParticipant;
+        cam: FakePublication;
+        stream: FakeVideoStream;
+    }> {
+        const encoder = new DeferredVideoEncoder();
+        const { ada, cam } = adaWithCamera();
+        const h = await watching([ada], video, undefined, encoder);
+        return { h, encoder, ada, cam, stream: subscribe(h, cam, ada)! };
+    }
+
+    it('sends one frame per source at a time: a due frame that arrives while one is encoded is dropped and counted', async () => {
+        const { h, encoder, stream } = await adaThroughDeferred();
+        await pushFrame(stream);
+        expect(encoder.calls).toHaveLength(1);
+        h.clock.now = 1000; // due, but the first frame is still being encoded
+        await pushFrame(stream);
+        expect(encoder.calls).toHaveLength(1);
+        expect(h.client.GetTelemetry().video).toMatchObject({ framesSkippedEncoding: 1, encodeInFlight: 1 });
+
+        encoder.resolve(0);
+        await flush();
+        expect(h.frames).toHaveLength(1);
+        h.clock.now = 1100;
+        await pushFrame(stream);
+        expect(encoder.calls).toHaveLength(2);
+    });
+
+    it('anchors pacing when a frame is sent: 3 s of 30 fps with a 100 ms round trip sends at 0, 1023 and 2046', async () => {
+        const { h, encoder, stream } = await adaThroughDeferred();
+        const sentAt: number[] = [];
+        for (let k = 0; k < 90; k++) {
+            h.clock.now = k * 33;
+            encoder.calls.forEach((call, i) => {
+                if (!call.settled && h.clock.now - sentAt[i] >= 100) {
+                    encoder.resolve(i);
+                }
+            });
+            await pushFrame(stream);
+            if (encoder.calls.length > sentAt.length) {
+                sentAt.push(h.clock.now);
+            }
+        }
+        expect(sentAt).toEqual([0, 1023, 2046]);
+        expect(h.frames).toHaveLength(3);
+    });
+
+    it('keeps draining the stream while a frame is encoded', async () => {
+        const { h, encoder, stream } = await adaThroughDeferred();
+        await pushFrame(stream);
+        for (let k = 1; k <= 5; k++) {
+            h.clock.now = k * 33;
+            await pushFrame(stream);
+        }
+        expect(encoder.calls).toHaveLength(1);
+        expect(h.client.GetTelemetry().video).toMatchObject({ framesReceived: 6, framesSkippedNotDue: 5, encodeInFlight: 1 });
+    });
+
+    it('a rejected encode is logged and counted, and the source waits out the interval', async () => {
+        const { h, encoder, stream } = await adaThroughDeferred();
+        await pushFrame(stream);
+        encoder.reject(0, 'the encode worker exited with code 1');
+        await flush();
+        expect(mocks.LogError).toHaveBeenCalledWith(expect.stringContaining('the encode worker exited with code 1'));
+        h.clock.now = 33;
+        await pushFrame(stream);
+        expect(encoder.calls).toHaveLength(1);
+        expect(h.client.GetTelemetry().video).toMatchObject({ encodeFailures: 1, encodeInFlight: 0, framesSkippedNotDue: 1, framesSent: 0 });
+
+        h.clock.now = 1000;
+        await pushFrame(stream);
+        expect(encoder.calls).toHaveLength(2);
+    });
+
+    it('stamps a frame with the wall clock when it arrived, not when its JPEG came back', async () => {
+        const { h, encoder, stream } = await adaThroughDeferred();
+        const wallClock = vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000);
+        await pushFrame(stream);
+        wallClock.mockReturnValue(1_700_000_005_000);
+        encoder.resolve(0);
+        await flush();
+        expect(h.frames[0].timestampMs).toBe(1_700_000_000_000);
+    });
+
+    it('opt-out during an encode: the JPEG is dropped, and the source is reported ended once, with nothing after it', async () => {
+        const { h, encoder, ada, stream } = await adaThroughDeferred();
+        const events: string[] = [];
+        h.client.onVideoFrame((f) => events.push(`frame:${f.participantIdentity}`));
+        h.client.onVideoSourceEnded((s) => events.push(`ended:${s.participantIdentity}`));
+        await pushFrame(stream);
+        encoder.resolve(0);
+        await flush();
+        h.clock.now = 1000;
+        await pushFrame(stream); // in the encoder now
+
+        ada.attributes = {};
+        h.fake.emit(ROOM_EVENT.ParticipantAttributesChanged, { 'mj.agentCanSee': '' }, ada);
+        encoder.resolve(1);
+        await flush();
+        expect(events).toEqual(['frame:ada', 'ended:ada']);
+        expect(h.client.GetTelemetry().video).toMatchObject({ framesSent: 1, framesDroppedAfterEncode: 1, encodeInFlight: 0 });
+    });
+
+    it('opt-out during a source\'s first encode: nothing is emitted and nothing is reported', async () => {
+        const { h, encoder, ada, stream } = await adaThroughDeferred();
+        await pushFrame(stream);
+        ada.attributes = {};
+        h.fake.emit(ROOM_EVENT.ParticipantAttributesChanged, {}, ada);
+        encoder.resolve(0);
+        await flush();
+        expect(h.frames).toEqual([]);
+        expect(h.ended).toEqual([]);
+        expect(h.client.GetTelemetry().video?.framesDroppedAfterEncode).toBe(1);
+    });
+
+    /** Ends Ada's camera one way or another. */
+    type EndSource = (h: Harness, ada: FakeParticipant, cam: FakePublication, stream: FakeVideoStream) => void;
+    it.each<[string, EndSource]>([
+        ['leaves', (h, ada) => leave(h, ada)],
+        ['unpublishes', (h, ada, cam) => h.fake.emit(ROOM_EVENT.TrackUnpublished, cam, ada)],
+        ['mutes', (h, ada, cam) => {
+            cam.muted = true;
+            h.fake.emit(ROOM_EVENT.TrackMuted, cam, ada);
+        }],
+        ['is unsubscribed', (h, ada, cam) => h.fake.emit(ROOM_EVENT.TrackUnsubscribed, { kind: TRACK_KIND.KIND_VIDEO }, cam, ada)],
+        ['has its stream end', (_h, _ada, _cam, stream) => stream.end()],
+    ])('the source %s during an encode: the JPEG is dropped and the source reported ended once', async (_label, end) => {
+        const { h, encoder, ada, cam, stream } = await adaThroughDeferred();
+        await pushFrame(stream);
+        encoder.resolve(0);
+        await flush();
+        h.clock.now = 1000;
+        await pushFrame(stream); // in the encoder now
+
+        end(h, ada, cam, stream);
+        await flush();
+        encoder.resolve(1);
+        await flush();
+        expect(h.frames).toHaveLength(1);
+        expect(h.ended).toEqual([ADA_CAMERA_ENDED]);
+    });
+
+    it('the bot leaving during an encode drops the JPEG and reports nothing', async () => {
+        const { h, encoder, stream } = await adaThroughDeferred();
+        await pushFrame(stream);
+        await h.client.disconnect();
+        encoder.resolve(0);
+        await flush();
+        expect(h.frames).toEqual([]);
+        expect(h.ended).toEqual([]);
+    });
+
+    it('a new subscription during an encode: the old JPEG is dropped, and the new reader waits for it to return', async () => {
+        const { h, encoder, ada, cam, stream: first } = await adaThroughDeferred();
+        await pushFrame(first); // in the encoder now
+        const renewed = new FakePublication(cam.sid, TRACK_SOURCE.SOURCE_CAMERA); // same track sid, new SDK object
+        ada.trackPublications.set(renewed.sid, renewed);
+        const second = subscribe(h, renewed, ada)!;
+        h.clock.now = 1000;
+        await pushFrame(second); // due, but the source still has a frame in the encoder
+        expect(encoder.calls).toHaveLength(1);
+
+        encoder.resolve(0);
+        await flush();
+        expect(h.frames).toEqual([]);
+        h.clock.now = 1100;
+        await pushFrame(second);
+        expect(encoder.calls).toHaveLength(2);
+        encoder.resolve(1);
+        await flush();
+        expect(h.frames).toHaveLength(1);
+        expect(h.ended).toEqual([]);
+    });
+
+    it('reads two sources at once, each with its own frame in the encoder', async () => {
+        const encoder = new DeferredVideoEncoder();
+        const adaCam = new FakePublication('TR_ada_cam', TRACK_SOURCE.SOURCE_CAMERA);
+        const bobCam = new FakePublication('TR_bob_cam', TRACK_SOURCE.SOURCE_CAMERA);
+        const ada = fakePerson('ada', 'Ada', { ...LETS_AGENTS_SEE }, [adaCam]);
+        const bob = fakePerson('bob', 'Bob', { ...LETS_AGENTS_SEE }, [bobCam]);
+        const h = await watching([ada, bob], { Streams: 2 }, undefined, encoder);
+        await pushFrame(subscribe(h, adaCam, ada)!);
+        await pushFrame(subscribe(h, bobCam, bob)!);
+        expect(encoder.calls).toHaveLength(2);
+        expect(h.client.GetTelemetry().video?.encodeInFlight).toBe(2);
+        encoder.resolve(1);
+        encoder.resolve(0);
+        await flush();
+        expect(h.frames.map((f) => f.participantIdentity)).toEqual(['bob', 'ada']);
     });
 });

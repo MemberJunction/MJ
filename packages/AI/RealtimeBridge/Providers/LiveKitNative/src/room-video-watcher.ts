@@ -14,15 +14,20 @@
  *   subscribed. The watcher unsubscribes every video track it does not read, and subscribes a source when a scan of the
  *   room selects it; reading starts when that subscription arrives.
  * - **Reading and pacing:** one `VideoStream` per selected source, drained frame by frame (the SDK enqueues every frame
- *   without backpressure). A frame is encoded only when the session's frame interval has passed since that source's
- *   last sampled frame.
- * - **Consent wins:** eligibility is re-checked right before a frame is encoded and emitted, so an opt-out that arrived
- *   while a frame was in hand drops that frame unencoded.
+ *   without backpressure, so the reader never waits for an encode). A frame is sent to the encoder only when the
+ *   session's frame interval has passed since that source's last sent frame (the pacing anchor is set when a frame is
+ *   sent), and only when no earlier frame of that source is still being encoded; a due frame that arrives meanwhile is
+ *   dropped and counted.
+ * - **Consent wins:** eligibility is checked before a frame is sent to the encoder (a frame of someone who no longer lets
+ *   agents see is never copied) and again when its JPEG returns, so an opt-out during an encode drops that frame.
  * - **Ended:** when a source that sent at least one frame stops, {@link RoomVideoWatcherOptions.OnSourceEnded} reports
- *   it (so the engine can tell the model). {@link RoomVideoWatcher.Stop} (the bot leaving) reports nothing.
+ *   it (so the engine can tell the model). A source counts as having sent a frame only once one was emitted.
+ *   {@link RoomVideoWatcher.Stop} (the bot leaving) reports nothing.
  *
- * Frames are processed on the thread that hosts the room: MJAPI's main loop in-process, or the media worker with
- * `MJ_LIVEKIT_WORKER_MEDIA=on`. Room telemetry reports the cost.
+ * Frames are read, sampled and checked on the thread that hosts the room (MJAPI's main loop in-process, or the media
+ * worker with `MJ_LIVEKIT_WORKER_MEDIA=on`), and encoded through {@link RoomVideoWatcherOptions.Encoder}: by default on
+ * that same thread, and on the encode worker's thread when the client was given {@link VideoEncodeWorkerHost} (the module
+ * factory does). Room telemetry reports the cost.
  *
  * @module @memberjunction/ai-bridge-livekit-native
  * @author MemberJunction.com
@@ -51,10 +56,12 @@ import {
     DEFAULT_CAMERA_MAX_DIMENSION,
     DEFAULT_JPEG_QUALITY,
     DEFAULT_SCREEN_MAX_DIMENSION,
-    VideoFrameEncoder,
-    type EncodedVideoFrame,
-    type VideoRotationDegrees,
+    InProcessVideoFrameEncoder,
+    type IRoomVideoFrameEncoder,
+    type RoomVideoFrameEncodeOptions,
+    type TimedEncodedVideoFrame,
 } from './video-frame-encoder';
+import type { VideoRotationDegrees } from './video-frame-pixels';
 
 /** What a {@link RoomVideoWatcher} needs from the room client that owns it. */
 export interface RoomVideoWatcherOptions {
@@ -68,7 +75,12 @@ export interface RoomVideoWatcherOptions {
     OnFrame: (frame: NativeRoomVideoFrame) => void;
     /** Receives each source that stopped after sending at least one frame. */
     OnSourceEnded: (source: NativeRoomVideoSourceEnd) => void;
-    /** Monotonic millisecond clock for pacing and encode timing. Default `performance.now()`. */
+    /**
+     * Where sampled frames are encoded. Default: an {@link InProcessVideoFrameEncoder} on the thread that hosts the room,
+     * timed with {@link Now}.
+     */
+    Encoder?: IRoomVideoFrameEncoder;
+    /** Monotonic millisecond clock for pacing, the encode round trip and the default encoder's timing. Default `performance.now()`. */
     Now?: () => number;
 }
 
@@ -77,13 +89,42 @@ interface WatchedSource {
     participant: RtcParticipant;
     publication: RtcTrackPublication;
     kind: NativeRoomVideoSourceKind;
-    encoder: VideoFrameEncoder;
     /** The reader of its `VideoStream`; absent while the subscription the watcher asked for is on its way. */
     reader?: RtcVideoStreamReader;
-    /** When a frame of this source was last sampled (sent, or rejected by the encoder). */
+    /** When a frame of this source was last sent to the encoder: the pacing anchor. */
     lastSampledAtMs?: number;
-    /** Whether this source has sent a frame, so its end is worth reporting. */
+    /** Whether a frame of this source is being encoded. Kept across a reader replacement, so a source never has two. */
+    encoding: boolean;
+    /** Whether this source has emitted a frame, so its end is worth reporting. */
     sentAny: boolean;
+}
+
+/** A frame sent to the encoder, and what its reply needs. */
+interface SentFrame {
+    source: WatchedSource;
+    /** The reader it came from: the reply is emitted only while the source is still read through it. */
+    reader: RtcVideoStreamReader;
+    /** When it arrived and was sent, on the watcher's monotonic clock: the round trip starts here. */
+    sentAtMs: number;
+    /** The wall clock when it arrived: the frame's timestamp. */
+    timestampMs: number;
+}
+
+/** The counters the watcher keeps; {@link RoomVideoWatcher.GetTelemetry} adds the selection and the encoder's own. */
+interface WatcherCounters {
+    framesReceived: number;
+    framesSent: number;
+    framesSkippedNotDue: number;
+    framesSkippedEncoding: number;
+    framesDroppedAfterEncode: number;
+    encodeFailures: number;
+    encodeInFlight: number;
+    encodeMsLast?: number;
+    encodeMsMax: number;
+    encodeRoundTripMsLast?: number;
+    encodeRoundTripMsMax: number;
+    encodeDispatchMsMax: number;
+    bytesSent: number;
 }
 
 /** A source found by a scan of the room. */
@@ -122,13 +163,20 @@ export class RoomVideoWatcher {
     private readonly onFrame: (frame: NativeRoomVideoFrame) => void;
     private readonly onSourceEnded: (source: NativeRoomVideoSourceEnd) => void;
     private readonly now: () => number;
+    private readonly encoder: IRoomVideoFrameEncoder;
     private readonly sources: WatchedSource[] = [];
     private stopped = false;
-    private readonly telemetry: Omit<RoomVideoTelemetry, 'selectedSources'> = {
+    private readonly telemetry: WatcherCounters = {
         framesReceived: 0,
         framesSent: 0,
         framesSkippedNotDue: 0,
+        framesSkippedEncoding: 0,
+        framesDroppedAfterEncode: 0,
+        encodeFailures: 0,
+        encodeInFlight: 0,
         encodeMsMax: 0,
+        encodeRoundTripMsMax: 0,
+        encodeDispatchMsMax: 0,
         bytesSent: 0,
     };
 
@@ -144,6 +192,7 @@ export class RoomVideoWatcher {
         this.onFrame = options.OnFrame;
         this.onSourceEnded = options.OnSourceEnded;
         this.now = options.Now ?? (() => performance.now());
+        this.encoder = options.Encoder ?? new InProcessVideoFrameEncoder(this.now);
     }
 
     // ── room events ──────────────────────────────────────────────────────────────
@@ -237,7 +286,7 @@ export class RoomVideoWatcher {
         this.fillFreeSlots();
     }
 
-    /** The bot is leaving: cancels every reader. Reports no ended sources. Idempotent. */
+    /** The bot is leaving: cancels every reader. Reports no ended sources; frames being encoded are dropped on return. Idempotent. */
     public Stop(): void {
         this.stopped = true;
         for (const source of this.sources.splice(0)) {
@@ -245,9 +294,16 @@ export class RoomVideoWatcher {
         }
     }
 
-    /** Participant-video counters. */
+    /** Participant-video counters, with where frames are encoded and the encoder's own counters. */
     public GetTelemetry(): RoomVideoTelemetry {
-        return { ...this.telemetry, selectedSources: this.sources.length };
+        const encoderStats = this.encoder.GetStats();
+        return {
+            ...this.telemetry,
+            selectedSources: this.sources.length,
+            encoder: this.encoder.Location,
+            encodeQueueDepth: encoderStats.QueueDepth,
+            encodeWorkerRestarts: encoderStats.WorkerRestarts,
+        };
     }
 
     // ── eligibility and selection ────────────────────────────────────────────────
@@ -304,7 +360,7 @@ export class RoomVideoWatcher {
             participant,
             publication,
             kind: this.kindOf(publication) ?? 'camera',
-            encoder: new VideoFrameEncoder(this.rtc.VideoBufferType.I420),
+            encoding: false,
             sentAny: false,
         };
         this.sources.push(source);
@@ -420,9 +476,9 @@ export class RoomVideoWatcher {
     }
 
     /**
-     * Samples one frame: counts it, drops it when the source's next frame is not due, else encodes and emits it. Consent
-     * is checked before the encode, so a frame of someone who stopped letting agents see is never even encoded; the
-     * encode is synchronous, so nothing can change between it and the emit.
+     * Samples one frame: counts it, drops it when the source's next frame is not due or an earlier frame of the source is
+     * still being encoded, checks consent, and sends it to the encoder. Never waits for the encode: the stream keeps
+     * being drained while it runs.
      */
     private handleFrame(source: WatchedSource, reader: RtcVideoStreamReader, event: RtcVideoFrameEvent): void {
         this.telemetry.framesReceived++;
@@ -431,44 +487,83 @@ export class RoomVideoWatcher {
             this.telemetry.framesSkippedNotDue++;
             return;
         }
-        if (!this.mayEmit(source, reader)) {
+        if (source.encoding) {
+            this.telemetry.framesSkippedEncoding++;
             return;
         }
-        const encoded = this.encode(source, event, arrivedAt);
-        if (encoded) {
-            this.emit(source, encoded, arrivedAt);
+        if (!this.mayEmit(source, reader)) {
+            return; // consent first: a frame of someone who no longer lets agents see is never copied or sent
         }
-    }
-
-    /** Scales, rotates and encodes one frame; times it. A rejected frame is logged and waits out the interval too. */
-    private encode(source: WatchedSource, event: RtcVideoFrameEvent, arrivedAt: number): EncodedVideoFrame | undefined {
-        try {
-            const encoded = source.encoder.Encode(event.frame, {
-                RotationDegrees: this.rotationDegreesOf(event.rotation),
-                MaxDimension: source.kind === 'screen' ? this.screenMaxDimension : this.cameraMaxDimension,
-                Quality: this.jpegQuality,
-            });
-            const encodeMs = this.now() - arrivedAt;
-            this.telemetry.encodeMsLast = encodeMs;
-            this.telemetry.encodeMsMax = Math.max(this.telemetry.encodeMsMax, encodeMs);
-            return encoded;
-        } catch (err) {
-            source.lastSampledAtMs = arrivedAt;
-            LogError(`[RoomVideoWatcher] encoding a frame of '${source.participant.identity}' failed: ${err instanceof Error ? err.message : String(err)}`);
-            return undefined;
-        }
+        this.send({ source, reader, sentAtMs: arrivedAt, timestampMs: Date.now() }, event);
     }
 
     /**
-     * Checked right before a frame is encoded: the watcher is running, the source is still read through this reader,
-     * and the participant still lets agents see. An opt-out that arrived while the frame was in hand wins.
+     * Sends one frame to the encoder: anchors the source's pacing, marks it in flight, and settles the reply later. The
+     * encode promise always gets a rejection handler (an unhandled one would end a media worker).
+     */
+    private send(sent: SentFrame, event: RtcVideoFrameEvent): void {
+        sent.source.lastSampledAtMs = sent.sentAtMs;
+        sent.source.encoding = true;
+        this.telemetry.encodeInFlight++;
+        let encoding: Promise<TimedEncodedVideoFrame>;
+        try {
+            encoding = this.encoder.Encode(event.frame, this.encodeOptionsFor(sent.source, event));
+        } catch (err) {
+            encoding = Promise.reject(err);
+        }
+        this.telemetry.encodeDispatchMsMax = Math.max(this.telemetry.encodeDispatchMsMax, this.now() - sent.sentAtMs);
+        void encoding.then(
+            (encoded) => this.finishEncode(sent, encoded),
+            (err: unknown) => this.failEncode(sent, err),
+        );
+    }
+
+    private encodeOptionsFor(source: WatchedSource, event: RtcVideoFrameEvent): RoomVideoFrameEncodeOptions {
+        return {
+            RotationDegrees: this.rotationDegreesOf(event.rotation),
+            MaxDimension: source.kind === 'screen' ? this.screenMaxDimension : this.cameraMaxDimension,
+            Quality: this.jpegQuality,
+            I420Type: this.rtc.VideoBufferType.I420,
+        };
+    }
+
+    /** A JPEG came back: emitted only if the source is still read through the same reader and consent still holds. */
+    private finishEncode(sent: SentFrame, encoded: TimedEncodedVideoFrame): void {
+        this.settleEncode(sent);
+        const roundTripMs = this.now() - sent.sentAtMs;
+        this.telemetry.encodeMsLast = encoded.EncodeMs;
+        this.telemetry.encodeMsMax = Math.max(this.telemetry.encodeMsMax, encoded.EncodeMs);
+        this.telemetry.encodeRoundTripMsLast = roundTripMs;
+        this.telemetry.encodeRoundTripMsMax = Math.max(this.telemetry.encodeRoundTripMsMax, roundTripMs);
+        if (this.mayEmit(sent.source, sent.reader)) {
+            this.emit(sent, encoded);
+        } else {
+            this.telemetry.framesDroppedAfterEncode++;
+        }
+    }
+
+    /** The frame could not be encoded: logged; the source waits out the interval (anchored when it was sent). */
+    private failEncode(sent: SentFrame, err: unknown): void {
+        this.settleEncode(sent);
+        this.telemetry.encodeFailures++;
+        LogError(`[RoomVideoWatcher] encoding a frame of '${sent.source.participant.identity}' failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+
+    private settleEncode(sent: SentFrame): void {
+        sent.source.encoding = false;
+        this.telemetry.encodeInFlight--;
+    }
+
+    /**
+     * Checked before a frame is sent to the encoder and again when its JPEG returns: the watcher is running, the source is
+     * still read through this reader, and the participant still lets agents see. An opt-out during an encode wins.
      */
     private mayEmit(source: WatchedSource, reader: RtcVideoStreamReader): boolean {
         return !this.stopped && source.reader === reader && this.isEligible(source.publication, source.participant);
     }
 
-    private emit(source: WatchedSource, encoded: EncodedVideoFrame, arrivedAt: number): void {
-        source.lastSampledAtMs = arrivedAt;
+    private emit(sent: SentFrame, encoded: TimedEncodedVideoFrame): void {
+        const source = sent.source;
         source.sentAny = true;
         this.telemetry.framesSent++;
         this.telemetry.bytesSent += encoded.Data.byteLength;
@@ -480,7 +575,7 @@ export class RoomVideoWatcher {
             source: source.kind,
             width: encoded.Width,
             height: encoded.Height,
-            timestampMs: Date.now(),
+            timestampMs: sent.timestampMs,
         };
         this.deliver('frame', () => this.onFrame(frame));
     }

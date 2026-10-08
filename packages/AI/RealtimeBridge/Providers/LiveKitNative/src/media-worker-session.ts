@@ -5,7 +5,8 @@
  *
  * A {@link MediaWorkerSession} owns the native `@livekit/rtc-node` room inside a `worker_threads.Worker`,
  * the outbound pre-buffer + duration-paced publish loop, and the zero-copy forwarding of inbound audio and of the
- * sampled JPEG frames of participant video (read and encoded in the worker when the agent watches the meeting).
+ * sampled JPEG frames of participant video (read in the worker when the agent watches the meeting, and encoded on the
+ * media worker's own encode worker when `videoEncodeWorker` is set).
  *
  * ## Outbound pacing
  * Model audio arrives in bursts far faster than real time. Each response is paced by audio DURATION
@@ -24,6 +25,7 @@ import type { NativeConnectArgs, NativeRoomAudioFrame } from '@memberjunction/ai
 import { LogError } from '@memberjunction/core';
 import { LiveKitRtcNodeRoomClient, DefaultRtcNodeLoader, type RtcNodeLoader } from './livekit-rtc-node-room';
 import { ReadEventLoop, type RoomAudioTelemetrySnapshot, type TelemetryRoomClient } from './room-telemetry';
+import { VideoEncodeWorkerHost } from './video-encode-worker-host';
 import type {
     MediaWorkerCommand,
     MediaWorkerEvent,
@@ -57,13 +59,17 @@ const TIMER_SLACK_MS = 1;
 
 /**
  * The native room client a worker session builds for a connect (the session's default factory): the in-process
- * client, at the session's rates, reading participant video when the options carry `video`.
+ * client, at the session's rates, reading participant video when the options carry `video`, and encoding it on this
+ * media worker's own encode worker ({@link VideoEncodeWorkerHost}, nested) when `videoEncodeWorker` is set.
  *
  * @param options The options from the main thread's `connect` command.
  * @param loader The `@livekit/rtc-node` loader (tests inject a fake). Default {@link DefaultRtcNodeLoader}.
  */
 export function CreateMediaWorkerRoomClient(options: MediaWorkerClientOptions, loader: RtcNodeLoader = DefaultRtcNodeLoader): TelemetryRoomClient {
-    return new LiveKitRtcNodeRoomClient(options.sampleRate, options.inboundSampleRate, options.channels, loader, { Video: options.video });
+    return new LiveKitRtcNodeRoomClient(options.sampleRate, options.inboundSampleRate, options.channels, loader, {
+        Video: options.video,
+        VideoEncoder: options.video && options.videoEncodeWorker ? VideoEncodeWorkerHost.Instance : undefined,
+    });
 }
 
 /** Copies an inbound audio frame's PCM into a standalone buffer the worker can transfer (zero-copy) to the main thread. */

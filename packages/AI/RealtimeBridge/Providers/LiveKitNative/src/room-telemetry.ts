@@ -42,6 +42,12 @@ export interface OutboundAudioTelemetry {
 }
 
 /**
+ * Where participant video is encoded: on the encode worker's own thread, or on the thread that hosts the room (the
+ * fallback, or with the encode worker turned off).
+ */
+export type VideoEncodeLocation = 'worker' | 'in-process';
+
+/**
  * Participant-video telemetry: what the bot read from people's cameras and screens, and what it cost. Present while the
  * bot watches the meeting (the client was created with video options).
  */
@@ -52,7 +58,7 @@ export interface RoomVideoTelemetry {
     framesSent: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
     /** Frames dropped because the source's next frame was not due yet (pacing to the session's rate). */
     framesSkippedNotDue: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
-    /** Duration of the most recent encode (scale, rotate, JPEG), in ms, on the thread that hosts the room. */
+    /** Duration of the most recent encode (scale, rotate, JPEG), in ms, on the thread that encoded it. */
     encodeMsLast?: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
     /** Longest encode so far, in ms. */
     encodeMsMax: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
@@ -60,6 +66,32 @@ export interface RoomVideoTelemetry {
     bytesSent: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
     /** Sources selected now (being read, or subscribed and waiting for their track). */
     selectedSources: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /** Where frames are encoded now. */
+    encoder?: VideoEncodeLocation;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /**
+     * Most recent time from sending a frame to the encoder to its reply, in ms, on the room's thread: queueing behind other
+     * rooms' frames, the hops between threads, and the encode.
+     */
+    encodeRoundTripMsLast?: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /** Longest round trip so far, in ms. */
+    encodeRoundTripMsMax?: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /**
+     * Longest cost to the room's thread of sending one sampled frame, in ms: the copy and the post to the encode worker,
+     * or the whole encode when frames are encoded in-process.
+     */
+    encodeDispatchMsMax?: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /** This room's frames being encoded now: its queue depth. */
+    encodeInFlight?: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /** Due frames dropped because the source's previous frame was still being encoded. */
+    framesSkippedEncoding?: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /** Frames encoded, then dropped: consent withdrawn, the source ended or the bot left while they were encoded. */
+    framesDroppedAfterEncode?: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /** Frames that failed to encode: a rejected frame, a request that timed out, or the encode worker failing with it in flight. */
+    encodeFailures?: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /** Frames sent to the encode worker and not answered yet, from every room on this thread. */
+    encodeQueueDepth?: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
+    /** Encode worker failures on this thread since the process started. */
+    encodeWorkerRestarts?: number;  // case-violation-ok-legacy-back-compat: matches the camelCase fields of the snapshot it belongs to
 }
 
 /** Telemetry snapshot for the room client. */

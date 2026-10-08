@@ -25,9 +25,6 @@
  */
 
 import { Worker } from 'node:worker_threads';
-import { fileURLToPath } from 'node:url';
-import { existsSync } from 'node:fs';
-import path from 'node:path';
 import { LogError, LogStatus } from '@memberjunction/core';
 import {
     VideoSourceIdOf,
@@ -44,6 +41,7 @@ import type {
     MediaWorkerClientOptions,
     MediaWorkerEvent,
 } from './media-worker-types';
+import { ResolveWorkerScriptPath } from './worker-script-path';
 
 /** Options for configuring {@link LiveKitWorkerRoomClient}. */
 export interface LiveKitWorkerRoomClientOptions extends MediaWorkerClientOptions {
@@ -67,21 +65,6 @@ export interface LiveKitWorkerRoomClientOptions extends MediaWorkerClientOptions
     maxRejoinTokenAgeMs?: number;
     /** Interval (ms) of the background telemetry refresh while connected (default: 1000; 0 disables). */
     telemetryPollMs?: number;
-}
-
-/** Resolves the default media worker bootstrap script path. */
-function resolveDefaultWorkerPath(): string {
-    const workerUrl = new URL('./media-worker-bootstrap.js', import.meta.url);
-    const urlPath = fileURLToPath(workerUrl);
-    if (existsSync(urlPath)) {
-        return urlPath;
-    }
-    // Fallback if running from src/ directly (e.g. vitest/dev)
-    const distPath = path.resolve(path.dirname(urlPath), '../dist/media-worker-bootstrap.js');
-    if (existsSync(distPath)) {
-        return distPath;
-    }
-    return urlPath;
 }
 
 /** A worker-infrastructure failure (spawn, crash, timeout) as opposed to a LiveKit-level join error. */
@@ -162,6 +145,7 @@ export class LiveKitWorkerRoomClient implements TelemetryRoomClient {
             inboundSampleRate: options?.inboundSampleRate ?? 24000,
             preBufferMs: options?.preBufferMs ?? 150,
             video: options?.video,
+            videoEncodeWorker: options?.videoEncodeWorker,
         };
         this.maxRestartAttempts = options?.maxRestartAttempts ?? 3;
         this.restartBackoffBaseMs = options?.restartBackoffBaseMs ?? 250;
@@ -172,7 +156,7 @@ export class LiveKitWorkerRoomClient implements TelemetryRoomClient {
         this.maxRejoinTokenAgeMs = options?.maxRejoinTokenAgeMs ?? 600_000;
         this.telemetryPollMs = options?.telemetryPollMs ?? 1000;
         this.fallbackFactory = options?.fallbackFactory;
-        this.workerFactory = options?.workerFactory ?? (() => new Worker(resolveDefaultWorkerPath()));
+        this.workerFactory = options?.workerFactory ?? (() => new Worker(ResolveWorkerScriptPath('media-worker-bootstrap.js')));
     }
 
     // ──────────────────────────────────────────────────────────────────────────

@@ -4,18 +4,18 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import jpeg from 'jpeg-js';
+import { EncodedVideoFrameSize, InProcessVideoFrameEncoder, VideoFrameEncoder } from '../video-frame-encoder';
 import {
     ConvertI420ToRgba,
-    EncodedVideoFrameSize,
+    CopyI420Planes,
     I420ByteLength,
     I420PlanesOf,
     OrientedVideoFrameSize,
     StandaloneArrayBuffer,
-    VideoFrameEncoder,
     type VideoRotationDegrees,
-} from '../video-frame-encoder';
+} from '../video-frame-pixels';
 import type { RtcVideoFrame } from '../livekit-rtc-node-room';
-import { i420Frame, VIDEO_BUFFER_TYPE } from './fake-rtc-node';
+import { i420Frame, twoColorFrame, VIDEO_BUFFER_TYPE } from './fake-rtc-node';
 
 /** BT.601 limited-range Y'CbCr of three colors, and what they convert to. */
 const RED = { y: 81, u: 90, v: 240 };
@@ -25,24 +25,6 @@ type Rgb = [number, number, number];
 const RED_RGB: Rgb = [254, 0, 0];
 const BLUE_RGB: Rgb = [0, 0, 255];
 const GRAY_RGB: Rgb = [128, 128, 128];
-
-/** An I420 frame whose left half is one color and right half another (width a multiple of 4, so chroma splits too). */
-function twoColorFrame(width: number, height: number, left: typeof RED, right: typeof RED): RtcVideoFrame {
-    const frame = i420Frame(width, height, left);
-    const chromaWidth = width / 2;
-    const chromaHeight = Math.ceil(height / 2);
-    const lumaLength = width * height;
-    const chromaLength = chromaWidth * chromaHeight;
-    for (let y = 0; y < height; y++) {
-        frame.data.fill(right.y, y * width + width / 2, (y + 1) * width);
-    }
-    for (let y = 0; y < chromaHeight; y++) {
-        const row = y * chromaWidth;
-        frame.data.fill(right.u, lumaLength + row + chromaWidth / 2, lumaLength + row + chromaWidth);
-        frame.data.fill(right.v, lumaLength + chromaLength + row + chromaWidth / 2, lumaLength + chromaLength + row + chromaWidth);
-    }
-    return frame;
-}
 
 /** Runs the RGBA pass alone and returns its pixels. */
 function toRgba(frame: RtcVideoFrame, rotation: VideoRotationDegrees, maxDimension: number): { rgba: Uint8Array; width: number; height: number } {
@@ -106,6 +88,40 @@ describe('frame math', () => {
     it('I420PlanesOf rejects an empty frame and a buffer shorter than the size implies', () => {
         expect(() => I420PlanesOf(new Uint8Array(0), 0, 0)).toThrow(/no pixels/);
         expect(() => I420PlanesOf(new Uint8Array(10), 4, 4)).toThrow(/expected 24/);
+    });
+
+    it('CopyI420Planes copies the planes into a buffer of their own, at most the I420 length, a shorter one whole', () => {
+        const frame = i420Frame(8, 6, RED);
+        const copy = CopyI420Planes(frame.data, 8, 6);
+        expect(copy).not.toBe(frame.data.buffer);
+        expect(copy.byteLength).toBe(I420ByteLength(8, 6));
+        expect(new Uint8Array(copy)).toEqual(frame.data);
+
+        const padded = new Uint8Array(I420ByteLength(8, 6) + 16);
+        padded.set(frame.data);
+        expect(CopyI420Planes(padded, 8, 6).byteLength).toBe(I420ByteLength(8, 6));
+        expect(CopyI420Planes(new Uint8Array(5), 8, 6).byteLength).toBe(5);
+    });
+});
+
+describe('InProcessVideoFrameEncoder', () => {
+    const OPTIONS = { RotationDegrees: 0 as const, MaxDimension: 32, Quality: 90, I420Type: VIDEO_BUFFER_TYPE.I420 };
+
+    it('encodes on the calling thread, times the encode with its clock, and reports no queue', async () => {
+        const ticks = [100, 112];
+        const encoder = new InProcessVideoFrameEncoder(() => ticks.shift() ?? 0);
+        const encoded = await encoder.Encode(i420Frame(64, 48, RED), OPTIONS);
+        expect(encoded).toMatchObject({ Width: 32, Height: 24, EncodeMs: 12 });
+        const decoded = jpeg.decode(new Uint8Array(encoded.Data), { useTArray: true });
+        expect([decoded.width, decoded.height]).toEqual([32, 24]);
+        expect(encoder.Location).toBe('in-process');
+        expect(encoder.GetStats()).toEqual({ QueueDepth: 0, WorkerRestarts: 0 });
+    });
+
+    it('rejects (does not throw) a frame it cannot encode', async () => {
+        const short: RtcVideoFrame = { ...i420Frame(8, 8), data: new Uint8Array(10) };
+        const encoding = new InProcessVideoFrameEncoder().Encode(short, OPTIONS);
+        await expect(encoding).rejects.toThrow(/expected 96/);
     });
 });
 

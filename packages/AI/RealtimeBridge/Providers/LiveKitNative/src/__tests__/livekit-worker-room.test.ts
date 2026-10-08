@@ -5,6 +5,7 @@ import type {
     NativeConnectArgs,
     NativeConnectResult,
     NativeRoomAudioFrame,
+    NativeRoomClient,
     NativeRoomParticipant,
     NativeRoomVideoFrame,
     NativeRoomVideoOptions,
@@ -12,7 +13,14 @@ import type {
 } from '@memberjunction/ai-bridge-livekit';
 import { LiveKitWorkerRoomClient, type LiveKitWorkerRoomClientOptions } from '../livekit-worker-room-client';
 import { CreateMediaWorkerRoomClient, MediaWorkerSession, type MediaWorkerPort } from '../media-worker-session';
-import { CreateLiveKitRtcNodeModule, IsWorkerMediaEnabled, LiveKitRtcNodeRoomClient } from '../livekit-rtc-node-room';
+import {
+    CreateLiveKitRtcNodeModule,
+    IsVideoEncodeWorkerEnabled,
+    IsWorkerMediaEnabled,
+    LiveKitRtcNodeRoomClient,
+} from '../livekit-rtc-node-room';
+import { VideoEncodeWorkerHost } from '../video-encode-worker-host';
+import { fakeWorkerFactory, type FakeEncodeWorker } from './fake-video-encode';
 import {
     fakePerson,
     FakePublication,
@@ -254,6 +262,7 @@ describe('CreateLiveKitRtcNodeModule worker selection', () => {
             WorkerFactory: () => {
                 throw new Error('worker threads unavailable');
             },
+            VideoEncodeWorker: false,
         }).createRoomClient({ Video: WATCH });
         const seen: NativeRoomVideoFrame[] = [];
         client.onVideoFrame?.((f) => seen.push(f));
@@ -288,11 +297,136 @@ describe('CreateMediaWorkerRoomClient (the worker session\'s default client)', (
     });
 });
 
+describe('IsVideoEncodeWorkerEnabled', () => {
+    it('is ON by default; only off/false/0 turn it off', () => {
+        expect(IsVideoEncodeWorkerEnabled(undefined)).toBe(true);
+        expect(IsVideoEncodeWorkerEnabled('')).toBe(true);
+        expect(IsVideoEncodeWorkerEnabled('on')).toBe(true);
+        expect(IsVideoEncodeWorkerEnabled('yes-please')).toBe(true);
+        expect(IsVideoEncodeWorkerEnabled('off')).toBe(false);
+        expect(IsVideoEncodeWorkerEnabled(' OFF ')).toBe(false);
+        expect(IsVideoEncodeWorkerEnabled('false')).toBe(false);
+        expect(IsVideoEncodeWorkerEnabled('0')).toBe(false);
+    });
+});
+
+describe('participant video on the encode worker: the module factory and the media worker', () => {
+    const host = VideoEncodeWorkerHost.Instance;
+    let encodeWorkers: FakeEncodeWorker[];
+
+    beforeEach(() => {
+        host.Reset();
+        encodeWorkers = [];
+        host.Configure({ WorkerFactory: fakeWorkerFactory(encodeWorkers) });
+        vi.stubEnv('MJ_LIVEKIT_VIDEO_ENCODE_WORKER', '');
+    });
+    afterEach(() => {
+        vi.unstubAllEnvs();
+        host.Reset();
+    });
+
+    /** Connects `client`, sends one frame of Ada's camera, and returns the frames it emits. */
+    async function sendOneFrame(client: NativeRoomClient, subscribeCamera: () => FakeVideoStream | undefined): Promise<NativeRoomVideoFrame[]> {
+        const seen: NativeRoomVideoFrame[] = [];
+        client.onVideoFrame?.((f) => seen.push(f));
+        await client.connect(ARGS);
+        subscribeCamera()!.push({ frame: i420Frame(32, 24), rotation: 0 });
+        await flush();
+        return seen;
+    }
+
+    it('the in-process client the factory builds encodes on this thread\'s encode worker (on by default)', async () => {
+        const { fake, subscribeCamera } = roomWithAdasCamera();
+        const client = CreateLiveKitRtcNodeModule({ Loader: async () => fake.module }).createRoomClient({ Video: WATCH });
+        const seen = await sendOneFrame(client, subscribeCamera);
+        expect(encodeWorkers).toHaveLength(1);
+        expect(encodeWorkers[0].requests).toHaveLength(1);
+        expect(seen).toEqual([]); // waiting on the worker
+        encodeWorkers[0].ready();
+        encodeWorkers[0].encoded(0, 42);
+        await flush();
+        expect(seen.map((f) => f.data.byteLength)).toEqual([42]);
+        await client.disconnect();
+    });
+
+    it('so does the worker client\'s in-process fallback', async () => {
+        const { fake, subscribeCamera } = roomWithAdasCamera();
+        const client = CreateLiveKitRtcNodeModule({
+            UseWorker: true,
+            Loader: async () => fake.module,
+            WorkerFactory: () => {
+                throw new Error('worker threads unavailable');
+            },
+        }).createRoomClient({ Video: WATCH });
+        await sendOneFrame(client, subscribeCamera);
+        expect(encodeWorkers).toHaveLength(1);
+        expect(encodeWorkers[0].requests).toHaveLength(1);
+        await client.disconnect();
+    });
+
+    it.each([
+        ['MJ_LIVEKIT_VIDEO_ENCODE_WORKER=off', 'off', undefined],
+        ['MJ_LIVEKIT_VIDEO_ENCODE_WORKER=false', 'false', undefined],
+        ['MJ_LIVEKIT_VIDEO_ENCODE_WORKER=0', '0', undefined],
+        ['VideoEncodeWorker: false', '', false],
+    ])('%s encodes in-process', async (_label, env, option) => {
+        vi.stubEnv('MJ_LIVEKIT_VIDEO_ENCODE_WORKER', env);
+        const { fake, subscribeCamera } = roomWithAdasCamera();
+        const client = CreateLiveKitRtcNodeModule({ Loader: async () => fake.module, VideoEncodeWorker: option }).createRoomClient({ Video: WATCH });
+        const seen = await sendOneFrame(client, subscribeCamera);
+        expect(encodeWorkers).toHaveLength(0);
+        expect(seen.map((f) => [f.mimeType, f.width, f.height])).toEqual([['image/jpeg', 32, 24]]);
+        await client.disconnect();
+    });
+
+    it('VideoEncodeWorker: true overrides MJ_LIVEKIT_VIDEO_ENCODE_WORKER=off', async () => {
+        vi.stubEnv('MJ_LIVEKIT_VIDEO_ENCODE_WORKER', 'off');
+        const { fake, subscribeCamera } = roomWithAdasCamera();
+        const client = CreateLiveKitRtcNodeModule({ Loader: async () => fake.module, VideoEncodeWorker: true }).createRoomClient({ Video: WATCH });
+        await sendOneFrame(client, subscribeCamera);
+        expect(encodeWorkers).toHaveLength(1);
+        await client.disconnect();
+    });
+
+    it('the worker client sends the switch to the media worker with the connect command', async () => {
+        for (const [option, expected] of [[undefined, true], [false, false]] as const) {
+            const worker = new MockMediaWorker();
+            const client = CreateLiveKitRtcNodeModule({ UseWorker: true, WorkerFactory: () => worker, VideoEncodeWorker: option }).createRoomClient({ Video: WATCH });
+            const connecting = client.connect(ARGS);
+            expect(worker.commandsOf('connect')[0].options.videoEncodeWorker).toBe(expected);
+            worker.answerConnect();
+            await connecting;
+            const leaving = client.disconnect();
+            worker.emitMessage({ type: 'commandSuccess', id: worker.commandsOf('disconnect')[0].id });
+            await leaving;
+        }
+    });
+
+    it('the media worker\'s client encodes on the media worker\'s own encode worker when videoEncodeWorker is set, in-process otherwise', async () => {
+        const watched = roomWithAdasCamera();
+        const onWorker = CreateMediaWorkerRoomClient(
+            { sampleRate: 24000, channels: 1, inboundSampleRate: 16000, video: WATCH, videoEncodeWorker: true },
+            async () => watched.fake.module,
+        );
+        await sendOneFrame(onWorker, watched.subscribeCamera);
+        expect(encodeWorkers).toHaveLength(1);
+        expect(encodeWorkers[0].requests).toHaveLength(1);
+
+        const inline = roomWithAdasCamera();
+        const inProcess = CreateMediaWorkerRoomClient({ sampleRate: 24000, channels: 1, inboundSampleRate: 16000, video: WATCH }, async () => inline.fake.module);
+        const seen = await sendOneFrame(inProcess, inline.subscribeCamera);
+        expect(seen).toHaveLength(1);
+        expect(encodeWorkers[0].requests).toHaveLength(1);
+    });
+});
+
 describe('package index', () => {
-    it('does not re-export the auto-running worker bootstrap', () => {
+    it('does not re-export the auto-running worker entries', () => {
         const indexSource = readFileSync(path.resolve(__dirname, '../index.ts'), 'utf8');
         expect(indexSource).not.toContain('media-worker-bootstrap');
+        expect(indexSource).not.toMatch(/['"]\.\/video-encode-worker['"]/);
         expect(indexSource).toContain('media-worker-session');
+        expect(indexSource).toContain("'./video-encode-worker-host'");
     });
 });
 

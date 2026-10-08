@@ -40,6 +40,12 @@ export interface MediaWorkerClientOptions {
      * every video track is unsubscribed). The watcher runs inside the worker: it reads attributes and events there.
      */
     video?: NativeRoomVideoOptions;  // case-violation-ok-legacy-back-compat: matches this protocol's existing camelCase fields
+    /**
+     * Whether the in-worker room client encodes participant video on its own encode worker (nested in the media worker)
+     * rather than on the media worker's thread. The module factory sets it from `MJ_LIVEKIT_VIDEO_ENCODE_WORKER` and its
+     * `VideoEncodeWorker` option; absent means the media worker's thread encodes.
+     */
+    videoEncodeWorker?: boolean;  // case-violation-ok-legacy-back-compat: matches this protocol's existing camelCase fields
 }
 
 /**

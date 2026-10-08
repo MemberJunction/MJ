@@ -11,8 +11,9 @@
  *   surfaced as a diarized `NativeRoomAudioFrame` (`{ data, participantIdentity, name }`).
  * - **Seeing in** — when the client is created with video options (the agent watches the meeting), a
  *   {@link RoomVideoWatcher} reads the cameras and screens of people who let agents see them, one source at a time,
- *   sampled to the session's rate and encoded as JPEG (`NativeRoomVideoFrame`). In EVERY meeting, video the bot does
- *   not read is unsubscribed as it arrives.
+ *   sampled to the session's rate and encoded as JPEG (`NativeRoomVideoFrame`): on the encode worker's own thread for
+ *   clients the module factory builds ({@link VideoEncodeWorkerHost}), in-process otherwise. In EVERY meeting, video
+ *   the bot does not read is unsubscribed as it arrives.
  * - **Roster / data** — participant connect/disconnect events + the reliable data channel ("chat").
  *
  * ## Sample rates (THE most common live-test failure — read this)
@@ -53,6 +54,8 @@ import type {
 import { LiveKitWorkerRoomClient } from './livekit-worker-room-client';
 import type { IMediaWorker } from './media-worker-types';
 import { DropVideoSubscription, RoomVideoWatcher } from './room-video-watcher';
+import type { IRoomVideoFrameEncoder } from './video-frame-encoder';
+import { VideoEncodeWorkerHost } from './video-encode-worker-host';
 import {
     GetModuleEventLoopMonitor,
     ReadEventLoop,
@@ -287,7 +290,15 @@ export interface LiveKitRtcNodeRoomClientOptions {
      * client reads no video. Either way, video the bot does not read is unsubscribed.
      */
     Video?: NativeRoomVideoOptions;
-    /** Monotonic millisecond clock for video pacing and encode timing (tests inject one). Default `performance.now()`. */
+    /**
+     * Where participant video is encoded. Default: in-process, on the thread that hosts the room. The module factory
+     * passes this thread's {@link VideoEncodeWorkerHost} unless the encode worker is turned off.
+     */
+    VideoEncoder?: IRoomVideoFrameEncoder;
+    /**
+     * Monotonic millisecond clock for video pacing, the encode round trip and the in-process encoder's timing (tests
+     * inject one). Default `performance.now()`.
+     */
     Now?: () => number;
 }
 
@@ -313,6 +324,13 @@ export interface CreateLiveKitRtcNodeModuleOptions {
     PreBufferMs?: number;
     /** Optional factory for custom IMediaWorker instances (useful for testing). */
     WorkerFactory?: () => IMediaWorker;
+    /**
+     * Whether participant video is encoded on its own worker thread ({@link VideoEncodeWorkerHost}, one per thread that
+     * hosts rooms) rather than on the thread that hosts the room. Default: ON; `process.env.MJ_LIVEKIT_VIDEO_ENCODE_WORKER`
+     * = `off` / `false` / `0` turns it off. An explicit value here overrides the env. Applies to every client this module
+     * builds: the in-process client, the worker client's in-process fallback, and the media worker's client.
+     */
+    VideoEncodeWorker?: boolean;
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -443,6 +461,7 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
 
     /** What the agent may read; absent when it does not watch the meeting. */
     private readonly videoOptions?: NativeRoomVideoOptions;
+    private readonly videoEncoder?: IRoomVideoFrameEncoder;
     private readonly now?: () => number;
     /** Reads participant video while connected; null when the agent does not watch (or after disconnect). */
     private videoWatcher: RoomVideoWatcher | null = null;
@@ -463,6 +482,7 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
         this.channels = channels;
         this.loadRtc = loadRtc;
         this.videoOptions = options.Video;
+        this.videoEncoder = options.VideoEncoder;
         this.now = options.Now;
     }
 
@@ -707,6 +727,7 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
             ListParticipants: () => ParticipantsToArray(room.remoteParticipants),
             OnFrame: (frame) => this.videoFrameHandler?.(frame),
             OnSourceEnded: (source) => this.videoSourceEndedHandler?.(source),
+            Encoder: this.videoEncoder,
             Now: this.now,
         });
     }
@@ -872,6 +893,16 @@ export function IsWorkerMediaEnabled(envValue: string | undefined): boolean {
 }
 
 /**
+ * Resolves the `MJ_LIVEKIT_VIDEO_ENCODE_WORKER` switch. Participant video is encoded on its own worker thread by
+ * default: only an explicit `off` / `false` / `0` (case-insensitive) turns that off; anything else, including unset,
+ * means on.
+ */
+export function IsVideoEncodeWorkerEnabled(envValue: string | undefined): boolean {
+    const v = (envValue ?? '').trim().toLowerCase();
+    return !(v === 'off' || v === 'false' || v === '0');
+}
+
+/**
  * Builds a {@link NativeRoomModule} backed by `@livekit/rtc-node`. The bridge's
  * `LiveKitNativeMeetingSdk` calls `createRoomClient(options)` and then `client.connect(...)`.
  *
@@ -886,6 +917,7 @@ export function CreateLiveKitRtcNodeModule(opts: CreateLiveKitRtcNodeModuleOptio
     const useWorker = opts.UseWorker ?? (opts.Loader === undefined && IsWorkerMediaEnabled(process.env.MJ_LIVEKIT_WORKER_MEDIA));
     const preBufferMs = opts.PreBufferMs ?? 150;
     const workerFactory = opts.WorkerFactory;
+    const useEncodeWorker = opts.VideoEncodeWorker ?? IsVideoEncodeWorkerEnabled(process.env.MJ_LIVEKIT_VIDEO_ENCODE_WORKER);
 
     return {
         createRoomClient(options: NativeRoomClientOptions): NativeRoomClient {
@@ -893,10 +925,16 @@ export function CreateLiveKitRtcNodeModule(opts: CreateLiveKitRtcNodeModuleOptio
             // token to client.connect(args). The PER-SESSION sample rates ARE used: the agent's realtime
             // model dictates them (OpenAI 24 kHz; Gemini Live 16 kHz IN), threaded down from the engine, so
             // inbound room audio is resampled to what THIS model consumes. Fall back to the module defaults.
-            // `Video` is present only when the agent watches the meeting; it reaches whichever client hosts the room.
+            // `Video` is present only when the agent watches the meeting; it reaches whichever client hosts the room,
+            // and so does the encode-worker switch (the host is per thread; getting it starts nothing).
             const outRate = options.OutboundSampleRate ?? outbound;
             const inRate = options.InboundSampleRate ?? inbound;
             const video = options.Video;
+            const inProcessClient = (): LiveKitRtcNodeRoomClient =>
+                new LiveKitRtcNodeRoomClient(outRate, inRate, channels, loader, {
+                    Video: video,
+                    VideoEncoder: video && useEncodeWorker ? VideoEncodeWorkerHost.Instance : undefined,
+                });
             if (useWorker) {
                 return new LiveKitWorkerRoomClient({
                     sampleRate: outRate,
@@ -904,11 +942,12 @@ export function CreateLiveKitRtcNodeModule(opts: CreateLiveKitRtcNodeModuleOptio
                     channels,
                     preBufferMs,
                     video,
+                    videoEncodeWorker: useEncodeWorker,
                     workerFactory,
-                    fallbackFactory: () => new LiveKitRtcNodeRoomClient(outRate, inRate, channels, loader, { Video: video }),
+                    fallbackFactory: inProcessClient,
                 });
             }
-            return new LiveKitRtcNodeRoomClient(outRate, inRate, channels, loader, { Video: video });
+            return inProcessClient();
         },
     };
 }
